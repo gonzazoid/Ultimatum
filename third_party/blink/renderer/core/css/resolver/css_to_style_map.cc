@@ -34,6 +34,8 @@
 #include "third_party/blink/renderer/core/css/css_border_image_slice_value.h"
 #include "third_party/blink/renderer/core/css/css_custom_ident_value.h"
 #include "third_party/blink/renderer/core/css/css_identifier_value.h"
+#include "third_party/blink/renderer/core/css/css_math_function_value.h"
+#include "third_party/blink/renderer/core/css/css_numeric_literal_value.h"
 #include "third_party/blink/renderer/core/css/css_primitive_value.h"
 #include "third_party/blink/renderer/core/css/css_primitive_value_mappings.h"
 #include "third_party/blink/renderer/core/css/css_quad_value.h"
@@ -360,12 +362,12 @@ Timing::PlaybackDirection CSSToStyleMap::MapAnimationDirection(
   }
 }
 
-absl::optional<double> CSSToStyleMap::MapAnimationDuration(
+std::optional<double> CSSToStyleMap::MapAnimationDuration(
     StyleResolverState& state,
     const CSSValue& value) {
   if (auto* identifier = DynamicTo<CSSIdentifierValue>(value);
       identifier && identifier->GetValueID() == CSSValueID::kAuto) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return To<CSSPrimitiveValue>(value).ComputeSeconds();
 }
@@ -473,12 +475,12 @@ EAnimPlayState CSSToStyleMap::MapAnimationPlayState(StyleResolverState& state,
 
 namespace {
 
-absl::optional<TimelineOffset> MapAnimationRange(StyleResolverState& state,
-                                                 const CSSValue& value,
-                                                 double default_percent) {
+std::optional<TimelineOffset> MapAnimationRange(StyleResolverState& state,
+                                                const CSSValue& value,
+                                                double default_percent) {
   if (auto* ident = DynamicTo<CSSIdentifierValue>(value);
       ident && ident->GetValueID() == CSSValueID::kNormal) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   const auto& list = To<CSSValueList>(value);
   DCHECK_GE(list.length(), 1u);
@@ -500,13 +502,13 @@ absl::optional<TimelineOffset> MapAnimationRange(StyleResolverState& state,
 
 }  // namespace
 
-absl::optional<TimelineOffset> CSSToStyleMap::MapAnimationRangeStart(
+std::optional<TimelineOffset> CSSToStyleMap::MapAnimationRangeStart(
     StyleResolverState& state,
     const CSSValue& value) {
   return MapAnimationRange(state, value, 0);
 }
 
-absl::optional<TimelineOffset> CSSToStyleMap::MapAnimationRangeEnd(
+std::optional<TimelineOffset> CSSToStyleMap::MapAnimationRangeEnd(
     StyleResolverState& state,
     const CSSValue& value) {
   return MapAnimationRange(state, value, 100);
@@ -685,14 +687,16 @@ void CSSToStyleMap::MapNinePieceImage(StyleResolverState& state,
   }
 }
 
-static Length ConvertBorderImageSliceSide(const CSSPrimitiveValue& value) {
+static Length ConvertBorderImageSliceSide(
+    const CSSLengthResolver& length_resolver,
+    const CSSPrimitiveValue& value) {
   if (value.IsPercentage()) {
-    return Length::Percent(value.GetDoubleValue());
+    return Length::Percent(value.ComputePercentage(length_resolver));
   }
-  return Length::Fixed(round(value.GetDoubleValue()));
+  return Length::Fixed(round(value.ComputeNumber(length_resolver)));
 }
 
-void CSSToStyleMap::MapNinePieceImageSlice(StyleResolverState&,
+void CSSToStyleMap::MapNinePieceImageSlice(StyleResolverState& state,
                                            const CSSValue& value,
                                            NinePieceImage& image) {
   if (!IsA<cssvalue::CSSBorderImageSliceValue>(value)) {
@@ -706,13 +710,16 @@ void CSSToStyleMap::MapNinePieceImageSlice(StyleResolverState&,
   // Set up a length box to represent our image slices.
   LengthBox box;
   const CSSQuadValue& slices = border_image_slice.Slices();
-  box.top_ = ConvertBorderImageSliceSide(To<CSSPrimitiveValue>(*slices.Top()));
+  box.top_ = ConvertBorderImageSliceSide(state.CssToLengthConversionData(),
+                                         To<CSSPrimitiveValue>(*slices.Top()));
   box.bottom_ =
-      ConvertBorderImageSliceSide(To<CSSPrimitiveValue>(*slices.Bottom()));
-  box.left_ =
-      ConvertBorderImageSliceSide(To<CSSPrimitiveValue>(*slices.Left()));
+      ConvertBorderImageSliceSide(state.CssToLengthConversionData(),
+                                  To<CSSPrimitiveValue>(*slices.Bottom()));
+  box.left_ = ConvertBorderImageSliceSide(
+      state.CssToLengthConversionData(), To<CSSPrimitiveValue>(*slices.Left()));
   box.right_ =
-      ConvertBorderImageSliceSide(To<CSSPrimitiveValue>(*slices.Right()));
+      ConvertBorderImageSliceSide(state.CssToLengthConversionData(),
+                                  To<CSSPrimitiveValue>(*slices.Right()));
   image.SetImageSlices(box);
 
   // Set our fill mode.
@@ -723,7 +730,13 @@ static BorderImageLength ToBorderImageLength(const StyleResolverState& state,
                                              const CSSValue& value) {
   if (const auto* primitive_value = DynamicTo<CSSPrimitiveValue>(value)) {
     if (primitive_value->IsNumber()) {
-      return primitive_value->GetDoubleValue();
+      if (auto* numeric_value =
+              DynamicTo<CSSNumericLiteralValue>(primitive_value)) {
+        return numeric_value->GetDoubleValue();
+      }
+      CHECK(primitive_value->IsMathFunctionValue());
+      return To<CSSMathFunctionValue>(primitive_value)
+          ->ComputeNumber(state.CssToLengthConversionData());
     }
   }
   return StyleBuilderConverter::ConvertLengthOrAuto(state, value);

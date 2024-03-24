@@ -1189,17 +1189,17 @@ HRESULT DoUpdate(UpdaterScope scope,
                  const base::win::ScopedBstr& appid,
                  AppBundleWebCreateMode app_bundle_web_create_mode,
                  int expected_final_state,
-                 HRESULT expected_error_code) {
+                 HRESULT expected_error_code,
+                 bool cancel_when_downloading) {
   Microsoft::WRL::ComPtr<IAppBundleWeb> bundle;
   InitializeBundle(scope, bundle);
   EXPECT_TRUE(bundle);
   EXPECT_HRESULT_SUCCEEDED(
       app_bundle_web_create_mode == AppBundleWebCreateMode::kCreateInstalledApp
           ? bundle->createInstalledApp(appid.Get())
-          : bundle->createApp(appid.Get(),
-                              base::win::ScopedBstr(L"brand").Get(),
+          : bundle->createApp(appid.Get(), base::win::ScopedBstr(L"BRND").Get(),
                               base::win::ScopedBstr(L"en").Get(),
-                              base::win::ScopedBstr(L"ap").Get()));
+                              base::win::ScopedBstr(L"DoUpdateAP").Get()));
   EXPECT_HRESULT_SUCCEEDED(bundle->checkForUpdate());
   bool done = false;
   static const base::TimeDelta kExpirationTimeout =
@@ -1209,16 +1209,25 @@ HRESULT DoUpdate(UpdaterScope scope,
   LONG state_value = 0;
   LONG error_code = 0;
   std::wstring extra_data;
+  Microsoft::WRL::ComPtr<IDispatch> app_dispatch;
+  EXPECT_HRESULT_SUCCEEDED(bundle->get_appWeb(0, &app_dispatch));
+  Microsoft::WRL::ComPtr<IAppWeb> app;
+  EXPECT_HRESULT_SUCCEEDED(app_dispatch.As(&app));
+  app.Reset();
+  EXPECT_HRESULT_SUCCEEDED(app_dispatch.CopyTo(
+      IsSystemInstall(scope) ? __uuidof(IAppWebSystem) : __uuidof(IAppWebUser),
+      IID_PPV_ARGS_Helper(&app)));
+
+  if (app_bundle_web_create_mode == AppBundleWebCreateMode::kCreateApp) {
+    EXPECT_HRESULT_SUCCEEDED(app->put_serverInstallDataIndex(
+        base::win::ScopedBstr(L"expected_install_data_index").Get()));
+    base::win::ScopedBstr install_data_index;
+    EXPECT_HRESULT_SUCCEEDED(
+        app->get_serverInstallDataIndex(install_data_index.Receive()));
+    EXPECT_STREQ(install_data_index.Get(), L"expected_install_data_index");
+  }
+
   while (!done && (timer.Elapsed() < kExpirationTimeout)) {
-    Microsoft::WRL::ComPtr<IDispatch> app_dispatch;
-    EXPECT_HRESULT_SUCCEEDED(bundle->get_appWeb(0, &app_dispatch));
-    Microsoft::WRL::ComPtr<IAppWeb> app;
-    EXPECT_HRESULT_SUCCEEDED(app_dispatch.As(&app));
-    app.Reset();
-    EXPECT_HRESULT_SUCCEEDED(app_dispatch.CopyTo(IsSystemInstall(scope)
-                                                     ? __uuidof(IAppWebSystem)
-                                                     : __uuidof(IAppWebUser),
-                                                 IID_PPV_ARGS_Helper(&app)));
     Microsoft::WRL::ComPtr<IDispatch> state_dispatch;
     EXPECT_HRESULT_SUCCEEDED(app->get_currentState(&state_dispatch));
     Microsoft::WRL::ComPtr<ICurrentState> state;
@@ -1259,8 +1268,9 @@ HRESULT DoUpdate(UpdaterScope scope,
             {L"[Next Version: ",
              GetAppVersionWebString(next_version_web_dispatch), L"]"});
         if (!done) {
-          EXPECT_HRESULT_SUCCEEDED(bundle->install());
+          EXPECT_HRESULT_SUCCEEDED(bundle->download());
         }
+
         break;
       }
 
@@ -1281,6 +1291,11 @@ HRESULT DoUpdate(UpdaterScope scope,
             "[Bytes downloaded: %lu][Bytes total: %lu][Time remaining: %ld]",
             bytes_downloaded, total_bytes_to_download,
             download_time_remaining_ms));
+
+        if (cancel_when_downloading) {
+          EXPECT_HRESULT_SUCCEEDED(bundle->cancel());
+        }
+
         break;
       }
 
@@ -1288,7 +1303,7 @@ HRESULT DoUpdate(UpdaterScope scope,
       case STATE_EXTRACTING:
       case STATE_APPLYING_DIFFERENTIAL_PATCH:
       case STATE_READY_TO_INSTALL: {
-        state_description = L"Download completed!";
+        state_description = L"Ready to install!";
         ULONG bytes_downloaded = 0;
         state->get_bytesDownloaded(&bytes_downloaded);
         ULONG total_bytes_to_download = 0;
@@ -1361,10 +1376,12 @@ void ExpectLegacyUpdate3WebSucceeds(
     const std::string& app_id,
     AppBundleWebCreateMode app_bundle_web_create_mode,
     int expected_final_state,
-    int expected_error_code) {
-  EXPECT_HRESULT_SUCCEEDED(DoUpdate(
-      scope, base::win::ScopedBstr(base::UTF8ToWide(app_id).c_str()),
-      app_bundle_web_create_mode, expected_final_state, expected_error_code));
+    int expected_error_code,
+    bool cancel_when_downloading) {
+  EXPECT_HRESULT_SUCCEEDED(
+      DoUpdate(scope, base::win::ScopedBstr(base::UTF8ToWide(app_id).c_str()),
+               app_bundle_web_create_mode, expected_final_state,
+               expected_error_code, cancel_when_downloading));
 }
 
 void SetupLaunchCommandElevated(const std::wstring& app_id,

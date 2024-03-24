@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <string_view>
 #include <utility>
 
 #include "ash/accessibility/accessibility_controller.h"
@@ -37,7 +38,6 @@
 #include "base/path_service.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -46,8 +46,6 @@
 #include "base/threading/scoped_blocking_call.h"
 #include "base/values.h"
 #include "chrome/browser/accessibility/accessibility_extension_api_ash.h"
-#include "chrome/browser/accessibility/pdf_ocr_controller.h"
-#include "chrome/browser/accessibility/pdf_ocr_controller_factory.h"
 #include "chrome/browser/ash/accessibility/accessibility_dlc_installer.h"
 #include "chrome/browser/ash/accessibility/accessibility_extension_loader.h"
 #include "chrome/browser/ash/accessibility/dictation.h"
@@ -99,7 +97,6 @@
 #include "extensions/browser/api/virtual_keyboard_private/virtual_keyboard_private_api.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension.h"
-#include "extensions/common/extension_messages.h"
 #include "extensions/common/extension_resource.h"
 #include "media/base/audio_codecs.h"
 #include "services/accessibility/buildflags.h"
@@ -496,45 +493,69 @@ AccessibilityManager::AccessibilityManager() {
   base::FilePath resources_path;
   if (!base::PathService::Get(chrome::DIR_RESOURCES, &resources_path))
     NOTREACHED();
+  const bool enable_v3_manifest =
+      base::CommandLine::ForCurrentProcess()->HasSwitch(
+          ::switches::kEnableExperimentalAccessibilityManifestV3);
+  const base::FilePath::CharType* accessibility_common_manifest_filename =
+      enable_v3_manifest
+          ? extension_misc::kAccessibilityCommonManifestV3Filename
+          : extension_misc::kAccessibilityCommonManifestFilename;
+  const base::FilePath::CharType* accessibility_common_guest_manifest_filename =
+      enable_v3_manifest
+          ? extension_misc::kAccessibilityCommonGuestManifestV3Filename
+          : extension_misc::kAccessibilityCommonGuestManifestFilename;
+
   accessibility_common_extension_loader_ =
       base::WrapUnique(new AccessibilityExtensionLoader(
           extension_misc::kAccessibilityCommonExtensionId,
           resources_path.Append(
               extension_misc::kAccessibilityCommonExtensionPath),
-          extension_misc::kAccessibilityCommonManifestFilename,
-          extension_misc::kAccessibilityCommonGuestManifestFilename,
+          accessibility_common_manifest_filename,
+          accessibility_common_guest_manifest_filename,
           base::BindRepeating(
               &AccessibilityManager::PostUnloadAccessibilityCommon,
               weak_ptr_factory_.GetWeakPtr())));
+
+  const base::FilePath::CharType* chromevox_manifest_filename =
+      enable_v3_manifest ? extension_misc::kChromeVoxManifestV3Filename
+                         : extension_misc::kChromeVoxManifestFilename;
+  const base::FilePath::CharType* chromevox_guest_manifest_filename =
+      enable_v3_manifest ? extension_misc::kChromeVoxGuestManifestV3Filename
+                         : extension_misc::kChromeVoxGuestManifestFilename;
+
   chromevox_loader_ = base::WrapUnique(new AccessibilityExtensionLoader(
       extension_misc::kChromeVoxExtensionId,
       resources_path.Append(extension_misc::kChromeVoxExtensionPath),
-      extension_misc::kChromeVoxManifestFilename,
-      extension_misc::kChromeVoxGuestManifestFilename,
+      chromevox_manifest_filename, chromevox_guest_manifest_filename,
       base::BindRepeating(&AccessibilityManager::PostUnloadChromeVox,
                           weak_ptr_factory_.GetWeakPtr())));
+
+  const base::FilePath::CharType* select_to_speak_manifest_filename =
+      enable_v3_manifest ? extension_misc::kSelectToSpeakManifestV3Filename
+                         : extension_misc::kSelectToSpeakManifestFilename;
+  const base::FilePath::CharType* select_to_speak_guest_manifest_filename =
+      enable_v3_manifest ? extension_misc::kSelectToSpeakGuestManifestV3Filename
+                         : extension_misc::kSelectToSpeakGuestManifestFilename;
+
   select_to_speak_loader_ = base::WrapUnique(new AccessibilityExtensionLoader(
       extension_misc::kSelectToSpeakExtensionId,
       resources_path.Append(extension_misc::kSelectToSpeakExtensionPath),
-      extension_misc::kSelectToSpeakManifestFilename,
-      extension_misc::kSelectToSpeakGuestManifestFilename,
+      select_to_speak_manifest_filename,
+      select_to_speak_guest_manifest_filename,
       base::BindRepeating(&AccessibilityManager::PostUnloadSelectToSpeak,
                           weak_ptr_factory_.GetWeakPtr())));
 
-  const bool enable_v3_manifest =
-      base::CommandLine::ForCurrentProcess()->HasSwitch(
-          ::switches::kEnableExperimentalAccessibilityManifestV3);
-  const base::FilePath::CharType* switchAccessManifestFilename =
+  const base::FilePath::CharType* switch_access_manifest_filename =
       enable_v3_manifest ? extension_misc::kSwitchAccessManifestV3Filename
                          : extension_misc::kSwitchAccessManifestFilename;
-  const base::FilePath::CharType* switchAccessGuestManifestFilename =
+  const base::FilePath::CharType* switch_access_guest_manifest_filename =
       enable_v3_manifest ? extension_misc::kSwitchAccessGuestManifestV3Filename
                          : extension_misc::kSwitchAccessGuestManifestFilename;
 
   switch_access_loader_ = base::WrapUnique(new AccessibilityExtensionLoader(
       extension_misc::kSwitchAccessExtensionId,
       resources_path.Append(extension_misc::kSwitchAccessExtensionPath),
-      switchAccessManifestFilename, switchAccessGuestManifestFilename,
+      switch_access_manifest_filename, switch_access_guest_manifest_filename,
       base::BindRepeating(&AccessibilityManager::PostUnloadSwitchAccess,
                           weak_ptr_factory_.GetWeakPtr())));
 
@@ -704,12 +725,6 @@ void AccessibilityManager::OnSpokenFeedbackChanged() {
         profile_,
         base::BindOnce(&AccessibilityManager::PostSwitchChromeVoxProfile,
                        weak_ptr_factory_.GetWeakPtr()));
-
-    if (::features::IsPdfOcrEnabled()) {
-      // Create PdfOcrController when both the PDF OCR feature flag and
-      // Chromevox are enabled.
-      ::screen_ai::PdfOcrControllerFactory::GetForProfile(profile());
-    }
   }
 
   if (spoken_feedback_enabled_ == enabled)
@@ -921,13 +936,7 @@ void AccessibilityManager::OnAccessibilityCommonChanged(
   if (enabled) {
     accessibility_common_enabled_features_.insert(pref_name);
     if (!accessibility_common_extension_loader_->loaded()) {
-      accessibility_common_extension_loader_->Load(
-          profile_, base::BindRepeating(
-                        &AccessibilityManager::PostLoadAccessibilityCommon,
-                        weak_ptr_factory_.GetWeakPtr()));
-    } else {
-      // It's already loaded. Just run the callback.
-      PostLoadAccessibilityCommon();
+      accessibility_common_extension_loader_->Load(profile_, base::DoNothing());
     }
   } else {
     accessibility_common_enabled_features_.erase(pref_name);
@@ -1309,13 +1318,6 @@ void AccessibilityManager::OnSelectToSpeakChanged() {
       prefs::kAccessibilitySelectToSpeakEnabled);
   if (enabled) {
     select_to_speak_loader_->SetBrowserContext(profile_, base::OnceClosure());
-
-    if (::features::IsAccessibilityPdfOcrForSelectToSpeakEnabled() &&
-        ::features::IsPdfOcrEnabled()) {
-      // Create PdfOcrController when both the PDF OCR feature flag and STS are
-      // enabled.
-      ::screen_ai::PdfOcrControllerFactory::GetForProfile(profile());
-    }
   }
 
   if (select_to_speak_enabled_ == enabled)
@@ -1413,10 +1415,7 @@ void AccessibilityManager::OnSwitchAccessChanged() {
   NotifyAccessibilityStatusChanged(details);
 
   if (enabled) {
-    switch_access_loader_->Load(
-        profile_,
-        base::BindRepeating(&AccessibilityManager::PostLoadSwitchAccess,
-                            weak_ptr_factory_.GetWeakPtr()));
+    switch_access_loader_->Load(profile_, base::DoNothing());
   }
 }
 
@@ -1467,9 +1466,9 @@ void AccessibilityManager::UpdateBrailleImeState() {
   PrefService* pref_service = profile_->GetPrefs();
   std::string preload_engines_str =
       pref_service->GetString(::prefs::kLanguagePreloadEngines);
-  std::vector<base::StringPiece> preload_engines = base::SplitStringPiece(
+  std::vector<std::string_view> preload_engines = base::SplitStringPiece(
       preload_engines_str, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
-  std::vector<base::StringPiece>::iterator it = base::ranges::find(
+  std::vector<std::string_view>::iterator it = base::ranges::find(
       preload_engines, extension_ime_util::kBrailleImeEngineId);
   bool is_enabled = (it != preload_engines.end());
   bool should_be_enabled =
@@ -1935,8 +1934,6 @@ void AccessibilityManager::PostLoadChromeVox() {
   audio_focus_manager_->SetEnforcementMode(
       media_session::mojom::EnforcementMode::kNone);
 
-  InitializeFocusRings(ax::mojom::AssistiveTechnologyType::kChromeVox);
-
   // Force volume slide gesture to be on for Chromebox for Meetings provisioned
   // devices.
   if (policy::EnrollmentRequisitionManager::IsRemoraRequisition())
@@ -1996,8 +1993,6 @@ void AccessibilityManager::OnChromeVoxPanelDestroying() {
 }
 
 void AccessibilityManager::PostLoadSelectToSpeak() {
-  InitializeFocusRings(ax::mojom::AssistiveTechnologyType::kSelectToSpeak);
-
   UpdateEnhancedNetworkTts();
 }
 
@@ -2037,6 +2032,10 @@ void AccessibilityManager::UpdateEnhancedNetworkTts() {
   }
 }
 
+void AccessibilityManager::LoadEnhancedNetworkTtsForTest() {
+  LoadEnhancedNetworkTts();
+}
+
 void AccessibilityManager::LoadEnhancedNetworkTts() {
   if (!profile_)
     return;
@@ -2052,11 +2051,22 @@ void AccessibilityManager::LoadEnhancedNetworkTts() {
   base::FilePath resources_path;
   if (!base::PathService::Get(chrome::DIR_RESOURCES, &resources_path))
     NOTREACHED();
+
+  const bool enable_v3_manifest =
+      base::CommandLine::ForCurrentProcess()->HasSwitch(
+          ::switches::kEnableExperimentalAccessibilityManifestV3);
+  const base::FilePath::CharType* manifest_filename =
+      enable_v3_manifest ? extension_misc::kEnhancedNetworkTtsManifestV3Filename
+                         : extension_misc::kEnhancedNetworkTtsManifestFilename;
+  const base::FilePath::CharType* guest_manifest_filename =
+      enable_v3_manifest
+          ? extension_misc::kEnhancedNetworkTtsGuestManifestV3Filename
+          : extension_misc::kEnhancedNetworkTtsGuestManifestFilename;
+
   component_loader->AddComponentFromDirWithManifestFilename(
       resources_path.Append(extension_misc::kEnhancedNetworkTtsExtensionPath),
-      extension_misc::kEnhancedNetworkTtsExtensionId,
-      extension_misc::kEnhancedNetworkTtsManifestFilename,
-      extension_misc::kEnhancedNetworkTtsGuestManifestFilename,
+      extension_misc::kEnhancedNetworkTtsExtensionId, manifest_filename,
+      guest_manifest_filename,
       base::BindOnce(&AccessibilityManager::PostLoadEnhancedNetworkTts,
                      base::Unretained(this)));
 }
@@ -2078,10 +2088,6 @@ void AccessibilityManager::PostLoadEnhancedNetworkTts() {
     std::move(enhanced_network_tts_waiter_for_test_).Run();
 }
 
-void AccessibilityManager::PostLoadSwitchAccess() {
-  InitializeFocusRings(ax::mojom::AssistiveTechnologyType::kSwitchAccess);
-}
-
 void AccessibilityManager::PostUnloadSwitchAccess() {
   // Do any teardown work needed immediately after Switch Access actually
   // unloads.
@@ -2095,16 +2101,6 @@ void AccessibilityManager::PostUnloadSwitchAccess() {
   } else {
     was_vk_enabled_before_switch_access_ = false;
   }
-}
-
-void AccessibilityManager::PostLoadAccessibilityCommon() {
-  // Do any setup work needed immediately after the Accessibility Common
-  // extension actually loads. This may be used by all features which make
-  // use of the Accessibility Common extension.
-  // Autoclick uses a focus ring to highlight the scrollable area.
-  InitializeFocusRings(ax::mojom::AssistiveTechnologyType::kAutoClick);
-  // Magnifier may use a focus ring to draw the user debug rect.
-  InitializeFocusRings(ax::mojom::AssistiveTechnologyType::kMagnifier);
 }
 
 void AccessibilityManager::PostUnloadAccessibilityCommon() {
@@ -2175,17 +2171,18 @@ const std::string AccessibilityManager::GetFocusRingId(
     ax::mojom::AssistiveTechnologyType at_type,
     const std::string& focus_ring_name) {
   // Add the focus ring name to the list of focus rings for the extension.
-  focus_ring_names_for_at_type_.find(at_type)->second.insert(focus_ring_name);
+  GetFocusRingsForATType(at_type).insert(focus_ring_name);
   std::ostringstream typeStringStream;
   typeStringStream << at_type;
   return typeStringStream.str() + '-' + focus_ring_name;
 }
 
-void AccessibilityManager::InitializeFocusRings(
+std::set<std::string>& AccessibilityManager::GetFocusRingsForATType(
     ax::mojom::AssistiveTechnologyType at_type) {
   if (focus_ring_names_for_at_type_.count(at_type) == 0) {
     focus_ring_names_for_at_type_.emplace(at_type, std::set<std::string>());
   }
+  return focus_ring_names_for_at_type_.find(at_type)->second;
 }
 
 void AccessibilityManager::RemoveFocusRings(
@@ -2902,6 +2899,50 @@ void AccessibilityManager::GetTtsDlcContentsOnPackState(
 
 void AccessibilityManager::SetDlcPathForTest(base::FilePath path) {
   dlc_path_for_test_ = std::move(path);
+}
+
+void AccessibilityManager::SendSyntheticMouseEvent(
+    ui::EventType type,
+    int flags,
+    int changed_button_flags,
+    gfx::Point location_in_screen) {
+  const display::Display& display =
+      display::Screen::GetScreen()->GetDisplayNearestPoint(location_in_screen);
+  auto* host = ash::GetWindowTreeHostForDisplay(display.id());
+  if (!host) {
+    return;
+  }
+
+  aura::Window* root_window = host->window();
+  if (!root_window) {
+    return;
+  }
+
+  aura::client::CursorClient* cursor_client =
+      aura::client::GetCursorClient(root_window);
+
+  bool is_mouse_events_enabled = cursor_client->IsMouseEventsEnabled();
+  if (!is_mouse_events_enabled) {
+    cursor_client->EnableMouseEvents();
+  }
+
+  ::wm::ConvertPointFromScreen(root_window, &location_in_screen);
+
+  ui::MouseEvent synthetic_mouse_event(
+      type, location_in_screen, location_in_screen, ui::EventTimeForNow(),
+      flags, changed_button_flags);
+
+  // Transforming the coordinates to the root will apply the screen scale factor
+  // to the event's location and also the screen rotation degree.
+  synthetic_mouse_event.UpdateForRootTransform(
+      host->GetRootTransform(),
+      host->GetRootTransformForLocalEventCoordinates());
+  // This skips rewriters.
+  host->DeliverEventToSink(&synthetic_mouse_event);
+
+  if (!is_mouse_events_enabled) {
+    cursor_client->DisableMouseEvents();
+  }
 }
 
 }  // namespace ash

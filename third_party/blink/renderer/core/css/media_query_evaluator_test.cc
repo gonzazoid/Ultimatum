@@ -114,6 +114,7 @@ MediaQueryEvaluatorTestCase g_screen_test_cases[] = {
     {"(display-mode: 'browser')", false},
     {"(display-mode: @junk browser)", false},
     {"(display-mode: tabbed)", false},
+    {"(display-mode: picture-in-picture)", false},
     {"(max-device-aspect-ratio: 4294967295/1)", true},
     {"(min-device-aspect-ratio: 1/4294967296)", true},
     {"(max-device-aspect-ratio: 0.5)", false},
@@ -812,14 +813,14 @@ TEST(MediaQueryEvaluatorTest, CachedDevicePosture) {
 
   MediaValuesCached::MediaValuesCachedData data;
   {
-    data.device_posture = device::mojom::blink::DevicePostureType::kContinuous;
+    data.device_posture = mojom::blink::DevicePostureType::kContinuous;
     MediaValues* media_values = MakeGarbageCollected<MediaValuesCached>(data);
     MediaQueryEvaluator media_query_evaluator(media_values);
     TestMQEvaluator(g_device_posture_none_cases, media_query_evaluator);
   }
 
   {
-    data.device_posture = device::mojom::blink::DevicePostureType::kFolded;
+    data.device_posture = mojom::blink::DevicePostureType::kFolded;
     MediaValues* media_values = MakeGarbageCollected<MediaValuesCached>(data);
     MediaQueryEvaluator media_query_evaluator(media_values);
     TestMQEvaluator(g_device_posture_folded_cases, media_query_evaluator);

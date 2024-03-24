@@ -334,8 +334,10 @@
     on-scroll="onSearchScroll"
     category-metadata="[[getCategoryMetadata(gifSupport, category)]]"
     gif-support$="[[gifSupport]]"
+    seal-support$="[[sealSupport]]"
     close-gif-nudge-overlay="[[closeGifNudgeOverlay]]"
-    use-grouped-preference="[[shouldUseGroupedPreference(false)]]"
+    useMojoSearch="[[useMojoSearch]]"
+    use-grouped-preference="[[variantGroupingSupport]]"
     global-tone="[[globalTone]]"
     global-gender="[[globalGender]]">
   </emoji-search>

@@ -21,8 +21,10 @@ source_set("signin_headers") {
     ":constants",
     "//base",
     "//components/signin/public/base",
+    "//components/signin/public/identity_manager",
     "//ios/chrome/browser/shared/coordinator/chrome_coordinator",
     "//ios/chrome/browser/shared/model/browser_state",
+    "//ios/chrome/browser/signin/model:capabilities_types",
     "//ios/chrome/browser/ui/first_run:interruptible_chrome_coordinator",
   ]
 }
@@ -173,6 +175,7 @@ source_set("eg2_tests") {
     "//ios/chrome/browser/ui/settings/google_services:constants",
     "//ios/chrome/test/earl_grey:eg_test_support+eg2",
     "//ios/testing/earl_grey:eg_test_support+eg2",
+    "//ios/testing/earl_grey:launch_configuration",
     "//net:test_support",
     "//ui/base",
   ]

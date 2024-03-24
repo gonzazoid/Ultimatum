@@ -186,9 +186,9 @@ void TextPaintTimingDetector::RecordAggregatedText(
 
   LocalFrame& frame = frame_view_->GetFrame();
   if (LocalDOMWindow* window = frame.DomWindow()) {
-    if (SoftNavigationHeuristics* soft_navigation =
+    if (SoftNavigationHeuristics* heuristics =
             SoftNavigationHeuristics::From(*window)) {
-      soft_navigation->RecordPaint(
+      heuristics->RecordPaint(
           &frame, mapped_visual_rect.size().GetArea(),
           aggregator.GetNode()->IsModifiedBySoftNavigation());
     }
@@ -196,7 +196,7 @@ void TextPaintTimingDetector::RecordAggregatedText(
   recorded_set_.insert(&aggregator);
   MaybeRecordTextRecord(aggregator, aggregated_size, property_tree_state,
                         aggregated_visual_rect, mapped_visual_rect);
-  if (absl::optional<PaintTimingVisualizer>& visualizer =
+  if (std::optional<PaintTimingVisualizer>& visualizer =
           frame_view_->GetPaintTimingDetector().Visualizer()) {
     visualizer->DumpTextDebuggingRect(aggregator, mapped_visual_rect);
   }
@@ -287,7 +287,10 @@ void TextPaintTimingDetector::AssignPaintTimeToQueuedRecords(
     record->paint_time = timestamp;
     if (can_report_element_timing)
       text_element_timing_->OnTextObjectPainted(*record);
-    if (ltp_manager_ && record->recorded_size > 0u) {
+
+    if (ltp_manager_ && (record->recorded_size > 0u) &&
+        !(record->node_ &&
+          ltp_manager_->IsUnrelatedSoftNavigationPaint(*(record->node_)))) {
       ltp_manager_->MaybeUpdateLargestText(record);
     }
     keys_to_be_removed.push_back(it.key);

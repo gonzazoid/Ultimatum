@@ -352,10 +352,21 @@ class ChromeSitePerProcessOopifPDFTest : public ChromeSitePerProcessTest {
 
   ~ChromeSitePerProcessOopifPDFTest() override = default;
 
+  // Return value could be nullptr.
   pdf::PdfViewerStreamManager* GetPdfViewerStreamManager() {
     return pdf::PdfViewerStreamManager::FromWebContents(
         browser()->tab_strip_model()->GetActiveWebContents());
   }
+
+  // Return value is always non-nullptr. This should only be called after a PDF
+  // navigation occurs in the active `content::WebContents`.
+  pdf::TestPdfViewerStreamManager* GetTestPdfViewerStreamManager() {
+    return factory_.GetTestPdfViewerStreamManager(
+        browser()->tab_strip_model()->GetActiveWebContents());
+  }
+
+ private:
+  pdf::TestPdfViewerStreamManagerFactory factory_;
 };
 
 // This test verifies that when navigating an OOPIF to a page with <embed>-ed
@@ -372,9 +383,6 @@ IN_PROC_BROWSER_TEST_F(ChromeSitePerProcessOopifPDFTest,
 
   content::WebContents* active_web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  auto* test_pdf_viewer_stream_manager =
-      pdf::TestPdfViewerStreamManager::CreateForWebContents(
-          active_web_contents);
 
   // Navigate subframe to a cross-site page with an embedded PDF.
   GURL frame_url =
@@ -384,14 +392,19 @@ IN_PROC_BROWSER_TEST_F(ChromeSitePerProcessOopifPDFTest,
   EXPECT_TRUE(NavigateIframeToURL(active_web_contents, "test", frame_url));
 
   // Wait until the PDF is fully loaded.
-  test_pdf_viewer_stream_manager->WaitUntilPdfLoaded();
+  content::RenderFrameHost* subframe_main_host =
+      ChildFrameAt(active_web_contents->GetPrimaryMainFrame(), 0);
+  ASSERT_TRUE(subframe_main_host);
+  content::RenderFrameHost* embedder_host = ChildFrameAt(subframe_main_host, 0);
+  ASSERT_TRUE(embedder_host);
+  ASSERT_TRUE(
+      GetTestPdfViewerStreamManager()->WaitUntilPdfLoaded(embedder_host));
 
   // The primary main frame shouldn't be the PDF embedder and shouldn't have a
   // PDF stream.
   auto* primary_main_frame = active_web_contents->GetPrimaryMainFrame();
   ASSERT_FALSE(
-      test_pdf_viewer_stream_manager->GetStreamContainer(primary_main_frame));
-  EXPECT_TRUE(GetPdfViewerStreamManager());
+      GetTestPdfViewerStreamManager()->GetStreamContainer(primary_main_frame));
 
   // Now detach the frame and observe that the stream manager is destroyed.
   EXPECT_TRUE(
@@ -419,7 +432,7 @@ class MailtoExternalProtocolHandlerDelegate
       content::WebContents* web_contents,
       ui::PageTransition page_transition,
       bool has_user_gesture,
-      const absl::optional<url::Origin>& initiating_origin,
+      const std::optional<url::Origin>& initiating_origin,
       const std::u16string& program_name) override {}
 
   scoped_refptr<shell_integration::DefaultSchemeClientWorker> CreateShellWorker(

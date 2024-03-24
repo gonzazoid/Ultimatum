@@ -1,4 +1,4 @@
-// Copyright 2023 The Chromium Authors
+// Copyright 2024 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,23 +12,23 @@
 #include "content/public/common/content_features.h"
 #include "net/base/features.h"
 
-namespace tpcd::support {
+namespace tpcd::trial {
 
 // static
-TpcdSupportServiceFactory* TpcdSupportServiceFactory::GetInstance() {
-  static base::NoDestructor<TpcdSupportServiceFactory> factory;
+TpcdTrialServiceFactory* TpcdTrialServiceFactory::GetInstance() {
+  static base::NoDestructor<TpcdTrialServiceFactory> factory;
   return factory.get();
 }
 
 // static
-TpcdSupportService* TpcdSupportServiceFactory::GetForProfile(Profile* profile) {
-  return static_cast<TpcdSupportService*>(
+TpcdTrialService* TpcdTrialServiceFactory::GetForProfile(Profile* profile) {
+  return static_cast<TpcdTrialService*>(
       GetInstance()->GetServiceForBrowserContext(profile, true));
 }
 
 // static
-ProfileSelections TpcdSupportServiceFactory::CreateProfileSelections() {
-  if (!base::FeatureList::IsEnabled(net::features::kTpcdSupportSettings) ||
+ProfileSelections TpcdTrialServiceFactory::CreateProfileSelections() {
+  if (!base::FeatureList::IsEnabled(net::features::kTpcdTrialSettings) ||
       !base::FeatureList::IsEnabled(features::kPersistentOriginTrials)) {
     return ProfileSelections::BuildNoProfilesSelected();
   }
@@ -37,25 +37,25 @@ ProfileSelections TpcdSupportServiceFactory::CreateProfileSelections() {
       .WithRegular(ProfileSelection::kOriginalOnly)
       .WithGuest(ProfileSelection::kOwnInstance)
       // The Following will be completely unselected as users do not "browse"
-      // within this profiles.
+      // within these profiles.
       .WithSystem(ProfileSelection::kNone)
       .WithAshInternals(ProfileSelection::kNone)
       .Build();
 }
 
-TpcdSupportServiceFactory::TpcdSupportServiceFactory()
-    : ProfileKeyedServiceFactory("TpcdSupportService",
+TpcdTrialServiceFactory::TpcdTrialServiceFactory()
+    : ProfileKeyedServiceFactory("TpcdTrialService",
                                  CreateProfileSelections()) {
   DependsOn(OriginTrialsFactory::GetInstance());
   DependsOn(HostContentSettingsMapFactory::GetInstance());
 }
 
-TpcdSupportServiceFactory::~TpcdSupportServiceFactory() = default;
+TpcdTrialServiceFactory::~TpcdTrialServiceFactory() = default;
 
-KeyedService* TpcdSupportServiceFactory::BuildServiceInstanceFor(
+KeyedService* TpcdTrialServiceFactory::BuildServiceInstanceFor(
     content::BrowserContext* context) const {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  return new TpcdSupportService(context);
+  return new TpcdTrialService(context);
 }
 
-}  // namespace tpcd::support
+}  // namespace tpcd::trial

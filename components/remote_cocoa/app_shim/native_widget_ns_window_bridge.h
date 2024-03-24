@@ -8,6 +8,7 @@
 #import <Cocoa/Cocoa.h>
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
@@ -24,7 +25,6 @@
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/accelerated_widget_mac/ca_transaction_observer.h"
 #include "ui/accelerated_widget_mac/display_ca_layer_tree.h"
 #include "ui/base/cocoa/command_dispatcher.h"
@@ -238,10 +238,9 @@ class REMOTE_COCOA_APP_SHIM_EXPORT NativeWidgetNSWindowBridge
   void CloseWindowNow() override;
   void SetInitialBounds(const gfx::Rect& new_bounds,
                         const gfx::Size& minimum_content_size) override;
-  void SetBounds(
-      const gfx::Rect& new_bounds,
-      const gfx::Size& minimum_content_size,
-      const absl::optional<gfx::Size>& maximum_content_size) override;
+  void SetBounds(const gfx::Rect& new_bounds,
+                 const gfx::Size& minimum_content_size,
+                 const std::optional<gfx::Size>& maximum_content_size) override;
   void SetSize(const gfx::Size& new_size,
                const gfx::Size& minimum_content_size) override;
   void SetSizeAndCenter(const gfx::Size& content_size,
@@ -290,6 +289,9 @@ class REMOTE_COCOA_APP_SHIM_EXPORT NativeWidgetNSWindowBridge
   void ImmersiveFullscreenRevealUnlock() override;
   void SetCanGoBack(bool can_go_back) override;
   void SetCanGoForward(bool can_go_back) override;
+  void DisplayContextMenu(mojom::ContextMenuPtr menu,
+                          mojo::PendingRemote<mojom::MenuHost> host,
+                          mojo::PendingReceiver<mojom::Menu> receiver) override;
 
   // Return true if [NSApp updateWindows] needs to be called after updating the
   // TextInputClient.
@@ -311,6 +313,8 @@ class REMOTE_COCOA_APP_SHIM_EXPORT NativeWidgetNSWindowBridge
   // changes. `reveal_amount` ranges in [0, 1]. This is the opacity of the
   // menubar and the browser window traffic lights.
   void OnImmersiveFullscreenMenuBarRevealChanged(float reveal_amount);
+
+  BOOL ImmersiveFullscreenEnabled() { return !!immersive_mode_controller_; }
 
   // Called by the ImmersiveModeController at the end of fullscreen transition
   // with the height of the menu bar if it autohides, or 0 if it doesn't.
@@ -442,7 +446,7 @@ class REMOTE_COCOA_APP_SHIM_EXPORT NativeWidgetNSWindowBridge
   };
 
   // This is present iff the window has been created in headless mode.
-  absl::optional<HeadlessModeWindow> headless_mode_window_;
+  std::optional<HeadlessModeWindow> headless_mode_window_;
 
   // This tracks whether current window can go back or go forward.
   bool can_go_back_ = false;

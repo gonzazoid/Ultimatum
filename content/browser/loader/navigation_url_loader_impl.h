@@ -12,13 +12,13 @@
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "content/browser/loader/navigation_url_loader.h"
+#include "content/browser/loader/response_head_update_params.h"
 #include "content/browser/navigation_subresource_loader_params.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/global_request_id.h"
 #include "content/public/browser/ssl_status.h"
 #include "content/public/browser/weak_document_ptr.h"
-#include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "net/base/load_timing_info.h"
 #include "net/url_request/url_request.h"
@@ -38,6 +38,10 @@
 namespace net {
 struct RedirectInfo;
 }
+
+namespace network {
+class URLLoaderFactoryBuilder;
+}  // namespace network
 
 namespace content {
 
@@ -82,25 +86,14 @@ class CONTENT_EXPORT NavigationURLLoaderImpl
 
   ~NavigationURLLoaderImpl() override;
 
-  // TODO(kinuko): Some method parameters can probably be just kept as
-  // member variables rather than being passed around.
-
-  // Intercepts loading of frame requests when network service is enabled and
-  // either a network::mojom::TrustedURLLoaderHeaderClient is being used or
-  // for schemes not handled by network service (e.g. files). This must be
-  // called on the UI thread or before threads start.
-  using URLLoaderFactoryInterceptor = base::RepeatingCallback<void(
-      mojo::PendingReceiver<network::mojom::URLLoaderFactory>* receiver)>;
-  static void SetURLLoaderFactoryInterceptorForTesting(
-      const URLLoaderFactoryInterceptor& interceptor);
-
   // Creates a URLLoaderFactory for a navigation. The factory uses
   // `header_client`. This should have the same settings as the factory from
   // the URLLoaderFactoryGetter. Called on the UI thread.
-  static void CreateURLLoaderFactoryWithHeaderClient(
+  static mojo::PendingRemote<network::mojom::URLLoaderFactory>
+  CreateURLLoaderFactoryWithHeaderClient(
       mojo::PendingRemote<network::mojom::TrustedURLLoaderHeaderClient>
           header_client,
-      mojo::PendingReceiver<network::mojom::URLLoaderFactory> factory_receiver,
+      network::URLLoaderFactoryBuilder factory_builder,
       StoragePartitionImpl* partition);
 
  private:
@@ -122,12 +115,9 @@ class CONTENT_EXPORT NavigationURLLoaderImpl
   void StartImpl(
       scoped_refptr<PrefetchedSignedExchangeCache>
           prefetched_signed_exchange_cache,
-      mojo::PendingRemote<network::mojom::URLLoaderFactory> factory_for_webui,
+      scoped_refptr<network::SharedURLLoaderFactory> factory_for_webui,
       std::string accept_langs);
 
-  void BindNonNetworkURLLoaderFactoryReceiver(
-      const GURL& url,
-      mojo::PendingReceiver<network::mojom::URLLoaderFactory> factory_receiver);
   void BindAndInterceptNonNetworkURLLoaderFactoryReceiver(
       const GURL& url,
       mojo::PendingReceiver<network::mojom::URLLoaderFactory> factory_receiver);
@@ -141,22 +131,23 @@ class CONTENT_EXPORT NavigationURLLoaderImpl
   // redirects.
   void Restart();
 
-  // `interceptor` is non-null if this is called by one of the interceptors
-  // (via a LoaderCallback).
-  // `single_request_handler` is the RequestHandler given by the
-  // `interceptor`, non-null if the interceptor wants to handle the request.
+  // `interceptor_result` is the result from the current interceptor (or nullopt
+  // if not called via `LoaderCallback`).
+  // `next_interceptor` indicates the index of the next interceptor to check.
   void MaybeStartLoader(
-      NavigationLoaderInterceptor* interceptor,
-      scoped_refptr<network::SharedURLLoaderFactory> single_request_factory);
+      size_t next_interceptor_index,
+      std::optional<NavigationLoaderInterceptor::Result> interceptor_result);
 
-  // This is the `fallback_callback` passed to
+  // Start a loader with the default behavior. This should be used when no
+  // interceptors have elected to handle the request in the first place.
+  void StartNonInterceptedRequest(ResponseHeadUpdateParams head_update_params);
+
+  // This is the `fallback_callback_for_service_worker` passed to
   // NavigationLoaderInterceptor::MaybeCreateLoader. It allows an interceptor
   // to initially elect to handle a request, and later decide to fallback to
-  // the default behavior. This is needed for service worker network fallback
-  // and signed exchange (SXG) fallback redirect.
+  // the default behavior. This is needed for service worker network fallback.
   void FallbackToNonInterceptedRequest(
-      bool reset_subresource_loader_params,
-      const ResponseHeadUpdateParams& head_update_params);
+      ResponseHeadUpdateParams head_update_params);
 
   scoped_refptr<network::SharedURLLoaderFactory>
   PrepareForNonInterceptedRequest();
@@ -247,9 +238,6 @@ class CONTENT_EXPORT NavigationURLLoaderImpl
   // Current URL that is being navigated, updated after redirection.
   GURL url_;
 
-  // Redirect URL chain.
-  std::vector<GURL> url_chain_;
-
   const int frame_tree_node_id_;
   const GlobalRequestID global_request_id_;
   net::RedirectInfo redirect_info_;
@@ -266,10 +254,9 @@ class CONTENT_EXPORT NavigationURLLoaderImpl
   net::HttpRequestHeaders url_loader_modified_headers_;
   net::HttpRequestHeaders url_loader_modified_cors_exempt_headers_;
 
-  std::optional<SubresourceLoaderParams> subresource_loader_params_;
+  SubresourceLoaderParams subresource_loader_params_;
 
   std::vector<std::unique_ptr<NavigationLoaderInterceptor>> interceptors_;
-  size_t interceptor_index_ = 0;
 
   // Set to true if the default URLLoader (network service) was used for the
   // current navigation.
@@ -349,11 +336,9 @@ class CONTENT_EXPORT NavigationURLLoaderImpl
   const ukm::SourceId ukm_source_id_;
 
   // If this navigation was intercepted by a worker but the worker didn't handle
-  // it, we still expose the worker timing as part of the response.
-  base::TimeTicks intercepting_worker_start_time_;
-  base::TimeTicks intercepting_worker_ready_time_;
-
-  network::mojom::ServiceWorkerRouterInfoPtr intercepting_worker_router_info_;
+  // it, we still expose some parameters like the worker timing as part of the
+  // response.
+  ResponseHeadUpdateParams head_update_params_;
 
   base::WeakPtrFactory<NavigationURLLoaderImpl> weak_factory_{this};
 };

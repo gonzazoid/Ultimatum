@@ -3,12 +3,14 @@
 // found in the LICENSE file.
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/containers/span.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/uuid.h"
 #include "build/build_config.h"
@@ -23,7 +25,6 @@
 #include "components/password_manager/core/browser/features/password_manager_features_util.h"
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_manager_metrics_util.h"
-#include "components/signin/public/base/signin_switches.h"
 #include "components/sync/base/features.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/engine/nigori/cross_user_sharing_public_key.h"
@@ -34,7 +35,7 @@
 #include "components/sync/protocol/sync_entity.pb.h"
 #include "components/sync/test/fake_server_nigori_helper.h"
 #include "content/public/test/browser_test.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "testing/gmock/include/gmock/gmock.h"
 
 using password_manager::PasswordForm;
 using password_manager::PasswordStoreInterface;
@@ -145,7 +146,7 @@ class SingleClientIncomingPasswordSharingInvitationTest : public SyncTest {
         /*enabled_features=*/
         {password_manager::features::kPasswordManagerEnableReceiverService,
          syncer::kSharingOfferKeyPairBootstrap},
-        /*disabled_features=*/{switches::kUnoDesktop});
+        /*disabled_features=*/{});
   }
 
   sync_pb::CrossUserSharingPublicKey GetPublicKeyFromServer() const {

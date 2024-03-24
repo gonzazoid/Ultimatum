@@ -145,6 +145,8 @@ void AddMaterialChromeColorMixer(ui::ColorProvider* provider,
   mixer[kColorComposeDialogScrollbarThumb] = {ui::kColorSysPrimary};
   mixer[kColorComposeDialogResultBackground] = {ui::kColorSysSurface5};
   mixer[kColorComposeDialogResultForeground] = {ui::kColorSysOnSurface};
+  mixer[kColorComposeDialogResultForegroundWhileLoading] = {
+      ui::kColorSysPrimary};
   mixer[kColorComposeDialogResultIcon] = {ui::kColorSysOnSurfaceSubtle};
   mixer[kColorComposeDialogTitle] = {ui::kColorSysOnSurface};
   mixer[kColorComposeDialogTextarea] = {ui::kColorSysOnSurface};
@@ -245,7 +247,15 @@ void AddMaterialChromeColorMixer(ui::ColorProvider* provider,
       kColorNewTabButtonInkDropFrameActive};
 
   // Omnibox chip colors.
+  mixer[kColorOmniboxChipInUseActivityIndicatorBackground] = {
+      ui::kColorSysPrimary};
+  mixer[kColorOmniboxChipInUseActivityIndicatorForeground] = {
+      ui::kColorSysOnPrimary};
   mixer[kColorOmniboxChipBackground] = {ui::kColorSysBaseContainerElevated};
+  mixer[kColorOmniboxChipBlockedActivityIndicatorBackground] = {
+      ui::kColorSysSurface};
+  mixer[kColorOmniboxChipBlockedActivityIndicatorForeground] = {
+      ui::kColorSysOnSurface};
   mixer[kColorOmniboxChipForegroundLowVisibility] = {ui::kColorSysOnSurface};
   mixer[kColorOmniboxChipForegroundNormalVisibility] = {ui::kColorSysPrimary};
   mixer[kColorOmniboxChipInkDropHover] = {

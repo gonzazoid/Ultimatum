@@ -182,7 +182,7 @@ class SavedTabGroupBar::OverflowMenu : public views::View {
   raw_ref<SavedTabGroupBar> parent_bar_;
 };
 
-BEGIN_METADATA(SavedTabGroupBar, OverflowMenu, views::View)
+BEGIN_METADATA(SavedTabGroupBar, OverflowMenu)
 END_METADATA
 
 SavedTabGroupBar::SavedTabGroupBar(Browser* browser,
@@ -469,8 +469,8 @@ void SavedTabGroupBar::OnWidgetDestroying(views::Widget* widget) {
   bubble_delegate_ = nullptr;
 }
 
-void SavedTabGroupBar::Layout() {
-  views::View::Layout();
+void SavedTabGroupBar::Layout(PassKey) {
+  LayoutSuperclass<views::View>(this);
   const bool should_show_overflow = ShouldShowOverflowButtonForWidth(width());
   const int last_visible_button_index =
       CalculateLastVisibleButtonIndexForWidth(width());
@@ -717,7 +717,11 @@ void SavedTabGroupBar::UpdateOverflowMenu() {
   }
 
   if (overflow_menu_->GetWidget()) {
-    bubble_delegate_->SizeToContents();
+    if (overflow_menu_->children().empty()) {
+      overflow_menu_->GetWidget()->Close();
+    } else {
+      bubble_delegate_->SizeToContents();
+    }
   }
 }
 

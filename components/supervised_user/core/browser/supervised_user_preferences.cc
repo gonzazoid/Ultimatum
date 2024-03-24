@@ -11,10 +11,10 @@
 #include "components/google/core/common/google_util.h"
 #include "components/prefs/pref_service.h"
 #include "components/supervised_user/core/browser/proto/kidschromemanagement_messages.pb.h"
+#include "components/supervised_user/core/browser/supervised_user_utils.h"
 #include "components/supervised_user/core/common/features.h"
 #include "components/supervised_user/core/common/pref_names.h"
 #include "components/supervised_user/core/common/supervised_user_constants.h"
-#include "components/supervised_user/core/common/supervised_user_utils.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "components/prefs/android/pref_service_android.h"
@@ -29,10 +29,10 @@ namespace {
 struct Family {
   using Member = kids_chrome_management::FamilyMember;
 
-  const absl::optional<const Member>& GetHeadOfHousehold() const {
+  const std::optional<const Member>& GetHeadOfHousehold() const {
     return head_of_household_;
   }
-  const absl::optional<const Member>& GetParent() const { return parent_; }
+  const std::optional<const Member>& GetParent() const { return parent_; }
   const std::vector<Member>& GetRegularMembers() const {
     return regular_members_;
   }
@@ -64,8 +64,8 @@ struct Family {
   ~Family() = default;
 
  private:
-  absl::optional<const Member> head_of_household_;
-  absl::optional<const Member> parent_;
+  std::optional<const Member> head_of_household_;
+  std::optional<const Member> parent_;
   std::vector<Member> regular_members_;
   std::vector<Member> children_;
 };

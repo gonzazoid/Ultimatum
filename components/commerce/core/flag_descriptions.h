@@ -19,11 +19,11 @@ extern const char kCommercePriceTrackingDescription[];
 extern const char kPriceTrackingIconColorsName[];
 extern const char kPriceTrackingIconColorsDescription[];
 
+extern const char kProductSpecificationsName[];
+extern const char kProductSpecificationsDescription[];
+
 extern const char kShoppingIconColorVariantName[];
 extern const char kShoppingIconColorVariantDescription[];
-
-extern const char kShoppingCollectionName[];
-extern const char kShoppingCollectionDescription[];
 
 extern const char kShoppingListName[];
 extern const char kShoppingListDescription[];

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "chrome/browser/ui/webui/ash/chrome_untrusted_web_ui_configs_chromeos.h"
+#include "chrome/browser/ui/webui/ash/chrome_web_ui_configs_chromeos.h"
 
 #include "base/functional/callback.h"
 #include "build/chromeos_buildflags.h"
@@ -17,7 +17,6 @@
 #include "chrome/browser/app_mode/app_mode_utils.h"         // nogncheck
 #include "chrome/browser/feedback/feedback_dialog_utils.h"  // nogncheck
 
-#include "ash/constants/ash_features.h"
 #include "ash/webui/camera_app_ui/camera_app_ui.h"
 #include "ash/webui/color_internals/color_internals_ui.h"
 #include "ash/webui/connectivity_diagnostics/connectivity_diagnostics_ui.h"
@@ -31,6 +30,7 @@
 #include "ash/webui/os_feedback_ui/os_feedback_ui.h"
 #include "ash/webui/personalization_app/personalization_app_ui.h"
 #include "ash/webui/print_management/print_management_ui.h"
+#include "ash/webui/print_preview_cros/print_preview_cros_ui.h"
 #include "ash/webui/scanning/scanning_ui.h"
 #include "ash/webui/shimless_rma/shimless_rma.h"
 #include "ash/webui/shortcut_customization_ui/shortcut_customization_app_ui.h"
@@ -49,6 +49,7 @@
 #include "chrome/browser/ash/system_web_apps/apps/help_app/help_app_ui_delegate.h"
 #include "chrome/browser/ash/system_web_apps/apps/media_app/chrome_media_app_ui_delegate.h"
 #include "chrome/browser/ash/system_web_apps/apps/personalization_app/personalization_app_utils.h"
+#include "chrome/browser/ash/system_web_apps/apps/vc_background_ui/vc_background_ui_utils.h"
 #include "chrome/browser/ui/ash/holding_space/holding_space_keyed_service.h"
 #include "chrome/browser/ui/ash/holding_space/holding_space_keyed_service_factory.h"
 #include "chrome/browser/ui/chrome_select_file_policy.h"
@@ -281,6 +282,8 @@ void RegisterAshChromeWebUIConfigs() {
           base::BindRepeating(
               &printing::print_management::PrintingManagerFactory::
                   CreatePrintManagementUIController)));
+  map.AddWebUIConfig(
+      std::make_unique<printing::print_preview::PrintPreviewCrosUIConfig>());
   map.AddWebUIConfig(std::make_unique<multidevice::ProximityAuthUIConfig>());
   map.AddWebUIConfig(std::make_unique<RemoteMaintenanceCurtainUIConfig>());
   map.AddWebUIConfig(
@@ -301,8 +304,8 @@ void RegisterAshChromeWebUIConfigs() {
       std::make_unique<UrgentPasswordExpiryNotificationUIConfig>());
   map.AddWebUIConfig(std::make_unique<VcTrayTesterUIConfig>());
   map.AddWebUIConfig(std::make_unique<VmUIConfig>());
-  map.AddWebUIConfig(
-      std::make_unique<vc_background_ui::VcBackgroundUIConfig>());
+  map.AddWebUIConfig(std::make_unique<vc_background_ui::VcBackgroundUIConfig>(
+      base::BindRepeating(vc_background_ui::CreateVcBackgroundUI)));
 #if !defined(OFFICIAL_BUILD)
   map.AddWebUIConfig(std::make_unique<SampleSystemWebAppUIConfig>());
   map.AddWebUIConfig(std::make_unique<StatusAreaInternalsUIConfig>());

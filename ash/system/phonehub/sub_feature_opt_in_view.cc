@@ -11,8 +11,8 @@
 #include "ash/style/typography.h"
 #include "ash/system/phonehub/phone_hub_view_ids.h"
 #include "base/strings/utf_string_conversions.h"
-#include "chromeos/constants/chromeos_features.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/chromeos/devicetype_utils.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/geometry/insets.h"
@@ -149,6 +149,7 @@ void SubFeatureOptInView::UpdateLabels() {
 }
 
 void SubFeatureOptInView::InitLayout() {
+  // TODO(b/322067753): Replace usage of |AshColorProvider| with |cros_tokens|.
   const SkColor border_color = AshColorProvider::Get()->GetContentLayerColor(
       AshColorProvider::ContentLayerType::kSeparatorColor);
   SetBorder(views::CreateRoundedRectBorder(
@@ -182,10 +183,8 @@ void SubFeatureOptInView::InitLayout() {
   text_label_->SetHorizontalAlignment(gfx::HorizontalAlignment::ALIGN_LEFT);
   text_label_->SetText(l10n_util::GetStringUTF16(description_string_id_));
 
-  if (chromeos::features::IsJellyrollEnabled()) {
-    TypographyProvider::Get()->StyleLabel(ash::TypographyToken::kCrosHeadline1,
-                                          *text_label_);
-  }
+  TypographyProvider::Get()->StyleLabel(ash::TypographyToken::kCrosHeadline1,
+                                        *text_label_);
   text_label_->SetLineHeight(kTextLabelLineHeightDip);
 
   // Set up layout row for the buttons.
@@ -222,5 +221,8 @@ void SubFeatureOptInView::InitLayout() {
   dismiss_button_->SetAccessibleDescription(
       u"", ax::mojom::DescriptionFrom::kAttributeExplicitlyEmpty);
 }
+
+BEGIN_METADATA(SubFeatureOptInView)
+END_METADATA
 
 }  // namespace ash

@@ -6,6 +6,8 @@
 
 #include "third_party/perfetto/include/perfetto/tracing/traced_value.h"
 
+namespace tabs {
+
 TabModel::TabModel(std::unique_ptr<content::WebContents> contents,
                    TabStripModel* owning_model)
     : contents_(std::move(contents)), owning_model_(owning_model) {
@@ -36,7 +38,7 @@ void TabModel::OnRemovedFromModel() {
   // TODO(tbergquist): Decide whether to stick with this approach or not.
   pinned_ = false;
   blocked_ = false;
-  group_ = absl::nullopt;
+  group_ = std::nullopt;
 }
 
 void TabModel::WriteIntoTrace(perfetto::TracedValue context) const {
@@ -45,3 +47,5 @@ void TabModel::WriteIntoTrace(perfetto::TracedValue context) const {
   dict.Add("pinned", pinned());
   dict.Add("blocked", blocked());
 }
+
+}  // namespace tabs

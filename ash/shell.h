@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "ash/accelerators/modifier_key_combo_recorder.h"
 #include "ash/accessibility/accessibility_event_handler_manager.h"
 #include "ash/ash_export.h"
 #include "ash/constants/ash_features.h"
@@ -151,7 +152,6 @@ class DragDropController;
 class EventClientImpl;
 class EventRewriterControllerImpl;
 class EventTransformationHandler;
-class WindowRestoreController;
 class FirmwareUpdateManager;
 class FirmwareUpdateNotificationController;
 class FloatController;
@@ -186,7 +186,6 @@ class LoginScreenController;
 class LoginUnlockThroughputRecorder;
 class MediaNotificationProvider;
 class TabClusterUIController;
-class TabletModeController;
 class MediaControllerImpl;
 class MessageCenterAshImpl;
 class MessageCenterController;
@@ -208,6 +207,7 @@ class PeripheralBatteryListener;
 class PeripheralBatteryNotifier;
 class PersistentWindowController;
 class PickerController;
+class PineController;
 class PipController;
 class PolicyRecommendationRestorer;
 class PostLoginGlanceablesMetricsRecorder;
@@ -218,6 +218,7 @@ class PrivacyHubController;
 class PrivacyScreenController;
 class ProjectingObserver;
 class ProjectorControllerImpl;
+class RapidKeySequenceRecorder;
 class RasterScaleController;
 class RgbKeyboardManager;
 class ResizeShadowController;
@@ -251,6 +252,7 @@ class SystemNudgePauseManagerImpl;
 class SystemSoundsDelegate;
 class SystemTrayModel;
 class SystemTrayNotifier;
+class TabletModeController;
 class ToastManagerImpl;
 class ToplevelWindowEventHandler;
 class ClipboardHistoryControllerImpl;
@@ -263,6 +265,8 @@ class VideoDetector;
 class WallpaperControllerImpl;
 class WindowBoundsTracker;
 class WindowCycleController;
+class WindowRestoreController;
+class WindowTilingController;
 class WindowTreeHostManager;
 class WmModeController;
 class ArcInputMethodBoundsTracker;
@@ -665,6 +669,7 @@ class ASH_EXPORT Shell : public SessionObserver,
     return peripheral_battery_listener_.get();
   }
   PickerController* picker_controller() { return picker_controller_.get(); }
+  PineController* pine_controller() { return pine_controller_.get(); }
   PipController* pip_controller() { return pip_controller_.get(); }
   PolicyRecommendationRestorer* policy_recommendation_restorer() {
     return policy_recommendation_restorer_.get();
@@ -729,6 +734,12 @@ class ASH_EXPORT Shell : public SessionObserver,
   ShortcutInputHandler* shortcut_input_handler() {
     return shortcut_input_handler_.get();
   }
+  ModifierKeyComboRecorder* modifier_key_combo_recorder() {
+    return modifier_key_combo_recorder_.get();
+  }
+  RapidKeySequenceRecorder* rapid_key_sequence_recorder() {
+    return rapid_key_sequence_recorder_.get();
+  }
   ShutdownControllerImpl* shutdown_controller() {
     return shutdown_controller_.get();
   }
@@ -783,6 +794,9 @@ class ASH_EXPORT Shell : public SessionObserver,
   }
   WindowRestoreController* window_restore_controller() {
     return window_restore_controller_.get();
+  }
+  WindowTilingController* window_tiling_controller() {
+    return window_tiling_controller_.get();
   }
   OverviewController* overview_controller() {
     return overview_controller_.get();
@@ -958,6 +972,8 @@ class ASH_EXPORT Shell : public SessionObserver,
   std::unique_ptr<EventRewriterControllerImpl> event_rewriter_controller_;
   std::unique_ptr<InputDeviceSettingsControllerImpl>
       input_device_settings_controller_;
+  std::unique_ptr<ModifierKeyComboRecorder> modifier_key_combo_recorder_;
+  std::unique_ptr<RapidKeySequenceRecorder> rapid_key_sequence_recorder_;
   std::unique_ptr<InputDeviceSettingsDispatcher>
       input_device_settings_dispatcher_;
   std::unique_ptr<InputDeviceTracker> input_device_tracker_;
@@ -1069,6 +1085,7 @@ class ASH_EXPORT Shell : public SessionObserver,
       feature_discover_reporter_;
   std::unique_ptr<AshColorProvider> ash_color_provider_;
   std::unique_ptr<NightLightControllerImpl> night_light_controller_;
+  std::unique_ptr<PineController> pine_controller_;
   std::unique_ptr<PipController> pip_controller_;
   std::unique_ptr<PrivacyScreenController> privacy_screen_controller_;
   std::unique_ptr<PolicyRecommendationRestorer> policy_recommendation_restorer_;
@@ -1095,6 +1112,7 @@ class ASH_EXPORT Shell : public SessionObserver,
   std::unique_ptr<WallpaperControllerImpl> wallpaper_controller_;
   std::unique_ptr<WindowCycleController> window_cycle_controller_;
   std::unique_ptr<WindowRestoreController> window_restore_controller_;
+  std::unique_ptr<WindowTilingController> window_tiling_controller_;
   std::unique_ptr<OverviewController> overview_controller_;
   std::unique_ptr<GameDashboardController> game_dashboard_controller_;
   // Owned by |focus_controller_|.

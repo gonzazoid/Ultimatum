@@ -4,6 +4,7 @@
 
 #include "components/commerce/core/account_checker.h"
 #include "base/json/json_writer.h"
+#include "base/time/time.h"
 #include "base/values.h"
 #include "components/commerce/core/commerce_constants.h"
 #include "components/commerce/core/commerce_feature_list.h"
@@ -24,7 +25,7 @@
 
 namespace {
 
-const int64_t kTimeoutMs = 10000;
+constexpr base::TimeDelta kTimeout = base::Milliseconds(10000);
 const char kPriceTrackEmailPref[] = "price_track_email";
 const char kPreferencesKey[] = "preferences";
 
@@ -66,7 +67,7 @@ bool AccountChecker::IsSignedIn() {
            identity_manager_->HasPrimaryAccount(signin::ConsentLevel::kSignin);
   }
   // The feature is not enabled, fallback to old behavior.
-  // TODO(crbug.com/1462978): Delete ConsentLevel::kSync usage once
+  // TODO(crbug.com/40067058): Delete ConsentLevel::kSync usage once
   // kReplaceSyncPromosWithSignInPromos is launched on all platforms. See
   // ConsentLevel::kSync documentation for details.
   return identity_manager_ &&
@@ -81,7 +82,7 @@ bool AccountChecker::IsSyncingBookmarks() {
                                 syncer::UploadState::ACTIVE;
   }
   // The feature is not enabled, fallback to old behavior.
-  // TODO(crbug.com/1462978): Delete IsSyncFeatureActive() usage once
+  // TODO(crbug.com/40067058): Delete IsSyncFeatureActive() usage once
   // kReplaceSyncPromosWithSignInPromos is launched on all platforms. See
   // ConsentLevel::kSync documentation for details.
   return sync_service_ && sync_service_->IsSyncFeatureActive() &&
@@ -151,7 +152,7 @@ void AccountChecker::FetchPriceEmailPref() {
         })");
   auto endpoint_fetcher = CreateEndpointFetcher(
       kOAuthName, GURL(kNotificationsPrefUrl), kGetHttpMethod, kContentType,
-      std::vector<std::string>{kOAuthScope}, kTimeoutMs, kEmptyPostData,
+      std::vector<std::string>{kOAuthScope}, kTimeout, kEmptyPostData,
       traffic_annotation);
   endpoint_fetcher.get()->Fetch(base::BindOnce(
       &AccountChecker::HandleFetchPriceEmailPrefResponse,
@@ -175,7 +176,7 @@ void AccountChecker::OnFetchPriceEmailPrefJsonParsed(
   if (pref_service_ && is_waiting_for_pref_fetch_completion_ &&
       result.has_value() && result->is_dict()) {
     if (auto* preferences_map = result->GetDict().FindDict(kPreferencesKey)) {
-      if (absl::optional<bool> price_email_pref =
+      if (std::optional<bool> price_email_pref =
               preferences_map->FindBool(kPriceTrackEmailPref)) {
         // Only set the pref value when necessary since it could affect
         // PrefService::Preference::IsDefaultValue().
@@ -245,7 +246,7 @@ void AccountChecker::OnPriceEmailPrefChanged() {
         })");
   auto endpoint_fetcher = CreateEndpointFetcher(
       kOAuthName, GURL(kNotificationsPrefUrl), kPostHttpMethod, kContentType,
-      std::vector<std::string>{kOAuthScope}, kTimeoutMs, post_data,
+      std::vector<std::string>{kOAuthScope}, kTimeout, post_data,
       traffic_annotation);
   endpoint_fetcher.get()->Fetch(base::BindOnce(
       &AccountChecker::HandleSendPriceEmailPrefResponse,
@@ -282,10 +283,10 @@ std::unique_ptr<EndpointFetcher> AccountChecker::CreateEndpointFetcher(
     const std::string& http_method,
     const std::string& content_type,
     const std::vector<std::string>& scopes,
-    int64_t timeout_ms,
+    const base::TimeDelta& timeout,
     const std::string& post_data,
     const net::NetworkTrafficAnnotationTag& annotation_tag) {
-  // TODO(crbug.com/1462978): Delete ConsentLevel::kSync usage once
+  // TODO(crbug.com/40067058): Delete ConsentLevel::kSync usage once
   // kReplaceSyncPromosWithSignInPromos is launched on all platforms. See
   // ConsentLevel::kSync documentation for details.
   signin::ConsentLevel consent_level =
@@ -294,7 +295,7 @@ std::unique_ptr<EndpointFetcher> AccountChecker::CreateEndpointFetcher(
           : signin::ConsentLevel::kSync;
   return std::make_unique<EndpointFetcher>(
       url_loader_factory_, oauth_consumer_name, url, http_method, content_type,
-      scopes, timeout_ms, post_data, annotation_tag, identity_manager_,
+      scopes, timeout, post_data, annotation_tag, identity_manager_,
       consent_level);
 }
 

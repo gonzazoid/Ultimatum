@@ -58,42 +58,6 @@ try_.builder(
 )
 
 try_.builder(
-    name = "fuchsia-arm64-rel",
-    branch_selector = branches.selector.FUCHSIA_BRANCHES,
-    mirrors = [
-        "ci/fuchsia-arm64-rel",
-    ],
-    gn_args = gn_args.config(
-        configs = [
-            "release_try_builder",
-            "reclient",
-            "fuchsia",
-            "arm64_host",
-        ],
-    ),
-    experiments = {
-        "enable_weetbix_queries": 100,
-        "weetbix.retry_weak_exonerations": 100,
-        "weetbix.enable_weetbix_exonerations": 100,
-    },
-    main_list_view = "try",
-    tryjob = try_.job(
-        location_filters = [
-            # Covers //fuchsia_web and //fuchsia changes, including
-            # SDK rolls.
-            ".*fuchsia.*",
-
-            # In 04/2022 - 04/2023, there was an independent failure.
-            "media/.+",
-
-            # TODO(crbug.com/1377994): When arm64 graphics are supported on
-            # emulator, fuchsia-arm64-rel tests should be tested.
-            "components/viz/viz.gni",
-        ],
-    ),
-)
-
-try_.builder(
     name = "fuchsia-binary-size",
     branch_selector = branches.selector.FUCHSIA_BRANCHES,
     executable = "recipe:binary_size_fuchsia_trybot",
@@ -145,6 +109,9 @@ This builder should be removed after migrating size from Ninja to Siso. b/277863
         },
     },
     siso_enabled = True,
+    # b/325854950 - 1280 concurrent remote jobs might cause slow downloads
+    # because this builder doesn't use SSD.
+    siso_remote_jobs = 640,
     tryjob = try_.job(
         experiment_percentage = 10,
     ),
@@ -234,6 +201,8 @@ try_.orchestrator_builder(
         # go/nplus1shardsproposal
         "chromium.add_one_test_shard": 10,
         "chromium.compilator_can_outlive_parent": 100,
+        # crbug.com/940930
+        "chromium.enable_cleandead": 100,
     },
     main_list_view = "try",
     siso_enabled = True,
@@ -248,27 +217,6 @@ try_.compilator_builder(
     ssd = True,
     main_list_view = "try",
     siso_enabled = True,
-)
-
-try_.builder(
-    name = "fuchsia-x64-rel",
-    branch_selector = branches.selector.FUCHSIA_BRANCHES,
-    mirrors = [
-        "ci/fuchsia-x64-rel",
-    ],
-    gn_args = gn_args.config(
-        configs = [
-            "release_try_builder",
-            "reclient",
-            "fuchsia",
-        ],
-    ),
-    experiments = {
-        "enable_weetbix_queries": 100,
-        "weetbix.retry_weak_exonerations": 100,
-        "weetbix.enable_weetbix_exonerations": 100,
-    },
-    main_list_view = "try",
 )
 
 try_.builder(

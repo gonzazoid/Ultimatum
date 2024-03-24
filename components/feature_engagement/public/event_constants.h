@@ -175,8 +175,11 @@ extern const char kBlueDotPromoOverflowMenuDismissed[];
 // row.
 extern const char kBlueDotPromoSettingsDismissed[];
 
-// The user snoozed the Credential Provider Extension Promo
+// The user snoozed the Credential Provider Extension Promo.
 extern const char kCredentialProviderExtensionPromoSnoozed[];
+
+// The user tapped Remind Me Later on the Docking Promo.
+extern const char kDockingPromoRemindMeLater[];
 
 // The user opened an url from omnibox.
 extern const char kOpenUrlFromOmnibox[];
@@ -192,10 +195,6 @@ extern const char kHistoryOnOverflowMenuUsed[];
 
 // The share item on the toolbar is used.
 extern const char kShareToolbarItemUsed[];
-
-// The user has met a condition that makes the default browser video promo
-// eligible to be displayed.
-extern const char kDefaultBrowserVideoPromoConditionsMet[];
 
 // The user has triggered the Lens button in the Omnibox keyboard.
 extern const char kLensButtonKeyboardUsed[];
@@ -220,16 +219,20 @@ extern const char kIOSPullToRefreshUsed[];
 // The user has tapped "incognito" on the page control in the tab grid.
 extern const char kIOSIncognitoPageControlTapped[];
 
-// The user has swiped left from regular tab grid to the incognito tab grid.
-extern const char kIOSSwipeLeftForIncognitoUsed[];
+// The user has swiped right from regular tab grid to the incognito tab grid.
+extern const char kIOSSwipeRightForIncognitoUsed[];
 
-// The user has met a condition that makes the Enhanced Safe Browsing
-// inline and blue-dot promos eligible to be displayed.
-extern const char kEnhancedSafeBrowsingPromoCriterionMet[];
+// The user has tapped the toolbar backward/forward button to navigate on a tab.
+extern const char kIOSBackForwardButtonTapped[];
 
-// The user has tapped on the 'X' button to remove the Enhanced Safe Browsing
-// inline promo from the settings menu.
-extern const char kEnhancedSafeBrowsingInlinePromoClosed[];
+// The user has swiped from the edge to navigate backward or forward on a tab.
+extern const char kIOSSwipeBackForwardUsed[];
+
+// The user has tapped on an adjacent tab in the tab grid.
+extern const char kIOSTabGridAdjacentTabTapped[];
+
+// The user has swipped the toolbar to go to an adjacent tab.
+extern const char kIOSSwipeToolbarToChangeTabUsed[];
 
 #endif  // BUILDFLAG(IS_IOS)
 

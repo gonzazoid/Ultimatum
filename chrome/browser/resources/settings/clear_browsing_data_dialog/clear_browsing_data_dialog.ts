@@ -19,26 +19,28 @@ import '../controls/settings_checkbox.js';
 import '../icons.html.js';
 import '../settings_shared.css.js';
 
-import {PrefControlMixinInterface} from '/shared/settings/controls/pref_control_mixin.js';
-import {DropdownMenuOptionList} from '/shared/settings/controls/settings_dropdown_menu.js';
-import {StatusAction, SyncBrowserProxy, SyncBrowserProxyImpl, SyncStatus} from '/shared/settings/people_page/sync_browser_proxy.js';
+import type {SyncBrowserProxy, SyncStatus} from '/shared/settings/people_page/sync_browser_proxy.js';
+import {StatusAction, SyncBrowserProxyImpl} from '/shared/settings/people_page/sync_browser_proxy.js';
 import {PrefsMixin} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
 import {getInstance as getAnnouncerInstance} from 'chrome://resources/cr_elements/cr_a11y_announcer/cr_a11y_announcer.js';
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import type {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
 import {assert} from 'chrome://resources/js/assert.js';
 import {FocusOutlineManager} from 'chrome://resources/js/focus_outline_manager.js';
 import {sanitizeInnerHtml} from 'chrome://resources/js/parse_html_subset.js';
-import {IronPagesElement} from 'chrome://resources/polymer/v3_0/iron-pages/iron-pages.js';
+import type {IronPagesElement} from 'chrome://resources/polymer/v3_0/iron-pages/iron-pages.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {SettingsCheckboxElement} from '../controls/settings_checkbox.js';
+import type {SettingsCheckboxElement} from '../controls/settings_checkbox.js';
+import type {DropdownMenuOptionList, SettingsDropdownMenuElement} from '../controls/settings_dropdown_menu.js';
 import {loadTimeData} from '../i18n_setup.js';
 import {routes} from '../route.js';
-import {Route, RouteObserverMixin, Router} from '../router.js';
+import type {Route} from '../router.js';
+import {RouteObserverMixin, Router} from '../router.js';
 
-import {ClearBrowsingDataBrowserProxy, ClearBrowsingDataBrowserProxyImpl, UpdateSyncStateEvent} from './clear_browsing_data_browser_proxy.js';
+import type {ClearBrowsingDataBrowserProxy, UpdateSyncStateEvent} from './clear_browsing_data_browser_proxy.js';
+import {ClearBrowsingDataBrowserProxyImpl} from './clear_browsing_data_browser_proxy.js';
 import {getTemplate} from './clear_browsing_data_dialog.html.js';
 
 /**
@@ -59,6 +61,7 @@ function closeDialog(dialog: CrDialogElement, isLast: boolean) {
 export interface SettingsClearBrowsingDataDialogElement {
   $: {
     clearBrowsingDataConfirm: HTMLElement,
+    cookiesCheckbox: SettingsCheckboxElement,
     cookiesCheckboxBasic: SettingsCheckboxElement,
     clearBrowsingDataDialog: CrDialogElement,
     tabs: IronPagesElement,
@@ -292,6 +295,8 @@ export class SettingsClearBrowsingDataDialogElement extends
             'computeHasOtherError_(syncStatus, isSyncPaused_, hasPassphraseError_)',
       },
 
+      selectedTabIndex_: Number,
+
       tabsNames_: {
         type: Array,
         value: () =>
@@ -320,6 +325,8 @@ export class SettingsClearBrowsingDataDialogElement extends
           prefs.browser.clear_data.time_period.value)`,
       `onTimePeriodBasicPrefUpdated_(
           prefs.browser.clear_data.time_period_basic.value)`,
+      `onSelectedTabIndexPrefUpdated_(
+          prefs.browser.last_clear_browsing_data_tab.value)`,
     ];
   }
 
@@ -343,6 +350,7 @@ export class SettingsClearBrowsingDataDialogElement extends
   private isSyncPaused_: boolean;
   private hasPassphraseError_: boolean;
   private hasOtherSyncError_: boolean;
+  private selectedTabIndex_: number;
   private tabsNames_: string[];
   private googleSearchHistoryString_: TrustedHTML;
   private isNonGoogleDse_: boolean;
@@ -474,12 +482,13 @@ export class SettingsClearBrowsingDataDialogElement extends
       isSignedIn: boolean, shouldShowCookieException: boolean,
       cookiesSummary: string, clearCookiesSummarySignedIn: string,
       clearCookiesSummarySyncing: string,
+      // @ts-ignore: error TS6133: unused on some platforms
       clearCookiesSummarySignedInSupervisedProfile: string): string {
-    if (loadTimeData.getBoolean('isChildAccount') &&
-        loadTimeData.getBoolean(
-            'clearingCookiesKeepsSupervisedUsersSignedIn')) {
+    // <if expr="is_linux or is_macosx or is_win">
+    if (loadTimeData.getBoolean('isChildAccount')) {
       return clearCookiesSummarySignedInSupervisedProfile;
     }
+    // </if>
 
     if (this.unoDesktopEnabled_ && isSignedIn) {
       return clearCookiesSummarySignedIn;
@@ -528,22 +537,32 @@ export class SettingsClearBrowsingDataDialogElement extends
   private async clearBrowsingData_() {
     this.clearingInProgress_ = true;
     this.clearingDataAlertString_ = loadTimeData.getString('clearingData');
+
+    this.setPrefValue(
+        'browser.last_clear_browsing_data_tab', this.selectedTabIndex_);
+    // Dropdown menu and checkbox selections of both tabs should be persisted
+    // independently from the tab on which the user confirmed the deletion.
+    this.shadowRoot!
+        .querySelectorAll<SettingsCheckboxElement>(
+            'settings-checkbox[no-set-pref]')
+        .forEach(checkbox => checkbox.sendPrefChange());
+    this.shadowRoot!
+        .querySelectorAll<SettingsDropdownMenuElement>(
+            'settings-dropdown-menu[no-set-pref]')
+        .forEach(dropdown => dropdown.sendPrefChange());
+
     const tab = this.$.tabs.selectedItem as HTMLElement;
     const dataTypes = this.getSelectedDataTypes_(tab);
-    const timePeriod = (tab.querySelector('.time-range-select') as unknown as
-                        PrefControlMixinInterface)
-                           .pref!.value;
+    const dropdownMenu =
+        tab.querySelector<SettingsDropdownMenuElement>('.time-range-select');
+    assert(dropdownMenu);
+    const timePeriod = dropdownMenu.pref!.value;
 
     if (tab.id === 'basic-tab') {
       chrome.metricsPrivate.recordUserAction('ClearBrowsingData_BasicTab');
     } else {
       chrome.metricsPrivate.recordUserAction('ClearBrowsingData_AdvancedTab');
     }
-
-    this.shadowRoot!
-        .querySelectorAll<SettingsCheckboxElement>(
-            'settings-checkbox[no-set-pref]')
-        .forEach(checkbox => checkbox.sendPrefChange());
 
     const {showHistoryNotice, showPasswordsNotice} =
         await this.browserProxy_.clearBrowsingData(dataTypes, timePeriod);
@@ -588,6 +607,10 @@ export class SettingsClearBrowsingDataDialogElement extends
    */
   private onPasswordsDeletionDialogClose_() {
     this.showPasswordsDeletionDialog_ = false;
+  }
+
+  private onSelectedTabIndexPrefUpdated_(selectedTabIndex: number) {
+    this.selectedTabIndex_ = selectedTabIndex;
   }
 
   /**

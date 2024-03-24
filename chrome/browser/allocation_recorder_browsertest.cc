@@ -9,6 +9,8 @@
 #include "chrome/test/base/chrome_test_utils.h"
 #include "components/allocation_recorder/testing/crash_verification.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
+#include "content/public/test/no_renderer_crashes_assertion.h"
 #include "url/gurl.h"
 
 #if BUILDFLAG(ENABLE_ALLOCATION_STACK_TRACE_RECORDER)
@@ -31,21 +33,11 @@ class AllocationRecorderBrowserTest : public PlatformBrowserTest {
   AllocationRecorderBrowserTest();
   ~AllocationRecorderBrowserTest() override;
 
-  void SetUpCommandLine(base::CommandLine* command_line) override;
-
   void CrashRendererProcess();
 };
 
 AllocationRecorderBrowserTest::AllocationRecorderBrowserTest() = default;
 AllocationRecorderBrowserTest::~AllocationRecorderBrowserTest() = default;
-
-void AllocationRecorderBrowserTest::SetUpCommandLine(
-    base::CommandLine* command_line) {
-  PlatformBrowserTest::SetUpCommandLine(command_line);
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-  command_line->AppendSwitch(switches::kEnableCrashpad);
-#endif
-}
 
 void AllocationRecorderBrowserTest::CrashRendererProcess() {
   const GURL crash_url("chrome://crash");

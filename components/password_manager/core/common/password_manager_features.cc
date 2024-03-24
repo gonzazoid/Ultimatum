@@ -30,7 +30,7 @@ BASE_FEATURE(kForceInitialSyncWhenDecryptionFails,
 // and filled.
 BASE_FEATURE(kForgotPasswordFormSupport,
              "ForgotPasswordFormSupport",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 #if BUILDFLAG(IS_IOS)
 // Enables password bottom sheet to be displayed (on iOS) when a user is
@@ -43,7 +43,7 @@ BASE_FEATURE(kIOSPasswordBottomSheet,
 // Enables password bottom sheet to be triggered on autofocus events (on iOS).
 BASE_FEATURE(kIOSPasswordBottomSheetAutofocus,
              "kIOSPasswordBottomSheetAutofocus",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // When enabled, eligible users will be given the possibility to bulk upload
 // local passwords in the iOS password settings.
@@ -85,6 +85,11 @@ BASE_FEATURE(kRecoverFromNeverSaveAndroid,
              "RecoverFromNeverSaveAndroid_LAUNCHED",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
+// Removes password suggestion filtering by username.
+BASE_FEATURE(kNoPasswordSuggestionFiltering,
+             "NoPasswordSuggestionFiltering",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
 #if BUILDFLAG(IS_ANDROID)
 // Use GMS AccountSettings to manage passkeys when UPM is not available.
 BASE_FEATURE(kPasskeyManagementUsingAccountSettingsAndroid,
@@ -94,7 +99,7 @@ BASE_FEATURE(kPasskeyManagementUsingAccountSettingsAndroid,
 // Enables the Password generation bottom sheet.
 BASE_FEATURE(kPasswordGenerationBottomSheet,
              "PasswordGenerationBottomSheet",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Enables the refactored Password Suggestion bottom sheet (Touch-To-Fill).
 // The goal of the refactoring is to transfer the knowledge about the

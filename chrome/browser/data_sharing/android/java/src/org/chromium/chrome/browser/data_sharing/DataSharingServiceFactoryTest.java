@@ -17,13 +17,14 @@ import org.chromium.base.library_loader.LibraryLoader;
 import org.chromium.base.test.BaseJUnit4ClassRunner;
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
+import org.chromium.base.test.util.Features;
+import org.chromium.base.test.util.Features.DisableFeatures;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
-import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
-import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
+import org.chromium.components.data_sharing.DataSharingNetworkLoader;
 import org.chromium.components.data_sharing.DataSharingService;
 
 import java.util.concurrent.TimeoutException;
@@ -46,6 +47,11 @@ public class DataSharingServiceFactoryTest {
                     public boolean isEmptyService() {
                         return true;
                     }
+
+                    @Override
+                    public DataSharingNetworkLoader getNetworkLoader() {
+                        return null;
+                    }
                 };
 
         DataSharingServiceFactory.setForTesting(testService);
@@ -58,7 +64,7 @@ public class DataSharingServiceFactoryTest {
                     public void run() {
                         DataSharingService dataSharingService =
                                 DataSharingServiceFactory.getForProfile(
-                                        Profile.getLastUsedRegularProfile());
+                                        ProfileManager.getLastUsedRegularProfile());
                         Assert.assertTrue(dataSharingService.isEmptyService());
                         Assert.assertEquals(dataSharingService, testService);
                     }
@@ -78,7 +84,7 @@ public class DataSharingServiceFactoryTest {
                     public void run() {
                         DataSharingService dataSharingService =
                                 DataSharingServiceFactory.getForProfile(
-                                        Profile.getLastUsedRegularProfile());
+                                        ProfileManager.getLastUsedRegularProfile());
                         Assert.assertFalse(dataSharingService.isEmptyService());
                     }
                 });
@@ -97,7 +103,7 @@ public class DataSharingServiceFactoryTest {
                     public void run() {
                         DataSharingService dataSharingService =
                                 DataSharingServiceFactory.getForProfile(
-                                        Profile.getLastUsedRegularProfile());
+                                        ProfileManager.getLastUsedRegularProfile());
                         Assert.assertTrue(dataSharingService.isEmptyService());
                     }
                 });

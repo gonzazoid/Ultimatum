@@ -136,6 +136,8 @@ chromium-metrics-reviews@google.com.
   <int value="4" label="Slots do not divide low entropy domain"/>
   <int value="5" label="Invalid slot bounds"/>
   <int value="6" label="Unknown fields"/>
+  <int value="7" label="Layer ID is not unique"/>
+  <int value="8" label="Limited layer dropped"/>
 </enum>
 
 <enum name="VariationsInvalidStudyReason">
@@ -156,6 +158,14 @@ chromium-metrics-reviews@google.com.
   <int value="12" label="Experiment has an invalid name"/>
   <int value="13" label="Feature has an invalid name"/>
   <int value="14" label="Forcing flag has an invalid name"/>
+</enum>
+
+<enum name="VariationsLimitedEntropySeedRejectionReason">
+  <int value="0" label="Exceeds entropy limit"/>
+  <int value="1" label="More than one limited layer"/>
+  <int value="2" label="Limited layer is active but has invalid slot bounds"/>
+  <int value="3" label="Limited layer is active but does not contain slots"/>
+  <int value="4" label="Limited layer is not active"/>
 </enum>
 
 <enum name="VariationsLogInvalidValue">

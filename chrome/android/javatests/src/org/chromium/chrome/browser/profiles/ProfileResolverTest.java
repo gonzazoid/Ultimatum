@@ -64,20 +64,21 @@ public class ProfileResolverTest {
     }
 
     private Profile getLastUsedRegularProfileOnUiThread() throws ExecutionException {
-        return TestThreadUtils.runOnUiThreadBlocking(() -> Profile.getLastUsedRegularProfile());
+        return TestThreadUtils.runOnUiThreadBlocking(
+                () -> ProfileManager.getLastUsedRegularProfile());
     }
 
     private Profile getPrimaryOtrProfileOnUiThread() throws ExecutionException {
         return TestThreadUtils.runOnUiThreadBlocking(
                 () ->
-                        Profile.getLastUsedRegularProfile()
+                        ProfileManager.getLastUsedRegularProfile()
                                 .getPrimaryOTRProfile(/* createIfNeeded= */ true));
     }
 
     private Profile newOtrProfileOnUiThread(String profileIdPrefix) throws ExecutionException {
         return TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
-                    Profile regularProfile = Profile.getLastUsedRegularProfile();
+                    Profile regularProfile = ProfileManager.getLastUsedRegularProfile();
                     OTRProfileID otrProfileId = OTRProfileID.createUnique(profileIdPrefix);
                     return regularProfile.getOffTheRecordProfile(
                             otrProfileId, /* createIfNeeded= */ true);
@@ -86,7 +87,7 @@ public class ProfileResolverTest {
 
     private ProfileKey getPrimaryProfileKeyOnUiThread() throws ExecutionException {
         return TestThreadUtils.runOnUiThreadBlocking(
-                () -> Profile.getLastUsedRegularProfile().getProfileKey());
+                () -> ProfileManager.getLastUsedRegularProfile().getProfileKey());
     }
 
     private String tokenizeOnUiThread(Profile profile) throws ExecutionException {
@@ -219,7 +220,7 @@ public class ProfileResolverTest {
     @SmallTest
     public void testResolveProfileKeyBeforeProfileInit() throws ExecutionException {
         initToReducedMode();
-        ProfileKey key = ProfileKey.getLastUsedRegularProfileKey();
+        ProfileKey key = ProfileKeyUtil.getLastUsedRegularProfileKey();
 
         String token = tokenizeOnUiThread(key);
         ProfileKey resolvedKey = resolveProfileKeySync(token);

@@ -5,6 +5,7 @@
 #ifndef COMPONENTS_VIZ_SERVICE_DISPLAY_OVERLAY_CANDIDATE_H_
 #define COMPONENTS_VIZ_SERVICE_DISPLAY_OVERLAY_CANDIDATE_H_
 
+#include <optional>
 #include <vector>
 
 #include "base/containers/flat_map.h"
@@ -16,7 +17,6 @@
 #include "components/viz/common/resources/resource_id.h"
 #include "components/viz/service/viz_service_export.h"
 #include "gpu/command_buffer/common/mailbox.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 #include "third_party/skia/include/private/chromium/GrDeferredDisplayList.h"
 #include "ui/gfx/buffer_types.h"
@@ -120,6 +120,10 @@ class VIZ_SERVICE_EXPORT OverlayCandidate {
   // If we need nearest neighbor filter for displaying this overlay.
   bool nearest_neighbor_filter : 1 = false;
 
+  // If true, we need to run a detiling image processor on the quad before we
+  // can scan it out.
+  bool needs_detiling : 1 = false;
+
   // Rect in content space that, when combined with |transform|, is the bounds
   // to position the overlay to. When |transform| is a |gx::OverlayTransform|,
   // this is the bounds of the quad rect with its transform applied, so that
@@ -149,7 +153,7 @@ class VIZ_SERVICE_EXPORT OverlayCandidate {
   gfx::RectF uv_rect = gfx::RectF(0.f, 0.f, 1.f, 1.f);
   // Clip rect in the target space after composition, or nullopt if the quad is
   // not clipped.
-  absl::optional<gfx::Rect> clip_rect;
+  std::optional<gfx::Rect> clip_rect;
 
   // Texture resource to present in an overlay.
   ResourceId resource_id = kInvalidResourceId;
@@ -212,7 +216,7 @@ class VIZ_SERVICE_EXPORT OverlayCandidate {
 
   // Represents either a background of this overlay candidate or a color of a
   // solid color quad, which can be checked via the |is_solid_color|.
-  absl::optional<SkColor4f> color;
+  std::optional<SkColor4f> color;
 
   // If |rpdq| is present, then the renderer must draw the filter effects and
   // copy the result into the buffer backing of a render pass.

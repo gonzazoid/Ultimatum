@@ -20,6 +20,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "components/autofill/core/common/autofill_switches.h"
+#include "components/autofill/core/common/dense_set.h"
 
 namespace autofill {
 
@@ -187,7 +188,8 @@ GURL StripAuthAndParams(const GURL& gurl) {
 bool IsAutofillManuallyTriggered(
     AutofillSuggestionTriggerSource trigger_source) {
   return IsAddressAutofillManuallyTriggered(trigger_source) ||
-         IsPaymentsAutofillManuallyTriggered(trigger_source);
+         IsPaymentsAutofillManuallyTriggered(trigger_source) ||
+         IsPasswordsAutofillManuallyTriggered(trigger_source);
 }
 
 bool IsAddressAutofillManuallyTriggered(
@@ -200,6 +202,12 @@ bool IsPaymentsAutofillManuallyTriggered(
     AutofillSuggestionTriggerSource trigger_source) {
   return trigger_source ==
          AutofillSuggestionTriggerSource::kManualFallbackPayments;
+}
+
+bool IsPasswordsAutofillManuallyTriggered(
+    AutofillSuggestionTriggerSource trigger_source) {
+  return trigger_source ==
+         AutofillSuggestionTriggerSource::kManualFallbackPasswords;
 }
 
 }  // namespace autofill

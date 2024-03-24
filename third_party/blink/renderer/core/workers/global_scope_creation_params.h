@@ -6,13 +6,13 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_WORKERS_GLOBAL_SCOPE_CREATION_PARAMS_H_
 
 #include <memory>
+#include <optional>
 
 #include "base/task/single_thread_task_runner.h"
 #include "base/unguessable_token.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "services/network/public/mojom/referrer_policy.mojom-blink-forward.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/permissions_policy/permissions_policy.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/common/user_agent/user_agent_metadata.h"
@@ -49,7 +49,7 @@ struct CORE_EXPORT GlobalScopeCreationParams final {
       mojom::blink::ScriptType script_type,
       const String& global_scope_name,
       const String& user_agent,
-      const absl::optional<UserAgentMetadata>& ua_metadata,
+      const std::optional<UserAgentMetadata>& ua_metadata,
       scoped_refptr<WebWorkerFetchContext>,
       Vector<network::mojom::blink::ContentSecurityPolicyPtr>
           outside_content_security_policies,
@@ -76,15 +76,16 @@ struct CORE_EXPORT GlobalScopeCreationParams final {
       const PermissionsPolicy* parent_permissions_policy = nullptr,
       base::UnguessableToken agent_cluster_id = {},
       ukm::SourceId ukm_source_id = ukm::kInvalidSourceId,
-      const absl::optional<ExecutionContextToken>& parent_context_token =
-          absl::nullopt,
+      const std::optional<ExecutionContextToken>& parent_context_token =
+          std::nullopt,
       bool parent_cross_origin_isolated_capability = false,
       bool parent_is_isolated_context = false,
       InterfaceRegistry* interface_registry = nullptr,
       scoped_refptr<base::SingleThreadTaskRunner>
           agent_group_scheduler_compositor_task_runner = nullptr,
       const SecurityOrigin* top_level_frame_security_origin = nullptr,
-      bool parent_has_storage_access = false);
+      bool parent_has_storage_access = false,
+      bool require_cross_site_request_for_cookies = false);
   GlobalScopeCreationParams(const GlobalScopeCreationParams&) = delete;
   GlobalScopeCreationParams& operator=(const GlobalScopeCreationParams&) =
       delete;
@@ -199,7 +200,7 @@ struct CORE_EXPORT GlobalScopeCreationParams final {
   // The identity of the parent ExecutionContext that is the sole owner of this
   // worker or worklet, which caused it to be created, and to whose lifetime
   // this worker/worklet is bound. This is used for resource usage attribution.
-  absl::optional<ExecutionContextToken> parent_context_token;
+  std::optional<ExecutionContextToken> parent_context_token;
 
   // https://html.spec.whatwg.org/C/#concept-settings-object-cross-origin-isolated-capability
   // Used by dedicated workers, and set to false when there is no parent.
@@ -226,6 +227,17 @@ struct CORE_EXPORT GlobalScopeCreationParams final {
   // Whether the parent ExecutionContext has storage access (via the Storage
   // Access API).
   const bool parent_has_storage_access;
+
+  // Late initialized on thread creation. This signals whether the world created
+  // is the default world for an isolate.
+  bool is_default_world_of_isolate = false;
+
+  // If `require_cross_site_request_for_cookies` is specified, then all requests
+  // made must have an empty site_for_cookies to ensure only SameSite=None
+  // cookies can be attached to the request.
+  // For context on usage see:
+  // https://privacycg.github.io/saa-non-cookie-storage/shared-workers.html
+  const bool require_cross_site_request_for_cookies;
 };
 
 }  // namespace blink

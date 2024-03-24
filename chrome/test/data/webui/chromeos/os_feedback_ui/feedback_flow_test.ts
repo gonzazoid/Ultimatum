@@ -17,11 +17,11 @@ import {setFeedbackServiceProviderForTesting, setHelpContentProviderForTesting} 
 import {FeedbackAppExitPath, FeedbackAppHelpContentOutcome, FeedbackAppPreSubmitAction, FeedbackContext, SendReportStatus} from 'chrome://os-feedback/os_feedback_ui.mojom-webui.js';
 import {SearchPageElement} from 'chrome://os-feedback/search_page.js';
 import {ShareDataPageElement} from 'chrome://os-feedback/share_data_page.js';
+import {CrButtonElement} from 'chrome://resources/ash/common/cr_elements/cr_button/cr_button.js';
+import {CrCheckboxElement} from 'chrome://resources/ash/common/cr_elements/cr_checkbox/cr_checkbox.js';
 import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
 import {strictQuery} from 'chrome://resources/ash/common/typescript_utils/strict_query.js';
 import {getDeepActiveElement} from 'chrome://resources/ash/common/util.js';
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
-import {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
 import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
@@ -1237,47 +1237,25 @@ suite('FeedbackFlowTestSuite', () => {
         true, FeedbackAppHelpContentOutcome.kContinueNoHelpContentDisplayed);
   });
 
+  test('UpdatesCSSUrl_TrustedUi', async () => {
+    /*@type {HTMLLinkElement}*/
+    const link = document.createElement('link');
+    const disabledUrl = 'chrome://resources/chromeos/colors/cros_styles.css';
+    link.href = disabledUrl;
+    document.head.appendChild(link);
+
+    await initializePage();
+
+    const enabledUrl = 'theme/colors.css';
+    assertTrue(link.href.includes(enabledUrl));
+
+    // Clean up test specific element.
+    document.head.removeChild(link);
+  });
+
+  // Test that test helper message is triggered on untrusted UI.
   test(
-      'UpdatesCSSUrlBasedOnIsJellyEnabledForOsFeedback_TrustedUi', async () => {
-        // Setup test for jelly disabled.
-        loadTimeData.overrideValues({
-          isJellyEnabledForOsFeedback: false,
-        });
-        /*@type {HTMLLinkElement}*/
-        const link = document.createElement('link');
-        const disabledUrl =
-            'chrome://resources/chromeos/colors/cros_styles.css';
-        link.href = disabledUrl;
-        document.head.appendChild(link);
-        await initializePage();
-
-        assertTrue(link.href.includes(disabledUrl));
-
-        // Reset app element.
-        document.body.innerHTML = window.trustedTypes!.emptyHTML;
-
-        // Setup test for jelly enabled.
-        loadTimeData.overrideValues({
-          isJellyEnabledForOsFeedback: true,
-        });
-        await initializePage();
-
-        const enabledUrl = 'theme/colors.css';
-        assertTrue(link.href.includes(enabledUrl));
-
-        // Clean up test specific element.
-        document.head.removeChild(link);
-      });
-
-  // Test that test helper message is triggered on untrusted UI when
-  // `isJellyEnabledForOsFeedback` is true.
-  test(
-      'UpdatesCSSUrlBasedOnIsJellyEnabledForOsFeedback_UntrustedUi',
-      async () => {
-        // `isJellyEnabledForOsFeedback` is true by default based on test flag
-        // configuration.
-        assertTrue(loadTimeData.getBoolean('isJellyEnabledForOsFeedback'));
-
+      'UpdatesCSSUrlBasedOn_UntrustedUi', async () => {
         const resolver = new PromiseResolver<void>();
         let colorChangeUpdaterCalled = false;
         const testMessageListener = (event: {data: {id: string}}) => {

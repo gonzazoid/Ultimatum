@@ -36,7 +36,7 @@
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/shared_memory_mapping.h"
-#include "base/memory/writable_shared_memory_region.h"
+#include "base/memory/unsafe_shared_memory_region.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/metrics/histogram_base.h"
 #include "base/metrics/histogram_functions.h"
@@ -988,13 +988,6 @@ GetBindHostReceiverInterceptor() {
   return *interceptor;
 }
 
-RenderProcessHostImpl::CreateNetworkFactoryCallback&
-GetCreateNetworkFactoryCallback() {
-  static base::NoDestructor<RenderProcessHostImpl::CreateNetworkFactoryCallback>
-      s_callback;
-  return *s_callback;
-}
-
 RenderProcessHostImpl::BadMojoMessageCallbackForTesting&
 GetBadMojoMessageCallbackForTesting() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -1067,8 +1060,9 @@ BASE_FEATURE(kCheckNoNewRefCountsWhenRphDeletingSoon,
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Please keep in sync with "RenderProcessHostBlockedURLReason" in
-// tools/metrics/histograms/enums.xml. // These values are persisted to logs.
-// Entries should not be renumbered and numeric values should never be reused.
+// tools/metrics/histograms/metadata/browser/enums.xml. These values are
+// persisted to logs. Entries should not be renumbered and numeric values should
+// never be reused.
 enum class BlockedURLReason {
   kInvalidURL = 0,
   kFailedCanRequestURLCheck = 1,
@@ -1669,6 +1663,7 @@ bool RenderProcessHostImpl::Init() {
 
   CreateMessageFilters();
   RegisterMojoInterfaces();
+  CreateMetricsAllocator();
 
   // Call this now and not in OnProcessLaunched in case any mojo calls get
   // dispatched before this.
@@ -1724,9 +1719,12 @@ bool RenderProcessHostImpl::Init() {
     AppendRendererCommandLine(cmd_line.get());
 
 #if BUILDFLAG(IS_WIN)
+    // TODO(https://crbug.com/325992828): Pass IsJitDisabled() instead of
+    // IsPdf() for the last argument. This is a temporary hack to fix the
+    // linked bug in M122.
     std::unique_ptr<SandboxedProcessLauncherDelegate> sandbox_delegate =
         std::make_unique<RendererSandboxedProcessLauncherDelegateWin>(
-            *cmd_line, IsPdf(), IsJitDisabled());
+            *cmd_line, IsPdf(), /*is_jit_disabled=*/IsPdf());
 #else
     std::unique_ptr<SandboxedProcessLauncherDelegate> sandbox_delegate =
         std::make_unique<RendererSandboxedProcessLauncherDelegate>();
@@ -1744,7 +1742,7 @@ bool RenderProcessHostImpl::Init() {
         std::move(sandbox_delegate), std::move(cmd_line), GetID(), this,
         std::move(mojo_invitation_),
         base::BindRepeating(&RenderProcessHostImpl::OnMojoError, id_),
-        std::move(file_data));
+        std::move(file_data), metrics_memory_region_.Duplicate());
     channel_->Pause();
 
     // In single process mode, browser-side tracing and memory will cover the
@@ -1874,10 +1872,11 @@ void RenderProcessHostImpl::BindIndexedDB(
     return;
   }
 
+  auto [state_checker, token] =
+      IndexedDBClientStateCheckerFactory::InitializePendingRemote(rfh_id);
   storage_partition_impl_->GetIndexedDBControl().BindIndexedDB(
       storage::BucketLocator::ForDefaultBucket(storage_key),
-      IndexedDBClientStateCheckerFactory::InitializePendingRemote(rfh_id),
-      std::move(receiver));
+      std::move(state_checker), token, std::move(receiver));
 }
 
 void RenderProcessHostImpl::BindBucketManagerHost(
@@ -2854,37 +2853,6 @@ ProcessLock RenderProcessHostImpl::GetProcessLock() const {
   return ChildProcessSecurityPolicyImpl::GetInstance()->GetProcessLock(GetID());
 }
 
-// static
-void RenderProcessHostImpl::SetNetworkFactoryForTesting(
-    const CreateNetworkFactoryCallback& create_network_factory_callback) {
-  DCHECK(!BrowserThread::IsThreadInitialized(BrowserThread::UI) ||
-         BrowserThread::CurrentlyOn(BrowserThread::UI));
-  DCHECK(create_network_factory_callback.is_null() ||
-         GetCreateNetworkFactoryCallback().is_null())
-      << "It is not expected that this is called with non-null callback when "
-      << "another overriding callback is already set.";
-  GetCreateNetworkFactoryCallback() = create_network_factory_callback;
-}
-
-void RenderProcessHostImpl::CreateURLLoaderFactory(
-    mojo::PendingReceiver<network::mojom::URLLoaderFactory> receiver,
-    network::mojom::URLLoaderFactoryParamsPtr params) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  DCHECK(params);
-  DCHECK_EQ(GetID(), static_cast<int>(params->process_id));
-
-  if (GetCreateNetworkFactoryCallback().is_null()) {
-    storage_partition_impl_->GetNetworkContext()->CreateURLLoaderFactory(
-        std::move(receiver), std::move(params));
-  } else {
-    mojo::PendingRemote<network::mojom::URLLoaderFactory> original_factory;
-    storage_partition_impl_->GetNetworkContext()->CreateURLLoaderFactory(
-        original_factory.InitWithNewPipeAndPassReceiver(), std::move(params));
-    GetCreateNetworkFactoryCallback().Run(std::move(receiver), GetID(),
-                                          std::move(original_factory));
-  }
-}
-
 bool RenderProcessHostImpl::MayReuseHost() {
   return GetContentClient()->browser()->MayReuseHost(this);
 }
@@ -3144,16 +3112,26 @@ void RenderProcessHostImpl::RemoveExpectedNavigationToSite(
 }
 
 // static
-void RenderProcessHostImpl::NotifySpareManagerAboutRecentlyUsedBrowserContext(
-    BrowserContext* browser_context) {
+void RenderProcessHostImpl::NotifySpareManagerAboutRecentlyUsedSiteInstance(
+    SiteInstance* site_instance,
+    bool ignore_delay) {
   SpareRenderProcessHostManager::GetInstance().PrepareForFutureRequests(
-      browser_context);
+      site_instance->GetBrowserContext(),
+      ignore_delay
+          ? std::nullopt
+          : GetContentClient()->browser()->GetSpareRendererDelayForSiteURL(
+                site_instance->GetSiteURL()));
+}
+
+// static
+RenderProcessHost* RenderProcessHost::GetSpareRenderProcessHost() {
+  return SpareRenderProcessHostManager::GetInstance()
+      .spare_render_process_host();
 }
 
 // static
 RenderProcessHost* RenderProcessHost::GetSpareRenderProcessHostForTesting() {
-  return SpareRenderProcessHostManager::GetInstance()
-      .spare_render_process_host();
+  return GetSpareRenderProcessHost();
 }
 
 // static
@@ -3339,9 +3317,15 @@ void RenderProcessHostImpl::AppendRendererCommandLine(
     command_line->AppendSwitch(switches::kNoZygote);
   }
 
-  if (IsJitDisabled())
-    command_line->AppendSwitchASCII(blink::switches::kJavaScriptFlags,
-                                    "--jitless");
+  if (IsJitDisabled()) {
+    if (IsPdf()) {
+      command_line->AppendSwitchASCII(blink::switches::kJavaScriptFlags,
+                                      "--jitless");
+    } else {
+      command_line->AppendSwitchASCII(blink::switches::kJavaScriptFlags,
+                                      "--no-maglev,--no-turbofan");
+    }
+  }
 
   if (features::IsTouchTextEditingRedesignEnabled()) {
     command_line->AppendSwitchASCII(
@@ -3519,6 +3503,7 @@ void RenderProcessHostImpl::PropagateBrowserCommandLineToRenderer(
     blink::switches::kDisablePreferCompositingToLCDText,
     blink::switches::kDisableRGBA4444Textures,
     blink::switches::kDisableThrottleNonVisibleCrossOriginIframes,
+    blink::switches::kEnableLeakDetectionHeapSnapshot,
     blink::switches::kEnableLowResTiling,
     blink::switches::kEnablePreferCompositingToLCDText,
     blink::switches::kEnableRGBA4444Textures,
@@ -3554,39 +3539,39 @@ void RenderProcessHostImpl::PropagateBrowserCommandLineToRenderer(
     switches::kRunAllCompositorStagesBeforeDraw,
 
 #if BUILDFLAG(ENABLE_PPAPI)
-    switches::kEnablePepperTesting,
+      switches::kEnablePepperTesting,
 #endif
-    switches::kDisableWebRtcHWDecoding,
-    switches::kDisableWebRtcHWEncoding,
-    switches::kEnableWebRtcSrtpEncryptedHeaders,
-    switches::kEnforceWebRtcIPPermissionCheck,
-    switches::kWebRtcMaxCaptureFramerate,
-    switches::kEnableLowEndDeviceMode,
-    switches::kDisableLowEndDeviceMode,
-    switches::kDisallowNonExactResourceReuse,
+      switches::kDisableWebRtcHWDecoding,
+      switches::kDisableWebRtcHWEncoding,
+      switches::kEnableWebRtcSrtpEncryptedHeaders,
+      switches::kEnforceWebRtcIPPermissionCheck,
+      switches::kWebRtcMaxCaptureFramerate,
+      switches::kEnableLowEndDeviceMode,
+      switches::kDisableLowEndDeviceMode,
+      switches::kDisallowNonExactResourceReuse,
 #if BUILDFLAG(IS_ANDROID)
-    switches::kDisableMediaSessionAPI,
-    switches::kRendererWaitForJavaDebugger,
+      switches::kDisableMediaSessionAPI,
+      switches::kRendererWaitForJavaDebugger,
 #endif
 #if BUILDFLAG(IS_WIN)
-    switches::kDisableHighResTimer,
-    switches::kTrySupportedChannelLayouts,
-    switches::kRaiseTimerFrequency,
+      switches::kDisableHighResTimer,
+      switches::kTrySupportedChannelLayouts,
+      switches::kRaiseTimerFrequency,
 #endif
 #if BUILDFLAG(IS_OZONE)
-    switches::kOzonePlatform,
+      switches::kOzonePlatform,
 #endif
 #if defined(ENABLE_IPC_FUZZER)
-    switches::kIpcDumpDirectory,
-    switches::kIpcFuzzerTestcase,
+      switches::kIpcDumpDirectory,
+      switches::kIpcFuzzerTestcase,
 #endif
 #if BUILDFLAG(IS_CHROMEOS)
-    switches::kSchedulerBoostUrgent,
+      switches::kSchedulerBoostUrgent,
 #endif
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-    switches::kLacrosEnablePlatformHevc,
-    switches::kLacrosUseChromeosProtectedMedia,
-    switches::kLacrosUseChromeosProtectedAv1,
+      switches::kLacrosEnablePlatformHevc,
+      switches::kLacrosUseChromeosProtectedMedia,
+      switches::kLacrosUseChromeosProtectedAv1,
 #endif
   };
   renderer_cmd->CopySwitchesFrom(browser_cmd, kSwitchNames);
@@ -3890,6 +3875,10 @@ base::SafeRef<RenderProcessHost> RenderProcessHostImpl::GetSafeRef() const {
 
 bool RenderProcessHostImpl::IsInitializedAndNotDead() {
   return is_initialized_ && !is_dead_;
+}
+
+bool RenderProcessHostImpl::IsDeletingSoon() {
+  return deleting_soon_;
 }
 
 void RenderProcessHostImpl::SetBlocked(bool blocked) {
@@ -4830,7 +4819,10 @@ RenderProcessHost* RenderProcessHostImpl::GetProcessHostForSiteInstance(
   // PrepareForFutureRequests will be postponed until later (e.g. until the
   // navigation commits or a cross-site redirect happens).
   if (spare_was_taken) {
-    spare_process_manager.PrepareForFutureRequests(browser_context);
+    spare_process_manager.PrepareForFutureRequests(
+        browser_context,
+        GetContentClient()->browser()->GetSpareRendererDelayForSiteURL(
+            site_instance->GetSiteURL()));
   }
 
   if (is_unmatched_service_worker) {
@@ -4856,21 +4848,12 @@ RenderProcessHost* RenderProcessHostImpl::GetProcessHostForSiteInstance(
   return render_process_host;
 }
 
-void RenderProcessHostImpl::CreateSharedRendererHistogramAllocator() {
+void RenderProcessHostImpl::CreateMetricsAllocator() {
   // Create a persistent memory segment for renderer histograms only if
   // they're active in the browser.
   if (!base::GlobalHistogramAllocator::Get()) {
-    if (is_initialized_) {
-      HistogramController::GetInstance()->SetHistogramMemory<RenderProcessHost>(
-          this, base::WritableSharedMemoryRegion());
-    }
     return;
   }
-
-  // Get handle to the renderer process. Stop if there is none.
-  base::ProcessHandle destination = GetProcess().Handle();
-  if (destination == base::kNullProcessHandle)
-    return;
 
   // Get the renderer histogram shared memory configuration.
   auto shared_memory_config =
@@ -4880,15 +4863,15 @@ void RenderProcessHostImpl::CreateSharedRendererHistogramAllocator() {
   // Create the shared memory region and allocator.
   auto shared_memory = base::HistogramSharedMemory::Create(
       GetID(), shared_memory_config.value());
-  if (!shared_memory.has_value()) {
-    return;
+  if (shared_memory.has_value()) {
+    metrics_memory_region_ = std::move(shared_memory->region);
+    metrics_allocator_ = std::move(shared_memory->allocator);
   }
+}
 
-  // Move the region and allocator out of the |shared_memory| helper.
-  metrics_allocator_ = shared_memory->TakeAllocator();
-
+void RenderProcessHostImpl::ShareMetricsMemoryRegion() {
   HistogramController::GetInstance()->SetHistogramMemory<RenderProcessHost>(
-      this, shared_memory->TakeRegion());
+      this, std::move(metrics_memory_region_));
 }
 
 ChildProcessTerminationInfo RenderProcessHostImpl::GetChildTerminationInfo(
@@ -5302,7 +5285,7 @@ void RenderProcessHostImpl::OnProcessLaunched() {
       UpdateProcessPriority();
 
     // Share histograms between the renderer and this process.
-    CreateSharedRendererHistogramAllocator();
+    ShareMetricsMemoryRegion();
   }
 
   // Pass bits of global renderer state to the renderer.

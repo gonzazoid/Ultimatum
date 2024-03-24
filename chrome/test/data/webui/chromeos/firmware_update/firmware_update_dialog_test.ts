@@ -9,8 +9,8 @@ import {DeviceRequest, DeviceRequestId, DeviceRequestKind, UpdateState} from 'ch
 import {FirmwareUpdateDialogElement} from 'chrome://accessory-update/firmware_update_dialog.js';
 import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
 import {strictQuery} from 'chrome://resources/ash/common/typescript_utils/strict_query.js';
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import {CrButtonElement} from 'chrome://resources/ash/common/cr_elements/cr_button/cr_button.js';
+import {CrDialogElement} from 'chrome://resources/ash/common/cr_elements/cr_dialog/cr_dialog.js';
 import {assert} from 'chrome://resources/js/assert.js';
 import {mojoString16ToString} from 'chrome://resources/js/mojo_type_util.js';
 import {PaperProgressElement} from 'chrome://resources/polymer/v3_0/paper-progress/paper-progress.js';
@@ -122,6 +122,12 @@ suite('FirmwareUpdateDialogTest', () => {
     assertEquals(
         getTextContent('#updateDialogBody'),
         loadTimeData.getString('restartingBodyText'));
+    // Body text should not have an aria-live value for non-requests.
+    assertEquals(
+        strictQuery(
+            '#updateDialogBody', updateDialogElement.shadowRoot, HTMLDivElement)
+            .ariaLive,
+        '');
     assertEquals(
         getTextContent('#progress'),
         loadTimeData.getString('restartingFooterText'));
@@ -221,6 +227,12 @@ suite('FirmwareUpdateDialogTest', () => {
     assertEquals(
         getTextContent('#updateDialogBody'),
         loadTimeData.getString('restartingBodyText'));
+    // Body text should not have an aria-live value for non-requests.
+    assertEquals(
+        strictQuery(
+            '#updateDialogBody', updateDialogElement.shadowRoot, HTMLDivElement)
+            .ariaLive,
+        '');
     assertEquals(
         getTextContent('#progress'),
         loadTimeData.getString('restartingFooterText'));
@@ -375,6 +387,15 @@ suite('FirmwareUpdateDialogTest', () => {
       assertEquals(
           getTextContent('#updateDialogBody'),
           loadTimeData.getString(expectedString));
+      assert(updateDialogElement?.shadowRoot);
+      // For user requests, the dialog body should be an assertive aria-live
+      // region.
+      assertEquals(
+          strictQuery(
+              '#updateDialogBody', updateDialogElement.shadowRoot,
+              HTMLDivElement)
+              .ariaLive,
+          'assertive');
       assertEquals(
           getTextContent('#progress'),
           loadTimeData.getStringF('waitingFooterText', 70));

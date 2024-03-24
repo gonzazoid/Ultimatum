@@ -2,8 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {AuthCompletedCredentials} from 'chrome://chrome-signin/gaia_auth_host/authenticator.js';
-import {sendWithPromise} from 'chrome://resources/js/cr.js';
+import type {AuthCompletedCredentials} from 'chrome://chrome-signin/gaia_auth_host/authenticator.js';
 
 export interface InlineLoginBrowserProxy {
   /** Send 'initialize' message to prepare for starting auth. */
@@ -42,18 +41,6 @@ export interface InlineLoginBrowserProxy {
   /** Send 'showIncognito' message to the handler */
   showIncognito(): void;
 
-  /**
-   * Send 'getAccounts' message to the handler. The promise will be resolved
-   * with the list of emails of accounts in session.
-   */
-  getAccounts(): Promise<string[]>;
-
-  /**
-   * Sends 'getDeviceId' message to the handler. The promise will be resolved
-   * with the device identifier for this user.
-   */
-  getDeviceId(): Promise<string>;
-
   /** Send 'dialogClose' message to close the login dialog. */
   dialogClose(): void;
 }
@@ -85,14 +72,6 @@ export class InlineLoginBrowserProxyImpl implements InlineLoginBrowserProxy {
 
   showIncognito() {
     chrome.send('showIncognito');
-  }
-
-  getAccounts() {
-    return sendWithPromise('getAccounts');
-  }
-
-  getDeviceId() {
-    return sendWithPromise('getDeviceId');
   }
 
   dialogClose() {

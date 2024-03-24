@@ -298,21 +298,23 @@ TEST_F(DownloadManagerCoordinatorTest,
   EXPECT_EQ(0U, base_view_controller_.childViewControllers.count);
 }
 
-// Tests downloadManagerTabHelper:didHideDownload: callback. Verifies that
-// hiding web states dismisses the presented view controller and download task
-// is reset to null (to prevent a stale raw pointer).
+// Tests downloadManagerTabHelper:didHideDownload:animated: callback. Verifies
+// that hiding web states dismisses the presented view controller and download
+// task is reset to null (to prevent a stale raw pointer).
 TEST_F(DownloadManagerCoordinatorTest, DelegateHideDownload) {
   auto task = CreateTestTask();
   [coordinator_ downloadManagerTabHelper:tab_helper()
                        didCreateDownload:task.get()
                        webStateIsVisible:YES];
   @autoreleasepool {
-    // Calling -downloadManagerTabHelper:didHideDownload: will retain and
-    // autorelease coordinator_. task_environment_ has to outlive the
-    // coordinator, so wrapping -downloadManagerTabHelper:didHideDownload:
-    // call in @autorelease will ensure that coordinator_ is deallocated.
+    // Calling -downloadManagerTabHelper:didHideDownload:animated: will retain
+    // and autorelease coordinator_. task_environment_ has to outlive the
+    // coordinator, so wrapping
+    // -downloadManagerTabHelper:didHideDownload:animated: call in @autorelease
+    // will ensure that coordinator_ is deallocated.
     [coordinator_ downloadManagerTabHelper:tab_helper()
-                           didHideDownload:task.get()];
+                           didHideDownload:task.get()
+                                  animated:NO];
   }
 
   // Verify that child view controller is removed and download task is set to
@@ -321,12 +323,13 @@ TEST_F(DownloadManagerCoordinatorTest, DelegateHideDownload) {
   EXPECT_FALSE(coordinator_.downloadTask);
 }
 
-// Tests downloadManagerTabHelper:didShowDownload: callback. Verifies that
-// showing web state presents download manager UI for that web state.
+// Tests downloadManagerTabHelper:didShowDownload:animated: callback. Verifies
+// that showing web state presents download manager UI for that web state.
 TEST_F(DownloadManagerCoordinatorTest, DelegateShowDownload) {
   auto task = CreateTestTask();
   [coordinator_ downloadManagerTabHelper:tab_helper()
-                         didShowDownload:task.get()];
+                         didShowDownload:task.get()
+                                animated:NO];
 
   // Only first presentation is animated. Switching between tab should create
   // the impression that UI was never dismissed.
@@ -559,8 +562,7 @@ TEST_F(DownloadManagerCoordinatorTest, QuitDuringInProgressDownload) {
   auto task = CreateTestTask();
   coordinator_.downloadTask = task.get();
   auto web_state = std::make_unique<web::FakeWebState>();
-  browser_->GetWebStateList()->InsertWebState(
-      0, std::move(web_state), WebStateList::INSERT_NO_FLAGS, WebStateOpener());
+  browser_->GetWebStateList()->InsertWebState(std::move(web_state));
   [coordinator_ start];
 
   EXPECT_EQ(1U, base_view_controller_.childViewControllers.count);
@@ -588,7 +590,7 @@ TEST_F(DownloadManagerCoordinatorTest, QuitDuringInProgressDownload) {
       }));
 
   // Web States are closed without user action only during app termination.
-  browser_->GetWebStateList()->CloseAllWebStates(WebStateList::CLOSE_NO_FLAGS);
+  CloseAllWebStates(*browser_->GetWebStateList(), WebStateList::CLOSE_NO_FLAGS);
 
   // Download task is destroyed before the download is complete.
   task = nullptr;

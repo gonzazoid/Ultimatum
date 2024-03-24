@@ -10,12 +10,22 @@
 #import <UserNotifications/UserNotifications.h>
 #import <string>
 
+#import "base/memory/raw_ptr.h"
 #import "ios/chrome/browser/push_notification/model/push_notification_client_id.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "url/gurl.h"
+
+class CommercePushNotificationClientTest;
+
+class Browser;
 
 // The PushNotificationClient class is an abstract class that provides a
 // framework for implementing push notification support. Feature teams that
 // intend to support push notifications should create a class that inherits from
 // the PushNotificationClient class.
+// TODO(crbug.com/325254943): Update this class and subclasses to accept an
+// injected ChromeBrowserState* and not internally fetch a browser state via
+// GetlastUsedBrowserState. Update tests as well.
 class PushNotificationClient {
  public:
   PushNotificationClient(PushNotificationClientId client_id);
@@ -46,10 +56,20 @@ class PushNotificationClient {
   // access a browser appropriate for opening a URL (active & scene
   // level SceneActivationLevelForegroundActive) resulting in the URL
   // not being opened.
-  virtual void OnSceneActiveForegroundBrowserReady() = 0;
+  virtual void OnSceneActiveForegroundBrowserReady();
 
   // Returns the feature's `client_id_`.
   PushNotificationClientId GetClientId();
+
+  // Loads a url in a new tab once an active browser is ready.
+  void loadUrlInNewTab(const GURL& url);
+
+  // Allows tests to set the last used ChromeBrowserState returned in
+  // GetLastUsedBrowserState().
+  void SetLastUsedChromeBrowserStateForTesting(
+      ChromeBrowserState* chrome_browser_state) {
+    last_used_browser_state_for_testing_ = chrome_browser_state;
+  }
 
  protected:
   // The unique string that is used to associate incoming push notifications to
@@ -57,6 +77,23 @@ class PushNotificationClient {
   // used inside the notification's payload when sending the notification to the
   // push notification server.
   PushNotificationClientId client_id_;
+
+  ChromeBrowserState* GetLastUsedBrowserState();
+
+  // Returns the first active browser found with scene level
+  // SceneActivationLevelForegroundActive.
+  Browser* GetSceneLevelForegroundActiveBrowser();
+
+ private:
+  friend class ::CommercePushNotificationClientTest;
+  std::vector<GURL> urls_delayed_for_loading_;
+
+  // Allows tests to override the last used ChromeBrowserState returned in
+  // GetLastUsedBrowserState().
+  raw_ptr<ChromeBrowserState> last_used_browser_state_for_testing_ = nullptr;
+
+  // Loads a url in a new tab for a given browser.
+  void loadUrlInNewTab(const GURL& url, Browser* browser);
 };
 
 #endif  // IOS_CHROME_BROWSER_PUSH_NOTIFICATION_MODEL_PUSH_NOTIFICATION_CLIENT_H_

@@ -50,6 +50,9 @@ namespace network {
 
 namespace {
 
+static constexpr int kHoursInOneWeek = 24 * 7;
+static constexpr int kHoursInOneYear = 24 * 365;
+
 BASE_FEATURE(kIncreaseCoookieAccesCacheSize,
              "IncreaseCoookieAccesCacheSize",
              base::FEATURE_DISABLED_BY_DEFAULT);
@@ -143,7 +146,7 @@ net::CookieOptions MakeOptionsForGet(
     options.set_exclude_httponly();  // Default, but make it explicit here.
     options.set_same_site_cookie_context(
         net::cookie_util::ComputeSameSiteContextForScriptGet(
-            url, site_for_cookies, absl::nullopt /*initiator*/,
+            url, site_for_cookies, std::nullopt /*initiator*/,
             force_ignore_site_for_cookies));
   } else {
     // mojom::RestrictedCookieManagerRole::NETWORK
@@ -154,6 +157,29 @@ net::CookieOptions MakeOptionsForGet(
   }
 
   return options;
+}
+
+// Records the time until expiration for a cookie set via script.
+void HistogramScriptCookieExpiration(const net::CanonicalCookie& cookie) {
+  // Ignore session cookies as they have no expiration date.
+  if (!cookie.IsPersistent()) {
+    return;
+  }
+
+  // We are studying the requested expiration dates of cookies set via script.
+  // Network cookies are handled in
+  // URLRequestHttpJob::SaveCookiesAndNotifyHeadersComplete.
+  const int script_cookie_expiration_in_hours =
+      (cookie.ExpiryDate() - base::Time::Now()).InHours();
+  if (script_cookie_expiration_in_hours > kHoursInOneWeek) {
+    UMA_HISTOGRAM_CUSTOM_COUNTS("Cookie.ScriptExpirationInHoursGTOneWeek",
+                                script_cookie_expiration_in_hours,
+                                kHoursInOneWeek + 1, kHoursInOneYear, 100);
+  } else {
+    UMA_HISTOGRAM_CUSTOM_COUNTS("Cookie.ScriptExpirationInHoursLTEOneWeek",
+                                script_cookie_expiration_in_hours, 1,
+                                kHoursInOneWeek + 1, 100);
+  }
 }
 
 }  // namespace
@@ -170,8 +196,8 @@ void RestrictedCookieManager::ComputeFirstPartySetMetadata(
   std::pair<base::OnceCallback<void(net::FirstPartySetMetadata)>,
             base::OnceCallback<void(net::FirstPartySetMetadata)>>
       callbacks = base::SplitOnceCallback(std::move(callback));
-  absl::optional<std::pair<net::FirstPartySetMetadata,
-                           net::FirstPartySetsCacheFilter::MatchInfo>>
+  std::optional<std::pair<net::FirstPartySetMetadata,
+                          net::FirstPartySetsCacheFilter::MatchInfo>>
       metadata_and_match_info =
           net::cookie_util::ComputeFirstPartySetMetadataMaybeAsync(
               /*request_site=*/net::SchemefulSite(origin), isolation_info,
@@ -314,7 +340,7 @@ class RestrictedCookieManager::Listener : public base::LinkNode<Listener> {
            const net::SiteForCookies& site_for_cookies,
            const url::Origin& top_frame_origin,
            bool has_storage_access,
-           const absl::optional<net::CookiePartitionKey>& cookie_partition_key,
+           const std::optional<net::CookiePartitionKey>& cookie_partition_key,
            net::CookieOptions options,
            mojo::PendingRemote<mojom::CookieChangeListener> mojo_listener)
       : cookie_store_(cookie_store),
@@ -644,7 +670,7 @@ void RestrictedCookieManager::CookieListToGetAllForUrlCallback(
       OnCookiesAccessed(mojom::CookieAccessDetails::New(
           mojom::CookieAccessDetails::Type::kRead, url,
           isolated_top_frame_origin, site_for_cookies,
-          std::move(on_cookies_accessed_result), absl::nullopt, /*count=*/1,
+          std::move(on_cookies_accessed_result), std::nullopt, /*count=*/1,
           is_ad_tagged, cookie_setting_overrides));
     }
   };
@@ -708,7 +734,7 @@ void RestrictedCookieManager::SetCanonicalCookie(
   // Don't allow a status that has an exclusion reason as they should have
   // already been taken care of on the renderer side.
   if (!status.IsInclude()) {
-    mojo::ReportBadMessage(
+    receiver_.ReportBadMessage(
         "RestrictedCookieManager: unexpected cookie inclusion status");
     std::move(callback).Run(false);
     return;
@@ -761,7 +787,7 @@ void RestrictedCookieManager::SetCanonicalCookie(
       OnCookiesAccessed(mojom::CookieAccessDetails::New(
           mojom::CookieAccessDetails::Type::kChange, url,
           isolated_top_frame_origin, site_for_cookies,
-          std::move(result_with_access_result), absl::nullopt,
+          std::move(result_with_access_result), std::nullopt,
           /*count=*/1,
           /*is_ad_tagged=*/false, cookie_setting_overrides));
     }
@@ -787,7 +813,7 @@ void RestrictedCookieManager::SetCanonicalCookie(
   // If the renderer's cookie has a partition key that was not created using
   // CookiePartitionKey::FromScript, then the cookie's partition key should be
   // equal to RestrictedCookieManager's partition key.
-  absl::optional<net::CookiePartitionKey> cookie_partition_key =
+  std::optional<net::CookiePartitionKey> cookie_partition_key =
       cookie.PartitionKey();
 
   // If the `cookie_partition_key_` has a nonce then force all cookie writes to
@@ -801,7 +827,7 @@ void RestrictedCookieManager::SetCanonicalCookie(
     // feature is disabled. If that is the case, we treat the cookie as
     // unpartitioned.
     if (!cookie_partition_key_) {
-      cookie_partition_key = absl::nullopt;
+      cookie_partition_key = std::nullopt;
     } else {
       bool cookie_partition_key_ok =
           cookie_partition_key->from_script() ||
@@ -809,7 +835,7 @@ void RestrictedCookieManager::SetCanonicalCookie(
       UMA_HISTOGRAM_BOOLEAN("Net.RestrictedCookieManager.CookiePartitionKeyOK",
                             cookie_partition_key_ok);
       if (!cookie_partition_key_ok) {
-        mojo::ReportBadMessage(
+        receiver_.ReportBadMessage(
             "RestrictedCookieManager: unexpected cookie partition key");
         std::move(callback).Run(false);
         return;
@@ -828,9 +854,9 @@ void RestrictedCookieManager::SetCanonicalCookie(
   std::unique_ptr<net::CanonicalCookie> sanitized_cookie =
       net::CanonicalCookie::FromStorage(
           cookie.Name(), cookie.Value(), cookie.Domain(), cookie.Path(), now,
-          cookie.ExpiryDate(), now, now, cookie.IsSecure(), cookie.IsHttpOnly(),
-          cookie.SameSite(), cookie.Priority(), cookie_partition_key,
-          source_scheme, origin_.port());
+          cookie.ExpiryDate(), now, now, cookie.SecureAttribute(),
+          cookie.IsHttpOnly(), cookie.SameSite(), cookie.Priority(),
+          cookie_partition_key, source_scheme, origin_.port());
   DCHECK(sanitized_cookie);
   // FromStorage() uses a less strict version of IsCanonical(), we need to check
   // the stricter version as well here.
@@ -878,7 +904,7 @@ void RestrictedCookieManager::SetCanonicalCookieResult(
       OnCookiesAccessed(mojom::CookieAccessDetails::New(
           mojom::CookieAccessDetails::Type::kChange, url,
           isolated_top_frame_origin, site_for_cookies, std::move(notify),
-          absl::nullopt, /*count=*/1,
+          std::nullopt, /*count=*/1,
           /*is_ad_tagged=*/false, cookie_setting_overrides));
     }
   }
@@ -938,7 +964,7 @@ void RestrictedCookieManager::SetCookieFromString(
   net::CookieInclusionStatus status;
   std::unique_ptr<net::CanonicalCookie> parsed_cookie =
       net::CanonicalCookie::Create(
-          url, cookie, base::Time::Now(), /*server_time=*/absl::nullopt,
+          url, cookie, base::Time::Now(), /*server_time=*/std::nullopt,
           cookie_partition_key_,
           cookie_settings().are_truncated_cookies_blocked(), &status);
   if (!parsed_cookie) {
@@ -952,7 +978,7 @@ void RestrictedCookieManager::SetCookieFromString(
       OnCookiesAccessed(mojom::CookieAccessDetails::New(
           mojom::CookieAccessDetails::Type::kChange, url,
           isolation_info_.top_frame_origin().value_or(url::Origin()),
-          site_for_cookies, std::move(result_with_access_result), absl::nullopt,
+          site_for_cookies, std::move(result_with_access_result), std::nullopt,
           /*count=*/1,
           /*is_ad_tagged=*/false,
           GetCookieSettingOverrides(has_storage_access,
@@ -960,6 +986,7 @@ void RestrictedCookieManager::SetCookieFromString(
     }
     return;
   }
+  HistogramScriptCookieExpiration(*parsed_cookie);
 
   // Further checks (origin_, settings), as well as logging done by
   // SetCanonicalCookie()
@@ -1060,7 +1087,7 @@ bool RestrictedCookieManager::ValidateAccessToCookiesAt(
     const url::Origin& top_frame_origin,
     const net::CanonicalCookie* cookie_being_set) {
   if (origin_.opaque()) {
-    mojo::ReportBadMessage("Access is denied in this context");
+    receiver_.ReportBadMessage("Access is denied in this context");
     return false;
   }
 
@@ -1082,14 +1109,15 @@ bool RestrictedCookieManager::ValidateAccessToCookiesAt(
 
   // Don't allow setting cookies on other domains. See crbug.com/996786.
   if (cookie_being_set && !cookie_being_set->IsDomainMatch(url.host())) {
-    mojo::ReportBadMessage("Setting cookies on other domains is disallowed.");
+    receiver_.ReportBadMessage(
+        "Setting cookies on other domains is disallowed.");
     return false;
   }
 
   if (origin_.IsSameOriginWith(url))
     return true;
 
-  mojo::ReportBadMessage("Incorrect url origin");
+  receiver_.ReportBadMessage("Incorrect url origin");
   return false;
 }
 

@@ -165,7 +165,7 @@ void SendKeyEvent(Browser* browser,
   auto* browser_window = GetBrowserWindow(browser);
   ui::test::EventGenerator event_generator{browser_window->GetRootWindow(),
                                            browser_window};
-  event_generator.PressAndReleaseKey(key_code, flags);
+  event_generator.PressAndReleaseKeyAndModifierKeys(key_code, flags);
 }
 
 std::unique_ptr<KeyedService> SetDlpRulesManager(
@@ -211,6 +211,13 @@ class CaptureModeBrowserTest : public InProcessBrowserTest {
     SetReportQueueForReportingManager(
         helper_->GetReportingManager(), events_,
         base::SequencedTaskRunner::GetCurrentDefault());
+  }
+
+  const GURL GetActiveWebContentsUrl() {
+    return browser()
+        ->tab_strip_model()
+        ->GetActiveWebContents()
+        ->GetLastCommittedURL();
   }
 
  protected:
@@ -354,8 +361,9 @@ IN_PROC_BROWSER_TEST_F(CaptureModeBrowserTest,
   EXPECT_THAT(
       events_[0],
       data_controls::IsDlpPolicyEvent(data_controls::CreateDlpPolicyEvent(
-          kSrcPattern, policy::DlpRulesManager::Restriction::kScreenshot,
-          kRuleName, kRuleId, policy::DlpRulesManager::Level::kWarn)));
+          GetActiveWebContentsUrl().spec(),
+          policy::DlpRulesManager::Restriction::kScreenshot, kRuleName, kRuleId,
+          policy::DlpRulesManager::Level::kWarn)));
 }
 
 IN_PROC_BROWSER_TEST_F(CaptureModeBrowserTest,
@@ -380,16 +388,17 @@ IN_PROC_BROWSER_TEST_F(CaptureModeBrowserTest,
   loop.Run();
 
   ASSERT_EQ(events_.size(), 2u);
+  const auto src_url = GetActiveWebContentsUrl().spec();
   EXPECT_THAT(
       events_[0],
       data_controls::IsDlpPolicyEvent(data_controls::CreateDlpPolicyEvent(
-          kSrcPattern, policy::DlpRulesManager::Restriction::kScreenshot,
-          kRuleName, kRuleId, policy::DlpRulesManager::Level::kWarn)));
+          src_url, policy::DlpRulesManager::Restriction::kScreenshot, kRuleName,
+          kRuleId, policy::DlpRulesManager::Level::kWarn)));
   EXPECT_THAT(
       events_[1],
       data_controls::IsDlpPolicyEvent(
           data_controls::CreateDlpPolicyWarningProceededEvent(
-              kSrcPattern, policy::DlpRulesManager::Restriction::kScreenshot,
+              src_url, policy::DlpRulesManager::Restriction::kScreenshot,
               kRuleName, kRuleId)));
 }
 

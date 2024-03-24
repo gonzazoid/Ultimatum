@@ -51,6 +51,7 @@
 #include "ui/events/keycodes/dom/dom_key.h"
 #include "ui/events/keycodes/dom/keycode_converter.h"
 #include "ui/events/keycodes/keyboard_codes_posix.h"
+#include "ui/events/types/event_type.h"
 
 namespace ash {
 
@@ -371,6 +372,35 @@ std::optional<AcceleratorConfigResult> ValidateAccelerator(
     return AcceleratorConfigResult::kReservedKeyNotAllowed;
   }
 
+  // Case: A function key accelerator cannot have the meta key modifier.
+  if ((modifiers & ui::EF_COMMAND_DOWN) != 0 &&
+      ui::KeyboardCapability::IsFunctionKey(accelerator.key_code())) {
+    VLOG(1) << "Failed to validate accelerator: "
+            << accelerator.GetShortcutText() << " with error: "
+            << static_cast<int>(AcceleratorConfigResult::kKeyNotAllowed)
+            << ". Accelerator has meta key with Function key.";
+    return AcceleratorConfigResult::kSearchWithFunctionKeyNotAllowed;
+  }
+
+  // Case: Non-standard keys cannot have search as a modifier.
+  absl::optional<AcceleratorKeycodeLookupCache::KeyCodeLookupEntry>
+      key_code_entry = FindKeyCodeEntry(accelerator.key_code());
+  if (key_code_entry.has_value()) {
+    const ui::KeyEvent key_event(
+        ui::ET_KEY_PRESSED, key_code_entry->resulting_key_code,
+        key_code_entry->dom_code, accelerator.modifiers());
+    const AcceleratorKeyInputType input_type =
+        GetKeyInputTypeFromKeyEvent(key_event);
+    if ((input_type == AcceleratorKeyInputType::kMisc ||
+         input_type == AcceleratorKeyInputType::kTopRow) &&
+        (modifiers & ui::EF_COMMAND_DOWN) != 0) {
+      VLOG(1) << "Failed to validate accelerator: "
+              << accelerator.GetShortcutText() << " with error: "
+              << " Cannot have search with non-standard key.";
+      return AcceleratorConfigResult::kNonStandardWithSearch;
+    }
+  }
+
   // Case: Top-row action keys cannot be part of the accelerator.
   std::optional<ui::TopRowActionKey> top_row_action_key =
       ui::KeyboardCapability::ConvertToTopRowActionKey(accelerator.key_code());
@@ -390,16 +420,6 @@ std::optional<AcceleratorConfigResult> ValidateAccelerator(
             << accelerator.GetShortcutText() << " with error: "
             << static_cast<int>(AcceleratorConfigResult::kShiftOnlyNotAllowed);
     return AcceleratorConfigResult::kShiftOnlyNotAllowed;
-  }
-
-  // Case: A function key accelerator cannot have the meta key modifier.
-  if ((modifiers & ui::EF_COMMAND_DOWN) != 0 &&
-      ui::KeyboardCapability::IsFunctionKey(accelerator.key_code())) {
-    VLOG(1) << "Failed to validate accelerator: "
-            << accelerator.GetShortcutText() << " with error: "
-            << static_cast<int>(AcceleratorConfigResult::kKeyNotAllowed)
-            << ". Accelerator has meta key with Function key.";
-    return AcceleratorConfigResult::kSearchWithFunctionKeyNotAllowed;
   }
 
   // No errors with the accelerator.
@@ -554,7 +574,6 @@ AcceleratorConfigurationProvider::AcceleratorConfigurationProvider(
           weak_ptr_factory_.GetWeakPtr()));
 
   UpdateKeyboards();
-  InitializeNonConfigurableAccelerators(GetNonConfigurableActionsMap());
 
   // Create LayoutInfos from kAcceleratorLayouts. LayoutInfos are static
   // data that provides additional details for the app for styling.
@@ -573,6 +592,10 @@ AcceleratorConfigurationProvider::AcceleratorConfigurationProvider(
     accelerator_layout_lookup_[GetUuid(layout->source, layout->action_id)] =
         *layout;
   }
+
+  // Must initialize the non-configurable accelerators after the layout
+  // has been set.
+  InitializeNonConfigurableAccelerators(GetNonConfigurableActionsMap());
 }
 
 AcceleratorConfigurationProvider::~AcceleratorConfigurationProvider() {
@@ -668,15 +691,16 @@ void AcceleratorConfigurationProvider::GetConflictAccelerator(
 
   // Check if `accelerator` conflicts with non-configurable accelerators.
   // This includes: browser, accessbility, and ambient accelerators.
-  const uint32_t* non_configurable_conflict_id =
-      non_configurable_accelerator_to_id_.Find(accelerator);
+  const std::vector<uint32_t> non_configurable_conflict_ids =
+      FindNonConfigurableIdFromAccelerator(accelerator);
   // If there was a conflict with a non-configurable accelerator
-  if (non_configurable_conflict_id) {
+  if (!non_configurable_conflict_ids.empty()) {
     result_data->result = AcceleratorConfigResult::kConflict;
     // Get the shortcut name and add it to the return struct.
     result_data->shortcut_name = l10n_util::GetStringUTF16(
-        accelerator_layout_lookup_[GetUuid(mojom::AcceleratorSource::kAmbient,
-                                           *non_configurable_conflict_id)]
+        accelerator_layout_lookup_[GetUuid(
+                                       mojom::AcceleratorSource::kAmbient,
+                                       non_configurable_conflict_ids.front())]
             .description_string_id);
     std::move(callback).Run(std::move(result_data));
     VLOG(1) << "Attempted to add accelerator: " << accelerator.GetShortcutText()
@@ -712,30 +736,9 @@ void AcceleratorConfigurationProvider::GetConflictAccelerator(
 // Get the default accelerators for the given accelerator id. The
 // accelerators are filtered and aliased accelerators are included.
 void AcceleratorConfigurationProvider::GetDefaultAcceleratorsForId(
-    uint32_t actionId,
+    uint32_t action_id,
     GetDefaultAcceleratorsForIdCallback callback) {
-  const std::vector<ui::Accelerator>& raw_default_accelerators =
-      ash_accelerator_configuration_->GetDefaultAcceleratorsForId(actionId);
-
-  std::vector<ui::Accelerator> default_accelerators;
-  for (const auto& accelerator : raw_default_accelerators) {
-    // Filter the hidden accelerators.
-    if (IsAcceleratorHidden(actionId, accelerator)) {
-      continue;
-    }
-    // Get the alias accelerators.
-    std::vector<ui::Accelerator> accelerator_aliases =
-        accelerator_alias_converter_.CreateAcceleratorAlias(accelerator);
-    // Return early if there are no alias accelerators. This will filter the
-    // disabled accelerators due to unavailable keys.
-    if (accelerator_aliases.empty()) {
-      continue;
-    }
-    for (const auto& accelerator_alias : accelerator_aliases) {
-      default_accelerators.push_back(accelerator_alias);
-    }
-  }
-  std::move(callback).Run(default_accelerators);
+  std::move(callback).Run(GetDefaultAcceleratorsForId(action_id));
 }
 
 void AcceleratorConfigurationProvider::GetAccelerators(
@@ -843,7 +846,8 @@ void AcceleratorConfigurationProvider::AddAccelerator(
   // Validate the source and action, if no errors then validate the accelerator.
   std::optional<AcceleratorConfigResult> error_result = ValidateSourceAndAction(
       source, action_id, ash_accelerator_configuration_);
-  if (!error_result.has_value()) {
+  if (!error_result.has_value() &&
+      !base::Contains(GetDefaultAcceleratorsForId(action_id), accelerator)) {
     error_result = ValidateAccelerator(accelerator);
   }
 
@@ -972,7 +976,9 @@ void AcceleratorConfigurationProvider::ReplaceAccelerator(
 
   std::optional<AcceleratorConfigResult> error_result = ValidateSourceAndAction(
       source, action_id, ash_accelerator_configuration_);
-  if (!error_result.has_value()) {
+  if (!error_result.has_value() &&
+      !base::Contains(GetDefaultAcceleratorsForId(action_id),
+                      new_accelerator)) {
     error_result = ValidateAccelerator(new_accelerator);
   }
 
@@ -1163,11 +1169,20 @@ void AcceleratorConfigurationProvider::InitializeNonConfigurableAccelerators(
     if (accelerators_details.IsStandardAccelerator()) {
       DCHECK(!accelerators_details.replacements.has_value());
       DCHECK(!accelerators_details.message_id.has_value());
+      const AcceleratorLayoutDetails& layout =
+          accelerator_layout_lookup_[GetUuid(mojom::AcceleratorSource::kAmbient,
+                                             ambient_action_id)];
       for (const auto& accelerator :
            accelerators_details.accelerators.value()) {
         const uint32_t action_id = static_cast<uint32_t>(ambient_action_id);
-        non_configurable_accelerator_to_id_.InsertNew(
-            std::make_pair(accelerator, action_id));
+        // Store accessibility lookups separately.
+        if (layout.category == mojom::AcceleratorCategory::kAccessibility) {
+          accessibility_accelerator_to_id_.InsertNew(
+              std::make_pair(accelerator, action_id));
+        } else {
+          non_configurable_accelerator_to_id_.InsertNew(
+              std::make_pair(accelerator, action_id));
+        }
         id_to_non_configurable_accelerators_[action_id].push_back(accelerator);
       }
     }
@@ -1265,16 +1280,18 @@ AcceleratorConfigurationProvider::PreprocessAddAccelerator(
 
   // Check if `accelerator` conflicts with non-configurable accelerators.
   // This includes: browser, accessbility, and ambient accelerators.
-  const uint32_t* non_configurable_conflict_id =
-      non_configurable_accelerator_to_id_.Find(accelerator);
-  // If there was a conflict with a non-configurable accelerator
-  if (non_configurable_conflict_id) {
+  const std::vector<uint32_t> non_configurable_conflict_ids =
+      FindNonConfigurableIdFromAccelerator(accelerator);
+  // If there was a conflict with a non-configurable accelerator, return
+  // just one of the conflict id's.
+  if (!non_configurable_conflict_ids.empty()) {
     pending_accelerator_.reset();
     result_data->result = AcceleratorConfigResult::kConflict;
     // Get the shortcut name and add it to the return struct.
     result_data->shortcut_name = l10n_util::GetStringUTF16(
-        accelerator_layout_lookup_[GetUuid(mojom::AcceleratorSource::kAmbient,
-                                           *non_configurable_conflict_id)]
+        accelerator_layout_lookup_[GetUuid(
+                                       mojom::AcceleratorSource::kAmbient,
+                                       non_configurable_conflict_ids.front())]
             .description_string_id);
     return result_data;
   }
@@ -1357,6 +1374,12 @@ AcceleratorConfigurationProvider::MaybeHandleNonSearchAccelerator(
     const ui::Accelerator& accelerator,
     mojom::AcceleratorSource source,
     AcceleratorActionId action_id) {
+  // Disable non-search accelerator warning when re-adding the default
+  // accelerator.
+  if (base::Contains(GetDefaultAcceleratorsForId(action_id), accelerator)) {
+    return AcceleratorConflictErrorState::kStandby;
+  }
+
   if (conflict_error_state_ !=
       AcceleratorConflictErrorState::kAwaitingNonSearchConfirmation) {
     pending_accelerator_.reset();
@@ -1376,6 +1399,29 @@ AcceleratorConfigurationProvider::MaybeHandleNonSearchAccelerator(
   return AcceleratorConflictErrorState::kStandby;
 }
 
+std::vector<uint32_t>
+AcceleratorConfigurationProvider::FindNonConfigurableIdFromAccelerator(
+    const ui::Accelerator& accelerator) {
+  std::vector<uint32_t> ids;
+  // Check browser/text non-configurable accelerators first.
+  uint32_t* non_configurable_conflict_id =
+      non_configurable_accelerator_to_id_.Find(accelerator);
+
+  if (non_configurable_conflict_id) {
+    ids.push_back(*non_configurable_conflict_id);
+  }
+
+  // Then check accessibility accelerators.
+  non_configurable_conflict_id =
+      accessibility_accelerator_to_id_.Find(accelerator);
+
+  if (non_configurable_conflict_id) {
+    ids.push_back(*non_configurable_conflict_id);
+  }
+
+  return ids;
+}
+
 void AcceleratorConfigurationProvider::SetLayoutDetailsMapForTesting(
     const std::vector<AcceleratorLayoutDetails>& layouts) {
   accelerator_layout_lookup_.clear();
@@ -1383,6 +1429,33 @@ void AcceleratorConfigurationProvider::SetLayoutDetailsMapForTesting(
     accelerator_layout_lookup_[GetUuid(layout.source, layout.action_id)] =
         layout;
   }
+}
+
+std::vector<ui::Accelerator>
+AcceleratorConfigurationProvider::GetDefaultAcceleratorsForId(
+    uint32_t action_id) const {
+  const std::vector<ui::Accelerator>& raw_default_accelerators =
+      ash_accelerator_configuration_->GetDefaultAcceleratorsForId(action_id);
+
+  std::vector<ui::Accelerator> default_accelerators;
+  for (const auto& accelerator : raw_default_accelerators) {
+    // Filter the hidden accelerators.
+    if (IsAcceleratorHidden(action_id, accelerator)) {
+      continue;
+    }
+    // Get the alias accelerators.
+    std::vector<ui::Accelerator> accelerator_aliases =
+        accelerator_alias_converter_.CreateAcceleratorAlias(accelerator);
+    // Return early if there are no alias accelerators. This will filter the
+    // disabled accelerators due to unavailable keys.
+    if (accelerator_aliases.empty()) {
+      continue;
+    }
+    for (const auto& accelerator_alias : accelerator_aliases) {
+      default_accelerators.push_back(accelerator_alias);
+    }
+  }
+  return default_accelerators;
 }
 
 mojom::TextAcceleratorPropertiesPtr

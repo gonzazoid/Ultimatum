@@ -19,7 +19,9 @@
 #include "components/user_education/common/tutorial_registry.h"
 
 extern const char kTabGroupTutorialId[];
+extern const char kSavedTabGroupTutorialId[];
 extern const char kSidePanelCustomizeChromeTutorialId[];
+extern const char kSideSearchTutorialId[];
 extern const char kPasswordManagerTutorialId[];
 
 class UserEducationService : public KeyedService {

@@ -7,6 +7,7 @@
 #include "chrome/renderer/accessibility/read_anything_app_model.h"
 
 #include "chrome/test/base/chrome_render_view_test.h"
+#include "read_anything_app_model.h"
 #include "ui/accessibility/ax_enums.mojom-shared.h"
 #include "ui/accessibility/ax_serializable_tree.h"
 
@@ -102,6 +103,7 @@ class ReadAnythingAppModelTest : public ChromeRenderViewTest {
 
   void SetThemeForTesting(const std::string& font_name,
                           float font_size,
+                          bool links_enabled,
                           SkColor foreground_color,
                           SkColor background_color,
                           int line_spacing,
@@ -111,7 +113,7 @@ class ReadAnythingAppModelTest : public ChromeRenderViewTest {
     auto letter_spacing_enum =
         static_cast<read_anything::mojom::LetterSpacing>(letter_spacing);
     model_->OnThemeChanged(read_anything::mojom::ReadAnythingTheme::New(
-        font_name, font_size, foreground_color, background_color,
+        font_name, font_size, links_enabled, foreground_color, background_color,
         line_spacing_enum, letter_spacing_enum));
   }
 
@@ -119,7 +121,7 @@ class ReadAnythingAppModelTest : public ChromeRenderViewTest {
       read_anything::mojom::LetterSpacing letter_spacing,
       read_anything::mojom::LineSpacing line_spacing) {
     model_->OnThemeChanged(read_anything::mojom::ReadAnythingTheme::New(
-        "Arial", 15.0, SkColorSetRGB(0x33, 0x40, 0x36),
+        "Arial", 15.0, false, SkColorSetRGB(0x33, 0x40, 0x36),
         SkColorSetRGB(0xDF, 0xD2, 0x63), line_spacing, letter_spacing));
   }
 
@@ -147,6 +149,8 @@ class ReadAnythingAppModelTest : public ChromeRenderViewTest {
   std::string FontName() { return model_->font_name(); }
 
   float FontSize() { return model_->font_size(); }
+
+  bool LinksEnabled() { return model_->links_enabled(); }
 
   SkColor ForegroundColor() { return model_->foreground_color(); }
 
@@ -197,6 +201,8 @@ class ReadAnythingAppModelTest : public ChromeRenderViewTest {
     return base::Contains(model_->display_node_ids(), ax_node_id);
   }
 
+  bool DisplayNodeIdsIsEmpty() { return model_->display_node_ids().empty(); }
+
   bool SelectionNodeIdsContains(ui::AXNodeID ax_node_id) {
     return base::Contains(model_->selection_node_ids(), ax_node_id);
   }
@@ -221,6 +227,10 @@ class ReadAnythingAppModelTest : public ChromeRenderViewTest {
     model_->set_selection_from_action(selection_from_action);
   }
 
+  void OnSelection(ax::mojom::EventFrom event_from) {
+    model_->OnSelection(event_from);
+  }
+
   void IncreaseTextSize() { model_->IncreaseTextSize(); }
 
   void DecreaseTextSize() { model_->DecreaseTextSize(); }
@@ -241,6 +251,37 @@ class ReadAnythingAppModelTest : public ChromeRenderViewTest {
   bool IsPdf() { return model_->is_pdf(); }
   ui::AXTreeID GetPDFWebContents() { return model_->GetPDFWebContents(); }
 
+  void InitAXPosition(const ui::AXNodeID id) {
+    model_->InitAXPositionWithNode(id);
+  }
+
+  ui::AXNodePosition::AXPositionInstance GetNextNodePosition() {
+    ReadAnythingAppModel::ReadAloudCurrentGranularity granularity =
+        ReadAnythingAppModel::ReadAloudCurrentGranularity();
+    return model_->GetNextValidPositionFromCurrentPosition(granularity);
+  }
+
+  ui::AXNodePosition::AXPositionInstance GetNextNodePosition(
+      ReadAnythingAppModel::ReadAloudCurrentGranularity granularity) {
+    return model_->GetNextValidPositionFromCurrentPosition(granularity);
+  }
+
+  ReadAnythingAppModel::ReadAloudCurrentGranularity GetNextNodes() {
+    return model_->GetNextNodes();
+  }
+
+  size_t GetNextSentence(const std::u16string& text) {
+    return model_->GetNextSentence(text);
+  }
+
+  int GetCurrentTextStartIndex(ui::AXNodeID id) {
+    return model_->GetCurrentTextStartIndex(id);
+  }
+
+  int GetCurrentTextEndIndex(ui::AXNodeID id) {
+    return model_->GetCurrentTextEndIndex(id);
+  }
+
   ui::AXTreeID tree_id_;
 
  private:
@@ -252,6 +293,7 @@ class ReadAnythingAppModelTest : public ChromeRenderViewTest {
 TEST_F(ReadAnythingAppModelTest, Theme) {
   std::string font_name = "Roboto";
   float font_size = 18.0;
+  bool links_enabled = false;
   SkColor foreground = SkColorSetRGB(0x33, 0x36, 0x39);
   SkColor background = SkColorSetRGB(0xFD, 0xE2, 0x93);
   int letter_spacing =
@@ -260,10 +302,11 @@ TEST_F(ReadAnythingAppModelTest, Theme) {
   int line_spacing =
       static_cast<int>(read_anything::mojom::LineSpacing::kDefaultValue);
   float line_spacing_value = 1.5;
-  SetThemeForTesting(font_name, font_size, foreground, background, line_spacing,
-                     letter_spacing);
+  SetThemeForTesting(font_name, font_size, links_enabled, foreground,
+                     background, line_spacing, letter_spacing);
   EXPECT_EQ(font_name, FontName());
   EXPECT_EQ(font_size, FontSize());
+  EXPECT_EQ(links_enabled, LinksEnabled());
   EXPECT_EQ(foreground, ForegroundColor());
   EXPECT_EQ(background, BackgroundColor());
   EXPECT_EQ(line_spacing_value, LineSpacing());
@@ -748,6 +791,53 @@ TEST_F(ReadAnythingAppModelTest,
   EXPECT_TRUE(DisplayNodeIdsContains(2));
   EXPECT_FALSE(DisplayNodeIdsContains(3));
   EXPECT_FALSE(DisplayNodeIdsContains(4));
+}
+
+TEST_F(ReadAnythingAppModelTest,
+       DisplayNodeIdsEmpty_WhenContentNodesAreAllHeadings) {
+  ui::AXTreeUpdate update;
+  SetUpdateTreeID(&update);
+
+  // All content nodes are heading nodes.
+  update.nodes.resize(3);
+  update.nodes[0].id = 2;
+  update.nodes[0].role = ax::mojom::Role::kHeading;
+  update.nodes[1].id = 3;
+  update.nodes[1].role = ax::mojom::Role::kHeading;
+  update.nodes[2].id = 4;
+  update.nodes[2].role = ax::mojom::Role::kHeading;
+  AccessibilityEventReceived({update});
+  ProcessDisplayNodes({2, 3, 4});
+  EXPECT_TRUE(DisplayNodeIdsIsEmpty());
+
+  // Content node is static text node with heading parent.
+  update.nodes.resize(3);
+  update.nodes[0].id = 1;
+  update.nodes[0].child_ids = {2};
+  update.nodes[1].id = 2;
+  update.nodes[1].role = ax::mojom::Role::kHeading;
+  update.nodes[1].child_ids = {3};
+  update.nodes[2].id = 3;
+  update.nodes[2].role = ax::mojom::Role::kStaticText;
+  AccessibilityEventReceived({update});
+  ProcessDisplayNodes({3});
+  EXPECT_TRUE(DisplayNodeIdsIsEmpty());
+
+  // Content node is inline text box with heading grandparent.
+  update.nodes.resize(4);
+  update.nodes[0].id = 1;
+  update.nodes[0].child_ids = {2};
+  update.nodes[1].id = 2;
+  update.nodes[1].role = ax::mojom::Role::kHeading;
+  update.nodes[1].child_ids = {3};
+  update.nodes[2].id = 3;
+  update.nodes[2].role = ax::mojom::Role::kStaticText;
+  update.nodes[2].child_ids = {4};
+  update.nodes[3].id = 4;
+  update.nodes[3].role = ax::mojom::Role::kInlineTextBox;
+  AccessibilityEventReceived({update});
+  ProcessDisplayNodes({4});
+  EXPECT_TRUE(DisplayNodeIdsIsEmpty());
 }
 
 TEST_F(ReadAnythingAppModelTest,
@@ -1456,4 +1546,278 @@ TEST_F(ReadAnythingAppModelTest, PdfEvents_DontSetRequiresDistillation) {
   update.nodes = {static_text_node};
   AccessibilityEventReceived({update});
   ASSERT_FALSE(RequiresDistillation());
+}
+
+TEST_F(ReadAnythingAppModelTest, OnSelection_HandlesClickAndDragEvents) {
+  ui::AXTreeUpdate update;
+  SetUpdateTreeID(&update);
+  update.tree_data.sel_anchor_object_id = 2;
+  update.tree_data.sel_focus_object_id = 3;
+  update.tree_data.sel_anchor_offset = 0;
+  update.tree_data.sel_focus_offset = 0;
+  update.tree_data.sel_is_backward = false;
+  AccessibilityEventReceived({update});
+  ProcessSelection();
+
+  // If there is a click and drag selection (the anchor object id and offset are
+  // the same as the prev selection received), the event_from eventually changes
+  // from kUser to kPage. Post process selection should be required in either
+  // case.
+  // SetRequiresPostProcessSelection(false) is needed to reset the flag to check
+  // that OnSelection(...) properly sets (or doesn't set) the flag.
+  update.tree_data.sel_anchor_object_id = 2;
+  update.tree_data.sel_focus_object_id = 3;
+  update.tree_data.sel_anchor_offset = 0;
+  update.tree_data.sel_focus_offset = 1;
+  update.tree_data.sel_is_backward = false;
+  AccessibilityEventReceived({update});
+
+  SetRequiresPostProcessSelection(false);
+  OnSelection(ax::mojom::EventFrom::kUser);
+  EXPECT_TRUE(RequiresPostProcessSelection());
+
+  SetRequiresPostProcessSelection(false);
+  OnSelection(ax::mojom::EventFrom::kPage);
+  EXPECT_TRUE(RequiresPostProcessSelection());
+
+  // If the user drags the selection so that it is backwards, post process
+  // selection should still be required.
+  update.tree_data.sel_anchor_object_id = 2;
+  update.tree_data.sel_focus_object_id = 1;
+  update.tree_data.sel_anchor_offset = 0;
+  update.tree_data.sel_focus_offset = 2;
+  update.tree_data.sel_is_backward = true;
+  AccessibilityEventReceived({update});
+  SetRequiresPostProcessSelection(false);
+  OnSelection(ax::mojom::EventFrom::kPage);
+  EXPECT_TRUE(RequiresPostProcessSelection());
+
+  // If the anchor changes (the user stopped dragging their cursor) and we
+  // receive an event with event_from kPage, post process selection should not
+  // be set to true.
+  update.tree_data.sel_anchor_object_id = 2;
+  update.tree_data.sel_focus_object_id = 3;
+  update.tree_data.sel_anchor_offset = 1;
+  update.tree_data.sel_focus_offset = 0;
+  update.tree_data.sel_is_backward = false;
+  AccessibilityEventReceived({update});
+  SetRequiresPostProcessSelection(false);
+  OnSelection(ax::mojom::EventFrom::kPage);
+  EXPECT_FALSE(RequiresPostProcessSelection());
+}
+
+TEST_F(ReadAnythingAppModelTest, GetNextSentence_ReturnsCorrectIndex) {
+  const std::u16string first_sentence = u"This is a normal sentence. ";
+  const std::u16string second_sentence = u"This is a second sentence.";
+
+  const std::u16string sentence = first_sentence + second_sentence;
+  size_t index = GetNextSentence(sentence);
+  EXPECT_EQ(index, first_sentence.length());
+  EXPECT_EQ(sentence.substr(0, index), first_sentence);
+}
+
+TEST_F(ReadAnythingAppModelTest,
+       GetNextSentence_OnlyOneSentence_ReturnsCorrectIndex) {
+  const std::u16string sentence = u"Hello, this is a normal sentence.";
+
+  size_t index = GetNextSentence(sentence);
+  EXPECT_EQ(index, sentence.length());
+  EXPECT_EQ(sentence.substr(0, index), sentence);
+}
+
+TEST_F(ReadAnythingAppModelTest, GetNextValidPosition) {
+  std::u16string sentence1 = u"This is a sentence.";
+  std::u16string sentence2 = u"This is another sentence.";
+  std::u16string sentence3 = u"And this is yet another sentence.";
+  ui::AXTreeUpdate update;
+  SetUpdateTreeID(&update);
+  ui::AXNodeData static_text1;
+  static_text1.id = 2;
+  static_text1.role = ax::mojom::Role::kStaticText;
+  static_text1.SetNameChecked(sentence1);
+
+  ui::AXNodeData static_text2;
+  static_text2.id = 3;
+  static_text2.role = ax::mojom::Role::kStaticText;
+  static_text2.SetNameChecked(sentence2);
+
+  ui::AXNodeData static_text3;
+  static_text3.id = 4;
+  static_text3.role = ax::mojom::Role::kStaticText;
+  static_text3.SetNameChecked(sentence3);
+  update.nodes = {static_text1, static_text2, static_text3};
+  AccessibilityEventReceived({update});
+  ProcessDisplayNodes({static_text1.id, static_text2.id, static_text3.id});
+  InitAXPosition(update.nodes[0].id);
+  ui::AXNodePosition::AXPositionInstance new_position = GetNextNodePosition();
+  EXPECT_EQ(new_position->anchor_id(), static_text2.id);
+  EXPECT_EQ(new_position->GetText(), sentence2);
+
+  // Getting the next node position shouldn't update the current AXPosition.
+  new_position = GetNextNodePosition();
+  EXPECT_EQ(new_position->anchor_id(), static_text2.id);
+  EXPECT_EQ(new_position->GetText(), sentence2);
+}
+
+TEST_F(ReadAnythingAppModelTest, GetNextValidPosition_SkipsNonTextNode) {
+  std::u16string sentence1 = u"This is a sentence.";
+  std::u16string sentence2 = u"This is another sentence.";
+  ui::AXTreeUpdate update;
+  SetUpdateTreeID(&update);
+  ui::AXNodeData static_text1;
+  static_text1.id = 2;
+  static_text1.role = ax::mojom::Role::kStaticText;
+  static_text1.SetNameChecked(sentence1);
+
+  ui::AXNodeData empty_node;
+  empty_node.id = 3;
+
+  ui::AXNodeData static_text2;
+  static_text2.id = 4;
+  static_text2.role = ax::mojom::Role::kStaticText;
+  static_text2.SetNameChecked(sentence2);
+  update.nodes = {static_text1, empty_node, static_text2};
+  AccessibilityEventReceived({update});
+  ProcessDisplayNodes({static_text1.id, empty_node.id, static_text2.id});
+  InitAXPosition(update.nodes[0].id);
+  ui::AXNodePosition::AXPositionInstance new_position = GetNextNodePosition();
+  EXPECT_EQ(new_position->anchor_id(), static_text2.id);
+  EXPECT_EQ(new_position->GetText(), sentence2);
+}
+
+TEST_F(ReadAnythingAppModelTest, GetNextValidPosition_SkipsNonDistilledNode) {
+  std::u16string sentence1 = u"This is a sentence.";
+  std::u16string sentence2 = u"This is another sentence.";
+  std::u16string sentence3 = u"And this is yet another sentence.";
+  ui::AXTreeUpdate update;
+  SetUpdateTreeID(&update);
+  ui::AXNodeData static_text1;
+  static_text1.id = 2;
+  static_text1.role = ax::mojom::Role::kStaticText;
+  static_text1.SetNameChecked(sentence1);
+
+  ui::AXNodeData static_text2;
+  static_text2.id = 3;
+  static_text2.role = ax::mojom::Role::kStaticText;
+  static_text2.SetNameChecked(sentence2);
+
+  ui::AXNodeData static_text3;
+  static_text3.id = 4;
+  static_text3.role = ax::mojom::Role::kStaticText;
+  static_text3.SetName(sentence3);
+  update.nodes = {static_text1, static_text2, static_text3};
+  AccessibilityEventReceived({update});
+  // Don't distill the node with id 3.
+  ProcessDisplayNodes({static_text1.id, static_text3.id});
+  InitAXPosition(update.nodes[0].id);
+  ui::AXNodePosition::AXPositionInstance new_position = GetNextNodePosition();
+  EXPECT_EQ(new_position->anchor_id(), static_text3.id);
+  EXPECT_EQ(new_position->GetText(), sentence3);
+}
+
+TEST_F(ReadAnythingAppModelTest, GetNextValidPosition_SkipsNodeWithHTMLTag) {
+  std::u16string sentence1 = u"This is a sentence.";
+  std::u16string sentence2 = u"This is another sentence.";
+  std::u16string sentence3 = u"And this is yet another sentence.";
+  ui::AXTreeUpdate update;
+  SetUpdateTreeID(&update);
+  ui::AXNodeData static_text1;
+  static_text1.id = 2;
+  static_text1.role = ax::mojom::Role::kStaticText;
+  static_text1.SetNameChecked(sentence1);
+
+  ui::AXNodeData static_text2;
+  static_text2.id = 3;
+  static_text2.role = ax::mojom::Role::kStaticText;
+  static_text2.AddStringAttribute(ax::mojom::StringAttribute::kHtmlTag, "h1");
+  static_text2.SetNameChecked(sentence2);
+
+  ui::AXNodeData static_text3;
+  static_text3.id = 4;
+  static_text3.role = ax::mojom::Role::kStaticText;
+  static_text3.SetNameChecked(sentence3);
+  update.nodes = {static_text1, static_text2, static_text3};
+  AccessibilityEventReceived({update});
+  ProcessDisplayNodes({static_text1.id, static_text2.id, static_text3.id});
+  InitAXPosition(update.nodes[0].id);
+  ui::AXNodePosition::AXPositionInstance new_position = GetNextNodePosition();
+  EXPECT_EQ(new_position->anchor_id(), static_text3.id);
+  EXPECT_EQ(new_position->GetText(), sentence3);
+}
+
+TEST_F(ReadAnythingAppModelTest,
+       GetNextValidPosition_ReturnsNullPositionAtEndOfTree) {
+  std::u16string sentence1 = u"This is a sentence.";
+  ui::AXTreeUpdate update;
+  SetUpdateTreeID(&update);
+  ui::AXNodeData static_text;
+  static_text.id = 2;
+  static_text.role = ax::mojom::Role::kStaticText;
+  static_text.SetNameChecked(sentence1);
+  ui::AXNodeData empty_node1;
+  empty_node1.id = 3;
+  ui::AXNodeData empty_node2;
+  empty_node2.id = 4;
+  update.nodes = {static_text, empty_node1, empty_node2};
+  AccessibilityEventReceived({update});
+  ProcessDisplayNodes({static_text.id, empty_node1.id, empty_node2.id});
+  InitAXPosition(update.nodes[0].id);
+  ui::AXNodePosition::AXPositionInstance new_position = GetNextNodePosition();
+  EXPECT_TRUE(new_position->IsNullPosition());
+}
+
+TEST_F(
+    ReadAnythingAppModelTest,
+    GetNextValidPosition_AfterGetNextNodesButBeforeGetCurrentText_UsesCurrentGranularity) {
+  std::u16string sentence1 = u"But from up here. The ";
+  std::u16string sentence2 = u"world ";
+  std::u16string sentence3 =
+      u"looks so small. And suddenly life seems so clear. And from up here. "
+      u"You coast past it all. The obstacles just disappear.";
+  ui::AXTreeUpdate update;
+  SetUpdateTreeID(&update);
+  ui::AXNodeData static_text1;
+  static_text1.id = 2;
+  static_text1.role = ax::mojom::Role::kStaticText;
+  static_text1.SetNameChecked(sentence1);
+
+  ui::AXNodeData static_text2;
+  static_text2.id = 3;
+  static_text2.role = ax::mojom::Role::kStaticText;
+  static_text2.SetNameChecked(sentence2);
+
+  ui::AXNodeData static_text3;
+  static_text3.id = 4;
+  static_text3.role = ax::mojom::Role::kStaticText;
+  static_text3.SetNameChecked(sentence3);
+  update.nodes = {static_text1, static_text2, static_text3};
+  AccessibilityEventReceived({update});
+  ProcessDisplayNodes({static_text1.id, static_text2.id, static_text3.id});
+  InitAXPosition(update.nodes[0].id);
+
+  ReadAnythingAppModel::ReadAloudCurrentGranularity current_granularity =
+      GetNextNodes();
+  // Expect that current_granularity contains static_text1
+  // Expect that the indices aren't returned correctly
+  // Expect that GetNextValidPosition fails without inserted the granularity.
+  // The first segment was returned correctly.
+  EXPECT_EQ((int)current_granularity.node_ids.size(), 1);
+  EXPECT_TRUE(base::Contains(current_granularity.node_ids, static_text1.id));
+  EXPECT_EQ(GetCurrentTextStartIndex(static_text1.id), -1);
+  EXPECT_EQ(GetCurrentTextEndIndex(static_text1.id), -1);
+
+  // Get the next position without using the current granularity. This
+  // simulates getting the next node position from within GetNextNode if
+  // the current granularity hasn't yet been added to the list processed
+  // granularities. This should return the ID for static_text1, even though
+  // it's already been used because the current granularity isn't being used.
+  ui::AXNodePosition::AXPositionInstance new_position = GetNextNodePosition();
+  EXPECT_EQ(new_position->anchor_id(), static_text1.id);
+
+  // Now get the next position using the correct current granularity. Thi
+  // simulates calling GetNextNodePosition from within GetNextNodes before
+  // the nodes have been added to the list of processed granularities. This
+  // should correctly return the next node in the tree.
+  new_position = GetNextNodePosition(current_granularity);
+  EXPECT_EQ(new_position->anchor_id(), static_text2.id);
 }

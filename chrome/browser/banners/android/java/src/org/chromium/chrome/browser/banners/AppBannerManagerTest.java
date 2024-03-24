@@ -65,6 +65,8 @@ import org.chromium.base.test.util.Criteria;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
+import org.chromium.base.test.util.Features.DisableFeatures;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.base.test.util.PackageManagerWrapper;
 import org.chromium.base.test.util.Restriction;
 import org.chromium.chrome.browser.ShortcutHelper;
@@ -75,8 +77,8 @@ import org.chromium.chrome.browser.feature_engagement.TrackerFactory;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.tab.Tab;
-import org.chromium.chrome.browser.tab.TabUtils;
 import org.chromium.chrome.browser.ui.appmenu.AppMenuCoordinator;
 import org.chromium.chrome.browser.ui.appmenu.AppMenuTestSupport;
 import org.chromium.chrome.test.ChromeActivityTestRule;
@@ -84,8 +86,6 @@ import org.chromium.chrome.test.ChromeBrowserTestRule;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.chrome.test.util.ChromeTabUtils;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.chrome.test.util.browser.TabLoadObserver;
 import org.chromium.chrome.test.util.browser.TabTitleObserver;
 import org.chromium.chrome.test.util.browser.webapps.WebappTestPage;
@@ -172,6 +172,8 @@ public class AppBannerManagerTest {
 
     private static final String INSTALL_PATH_HISTOGRAM_NAME = "WebApk.Install.PathToInstall";
 
+    private static final String EXPECTED_DIALOG_TITLE = "Install app";
+
     private class MockAppDetailsDelegate extends AppDetailsDelegate {
         private Observer mObserver;
         private AppData mAppData;
@@ -240,7 +242,7 @@ public class AppBannerManagerTest {
 
         ThreadUtils.runOnUiThreadBlocking(
                 () -> {
-                    Profile profile = Profile.getLastUsedRegularProfile();
+                    Profile profile = ProfileManager.getLastUsedRegularProfile();
                     TrackerFactory.setTestingFactory(profile, mTracker);
                 });
 
@@ -271,7 +273,8 @@ public class AppBannerManagerTest {
         ThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     // TODO (https://crbug.com/1063807):  Add incognito mode tests.
-                    SiteEngagementService.getForBrowserContext(Profile.getLastUsedRegularProfile())
+                    SiteEngagementService.getForBrowserContext(
+                                    ProfileManager.getLastUsedRegularProfile())
                             .resetBaseScoreForUrl(url, engagement);
                 });
     }
@@ -362,22 +365,9 @@ public class AppBannerManagerTest {
                 });
     }
 
-    private static String getExpectedDialogTitle(Tab tab) throws Exception {
-        String title =
-                ThreadUtils.runOnUiThreadBlocking(
-                        () -> {
-                            return TabUtils.getActivity(tab)
-                                    .getString(
-                                            AppBannerManager.getHomescreenLanguageOption(
-                                                            tab.getWebContents())
-                                                    .titleTextId);
-                        });
-        return title;
-    }
-
     private void waitUntilNoDialogsShowing(final Tab tab) throws Exception {
         UiObject dialogUiObject =
-                mUiDevice.findObject(new UiSelector().text(getExpectedDialogTitle(tab)));
+                mUiDevice.findObject(new UiSelector().text(EXPECTED_DIALOG_TITLE));
         dialogUiObject.waitUntilGone(CriteriaHelper.DEFAULT_MAX_TIME_TO_POLL);
     }
 
@@ -385,7 +375,7 @@ public class AppBannerManagerTest {
         TouchCommon.singleClickView(tab.getView());
 
         UiObject dialogUiObject =
-                mUiDevice.findObject(new UiSelector().text(getExpectedDialogTitle(tab)));
+                mUiDevice.findObject(new UiSelector().text(EXPECTED_DIALOG_TITLE));
         Assert.assertTrue(dialogUiObject.waitForExists(CriteriaHelper.DEFAULT_MAX_TIME_TO_POLL));
     }
 
@@ -715,7 +705,7 @@ public class AppBannerManagerTest {
     }
 
     @Test
-    @SmallTest
+    @MediumTest
     @Feature({"AppBanners"})
     public void testModalNativeAppBannerCanBeTriggeredMultipleTimesBrowserTab() throws Exception {
         triggerModalBannerMultipleTimes(
@@ -729,7 +719,7 @@ public class AppBannerManagerTest {
     }
 
     @Test
-    @SmallTest
+    @MediumTest
     @Feature({"AppBanners"})
     public void testModalNativeAppBannerCanBeTriggeredMultipleTimesCustomTab() throws Exception {
         mCustomTabActivityTestRule.startCustomTabActivityWithIntent(

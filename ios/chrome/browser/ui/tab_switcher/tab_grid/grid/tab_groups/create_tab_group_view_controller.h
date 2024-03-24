@@ -7,10 +7,17 @@
 
 #import <UIKit/UIKit.h>
 
+#import "ios/chrome/browser/ui/tab_switcher/tab_grid/grid/tab_groups/tab_group_creation_consumer.h"
+
+@protocol TabGroupCreationMutator;
 @protocol TabGroupsCommands;
 
 // View controller that display the tab group creation view.
-@interface CreateTabGroupViewController : UIViewController
+@interface CreateTabGroupViewController
+    : UIViewController <TabGroupCreationConsumer>
+
+// Mutator to handle model changes.
+@property(nonatomic, weak) id<TabGroupCreationMutator> mutator;
 
 // Initiates a CreateTabGroupViewController with `handler` to handle user
 // action.

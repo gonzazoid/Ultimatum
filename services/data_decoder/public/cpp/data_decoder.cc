@@ -74,13 +74,13 @@ class ValueParseRequest : public base::RefCounted<ValueParseRequest<T, V>> {
     return receiver;
   }
 
-  void OnServiceValue(absl::optional<V> value) {
-    OnServiceValueOrError(std::move(value), absl::nullopt);
+  void OnServiceValue(std::optional<V> value) {
+    OnServiceValueOrError(std::move(value), std::nullopt);
   }
 
   // Handles a successful parse from the service.
-  void OnServiceValueOrError(absl::optional<V> value,
-                             const absl::optional<std::string>& error) {
+  void OnServiceValueOrError(std::optional<V> value,
+                             const std::optional<std::string>& error) {
     if (!callback() || is_cancelled_->data)
       return;
 
@@ -181,7 +181,6 @@ mojom::DataDecoderService* DataDecoder::GetService() {
 #else
       LOG(FATAL) << "data_decoder::ServiceProvider::Set() must be called "
                  << "before any instances of DataDecoder can be used.";
-      return nullptr;
 #endif
     }
 

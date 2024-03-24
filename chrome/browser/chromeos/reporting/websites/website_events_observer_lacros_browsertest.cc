@@ -16,6 +16,7 @@
 #include "chromeos/crosapi/mojom/crosapi.mojom-forward.h"
 #include "chromeos/dbus/missive/missive_client_test_observer.h"
 #include "chromeos/startup/browser_init_params.h"
+#include "components/content_settings/core/common/content_settings_pattern.h"
 #include "components/policy/core/common/cloud/dm_token.h"
 #include "components/policy/core/common/policy_loader_lacros.h"
 #include "components/policy/proto/device_management_backend.pb.h"
@@ -50,7 +51,7 @@ void SetupUserDeviceAffiliation() {
       std::move(profile_policy_data));
 
   ::crosapi::mojom::BrowserInitParamsPtr init_params =
-      ::crosapi::mojom::BrowserInitParams::New();
+      chromeos::BrowserInitParams::GetForTests()->Clone();
   init_params->device_properties = crosapi::mojom::DeviceProperties::New();
   init_params->device_properties->device_dm_token = kTestDMToken;
   init_params->device_properties->device_affiliation_ids = {kAffiliationId};
@@ -95,11 +96,6 @@ class WebsiteEventsObserverBrowserTest : public MixinBasedInProcessBrowserTest {
       ::content::BrowserMainParts* browser_parts) override {
     SetupUserDeviceAffiliation();
     MixinBasedInProcessBrowserTest::CreatedBrowserMainParts(browser_parts);
-  }
-
-  void TearDownInProcessBrowserTestFixture() override {
-    ::chromeos::BrowserInitParams::SetInitParamsForTests(nullptr);
-    MixinBasedInProcessBrowserTest::TearDownInProcessBrowserTestFixture();
   }
 
   void SetAllowlistedUrls(const std::vector<std::string>& allowlisted_urls) {

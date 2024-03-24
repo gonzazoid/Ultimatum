@@ -101,6 +101,7 @@
 #include "chrome/browser/ssl/stateful_ssl_host_state_delegate_factory.h"
 #include "chrome/browser/startup_data.h"
 #include "chrome/browser/storage/storage_notification_service_factory.h"
+#include "chrome/browser/tpcd/support/top_level_trial_service_factory.h"
 #include "chrome/browser/tpcd/support/tpcd_support_service_factory.h"
 #include "chrome/browser/transition_manager/full_browser_transition_manager.h"
 #include "chrome/browser/ui/startup/startup_browser_creator.h"
@@ -149,6 +150,7 @@
 #include "components/profile_metrics/browser_profile_type.h"
 #include "components/safe_search_api/safe_search_util.h"
 #include "components/security_interstitials/content/stateful_ssl_host_state_delegate.h"
+#include "components/services/screen_ai/buildflags/buildflags.h"
 #include "components/signin/public/base/signin_pref_names.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/site_isolation/site_isolation_policy.h"
@@ -236,6 +238,11 @@
 #if BUILDFLAG(ENABLE_PLUGINS)
 #include "chrome/browser/plugins/chrome_plugin_service_filter.h"
 #include "chrome/browser/plugins/plugin_prefs.h"
+#endif
+
+#if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
+#include "chrome/browser/accessibility/pdf_ocr_controller_factory.h"
+#include "ui/accessibility/accessibility_features.h"
 #endif
 
 #if BUILDFLAG(ENABLE_SESSION_SERVICE)
@@ -486,7 +493,7 @@ ProfileImpl::ProfileImpl(
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // TODO(crbug.com/1325210): Move this into
-  // ChromeUserManager::OnProfileCreationStarted().
+  // ChromeUserManagerImpl::OnProfileCreationStarted().
   if (ash::ProfileHelper::IsUserProfile(this)) {
     // |ash::InitializeAccountManager| is called during a User's session
     // initialization but some tests do not properly login to a User Session.
@@ -850,6 +857,13 @@ void ProfileImpl::DoFinalInit(CreateMode create_mode) {
   PasswordManagerSettingsServiceFactory::GetForProfile(this);
 #endif
 
+#if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
+  if (features::IsPdfOcrEnabled()) {
+    // Create the PDF OCR controller so that it can self-activate as needed.
+    screen_ai::PdfOcrControllerFactory::GetForProfile(this);
+  }
+#endif
+
   // The announcement notification  service might not be available for some
   // irregular profiles, like the System Profile.
   if (AnnouncementNotificationService* announcement_notification =
@@ -864,9 +878,11 @@ void ProfileImpl::DoFinalInit(CreateMode create_mode) {
   // as it depends on the default StoragePartition being initialized.
   GetOriginTrialsControllerDelegate();
 
-  // The TpcdSupportService must be created with the profile, but after the
-  // initialization of the OriginTrialsControllerDelegate, as it depends on it.
-  tpcd::support::TpcdSupportServiceFactory::GetForProfile(this);
+  // The TpcdTrialService and TopLevelTrialService must be created with the
+  // profile, but after the initialization of the
+  // OriginTrialsControllerDelegate, as it depends on it.
+  tpcd::trial::TpcdTrialServiceFactory::GetForProfile(this);
+  tpcd::trial::TopLevelTrialServiceFactory::GetForProfile(this);
 }
 
 base::FilePath ProfileImpl::last_selected_directory() {

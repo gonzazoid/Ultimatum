@@ -45,7 +45,6 @@
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
-#include "chrome/browser/ui/commander/commander.h"
 #include "chrome/browser/ui/global_error/global_error.h"
 #include "chrome/browser/ui/global_error/global_error_service.h"
 #include "chrome/browser/ui/global_error/global_error_service_factory.h"
@@ -60,9 +59,9 @@
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/toolbar/app_menu_icon_controller.h"
 #include "chrome/browser/ui/toolbar/bookmark_sub_menu_model.h"
-#include "chrome/browser/ui/toolbar/chrome_labs_model.h"
-#include "chrome/browser/ui/toolbar/chrome_labs_prefs.h"
-#include "chrome/browser/ui/toolbar/chrome_labs_utils.h"
+#include "chrome/browser/ui/toolbar/chrome_labs/chrome_labs_model.h"
+#include "chrome/browser/ui/toolbar/chrome_labs/chrome_labs_prefs.h"
+#include "chrome/browser/ui/toolbar/chrome_labs/chrome_labs_utils.h"
 #include "chrome/browser/ui/toolbar/recent_tabs_sub_menu_model.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/web_applications/web_app_launch_utils.h"
@@ -596,6 +595,12 @@ SaveAndShareSubMenuModel::SaveAndShareSubMenuModel(
                                          ui::kColorMenuIcon, kDefaultIconSize));
     }
   }
+  if (sharing_hub::DesktopScreenshotsFeatureEnabled(browser->profile())) {
+    AddItemWithStringIdAndIcon(
+        IDC_SHARING_HUB_SCREENSHOT, IDS_SHARING_HUB_SCREENSHOT_LABEL,
+        ui::ImageModel::FromVectorIcon(kSharingHubScreenshotIcon,
+                                       ui::kColorMenuIcon, kDefaultIconSize));
+  }
 }
 
 }  // namespace
@@ -694,9 +699,6 @@ void ToolsMenuModel::Build(Browser* browser) {
     AddItemWithStringId(IDC_CREATE_SHORTCUT, IDS_ADD_TO_OS_LAUNCH_SURFACE);
   }
   AddItemWithStringId(IDC_NAME_WINDOW, IDS_NAME_WINDOW);
-  if (commander::IsEnabled()) {
-    AddItemWithStringId(IDC_TOGGLE_QUICK_COMMANDS, IDS_TOGGLE_QUICK_COMMANDS);
-  }
 
   if (features::IsSidePanelPinningEnabled()) {
     AddItemWithStringId(IDC_SHOW_READING_MODE_SIDE_PANEL,
@@ -754,7 +756,6 @@ void ToolsMenuModel::Build(Browser* browser) {
       }
     }
     SetCommandIcon(this, IDC_NAME_WINDOW, kNameWindowIcon);
-    SetCommandIcon(this, IDC_TOGGLE_QUICK_COMMANDS, kQuickCommandsIcon);
     SetCommandIcon(this, IDC_SHOW_READING_MODE_SIDE_PANEL,
                    kMenuBookChromeRefreshIcon);
     SetCommandIcon(this, IDC_PERFORMANCE, kPerformanceIcon);

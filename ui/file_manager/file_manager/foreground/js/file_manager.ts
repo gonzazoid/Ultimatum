@@ -5,12 +5,11 @@
 import 'chrome://resources/cros_components/switch/switch.js';
 import '../../background/js/file_manager_base.js';
 import '../../background/js/test_util.js';
-import '../../definitions/file_manager_private.js';
 import '../../widgets/xf_jellybean.js';
 
 import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
 import {ColorChangeUpdater} from 'chrome://resources/cr_components/color_change_listener/colors_css_updater.js';
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import {CrButtonElement} from 'chrome://resources/ash/common/cr_elements/cr_button/cr_button.js';
 import {assert, assertInstanceof} from 'chrome://resources/js/assert.js';
 
 import type {Crostini} from '../../background/js/crostini.js';
@@ -345,6 +344,12 @@ export class FileManager {
   private guestMode_: boolean = false;
 
   private store_ = getStore();
+
+  /**
+   * Whether local user files (e.g. My Files, Downloads, Play files...) are
+   * enabled or not, retrieved from user preferences.
+   */
+  localUserFilesAllowed: boolean = true;
 
   constructor() {
     (function() {
@@ -1434,13 +1439,14 @@ export class FileManager {
     }
 
     // Check directory change.
-    tracker.stop();
     if (!tracker.hasChanged) {
       // Finish setup current directory.
       await this.finishSetupCurrentDirectory_(
           (nextCurrentDirEntry as DirectoryEntry), selectionEntry,
           this.launchParams_.targetName);
     }
+    // Only stop the tracker after finishing the directory change.
+    tracker.stop();
   }
 
   /**
@@ -1628,6 +1634,12 @@ export class FileManager {
       redraw = true;
     }
 
+    if (this.localUserFilesAllowed !== prefs.localUserFilesAllowed) {
+      this.localUserFilesAllowed = prefs.localUserFilesAllowed;
+      // TODO(b/322779971): Trigger all changes necessary: remove placeholders,
+      // remove commands that aren't valid, etc.
+    }
+
     await this.updateOfficePrefs_(prefs);
 
     assert(this.ui.directoryTree);
@@ -1710,7 +1722,7 @@ export class FileManager {
     if (!isXfTree(this.ui_.directoryTree)) {
       this.ui_.directoryTree!.dataModel.fakeTrashItem = null;
     }
-    this.navigateAwayFromDisabledRoot_(this.fakeTrashItem_);
+    this.navigateAwayFromDisabledRoot_(this.fakeTrashItem_?.entry || null);
   }
 
   /**
@@ -1718,9 +1730,10 @@ export class FileManager {
    * updated.
    */
   private toggleDriveRootOnPreferencesUpdate_() {
+    let driveFakeRoot: EntryList|FakeEntry|null =
+        getEntry(this.store_.getState(), driveRootEntryListKey) as EntryList |
+        null;
     if (this.driveEnabled_) {
-      let driveFakeRoot =
-          getEntry(this.store_.getState(), driveRootEntryListKey) as EntryList;
       if (!driveFakeRoot) {
         driveFakeRoot = new EntryList(
             str('DRIVE_DIRECTORY_LABEL'), RootType.DRIVE_FAKE_ROOT);
@@ -1746,18 +1759,19 @@ export class FileManager {
     assert(this.ui.directoryTree);
     if (!isXfTree(this.ui.directoryTree)) {
       this.ui.directoryTree!.dataModel.fakeDriveItem = null;
+      this.navigateAwayFromDisabledRoot_(this.fakeDriveItem_?.entry || null);
+    } else {
+      this.navigateAwayFromDisabledRoot_(driveFakeRoot);
     }
-    this.navigateAwayFromDisabledRoot_(this.fakeDriveItem_);
   }
 
   /**
    * If the root item has been disabled but it is the current visible entry,
    * navigate away from it to the default display root.
-   * @param rootItem The item to navigate away from.
+   * @param entry The entry to navigate away from.
    */
-  private navigateAwayFromDisabledRoot_(rootItem: null|
-                                        NavigationModelFakeItem) {
-    if (!rootItem) {
+  private navigateAwayFromDisabledRoot_(entry: null|Entry|FilesAppEntry) {
+    if (!entry) {
       return;
     }
 
@@ -1765,9 +1779,9 @@ export class FileManager {
     assert(this.volumeManager_);
     // The fake root item is being hidden so navigate away if it's the
     // current directory.
-    if (this.directoryModel_.getCurrentDirEntry() === rootItem.entry) {
+    if (this.directoryModel_.getCurrentDirEntry() === entry) {
       this.volumeManager_.getDefaultDisplayRoot((displayRoot) => {
-        if (this.directoryModel_!.getCurrentDirEntry() === rootItem.entry &&
+        if (this.directoryModel_!.getCurrentDirEntry() === entry &&
             displayRoot) {
           this.directoryModel_!.changeDirectoryEntry(displayRoot);
         }

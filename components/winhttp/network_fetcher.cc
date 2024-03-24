@@ -66,7 +66,7 @@ void CrackUrl(const GURL& url,
 }  // namespace
 
 NetworkFetcher::NetworkFetcher(
-    const HINTERNET& session_handle,
+    scoped_refptr<SharedHInternet> session_handle,
     scoped_refptr<ProxyConfiguration> proxy_configuration)
     : main_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()),
       session_handle_(session_handle),
@@ -213,8 +213,8 @@ HRESULT NetworkFetcher::BeginFetch(
     return HRESULTFromLastError();
   }
 
-  absl::optional<ScopedWinHttpProxyInfo> winhttp_proxy_info =
-      proxy_configuration_->GetProxyForUrl(*session_handle_, url_);
+  std::optional<ScopedWinHttpProxyInfo> winhttp_proxy_info =
+      proxy_configuration_->GetProxyForUrl(session_handle_->handle(), url_);
 
   request_handle_ = OpenRequest();
   if (!request_handle_.get()) {
@@ -271,7 +271,7 @@ HRESULT NetworkFetcher::BeginFetch(
 ScopedHInternet NetworkFetcher::Connect() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return ScopedHInternet(::WinHttpConnect(
-      *session_handle_, base::SysUTF8ToWide(host_).c_str(), port_, 0));
+      session_handle_->handle(), base::SysUTF8ToWide(host_).c_str(), port_, 0));
 }
 
 ScopedHInternet NetworkFetcher::OpenRequest() {
@@ -391,7 +391,9 @@ HRESULT NetworkFetcher::ReadData() {
 void NetworkFetcher::ReadDataComplete(size_t num_bytes_read) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   read_buffer_.resize(num_bytes_read);
-  write_data_callback_.Run();
+  if (write_data_callback_) {
+    write_data_callback_.Run();
+  }
 }
 
 void NetworkFetcher::RequestError(DWORD error) {
@@ -430,7 +432,6 @@ bool NetworkFetcher::WriteDataToFileBlocking() {
     }
   }
 
-  DCHECK(file_.IsValid());
   if (file_.WriteAtCurrentPos(&read_buffer_.front(), read_buffer_.size()) ==
       -1) {
     net_error_ = HRESULTFromLastError();
@@ -485,8 +486,8 @@ void __stdcall NetworkFetcher::WinHttpStatusCallback(HINTERNET handle,
                                                      DWORD status,
                                                      void* info,
                                                      DWORD info_len) {
-  DCHECK(handle);
-  DCHECK(context);
+  DUMP_WILL_BE_CHECK(handle);
+  DUMP_WILL_BE_CHECK(context);
 
   base::StringPiece status_string;
   std::wstring info_string;
@@ -535,7 +536,8 @@ void __stdcall NetworkFetcher::WinHttpStatusCallback(HINTERNET handle,
       break;
     case WINHTTP_CALLBACK_STATUS_DATA_AVAILABLE:
       status_string = "data available";
-      DCHECK_EQ(info_len, sizeof(uint32_t));
+      DUMP_WILL_BE_CHECK(info);
+      DUMP_WILL_BE_CHECK(info_len == sizeof(uint32_t));
       info_string = base::NumberToWString(*static_cast<uint32_t*>(info));
       break;
     case WINHTTP_CALLBACK_STATUS_HEADERS_AVAILABLE:
@@ -556,8 +558,8 @@ void __stdcall NetworkFetcher::WinHttpStatusCallback(HINTERNET handle,
       break;
     case WINHTTP_CALLBACK_STATUS_SECURE_FAILURE:
       status_string = "https failure";
-      DCHECK(info);
-      DCHECK_EQ(info_len, sizeof(uint32_t));
+      DUMP_WILL_BE_CHECK(info);
+      DUMP_WILL_BE_CHECK(info_len == sizeof(uint32_t));
       info_string = base::ASCIIToWide(
           base::StringPrintf("%#x", *static_cast<uint32_t*>(info)));
       break;
@@ -594,12 +596,12 @@ void __stdcall NetworkFetcher::WinHttpStatusCallback(HINTERNET handle,
           base::BindOnce(&NetworkFetcher::HeadersAvailable, network_fetcher);
       break;
     case WINHTTP_CALLBACK_STATUS_READ_COMPLETE:
-      DCHECK_EQ(info, &network_fetcher->read_buffer_.front());
+      DUMP_WILL_BE_CHECK(info == &network_fetcher->read_buffer_.front());
       callback = base::BindOnce(&NetworkFetcher::ReadDataComplete,
                                 network_fetcher, size_t{info_len});
       break;
     case WINHTTP_CALLBACK_STATUS_REQUEST_ERROR:
-      DCHECK(info);
+      DUMP_WILL_BE_CHECK(info);
       callback = base::BindOnce(
           &NetworkFetcher::RequestError, network_fetcher,
           static_cast<const WINHTTP_ASYNC_RESULT*>(info)->dwError);

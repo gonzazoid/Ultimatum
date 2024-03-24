@@ -100,12 +100,20 @@ class BookmarkBridge : public ProfileObserver,
 
   void GetTopLevelFolderIds(
       JNIEnv* env,
+      jboolean j_ignore_visibility,
       const base::android::JavaParamRef<jobject>& j_result_obj);
-  std::vector<const bookmarks::BookmarkNode*> GetTopLevelFolderIdsImpl();
+  std::vector<const bookmarks::BookmarkNode*> GetTopLevelFolderIdsImpl(
+      bool ignore_visibility);
   base::android::ScopedJavaLocalRef<jobject> GetRootFolderId(JNIEnv* env);
   base::android::ScopedJavaLocalRef<jobject> GetMobileFolderId(JNIEnv* env);
   base::android::ScopedJavaLocalRef<jobject> GetOtherFolderId(JNIEnv* env);
   base::android::ScopedJavaLocalRef<jobject> GetDesktopFolderId(JNIEnv* env);
+  base::android::ScopedJavaLocalRef<jobject> GetAccountMobileFolderId(
+      JNIEnv* env);
+  base::android::ScopedJavaLocalRef<jobject> GetAccountOtherFolderId(
+      JNIEnv* env);
+  base::android::ScopedJavaLocalRef<jobject> GetAccountDesktopFolderId(
+      JNIEnv* env);
   base::android::ScopedJavaLocalRef<jobject> GetPartnerFolderId(JNIEnv* env);
   base::android::ScopedJavaLocalRef<jobject>
   GetLocalOrSyncableReadingListFolder(JNIEnv* env);
@@ -209,13 +217,21 @@ class BookmarkBridge : public ProfileObserver,
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& j_bookmark_id_obj);
 
+  void DeleteBookmarkImpl(const bookmarks::BookmarkNode* node, int type);
+
   void RemoveAllUserBookmarks(JNIEnv* env);
 
   void MoveBookmark(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& j_bookmark_id_obj,
       const base::android::JavaParamRef<jobject>& j_parent_id_obj,
-      jint index);
+      jint j_index);
+
+  void MoveBookmarkImpl(const bookmarks::BookmarkNode* node,
+                        int type,
+                        const bookmarks::BookmarkNode* new_parent_node,
+                        int parent_type,
+                        int index);
 
   base::android::ScopedJavaLocalRef<jobject> AddBookmark(
       JNIEnv* env,
@@ -248,7 +264,7 @@ class BookmarkBridge : public ProfileObserver,
   void EndGroupingUndos(JNIEnv* env);
 
   bool IsBookmarked(JNIEnv* env,
-                    const base::android::JavaParamRef<jobject>& gurl);
+                    const base::android::JavaParamRef<jobject>& j_url);
 
   std::u16string GetTitle(const bookmarks::BookmarkNode* node) const;
 
@@ -286,6 +302,14 @@ class BookmarkBridge : public ProfileObserver,
   // which is the root.
   ReadingListManager* GetReadingListManagerFromParentNode(
       const bookmarks::BookmarkNode* node);
+  // Moves `node` to be a child of `new_parent_node` which may require swapping
+  // to/from ReadingListManager.
+  void MoveNodeBetweenReadingListAndBookmarks(
+      const bookmarks::BookmarkNode* node,
+      int type,
+      const bookmarks::BookmarkNode* new_parent_node,
+      int parent_type,
+      int index);
 
   // Override bookmarks::BaseBookmarkModelObserver.
   // Called when there are changes to the bookmark model that don't trigger
@@ -362,6 +386,8 @@ class BookmarkBridge : public ProfileObserver,
   base::ScopedMultiSourceObservation<ReadingListManager,
                                      ReadingListManager::Observer>
       reading_list_manager_observations_{this};
+
+  bool suppress_observer_notifications_ = false;
 
   // Weak pointers for creating callbacks that won't call into a destroyed
   // object.

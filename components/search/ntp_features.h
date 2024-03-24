@@ -25,6 +25,7 @@ BASE_DECLARE_FEATURE(kCacheOneGoogleBar);
 BASE_DECLARE_FEATURE(kCustomizeChromeColorExtraction);
 BASE_DECLARE_FEATURE(kCustomizeChromeSidePanelExtensionsCard);
 BASE_DECLARE_FEATURE(kCustomizeChromeWallpaperSearch);
+BASE_DECLARE_FEATURE(kCustomizeChromeWallpaperSearchButton);
 BASE_DECLARE_FEATURE(kCustomizeChromeWallpaperSearchInspirationCard);
 BASE_DECLARE_FEATURE(kCwsDarkLogo);
 BASE_DECLARE_FEATURE(kDismissPromos);
@@ -51,7 +52,6 @@ BASE_DECLARE_FEATURE(kNtpDriveModuleShowSixFiles);
 BASE_DECLARE_FEATURE(kNtpDummyModules);
 #endif
 BASE_DECLARE_FEATURE(kNtpComprehensiveTheming);
-BASE_DECLARE_FEATURE(kNtpComprehensiveThemeRealbox);
 BASE_DECLARE_FEATURE(kNtpLogo);
 BASE_DECLARE_FEATURE(kNtpReducedLogoSpace);
 BASE_DECLARE_FEATURE(kNtpMiddleSlotPromo);
@@ -85,6 +85,7 @@ BASE_DECLARE_FEATURE(kNtpHistoryClustersModuleMinimumImagesRequired);
 BASE_DECLARE_FEATURE(kNtpHistoryClustersModuleCategories);
 BASE_DECLARE_FEATURE(kNtpHistoryClustersModuleLoad);
 BASE_DECLARE_FEATURE(kNtpHistoryClustersModuleMaxClusters);
+BASE_DECLARE_FEATURE(kNtpHistoryClustersModuleRankingMetricsQueryDays);
 BASE_DECLARE_FEATURE(kNtpHistoryClustersModuleSuggestionChipHeader);
 BASE_DECLARE_FEATURE(kNtpHistoryClustersModuleTextOnly);
 BASE_DECLARE_FEATURE(kNtpModulesHeaderIcon);
@@ -95,6 +96,10 @@ BASE_DECLARE_FEATURE(kNtpHistoryClustersModuleFetchClustersUntilExhausted);
 BASE_DECLARE_FEATURE(kNtpHistoryClustersModuleIncludeSyncedVisits);
 BASE_DECLARE_FEATURE(kNtpHistoryClustersModuleEnableContentClustering);
 BASE_DECLARE_FEATURE(kNtpTabResumptionModule);
+BASE_DECLARE_FEATURE(kNtpTabResumptionModuleCategories);
+BASE_DECLARE_FEATURE(kNtpTabResumptionModuleTimeLimit);
+BASE_DECLARE_FEATURE(kNtpWallpaperSearchButton);
+BASE_DECLARE_FEATURE(kNtpWallpaperSearchButtonAnimation);
 
 // Parameter for controlling the luminosity difference for NTP elements on light
 // backgrounds.
@@ -190,9 +195,28 @@ extern const char kNtpHistoryClustersModuleCategoriesBoostlistParam[];
 // Parameter for setting the maximum number of candidate clusters for the
 // History Clusters Service to return.
 extern const char kNtpHistoryClustersModuleMaxClustersParam[];
+// Parameter for setting the maximum number of category ids associated with a
+// cluster that will be recorded and queried to determine if a cluster belongs
+// to the most frequently seen or used category.
+extern const char kNtpHistoryClustersModuleMaxCategoriesToRecordParam[];
+// Parameter for setting the minimum category weight required for a category
+// associated with a cluster to be recorded and queried at a later time to
+// determine if a cluster belongs to the most frequently seen or used category.
+extern const char kNtpHistoryClustersModuleMinCategoryWeightToRecordParam[];
+// Parameter for setting the number of days to query for cluster metric data
+// that is used to compute metrics used cluster ranking.
+extern const char kNtpHistoryClustersModuleRankingMetricsQueryDaysParam[];
 extern const char kNtpHistoryClustersModuleScoreThresholdParam[];
 extern const char kNtpRealboxWidthBehaviorParam[];
+// Parameter for determining the categories a tab must not fall into
+// to be shown.
+extern const char kNtpTabResumptionModuleCategoriesBlocklistParam[];
 extern const char kNtpTabResumptionModuleDataParam[];
+// Parameter determining the recency of tabs in the Tab Resumption module.
+extern const char kNtpTabResumptionModuleTimeLimitParam[];
+extern const char kNtpTabResumptionModuleVisibilityThresholdDataParam[];
+// Parameter determining the trigger delay of the Wallpaper Search HaTS survey.
+extern const char kWallpaperSearchHatsDelayParam[];
 
 // Parameter determining the background color of the expanded state realbox.
 extern const base::FeatureParam<bool>

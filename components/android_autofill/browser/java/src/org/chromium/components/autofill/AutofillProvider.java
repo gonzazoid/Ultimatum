@@ -98,7 +98,9 @@ public class AutofillProvider {
             mContainerView = containerView;
             mAutofillUMA =
                     new AutofillProviderUMA(
-                            context, mAutofillManager.isAwGCurrentAutofillService());
+                            context,
+                            mAutofillManager.isAwGCurrentAutofillService(),
+                            mAutofillManager.getPackageName());
             mInputUIObserver =
                     new AutofillManagerWrapper.InputUIObserver() {
                         @Override
@@ -117,7 +119,7 @@ public class AutofillProvider {
     }
 
     public void destroy() {
-        mAutofillUMA.recordSession(mAutofillManager.isDisabled());
+        mAutofillUMA.recordSession();
         detachFromJavaAutofillProvider();
         mAutofillManager.destroy();
     }
@@ -462,7 +464,7 @@ public class AutofillProvider {
         forceNotifyFormValues();
         mAutofillManager.commit(submissionSource);
         mRequest = null;
-        mAutofillUMA.onFormSubmitted(submissionSource, mAutofillManager.isDisabled());
+        mAutofillUMA.onFormSubmitted(submissionSource);
     }
 
     /**
@@ -666,7 +668,7 @@ public class AutofillProvider {
 
     public void setWebContents(WebContents webContents) {
         if (webContents == mWebContents) return;
-        mAutofillUMA.recordSession(mAutofillManager.isDisabled());
+        mAutofillUMA.recordSession();
         if (mWebContents != null) mRequest = null;
         mWebContents = webContents;
         detachFromJavaAutofillProvider();
@@ -774,6 +776,13 @@ public class AutofillProvider {
                         rect.top,
                         rect.width(),
                         rect.height());
+    }
+
+    @CalledByNative
+    public void cancelSession() {
+        mAutofillManager.cancel();
+        mPrefillRequest = null;
+        mRequest = null;
     }
 
     @CalledByNative

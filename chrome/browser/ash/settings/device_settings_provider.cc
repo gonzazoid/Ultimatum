@@ -8,6 +8,8 @@
 #include <stddef.h>
 
 #include <memory>
+#include <optional>
+#include <string_view>
 #include <utility>
 
 #include "ash/constants/ash_features.h"
@@ -42,7 +44,6 @@
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/user_manager.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/re2/src/re2/re2.h"
 
 using google::protobuf::RepeatedField;
@@ -198,7 +199,7 @@ void SetJsonDeviceSetting(const std::string& setting_name,
                           const std::string& json_string,
                           PrefValueMap* pref_value_map) {
   std::string error;
-  absl::optional<base::Value> decoded_json =
+  std::optional<base::Value> decoded_json =
       policy::DecodeJsonStringAndNormalize(json_string, policy_name, &error);
   if (decoded_json.has_value()) {
     pref_value_map->SetValue(setting_name, std::move(decoded_json.value()));
@@ -242,17 +243,17 @@ enum class AllowedUsersPoliciesInvalidState {
 };
 
 // Returns the value of the allow_new_users (DeviceAllowNewUsers) device
-// policy or an empty absl::optional if the policy was not set.
-absl::optional<bool> GetAllowNewUsers(
+// policy or an empty std::optional if the policy was not set.
+std::optional<bool> GetAllowNewUsers(
     const em::ChromeDeviceSettingsProto& policy) {
   if (!policy.has_allow_new_users() ||
       !policy.allow_new_users().has_allow_new_users())
-    return absl::nullopt;
-  return absl::optional<bool>{policy.allow_new_users().allow_new_users()};
+    return std::nullopt;
+  return std::optional<bool>{policy.allow_new_users().allow_new_users()};
 }
 
 // Returns:
-// - an empty absl::optional if the user_allowlist and user_whitelist
+// - an empty std::optional if the user_allowlist and user_whitelist
 // outer wrapper message is not present.
 // - true if the user_allowlist outer wrapper message is present and the
 //   user_allowlist inner list is empty, or when it's not present,
@@ -260,7 +261,7 @@ absl::optional<bool> GetAllowNewUsers(
 // - false if the user_allowlist outer wrapper message is present and the
 //   user_allowlist inner list has at least one element, or when it's not
 //   present, and the user_whitelist has at least one element.
-absl::optional<bool> GetIsEmptyAllowList(
+std::optional<bool> GetIsEmptyAllowList(
     const em::ChromeDeviceSettingsProto& policy) {
   if (policy.has_user_allowlist()) {
     base::UmaHistogramBoolean(kAllowlistCOILFallbackHistogram, false);
@@ -273,7 +274,7 @@ absl::optional<bool> GetIsEmptyAllowList(
     return policy.user_whitelist().user_whitelist_size() == 0;
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 // Decodes the allow_new_users (DeviceAllowNewUsers) and user_allowlist
@@ -1382,7 +1383,7 @@ DeviceSettingsProvider::~DeviceSettingsProvider() {
 }
 
 // static
-bool DeviceSettingsProvider::IsDeviceSetting(base::StringPiece name) {
+bool DeviceSettingsProvider::IsDeviceSetting(std::string_view name) {
   return base::Contains(kKnownSettings, name);
 }
 
@@ -1616,7 +1617,7 @@ bool DeviceSettingsProvider::MitigateMissingPolicy() {
   return true;
 }
 
-const base::Value* DeviceSettingsProvider::Get(base::StringPiece path) const {
+const base::Value* DeviceSettingsProvider::Get(std::string_view path) const {
   if (IsDeviceSetting(path)) {
     const base::Value* value;
     if (values_cache_.GetValue(path, &value))
@@ -1636,7 +1637,7 @@ DeviceSettingsProvider::PrepareTrustedValues(base::OnceClosure* callback) {
   return status;
 }
 
-bool DeviceSettingsProvider::HandlesSetting(base::StringPiece path) const {
+bool DeviceSettingsProvider::HandlesSetting(std::string_view path) const {
   return IsDeviceSetting(path);
 }
 

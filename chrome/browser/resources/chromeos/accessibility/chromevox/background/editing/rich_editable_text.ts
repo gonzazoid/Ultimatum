@@ -5,11 +5,12 @@
 /**
  * @fileoverview Handle processing for richly editable text.
  */
-import {AutomationPredicate} from '../../../common/automation_predicate.js';
-import {AutomationUtil} from '../../../common/automation_util.js';
-import {constants} from '../../../common/constants.js';
-import {Cursor} from '../../../common/cursors/cursor.js';
-import {CursorRange} from '../../../common/cursors/range.js';
+import {AutomationPredicate} from '/common/automation_predicate.js';
+import {AutomationUtil} from '/common/automation_util.js';
+import {constants} from '/common/constants.js';
+import {Cursor} from '/common/cursors/cursor.js';
+import {CursorRange} from '/common/cursors/range.js';
+
 import {NavBraille} from '../../common/braille/nav_braille.js';
 import {Msgs} from '../../common/msgs.js';
 import {SettingsManager} from '../../common/settings_manager.js';
@@ -138,14 +139,13 @@ export class RichEditableText extends AutomationEditableText {
     const isSameSelection =
         baseLineOnStart && prevStartLine.isSameLineAndSelection(startLine);
 
-    let cur;
-    if (isSameSelection && this.line_) {
+    const cur = new EditableLine(
+        root.selectionStartObject, root.selectionStartOffset,
+        root.selectionEndObject, root.selectionEndOffset, baseLineOnStart);
+
+    if (isSameSelection && this.line_ && this.line_.text === cur.text) {
       // Nothing changed, return.
       return;
-    } else {
-      cur = new EditableLine(
-          root.selectionStartObject, root.selectionStartOffset,
-          root.selectionEndObject, root.selectionEndOffset, baseLineOnStart);
     }
     const prev = this.line_!;
     this.line_ = cur;
@@ -559,7 +559,7 @@ export class RichEditableText extends AutomationEditableText {
 
   override describeSelectionChanged(evt: TextChangeEvent): void {
     // Note that since Chrome allows for selection to be placed immediately at
-    // the end of a line (i.e. end == value.length) and since we try to describe
+    // the end of a line (i.e. end === value.length) and since we try to describe
     // the character to the right, just describe it as a new line.
     if ((this.start + 1) === evt.start && evt.start === this.value.length) {
       this.speak('\n', evt.triggeredByUser);

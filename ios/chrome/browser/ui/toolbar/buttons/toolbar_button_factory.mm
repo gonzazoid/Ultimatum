@@ -16,11 +16,11 @@
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_configuration.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_tab_grid_button.h"
 #import "ios/chrome/browser/ui/toolbar/public/toolbar_constants.h"
-#import "ios/chrome/common/button_configuration_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/grit/ios_theme_resources.h"
+#import "ios/public/provider/chrome/browser/raccoon/raccoon_api.h"
 #import "ui/base/l10n/l10n_util.h"
 
 namespace {
@@ -131,8 +131,8 @@ const CGFloat kSymbolToolbarPointSize = 24;
 - (ToolbarButton*)reloadButton {
   UIImage* reloadImage =
       CustomSymbolWithPointSize(kArrowClockWiseSymbol, kSymbolToolbarPointSize);
-  ToolbarButton* reloadButton = [[ToolbarButton alloc]
-      initWithImage:[reloadImage imageFlippedForRightToLeftLayoutDirection]];
+  ToolbarButton* reloadButton =
+      [[ToolbarButton alloc] initWithImage:reloadImage];
   [self configureButton:reloadButton width:kAdaptiveToolbarButtonWidth];
   reloadButton.accessibilityLabel =
       l10n_util::GetNSString(IDS_IOS_ACCNAME_RELOAD);
@@ -240,6 +240,12 @@ const CGFloat kSymbolToolbarPointSize = 24;
   button.toolbarConfiguration = self.toolbarConfiguration;
   button.exclusiveTouch = YES;
   button.pointerInteractionEnabled = YES;
+  if (ios::provider::IsRaccoonEnabled()) {
+    if (@available(iOS 17.0, *)) {
+      button.hoverStyle = [UIHoverStyle
+          styleWithShape:[UIShape rectShapeWithCornerRadius:width / 4]];
+    }
+  }
   button.pointerStyleProvider =
       ^UIPointerStyle*(UIButton* uiButton, UIPointerEffect* proposedEffect,
                        UIPointerShape* proposedShape) {

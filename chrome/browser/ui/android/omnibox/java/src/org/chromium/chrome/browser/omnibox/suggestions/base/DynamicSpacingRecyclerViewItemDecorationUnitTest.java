@@ -5,14 +5,11 @@
 package org.chromium.chrome.browser.omnibox.suggestions.base;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 import android.graphics.Rect;
 import android.view.View;
@@ -27,13 +24,12 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
-import org.robolectric.annotation.Config;
 
 import org.chromium.base.ContextUtils;
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.base.test.util.Features;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
-import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 
 /** Tests for {@link DynamicSpacingRecyclerViewItemDecoration}. */
 @RunWith(BaseRobolectricTestRunner.class)
@@ -63,11 +59,6 @@ public class DynamicSpacingRecyclerViewItemDecorationUnitTest {
         lenient().doReturn(ContextUtils.getApplicationContext()).when(mRecyclerView).getContext();
 
         doReturn(CONTAINER_SIZE).when(mRecyclerView).getMeasuredWidth();
-
-        mDecoration =
-                spy(
-                        new DynamicSpacingRecyclerViewItemDecoration(
-                                mRecyclerView, LEAD_IN_SPACE, MIN_ELEMENT_SPACE));
     }
 
     /**
@@ -76,8 +67,7 @@ public class DynamicSpacingRecyclerViewItemDecorationUnitTest {
      * @param newWidth new measured width to be reported by the container.
      */
     void resizeContainer(int newWidth) {
-        doReturn(newWidth).when(mRecyclerView).getMeasuredWidth();
-        mDecoration.notifyViewMeasuredSizeChanged();
+        mDecoration.notifyViewSizeChanged(true, newWidth, 100);
     }
 
     // Compares spacing against expected value.
@@ -103,16 +93,10 @@ public class DynamicSpacingRecyclerViewItemDecorationUnitTest {
     }
 
     @Test
-    @Config(qualifiers = "sw480dp-port")
     public void computeItemOffsets_reportsDefaultsWhenItemWidthNotKnown() {
-        verifyItemSpacing(MIN_ELEMENT_SPACE);
-
-        // Simulate container resize. This should have no unintended side effects.
-        resizeContainer(1234);
-        verifyItemSpacing(MIN_ELEMENT_SPACE);
-
-        // Same should apply if item width is set to 0.
-        mDecoration.setItemWidth(0);
+        mDecoration =
+                new DynamicSpacingRecyclerViewItemDecoration(
+                        LEAD_IN_SPACE, MIN_ELEMENT_SPACE, /* itemWidth= */ 0);
         verifyItemSpacing(MIN_ELEMENT_SPACE);
     }
 
@@ -127,9 +111,11 @@ public class DynamicSpacingRecyclerViewItemDecorationUnitTest {
         // Quickly verify our logic. We should not deviate by more than 4.5 pixels (rounding).
         assertEquals((int) (singleTileSize * 4.5 + MIN_ELEMENT_SPACE * 4), adjustedWidth, 4.5);
 
-        // Notify the ItemDecoration of a new item size, and check the spacing is exactly same as
-        // minimum spacing.
-        mDecoration.setItemWidth(singleTileSize);
+        // Create a decoration where the tile fits exactly.
+        mDecoration =
+                new DynamicSpacingRecyclerViewItemDecoration(
+                        LEAD_IN_SPACE, MIN_ELEMENT_SPACE, singleTileSize);
+        resizeContainer(CONTAINER_SIZE);
         verifyItemSpacing(MIN_ELEMENT_SPACE);
     }
 
@@ -153,14 +139,21 @@ public class DynamicSpacingRecyclerViewItemDecorationUnitTest {
         // Compute expected padding in that case.
         int expectedPadding = (int) (adjustedWidth - 3.5 * singleTileSize) / 3;
 
-        mDecoration.setItemWidth(singleTileSize);
+        // Create a decoration where the tile fits tightly.
+        mDecoration =
+                new DynamicSpacingRecyclerViewItemDecoration(
+                        LEAD_IN_SPACE, MIN_ELEMENT_SPACE, singleTileSize);
+        resizeContainer(CONTAINER_SIZE);
         verifyItemSpacing(expectedPadding);
     }
 
     @Test
     public void computeItemOffsets_portrait_impossibleFit() {
         // No way to fit in 1.5 tiles on screen.
-        mDecoration.setItemWidth(CONTAINER_SIZE);
+        mDecoration =
+                new DynamicSpacingRecyclerViewItemDecoration(
+                        LEAD_IN_SPACE, MIN_ELEMENT_SPACE, CONTAINER_SIZE);
+        resizeContainer(CONTAINER_SIZE);
         verifyItemSpacing(MIN_ELEMENT_SPACE);
     }
 
@@ -176,8 +169,11 @@ public class DynamicSpacingRecyclerViewItemDecorationUnitTest {
         int oldContainerSize = LEAD_IN_SPACE + 5 * oldItemSpace + (int) (5.5 * itemWidth);
         int newContainerSize = LEAD_IN_SPACE + 4 * newItemSpace + (int) (4.5 * itemWidth);
 
+        mDecoration =
+                new DynamicSpacingRecyclerViewItemDecoration(
+                        LEAD_IN_SPACE, MIN_ELEMENT_SPACE, itemWidth);
+
         resizeContainer(oldContainerSize);
-        mDecoration.setItemWidth(itemWidth);
         verifyItemSpacing(oldItemSpace);
 
         // Notify container has resized.
@@ -191,23 +187,26 @@ public class DynamicSpacingRecyclerViewItemDecorationUnitTest {
         int itemSpace = 2 * MIN_ELEMENT_SPACE;
         int containerSize = LEAD_IN_SPACE + 5 * itemSpace + (int) (5.5 * itemWidth);
 
-        resizeContainer(containerSize);
-        mDecoration.setItemWidth(itemWidth);
+        mDecoration =
+                new DynamicSpacingRecyclerViewItemDecoration(
+                        LEAD_IN_SPACE, MIN_ELEMENT_SPACE, itemWidth);
+        // Expect the updates here:
+        assertTrue(mDecoration.notifyViewSizeChanged(true, containerSize, 100));
         verifyItemSpacing(itemSpace);
 
-        clearInvocations(mDecoration);
-
-        // Notify container has resized, observe no update.
-        mDecoration.notifyViewMeasuredSizeChanged();
-        verify(mDecoration, times(0)).computeElementSpacingPx();
+        // ... but no updates here:
+        assertFalse(mDecoration.notifyViewSizeChanged(true, containerSize, 100));
     }
 
     @Test
-    @Config(qualifiers = "land")
     public void formFactor_itemSpacingPhone_landscape() {
-        // Set the item width to be 1/3 of the carousel.
         int itemWidth = CONTAINER_SIZE / 3;
-        mDecoration.setItemWidth(itemWidth);
+        mDecoration =
+                new DynamicSpacingRecyclerViewItemDecoration(
+                        LEAD_IN_SPACE, MIN_ELEMENT_SPACE, itemWidth);
+
+        mDecoration.notifyViewSizeChanged(false, CONTAINER_SIZE, /* height= */ 100);
+
         // It's unlikely that the minimum spacing would guarantee 2.5 items to be shown, but we can
         // verify this fast.
         assertNotEquals(CONTAINER_SIZE, LEAD_IN_SPACE + itemWidth * 2.5 + MIN_ELEMENT_SPACE * 2);
@@ -215,5 +214,64 @@ public class DynamicSpacingRecyclerViewItemDecorationUnitTest {
         // However, we don't permit dynamic spacing in landscape mode, so this should fall back to
         // MIN_ELEMENT_SPACE.
         verifyItemSpacing(MIN_ELEMENT_SPACE);
+    }
+
+    @Test
+    public void computeElementSpacingPx_minFractionalExposure() {
+        // Ignore lead-in and element spacing completely to simplify computations.
+        // Each element is 100px wide, with minimum exposure fraction of 0.1
+        final int itemWidth = 100;
+        final float minExposureFrac = 0.1f;
+        final float maxExposureFrac = 0.9f;
+        final int containerWidth = /* 2.1 * itemWidth=*/ 210;
+        mDecoration =
+                new DynamicSpacingRecyclerViewItemDecoration(
+                        0, 0, itemWidth, minExposureFrac, maxExposureFrac);
+
+        // This should fit EXACTLY 2.1 items with zero spacing.
+        resizeContainer(containerWidth);
+        mDecoration.getItemOffsets(mOffsets, mFirstView, mRecyclerView, null);
+        assertEquals(0, mOffsets.right);
+        assertEquals(0, mOffsets.left);
+    }
+
+    @Test
+    public void computeElementSpacingPx_maxFractionalExposure() {
+        // Ignore lead-in and element spacing completely to simplify computations.
+        // Each element is 100px wide, with minimum exposure fraction of 0.1
+        final int itemWidth = 100;
+        final float minExposureFrac = 0.1f;
+        final float maxExposureFrac = 0.9f;
+        final int containerWidth = /* 2.1 * itemWidth - 1=*/ 209;
+        mDecoration =
+                new DynamicSpacingRecyclerViewItemDecoration(
+                        0, 0, itemWidth, minExposureFrac, maxExposureFrac);
+
+        // This should fit EXACTLY 1.9 items.
+        resizeContainer(containerWidth);
+        mDecoration.getItemOffsets(mOffsets, mFirstView, mRecyclerView, null);
+
+        // The expected space to separate elements is:
+        int itemSpacing = containerWidth - (int) ((1 + maxExposureFrac) * itemWidth);
+        assertEquals(itemSpacing / 2, mOffsets.right);
+        assertEquals(/* lead-in */ 0, mOffsets.left);
+    }
+
+    @Test
+    public void computeElementSpacingPx_mediumFractionalExposure() {
+        // Ignore lead-in and element spacing completely to simplify computations.
+        // Each element is 100px wide, with minimum exposure fraction of 0.1
+        final int itemWidth = 100;
+        final float minExposureFrac = 0.1f;
+        final float maxExposureFrac = 0.9f;
+        final int containerWidth = /* 2.5 * itemWidth =*/ 250;
+        mDecoration =
+                new DynamicSpacingRecyclerViewItemDecoration(
+                        0, 0, itemWidth, minExposureFrac, maxExposureFrac);
+
+        resizeContainer(containerWidth);
+        mDecoration.getItemOffsets(mOffsets, mFirstView, mRecyclerView, null);
+        assertEquals(0, mOffsets.right);
+        assertEquals(0, mOffsets.left);
     }
 }

@@ -24,10 +24,10 @@ import org.chromium.components.signin.AccountUtils;
 import org.chromium.components.signin.AccountsChangeObserver;
 import org.chromium.components.signin.AuthException;
 import org.chromium.components.signin.base.AccountCapabilities;
+import org.chromium.components.signin.base.AccountInfo;
 import org.chromium.components.signin.base.CoreAccountInfo;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -150,17 +150,21 @@ public class FakeAccountManagerFacade implements AccountManagerFacade {
     }
 
     @Override
-    public void checkChildAccountStatus(Account account, ChildAccountStatusListener listener) {
-        if (account.name.startsWith(CHILD_ACCOUNT_NAME_PREFIX)) {
-            listener.onStatusReady(true, account);
+    public void checkChildAccountStatus(
+            CoreAccountInfo coreAccountInfo, ChildAccountStatusListener listener) {
+        if (coreAccountInfo.getEmail().startsWith(CHILD_ACCOUNT_NAME_PREFIX)) {
+            listener.onStatusReady(true, coreAccountInfo);
         } else {
             listener.onStatusReady(false, /* childAccount= */ null);
         }
     }
 
     @Override
-    public Promise<AccountCapabilities> getAccountCapabilities(Account account) {
-        return Promise.fulfilled(new AccountCapabilities(new HashMap<>()));
+
+    public Promise<AccountCapabilities> getAccountCapabilities(CoreAccountInfo coreAccountInfo) {
+        AccountHolder accountHolder =
+                getAccountHolder(AccountUtils.createAccountFromName(coreAccountInfo.getEmail()));
+        return Promise.fulfilled(accountHolder.getAccountCapabilities());
     }
 
     @Override
@@ -188,6 +192,14 @@ public class FakeAccountManagerFacade implements AccountManagerFacade {
         ThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     mAccountHolders.add(AccountHolder.createFromAccount(account));
+                    fireOnAccountsChangedNotification();
+                });
+    }
+
+    public void addAccountWithAccountInfo(AccountInfo accountInfo) {
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mAccountHolders.add(AccountHolder.createFromAccount(accountInfo));
                     fireOnAccountsChangedNotification();
                 });
     }
@@ -270,7 +282,7 @@ public class FakeAccountManagerFacade implements AccountManagerFacade {
     }
 
     @MainThread
-    private @Nullable AccountHolder getAccountHolder(Account account) throws AuthException {
+    private @Nullable AccountHolder getAccountHolder(Account account) {
         ThreadUtils.checkUiThread();
         for (AccountHolder accountHolder : mAccountHolders) {
             if (accountHolder.getAccount().equals(account)) {

@@ -19,6 +19,7 @@
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/core/svg/svg_length_functions.h"
 #include "third_party/blink/renderer/platform/fonts/shaping/shape_result_view.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/clear_collection_scope.h"
 
 namespace blink {
 
@@ -44,6 +45,7 @@ InlineBoxState::InlineBoxState(const InlineBoxState&& state)
       item(state.item),
       style(state.style),
       scaled_font(state.scaled_font),
+      has_scaled_font(state.has_scaled_font),
       scaling_factor(state.scaling_factor),
       metrics(state.metrics),
       text_metrics(state.text_metrics),
@@ -61,10 +63,7 @@ InlineBoxState::InlineBoxState(const InlineBoxState&& state)
       has_box_placeholder(state.has_box_placeholder),
       needs_box_fragment(state.needs_box_fragment),
       is_svg_text(state.is_svg_text) {
-  if (state.scaled_font)
-    font = &*scaled_font;
-  else
-    font = state.font;
+  font = has_scaled_font ? &scaled_font : state.font;
 }
 
 void InlineBoxState::ResetStyle(const ComputedStyle& style_ref,
@@ -74,13 +73,14 @@ void InlineBoxState::ResetStyle(const ComputedStyle& style_ref,
   is_svg_text = is_svg;
   if (!is_svg_text) {
     scaling_factor = 1.0f;
+    has_scaled_font = false;
     font = &style->GetFont();
     return;
   }
-  scaled_font.emplace();
+  has_scaled_font = true;
   LayoutSVGInlineText::ComputeNewScaledFontForStyle(
-      layout_object, scaling_factor, *scaled_font);
-  font = &*scaled_font;
+      layout_object, scaling_factor, scaled_font);
+  font = &scaled_font;
   switch (style_ref.AlignmentBaseline()) {
     case EAlignmentBaseline::kAuto:
     case EAlignmentBaseline::kBaseline:
@@ -170,7 +170,8 @@ void InlineBoxState::EnsureTextMetrics(const ComputedStyle& styleref,
 
 void InlineBoxState::AccumulateUsedFonts(const ShapeResultView* shape_result) {
   const auto baseline_type = style->GetFontBaseline();
-  HashSet<const SimpleFontData*> fallback_fonts;
+  HeapHashSet<Member<const SimpleFontData>> fallback_fonts;
+  ClearCollectionScope clear_scope(&fallback_fonts);
   shape_result->FallbackFonts(&fallback_fonts);
   for (const SimpleFontData* const fallback_font : fallback_fonts) {
     FontHeight fallback_metrics =

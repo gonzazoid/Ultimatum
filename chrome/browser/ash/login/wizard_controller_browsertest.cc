@@ -106,10 +106,10 @@
 #include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/ash/components/audio/cras_audio_handler.h"
+#include "chromeos/ash/components/dbus/device_management/fake_install_attributes_client.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "chromeos/ash/components/dbus/shill/fake_shill_manager_client.h"
 #include "chromeos/ash/components/dbus/system_clock/system_clock_client.h"
-#include "chromeos/ash/components/dbus/userdataauth/fake_install_attributes_client.h"
 #include "chromeos/ash/components/geolocation/simple_geolocation_provider.h"
 #include "chromeos/ash/components/install_attributes/stub_install_attributes.h"
 #include "chromeos/ash/components/network/network_state.h"
@@ -194,6 +194,9 @@ constexpr policy::AutoEnrollmentState kAutoEnrollmentConnectionError =
 constexpr policy::AutoEnrollmentState kAutoEnrollmentServerError =
     base::unexpected(policy::AutoEnrollmentDMServerError{
         .dm_error = policy::DM_STATUS_TEMPORARY_UNAVAILABLE});
+
+constexpr policy::AutoEnrollmentState kAutoEnrollmentStateKeysRetrievalError =
+    base::unexpected(policy::AutoEnrollmentStateKeysRetrievalError{});
 
 // Matches on the mode parameter of an EnrollmentConfig object.
 MATCHER_P(EnrollmentModeMatches, mode, "") {
@@ -1599,6 +1602,24 @@ IN_PROC_BROWSER_TEST_F(WizardControllerUnifiedEnrollmentTest, NoEnrollment) {
   EXPECT_EQ(policy::AutoEnrollmentTypeChecker::CheckType::
                 kForcedReEnrollmentExplicitlyRequired,
             auto_enrollment_controller()->auto_enrollment_check_type());
+}
+
+// Tests that when EnrollmentStateFetcher reports state keys retrieval error, we
+// show an error on enrollment check screen and that it is not possible to enter
+// guest mode.
+IN_PROC_BROWSER_TEST_F(WizardControllerUnifiedEnrollmentTest,
+                       BlockedByCommunicationErrorOnStateKeysRetrieval) {
+  ScopedEnrollmentStateFetcherFactory fetcher_factory(
+      auto_enrollment_controller());
+  ProgressUntilAutoEnrollmentCheckScreen();
+  fetcher_factory.WaitUntilEnrollmentStateFetcherCreated();
+
+  fetcher_factory.ReportEnrollmentState(kAutoEnrollmentStateKeysRetrievalError);
+
+  CheckCurrentScreen(AutoEnrollmentCheckScreenView::kScreenId);
+  EXPECT_EQ(AutoEnrollmentCheckScreenView::kScreenId.AsId(),
+            GetErrorScreen()->GetParentScreen());
+  test::OobeJS().ExpectHiddenPath(kGuestSessionLink);
 }
 
 // Tests that when EnrollmentStateFetcher reports kServerError, we show an error
@@ -3054,6 +3075,51 @@ IN_PROC_BROWSER_TEST_F(RemoteActivityNotificationTestWhenPrefIsNotSet,
   EXPECT_FALSE(IsRemoteActivityScreenVisible());
 }
 
+class RemoteActivityNotificationTestWhenNoLoginAccountPresentTest
+    : public WizardControllerTest {
+ public:
+  // WizardControllerTest:
+  void SetUpInProcessBrowserTestFixture() override {
+    WizardControllerTest::SetUpInProcessBrowserTestFixture();
+    feature_list_.InitAndEnableFeature(
+        remoting::features::kEnableCrdAdminRemoteAccessV2);
+  }
+
+  void SetUpOnMainThread() override {
+    WizardControllerTest::SetUpOnMainThread();
+  }
+
+  PrefService* local_state() { return g_browser_process->local_state(); }
+
+ protected:
+  base::test::ScopedFeatureList feature_list_;
+  DeviceStateMixin device_state_{&mixin_host_,
+                                 DeviceStateMixin::State::BEFORE_OOBE};
+  FakeGaiaMixin gaia_mixin_{&mixin_host_};
+  LoginManagerMixin login_mixin_{&mixin_host_, LoginManagerMixin::UserList(),
+                                 &gaia_mixin_};
+};
+
+IN_PROC_BROWSER_TEST_F(
+    RemoteActivityNotificationTestWhenNoLoginAccountPresentTest,
+    PRE_ShouldGoToPreviousScreenWhenNotificationIsDismissed) {
+  CheckCurrentScreen(UserCreationView::kScreenId);
+
+  local_state()->SetBoolean(prefs::kRemoteAdminWasPresent, true);
+}
+
+IN_PROC_BROWSER_TEST_F(
+    RemoteActivityNotificationTestWhenNoLoginAccountPresentTest,
+    ShouldGoToPreviousScreenWhenNotificationIsDismissed) {
+  OobeScreenWaiter(RemoteActivityNotificationView::kScreenId).Wait();
+  CheckCurrentScreen(RemoteActivityNotificationView::kScreenId);
+
+  test::OobeJS().ClickOnPath({"remote-activity-notification", "cancelButton"});
+
+  OobeScreenWaiter(UserCreationView::kScreenId).Wait();
+  CheckCurrentScreen(UserCreationView::kScreenId);
+}
+
 class WizardControllerThemeSelectionTest : public WizardControllerTest {
  protected:
   FakeGaiaMixin gaia_mixin_{&mixin_host_};
@@ -3190,7 +3256,6 @@ IN_PROC_BROWSER_TEST_F(WizardControllerGaiaTest,
 
   WizardController::default_controller()->AdvanceToScreen(
       GaiaInfoScreenView::kScreenId);
-  test::OobeJS().ClickOnPath({"gaia-info", "nextButton"});
   OobeScreenWaiter(GaiaView::kScreenId).Wait();
 
   test::OobeJS().ClickOnPath(

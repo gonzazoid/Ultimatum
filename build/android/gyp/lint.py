@@ -28,6 +28,7 @@ _DISABLED_ALWAYS = [
     "InflateParams",  # Null is ok when inflating views for dialogs.
     "InlinedApi",  # Constants are copied so they are always available.
     "LintBaseline",  # Don't warn about using baseline.xml files.
+    "LintBaselineFixed",  # We dont care if baseline.xml has unused entries.
     "MissingInflatedId",  # False positives https://crbug.com/1394222
     "MissingApplicationIcon",  # False positive for non-production targets.
     "NetworkSecurityConfig",  # Breaks on library certificates b/269783280.
@@ -380,6 +381,11 @@ def _RunLint(custom_lint_jar_path,
       shutil.rmtree(resource_root_dir, ignore_errors=True)
       shutil.rmtree(srcjar_root_dir, ignore_errors=True)
       os.unlink(project_xml_path)
+      # lint-resources.xml is meant to be used for caching, but is suspected
+      # to lead to crashes: b/324598620
+      lint_resources_xml = os.path.join(lint_gen_dir, 'lint-resources.xml')
+      if os.path.exists(lint_resources_xml):
+        os.unlink(lint_resources_xml)
 
     if failed:
       print('- For more help with lint in Chrome:', _LINT_MD_URL)

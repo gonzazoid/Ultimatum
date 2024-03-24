@@ -3,11 +3,12 @@
 # found in the LICENSE file.
 
 load("//lib/builder_config.star", "builder_config")
-load("//lib/builders.star", "builders", "cpu", "os", "reclient", "xcode")
+load("//lib/builders.star", "builders", "cpu", "os", "reclient")
 load("//lib/ci.star", "ci")
 load("//lib/consoles.star", "consoles")
 load("//lib/gn_args.star", "gn_args")
 load("//lib/structs.star", "structs")
+load("//lib/xcode.star", "xcode")
 load("//console-header.star", "HEADER")
 
 luci.bucket(
@@ -492,7 +493,6 @@ fyi_reclient_staging_builder(
             "release_builder",
             "reclient",
             "minimal_symbols",
-            "disable_nacl",
         ],
     ),
     builderless = True,
@@ -527,7 +527,6 @@ fyi_reclient_test_builder(
             "release_builder",
             "reclient",
             "minimal_symbols",
-            "disable_nacl",
         ],
     ),
     builderless = True,
@@ -614,6 +613,7 @@ ci.builder(
             apply_configs = ["mb"],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.WIN,
         ),
     ),
     gn_args = gn_args.config(
@@ -704,8 +704,6 @@ ci.builder(
     execution_timeout = 6 * time.hour,
     reclient_bootstrap_env = {
         "RBE_ip_reset_min_delay": "-1s",
-        "RBE_experimental_goma_deps_cache": "true",
-        "RBE_deps_cache_mode": "reproxy",
         "RBE_fast_log_collection": "true",
     },
     reclient_cache_silo = "Comparison Linux - cache siloed",
@@ -739,8 +737,6 @@ The bot specs should be in sync with <a href="https://ci.chromium.org/p/chromium
     execution_timeout = 6 * time.hour,
     reclient_bootstrap_env = {
         "RBE_ip_reset_min_delay": "-1s",
-        "RBE_experimental_goma_deps_cache": "true",
-        "RBE_deps_cache_mode": "reproxy",
         "RBE_fast_log_collection": "true",
     },
     reclient_cache_silo = "Comparison Linux CQ - cache siloed",

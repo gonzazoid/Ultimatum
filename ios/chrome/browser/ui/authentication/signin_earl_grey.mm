@@ -39,10 +39,13 @@ using base::test::ios::WaitUntilConditionOrTimeout;
                                                   forIdentity:fakeIdentity];
 }
 
-- (void)setCanOfferExtendedChromeSyncPromos:(BOOL)value
-                                forIdentity:(FakeSystemIdentity*)fakeIdentity {
-  [SigninEarlGreyAppInterface setCanOfferExtendedChromeSyncPromos:value
-                                                      forIdentity:fakeIdentity];
+- (void)setCanShowHistorySyncOptInsWithoutMinorModeRestrictions:(BOOL)value
+                                                    forIdentity:
+                                                        (FakeSystemIdentity*)
+                                                            fakeIdentity {
+  [SigninEarlGreyAppInterface
+      setCanShowHistorySyncOptInsWithoutMinorModeRestrictions:value
+                                                  forIdentity:fakeIdentity];
 }
 
 - (void)forgetFakeIdentity:(FakeSystemIdentity*)fakeIdentity {
@@ -52,6 +55,11 @@ using base::test::ios::WaitUntilConditionOrTimeout;
 - (void)signOut {
   [SigninEarlGreyAppInterface signOut];
   [self verifySignedOut];
+}
+
+- (void)signinWithFakeIdentity:(FakeSystemIdentity*)identity {
+  [SigninEarlGreyAppInterface signinWithFakeIdentity:identity];
+  [self verifySignedInWithFakeIdentity:identity];
 }
 
 - (void)verifySignedInWithFakeIdentity:(FakeSystemIdentity*)fakeIdentity {

@@ -9,6 +9,7 @@
 
 #import <memory>
 
+#import "base/memory/raw_ptr.h"
 #import "base/strings/sys_string_conversions.h"
 #import "ios/chrome/browser/ntp/model/new_tab_page_tab_helper.h"
 #import "ios/chrome/browser/ntp/model/new_tab_page_tab_helper_delegate.h"
@@ -91,11 +92,11 @@ class URLLoadingBrowserAgentTest : public BlockCleanupTest {
   void TearDown() override {
     // Cleanup to avoid debugger crash in non empty observer lists.
     WebStateList* web_state_list = browser_->GetWebStateList();
-    web_state_list->CloseAllWebStates(
-        WebStateList::ClosingFlags::CLOSE_NO_FLAGS);
+    CloseAllWebStates(*web_state_list,
+                      WebStateList::ClosingFlags::CLOSE_NO_FLAGS);
     WebStateList* otr_web_state_list = otr_browser_->GetWebStateList();
-    otr_web_state_list->CloseAllWebStates(
-        WebStateList::ClosingFlags::CLOSE_NO_FLAGS);
+    CloseAllWebStates(*otr_web_state_list,
+                      WebStateList::ClosingFlags::CLOSE_NO_FLAGS);
 
     BlockCleanupTest::TearDown();
   }
@@ -113,12 +114,12 @@ class URLLoadingBrowserAgentTest : public BlockCleanupTest {
   IOSChromeScopedTestingLocalState local_state_;
   std::unique_ptr<TestChromeBrowserState> chrome_browser_state_;
   std::unique_ptr<TestBrowser> browser_;
-  ChromeBrowserState* otr_browser_state_;
+  raw_ptr<ChromeBrowserState> otr_browser_state_;
   URLLoadingTestDelegate* url_loading_delegate_;
   std::unique_ptr<TestSceneUrlLoadingService> scene_loader_;
-  UrlLoadingBrowserAgent* loader_;
+  raw_ptr<UrlLoadingBrowserAgent> loader_;
   std::unique_ptr<Browser> otr_browser_;
-  UrlLoadingBrowserAgent* otr_loader_;
+  raw_ptr<UrlLoadingBrowserAgent> otr_loader_;
 };
 
 TEST_F(URLLoadingBrowserAgentTest, TestSwitchToTab) {
@@ -128,17 +129,13 @@ TEST_F(URLLoadingBrowserAgentTest, TestSwitchToTab) {
   std::unique_ptr<web::FakeWebState> web_state = CreateFakeWebState();
   web::WebState* web_state_ptr = web_state.get();
   web_state->SetCurrentURL(GURL("http://test/1"));
-  web_state_list->InsertWebState(0, std::move(web_state),
-                                 WebStateList::INSERT_FORCE_INDEX,
-                                 WebStateOpener());
+  web_state_list->InsertWebState(std::move(web_state));
 
   std::unique_ptr<web::FakeWebState> web_state_2 = CreateFakeWebState();
   web::WebState* web_state_ptr_2 = web_state_2.get();
   GURL url("http://test/2");
   web_state_2->SetCurrentURL(url);
-  web_state_list->InsertWebState(1, std::move(web_state_2),
-                                 WebStateList::INSERT_FORCE_INDEX,
-                                 WebStateOpener());
+  web_state_list->InsertWebState(std::move(web_state_2));
 
   web_state_list->ActivateWebStateAt(0);
 
@@ -159,9 +156,7 @@ TEST_F(URLLoadingBrowserAgentTest, TestSwitchToTabFromNTP) {
   std::unique_ptr<web::FakeWebState> web_state = CreateFakeWebState();
   web::WebState* web_state_ptr = web_state.get();
   web_state->SetCurrentURL(GURL("chrome://newtab"));
-  web_state_list->InsertWebState(0, std::move(web_state),
-                                 WebStateList::INSERT_FORCE_INDEX,
-                                 WebStateOpener());
+  web_state_list->InsertWebState(std::move(web_state));
   id mock_delegate = OCMProtocolMock(@protocol(NewTabPageTabHelperDelegate));
   NewTabPageTabHelper::CreateForWebState(web_state_ptr);
   NewTabPageTabHelper::FromWebState(web_state_ptr)->SetDelegate(mock_delegate);
@@ -170,9 +165,7 @@ TEST_F(URLLoadingBrowserAgentTest, TestSwitchToTabFromNTP) {
   web::WebState* web_state_ptr_2 = web_state_2.get();
   GURL url("http://test/2");
   web_state_2->SetCurrentURL(url);
-  web_state_list->InsertWebState(1, std::move(web_state_2),
-                                 WebStateList::INSERT_FORCE_INDEX,
-                                 WebStateOpener());
+  web_state_list->InsertWebState(std::move(web_state_2));
 
   web_state_list->ActivateWebStateAt(0);
 
@@ -194,9 +187,7 @@ TEST_F(URLLoadingBrowserAgentTest, TestSwitchToClosedTab) {
   std::unique_ptr<web::FakeWebState> web_state = CreateFakeWebState();
   web_state->SetCurrentURL(GURL("chrome://newtab"));
   web::WebState* web_state_ptr = web_state.get();
-  web_state_list->InsertWebState(0, std::move(web_state),
-                                 WebStateList::INSERT_FORCE_INDEX,
-                                 WebStateOpener());
+  web_state_list->InsertWebState(std::move(web_state));
   web_state_list->ActivateWebStateAt(0);
   id mock_delegate = OCMProtocolMock(@protocol(NewTabPageTabHelperDelegate));
   NewTabPageTabHelper::CreateForWebState(web_state_ptr);

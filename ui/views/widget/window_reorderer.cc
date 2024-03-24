@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "base/containers/adapters.h"
+#include "base/debug/crash_logging.h"
 #include "base/memory/raw_ptr.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_occlusion_tracker.h"
@@ -47,6 +48,9 @@ void GetOrderOfViewsWithLayers(
     const std::map<views::View*, aura::Window*>& hosts,
     std::vector<views::View*>* order) {
   DCHECK(view);
+  SCOPED_CRASH_KEY_STRING64("GetOrderOfViewsWithLayers", "view_name",
+                            view->GetObjectName());
+
   DCHECK(parent_layer);
   DCHECK(order);
   if (view->layer() && view->layer()->parent() == parent_layer) {
@@ -87,7 +91,7 @@ class WindowReorderer::AssociationObserver : public aura::WindowObserver {
   // Not owned.
   raw_ptr<WindowReorderer> reorderer_;
 
-  std::set<aura::Window*> windows_;
+  std::set<raw_ptr<aura::Window, SetExperimental>> windows_;
 };
 
 WindowReorderer::AssociationObserver::AssociationObserver(

@@ -57,6 +57,7 @@
 #import "ios/chrome/browser/signin/model/fake_system_identity.h"
 #import "ios/chrome/browser/sync/model/sync_service_factory.h"
 #import "ios/chrome/browser/ui/first_run/first_run_screen_provider.h"
+#import "ios/chrome/browser/ui/first_run/first_run_util.h"
 #import "ios/chrome/browser/ui/ntp/new_tab_page_feature.h"
 #import "ios/chrome/browser/ui/popup_menu/overflow_menu/feature_flags.h"
 #import "ios/chrome/browser/unified_consent/model/unified_consent_service_factory.h"
@@ -89,7 +90,7 @@
 #import "ios/web/public/ui/crw_web_view_scroll_view_proxy.h"
 #import "ios/web/public/web_client.h"
 #import "ios/web/public/web_state.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 #import "services/metrics/public/cpp/ukm_recorder.h"
 #import "ui/base/device_form_factor.h"
 
@@ -174,10 +175,8 @@ base::RepeatingClosure ExpectNCall(uint32_t n, base::RepeatingClosure closure) {
 + (void)killWebKitNetworkProcess {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wundeclared-selector"
-  if (@available(iOS 15, *)) {
-    [[WKWebsiteDataStore defaultDataStore]
-        performSelector:@selector(_terminateNetworkProcess)];
-  }
+  [[WKWebsiteDataStore defaultDataStore]
+      performSelector:@selector(_terminateNetworkProcess)];
 #pragma clang diagnostic pop
 }
 
@@ -1535,12 +1534,6 @@ int watchRunNumber = 0;
   pasteboard.URL = [NSURL URLWithString:@"chrome://version"];
 }
 
-#pragma mark - Default Search Engine Choice Screen Utilities
-
-+ (BOOL)IsSearchEngineChoiceScreenEnabledFre {
-  return ios::first_run::IsSearchEngineChoiceScreenEnabledFre();
-}
-
 #pragma mark - First Run Utilities
 
 + (void)writeFirstRunSentinel {
@@ -1560,6 +1553,11 @@ int watchRunNumber = 0;
     FirstRun::ClearStateForTesting();
     FirstRun::IsChromeFirstRun();
   }
+}
+
++ (bool)hasFirstRunSentinel {
+  base::ScopedAllowBlockingForTesting allow_blocking;
+  return HasFirstRunSentinel();
 }
 
 @end

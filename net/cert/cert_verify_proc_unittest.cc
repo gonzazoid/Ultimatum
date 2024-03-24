@@ -5,6 +5,7 @@
 #include "net/cert/cert_verify_proc.h"
 
 #include <memory>
+#include <string_view>
 #include <vector>
 
 #include "base/files/file_path.h"
@@ -17,7 +18,6 @@
 #include "base/rand_util.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
@@ -148,7 +148,8 @@ class MockCertVerifyProc : public CertVerifyProc {
                      const std::string& sct_list,
                      int flags,
                      CertVerifyResult* verify_result,
-                     const NetLogWithSource& net_log) override;
+                     const NetLogWithSource& net_log,
+                     std::optional<base::Time> time_now) override;
 
   const CertVerifyResult result_;
   const int error_ = OK;
@@ -160,7 +161,8 @@ int MockCertVerifyProc::VerifyInternal(X509Certificate* cert,
                                        const std::string& sct_list,
                                        int flags,
                                        CertVerifyResult* verify_result,
-                                       const NetLogWithSource& net_log) {
+                                       const NetLogWithSource& net_log,
+                                       std::optional<base::Time> time_now) {
   *verify_result = result_;
   verify_result->verified_cert = cert;
   return error_;
@@ -204,9 +206,9 @@ scoped_refptr<CertVerifyProc> CreateCertVerifyProc(
     CertificateList additional_untrusted_authorities) {
   CertVerifyProc::InstanceParams instance_params;
   instance_params.additional_trust_anchors =
-      net::x509_util::ParseAllCerts(additional_trust_anchors);
+      net::x509_util::ParseAllValidCerts(additional_trust_anchors);
   instance_params.additional_untrusted_authorities =
-      net::x509_util::ParseAllCerts(additional_untrusted_authorities);
+      net::x509_util::ParseAllValidCerts(additional_untrusted_authorities);
   switch (type) {
 #if BUILDFLAG(IS_ANDROID)
     case CERT_VERIFY_PROC_ANDROID:
@@ -279,11 +281,9 @@ bool ScopedTestRootCanTrustIntermediateCert(
 }
 
 std::string MakeRandomHexString(size_t num_bytes) {
-  std::vector<char> rand_bytes;
-  rand_bytes.resize(num_bytes);
-
-  base::RandBytes(rand_bytes.data(), rand_bytes.size());
-  return base::HexEncode(rand_bytes.data(), rand_bytes.size());
+  std::vector<uint8_t> rand_bytes(num_bytes);
+  base::RandBytes(rand_bytes);
+  return base::HexEncode(rand_bytes);
 }
 
 }  // namespace
@@ -358,8 +358,7 @@ class CertVerifyProcInternalTest
 #if BUILDFLAG(IS_IOS)
     // Beginning with iOS 13, the minimum key size for RSA/DSA algorithms is
     // 2048 bits. See https://support.apple.com/en-us/HT210176
-    if (verify_proc_type() == CERT_VERIFY_PROC_IOS &&
-        base::ios::IsRunningOnIOS13OrLater()) {
+    if (verify_proc_type() == CERT_VERIFY_PROC_IOS) {
       return size < 2048;
     }
 #endif
@@ -371,15 +370,13 @@ class CertVerifyProcInternalTest
   // current platform.
   bool IsInvalidRsaDsaKeySize(int size) const {
 #if BUILDFLAG(IS_IOS)
-    if (base::ios::IsRunningOnIOS12OrLater()) {
-      // On iOS using SecTrustEvaluateWithError it is not possible to
-      // distinguish between weak and invalid key sizes.
-      return IsWeakRsaDsaKeySize(size);
-    }
-#endif
-
+    // On iOS using SecTrustEvaluateWithError it is not possible to
+    // distinguish between weak and invalid key sizes.
+    return IsWeakRsaDsaKeySize(size);
+#else
     // This platform does not mark certificates with weak keys as invalid.
     return false;
+#endif
   }
 
   static bool ParseKeyType(const std::string& key_type,
@@ -451,12 +448,6 @@ class CertVerifyProcInternalTest
   }
 
   bool VerifyProcTypeIsIOSAtMostOS14() const {
-#if BUILDFLAG(IS_IOS)
-    if (verify_proc_type() == CERT_VERIFY_PROC_IOS &&
-        !base::ios::IsRunningOnIOS15OrLater()) {
-      return true;
-    }
-#endif
     return false;
   }
 
@@ -532,7 +523,7 @@ TEST_P(CertVerifyProcInternalTest, EVVerificationMultipleOID) {
   //
   // This way CRLSet coverage will be sufficient for EV revocation checking,
   // so this test does not depend on online revocation checking.
-  base::StringPiece spki;
+  std::string_view spki;
   ASSERT_TRUE(asn1::ExtractSPKIFromDERCert(
       x509_util::CryptoBufferAsStringPiece(root->GetCertBuffer()), &spki));
   SHA256HashValue spki_sha256;
@@ -803,7 +794,7 @@ TEST_P(CertVerifyProcInternalTest, UnnecessaryInvalidIntermediate) {
   base::FilePath certs_dir =
       GetTestNetDataDirectory().AppendASCII("parse_certificate_unittest");
   bssl::UniquePtr<CRYPTO_BUFFER> bad_cert =
-      x509_util::CreateCryptoBuffer(base::StringPiece("invalid"));
+      x509_util::CreateCryptoBuffer(std::string_view("invalid"));
   ASSERT_TRUE(bad_cert);
 
   scoped_refptr<X509Certificate> ok_cert(
@@ -1132,7 +1123,7 @@ class CertVerifyProcInspectSignatureAlgorithmsTest : public ::testing::Test {
   // |algorithm|. Note this violates the constness of StringPiece.
   [[nodiscard]] static bool SetAlgorithmSequence(
       bssl::DigestAlgorithm algorithm,
-      base::StringPiece* algorithm_sequence) {
+      std::string_view* algorithm_sequence) {
     // This string of bytes is the full SEQUENCE for an AlgorithmIdentifier.
     std::vector<uint8_t> replacement_sequence;
     switch (algorithm) {
@@ -1172,27 +1163,28 @@ class CertVerifyProcInspectSignatureAlgorithmsTest : public ::testing::Test {
 
   // Locate the serial number bytes.
   [[nodiscard]] static bool ExtractSerialNumberFromDERCert(
-      base::StringPiece der_cert,
-      base::StringPiece* serial_value) {
+      std::string_view der_cert,
+      std::string_view* serial_value) {
     bssl::der::Parser parser((bssl::der::Input(der_cert)));
     bssl::der::Parser certificate;
-    if (!parser.ReadSequence(&certificate))
+    if (!parser.ReadSequence(&certificate)) {
       return false;
+    }
 
     bssl::der::Parser tbs_certificate;
-    if (!certificate.ReadSequence(&tbs_certificate))
+    if (!certificate.ReadSequence(&tbs_certificate)) {
       return false;
+    }
 
     bool unused;
     if (!tbs_certificate.SkipOptionalTag(
-            bssl::der::kTagConstructed | bssl::der::kTagContextSpecific | 0,
-            &unused)) {
+            CBS_ASN1_CONSTRUCTED | CBS_ASN1_CONTEXT_SPECIFIC | 0, &unused)) {
       return false;
     }
 
     // serialNumber
     bssl::der::Input serial_value_der;
-    if (!tbs_certificate.ReadTag(bssl::der::kInteger, &serial_value_der)) {
+    if (!tbs_certificate.ReadTag(CBS_ASN1_INTEGER, &serial_value_der)) {
       return false;
     }
 
@@ -1223,15 +1215,15 @@ class CertVerifyProcInspectSignatureAlgorithmsTest : public ::testing::Test {
 
     // Parse the certificate and identify the locations of interest within
     // |cert_der|.
-    base::StringPiece cert_algorithm_sequence;
-    base::StringPiece tbs_algorithm_sequence;
+    std::string_view cert_algorithm_sequence;
+    std::string_view tbs_algorithm_sequence;
     if (!asn1::ExtractSignatureAlgorithmsFromDERCert(
             cert_der, &cert_algorithm_sequence, &tbs_algorithm_sequence)) {
       ADD_FAILURE() << "Failed parsing certificate algorithms";
       return nullptr;
     }
 
-    base::StringPiece serial_value;
+    std::string_view serial_value;
     if (!ExtractSerialNumberFromDERCert(cert_der, &serial_value)) {
       ADD_FAILURE() << "Failed parsing certificate serial number";
       return nullptr;
@@ -2816,7 +2808,7 @@ class CertVerifyProcInternalWithNetFetchingTest
   }
 
   // Returns a random URL path (starting with /) that has the given suffix.
-  static std::string MakeRandomPath(base::StringPiece suffix) {
+  static std::string MakeRandomPath(std::string_view suffix) {
     return "/" + MakeRandomHexString(12) + std::string(suffix);
   }
 
@@ -2853,8 +2845,8 @@ class CertVerifyProcInternalWithNetFetchingTest
   // Returns the full URL to retrieve the CRL from the test server.
   GURL CreateAndServeCrl(CertBuilder* crl_issuer,
                          const std::vector<uint64_t>& revoked_serials,
-                         absl::optional<bssl::SignatureAlgorithm>
-                             signature_algorithm = absl::nullopt) {
+                         std::optional<bssl::SignatureAlgorithm>
+                             signature_algorithm = std::nullopt) {
     std::string crl = BuildCrl(crl_issuer->GetSubject(), crl_issuer->GetKey(),
                                revoked_serials, signature_algorithm);
     std::string crl_path = MakeRandomPath(".crl");
@@ -4302,7 +4294,7 @@ TEST_P(CertVerifyProcConstraintsTest, PolicyConstraints0Root) {
     static const char kPolicy3[] = "1.2.3.5";
     chain_[3]->SetPolicyConstraints(
         /*require_explicit_policy=*/0,
-        /*inhibit_policy_mapping=*/absl::nullopt);
+        /*inhibit_policy_mapping=*/std::nullopt);
     chain_[3]->SetCertificatePolicies({kPolicy1, kPolicy2});
     chain_[2]->SetCertificatePolicies({kPolicy3, kPolicy1});
     chain_[1]->SetCertificatePolicies({kPolicy1});
@@ -4334,7 +4326,7 @@ TEST_P(CertVerifyProcConstraintsTest, PolicyConstraints4Root) {
   // long, an explicit policy is never required.
   chain_[3]->SetPolicyConstraints(
       /*require_explicit_policy=*/4,
-      /*inhibit_policy_mapping=*/absl::nullopt);
+      /*inhibit_policy_mapping=*/std::nullopt);
 
   EXPECT_THAT(Verify(), IsOk());
   if (VerifyProcTypeIsBuiltin()) {
@@ -4348,7 +4340,7 @@ TEST_P(CertVerifyProcConstraintsTest, PolicyConstraints3Root) {
   // constraints are enforced.
   chain_[3]->SetPolicyConstraints(
       /*require_explicit_policy=*/3,
-      /*inhibit_policy_mapping=*/absl::nullopt);
+      /*inhibit_policy_mapping=*/std::nullopt);
 
   if (VerifyProcTypeIsBuiltin()) {
     EXPECT_THAT(Verify(), IsOk());
@@ -4368,7 +4360,7 @@ TEST_P(CertVerifyProcConstraintsTest, PolicyConstraints2Root) {
   // constraints are enforced.
   chain_[3]->SetPolicyConstraints(
       /*require_explicit_policy=*/2,
-      /*inhibit_policy_mapping=*/absl::nullopt);
+      /*inhibit_policy_mapping=*/std::nullopt);
 
   if (VerifyProcTypeIsBuiltin()) {
     EXPECT_THAT(Verify(), IsOk());
@@ -4395,7 +4387,7 @@ TEST_P(CertVerifyProcConstraintsTest, PolicyConstraints0Intermediate) {
     static const char kPolicy3[] = "1.2.3.5";
     chain_[2]->SetPolicyConstraints(
         /*require_explicit_policy=*/0,
-        /*inhibit_policy_mapping=*/absl::nullopt);
+        /*inhibit_policy_mapping=*/std::nullopt);
     chain_[2]->SetCertificatePolicies({kPolicy1, kPolicy2});
     chain_[1]->SetCertificatePolicies({kPolicy3, kPolicy1});
 
@@ -4421,7 +4413,7 @@ TEST_P(CertVerifyProcConstraintsTest, PolicyConstraints3Intermediate) {
   // |chain_[2]| is 3 certs long, an explicit policy is never required.
   chain_[2]->SetPolicyConstraints(
       /*require_explicit_policy=*/3,
-      /*inhibit_policy_mapping=*/absl::nullopt);
+      /*inhibit_policy_mapping=*/std::nullopt);
 
   EXPECT_THAT(Verify(), IsOk());
   if (VerifyProcTypeIsBuiltin()) {
@@ -4435,11 +4427,11 @@ TEST_P(CertVerifyProcConstraintsTest, PolicyConstraints2Intermediate) {
   // should fail to verify.
   chain_[2]->SetPolicyConstraints(
       /*require_explicit_policy=*/2,
-      /*inhibit_policy_mapping=*/absl::nullopt);
+      /*inhibit_policy_mapping=*/std::nullopt);
 
-    EXPECT_THAT(Verify(), IsError(ExpectedIntermediateConstraintError()));
-    if (VerifyProcTypeIsBuiltin()) {
-      EXPECT_THAT(VerifyWithExpiryAndConstraints(), IsError(ERR_CERT_INVALID));
+  EXPECT_THAT(Verify(), IsError(ExpectedIntermediateConstraintError()));
+  if (VerifyProcTypeIsBuiltin()) {
+    EXPECT_THAT(VerifyWithExpiryAndConstraints(), IsError(ERR_CERT_INVALID));
     }
 }
 
@@ -4449,7 +4441,7 @@ TEST_P(CertVerifyProcConstraintsTest, PolicyConstraints1Intermediate) {
   // should fail to verify.
   chain_[2]->SetPolicyConstraints(
       /*require_explicit_policy=*/1,
-      /*inhibit_policy_mapping=*/absl::nullopt);
+      /*inhibit_policy_mapping=*/std::nullopt);
 
   EXPECT_THAT(Verify(), IsError(ExpectedIntermediateConstraintError()));
   if (VerifyProcTypeIsBuiltin()) {
@@ -4463,7 +4455,7 @@ TEST_P(CertVerifyProcConstraintsTest, PolicyConstraints0Leaf) {
   // and the final paragraph of 6.1.5)
   chain_[0]->SetPolicyConstraints(
       /*require_explicit_policy=*/0,
-      /*inhibit_policy_mapping=*/absl::nullopt);
+      /*inhibit_policy_mapping=*/std::nullopt);
 
   EXPECT_THAT(Verify(), IsError(ExpectedIntermediateConstraintError()));
 }
@@ -4474,14 +4466,14 @@ TEST_P(CertVerifyProcConstraintsTest, InhibitPolicyMapping0Root) {
 
   // Root inhibits policy mapping immediately.
   chain_[3]->SetPolicyConstraints(
-      /*require_explicit_policy=*/absl::nullopt,
+      /*require_explicit_policy=*/std::nullopt,
       /*inhibit_policy_mapping=*/0);
 
   // Policy constraints are specified on an intermediate so that an explicit
   // policy will be required regardless if root constraints are applied.
   chain_[2]->SetPolicyConstraints(
       /*require_explicit_policy=*/0,
-      /*inhibit_policy_mapping=*/absl::nullopt);
+      /*inhibit_policy_mapping=*/std::nullopt);
 
   // Intermediate uses policy mappings. This should not be allowed if the root
   // constraints were enforced.
@@ -4510,14 +4502,14 @@ TEST_P(CertVerifyProcConstraintsTest, InhibitPolicyMapping1Root) {
 
   // Root inhibits policy mapping after 1 cert.
   chain_[3]->SetPolicyConstraints(
-      /*require_explicit_policy=*/absl::nullopt,
+      /*require_explicit_policy=*/std::nullopt,
       /*inhibit_policy_mapping=*/1);
 
   // Policy constraints are specified on an intermediate so that an explicit
   // policy will be required regardless if root constraints are applied.
   chain_[2]->SetPolicyConstraints(
       /*require_explicit_policy=*/0,
-      /*inhibit_policy_mapping=*/absl::nullopt);
+      /*inhibit_policy_mapping=*/std::nullopt);
 
   // Intermediate uses policy mappings. This should be allowed even if the root
   // constraints were enforced, since policy mapping was allowed for 1 cert
@@ -4548,7 +4540,7 @@ TEST_P(CertVerifyProcConstraintsTest, InhibitAnyPolicy0Root) {
   // policy will be required regardless if root constraints are applied.
   chain_[2]->SetPolicyConstraints(
       /*require_explicit_policy=*/0,
-      /*inhibit_policy_mapping=*/absl::nullopt);
+      /*inhibit_policy_mapping=*/std::nullopt);
 
   // This intermediate only asserts anyPolicy, so this chain should
   // be invalid if policyConstraints from the root cert are enforced.
@@ -4584,7 +4576,7 @@ TEST_P(CertVerifyProcConstraintsTest, InhibitAnyPolicy1Root) {
     // policy will be required regardless if root constraints are applied.
     chain_[2]->SetPolicyConstraints(
         /*require_explicit_policy=*/0,
-        /*inhibit_policy_mapping=*/absl::nullopt);
+        /*inhibit_policy_mapping=*/std::nullopt);
 
     // AnyPolicy should be allowed in this cert.
     chain_[2]->SetCertificatePolicies({kAnyPolicy});
@@ -4624,7 +4616,7 @@ TEST_P(CertVerifyProcConstraintsTest, InhibitAnyPolicy0Intermediate) {
   chain_[2]->SetInhibitAnyPolicy(0);
   chain_[2]->SetPolicyConstraints(
       /*require_explicit_policy=*/0,
-      /*inhibit_policy_mapping=*/absl::nullopt);
+      /*inhibit_policy_mapping=*/std::nullopt);
 
   chain_[2]->SetCertificatePolicies({kAnyPolicy});
   // This shouldn't be allowed as the parent cert set inhibitAnyPolicy=0.
@@ -4641,7 +4633,7 @@ TEST_P(CertVerifyProcConstraintsTest, InhibitAnyPolicy1Intermediate) {
   chain_[2]->SetInhibitAnyPolicy(1);
   chain_[2]->SetPolicyConstraints(
       /*require_explicit_policy=*/0,
-      /*inhibit_policy_mapping=*/absl::nullopt);
+      /*inhibit_policy_mapping=*/std::nullopt);
 
   chain_[2]->SetCertificatePolicies({kAnyPolicy});
   // This is okay as the parent cert set inhibitAnyPolicy=1.
@@ -4672,7 +4664,7 @@ TEST_P(CertVerifyProcConstraintsTest, PoliciesRoot) {
     // policy will be required regardless if root constraints are applied.
     chain_[2]->SetPolicyConstraints(
         /*require_explicit_policy=*/0,
-        /*inhibit_policy_mapping=*/absl::nullopt);
+        /*inhibit_policy_mapping=*/std::nullopt);
 
     chain_[2]->SetCertificatePolicies({kPolicy1});
     chain_[1]->SetCertificatePolicies({kPolicy1});
@@ -4724,7 +4716,7 @@ TEST_P(CertVerifyProcConstraintsTest, PolicyMappingsRoot) {
     // policy will be required regardless if root constraints are applied.
     chain_[2]->SetPolicyConstraints(
         /*require_explicit_policy=*/0,
-        /*inhibit_policy_mapping=*/absl::nullopt);
+        /*inhibit_policy_mapping=*/std::nullopt);
 
     chain_[2]->SetCertificatePolicies({kPolicy2});
     chain_[1]->SetCertificatePolicies({kPolicy2});
@@ -5129,7 +5121,7 @@ TEST_P(CertVerifyProcConstraintsTrustedLeafTest, PolicyConstraints) {
 
     chain_[0]->SetPolicyConstraints(
         /*require_explicit_policy=*/0,
-        /*inhibit_policy_mapping=*/absl::nullopt);
+        /*inhibit_policy_mapping=*/std::nullopt);
     if (leaf_has_policy) {
       chain_[0]->SetCertificatePolicies({kPolicy1});
     } else {
@@ -5151,7 +5143,7 @@ TEST_P(CertVerifyProcConstraintsTrustedLeafTest, InhibitAnyPolicy) {
   static const char kAnyPolicy[] = "2.5.29.32.0";
   chain_[0]->SetPolicyConstraints(
       /*require_explicit_policy=*/0,
-      /*inhibit_policy_mapping=*/absl::nullopt);
+      /*inhibit_policy_mapping=*/std::nullopt);
   chain_[0]->SetInhibitAnyPolicy(0);
   chain_[0]->SetCertificatePolicies({kAnyPolicy});
 
@@ -5402,7 +5394,7 @@ TEST_P(CertVerifyProcConstraintsTrustedSelfSignedTest, PolicyConstraints) {
 
     cert_->SetPolicyConstraints(
         /*require_explicit_policy=*/0,
-        /*inhibit_policy_mapping=*/absl::nullopt);
+        /*inhibit_policy_mapping=*/std::nullopt);
     if (leaf_has_policy) {
       cert_->SetCertificatePolicies({kPolicy1});
 
@@ -5424,7 +5416,7 @@ TEST_P(CertVerifyProcConstraintsTrustedSelfSignedTest, InhibitAnyPolicy) {
   static const char kAnyPolicy[] = "2.5.29.32.0";
   cert_->SetPolicyConstraints(
       /*require_explicit_policy=*/0,
-      /*inhibit_policy_mapping=*/absl::nullopt);
+      /*inhibit_policy_mapping=*/std::nullopt);
   cert_->SetInhibitAnyPolicy(0);
   cert_->SetCertificatePolicies({kAnyPolicy});
 

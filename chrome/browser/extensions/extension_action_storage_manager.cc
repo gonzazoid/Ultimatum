@@ -18,6 +18,7 @@
 #include "extensions/browser/extension_system.h"
 #include "extensions/browser/state_store.h"
 #include "extensions/common/constants.h"
+#include "extensions/common/extension_id.h"
 #include "ui/gfx/codec/png_codec.h"
 #include "ui/gfx/image/image.h"
 #include "ui/gfx/image/image_skia.h"
@@ -116,7 +117,7 @@ void SetDefaultsFromValue(const base::Value::Dict& dict,
                               RawStringToSkColor(*badge_text_color));
   }
 
-  absl::optional<int> appearance_storage = dict.FindInt(kAppearanceStorageKey);
+  std::optional<int> appearance_storage = dict.FindInt(kAppearanceStorageKey);
   if (appearance_storage && !action->HasIsVisible(kDefaultTabId)) {
     switch (*appearance_storage) {
       case INVISIBLE:
@@ -246,8 +247,8 @@ void ExtensionActionStorageManager::WriteToStorage(
 }
 
 void ExtensionActionStorageManager::ReadFromStorage(
-    const std::string& extension_id,
-    absl::optional<base::Value> value) {
+    const ExtensionId& extension_id,
+    std::optional<base::Value> value) {
   const Extension* extension = ExtensionRegistry::Get(browser_context_)->
       enabled_extensions().GetByID(extension_id);
   if (!extension)

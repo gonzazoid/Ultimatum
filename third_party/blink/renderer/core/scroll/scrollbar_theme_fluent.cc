@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme_fluent.h"
 
 #include "base/numerics/safe_conversions.h"
+#include "third_party/blink/public/common/css/forced_colors.h"
 #include "third_party/blink/public/platform/web_theme_engine.h"
 #include "third_party/blink/renderer/core/scroll/scrollable_area.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar.h"
@@ -127,6 +128,13 @@ base::TimeDelta ScrollbarThemeFluent::OverlayScrollbarFadeOutDuration() const {
   return style_.fade_out_duration;
 }
 
+ScrollbarPart ScrollbarThemeFluent::PartsToInvalidateOnThumbPositionChange(
+    const Scrollbar& scrollbar,
+    float old_position,
+    float new_position) const {
+  return ScrollbarPart::kNoPart;
+}
+
 int ScrollbarThemeFluent::ThumbThickness(
     const float scale_from_dip,
     const EScrollbarWidth scrollbar_width) const {
@@ -160,6 +168,18 @@ void ScrollbarThemeFluent::PaintButton(GraphicsContext& context,
       context, scrollbar,
       UsesOverlayScrollbars() ? InsetButtonRect(scrollbar, rect, part) : rect,
       part);
+}
+WebThemeEngine::ScrollbarThumbExtraParams
+ScrollbarThemeFluent::BuildScrollbarThumbExtraParams(
+    const Scrollbar& scrollbar) {
+  WebThemeEngine::ScrollbarThumbExtraParams scrollbar_thumb;
+  if (scrollbar.ScrollbarThumbColor().has_value()) {
+    scrollbar_thumb.thumb_color =
+        scrollbar.ScrollbarThumbColor().value().toSkColor4f().toSkColor();
+  }
+  scrollbar_thumb.is_thumb_minimal_mode =
+      scrollbar.IsFluentOverlayScrollbarMinimalMode();
+  return scrollbar_thumb;
 }
 
 gfx::Rect ScrollbarThemeFluent::InsetTrackRect(const Scrollbar& scrollbar,

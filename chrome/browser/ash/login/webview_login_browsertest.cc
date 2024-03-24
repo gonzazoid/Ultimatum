@@ -11,6 +11,7 @@
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/login_screen_test_api.h"
+#include "ash/shell.h"
 #include "base/check_deref.h"
 #include "base/files/file_util.h"
 #include "base/functional/bind.h"
@@ -68,6 +69,7 @@
 #include "chrome/browser/ui/webui/ash/login/gaia_screen_handler.h"
 #include "chrome/browser/ui/webui/ash/login/marketing_opt_in_screen_handler.h"
 #include "chrome/browser/ui/webui/ash/login/quick_start_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/user_creation_screen_handler.h"
 #include "chrome/browser/ui/webui/signin/signin_utils.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/pref_names.h"
@@ -132,6 +134,9 @@
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/events/event_constants.h"
+#include "ui/events/keycodes/keyboard_codes.h"
+#include "ui/events/test/event_generator.h"
 
 namespace ash {
 
@@ -143,7 +148,7 @@ constexpr char kCancelButton[] = "cancelButton";
 constexpr char kClientCert1Name[] = "client_1";
 constexpr char kClientCert2Name[] = "client_2";
 constexpr char kLoadingDialog[] = "loadingDialog";
-constexpr char kSigninWebview[] = "$('gaia-signin').getSigninFrame_()";
+constexpr char kSigninWebview[] = "$('gaia-signin').getSigninFrame()";
 constexpr char kSigninWebviewOnLockScreen[] =
     "$('main-element').getSigninFrame_()";
 constexpr char kTestCookieHost[] = "host1.com";
@@ -347,7 +352,7 @@ class WebviewLoginTest : public OobeBaseTest {
 
   void WaitForServicesSet() {
     test::OobeJS()
-        .CreateWaiter("$('gaia-signin').authenticator_.services_")
+        .CreateWaiter("$('gaia-signin').authenticator.services_")
         ->Wait();
   }
 
@@ -361,6 +366,15 @@ class WebviewLoginTest : public OobeBaseTest {
   base::test::ScopedFeatureList scoped_feature_list_;
 };
 
+IN_PROC_BROWSER_TEST_F(WebviewLoginTest, BackButtonOobeFlow) {
+  WaitForGaiaPageLoadAndPropertyUpdate();
+  ExpectIdentifierPage();
+
+  // Click back to reload (unreachable) identifier page.
+  test::OobeJS().ClickOnPath(kBackButton);
+  OobeScreenWaiter(UserCreationView::kScreenId).Wait();
+}
+
 IN_PROC_BROWSER_TEST_F(WebviewLoginTest, ErrorScreenOnGaiaError) {
   WaitForGaiaPageLoadAndPropertyUpdate();
   ExpectIdentifierPage();
@@ -370,8 +384,9 @@ IN_PROC_BROWSER_TEST_F(WebviewLoginTest, ErrorScreenOnGaiaError) {
       GaiaUrls::GetInstance()->embedded_setup_chromeos_url(),
       net::HTTP_NOT_FOUND);
 
-  // Click back to reload (unreachable) identifier page.
-  test::OobeJS().ClickOnPath(kBackButton);
+  // Click ESC key to reload (unreachable) identifier page.
+  ui::test::EventGenerator generator(Shell::Get()->GetPrimaryRootWindow());
+  generator.PressAndReleaseKey(ui::VKEY_ESCAPE, ui::EF_NONE);
   OobeScreenWaiter(ErrorScreenView::kScreenId).Wait();
 }
 
@@ -414,7 +429,7 @@ IN_PROC_BROWSER_TEST_F(WebviewLoginTest,
   fake_gaia_.fake_gaia()->SetFixedResponse(
       GaiaUrls::GetInstance()->embedded_setup_chromeos_url(), net::HTTP_OK,
       "<body>no-op gaia</body>");
-  test::OobeJS().ExecuteAsync("$('gaia-signin').authenticator_.reload()");
+  test::OobeJS().ExecuteAsync("$('gaia-signin').authenticator.reload()");
 
   // Wait for both buttons to become disabled due to reload.
   test::OobeJS().CreateEnabledWaiter(false, kPrimaryButton)->Wait();
@@ -470,9 +485,11 @@ IN_PROC_BROWSER_TEST_F(WebviewLoginTest, StoragePartitionHandling) {
   // later if it has been cleared.
   InjectCookie(signin_frame_partition_1);
 
-  // Press the back button at a sign-in screen without pre-existing users to
+  // Press ESC key at a sign-in screen without pre-existing users to
   // start a new sign-in attempt.
-  test::OobeJS().ClickOnPath(kBackButton);
+  ui::test::EventGenerator generator(Shell::Get()->GetPrimaryRootWindow());
+  generator.PressAndReleaseKey(ui::VKEY_ESCAPE, ui::EF_NONE);
+
   WaitForGaiaPageBackButtonUpdate();
   // Expect that we got back to the identifier page, as there are no known users
   // so the sign-in screen will not display user pods.
@@ -525,12 +542,12 @@ class WebviewCloseViewLoginTest : public WebviewLoginTest,
   void EmulateGaiaDoneTimeout() {
     // Wait for user info timer to be set.
     test::OobeJS()
-        .CreateWaiter("$('gaia-signin').authenticator_.gaiaDoneTimer_")
+        .CreateWaiter("$('gaia-signin').authenticator.gaiaDoneTimer_")
         ->Wait();
 
     // Emulate timeout fire.
     test::OobeJS().ExecuteAsync(
-        "$('gaia-signin').authenticator_.onGaiaDoneTimeout_()");
+        "$('gaia-signin').authenticator.onGaiaDoneTimeout_()");
   }
 };
 
@@ -876,7 +893,7 @@ class WebviewDeviceOwnedLoginTest : public WebviewLoginTest {
 IN_PROC_BROWSER_TEST_F(WebviewDeviceOwnedLoginTest, AllowNewUser) {
   WaitForGaiaPageLoad();
 
-  std::string frame_url = "$('gaia-signin').authenticator_.reloadUrl_";
+  std::string frame_url = "$('gaia-signin').authenticator.reloadUrl_";
   // New users are allowed.
   test::OobeJS().ExpectTrue(frame_url + ".search('flow=nosignup') == -1");
 
@@ -1036,7 +1053,7 @@ class ReauthEndpointWebviewLoginTest : public WebviewLoginTest {
       AccountId::FromUserEmailGaiaId(FakeGaiaMixin::kFakeUserEmail,
                                      FakeGaiaMixin::kFakeUserGaiaId),
       test::UserAuthConfig::Create(test::kDefaultAuthSetup).RequireReauth(),
-      user_manager::USER_TYPE_CHILD};
+      user_manager::UserType::kChild};
   LoginManagerMixin login_manager_mixin_{&mixin_host_, {reauth_user_}};
 };
 
@@ -1454,7 +1471,7 @@ class WebviewClientCertsLoginTest : public WebviewClientCertsLoginTestBase {
   LoginManagerMixin::TestUserInfo test_user_{
       AccountId::FromUserEmailGaiaId(FakeGaiaMixin::kFakeUserEmail,
                                      FakeGaiaMixin::kFakeUserGaiaId),
-      test::kDefaultAuthSetup, user_manager::USER_TYPE_REGULAR};
+      test::kDefaultAuthSetup, user_manager::UserType::kRegular};
   LoginManagerMixin login_manager_mixin_{&mixin_host_, {test_user_}};
 
  private:
@@ -2236,7 +2253,7 @@ IN_PROC_BROWSER_TEST_F(WebviewChildLoginTest, UserInfoSentBeforeAuthFinished) {
   WaitForServicesSet();
 
   // Timer should not be set.
-  test::OobeJS().ExpectFalse("$('gaia-signin').authenticator_.gaiaDoneTimer_");
+  test::OobeJS().ExpectFalse("$('gaia-signin').authenticator.gaiaDoneTimer_");
 
   test::WaitForPrimaryUserSessionStart();
 
@@ -2260,7 +2277,7 @@ IN_PROC_BROWSER_TEST_F(WebviewChildLoginTest, UserInfoSentAfterTimerSet) {
 
   // Wait for user info timer to be set.
   test::OobeJS()
-      .CreateWaiter("$('gaia-signin').authenticator_.gaiaDoneTimer_")
+      .CreateWaiter("$('gaia-signin').authenticator.gaiaDoneTimer_")
       ->Wait();
 
   // Send user info after that.

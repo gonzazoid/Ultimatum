@@ -5,6 +5,7 @@
 #include "chrome/browser/device_api/managed_configuration_api.h"
 
 #include <memory>
+#include <optional>
 
 #include "base/containers/contains.h"
 #include "base/functional/bind.h"
@@ -23,7 +24,6 @@
 #include "content/public/browser/browser_thread.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/simple_url_loader.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/origin.h"
 
 namespace {
@@ -65,8 +65,7 @@ constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
 // Converts url::Origin into the key that can be used for filenames/dictionary
 // keys.
 std::string GetOriginEncoded(const url::Origin& origin) {
-  std::string serialized = origin.Serialize();
-  return base::HexEncode(serialized.data(), serialized.size());
+  return base::HexEncode(origin.Serialize());
 }
 
 }  // namespace
@@ -145,13 +144,13 @@ void ManagedConfigurationAPI::RegisterProfilePrefs(
 void ManagedConfigurationAPI::GetOriginPolicyConfiguration(
     const url::Origin& origin,
     const std::vector<std::string>& keys,
-    base::OnceCallback<void(absl::optional<base::Value::Dict>)> callback) {
+    base::OnceCallback<void(std::optional<base::Value::Dict>)> callback) {
   if (!CanHaveManagedStore(origin)) {
-    return std::move(callback).Run(absl::nullopt);
+    return std::move(callback).Run(std::nullopt);
   }
 
   if (!base::Contains(store_map_, origin)) {
-    return std::move(callback).Run(absl::nullopt);
+    return std::move(callback).Run(std::nullopt);
   }
 
   store_map_[origin]
@@ -356,7 +355,7 @@ void ManagedConfigurationAPI::PromoteObservers() {
   for (auto it = unmanaged_observers_.begin();
        it != unmanaged_observers_.end();) {
     if (CanHaveManagedStore((*it)->GetOrigin())) {
-      auto* observer = *it;
+      auto* observer = (*it).get();
       it = unmanaged_observers_.erase(it);
       AddObserver(observer);
     } else {

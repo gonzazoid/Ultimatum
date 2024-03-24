@@ -89,15 +89,11 @@ void AppendExtraHeaders(net::HttpRequestHeaders* headers,
 
 // Return whether the download is explicitly to fetch part of the file.
 bool IsArbitraryRangeRequest(DownloadSaveInfo* save_info) {
-  if (!base::FeatureList::IsEnabled(features::kDownloadRange))
-    return false;
   return save_info && save_info->IsArbitraryRangeRequest();
 }
 
 bool IsArbitraryRangeRequest(DownloadUrlParameters* parameters) {
   DCHECK(parameters);
-  if (!base::FeatureList::IsEnabled(features::kDownloadRange))
-    return false;
   auto offsets = parameters->range_request_offset();
   return offsets.first != kInvalidRange || offsets.second != kInvalidRange;
 }
@@ -561,13 +557,13 @@ DownloadDBEntry CreateDownloadDBEntryFromItem(const DownloadItemImpl& item) {
 }
 
 std::unique_ptr<DownloadEntry> CreateDownloadEntryFromDownloadDBEntry(
-    absl::optional<DownloadDBEntry> entry) {
+    std::optional<DownloadDBEntry> entry) {
   if (!entry || !entry->download_info)
     return nullptr;
 
-  absl::optional<InProgressInfo> in_progress_info =
+  std::optional<InProgressInfo> in_progress_info =
       entry->download_info->in_progress_info;
-  absl::optional<UkmInfo> ukm_info = entry->download_info->ukm_info;
+  std::optional<UkmInfo> ukm_info = entry->download_info->ukm_info;
   if (!ukm_info || !in_progress_info)
     return nullptr;
 

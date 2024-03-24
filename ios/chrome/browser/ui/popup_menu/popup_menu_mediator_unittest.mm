@@ -6,6 +6,7 @@
 
 #import "base/files/scoped_temp_dir.h"
 #import "base/ios/ios_util.h"
+#import "base/memory/raw_ptr.h"
 #import "base/memory/scoped_refptr.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/scoped_feature_list.h"
@@ -160,8 +161,7 @@ class PopupMenuMediatorTest : public PlatformTest {
     web_state_->SetWebFramesManager(std::move(frames_manager));
 
     browser_->GetWebStateList()->InsertWebState(
-        0, std::move(test_web_state), WebStateList::INSERT_FORCE_INDEX,
-        WebStateOpener());
+        std::move(test_web_state), WebStateList::InsertionParams::AtIndex(0));
     for (int i = 1; i < kNumberOfWebStates; i++) {
       InsertNewWebState(i);
     }
@@ -235,8 +235,7 @@ class PopupMenuMediatorTest : public PlatformTest {
     web_state->SetWebFramesManager(std::move(frames_manager));
 
     browser_->GetWebStateList()->InsertWebState(
-        index, std::move(web_state), WebStateList::INSERT_FORCE_INDEX,
-        WebStateOpener());
+        std::move(web_state), WebStateList::InsertionParams::AtIndex(index));
   }
 
   void SetUpActiveWebState() {
@@ -303,10 +302,10 @@ class PopupMenuMediatorTest : public PlatformTest {
 
   FakeOverlayPresentationContext presentation_context_;
   PopupMenuMediator* mediator_;
-  BookmarkModel* bookmark_model_;
-  ReadingListModel* reading_list_model_;
+  raw_ptr<BookmarkModel> bookmark_model_;
+  raw_ptr<ReadingListModel> reading_list_model_;
   std::unique_ptr<TestingPrefServiceSimple> prefs_;
-  web::FakeWebState* web_state_;
+  raw_ptr<web::FakeWebState> web_state_;
   std::unique_ptr<web::NavigationItem> navigation_item_;
   id popup_menu_;
   // Mock refusing all calls except -setPopupMenuItems:.

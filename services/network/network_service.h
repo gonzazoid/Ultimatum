@@ -7,6 +7,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
@@ -50,6 +51,7 @@
 #include "services/network/public/mojom/host_resolver.mojom.h"
 #include "services/network/public/mojom/key_pinning.mojom.h"
 #include "services/network/public/mojom/net_log.mojom.h"
+#include "services/network/public/mojom/network_annotation_monitor.mojom.h"
 #include "services/network/public/mojom/network_change_manager.mojom.h"
 #include "services/network/public/mojom/network_quality_estimator_manager.mojom.h"
 #include "services/network/public/mojom/network_service.mojom.h"
@@ -59,7 +61,6 @@
 #include "services/network/restricted_cookie_manager.h"
 #include "services/network/trust_tokens/trust_token_key_commitments.h"
 #include "services/service_manager/public/cpp/binder_registry.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_CT_SUPPORTED)
 #include "services/network/public/mojom/ct_log_info.mojom.h"
@@ -142,6 +143,13 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
   void CreateNetLogEntriesForActiveObjects(
       net::NetLog::ThreadSafeObserver* observer);
 
+  void SetNetworkAnnotationMonitor(
+      mojo::PendingRemote<network::mojom::NetworkAnnotationMonitor> remote)
+      override;
+
+  void NotifyNetworkRequestWithAnnotation(
+      net::NetworkTrafficAnnotationTag traffic_annotation);
+
   // mojom::NetworkService implementation:
   void SetParams(mojom::NetworkServiceParamsPtr params) override;
   void StartNetLog(base::File file,
@@ -167,8 +175,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
       mojom::HttpAuthDynamicParamsPtr http_auth_dynamic_params) override;
   void SetRawHeadersAccess(int32_t process_id,
                            const std::vector<url::Origin>& origins) override;
-  // TODO(https://crbug.com/1491092): Rename to SetMaxConnectionsPerProxyChain.
-  void SetMaxConnectionsPerProxy(int32_t max_connections) override;
+  void SetMaxConnectionsPerProxyChain(int32_t max_connections) override;
   void GetNetworkChangeManager(
       mojo::PendingReceiver<mojom::NetworkChangeManager> receiver) override;
   void GetNetworkQualityEstimatorManager(
@@ -212,7 +219,9 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
   void UpdateKeyPinsList(mojom::PinListPtr pin_list,
                          base::Time update_time) override;
 
-  void UpdateMaskedDomainList(const std::string& raw_mdl) override;
+  void UpdateMaskedDomainList(
+      const std::string& raw_mdl,
+      const std::vector<std::string>& exclusion_list) override;
 
 #if BUILDFLAG(IS_ANDROID)
   void DumpWithoutCrashing(base::Time dump_request_time) override;
@@ -367,6 +376,9 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
     SetTestDohConfigForTesting,
   };
 
+  mojo::Remote<network::mojom::NetworkAnnotationMonitor>
+      network_annotation_monitor_;
+
   std::unique_ptr<RestrictedCookieManager::UmaMetricsUpdater> metrics_updater_;
 
   FunctionTag dns_config_overrides_set_by_ = FunctionTag::None;
@@ -429,7 +441,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
   // including ones it does not own.
   // TODO(mmenke): Once the NetworkService always owns NetworkContexts, merge
   // this with |owned_network_contexts_|.
-  std::set<NetworkContext*> network_contexts_;
+  std::set<raw_ptr<NetworkContext, SetExperimental>> network_contexts_;
 
   std::unique_ptr<NetworkServiceProxyAllowList>
       network_service_proxy_allow_list_;

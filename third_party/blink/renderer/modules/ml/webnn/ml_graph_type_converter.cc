@@ -17,6 +17,7 @@
 #include "third_party/blink/renderer/bindings/modules/v8/v8_ml_instance_normalization_options.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_ml_layer_normalization_options.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_ml_leaky_relu_options.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_ml_linear_options.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_ml_pad_options.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_ml_pool_2d_options.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_ml_reduce_options.h"
@@ -225,6 +226,25 @@ blink_mojom::LeakyReluPtr CreateLeakyRelu(
   return leaky_relu_mojo;
 }
 
+blink_mojom::LinearPtr CreateLinear(const OperandToIdMap& operand_to_id_map,
+                                    const MLOperator* linear,
+                                    bool is_activation) {
+  auto linear_mojo = blink_mojom::Linear::New();
+  // Activation has no input and output operand.
+  if (!is_activation) {
+    linear_mojo->input_operand_id =
+        GetOperatorInputId(linear, operand_to_id_map);
+    linear_mojo->output_operand_id =
+        GetOperatorOutputId(linear, operand_to_id_map);
+  }
+
+  const auto* options = static_cast<const MLLinearOptions*>(linear->Options());
+  CHECK(options);
+  linear_mojo->alpha = options->alpha();
+  linear_mojo->beta = options->beta();
+  return linear_mojo;
+}
+
 blink_mojom::SoftplusPtr CreateSoftplus(const OperandToIdMap& operand_to_id_map,
                                         const MLOperator* softplus,
                                         bool is_activation) {
@@ -272,6 +292,9 @@ base::expected<ActivationPtr, String> CreateActivation(
     case blink::MLOperator::OperatorKind::kLeakyRelu:
       return blink_mojom::Activation::NewLeakyRelu(
           CreateLeakyRelu(operand_to_id_map, ml_operator, true));
+    case blink::MLOperator::OperatorKind::kLinear:
+      return blink_mojom::Activation::NewLinear(
+          CreateLinear(operand_to_id_map, ml_operator, true));
     case blink::MLOperator::OperatorKind::kRelu:
       return blink_mojom::Activation::NewRelu(blink_mojom::Relu::New());
     case blink::MLOperator::OperatorKind::kSigmoid:
@@ -600,6 +623,16 @@ OperationPtr CreateGemmOperation(const OperandToIdMap& operand_to_id_map,
   gemm_mojo->b_transpose = options->bTranspose();
 
   return webnn::mojom::blink::Operation::NewGemm(std::move(gemm_mojo));
+}
+
+OperationPtr CreateHardSwishOperation(const OperandToIdMap& operand_to_id_map,
+                                      const MLOperator* hard_swish) {
+  auto hard_swish_mojo = blink_mojom::HardSwish::New();
+  hard_swish_mojo->input_operand_id =
+      GetOperatorInputId(hard_swish, operand_to_id_map);
+  hard_swish_mojo->output_operand_id =
+      GetOperatorOutputId(hard_swish, operand_to_id_map);
+  return blink_mojom::Operation::NewHardSwish(std::move(hard_swish_mojo));
 }
 
 base::expected<OperationPtr, String> CreateLayerNormalizationOperation(
@@ -1091,6 +1124,8 @@ base::expected<OperationPtr, String> ConvertToMojoOperation(
     case MLOperator::OperatorKind::kHardSigmoid:
       return blink_mojom::Operation::NewHardSigmoid(
           CreateHardSigmoid(operand_to_id_map, op, false));
+    case MLOperator::OperatorKind::kHardSwish:
+      return CreateHardSwishOperation(operand_to_id_map, op);
     case MLOperator::OperatorKind::kInstanceNormalization:
       return CreateInstanceNormalizationOperation(operand_to_id_map, op);
     case MLOperator::OperatorKind::kLayerNormalization:
@@ -1098,6 +1133,9 @@ base::expected<OperationPtr, String> ConvertToMojoOperation(
     case MLOperator::OperatorKind::kLeakyRelu:
       return blink_mojom::Operation::NewLeakyRelu(
           CreateLeakyRelu(operand_to_id_map, op, false));
+    case MLOperator::OperatorKind::kLinear:
+      return blink_mojom::Operation::NewLinear(
+          CreateLinear(operand_to_id_map, op, false));
     case MLOperator::OperatorKind::kMatmul:
       return CreateMatmulOperation(operand_to_id_map, op);
     case MLOperator::OperatorKind::kPad:
@@ -1105,6 +1143,9 @@ base::expected<OperationPtr, String> ConvertToMojoOperation(
     case MLOperator::OperatorKind::kAveragePool2d:
       return CreatePool2dOperation(operand_to_id_map, op,
                                    blink_mojom::Pool2d::Kind::kAveragePool2d);
+    case MLOperator::OperatorKind::kL2Pool2d:
+      return CreatePool2dOperation(operand_to_id_map, op,
+                                   blink_mojom::Pool2d::Kind::kL2Pool2d);
     case MLOperator::OperatorKind::kMaxPool2d:
       return CreatePool2dOperation(operand_to_id_map, op,
                                    blink_mojom::Pool2d::Kind::kMaxPool2d);
@@ -1165,9 +1206,7 @@ base::expected<OperationPtr, String> ConvertToMojoOperation(
       return CreateTransposeOperation(operand_to_id_map, op);
     case MLOperator::OperatorKind::kWhere:
       return CreateWhereOperation(operand_to_id_map, op);
-    case MLOperator::OperatorKind::kHardSwish:
-      [[fallthrough]];
-    case MLOperator::OperatorKind::kLinear:
+    case MLOperator::OperatorKind::kLstm:
       break;
   }
   return base::unexpected(MLOperator::OperatorKindToString(op->Kind()) +

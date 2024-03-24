@@ -393,7 +393,7 @@ class WebAppPolicyManagerTestBase : public ChromeRenderViewHostTestHarness {
             [this](const ExternalInstallOptions& install_options) {
               const GURL& install_url = install_options.install_url;
               const webapps::AppId app_id = GenerateAppId(
-                  /*manifest_id=*/absl::nullopt, install_url);
+                  /*manifest_id=*/std::nullopt, install_url);
               if (app_registrar().GetAppById(app_id) &&
                   install_options.force_reinstall) {
                 UnregisterApp(app_id);
@@ -417,7 +417,7 @@ class WebAppPolicyManagerTestBase : public ChromeRenderViewHostTestHarness {
         base::BindLambdaForTesting(
             [this](const GURL& app_url,
                    ExternalInstallSource install_source) -> bool {
-              absl::optional<webapps::AppId> app_id =
+              std::optional<webapps::AppId> app_id =
                   app_registrar().LookupExternalAppId(app_url);
               if (app_id) {
                 UnregisterApp(*app_id);
@@ -447,14 +447,14 @@ class WebAppPolicyManagerTestBase : public ChromeRenderViewHostTestHarness {
         url, ConvertExternalInstallSourceToSource(install_source));
     RegisterApp(std::move(web_app));
     test::AddInstallUrlData(profile()->GetPrefs(), &sync_bridge(),
-                            GenerateAppId(/*manifest_id=*/absl::nullopt, url),
+                            GenerateAppId(/*manifest_id=*/std::nullopt, url),
                             url, install_source);
   }
 
   void MakeInstalledAppPlaceholder(const GURL& url) {
     test::AddInstallUrlAndPlaceholderData(
         profile()->GetPrefs(), &sync_bridge(),
-        GenerateAppId(/*manifest_id=*/absl::nullopt, url), url,
+        GenerateAppId(/*manifest_id=*/std::nullopt, url), url,
         ExternalInstallSource::kExternalPolicy, /*is_placeholder=*/true);
   }
 
@@ -1342,11 +1342,13 @@ TEST_P(WebAppPolicyManagerTest, WebAppSettingsDynamicRefresh) {
   MockAppRegistrarObserver mock_observer;
   app_registrar().AddObserver(&mock_observer);
 
-  base::RunLoop loop;
-  policy_manager().SetRefreshPolicySettingsCompletedCallbackForTesting(
-      loop.QuitClosure());
-  SetWebAppSettingsListPref(profile(), kWebAppSettingInitialConfiguration);
-  loop.Run();
+  {
+    base::RunLoop loop;
+    policy_manager().SetRefreshPolicySettingsCompletedCallbackForTesting(
+        loop.QuitClosure());
+    SetWebAppSettingsListPref(profile(), kWebAppSettingInitialConfiguration);
+    loop.Run();
+  }
 
   EXPECT_EQ(GetUrlRunOnOsLoginPolicy(kWindowedUrl),
             RunOnOsLoginPolicy::kBlocked);
@@ -1355,7 +1357,14 @@ TEST_P(WebAppPolicyManagerTest, WebAppSettingsDynamicRefresh) {
             RunOnOsLoginPolicy::kAllowed);
   EXPECT_EQ(1, mock_observer.GetOnWebAppSettingsPolicyChangedCalledCount());
 
-  SetWebAppSettingsListPref(profile(), kWebAppSettingWithDefaultConfiguration);
+  {
+    base::RunLoop loop;
+    policy_manager().SetRefreshPolicySettingsCompletedCallbackForTesting(
+        loop.QuitClosure());
+    SetWebAppSettingsListPref(profile(),
+                              kWebAppSettingWithDefaultConfiguration);
+    loop.Run();
+  }
   EXPECT_EQ(GetUrlRunOnOsLoginPolicy(kWindowedUrl),
             RunOnOsLoginPolicy::kRunWindowed);
   EXPECT_EQ(GetUrlRunOnOsLoginPolicy(kTabbedUrl), RunOnOsLoginPolicy::kAllowed);
@@ -1415,11 +1424,14 @@ TEST_P(WebAppPolicyManagerTest, WebAppSettingsForceInstallNewApps) {
   MockAppRegistrarObserver mock_observer;
   app_registrar().AddObserver(&mock_observer);
 
-  base::RunLoop settings_loop;
-  policy_manager().SetRefreshPolicySettingsCompletedCallbackForTesting(
-      settings_loop.QuitClosure());
-  SetWebAppSettingsListPref(profile(), kWebAppSettingWithDefaultConfiguration);
-  settings_loop.Run();
+  {
+    base::RunLoop settings_loop;
+    policy_manager().SetRefreshPolicySettingsCompletedCallbackForTesting(
+        settings_loop.QuitClosure());
+    SetWebAppSettingsListPref(profile(),
+                              kWebAppSettingWithDefaultConfiguration);
+    settings_loop.Run();
+  }
 
   EXPECT_EQ(1, mock_observer.GetOnWebAppSettingsPolicyChangedCalledCount());
   EXPECT_EQ(GetUrlRunOnOsLoginPolicy(kWindowedUrl),
@@ -1430,14 +1442,18 @@ TEST_P(WebAppPolicyManagerTest, WebAppSettingsForceInstallNewApps) {
   EXPECT_EQ(GetUrlRunOnOsLoginPolicy("http://foo.example"),
             RunOnOsLoginPolicy::kBlocked);
 
-  // Now add two sites, one that opens in a window and one that opens in a tab.
-  base::Value::List list;
-  list.Append(GetWindowedItem());
-  list.Append(GetTabbedItem());
-
-  profile()->GetPrefs()->SetList(prefs::kWebAppInstallForceList,
-                                 std::move(list));
-  WaitForAppsToSynchronize();
+  {
+    base::RunLoop loop;
+    policy_manager().SetRefreshPolicySettingsCompletedCallbackForTesting(
+        loop.QuitClosure());
+    // Now add two sites, one that opens in a window and one that opens in a
+    // tab.
+    profile()->GetPrefs()->SetList(
+        prefs::kWebAppInstallForceList,
+        base::Value::List().Append(GetWindowedItem()).Append(GetTabbedItem()));
+    loop.Run();
+  }
+  // WaitForAppsToSynchronize();
 
   provider()->command_manager().AwaitAllCommandsCompleteForTesting();
 
@@ -1611,7 +1627,7 @@ TEST_P(WebAppPolicyManagerPreventCloseTest, WebAppSettingsPreventClose) {
   {
     ScopedRegistryUpdate update = sync_bridge().BeginUpdate();
 
-    absl::optional<webapps::AppId> app_id =
+    std::optional<webapps::AppId> app_id =
         app_registrar().LookUpAppIdByInstallUrl(
             GURL(kWindowedAlsoManuallyInstalled));
     ASSERT_TRUE(app_id.has_value());

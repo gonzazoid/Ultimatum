@@ -4,24 +4,37 @@
 
 #import "ios/chrome/browser/ui/save_to_drive/save_to_drive_coordinator.h"
 
+#import "base/metrics/histogram_functions.h"
 #import "base/strings/sys_string_conversions.h"
+#import "components/strings/grit/components_strings.h"
 #import "ios/chrome/browser/download/model/download_manager_tab_helper.h"
+#import "ios/chrome/browser/drive/model/drive_metrics.h"
+#import "ios/chrome/browser/drive/model/drive_service_factory.h"
 #import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/public/commands/account_picker_commands.h"
 #import "ios/chrome/browser/shared/public/commands/application_commands.h"
 #import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/manage_storage_alert_commands.h"
 #import "ios/chrome/browser/shared/public/commands/save_to_drive_commands.h"
 #import "ios/chrome/browser/shared/public/commands/show_signin_command.h"
+#import "ios/chrome/browser/signin/model/chrome_account_manager_service_factory.h"
 #import "ios/chrome/browser/signin/model/system_identity.h"
 #import "ios/chrome/browser/ui/account_picker/account_picker_configuration.h"
 #import "ios/chrome/browser/ui/account_picker/account_picker_coordinator.h"
 #import "ios/chrome/browser/ui/account_picker/account_picker_coordinator_delegate.h"
 #import "ios/chrome/browser/ui/authentication/signin/signin_completion_info.h"
+#import "ios/chrome/browser/ui/save_to_drive/file_destination_picker_view_controller.h"
 #import "ios/chrome/browser/ui/save_to_drive/save_to_drive_mediator.h"
 #import "ios/chrome/browser/ui/save_to_drive/save_to_drive_util.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/web/public/download/download_task.h"
 #import "ios/web/public/web_state.h"
+#import "ui/base/l10n/l10n_util_mac.h"
 
-@interface SaveToDriveCoordinator () <AccountPickerCoordinatorDelegate>
+@interface SaveToDriveCoordinator () <AccountPickerCommands,
+                                      AccountPickerCoordinatorDelegate,
+                                      ManageStorageAlertCommands>
 
 @end
 
@@ -29,7 +42,8 @@
   raw_ptr<web::DownloadTask> _downloadTask;
   SaveToDriveMediator* _mediator;
   AccountPickerCoordinator* _accountPickerCoordinator;
-  id<SystemIdentity> _selectedIdentity;
+  FileDestinationPickerViewController* _destinationPicker;
+  UIAlertController* _alertController;
 }
 
 - (instancetype)initWithBaseViewController:(UIViewController*)viewController
@@ -45,11 +59,30 @@
 #pragma mark - ChromeCoordinator
 
 - (void)start {
-  id<SaveToDriveCommands> saveToDriveCommandsHandler = HandlerForProtocol(
-      self.browser->GetCommandDispatcher(), SaveToDriveCommands);
-  _mediator = [[SaveToDriveMediator alloc]
-            initWithDownloadTask:_downloadTask
-      saveToDriveCommandsHandler:saveToDriveCommandsHandler];
+  CommandDispatcher* dispatcher = self.browser->GetCommandDispatcher();
+  [dispatcher startDispatchingToTarget:self
+                           forProtocol:@protocol(AccountPickerCommands)];
+  [dispatcher startDispatchingToTarget:self
+                           forProtocol:@protocol(ManageStorageAlertCommands)];
+  ChromeBrowserState* browserState = self.browser->GetBrowserState();
+  drive::DriveService* driveService =
+      drive::DriveServiceFactory::GetForBrowserState(browserState);
+  ChromeAccountManagerService* accountManagerService =
+      ChromeAccountManagerServiceFactory::GetForBrowserState(browserState);
+  PrefService* prefService = browserState->GetPrefs();
+  id<SaveToDriveCommands> saveToDriveHandler =
+      HandlerForProtocol(dispatcher, SaveToDriveCommands);
+  id<ApplicationCommands> applicationHandler =
+      HandlerForProtocol(dispatcher, ApplicationCommands);
+  _mediator =
+      [[SaveToDriveMediator alloc] initWithDownloadTask:_downloadTask
+                                     saveToDriveHandler:saveToDriveHandler
+                              manageStorageAlertHandler:self
+                                     applicationHandler:applicationHandler
+                                   accountPickerHandler:self
+                                            prefService:prefService
+                                  accountManagerService:accountManagerService
+                                           driveService:driveService];
 
   AccountPickerConfiguration* accountPickerConfiguration =
       drive::GetAccountPickerConfiguration(_downloadTask);
@@ -58,13 +91,27 @@
                          browser:self.browser
                    configuration:accountPickerConfiguration];
   _accountPickerCoordinator.delegate = self;
+  _destinationPicker = [[FileDestinationPickerViewController alloc] init];
+  _accountPickerCoordinator.accountConfirmationChildViewController =
+      _destinationPicker;
   [_accountPickerCoordinator start];
+
+  _destinationPicker.actionDelegate = _mediator;
+  _mediator.accountPickerConsumer = _accountPickerCoordinator;
+  _mediator.destinationPickerConsumer = _destinationPicker;
 }
 
 - (void)stop {
+  CommandDispatcher* dispatcher = self.browser->GetCommandDispatcher();
+  [dispatcher stopDispatchingToTarget:self];
   [_mediator disconnect];
   _mediator = nil;
-
+  [_destinationPicker willMoveToParentViewController:nil];
+  [_destinationPicker removeFromParentViewController];
+  _destinationPicker = nil;
+  [_alertController.presentingViewController dismissViewControllerAnimated:NO
+                                                                completion:nil];
+  _alertController = nil;
   [_accountPickerCoordinator stop];
   _accountPickerCoordinator = nil;
 }
@@ -98,14 +145,13 @@
             (AccountPickerCoordinator*)accountPickerCoordinator
                didSelectIdentity:(id<SystemIdentity>)identity
                     askEveryTime:(BOOL)askEveryTime {
-  _selectedIdentity = identity;
-  [_accountPickerCoordinator startValidationSpinner];
-  [_accountPickerCoordinator stopAnimated:YES];
+  CHECK(identity);
+  [_mediator saveWithSelectedIdentity:identity];
 }
 
 - (void)accountPickerCoordinatorCancel:
     (AccountPickerCoordinator*)accountPickerCoordinator {
-  [_accountPickerCoordinator stopAnimated:YES];
+  [_mediator cancelSaveToDrive];
 }
 
 - (void)accountPickerCoordinatorAllIdentityRemoved:
@@ -116,15 +162,56 @@
 - (void)accountPickerCoordinatorDidStop:
     (AccountPickerCoordinator*)accountPickerCoordinator {
   _accountPickerCoordinator = nil;
-
-  // If an identity was selected, start the download and save to Drive.
-  if (_selectedIdentity) {
-    [_mediator startDownloadAndSaveToDriveWithIdentity:_selectedIdentity];
-  }
-
   id<SaveToDriveCommands> saveToDriveCommandsHandler = HandlerForProtocol(
       self.browser->GetCommandDispatcher(), SaveToDriveCommands);
   [saveToDriveCommandsHandler hideSaveToDrive];
+}
+
+#pragma mark - ManageStorageAlertCommands
+
+- (void)showManageStorageAlertForIdentity:(id<SystemIdentity>)identity {
+  if (_alertController) {
+    [_alertController.presentingViewController
+        dismissViewControllerAnimated:NO
+                           completion:nil];
+  }
+  _alertController = [UIAlertController
+      alertControllerWithTitle:l10n_util::GetNSString(
+                                   IDS_IOS_MANAGE_STORAGE_ALERT_TITLE)
+                       message:l10n_util::GetNSString(
+                                   IDS_IOS_MANAGE_STORAGE_ALERT_MESSAGE)
+                preferredStyle:UIAlertControllerStyleAlert];
+  __weak __typeof(_mediator) weakMediator = _mediator;
+  UIAlertAction* manageStorageAction = [UIAlertAction
+      actionWithTitle:l10n_util::GetNSString(
+                          IDS_IOS_MANAGE_STORAGE_ALERT_MANAGE_STORAGE_BUTTON)
+                style:UIAlertActionStyleDefault
+              handler:^(UIAlertAction* action) {
+                [weakMediator showManageStorageForIdentity:identity];
+                base::UmaHistogramBoolean(
+                    kSaveToDriveUIManageStorageAlertCanceled, false);
+              }];
+  UIAlertAction* cancelAction = [UIAlertAction
+      actionWithTitle:l10n_util::GetNSString(IDS_CANCEL)
+                style:UIAlertActionStyleCancel
+              handler:^(UIAlertAction* action) {
+                base::UmaHistogramBoolean(
+                    kSaveToDriveUIManageStorageAlertCanceled, true);
+              }];
+  [_alertController addAction:manageStorageAction];
+  [_alertController addAction:cancelAction];
+  [_alertController setPreferredAction:manageStorageAction];
+  CHECK(_accountPickerCoordinator.viewController);
+  [_accountPickerCoordinator.viewController
+      presentViewController:_alertController
+                   animated:YES
+                 completion:nil];
+}
+
+#pragma mark - AccountPickerCommands
+
+- (void)hideAccountPickerAnimated:(BOOL)animated {
+  [_accountPickerCoordinator stopAnimated:animated];
 }
 
 @end

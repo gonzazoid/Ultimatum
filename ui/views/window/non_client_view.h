@@ -101,7 +101,7 @@ class VIEWS_EXPORT NonClientFrameView : public View,
   // View:
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   void OnThemeChanged() override;
-  void Layout() override;
+  void Layout(PassKey) override;
   Views GetChildrenInZOrder() override;
 
   // Inserts the passed client view into this NonClientFrameView. Subclasses can
@@ -214,7 +214,7 @@ class VIEWS_EXPORT NonClientView : public View, public ViewTargeterDelegate {
   gfx::Size CalculatePreferredSize() const override;
   gfx::Size GetMinimumSize() const override;
   gfx::Size GetMaximumSize() const override;
-  void Layout() override;
+  void Layout(PassKey) override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   views::View* GetTooltipHandlerForPoint(const gfx::Point& point) override;
 
@@ -235,7 +235,7 @@ class VIEWS_EXPORT NonClientView : public View, public ViewTargeterDelegate {
   // A ClientView object or subclass, responsible for sizing the contents view
   // of the window, hit testing and perhaps other tasks depending on the
   // implementation.
-  const raw_ptr<ClientView> client_view_;
+  const raw_ptr<ClientView, DanglingUntriaged> client_view_;
 
   // The overlay view, when non-NULL and visible, takes up the entire widget and
   // is placed on top of the ClientView and NonClientFrameView.

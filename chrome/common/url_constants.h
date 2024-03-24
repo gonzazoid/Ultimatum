@@ -61,6 +61,18 @@ inline constexpr char kBatterySaverModeLearnMoreUrl[] =
 inline constexpr char kBluetoothAdapterOffHelpURL[] =
     "https://support.google.com/chrome?p=bluetooth";
 
+// "Chrome Settings" URL for website camera access permissions.
+inline constexpr char kBrowserCameraPermissionsSettingsURL[] =
+    "chrome://settings/content/camera";
+
+// "Chrome Settings" URL for website location access permissions.
+inline constexpr char kBrowserLocationPermissionsSettingsURL[] =
+    "chrome://settings/content/location";
+
+// "Chrome Settings" URL for website microphone access permissions.
+inline constexpr char kBrowserMicrophonePermissionsSettingsURL[] =
+    "chrome://settings/content/microphone";
+
 // "Learn more" URL shown in the dialog to enable cloud services for Cast.
 inline constexpr char kCastCloudServicesHelpURL[] =
     "https://support.google.com/chromecast/?p=casting_cloud_services";
@@ -264,6 +276,10 @@ inline constexpr char kGoogleAccountActivityControlsURLInPrivacyGuide[] =
     "https://myaccount.google.com/activitycontrols/"
     "search&utm_source=chrome&utm_medium=privacy-guide";
 
+// URL of the 'Linked services' section of the privacy settings page.
+inline constexpr char kGoogleAccountLinkedServicesURL[] =
+    "https://myaccount.google.com/linked-services";
+
 // URL of the Google Account.
 inline constexpr char kGoogleAccountURL[] = "https://myaccount.google.com";
 
@@ -294,6 +310,10 @@ inline constexpr char16_t kMemorySaverModeTabDiscardingHelpUrl[] =
 // The URL to the help center article of Incognito mode.
 inline constexpr char16_t kIncognitoHelpCenterURL[] =
     u"https://support.google.com/chrome?p=incognito";
+
+// The URL for the Help Center page about IP Protection.
+inline constexpr char kIpProtectionHelpCenterURL[] =
+    "https://support.google.com/chrome?p=ip_protection";
 
 // The URL for "Learn more" page for Isolated Web Apps.
 // TODO(crbug.com/1480695): Update this URL with proper user-facing explainer.
@@ -554,6 +574,10 @@ inline constexpr char kArcPrivacyPolicyPathFormat[] =
 // Relative to |kChromeOSAssetPath|.
 inline constexpr char kArcTermsPathFormat[] = "arc_tos/%s/terms.html";
 
+// Help center URL for ChromeOS Battery Saver.
+inline constexpr char kCrosBatterySaverLearnMoreURL[] =
+    "https://support.google.com/chromebook/?p=battery_saver";
+
 // The URL for the "Learn more" link during Bluetooth pairing.
 // TODO(crbug.com/1010321): Remove 'm100' prefix from link once Bluetooth Revamp
 // has shipped.
@@ -703,7 +727,7 @@ inline constexpr char kCrosEulaOnlineURLPath[] =
 
 // The URL path to online ARC++ terms of service.
 inline constexpr char kArcTosOnlineURLPath[] =
-    "https://play.google.com/about/play-terms/embedded/";
+    "https://play.google/play-terms/embedded/";
 
 // The URL path to online privacy policy.
 inline constexpr char kPrivacyPolicyOnlineURLPath[] =

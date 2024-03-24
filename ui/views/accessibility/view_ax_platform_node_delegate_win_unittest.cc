@@ -18,6 +18,7 @@
 #include "base/win/scoped_variant.h"
 #include "third_party/iaccessible2/ia2_api_all.h"
 #include "ui/accessibility/accessibility_features.h"
+#include "ui/accessibility/ax_action_data.h"
 #include "ui/accessibility/ax_constants.mojom.h"
 #include "ui/accessibility/platform/ax_platform_node_win.h"
 #include "ui/gfx/render_text_test_api.h"
@@ -396,7 +397,7 @@ TEST_F(ViewAXPlatformNodeDelegateWinTest, Overrides) {
   View* alert_view = new ScrollView;
   alert_view->GetViewAccessibility().OverrideRole(ax::mojom::Role::kAlert);
   alert_view->GetViewAccessibility().OverrideName(u"Name");
-  alert_view->GetViewAccessibility().OverrideDescription("Description");
+  alert_view->GetViewAccessibility().SetDescription("Description");
   alert_view->GetViewAccessibility().OverrideIsLeaf(true);
   contents_view->AddChildView(alert_view);
 
@@ -473,7 +474,7 @@ TEST_F(ViewAXPlatformNodeDelegateWinTest, GridRowColumnCount) {
   EXPECT_EQ(0, column_count);
   // To do still: When nothing is set, currently
   // AXPlatformNodeDelegateBase::GetTable{Row/Col}Count() returns 0 Should it
-  // return absl::nullopt if the attribute is not set? Like
+  // return std::nullopt if the attribute is not set? Like
   // GetTableAria{Row/Col}Count()
   // EXPECT_EQ(E_UNEXPECTED, grid_provider->get_RowCount(&row_count));
 
@@ -830,6 +831,87 @@ TEST_F(ViewAXPlatformNodeDelegateWinInnerTextRangeTest, Textfield_LTR) {
       kRange4.start(), kRange4.end(), ui::AXCoordinateSystem::kScreenDIPs,
       ui::AXClippingBehavior::kClipped, &offscreen_result);
   EXPECT_EQ(gfx::Rect(initial_x, insets.top(), 3 * kGlyphWidth, height),
+            bounds);
+  EXPECT_EQ(offscreen_result, ui::AXOffscreenResult::kOnscreen);
+}
+
+TEST_F(ViewAXPlatformNodeDelegateWinInnerTextRangeTest,
+       Textfield_TextOverflow) {
+  ui::AXOffscreenResult offscreen_result;
+  gfx::Rect bounds;
+
+  // This string contains text that is too long to fit in the textfield.
+  const char16_t kText[] = u"3.1415926535897932384626433832795";
+
+  constexpr int kGlyphWidth = 5;
+  // The textfield is 5 glyphs wide, so the text will overflow.
+  gfx::Rect textfield_bounds = gfx::Rect(0, 0, 5 * kGlyphWidth, 100);
+  textfield_->SetBoundsRect(textfield_bounds);
+  gfx::Insets insets = textfield_->GetInsets();
+
+  textfield_->SetText(kText);
+  ui::AXNodeID id = textfield_delegate()->GetData().id;
+
+  // Initialize the textfield's scroll offset to 0.
+  ui::AXActionData set_selection_action_data_1;
+  set_selection_action_data_1.action = ax::mojom::Action::kSetSelection;
+  set_selection_action_data_1.anchor_node_id = id;
+  set_selection_action_data_1.focus_node_id = id;
+  set_selection_action_data_1.focus_offset = 0;
+  set_selection_action_data_1.anchor_offset = 0;
+  textfield_delegate()->AccessibilityPerformAction(set_selection_action_data_1);
+  EXPECT_EQ(textfield_delegate()->GetData().GetIntAttribute(
+                ax::mojom::IntAttribute::kScrollX),
+            0);
+
+  int height = textfield_bounds.height() - insets.top() - insets.bottom();
+  int initial_x = 2 * insets.left();
+
+  // 1. Check the bounds of the first 5 characters. They are on screen.
+  constexpr gfx::Range kRange1 = gfx::Range(0, 5);
+  // The expected width is as follows because we clip bounds to the container.
+  int expected_width = textfield_bounds.width() - insets.left();
+  bounds = textfield_delegate()->GetInnerTextRangeBoundsRect(
+      kRange1.start(), kRange1.end(), ui::AXCoordinateSystem::kScreenDIPs,
+      ui::AXClippingBehavior::kClipped, &offscreen_result);
+  EXPECT_EQ(gfx::Rect(initial_x, insets.top(), expected_width, height), bounds);
+
+  EXPECT_EQ(offscreen_result, ui::AXOffscreenResult::kOnscreen);
+
+  // 2. Check the bounds of the last character. It's offscreen, because the
+  // scroll offset is still 0 for now.
+  constexpr size_t text_length = std::size(kText) - 1;
+  constexpr gfx::Range kRange2 = gfx::Range(text_length - 1, text_length);
+  bounds = textfield_delegate()->GetInnerTextRangeBoundsRect(
+      kRange2.start(), kRange2.end(), ui::AXCoordinateSystem::kScreenDIPs,
+      ui::AXClippingBehavior::kClipped, &offscreen_result);
+  EXPECT_EQ(gfx::Rect(insets.left(), insets.top(), 0, 0), bounds);
+  EXPECT_EQ(offscreen_result, ui::AXOffscreenResult::kOffscreen);
+
+  // 3. Set the selection to the last character. This will scroll the textfield
+  // and it should be onscreen now.
+  // Perform the scroll.
+  ui::AXActionData set_selection_action_data_2;
+  set_selection_action_data_2.action = ax::mojom::Action::kSetSelection;
+  set_selection_action_data_2.anchor_node_id = id;
+  set_selection_action_data_2.focus_node_id = id;
+  set_selection_action_data_2.focus_offset = kRange2.start();
+  set_selection_action_data_2.anchor_offset = kRange2.end();
+  textfield_delegate()->AccessibilityPerformAction(set_selection_action_data_2);
+  int scroll_x = textfield_delegate()->GetData().GetIntAttribute(
+      ax::mojom::IntAttribute::kScrollX);
+  EXPECT_EQ(scroll_x, -156);
+
+  // TODO(1468416): This is not obvious, but we need to call `GetData` to
+  // refresh the text offsets and accessible name. This won't be needed anymore
+  // once we finish the ViewsAX project and remove the temporary solution.
+  textfield_delegate()->GetData();
+
+  bounds = textfield_delegate()->GetInnerTextRangeBoundsRect(
+      kRange2.start(), kRange2.end(), ui::AXCoordinateSystem::kScreenDIPs,
+      ui::AXClippingBehavior::kClipped, &offscreen_result);
+  EXPECT_EQ(gfx::Rect(initial_x + kRange2.start() * kGlyphWidth + scroll_x,
+                      insets.top(), kGlyphWidth, height),
             bounds);
   EXPECT_EQ(offscreen_result, ui::AXOffscreenResult::kOnscreen);
 }

@@ -2,8 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {AutomationUtil} from '../common/automation_util.js';
-import {ParagraphUtils} from '../common/paragraph_utils.js';
+import {AutomationUtil} from '/common/automation_util.js';
+import {ParagraphUtils} from '/common/paragraph_utils.js';
+import {TestImportManager} from '/common/testing/test_import_manager.js';
 
 import {PrefsManager} from './prefs_manager.js';
 
@@ -400,3 +401,7 @@ export class UiManager {
     }) !== undefined;
   }
 }
+
+TestImportManager.exportForTesting(
+    UiManager,
+    ['SELECT_TO_SPEAK_TRAY_CLASS_NAME', SELECT_TO_SPEAK_TRAY_CLASS_NAME]);

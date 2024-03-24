@@ -16,7 +16,7 @@
  * iron-icon element.
  *
  * Example of using a cr-icon:
- * <link rel="import" href="chrome://resources/cr_elements/cr_icons.css.html">
+ * <link rel="import" href="chrome://resources/ash/common/cr_elements/cr_icons.css.html">
  * <dom-module id="module">
  *   <template>
  *     <style includes="cr-icons"></style>
@@ -29,7 +29,7 @@
  *
  * Example of using an iron-icon:
  * In the TS file:
- * import 'chrome://resources/cr_elements/icons.html.js';
+ * import 'chrome://resources/ash/common/cr_elements/icons.html.js';
  *
  * In the HTML template file:
  * <cr-icon-button iron-icon="cr:icon-key"></cr-icon-button>
@@ -49,8 +49,8 @@
 import '../cr_shared_vars.css.js';
 import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
 
-import {PaperRippleBehavior} from '//resources/polymer/v3_0/paper-behaviors/paper-ripple-behavior.js';
-import {mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PaperRippleMixin} from '//resources/polymer/v3_0/paper-behaviors/paper-ripple-mixin.js';
+import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './cr_icon_button.html.js';
 
@@ -60,11 +60,7 @@ export interface CrIconButtonElement {
   };
 }
 
-const CrIconbuttonElementBase =
-    mixinBehaviors([PaperRippleBehavior], PolymerElement) as {
-      new (): PolymerElement & PaperRippleBehavior,
-    };
-
+const CrIconbuttonElementBase = PaperRippleMixin(PolymerElement);
 
 export class CrIconButtonElement extends CrIconbuttonElementBase {
   static get is() {

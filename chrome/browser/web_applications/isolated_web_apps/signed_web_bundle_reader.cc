@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -34,7 +35,6 @@
 #include "mojo/public/cpp/system/file_data_source.h"
 #include "net/base/url_util.h"
 #include "services/network/public/cpp/resource_request.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace web_app {
@@ -89,121 +89,9 @@ void OpenFileDataSource(
 
 }  // namespace
 
-namespace internal {
-
-// static
-base::expected<std::unique_ptr<SafeWebBundleParserConnection>,
-               UnusableSwbnFileError>
-SafeWebBundleParserConnection::CreateSafeWebBundleParserConnection(
-    const base::File* web_bundle_file,
-    absl::optional<GURL> base_url) {
-  if (!web_bundle_file->IsValid()) {
-    auto error = UnusableSwbnFileError(
-        UnusableSwbnFileError::Error::kIntegrityBlockParserInternalError,
-        base::File::ErrorToString(web_bundle_file->error_details()));
-    return base::unexpected(error);
-  }
-
-  std::unique_ptr<SafeWebBundleParserConnection> connection = base::WrapUnique(
-      new SafeWebBundleParserConnection(web_bundle_file, base_url));
-
-  base::File file_to_open = web_bundle_file->Duplicate();
-  base::File::Error file_error =
-      connection->parser_->OpenFile(std::move(file_to_open));
-
-  if (file_error != base::File::FILE_OK) {
-    auto error = UnusableSwbnFileError(
-        UnusableSwbnFileError::Error::kIntegrityBlockParserInternalError,
-        base::File::ErrorToString(file_error));
-    return base::unexpected(error);
-  }
-
-  return connection;
-}
-
-SafeWebBundleParserConnection::SafeWebBundleParserConnection(
-    const base::File* web_bundle_file,
-    absl::optional<GURL> base_url)
-    : web_bundle_file_(*web_bundle_file), base_url_(std::move(base_url)) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  CHECK_EQ(state_, State::kDisconnected);
-  parser_ = std::make_unique<data_decoder::SafeWebBundleParser>(base_url_);
-  state_ = State::kConnected;
-}
-
-SafeWebBundleParserConnection::~SafeWebBundleParserConnection() = default;
-
-void SafeWebBundleParserConnection::StartProcessingDisconnects() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  CHECK_EQ(state_, State::kConnected);
-  parser_->SetDisconnectCallback(
-      base::BindOnce(&SafeWebBundleParserConnection::OnParserDisconnected,
-                     // `base::Unretained` is okay to use here, since
-                     // `parser_` will be deleted before `this` is deleted.
-                     base::Unretained(this)));
-}
-
-void SafeWebBundleParserConnection::OnParserDisconnected() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  CHECK_EQ(state_, State::kConnected);
-
-  state_ = State::kDisconnected;
-  parser_ = nullptr;
-  if (!parser_disconnect_callback_for_testing_.is_null()) {
-    CHECK_IS_TEST();
-    parser_disconnect_callback_for_testing_.Run();
-  }
-}
-
-void SafeWebBundleParserConnection::Reconnect(
-    ReconnectCompleteCallback reconnect_callback) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  CHECK(!parser_);
-  CHECK_EQ(state_, State::kDisconnected);
-  parser_ = std::make_unique<data_decoder::SafeWebBundleParser>(base_url_);
-
-  base::File file = web_bundle_file_.get().Duplicate();
-  base::File::Error file_error;
-  if (reconnection_file_error_for_testing_.has_value()) {
-    CHECK_IS_TEST();
-    file_error = *reconnection_file_error_for_testing_;
-  } else {
-    file_error = parser_->OpenFile(std::move(file));
-  }
-
-  base::expected<void, std::string> status;
-  if (file_error != base::File::FILE_OK) {
-    state_ = State::kDisconnected;
-    status = base::unexpected(base::File::ErrorToString(file_error));
-  } else {
-    state_ = State::kConnected;
-    StartProcessingDisconnects();
-  }
-
-  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
-      FROM_HERE,
-      base::BindOnce(std::move(reconnect_callback), std::move(status)));
-}
-
-void SafeWebBundleParserConnection::Close(base::OnceClosure close_callback) {
-  if (parser_) {
-    parser_->Close(base::BindOnce(&SafeWebBundleParserConnection::OnClosed,
-                                  base::Unretained(this),
-                                  std::move(close_callback)));
-  } else {
-    std::move(close_callback).Run();
-  }
-}
-
-void SafeWebBundleParserConnection::OnClosed(base::OnceClosure close_callback) {
-  std::move(close_callback).Run();
-}
-
-}  // namespace internal
-
 SignedWebBundleReader::SignedWebBundleReader(
     const base::FilePath& web_bundle_path,
-    const absl::optional<GURL>& base_url,
+    const std::optional<GURL>& base_url,
     std::unique_ptr<web_package::SignedWebBundleSignatureVerifier>
         signature_verifier)
     : signature_verifier_(std::move(signature_verifier)),
@@ -220,7 +108,7 @@ SignedWebBundleReader::~SignedWebBundleReader() {
 // static
 std::unique_ptr<SignedWebBundleReader> SignedWebBundleReader::Create(
     const base::FilePath& web_bundle_path,
-    const absl::optional<GURL>& base_url,
+    const std::optional<GURL>& base_url,
     std::unique_ptr<web_package::SignedWebBundleSignatureVerifier>
         signature_verifier) {
   return base::WrapUnique(new SignedWebBundleReader(
@@ -243,14 +131,10 @@ void SignedWebBundleReader::OnFileClosed(base::OnceClosure callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   CHECK(state_ == State::kClosed || state_ == State::kError)
       << base::to_underlying(state_);
-  // Connection might not exist is the file can not be opened.
-  if (connection_) {
-    connection_->Close(base::BindOnce(&SignedWebBundleReader::OnParserClosed,
-                                      weak_ptr_factory_.GetWeakPtr(),
-                                      std::move(callback)));
-  } else {
-    OnParserClosed(std::move(callback));
-  }
+
+  parser_->Close(base::BindOnce(&SignedWebBundleReader::OnParserClosed,
+                                weak_ptr_factory_.GetWeakPtr(),
+                                std::move(callback)));
 }
 
 void SignedWebBundleReader::OnParserClosed(base::OnceClosure callback) {
@@ -282,19 +166,13 @@ void SignedWebBundleReader::OnFileOpened(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   CHECK_EQ(state_, State::kInitializing);
 
+  parser_ = std::make_unique<data_decoder::SafeWebBundleParser>(
+      base_url_,
+      data_decoder::SafeWebBundleParser::GetFileStrategy(file.Duplicate()));
+
   file_ = std::move(file);
 
-  auto connection = internal::SafeWebBundleParserConnection::
-      CreateSafeWebBundleParserConnection(&file_.value(), base_url_);
-  if (!connection.has_value()) {
-    FulfillWithError(std::move(read_error_callback),
-                     std::move(connection.error()));
-    return;
-  }
-
-  connection_.swap(connection.value());
-
-  connection_->parser_->ParseIntegrityBlock(
+  parser_->ParseIntegrityBlock(
       base::BindOnce(&SignedWebBundleReader::OnIntegrityBlockParsed,
                      weak_ptr_factory_.GetWeakPtr(),
                      std::move(integrity_block_result_callback),
@@ -391,7 +269,7 @@ void SignedWebBundleReader::OnSignaturesVerified(
     const base::TimeTicks& verification_start_time,
     uint64_t file_length,
     ReadErrorCallback callback,
-    absl::optional<web_package::SignedWebBundleSignatureVerifier::Error>
+    std::optional<web_package::SignedWebBundleSignatureVerifier::Error>
         verification_error) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   CHECK_EQ(state_, State::kInitializing);
@@ -422,7 +300,7 @@ void SignedWebBundleReader::ReadMetadata(ReadErrorCallback callback) {
       << "The integrity block must have been read before reading metadata.";
   uint64_t metadata_offset = integrity_block_size_in_bytes_.value();
 
-  connection_->parser_->ParseMetadata(
+  parser_->ParseMetadata(
       metadata_offset,
       base::BindOnce(&SignedWebBundleReader::OnMetadataParsed,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
@@ -445,8 +323,6 @@ void SignedWebBundleReader::OnMetadataParsed(
 
   state_ = State::kInitialized;
 
-  connection_->StartProcessingDisconnects();
-
   std::move(callback).Run(base::ok());
 }
 
@@ -457,7 +333,7 @@ void SignedWebBundleReader::FulfillWithError(ReadErrorCallback callback,
       base::BindOnce(std::move(callback), base::unexpected(std::move(error))));
 }
 
-const absl::optional<GURL>& SignedWebBundleReader::GetPrimaryURL() const {
+const std::optional<GURL>& SignedWebBundleReader::GetPrimaryURL() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   CHECK_EQ(state_, State::kInitialized);
 
@@ -494,42 +370,7 @@ void SignedWebBundleReader::ReadResponse(
     return;
   }
 
-  auto response_location = entry_it->second->Clone();
-  if (connection_->is_disconnected()) {
-    // Try reconnecting the parser if it hasn't been attempted yet.
-    if (pending_read_responses_.empty()) {
-      connection_->Reconnect(base::BindOnce(&SignedWebBundleReader::OnReconnect,
-                                            base::Unretained(this)));
-    }
-    pending_read_responses_.emplace_back(std::move(response_location),
-                                         std::move(callback));
-    return;
-  }
-
-  ReadResponseInternal(std::move(response_location), std::move(callback));
-}
-
-void SignedWebBundleReader::OnReconnect(
-    base::expected<void, std::string> status) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  std::vector<std::pair<web_package::mojom::BundleResponseLocationPtr,
-                        ResponseCallback>>
-      read_tasks;
-  read_tasks.swap(pending_read_responses_);
-
-  for (auto& [response_location, response_callback] : read_tasks) {
-    if (!status.has_value()) {
-      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
-          FROM_HERE,
-          base::BindOnce(
-              std::move(response_callback),
-              base::unexpected(ReadResponseError::ForParserInternalError(
-                  "Unable to open file: " + status.error()))));
-    } else {
-      ReadResponseInternal(std::move(response_location),
-                           std::move(response_callback));
-    }
-  }
+  ReadResponseInternal(entry_it->second->Clone(), std::move(callback));
 }
 
 void SignedWebBundleReader::ReadResponseInternal(
@@ -537,7 +378,7 @@ void SignedWebBundleReader::ReadResponseInternal(
     ResponseCallback callback) {
   CHECK_EQ(state_, State::kInitialized);
 
-  connection_->parser_->ParseResponse(
+  parser_->ParseResponse(
       location->offset, location->length,
       base::BindOnce(&SignedWebBundleReader::OnResponseParsed,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
@@ -618,16 +459,6 @@ base::WeakPtr<SignedWebBundleReader> SignedWebBundleReader::AsWeakPtr() {
   return weak_ptr_factory_.GetWeakPtr();
 }
 
-void SignedWebBundleReader::SetParserDisconnectCallbackForTesting(
-    base::RepeatingClosure callback) {
-  connection_->parser_disconnect_callback_for_testing_ = std::move(callback);
-}
-
-void SignedWebBundleReader::SetReconnectionFileErrorForTesting(
-    base::File::Error file_error) {
-  connection_->reconnection_file_error_for_testing_ = file_error;
-}
-
 // static
 SignedWebBundleReader::ReadResponseError
 SignedWebBundleReader::ReadResponseError::FromBundleParseError(
@@ -670,19 +501,19 @@ SignedWebBundleReader::SignatureVerificationAction::Abort(
 SignedWebBundleReader::SignatureVerificationAction SignedWebBundleReader::
     SignatureVerificationAction::ContinueAndVerifySignatures() {
   return SignatureVerificationAction(Type::kContinueAndVerifySignatures,
-                                     absl::nullopt);
+                                     std::nullopt);
 }
 
 // static
 SignedWebBundleReader::SignatureVerificationAction SignedWebBundleReader::
     SignatureVerificationAction::ContinueAndSkipSignatureVerification() {
   return SignatureVerificationAction(
-      Type::kContinueAndSkipSignatureVerification, absl::nullopt);
+      Type::kContinueAndSkipSignatureVerification, std::nullopt);
 }
 
 SignedWebBundleReader::SignatureVerificationAction::SignatureVerificationAction(
     Type type,
-    absl::optional<std::string> abort_message)
+    std::optional<std::string> abort_message)
     : type_(type), abort_message_(abort_message) {}
 
 SignedWebBundleReader::SignatureVerificationAction::SignatureVerificationAction(
@@ -696,9 +527,6 @@ UnsecureReader::UnsecureReader(const base::FilePath& web_bundle_path)
 
 UnsecureReader::~UnsecureReader() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (file_) {
-    CloseFile(std::move(*file_), base::DoNothing());
-  }
 }
 
 void UnsecureReader::StartReading() {
@@ -709,16 +537,10 @@ void UnsecureReader::StartReading() {
 
 void UnsecureReader::OnFileOpened(base::File file) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  file_ = std::move(file);
 
-  auto connection = internal::SafeWebBundleParserConnection::
-      CreateSafeWebBundleParserConnection(&file_.value(),
-                                          /*base_url=*/absl::nullopt);
-  if (!connection.has_value()) {
-    ReturnError(connection.error());
-    return;
-  }
-  connection_.swap(connection.value());
+  parser_ = std::make_unique<data_decoder::SafeWebBundleParser>(
+      /*base_url=*/std::nullopt,
+      data_decoder::SafeWebBundleParser::GetFileStrategy(std::move(file)));
 
   DoReading();
 }
@@ -750,7 +572,7 @@ UnsecureSignedWebBundleIdReader::UnsecureSignedWebBundleIdReader(
 
 void UnsecureSignedWebBundleIdReader::DoReading() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  connection_->parser_->ParseIntegrityBlock(
+  parser_->ParseIntegrityBlock(
       base::BindOnce(&UnsecureSignedWebBundleIdReader::OnIntegrityBlockParsed,
                      weak_ptr_factory_.GetWeakPtr()));
 }

@@ -22,6 +22,7 @@
 #include "components/autofill/core/browser/metrics/log_event.h"
 #include "components/autofill/core/browser/randomized_encoder.h"
 #include "components/autofill/core/browser/server_prediction_overrides.h"
+#include "components/autofill/core/browser/validation.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/autofill/core/common/autofill_internals/log_message.h"
 #include "components/autofill/core/common/autofill_internals/logging_scope.h"
@@ -150,6 +151,16 @@ FieldType FirstNonCapturedType(const FormStructure& form,
                                const FieldTypeSet& contained_types) {
   for (const auto& field : form) {
     for (auto type : field->possible_types()) {
+      // EMAIL_ADDRESS is exempt from the contained_types requirement, if the
+      // possible_type was determined by a valid email address found within the
+      // field's content. The kAutofillUploadVotesForFieldsWithEmail feature
+      // handles this scenario.
+      if (type == EMAIL_ADDRESS && IsValidEmailAddress(field->value) &&
+          base::FeatureList::IsEnabled(
+              features::kAutofillUploadVotesForFieldsWithEmail)) {
+        continue;
+      }
+
       if (type != UNKNOWN_TYPE && type != EMPTY_TYPE &&
           !contained_types.count(type)) {
         return type;
@@ -248,12 +259,10 @@ void PopulateRandomizedFieldMetadata(
                           RandomizedEncoder::FIELD_NAME, field.name_attribute,
                           /*include_checksum=*/false, metadata->mutable_name());
   }
-  if (!FormControlTypeToString(field.form_control_type).empty()) {
-    EncodeRandomizedValue(encoder, form_signature, field_signature,
-                          RandomizedEncoder::FIELD_CONTROL_TYPE,
-                          FormControlTypeToString(field.form_control_type),
-                          /*include_checksum=*/false, metadata->mutable_type());
-  }
+  EncodeRandomizedValue(encoder, form_signature, field_signature,
+                        RandomizedEncoder::FIELD_CONTROL_TYPE,
+                        FormControlTypeToString(field.form_control_type),
+                        /*include_checksum=*/false, metadata->mutable_type());
   if (!field.label.empty()) {
     EncodeRandomizedValue(encoder, form_signature, field_signature,
                           RandomizedEncoder::FIELD_LABEL, field.label,
@@ -301,10 +310,6 @@ void EncodeFormFieldsForUpload(const FormStructure& form,
 
   for (AutofillField* field : upload_fields) {
     // Don't upload checkable fields.
-    if (IsCheckable(field->check_status)) {
-      continue;
-    }
-    //  Add the same field elements as the query and a few more below.
     if (IsCheckable(field->check_status)) {
       continue;
     }
@@ -596,7 +601,6 @@ GetSuggestionsMapFromResponse(
 std::vector<AutofillUploadContents> EncodeUploadRequest(
     const FormStructure& form,
     const FieldTypeSet& available_field_types,
-    bool form_was_autofilled,
     std::string_view login_form_signature,
     bool observed_submission) {
   DCHECK_EQ(FirstNonCapturedType(form, available_field_types),
@@ -609,9 +613,9 @@ std::vector<AutofillUploadContents> EncodeUploadRequest(
   upload.set_client_version(
       std::string(version_info::GetProductNameAndVersionForUserAgent()));
   upload.set_form_signature(form.form_signature().value());
-  upload.set_autofill_used(form_was_autofilled);
+  upload.set_autofill_used(false);
   upload.set_data_present(data_present);
-  upload.set_has_form_tag(form.is_form_tag());
+  upload.set_has_form_tag(form.is_form_element());
   if (!form.current_page_language()->empty() &&
       form.randomized_encoder().has_value()) {
     upload.set_language(form.current_page_language().value());
@@ -686,7 +690,7 @@ std::vector<AutofillUploadContents> EncodeUploadRequest(
         std::string(version_info::GetProductNameAndVersionForUserAgent()));
     upload_content.set_form_signature(
         (*subform_begin)->host_form_signature.value());
-    upload_content.set_autofill_used(form_was_autofilled);
+    upload_content.set_autofill_used(false);
     upload_content.set_data_present(data_present);
 
     auto subform_end =
@@ -809,17 +813,24 @@ void ProcessServerPredictionsQueryResponse(
             field_suggestion->password_requirements());
       }
       ++field_rank_map[field->GetFieldSignature()];
+
       // Log the field type predicted from Autofill crowdsourced server.
       field->AppendLogEventIfNotRepeated(ServerPredictionFieldLogEvent{
-          .server_type1 = field->server_type(),
-          .prediction_source1 = field->server_predictions().empty()
-                                    ? FieldPrediction::SOURCE_UNSPECIFIED
-                                    : field->server_predictions()[0].source(),
+          // If the server prediction is empty, the server type should be
+          // SERVER_RESPONSE_PENDING (161), which means that Autofill may not
+          // have received server predictions. NO_SERVER_DATA means that the
+          // server has no classification for the field.
+          .server_type1 = !field->server_predictions().empty()
+                              ? std::optional<FieldType>(field->server_type())
+                              : std::nullopt,
+          .prediction_source1 = !field->server_predictions().empty()
+                                    ? field->server_predictions()[0].source()
+                                    : FieldPrediction::SOURCE_UNSPECIFIED,
           .server_type2 =
               field->server_predictions().size() >= 2
-                  ? ToSafeFieldType(field->server_predictions()[1].type(),
-                                    NO_SERVER_DATA)
-                  : NO_SERVER_DATA,
+                  ? std::optional<FieldType>(ToSafeFieldType(
+                        field->server_predictions()[1].type(), NO_SERVER_DATA))
+                  : std::nullopt,
           .prediction_source2 = field->server_predictions().size() >= 2
                                     ? field->server_predictions()[1].source()
                                     : FieldPrediction::SOURCE_UNSPECIFIED,

@@ -116,6 +116,7 @@ void StubAuthenticator::LoginOffTheRecord() {
 void StubAuthenticator::LoginAsPublicSession(const UserContext& user_context) {
   UserContext logged_in_user_context = user_context;
   logged_in_user_context.SetIsUsingOAuth(false);
+  logged_in_user_context.SetMountState(UserContext::MountState::kEphemeral);
   logged_in_user_context.SetUserIDHash(
       logged_in_user_context.GetAccountId().GetUserEmail() + kUserIdHashSuffix);
   logged_in_user_context.GetKey()->Transform(
@@ -126,9 +127,10 @@ void StubAuthenticator::LoginAsPublicSession(const UserContext& user_context) {
 void StubAuthenticator::LoginAsKioskAccount(
     const AccountId& /* app_account_id */,
     bool /* ephemeral */) {
-  UserContext user_context(user_manager::UserType::USER_TYPE_KIOSK_APP,
+  UserContext user_context(user_manager::UserType::kKioskApp,
                            expected_user_context_.GetAccountId());
   user_context.SetIsUsingOAuth(false);
+  user_context.SetMountState(UserContext::MountState::kExistingPersistent);
   user_context.SetUserIDHash(
       expected_user_context_.GetAccountId().GetUserEmail() + kUserIdHashSuffix);
   user_context.GetKey()->Transform(Key::KEY_TYPE_SALTED_SHA256_TOP_HALF,
@@ -139,9 +141,10 @@ void StubAuthenticator::LoginAsKioskAccount(
 void StubAuthenticator::LoginAsArcKioskAccount(
     const AccountId& /* app_account_id */,
     bool /* ephemeral */) {
-  UserContext user_context(user_manager::USER_TYPE_ARC_KIOSK_APP,
+  UserContext user_context(user_manager::UserType::kArcKioskApp,
                            expected_user_context_.GetAccountId());
   user_context.SetIsUsingOAuth(false);
+  user_context.SetMountState(UserContext::MountState::kExistingPersistent);
   user_context.SetUserIDHash(
       expected_user_context_.GetAccountId().GetUserEmail() + kUserIdHashSuffix);
   user_context.GetKey()->Transform(Key::KEY_TYPE_SALTED_SHA256_TOP_HALF,
@@ -152,9 +155,10 @@ void StubAuthenticator::LoginAsArcKioskAccount(
 void StubAuthenticator::LoginAsWebKioskAccount(
     const AccountId& /* app_account_id */,
     bool /* ephemeral */) {
-  UserContext user_context(user_manager::USER_TYPE_WEB_KIOSK_APP,
+  UserContext user_context(user_manager::UserType::kWebKioskApp,
                            expected_user_context_.GetAccountId());
   user_context.SetIsUsingOAuth(false);
+  user_context.SetMountState(UserContext::MountState::kExistingPersistent);
   user_context.SetUserIDHash(
       expected_user_context_.GetAccountId().GetUserEmail() + kUserIdHashSuffix);
   user_context.GetKey()->Transform(Key::KEY_TYPE_SALTED_SHA256_TOP_HALF,
@@ -166,6 +170,7 @@ void StubAuthenticator::OnAuthSuccess() {
   // If we want to be more like the real thing, we could save the user ID
   // in AuthenticateToLogin, but there's not much of a point.
   UserContext user_context = ExpectedUserContextWithTransformedKey();
+  user_context.SetMountState(UserContext::MountState::kExistingPersistent);
   consumer_->OnAuthSuccess(user_context);
 }
 

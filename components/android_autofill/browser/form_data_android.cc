@@ -87,8 +87,8 @@ bool FormDataAndroid::SimilarFormAs(const FormData& form) const {
   // since these remain constant even if the page has dynamically modified its
   // fields to have different labels, form control types, etc.
   auto SimilarityTuple = [](const FormData& f) {
-    return std::tie(f.host_frame, f.unique_renderer_id, f.name, f.id_attribute,
-                    f.name_attribute, f.url, f.action, f.is_form_tag);
+    return std::tie(f.host_frame, f.renderer_id, f.name, f.id_attribute,
+                    f.name_attribute, f.url, f.action);
   };
   return SimilarityTuple(form_) == SimilarityTuple(form) &&
          SimilarFieldsAs(form);
@@ -114,7 +114,6 @@ FormDataAndroid::SimilarFormAsWithDiagnosis(const FormData& form) const {
                   SimilarityCheckComponent::kNameAttribute);
   check_component(&FormData::url, SimilarityCheckComponent::kUrl);
   check_component(&FormData::action, SimilarityCheckComponent::kAction);
-  check_component(&FormData::is_form_tag, SimilarityCheckComponent::kIsFormTag);
 
   if (!SimilarFieldsAs(form)) {
     result.value() |= base::to_underlying(SimilarityCheckComponent::kFields);
@@ -143,6 +142,21 @@ void FormDataAndroid::UpdateFieldTypes(const FormStructure& form_structure) {
               AutofillType(autofill_field->heuristic_type()),
               AutofillType(autofill_field->server_type()),
               autofill_field->ComputedType(), std::move(server_predictions)));
+    }
+  }
+}
+
+void FormDataAndroid::UpdateFieldTypes(
+    const base::flat_map<FieldGlobalId, AutofillType>& types) {
+  for (const std::unique_ptr<FormFieldDataAndroid>& field : fields_) {
+    auto it = types.find(field->global_id());
+    if (it == types.end()) {
+      continue;
+    }
+
+    const AutofillType& new_type = it->second;
+    if (field->field_types() != new_type) {
+      field->UpdateAutofillTypes(FormFieldDataAndroid::FieldTypes(new_type));
     }
   }
 }

@@ -5,6 +5,8 @@
 #ifndef CHROME_BROWSER_ENTERPRISE_DATA_CONTROLS_DATA_CONTROLS_DIALOG_H_
 #define CHROME_BROWSER_ENTERPRISE_DATA_CONTROLS_DATA_CONTROLS_DIALOG_H_
 
+#include <vector>
+
 #include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "components/enterprise/data_controls/rule.h"
@@ -52,6 +54,28 @@ class DataControlsDialog : public views::DialogDelegate {
     // kClipboardCopyWarn,
   };
 
+  // Test observer to validate the dialog was shown/closed at appropriate
+  // timings, which buttons were pressed, etc. Only one `TestObserver` should be
+  // instantiated per test.
+  class TestObserver {
+   public:
+    TestObserver();
+    ~TestObserver();
+
+    // Called as the last statement in the DataControlsDialog constructor.
+    virtual void OnConstructed(DataControlsDialog* dialog) {}
+
+    // Called when OnWidgetInitialized is called. This is used to give the test
+    // a proper hook to close the dialog after it's first shown.
+    virtual void OnWidgetInitialized(DataControlsDialog* dialog) {}
+
+    // Called as the last statement in the DataControlsDialog destructor. As
+    // such, do not keep `dialog` after this function returns, only use it
+    // locally to validate test assertions.
+    virtual void OnDestructed(DataControlsDialog* dialog) {}
+  };
+  static void SetObserverForTesting(TestObserver* observer);
+
   static void Show(content::WebContents* web_contents,
                    Type type,
                    base::OnceCallback<void(bool bypassed)> callback =
@@ -65,9 +89,13 @@ class DataControlsDialog : public views::DialogDelegate {
   views::Widget* GetWidget() override;
   ui::ModalType GetModalType() const override;
   bool ShouldShowCloseButton() const override;
+  void OnWidgetInitialized() override;
+
+  Type type() const;
 
  private:
   DataControlsDialog(Type type,
+                     content::WebContents* web_contents,
                      base::OnceCallback<void(bool bypassed)> callback);
 
   // Helpers to create sub-views of the dialog.
@@ -75,11 +103,12 @@ class DataControlsDialog : public views::DialogDelegate {
   std::unique_ptr<views::Label> CreateMessage() const;
 
   Type type_;
+  raw_ptr<content::WebContents> web_contents_ = nullptr;
   raw_ptr<views::BoxLayoutView> contents_view_ = nullptr;
 
   // Called when the dialog closes, with `true` in the case of a bypassed
   // warning.
-  base::OnceCallback<void(bool bypassed)> callback_;
+  std::vector<base::OnceCallback<void(bool bypassed)>> callbacks_;
 };
 
 }  // namespace data_controls

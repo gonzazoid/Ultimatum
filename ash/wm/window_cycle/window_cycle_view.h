@@ -38,9 +38,9 @@ class WindowCycleItemView;
 // A view that shows a collection of windows the user can cycle through.
 class ASH_EXPORT WindowCycleView : public views::WidgetDelegateView,
                                    public ui::ImplicitAnimationObserver {
- public:
-  METADATA_HEADER(WindowCycleView);
+  METADATA_HEADER(WindowCycleView, views::WidgetDelegateView)
 
+ public:
   using WindowList = std::vector<raw_ptr<aura::Window, VectorExperimental>>;
 
   // Horizontal padding between the alt-tab bandshield and the window
@@ -129,7 +129,7 @@ class ASH_EXPORT WindowCycleView : public views::WidgetDelegateView,
 
   // views::WidgetDelegateView:
   gfx::Size CalculatePreferredSize() const override;
-  void Layout() override;
+  void Layout(PassKey) override;
 
   // ui::ImplicitAnimationObserver:
   void OnImplicitAnimationsCompleted() override;

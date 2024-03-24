@@ -477,7 +477,8 @@ String MediaKeySession::sessionId() const {
   return session_id_;
 }
 
-ScriptPromise MediaKeySession::closed(ScriptState* script_state) {
+ScriptPromiseTyped<V8MediaKeySessionClosedReason> MediaKeySession::closed(
+    ScriptState* script_state) {
   return closed_promise_->Promise(script_state->World());
 }
 
@@ -997,7 +998,8 @@ void MediaKeySession::OnSessionClosed(media::CdmSessionClosedReason reason) {
 
   // 7. Resolve promise.
   closed_promise_->Resolve(
-      V8MediaKeySessionClosedReason(ConvertSessionClosedReason(reason)));
+      V8MediaKeySessionClosedReason(ConvertSessionClosedReason(reason))
+          .AsString());
 
   // Fail any pending events, except if it's a close request.
   action_timer_.Stop();

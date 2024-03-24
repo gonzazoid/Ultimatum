@@ -77,6 +77,10 @@ class WebAppToolbarButtonContainer : public views::View,
     return extensions_container_;
   }
 
+  ExtensionsToolbarCoordinator* extensions_toolbar_coordinator() {
+    return extensions_toolbar_coordinator_.get();
+  }
+
   DownloadToolbarButtonView* download_button() {
     return download_button_.get();
   }
@@ -150,8 +154,7 @@ class WebAppToolbarButtonContainer : public views::View,
   std::unique_ptr<PageActionIconController> page_action_icon_controller_;
   int page_action_insertion_point_ = 0;
 
-  std::unique_ptr<ExtensionsToolbarCoordinator>
-      extensions_toolbar_coordinator_ = nullptr;
+  std::unique_ptr<ExtensionsToolbarCoordinator> extensions_toolbar_coordinator_;
 
   // All remaining members are owned by the views hierarchy.
   raw_ptr<WebAppOriginText> web_app_origin_text_ = nullptr;

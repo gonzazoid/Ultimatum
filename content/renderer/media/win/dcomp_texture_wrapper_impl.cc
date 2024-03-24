@@ -174,10 +174,17 @@ void DCOMPTextureWrapperImpl::CreateVideoFrame(
     // The SI backing this VideoFrame will be read by the display compositor and
     // raster. The latter will be over GL if not using OOP-R. NOTE: GL usage can
     // be eliminated once OOP-R ships definitively.
-    shared_image = sii->NotifyMailboxAdded(
-        mailbox_, gpu::SHARED_IMAGE_USAGE_DISPLAY_READ |
-                      gpu::SHARED_IMAGE_USAGE_GLES2_READ |
-                      gpu::SHARED_IMAGE_USAGE_RASTER);
+    // TODO(crbug.com/1494911): Check the potential inconsistency between the
+    // |usage| passed to NotifyMailboxAdded() here and the |usage| that
+    // DCOMPTextureBacking's constructor uses to initialize
+    // ClearTrackingSharedImageBacking.
+    shared_image =
+        sii->NotifyMailboxAdded(mailbox_, viz::SinglePlaneFormat::kBGRA_8888,
+                                natural_size_, gfx::ColorSpace::CreateSRGB(),
+                                kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
+                                gpu::SHARED_IMAGE_USAGE_DISPLAY_READ |
+                                    gpu::SHARED_IMAGE_USAGE_GLES2_READ |
+                                    gpu::SHARED_IMAGE_USAGE_RASTER_READ);
   }
 
   gpu::MailboxHolder holders[media::VideoFrame::kMaxPlanes] = {
@@ -211,7 +218,8 @@ void DCOMPTextureWrapperImpl::CreateVideoFrame(
   DCHECK(media_task_runner_->RunsTasksInCurrentSequence());
   gpu::SharedImageInterface* sii = factory_->SharedImageInterface();
 
-  uint32_t usage = gpu::SHARED_IMAGE_USAGE_RASTER |
+  uint32_t usage = gpu::SHARED_IMAGE_USAGE_RASTER_READ |
+                   gpu::SHARED_IMAGE_USAGE_RASTER_WRITE |
                    gpu::SHARED_IMAGE_USAGE_OOP_RASTERIZATION |
                    gpu::SHARED_IMAGE_USAGE_DISPLAY_READ |
                    gpu::SHARED_IMAGE_USAGE_SCANOUT;

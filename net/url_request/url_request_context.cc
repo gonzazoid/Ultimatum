@@ -40,7 +40,6 @@
 #include "net/ssl/ssl_config_service.h"
 #include "net/url_request/url_request.h"
 #include "net/url_request/url_request_job_factory.h"
-#include "net/url_request/url_request_throttler_manager.h"
 
 #if BUILDFLAG(ENABLE_REPORTING)
 #include "net/network_error_logging/network_error_logging_service.h"
@@ -52,7 +51,8 @@ namespace net {
 
 URLRequestContext::URLRequestContext(
     base::PassKey<URLRequestContextBuilder> pass_key)
-    : url_requests_(std::make_unique<std::set<const URLRequest*>>()),
+    : url_requests_(std::make_unique<
+                    std::set<raw_ptr<const URLRequest, SetExperimental>>>()),
       bound_network_(handles::kInvalidNetworkHandle) {}
 
 URLRequestContext::~URLRequestContext() {
@@ -133,7 +133,7 @@ std::unique_ptr<URLRequest> URLRequestContext::CreateRequest(
     URLRequest::Delegate* delegate,
     NetworkTrafficAnnotationTag traffic_annotation,
     bool is_for_websockets,
-    const absl::optional<net::NetLogSource> net_log_source) const {
+    const std::optional<net::NetLogSource> net_log_source) const {
   return std::make_unique<URLRequest>(
       base::PassKey<URLRequestContext>(), url, priority, delegate, this,
       traffic_annotation, is_for_websockets, net_log_source);
@@ -238,10 +238,6 @@ void URLRequestContext::set_job_factory(
     std::unique_ptr<const URLRequestJobFactory> job_factory) {
   job_factory_storage_ = std::move(job_factory);
   job_factory_ = job_factory_storage_.get();
-}
-void URLRequestContext::set_throttler_manager(
-    std::unique_ptr<URLRequestThrottlerManager> throttler_manager) {
-  throttler_manager_ = std::move(throttler_manager);
 }
 void URLRequestContext::set_quic_context(
     std::unique_ptr<QuicContext> quic_context) {

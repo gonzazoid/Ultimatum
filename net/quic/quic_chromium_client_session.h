@@ -16,6 +16,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/containers/flat_map.h"
@@ -69,7 +70,7 @@ struct HostResolverEndpointResult;
 class NetLog;
 class QuicCryptoClientStreamFactory;
 class QuicServerInfo;
-class QuicStreamFactory;
+class QuicSessionPool;
 class SSLConfigService;
 class SSLInfo;
 class TransportSecurityState;
@@ -269,7 +270,7 @@ class NET_EXPORT_PRIVATE QuicChromiumClientSession
     bool WasEverUsed() const;
 
     // Retrieves any DNS aliases for the given session key from the map stored
-    // in `stream_factory_`. Includes all known aliases, e.g. from A, AAAA, or
+    // in `session_pool_`. Includes all known aliases, e.g. from A, AAAA, or
     // HTTPS, not just from the address used for the connection, in no
     // particular order.
     const std::set<std::string>& GetDnsAliasesForSessionKey(
@@ -546,7 +547,7 @@ class NET_EXPORT_PRIVATE QuicChromiumClientSession
   };
 
   // Constructs a new session which will own |connection|, but not
-  // |stream_factory|, which must outlive this session.
+  // |session_pool|, which must outlive this session.
   // TODO(rch): decouple the factory from the session via a Delegate interface.
   //
   // If |require_confirmation| is true, the returned session will wait for a
@@ -557,7 +558,7 @@ class NET_EXPORT_PRIVATE QuicChromiumClientSession
   QuicChromiumClientSession(
       quic::QuicConnection* connection,
       std::unique_ptr<DatagramClientSocket> socket,
-      QuicStreamFactory* stream_factory,
+      QuicSessionPool* session_pool,
       QuicCryptoClientStreamFactory* crypto_client_stream_factory,
       const quic::QuicClock* clock,
       TransportSecurityState* transport_security_state,
@@ -775,7 +776,7 @@ class NET_EXPORT_PRIVATE QuicChromiumClientSession
   // (its own hostname and port fields are ignored). If this is a secure QUIC
   // session, then |hostname| must match the certificate presented during the
   // handshake.
-  bool CanPool(const std::string& hostname,
+  bool CanPool(std::string_view hostname,
                const QuicSessionKey& other_session_key) const;
 
   const quic::QuicServerId& server_id() const {
@@ -875,7 +876,7 @@ class NET_EXPORT_PRIVATE QuicChromiumClientSession
   bool require_confirmation() const { return require_confirmation_; }
 
   // Retrieves any DNS aliases for the given session key from the map stored
-  // in `stream_factory_`. Includes all known aliases, e.g. from A, AAAA, or
+  // in `session_pool_`. Includes all known aliases, e.g. from A, AAAA, or
   // HTTPS, not just from the address used for the connection, in no particular
   // order.
   const std::set<std::string>& GetDnsAliasesForSessionKey(
@@ -895,7 +896,7 @@ class NET_EXPORT_PRIVATE QuicChromiumClientSession
  private:
   friend class test::QuicChromiumClientSessionPeer;
 
-  typedef std::set<Handle*> HandleSet;
+  typedef std::set<raw_ptr<Handle, SetExperimental>> HandleSet;
   typedef std::list<StreamRequest*> StreamRequestQueue;
 
   bool WasConnectionEverUsed();
@@ -1052,7 +1053,7 @@ class NET_EXPORT_PRIVATE QuicChromiumClientSession
   std::unique_ptr<QuicCryptoClientConfigHandle> crypto_config_;
 
   std::unique_ptr<quic::QuicCryptoClientStream> crypto_stream_;
-  raw_ptr<QuicStreamFactory> stream_factory_;
+  raw_ptr<QuicSessionPool> session_pool_;
   base::ObserverList<ConnectivityObserver> connectivity_observer_list_;
   std::vector<std::unique_ptr<QuicChromiumPacketReader>> packet_readers_;
   raw_ptr<TransportSecurityState> transport_security_state_;

@@ -4,15 +4,17 @@
 
 #include "third_party/blink/renderer/modules/mediastream/browser_capture_media_stream_track.h"
 
+#include <optional>
+
 #include "base/metrics/histogram_functions.h"
 #include "base/token.h"
+#include "base/types/expected.h"
 #include "base/uuid.h"
 #include "build/build_config.h"
 #include "media/capture/mojom/video_capture_types.mojom-blink.h"
 #include "media/capture/video_capture_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/web/modules/mediastream/media_stream_video_source.h"
-#include "third_party/blink/renderer/bindings/modules/v8/v8_captured_wheel_action.h"
+#include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/modules/mediastream/crop_target.h"
 #include "third_party/blink/renderer/modules/mediastream/restriction_target.h"
@@ -33,30 +35,32 @@ using ApplySubCaptureTargetResult =
 // If crop_id is the empty string, returns an empty base::Token.
 // If crop_id is a valid UUID, returns a base::Token representing the ID.
 // Otherwise, returns nullopt.
-absl::optional<base::Token> IdStringToToken(const String& crop_id) {
+std::optional<base::Token> IdStringToToken(const String& crop_id) {
   if (crop_id.empty()) {
     return base::Token();
   }
   if (!crop_id.ContainsOnlyASCIIOrEmpty()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   const base::Uuid guid = base::Uuid::ParseCaseInsensitive(crop_id.Ascii());
-  return guid.is_valid() ? absl::make_optional<base::Token>(GUIDToToken(guid))
-                         : absl::nullopt;
+  return guid.is_valid() ? std::make_optional<base::Token>(GUIDToToken(guid))
+                         : std::nullopt;
 }
 
 void RaiseApplySubCaptureTargetException(
-    ScriptPromiseResolverWithTracker<ApplySubCaptureTargetResult>* resolver,
+    ScriptPromiseResolverWithTracker<ApplySubCaptureTargetResult, IDLUndefined>*
+        resolver,
     DOMExceptionCode exception_code,
     const WTF::String& exception_text,
     ApplySubCaptureTargetResult result) {
-  resolver->Reject(
+  resolver->Reject<DOMException>(
       MakeGarbageCollected<DOMException>(exception_code, exception_text),
       result);
 }
 
 void ResolveApplySubCaptureTargetPromiseHelper(
-    ScriptPromiseResolverWithTracker<ApplySubCaptureTargetResult>* resolver,
+    ScriptPromiseResolverWithTracker<ApplySubCaptureTargetResult, IDLUndefined>*
+        resolver,
     media::mojom::ApplySubCaptureTargetResult result) {
   DCHECK(IsMainThread());
 
@@ -108,18 +112,17 @@ void ResolveApplySubCaptureTargetPromiseHelper(
   NOTREACHED();
 }
 
-MediaStreamVideoSource* GetNativeVideoSource(
-    MediaStreamComponent* const component,
-    String& error) {
+base::expected<MediaStreamVideoSource*, DOMException*> GetNativeVideoSource(
+    MediaStreamComponent* const component) {
   if (!component) {
-    error = "Missing component.";
-    return nullptr;
+    return base::unexpected(MakeGarbageCollected<DOMException>(
+        DOMExceptionCode::kUnknownError, "Missing component."));
   }
 
   MediaStreamSource* const source = component->Source();
   if (!source) {
-    error = "Missing source.";
-    return nullptr;
+    return base::unexpected(MakeGarbageCollected<DOMException>(
+        DOMExceptionCode::kUnknownError, "Missing source."));
   }
 
   CHECK_EQ(source->GetType(), MediaStreamSource::kTypeVideo);
@@ -127,8 +130,8 @@ MediaStreamVideoSource* GetNativeVideoSource(
   MediaStreamVideoSource* const native_source =
       MediaStreamVideoSource::GetVideoSource(source);
   if (!native_source) {
-    error = "Missing native source.";
-    return nullptr;
+    return base::unexpected(MakeGarbageCollected<DOMException>(
+        DOMExceptionCode::kUnknownError, "Missing native source."));
   }
   return native_source;
 }
@@ -163,41 +166,31 @@ void BrowserCaptureMediaStreamTrack::Trace(Visitor* visitor) const {
 }
 
 void BrowserCaptureMediaStreamTrack::SendWheel(
-    CapturedWheelAction* action,
-    base::OnceCallback<void(bool, const String&)> callback) {
-  String error;
-  MediaStreamVideoSource* const native_source =
-      GetNativeVideoSource(Component(), error);
-  if (!native_source) {
-    std::move(callback).Run(false, error);
+    double relative_x,
+    double relative_y,
+    int wheel_delta_x,
+    int wheel_delta_y,
+    base::OnceCallback<void(DOMException*)> callback) {
+  const base::expected<MediaStreamVideoSource*, DOMException*> native_source =
+      GetNativeVideoSource(Component());
+  if (!native_source.has_value()) {
+    std::move(callback).Run(native_source.error());
     return;
   }
-  native_source->SendWheel(action, std::move(callback));
-}
-
-void BrowserCaptureMediaStreamTrack::GetZoomLevel(
-    base::OnceCallback<void(absl::optional<int>, const String&)> callback) {
-  String error;
-  MediaStreamVideoSource* const native_source =
-      GetNativeVideoSource(Component(), error);
-  if (!native_source) {
-    std::move(callback).Run(false, error);
-    return;
-  }
-  native_source->GetZoomLevel(std::move(callback));
+  native_source.value()->SendWheel(relative_x, relative_y, wheel_delta_x,
+                                   wheel_delta_y, std::move(callback));
 }
 
 void BrowserCaptureMediaStreamTrack::SetZoomLevel(
     int zoom_level,
-    base::OnceCallback<void(bool, const String&)> callback) {
-  String error;
-  MediaStreamVideoSource* const native_source =
-      GetNativeVideoSource(Component(), error);
-  if (!native_source) {
-    std::move(callback).Run(false, error);
+    base::OnceCallback<void(DOMException*)> callback) {
+  const base::expected<MediaStreamVideoSource*, DOMException*> native_source =
+      GetNativeVideoSource(Component());
+  if (!native_source.has_value()) {
+    std::move(callback).Run(native_source.error());
     return;
   }
-  native_source->SetZoomLevel(zoom_level, std::move(callback));
+  native_source.value()->SetZoomLevel(zoom_level, std::move(callback));
 }
 
 #endif  // !BUILDFLAG(IS_ANDROID)
@@ -253,8 +246,8 @@ ScriptPromise BrowserCaptureMediaStreamTrack::ApplySubCaptureTarget(
   // If the promise is not resolved within the |timeout_interval|, an
   // ApplySubCaptureTargetResult::kTimedOut response will be recorded in the
   // UMA.
-  auto* resolver = MakeGarbageCollected<
-      ScriptPromiseResolverWithTracker<ApplySubCaptureTargetResult>>(
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolverWithTracker<
+      ApplySubCaptureTargetResult, IDLUndefined>>(
       script_state, metric_name_prefix,
       /*timeout_interval=*/base::Seconds(10));
   if (type == SubCaptureTarget::Type::kCropTarget) {
@@ -263,19 +256,20 @@ ScriptPromise BrowserCaptureMediaStreamTrack::ApplySubCaptureTarget(
   ScriptPromise promise = resolver->Promise();
 
 #if BUILDFLAG(IS_ANDROID)
-  resolver->Reject(
+  resolver->Reject<DOMException>(
       MakeGarbageCollected<DOMException>(DOMExceptionCode::kUnknownError,
                                          "Not supported on Android."),
       ApplySubCaptureTargetResult::kUnsupportedPlatform);
   return promise;
 #else
 
-  const absl::optional<base::Token> token =
+  const std::optional<base::Token> token =
       IdStringToToken(target ? target->GetId() : String());
   if (!token.has_value()) {
-    resolver->Reject(MakeGarbageCollected<DOMException>(
-                         DOMExceptionCode::kUnknownError, "Invalid token."),
-                     ApplySubCaptureTargetResult::kInvalidTarget);
+    resolver->Reject<DOMException>(
+        MakeGarbageCollected<DOMException>(DOMExceptionCode::kUnknownError,
+                                           "Invalid token."),
+        ApplySubCaptureTargetResult::kInvalidTarget);
     return promise;
   }
 
@@ -294,7 +288,7 @@ ScriptPromise BrowserCaptureMediaStreamTrack::ApplySubCaptureTarget(
   MediaStreamTrackPlatform* const native_track =
       MediaStreamTrackPlatform::GetTrack(WebMediaStreamTrack(component));
   if (!native_source || !native_track) {
-    resolver->Reject(
+    resolver->Reject<DOMException>(
         MakeGarbageCollected<DOMException>(DOMExceptionCode::kUnknownError,
                                            "Native/platform track missing."),
         ApplySubCaptureTargetResult::kRejectedWithErrorGeneric);
@@ -304,13 +298,14 @@ ScriptPromise BrowserCaptureMediaStreamTrack::ApplySubCaptureTarget(
   // TODO(crbug.com/1332628): Instead of using GetNextSubCaptureTargetVersion(),
   // move the ownership of the Promises from this->pending_promises_ into
   // native_source.
-  const absl::optional<uint32_t> optional_sub_capture_target_version =
+  const std::optional<uint32_t> optional_sub_capture_target_version =
       native_source->GetNextSubCaptureTargetVersion();
   if (!optional_sub_capture_target_version.has_value()) {
-    resolver->Reject(MakeGarbageCollected<DOMException>(
-                         DOMExceptionCode::kOperationError,
-                         "Can't change target while clones exist."),
-                     ApplySubCaptureTargetResult::kInvalidTarget);
+    resolver->Reject<DOMException>(
+        MakeGarbageCollected<DOMException>(
+            DOMExceptionCode::kOperationError,
+            "Can't change target while clones exist."),
+        ApplySubCaptureTargetResult::kInvalidTarget);
     return promise;
   }
   const uint32_t sub_capture_target_version =
@@ -403,8 +398,9 @@ void BrowserCaptureMediaStreamTrack::MaybeFinalizeCropPromise(
     }
   }
 
-  ScriptPromiseResolverWithTracker<ApplySubCaptureTargetResult>* const
-      resolver = info->promise_resolver;
+  ScriptPromiseResolverWithTracker<ApplySubCaptureTargetResult,
+                                   IDLUndefined>* const resolver =
+      info->promise_resolver;
   pending_promises_.erase(iter);
   ResolveApplySubCaptureTargetPromiseHelper(resolver, result);
 }

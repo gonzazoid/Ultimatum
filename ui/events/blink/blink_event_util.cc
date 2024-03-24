@@ -20,10 +20,10 @@
 #include "ui/events/base_event_utils.h"
 #include "ui/events/event_constants.h"
 #include "ui/events/gesture_detection/gesture_event_data.h"
-#include "ui/events/gesture_detection/motion_event.h"
 #include "ui/events/gesture_event_details.h"
 #include "ui/events/keycodes/dom/keycode_converter.h"
 #include "ui/events/types/event_type.h"
+#include "ui/events/velocity_tracker/motion_event.h"
 #include "ui/gfx/geometry/angle_conversions.h"
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/transform.h"
@@ -491,7 +491,7 @@ WebGestureEvent CreateWebGestureEventFromGestureEventData(
 std::unique_ptr<blink::WebInputEvent> ScaleWebInputEvent(
     const blink::WebInputEvent& event,
     float scale,
-    absl::optional<int64_t> trace_id) {
+    std::optional<int64_t> trace_id) {
   return TranslateAndScaleWebInputEvent(event, gfx::Vector2dF(0, 0), scale,
                                         trace_id);
 }
@@ -500,7 +500,7 @@ std::unique_ptr<blink::WebInputEvent> TranslateAndScaleWebInputEvent(
     const blink::WebInputEvent& event,
     const gfx::Vector2dF& delta,
     float scale,
-    absl::optional<int64_t> trace_id) {
+    std::optional<int64_t> trace_id) {
   std::unique_ptr<blink::WebInputEvent> scaled_event;
   if (scale == 1.f && delta.IsZero()) {
     return scaled_event;
@@ -655,7 +655,8 @@ WebInputEvent::Type ToWebMouseEventType(MotionEvent::Action action) {
     case MotionEvent::Action::POINTER_UP:
       break;
   }
-  NOTREACHED() << "Invalid MotionEvent::Action = " << action;
+  DUMP_WILL_BE_NOTREACHED_NORETURN()
+      << "Invalid MotionEvent::Action = " << action;
   return WebInputEvent::Type::kUndefined;
 }
 

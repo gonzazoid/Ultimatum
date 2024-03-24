@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "content/browser/site_per_process_browsertest.h"
-
 #include <list>
 #include <memory>
 #include <string>
@@ -16,9 +14,9 @@
 #include "base/memory/ptr_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/ranges/algorithm.h"
-#include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
+#include "base/test/run_until.h"
 #include "base/test/scoped_run_loop_timeout.h"
 #include "base/test/test_timeouts.h"
 #include "base/test/with_feature_override.h"
@@ -32,6 +30,7 @@
 #include "content/browser/renderer_host/navigator.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/renderer_host/render_widget_host_view_child_frame.h"
+#include "content/browser/site_per_process_browsertest.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/common/content_navigation_policy.h"
 #include "content/public/browser/navigation_handle.h"
@@ -206,12 +205,8 @@ IN_PROC_BROWSER_TEST_P(SitePerProcessBrowserTest,
   ASSERT_TRUE(
       ExecJs(web_contents(),
              "document.querySelector('iframe').style.visibility = 'hidden';"));
-  while (!frame_connector_delegate->IsHidden()) {
-    base::RunLoop run_loop;
-    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
-        FROM_HERE, run_loop.QuitClosure(), TestTimeouts::tiny_timeout());
-    run_loop.Run();
-  }
+  EXPECT_TRUE(base::test::RunUntil(
+      [&]() { return frame_connector_delegate->IsHidden(); }));
 
   // Now we navigate the child to about:blank, but since we do not proceed with
   // the navigation, the OOPIF should stay alive and RemoteFrameView intact.
@@ -231,12 +226,8 @@ IN_PROC_BROWSER_TEST_P(SitePerProcessBrowserTest,
   ASSERT_TRUE(
       ExecJs(web_contents(),
              "document.querySelector('iframe').style.visibility = 'visible';"));
-  while (frame_connector_delegate->IsHidden()) {
-    base::RunLoop run_loop;
-    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
-        FROM_HERE, run_loop.QuitClosure(), TestTimeouts::tiny_timeout());
-    run_loop.Run();
-  }
+  EXPECT_TRUE(base::test::RunUntil(
+      [&]() { return !frame_connector_delegate->IsHidden(); }));
 }
 
 // Ensure that after a main frame with an OOPIF is navigated cross-site, the
@@ -1760,12 +1751,8 @@ IN_PROC_BROWSER_TEST_P(
   DisableBackForwardCacheForTesting(web_contents(),
                                     BackForwardCache::TEST_USES_UNLOAD_EVENT);
 
-  // 3) Retrieve the fenced frame url mapping id associated with the owned page
-  // by the main RenderFrameHost's `DocumentAssociatedData`. Since
-  // `DocumentAssociatedData` does not change its owned page during its
-  // lifetime, this id also uniquely identifies `DocumentAssociatedData`.
-  FencedFrameURLMapping::Id fenced_frame_url_mapping_id =
-      child_rfh->GetPage().fenced_frame_urls_map().unique_id();
+  // 3) Retrieve the weak pointer to the owned page by the main
+  // RenderFrameHost's `DocumentAssociatedData`.
   base::WeakPtr<PageImpl> weak_ptr_page = child_rfh->GetPage().GetWeakPtrImpl();
 
   // 4) Navigate the main frame to a same-site url. The unload handler of the
@@ -1781,16 +1768,6 @@ IN_PROC_BROWSER_TEST_P(
       GetRenderDocumentLevel() < RenderDocumentLevel::kAllFrames);
 
   // 6) If RenderDocument feature is not enabled for all frames, verify
-  // `DocumentAssociatedData` has changed by comparing fenced frame url mapping
-  // ids.
-  FencedFrameURLMapping::Id fenced_frame_url_mapping_id_after_navigation =
-      child_rfh->GetPage().fenced_frame_urls_map().unique_id();
-
-  EXPECT_EQ(fenced_frame_url_mapping_id !=
-                fenced_frame_url_mapping_id_after_navigation,
-            GetRenderDocumentLevel() < RenderDocumentLevel::kAllFrames);
-
-  // 7)  If RenderDocument feature is not enabled for all frames, verify
   // `PageImpl` has changed by checking the weak pointer.
   EXPECT_EQ(weak_ptr_page == nullptr,
             GetRenderDocumentLevel() < RenderDocumentLevel::kAllFrames);

@@ -1579,3 +1579,56 @@ void AuthenticatorPriorityMechanismSheetModel::OnAccept() {
       ->mechanisms()[*dialog_model()->priority_mechanism_index()]
       .callback.Run();
 }
+
+// AuthenticatorGPMCreatePinSheetModel -------------------------------------
+
+AuthenticatorGPMCreatePinSheetModel::AuthenticatorGPMCreatePinSheetModel(
+    AuthenticatorRequestDialogModel* dialog_model,
+    int pin_digits_count)
+    : AuthenticatorSheetModelBase(dialog_model,
+                                  OtherMechanismButtonVisibility::kHidden),
+      pin_digits_count_(pin_digits_count) {
+  // TODO(rgod): Add correct illustration.
+  vector_illustrations_.emplace(kPasskeyHeaderIcon, kPasskeyHeaderDarkIcon);
+}
+
+AuthenticatorGPMCreatePinSheetModel::~AuthenticatorGPMCreatePinSheetModel() =
+    default;
+
+int AuthenticatorGPMCreatePinSheetModel::pin_digits_count() const {
+  return pin_digits_count_;
+}
+
+void AuthenticatorGPMCreatePinSheetModel::SetPin(std::u16string pin) {
+  bool accept_button_enabled = IsAcceptButtonEnabled();
+  pin_ = std::move(pin);
+  if (accept_button_enabled != IsAcceptButtonEnabled()) {
+    dialog_model()->OnButtonsStateChange();
+  }
+}
+
+std::u16string AuthenticatorGPMCreatePinSheetModel::GetStepTitle() const {
+  return u"Create a PIN for your Google Password Manager (UNTRANSLATED)";
+}
+
+std::u16string AuthenticatorGPMCreatePinSheetModel::GetStepDescription() const {
+  return u"Your PIN protects your data. You'll need it when you want to start "
+         u"using your passkeys on new devices. (UNTRANSLATED)";
+}
+
+bool AuthenticatorGPMCreatePinSheetModel::IsAcceptButtonVisible() const {
+  return true;
+}
+
+bool AuthenticatorGPMCreatePinSheetModel::IsAcceptButtonEnabled() const {
+  return static_cast<int>(pin_.length()) == pin_digits_count_;
+}
+
+std::u16string AuthenticatorGPMCreatePinSheetModel::GetAcceptButtonLabel()
+    const {
+  return l10n_util::GetStringUTF16(IDS_WEBAUTHN_CONTINUE);
+}
+
+void AuthenticatorGPMCreatePinSheetModel::OnAccept() {
+  dialog_model()->OnGPMCreate();
+}

@@ -5,6 +5,7 @@
 #import "ios/chrome/browser/ui/search_engine_choice/search_engine_choice_coordinator.h"
 
 #import <UIKit/UIKit.h>
+
 #import <memory>
 
 #import "base/apple/foundation_util.h"
@@ -13,10 +14,11 @@
 #import "base/test/scoped_feature_list.h"
 #import "components/search_engines/search_engine_choice_utils.h"
 #import "components/search_engines/search_engines_pref_names.h"
+#import "components/search_engines/search_engines_switches.h"
 #import "components/signin/public/base/signin_switches.h"
 #import "components/strings/grit/components_strings.h"
 #import "components/sync_preferences/testing_pref_service_syncable.h"
-#import "ios/chrome/browser/promos_manager/mock_promos_manager.h"
+#import "ios/chrome/browser/promos_manager/model/mock_promos_manager.h"
 #import "ios/chrome/browser/search_engines/model/template_url_service_factory.h"
 #import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
 #import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
@@ -49,9 +51,6 @@
   _wasDismissed = YES;
 }
 
-- (void)skipAllScreens {
-}
-
 @end
 
 // Empty implementation of the SearchEngineChoiceCoordinatorDelegate used to
@@ -77,8 +76,7 @@
 class SearchEngineChoiceCoordinatorTest : public PlatformTest {
  protected:
   SearchEngineChoiceCoordinatorTest() {
-    feature_list_.InitWithFeatures(
-        {switches::kSearchEngineChoiceFre, switches::kSearchEngineChoice}, {});
+    feature_list_.InitWithFeatures({switches::kSearchEngineChoiceTrigger}, {});
     TestChromeBrowserState::Builder test_cbs_builder;
     test_cbs_builder.AddTestingFactory(
         ios::TemplateURLServiceFactory::GetInstance(),

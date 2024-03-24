@@ -746,6 +746,8 @@ bool CSSPropertyEquality::PropertiesEqual(const PropertyHandle& property,
       return a.VerticalAlign() == b.VerticalAlign() &&
              (a.VerticalAlign() != EVerticalAlign::kLength ||
               a.GetVerticalAlignLength() == b.GetVerticalAlignLength());
+    case CSSPropertyID::kViewTransitionClass:
+      return a.ViewTransitionClass() == b.ViewTransitionClass();
     case CSSPropertyID::kViewTransitionName:
       return a.ViewTransitionName() == b.ViewTransitionName();
     case CSSPropertyID::kVisibility:
@@ -912,6 +914,11 @@ bool CSSPropertyEquality::PropertiesEqual(const PropertyHandle& property,
       return a.TextEmphasisColor() == b.TextEmphasisColor();
     case CSSPropertyID::kZoom:
       return a.Zoom() == b.Zoom();
+    case CSSPropertyID::kPositionTryOrder:
+      return a.PositionTryOrder() == b.PositionTryOrder();
+    case CSSPropertyID::kPositionTryOptions:
+      return base::ValuesEquivalent(a.GetPositionTryOptions(),
+                                    b.GetPositionTryOptions());
 
     // These properties are not animateable, but perhaps equality should still
     // be defined for them.
@@ -1234,6 +1241,7 @@ bool CSSPropertyEquality::PropertiesEqual(const PropertyHandle& property,
     case CSSPropertyID::kPlaceContent:
     case CSSPropertyID::kPlaceItems:
     case CSSPropertyID::kPlaceSelf:
+    case CSSPropertyID::kPositionTry:
     case CSSPropertyID::kScrollMargin:
     case CSSPropertyID::kScrollPadding:
     case CSSPropertyID::kScrollStart:

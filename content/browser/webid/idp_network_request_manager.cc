@@ -315,16 +315,8 @@ void ParseIdentityProviderMetadata(const base::Value::Dict& idp_metadata_value,
                                    IdentityProviderMetadata& idp_metadata) {
   idp_metadata.brand_background_color =
       ParseCssColor(idp_metadata_value.FindString(kIdpBrandingBackgroundColor));
-  if (idp_metadata.brand_background_color) {
-    idp_metadata.brand_text_color = ParseCssColor(
-        idp_metadata_value.FindString(kIdpBrandingForegroundColor));
-    if (idp_metadata.brand_text_color) {
-      float text_contrast_ratio = color_utils::GetContrastRatio(
-          *idp_metadata.brand_background_color, *idp_metadata.brand_text_color);
-      if (text_contrast_ratio < color_utils::kMinimumReadableContrastRatio)
-        idp_metadata.brand_text_color = std::nullopt;
-    }
-  }
+  idp_metadata.brand_text_color =
+      ParseCssColor(idp_metadata_value.FindString(kIdpBrandingForegroundColor));
 
   const base::Value::List* icons_value =
       idp_metadata_value.FindList(kIdpBrandingIcons);
@@ -543,7 +535,7 @@ void OnConfigParsed(const GURL& provider,
   }
   idp_metadata.idp_login_url =
       ExtractEndpoint(provider, response, kLoginUrlKey);
-  if (IsFedCmAddAccountEnabled()) {
+  if (IsFedCmUseOtherAccountEnabled()) {
     const base::Value::Dict* modes_dict = response.FindDict(kModesKey);
     const base::Value::Dict* selected_mode_dict = nullptr;
     if (modes_dict) {
@@ -652,24 +644,12 @@ std::pair<GURL, std::optional<ErrorUrlType>> GetErrorUrlAndType(
   }
 
   url::Origin error_origin = url::Origin::Create(error_url);
-  if (!network::IsOriginPotentiallyTrustworthy(error_origin)) {
-    return std::make_pair(GURL(), std::nullopt);
-  }
-
-  std::string error_url_etld_plus_one =
-      webid::FormatUrlWithDomain(error_url, /*for_display=*/false);
-  if (error_url_etld_plus_one.empty()) {
-    return std::make_pair(GURL(), std::nullopt);
-  }
-
   url::Origin idp_origin = url::Origin::Create(idp_url);
   if (error_origin == idp_origin) {
     return std::make_pair(error_url, ErrorUrlType::kSameOrigin);
   }
 
-  std::string idp_etld_plus_one =
-      webid::FormatUrlWithDomain(idp_url, /*for_display=*/false);
-  if (error_url_etld_plus_one != idp_etld_plus_one) {
+  if (!webid::IsSameSite(error_origin, idp_origin)) {
     return std::make_pair(GURL(), ErrorUrlType::kCrossSite);
   }
 
@@ -729,10 +709,19 @@ void OnTokenRequestParsed(
 
   if (fetch_status.parse_status != ParseStatus::kSuccess) {
     if (IsFedCmErrorEnabled()) {
-      token_result.error = TokenError{kServerError, GURL()};
+      ErrorDialogType type;
+      if (fetch_status.response_code == net::HTTP_INTERNAL_SERVER_ERROR) {
+        token_result.error = TokenError{kServerError, GURL()};
+        type = ErrorDialogType::kServerErrorWithoutUrl;
+      } else if (fetch_status.response_code == net::HTTP_SERVICE_UNAVAILABLE) {
+        token_result.error = TokenError{kTemporarilyUnavailable, GURL()};
+        type = ErrorDialogType::kTemporarilyUnavailableWithoutUrl;
+      } else {
+        token_result.error = TokenError{kGenericEmpty, GURL()};
+        type = ErrorDialogType::kGenericEmptyWithoutUrl;
+      }
       std::move(record_error_metrics_callback)
-          .Run(TokenResponseType::kTokenNotReceivedAndErrorNotReceived,
-               ErrorDialogType::kServerErrorWithoutUrl,
+          .Run(TokenResponseType::kTokenNotReceivedAndErrorNotReceived, type,
                /*error_url_type=*/std::nullopt);
     }
     std::move(callback).Run(fetch_status, token_result);

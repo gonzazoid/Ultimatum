@@ -9,6 +9,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -27,7 +28,6 @@
 #include "components/query_tiles/tile.h"
 #include "components/search_engines/template_url.h"
 #include "components/url_formatter/url_formatter.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/metrics_proto/omnibox_event.pb.h"
 #include "third_party/omnibox_proto/groups.pb.h"
 #include "third_party/omnibox_proto/types.pb.h"
@@ -710,6 +710,10 @@ struct AutocompleteMatch {
   // `ComputeStrippedDestinationURL()` computation.
   GURL stripped_destination_url;
 
+  // Extra headers to add to the navigation. See `NavigateParams::extra_headers`
+  // for how headers should be represented.
+  std::string extra_headers;
+
   // Optional image information. Used for entity suggestions. The dominant color
   // can be used to paint the image placeholder while fetching the image.
   std::string image_dominant_color;
@@ -759,14 +763,14 @@ struct AutocompleteMatch {
   // TODO(manukh): Seems redundant to prefix a suggestion field with
   //  'suggestion_'. Check if it makes sense to rename to 'group_id', and
   //  likewise for the associated methods and local variables.
-  absl::optional<omnibox::GroupId> suggestion_group_id;
+  std::optional<omnibox::GroupId> suggestion_group_id;
 
   // If true, UI-level code should swap the contents and description fields
   // before displaying.
   bool swap_contents_and_description = false;
 
   // A rich-format version of the display for the dropdown.
-  absl::optional<SuggestionAnswer> answer;
+  std::optional<SuggestionAnswer> answer;
 
   // The transition type to use when the user opens this match.  By default,
   // this is TYPED.  Providers whose matches do not look like URLs should set
@@ -805,7 +809,7 @@ struct AutocompleteMatch {
 
   // True if we saw a tab that matched this suggestion.
   // Unset if it has not been computed yet.
-  absl::optional<bool> has_tab_match;
+  std::optional<bool> has_tab_match;
 
   // Set with a keyword provider match if this match can show a keyword hint.
   // For example, if this is a SearchProvider match for "www.amazon.com",
@@ -876,7 +880,7 @@ struct AutocompleteMatch {
   std::vector<SuggestTile> suggest_tiles;
 
   // Signals for ML scoring.
-  absl::optional<ScoringSignals> scoring_signals;
+  std::optional<ScoringSignals> scoring_signals;
 
   // A flag to mark whether this would've been excluded from the "original" list
   // of matches. Traditionally, providers limit the number of suggestions they

@@ -16,8 +16,16 @@
 #include "components/autofill/core/browser/metrics/form_events/form_events.h"
 #include "components/autofill/core/common/form_field_data.h"
 #include "components/autofill/core/common/form_interactions_flow.h"
+#include "components/autofill/core/common/unique_ids.h"
 
 namespace autofill::autofill_metrics {
+
+enum class FilledFieldTypeMetric {
+  kClassifiedWithRecognizedAutocomplete = 0,
+  kClassifiedWithUnrecognizedAutocomplete = 1,
+  kUnclassified = 2,
+  kMaxValue = kUnclassified
+};
 
 // Utility to log autofill form events in the relevant histograms depending on
 // the presence of server and/or local data.
@@ -48,6 +56,18 @@ class FormEventLoggerBase {
       const base::TimeTicks& form_parsed_timestamp,
       AutofillMetrics::PaymentsSigninState signin_state_for_metrics,
       bool off_the_record);
+
+  // This is different from OnDidFillSuggestion because it does not require to
+  // provide data models or other parameters. It is needed to be used in field
+  // by field filling.
+  void RecordFillingOperation(
+      FormGlobalId form_id,
+      base::span<const FormFieldData*> filled_fields,
+      base::span<const AutofillField*> filled_autofill_fields);
+
+  void OnDidRefill(
+      AutofillMetrics::PaymentsSigninState signin_state_for_metrics,
+      const FormStructure& form);
 
   void OnWillSubmitForm(
       AutofillMetrics::PaymentsSigninState signin_state_for_metrics,
@@ -179,7 +199,7 @@ class FormEventLoggerBase {
   bool has_logged_interacted_ = false;
   bool has_logged_user_hide_suggestions_ = false;
   bool has_logged_suggestions_shown_ = false;
-  bool has_logged_suggestion_filled_ = false;
+  bool has_logged_form_filling_suggestion_filled_ = false;
   bool has_logged_undo_after_fill_ = false;
   bool has_logged_fill_after_undo_ = false;
   bool has_logged_autocomplete_off_ = false;
@@ -195,6 +215,13 @@ class FormEventLoggerBase {
   AblationGroup ablation_group_ = AblationGroup::kDefault;
   AblationGroup conditional_ablation_group_ = AblationGroup::kDefault;
   std::optional<base::TimeDelta> time_from_interaction_to_submission_;
+
+  // Logs the total number of filling operations performed by the user
+  // (Excluding Undo operations). This is not related to
+  // `has_logged_form_filling_suggestion_filled_` since the latter doesn't
+  // include field by field filling operations.
+  size_t filling_operation_count_ = 0;
+  std::map<FieldGlobalId, FilledFieldTypeMetric> filled_fields_types_;
 
   // The last field that was polled for suggestions.
   FormFieldData last_polled_field_;

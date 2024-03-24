@@ -45,21 +45,6 @@ enum ComposeLength {
   COMPOSE_LONGER = 2;
 }
 
-// Information about a previous response in a compose session.
-message ComposePriorResponse {
-  // The model response.
-  string response_text = 1;
-  // The tone and length options used to generate the response.
-  // Allows the service to identify if tone/length options have changed,
-  // and potentially apply a lengthen/formalize operation on top of the
-  // response.
-  ComposeTone tone = 2;
-  ComposeLength length = 3;
-  // If true, we may ensure the next response is not too similar to
-  // this one.
-  bool regenerate_requested_since = 4;
-}
-
 // Stores the metadata associated with a single call to the model execution.
 // This excludes any explicit user input.
 message ComposePageMetadata {
@@ -85,13 +70,6 @@ enum FinalStatus {
   STATUS_ABANDONED = 2;
   // This case includes: close tab, starting new session, navigation, etc.
   STATUS_FINISHED_WITHOUT_INSERT = 3;
-}
-
-// How the user used their clipboard with the feature.
-enum ClipboardUse {
-  CLIPBOARD_UNSPECIFIED = 0;
-  // User copied the compose response to the clipboard.
-  CLIPBOARD_RESPONSE_COPIED = 1;
 }
 
 // Stores all data associated with a single call to the model execution run for
@@ -141,9 +119,9 @@ message Int128 {
 // This includes user feedback, and metrics about feature usage.
 // Next Id: 8
 message ComposeQuality {
+  reserved 3;
   FinalStatus final_status = 1;
   UserFeedback user_feedback = 2;
-  ClipboardUse clipboard_use = 3;
   // How long the user had to wait before seeing the model response.
   int64 request_latency_ms = 4;
   // How much was the text modified before commit only valid iff

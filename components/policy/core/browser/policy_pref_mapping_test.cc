@@ -6,6 +6,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -32,7 +33,6 @@
 #include "components/prefs/pref_service.h"
 #include "printing/buildflags/buildflags.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace policy {
@@ -145,6 +145,10 @@ class PrefTestCase {
       ADD_FAILURE()
           << "only one of |value| or |default_value| should be used for pref "
           << name;
+    }
+    if (!value && !default_value) {
+      ADD_FAILURE() << "either |value| or |default_value| must be set for pref "
+                    << name;
     }
   }
 
@@ -493,10 +497,10 @@ void SetProviderPolicy(MockConfigurationPolicyProvider* provider,
   provider->UpdateChromePolicy(policy_map);
 }
 
-absl::optional<base::flat_set<std::string>> GetTestFilter() {
+std::optional<base::flat_set<std::string>> GetTestFilter() {
   if (!base::CommandLine::ForCurrentProcess()->HasSwitch(
           kPolicyToPrefMappingsFilterSwitch)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   std::string value =
@@ -505,7 +509,7 @@ absl::optional<base::flat_set<std::string>> GetTestFilter() {
   auto list = base::SplitString(value, ":", base::TRIM_WHITESPACE,
                                 base::SPLIT_WANT_NONEMPTY);
   if (list.empty())
-    return absl::nullopt;
+    return std::nullopt;
 
   return base::flat_set<std::string>(std::move(list));
 }
@@ -657,12 +661,6 @@ void VerifyPolicyToPrefMappings(const base::FilePath& test_case_path,
           if (!expected_value && pref_case->default_value()) {
             expected_value = pref_case->default_value();
             expect_value_to_be_default = true;
-          }
-          if (!expected_value && policies.size() == 1) {
-            // If no value/default value is specified, fall back to the policy
-            // value (if only one policy is set).
-            expected_value = &policies.begin()->second;
-            expect_value_to_be_default = false;
           }
           ASSERT_TRUE(expected_value);
 

@@ -5,7 +5,7 @@ include_rules = [
   # everywhere.
   "+chromeos/crosapi/cpp/crosapi_constants.h",
   "+chromeos/lacros/lacros_service.h",
-  "+chromeos/lacros/lacros_test_helper.h",
+  "+chromeos/startup/browser_params_proxy.h",
   "+chromeos/startup/startup_switches.h",
 
   # Tests can use all content/public headers.
@@ -80,6 +80,9 @@ specific_include_rules = {
   ],
   "fenced_frame_reporter_observer.h": [
     "+content/browser/fenced_frame/fenced_frame_reporter.h"
+  ],
+  "mock_captured_surface_controller.h": [
+    "+content/browser/media/captured_surface_controller.h"
   ],
   "test_shared_storage_header_observer.h": [
     "+content/browser/shared_storage/shared_storage_header_observer.h"

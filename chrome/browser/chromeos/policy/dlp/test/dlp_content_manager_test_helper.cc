@@ -43,15 +43,25 @@ DlpContentManagerTestHelper::~DlpContentManagerTestHelper() {
 
 void DlpContentManagerTestHelper::ChangeConfidentiality(
     content::WebContents* web_contents,
-    const DlpContentRestrictionSet& restrictions) {
+    DlpContentRestrictionSet restrictions) {
   DCHECK(manager_);
+  for (auto& restriction_lvl_url : restrictions.restrictions_) {
+    if (restriction_lvl_url.level != DlpRulesManager::Level::kNotSet) {
+      restriction_lvl_url.url = web_contents->GetLastCommittedURL();
+    }
+  }
   manager_->OnConfidentialityChanged(web_contents, restrictions);
 }
 
 void DlpContentManagerTestHelper::UpdateConfidentiality(
     content::WebContents* web_contents,
-    const DlpContentRestrictionSet& restrictions) {
+    DlpContentRestrictionSet restrictions) {
   DCHECK(manager_);
+  for (auto& restriction_lvl_url : restrictions.restrictions_) {
+    if (restriction_lvl_url.level != DlpRulesManager::Level::kNotSet) {
+      restriction_lvl_url.url = web_contents->GetLastCommittedURL();
+    }
+  }
   manager_->UpdateConfidentiality(web_contents, restrictions);
 }
 
@@ -95,7 +105,7 @@ DlpContentManagerTestHelper::GetRunningScreenShares() const {
 }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-absl::optional<DlpContentManagerAsh::VideoCaptureInfo>
+std::optional<DlpContentManagerAsh::VideoCaptureInfo>
 DlpContentManagerTestHelper::GetRunningVideoCaptureInfo() const {
   DCHECK(manager_);
   return static_cast<DlpContentManagerAsh*>(manager_)

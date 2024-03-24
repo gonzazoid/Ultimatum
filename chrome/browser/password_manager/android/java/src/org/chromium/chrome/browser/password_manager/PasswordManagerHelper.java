@@ -36,6 +36,7 @@ import org.chromium.chrome.browser.password_manager.CredentialManagerLauncher.Cr
 import org.chromium.chrome.browser.password_manager.PasswordCheckupClientHelper.PasswordCheckBackendException;
 import org.chromium.chrome.browser.preferences.Pref;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.sync.SyncServiceFactory;
 import org.chromium.components.browser_ui.settings.SettingsLauncher;
 import org.chromium.components.prefs.PrefService;
@@ -88,38 +89,6 @@ public class PasswordManagerHelper {
     // |PasswordSettings.class.getName()| once it's modularized.
     private static final String PASSWORD_SETTINGS_CLASS =
             "org.chromium.chrome.browser.password_manager.settings.PasswordSettings";
-    private static final String ACCOUNT_GET_INTENT_LATENCY_HISTOGRAM =
-            "PasswordManager.CredentialManager.Account.GetIntent.Latency";
-    private static final String ACCOUNT_GET_INTENT_SUCCESS_HISTOGRAM =
-            "PasswordManager.CredentialManager.Account.GetIntent.Success";
-    private static final String ACCOUNT_GET_INTENT_ERROR_HISTOGRAM =
-            "PasswordManager.CredentialManager.Account.GetIntent.Error";
-    private static final String ACCOUNT_GET_INTENT_API_ERROR_HISTOGRAM =
-            "PasswordManager.CredentialManager.Account.GetIntent.APIError";
-    private static final String ACCOUNT_GET_INTENT_ERROR_CONNECTION_RESULT_CODE_HISTOGRAM =
-            "PasswordManager.CredentialManager.Account.GetIntent.APIError.ConnectionResultCode";
-    private static final String ACCOUNT_LAUNCH_CREDENTIAL_MANAGER_SUCCESS_HISTOGRAM =
-            "PasswordManager.CredentialManager.Account.Launch.Success";
-
-    private static final String LOCAL_GET_INTENT_LATENCY_HISTOGRAM =
-            "PasswordManager.CredentialManager.LocalProfile.GetIntent.Latency";
-    private static final String LOCAL_GET_INTENT_SUCCESS_HISTOGRAM =
-            "PasswordManager.CredentialManager.LocalProfile.GetIntent.Success";
-    private static final String LOCAL_GET_INTENT_ERROR_HISTOGRAM =
-            "PasswordManager.CredentialManager.LocalProfile.GetIntent.Error";
-    private static final String LOCAL_GET_INTENT_API_ERROR_HISTOGRAM =
-            "PasswordManager.CredentialManager.LocalProfile.GetIntent.APIError";
-    private static final String LOCAL_GET_INTENT_ERROR_CONNECTION_RESULT_CODE_HISTOGRAM =
-            "PasswordManager.CredentialManager.LocalProfile.GetIntent.APIError"
-                    + ".ConnectionResultCode";
-    private static final String LOCAL_LAUNCH_CREDENTIAL_MANAGER_SUCCESS_HISTOGRAM =
-            "PasswordManager.CredentialManager.LocalProfile.Launch.Success";
-
-    private static final String ACCOUNT_SETTINGS_ACTIVITY_HISTOGRAM =
-            "PasswordManager.AccountSettings.Launch.Success";
-
-    private static final String PASSWORD_CHECKUP_LAUNCH_CREDENTIAL_MANAGER_SUCCESS_HISTOGRAM =
-            "PasswordManager.PasswordCheckup.Launch.Success";
 
     /**
      * The identifier of the loading dialog outcome.
@@ -233,7 +202,7 @@ public class PasswordManagerHelper {
      * @return True if Unified Password Manager can be used, false otherwise.
      */
     public static boolean canUseUpm() {
-        Profile profile = Profile.getLastUsedRegularProfile();
+        Profile profile = ProfileManager.getLastUsedRegularProfile();
         SyncService syncService = SyncServiceFactory.getForProfile(profile);
         PrefService prefService = UserPrefs.get(profile);
         // TODO(crbug.com/1327294): Reevaluate if passing the syncService instead of the boolean is
@@ -306,7 +275,7 @@ public class PasswordManagerHelper {
      */
     public static void runPasswordCheckupInBackground(
             @PasswordCheckReferrer int referrer,
-            Optional<String> accountName,
+            String accountName,
             Callback<Void> successCallback,
             Callback<Exception> failureCallback) {
         assert canUseUpm();
@@ -347,7 +316,7 @@ public class PasswordManagerHelper {
      */
     public static void getBreachedCredentialsCount(
             @PasswordCheckReferrer int referrer,
-            Optional<String> accountName,
+            String accountName,
             Callback<Integer> successCallback,
             Callback<Exception> failureCallback) {
         assert canUseUpm();
@@ -424,7 +393,7 @@ public class PasswordManagerHelper {
     // TODO(http://crbug.com/1371422): Remove method and manage eviction from native code
     // as this is covered by chrome://password-manager-internals page.
     public static void resetUpmUnenrollment() {
-        PrefService prefs = UserPrefs.get(Profile.getLastUsedRegularProfile());
+        PrefService prefs = UserPrefs.get(ProfileManager.getLastUsedRegularProfile());
 
         // Exit early if the user is not unenrolled.
         if (!prefs.getBoolean(Pref.UNENROLLED_FROM_GOOGLE_MOBILE_SERVICES_DUE_TO_ERRORS)) return;
@@ -537,7 +506,8 @@ public class PasswordManagerHelper {
                     maybeLaunchIntentWithLoadingDialog(
                             loadingDialogCoordinator,
                             intent,
-                            PASSWORD_CHECKUP_LAUNCH_CREDENTIAL_MANAGER_SUCCESS_HISTOGRAM);
+                            PasswordMetricsUtil
+                                    .PASSWORD_CHECKUP_LAUNCH_CREDENTIAL_MANAGER_SUCCESS_HISTOGRAM);
                 },
                 (error) -> {
                     passwordCheckupMetricsRecorder.recordMetrics(Optional.of(error));
@@ -548,10 +518,12 @@ public class PasswordManagerHelper {
     private static void recordFailureMetrics(Exception exception, boolean forAccount) {
         final String kGetIntentSuccessHistogram =
                 forAccount
-                        ? ACCOUNT_GET_INTENT_SUCCESS_HISTOGRAM
-                        : LOCAL_GET_INTENT_SUCCESS_HISTOGRAM;
+                        ? PasswordMetricsUtil.ACCOUNT_GET_INTENT_SUCCESS_HISTOGRAM
+                        : PasswordMetricsUtil.LOCAL_GET_INTENT_SUCCESS_HISTOGRAM;
         final String kGetIntentErrorHistogram =
-                forAccount ? ACCOUNT_GET_INTENT_ERROR_HISTOGRAM : LOCAL_GET_INTENT_ERROR_HISTOGRAM;
+                forAccount
+                        ? PasswordMetricsUtil.ACCOUNT_GET_INTENT_ERROR_HISTOGRAM
+                        : PasswordMetricsUtil.LOCAL_GET_INTENT_ERROR_HISTOGRAM;
         RecordHistogram.recordBooleanHistogram(kGetIntentSuccessHistogram, false);
         if (exception instanceof CredentialManagerBackendException) {
             int errorCode = ((CredentialManagerBackendException) exception).errorCode;
@@ -571,12 +543,14 @@ public class PasswordManagerHelper {
 
         final String kGetIntentApiErrorHistogram =
                 forAccount
-                        ? ACCOUNT_GET_INTENT_API_ERROR_HISTOGRAM
-                        : LOCAL_GET_INTENT_API_ERROR_HISTOGRAM;
+                        ? PasswordMetricsUtil.ACCOUNT_GET_INTENT_API_ERROR_HISTOGRAM
+                        : PasswordMetricsUtil.LOCAL_GET_INTENT_API_ERROR_HISTOGRAM;
         final String kGetIntentErrorConnectionResultCodeHistogram =
                 forAccount
-                        ? ACCOUNT_GET_INTENT_ERROR_CONNECTION_RESULT_CODE_HISTOGRAM
-                        : LOCAL_GET_INTENT_ERROR_CONNECTION_RESULT_CODE_HISTOGRAM;
+                        ? PasswordMetricsUtil
+                                .ACCOUNT_GET_INTENT_ERROR_CONNECTION_RESULT_CODE_HISTOGRAM
+                        : PasswordMetricsUtil
+                                .LOCAL_GET_INTENT_ERROR_CONNECTION_RESULT_CODE_HISTOGRAM;
 
         int apiErrorCode = PasswordManagerAndroidBackendUtil.getApiErrorCode(exception);
         RecordHistogram.recordSparseHistogram(kGetIntentApiErrorHistogram, apiErrorCode);
@@ -611,19 +585,19 @@ public class PasswordManagerHelper {
                 loadingDialogCoordinator,
                 intent,
                 forAccount
-                        ? ACCOUNT_LAUNCH_CREDENTIAL_MANAGER_SUCCESS_HISTOGRAM
-                        : LOCAL_LAUNCH_CREDENTIAL_MANAGER_SUCCESS_HISTOGRAM);
+                        ? PasswordMetricsUtil.ACCOUNT_LAUNCH_CREDENTIAL_MANAGER_SUCCESS_HISTOGRAM
+                        : PasswordMetricsUtil.LOCAL_LAUNCH_CREDENTIAL_MANAGER_SUCCESS_HISTOGRAM);
     }
 
     private static void recordSuccessMetrics(long elapsedTimeMs, boolean forAccount) {
         final String kGetIntentLatencyHistogram =
                 forAccount
-                        ? ACCOUNT_GET_INTENT_LATENCY_HISTOGRAM
-                        : LOCAL_GET_INTENT_LATENCY_HISTOGRAM;
+                        ? PasswordMetricsUtil.ACCOUNT_GET_INTENT_LATENCY_HISTOGRAM
+                        : PasswordMetricsUtil.LOCAL_GET_INTENT_LATENCY_HISTOGRAM;
         final String kGetIntentSuccessHistogram =
                 forAccount
-                        ? ACCOUNT_GET_INTENT_SUCCESS_HISTOGRAM
-                        : LOCAL_GET_INTENT_SUCCESS_HISTOGRAM;
+                        ? PasswordMetricsUtil.ACCOUNT_GET_INTENT_SUCCESS_HISTOGRAM
+                        : PasswordMetricsUtil.LOCAL_GET_INTENT_SUCCESS_HISTOGRAM;
 
         RecordHistogram.recordTimesHistogram(kGetIntentLatencyHistogram, elapsedTimeMs);
         RecordHistogram.recordBooleanHistogram(kGetIntentSuccessHistogram, true);
@@ -757,6 +731,7 @@ public class PasswordManagerHelper {
             } catch (ActivityNotFoundException e) {
             }
         }
-        RecordHistogram.recordBooleanHistogram(ACCOUNT_SETTINGS_ACTIVITY_HISTOGRAM, success);
+        RecordHistogram.recordBooleanHistogram(
+                PasswordMetricsUtil.ACCOUNT_SETTINGS_ACTIVITY_HISTOGRAM, success);
     }
 }

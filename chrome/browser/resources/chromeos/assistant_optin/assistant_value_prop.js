@@ -11,7 +11,7 @@
  * Event 'loaded' will be fired when the page has been successfully loaded.
  */
 
-import '//resources/cr_elements/cr_dialog/cr_dialog.js';
+import '//resources/ash/common/cr_elements/cr_dialog/cr_dialog.js';
 import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
 import '../components/dialogs/oobe_adaptive_dialog.js';
 import '../components/buttons/oobe_next_button.js';
@@ -284,7 +284,7 @@ class AssistantValueProp extends AssistantValuePropBase {
    * Handles event when value prop webview cannot be loaded.
    */
   onWebViewErrorOccurred(details) {
-    if (details && details.error == 'net::ERR_ABORTED') {
+    if (details && details.error === 'net::ERR_ABORTED') {
       // Retry triggers net::ERR_ABORTED, so ignore it.
       // TODO(b/232592745): Replace with a state machine to handle aborts
       // gracefully and avoid duplicate reloads.
@@ -325,14 +325,14 @@ class AssistantValueProp extends AssistantValuePropBase {
       return;
     }
     this.headerReceived_ = true;
-    if (details.statusCode == '404') {
-      if (details.url != this.defaultUrl) {
+    if (details.statusCode === 404) {
+      if (details.url !== this.defaultUrl) {
         this.reloadWithDefaultUrl_ = true;
         return;
       } else {
         this.onWebViewErrorOccurred();
       }
-    } else if (details.statusCode != '200') {
+    } else if (details.statusCode !== 200) {
       this.onWebViewErrorOccurred();
     }
   }
@@ -534,10 +534,10 @@ class AssistantValueProp extends AssistantValuePropBase {
    */
   showContentForStep_(step) {
     for (const subtitle of this.$['subtitle-container'].children) {
-      subtitle.hidden = subtitle.getAttribute('step') != step;
+      subtitle.hidden = parseInt(subtitle.getAttribute('step')) !== step;
     }
     for (const zippy of this.$['consents-container'].children) {
-      zippy.hidden = zippy.getAttribute('step') != step;
+      zippy.hidden = parseInt(zippy.getAttribute('step')) !== step;
     }
   }
 

@@ -9,7 +9,7 @@
 #include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
 
-namespace plus_addresses {
+namespace plus_addresses::features {
 
 COMPONENT_EXPORT(PLUS_ADDRESSES_FEATURES)
 BASE_DECLARE_FEATURE(kFeature);
@@ -54,6 +54,15 @@ extern const base::FeatureParam<std::string> kPlusAddressManagementUrl;
 COMPONENT_EXPORT(PLUS_ADDRESSES_FEATURES)
 extern const base::FeatureParam<std::string> kPlusAddressExcludedSites;
 
-}  // namespace plus_addresses
+// Url for user to report issues with plus addresses.
+COMPONENT_EXPORT(PLUS_ADDRESSES_FEATURES)
+extern const base::FeatureParam<std::string> kPlusAddressErrorReportUrl;
+
+// Used to disable this feature when requests to the server repeatedly fail with
+// a 403.
+COMPONENT_EXPORT(PLUS_ADDRESSES_FEATURES)
+extern const base::FeatureParam<bool> kDisableForForbiddenUsers;
+
+}  // namespace plus_addresses::features
 
 #endif  // COMPONENTS_PLUS_ADDRESSES_FEATURES_H_

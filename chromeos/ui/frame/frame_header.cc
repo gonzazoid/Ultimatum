@@ -173,7 +173,7 @@ void FrameHeader::FrameAnimatorView::StopAnimation() {
   }
 }
 
-BEGIN_METADATA(FrameHeader, FrameAnimatorView, views::View)
+BEGIN_METADATA(FrameHeader, FrameAnimatorView)
 END_METADATA
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -471,7 +471,7 @@ void FrameHeader::LayoutHeaderInternal() {
       caption_button_container_size.width(),
       caption_button_container_size.height());
 
-  caption_button_container()->Layout();
+  caption_button_container()->DeprecatedLayoutImmediately();
 
   int origin = 0;
   if (back_button_) {

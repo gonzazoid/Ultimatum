@@ -43,7 +43,6 @@ CpuProbe::~CpuProbe() {
 
 void CpuProbe::StartSampling(base::OnceClosure started_callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  CHECK(!got_probe_baseline_) << "got_probe_baseline_ incorrectly reset";
 
   // Schedule the first CpuProbe update right away. This update result will
   // not be reported but will set `got_probe_baseline_`.
@@ -55,21 +54,19 @@ void CpuProbe::RequestSample(SampleCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // Don't check `got_probe_baseline_` until the result is received since it
   // will be set asynchronously.
-  Update(base::BindOnce(&CpuProbe::OnPressureSampleAvailable, GetWeakPtr(),
+  Update(base::BindOnce(&CpuProbe::OnSampleAvailable, GetWeakPtr(),
                         std::move(callback)));
 }
 
 void CpuProbe::OnSamplingStarted(base::OnceClosure started_callback,
-                                 absl::optional<PressureSample>) {
+                                 std::optional<CpuSample>) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  CHECK_EQ(got_probe_baseline_, false);
   got_probe_baseline_ = true;
   std::move(started_callback).Run();
 }
 
-void CpuProbe::OnPressureSampleAvailable(
-    SampleCallback callback,
-    absl::optional<PressureSample> sample) {
+void CpuProbe::OnSampleAvailable(SampleCallback callback,
+                                 std::optional<CpuSample> sample) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   CHECK_EQ(got_probe_baseline_, true);

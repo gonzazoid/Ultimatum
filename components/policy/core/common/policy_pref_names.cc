@@ -22,9 +22,6 @@ const char kEnterpriseMDMManagementWindows[] =
 // Integer pref that stores the Mac enterprise MDM management authority.
 const char kEnterpriseMDMManagementMac[] =
     "management.platform.enterprise_mdm_mac";
-// Boolean pref that indicates whether integration with macOS Screen Time should
-// be enabled.
-const char kScreenTimeEnabled[] = "policy.screen_time";
 #endif
 
 // Enterprise policy controlled value representing whether the user may be shown
@@ -162,6 +159,9 @@ const char kForcePermissionPolicyUnloadDefaultEnabled[] =
 // applied when a AlwaysOn VPN is active but not connected.
 const char kAlwaysOnVpnPreConnectUrlAllowlist[] =
     "policy.alwayson_vpn_pre_connect_url_allowlist";
+
+// Boolean value for the FloatingWorkspaceEnabled policy
+const char kFloatingWorkspaceEnabled[] = "ash.floating_workspace_enabled";
 #endif
 }  // namespace policy_prefs
 }  // namespace policy

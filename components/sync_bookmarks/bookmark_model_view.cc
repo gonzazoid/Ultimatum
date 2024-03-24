@@ -110,18 +110,13 @@ void BookmarkModelView::SetURL(const bookmarks::BookmarkNode* node,
                           bookmarks::metrics::BookmarkEditSource::kOther);
 }
 
-const bookmarks::BookmarkNode* BookmarkModelView::GetNodeByUuid(
-    const base::Uuid& uuid) const {
-  return bookmark_model_->GetNodeByUuid(uuid);
-}
-
 const bookmarks::BookmarkNode* BookmarkModelView::AddFolder(
     const bookmarks::BookmarkNode* parent,
     size_t index,
     const std::u16string& title,
     const bookmarks::BookmarkNode::MetaInfoMap* meta_info,
-    absl::optional<base::Time> creation_time,
-    absl::optional<base::Uuid> uuid) {
+    std::optional<base::Time> creation_time,
+    std::optional<base::Uuid> uuid) {
   return bookmark_model_->AddFolder(parent, index, title, meta_info,
                                     creation_time, uuid);
 }
@@ -132,8 +127,8 @@ const bookmarks::BookmarkNode* BookmarkModelView::AddURL(
     const std::u16string& title,
     const GURL& url,
     const bookmarks::BookmarkNode::MetaInfoMap* meta_info,
-    absl::optional<base::Time> creation_time,
-    absl::optional<base::Uuid> uuid) {
+    std::optional<base::Time> creation_time,
+    std::optional<base::Uuid> uuid) {
   return bookmark_model_->AddURL(parent, index, title, url, meta_info,
                                  creation_time, uuid);
 }
@@ -192,9 +187,12 @@ void BookmarkModelViewUsingLocalOrSyncableNodes::RemoveAllSyncableNodes() {
   underlying_model()->RemoveAllUserBookmarks();
 }
 
-bool BookmarkModelViewUsingLocalOrSyncableNodes::
-    HasWellKnownPermanentNodeUuids() const {
-  return true;
+const bookmarks::BookmarkNode*
+BookmarkModelViewUsingLocalOrSyncableNodes::GetNodeByUuid(
+    const base::Uuid& uuid) const {
+  return underlying_model()->GetNodeByUuid(
+      uuid,
+      bookmarks::BookmarkModel::NodeTypeForUuidLookup::kLocalOrSyncableNodes);
 }
 
 BookmarkModelViewUsingAccountNodes::BookmarkModelViewUsingAccountNodes(
@@ -230,9 +228,11 @@ void BookmarkModelViewUsingAccountNodes::RemoveAllSyncableNodes() {
   underlying_model()->RemoveAccountPermanentFolders();
 }
 
-bool BookmarkModelViewUsingAccountNodes::HasWellKnownPermanentNodeUuids()
-    const {
-  return false;
+const bookmarks::BookmarkNode*
+BookmarkModelViewUsingAccountNodes::GetNodeByUuid(
+    const base::Uuid& uuid) const {
+  return underlying_model()->GetNodeByUuid(
+      uuid, bookmarks::BookmarkModel::NodeTypeForUuidLookup::kAccountNodes);
 }
 
 }  // namespace sync_bookmarks

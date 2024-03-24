@@ -67,9 +67,9 @@ class ASH_EXPORT SavedDeskItemView : public views::Button,
                                      public OverviewFocusableView,
                                      public views::ViewTargeterDelegate,
                                      public views::TextfieldController {
- public:
-  METADATA_HEADER(SavedDeskItemView);
+  METADATA_HEADER(SavedDeskItemView, views::Button)
 
+ public:
   explicit SavedDeskItemView(std::unique_ptr<DeskTemplate> saved_desk);
   SavedDeskItemView(const SavedDeskItemView&) = delete;
   SavedDeskItemView& operator=(const SavedDeskItemView&) = delete;
@@ -114,7 +114,7 @@ class ASH_EXPORT SavedDeskItemView : public views::Button,
 
   // views::Button:
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
-  void Layout() override;
+  void Layout(PassKey) override;
   void OnViewFocused(views::View* observed_view) override;
   void OnViewBlurred(views::View* observed_view) override;
   void OnFocus() override;

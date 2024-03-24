@@ -290,7 +290,7 @@ JNI_ZERO_COMPONENT_BUILD_EXPORT bool ${REGISTRATION_NAME}(JNIEnv* env) {
   const int number_of_methods = std::size(kMethods_${ESCAPED_PROXY_CLASS});
 
   jni_zero::ScopedJavaLocalRef<jclass> native_clazz =
-      base::android::GetClass(env, "${PROXY_CLASS}");
+      jni_zero::GetClass(env, "${PROXY_CLASS}");
   if (env->RegisterNatives(
       native_clazz.obj(),
       kMethods_${ESCAPED_PROXY_CLASS},
@@ -433,8 +433,8 @@ def CreateFromDict(options, registration_dict):
 #include <iterator>
 
 #include "third_party/jni_zero/jni_export.h"
-#include "third_party/jni_zero/jni_int_wrapper.h"
 #include "third_party/jni_zero/jni_zero_helper.h"
+#include "third_party/jni_zero/jni_zero.h"
 
 
 // Step 1: Forward declarations (classes).

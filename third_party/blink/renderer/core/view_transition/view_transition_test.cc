@@ -29,6 +29,8 @@
 #include "third_party/blink/renderer/core/layout/layout_shift_tracker.h"
 #include "third_party/blink/renderer/core/layout/layout_view.h"
 #include "third_party/blink/renderer/core/layout/physical_box_fragment.h"
+#include "third_party/blink/renderer/core/navigation_api/navigation_api.h"
+#include "third_party/blink/renderer/core/navigation_api/navigation_history_entry.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/core/style/computed_style_constants.h"
 #include "third_party/blink/renderer/core/testing/core_unit_test_helper.h"
@@ -54,9 +56,10 @@
 namespace blink {
 
 class ViewTransitionTest : public testing::Test,
-                           public PaintTestConfigurations {
+                           public PaintTestConfigurations,
+                           private ScopedViewTransitionOnNavigationForTest {
  public:
-  ViewTransitionTest() {}
+  ViewTransitionTest() : ScopedViewTransitionOnNavigationForTest(true) {}
 
   void SetUp() override {
     web_view_helper_ = std::make_unique<frame_test_helpers::WebViewHelper>();
@@ -1289,6 +1292,63 @@ TEST_P(ViewTransitionTest, GetAnimationsCrashTest) {
   // This test passes if getAnimations() doesn't crash while trying to sort the
   // view-transitions animations.
   ASSERT_GT(GetDocument().getAnimations().size(), 0ul);
+}
+
+TEST_P(ViewTransitionTest, ScriptCallAfterNavigationTransition) {
+  GetDocument().domWindow()->GetSecurityContext().SetSecurityOriginForTesting(
+      SecurityOrigin::Create(KURL("http://test.com")));
+  GetDocument()
+      .domWindow()
+      ->GetFrame()
+      ->Loader()
+      .SetIsNotOnInitialEmptyDocument();
+
+  auto* current_item = MakeGarbageCollected<HistoryItem>();
+  current_item->SetURL(KURL("http://test.com"));
+  GetDocument().domWindow()->navigation()->UpdateCurrentEntryForTesting(
+      *current_item);
+
+  V8TestingScope v8_scope;
+  ScriptState* script_state = v8_scope.GetScriptState();
+  ExceptionState& exception_state = v8_scope.GetExceptionState();
+
+  auto page_conceal_params = mojom::blink::PageConcealEventParams::New();
+  page_conceal_params->url = KURL("http://test.com");
+  page_conceal_params->navigation_type =
+      mojom::blink::NavigationTypeForNavigationApi::kPush;
+  ViewTransitionSupplement::SnapshotDocumentForNavigation(
+      GetDocument(), std::move(page_conceal_params),
+      base::BindOnce([](const ViewTransitionState&) {}));
+
+  ASSERT_TRUE(ViewTransitionSupplement::From(GetDocument())->GetTransition());
+
+  bool callback_issued = false;
+
+  // This callback sets the elements for the start phase of the transition.
+  auto start_setup_lambda =
+      [](const v8::FunctionCallbackInfo<v8::Value>& info) {
+        auto* callback_issued =
+            static_cast<bool*>(info.Data().As<v8::External>()->Value());
+        *callback_issued = true;
+      };
+  auto start_setup_callback =
+      v8::Function::New(
+          v8_scope.GetContext(), start_setup_lambda,
+          v8::External::New(v8_scope.GetIsolate(), &callback_issued))
+          .ToLocalChecked();
+  DOMViewTransition* script_transition =
+      ViewTransitionSupplement::startViewTransition(
+          script_state, GetDocument(),
+          V8ViewTransitionCallback::Create(start_setup_callback),
+          exception_state);
+
+  EXPECT_TRUE(script_transition);
+
+  UpdateAllLifecyclePhasesAndFinishDirectives();
+  test::RunPendingTasks();
+  UpdateAllLifecyclePhasesAndFinishDirectives();
+
+  EXPECT_TRUE(callback_issued);
 }
 
 }  // namespace blink

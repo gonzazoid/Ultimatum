@@ -234,6 +234,7 @@ InputHandler::ScrollStatus InputHandler::ScrollBegin(ScrollState* scroll_state,
   // oopif.
   if (GetViewport().ShouldScroll(*CurrentlyScrollingNode())) {
     outer_viewport_consumed_delta_ = false;
+    inner_viewport_consumed_delta_ = false;
     if (!GetViewport().CanScroll(*CurrentlyScrollingNode(), *scroll_state)) {
       // TODO(crbug.com/1155758): This is a temporary workaround for GuestViews
       // as they create viewport nodes and want to bubble scroll if the
@@ -546,7 +547,9 @@ InputHandlerPointerResult InputHandler::MouseMoveAt(
 }
 
 PointerResultType InputHandler::HitTest(const gfx::PointF& viewport_point) {
-  return scrollbar_controller_->HitTest(viewport_point);
+  return scrollbar_controller_->HitTest(viewport_point)
+             ? PointerResultType::kScrollbarScroll
+             : PointerResultType::kUnhandled;
 }
 
 InputHandlerPointerResult InputHandler::MouseDown(
@@ -1023,6 +1026,9 @@ void InputHandler::ProcessCommitDeltas(
     commit_data->scroll_end_data.gesture_affects_outer_viewport_scroll =
         outer_viewport_consumed_delta_;
     outer_viewport_consumed_delta_ = false;
+    commit_data->scroll_end_data.gesture_affects_inner_viewport_scroll =
+        inner_viewport_consumed_delta_;
+    inner_viewport_consumed_delta_ = false;
   }
 }
 
@@ -1398,12 +1404,12 @@ bool InputHandler::IsInitialScrollHitTestReliable(
   }
 
   // If `first_scrollable_or_opaque_to_hit_test_layer` is not a scrollbar, and
-  // its scroll tree index corresponds to the first scrollable ancestor for
-  // `layer_impl`, the hit test has not escaped to other areas of the scroll
-  // tree and is reliable.
+  // it and `layer_impl` will scroll the same scroll node, the hit test has not
+  // escaped to other areas of the scroll tree and is reliable so far.
   if (!first_scrollable_or_opaque_to_hit_test_layer->IsScrollbarLayer() &&
-      closest_scroll_node->id ==
-          first_scrollable_or_opaque_to_hit_test_layer->scroll_tree_index()) {
+      closest_scroll_node == GetNodeToScroll(scroll_tree.Node(
+                                 first_scrollable_or_opaque_to_hit_test_layer
+                                     ->scroll_tree_index()))) {
     out_node_to_scroll = closest_scroll_node;
     return true;
   }
@@ -1639,6 +1645,10 @@ void InputHandler::ScrollLatchedScroller(ScrollState* scroll_state,
             std::abs(result.outer_viewport_scrolled_delta.y()) > kEpsilon) {
           outer_viewport_consumed_delta_ = true;
         }
+        if (std::abs(result.inner_viewport_scrolled_delta.x()) > kEpsilon ||
+            std::abs(result.inner_viewport_scrolled_delta.y()) > kEpsilon) {
+          inner_viewport_consumed_delta_ = true;
+        }
       } else {
         applied_delta = ComputeScrollDelta(scroll_node, delta);
         compositor_delegate_->GetImplDeprecated().ScrollAnimationCreate(
@@ -1674,6 +1684,10 @@ void InputHandler::ScrollLatchedScroller(ScrollState* scroll_state,
       if (std::abs(result.outer_viewport_scrolled_delta.x()) > kEpsilon ||
           std::abs(result.outer_viewport_scrolled_delta.y()) > kEpsilon) {
         outer_viewport_consumed_delta_ = true;
+      }
+      if (std::abs(result.inner_viewport_scrolled_delta.x()) > kEpsilon ||
+          std::abs(result.inner_viewport_scrolled_delta.y()) > kEpsilon) {
+        inner_viewport_consumed_delta_ = true;
       }
     } else {
       applied_delta = ScrollSingleNode(scroll_node, delta, viewport_point,

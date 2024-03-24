@@ -7,14 +7,15 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <vector>
 
+#include "ash/constants/ash_features.h"
 #include "ash/shell.h"
 #include "ash/system/camera/camera_effects_controller.h"
-#include "ash/webui/common/mojom/sea_pen.mojom.h"
+#include "ash/wallpaper/wallpaper_utils/sea_pen_metadata_utils.h"
 #include "base/functional/bind.h"
-#include "chrome/browser/ash/wallpaper_handlers/sea_pen_fetcher.h"
+#include "chrome/browser/ash/system_web_apps/apps/personalization_app/personalization_app_sea_pen_provider_base.h"
 #include "chrome/browser/ash/wallpaper_handlers/wallpaper_fetcher_delegate.h"
+#include "components/manta/features.h"
 #include "content/public/browser/web_ui.h"
 #include "ui/gfx/codec/jpeg_codec.h"
 
@@ -51,9 +52,19 @@ VcBackgroundUISeaPenProviderImpl::VcBackgroundUISeaPenProviderImpl(
         wallpaper_fetcher_delegate)
     : PersonalizationAppSeaPenProviderBase(
           web_ui,
-          std::move(wallpaper_fetcher_delegate)) {}
+          std::move(wallpaper_fetcher_delegate),
+          manta::proto::FeatureName::CHROMEOS_VC_BACKGROUNDS) {}
 
 VcBackgroundUISeaPenProviderImpl::~VcBackgroundUISeaPenProviderImpl() = default;
+
+void VcBackgroundUISeaPenProviderImpl::BindInterface(
+    mojo::PendingReceiver<ash::personalization_app::mojom::SeaPenProvider>
+        receiver) {
+  CHECK(::ash::features::IsVcBackgroundReplaceEnabled());
+  CHECK(::manta::features::IsMantaServiceEnabled());
+  ::ash::personalization_app::PersonalizationAppSeaPenProviderBase::
+      BindInterface(std::move(receiver));
+}
 
 void VcBackgroundUISeaPenProviderImpl::SelectRecentSeaPenImageInternal(
     const base::FilePath& path,
@@ -89,12 +100,11 @@ void VcBackgroundUISeaPenProviderImpl::DeleteRecentSeaPenImage(
 
 void VcBackgroundUISeaPenProviderImpl::OnFetchWallpaperDoneInternal(
     const SeaPenImage& sea_pen_image,
-    const std::string& query_info,
+    const ash::personalization_app::mojom::SeaPenQueryPtr& query,
     base::OnceCallback<void(bool success)> callback) {
-  // TODO(charleszhao): handle query_info properly.
-  // Set camera background with image content.
+  const std::string metadata = QueryDictToXmpString(SeaPenQueryToDict(query));
   GetCameraEffectsController()->SetBackgroundImageFromContent(
-      std::string(sea_pen_image.jpg_bytes), std::move(callback));
+      sea_pen_image, metadata, std::move(callback));
 }
 
 }  // namespace ash::vc_background_ui

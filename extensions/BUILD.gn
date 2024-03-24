@@ -278,16 +278,6 @@ test("extensions_unittests") {
     "//third_party/mesa_headers",
   ]
 
-  if (is_fuchsia) {
-    additional_manifest_fragments = [
-      # TODO(https://crbug.com/1185811): Investigate removing the requirement
-      # for VmexResource.
-      "//build/config/fuchsia/test/mark_vmo_executable.shard.test-cml",
-      "//build/config/fuchsia/test/network.shard.test-cml",
-      "//third_party/fuchsia-sdk/sdk/pkg/vulkan/client.shard.cml",
-    ]
-  }
-
   if (is_chromeos) {
     deps += [
       "//chrome/browser/chromeos/extensions/telemetry/api:extensions_unittests",

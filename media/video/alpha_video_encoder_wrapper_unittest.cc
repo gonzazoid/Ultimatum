@@ -150,7 +150,6 @@ class AlphaVideoEncoderWrapperTest
  protected:
   VideoCodec codec_;
   VideoCodecProfile profile_;
-  std::vector<uint8_t> resize_buff_;
 
   MockMediaLog media_log_;
   base::test::TaskEnvironment task_environment_;
@@ -163,7 +162,7 @@ TEST_P(AlphaVideoEncoderWrapperTest, InitializeAndFlush) {
   options.frame_size = gfx::Size(640, 480);
   bool output_called = false;
   VideoEncoder::OutputCB output_cb = base::BindLambdaForTesting(
-      [&](VideoEncoderOutput, absl::optional<VideoEncoder::CodecDescription>) {
+      [&](VideoEncoderOutput, std::optional<VideoEncoder::CodecDescription>) {
         output_called = true;
       });
 
@@ -186,7 +185,7 @@ TEST_P(AlphaVideoEncoderWrapperTest, ForceAllKeyFrames) {
 
   VideoEncoder::OutputCB output_cb = base::BindLambdaForTesting(
       [&](VideoEncoderOutput output,
-          absl::optional<VideoEncoder::CodecDescription> desc) {
+          std::optional<VideoEncoder::CodecDescription> desc) {
         EXPECT_TRUE(output.key_frame);
         outputs_count++;
       });
@@ -223,7 +222,7 @@ TEST_P(AlphaVideoEncoderWrapperTest, OutputCountEqualsFrameCount) {
 
   VideoEncoder::OutputCB output_cb = base::BindLambdaForTesting(
       [&](VideoEncoderOutput output,
-          absl::optional<VideoEncoder::CodecDescription> desc) {
+          std::optional<VideoEncoder::CodecDescription> desc) {
         EXPECT_NE(output.data, nullptr);
         EXPECT_GT(output.size, 0u);
         EXPECT_NE(output.alpha_data, nullptr);
@@ -265,7 +264,7 @@ TEST_P(AlphaVideoEncoderWrapperTest, EncodeAndDecode) {
 
   VideoEncoder::OutputCB encoder_output_cb = base::BindLambdaForTesting(
       [&, this](VideoEncoderOutput output,
-                absl::optional<VideoEncoder::CodecDescription> desc) {
+                std::optional<VideoEncoder::CodecDescription> desc) {
         auto buffer =
             DecoderBuffer::FromArray(std::move(output.data), output.size);
         buffer->set_timestamp(output.timestamp);

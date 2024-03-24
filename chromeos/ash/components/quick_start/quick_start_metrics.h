@@ -11,6 +11,8 @@
 #include "base/timer/elapsed_timer.h"
 #include "chromeos/ash/components/quick_start/quick_start_response_type.h"
 
+class GoogleServiceAuthError;
+
 namespace ash::quick_start {
 
 class QuickStartMetrics {
@@ -137,6 +139,20 @@ class QuickStartMetrics {
   // //tools/metrics/histograms/metadata/quickstart/enums.xml, and should always
   // reflect it (do not change one without changing the other). Entries should
   // be never modified or deleted. Only additions possible.
+  enum class GaiaAuthenticationResult {
+    kUnknownError = 0,
+    kSuccess = 1,
+    kResponseParsingError = 2,
+    kRejection = 3,
+    kAdditionalChallengesOnSource = 4,
+    kAdditionalChallengesOnTarget = 5,
+    kMaxValue = kAdditionalChallengesOnTarget,
+  };
+
+  // This enum is tied directly to a UMA enum defined in
+  // //tools/metrics/histograms/metadata/quickstart/enums.xml, and should always
+  // reflect it (do not change one without changing the other). Entries should
+  // be never modified or deleted. Only additions possible.
   enum class WifiTransferResultFailureReason {
     kConnectionDroppedDuringAttempt = 0,
     kEmptyResponseBytes = 1,
@@ -214,6 +230,16 @@ class QuickStartMetrics {
   const QuickStartMetrics& operator=(const QuickStartMetrics&) = delete;
   virtual ~QuickStartMetrics();
 
+  // Records the start of an attempt to fetch challenge bytes from Gaia.
+  // Challenge bytes are later used to generate a Remote Attestation certificate
+  // and a FIDO assertion.
+  void RecordChallengeBytesRequested();
+
+  // Records the end of an attempt to fetch challenge bytes from Gaia.
+  // `status` is the overall status of the fetch. It is set to
+  // `GoogleServiceAuthError::State::NONE` if the request was successful.
+  void RecordChallengeBytesRequestEnded(const GoogleServiceAuthError& status);
+
   void RecordAttestationCertificateRequested();
 
   // Records the end of a Remote Attestation certificate request. `error_code`
@@ -221,6 +247,11 @@ class QuickStartMetrics {
   // of the error.
   void RecordAttestationCertificateRequestEnded(
       std::optional<AttestationCertificateRequestErrorCode> error_code);
+
+  void RecordGaiaAuthenticationStarted();
+
+  void RecordGaiaAuthenticationRequestEnded(
+      const GaiaAuthenticationResult& result);
 
   void RecordFastPairAdvertisementStarted(AdvertisingMethod advertising_method);
 
@@ -265,10 +296,20 @@ class QuickStartMetrics {
   // received.
   std::unique_ptr<base::ElapsedTimer> message_elapsed_timer_;
 
+  // Timer to keep track of challenge bytes fetch requests. It should be set at
+  // the start of a challenge bytes fetch and destroyed when a response is
+  // received.
+  std::unique_ptr<base::ElapsedTimer> challenge_bytes_fetch_timer_;
+
   // Timer to keep track of remote attestation certificate fetch requests. It
   // should be set at the start of a certificate fetch and destroyed when a
   // response is received.
   std::unique_ptr<base::ElapsedTimer> attestation_certificate_timer_;
+
+  // Timer to keep track of Gaia authentication requests. It should be set at
+  // the start of a Gaia authentication request and destroyed when a response is
+  // received.
+  std::unique_ptr<base::ElapsedTimer> gaia_authentication_timer_;
 };
 
 }  // namespace ash::quick_start

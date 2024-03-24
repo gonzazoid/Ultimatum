@@ -78,7 +78,7 @@ class Tab : public gfx::AnimationDelegate,
   bool GetHitTestMask(SkPath* mask) const override;
 
   // TabSlotView:
-  void Layout() override;
+  void Layout(PassKey) override;
   bool OnKeyPressed(const ui::KeyEvent& event) override;
   bool OnKeyReleased(const ui::KeyEvent& event) override;
   bool OnMousePressed(const ui::MouseEvent& event) override;
@@ -186,6 +186,10 @@ class Tab : public gfx::AnimationDelegate,
   raw_ptr<TabCloseButton> close_button() { return close_button_; }
 
   TabIcon* GetTabIconForTesting() const { return icon_; }
+
+  AlertIndicatorButton* alert_indicator_button_for_testing() {
+    return alert_indicator_button_;
+  }
 
  private:
   class TabCloseButtonObserver;

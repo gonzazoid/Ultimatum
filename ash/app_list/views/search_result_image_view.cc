@@ -48,8 +48,9 @@ constexpr gfx::Insets kFocusRingInsets =
 constexpr double kDraggedImageOpacity = 0.6;
 
 class ImagePreviewView : public views::ImageButton {
+  METADATA_HEADER(ImagePreviewView, views::ImageButton)
+
  public:
-  METADATA_HEADER(ImagePreviewView);
   ImagePreviewView() {
     SetInstallFocusRingOnFocus(false);
     SetFocusBehavior(FocusBehavior::ACCESSIBLE_ONLY);
@@ -74,7 +75,7 @@ class ImagePreviewView : public views::ImageButton {
   }
 };
 
-BEGIN_METADATA(ImagePreviewView, views::ImageButton)
+BEGIN_METADATA(ImagePreviewView)
 END_METADATA
 
 }  // namespace
@@ -168,7 +169,7 @@ void SearchResultImageView::OnMetadataChanged() {
   UpdateAccessibleName();
   // By default, the description will be set to the tooltip text, but the title
   // is already announced in the accessible name.
-  GetViewAccessibility().OverrideDescription(
+  GetViewAccessibility().SetDescription(
       u"", ax::mojom::DescriptionFrom::kAttributeExplicitlyEmpty);
 
   if (!result() || result()->icon().icon.IsEmpty()) {
@@ -199,7 +200,7 @@ void SearchResultImageView::OnMetadataChanged() {
 
 SearchResultImageView::~SearchResultImageView() = default;
 
-BEGIN_METADATA(SearchResultImageView, SearchResultBaseView)
+BEGIN_METADATA(SearchResultImageView)
 END_METADATA
 
 }  // namespace ash

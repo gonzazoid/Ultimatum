@@ -320,7 +320,6 @@ const ui::ImageModel PageInfoViewFactory::GetPermissionIcon(
                    : &vector_icons::kCertificateChromeRefreshIcon;
         break;
 #endif
-      case ContentSettingsType::MIDI:
       case ContentSettingsType::MIDI_SYSEX:
         icon = show_blocked_badge ? &vector_icons::kMidiOffChromeRefreshIcon
                                   : &vector_icons::kMidiChromeRefreshIcon;
@@ -451,7 +450,6 @@ const ui::ImageModel PageInfoViewFactory::GetPermissionIcon(
       icon = &vector_icons::kProtectedContentIcon;
       break;
 #endif
-    case ContentSettingsType::MIDI:
     case ContentSettingsType::MIDI_SYSEX:
       icon = &vector_icons::kMidiIcon;
       break;
@@ -506,6 +504,9 @@ const ui::ImageModel PageInfoViewFactory::GetPermissionIcon(
       break;
     case ContentSettingsType::AUTO_PICTURE_IN_PICTURE:
       icon = &vector_icons::kPictureInPictureIcon;
+      break;
+    case ContentSettingsType::AUTOMATIC_FULLSCREEN:
+      icon = &kFullscreenIcon;
       break;
     default:
       // All other |ContentSettingsType|s do not have icons on desktop or are

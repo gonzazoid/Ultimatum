@@ -112,8 +112,7 @@ SniffingResult MatchesSignature(std::string_view* data,
   return CrossOriginReadBlocking::kNo;
 }
 
-size_t FindFirstJavascriptLineTerminator(const std::string_view& hay,
-                                         size_t pos) {
+size_t FindFirstJavascriptLineTerminator(std::string_view hay, size_t pos) {
   // https://www.ecma-international.org/ecma-262/8.0/index.html#prod-LineTerminator
   // defines LineTerminator ::= <LF> | <CR> | <LS> | <PS>.
   //
@@ -580,7 +579,7 @@ class CrossOriginReadBlocking::CorbResponseAnalyzer::SimpleConfirmationSniffer
 
 Decision CrossOriginReadBlocking::CorbResponseAnalyzer::Init(
     const GURL& request_url,
-    const absl::optional<url::Origin>& request_initiator,
+    const std::optional<url::Origin>& request_initiator,
     mojom::RequestMode request_mode,
     mojom::RequestDestination /*request_destination_from_renderer*/,
     const mojom::URLResponseHead& response) {
@@ -655,7 +654,7 @@ Decision
 CrossOriginReadBlocking::CorbResponseAnalyzer::ShouldBlockBasedOnHeaders(
     mojom::RequestMode request_mode,
     const GURL& request_url,
-    const absl::optional<url::Origin>& request_initiator,
+    const std::optional<url::Origin>& request_initiator,
     const mojom::URLResponseHead& response,
     MimeType canonical_mime_type) {
   // The checks in this method are ordered to rule out blocking in most cases as

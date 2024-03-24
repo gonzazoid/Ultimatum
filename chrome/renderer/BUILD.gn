@@ -159,9 +159,12 @@ static_library("renderer") {
     "//components/content_settings/renderer",
     "//components/continuous_search/renderer",
     "//components/dom_distiller/content/renderer",
+    "//components/facilitated_payments/content/renderer",
+    "//components/facilitated_payments/core/features",
     "//components/feed:buildflags",
     "//components/feed:feature_list",
     "//components/feed/content/renderer:feed_renderer",
+    "//components/google/core/common",
     "//components/heap_profiling/in_process",
     "//components/history_clusters/core",
     "//components/language/core/common",
@@ -178,9 +181,8 @@ static_library("renderer") {
     "//components/page_load_metrics/renderer",
     "//components/paint_preview/buildflags",
     "//components/password_manager/core/common",
+    "//components/pdf/common:constants",
     "//components/permissions:permissions_common",
-    "//components/facilitated_payments/content/renderer",
-    "//components/facilitated_payments/core/features",
     "//components/plugins/renderer",
     "//components/resources:components_resources",
     "//components/resources:components_scaled_resources",
@@ -291,7 +293,6 @@ static_library("renderer") {
     ]
 
     deps += [
-      "//components/pdf/common",
       "//components/pdf/renderer",
       "//pdf:features",
     ]

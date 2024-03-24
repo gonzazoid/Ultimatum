@@ -265,6 +265,34 @@ IN_PROC_BROWSER_TEST_P(SystemWebAppManagerBrowserTest, UpdatesLaunchStats) {
       << "Expect app to exist";
 }
 
+class SystemWebAppManagerLaunchWithUrlBrowserTest
+    : public TestProfileTypeMixin<SystemWebAppBrowserTestBase> {
+ public:
+  SystemWebAppManagerLaunchWithUrlBrowserTest() {
+    SetSystemWebAppInstallation(
+        TestSystemWebAppInstallation::SetUpAppLaunchWithUrl());
+  }
+};
+
+IN_PROC_BROWSER_TEST_P(SystemWebAppManagerLaunchWithUrlBrowserTest,
+                       LaunchWithCallback) {
+  WaitForTestSystemAppInstall();
+  content::TestNavigationObserver navigation_observer(GetStartUrl());
+  navigation_observer.StartWatchingNewWebContents();
+  ash::SystemAppLaunchParams params;
+  params.launch_source = apps::LaunchSource::kFromOtherApp;
+  params.url = GetStartUrl();
+  bool is_called = false;
+  LaunchSystemWebAppAsync(
+      browser()->profile(), GetAppType(), params, nullptr,
+      base::BindLambdaForTesting(
+          [&is_called](apps::LaunchResult&& callback_result) {
+            is_called = true;
+          }));
+  navigation_observer.Wait();
+  EXPECT_TRUE(is_called);
+}
+
 class SystemWebAppManagerFileHandlingBrowserTestBase
     : public TestProfileTypeMixin<SystemWebAppBrowserTestBase> {
  public:
@@ -904,6 +932,7 @@ IN_PROC_BROWSER_TEST_P(SystemWebAppManagerHasTabStripTest, HasTabStrip) {
   Browser* browser;
   EXPECT_TRUE(LaunchApp(GetAppType(), &browser));
   EXPECT_TRUE(browser->app_controller()->has_tab_strip());
+  EXPECT_FALSE(browser->app_controller()->ShouldHideNewTabButton());
 }
 
 class SystemWebAppManagerHasNoTabStripTest
@@ -1108,6 +1137,15 @@ IN_PROC_BROWSER_TEST_P(SystemWebAppManagerInstallAllAppsBrowserTest,
              "//chrome/browser/ash/extensions/default_app_order.cc, which "
              "should match the order in go/default-apps";
     }
+  }
+
+  // Verify that all system web apps have an icon.
+  for (const auto& [_, delegate] : app_map) {
+    const auto info = delegate->GetWebAppInfo();
+    EXPECT_FALSE(info->manifest_icons.empty())
+        << delegate->GetInternalName() << " needs a manifest icon";
+    EXPECT_FALSE(delegate->GetWebAppInfo()->icon_bitmaps.empty())
+        << delegate->GetInternalName() << " needs an icon bitmap";
   }
 }
 
@@ -1934,5 +1972,8 @@ INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_REGULAR_PROFILE_P(
 
 INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_REGULAR_PROFILE_P(
     SystemWebAppManagerContextMenuBrowserTest);
+
+INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_REGULAR_PROFILE_P(
+    SystemWebAppManagerLaunchWithUrlBrowserTest);
 
 }  // namespace ash

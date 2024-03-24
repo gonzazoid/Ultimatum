@@ -395,6 +395,27 @@ bool RecordLcpInfluencerScriptUrlsHistogram(
   return updater->has_updated();
 }
 
+bool RecordPreconnectOriginsHistogram(const LoadingPredictorConfig& config,
+                                      const std::vector<GURL>& origins,
+                                      LcppData& data) {
+  // There could be multiple preconnect origins. Record each in a separate
+  // histogram.
+  std::unique_ptr<LcppFrequencyStatDataUpdater> updater =
+      LcppFrequencyStatDataUpdater::FromLcppStringFrequencyStatData(
+          config, data.mutable_lcpp_stat()->preconnect_origin_stat());
+  CHECK(updater);
+  for (auto& origin : origins) {
+    const auto& origin_spec = origin.spec();
+    if (!IsValidUrlInLcppStringFrequencyStatData(origin_spec)) {
+      continue;
+    }
+    updater->Update(origin_spec);
+  }
+  *data.mutable_lcpp_stat()->mutable_preconnect_origin_stat() =
+      updater->ToLcppStringFrequencyStatData();
+  return updater->has_updated();
+}
+
 bool RecordFetchedFontUrlsHistogram(const LoadingPredictorConfig& config,
                                     const std::vector<GURL>& fetched_font_urls,
                                     LcppData& data) {
@@ -504,7 +525,7 @@ bool IsValidLcpUrlsHistogram(
 
 }  // namespace
 
-absl::optional<blink::mojom::LCPCriticalPathPredictorNavigationTimeHint>
+std::optional<blink::mojom::LCPCriticalPathPredictorNavigationTimeHint>
 ConvertLcppDataToLCPCriticalPathPredictorNavigationTimeHint(
     const LcppData& lcpp_data) {
   std::vector<std::string> lcp_element_locators =
@@ -512,14 +533,16 @@ ConvertLcppDataToLCPCriticalPathPredictorNavigationTimeHint(
   std::vector<GURL> lcp_influencer_scripts =
       PredictLcpInfluencerScripts(lcpp_data);
   std::vector<GURL> fetched_fonts = PredictFetchedFontUrls(lcpp_data);
+  std::vector<GURL> preconnect_origins =
+      PredictPreconnectableOrigins(lcpp_data);
 
   if (!lcp_element_locators.empty() || !lcp_influencer_scripts.empty() ||
-      !fetched_fonts.empty()) {
+      !fetched_fonts.empty() || !preconnect_origins.empty()) {
     return blink::mojom::LCPCriticalPathPredictorNavigationTimeHint(
         std::move(lcp_element_locators), std::move(lcp_influencer_scripts),
-        std::move(fetched_fonts));
+        std::move(fetched_fonts), std::move(preconnect_origins));
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 std::vector<GURL> PredictFetchedFontUrls(const LcppData& data) {
@@ -554,6 +577,40 @@ std::vector<GURL> PredictFetchedFontUrls(const LcppData& data) {
   return font_urls;
 }
 
+std::vector<GURL> PredictPreconnectableOrigins(const LcppData& data) {
+  std::vector<std::pair<double, std::string>>
+      preconnect_origins_with_frequency = ConvertToFrequencyStringPair(
+          data.lcpp_stat().preconnect_origin_stat());
+
+  const double frequency_threshold =
+      blink::features::kLCPPAutoPreconnectFrequencyThreshold.Get();
+  int preconnects_allowed =
+      blink::features::kkLCPPAutoPreconnectMaxPreconnectOriginsCount.Get();
+  if (preconnects_allowed <= 0) {
+    return std::vector<GURL>();
+  }
+
+  std::vector<GURL> preconnect_origins;
+  for (const auto& [frequency, preconnect_url] :
+       preconnect_origins_with_frequency) {
+    // The frequencies are reverse sorted by `ConvertToFrequencyStringPair`.
+    // No need to see later frequencies if the frequency is smaller than the
+    // frequency_threshold.
+    if (frequency < frequency_threshold) {
+      break;
+    }
+    GURL parsed_url(preconnect_url);
+    if (!parsed_url.is_valid() || !parsed_url.SchemeIsHTTPOrHTTPS()) {
+      continue;
+    }
+    preconnect_origins.emplace_back(std::move(parsed_url));
+    if (--preconnects_allowed <= 0) {
+      break;
+    }
+  }
+  return preconnect_origins;
+}
+
 std::vector<GURL> PredictFetchedSubresourceUrls(const LcppData& data) {
   std::vector<GURL> subresource_urls;
   for (const auto& [frequency, subresource_url] : ConvertToFrequencyStringPair(
@@ -582,6 +639,8 @@ bool UpdateLcppDataWithLcppDataInputs(const LoadingPredictorConfig& config,
       RecordFetchedFontUrlsHistogram(config, inputs.font_urls, data);
   data_updated |= RecordFetchedSubresourceUrlsHistogram(
       config, inputs.subresource_urls, data);
+  data_updated |=
+      RecordPreconnectOriginsHistogram(config, inputs.preconnect_origins, data);
   base::UmaHistogramCounts10000("Blink.LCPP.ReportedFontCount",
                                 base::checked_cast<int>(inputs.font_url_count));
   return data_updated;
@@ -603,6 +662,10 @@ bool IsValidLcppStat(const LcppStat& lcpp_stat) {
   }
   if (lcpp_stat.has_fetched_subresource_url_stat() &&
       !IsValidLcpUrlsHistogram(lcpp_stat.fetched_subresource_url_stat())) {
+    return false;
+  }
+  if (lcpp_stat.has_preconnect_origin_stat() &&
+      !IsValidLcpUrlsHistogram(lcpp_stat.preconnect_origin_stat())) {
     return false;
   }
   return true;

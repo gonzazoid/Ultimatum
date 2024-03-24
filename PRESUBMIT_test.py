@@ -1470,96 +1470,6 @@ class CheckNoDownstreamDepsTest(unittest.TestCase):
                      'Expected %d items, found %d: %s'
                      % (0, len(msgs), msgs))
 
-class AndroidDeprecatedJUnitFrameworkTest(unittest.TestCase):
-  def testCheckAndroidTestJUnitFramework(self):
-    mock_input_api = MockInputApi()
-    mock_output_api = MockOutputApi()
-
-    mock_input_api.files = [
-        MockAffectedFile('LalaLand.java', [
-          'random stuff'
-        ]),
-        MockAffectedFile('CorrectUsage.java', [
-          'import org.junit.ABC',
-          'import org.junit.XYZ;',
-        ]),
-        MockAffectedFile('UsedDeprecatedJUnit.java', [
-          'import junit.framework.*;',
-        ]),
-        MockAffectedFile('UsedDeprecatedJUnitAssert.java', [
-          'import junit.framework.Assert;',
-        ]),
-    ]
-    msgs = PRESUBMIT._CheckAndroidTestJUnitFrameworkImport(
-        mock_input_api, mock_output_api)
-    self.assertEqual(1, len(msgs),
-                     'Expected %d items, found %d: %s'
-                     % (1, len(msgs), msgs))
-    self.assertEqual(2, len(msgs[0].items),
-                     'Expected %d items, found %d: %s'
-                     % (2, len(msgs[0].items), msgs[0].items))
-    self.assertTrue('UsedDeprecatedJUnit.java:1' in msgs[0].items,
-                    'UsedDeprecatedJUnit.java not found in errors')
-    self.assertTrue('UsedDeprecatedJUnitAssert.java:1'
-                    in msgs[0].items,
-                    'UsedDeprecatedJUnitAssert not found in errors')
-
-
-class AndroidJUnitBaseClassTest(unittest.TestCase):
-  def testCheckAndroidTestJUnitBaseClass(self):
-    mock_input_api = MockInputApi()
-    mock_output_api = MockOutputApi()
-
-    mock_input_api.files = [
-        MockAffectedFile('LalaLand.java', [
-          'random stuff'
-        ]),
-        MockAffectedFile('CorrectTest.java', [
-          '@RunWith(ABC.class);'
-          'public class CorrectTest {',
-          '}',
-        ]),
-        MockAffectedFile('HistoricallyIncorrectTest.java', [
-          'public class Test extends BaseCaseA {',
-          '}',
-        ], old_contents=[
-          'public class Test extends BaseCaseB {',
-          '}',
-        ]),
-        MockAffectedFile('CorrectTestWithInterface.java', [
-          '@RunWith(ABC.class);'
-          'public class CorrectTest implement Interface {',
-          '}',
-        ]),
-        MockAffectedFile('IncorrectTest.java', [
-          'public class IncorrectTest extends TestCase {',
-          '}',
-        ]),
-        MockAffectedFile('IncorrectWithInterfaceTest.java', [
-          'public class Test implements X extends BaseClass {',
-          '}',
-        ]),
-        MockAffectedFile('IncorrectMultiLineTest.java', [
-          'public class Test implements X, Y, Z',
-          '        extends TestBase {',
-          '}',
-        ]),
-    ]
-    msgs = PRESUBMIT._CheckAndroidTestJUnitInheritance(
-        mock_input_api, mock_output_api)
-    self.assertEqual(1, len(msgs),
-                     'Expected %d items, found %d: %s'
-                     % (1, len(msgs), msgs))
-    self.assertEqual(3, len(msgs[0].items),
-                     'Expected %d items, found %d: %s'
-                     % (3, len(msgs[0].items), msgs[0].items))
-    self.assertTrue('IncorrectTest.java:1' in msgs[0].items,
-                    'IncorrectTest not found in errors')
-    self.assertTrue('IncorrectWithInterfaceTest.java:1'
-                    in msgs[0].items,
-                    'IncorrectWithInterfaceTest not found in errors')
-    self.assertTrue('IncorrectMultiLineTest.java:2' in msgs[0].items,
-                    'IncorrectMultiLineTest not found in errors')
 
 class AndroidDebuggableBuildTest(unittest.TestCase):
 
@@ -2890,7 +2800,7 @@ class BannedTypeCheckTest(unittest.TestCase):
       MockFile('some/java/problematic/requestlayout.java',
                ['requestLayout();']),
       MockFile('some/java/problematic/lastprofile.java',
-               ['Profile.getLastUsedRegularProfile();']),
+               ['ProfileManager.getLastUsedRegularProfile();']),
       MockFile('some/java/problematic/getdrawable1.java',
                ['ResourcesCompat.getDrawable();']),
       MockFile('some/java/problematic/getdrawable2.java',
@@ -3389,6 +3299,23 @@ class StringTest(unittest.TestCase):
              </release>
            </grit>
         """.splitlines()
+  # A grd file with multiple ICU syntax messages without syntax errors.
+  NEW_GRD_CONTENTS_ICU_SYNTAX_OK3 = """<?xml version="1.0" encoding="UTF-8"?>
+           <grit latest_public_release="1" current_release="1">
+             <release seq="1">
+               <messages>
+                 <message name="IDS_TEST1">
+                   {NUM, plural,
+                    =0 {New test text for numeric zero}
+                    =1 {Different test text for numeric one}
+                    =2 {New test text for numeric two}
+                    =3 {New test text for numeric three}
+                    other {Different test text for plural with {NUM} as number}}
+                 </message>
+               </messages>
+             </release>
+           </grit>
+        """.splitlines()
   # A grd file with one ICU syntax message with syntax errors (misses a comma).
   NEW_GRD_CONTENTS_ICU_SYNTAX_ERROR = """<?xml version="1.0" encoding="UTF-8"?>
            <grit latest_public_release="1" current_release="1">
@@ -3481,9 +3408,22 @@ class StringTest(unittest.TestCase):
             'other {Different test text for plural with {NUM} as number}}',
         '</message>',
     '</grit-part>')
+  # A grdp file with multiple ICU syntax messages without syntax errors.
+  NEW_GRDP_CONTENTS_ICU_SYNTAX_OK3 = (
+    '<?xml version="1.0" encoding="utf-8"?>',
+      '<grit-part>',
+        '<message name="IDS_PART_TEST1">',
+           '{NUM, plural,',
+            '=0 {New test text for numeric zero}',
+            '=1 {Different test text for numeric one}',
+            '=2 {New test text for numeric two}',
+            '=3 {New test text for numeric three}',
+            'other {Different test text for plural with {NUM} as number}}',
+        '</message>',
+    '</grit-part>')
 
-  # A grdp file with one ICU syntax message with syntax errors (superfluent
-  # whitespace).
+  # A grdp file with one ICU syntax message with syntax errors (superfluous
+  # space).
   NEW_GRDP_CONTENTS_ICU_SYNTAX_ERROR = (
     '<?xml version="1.0" encoding="utf-8"?>',
       '<grit-part>',
@@ -3882,6 +3822,18 @@ class StringTest(unittest.TestCase):
       MockAffectedFile('test.grd', self.NEW_GRD_CONTENTS_ICU_SYNTAX_OK2,
                        self.NEW_GRD_CONTENTS_ICU_SYNTAX_OK1, action='M'),
       MockAffectedFile('part.grdp', self.NEW_GRDP_CONTENTS_ICU_SYNTAX_OK2,
+                       self.NEW_GRDP_CONTENTS_ICU_SYNTAX_OK1, action='M')])
+    results = PRESUBMIT.CheckStrings(input_api, MockOutputApi())
+    # We expect no ICU syntax errors.
+    icu_errors = [e for e in results
+        if e.message == self.ICU_SYNTAX_ERROR_MESSAGE]
+    self.assertEqual(0, len(icu_errors))
+
+    # Valid changes in ICU syntax. Should not raise an error.
+    input_api = self.makeInputApi([
+      MockAffectedFile('test.grd', self.NEW_GRD_CONTENTS_ICU_SYNTAX_OK3,
+                       self.NEW_GRD_CONTENTS_ICU_SYNTAX_OK1, action='M'),
+      MockAffectedFile('part.grdp', self.NEW_GRDP_CONTENTS_ICU_SYNTAX_OK3,
                        self.NEW_GRDP_CONTENTS_ICU_SYNTAX_OK1, action='M')])
     results = PRESUBMIT.CheckStrings(input_api, MockOutputApi())
     # We expect no ICU syntax errors.
@@ -4986,31 +4938,6 @@ class CheckMockAnnotation(unittest.TestCase):
         errors = PRESUBMIT.CheckMockAnnotation(mock_input, MockOutputApi())
         self.assertEqual(0, len(errors))
 
-
-class LayoutInTestsTest(unittest.TestCase):
-  def testLayoutInTest(self):
-    mock_input = MockInputApi()
-    mock_input.files = [
-        MockFile('path/to/foo_unittest.cc',
-                 ['  foo->Layout();', '  bar.Layout();']),
-    ]
-    errors = PRESUBMIT.CheckNoLayoutCallsInTests(mock_input, MockOutputApi())
-    self.assertNotEqual(0, len(errors))
-
-  def testNoTriggerOnLayoutOverride(self):
-    mock_input = MockInputApi();
-    mock_input.files = [
-        MockFile('path/to/foo_unittest.cc',
-                 ['class TestView: public views::View {',
-                  ' public:',
-                  '  void Layout(); override {',
-                  '    views::View::Layout();',
-                  '    // perform bespoke layout',
-                  '  }',
-                  '};'])
-    ]
-    errors = PRESUBMIT.CheckNoLayoutCallsInTests(mock_input, MockOutputApi())
-    self.assertEqual(0, len(errors))
 
 class AssertNoJsInIosTest(unittest.TestCase):
     def testErrorJs(self):

@@ -9,12 +9,12 @@
 
 import '//resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 import '//resources/polymer/v3_0/paper-progress/paper-progress.js';
-import '//resources/cr_elements/cr_shared_vars.css.js';
-import '//resources/cr_elements/cr_button/cr_button.js';
-import '//resources/cr_elements/chromeos/cros_color_overrides.css.js';
+import '//resources/ash/common/cr_elements/cr_shared_vars.css.js';
+import '//resources/ash/common/cr_elements/cr_button/cr_button.js';
+import '//resources/ash/common/cr_elements/cros_color_overrides.css.js';
 
 import {focusWithoutInk} from 'chrome://resources/js/focus_without_ink.js';
-import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {I18nMixin} from 'chrome://resources/ash/common/cr_elements/i18n_mixin.js';
 import {afterNextRender, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './bluetooth_base_page.html.js';
@@ -75,21 +75,24 @@ export class SettingsBluetoothBasePageElement extends
 
   override connectedCallback(): void {
     super.connectedCallback();
-    afterNextRender(this, () => {
-      if (!this.focusDefault) {
+    afterNextRender(this, () => this.focus());
+  }
+
+  override focus(): void {
+    super.focus();
+    if (!this.focusDefault) {
+      return;
+    }
+
+    const buttons = this.shadowRoot!.querySelectorAll('cr-button');
+    // Focus to the first non-disabled, from the end.
+    for (let i = buttons.length - 1; i >= 0; i--) {
+      const button = buttons.item(i);
+      if (!button.disabled) {
+        focusWithoutInk(button);
         return;
       }
-
-      const buttons = this.shadowRoot!.querySelectorAll('cr-button');
-      // Focus to the first non-disabled, from the end.
-      for (let i = buttons.length - 1; i >= 0; i--) {
-        const button = buttons.item(i);
-        if (!button.disabled) {
-          focusWithoutInk(button);
-          return;
-        }
-      }
-    });
+    }
   }
 
   private onCancelClick_(): void {

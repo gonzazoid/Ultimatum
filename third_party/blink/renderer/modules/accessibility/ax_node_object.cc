@@ -32,13 +32,13 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <queue>
 
 #include "base/auto_reset.h"
 #include "base/containers/contains.h"
 #include "base/containers/fixed_flat_set.h"
 #include "base/numerics/safe_conversions.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/input/web_keyboard_event.h"
 #include "third_party/blink/public/mojom/frame/user_activation_notification_type.mojom-blink.h"
@@ -508,6 +508,12 @@ AXObject* AXNodeObject::ActiveDescendant() {
   return ax_descendant && ax_descendant->IsVisible() ? ax_descendant : nullptr;
 }
 
+bool IsExemptFromInlineBlockCheck(ax::mojom::blink::Role role) {
+  return role == ax::mojom::blink::Role::kSvgRoot ||
+         role == ax::mojom::blink::Role::kCanvas ||
+         role == ax::mojom::blink::Role::kEmbeddedObject;
+}
+
 AXObjectInclusion AXNodeObject::ShouldIncludeBasedOnSemantics(
     IgnoredReasons* ignored_reasons) const {
   DCHECK(GetDocument());
@@ -641,7 +647,7 @@ AXObjectInclusion AXNodeObject::ShouldIncludeBasedOnSemantics(
   // Descendants are pruned: IsRelevantPseudoElementDescendant() returns false.
   // Note: this is duplicated from AXLayoutObject because CSS alt text may apply
   // to both Elements and pseudo-elements.
-  absl::optional<String> alt_text = GetCSSAltText(GetElement());
+  std::optional<String> alt_text = GetCSSAltText(GetElement());
   if (alt_text && !alt_text->empty())
     return kIncludeObject;
 
@@ -664,6 +670,7 @@ AXObjectInclusion AXNodeObject::ShouldIncludeBasedOnSemantics(
           ax::mojom::blink::Role::kAudio,
           ax::mojom::blink::Role::kBanner,
           ax::mojom::blink::Role::kBlockquote,
+          ax::mojom::blink::Role::kCode,
           ax::mojom::blink::Role::kComplementary,
           ax::mojom::blink::Role::kContentDeletion,
           ax::mojom::blink::Role::kContentInfo,
@@ -690,6 +697,7 @@ AXObjectInclusion AXNodeObject::ShouldIncludeBasedOnSemantics(
           ax::mojom::blink::Role::kDocPreface,
           ax::mojom::blink::Role::kDocPrologue,
           ax::mojom::blink::Role::kDocToc,
+          ax::mojom::blink::Role::kEmphasis,
           ax::mojom::blink::Role::kFigcaption,
           ax::mojom::blink::Role::kFigure,
           ax::mojom::blink::Role::kFooter,
@@ -736,12 +744,18 @@ AXObjectInclusion AXNodeObject::ShouldIncludeBasedOnSemantics(
           ax::mojom::blink::Role::kSplitter,
           ax::mojom::blink::Role::kSubscript,
           ax::mojom::blink::Role::kSuperscript,
+          ax::mojom::blink::Role::kStrong,
           ax::mojom::blink::Role::kTerm,
           ax::mojom::blink::Role::kTime,
           ax::mojom::blink::Role::kVideo,
       });
 
   if (base::Contains(always_included_computed_roles, RoleValue())) {
+    return kIncludeObject;
+  }
+
+  // An <hgroup> element has the "group" aria role.
+  if (GetNode()->HasTagName(html_names::kHgroupTag)) {
     return kIncludeObject;
   }
 
@@ -767,6 +781,29 @@ AXObjectInclusion AXNodeObject::ShouldIncludeBasedOnSemantics(
   // Process potential in-page link targets
   if (IsPotentialInPageLinkTarget(*element))
     return kIncludeObject;
+
+  if (AXObjectCache().GetAXMode().has_mode(ui::AXMode::kInlineTextBoxes)) {
+    // We are including inline block elements since we might rely on these for
+    // NextOnLine/PreviousOnLine computations.
+    //
+    // If we have an element with inline
+    // block specified, we should include. There are some roles where we
+    // shouldn't include even if inline block, or we'll get test failures.
+    //
+    // We also only want to include in the tree if the inline block element has
+    // siblings.
+    // Otherwise we will include nodes that we don't need for anything.
+    // Consider a structure where we have a subtree of 12 layers, where each
+    // layer has an inline-block node with a single child that points to the
+    // next layer. All nodes have a single child, meaning that this child has no
+    // siblings.
+    if (!IsExemptFromInlineBlockCheck(native_role_) && GetLayoutObject() &&
+        GetLayoutObject()->IsInline() &&
+        GetLayoutObject()->IsAtomicInlineLevel() &&
+        node->parentNode()->childElementCount() > 1) {
+      return kIncludeObject;
+    }
+  }
 
   // <span> tags are inline tags and not meant to convey information if they
   // have no other ARIA information on them. If we don't ignore them, they may
@@ -851,7 +888,7 @@ std::optional<String> AXNodeObject::GetCSSAltText(const Element* element) {
       if (content_data->IsAltText())
         return To<AltTextContentData>(content_data)->GetText();
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // If the content property is used on a non-pseudo element, match the
@@ -863,7 +900,7 @@ std::optional<String> AXNodeObject::GetCSSAltText(const Element* element) {
     return To<AltTextContentData>(content_data->Next())->GetText();
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 // The following lists are for deciding whether the tags aside,
@@ -2395,7 +2432,7 @@ void AXNodeObject::SerializeMarkerAttributes(ui::AXNodeData* node_data) const {
   std::vector<int32_t> marker_ends;
 
   // First use ARIA markers for spelling/grammar if available.
-  absl::optional<DocumentMarker::MarkerType> aria_marker_type =
+  std::optional<DocumentMarker::MarkerType> aria_marker_type =
       GetAriaSpellingOrGrammarMarker();
   if (aria_marker_type) {
     AXRange range = AXRange::RangeOfContents(*this);
@@ -2818,13 +2855,13 @@ String AXNodeObject::ImageDataUrl(const gfx::Size& max_size) const {
   ImageBitmap* image_bitmap = nullptr;
   if (auto* image = DynamicTo<HTMLImageElement>(node)) {
     image_bitmap =
-        MakeGarbageCollected<ImageBitmap>(image, absl::nullopt, options);
+        MakeGarbageCollected<ImageBitmap>(image, std::nullopt, options);
   } else if (auto* canvas = DynamicTo<HTMLCanvasElement>(node)) {
     image_bitmap =
-        MakeGarbageCollected<ImageBitmap>(canvas, absl::nullopt, options);
+        MakeGarbageCollected<ImageBitmap>(canvas, std::nullopt, options);
   } else if (auto* video = DynamicTo<HTMLVideoElement>(node)) {
     image_bitmap =
-        MakeGarbageCollected<ImageBitmap>(video, absl::nullopt, options);
+        MakeGarbageCollected<ImageBitmap>(video, std::nullopt, options);
   }
   if (!image_bitmap)
     return String();
@@ -3346,8 +3383,12 @@ AXObject* AXNodeObject::ChooserPopup() const {
     default:
 #if DCHECK_IS_ON()
       for (const auto& child : ChildrenIncludingIgnored()) {
-        DCHECK(!IsA<Document>(child->GetNode()))
-            << "Chooser popup exists for " << native_role_;
+        DCHECK(!IsA<Document>(child->GetNode()) ||
+               !child->ParentObject()->IsVisible())
+            << "Chooser popup exists for " << native_role_
+            << "\n* Child: " << child->ToString(true, true)
+            << "\n* Child's immediate parent: "
+            << child->ParentObject()->ToString(true, true);
       }
 #endif
       return nullptr;
@@ -4408,7 +4449,7 @@ void AXNodeObject::LoadInlineTextBoxesHelper() {
     // results are serialized.
     if (!CachedChildrenIncludingIgnored().empty()) {
       AXObjectCache().AddDirtyObjectToSerializationQueue(
-          this, /*subtree*/ false, ax::mojom::blink::EventFrom::kNone,
+          this, ax::mojom::blink::EventFrom::kNone,
           ax::mojom::blink::Action::kNone, {});
     }
   } else {
@@ -4564,7 +4605,8 @@ void AXNodeObject::AddOwnedChildren() {
 
   // Always include owned children.
   for (const auto& owned_child : owned_children) {
-    DCHECK(AXRelationCache::IsValidOwnedChild(owned_child))
+    DCHECK(owned_child->GetNode());
+    DCHECK(AXRelationCache::IsValidOwnedChild(*owned_child->GetNode()))
         << "This object is not allowed to be owned, but it is.\n"
         << owned_child->ToString(true, true);
     AddChildAndCheckIncluded(owned_child, true);
@@ -4579,15 +4621,7 @@ void AXNodeObject::AddChildrenImpl() {
   }
 
   CHECK(NeedsToUpdateChildren());
-
-  if (!CanHaveChildren()) {
-    // TODO(crbug.com/1407397): Make sure this is no longer firing then
-    // transform this block to CHECK(CanHaveChildren());
-    DUMP_WILL_BE_NOTREACHED_NORETURN()
-        << "Should not reach AddChildren() if CanHaveChildren() is false.\n"
-        << ToString(true, true);
-    return;
-  }
+  CHECK(CanHaveChildren());
 
   if (ShouldLoadInlineTextBoxes() && HasLayoutText(this)) {
     AddInlineTextBoxChildren();
@@ -4934,8 +4968,13 @@ Element* AXNodeObject::AnchorElement() const {
   const AXObject* current = this;
   while (current) {
     if (current->IsLink()) {
-      DCHECK(current->GetElement())
-          << "An AXObject* that is a link should always have an element.";
+      if (!current->GetElement()) {
+        // TODO(crbug.com/1524124): Investigate and fix why this gets hit.
+        DUMP_WILL_BE_NOTREACHED_NORETURN()
+            << "An AXObject* that is a link should always have an element.\n"
+            << ToString(true, true) << "\n"
+            << current->ToString(true, true);
+      }
       return current->GetElement();
     }
     current = current->ParentObject();

@@ -5,9 +5,10 @@
 #include "net/cert/cert_verifier.h"
 
 #include <algorithm>
+#include <string_view>
 #include <utility>
 
-#include "base/strings/string_util.h"
+#include "base/containers/span.h"
 #include "base/types/optional_util.h"
 #include "build/build_config.h"
 #include "net/base/features.h"
@@ -61,6 +62,17 @@ class DefaultCertVerifyProcFactory : public net::CertVerifyProcFactory {
   ~DefaultCertVerifyProcFactory() override = default;
 };
 
+base::span<const uint8_t> CryptoBufferToSpan(const CRYPTO_BUFFER* b) {
+  return base::make_span(CRYPTO_BUFFER_data(b), CRYPTO_BUFFER_len(b));
+}
+
+void Sha256UpdateLengthPrefixed(SHA256_CTX* ctx, base::span<const uint8_t> s) {
+  // Include a length prefix to ensure the hash is injective.
+  uint64_t l = s.size();
+  SHA256_Update(ctx, reinterpret_cast<uint8_t*>(&l), sizeof(l));
+  SHA256_Update(ctx, s.data(), s.size());
+}
+
 }  // namespace
 
 CertVerifier::Config::Config() = default;
@@ -74,10 +86,10 @@ CertVerifier::RequestParams::RequestParams() = default;
 
 CertVerifier::RequestParams::RequestParams(
     scoped_refptr<X509Certificate> certificate,
-    base::StringPiece hostname,
+    std::string_view hostname,
     int flags,
-    base::StringPiece ocsp_response,
-    base::StringPiece sct_list)
+    std::string_view ocsp_response,
+    std::string_view sct_list)
     : certificate_(std::move(certificate)),
       hostname_(hostname),
       flags_(flags),
@@ -89,19 +101,17 @@ CertVerifier::RequestParams::RequestParams(
   // sake.
   SHA256_CTX ctx;
   SHA256_Init(&ctx);
-  SHA256_Update(&ctx, CRYPTO_BUFFER_data(certificate_->cert_buffer()),
-                CRYPTO_BUFFER_len(certificate_->cert_buffer()));
+  Sha256UpdateLengthPrefixed(&ctx,
+                             CryptoBufferToSpan(certificate_->cert_buffer()));
   for (const auto& cert_handle : certificate_->intermediate_buffers()) {
-    SHA256_Update(&ctx, CRYPTO_BUFFER_data(cert_handle.get()),
-                  CRYPTO_BUFFER_len(cert_handle.get()));
+    Sha256UpdateLengthPrefixed(&ctx, CryptoBufferToSpan(cert_handle.get()));
   }
-  SHA256_Update(&ctx, hostname.data(), hostname.size());
+  Sha256UpdateLengthPrefixed(&ctx, base::as_byte_span(hostname));
   SHA256_Update(&ctx, &flags, sizeof(flags));
-  SHA256_Update(&ctx, ocsp_response.data(), ocsp_response.size());
-  SHA256_Update(&ctx, sct_list.data(), sct_list.size());
-  SHA256_Final(reinterpret_cast<uint8_t*>(
-                   base::WriteInto(&key_, SHA256_DIGEST_LENGTH + 1)),
-               &ctx);
+  Sha256UpdateLengthPrefixed(&ctx, base::as_byte_span(ocsp_response));
+  Sha256UpdateLengthPrefixed(&ctx, base::as_byte_span(sct_list));
+  key_.resize(SHA256_DIGEST_LENGTH);
+  SHA256_Final(reinterpret_cast<uint8_t*>(key_.data()), &ctx);
 }
 
 CertVerifier::RequestParams::RequestParams(const RequestParams& other) =

@@ -26,6 +26,7 @@ import "chromeos/crosapi/mojom/clipboard.mojom";
 import "chromeos/crosapi/mojom/clipboard_history.mojom";
 import "chromeos/crosapi/mojom/content_protection.mojom";
 import "chromeos/crosapi/mojom/cros_display_config.mojom";
+import "chromeos/crosapi/mojom/debug_interface.mojom";
 import "chromeos/crosapi/mojom/desk.mojom";
 import "chromeos/crosapi/mojom/desk_profiles.mojom";
 import "chromeos/crosapi/mojom/desk_template.mojom";
@@ -71,6 +72,7 @@ import "chromeos/crosapi/mojom/login_state.mojom";
 import "chromeos/crosapi/mojom/policy_namespace.mojom";
 import "chromeos/crosapi/mojom/policy_service.mojom";
 import "chromeos/crosapi/mojom/message_center.mojom";
+import "chromeos/crosapi/mojom/mahi.mojom";
 import "chromeos/crosapi/mojom/metrics.mojom";
 import "chromeos/crosapi/mojom/metrics_reporting.mojom";
 import "chromeos/crosapi/mojom/multi_capture_service.mojom";
@@ -157,8 +159,8 @@ struct BrowserInfo {
 // please note the milestone when you added it, to help us reason about
 // compatibility between the client applications and older ash-chrome binaries.
 //
-// Next version: 131
-// Next method id: 133
+// Next version: 133
+// Next method id: 135
 [Stable, Uuid="8b79c34f-2bf8-4499-979a-b17cac522c1e",
  RenamedFrom="crosapi.mojom.AshChromeService"]
 interface Crosapi {
@@ -279,6 +281,11 @@ interface Crosapi {
   // Added in M106.
   [MinVersion=89] BindCrosDisplayConfigController@93(
       pending_receiver<CrosDisplayConfigController> receiver);
+
+  // Binds the DebugInterfaceRegisterer for registering DebugInterface.
+  // Added in M122.
+  [MinVersion=131] BindDebugInterfaceRegisterer@133(
+      pending_receiver<DebugInterfaceRegisterer> receiver);
 
   // Binds the desk factory interface.
   // Added in M109.
@@ -508,6 +515,11 @@ interface Crosapi {
   // Added in M90.
   [MinVersion=17] BindMachineLearningService@22(
       pending_receiver<chromeos.machine_learning.mojom.MachineLearningService> receiver);
+
+  // Binds the mahi browser delegate to the mahi browser client.
+  // Added in M123.
+  [MinVersion=132] BindMahiBrowserDelegate@134(
+      pending_receiver<MahiBrowserDelegate> receiver);
 
   // Binds the MediaUI interface for the Global Media Controls UI.
   // Added in M113.
@@ -991,8 +1003,8 @@ struct DeviceProperties {
 // Entropy variables which need to be kept in sync between Ash and Lacros
 // throughout a session.
 //
-// Next version: 1
-// Next id: 3
+// Next version: 2
+// Next id: 4
 [Stable]
 struct EntropySource {
   // Metrics service low entropy source of ash chrome.
@@ -1003,6 +1015,13 @@ struct EntropySource {
 
   // Metrics service pseudo low entropy source of ash chrome.
   int32 pseudo_low_entropy@2;
+
+  // The limited entropy randomization source used by ash chrome, provided by
+  // the metrics service. This field should not be null, but is required to be
+  // optional by mojo for backward compatibility. See
+  // https://chromium.googlesource.com/chromium/src/mojo/+/HEAD/public/tools/bindings/README.md#versioned-structs
+  [MinVersion=1]
+  string? limited_entropy_randomization_source@3;
 };
 
 [Stable, Extensible]
@@ -1123,8 +1142,8 @@ enum OpenUrlFrom {
 // parameters here. If a new parameter is added and its value is only known
 // after the user has logged in, please update BrowserPostLoginParams as well.
 //
-// Next version: 75
-// Next id: 75
+// Next version: 77
+// Next id: 77
 [Stable, RenamedFrom="crosapi.mojom.LacrosInitParams"]
 struct BrowserInitParams {
   // This is ash-chrome's version of the Crosapi interface. This is used by
@@ -1568,6 +1587,12 @@ struct BrowserInitParams {
   // If true, "Compose" will be disabled. Only applies on chromeos devices.
   [MinVersion=75]
   bool should_disable_chrome_compose_on_chromeos@75;
+
+  // The seed that is used to randomize the limited entropy synthetic trial. The
+  // group assignment of this trial needs to be the same between Lacros and ash
+  // chrome.
+  [MinVersion=76]
+  uint64 limited_entropy_synthetic_trial_seed@76;
 };
 
 // BrowserPostLoginParams is the subset of parameters in BrowserInitParams
@@ -1717,7 +1742,7 @@ struct OpenUrlParams {
 // has accidentally become a kitchen sink for different features. This was not
 // intentional.
 //
-// Next MinVersion: 76.
+// Next MinVersion: 77.
 // Next ID: 23
 //
 [Stable, Uuid="4e04dc16-b34c-40fd-9e3f-3c55c2c6cf91",
@@ -1769,18 +1794,19 @@ interface BrowserService {
   NewGuestWindow@14([MinVersion=72] int64 target_display_id)
       => ([MinVersion=73] CreationResult result);
 
-  // Opens a new tab in the browser with, currently, the main profile. This may
-  // open a new window, if there's no window. If a new browser is opened and
-  // `should_trigger_session_restore` is set, the new browser will open with the
-  // profile's session startup pref. If this is not set the browser will open
-  // without considering the user's session startup pref. Please see also the
-  // Chrome's NewTab command for details.
+  // Opens a new tab in the browser with the profile that matches `profile_id`.
+  // This may open a new window, if there's no window. If a new browser is
+  // opened and `should_trigger_session_restore` is set, the new browser will
+  // open with the profile's session startup pref. If this is not set the
+  // browser will open without considering the user's session startup pref.
+  // Please see also the Chrome's NewTab command for details.
   // The callback is called on the command execution.
   // This is designed to be equivalent of CTRL+T behavior. By default, this
   // opens a new-tab-page, but extensions may override the behavior.
   // Added in M91.
   [MinVersion=71]
-  NewTab@20() => ([MinVersion=73] CreationResult result);
+  NewTab@20([MinVersion=76] uint64? profile_id)
+      => ([MinVersion=73] CreationResult result);
   // The `should_trigger_session_restore` parameter was deprecated in M108 and
   // is no longer supported. See Launch for something similar.
   [MinVersion=10]

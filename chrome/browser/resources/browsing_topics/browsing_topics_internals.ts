@@ -5,10 +5,11 @@
 import 'chrome://resources/cr_elements/cr_tab_box/cr_tab_box.js';
 
 import {assert} from 'chrome://resources/js/assert.js';
-import {String16} from 'chrome://resources/mojo/mojo/public/mojom/base/string16.mojom-webui.js';
-import {Time, TimeDelta} from 'chrome://resources/mojo/mojo/public/mojom/base/time.mojom-webui.js';
+import type {String16} from 'chrome://resources/mojo/mojo/public/mojom/base/string16.mojom-webui.js';
+import type {Time, TimeDelta} from 'chrome://resources/mojo/mojo/public/mojom/base/time.mojom-webui.js';
 
-import {PageHandler, PageHandlerRemote, WebUITopic} from './browsing_topics_internals.mojom-webui.js';
+import type {PageHandlerRemote, WebUITopic} from './browsing_topics_internals.mojom-webui.js';
+import {PageHandler} from './browsing_topics_internals.mojom-webui.js';
 
 let pageHandler: PageHandlerRemote|null = null;
 let hostsClassificationSequenceNumber = 0;
@@ -210,8 +211,7 @@ async function asyncGetBrowsingTopicsState(calculateNow: boolean) {
     nestedDivs[3]!.textContent += epoch.taxonomyVersion;
 
     epoch.topics.forEach((topic) => {
-      epochDiv.querySelectorAll('table')![0]!.appendChild(
-          createTopicRow(topic));
+      epochDiv.querySelectorAll('table')[0]!.appendChild(createTopicRow(topic));
     });
 
     document.querySelector('#epoch-div-list-wrapper')!.appendChild(epochDiv);

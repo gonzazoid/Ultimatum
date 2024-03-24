@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/loader/prefetched_signed_exchange_manager.h"
 
+#include <optional>
 #include <queue>
 #include <utility>
 
@@ -16,7 +17,6 @@
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/wrapper_shared_url_loader_factory.h"
 #include "services/network/public/mojom/url_loader_factory.mojom-blink.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/devtools/console_message.mojom-blink.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/resource_load_info_notifier_wrapper.h"
@@ -98,7 +98,7 @@ class PrefetchedSignedExchangeManager::PrefetchedSignedExchangeLoader
                          base::TimeDelta timeout_interval,
                          URLLoaderClient* client,
                          WebURLResponse& response,
-                         absl::optional<WebURLError>& error,
+                         std::optional<WebURLError>& error,
                          scoped_refptr<SharedBuffer>& data,
                          int64_t& encoded_data_length,
                          uint64_t& encoded_body_length,
@@ -250,7 +250,8 @@ void PrefetchedSignedExchangeManager::StartPrefetchedLinkHeaderPreloads() {
 std::unique_ptr<URLLoader>
 PrefetchedSignedExchangeManager::MaybeCreateURLLoader(
     const network::ResourceRequest& network_request,
-    Vector<std::unique_ptr<URLLoaderThrottle>>& throttles) {
+    base::OnceCallback<Vector<std::unique_ptr<URLLoaderThrottle>>(void)>
+        create_throttles_callback) {
   if (started_)
     return nullptr;
   const auto* matching_resource = alternative_resources_->FindMatchingEntry(
@@ -264,7 +265,7 @@ PrefetchedSignedExchangeManager::MaybeCreateURLLoader(
           network_request,
           frame_->GetFrameScheduler()->GetTaskRunner(
               TaskType::kInternalLoading),
-          std::move(throttles));
+          std::move(create_throttles_callback).Run());
   loaders_.emplace_back(loader->GetWeakPtr());
   return loader;
 }

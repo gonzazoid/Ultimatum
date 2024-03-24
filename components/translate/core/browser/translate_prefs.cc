@@ -609,7 +609,7 @@ std::vector<std::string> TranslatePrefs::GetNeverPromptSitesBetween(
   std::vector<std::string> result;
   const auto& dict = prefs_->GetDict(prefs::kPrefNeverPromptSitesWithTime);
   for (const auto entry : dict) {
-    absl::optional<base::Time> time = base::ValueToTime(entry.second);
+    std::optional<base::Time> time = base::ValueToTime(entry.second);
     if (!time) {
       // Badly formatted preferences may be synced from the server, see
       // https://crbug.com/1295549
@@ -959,9 +959,12 @@ void TranslatePrefs::MigrateNeverPromptSites() {
   // Migration copies any sites on the deprecated never prompt pref to
   // the new version and clears all references to the old one. This will
   // make subsequent calls to migrate no-ops.
-  ScopedDictPrefUpdate never_prompt_list_update(
-      prefs_, prefs::kPrefNeverPromptSitesWithTime);
-  base::Value::Dict& never_prompt_list = never_prompt_list_update.Get();
+
+  // Use of ScopedDictPrefUpdate is avoided since a call to its Get() ensures
+  // that the observers are notified upon destruction no matter if the value was
+  // changed or not.
+  base::Value::Dict never_prompt_list =
+      prefs_->GetDict(prefs::kPrefNeverPromptSitesWithTime).Clone();
   ScopedListPrefUpdate deprecated_prompt_list_update(
       prefs_, kPrefNeverPromptSitesDeprecated);
   base::Value::List& deprecated_list = deprecated_prompt_list_update.Get();
@@ -974,6 +977,8 @@ void TranslatePrefs::MigrateNeverPromptSites() {
     }
   }
   deprecated_list.clear();
+  prefs_->SetDict(prefs::kPrefNeverPromptSitesWithTime,
+                  std::move(never_prompt_list));
 }
 
 bool TranslatePrefs::IsValueOnNeverPromptList(const char* pref_id,

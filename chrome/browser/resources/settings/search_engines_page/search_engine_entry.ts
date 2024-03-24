@@ -19,7 +19,8 @@ import {assert} from 'chrome://resources/js/assert.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './search_engine_entry.html.js';
-import {ChoiceMadeLocation, SearchEngine, SearchEnginesBrowserProxy, SearchEnginesBrowserProxyImpl} from './search_engines_browser_proxy.js';
+import type {SearchEngine, SearchEnginesBrowserProxy} from './search_engines_browser_proxy.js';
+import {ChoiceMadeLocation, SearchEnginesBrowserProxyImpl} from './search_engines_browser_proxy.js';
 
 export interface SettingsSearchEngineEntryElement {
   $: {
@@ -76,7 +77,8 @@ export class SettingsSearchEngineEntryElement extends PolymerElement {
   }
 
   private computeShowEditIcon_(): boolean {
-    return !this.engine.canBeActivated && !this.engine.isManaged;
+    return !this.engine.isStarterPack && !this.engine.canBeActivated &&
+        !this.engine.isManaged;
   }
 
   private onDeleteClick_(e: Event) {

@@ -349,7 +349,7 @@ void ApkWebAppService::MaybeUninstallWebApp(const webapps::AppId& web_app_id) {
 
   auto* provider = web_app::WebAppProvider::GetForWebApps(profile_);
   DCHECK(provider);
-  provider->scheduler().RemoveInstallSource(
+  provider->scheduler().RemoveInstallManagementMaybeUninstall(
       web_app_id, web_app::WebAppManagement::kWebAppStore,
       webapps::WebappUninstallSource::kArc,
       base::BindOnce(&ApkWebAppService::OnDidRemoveInstallSource,
@@ -489,6 +489,10 @@ void ApkWebAppService::OnAppRegistryCacheWillBeDestroyed(
 
 void ApkWebAppService::OnWebAppProviderBridgeConnected() {
   SyncArcAndWebApps();
+}
+
+void ApkWebAppService::OnWebAppServiceAshDestroyed() {
+  web_app_service_observer_.Reset();
 }
 
 void ApkWebAppService::MaybeRemoveArcPackageForWebApp(

@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
@@ -67,6 +68,7 @@
 #include "extensions/browser/extension_function_dispatcher.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/warning_service.h"
+#include "extensions/common/extension_id.h"
 #include "extensions/common/mojom/context_type.mojom.h"
 #include "extensions/common/mojom/event_dispatcher.mojom-forward.h"
 #include "extensions/common/permissions/permissions_data.h"
@@ -74,7 +76,6 @@
 #include "net/base/load_flags.h"
 #include "net/http/http_util.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/webui/web_ui_util.h"
 #include "ui/gfx/image/image_skia.h"
@@ -837,7 +838,7 @@ class ExtensionDownloadsEventRouterData : public base::SupportsUserData::Data {
     determiners_.clear();
   }
 
-  void DeterminerRemoved(const std::string& extension_id) {
+  void DeterminerRemoved(const ExtensionId& extension_id) {
     DCHECK_CURRENTLY_ON(BrowserThread::UI);
     for (auto iter = determiners_.begin(); iter != determiners_.end();) {
       if (iter->extension_id == extension_id) {
@@ -851,7 +852,7 @@ class ExtensionDownloadsEventRouterData : public base::SupportsUserData::Data {
     CheckAllDeterminersCalled();
   }
 
-  void AddPendingDeterminer(const std::string& extension_id,
+  void AddPendingDeterminer(const ExtensionId& extension_id,
                             const base::Time& installed) {
     DCHECK_CURRENTLY_ON(BrowserThread::UI);
     for (auto& determiner : determiners_) {
@@ -863,7 +864,7 @@ class ExtensionDownloadsEventRouterData : public base::SupportsUserData::Data {
     determiners_.push_back(DeterminerInfo(extension_id, installed));
   }
 
-  bool DeterminerAlreadyReported(const std::string& extension_id) {
+  bool DeterminerAlreadyReported(const ExtensionId& extension_id) {
     DCHECK_CURRENTLY_ON(BrowserThread::UI);
     for (auto& determiner : determiners_) {
       if (determiner.extension_id == extension_id) {
@@ -899,7 +900,7 @@ class ExtensionDownloadsEventRouterData : public base::SupportsUserData::Data {
   // |extension_id| has already reported. The caller is responsible for
   // validating |filename|.
   bool DeterminerCallback(content::BrowserContext* browser_context,
-                          const std::string& extension_id,
+                          const ExtensionId& extension_id,
                           const base::FilePath& filename,
                           downloads::FilenameConflictAction conflict_action) {
     DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -916,7 +917,7 @@ class ExtensionDownloadsEventRouterData : public base::SupportsUserData::Data {
         if (!filename.empty() ||
             (conflict_action != downloads::FilenameConflictAction::kUniquify)) {
           WarningSet warnings;
-          std::string winner_extension_id;
+          ExtensionId winner_extension_id;
           ExtensionDownloadsEventRouter::DetermineFilenameInternal(
               filename, conflict_action, determiner.extension_id,
               determiner.install_time, determiner_.extension_id,
@@ -941,10 +942,10 @@ class ExtensionDownloadsEventRouterData : public base::SupportsUserData::Data {
 
   struct DeterminerInfo {
     DeterminerInfo();
-    DeterminerInfo(const std::string& e_id, const base::Time& installed);
+    DeterminerInfo(const ExtensionId& e_id, const base::Time& installed);
     ~DeterminerInfo();
 
-    std::string extension_id;
+    ExtensionId extension_id;
     base::Time install_time;
     bool reported;
   };
@@ -1004,7 +1005,7 @@ class ExtensionDownloadsEventRouterData : public base::SupportsUserData::Data {
 int ExtensionDownloadsEventRouterData::determine_filename_timeout_s_ = 15;
 
 ExtensionDownloadsEventRouterData::DeterminerInfo::DeterminerInfo(
-    const std::string& e_id,
+    const ExtensionId& e_id,
     const base::Time& installed)
     : extension_id(e_id), install_time(installed), reported(false) {}
 
@@ -1023,7 +1024,7 @@ bool OnDeterminingFilenameWillDispatchCallback(
     mojom::ContextType target_context,
     const Extension* extension,
     const base::Value::Dict* listener_filter,
-    absl::optional<base::Value::List>& event_args_out,
+    std::optional<base::Value::List>& event_args_out,
     mojom::EventFilteringInfoPtr& event_filtering_info_out) {
   *any_determiners = true;
   base::Time installed =
@@ -1065,7 +1066,7 @@ DownloadedByExtension* DownloadedByExtension::Get(
 }
 
 DownloadedByExtension::DownloadedByExtension(download::DownloadItem* item,
-                                             const std::string& id,
+                                             const ExtensionId& id,
                                              const std::string& name)
     : id_(id), name_(name) {
   item->SetUserData(kKey, base::WrapUnique(this));
@@ -1076,7 +1077,7 @@ DownloadsDownloadFunction::DownloadsDownloadFunction() {}
 DownloadsDownloadFunction::~DownloadsDownloadFunction() {}
 
 ExtensionFunction::ResponseAction DownloadsDownloadFunction::Run() {
-  absl::optional<downloads::Download::Params> params =
+  std::optional<downloads::Download::Params> params =
       downloads::Download::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   const downloads::DownloadOptions& options = params->options;
@@ -1207,7 +1208,7 @@ DownloadsSearchFunction::DownloadsSearchFunction() {}
 DownloadsSearchFunction::~DownloadsSearchFunction() {}
 
 ExtensionFunction::ResponseAction DownloadsSearchFunction::Run() {
-  absl::optional<downloads::Search::Params> params =
+  std::optional<downloads::Search::Params> params =
       downloads::Search::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   DownloadManager* manager = nullptr;
@@ -1256,7 +1257,7 @@ DownloadsPauseFunction::DownloadsPauseFunction() {}
 DownloadsPauseFunction::~DownloadsPauseFunction() {}
 
 ExtensionFunction::ResponseAction DownloadsPauseFunction::Run() {
-  absl::optional<downloads::Pause::Params> params =
+  std::optional<downloads::Pause::Params> params =
       downloads::Pause::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   DownloadItem* download_item = GetDownload(
@@ -1279,7 +1280,7 @@ DownloadsResumeFunction::DownloadsResumeFunction() {}
 DownloadsResumeFunction::~DownloadsResumeFunction() {}
 
 ExtensionFunction::ResponseAction DownloadsResumeFunction::Run() {
-  absl::optional<downloads::Resume::Params> params =
+  std::optional<downloads::Resume::Params> params =
       downloads::Resume::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   DownloadItem* download_item = GetDownload(
@@ -1302,7 +1303,7 @@ DownloadsCancelFunction::DownloadsCancelFunction() {}
 DownloadsCancelFunction::~DownloadsCancelFunction() {}
 
 ExtensionFunction::ResponseAction DownloadsCancelFunction::Run() {
-  absl::optional<downloads::Resume::Params> params =
+  std::optional<downloads::Resume::Params> params =
       downloads::Resume::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   DownloadItem* download_item = GetDownload(
@@ -1320,7 +1321,7 @@ DownloadsEraseFunction::DownloadsEraseFunction() {}
 DownloadsEraseFunction::~DownloadsEraseFunction() {}
 
 ExtensionFunction::ResponseAction DownloadsEraseFunction::Run() {
-  absl::optional<downloads::Erase::Params> params =
+  std::optional<downloads::Erase::Params> params =
       downloads::Erase::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   DownloadManager* manager = nullptr;
@@ -1346,7 +1347,7 @@ DownloadsRemoveFileFunction::DownloadsRemoveFileFunction() {}
 DownloadsRemoveFileFunction::~DownloadsRemoveFileFunction() {}
 
 ExtensionFunction::ResponseAction DownloadsRemoveFileFunction::Run() {
-  absl::optional<downloads::RemoveFile::Params> params =
+  std::optional<downloads::RemoveFile::Params> params =
       downloads::RemoveFile::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   DownloadItem* download_item = GetDownload(
@@ -1381,7 +1382,7 @@ DownloadsAcceptDangerFunction::OnPromptCreatedCallback*
     DownloadsAcceptDangerFunction::on_prompt_created_ = nullptr;
 
 ExtensionFunction::ResponseAction DownloadsAcceptDangerFunction::Run() {
-  absl::optional<downloads::AcceptDanger::Params> params =
+  std::optional<downloads::AcceptDanger::Params> params =
       downloads::AcceptDanger::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   PromptOrWait(params->download_id, 10);
@@ -1460,7 +1461,7 @@ DownloadsShowFunction::DownloadsShowFunction() {}
 DownloadsShowFunction::~DownloadsShowFunction() {}
 
 ExtensionFunction::ResponseAction DownloadsShowFunction::Run() {
-  absl::optional<downloads::Show::Params> params =
+  std::optional<downloads::Show::Params> params =
       downloads::Show::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   DownloadItem* download_item = GetDownload(
@@ -1498,7 +1499,7 @@ DownloadsOpenFunction::DownloadsOpenFunction() {}
 DownloadsOpenFunction::~DownloadsOpenFunction() {}
 
 ExtensionFunction::ResponseAction DownloadsOpenFunction::Run() {
-  absl::optional<downloads::Open::Params> params =
+  std::optional<downloads::Open::Params> params =
       downloads::Open::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   DownloadItem* download_item = GetDownload(
@@ -1570,7 +1571,7 @@ DownloadsSetShelfEnabledFunction::DownloadsSetShelfEnabledFunction() {}
 DownloadsSetShelfEnabledFunction::~DownloadsSetShelfEnabledFunction() {}
 
 ExtensionFunction::ResponseAction DownloadsSetShelfEnabledFunction::Run() {
-  absl::optional<downloads::SetShelfEnabled::Params> params =
+  std::optional<downloads::SetShelfEnabled::Params> params =
       downloads::SetShelfEnabled::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   // TODO(devlin): Solve this with the feature system.
@@ -1626,7 +1627,7 @@ DownloadsSetUiOptionsFunction::DownloadsSetUiOptionsFunction() = default;
 DownloadsSetUiOptionsFunction::~DownloadsSetUiOptionsFunction() = default;
 
 ExtensionFunction::ResponseAction DownloadsSetUiOptionsFunction::Run() {
-  absl::optional<downloads::SetUiOptions::Params> params =
+  std::optional<downloads::SetUiOptions::Params> params =
       downloads::SetUiOptions::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   const downloads::UiOptions& options = params->options;
@@ -1685,11 +1686,10 @@ void DownloadsGetFileIconFunction::SetIconExtractorForTesting(
 }
 
 ExtensionFunction::ResponseAction DownloadsGetFileIconFunction::Run() {
-  absl::optional<downloads::GetFileIcon::Params> params =
+  std::optional<downloads::GetFileIcon::Params> params =
       downloads::GetFileIcon::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
-  const absl::optional<downloads::GetFileIconOptions>& options =
-      params->options;
+  const std::optional<downloads::GetFileIconOptions>& options = params->options;
   int icon_size = kDefaultIconSize;
   if (options && options->size)
     icon_size = *options->size;
@@ -1823,11 +1823,11 @@ void ExtensionDownloadsEventRouter::OnDeterminingFilename(
 void ExtensionDownloadsEventRouter::DetermineFilenameInternal(
     const base::FilePath& filename,
     downloads::FilenameConflictAction conflict_action,
-    const std::string& suggesting_extension_id,
+    const ExtensionId& suggesting_extension_id,
     const base::Time& suggesting_install_time,
-    const std::string& incumbent_extension_id,
+    const ExtensionId& incumbent_extension_id,
     const base::Time& incumbent_install_time,
-    std::string* winner_extension_id,
+    ExtensionId* winner_extension_id,
     base::FilePath* determined_filename,
     downloads::FilenameConflictAction* determined_conflict_action,
     WarningSet* warnings) {
@@ -1861,7 +1861,7 @@ void ExtensionDownloadsEventRouter::DetermineFilenameInternal(
 bool ExtensionDownloadsEventRouter::DetermineFilename(
     content::BrowserContext* browser_context,
     bool include_incognito,
-    const std::string& ext_id,
+    const ExtensionId& ext_id,
     int download_id,
     const base::FilePath& const_filename,
     downloads::FilenameConflictAction conflict_action,

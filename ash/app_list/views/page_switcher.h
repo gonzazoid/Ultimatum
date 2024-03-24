@@ -35,8 +35,7 @@ class PageSwitcher : public views::View,
 
   // Overridden from views::View:
   gfx::Size CalculatePreferredSize() const override;
-  void Layout() override;
-  const char* GetClassName() const override;
+  void Layout(PassKey) override;
   void OnThemeChanged() override;
 
  private:

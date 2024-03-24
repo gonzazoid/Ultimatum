@@ -27,7 +27,7 @@ import * as BrowserDebugger from 'devtools/panels/browser_debugger/browser_debug
       </body>
     `);
 
-  Common.Settings.settingForTest('showEventListenersForAncestors').set(false);
+  Common.Settings.settingForTest('show-event-listeners-for-ancestors').set(false);
   var scriptURL = 'http://127.0.0.1:8000/devtools/service-workers/resources/service-worker-empty.js';
   var scope = 'http://127.0.0.1:8000/devtools/service-workers/resources/scope1/';
 
@@ -50,7 +50,7 @@ import * as BrowserDebugger from 'devtools/panels/browser_debugger/browser_debug
     SourcesTestRunner.selectThread(executionContext.target());
     TestRunner.addResult('Context is service worker: ' + isServiceWorker());
     TestRunner.addResult('Dumping listeners');
-    await UI.ViewManager.ViewManager.instance().showView('sources.globalListeners').then(() => {
+    await UI.ViewManager.ViewManager.instance().showView('sources.global-listeners').then(() => {
       objectEventListenersPane = UI.Context.Context.instance().flavor(BrowserDebugger.ObjectEventListenersSidebarPane.ObjectEventListenersSidebarPane);
       objectEventListenersPane.update();
       ElementsTestRunner.expandAndDumpEventListeners(objectEventListenersPane.eventListenersView, step3);

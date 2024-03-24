@@ -204,11 +204,26 @@ void LocalFileSuggestionProvider::OnValidationComplete(
 
   std::vector<FileSuggestData> final_results;
   for (auto& result : results.first) {
-    final_results.emplace_back(
-        FileSuggestionType::kLocalFile, result.path,
-        app_list::GetJustificationString(result.info.last_accessed,
-                                         result.info.last_modified),
-        /*timestamp=*/absl::nullopt, result.score);
+    if (result.info.last_accessed > result.info.last_modified) {
+      std::optional<std::u16string> justification_string =
+          app_list::GetJustificationString(app_list::JustificationType::kViewed,
+                                           result.info.last_accessed,
+                                           /*user_name=*/"");
+      final_results.emplace_back(
+          FileSuggestionType::kLocalFile, result.path, justification_string,
+          /*timestamp=*/result.info.last_accessed,
+          /*secondary_timestamp=*/std::nullopt, result.score);
+    } else {
+      std::optional<std::u16string> justification_string =
+          app_list::GetJustificationString(
+              app_list::JustificationType::kModifiedByCurrentUser,
+              result.info.last_modified,
+              /*user_name=*/"");
+      final_results.emplace_back(
+          FileSuggestionType::kLocalFile, result.path, justification_string,
+          /*timestamp=*/result.info.last_modified,
+          /*secondary_timestamp=*/std::nullopt, result.score);
+    }
   }
 
   // Sort valid results high-to-low by score.

@@ -20,7 +20,6 @@
 #include "components/content_settings/core/common/content_settings_pattern.h"
 #include "components/tpcd/metadata/parser.h"
 #include "net/base/features.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using component_updater::ComponentUpdateService;
 
@@ -48,7 +47,7 @@ std::optional<std::string> ReadComponentFromDisk(
   std::string contents;
   if (!base::ReadFileToString(file_path, &contents)) {
     VLOG(1) << "Failed reading from " << file_path.value();
-    return absl::nullopt;
+    return std::nullopt;
   }
   return contents;
 }
@@ -146,6 +145,11 @@ bool TpcdMetadataComponentInstallerPolicy::VerifyInstallation(
         !ContentSettingsPattern::FromString(me.secondary_pattern_spec())
              .IsValid()) {
       WriteMetrics(TpcdMetadataInstallationResult::kErroneousSpec);
+      return false;
+    }
+
+    if (!me.has_source()) {
+      WriteMetrics(TpcdMetadataInstallationResult::kErroneousSource);
       return false;
     }
   }

@@ -7,7 +7,9 @@ package org.chromium.chrome.browser.tasks.tab_management;
 import android.content.Context;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
+import org.chromium.base.Token;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabCreationState;
@@ -16,8 +18,8 @@ import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.tabmodel.TabModelSelectorObserver;
 import org.chromium.chrome.browser.tabmodel.TabModelSelectorTabModelObserver;
-import org.chromium.chrome.browser.tasks.tab_groups.EmptyTabGroupModelFilterObserver;
 import org.chromium.chrome.browser.tasks.tab_groups.TabGroupModelFilter;
+import org.chromium.chrome.browser.tasks.tab_groups.TabGroupModelFilterObserver;
 import org.chromium.chrome.browser.tasks.tab_groups.TabGroupTitleUtils;
 import org.chromium.chrome.browser.ui.messages.snackbar.Snackbar;
 import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
@@ -27,28 +29,34 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * A controller that listens to
- * {@link TabGroupModelFilter.Observer#didCreateGroup(List, List, List)} and shows a
- * undo snackbar.
+ * A controller that listens to {@link TabGroupModelFilterObserver#didCreateGroup(List, List, List)}
+ * and shows a undo snackbar.
  */
 public class UndoGroupSnackbarController implements SnackbarManager.SnackbarController {
     private final Context mContext;
     private final TabModelSelector mTabModelSelector;
     private final SnackbarManager mSnackbarManager;
-    private final TabGroupModelFilter.Observer mTabGroupModelFilterObserver;
+    private final TabGroupModelFilterObserver mTabGroupModelFilterObserver;
     private final TabModelSelectorObserver mTabModelSelectorObserver;
     private final TabModelSelectorTabModelObserver mTabModelSelectorTabModelObserver;
 
     private class TabUndoInfo {
         public final Tab tab;
         public final int tabOriginalIndex;
-        public final int tabOriginalGroupId;
+        public final int tabOriginalRootId;
+        public final @Nullable Token tabOriginalTabGroupId;
         public final String destinationGroupTitle;
 
-        TabUndoInfo(Tab tab, int tabIndex, int tabGroupId, String destinationGroupTitle) {
+        TabUndoInfo(
+                Tab tab,
+                int tabIndex,
+                int rootId,
+                @Nullable Token tabGroupId,
+                String destinationGroupTitle) {
             this.tab = tab;
             this.tabOriginalIndex = tabIndex;
-            this.tabOriginalGroupId = tabGroupId;
+            this.tabOriginalRootId = rootId;
+            this.tabOriginalTabGroupId = tabGroupId;
             this.destinationGroupTitle = destinationGroupTitle;
         }
     }
@@ -66,12 +74,13 @@ public class UndoGroupSnackbarController implements SnackbarManager.SnackbarCont
         mTabModelSelector = tabModelSelector;
         mSnackbarManager = snackbarManager;
         mTabGroupModelFilterObserver =
-                new EmptyTabGroupModelFilterObserver() {
+                new TabGroupModelFilterObserver() {
                     @Override
                     public void didCreateGroup(
                             List<Tab> tabs,
                             List<Integer> tabOriginalIndex,
                             List<Integer> originalRootId,
+                            List<Token> originalTabGroupId,
                             String destinationGroupTitle) {
                         assert tabs.size() == tabOriginalIndex.size();
 
@@ -79,10 +88,12 @@ public class UndoGroupSnackbarController implements SnackbarManager.SnackbarCont
                         for (int i = 0; i < tabs.size(); i++) {
                             Tab tab = tabs.get(i);
                             int index = tabOriginalIndex.get(i);
-                            int groupId = originalRootId.get(i);
+                            int rootId = originalRootId.get(i);
+                            Token tabGroupId = originalTabGroupId.get(i);
 
                             tabUndoInfo.add(
-                                    new TabUndoInfo(tab, index, groupId, destinationGroupTitle));
+                                    new TabUndoInfo(
+                                            tab, index, rootId, tabGroupId, destinationGroupTitle));
                         }
                         showUndoGroupSnackbar(tabUndoInfo);
                     }
@@ -130,7 +141,7 @@ public class UndoGroupSnackbarController implements SnackbarManager.SnackbarCont
 
     /**
      * Cleans up this class, removes {@link TabModelSelectorObserver} from {@link TabModelSelector}
-     * and {@link TabGroupModelFilter.Observer} from {@link TabGroupModelFilter}.
+     * and {@link TabGroupModelFilterObserver} from {@link TabGroupModelFilter}.
      */
     public void destroy() {
         if (mTabModelSelector != null) {
@@ -174,7 +185,7 @@ public class UndoGroupSnackbarController implements SnackbarManager.SnackbarCont
     public void onDismissNoAction(Object actionData) {
         // Delete the original tab group titles of the merging tabs once the merge is committed.
         for (TabUndoInfo info : (List<TabUndoInfo>) actionData) {
-            TabGroupTitleUtils.deleteTabGroupTitle(info.tabOriginalGroupId);
+            TabGroupTitleUtils.deleteTabGroupTitle(info.tabOriginalRootId);
         }
     }
 
@@ -197,7 +208,10 @@ public class UndoGroupSnackbarController implements SnackbarManager.SnackbarCont
         for (int i = data.size() - 1; i >= 0; i--) {
             TabUndoInfo info = data.get(i);
             tabGroupModelFilter.undoGroupedTab(
-                    info.tab, info.tabOriginalIndex, info.tabOriginalGroupId);
+                    info.tab,
+                    info.tabOriginalIndex,
+                    info.tabOriginalRootId,
+                    info.tabOriginalTabGroupId);
         }
     }
 }

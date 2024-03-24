@@ -28,9 +28,9 @@ namespace ash {
 // A view that mirrors the client area of a single (source) window.
 class ASH_EXPORT WindowMirrorView : public views::View,
                                     public aura::WindowObserver {
- public:
-  METADATA_HEADER(WindowMirrorView);
+  METADATA_HEADER(WindowMirrorView, views::View)
 
+ public:
   explicit WindowMirrorView(aura::Window* source,
                             bool show_non_client_view = false,
                             bool sync_bounds = false);
@@ -51,7 +51,7 @@ class ASH_EXPORT WindowMirrorView : public views::View,
 
   // views::View:
   gfx::Size CalculatePreferredSize() const override;
-  void Layout() override;
+  void Layout(PassKey) override;
   bool GetNeedsNotificationWhenVisibleBoundsChange() const override;
   void OnVisibleBoundsChanged() override;
   void AddedToWidget() override;

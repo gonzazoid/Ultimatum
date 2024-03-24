@@ -24,6 +24,16 @@
 - (void)setContentNotificationsFooterItem:
     (TableViewHeaderFooterItem*)contentNotificationsFooterItem;
 
+// Initializes the tips notifications item.
+- (void)setTipsNotificationsItem:(TableViewItem*)tipsNotificationsItem;
+
+// Initializes the tips notifications footer item.
+- (void)setTipsNotificationsFooterItem:
+    (TableViewHeaderFooterItem*)tipsNotificationsFooterItem;
+
+// Called when an item is updated and needs to be reloaded.
+- (void)reloadData;
+
 @end
 
 #endif  // IOS_CHROME_BROWSER_UI_SETTINGS_PRICE_NOTIFICATIONS_PRICE_NOTIFICATIONS_CONSUMER_H_

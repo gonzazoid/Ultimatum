@@ -11,7 +11,7 @@ import androidx.annotation.Nullable;
 
 import org.chromium.base.ResettersForTesting;
 import org.chromium.base.metrics.RecordHistogram;
-import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
 import org.chromium.chrome.browser.signin.services.SigninManager;
 import org.chromium.chrome.browser.ui.signin.SyncConsentActivityLauncher;
@@ -93,7 +93,7 @@ public final class SyncConsentActivityLauncherImpl implements SyncConsentActivit
     public boolean launchActivityIfAllowed(Context context, @SigninAccessPoint int accessPoint) {
         SigninManager signinManager =
                 IdentityServicesProvider.get()
-                        .getSigninManager(Profile.getLastUsedRegularProfile());
+                        .getSigninManager(ProfileManager.getLastUsedRegularProfile());
         if (signinManager.isSyncOptInAllowed()) {
             launchInternal(context, SyncConsentFragmentBase.createArguments(accessPoint, null));
             return true;
@@ -104,31 +104,6 @@ public final class SyncConsentActivityLauncherImpl implements SyncConsentActivit
             ManagedPreferencesUtils.showManagedByAdministratorToast(context);
         }
         return false;
-    }
-
-    /**
-     * Launches the {@link SyncConsentActivity} with Tangible Sync flow.
-     * @param accessPoint {@link SigninAccessPoint} for starting sign-in flow.
-     * @param accountName The account to select.
-     */
-    @Override
-    public void launchActivityForTangibleSyncFlow(
-            Context context, @SigninAccessPoint int accessPoint, String accountName) {
-        launchInternal(
-                context,
-                SyncConsentFragmentBase.createArgumentsForTangibleSync(accessPoint, accountName));
-    }
-
-    /**
-     * Launches the {@link SyncConsentActivity} with "New Account" sign-in flow for Tangible Sync.
-     * @param accessPoint {@link SigninAccessPoint} for starting sign-in flow.
-     */
-    @Override
-    public void launchActivityForTangibleSyncAddAccountFlow(
-            Context context, @SigninAccessPoint int accessPoint) {
-        launchInternal(
-                context,
-                SyncConsentFragmentBase.createArgumentsForTangibleSyncAddAccountFlow(accessPoint));
     }
 
     private void launchInternal(Context context, Bundle fragmentArgs) {

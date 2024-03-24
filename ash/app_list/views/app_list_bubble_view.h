@@ -24,6 +24,7 @@ namespace ash {
 class ApplicationDragAndDropHost;
 class AppListA11yAnnouncer;
 class AppListBubbleAppsPage;
+class AppListBubbleAppsCollectionsPage;
 class AppListBubbleAssistantPage;
 class AppListBubbleSearchPage;
 class AppListFolderItem;
@@ -100,7 +101,7 @@ class ASH_EXPORT AppListBubbleView : public views::View,
 
   // views::View:
   bool AcceleratorPressed(const ui::Accelerator& accelerator) override;
-  void Layout() override;
+  void Layout(PassKey) override;
   bool GetDropFormats(int* formats,
                       std::set<ui::ClipboardFormatType>* format_types) override;
   bool CanDrop(const OSExchangeData& data) override;
@@ -152,6 +153,7 @@ class ASH_EXPORT AppListBubbleView : public views::View,
   views::View* separator_for_test() { return separator_; }
   bool showing_folder_for_test() { return showing_folder_; }
   AppListBubbleAppsPage* apps_page_for_test() { return apps_page_; }
+  AppListBubbleSearchPage* search_page() { return search_page_; }
   AppListFolderView* folder_view_for_test() { return folder_view_; }
 
  private:
@@ -209,6 +211,7 @@ class ASH_EXPORT AppListBubbleView : public views::View,
   raw_ptr<AppListBubbleAppsPage> apps_page_ = nullptr;
   raw_ptr<AppListBubbleSearchPage> search_page_ = nullptr;
   raw_ptr<AppListBubbleAssistantPage> assistant_page_ = nullptr;
+  raw_ptr<AppListBubbleAppsCollectionsPage> apps_collections_page_ = nullptr;
 
   // Lives in this class because it can overlap the search box.
   raw_ptr<AppListFolderView, DanglingUntriaged> folder_view_ = nullptr;

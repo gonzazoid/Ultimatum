@@ -7,6 +7,7 @@
 #include <map>
 #include <utility>
 
+#include "base/containers/map_util.h"
 #include "base/feature_list.h"
 #include "base/task/bind_post_task.h"
 #include "base/task/single_thread_task_runner.h"
@@ -216,18 +217,23 @@ bool AgentSchedulingGroup::Send(IPC::Message* message) {
 #endif
 
 void AgentSchedulingGroup::AddFrameRoute(
-    int32_t routing_id,
+    const blink::LocalFrameToken& frame_token,
+#if BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
+    int routing_id,
+#endif
     RenderFrameImpl* render_frame,
     scoped_refptr<base::SingleThreadTaskRunner> task_runner) {
-  DCHECK(!listener_map_.Lookup(routing_id));
-  listener_map_.AddWithID(render_frame, routing_id);
+  DCHECK(!base::Contains(listener_map_, frame_token));
+  listener_map_.insert({frame_token, render_frame});
 #if BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
+  DCHECK(!base::Contains(routing_id_map_, routing_id));
+  routing_id_map_.insert({routing_id, render_frame});
   render_thread_->AddRoute(routing_id, render_frame);
 #endif
 
   // See warning in `GetAssociatedInterface`.
   // Replay any `GetAssociatedInterface` calls for this route.
-  auto range = pending_receivers_.equal_range(routing_id);
+  auto range = pending_receivers_.equal_range(frame_token);
   for (auto iter = range.first; iter != range.second; ++iter) {
     ReceiverData& data = iter->second;
     render_frame->OnAssociatedInterfaceRequest(data.name,
@@ -239,10 +245,18 @@ void AgentSchedulingGroup::AddFrameRoute(
 #endif
 }
 
-void AgentSchedulingGroup::RemoveFrameRoute(int32_t routing_id) {
-  DCHECK(listener_map_.Lookup(routing_id));
-  listener_map_.Remove(routing_id);
+void AgentSchedulingGroup::RemoveFrameRoute(
+    const blink::LocalFrameToken& frame_token
 #if BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
+    ,
+    int routing_id
+#endif
+) {
+  DCHECK(base::Contains(listener_map_, frame_token));
+  listener_map_.erase(frame_token);
+#if BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
+  DCHECK(base::Contains(routing_id_map_, routing_id));
+  routing_id_map_.erase(routing_id);
   render_thread_->RemoveRoute(routing_id);
 #endif
 }
@@ -283,14 +297,13 @@ blink::WebView* AgentSchedulingGroup::CreateWebView(
       opener_frame ? opener_frame->View() : nullptr,
       std::move(params->blink_page_broadcast), agent_group_scheduler(),
       params->session_storage_namespace_id, params->base_background_color,
-      params->browsing_context_group_info);
+      params->browsing_context_group_info, &params->color_provider_colors);
 
   bool local_main_frame = params->main_frame->is_local_params();
 
   web_view->SetRendererPreferences(params->renderer_preferences);
   web_view->SetWebPreferences(params->web_preferences);
   web_view->SetPageAttributionSupport(params->attribution_support);
-  web_view->SetColorProviders(params->color_provider_colors);
 
   const bool is_for_nested_main_frame =
       params->type != mojom::ViewWidgetType::kTopLevel;
@@ -438,12 +451,12 @@ void AgentSchedulingGroup::BindAssociatedInterfaces(
 }
 
 void AgentSchedulingGroup::GetRoute(
-    int32_t routing_id,
+    const blink::LocalFrameToken& frame_token,
     mojo::PendingAssociatedReceiver<blink::mojom::AssociatedInterfaceProvider>
         receiver) {
   DCHECK(receiver.is_valid());
   associated_interface_provider_receivers_.Add(
-      this, std::move(receiver), routing_id,
+      this, std::move(receiver), frame_token,
       agent_group_scheduler_->DefaultTaskRunner());
 }
 
@@ -451,10 +464,10 @@ void AgentSchedulingGroup::GetAssociatedInterface(
     const std::string& name,
     mojo::PendingAssociatedReceiver<blink::mojom::AssociatedInterface>
         receiver) {
-  int32_t routing_id =
+  const auto& frame_token =
       associated_interface_provider_receivers_.current_context();
 
-  if (auto* listener = GetListener(routing_id)) {
+  if (auto* listener = GetListener(frame_token)) {
     listener->OnAssociatedInterfaceRequest(name, receiver.PassHandle());
   } else {
     // THIS IS UNSAFE!
@@ -463,15 +476,20 @@ void AgentSchedulingGroup::GetAssociatedInterface(
     // broken even after the corresponding `AddRoute` happens. Browser should
     // avoid calling this before the corresponding `AddRoute`, but this is a
     // short term workaround until that happens.
-    pending_receivers_.emplace(routing_id,
+    pending_receivers_.emplace(frame_token,
                                ReceiverData(name, std::move(receiver)));
   }
 }
 
-RenderFrameImpl* AgentSchedulingGroup::GetListener(int32_t routing_id) {
-  DCHECK_NE(routing_id, MSG_ROUTING_CONTROL);
-
-  return listener_map_.Lookup(routing_id);
+RenderFrameImpl* AgentSchedulingGroup::GetListener(
+    const blink::LocalFrameToken& frame_token) {
+  return base::FindPtrOrNull(listener_map_, frame_token);
 }
+
+#if BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
+RenderFrameImpl* AgentSchedulingGroup::GetListener(int32_t routing_id) {
+  return base::FindPtrOrNull(routing_id_map_, routing_id);
+}
+#endif
 
 }  // namespace content

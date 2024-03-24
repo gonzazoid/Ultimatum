@@ -58,7 +58,6 @@ class DevToolsRendererChannel : public blink::mojom::DevToolsAgentHost {
   void AttachSession(DevToolsSession* session);
   void InspectElement(const gfx::Point& point);
   using GetUniqueFormCallback = base::OnceCallback<void(uint64_t)>;
-  void GetUniqueFormControlId(int node_id, GetUniqueFormCallback callback);
   void ForceDetachWorkerSessions();
 
   using ChildTargetCreatedCallback =
@@ -81,6 +80,7 @@ class DevToolsRendererChannel : public blink::mojom::DevToolsAgentHost {
   void ChildTargetDestroyed(DevToolsAgentHostImpl*);
   void MainThreadDebuggerPaused() override;
   void MainThreadDebuggerResumed() override;
+  void BringToForeground() override;
 
   void CleanupConnection();
   void SetRendererInternal(blink::mojom::DevToolsAgent* agent,

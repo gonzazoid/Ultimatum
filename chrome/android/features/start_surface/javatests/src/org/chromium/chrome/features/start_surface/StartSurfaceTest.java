@@ -71,6 +71,8 @@ import org.chromium.base.test.util.DisableIf;
 import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.DoNotBatch;
 import org.chromium.base.test.util.Feature;
+import org.chromium.base.test.util.Features.DisableFeatures;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.base.test.util.HistogramWatcher;
 import org.chromium.base.test.util.Restriction;
 import org.chromium.chrome.browser.ChromeInactivityTracker;
@@ -83,7 +85,7 @@ import org.chromium.chrome.browser.init.AsyncInitializationActivity;
 import org.chromium.chrome.browser.layouts.LayoutStateProvider;
 import org.chromium.chrome.browser.layouts.LayoutTestUtils;
 import org.chromium.chrome.browser.layouts.LayoutType;
-import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabLaunchType;
 import org.chromium.chrome.browser.tasks.ReturnToChromeUtil;
@@ -95,8 +97,6 @@ import org.chromium.chrome.test.ChromeJUnit4RunnerDelegate;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.chrome.test.R;
 import org.chromium.chrome.test.util.ChromeTabUtils;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.chrome.test.util.browser.suggestions.SuggestionsDependenciesRule;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetTestSupport;
 import org.chromium.components.browser_ui.styles.ChromeColors;
@@ -913,7 +913,8 @@ public class StartSurfaceTest {
         // SpareTab should be created when the start surface is shown.
         CriteriaHelper.pollUiThread(
                 () -> {
-                    WarmupManager.getInstance().hasSpareTab(Profile.getLastUsedRegularProfile());
+                    WarmupManager.getInstance()
+                            .hasSpareTab(ProfileManager.getLastUsedRegularProfile());
                 });
 
         // The spareTab initializes a renderer process.
@@ -927,7 +928,7 @@ public class StartSurfaceTest {
         CriteriaHelper.pollUiThread(
                 () ->
                         !WarmupManager.getInstance()
-                                .hasSpareTab(Profile.getLastUsedRegularProfile()));
+                                .hasSpareTab(ProfileManager.getLastUsedRegularProfile()));
         Assert.assertEquals(
                 1,
                 RecordHistogram.getHistogramValueCountForTesting(
@@ -956,7 +957,8 @@ public class StartSurfaceTest {
         // SpareTab should be created when the start surface is shown.
         CriteriaHelper.pollUiThread(
                 () -> {
-                    WarmupManager.getInstance().hasSpareTab(Profile.getLastUsedRegularProfile());
+                    WarmupManager.getInstance()
+                            .hasSpareTab(ProfileManager.getLastUsedRegularProfile());
                 });
 
         // Navigate from StartSurface using search box.
@@ -972,7 +974,7 @@ public class StartSurfaceTest {
         CriteriaHelper.pollUiThread(
                 () ->
                         !WarmupManager.getInstance()
-                                .hasSpareTab(Profile.getLastUsedRegularProfile()));
+                                .hasSpareTab(ProfileManager.getLastUsedRegularProfile()));
         Assert.assertEquals(
                 1,
                 RecordHistogram.getHistogramValueCountForTesting(
@@ -999,7 +1001,8 @@ public class StartSurfaceTest {
         // SpareTab should be created when the start surface is shown.
         CriteriaHelper.pollUiThread(
                 () -> {
-                    WarmupManager.getInstance().hasSpareTab(Profile.getLastUsedRegularProfile());
+                    WarmupManager.getInstance()
+                            .hasSpareTab(ProfileManager.getLastUsedRegularProfile());
                 });
 
         // Navigate from StartSurface using carousel tab switcher.
@@ -1010,7 +1013,7 @@ public class StartSurfaceTest {
         CriteriaHelper.pollUiThread(
                 () ->
                         !WarmupManager.getInstance()
-                                .hasSpareTab(Profile.getLastUsedRegularProfile()));
+                                .hasSpareTab(ProfileManager.getLastUsedRegularProfile()));
         Assert.assertEquals(
                 1,
                 RecordHistogram.getHistogramValueCountForTesting(
@@ -1038,7 +1041,8 @@ public class StartSurfaceTest {
         // SpareTab should be created when the start surface is shown.
         CriteriaHelper.pollUiThread(
                 () -> {
-                    WarmupManager.getInstance().hasSpareTab(Profile.getLastUsedRegularProfile());
+                    WarmupManager.getInstance()
+                            .hasSpareTab(ProfileManager.getLastUsedRegularProfile());
                 });
 
         // The renderer process count should be 1 as spareTab also initializes renderer when the
@@ -1067,7 +1071,8 @@ public class StartSurfaceTest {
         // SpareTab should be created when the start surface is shown.
         CriteriaHelper.pollUiThread(
                 () -> {
-                    WarmupManager.getInstance().hasSpareTab(Profile.getLastUsedRegularProfile());
+                    WarmupManager.getInstance()
+                            .hasSpareTab(ProfileManager.getLastUsedRegularProfile());
                 });
 
         // Navigate from start surface using link
@@ -1077,7 +1082,7 @@ public class StartSurfaceTest {
         CriteriaHelper.pollUiThread(
                 () ->
                         !WarmupManager.getInstance()
-                                .hasSpareTab(Profile.getLastUsedRegularProfile()));
+                                .hasSpareTab(ProfileManager.getLastUsedRegularProfile()));
         Assert.assertEquals(
                 1,
                 RecordHistogram.getHistogramValueCountForTesting(

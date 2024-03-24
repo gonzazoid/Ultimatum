@@ -11,80 +11,30 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "chrome/browser/ui/toolbar/pinned_toolbar_actions_model.h"
-#include "chrome/browser/ui/views/toolbar/toolbar_button.h"
+#include "chrome/browser/ui/toolbar/pinned_toolbar/pinned_toolbar_actions_model.h"
+#include "chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_controller.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_icon_container_view.h"
 #include "ui/actions/action_id.h"
 #include "ui/actions/actions.h"
 #include "ui/base/metadata/metadata_header_macros.h"
-#include "ui/base/models/simple_menu_model.h"
 #include "ui/views/drag_controller.h"
 
-class Browser;
 class BrowserView;
 
+namespace views {
+class ActionViewController;
+}
+
 // Container for pinned actions shown in the toolbar.
-// TODO(crbug.com/1514477): Re-enable animation after the race condition issue
-// is addressed.
 class PinnedToolbarActionsContainer
-    : public views::View,
+    : public ToolbarIconContainerView,
       public PinnedToolbarActionsModel::Observer,
       public views::DragController,
       public ToolbarController::PinnedActionsDelegate {
-  METADATA_HEADER(PinnedToolbarActionsContainer, views::View)
+  METADATA_HEADER(PinnedToolbarActionsContainer, ToolbarIconContainerView)
 
  public:
-  class PinnedActionToolbarButton : public ToolbarButton,
-                                    public ui::SimpleMenuModel::Delegate {
-    METADATA_HEADER(PinnedActionToolbarButton, ToolbarButton)
-
-   public:
-    PinnedActionToolbarButton(Browser* browser,
-                              actions::ActionId action_id,
-                              PinnedToolbarActionsContainer* container);
-    ~PinnedActionToolbarButton() override;
-
-    actions::ActionId GetActionId();
-
-    void ButtonPressed();
-    void AddHighlight();
-    void ResetHighlight();
-    void SetIconVisibility(bool visible);
-    void SetPinned(bool pinned);
-
-    bool IsActive();
-    bool IsInvokingAction();
-
-    // View:
-    bool OnKeyPressed(const ui::KeyEvent& event) override;
-
-    // Button:
-    gfx::Size CalculatePreferredSize() const override;
-    void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
-
-    void UpdatePinnedStateForContextMenu();
-
-    // ui::SimpleMenuModel::Delegate:
-    bool IsItemForCommandIdDynamic(int command_id) const override;
-    std::u16string GetLabelForCommandId(int command_id) const override;
-    void ExecuteCommand(int command_id, int event_flags) override;
-    bool IsCommandIdEnabled(int command_id) const override;
-
-   private:
-    void ActionItemChanged();
-    std::unique_ptr<ui::SimpleMenuModel> CreateMenuModel();
-
-    raw_ptr<Browser> browser_;
-    raw_ptr<actions::ActionItem> action_item_ = nullptr;
-    base::CallbackListSubscription action_changed_subscription_;
-    // Used to ensure the button remains highlighted while active.
-    std::optional<Button::ScopedAnchorHighlight> anchor_higlight_;
-    bool pinned_ = false;
-    bool invoking_action_ = false;
-    raw_ptr<PinnedToolbarActionsContainer> container_;
-  };
-
   explicit PinnedToolbarActionsContainer(BrowserView* browser_view);
   PinnedToolbarActionsContainer(const PinnedToolbarActionsContainer&) = delete;
   PinnedToolbarActionsContainer& operator=(
@@ -94,8 +44,11 @@ class PinnedToolbarActionsContainer
   void UpdateActionState(actions::ActionId id, bool is_active);
   void UpdateDividerFlexSpecification();
   void MovePinnedActionBy(actions::ActionId action_id, int delta);
+  gfx::Size CustomFlexRule(const views::View* view,
+                           const views::SizeBounds& size_bounds);
 
-  void UpdateAllIcons();
+  // ToolbarIconContainerView:
+  void UpdateAllIcons() override;
 
   // views::View:
   void OnThemeChanged() override;
@@ -129,8 +82,11 @@ class PinnedToolbarActionsContainer
   // ToolbarController::PinnedActionsDelegate:
   actions::ActionItem* GetActionItemFor(const actions::ActionId& id) override;
   bool IsOverflowed(const actions::ActionId& id) override;
+  views::View* GetContainerView() override;
+  bool ShouldAnyButtonsOverflow(gfx::Size available_size) const override;
 
   bool IsActionPinned(const actions::ActionId& id);
+  bool IsActionPoppedOutForTesting(const actions::ActionId& id);
 
  private:
   friend class PinnedSidePanelInteractiveTest;
@@ -145,6 +101,11 @@ class PinnedToolbarActionsContainer
   void RemovePinnedActionButtonFor(const actions::ActionId& id);
   PinnedActionToolbarButton* GetPinnedButtonFor(const actions::ActionId& id);
   PinnedActionToolbarButton* GetPoppedOutButtonFor(const actions::ActionId& id);
+  // Returns the size based on the layout manager's default flex specification.
+  gfx::Size DefaultFlexRule(const views::SizeBounds& size_bounds);
+  // Returns the total width of the `popped_out_buttons_` including margins
+  // between them.
+  int CalculatePoppedOutButtonsWidth();
 
   // Sorts child views to display them in the correct order.
   void ReorderViews();
@@ -153,7 +114,6 @@ class PinnedToolbarActionsContainer
   void UpdateViews();
 
   void RemoveButton(PinnedActionToolbarButton* button);
-
   void SetActionButtonIconVisibility(actions::ActionId id, bool visible);
 
   // Moves the dragged action `action_id`.
@@ -173,6 +133,7 @@ class PinnedToolbarActionsContainer
 
   const raw_ptr<BrowserView> browser_view_;
 
+  std::unique_ptr<views::ActionViewController> action_view_controller_;
   std::vector<raw_ptr<PinnedActionToolbarButton, VectorExperimental>>
       pinned_buttons_;
   std::vector<raw_ptr<PinnedActionToolbarButton, VectorExperimental>>

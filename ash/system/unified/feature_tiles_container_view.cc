@@ -48,8 +48,9 @@ int GetTileWeight(FeatureTile::TileType type) {
 // The row container that holds `FeatureTile` elements. Can hold a single
 // primary tile, two primary tiles, or a primary and two compact tiles.
 class FeatureTilesContainerView::RowContainer : public views::FlexLayoutView {
+  METADATA_HEADER(RowContainer, views::FlexLayoutView)
+
  public:
-  METADATA_HEADER(RowContainer);
   explicit RowContainer(FeatureTilesContainerView* container)
       : container_(container) {
     DCHECK(container_);
@@ -72,15 +73,16 @@ class FeatureTilesContainerView::RowContainer : public views::FlexLayoutView {
   const raw_ptr<FeatureTilesContainerView> container_;
 };
 
-BEGIN_METADATA(FeatureTilesContainerView, RowContainer, views::FlexLayoutView)
+BEGIN_METADATA(FeatureTilesContainerView, RowContainer)
 END_METADATA
 
 // The page container that holds `RowContainer` elements. Can hold from one up
 // to four rows depending on the available space. More pages will be created if
 // the available tiles do not fit a single page.
 class FeatureTilesContainerView::PageContainer : public views::FlexLayoutView {
+  METADATA_HEADER(PageContainer, views::FlexLayoutView)
+
  public:
-  METADATA_HEADER(PageContainer);
   PageContainer() {
     SetOrientation(views::LayoutOrientation::kVertical);
     SetCrossAxisAlignment(views::LayoutAlignment::kCenter);
@@ -93,7 +95,7 @@ class FeatureTilesContainerView::PageContainer : public views::FlexLayoutView {
   ~PageContainer() override = default;
 };
 
-BEGIN_METADATA(FeatureTilesContainerView, PageContainer, views::FlexLayoutView)
+BEGIN_METADATA(FeatureTilesContainerView, PageContainer)
 END_METADATA
 
 FeatureTilesContainerView::FeatureTilesContainerView(
@@ -237,8 +239,8 @@ bool FeatureTilesContainerView::OnMouseWheel(const ui::MouseWheelEvent& event) {
                                                         event.type());
 }
 
-void FeatureTilesContainerView::Layout() {
-  views::View::Layout();
+void FeatureTilesContainerView::Layout(PassKey) {
+  LayoutSuperclass<views::View>(this);
 
   // `SelectedPageChanged` is called to recalculate the pages bounds after a
   // Layout (e.g. when changing the UI scale).
@@ -324,7 +326,7 @@ int FeatureTilesContainerView::GetVisibleFeatureTileCount() const {
   return count;
 }
 
-BEGIN_METADATA(FeatureTilesContainerView, views::View)
+BEGIN_METADATA(FeatureTilesContainerView)
 END_METADATA
 
 }  // namespace ash

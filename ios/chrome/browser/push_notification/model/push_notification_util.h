@@ -6,10 +6,25 @@
 #define IOS_CHROME_BROWSER_PUSH_NOTIFICATION_MODEL_PUSH_NOTIFICATION_UTIL_H_
 
 #import <Foundation/Foundation.h>
+#import <UserNotifications/UserNotifications.h>
 
 @class UIApplication;
 @class UNNotificationCategory;
 @class UNNotificationSettings;
+
+namespace push_notification {
+
+// Multiple UMA metrics and the local state pref service rely on this enum.
+// Please do not reorder or delete its entries.
+enum class SettingsAuthorizationStatus {
+  NOTDETERMINED,
+  DENIED,
+  AUTHORIZED,
+  PROVISIONAL,
+  EPHEMERAL,
+  kMaxValue = EPHEMERAL
+};
+}  // namespace push_notification
 
 // This collection of class functions' purpose is to encapsulate the push
 // notification functionality that must interact with Apple in some manner,
@@ -42,12 +57,30 @@
 + (void)requestPushNotificationPermission:
     (void (^)(BOOL granted, BOOL promptShown, NSError* error))completionHandler;
 
+// This function enrolls the user into provisional notifications. If the OS
+// grants this permission, then `completionHandler` is executed with `granted`
+// equaling true. Also, there is a possibility that `completionHandler` will
+// be executed in a background thread. In addition, this function reports
+// permission request's outcome to metrics. It only grants permission if the
+// notification authorization status is NotDetermined which indicates it was
+// never set.  If notifications were already enabled, it returns `granted`
+// equaling true only if the type enabled is Provisional, otherwise it returns
+// false. This function does not present a prompt to the user and runs its
+// logic silently.
++ (void)enableProvisionalPushNotificationPermission:
+    (void (^)(BOOL granted, NSError* error))completionHandler;
+
 // This functions retrieves the authorization and feature-related settings for
 // push notifications. This function ensures that the `completionHandler` is
 // executed on the application's main thread.
 + (void)getPermissionSettings:
     (void (^)(UNNotificationSettings* settings))completionHandler;
 
+// This function updates the value stored in the prefService that represents the
+// user's iOS settings permission status for push notifications. If there is a
+// difference between the prefService's previous value and the new value, the
+// change is logged to UMA.
++ (void)updateAuthorizationStatusPref:(UNAuthorizationStatus)status;
 @end
 
 #endif  // IOS_CHROME_BROWSER_PUSH_NOTIFICATION_MODEL_PUSH_NOTIFICATION_UTIL_H_

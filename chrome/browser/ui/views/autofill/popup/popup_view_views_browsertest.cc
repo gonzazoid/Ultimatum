@@ -16,7 +16,6 @@
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/autofill/core/browser/filling_product.h"
-#include "components/autofill/core/browser/ui/popup_types.h"
 #include "components/autofill/core/browser/ui/suggestion.h"
 #include "components/autofill/core/common/aliases.h"
 #include "components/autofill/core/common/autofill_features.h"
@@ -274,6 +273,22 @@ IN_PROC_BROWSER_TEST_P(PopupViewViewsBrowsertest,
   warning.popup_item_id = PopupItemId::kInsecureContextPaymentDisabledMessage;
   PrepareSuggestions({std::move(warning)});
   ShowAndVerifyUi();
+}
+
+IN_PROC_BROWSER_TEST_P(PopupViewViewsBrowsertest,
+                       NoScrollingForNonExcessiveHeightRootPopup) {
+  controller().set_suggestions(
+      {PopupItemId::kAddressEntry, PopupItemId::kAddressEntry,
+       PopupItemId::kSeparator, PopupItemId::kAutofillOptions});
+  ShowAndVerifyUi(/*popup_has_parent=*/false);
+}
+
+IN_PROC_BROWSER_TEST_P(PopupViewViewsBrowsertest,
+                       NoScrollingForNonExcessiveHeightNonRootPopup) {
+  controller().set_suggestions(
+      {PopupItemId::kAddressEntry, PopupItemId::kAddressEntry,
+       PopupItemId::kSeparator, PopupItemId::kAutofillOptions});
+  ShowAndVerifyUi(/*popup_has_parent=*/true);
 }
 
 IN_PROC_BROWSER_TEST_P(PopupViewViewsBrowsertest,

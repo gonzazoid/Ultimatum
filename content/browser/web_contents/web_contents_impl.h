@@ -132,6 +132,7 @@ class RenderWidgetHostImpl;
 class RenderWidgetHostInputEventRouter;
 class SafeAreaInsetsHost;
 class SavePackage;
+class ScopedAccessibilityMode;
 class ScreenChangeMonitor;
 class ScreenOrientationProvider;
 class SiteInstanceGroup;
@@ -284,7 +285,7 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
 
   // Adds the given accessibility mode to the current accessibility mode
   // bitmap.
-  void AddAccessibilityMode(ui::AXMode mode);
+  void AddAccessibilityModeForTesting(ui::AXMode mode);
 
   // Sets the zoom level for frames associated with this WebContents.
   void UpdateZoom();
@@ -333,6 +334,11 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   // human-readable name.
   std::string GetTitleForMediaControls();
 
+  // Sets the accessibility mode if this WebContents will potentially be
+  // user-visible, and broadcasts it to all of its frames if it differs from the
+  // previous mode.
+  void SetAccessibilityMode(ui::AXMode mode);
+
   // WebContents ------------------------------------------------------
   WebContentsDelegate* GetDelegate() final;
   void SetDelegate(WebContentsDelegate* delegate) override;
@@ -372,7 +378,6 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   bool ShouldOverrideUserAgentForRendererInitiatedNavigation() override;
   void SetAlwaysSendSubresourceNotifications() override;
   bool GetSendSubresourceNotification() override;
-  void EnableAccessibilityMode(ui::AXMode mode) override;
   bool IsWebContentsOnlyAccessibilityModeForTesting() override;
   bool IsFullAccessibilityModeForTesting() override;
   const std::u16string& GetTitle() override;
@@ -504,10 +509,10 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   int GetMaximumZoomPercent() override;
   void SetPageScale(float page_scale_factor) override;
   gfx::Size GetPreferredSize() override;
-  bool GotResponseToLockMouseRequest(
+  bool GotResponseToPointerLockRequest(
       blink::mojom::PointerLockResult result) override;
-  void GotLockMousePermissionResponse(bool allowed) override;
-  void DropMouseLockForTesting() override;
+  void GotPointerLockPermissionResponse(bool allowed) override;
+  void DropPointerLockForTesting() override;
   bool GotResponseToKeyboardLockRequest(bool allowed) override;
   bool HasOpener() override;
   RenderFrameHostImpl* GetOpener() override;
@@ -580,6 +585,8 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   void SetV8CompileHints(base::ReadOnlySharedMemoryRegion data) override;
   void SetTabSwitchStartTime(base::TimeTicks start_time,
                              bool destination_is_loaded) override;
+  bool IsInPreviewMode() const override;
+  void WillActivatePreviewPage() override;
   void ActivatePreviewPage() override;
 
   // Implementation of PageNavigator.
@@ -656,7 +663,7 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
       blink::mojom::CaptureHandleConfigPtr config) override;
   ui::AXMode GetAccessibilityMode() override;
   // Broadcasts the mode change to all frames.
-  void SetAccessibilityMode(ui::AXMode mode) override;
+  void ResetAccessibility() override;
   void AXTreeIDForMainFrameHasChanged() override;
   void AccessibilityEventReceived(
       const AXEventNotificationDetails& details) override;
@@ -668,6 +675,7 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   void RecordAccessibilityEvents(
       bool start_recording,
       std::optional<ui::AXEventCallback> callback) override;
+  void AccessibilityFatalError() override;
   device::mojom::GeolocationContext* GetGeolocationContext() override;
   device::mojom::WakeLockContext* GetWakeLockContext() override;
 #if BUILDFLAG(IS_ANDROID)
@@ -901,6 +909,8 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   network::mojom::AttributionSupport GetAttributionSupport() override;
   void UpdateAttributionSupportRenderer() override;
   static void UpdateAttributionSupportAllRenderers();
+  BackForwardTransitionAnimationManager*
+  GetBackForwardTransitionAnimationManager() override;
 
   void GetMediaCaptureRawDeviceIdsOpened(
       blink::mojom::MediaStreamType type,
@@ -998,10 +1008,10 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
       RenderWidgetHostImpl* render_widget_host,
       base::RepeatingClosure hang_monitor_restarter) override;
   void RendererResponsive(RenderWidgetHostImpl* render_widget_host) override;
-  void RequestToLockMouse(RenderWidgetHostImpl* render_widget_host,
-                          bool user_gesture,
-                          bool last_unlocked_by_target,
-                          bool privileged) override;
+  void RequestToLockPointer(RenderWidgetHostImpl* render_widget_host,
+                            bool user_gesture,
+                            bool last_unlocked_by_target,
+                            bool privileged) override;
   bool RequestKeyboardLock(RenderWidgetHostImpl* render_widget_host,
                            bool esc_key_locked) override;
   void CancelKeyboardLock(RenderWidgetHostImpl* render_widget_host) override;
@@ -1010,10 +1020,11 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   // bool IsFullscreen() const override;
   blink::mojom::DisplayMode GetDisplayMode() const override;
   ui::WindowShowState GetWindowShowState() override;
+  DevicePostureProviderImpl* GetDevicePostureProvider() override;
   bool GetResizable() override;
-  void LostMouseLock(RenderWidgetHostImpl* render_widget_host) override;
-  bool HasMouseLock(RenderWidgetHostImpl* render_widget_host) override;
-  RenderWidgetHostImpl* GetMouseLockWidget() override;
+  void LostPointerLock(RenderWidgetHostImpl* render_widget_host) override;
+  bool HasPointerLock(RenderWidgetHostImpl* render_widget_host) override;
+  RenderWidgetHostImpl* GetPointerLockWidget() override;
   bool OnRenderFrameProxyVisibilityChanged(
       RenderFrameProxyHost* render_frame_proxy_host,
       blink::mojom::FrameVisibility visibility) override;
@@ -1062,7 +1073,7 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   void OnVirtualKeyboardModeChanged(PageImpl& page) override;
   void NotifyPageBecamePrimary(PageImpl& page) override;
 
-  bool IsInPreviewMode() const override;
+  bool IsPageInPreviewMode() const override;
   void CancelPreviewByMojoBinderPolicy(
       const std::string& interface_name) override;
   void OnCanResizeFromWebAPIChanged() override;
@@ -1091,7 +1102,6 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
 
   // NavigationControllerDelegate ----------------------------------------------
 
-  WebContents* DeprecatedGetWebContents() override;
   void NotifyNavigationEntryCommitted(
       const LoadCommittedDetails& load_details) override;
   void NotifyNavigationEntryChanged(
@@ -1385,7 +1395,7 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   }
 
   RenderWidgetHost* mouse_lock_widget_for_testing() {
-    return mouse_lock_widget_;
+    return pointer_lock_widget_;
   }
 
   ui::mojom::VirtualKeyboardMode GetVirtualKeyboardMode() const;
@@ -1827,6 +1837,12 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   // |current_fullscreen_frame_id_| and notify observers whenever it changes.
   void FullscreenFrameSetUpdated();
 
+  // Adjusts bounds for minimum window size and available screen area
+  // constraints. This compliments similar renderer-side adjustments, using the
+  // resolved display mode for new windows, which renderers may be unable to
+  // determine.
+  int64_t AdjustWindowRect(gfx::Rect* bounds, RenderFrameHostImpl* opener);
+
   // ui::NativeThemeObserver:
   void OnNativeThemeUpdated(ui::NativeTheme* observed_theme) override;
   void OnCaptionStyleUpdated() override;
@@ -2154,7 +2170,7 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
 
   // All live RenderWidgetHostImpls that are created by this object and may
   // outlive it.
-  std::set<RenderWidgetHostImpl*> created_widgets_;
+  std::set<raw_ptr<RenderWidgetHostImpl, SetExperimental>> created_widgets_;
 
   // Process id of the shown fullscreen widget, or kInvalidUniqueID if there is
   // no fullscreen widget.
@@ -2213,6 +2229,9 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
 
   std::unique_ptr<ui::AXEventRecorder> event_recorder_;
 
+  // Enables ui::kAXModeBasic for the duration of a recording session.
+  std::unique_ptr<ScopedAccessibilityMode> recording_mode_;
+
   // Monitors power levels for audio streams associated with this WebContents.
   AudioStreamMonitor audio_stream_monitor_;
 
@@ -2255,7 +2274,8 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
 
   // Stores the RenderWidgetHost that currently holds a mouse lock or nullptr if
   // there's no RenderWidgetHost holding a lock.
-  raw_ptr<RenderWidgetHostImpl, DanglingUntriaged> mouse_lock_widget_ = nullptr;
+  raw_ptr<RenderWidgetHostImpl, DanglingUntriaged> pointer_lock_widget_ =
+      nullptr;
 
   // Stores the RenderWidgetHost that currently holds a keyboard lock or nullptr
   // if no RenderWidgetHost has the keyboard locked.
@@ -2306,7 +2326,7 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
 
   // Stores a set of frames that are fullscreen.
   // See https://fullscreen.spec.whatwg.org.
-  std::set<RenderFrameHostImpl*> fullscreen_frames_;
+  std::set<raw_ptr<RenderFrameHostImpl, SetExperimental>> fullscreen_frames_;
 
   // Store an ID for the frame that is currently fullscreen, or an invalid ID if
   // there is none.
@@ -2413,6 +2433,13 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   base::WeakPtr<FileChooserImpl> active_file_chooser_;
 
   std::optional<base::Location> ownership_location_;
+
+  // Indicates if the instance is hosted in a preview window.
+  // This will be set in Init() and will be reset in WillActivatePreviewPage().
+  bool is_in_preview_mode_ = false;
+
+  // Indicates accessibility had an unrecoverable error.
+  bool accessibility_fatal_error_ = false;
 
   base::WeakPtrFactory<WebContentsImpl> loading_weak_factory_{this};
   base::WeakPtrFactory<WebContentsImpl> weak_factory_{this};

@@ -4,12 +4,14 @@
 
 #include "chrome/browser/enterprise/connectors/analysis/content_analysis_dialog.h"
 
+#include <cstddef>
 #include <memory>
 
 #include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "cc/paint/paint_flags.h"
+#include "chrome/browser/enterprise/connectors/analysis/content_analysis_features.h"
 #include "chrome/browser/safe_browsing/cloud_content_scanning/deep_scanning_utils.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/theme_resources.h"
@@ -124,9 +126,9 @@ class DeepScanningBaseView {
 
 class DeepScanningTopImageView : public DeepScanningBaseView,
                                  public views::ImageView {
- public:
-  METADATA_HEADER(DeepScanningTopImageView);
+  METADATA_HEADER(DeepScanningTopImageView, views::ImageView)
 
+ public:
   using DeepScanningBaseView::DeepScanningBaseView;
 
   void Update() {
@@ -142,14 +144,14 @@ class DeepScanningTopImageView : public DeepScanningBaseView,
   }
 };
 
-BEGIN_METADATA(DeepScanningTopImageView, views::ImageView)
+BEGIN_METADATA(DeepScanningTopImageView)
 END_METADATA
 
 class DeepScanningSideIconImageView : public DeepScanningBaseView,
                                       public views::ImageView {
- public:
-  METADATA_HEADER(DeepScanningSideIconImageView);
+  METADATA_HEADER(DeepScanningSideIconImageView, views::ImageView)
 
+ public:
   using DeepScanningBaseView::DeepScanningBaseView;
 
   void Update() {
@@ -173,14 +175,14 @@ class DeepScanningSideIconImageView : public DeepScanningBaseView,
   }
 };
 
-BEGIN_METADATA(DeepScanningSideIconImageView, views::ImageView)
+BEGIN_METADATA(DeepScanningSideIconImageView)
 END_METADATA
 
 class DeepScanningSideIconSpinnerView : public DeepScanningBaseView,
                                         public views::Throbber {
- public:
-  METADATA_HEADER(DeepScanningSideIconSpinnerView);
+  METADATA_HEADER(DeepScanningSideIconSpinnerView, views::Throbber)
 
+ public:
   using DeepScanningBaseView::DeepScanningBaseView;
 
   void Update() {
@@ -197,7 +199,7 @@ class DeepScanningSideIconSpinnerView : public DeepScanningBaseView,
   }
 };
 
-BEGIN_METADATA(DeepScanningSideIconSpinnerView, views::Throbber)
+BEGIN_METADATA(DeepScanningSideIconSpinnerView)
 END_METADATA
 
 // static
@@ -299,7 +301,7 @@ void ContentAnalysisDialog::AcceptButtonCallback() {
   DCHECK(delegate_);
   DCHECK(is_warning());
   accepted_or_cancelled_ = true;
-  absl::optional<std::u16string> justification = absl::nullopt;
+  std::optional<std::u16string> justification = std::nullopt;
   if (delegate_->BypassRequiresJustification() && bypass_justification_)
     justification = bypass_justification_->GetText();
   delegate_->BypassWarnings(justification);
@@ -411,11 +413,17 @@ views::View* ContentAnalysisDialog::GetContentsView() {
     contents_layout_->AddChildView(CreateSideIcon());
 
     // Add the message.
-    message_ = contents_layout_->AddChildView(std::make_unique<views::Label>());
+    message_ =
+        contents_layout_->AddChildView(std::make_unique<views::StyledLabel>());
     message_->SetText(GetDialogMessage());
     message_->SetLineHeight(kLineHeight);
-    message_->SetMultiLine(true);
-    message_->SetVerticalAlignment(gfx::ALIGN_MIDDLE);
+
+    // Calculate the width of the side icon column with insets and padding.
+    int side_icon_column_width = kMessageAndIconRowLeadingPadding +
+                                 kSideImageInsets.width() + kSideImageSize +
+                                 kSideIconBetweenChildSpacing;
+    message_->SizeToFit(fixed_width() - side_icon_column_width -
+                        kMessageAndIconRowTrailingPadding);
     message_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
 
     if (!is_pending())
@@ -523,13 +531,7 @@ void ContentAnalysisDialog::UpdateViews() {
   // Update the message's text, and send an alert for screen readers since the
   // text changed.
   std::u16string new_message = GetDialogMessage();
-  message_->SetText(new_message);
-  message_->GetViewAccessibility().AnnounceText(std::move(new_message));
-
-  // Add a "Learn More" link for warnings/failures when one is provided.
-  if ((is_failure() || is_warning()) && has_learn_more_url()) {
-    AddLearnMoreLinkToDialog();
-  }
+  UpdateDialogMessage(std::move(new_message));
 
   // Add bypass justification views when required on warning verdicts. The order
   // of the helper functions needs to be preserved for them to appear in the
@@ -978,6 +980,52 @@ void ContentAnalysisDialog::AddJustificationTextLengthToDialog() {
   }
 }
 
+void ContentAnalysisDialog::AddLinksToDialogMessage() {
+  if (!has_custom_message_ranges()) {
+    return;
+  }
+
+  std::vector<std::pair<gfx::Range, GURL>> ranges =
+      *(delegate_->GetCustomRuleMessageRanges());
+  for (const auto& range : ranges) {
+    if (!range.second.is_valid()) {
+      continue;
+    }
+    message_->AddStyleRange(
+        gfx::Range(range.first.start(), range.first.end()),
+        views::StyledLabel::RangeStyleInfo::CreateForLink(base::BindRepeating(
+            [](base::WeakPtr<content::WebContents> web_contents, GURL url,
+               const ui::Event& event) {
+              if (!web_contents) {
+                return;
+              }
+              web_contents->OpenURL(content::OpenURLParams(
+                  url, content::Referrer(),
+                  WindowOpenDisposition::NEW_FOREGROUND_TAB,
+                  ui::PAGE_TRANSITION_LINK,
+                  /*is_renderer_initiated=*/false));
+            },
+            web_contents_->GetWeakPtr(), range.second)));
+  }
+}
+
+void ContentAnalysisDialog::UpdateDialogMessage(std::u16string new_message) {
+  if (IsDialogCustomRuleMessageEnabled() && (is_failure() || is_warning()) &&
+      has_custom_message()) {
+    message_->SetText(new_message);
+    AddLinksToDialogMessage();
+    message_->GetViewAccessibility().AnnounceText(std::move(new_message));
+  } else {
+    message_->SetText(new_message);
+    message_->GetViewAccessibility().AnnounceText(std::move(new_message));
+
+    // Add a "Learn More" link for warnings/failures when one is provided.
+    if ((is_failure() || is_warning()) && has_learn_more_url()) {
+      AddLearnMoreLinkToDialog();
+    }
+  }
+}
+
 bool ContentAnalysisDialog::ShouldUseDarkTopImage() const {
   return color_utils::IsDark(
       contents_view_->GetColorProvider()->GetColor(ui::kColorDialogBackground));
@@ -1055,7 +1103,7 @@ views::Throbber* ContentAnalysisDialog::GetSideIconSpinnerForTesting() const {
   return side_icon_spinner_;
 }
 
-views::Label* ContentAnalysisDialog::GetMessageForTesting() const {
+views::StyledLabel* ContentAnalysisDialog::GetMessageForTesting() const {
   return message_;
 }
 

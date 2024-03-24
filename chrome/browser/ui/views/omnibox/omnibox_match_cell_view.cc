@@ -223,7 +223,9 @@ void OmniboxMatchCellView::ComputeMatchMaxWidths(
             std::min(description_width, kMinimumDescriptionWidth) &&
         !OmniboxFieldTrial::IsActionsUISimplificationEnabled()) {
       *description_max_width = 0;
-      // Since we're not going to display the description, the contents can have
+    }
+    if (*description_max_width == 0) {
+      // If we're not going to display the description, the contents can have
       // the space we reserved for the separator.
       available_width += separator_width;
       *contents_max_width = std::min(contents_width, available_width);
@@ -463,8 +465,8 @@ gfx::Insets OmniboxMatchCellView::GetInsets() const {
                            vertical_margin, right_margin);
 }
 
-void OmniboxMatchCellView::Layout() {
-  views::View::Layout();
+void OmniboxMatchCellView::Layout(PassKey) {
+  LayoutSuperclass<views::View>(this);
 
   const bool two_line = layout_style_ == LayoutStyle::TWO_LINE_SUGGESTION;
   const gfx::Rect child_area = GetContentsBounds();

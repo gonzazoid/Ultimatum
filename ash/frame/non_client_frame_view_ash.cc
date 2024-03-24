@@ -23,6 +23,7 @@
 #include "chromeos/ui/frame/header_view.h"
 #include "chromeos/ui/frame/immersive/immersive_fullscreen_controller.h"
 #include "chromeos/ui/frame/non_client_frame_view_base.h"
+#include "ui/aura/client/aura_constants.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_observer.h"
 #include "ui/base/hit_test.h"
@@ -178,7 +179,9 @@ NonClientFrameViewAsh::NonClientFrameViewAsh(views::Widget* frame)
       frame_context_menu_controller_.get());
 }
 
-NonClientFrameViewAsh::~NonClientFrameViewAsh() = default;
+NonClientFrameViewAsh::~NonClientFrameViewAsh() {
+  header_view_->set_context_menu_controller(nullptr);
+}
 
 // static
 NonClientFrameViewAsh* NonClientFrameViewAsh::Get(aura::Window* window) {
@@ -267,12 +270,27 @@ void NonClientFrameViewAsh::SetFrameOverlapped(bool overlapped) {
     return;
   }
 
+  bool fills_bounds_opaquely = true;
   if (overlapped) {
     // When frame is overlapped with the window area, we need to draw header
     // view in front of client content.
     // TODO(b/282627319): remove the layer at the right condition.
     header_view_->SetPaintToLayer();
     header_view_->layer()->parent()->StackAtTop(header_view_->layer());
+
+    // Overlapped frames are now painted onto a dedicated header view layer
+    // instead of the non-opaque layer that hosts the widget.
+    // For windows that have rounded corners, the upper corners of the header
+    // are rounded while the compositor still thinks that the layer fills the
+    // whole rect, including the two upper corners.
+    // Therefore, the header view layer also needs to be non-opaque to prevent
+    // visual artifacts from appearing around the upper corners.
+    if (chromeos::ShouldWindowHaveRoundedCorners(frame_->GetNativeWindow())) {
+      fills_bounds_opaquely = false;
+    }
+  }
+  if (header_view_->layer()) {
+    header_view_->layer()->SetFillsBoundsOpaquely(fills_bounds_opaquely);
   }
 
   frame_overlapped_ = overlapped;
@@ -296,6 +314,18 @@ void NonClientFrameViewAsh::OnWindowPropertyChanged(aura::Window* window,
   // the `window`accordingly.
   if (chromeos::CanPropertyEffectFrameRadius(key)) {
     UpdateWindowRoundedCorners();
+
+    bool fills_bounds_opaquely = true;
+    // For overlapped frames header_view_ layer needs to non-opaque to avoid
+    // visual artifacts at the upper corners.
+    // See comment in NonClientFrameViewAsh::SetFrameOverlapped.
+    if (frame_overlapped_ &&
+        chromeos::ShouldWindowHaveRoundedCorners(frame_->GetNativeWindow())) {
+      fills_bounds_opaquely = false;
+    }
+    if (header_view_->layer()) {
+      header_view_->layer()->SetFillsBoundsOpaquely(fills_bounds_opaquely);
+    }
   }
 }
 
@@ -308,9 +338,13 @@ void NonClientFrameViewAsh::UpdateWindowRoundedCorners() {
     return;
   }
 
+  aura::Window* frame_window = GetWidget()->GetNativeWindow();
+
+  const int corner_radius = chromeos::GetFrameCornerRadius(frame_window);
+  frame_window->SetProperty(aura::client::kWindowCornerRadiusKey,
+                            corner_radius);
+
   if (frame_enabled_) {
-    const int corner_radius =
-        chromeos::GetFrameCornerRadius(GetWidget()->GetNativeWindow());
     header_view_->SetHeaderCornerRadius(corner_radius);
   }
 
@@ -318,7 +352,7 @@ void NonClientFrameViewAsh::UpdateWindowRoundedCorners() {
     return;
   }
 
-  GetWidget()->client_view()->UpdateWindowRoundedCorners();
+  GetWidget()->client_view()->UpdateWindowRoundedCorners(corner_radius);
 }
 
 base::RepeatingCallback<void()>
@@ -366,7 +400,7 @@ void NonClientFrameViewAsh::UpdateDefaultFrameColors() {
   frame_window->SetProperty(kFrameInactiveColorKey, dialog_title_bar_color);
 }
 
-BEGIN_METADATA(NonClientFrameViewAsh, views::NonClientFrameView)
+BEGIN_METADATA(NonClientFrameViewAsh)
 END_METADATA
 
 }  // namespace ash

@@ -239,7 +239,8 @@ std::unique_ptr<DawnImageRepresentation> SharedImageManager::ProduceDawn(
     MemoryTypeTracker* tracker,
     const wgpu::Device& device,
     wgpu::BackendType backend_type,
-    std::vector<wgpu::TextureFormat> view_formats) {
+    std::vector<wgpu::TextureFormat> view_formats,
+    scoped_refptr<SharedContextState> context_state) {
   CALLED_ON_VALID_THREAD();
 
   AutoLock autolock(this);
@@ -250,8 +251,9 @@ std::unique_ptr<DawnImageRepresentation> SharedImageManager::ProduceDawn(
     return nullptr;
   }
 
-  auto representation = (*found)->ProduceDawn(
-      this, tracker, device, backend_type, std::move(view_formats));
+  auto representation =
+      (*found)->ProduceDawn(this, tracker, device, backend_type,
+                            std::move(view_formats), context_state);
   if (!representation) {
     LOG(ERROR) << "SharedImageManager::ProduceDawn: Trying to produce a "
                   "Dawn representation from an incompatible backing: "
@@ -435,6 +437,19 @@ void SharedImageManager::UpdateExternalFence(
 }
 #endif
 
+std::optional<uint32_t> SharedImageManager::GetUsageForMailbox(
+    const Mailbox& mailbox) {
+  AutoLock autolock(this);
+
+  {
+    auto found = images_.find(mailbox);
+    if (found == images_.end()) {
+      return std::nullopt;
+    }
+    return std::optional<uint32_t>((*found)->usage());
+  }
+}
+
 void SharedImageManager::OnRepresentationDestroyed(
     const Mailbox& mailbox,
     SharedImageRepresentation* representation) {
@@ -491,10 +506,12 @@ bool SharedImageManager::OnMemoryDump(
       base::trace_event::MemoryDumpLevelOfDetail::kBackground) {
     size_t total_size = 0;
     size_t total_purgeable_size = 0;
+    size_t total_non_exo_size = 0;
     for (auto& backing : images_) {
       size_t size = backing->GetEstimatedSizeForMemoryDump();
       total_size += size;
       total_purgeable_size += backing->IsPurgeable() ? size : 0;
+      total_non_exo_size += backing->IsImportedFromExo() ? 0 : size;
     }
 
     base::trace_event::MemoryAllocatorDump* dump =
@@ -505,6 +522,9 @@ bool SharedImageManager::OnMemoryDump(
     dump->AddScalar("purgeable_size",
                     base::trace_event::MemoryAllocatorDump::kUnitsBytes,
                     total_purgeable_size);
+    dump->AddScalar("non_exo_size",
+                    base::trace_event::MemoryAllocatorDump::kUnitsBytes,
+                    total_non_exo_size);
 
     // Early out, no need for more detail in a BACKGROUND dump.
     return true;

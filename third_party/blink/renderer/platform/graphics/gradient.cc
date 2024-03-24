@@ -28,7 +28,8 @@
 #include "third_party/blink/renderer/platform/graphics/gradient.h"
 
 #include <algorithm>
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
 #include "third_party/blink/renderer/platform/geometry/blend.h"
 #include "third_party/blink/renderer/platform/graphics/color.h"
 #include "third_party/blink/renderer/platform/graphics/dark_mode_settings_builder.h"
@@ -94,20 +95,21 @@ static SkColor4f ResolveStopColorWithMissingParams(
     Color neighbor,
     Color::ColorSpace color_space,
     sk_sp<cc::ColorFilter> color_filter) {
-  absl::optional<float> param0 =
+  std::optional<float> param0 =
       color.Param0IsNone() ? neighbor.Param0() : color.Param0();
-  absl::optional<float> param1 =
+  std::optional<float> param1 =
       color.Param1IsNone() ? neighbor.Param1() : color.Param1();
-  absl::optional<float> param2 =
+  std::optional<float> param2 =
       color.Param2IsNone() ? neighbor.Param2() : color.Param2();
-  absl::optional<float> alpha =
+  std::optional<float> alpha =
       color.AlphaIsNone() ? neighbor.Alpha() : color.Alpha();
   Color resolved_color =
       Color::FromColorSpace(color_space, param0, param1, param2, alpha);
   if (color_filter) {
-    return color_filter->FilterColor(resolved_color.toSkColor4f());
+    return color_filter->FilterColor(
+        resolved_color.ToGradientStopSkColor4f(color_space));
   }
-  return resolved_color.toSkColor4f();
+  return resolved_color.ToGradientStopSkColor4f(color_space);
 }
 
 // Collect sorted stop position and color information into the pos and colors
@@ -127,10 +129,12 @@ void Gradient::FillSkiaStops(ColorBuffer& colors, OffsetBuffer& pos) const {
     // with a stop at (0 + epsilon).
     pos.push_back(WebCoreDoubleToSkScalar(0));
     if (color_filter_) {
-      colors.push_back(
-          color_filter_->FilterColor(stops_.front().color.toSkColor4f()));
+      colors.push_back(color_filter_->FilterColor(
+          stops_.front().color.ToGradientStopSkColor4f(
+              color_space_interpolation_space_)));
     } else {
-      colors.push_back(stops_.front().color.toSkColor4f());
+      colors.push_back(stops_.front().color.ToGradientStopSkColor4f(
+          color_space_interpolation_space_));
     }
   }
 
@@ -158,9 +162,11 @@ void Gradient::FillSkiaStops(ColorBuffer& colors, OffsetBuffer& pos) const {
       pos.push_back(WebCoreDoubleToSkScalar(stops_[i].stop));
       if (color_filter_) {
         colors.push_back(
-            color_filter_->FilterColor(stops_[i].color.toSkColor4f()));
+            color_filter_->FilterColor(stops_[i].color.ToGradientStopSkColor4f(
+                color_space_interpolation_space_)));
       } else {
-        colors.push_back(stops_[i].color.toSkColor4f());
+        colors.push_back(stops_[i].color.ToGradientStopSkColor4f(
+            color_space_interpolation_space_));
       }
     }
   }
@@ -190,13 +196,17 @@ SkGradientShader::Interpolation Gradient::ResolveSkInterpolation() const {
       sk_interpolation.fColorSpace = sk_colorspace::kLab;
       break;
     case Color::ColorSpace::kOklab:
-      sk_interpolation.fColorSpace = sk_colorspace::kOKLab;
+      sk_interpolation.fColorSpace = Color::IsBakedGamutMappingEnabled()
+                                         ? sk_colorspace::kOKLabGamutMap
+                                         : sk_colorspace::kOKLab;
       break;
     case Color::ColorSpace::kLch:
       sk_interpolation.fColorSpace = sk_colorspace::kLCH;
       break;
     case Color::ColorSpace::kOklch:
-      sk_interpolation.fColorSpace = sk_colorspace::kOKLCH;
+      sk_interpolation.fColorSpace = Color::IsBakedGamutMappingEnabled()
+                                         ? sk_colorspace::kOKLCHGamutMap
+                                         : sk_colorspace::kOKLCH;
       break;
     case Color::ColorSpace::kSRGB:
     case Color::ColorSpace::kSRGBLegacy:
@@ -217,7 +227,9 @@ SkGradientShader::Interpolation Gradient::ResolveSkInterpolation() const {
       if (has_non_legacy_color) {
         // If no colorspace is provided and the gradient is not entirely
         // composed of legacy colors, Oklab is the default interpolation space.
-        sk_interpolation.fColorSpace = sk_colorspace::kOKLab;
+        sk_interpolation.fColorSpace = Color::IsBakedGamutMappingEnabled()
+                                           ? sk_colorspace::kOKLabGamutMap
+                                           : sk_colorspace::kOKLab;
       } else {
         // TODO(crbug.com/1379462): This should be kSRGB.
         sk_interpolation.fColorSpace = sk_colorspace::kDestination;
@@ -389,7 +401,7 @@ class RadialGradient final : public Gradient {
                                   const SkMatrix& local_matrix,
                                   SkColor4f fallback_color) const override {
     const SkMatrix* matrix = &local_matrix;
-    absl::optional<SkMatrix> adjusted_local_matrix;
+    std::optional<SkMatrix> adjusted_local_matrix;
     if (aspect_ratio_ != 1) {
       // CSS3 elliptical gradients: apply the elliptical scaling at the
       // gradient center point.
@@ -456,7 +468,7 @@ class ConicGradient final : public Gradient {
     // Skia's sweep gradient angles are relative to the x-axis, not the y-axis.
     const float skia_rotation = rotation_ - 90;
     const SkMatrix* matrix = &local_matrix;
-    absl::optional<SkMatrix> adjusted_local_matrix;
+    std::optional<SkMatrix> adjusted_local_matrix;
     if (skia_rotation) {
       adjusted_local_matrix.emplace(local_matrix);
       adjusted_local_matrix->preRotate(skia_rotation, position_.x(),

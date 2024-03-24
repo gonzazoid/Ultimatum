@@ -4,9 +4,11 @@
 
 #import "ios/chrome/browser/ntp/model/set_up_list.h"
 
+#import "base/memory/raw_ptr.h"
 #import "base/test/gtest_util.h"
 #import "base/test/scoped_feature_list.h"
 #import "components/password_manager/core/browser/password_manager_util.h"
+#import "components/prefs/scoped_user_pref_update.h"
 #import "components/signin/public/base/signin_metrics.h"
 #import "components/sync/base/pref_names.h"
 #import "components/sync_preferences/testing_pref_service_syncable.h"
@@ -17,6 +19,7 @@
 #import "ios/chrome/browser/ntp/model/set_up_list_item_type.h"
 #import "ios/chrome/browser/ntp/model/set_up_list_prefs.h"
 #import "ios/chrome/browser/policy/model/policy_util.h"
+#import "ios/chrome/browser/push_notification/model/constants.h"
 #import "ios/chrome/browser/shared/model/application_context/application_context.h"
 #import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
 #import "ios/chrome/browser/shared/model/prefs/pref_names.h"
@@ -90,6 +93,20 @@ class SetUpListTest : public PlatformTest {
         browser_state_->GetPrefs(), enable);
   }
 
+  // Enables/disables tips notifications.
+  void SetTipsNotificationsEnabled(bool enable) {
+    ScopedDictPrefUpdate update(local_state_.Get(),
+                                prefs::kAppLevelPushNotificationPermissions);
+    update->Set(kTipsNotificationKey, enable);
+  }
+
+  // Enables/disables content notifications.
+  void SetContentNotificationsEnabled(bool enable) {
+    ScopedDictPrefUpdate update(prefs_.get(),
+                                prefs::kFeaturePushNotificationPermissions);
+    update->Set(kContentNotificationKey, enable);
+  }
+
   // Returns the item with the given `type`. Returns nil if not found.
   SetUpListItem* FindItem(SetUpListItemType type) {
     for (SetUpListItem* item in set_up_list_.items) {
@@ -136,10 +153,10 @@ class SetUpListTest : public PlatformTest {
  protected:
   web::WebTaskEnvironment task_environment_;
   base::test::ScopedFeatureList feature_list_;
-  PrefService* prefs_;
+  raw_ptr<PrefService> prefs_;
   IOSChromeScopedTestingLocalState local_state_;
   std::unique_ptr<TestChromeBrowserState> browser_state_;
-  AuthenticationService* auth_service_;
+  raw_ptr<AuthenticationService> auth_service_;
   SetUpList* set_up_list_;
 };
 
@@ -238,6 +255,60 @@ TEST_F(SetUpListTest, BuildListWithAutofill) {
 }
 
 // Tests that the SetUpList uses the correct criteria when including the
+// Notifications item and tips notification is enabled.
+TEST_F(SetUpListTest, BuildListWithNotifications_Tips) {
+  feature_list_.InitAndEnableFeature(kIOSTipsNotifications);
+  SetTipsNotificationsEnabled(false);
+  BuildSetUpList();
+  ExpectListToInclude(SetUpListItemType::kNotifications, NO);
+
+  SetTipsNotificationsEnabled(true);
+  BuildSetUpList();
+  ExpectListToInclude(SetUpListItemType::kNotifications, YES);
+  EXPECT_EQ(GetItemState(SetUpListItemType::kNotifications),
+            SetUpListItemState::kCompleteNotInList);
+
+  SetItemState(SetUpListItemType::kNotifications,
+               SetUpListItemState::kCompleteInList);
+  BuildSetUpList();
+  ExpectListToInclude(SetUpListItemType::kNotifications, YES);
+  EXPECT_EQ(GetItemState(SetUpListItemType::kNotifications),
+            SetUpListItemState::kCompleteNotInList);
+
+  BuildSetUpList();
+  ExpectListToNotInclude(SetUpListItemType::kNotifications);
+}
+
+// Tests that the SetUpList uses the correct criteria when including the
+// Notifications item and content notifications is enabled.
+TEST_F(SetUpListTest, BuildListWithNotifications_Content) {
+  feature_list_.InitAndEnableFeatureWithParameters(
+      kContentPushNotifications,
+      {{kContentPushNotificationsExperimentType, "2"}});
+  SignInFakeIdentity();
+
+  SetContentNotificationsEnabled(false);
+  BuildSetUpList();
+  ExpectListToInclude(SetUpListItemType::kNotifications, NO);
+
+  SetContentNotificationsEnabled(true);
+  BuildSetUpList();
+  ExpectListToInclude(SetUpListItemType::kNotifications, YES);
+  EXPECT_EQ(GetItemState(SetUpListItemType::kNotifications),
+            SetUpListItemState::kCompleteNotInList);
+
+  SetItemState(SetUpListItemType::kNotifications,
+               SetUpListItemState::kCompleteInList);
+  BuildSetUpList();
+  ExpectListToInclude(SetUpListItemType::kNotifications, YES);
+  EXPECT_EQ(GetItemState(SetUpListItemType::kNotifications),
+            SetUpListItemState::kCompleteNotInList);
+
+  BuildSetUpList();
+  ExpectListToNotInclude(SetUpListItemType::kNotifications);
+}
+
+// Tests that the SetUpList uses the correct criteria when including the
 // Follow item.
 TEST_F(SetUpListTest, BuildListWithFollow) {
   BuildSetUpList();
@@ -252,7 +323,7 @@ TEST_F(SetUpListTest, ObservesPrefs) {
   set_up_list_.delegate = delegate;
   SetUpListItem* item = FindItem(SetUpListItemType::kSignInSync);
   EXPECT_FALSE(item.complete);
-  OCMExpect([delegate setUpListItemDidComplete:item]);
+  OCMExpect([delegate setUpListItemDidComplete:item allItemsCompleted:NO]);
   set_up_list_prefs::MarkItemComplete(local_state_.Get(),
                                       SetUpListItemType::kSignInSync);
   EXPECT_TRUE(item.complete);
@@ -262,6 +333,7 @@ TEST_F(SetUpListTest, ObservesPrefs) {
 // Tests that `allItemsComplete` correctly returns whether all items are
 // complete.
 TEST_F(SetUpListTest, AllItemsComplete) {
+  feature_list_.InitAndEnableFeature(kIOSTipsNotifications);
   BuildSetUpList();
   EXPECT_FALSE([set_up_list_ allItemsComplete]);
 
@@ -271,6 +343,8 @@ TEST_F(SetUpListTest, AllItemsComplete) {
                                       SetUpListItemType::kDefaultBrowser);
   set_up_list_prefs::MarkItemComplete(local_state_.Get(),
                                       SetUpListItemType::kAutofill);
+  set_up_list_prefs::MarkItemComplete(local_state_.Get(),
+                                      SetUpListItemType::kNotifications);
 
   EXPECT_TRUE([set_up_list_ allItemsComplete]);
 }
@@ -287,10 +361,11 @@ TEST_F(SetUpListTest, Disable) {
 
 // Tests that the Set Up List item order is correct with kMagicStack enabled.
 TEST_F(SetUpListTest, MagicStackItemOrder) {
-  feature_list_.InitWithFeatures({kMagicStack}, {});
+  feature_list_.InitWithFeatures({kMagicStack, kIOSTipsNotifications}, {});
   BuildSetUpList();
 
   EXPECT_EQ(GetItemIndex(SetUpListItemType::kDefaultBrowser), 0u);
   EXPECT_EQ(GetItemIndex(SetUpListItemType::kAutofill), 1u);
-  EXPECT_EQ(GetItemIndex(SetUpListItemType::kSignInSync), 2u);
+  EXPECT_EQ(GetItemIndex(SetUpListItemType::kNotifications), 2u);
+  EXPECT_EQ(GetItemIndex(SetUpListItemType::kSignInSync), 3u);
 }

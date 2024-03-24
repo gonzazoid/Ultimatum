@@ -15,7 +15,6 @@
 #include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -458,9 +457,7 @@ class BrowserManager : public session_manager::SessionManagerObserver,
     // ID managed in BrowserServiceHostAsh, which is tied to the |service|.
     mojo::RemoteSetElementId mojo_id;
     // BrowserService proxy connected to lacros-chrome.
-    // This field is not a raw_ptr<> because it was filtered by the rewriter
-    // for: #union
-    RAW_PTR_EXCLUSION mojom::BrowserService* service;
+    raw_ptr<mojom::BrowserService, DanglingUntriaged> service;
     // Supported interface version of the BrowserService in Lacros-chrome.
     uint32_t interface_version;
   };
@@ -616,10 +613,9 @@ class BrowserManager : public session_manager::SessionManagerObserver,
   void WaitForProfileAddedAndThen(base::OnceClosure cb);
 
   // Waits for the device owner being fetched from `UserManager` and then
-  // executes a callback. If Lacros is launched at the login screen, this
-  // just executes the callback directly.
-  void WaitForDeviceOwnerFetchedAndThen(base::OnceClosure cb,
-                                        bool launching_at_login_screen);
+  // executes a callback. Should NOT be called if Lacros is launched at the
+  // login screen since device owner is not available until login.
+  void WaitForDeviceOwnerFetchedAndThen(base::OnceClosure cb);
 
   // Called as soon as `LaunchParamsFromBackground` are fetched.
   void OnLaunchParamsFetched(

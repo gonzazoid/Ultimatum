@@ -9,15 +9,18 @@ import 'chrome://resources/cr_elements/cr_auto_img/cr_auto_img.js';
 import 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
 import './icons.html.js';
 
-import {ShoppingServiceApiProxy, ShoppingServiceApiProxyImpl} from '//bookmarks-side-panel.top-chrome/shared/commerce/shopping_service_api_proxy.js';
-import {BookmarkProductInfo} from '//bookmarks-side-panel.top-chrome/shared/shopping_list.mojom-webui.js';
-import {CrToastElement} from 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
+import type {BrowserProxy} from '//resources/cr_components/commerce/browser_proxy.js';
+import {BrowserProxyImpl} from '//resources/cr_components/commerce/browser_proxy.js';
+import type {BookmarkProductInfo} from '//resources/cr_components/commerce/shopping_service.mojom-webui.js';
+import type {CrToastElement} from 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
 import {getFaviconForPageURL} from 'chrome://resources/js/icon.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
-import {DomRepeatEvent, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import type {DomRepeatEvent} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {ActionSource} from '../bookmarks.mojom-webui.js';
-import {BookmarksApiProxy, BookmarksApiProxyImpl} from '../bookmarks_api_proxy.js';
+import type {BookmarksApiProxy} from '../bookmarks_api_proxy.js';
+import {BookmarksApiProxyImpl} from '../bookmarks_api_proxy.js';
 
 import {getTemplate} from './shopping_list.html.js';
 
@@ -67,8 +70,7 @@ export class ShoppingListElement extends PolymerElement {
   private open_: boolean;
   private bookmarksApi_: BookmarksApiProxy =
       BookmarksApiProxyImpl.getInstance();
-  private shoppingServiceApi_: ShoppingServiceApiProxy =
-      ShoppingServiceApiProxyImpl.getInstance();
+  private shoppingServiceApi_: BrowserProxy = BrowserProxyImpl.getInstance();
   private listenerIds_: number[] = [];
   private retryOperationCallback_: () => void;
 

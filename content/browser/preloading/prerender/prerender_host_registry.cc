@@ -554,6 +554,13 @@ int PrerenderHostRegistry::CreateAndStartHost(
       return RenderFrameHost::kNoFrameTreeNodeId;
     }
 
+    // Check the about://flags toggle.
+    if (!base::FeatureList::IsEnabled(blink::features::kPrerender2)) {
+      builder.RejectAsNotEligible(attributes,
+                                  PrerenderFinalStatus::kPreloadingDisabled);
+      return RenderFrameHost::kNoFrameTreeNodeId;
+    }
+
     // Check whether preloading is enabled. If it is not enabled, report the
     // reason.
     switch (initiator_web_contents.GetDelegate()->IsPrerender2Supported(
@@ -1639,6 +1646,11 @@ void PrerenderHostRegistry::ScheduleToDeleteAbandonedHost(
 
   // Asynchronously delete the prerender host.
   to_be_deleted_hosts_.push_back(std::move(prerender_host));
+
+  // A task has already been scheduled to delete the abandoned hosts.
+  if (to_be_deleted_hosts_.size() > 1) {
+    return;
+  }
   base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&PrerenderHostRegistry::DeleteAbandonedHosts,
                                 weak_factory_.GetWeakPtr()));

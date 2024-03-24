@@ -54,14 +54,15 @@ bool IsFedCmErrorEnabled();
 // Whether the disconnect API is enabled.
 bool IsFedCmDisconnectEnabled();
 
-// Whether "Add Account" is enabled.
-bool IsFedCmAddAccountEnabled();
+// Whether "Use Other Account" is enabled.
+bool IsFedCmUseOtherAccountEnabled();
 
 // Whether the ExemptIdpWithThirdPartyCookies feature is enabled.
 bool IsFedCmExemptIdpWithThirdPartyCookiesEnabled();
 
 // Whether the ButtonMode feature is enabled.
 bool IsFedCmButtonModeEnabled();
+
 }  // namespace content
 
 #endif  // CONTENT_BROWSER_WEBID_FLAGS_H_

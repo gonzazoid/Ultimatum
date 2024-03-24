@@ -7,6 +7,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "ash/components/arc/compat_mode/overlay_dialog.h"
@@ -134,7 +135,7 @@ gfx::Size PasspointDialogView::CalculatePreferredSize() const {
 
 void PasspointDialogView::AddedToWidget() {
   auto& view_ax = GetWidget()->GetRootView()->GetViewAccessibility();
-  view_ax.OverrideRole(ax::mojom::Role::kDialog);
+  view_ax.SetRole(ax::mojom::Role::kDialog);
   view_ax.OverrideName(l10n_util::GetStringFUTF16(
       IDS_ASH_ARC_PASSPOINT_APP_APPROVAL_TITLE, app_name_));
 }
@@ -156,6 +157,7 @@ std::unique_ptr<views::View> PasspointDialogView::MakeBaseLabelView(
           .SetHorizontalAlignment(gfx::ALIGN_LEFT)
           .SetAutoColorReadabilityEnabled(false)
           .Build();
+  styled_label->set_use_legacy_preferred_size(true);
 
   if (!is_expiring) {
     std::vector<size_t> offsets;
@@ -175,7 +177,7 @@ std::unique_ptr<views::View> PasspointDialogView::MakeBaseLabelView(
 }
 
 std::unique_ptr<views::View> PasspointDialogView::MakeSubscriptionLabelView(
-    base::StringPiece friendly_name) {
+    std::string_view friendly_name) {
   std::vector<size_t> offsets;
   const std::u16string learn_more = l10n_util::GetStringUTF16(
       IDS_ASH_ARC_PASSPOINT_APP_APPROVAL_LEARN_MORE_LABEL);
@@ -184,23 +186,26 @@ std::unique_ptr<views::View> PasspointDialogView::MakeSubscriptionLabelView(
       {ui::GetChromeOSDeviceName(), base::UTF8ToUTF16(friendly_name),
        learn_more},
       &offsets);
-  return views::Builder<views::StyledLabel>()
-      .CopyAddressTo(&body_subscription_text_)
-      .SetText(label)
-      .SizeToFit(GetLabelWidth())
-      .SetHorizontalAlignment(gfx::ALIGN_LEFT)
-      .SetAutoColorReadabilityEnabled(false)
-      .AddStyleRange(
-          gfx::Range(offsets.back(), offsets.back() + learn_more.length()),
-          views::StyledLabel::RangeStyleInfo::CreateForLink(
-              base::BindRepeating(&PasspointDialogView::OnLearnMoreClicked,
-                                  weak_factory_.GetWeakPtr())))
-      .Build();
+  std::unique_ptr<views::StyledLabel> styled_label =
+      views::Builder<views::StyledLabel>()
+          .CopyAddressTo(&body_subscription_text_)
+          .SetText(label)
+          .SizeToFit(GetLabelWidth())
+          .SetHorizontalAlignment(gfx::ALIGN_LEFT)
+          .SetAutoColorReadabilityEnabled(false)
+          .AddStyleRange(
+              gfx::Range(offsets.back(), offsets.back() + learn_more.length()),
+              views::StyledLabel::RangeStyleInfo::CreateForLink(
+                  base::BindRepeating(&PasspointDialogView::OnLearnMoreClicked,
+                                      weak_factory_.GetWeakPtr())))
+          .Build();
+  styled_label->set_use_legacy_preferred_size(true);
+  return styled_label;
 }
 
 std::unique_ptr<views::View> PasspointDialogView::MakeContentsView(
     bool is_expiring,
-    base::StringPiece friendly_name) {
+    std::string_view friendly_name) {
   views::LayoutProvider* provider = views::LayoutProvider::Get();
   std::unique_ptr<views::BoxLayoutView> contents =
       views::Builder<views::BoxLayoutView>()

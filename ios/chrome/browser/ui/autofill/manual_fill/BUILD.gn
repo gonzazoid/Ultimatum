@@ -8,6 +8,8 @@ source_set("manual_fill") {
     "address_coordinator.mm",
     "card_coordinator.h",
     "card_coordinator.mm",
+    "expanded_manual_fill_coordinator.h",
+    "expanded_manual_fill_coordinator.mm",
     "fallback_coordinator.h",
     "fallback_coordinator.mm",
     "form_observer_helper.h",
@@ -33,6 +35,7 @@ source_set("manual_fill") {
     "manual_fill_password_mediator.mm",
   ]
   deps = [
+    ":manual_fill_constants",
     ":requesters",
     "//base",
     "//components/autofill/core/browser",
@@ -47,7 +50,7 @@ source_set("manual_fill") {
     "//ios/chrome/app/strings",
     "//ios/chrome/browser/autofill/model",
     "//ios/chrome/browser/autofill/model:model_shared",
-    "//ios/chrome/browser/favicon",
+    "//ios/chrome/browser/favicon/model",
     "//ios/chrome/browser/net/model:crurl",
     "//ios/chrome/browser/passwords/model",
     "//ios/chrome/browser/shared/coordinator/chrome_coordinator",
@@ -87,10 +90,14 @@ source_set("manual_fill_ui") {
     "card_view_controller.mm",
     "chip_button.h",
     "chip_button.mm",
+    "expanded_manual_fill_view_controller+Testing.h",
+    "expanded_manual_fill_view_controller.h",
+    "expanded_manual_fill_view_controller.mm",
     "fallback_view_controller.h",
     "fallback_view_controller.mm",
     "manual_fill_accessory_view_controller.h",
     "manual_fill_accessory_view_controller.mm",
+    "manual_fill_accessory_view_controller_delegate.h",
     "manual_fill_action_cell.h",
     "manual_fill_action_cell.mm",
     "manual_fill_address.h",
@@ -118,21 +125,25 @@ source_set("manual_fill_ui") {
     "password_view_controller.mm",
   ]
   deps = [
+    ":manual_fill_constants",
     "//base",
+    "//components/autofill/core/browser",
     "//components/google/core/common",
     "//components/password_manager/core/browser",
     "//components/password_manager/core/common",
+    "//components/strings",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/favicon",
+    "//ios/chrome/browser/favicon/model",
     "//ios/chrome/browser/net/model:crurl",
     "//ios/chrome/browser/shared/model/application_context",
     "//ios/chrome/browser/shared/public/features",
+    "//ios/chrome/browser/shared/ui/elements",
     "//ios/chrome/browser/shared/ui/list_model:list_model",
     "//ios/chrome/browser/shared/ui/symbols",
     "//ios/chrome/browser/shared/ui/table_view:styler",
     "//ios/chrome/browser/shared/ui/table_view:table_view",
+    "//ios/chrome/browser/shared/ui/table_view:utils",
     "//ios/chrome/browser/ui/settings/password:title_view",
-    "//ios/chrome/common:button_config",
     "//ios/chrome/common:string_util",
     "//ios/chrome/common/ui/favicon",
     "//ios/chrome/common/ui/util",
@@ -143,9 +154,18 @@ source_set("manual_fill_ui") {
   frameworks = [ "UIKit.framework" ]
 }
 
+source_set("manual_fill_constants") {
+  sources = [
+    "manual_fill_constants.h",
+    "manual_fill_constants.mm",
+  ]
+}
+
 source_set("unit_tests") {
   testonly = true
   sources = [
+    "chip_button_unittest.mm",
+    "expanded_manual_fill_view_controller_unittest.mm",
     "fallback_view_controller_unittest.mm",
     "form_observer_helper_unittest.mm",
     "full_card_requester_unittest.mm",
@@ -160,10 +180,12 @@ source_set("unit_tests") {
   ]
   deps = [
     ":manual_fill",
+    ":manual_fill_constants",
     ":manual_fill_ui",
     ":requesters",
     "//base",
     "//base/test:test_support",
+    "//components/affiliations/core/browser:test_support",
     "//components/autofill/core/browser",
     "//components/autofill/core/browser:test_support",
     "//components/autofill/core/common",
@@ -174,7 +196,7 @@ source_set("unit_tests") {
     "//components/password_manager/core/browser",
     "//components/password_manager/core/browser:test_support",
     "//components/prefs",
-    "//ios/chrome/browser/favicon",
+    "//ios/chrome/browser/favicon/model",
     "//ios/chrome/browser/infobars/model",
     "//ios/chrome/browser/passwords/model:store_factory",
     "//ios/chrome/browser/shared/coordinator/scene:scene_state_header",
@@ -184,6 +206,7 @@ source_set("unit_tests") {
     "//ios/chrome/browser/shared/model/web_state_list:web_state_list",
     "//ios/chrome/browser/shared/model/web_state_list/test:test_support",
     "//ios/chrome/browser/shared/public/commands",
+    "//ios/chrome/browser/shared/public/features",
     "//ios/chrome/browser/shared/ui/table_view:test_support",
     "//ios/chrome/browser/sync/model",
     "//ios/chrome/browser/sync/model:test_support",
@@ -193,6 +216,7 @@ source_set("unit_tests") {
     "//ios/chrome/browser/ui/settings/password:features",
     "//ios/chrome/browser/ui/settings/password/password_settings:common",
     "//ios/chrome/browser/ui/settings/password/reauthentication:reauthentication_ui",
+    "//ios/chrome/common/ui/colors",
     "//ios/chrome/test:test_support",
     "//ios/chrome/test/app:test_support",
     "//ios/web/public/js_messaging",
@@ -218,6 +242,7 @@ source_set("requesters") {
     "//components/autofill/core/browser",
     "//components/autofill/core/common",
     "//components/autofill/ios/browser",
+    "//ios/chrome/browser/autofill/model",
     "//ios/chrome/browser/shared/model/browser_state",
     "//ios/chrome/browser/shared/model/web_state_list:web_state_list",
     "//ios/chrome/browser/ui/autofill:bridges",
@@ -234,11 +259,13 @@ source_set("eg2_tests") {
   sources = [
     "address_view_controller_egtest.mm",
     "card_view_controller_egtest.mm",
+    "expanded_manual_fill_egtest.mm",
     "fallback_coordinator_egtest.mm",
     "fallback_view_controller_egtest.mm",
     "password_view_controller_egtest.mm",
   ]
   deps = [
+    ":manual_fill_constants",
     "//base",
     "//base/test:test_support",
     "//components/autofill/core/browser:test_support",
@@ -246,6 +273,7 @@ source_set("eg2_tests") {
     "//components/password_manager/core/common:features",
     "//components/strings",
     "//ios/chrome/app/strings",
+    "//ios/chrome/browser/shared/public/features",
     "//ios/chrome/browser/shared/ui/util:eg_test_support+eg2",
     "//ios/chrome/browser/signin/model:fake_system_identity",
     "//ios/chrome/browser/ui/authentication:eg_test_support+eg2",
@@ -258,6 +286,7 @@ source_set("eg2_tests") {
     "//ios/chrome/test:eg_test_support+eg2",
     "//ios/chrome/test/earl_grey:eg_test_support+eg2",
     "//ios/testing/earl_grey:eg_test_support+eg2",
+    "//ios/testing/earl_grey:launch_configuration",
     "//ios/web/public/test:element_selector",
     "//net:test_support",
     "//ui/base",

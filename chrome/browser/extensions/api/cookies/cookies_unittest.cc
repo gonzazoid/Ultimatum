@@ -5,9 +5,12 @@
 // Tests common functionality used by the Chrome Extensions Cookies API
 // implementation.
 
+#include "chrome/common/extensions/api/cookies.h"
+
 #include <stddef.h>
 
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -15,13 +18,11 @@
 #include "base/values.h"
 #include "chrome/browser/extensions/api/cookies/cookies_api_constants.h"
 #include "chrome/browser/extensions/api/cookies/cookies_helpers.h"
-#include "chrome/common/extensions/api/cookies.h"
 #include "chrome/test/base/testing_profile.h"
 #include "content/public/test/browser_task_environment.h"
 #include "net/cookies/canonical_cookie.h"
 #include "net/cookies/cookie_constants.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 using extensions::api::cookies::Cookie;
@@ -176,7 +177,7 @@ TEST_F(ExtensionCookiesTest, DomainMatching) {
     base::Value::Dict dict;
     dict.Set(keys::kDomainKey, tests[i].filter);
     args.Append(std::move(dict));
-    absl::optional<GetAll::Params> params = GetAll::Params::Create(args);
+    std::optional<GetAll::Params> params = GetAll::Params::Create(args);
 
     cookies_helpers::MatchFilter filter(&params->details);
     std::unique_ptr<net::CanonicalCookie> cookie =
@@ -193,8 +194,8 @@ TEST_F(ExtensionCookiesTest, DecodeUTF8WithErrorHandling) {
   std::unique_ptr<net::CanonicalCookie> canonical_cookie(
       net::CanonicalCookie::Create(
           GURL("http://test.com"), "=011Q255bNX_1!yd\203e+;path=/path\203",
-          base::Time::Now(), absl::nullopt /* server_time */,
-          absl::nullopt /* cookie_partition_key */));
+          base::Time::Now(), std::nullopt /* server_time */,
+          std::nullopt /* cookie_partition_key */));
   ASSERT_NE(nullptr, canonical_cookie.get());
   Cookie cookie =
       cookies_helpers::CreateCookie(*canonical_cookie, "some cookie store");
@@ -206,13 +207,18 @@ TEST_F(ExtensionCookiesTest, DecodeUTF8WithErrorHandling) {
 
 TEST_F(ExtensionCookiesTest, PartitionKeySerialization) {
   std::string top_level_site = "https://toplevelsite.com";
-  absl::optional<extensions::api::cookies::CookiePartitionKey>
+  std::optional<extensions::api::cookies::CookiePartitionKey>
       partition_key_for_nonce_and_regular =
           extensions::api::cookies::CookiePartitionKey();
-  absl::optional<extensions::api::cookies::CookiePartitionKey>
+  std::optional<extensions::api::cookies::CookiePartitionKey>
       partition_key_for_opaque = extensions::api::cookies::CookiePartitionKey();
   partition_key_for_nonce_and_regular->top_level_site = top_level_site;
   partition_key_for_opaque->top_level_site = "";
+
+  // Partition key to confirm crbug.com/1522601 is addressed.
+  std::optional<extensions::api::cookies::CookiePartitionKey>
+      partition_key_with_no_top_level_site_set =
+          extensions::api::cookies::CookiePartitionKey();
 
   // Make a CanonicalCookie with a opaque top_level_site or nonce in partition
   // key.
@@ -252,12 +258,26 @@ TEST_F(ExtensionCookiesTest, PartitionKeySerialization) {
 
   // Confirm that to be matchable, the partition key
   // must be serializable.
-  EXPECT_TRUE(cookies_helpers::CookieMatchesPartitionKeyInDetails(
-      partition_key_for_nonce_and_regular, *cookie));
-  EXPECT_FALSE(cookies_helpers::CookieMatchesPartitionKeyInDetails(
-      partition_key_for_nonce_and_regular, *nonce_cookie));
-  EXPECT_FALSE(cookies_helpers::CookieMatchesPartitionKeyInDetails(
-      partition_key_for_opaque, *opaque_cookie));
+  EXPECT_TRUE(
+      cookies_helpers::CanonicalCookiePartitionKeyMatchesApiCookiePartitionKey(
+          partition_key_for_nonce_and_regular, *cookie->PartitionKey()));
+  EXPECT_FALSE(
+      cookies_helpers::CanonicalCookiePartitionKeyMatchesApiCookiePartitionKey(
+          partition_key_for_nonce_and_regular, *nonce_cookie->PartitionKey()));
+  EXPECT_FALSE(
+      cookies_helpers::CanonicalCookiePartitionKeyMatchesApiCookiePartitionKey(
+          partition_key_for_opaque, *opaque_cookie->PartitionKey()));
+  EXPECT_FALSE(
+      cookies_helpers::CanonicalCookiePartitionKeyMatchesApiCookiePartitionKey(
+          partition_key_with_no_top_level_site_set, *cookie->PartitionKey()));
+  EXPECT_FALSE(
+      cookies_helpers::CanonicalCookiePartitionKeyMatchesApiCookiePartitionKey(
+          partition_key_with_no_top_level_site_set,
+          *nonce_cookie->PartitionKey()));
+  EXPECT_FALSE(
+      cookies_helpers::CanonicalCookiePartitionKeyMatchesApiCookiePartitionKey(
+          partition_key_with_no_top_level_site_set,
+          *opaque_cookie->PartitionKey()));
 
   // Confirm that a CanonicalCookie with serializable partition key
   // can be used to create a cookie.

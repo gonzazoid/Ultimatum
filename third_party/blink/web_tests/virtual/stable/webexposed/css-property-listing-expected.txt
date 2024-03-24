@@ -163,6 +163,7 @@ All changes to this list should go through Blink's feature review process: http:
     display
     dominant-baseline
     empty-cells
+    field-sizing
     fill
     fill-opacity
     fill-rule
@@ -371,6 +372,7 @@ All changes to this list should go through Blink's feature review process: http:
     text-rendering
     text-shadow
     text-size-adjust
+    text-spacing-trim
     text-transform
     text-underline-offset
     text-underline-position

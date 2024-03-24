@@ -22,6 +22,7 @@
 #include "extensions/browser/extension_system.h"
 #include "extensions/common/error_utils.h"
 #include "extensions/common/extension.h"
+#include "extensions/common/extension_id.h"
 #include "extensions/common/permissions/permissions_data.h"
 
 using url_matcher::URLMatcherConditionSet;
@@ -59,7 +60,8 @@ std::set<const WebRequestRule*> WebRequestRulesRegistry::GetMatches(
 
   // 1st phase -- add all rules with some conditions without UrlFilter
   // attributes.
-  for (const auto* rule : rules_with_untriggered_conditions_) {
+  for (const DeclarativeRule<WebRequestCondition, WebRequestAction>* rule :
+       rules_with_untriggered_conditions_) {
     if (rule->conditions().IsFulfilled(base::MatcherStringPattern::kInvalidId,
                                        request_data))
       result.insert(rule);
@@ -141,7 +143,7 @@ WebRequestRulesRegistry::CreateDeltas(PermissionHelper* permission_helper,
 }
 
 std::string WebRequestRulesRegistry::AddRulesImpl(
-    const std::string& extension_id,
+    const ExtensionId& extension_id,
     const std::vector<const api::events::Rule*>& rules) {
   using RulesVector = std::vector<RulesMap::value_type>;
 
@@ -211,7 +213,7 @@ std::string WebRequestRulesRegistry::AddRulesImpl(
 }
 
 std::string WebRequestRulesRegistry::RemoveRulesImpl(
-    const std::string& extension_id,
+    const ExtensionId& extension_id,
     const std::vector<std::string>& rule_identifiers) {
   // URLMatcherConditionSet IDs that can be removed from URLMatcher.
   std::vector<base::MatcherStringPattern::ID> remove_from_url_matcher;
@@ -242,7 +244,7 @@ std::string WebRequestRulesRegistry::RemoveRulesImpl(
 }
 
 std::string WebRequestRulesRegistry::RemoveAllRulesImpl(
-    const std::string& extension_id) {
+    const ExtensionId& extension_id) {
   // First we get out all URLMatcherConditionSets and remove the rule references
   // from |rules_with_untriggered_conditions_|.
   std::vector<base::MatcherStringPattern::ID> remove_from_url_matcher;
@@ -284,7 +286,7 @@ bool WebRequestRulesRegistry::IsEmpty() const {
 WebRequestRulesRegistry::~WebRequestRulesRegistry() = default;
 
 base::Time WebRequestRulesRegistry::GetExtensionInstallationTime(
-    const std::string& extension_id) const {
+    const ExtensionId& extension_id) const {
   return ExtensionPrefs::Get(browser_context())
       ->GetLastUpdateTime(extension_id);
 }

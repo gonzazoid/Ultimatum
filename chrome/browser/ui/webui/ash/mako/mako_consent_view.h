@@ -13,10 +13,10 @@ namespace ash {
 
 // A view to contain the Mako consent UI.
 class MakoConsentView : public WebUIBubbleDialogView {
- public:
-  METADATA_HEADER(MakoConsentView);
+  METADATA_HEADER(MakoConsentView, WebUIBubbleDialogView)
 
-  MakoConsentView(BubbleContentsWrapper* contents_wrapper,
+ public:
+  MakoConsentView(WebUIContentsWrapper* contents_wrapper,
                   const gfx::Rect& caret_bounds);
   MakoConsentView(const MakoConsentView&) = delete;
   MakoConsentView& operator=(const MakoConsentView&) = delete;

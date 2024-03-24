@@ -7,6 +7,7 @@ package org.chromium.chrome.browser.price_change;
 import static org.chromium.chrome.browser.preferences.ChromePreferenceKeys.PRICE_TRACKING_IDS_FOR_TABS_WITH_PRICE_DROP;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
@@ -17,11 +18,14 @@ import org.chromium.base.shared_preferences.SharedPreferencesManager;
 import org.chromium.chrome.browser.magic_stack.ModuleDelegate;
 import org.chromium.chrome.browser.magic_stack.ModuleDelegate.ModuleType;
 import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
+import org.chromium.chrome.browser.price_tracking.PriceTrackingFeatures;
+import org.chromium.chrome.browser.price_tracking.PriceTrackingUtilities;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.state.ShoppingPersistedTabData;
 import org.chromium.chrome.browser.tab.state.ShoppingPersistedTabDataService;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
+import org.chromium.chrome.browser.tabmodel.TabModelSelectorObserver;
 import org.chromium.chrome.browser.tabmodel.TabModelUtils;
 import org.chromium.chrome.browser.ui.favicon.FaviconHelper;
 import org.chromium.components.embedder_support.util.UrlUtilities;
@@ -34,7 +38,7 @@ import java.util.Set;
 /**
  * Mediator for the price change module which can be embedded by surfaces like NTP or Start surface.
  */
-public class PriceChangeModuleMediator {
+public class PriceChangeModuleMediator implements TabModelSelectorObserver {
 
     private final Context mContext;
     private final ShoppingPersistedTabDataService mShoppingPersistedTabDataService;
@@ -46,6 +50,8 @@ public class PriceChangeModuleMediator {
     private final ImageFetcher mImageFetcher;
     private final ModuleDelegate mModuleDelegate;
     private final @ModuleType int mModuleType;
+    private final SharedPreferences mSharedPreferences;
+    private final SharedPreferences.OnSharedPreferenceChangeListener mPriceAnnotationsPrefListener;
 
     PriceChangeModuleMediator(
             Context context,
@@ -54,7 +60,8 @@ public class PriceChangeModuleMediator {
             TabModelSelector tabModelSelector,
             FaviconHelper faviconHelper,
             ImageFetcher imageFetcher,
-            ModuleDelegate moduleDelegate) {
+            ModuleDelegate moduleDelegate,
+            SharedPreferences sharedPreferences) {
         mContext = context;
         mModel = model;
         mProfile = profile;
@@ -65,10 +72,26 @@ public class PriceChangeModuleMediator {
         mImageFetcher = imageFetcher;
         mModuleDelegate = moduleDelegate;
         mModuleType = ModuleType.PRICE_CHANGE;
+        mSharedPreferences = sharedPreferences;
+        mPriceAnnotationsPrefListener =
+                (sharedPrefs, key) -> {
+                    if (!PriceTrackingUtilities.TRACK_PRICES_ON_TABS.equals(key)) return;
+                    if (!sharedPrefs.getBoolean(
+                            PriceTrackingUtilities.TRACK_PRICES_ON_TABS,
+                            PriceTrackingFeatures.isPriceTrackingEnabled(profile))) {
+                        mModuleDelegate.removeModule(getModuleType());
+                    }
+                };
+        mSharedPreferences.registerOnSharedPreferenceChangeListener(mPriceAnnotationsPrefListener);
     }
 
     /** Show the price change module. */
     public void showModule() {
+        if (!mTabModelSelector.isTabStateInitialized()) {
+            mTabModelSelector.addObserver(this);
+            return;
+        }
+
         if (!mShoppingPersistedTabDataService.isInitialized()) {
             SharedPreferencesManager manager = ChromeSharedPreferences.getInstance();
             Set<Tab> tabList = new HashSet<>();
@@ -89,6 +112,14 @@ public class PriceChangeModuleMediator {
                         return;
                     }
                     Tab tab = res.get(0).getTab();
+                    // Check if tab is in the current tab model for multi-window case.
+                    if (tab == null
+                            || TabModelUtils.getTabById(
+                                            mTabModelSelector.getModel(false), tab.getId())
+                                    == null) {
+                        mModuleDelegate.onDataFetchFailed(mModuleType);
+                        return;
+                    }
                     ShoppingPersistedTabData data = res.get(0).getData();
                     mModel.set(
                             PriceChangeModuleProperties.MODULE_TITLE,
@@ -106,9 +137,18 @@ public class PriceChangeModuleMediator {
                     mModel.set(
                             PriceChangeModuleProperties.MODULE_PREVIOUS_PRICE_STRING,
                             data.getPriceDrop().previousPrice);
+                    String domain =
+                            UrlUtilities.getDomainAndRegistry(
+                                    res.get(0).getTab().getUrl().getSpec(), false);
+                    mModel.set(PriceChangeModuleProperties.MODULE_DOMAIN_STRING, domain);
                     mModel.set(
-                            PriceChangeModuleProperties.MODULE_DOMAIN_STRING,
-                            UrlUtilities.getDomainAndRegistry(tab.getUrl().getSpec(), false));
+                            PriceChangeModuleProperties.MODULE_ACCESSIBILITY_LABEL,
+                            mContext.getString(
+                                    R.string.price_change_module_accessibility_label,
+                                    data.getPriceDrop().previousPrice,
+                                    data.getPriceDrop().price,
+                                    data.getProductTitle(),
+                                    domain));
                     mModel.set(
                             PriceChangeModuleProperties.MODULE_ON_CLICK_LISTENER,
                             v -> mModuleDelegate.onTabClicked(tab.getId(), mModuleType));
@@ -157,7 +197,19 @@ public class PriceChangeModuleMediator {
                 });
     }
 
+    void destroy() {
+        mSharedPreferences.unregisterOnSharedPreferenceChangeListener(
+                mPriceAnnotationsPrefListener);
+        mTabModelSelector.removeObserver(this);
+    }
+
     int getModuleType() {
         return mModuleType;
+    }
+
+    @Override
+    public void onTabStateInitialized() {
+        mTabModelSelector.removeObserver(this);
+        showModule();
     }
 }

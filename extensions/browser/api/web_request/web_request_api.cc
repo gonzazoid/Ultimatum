@@ -28,6 +28,7 @@
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/common/url_constants.h"
+#include "extensions/browser/api/declarative_net_request/utils.h"
 #include "extensions/browser/api/web_request/extension_web_request_event_router.h"
 #include "extensions/browser/api/web_request/web_request_api_constants.h"
 #include "extensions/browser/api/web_request/web_request_api_helpers.h"
@@ -240,6 +241,13 @@ void WebRequestAPI::ProxySet::MaybeProxyAuthRequest(
                            request_id.request_id, std::move(callback));
 }
 
+void WebRequestAPI::ProxySet::OnDNRExtensionUnloaded(
+    const Extension* extension) {
+  for (const auto& proxy : proxies_) {
+    proxy->OnDNRExtensionUnloaded(extension);
+  }
+}
+
 WebRequestAPI::RequestIDGenerator::RequestIDGenerator() = default;
 WebRequestAPI::RequestIDGenerator::~RequestIDGenerator() = default;
 
@@ -371,7 +379,7 @@ bool WebRequestAPI::MaybeProxyURLLoaderFactory(
     URLLoaderFactoryType type,
     std::optional<int64_t> navigation_id,
     ukm::SourceIdObj ukm_source_id,
-    mojo::PendingReceiver<network::mojom::URLLoaderFactory>* factory_receiver,
+    network::URLLoaderFactoryBuilder& factory_builder,
     mojo::PendingRemote<network::mojom::TrustedURLLoaderHeaderClient>*
         header_client,
     scoped_refptr<base::SequencedTaskRunner> navigation_response_task_runner,
@@ -425,10 +433,6 @@ bool WebRequestAPI::MaybeProxyURLLoaderFactory(
     }
   }
 
-  auto proxied_receiver = std::move(*factory_receiver);
-  mojo::PendingRemote<network::mojom::URLLoaderFactory> target_factory_remote;
-  *factory_receiver = target_factory_remote.InitWithNewPipeAndPassReceiver();
-
   std::unique_ptr<ExtensionNavigationUIData> navigation_ui_data;
   const bool is_navigation = (type == URLLoaderFactoryType::kNavigation);
   if (is_navigation) {
@@ -460,9 +464,9 @@ bool WebRequestAPI::MaybeProxyURLLoaderFactory(
       frame ? frame->GetRoutingID() : MSG_ROUTING_NONE,
       frame ? frame->GetRenderViewHost()->GetRoutingID() : MSG_ROUTING_NONE,
       &request_id_generator_, std::move(navigation_ui_data),
-      std::move(navigation_id), ukm_source_id, std::move(proxied_receiver),
-      std::move(target_factory_remote), std::move(header_client_receiver),
-      proxies_.get(), type, std::move(navigation_response_task_runner));
+      std::move(navigation_id), ukm_source_id, factory_builder,
+      std::move(header_client_receiver), proxies_.get(), type,
+      std::move(navigation_response_task_runner));
   return true;
 }
 
@@ -633,6 +637,10 @@ void WebRequestAPI::OnExtensionUnloaded(
   if (HasAnyWebRequestPermissions(extension)) {
     --web_request_extension_count_;
     UpdateMayHaveProxies();
+  }
+
+  if (declarative_net_request::HasAnyDNRPermission(*extension)) {
+    proxies_->OnDNRExtensionUnloaded(extension);
   }
 }
 

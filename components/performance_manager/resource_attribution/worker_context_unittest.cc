@@ -5,6 +5,7 @@
 #include "components/performance_manager/public/resource_attribution/worker_context.h"
 
 #include <memory>
+#include <optional>
 #include <set>
 #include <utility>
 
@@ -15,6 +16,7 @@
 #include "components/performance_manager/public/graph/graph.h"
 #include "components/performance_manager/public/graph/worker_node.h"
 #include "components/performance_manager/public/performance_manager.h"
+#include "components/performance_manager/resource_attribution/performance_manager_aliases.h"
 #include "components/performance_manager/test_support/performance_manager_test_harness.h"
 #include "components/performance_manager/test_support/run_in_graph.h"
 #include "components/performance_manager/worker_watcher.h"
@@ -28,23 +30,23 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/cleanup/cleanup.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "url/gurl.h"
 
-namespace performance_manager::resource_attribution {
+namespace resource_attribution {
 
 namespace {
 
-using ResourceAttrWorkerContextTest = PerformanceManagerTestHarness;
+using ResourceAttrWorkerContextTest =
+    performance_manager::PerformanceManagerTestHarness;
 using ResourceAttrWorkerContextNoPMTest = content::RenderViewHostTestHarness;
 
 TEST_F(ResourceAttrWorkerContextTest, WorkerContexts) {
   std::unique_ptr<content::WebContents> web_contents = CreateTestWebContents();
 
-  WorkerWatcher* worker_watcher =
-      PerformanceManagerRegistryImpl::GetInstance()->GetWorkerWatcherForTesting(
-          GetBrowserContext());
+  performance_manager::WorkerWatcher* worker_watcher =
+      performance_manager::PerformanceManagerRegistryImpl::GetInstance()
+          ->GetWorkerWatcherForTesting(GetBrowserContext());
   ASSERT_TRUE(worker_watcher);
 
   // Navigate to an initial page. This creates a TestFrameNode and
@@ -70,7 +72,7 @@ TEST_F(ResourceAttrWorkerContextTest, WorkerContexts) {
 
   // Validate that the right worker nodes were created, save a pointer to one.
   base::WeakPtr<WorkerNode> worker_node;
-  RunInGraph([&](Graph* graph) {
+  performance_manager::RunInGraph([&](Graph* graph) {
     bool found_worker = false;
     for (const WorkerNode* node : graph->GetAllWorkerNodes()) {
       EXPECT_THAT(node->GetWorkerToken(),
@@ -83,14 +85,14 @@ TEST_F(ResourceAttrWorkerContextTest, WorkerContexts) {
     EXPECT_TRUE(found_worker);
   });
 
-  absl::optional<WorkerContext> worker_context =
+  std::optional<WorkerContext> worker_context =
       WorkerContext::FromWorkerToken(worker_token);
   ASSERT_TRUE(worker_context.has_value());
   EXPECT_EQ(worker_token, worker_context->GetWorkerToken());
 
   base::WeakPtr<WorkerNode> worker_node_from_context =
       worker_context->GetWeakWorkerNode();
-  RunInGraph([&] {
+  performance_manager::RunInGraph([&] {
     ASSERT_TRUE(worker_node);
     ASSERT_TRUE(worker_node_from_context);
     EXPECT_EQ(worker_node.get(), worker_node_from_context.get());
@@ -104,7 +106,7 @@ TEST_F(ResourceAttrWorkerContextTest, WorkerContexts) {
   });
 
   // Make sure a second worker gets a different context.
-  absl::optional<WorkerContext> worker_context2 =
+  std::optional<WorkerContext> worker_context2 =
       WorkerContext::FromWorkerToken(worker_token2);
   EXPECT_TRUE(worker_context2.has_value());
   EXPECT_NE(worker_context2, worker_context);
@@ -114,11 +116,11 @@ TEST_F(ResourceAttrWorkerContextTest, WorkerContexts) {
   // Context still returns worker token, but it no longer matches any worker.
   EXPECT_EQ(worker_token, worker_context->GetWorkerToken());
   EXPECT_FALSE(WorkerContext::FromWorkerToken(worker_token).has_value());
-  RunInGraph([&](Graph* graph) {
+  performance_manager::RunInGraph([&](Graph* graph) {
     EXPECT_TRUE(graph->GetAllWorkerNodes().empty());
     EXPECT_FALSE(worker_node);
     EXPECT_EQ(nullptr, worker_context->GetWorkerNode());
-    EXPECT_EQ(absl::nullopt, WorkerContext::FromWeakWorkerNode(worker_node));
+    EXPECT_EQ(std::nullopt, WorkerContext::FromWeakWorkerNode(worker_node));
   });
 }
 
@@ -132,4 +134,4 @@ TEST_F(ResourceAttrWorkerContextNoPMTest, WorkerContextWithoutPM) {
 
 }  // namespace
 
-}  // namespace performance_manager::resource_attribution
+}  // namespace resource_attribution

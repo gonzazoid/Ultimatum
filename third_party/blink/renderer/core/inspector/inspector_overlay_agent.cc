@@ -337,9 +337,6 @@ class InspectorOverlayAgent::InspectorPageOverlayDelegate final
 
  private:
   // cc::ContentLayerClient implementation
-  gfx::Rect PaintableRegion() const override {
-    return gfx::Rect(layer_->bounds());
-  }
   bool FillsBoundsCompletely() const override { return false; }
 
   scoped_refptr<cc::DisplayItemList> PaintContentsToDisplayList() override {
@@ -347,7 +344,7 @@ class InspectorOverlayAgent::InspectorPageOverlayDelegate final
     display_list->StartPaint();
     display_list->push<cc::DrawRecordOp>(
         overlay_->OverlayMainFrame()->View()->GetPaintRecord());
-    display_list->EndPaintOfUnpaired(PaintableRegion());
+    display_list->EndPaintOfUnpaired(gfx::Rect(layer_->bounds()));
     display_list->Finalize();
     return display_list;
   }
@@ -425,7 +422,7 @@ InspectorOverlayAgent::InspectorOverlayAgent(
   if (GetFrame()->GetWidgetForLocalRoot()) {
     original_layer_tree_debug_state_ =
         std::make_unique<cc::LayerTreeDebugState>(
-            GetFrame()->GetWidgetForLocalRoot()->GetLayerTreeDebugState());
+            *GetFrame()->GetWidgetForLocalRoot()->GetLayerTreeDebugState());
   }
 }
 
@@ -556,7 +553,7 @@ protocol::Response InspectorOverlayAgent::setShowDebugBorders(bool show) {
   }
   if (FrameWidgetInitialized()) {
     FrameWidget* widget = GetFrame()->GetWidgetForLocalRoot();
-    cc::LayerTreeDebugState debug_state = widget->GetLayerTreeDebugState();
+    cc::LayerTreeDebugState debug_state = *widget->GetLayerTreeDebugState();
     if (show) {
       debug_state.show_debug_borders.set();
     } else {
@@ -577,7 +574,7 @@ protocol::Response InspectorOverlayAgent::setShowFPSCounter(bool show) {
   }
   if (FrameWidgetInitialized()) {
     FrameWidget* widget = GetFrame()->GetWidgetForLocalRoot();
-    cc::LayerTreeDebugState debug_state = widget->GetLayerTreeDebugState();
+    cc::LayerTreeDebugState debug_state = *widget->GetLayerTreeDebugState();
     debug_state.show_fps_counter = show;
     widget->SetLayerTreeDebugState(debug_state);
   }
@@ -594,7 +591,7 @@ protocol::Response InspectorOverlayAgent::setShowPaintRects(bool show) {
   }
   if (FrameWidgetInitialized()) {
     FrameWidget* widget = GetFrame()->GetWidgetForLocalRoot();
-    cc::LayerTreeDebugState debug_state = widget->GetLayerTreeDebugState();
+    cc::LayerTreeDebugState debug_state = *widget->GetLayerTreeDebugState();
     debug_state.show_paint_rects = show;
     widget->SetLayerTreeDebugState(debug_state);
   }
@@ -611,7 +608,7 @@ protocol::Response InspectorOverlayAgent::setShowLayoutShiftRegions(bool show) {
   }
   if (FrameWidgetInitialized()) {
     FrameWidget* widget = GetFrame()->GetWidgetForLocalRoot();
-    cc::LayerTreeDebugState debug_state = widget->GetLayerTreeDebugState();
+    cc::LayerTreeDebugState debug_state = *widget->GetLayerTreeDebugState();
     debug_state.show_layout_shift_regions = show;
     widget->SetLayerTreeDebugState(debug_state);
   }
@@ -629,7 +626,7 @@ protocol::Response InspectorOverlayAgent::setShowScrollBottleneckRects(
   }
   if (FrameWidgetInitialized()) {
     FrameWidget* widget = GetFrame()->GetWidgetForLocalRoot();
-    cc::LayerTreeDebugState debug_state = widget->GetLayerTreeDebugState();
+    cc::LayerTreeDebugState debug_state = *widget->GetLayerTreeDebugState();
     debug_state.show_touch_event_handler_rects = show;
     debug_state.show_wheel_event_handler_rects = show;
     debug_state.show_non_fast_scrollable_rects = show;
@@ -660,7 +657,7 @@ protocol::Response InspectorOverlayAgent::setShowWebVitals(bool show) {
   }
   if (FrameWidgetInitialized()) {
     FrameWidget* widget = GetFrame()->GetWidgetForLocalRoot();
-    cc::LayerTreeDebugState debug_state = widget->GetLayerTreeDebugState();
+    cc::LayerTreeDebugState debug_state = *widget->GetLayerTreeDebugState();
     debug_state.show_web_vital_metrics = show;
     widget->SetLayerTreeDebugState(debug_state);
   }
@@ -1295,7 +1292,7 @@ void InspectorOverlayAgent::DidInitializeFrameWidget() {
   }
 
   original_layer_tree_debug_state_ = std::make_unique<cc::LayerTreeDebugState>(
-      GetFrame()->GetWidgetForLocalRoot()->GetLayerTreeDebugState());
+      *GetFrame()->GetWidgetForLocalRoot()->GetLayerTreeDebugState());
   Restore();
 }
 
@@ -1398,8 +1395,7 @@ void InspectorOverlayAgent::LoadOverlayPageResource() {
       isolate, ToMicrotaskQueue(script_state),
       v8::MicrotasksScope::kDoNotRunMicrotasks);
   v8::Local<v8::Value> overlay_host_obj =
-      ToV8Traits<InspectorOverlayHost>::ToV8(script_state, overlay_host_.Get())
-          .ToLocalChecked();
+      ToV8Traits<InspectorOverlayHost>::ToV8(script_state, overlay_host_.Get());
   DCHECK(!overlay_host_obj.IsEmpty());
   script_state->GetContext()
       ->Global()
@@ -1925,12 +1921,12 @@ InspectorOverlayAgent::ToIsolationModeHighlightConfig(
 }
 
 // static
-absl::optional<LineStyle> InspectorOverlayAgent::ToLineStyle(
+std::optional<LineStyle> InspectorOverlayAgent::ToLineStyle(
     protocol::Overlay::LineStyle* config) {
   if (!config) {
-    return absl::nullopt;
+    return std::nullopt;
   }
-  absl::optional<LineStyle> line_style = LineStyle();
+  std::optional<LineStyle> line_style = LineStyle();
   line_style->color = ParseColor(config->getColor(nullptr));
   line_style->pattern = config->getPattern("solid");
 
@@ -1938,12 +1934,12 @@ absl::optional<LineStyle> InspectorOverlayAgent::ToLineStyle(
 }
 
 // static
-absl::optional<BoxStyle> InspectorOverlayAgent::ToBoxStyle(
+std::optional<BoxStyle> InspectorOverlayAgent::ToBoxStyle(
     protocol::Overlay::BoxStyle* config) {
   if (!config) {
-    return absl::nullopt;
+    return std::nullopt;
   }
-  absl::optional<BoxStyle> box_style = BoxStyle();
+  std::optional<BoxStyle> box_style = BoxStyle();
   box_style->fill_color = ParseColor(config->getFillColor(nullptr));
   box_style->hatch_color = ParseColor(config->getHatchColor(nullptr));
 

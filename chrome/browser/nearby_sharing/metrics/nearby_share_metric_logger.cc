@@ -4,11 +4,13 @@
 
 #include "chrome/browser/nearby_sharing/metrics/nearby_share_metric_logger.h"
 
+#include <utility>
+
 #include "base/time/time.h"
 #include "chrome/browser/nearby_sharing/metrics/metric_common.h"
 #include "chromeos/ash/services/nearby/public/mojom/nearby_connections_types.mojom-shared.h"
 #include "components/metrics/structured/structured_events.h"
-#include "components/metrics/structured/structured_metrics_features.h"
+#include "components/metrics/structured/structured_metrics_client.h"
 
 namespace nearby::share::metrics {
 
@@ -21,7 +23,7 @@ void NearbyShareMetricLogger::OnShareTargetDiscoveryStarted() {
 }
 
 void NearbyShareMetricLogger::OnShareTargetDiscoveryStopped() {
-  discovery_start_time_ = absl::nullopt;
+  discovery_start_time_ = std::nullopt;
 }
 
 void NearbyShareMetricLogger::OnShareTargetAdded(
@@ -156,7 +158,7 @@ void NearbyShareMetricLogger::OnTransferCompleted(
   metric.SetTimeToTransferComplete(complete_time.InMilliseconds());
 
   // Emit the metric.
-  metric.Record();
+  ::metrics::structured::StructuredMetricsClient::Record(std::move(metric));
 }
 
 void NearbyShareMetricLogger::OnBandwidthUpgrade(

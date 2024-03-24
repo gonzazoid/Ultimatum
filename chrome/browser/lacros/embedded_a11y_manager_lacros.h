@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_LACROS_EMBEDDED_A11Y_MANAGER_LACROS_H_
 #define CHROME_BROWSER_LACROS_EMBEDDED_A11Y_MANAGER_LACROS_H_
 
+#include <optional>
 #include <string>
 
 #include "base/functional/callback_forward.h"
@@ -37,9 +38,6 @@ class EmbeddedA11yManagerLacros
  public:
   // Gets the current instance of EmbeddedA11yManagerLacros. There should be one
   // of these across all Lacros profiles.
-  // TODO(b:271633121): Use this instance from a EmbeddedA11yHelperPrivate API
-  // to send a Select to Speak context menu click from extension back through
-  // crosapi to Ash.
   static EmbeddedA11yManagerLacros* GetInstance();
 
   EmbeddedA11yManagerLacros(EmbeddedA11yManagerLacros&) = delete;
@@ -67,6 +65,10 @@ class EmbeddedA11yManagerLacros
 
   void AddFocusChangedCallbackForTest(
       base::RepeatingCallback<void(gfx::Rect)> callback);
+
+  void SetReadingModeEnabled(bool enabled);
+
+  bool IsReadingModeEnabled();
 
  private:
   EmbeddedA11yManagerLacros();
@@ -105,7 +107,7 @@ class EmbeddedA11yManagerLacros
   void InstallExtension(extensions::ComponentLoader* component_loader,
                         const base::FilePath& path,
                         const std::string& extension_id,
-                        absl::optional<base::Value::Dict> manifest);
+                        std::optional<base::Value::Dict> manifest);
 
   // Called when focus highlight feature is active and the focused node
   // changed.
@@ -122,7 +124,8 @@ class EmbeddedA11yManagerLacros
   bool chromevox_enabled_ = false;
   bool select_to_speak_enabled_ = false;
   bool switch_access_enabled_ = false;
-  bool pdf_ocr_always_active_enabled_ = false;
+  bool reading_mode_enabled_ = false;
+  std::optional<bool> pdf_ocr_always_active_enabled_;
 
   base::RepeatingClosure extension_installation_changed_callback_for_test_;
   base::RepeatingClosure speak_selected_text_callback_for_test_;

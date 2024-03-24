@@ -8,6 +8,7 @@
 
 #include "base/files/file_path.h"
 #include "base/functional/callback.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/time/time.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/app/vector_icons/vector_icons.h"
@@ -322,7 +323,8 @@ DownloadBubbleRowView::DownloadBubbleRowView(
     base::WeakPtr<DownloadBubbleUIController> bubble_controller,
     base::WeakPtr<DownloadBubbleNavigationHandler> navigation_handler,
     base::WeakPtr<Browser> browser,
-    int fixed_width)
+    int fixed_width,
+    bool is_in_partial_view)
     : info_(info),
       context_menu_(std::make_unique<DownloadShelfContextMenuView>(
           info_->model()->GetWeakPtr(),
@@ -344,6 +346,8 @@ DownloadBubbleRowView::DownloadBubbleRowView(
                               base::Unretained(this))),
       input_protector_(
           std::make_unique<views::InputEventActivationProtector>()),
+      shown_time_(base::Time::Now()),
+      is_in_partial_view_(is_in_partial_view),
       fixed_width_(fixed_width) {
   CHECK(info_->model());
   info_->AddObserver(this);
@@ -367,34 +371,32 @@ DownloadBubbleRowView::DownloadBubbleRowView(
   const int icon_label_spacing = ChromeLayoutProvider::Get()->GetDistanceMetric(
       views::DISTANCE_RELATED_LABEL_HORIZONTAL);
 
-  auto* layout = SetLayoutManager(std::make_unique<views::TableLayout>());
-  // Download Icon
-  layout->AddColumn(views::LayoutAlignment::kCenter,
-                    views::LayoutAlignment::kStart,
-                    views::TableLayout::kFixedSize,
-                    views::TableLayout::ColumnSize::kUsePreferred, 0, 0);
-  // Download name label (primary_label_)
-  layout->AddPaddingColumn(views::TableLayout::kFixedSize, icon_label_spacing)
+  SetLayoutManager(std::make_unique<views::TableLayout>())
+      // Download Icon
+      ->AddColumn(views::LayoutAlignment::kCenter,
+                  views::LayoutAlignment::kStart,
+                  views::TableLayout::kFixedSize,
+                  views::TableLayout::ColumnSize::kUsePreferred, 0, 0)
+      // Download name label (primary_label_)
+      .AddPaddingColumn(views::TableLayout::kFixedSize, icon_label_spacing)
       .AddColumn(views::LayoutAlignment::kStart,
                  features::IsChromeRefresh2023()
                      ? views::LayoutAlignment::kCenter
                      : views::LayoutAlignment::kStart,
-                 1.0f, views::TableLayout::ColumnSize::kUsePreferred, 0, 0);
-  // Download Buttons: Cancel, Discard, Scan, Open Now, only one may be active
-  layout->AddColumn(views::LayoutAlignment::kCenter,
-                    views::LayoutAlignment::kStart,
-                    views::TableLayout::kFixedSize,
-                    views::TableLayout::ColumnSize::kUsePreferred, 0, 0);
+                 1.0f, views::TableLayout::ColumnSize::kUsePreferred, 0, 0)
+      // Download Buttons: Cancel, Discard, Scan, Open Now, only one may be
+      // active
+      .AddColumn(views::LayoutAlignment::kCenter,
+                 views::LayoutAlignment::kStart, views::TableLayout::kFixedSize,
+                 views::TableLayout::ColumnSize::kUsePreferred, 0, 0)
+      // Subpage icon
+      .AddColumn(views::LayoutAlignment::kCenter,
+                 views::LayoutAlignment::kStart, views::TableLayout::kFixedSize,
+                 views::TableLayout::ColumnSize::kUsePreferred, 0, 0)
+      // Three rows, one for name, one for status, and one for the progress bar.
+      .AddRows(3, 1.0f);
 
-  // Subpage icon
-  layout->AddColumn(views::LayoutAlignment::kCenter,
-                    views::LayoutAlignment::kStart,
-                    views::TableLayout::kFixedSize,
-                    views::TableLayout::ColumnSize::kUsePreferred, 0, 0);
-  // Three rows, one for name, one for status, and one for the progress bar.
-  layout->AddRows(3, 1.0f);
-
-  layout->SetChildViewIgnoredByLayout(inkdrop_container_, true);
+  inkdrop_container_->SetProperty(views::kViewIgnoredByLayoutKey, true);
 
   transparent_button_ =
       AddChildView(std::make_unique<DownloadBubbleTransparentButton>(
@@ -403,7 +405,7 @@ DownloadBubbleRowView::DownloadBubbleRowView(
           this));
   transparent_button_->set_context_menu_controller(this);
   transparent_button_->SetTriggerableEventFlags(ui::EF_LEFT_MOUSE_BUTTON);
-  layout->SetChildViewIgnoredByLayout(transparent_button_, true);
+  transparent_button_->SetProperty(views::kViewIgnoredByLayoutKey, true);
 
   icon_ = AddChildView(std::make_unique<views::ImageView>());
   icon_->SetCanProcessEventsWithinSubtree(false);
@@ -461,7 +463,7 @@ DownloadBubbleRowView::DownloadBubbleRowView(
   open_when_complete_action_ =
       AddQuickAction(DownloadCommands::OPEN_WHEN_COMPLETE);
   quick_action_holder_->SetVisible(false);
-  layout->SetChildViewIgnoredByLayout(quick_action_holder_, true);
+  quick_action_holder_->SetProperty(views::kViewIgnoredByLayoutKey, true);
   quick_action_holder_->SetBackground(
       views::CreateThemedSolidBackground(ui::kColorDialogBackground));
 
@@ -643,8 +645,8 @@ void DownloadBubbleRowView::UpdateRowForFocus(
   }
 }
 
-void DownloadBubbleRowView::Layout() {
-  views::View::Layout();
+void DownloadBubbleRowView::Layout(PassKey) {
+  LayoutSuperclass<views::View>(this);
   transparent_button_->SetBoundsRect(GetLocalBounds());
   gfx::Size quick_actions_size = quick_action_holder_->GetPreferredSize();
   gfx::Insets insets = GetLayoutInsets(DOWNLOAD_ROW);
@@ -658,8 +660,21 @@ void DownloadBubbleRowView::Layout() {
 
 void DownloadBubbleRowView::OnMainButtonPressed(const ui::Event& event) {
   if (!bubble_controller_ || !navigation_handler_ ||
-      !info_->main_button_enabled() || !info_->model() ||
-      input_protector_->IsPossiblyUnintendedInteraction(event)) {
+      !info_->main_button_enabled() || !info_->model()) {
+    return;
+  }
+  // Log histograms for how long users take to open a download by clicking the
+  // main button, if the download has no warning. This is logged before the
+  // input_protector_ check to capture attempted clicks sooner than 500 ms.
+  if (!info_->has_subpage() && is_in_partial_view_) {
+    base::Time now = base::Time::Now();
+    base::UmaHistogramTimes("Download.PartialView.StartTimeToOpenDownloadClick",
+                            now - model()->GetStartTime());
+    base::UmaHistogramTimes(
+        "Download.PartialView.RowShownTimeToOpenDownloadClick",
+        now - shown_time_);
+  }
+  if (input_protector_->IsPossiblyUnintendedInteraction(event)) {
     return;
   }
   if (info_->has_subpage()) {

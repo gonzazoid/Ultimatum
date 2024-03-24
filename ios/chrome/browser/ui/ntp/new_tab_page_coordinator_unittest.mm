@@ -5,12 +5,14 @@
 #import "ios/chrome/browser/ui/ntp/new_tab_page_coordinator.h"
 #import "ios/chrome/browser/ui/ntp/new_tab_page_coordinator+Testing.h"
 
+#import "base/memory/raw_ptr.h"
 #import "base/test/metrics/histogram_tester.h"
 #import "base/test/scoped_feature_list.h"
 #import "base/test/task_environment.h"
 #import "components/variations/service/variations_service.h"
 #import "components/variations/service/variations_service_client.h"
-#import "ios/chrome/browser/favicon/ios_chrome_large_icon_service_factory.h"
+#import "components/variations/synthetic_trial_registry.h"
+#import "ios/chrome/browser/favicon/model/ios_chrome_large_icon_service_factory.h"
 #import "ios/chrome/browser/ntp/model/new_tab_page_tab_helper.h"
 #import "ios/chrome/browser/search_engines/model/template_url_service_factory.h"
 #import "ios/chrome/browser/shared/model/application_context/application_context.h"
@@ -28,6 +30,7 @@
 #import "ios/chrome/browser/signin/model/fake_authentication_service_delegate.h"
 #import "ios/chrome/browser/signin/model/fake_system_identity.h"
 #import "ios/chrome/browser/signin/model/fake_system_identity_manager.h"
+#import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_most_visited_action_item.h"
 #import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_most_visited_item.h"
 #import "ios/chrome/browser/ui/content_suggestions/content_suggestions_coordinator.h"
 #import "ios/chrome/browser/ui/content_suggestions/content_suggestions_mediator.h"
@@ -62,6 +65,7 @@
 #import "third_party/ocmock/OCMock/OCMock.h"
 #import "third_party/ocmock/gtest_support.h"
 
+using variations::SyntheticTrialRegistry;
 using variations::UIStringOverrider;
 using variations::VariationsService;
 using variations::VariationsServiceClient;
@@ -107,12 +111,15 @@ class ScopedVariationsService {
   ScopedVariationsService() {
     EXPECT_EQ(nullptr,
               TestingApplicationContext::GetGlobal()->GetVariationsService());
+    synthetic_trial_registry_ = std::make_unique<SyntheticTrialRegistry>();
+
     variations_service_ = VariationsService::Create(
         std::make_unique<TestVariationsServiceClient>(),
         TestingApplicationContext::GetGlobal()->GetLocalState(),
         /*state_manager=*/nullptr, "dummy-disable-background-switch",
         UIStringOverrider(),
-        network::TestNetworkConnectionTracker::CreateGetter());
+        network::TestNetworkConnectionTracker::CreateGetter(),
+        synthetic_trial_registry_.get());
     TestingApplicationContext::GetGlobal()->SetVariationsService(
         variations_service_.get());
   }
@@ -127,6 +134,7 @@ class ScopedVariationsService {
   VariationsService* Get() { return variations_service_.get(); }
 
   std::unique_ptr<VariationsService> variations_service_;
+  std::unique_ptr<SyntheticTrialRegistry> synthetic_trial_registry_;
 };
 
 }  // namespace
@@ -182,8 +190,8 @@ class NewTabPageCoordinatorTest : public PlatformTest {
       StartSurfaceRecentTabBrowserAgent::CreateForBrowser(browser_.get());
       // Create non-NTP WebState
       browser_.get()->GetWebStateList()->InsertWebState(
-          0, CreateWebState("http://chromium.org"),
-          WebStateList::INSERT_ACTIVATE, WebStateOpener());
+          CreateWebState("http://chromium.org"),
+          WebStateList::InsertionParams::Automatic().Activate());
       favicon::WebFaviconDriver::CreateForWebState(
           browser_.get()->GetWebStateList()->GetActiveWebState(),
           /*favicon_service=*/nullptr);
@@ -232,8 +240,8 @@ class NewTabPageCoordinatorTest : public PlatformTest {
   // Inserts a FakeWebState into the browser's WebStateList.
   void InsertWebState(std::unique_ptr<web::WebState> web_state) {
     browser_->GetWebStateList()->InsertWebState(
-        /*index=*/0, std::move(web_state), WebStateList::INSERT_ACTIVATE,
-        WebStateOpener());
+        std::move(web_state),
+        WebStateList::InsertionParams::Automatic().Activate());
     web_state_ = browser_->GetWebStateList()->GetActiveWebState();
   }
 
@@ -332,7 +340,7 @@ class NewTabPageCoordinatorTest : public PlatformTest {
   }
 
   web::WebTaskEnvironment task_environment_;
-  web::WebState* web_state_;
+  raw_ptr<web::WebState> web_state_;
   id toolbar_delegate_;
   id delegate_;
   IOSChromeScopedTestingChromeBrowserStateManager scoped_browser_state_manager_;
@@ -507,11 +515,11 @@ TEST_F(NewTabPageCoordinatorTest, FakeboxTappedMetricLogging) {
   [coordinator_ stop];
 }
 
-// Test that in response to tapping on MVT while on the Start Surface, the
+// Test that in response to tapping on Shortcuts while on the Start Surface, the
 // NTPTabHelper, NTPCoordinator, and ContentSuggestionsMediator perform as
 // expected, leading to logging the correct NTP metric and resets NTPTabHelper's
 // ShouldShowStartSurface() property.
-TEST_F(NewTabPageCoordinatorTest, MVTStartMetricLogging) {
+TEST_F(NewTabPageCoordinatorTest, ShortcutsStartMetricLogging) {
   CreateCoordinator(/*off_the_record=*/false);
   UrlLoadingNotifierBrowserAgent::CreateForBrowser(browser_.get());
   FakeUrlLoadingBrowserAgent::CreateForBrowser(browser_.get());
@@ -521,17 +529,14 @@ TEST_F(NewTabPageCoordinatorTest, MVTStartMetricLogging) {
   [coordinator_ didNavigateToNTPInWebState:web_state_];
 
   histogram_tester_->ExpectUniqueSample("IOS.Start.Click",
-                                        IOSHomeActionType::kMostVisitedTile, 0);
+                                        IOSHomeActionType::kShortcuts, 0);
   histogram_tester_->ExpectTotalCount(kStartTimeSpentHistogram, 0);
   histogram_tester_->ExpectTotalCount(kStartImpressionHistogram, 1);
 
-  ContentSuggestionsMostVisitedItem* item =
-      [[ContentSuggestionsMostVisitedItem alloc] init];
-  item.title = @"Most Visited Index 0";
-  item.URL = GURL("chrome://version");
-  [coordinator_.contentSuggestionsCoordinator.contentSuggestionsMediator
-      openMostVisitedItem:item
-                  atIndex:0];
+  ContentSuggestionsMostVisitedActionItem* item =
+      [[ContentSuggestionsMostVisitedActionItem alloc] init];
+  item.title = @"Bookmarks 0";
+  [coordinator_ shortcutTileOpened];
   // Force the URL load callback to simulate the NavigationManager receiving the
   // URL load signal from the URLLoadingBrowserAgent.
   web::FakeNavigationContext navigation_context;
@@ -547,7 +552,7 @@ TEST_F(NewTabPageCoordinatorTest, MVTStartMetricLogging) {
   // received the DidStartNavigation() WebStateObserver callback to reset
   // ShouldShowStartSurface() to false.
   histogram_tester_->ExpectUniqueSample("IOS.Start.Click",
-                                        IOSHomeActionType::kMostVisitedTile, 1);
+                                        IOSHomeActionType::kShortcuts, 1);
   histogram_tester_->ExpectTotalCount(kStartTimeSpentHistogram, 1);
   histogram_tester_->ExpectTotalCount(kStartImpressionHistogram, 1);
   EXPECT_FALSE(
@@ -634,8 +639,8 @@ TEST_F(NewTabPageCoordinatorTest, DidNavigateBetweenWebStates) {
 
     // Close all web states.
     [coordinator_ didNavigateAwayFromNTP];
-    browser_->GetWebStateList()->CloseAllWebStates(
-        WebStateList::CLOSE_NO_FLAGS);
+    CloseAllWebStates(*browser_->GetWebStateList(),
+                      WebStateList::CLOSE_NO_FLAGS);
     [coordinator_ stopIfNeeded];
     if (!off_the_record) {
       histogram_tester_->ExpectTotalCount(kNTPTimeSpentHistogram, 2);

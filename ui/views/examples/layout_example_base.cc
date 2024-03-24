@@ -51,9 +51,9 @@ END_METADATA
 // This View holds two other views which consists of a view on the left onto
 // which the BoxLayout is attached for demonstrating its features. The view
 // on the right contains all the various controls which allow the user to
-// interactively control the various features/properties of BoxLayout. Layout()
-// will ensure the left view takes 75% and the right view fills the remaining
-// 25%.
+// interactively control the various features/properties of BoxLayout.
+// Layout will ensure the left view takes 75% and the right view fills the
+// remaining 25%.
 class FullPanel : public View {
   METADATA_HEADER(FullPanel, View)
 
@@ -99,20 +99,25 @@ LayoutExampleBase::ChildPanel::ChildPanel(LayoutExampleBase* example)
 
 LayoutExampleBase::ChildPanel::~ChildPanel() = default;
 
-void LayoutExampleBase::ChildPanel::Layout() {
+void LayoutExampleBase::ChildPanel::Layout(PassKey) {
   constexpr int kSpacing = 2;
   if (selected_) {
     const gfx::Rect client = GetContentsBounds();
+    margin_.top->SizeToPreferredSize();
     margin_.top->SetPosition(
         gfx::Point((client.width() - margin_.top->width()) / 2, kSpacing));
+    margin_.left->SizeToPreferredSize();
     margin_.left->SetPosition(
         gfx::Point(kSpacing, (client.height() - margin_.left->height()) / 2));
+    margin_.bottom->SizeToPreferredSize();
     margin_.bottom->SetPosition(
         gfx::Point((client.width() - margin_.bottom->width()) / 2,
                    client.height() - margin_.bottom->height() - kSpacing));
+    margin_.right->SizeToPreferredSize();
     margin_.right->SetPosition(
         gfx::Point(client.width() - margin_.right->width() - kSpacing,
                    (client.height() - margin_.right->height()) / 2));
+    flex_->SizeToPreferredSize();
     flex_->SetPosition(gfx::Point((client.width() - flex_->width()) / 2,
                                   (client.height() - flex_->height()) / 2));
   }
@@ -174,7 +179,7 @@ Textfield* LayoutExampleBase::ChildPanel::CreateTextfield(
   return AddChildView(CreateCommonTextfieldWithAXName(this, name));
 }
 
-BEGIN_METADATA(LayoutExampleBase, ChildPanel, View)
+BEGIN_METADATA(LayoutExampleBase, ChildPanel)
 END_METADATA
 
 LayoutExampleBase::LayoutExampleBase(const char* title) : ExampleBase(title) {}

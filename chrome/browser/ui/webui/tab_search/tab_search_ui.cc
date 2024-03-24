@@ -95,6 +95,7 @@ TabSearchUI::TabSearchUI(content::WebUI* web_ui)
       {"learnMoreDisclaimer", IDS_TAB_ORGANIZATION_DISCLAIMER},
       {"notStartedBody", IDS_TAB_ORGANIZATION_NOT_STARTED_BODY},
       {"notStartedBodyFRE", IDS_TAB_ORGANIZATION_NOT_STARTED_BODY_FRE},
+      {"notStartedBodyLinkFRE", IDS_TAB_ORGANIZATION_NOT_STARTED_BODY_LINK_FRE},
       {"notStartedBodySignedOut",
        IDS_TAB_ORGANIZATION_NOT_STARTED_BODY_SIGNED_OUT},
       {"notStartedBodySyncPaused",
@@ -182,6 +183,9 @@ TabSearchUI::TabSearchUI(content::WebUI* web_ui)
     }
   }
   source->AddBoolean("tabOrganizationEnabled", tab_organization_enabled);
+  source->AddBoolean(
+      "multiTabOrganizationEnabled",
+      base::FeatureList::IsEnabled(features::kMultiTabOrganization));
   source->AddBoolean(
       "tabOrganizationRefreshButtonEnabled",
       base::FeatureList::IsEnabled(features::kTabOrganizationRefreshButton));

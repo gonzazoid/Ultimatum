@@ -18,6 +18,8 @@ proto_library("optimization_guide_proto") {
     "features/common_quality_data.proto",
     "features/compose.proto",
     "features/default.proto",
+    "features/history_document.proto",
+    "features/history_query.proto",
     "features/tab_organization.proto",
     "features/wallpaper_search.proto",
     "hint_cache.proto",
@@ -27,6 +29,7 @@ proto_library("optimization_guide_proto") {
     "model_quality_metadata.proto",
     "model_quality_service.proto",
     "models.proto",
+    "on_device_base_model_metadata.proto",
     "on_device_tail_suggest_model_metadata.proto",
     "page_entities_metadata.proto",
     "page_entities_model_metadata.proto",
@@ -35,6 +38,7 @@ proto_library("optimization_guide_proto") {
     "push_notification.proto",
     "salient_image_metadata.proto",
     "string_value.proto",
+    "text_safety_model_metadata.proto",
     "visual_search_model_metadata.proto",
   ]
 

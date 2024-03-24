@@ -28,7 +28,7 @@
 #import "ios/web/public/navigation/navigation_manager.h"
 #import "ios/web/public/thread/web_task_traits.h"
 #import "ios/web/public/thread/web_thread.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 #import "ui/base/page_transition_types.h"
 
 namespace {
@@ -69,7 +69,7 @@ std::string GetOfflineData(base::FilePath offline_root,
     if (!base::ReadFileToString(image_path, &image)) {
       continue;
     }
-    base::Base64Encode(image, &image);
+    image = base::Base64Encode(image);
     std::string src_with_file = base::StringPrintf("%s", file_name.c_str());
     std::string src_with_data =
         base::StringPrintf("data:image/png;base64,%s", image.c_str());
@@ -172,10 +172,10 @@ void OfflinePageTabHelper::DidStartNavigation(web::WebState* web_state,
       context->IsSameDocument()) {
     // This is the navigation triggered by loadData or loadSimulatedRequest.
     // Ignore it, to not reset the presenting_offline_page_ flag.
-    offline_navigation_triggered_ = GURL::EmptyGURL();
+    offline_navigation_triggered_ = GURL();
     return;
   }
-  offline_navigation_triggered_ = GURL::EmptyGURL();
+  offline_navigation_triggered_ = GURL();
   initial_navigation_url_ = context->GetUrl();
   loading_slow_or_failed_ = false;
   navigation_committed_ = false;
@@ -231,9 +231,9 @@ void OfflinePageTabHelper::ReplaceLocationUrlAndReload(const GURL& url) {
   reloading_from_offline_ = true;
   std::string encoded_url;
   if (url.is_valid() && url.SchemeIsHTTPOrHTTPS()) {
-    base::Base64Encode(url.spec(), &encoded_url);
+    encoded_url = base::Base64Encode(url.spec());
   } else {
-    base::Base64Encode("about:blank", &encoded_url);
+    encoded_url = base::Base64Encode("about:blank");
   }
   NSString* js =
       [NSString stringWithFormat:@"window.location.replace(atob('%@'));",
@@ -373,20 +373,18 @@ void OfflinePageTabHelper::LoadOfflinePage(const GURL& url) {
           ->OfflineRoot()
           .DirName();
 
-  if (@available(iOS 15, *)) {
-    scoped_refptr<const ReadingListEntry> entry =
-        reading_list_model_->GetEntryByURL(url);
-    base::FilePath offline_path = entry->DistilledPath();
-    bool is_pdf = offline_path.Extension() == ".pdf";
+  scoped_refptr<const ReadingListEntry> entry =
+      reading_list_model_->GetEntryByURL(url);
+  base::FilePath offline_path = entry->DistilledPath();
+  bool is_pdf = offline_path.Extension() == ".pdf";
 
-    base::ThreadPool::PostTaskAndReplyWithResult(
-        FROM_HERE,
-        {base::MayBlock(), base::TaskPriority::USER_BLOCKING,
-         base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
-        base::BindOnce(&GetOfflineData, offline_root, offline_path),
-        base::BindOnce(&OfflinePageTabHelper::LoadOfflineData,
-                       weak_factory_.GetWeakPtr(), web_state_, url, is_pdf));
-  }
+  base::ThreadPool::PostTaskAndReplyWithResult(
+      FROM_HERE,
+      {base::MayBlock(), base::TaskPriority::USER_BLOCKING,
+       base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
+      base::BindOnce(&GetOfflineData, offline_root, offline_path),
+      base::BindOnce(&OfflinePageTabHelper::LoadOfflineData,
+                     weak_factory_.GetWeakPtr(), web_state_, url, is_pdf));
 }
 
 bool OfflinePageTabHelper::HasDistilledVersionForOnlineUrl(

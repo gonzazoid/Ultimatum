@@ -17,6 +17,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.VectorDrawable;
 import android.util.Pair;
 import android.view.View;
 import android.widget.ImageView;
@@ -56,6 +57,8 @@ import org.chromium.chrome.browser.app.ChromeActivity;
 import org.chromium.chrome.browser.browserservices.intents.BrowserServicesIntentDataProvider;
 import org.chromium.chrome.browser.customtabs.content.CustomTabIntentHandler;
 import org.chromium.chrome.browser.customtabs.dependency_injection.BaseCustomTabActivityModule;
+import org.chromium.chrome.browser.customtabs.features.toolbar.CustomTabToolbar;
+import org.chromium.chrome.browser.customtabs.features.toolbar.CustomTabToolbar.CustomTabLocationBar;
 import org.chromium.chrome.browser.dependency_injection.ModuleOverridesRule;
 import org.chromium.chrome.browser.firstrun.FirstRunStatus;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
@@ -63,6 +66,7 @@ import org.chromium.chrome.browser.offlinepages.ClientId;
 import org.chromium.chrome.browser.offlinepages.OfflinePageBridge;
 import org.chromium.chrome.browser.omnibox.UrlBar;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TrustedCdn;
 import org.chromium.chrome.browser.test.ScreenShooter;
@@ -176,7 +180,7 @@ public class TrustedCdnPublisherUrlTest {
                 "https://www.example.com/test",
                 "com.example.test",
                 "example.com",
-                R.drawable.omnibox_https_valid);
+                R.drawable.omnibox_https_valid_refresh);
         mScreenShooter.shoot("trustedPublisherUrlHttps");
     }
 
@@ -200,8 +204,8 @@ public class TrustedCdnPublisherUrlTest {
     public void testRtl() throws Exception {
         String publisher =
                 "\u200e\u202b\u0645\u0648\u0642\u0639\u002e\u0648\u0632\u0627\u0631"
-                        + "\u0629\u002d\u0627\u0644\u0623\u062a\u0635\u0627\u0644\u0627\u062a\u002e\u0645"
-                        + "\u0635\u0631\u202c\u200e";
+                    + "\u0629\u002d\u0627\u0644\u0623\u062a\u0635\u0627\u0644\u0627\u062a\u002e\u0645"
+                    + "\u0635\u0631\u202c\u200e";
         runTrustedCdnPublisherUrlTest(
                 "http://xn--4gbrim.xn----rmckbbajlc6dj7bxne2c.xn--wgbh1c/",
                 "com.example.test",
@@ -249,7 +253,7 @@ public class TrustedCdnPublisherUrlTest {
                 "https://example.com/test",
                 "com.example.test",
                 "example.com",
-                R.drawable.omnibox_https_valid);
+                R.drawable.omnibox_https_valid_refresh);
         TestTouchUtils.performClickOnMainSync(
                 InstrumentationRegistry.getInstrumentation(),
                 mCustomTabActivityTestRule.getActivity().findViewById(R.id.security_button));
@@ -268,7 +272,7 @@ public class TrustedCdnPublisherUrlTest {
                 "https://example.com/test",
                 "com.example.test",
                 "example.com",
-                R.drawable.omnibox_https_valid);
+                R.drawable.omnibox_https_valid_refresh);
 
         String otherTestUrl = mWebServer.setResponse("/other.html", PAGE_WITH_TITLE, null);
         mCustomTabActivityTestRule.loadUrl(otherTestUrl);
@@ -291,7 +295,7 @@ public class TrustedCdnPublisherUrlTest {
                 publisherUrl.getSpec(),
                 "com.example.test",
                 "example.com",
-                R.drawable.omnibox_https_valid);
+                R.drawable.omnibox_https_valid_refresh);
 
         final Instrumentation.ActivityMonitor monitor =
                 InstrumentationRegistry.getInstrumentation()
@@ -345,13 +349,14 @@ public class TrustedCdnPublisherUrlTest {
     public void testOfflinePage() throws TimeoutException {
         String publisherUrl = "https://example.com/test";
         runTrustedCdnPublisherUrlTest(
-                publisherUrl, "com.example.test", "example.com", R.drawable.omnibox_https_valid);
+                publisherUrl, "com.example.test", "example.com",
+                R.drawable.omnibox_https_valid_refresh);
 
         // TODO (https://crbug.com/1063807):  Add incognito mode tests.
         OfflinePageBridge offlinePageBridge =
                 TestThreadUtils.runOnUiThreadBlockingNoException(
                         () -> {
-                            Profile profile = Profile.getLastUsedRegularProfile();
+                            Profile profile = ProfileManager.getLastUsedRegularProfile();
                             return OfflinePageBridge.getForProfile(profile);
                         });
 
@@ -461,18 +466,29 @@ public class TrustedCdnPublisherUrlTest {
         } else {
             Assert.assertEquals(View.VISIBLE, securityButton.getVisibility());
 
-            ColorStateList colorStateList =
-                    AppCompatResources.getColorStateList(
-                            ApplicationProvider.getApplicationContext(),
-                            R.color.default_icon_color_light_tint_list);
-            ImageView expectedSecurityButton =
-                    new ImageView(ApplicationProvider.getApplicationContext());
-            expectedSecurityButton.setImageResource(expectedSecurityIcon);
-            ImageViewCompat.setImageTintList(expectedSecurityButton, colorStateList);
+            // VectorDrawables don't have a good means for comparison so just verify resource IDs.
+            if (securityButton.getDrawable() instanceof VectorDrawable) {
+                CustomTabToolbar toolbar =
+                        mCustomTabActivityTestRule.getActivity().findViewById(R.id.toolbar);
+                CustomTabLocationBar locationBar = (CustomTabLocationBar) toolbar.getLocationBar();
+                Assert.assertEquals(locationBar.getSecurityIconResourceForTesting(),
+                                    expectedSecurityIcon);
+            }
+            else {
+                ColorStateList colorStateList =
+                        AppCompatResources.getColorStateList(
+                                ApplicationProvider.getApplicationContext(),
+                                R.color.default_icon_color_light_tint_list);
+                ImageView expectedSecurityButton =
+                        new ImageView(ApplicationProvider.getApplicationContext());
+                expectedSecurityButton.setImageResource(expectedSecurityIcon);
+                ImageViewCompat.setImageTintList(expectedSecurityButton, colorStateList);
 
-            BitmapDrawable expectedDrawable = (BitmapDrawable) expectedSecurityButton.getDrawable();
-            BitmapDrawable actualDrawable = (BitmapDrawable) securityButton.getDrawable();
-            Assert.assertTrue(expectedDrawable.getBitmap().sameAs(actualDrawable.getBitmap()));
+                BitmapDrawable expectedDrawable =
+                    (BitmapDrawable) expectedSecurityButton.getDrawable();
+                BitmapDrawable actualDrawable = (BitmapDrawable) securityButton.getDrawable();
+                Assert.assertTrue(expectedDrawable.getBitmap().sameAs(actualDrawable.getBitmap()));
+            }
         }
     }
 }

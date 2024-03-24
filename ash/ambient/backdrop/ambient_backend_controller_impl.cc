@@ -114,6 +114,10 @@ std::unique_ptr<network::ResourceRequest> CreateResourceRequest(
       net::LOAD_BYPASS_CACHE | net::LOAD_DISABLE_CACHE;
   resource_request->credentials_mode = network::mojom::CredentialsMode::kOmit;
   auto language_tag = ash::GetLanguageTag();
+  if (!language_tag.empty()) {
+    resource_request->headers.SetHeader(
+        net::HttpRequestHeaders::kAcceptLanguage, language_tag);
+  }
 
   for (const auto& header : request.headers) {
     std::string encoded_value;
@@ -123,11 +127,6 @@ std::unique_ptr<network::ResourceRequest> CreateResourceRequest(
       encoded_value = header.value;
 
     resource_request->headers.SetHeader(header.name, encoded_value);
-
-    if (!language_tag.empty()) {
-      resource_request->headers.SetHeader(
-          net::HttpRequestHeaders::kAcceptLanguage, language_tag);
-    }
   }
 
   return resource_request;
@@ -220,6 +219,8 @@ std::optional<WeatherInfo> ToWeatherInfo(const base::Value& result) {
   WeatherInfo weather_info;
   const auto& list_result = result.GetList();
 
+  weather_info.condition_description = GetStringValue(
+      list_result, backdrop::WeatherInfo::kConditionDescriptionFieldNumber);
   weather_info.condition_icon_url = GetStringValue(
       list_result, backdrop::WeatherInfo::kConditionIconUrlFieldNumber);
   weather_info.temp_f =

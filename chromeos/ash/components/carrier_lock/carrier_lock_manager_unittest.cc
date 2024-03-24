@@ -361,9 +361,9 @@ TEST_F(CarrierLockManagerTest, CarrierLockStartManagerModemFailed) {
   task_environment_.RunUntilIdle();
 
   // Check local pref values
-  EXPECT_EQ(base::Time(), pref_state_->GetTime(kLastConfigTimePref));
+  EXPECT_NE(base::Time(), pref_state_->GetTime(kLastConfigTimePref));
   EXPECT_EQ(std::string(kTestTopic), pref_state_->GetString(kFcmTopicPref));
-  EXPECT_EQ(std::string(), pref_state_->GetString(kLastImeiPref));
+  EXPECT_EQ(std::string(kTestImei), pref_state_->GetString(kLastImeiPref));
   EXPECT_EQ(false, pref_state_->GetBoolean(kDisableManagerPref));
   EXPECT_EQ(1, pref_state_->GetInteger(kErrorCounterPref));
 
@@ -488,6 +488,7 @@ TEST_F(CarrierLockManagerTest, CarrierLockStartManagerLockedToUnlocked) {
       /*fcm topic*/ std::string(),
       /*result*/ Result::kSuccess);
   fcm->SendNotification();
+  task_environment_.FastForwardBy(kConfigDelay);
   task_environment_.RunUntilIdle();
 
   // Check local pref values

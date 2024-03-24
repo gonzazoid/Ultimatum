@@ -96,17 +96,16 @@ import androidx.test.filters.LargeTest;
 import androidx.test.filters.SmallTest;
 
 import org.hamcrest.Matchers;
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import org.chromium.base.FeatureList;
+import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.Criteria;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.DisabledTest;
-import org.chromium.base.test.util.DoNotBatch;
 import org.chromium.base.test.util.HistogramWatcher;
 import org.chromium.base.test.util.Restriction;
 import org.chromium.base.test.util.UrlUtils;
@@ -126,7 +125,7 @@ import java.util.concurrent.ExecutionException;
  * the interface.
  */
 @RunWith(ContentJUnit4ClassRunner.class)
-@DoNotBatch(reason = "Flaky tests")
+@Batch(Batch.PER_CLASS)
 @SuppressLint("VisibleForTests")
 @Restriction(DeviceRestriction.RESTRICTION_TYPE_NON_AUTO)
 public class WebContentsAccessibilityTest {
@@ -165,10 +164,6 @@ public class WebContentsAccessibilityTest {
             "Expected focus to be on a different node than it is.";
 
     // ContentFeatureList maps used for various tests.
-    private static final Map<String, Boolean> AXMODES_ON =
-            Map.of(ContentFeatureList.ACCESSIBILITY_PERFORMANCE_FILTERING, true);
-    private static final Map<String, Boolean> AUTO_DISABLE_V2_ON =
-            Map.of(ContentFeatureList.AUTO_DISABLE_ACCESSIBILITY_V2, true);
     private static final Map<String, Boolean> INCLUDE_LONG_CLICK_ENABLED =
             Map.of(ContentFeatureList.ACCESSIBILITY_INCLUDE_LONG_CLICK_ACTION, true);
     private static final Map<String, Boolean> INCLUDE_LONG_CLICK_DISABLED =
@@ -199,6 +194,9 @@ public class WebContentsAccessibilityTest {
         mActivityTestRule.setupTestFramework();
         mActivityTestRule.setAccessibilityDelegate();
 
+        // To prevent flakes, do not disable accessibility mid tests.
+        mActivityTestRule.mWcax.setIsAutoDisableAccessibilityCandidateForTesting(false);
+
         mTestData = AccessibilityContentShellTestData.getInstance();
         mActivityTestRule.sendReadyForTestSignal();
     }
@@ -209,6 +207,9 @@ public class WebContentsAccessibilityTest {
         mActivityTestRule.setupTestFrameworkForFormControlsMode();
         mActivityTestRule.setAccessibilityDelegate();
 
+        // To prevent flakes, do not disable accessibility mid tests.
+        mActivityTestRule.mWcax.setIsAutoDisableAccessibilityCandidateForTesting(false);
+
         mTestData = AccessibilityContentShellTestData.getInstance();
         mActivityTestRule.sendReadyForTestSignal();
     }
@@ -218,6 +219,9 @@ public class WebContentsAccessibilityTest {
         mActivityTestRule.waitForActiveShellToBeDoneLoading();
         mActivityTestRule.setupTestFrameworkForBasicMode();
         mActivityTestRule.setAccessibilityDelegate();
+
+        // To prevent flakes, do not disable accessibility mid tests.
+        mActivityTestRule.mWcax.setIsAutoDisableAccessibilityCandidateForTesting(false);
 
         mTestData = AccessibilityContentShellTestData.getInstance();
         mActivityTestRule.sendReadyForTestSignal();
@@ -230,15 +234,11 @@ public class WebContentsAccessibilityTest {
         mActivityTestRule.setupTestFramework();
         mActivityTestRule.setAccessibilityDelegate();
 
+        // To prevent flakes, do not disable accessibility mid tests.
+        mActivityTestRule.mWcax.setIsAutoDisableAccessibilityCandidateForTesting(false);
+
         mTestData = AccessibilityContentShellTestData.getInstance();
         mActivityTestRule.sendReadyForTestSignal();
-    }
-
-    /** Helper method to tear down our tests so we can start the next test clean. */
-    @After
-    public void tearDown() {
-        mTestData = null;
-        mNodeInfo = null;
     }
 
     // Helper pass-through methods to make tests easier to read.
@@ -388,7 +388,6 @@ public class WebContentsAccessibilityTest {
                         + "<p>This is a test 3</p>");
 
         // Set the relevant features and accessibility state.
-        FeatureList.setTestFeatures(AXMODES_ON);
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     AccessibilityState.setIsScreenReaderEnabledForTesting(true);
@@ -423,7 +422,6 @@ public class WebContentsAccessibilityTest {
                         + "<p>This is a test 3</p>");
 
         // Set the relevant features and accessibility state.
-        FeatureList.setTestFeatures(AXMODES_ON);
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     AccessibilityState.setIsScreenReaderEnabledForTesting(false);
@@ -459,7 +457,6 @@ public class WebContentsAccessibilityTest {
                         + "<p>This is a test 3</p>");
 
         // Set the relevant features and screen reader state.
-        FeatureList.setTestFeatures(AXMODES_ON);
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     AccessibilityState.setIsScreenReaderEnabledForTesting(false);
@@ -497,7 +494,6 @@ public class WebContentsAccessibilityTest {
                         + "<p>This is a test 3</p>");
 
         // Set the relevant features and screen reader state, set event type masks to empty.
-        FeatureList.setTestFeatures(AXMODES_ON);
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     AccessibilityState.setStateMaskForTesting(
@@ -538,7 +534,6 @@ public class WebContentsAccessibilityTest {
                         + "<p>This is a test 3</p>");
 
         // Set the relevant features and screen reader state, set event type masks to empty.
-        FeatureList.setTestFeatures(AXMODES_ON);
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     AccessibilityState.setStateMaskForTesting(
@@ -576,7 +571,6 @@ public class WebContentsAccessibilityTest {
                         + "<p>This is a test 3</p>");
 
         // Set the relevant features and screen reader state, set event type masks to empty.
-        FeatureList.setTestFeatures(AXMODES_ON);
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     AccessibilityState.setStateMaskForTesting(
@@ -637,7 +631,8 @@ public class WebContentsAccessibilityTest {
         setupTestWithHTML("<p>This is a test</p>");
         waitForNodeMatching(sTextMatcher, "This is a test");
 
-        FeatureList.setTestFeatures(AUTO_DISABLE_V2_ON);
+        // Explicitly enable auto-disable capabilities for this test.
+        mActivityTestRule.mWcax.setIsAutoDisableAccessibilityCandidateForTesting(true);
 
         // The test suite always initializes native, so first we will disable it manually.
         var histogramWatcher =
@@ -818,8 +813,7 @@ public class WebContentsAccessibilityTest {
         setupTestWithHTML("<p>This is a test</p>");
         waitForNodeMatching(sTextMatcher, "This is a test");
 
-        // Enable feature, but set this instance as not a candidate.
-        FeatureList.setTestFeatures(AUTO_DISABLE_V2_ON);
+        // Set this instance as not a candidate.
         mActivityTestRule.mWcax.setIsAutoDisableAccessibilityCandidateForTesting(false);
 
         // Changing the accessibility state will refresh the native state.

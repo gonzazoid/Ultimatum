@@ -20,6 +20,9 @@ struct ModelAssets {
 
   mojo_base.mojom.ReadOnlyFile? ts_data;
   mojo_base.mojom.ReadOnlyFile? ts_sp_model;
+
+  // The language detection model file, if output language detection is desired.
+  mojo_base.mojom.ReadOnlyFile? language_detection_model;
 };
 
 // Params to describe the model to load.
@@ -30,6 +33,13 @@ struct LoadModelParams {
   // The maximum number of input+output tokens the model can handle. This is
   // needed when initializing the model.
   uint32 max_tokens;
+
+  // The number of scores output by the TS model, an implementation defined
+  // default if unspecified.
+  uint32? ts_dimension;
+
+  // List of adaptation ranks the model should support.
+  array<uint32> adaptation_ranks;
 };
 
 // A service which allows loading trusted models which are stored on-device and

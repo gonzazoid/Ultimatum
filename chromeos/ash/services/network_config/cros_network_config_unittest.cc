@@ -364,8 +364,7 @@ class CrosNetworkConfigTest : public testing::Test {
                 "WiFi": { "Passphrase": "fake", "SSID": "%s", "HexSSID": "%s",
                           "Security": "WPA-PSK", "AutoConnect": true}})",
             user_policy_ssid.c_str(),
-            base::HexEncode(user_policy_ssid.c_str(), user_policy_ssid.size())
-                .c_str()));
+            base::HexEncode(user_policy_ssid).c_str()));
     ASSERT_TRUE(wifi2_onc.has_value());
 
     std::optional<base::Value::Dict> wifi_eap_onc =
@@ -1354,15 +1353,6 @@ TEST_F(CrosNetworkConfigTest, PortalState) {
   EXPECT_EQ(mojom::ConnectionStateType::kPortal, network->connection_state);
   EXPECT_EQ(mojom::PortalState::kNoInternet, network->portal_state);
   EXPECT_FALSE(network->portal_probe_url);
-
-  helper()->ConfigureService(
-      R"({"GUID": "wifi1_guid", "Type": "wifi", "State": "portal-suspected",
-          "Strength": 90, "AutoConnect": true,
-          "PortalDetectionFailedStatusCode": 407})");
-  network = GetNetworkState("wifi1_guid");
-  ASSERT_TRUE(network);
-  EXPECT_EQ(mojom::ConnectionStateType::kPortal, network->connection_state);
-  EXPECT_EQ(mojom::PortalState::kProxyAuthRequired, network->portal_state);
 }
 
 TEST_F(CrosNetworkConfigTest, GetNetworkStateList) {
@@ -1641,6 +1631,60 @@ TEST_F(CrosNetworkConfigTest, GetDeviceStateListCarrierUnlocked) {
   EXPECT_EQ(3, cellular->sim_lock_status->retries_left);
   EXPECT_EQ(kCellularTestImei, cellular->imei);
   ASSERT_FALSE(cellular->is_carrier_locked);
+}
+
+TEST_F(CrosNetworkConfigTest, GetManagedPropertiesCarrierLocked) {
+  feature_list.InitAndEnableFeature(features::kCellularCarrierLock);
+  /* Lock the SIM using network-pin */
+  base::Value::Dict sim_value;
+  sim_value.Set(shill::kSIMLockEnabledProperty, true);
+  sim_value.Set(shill::kSIMLockTypeProperty, shill::kSIMLockNetworkPin);
+  sim_value.Set(shill::kSIMLockRetriesLeftProperty, kSimRetriesLeft);
+  helper()->device_test()->SetDeviceProperty(kCellularDevicePath,
+                                             shill::kSIMLockStatusProperty,
+                                             base::Value(std::move(sim_value)),
+                                             /*notify_changed=*/true);
+  base::RunLoop().RunUntilIdle();
+
+  mojom::ManagedPropertiesPtr properties = GetManagedProperties(kCellularGuid);
+  ASSERT_TRUE(properties);
+  EXPECT_EQ(kCellularGuid, properties->guid);
+  EXPECT_EQ(mojom::NetworkType::kCellular, properties->type);
+  EXPECT_EQ(mojom::ConnectionStateType::kNotConnected,
+            properties->connection_state);
+  ASSERT_TRUE(properties->type_properties);
+  mojom::ManagedCellularPropertiesPtr& cellular =
+      properties->type_properties->get_cellular();
+  ASSERT_TRUE(cellular);
+  EXPECT_TRUE(cellular->sim_locked);
+  EXPECT_EQ(shill::kSIMLockNetworkPin, cellular->sim_lock_type);
+}
+
+TEST_F(CrosNetworkConfigTest, GetManagedPropertiesCarrierLockedDisabled) {
+  feature_list.InitAndDisableFeature(features::kCellularCarrierLock);
+  /* Lock the SIM using network-pin */
+  base::Value::Dict sim_value;
+  sim_value.Set(shill::kSIMLockEnabledProperty, true);
+  sim_value.Set(shill::kSIMLockTypeProperty, shill::kSIMLockPin);
+  sim_value.Set(shill::kSIMLockRetriesLeftProperty, kSimRetriesLeft);
+  helper()->device_test()->SetDeviceProperty(kCellularDevicePath,
+                                             shill::kSIMLockStatusProperty,
+                                             base::Value(std::move(sim_value)),
+                                             /*notify_changed=*/true);
+  base::RunLoop().RunUntilIdle();
+
+  mojom::ManagedPropertiesPtr properties = GetManagedProperties(kCellularGuid);
+  ASSERT_TRUE(properties);
+  EXPECT_EQ(kCellularGuid, properties->guid);
+  EXPECT_EQ(mojom::NetworkType::kCellular, properties->type);
+  EXPECT_EQ(mojom::ConnectionStateType::kNotConnected,
+            properties->connection_state);
+  ASSERT_TRUE(properties->type_properties);
+  mojom::ManagedCellularPropertiesPtr& cellular =
+      properties->type_properties->get_cellular();
+  ASSERT_TRUE(cellular);
+  EXPECT_TRUE(cellular->sim_locked);
+  EXPECT_EQ("", cellular->sim_lock_type);
 }
 
 TEST_F(CrosNetworkConfigTest, SimStateCarrierLocked) {

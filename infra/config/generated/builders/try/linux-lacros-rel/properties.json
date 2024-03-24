@@ -14,7 +14,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "linux-lacros-builder-rel",
-              "project": "chromium"
+              "project": "chromium-m123"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-chromiumos-archive",
@@ -27,7 +27,8 @@
                 "build_config": "Release",
                 "config": "chromium",
                 "target_arch": "intel",
-                "target_bits": 64
+                "target_bits": 64,
+                "target_platform": "chromeos"
               },
               "legacy_gclient_config": {
                 "apply_configs": [
@@ -41,7 +42,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "linux-lacros-tester-rel",
-              "project": "chromium"
+              "project": "chromium-m123"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-chromiumos-archive",
@@ -54,7 +55,8 @@
                 "build_config": "Release",
                 "config": "chromium",
                 "target_arch": "intel",
-                "target_bits": 64
+                "target_bits": 64,
+                "target_platform": "chromeos"
               },
               "legacy_gclient_config": {
                 "apply_configs": [
@@ -66,7 +68,7 @@
               "parent": {
                 "bucket": "ci",
                 "builder": "linux-lacros-builder-rel",
-                "project": "chromium"
+                "project": "chromium-m123"
               }
             }
           }
@@ -76,14 +78,14 @@
         {
           "bucket": "ci",
           "builder": "linux-lacros-builder-rel",
-          "project": "chromium"
+          "project": "chromium-m123"
         }
       ],
       "builder_ids_in_scope_for_testing": [
         {
           "bucket": "ci",
           "builder": "linux-lacros-tester-rel",
-          "project": "chromium"
+          "project": "chromium-m123"
         }
       ]
     }

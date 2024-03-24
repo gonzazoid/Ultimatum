@@ -50,6 +50,8 @@ class PrefRegistrySyncable;
 }
 
 namespace variations {
+struct StudyGroupNames;
+class SyntheticTrialRegistry;
 class VariationsSeed;
 }
 
@@ -174,7 +176,8 @@ class VariationsService
       const char* disable_network_switch,
       const UIStringOverrider& ui_string_overrider,
       web_resource::ResourceRequestAllowedNotifier::
-          NetworkConnectionTrackerGetter network_connection_tracker_getter);
+          NetworkConnectionTrackerGetter network_connection_tracker_getter,
+      SyntheticTrialRegistry* synthetic_trial_registry);
 
   // Enables fetching the seed for testing, even for unofficial builds. This
   // should be used along with overriding |DoActualFetch| or using
@@ -205,6 +208,10 @@ class VariationsService
           extra_overrides,
       std::unique_ptr<base::FeatureList> feature_list,
       PlatformFieldTrials* platform_field_trials);
+
+  // Returns the names of studies and their groups which could possibly be
+  // forced.
+  std::vector<StudyGroupNames> GetStudiesAvailableToForce();
 
   // The seed type used.
   SeedType GetSeedType() const;
@@ -263,7 +270,8 @@ class VariationsService
       std::unique_ptr<web_resource::ResourceRequestAllowedNotifier> notifier,
       PrefService* local_state,
       metrics::MetricsStateManager* state_manager,
-      const UIStringOverrider& ui_string_overrider);
+      const UIStringOverrider& ui_string_overrider,
+      SyntheticTrialRegistry* synthetic_trial_registry);
 
   // Sets the URL for querying the variations server. Used for testing.
   void set_variations_server_url(const GURL& url) {
@@ -316,6 +324,11 @@ class VariationsService
   FRIEND_TEST_ALL_PREFIXES(VariationsServiceTest, DoNotRetryAfterARetry);
   FRIEND_TEST_ALL_PREFIXES(VariationsServiceTest,
                            DoNotRetryIfInsecureURLIsHTTPS);
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // For the test to access |limited_entropy_synthetic_trial_|.
+  FRIEND_TEST_ALL_PREFIXES(VariationsServiceBrowserTest,
+                           LimitedEntropySyntheticTrialSeedTransfer);
+#endif
 
   void InitResourceRequestedAllowedNotifier();
 
@@ -365,6 +378,8 @@ class VariationsService
 
   // The pref service used to store persist the variations seed.
   raw_ptr<PrefService> local_state_;
+
+  const raw_ptr<SyntheticTrialRegistry> synthetic_trial_registry_;
 
   // Used for instantiating entropy providers for variations seed simulation.
   // Weak pointer.

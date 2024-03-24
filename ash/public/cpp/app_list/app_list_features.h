@@ -38,9 +38,9 @@ ASH_PUBLIC_EXPORT BASE_DECLARE_FEATURE(kLauncherPlayStoreSearch);
 // Enables app list drag and drop refactor to use views drag and drop APIs.
 ASH_PUBLIC_EXPORT BASE_DECLARE_FEATURE(kDragAndDropRefactor);
 
-// When enabled, launcher continue section will suggest drive files based on
-// recency, instead of fetching them using drive's ItemSuggest API.
-ASH_PUBLIC_EXPORT BASE_DECLARE_FEATURE(kContinueSectionWithRecents);
+// Enables the Launcher Apps Collection UI in ChromeOS - a modular view with
+// different categories filled with predefined apps.
+ASH_PUBLIC_EXPORT BASE_DECLARE_FEATURE(kAppsCollections);
 
 ASH_PUBLIC_EXPORT bool IsAppReinstallZeroStateEnabled();
 ASH_PUBLIC_EXPORT bool IsAppListLaunchRecordingEnabled();
@@ -52,7 +52,7 @@ ASH_PUBLIC_EXPORT bool IsDynamicSearchUpdateAnimationEnabled();
 ASH_PUBLIC_EXPORT base::TimeDelta DynamicSearchUpdateAnimationDuration();
 ASH_PUBLIC_EXPORT bool IsLauncherPlayStoreSearchEnabled();
 ASH_PUBLIC_EXPORT bool IsDragAndDropRefactorEnabled();
-ASH_PUBLIC_EXPORT bool IsContinueSectionWithRecentsEnabled();
+ASH_PUBLIC_EXPORT bool IsAppsCollectionsEnabled();
 
 }  // namespace app_list_features
 

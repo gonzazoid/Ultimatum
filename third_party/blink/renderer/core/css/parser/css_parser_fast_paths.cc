@@ -1322,12 +1322,21 @@ bool CSSParserFastPaths::IsValidKeywordPropertyAndValue(
              value_id == CSSValueID::kRelative ||
              value_id == CSSValueID::kAbsolute ||
              value_id == CSSValueID::kFixed || value_id == CSSValueID::kSticky;
+    case CSSPropertyID::kPositionTryOrder:
+      return value_id == CSSValueID::kNormal ||
+             value_id == CSSValueID::kMostWidth ||
+             value_id == CSSValueID::kMostHeight ||
+             value_id == CSSValueID::kMostBlockSize ||
+             value_id == CSSValueID::kMostInlineSize;
     case CSSPropertyID::kResize:
       return value_id == CSSValueID::kNone || value_id == CSSValueID::kBoth ||
              value_id == CSSValueID::kHorizontal ||
              value_id == CSSValueID::kVertical ||
              value_id == CSSValueID::kBlock ||
-             value_id == CSSValueID::kInline || value_id == CSSValueID::kAuto;
+             value_id == CSSValueID::kInline ||
+             value_id == CSSValueID::kInternalTextareaAuto ||
+             (RuntimeEnabledFeatures::CSSResizeAutoEnabled() &&
+              value_id == CSSValueID::kAuto);
     case CSSPropertyID::kScrollBehavior:
       return value_id == CSSValueID::kAuto || value_id == CSSValueID::kSmooth;
     case CSSPropertyID::kShapeRendering:
@@ -1595,14 +1604,10 @@ bool CSSParserFastPaths::IsValidKeywordPropertyAndValue(
              value_id == CSSValueID::kBalance ||
              value_id == CSSValueID::kPretty;
     case CSSPropertyID::kTransformBox:
-      if (RuntimeEnabledFeatures::CSSTransformBoxAdditionalKeywordsEnabled()) {
-        return value_id == CSSValueID::kContentBox ||
-               value_id == CSSValueID::kBorderBox ||
-               value_id == CSSValueID::kStrokeBox ||
-               value_id == CSSValueID::kFillBox ||
-               value_id == CSSValueID::kViewBox;
-      }
-      return value_id == CSSValueID::kFillBox ||
+      return value_id == CSSValueID::kContentBox ||
+             value_id == CSSValueID::kBorderBox ||
+             value_id == CSSValueID::kStrokeBox ||
+             value_id == CSSValueID::kFillBox ||
              value_id == CSSValueID::kViewBox;
     case CSSPropertyID::kTransformStyle:
       return value_id == CSSValueID::kFlat ||
@@ -1723,6 +1728,7 @@ CSSBitset CSSParserFastPaths::handled_by_keyword_fast_paths_properties_{{
     CSSPropertyID::kPageOrientation,
     CSSPropertyID::kPointerEvents,
     CSSPropertyID::kPosition,
+    CSSPropertyID::kPositionTryOrder,
     CSSPropertyID::kResize,
     CSSPropertyID::kScrollBehavior,
     CSSPropertyID::kOverscrollBehaviorInline,

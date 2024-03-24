@@ -14,7 +14,6 @@
 
 namespace blink {
 
-class FragmentItem;
 class LayoutObject;
 class LayoutSVGInlineText;
 struct AutoDarkMode;
@@ -57,8 +56,8 @@ class CORE_EXPORT TextPainter : public TextPainterBase {
    private:
     const LayoutSVGInlineText& layout_svg_inline_text_;
     const ComputedStyle& style_;
-    absl::optional<AffineTransform> shader_transform_;
-    absl::optional<Color> text_match_color_;
+    std::optional<AffineTransform> shader_transform_;
+    std::optional<Color> text_match_color_;
     StyleVariant style_variant_ = StyleVariant::kStandard;
     PaintFlags paint_flags_ = PaintFlag::kNoFlag;
     bool is_painting_selection_ = false;
@@ -69,12 +68,9 @@ class CORE_EXPORT TextPainter : public TextPainterBase {
               const Font& font,
               const gfx::Rect& visual_rect,
               const LineRelativeOffset& text_origin,
-              InlinePaintContext* inline_context,
               bool horizontal)
-      : TextPainterBase(context, font, text_origin, inline_context, horizontal),
-        visual_rect_(visual_rect) {
-    DCHECK(inline_context_);
-  }
+      : TextPainterBase(context, font, text_origin, horizontal),
+        visual_rect_(visual_rect) {}
   ~TextPainter() = default;
 
   void Paint(const TextFragmentPaintInfo& fragment_paint_info,
@@ -92,20 +88,9 @@ class CORE_EXPORT TextPainter : public TextPainterBase {
                          DOMNodeId node_id,
                          const AutoDarkMode& auto_dark_mode);
 
-  void PaintDecorationsExceptLineThrough(
-      const TextFragmentPaintInfo& fragment_paint_info,
-      const FragmentItem& text_item,
-      const PaintInfo& paint_info,
-      const ComputedStyle& style,
-      const TextPaintStyle& text_style,
-      TextDecorationInfo& decoration_info,
-      TextDecorationLine lines_to_paint);
-
-  void PaintDecorationsOnlyLineThrough(const FragmentItem& text_item,
-                                       const PaintInfo& paint_info,
-                                       const ComputedStyle& style,
-                                       const TextPaintStyle& text_style,
-                                       TextDecorationInfo& decoration_info);
+  void PaintDecorationLine(const TextDecorationInfo& decoration_info,
+                           const Color& line_color,
+                           const TextFragmentPaintInfo* fragment_paint_info);
 
   SvgTextPaintState& SetSvgState(const LayoutSVGInlineText&,
                                  const ComputedStyle&,
@@ -123,27 +108,12 @@ class CORE_EXPORT TextPainter : public TextPainterBase {
                              float dilation) override;
 
  private:
-  template <PaintInternalStep step>
-  void PaintInternalFragment(const TextFragmentPaintInfo&,
-                             DOMNodeId node_id,
-                             const AutoDarkMode& auto_dark_mode);
-
   void PaintSvgTextFragment(const TextFragmentPaintInfo&,
                             DOMNodeId node_id,
                             const AutoDarkMode& auto_dark_mode);
-  void PaintSvgDecorationsExceptLineThrough(
-      const TextFragmentPaintInfo&,
-      const TextDecorationOffset& decoration_offset,
-      TextDecorationInfo& decoration_info,
-      TextDecorationLine lines_to_paint,
-      const PaintInfo& paint_info,
-      const TextPaintStyle& text_style);
-  void PaintSvgDecorationsOnlyLineThrough(TextDecorationInfo& decoration_info,
-                                          const PaintInfo& paint_info,
-                                          const TextPaintStyle& text_style);
 
   const gfx::Rect visual_rect_;
-  absl::optional<SvgTextPaintState> svg_text_paint_state_;
+  std::optional<SvgTextPaintState> svg_text_paint_state_;
 };
 
 }  // namespace blink

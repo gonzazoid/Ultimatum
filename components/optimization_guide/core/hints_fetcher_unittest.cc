@@ -5,6 +5,7 @@
 #include "components/optimization_guide/core/hints_fetcher.h"
 
 #include <memory>
+#include <optional>
 
 #include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
@@ -28,7 +29,6 @@
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace optimization_guide {
 
@@ -64,7 +64,7 @@ class HintsFetcherTest : public testing::Test,
 
   ~HintsFetcherTest() override = default;
 
-  void OnHintsFetched(absl::optional<std::unique_ptr<proto::GetHintsResponse>>
+  void OnHintsFetched(std::optional<std::unique_ptr<proto::GetHintsResponse>>
                           get_hints_response) {
     if (get_hints_response)
       hints_fetched_ = true;
@@ -109,7 +109,8 @@ class HintsFetcherTest : public testing::Test,
         optimization_guide::proto::CONTEXT_BATCH_UPDATE_ACTIVE_TABS, "en-US",
         /*access_token=*/std::string(), skip_cache,
         base::BindOnce(&HintsFetcherTest::OnHintsFetched,
-                       base::Unretained(this)));
+                       base::Unretained(this)),
+        nullptr);
     RunUntilIdle();
     return status;
   }
@@ -160,11 +161,11 @@ class HintsFetcherTest : public testing::Test,
   bool hints_fetched_ = false;
   base::test::ScopedFeatureList scoped_list_;
   base::test::TaskEnvironment task_environment_;
+  std::unique_ptr<TestingPrefServiceSimple> pref_service_;
 
   std::unique_ptr<base::SimpleTestClock> alternative_clock_;
   std::unique_ptr<HintsFetcher> hints_fetcher_;
 
-  std::unique_ptr<TestingPrefServiceSimple> pref_service_;
   scoped_refptr<network::SharedURLLoaderFactory> shared_url_loader_factory_;
   network::TestURLLoaderFactory test_url_loader_factory_;
 
@@ -379,7 +380,7 @@ TEST_P(HintsFetcherTest, HintsFetchSuccessfulHostsRecorded) {
 
   const base::Value::Dict& hosts_fetched =
       pref_service()->GetDict(prefs::kHintsFetcherHostsSuccessfullyFetched);
-  absl::optional<double> value;
+  std::optional<double> value;
   for (const std::string& host : hosts) {
     value = hosts_fetched.FindDouble(HashHostForDictionary(host));
     // This reduces the necessary precision for the check on the expiry time for

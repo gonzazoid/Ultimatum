@@ -31,6 +31,10 @@ namespace media {
 
 namespace {
 
+BASE_FEATURE(kAddSharedImageRasterUsageWithNonOOPR,
+             "VideoFrameYUVAddSharedImageRasterUsageWithNonOOPR",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
 viz::SharedImageFormat PlaneSharedImageFormat(int num_channels,
                                               bool supports_red) {
   switch (num_channels) {
@@ -157,11 +161,20 @@ void VideoFrameYUVMailboxesHolder::VideoFrameToMailboxes(
   uint32_t mailbox_usage;
   auto& caps = provider_->ContextCapabilities();
   if (caps.gpu_rasterization) {
-    mailbox_usage = gpu::SHARED_IMAGE_USAGE_RASTER |
+    mailbox_usage = gpu::SHARED_IMAGE_USAGE_RASTER_READ |
+                    gpu::SHARED_IMAGE_USAGE_RASTER_WRITE |
                     gpu::SHARED_IMAGE_USAGE_OOP_RASTERIZATION;
   } else {
     mailbox_usage = gpu::SHARED_IMAGE_USAGE_GLES2_READ |
                     gpu::SHARED_IMAGE_USAGE_GLES2_WRITE;
+    // RASTER_{READ, WRITE} usages should be included as these SharedImages are
+    // both read and written via raster, but historically these usages were not
+    // included. Currently in the process of adding with a killswitch.
+    // TODO(crbug.com/1524009): Remove this killswitch post-safe rollout.
+    if (base::FeatureList::IsEnabled(kAddSharedImageRasterUsageWithNonOOPR)) {
+      mailbox_usage = mailbox_usage | gpu::SHARED_IMAGE_USAGE_RASTER_READ |
+                      gpu::SHARED_IMAGE_USAGE_RASTER_WRITE;
+    }
   }
 
   // Enabled with flags UseWritePixelsYUV and

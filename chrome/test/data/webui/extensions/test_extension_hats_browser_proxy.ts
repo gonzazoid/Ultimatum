@@ -2,14 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {ExtensionsHatsBrowserProxy} from 'chrome://extensions/extensions.js';
+import type {ExtensionsHatsBrowserProxy} from 'chrome://extensions/extensions.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
 export class TestExtensionsHatsBrowserProxy extends TestBrowserProxy implements
     ExtensionsHatsBrowserProxy {
   constructor() {
     super([
-      'triggerSurvey',
+      'panelShown',
       'extensionKeptAction',
       'extensionRemovedAction',
       'nonTriggerExtensionRemovedAction',
@@ -17,8 +17,8 @@ export class TestExtensionsHatsBrowserProxy extends TestBrowserProxy implements
     ]);
   }
 
-  triggerSurvey() {
-    this.methodCalled('triggerSurvey');
+  panelShown() {
+    this.methodCalled('panelShown');
   }
 
   extensionKeptAction() {

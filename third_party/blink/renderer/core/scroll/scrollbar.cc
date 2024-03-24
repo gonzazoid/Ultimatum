@@ -516,6 +516,11 @@ void Scrollbar::MouseExited() {
     scrollable_area_->MouseExitedScrollbar(*this);
   SetHoveredPart(kNoPart);
   if (theme_.UsesFluentOverlayScrollbars() && scrollable_area_) {
+    // If the mouse was hovering over the track and leaves the scrollbar, the
+    // call to `SetHoveredPart(kNoPart)` will only invalidate the paint for the
+    // track. Overlay Fluent scrollbars always need to invalidate the thumb to
+    // change between solid/transparent colors.
+    SetNeedsPaintInvalidation(kThumbPart);
     scrollable_area_->GetLayoutBox()
         ->GetFrameView()
         ->SetPaintArtifactCompositorNeedsUpdate();
@@ -869,18 +874,18 @@ EScrollbarWidth Scrollbar::CSSScrollbarWidth() const {
   return EScrollbarWidth::kAuto;
 }
 
-absl::optional<blink::Color> Scrollbar::ScrollbarThumbColor() const {
+std::optional<blink::Color> Scrollbar::ScrollbarThumbColor() const {
   if (style_source_) {
     return style_source_->StyleRef().ScrollbarThumbColorResolved();
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
-absl::optional<blink::Color> Scrollbar::ScrollbarTrackColor() const {
+std::optional<blink::Color> Scrollbar::ScrollbarTrackColor() const {
   if (style_source_) {
     return style_source_->StyleRef().ScrollbarTrackColorResolved();
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 bool Scrollbar::IsOpaque() const {
@@ -888,7 +893,7 @@ bool Scrollbar::IsOpaque() const {
     return false;
   }
 
-  absl::optional<blink::Color> track_color = ScrollbarTrackColor();
+  std::optional<blink::Color> track_color = ScrollbarTrackColor();
   if (!track_color) {
     // The native themes should ensure opaqueness of non-overlay scrollbars.
     return true;

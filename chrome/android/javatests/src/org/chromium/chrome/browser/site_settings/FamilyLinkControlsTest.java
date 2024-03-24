@@ -25,16 +25,18 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.RuleChain;
+import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.DoNotBatch;
 import org.chromium.base.test.util.JniMocker;
-import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.settings.SettingsActivity;
 import org.chromium.chrome.browser.signin.SigninCheckerProvider;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
+import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.chrome.test.util.browser.signin.SigninTestRule;
 import org.chromium.components.browser_ui.settings.ChromeSwitchPreference;
@@ -49,6 +51,7 @@ import org.chromium.content_public.browser.test.util.TestThreadUtils;
 /** Tests family link controls are reflected in UI */
 @DoNotBatch(
         reason = "Activity must be destroyed between tests to ensure the child account is removed.")
+@RunWith(ChromeJUnit4ClassRunner.class)
 public class FamilyLinkControlsTest {
 
     public final SigninTestRule mSigninTestRule = new SigninTestRule();
@@ -70,14 +73,14 @@ public class FamilyLinkControlsTest {
         MockitoAnnotations.initMocks(this);
         mSettingsActivity = SiteSettingsTestUtils.startSiteSettingsMenu("");
         TestThreadUtils.runOnUiThreadBlockingNoException(
-                () -> SigninCheckerProvider.get(Profile.getLastUsedRegularProfile()));
+                () -> SigninCheckerProvider.get(ProfileManager.getLastUsedRegularProfile()));
         mAccountInfo = mSigninTestRule.addChildTestAccountThenWaitForSignin();
 
         // Wait for SigninChecker to be initialized
         CriteriaHelper.pollUiThread(
                 () ->
                         IdentityServicesProvider.get()
-                                .getSigninManager(Profile.getLastUsedRegularProfile())
+                                .getSigninManager(ProfileManager.getLastUsedRegularProfile())
                                 .getIdentityManager()
                                 .hasPrimaryAccount(ConsentLevel.SIGNIN));
     }

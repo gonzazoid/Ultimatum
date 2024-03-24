@@ -155,7 +155,9 @@ void AccountSelectionViewAndroid::Show(
     const std::optional<std::string>& iframe_for_display,
     const std::vector<content::IdentityProviderData>& identity_provider_data,
     Account::SignInMode sign_in_mode,
+    blink::mojom::RpMode rp_mode,
     bool show_auto_reauthn_checkbox) {
+  // TODO(crbug.com/1518356): Use rp_mode for button flows on Android.
   if (!MaybeCreateJavaObject()) {
     // It's possible that the constructor cannot access the bottom sheet clank
     // component. That case may be temporary but we can't let users in a
@@ -186,15 +188,18 @@ void AccountSelectionViewAndroid::Show(
       ConvertUTF8ToJavaString(env, identity_provider_data[0].idp_for_display),
       accounts_obj, idp_metadata_obj, client_id_metadata_obj,
       sign_in_mode == Account::SignInMode::kAuto,
-      ConvertRpContextToJavaString(env, identity_provider_data[0].rp_context));
+      ConvertRpContextToJavaString(env, identity_provider_data[0].rp_context),
+      identity_provider_data[0].request_permission);
 }
 
 void AccountSelectionViewAndroid::ShowFailureDialog(
     const std::string& top_frame_for_display,
     const std::optional<std::string>& iframe_for_display,
     const std::string& idp_for_display,
-    const blink::mojom::RpContext& rp_context,
+    blink::mojom::RpContext rp_context,
+    blink::mojom::RpMode rp_mode,
     const content::IdentityProviderMetadata& idp_metadata) {
+  // TODO(crbug.com/1518356): Use rp_mode for button flows on Android.
   if (!MaybeCreateJavaObject()) {
     // It's possible that the constructor cannot access the bottom sheet clank
     // component. That case may be temporary but we can't let users in a
@@ -217,9 +222,11 @@ void AccountSelectionViewAndroid::ShowErrorDialog(
     const std::string& top_frame_for_display,
     const std::optional<std::string>& iframe_for_display,
     const std::string& idp_for_display,
-    const blink::mojom::RpContext& rp_context,
+    blink::mojom::RpContext rp_context,
+    blink::mojom::RpMode rp_mode,
     const content::IdentityProviderMetadata& idp_metadata,
     const std::optional<TokenError>& error) {
+  // TODO(crbug.com/1518356): Use rp_mode for button flows on Android.
   if (!MaybeCreateJavaObject()) {
     // It's possible that the constructor cannot access the bottom sheet clank
     // component. That case may be temporary but we can't let users in a
@@ -255,6 +262,13 @@ std::optional<std::string> AccountSelectionViewAndroid::GetSubtitle() const {
     return std::nullopt;
   }
   return ConvertJavaStringToUTF8(subtitle);
+}
+
+void AccountSelectionViewAndroid::ShowUrl(LinkType link_type, const GURL& url) {
+  JNIEnv* env = AttachCurrentThread();
+  Java_AccountSelectionBridge_showUrl(
+      env, java_object_internal_, static_cast<int>(link_type),
+      url::GURLAndroid::FromNativeGURL(env, url));
 }
 
 content::WebContents* AccountSelectionViewAndroid::ShowModalDialog(
@@ -304,13 +318,19 @@ void AccountSelectionViewAndroid::OnDismiss(JNIEnv* env, jint dismiss_reason) {
 
 void AccountSelectionViewAndroid::OnLoginToIdP(
     JNIEnv* env,
+    const JavaParamRef<jobject>& idp_config_url,
     const JavaParamRef<jobject>& idp_login_url) {
+  GURL config_url = *url::GURLAndroid::ToNativeGURL(env, idp_config_url);
   GURL login_url = *url::GURLAndroid::ToNativeGURL(env, idp_login_url);
-  delegate_->OnLoginToIdP(login_url);
+  delegate_->OnLoginToIdP(config_url, login_url);
 }
 
 void AccountSelectionViewAndroid::OnMoreDetails(JNIEnv* env) {
   delegate_->OnMoreDetails();
+}
+
+void AccountSelectionViewAndroid::OnAccountsDisplayed(JNIEnv* env) {
+  delegate_->OnAccountsDisplayed();
 }
 
 bool AccountSelectionViewAndroid::MaybeCreateJavaObject() {

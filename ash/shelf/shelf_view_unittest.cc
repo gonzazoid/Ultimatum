@@ -2042,7 +2042,7 @@ TEST_P(LtrRtlShelfViewTest, DragAppAfterContextMenuIsShownInAlwaysShownShelf) {
   const ShelfID first_app_id = AddAppShortcut();
   const ShelfID second_app_id = AddAppShortcut();
   const int last_index = model_->items().size() - 1;
-  ASSERT_TRUE(last_index >= 0);
+  ASSERT_GE(last_index, 0);
 
   ShelfAppButton* button = GetButtonByID(first_app_id);
   ASSERT_TRUE(button);
@@ -3866,9 +3866,9 @@ TEST_F(ShelfViewDeskButtonTest, OverviewVisibility) {
   // The button should disappear in overview mode and reappear after.
   ToggleOverview();
   EXPECT_FALSE(desk_button_widget()->GetLayer()->GetTargetVisibility());
-  // Since the desk button is hidden, the hotseat should expand to use the space
-  // the desk button was occupying.
-  EXPECT_GT(GetPrimaryShelf()
+  // To avoid unnecessary re-layout before/after overview, keep hotseat the same
+  // width.
+  EXPECT_EQ(GetPrimaryShelf()
                 ->shelf_widget()
                 ->hotseat_widget()
                 ->GetWindowBoundsInScreen()
@@ -3900,23 +3900,22 @@ TEST_F(ShelfViewDeskButtonTest, TabletModeVisibility) {
   EXPECT_TRUE(desk_button_widget()->GetLayer()->GetTargetVisibility());
 }
 
-// Verify that the desk button is 136px wide if the screen width is greater than
-// 1280px, 96px if the screen width is less than or equal to 1280px, and 36px if
-// the screen width is small enough to cause shelf overflow. We also test that
-// the button is 36x36 in vertical alignment.
+// Verify that the desk button is 218px wide if the screen width is greater than
+// or equal to 1280px, 118px if the screen width is less than 1280px. We also
+// test that the button is 48x50 in vertical alignment.
 TEST_F(ShelfViewDeskButtonTest, Position) {
   SetShowDeskButtonInShelfPref(prefs_, true);
   GetPrimaryShelf()->SetAlignment(ShelfAlignment::kBottom);
   UpdateDisplay("1281x400");
-  EXPECT_EQ(136, desk_button_widget()->GetTargetBounds().width());
+  EXPECT_EQ(218, desk_button_widget()->GetTargetBounds().width());
   UpdateDisplay("200x1281");
-  EXPECT_EQ(36, desk_button_widget()->GetTargetBounds().width());
+  EXPECT_EQ(118, desk_button_widget()->GetTargetBounds().width());
   UpdateDisplay("1280x400");
-  EXPECT_EQ(96, desk_button_widget()->GetTargetBounds().width());
+  EXPECT_EQ(218, desk_button_widget()->GetTargetBounds().width());
 
   GetPrimaryShelf()->SetAlignment(ShelfAlignment::kLeft);
-  EXPECT_EQ(36, desk_button_widget()->GetTargetBounds().width());
-  EXPECT_EQ(36, desk_button_widget()->GetTargetBounds().height());
+  EXPECT_EQ(48, desk_button_widget()->GetTargetBounds().width());
+  EXPECT_EQ(50, desk_button_widget()->GetTargetBounds().height());
 }
 
 // Verify that the desk button does not appear by default, appears when the user
@@ -4226,6 +4225,64 @@ TEST_F(ShelfViewPromiseAppTest, PromiseIconLayers) {
   }
 
   EXPECT_FALSE(test_api_->HasPendingPromiseAppRemoval(promise_app_id));
+}
+
+class ShelfViewWebAppShortcutTest : public ShelfViewTest {
+ public:
+  ShelfViewWebAppShortcutTest() {
+    scoped_feature_list_.InitWithFeatures(
+        {features::kSeparateWebAppShortcutBadgeIcon,
+         chromeos::features::kCrosWebAppShortcutUiUpdate},
+        {});
+  }
+  ShelfViewWebAppShortcutTest(const ShelfViewWebAppShortcutTest&) = delete;
+  ShelfViewWebAppShortcutTest& operator=(const ShelfViewWebAppShortcutTest&) =
+      delete;
+  ~ShelfViewWebAppShortcutTest() override = default;
+
+ protected:
+  ShelfID AddWebAppShortcut(bool wait_for_animations) {
+    ShelfItem item = ShelfTestUtil::AddWebAppShortcut(
+        base::NumberToString(id_++), true, CreateImageSkiaIcon(SK_ColorRED),
+        CreateImageSkiaIcon(SK_ColorCYAN));
+    // Set a delegate; some tests require one to select the item.
+    model_->ReplaceShelfItemDelegate(
+        item.id, std::make_unique<ShelfItemSelectionTracker>());
+    if (wait_for_animations) {
+      test_api_->RunMessageLoopUntilAnimationsDone();
+    }
+    return item.id;
+  }
+
+  gfx::ImageSkia GetHostBadgeImage(ShelfID id) {
+    ShelfAppButton* button = GetButtonByID(id);
+    return button->GetHostBadgeImageForTest();
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+TEST_F(ShelfViewWebAppShortcutTest,
+       ShortcutIconEffectsShowOnShortcutItemWithHostBadge) {
+  // Add a shortcut app button.
+  ShelfID last_added = AddWebAppShortcut(true);
+  const std::string web_app_id = last_added.app_id;
+  ShelfItem item = GetItemByID(last_added);
+
+  EXPECT_FALSE(item.badge_image.isNull());
+  EXPECT_FALSE(GetHostBadgeImage(last_added).isNull());
+}
+
+TEST_F(ShelfViewWebAppShortcutTest,
+       NoShortcutIconEffectOntItemWithoutHostBadge) {
+  // Add a shortcut app button.
+  ShelfID last_added = AddAppShortcut();
+  const std::string web_app_id = last_added.app_id;
+  ShelfItem item = GetItemByID(last_added);
+
+  EXPECT_TRUE(item.badge_image.isNull());
+  EXPECT_TRUE(GetHostBadgeImage(last_added).isNull());
 }
 
 }  // namespace ash

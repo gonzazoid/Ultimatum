@@ -144,9 +144,6 @@ class SimulatedAvatarButton : public SimulatedToolbarElement {
   }
 
  private:
-  // views::View:
-  const char* GetClassName() const override { return "SimulatedAvatarButton"; }
-
   View* icon() { return children()[0]; }
   const View* icon() const { return children()[0]; }
   View* label() { return children()[1]; }
@@ -233,7 +230,7 @@ class SimulatedExtensionsContainer : public SimulatedToolbarElement {
   // If |expected_num_icons| is specified:
   // - while animating, serves as a lower bound on the number of icons displayed
   // - while not animating, must match the number of visible icons exactly
-  void EnsureLayout(absl::optional<int> expected_num_icons) const {
+  void EnsureLayout(std::optional<int> expected_num_icons) const {
     if (layout()->is_animating()) {
       // For animating layouts, we ensure that icons are the correct size and
       // appear between the left edge of the container and exactly overlapping
@@ -296,14 +293,9 @@ class SimulatedExtensionsContainer : public SimulatedToolbarElement {
   }
 
  private:
-  // views::View:
-  const char* GetClassName() const override {
-    return "SimulatedExtensionsContainer";
-  }
-
   const View* main_button() const { return children()[children().size() - 1]; }
 
-  std::set<const View*> visible_views_;
+  std::set<raw_ptr<const View, SetExperimental>> visible_views_;
 };
 
 BEGIN_METADATA(SimulatedExtensionsContainer)
@@ -362,7 +354,7 @@ class SimulatedToolbar : public View {
   //
   // The parameter |expected_num_extension_icons| is passed to
   // SimulatedExtensionsContainer::EnsureLayout().
-  void EnsureLayout(absl::optional<int> expected_num_extension_icons) const {
+  void EnsureLayout(std::optional<int> expected_num_extension_icons) const {
     EXPECT_EQ(kIconDimension, height());
     EXPECT_EQ(gfx::Rect(gfx::Point(), kIconSize), children()[0]->bounds());
     EXPECT_EQ(gfx::Point(kIconDimension, 0), location()->origin());
@@ -382,9 +374,6 @@ class SimulatedToolbar : public View {
   }
 
  private:
-  // views::View:
-  const char* GetClassName() const override { return "SimulatedToolbar"; }
-
   raw_ptr<SimulatedExtensionsContainer> extensions_;
   raw_ptr<SimulatedAvatarButton> avatar_;
 };
@@ -439,13 +428,13 @@ class CompositeLayoutTest : public testing::Test {
       avatar_test_api_->IncrementTime(delta);
     if (extensions()->layout()->is_animating())
       extensions_test_api_->IncrementTime(delta);
-    toolbar_->Layout();
+    toolbar_->DeprecatedLayoutImmediately();
   }
 
   void ResetAnimation() {
     avatar()->layout()->ResetLayout();
     extensions()->layout()->ResetLayout();
-    toolbar()->Layout();
+    toolbar()->DeprecatedLayoutImmediately();
   }
 
   bool IsAnimating() const {
@@ -473,7 +462,7 @@ class CompositeLayoutTest : public testing::Test {
   // at minimum that many if animating) simulated extension icons must be
   // visible.
   void EnsureLayout(
-      absl::optional<int> expected_num_extension_icons = absl::nullopt) {
+      std::optional<int> expected_num_extension_icons = std::nullopt) {
     toolbar_->EnsureLayout(expected_num_extension_icons);
   }
 

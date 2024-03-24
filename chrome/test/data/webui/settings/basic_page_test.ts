@@ -12,7 +12,8 @@ import {isChromeOS, isLacros} from 'chrome://resources/js/platform.js';
 import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {CrSettingsPrefs, MetricsBrowserProxyImpl, pageVisibility, PerformanceBrowserProxyImpl, PrivacyGuideBrowserProxy, PrivacyGuideBrowserProxyImpl, PrivacyGuideInteractions, Router, routes, SettingsBasicPageElement, SettingsIdleLoadElement, SettingsPrefsElement, SettingsSectionElement, StatusAction, SyncStatus} from 'chrome://settings/settings.js';
+import type {PrivacyGuideBrowserProxy, SettingsBasicPageElement, SettingsIdleLoadElement, SettingsPrefsElement, SettingsSectionElement, SyncStatus} from 'chrome://settings/settings.js';
+import {CrSettingsPrefs, MetricsBrowserProxyImpl, pageVisibility, PerformanceBrowserProxyImpl, PrivacyGuideBrowserProxyImpl, PrivacyGuideInteractions, Router, routes, StatusAction} from 'chrome://settings/settings.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 import {eventToPromise, isChildVisible, isVisible} from 'chrome://webui-test/test_util.js';
@@ -451,19 +452,6 @@ suite('Performance', () => {
     return page.shadowRoot!.querySelector('#speedSettingsSection');
   }
 
-  // The following features may be overridden in tests. Reset them to the
-  // original values on teardown.
-  // TODO(crbug.com/1486635): Remove once preloading subpage in performance
-  // settings is launched
-  const defaultFeatureValues = {
-    isPerformanceSettingsPreloadingSubpageV2Enabled: loadTimeData.getBoolean(
-        'isPerformanceSettingsPreloadingSubpageV2Enabled'),
-  };
-
-  teardown(function() {
-    loadTimeData.overrideValues(defaultFeatureValues);
-  });
-
   async function createNewBasicPage() {
     performanceBrowserProxy = new TestPerformanceBrowserProxy();
     PerformanceBrowserProxyImpl.setInstance(performanceBrowserProxy);
@@ -527,35 +515,6 @@ suite('Performance', () => {
     assertFalse(
         !!queryPerformanceSettingsSection(),
         'Performance section should not exist when visibility is false');
-  });
-
-  // TODO(crbug.com/1486635): Remove once preloading subpage in performance
-  // settings is launched
-  test('performanceSpeedSectionV2', async function() {
-    await createNewBasicPage();
-    page.pageVisibility = pageVisibility;
-    flush();
-
-    const speedSection = querySpeedSettingsSection();
-    assertTrue(!!speedSection);
-    assertFalse(!!speedSection.querySelector('settings-preloading-page'));
-    assertTrue(!!speedSection.querySelector('settings-speed-page'));
-  });
-
-  // TODO(crbug.com/1486635): Remove once preloading subpage in performance
-  // settings is launched
-  test('performanceSpeedSectionV2NotEnabled', async function() {
-    loadTimeData.overrideValues({
-      isPerformanceSettingsPreloadingSubpageV2Enabled: false,
-    });
-    await createNewBasicPage();
-    page.pageVisibility = pageVisibility;
-    flush();
-
-    const speedSection = querySpeedSettingsSection();
-    assertTrue(!!speedSection);
-    assertTrue(!!speedSection.querySelector('settings-preloading-page'));
-    assertFalse(!!speedSection.querySelector('settings-speed-page'));
   });
 
   test('performanceVisibilityTestDeviceHasBattery', async function() {

@@ -91,10 +91,11 @@ class ScrollableShelfViewWithGuestModePixelTest
     set_start_session(false);
 
     ShelfTestBase::SetUp();
-    if (GetParam())
+    if (GetParam()) {
       SimulateGuestLogin();
-    else
+    } else {
       SimulateUserLogin("user@gmail.com");
+    }
   }
 
  private:

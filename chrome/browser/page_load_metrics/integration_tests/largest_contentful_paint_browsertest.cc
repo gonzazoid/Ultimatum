@@ -23,6 +23,7 @@
 #include "components/paint_preview/buildflags/buildflags.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/common/content_switches.h"
+#include "content/public/test/back_forward_cache_util.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/hit_test_region_observer.h"
@@ -53,11 +54,11 @@ void ValidateTraceEventHasCorrectCandidateSize(int expected_size,
   ASSERT_TRUE(event.HasDictArg("data"));
   base::Value::Dict data = event.GetKnownArgAsDict("data");
 
-  const absl::optional<int> traced_size = data.FindInt("size");
+  const std::optional<int> traced_size = data.FindInt("size");
   ASSERT_TRUE(traced_size.has_value());
   EXPECT_EQ(traced_size.value(), expected_size);
 
-  const absl::optional<bool> traced_main_frame_flag =
+  const std::optional<bool> traced_main_frame_flag =
       data.FindBool("isMainFrame");
   ASSERT_TRUE(traced_main_frame_flag.has_value());
   EXPECT_TRUE(traced_main_frame_flag.value());
@@ -68,14 +69,14 @@ void ValidateTraceEventBreakdownTimings(const TraceEvent& event,
   ASSERT_TRUE(event.HasDictArg("data"));
   base::Value::Dict data = event.GetKnownArgAsDict("data");
 
-  const absl::optional<double> load_start = data.FindDouble("imageLoadStart");
+  const std::optional<double> load_start = data.FindDouble("imageLoadStart");
   ASSERT_TRUE(load_start.has_value());
 
-  const absl::optional<double> discovery_time =
+  const std::optional<double> discovery_time =
       data.FindDouble("imageDiscoveryTime");
   ASSERT_TRUE(discovery_time.has_value());
 
-  const absl::optional<double> load_end = data.FindDouble("imageLoadEnd");
+  const std::optional<double> load_end = data.FindDouble("imageLoadEnd");
   ASSERT_TRUE(load_end.has_value());
 
   // Verify image discovery time < load start < load end < lcp time;
@@ -88,7 +89,7 @@ void ValidateTraceEventBreakdownTimings(const TraceEvent& event,
 
 int GetCandidateIndex(const TraceEvent& event) {
   base::Value::Dict data = event.GetKnownArgAsDict("data");
-  absl::optional<int> candidate_idx = data.FindInt("candidateIndex");
+  std::optional<int> candidate_idx = data.FindInt("candidateIndex");
   DCHECK(candidate_idx.has_value()) << "couldn't find 'candidateIndex'";
 
   return candidate_idx.value();
@@ -126,7 +127,7 @@ IN_PROC_BROWSER_TEST_F(MetricIntegrationTest, LargestContentfulPaint) {
   // need to be updated to reflect new semantics.
   const std::string test_name[3] = {"test_first_image()", "test_larger_image()",
                                     "test_largest_image()"};
-  absl::optional<double> lcp_timestamps[3];
+  std::optional<double> lcp_timestamps[3];
   for (size_t i = 0; i < 3; i++) {
     waiter->AddPageExpectation(page_load_metrics::PageLoadMetricsTestWaiter::
                                    TimingField::kLargestContentfulPaint);
@@ -348,7 +349,7 @@ class MAYBE_IsAnimatedLCPTest : public MetricIntegrationTest {
                         unsigned entries = 1) {
     // Install a ScopedRunLoopTimeout override to distinguish the timeout from
     // IsAnimatedLCPTest vs browser_test_base.
-    base::test::ScopedRunLoopTimeout run_loop_timeout(FROM_HERE, absl::nullopt,
+    base::test::ScopedRunLoopTimeout run_loop_timeout(FROM_HERE, std::nullopt,
                                                       base::NullCallback());
     auto waiter =
         std::make_unique<page_load_metrics::PageLoadMetricsTestWaiter>(
@@ -420,9 +421,15 @@ class MAYBE_MouseoverLCPTest : public MetricIntegrationTest,
                       int x2,
                       int y2,
                       bool expected) {
-    // Install a ScopedRunLoopTimeout override to distinguish the timeout from
-    // MouseoverLCPTest vs browser_test_base.
-    base::test::ScopedRunLoopTimeout run_loop_timeout(FROM_HERE, absl::nullopt,
+    // Turn off BFCache to see if it helps with BFCache bot flakes. See
+    // https://crbug.com/1288027
+    content::DisableBackForwardCacheForTesting(
+        web_contents(), content::BackForwardCache::DisableForTestingReason::
+                            TEST_REQUIRES_NO_CACHING);
+
+    // Install a ScopedRunLoopTimeout override to distinguish the timeout
+    // from MouseoverLCPTest vs browser_test_base.
+    base::test::ScopedRunLoopTimeout run_loop_timeout(FROM_HERE, std::nullopt,
                                                       base::NullCallback());
     auto waiter =
         std::make_unique<page_load_metrics::PageLoadMetricsTestWaiter>(
@@ -894,16 +901,6 @@ IN_PROC_BROWSER_TEST_F(LargestContentfulPaintTypeTest, MAYBE_DataURIType_SVG) {
   TestImage(imgSrc, flag_set);
 }
 
-class VideoLCPTypeTest : public LargestContentfulPaintTypeTest {
-  void SetUpCommandLine(base::CommandLine* command_line) override {
-    LargestContentfulPaintTypeTest::SetUpCommandLine(command_line);
-    feature_list_.InitWithFeatures(
-        {blink::features::kLCPVideoFirstFrame} /*enabled*/, {} /*disabled*/);
-  }
-
-  base::test::ScopedFeatureList feature_list_;
-};
-
 // (https://crbug.com/1385713): Flaky on mac12-arm64-rel M1 Mac CQ.
 // (https://crbug.com/1405307): Flaky on ChromeOS and Linux as well.
 #if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
@@ -911,7 +908,8 @@ class VideoLCPTypeTest : public LargestContentfulPaintTypeTest {
 #else
 #define MAYBE_DataURIType_Video DataURIType_Video
 #endif
-IN_PROC_BROWSER_TEST_F(VideoLCPTypeTest, MAYBE_DataURIType_Video) {
+IN_PROC_BROWSER_TEST_F(LargestContentfulPaintTypeTest,
+                       MAYBE_DataURIType_Video) {
   auto flag_set = blink::LargestContentfulPaintType::kImage |
                   blink::LargestContentfulPaintType::kVideo |
                   blink::LargestContentfulPaintType::kDataURI;
@@ -988,6 +986,7 @@ class LcpBreakdownTimingsTest : public MetricIntegrationTest {
  protected:
   void RunTest(std::string test_url,
                std::string resource,
+               std::optional<uint8_t> subframe_index,
                std::string script = "") {
     Start();
     auto waiter0 =
@@ -1007,25 +1006,27 @@ class LcpBreakdownTimingsTest : public MetricIntegrationTest {
 
     waiter0->Wait();
 
+    auto* rfh =
+        !subframe_index.has_value()
+            ? web_contents()->GetPrimaryMainFrame()
+            : content::ChildFrameAt(web_contents()->GetPrimaryMainFrame(),
+                                    subframe_index.value());
+
+    timeline_lcp_list_[0] =
+        EvalJs(rfh, content::JsReplace("getLcp($1)", resource)).ExtractDouble();
+
     // Retrieve resource timing timings of initial load for validation.
     request_start_list_[0] =
-        EvalJs(web_contents()->GetPrimaryMainFrame(),
-               content::JsReplace("getRequestStart($1)", resource))
+        EvalJs(rfh, content::JsReplace("getRequestStart($1)", resource))
             .ExtractDouble();
 
     response_end_list_[0] =
-        EvalJs(web_contents()->GetPrimaryMainFrame(),
-               content::JsReplace("getResponseEnd($1)", resource))
+        EvalJs(rfh, content::JsReplace("getResponseEnd($1)", resource))
             .ExtractDouble();
 
     start_time_list_[0] =
-        EvalJs(web_contents()->GetPrimaryMainFrame(),
-               content::JsReplace("getStartTime($1)", resource))
+        EvalJs(rfh, content::JsReplace("getStartTime($1)", resource))
             .ExtractDouble();
-
-    timeline_lcp_list_[0] = EvalJs(web_contents()->GetPrimaryMainFrame(),
-                                   content::JsReplace("getLcp($1)", resource))
-                                .ExtractDouble();
 
     auto waiter1 =
         std::make_unique<page_load_metrics::PageLoadMetricsTestWaiter>(
@@ -1046,30 +1047,30 @@ class LcpBreakdownTimingsTest : public MetricIntegrationTest {
 
     waiter1->Wait();
 
+    rfh = !subframe_index.has_value()
+              ? web_contents()->GetPrimaryMainFrame()
+              : content::ChildFrameAt(web_contents()->GetPrimaryMainFrame(),
+                                      subframe_index.value());
+    timeline_lcp_list_[1] =
+        EvalJs(rfh, content::JsReplace("getLcp($1)", resource)).ExtractDouble();
+
     // Retrieve resource timing timings after refresh for validation.
     request_start_list_[1] =
-        EvalJs(web_contents()->GetPrimaryMainFrame(),
-               content::JsReplace("getRequestStart($1)", resource))
+        EvalJs(rfh, content::JsReplace("getRequestStart($1)", resource))
             .ExtractDouble();
 
     response_end_list_[1] =
-        EvalJs(web_contents()->GetPrimaryMainFrame(),
-               content::JsReplace("getResponseEnd($1)", resource))
+        EvalJs(rfh, content::JsReplace("getResponseEnd($1)", resource))
             .ExtractDouble();
 
     start_time_list_[1] =
-        EvalJs(web_contents()->GetPrimaryMainFrame(),
-               content::JsReplace("getStartTime($1)", resource))
+        EvalJs(rfh, content::JsReplace("getStartTime($1)", resource))
             .ExtractDouble();
-
-    timeline_lcp_list_[1] = EvalJs(web_contents()->GetPrimaryMainFrame(),
-                                   content::JsReplace("getLcp($1)", resource))
-                                .ExtractDouble();
 
     ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), GURL("about:blank")));
   }
 
-  void Validate() {
+  void Validate(bool is_lcp_from_subframe = false) {
     std::vector<double> ttfb_list = GetPageLoadMetricsAsList(
         PageLoad::kMainFrameResource_NavigationStartToReceiveHeadersStartName);
 
@@ -1102,14 +1103,23 @@ class LcpBreakdownTimingsTest : public MetricIntegrationTest {
 
     EXPECT_LT(load_end_list_[0], lcp_list_[0]);
 
-    // LCP breadown timings should be the same as resource timings.
-    EXPECT_NEAR(discovery_time_list_[0], start_time_list_[0], epsilon_);
+    // LCP breadown timings should be the same as resource timings. If the LCP
+    // element is from a subframe, the navigation start offset should be
+    // accounted for.
+    auto navigation_start_offset =
+        is_lcp_from_subframe ? discovery_time_list_[0] - start_time_list_[0]
+                             : 0;
+    EXPECT_NEAR(discovery_time_list_[0], start_time_list_[0],
+                epsilon_ + navigation_start_offset);
 
-    EXPECT_NEAR(load_start_list_[0], request_start_list_[0], epsilon_);
+    EXPECT_NEAR(load_start_list_[0], request_start_list_[0],
+                epsilon_ + navigation_start_offset);
 
-    EXPECT_NEAR(load_end_list_[0], response_end_list_[0], epsilon_);
+    EXPECT_NEAR(load_end_list_[0], response_end_list_[0],
+                epsilon_ + navigation_start_offset);
 
-    EXPECT_NEAR(lcp_list_[0], timeline_lcp_list_[0], epsilon_);
+    EXPECT_NEAR(lcp_list_[0], timeline_lcp_list_[0],
+                epsilon_ + navigation_start_offset);
 
     // Validate timings after refresh. LCP breakdown timings could be equal if
     // the image is loaded from memory. Hence we use EXPECT_LE instead of
@@ -1123,13 +1133,21 @@ class LcpBreakdownTimingsTest : public MetricIntegrationTest {
     EXPECT_LE(load_end_list_[1], lcp_list_[1]);
 
     // LCP breadown timings should be the same as resource timings.
-    EXPECT_NEAR(discovery_time_list_[1], start_time_list_[1], epsilon_);
+    navigation_start_offset =
+        is_lcp_from_subframe ? discovery_time_list_[1] - start_time_list_[1]
+                             : 0;
 
-    EXPECT_NEAR(load_start_list_[1], request_start_list_[1], epsilon_);
+    EXPECT_NEAR(discovery_time_list_[1], start_time_list_[1],
+                epsilon_ + navigation_start_offset);
 
-    EXPECT_NEAR(load_end_list_[1], response_end_list_[1], epsilon_);
+    EXPECT_NEAR(load_start_list_[1], request_start_list_[1],
+                epsilon_ + navigation_start_offset);
 
-    EXPECT_NEAR(lcp_list_[1], timeline_lcp_list_[1], epsilon_);
+    EXPECT_NEAR(load_end_list_[1], response_end_list_[1],
+                epsilon_ + navigation_start_offset);
+
+    EXPECT_NEAR(lcp_list_[1], timeline_lcp_list_[1],
+                epsilon_ + navigation_start_offset);
   }
 
   void ValidateForMemCacheLoadedImages() {
@@ -1150,6 +1168,26 @@ class LcpBreakdownTimingsTest : public MetricIntegrationTest {
   double epsilon_ = 1.5;
 };
 
+IN_PROC_BROWSER_TEST_F(LcpBreakdownTimingsTest, Subframe) {
+  std::string url = "/lcp_breakdown_timings_with_subframe.html";
+  auto* resource_name = "lcp-256x256.png";
+  RunTest(url, resource_name, 0, "addSameSiteSubframe()");
+  Validate(true);
+  ValidateForMemCacheLoadedImages();
+}
+
+// TODO(323888356): There is an issue in the LCP size calculation in a cross
+// site subframe. This test should be enabled after that issue is resolved.
+IN_PROC_BROWSER_TEST_F(LcpBreakdownTimingsTest, DISABLED_CrossSiteSubframe) {
+  std::string url = "/lcp_breakdown_timings_with_subframe.html";
+  auto* resource_name = "lcp-256x256.png";
+  RunTest(url, resource_name, 0, "addCrossSiteSubframe()");
+  Validate(true);
+  // Image that is in cross origin subframe wouldn't be loaded from cache, so
+  // we don't verify that the breakdown timings are all set to discovery time
+  // after refresh.
+}
+
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
 #define MAYBE_MemCacheServedImage DISABLED_MemCacheServedImage
 #else
@@ -1159,7 +1197,7 @@ IN_PROC_BROWSER_TEST_F(LcpBreakdownTimingsTest, MAYBE_MemCacheServedImage) {
   std::string test_url = "/lcp_breakdown_timings_memcache_served_images.html";
   std::string resource = "green.png";
 
-  RunTest(test_url, resource);
+  RunTest(test_url, resource, std::nullopt);
   Validate();
 
   // Since after refresh, the image is loaded from mem cache, the discovery_time
@@ -1175,7 +1213,7 @@ IN_PROC_BROWSER_TEST_F(LcpBreakdownTimingsTest, MAYBE_MemCacheServedImage) {
 IN_PROC_BROWSER_TEST_F(LcpBreakdownTimingsTest, MAYBE_PreloadedImage) {
   std::string test_url = "/lcp_breakdown_timings_preloaded_images.html";
   std::string resource = "/images/lcp-16x16.png";
-  RunTest(test_url, resource,
+  RunTest(test_url, resource, std::nullopt,
           content::JsReplace("addImageWithUrl($1)", resource));
   Validate();
 }
@@ -1189,7 +1227,7 @@ IN_PROC_BROWSER_TEST_F(LcpBreakdownTimingsTest, MAYBE_PreloadedCacheableImage) {
   std::string test_url =
       "/lcp_breakdown_timings_preloaded_cacheable_images.html";
   std::string resource = "green.png";
-  RunTest(test_url, resource,
+  RunTest(test_url, resource, std::nullopt,
           content::JsReplace("addImageWithUrl($1)", resource));
   Validate();
   ValidateForMemCacheLoadedImages();
@@ -1204,7 +1242,7 @@ IN_PROC_BROWSER_TEST_F(LcpBreakdownTimingsTest, MAYBE_NativeLazyLoadingImage) {
   std::string test_url =
       "/lcp_breakdown_timings_native_lazy_loading_images.html";
   std::string resource = "lcp-16x16.png";
-  RunTest(test_url, resource);
+  RunTest(test_url, resource, std::nullopt);
   Validate();
 }
 
@@ -1214,7 +1252,7 @@ IN_PROC_BROWSER_TEST_F(LcpBreakdownTimingsTest,
   std::string test_url =
       "/lcp_breakdown_timings_manual_lazy_loading_images.html";
   std::string resource = "lcp-16x16.png";
-  RunTest(test_url, resource,
+  RunTest(test_url, resource, std::nullopt,
           content::JsReplace("(async ()=>{await scrollToLoadImage($1);})()",
                              resource));
   Validate();
@@ -1228,11 +1266,12 @@ IN_PROC_BROWSER_TEST_F(LcpBreakdownTimingsTest,
 IN_PROC_BROWSER_TEST_F(LcpBreakdownTimingsTest, MAYBE_CssBackgroundImage) {
   std::string test_url = "/lcp_breakdown_timings_css_background_images.html";
   std::string resource = "lcp-256x256.png";
-  RunTest(test_url, resource);
+  RunTest(test_url, resource, std::nullopt);
   Validate();
 }
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
+// TODO(crbug.com/1522206): Flaky test.
+#if BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_MAC)
 #define MAYBE_WrittenAsInnerHtmlImage DISABLED_WrittenAsInnerHtmlImage
 #else
 #define MAYBE_WrittenAsInnerHtmlImage WrittenAsInnerHtmlImage
@@ -1240,11 +1279,13 @@ IN_PROC_BROWSER_TEST_F(LcpBreakdownTimingsTest, MAYBE_CssBackgroundImage) {
 IN_PROC_BROWSER_TEST_F(LcpBreakdownTimingsTest, MAYBE_WrittenAsInnerHtmlImage) {
   std::string test_url = "/lcp_breakdown_timings_written_as_html_images.html";
   std::string resource = "/images/lcp-256x256.png";
-  RunTest(test_url, resource, "AddImageByScript(WriteToDomAsInnerHtml);");
+  RunTest(test_url, resource, std::nullopt,
+          "AddImageByScript(WriteToDomAsInnerHtml);");
   Validate();
 }
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
+// TODO(crbug.com/1521113): Flaky on Mac.
+#if BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_MAC)
 #define MAYBE_WrittenAsOuterHtmlImage DISABLED_WrittenAsOuterHtmlImage
 #else
 #define MAYBE_WrittenAsOuterHtmlImage WrittenAsOuterHtmlImage
@@ -1252,7 +1293,8 @@ IN_PROC_BROWSER_TEST_F(LcpBreakdownTimingsTest, MAYBE_WrittenAsInnerHtmlImage) {
 IN_PROC_BROWSER_TEST_F(LcpBreakdownTimingsTest, MAYBE_WrittenAsOuterHtmlImage) {
   std::string test_url = "/lcp_breakdown_timings_written_as_html_images.html";
   std::string resource = "/images/lcp-256x256.png";
-  RunTest(test_url, resource, "AddImageByScript(WriteToDomAsOuterHtml);");
+  RunTest(test_url, resource, std::nullopt,
+          "AddImageByScript(WriteToDomAsOuterHtml);");
   Validate();
 }
 
@@ -1264,7 +1306,7 @@ IN_PROC_BROWSER_TEST_F(LcpBreakdownTimingsTest, MAYBE_WrittenAsOuterHtmlImage) {
 IN_PROC_BROWSER_TEST_F(LcpBreakdownTimingsTest, MAYBE_DocumentWrittenImage) {
   std::string test_url = "/lcp_breakdown_timings_document_written_images.html";
   std::string resource = "/images/lcp-256x256.png";
-  RunTest(test_url, resource);
+  RunTest(test_url, resource, std::nullopt);
   Validate();
 }
 
@@ -1277,7 +1319,7 @@ IN_PROC_BROWSER_TEST_F(LcpBreakdownTimingsTest, MAYBE_SrcSetImage) {
   std::string test_url = "/lcp_breakdown_timings_srcset_images.html";
   std::string resource = "lcp-256x256.png";
 
-  RunTest(test_url, resource);
+  RunTest(test_url, resource, std::nullopt);
   Validate();
 }
 
@@ -1290,7 +1332,7 @@ IN_PROC_BROWSER_TEST_F(LcpBreakdownTimingsTest, MAYBE_DomMethodAddedImage) {
   std::string test_url = "/lcp_breakdown_timings_empty.html";
   std::string resource = "/images/lcp-256x256.png";
 
-  RunTest(test_url, resource,
+  RunTest(test_url, resource, std::nullopt,
           content::JsReplace("addImageWithUrl($1)", resource));
   Validate();
 }

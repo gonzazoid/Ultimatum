@@ -5,6 +5,7 @@
 #include "chrome/browser/extensions/api/developer_private/extension_info_generator.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -44,6 +45,7 @@
 #include "extensions/common/constants.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_builder.h"
+#include "extensions/common/extension_id.h"
 #include "extensions/common/features/feature_channel.h"
 #include "extensions/common/permissions/permission_message.h"
 #include "extensions/common/permissions/permission_set.h"
@@ -52,7 +54,6 @@
 #include "extensions/common/url_pattern_set.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
@@ -72,13 +73,13 @@ namespace {
 
 const char kAllHostsPermission[] = "*://*/*";
 
-absl::optional<base::Value::Dict> DeserializeJSONTestData(
+std::optional<base::Value::Dict> DeserializeJSONTestData(
     const base::FilePath& path,
     std::string* error) {
   JSONFileValueDeserializer deserializer(path);
   std::unique_ptr<base::Value> value = deserializer.Deserialize(nullptr, error);
   if (!value || !value->is_dict()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return std::move(*value).TakeDict();
 }
@@ -87,7 +88,7 @@ absl::optional<base::Value::Dict> DeserializeJSONTestData(
 // is present in |list|.
 const developer::ExtensionInfo* GetInfoFromList(
     const ExtensionInfoGenerator::ExtensionInfoList& list,
-    const std::string& id) {
+    const ExtensionId& id) {
   for (const auto& item : list) {
     if (item.id == id)
       return &item;
@@ -145,7 +146,7 @@ class ExtensionInfoGeneratorUnitTest : public ExtensionServiceTestWithInstall {
   }
 
   std::unique_ptr<developer::ExtensionInfo> GenerateExtensionInfo(
-      const std::string& extension_id) {
+      const ExtensionId& extension_id) {
     std::unique_ptr<developer::ExtensionInfo> info;
     base::RunLoop run_loop;
     quit_closure_ = run_loop.QuitClosure();
@@ -183,7 +184,7 @@ class ExtensionInfoGeneratorUnitTest : public ExtensionServiceTestWithInstall {
       const std::string& name,
       base::Value::List permissions,
       mojom::ManifestLocation location) {
-    const std::string kId = crx_file::id_util::GenerateId(name);
+    const ExtensionId kId = crx_file::id_util::GenerateId(name);
     scoped_refptr<const Extension> extension =
         ExtensionBuilder()
             .SetManifest(base::Value::Dict()
@@ -226,7 +227,7 @@ class ExtensionInfoGeneratorUnitTest : public ExtensionServiceTestWithInstall {
       InspectableViewsFinder::ViewList views,
       const base::FilePath& expected_output_path) {
     std::string error;
-    absl::optional<base::Value::Dict> expected_output_data =
+    std::optional<base::Value::Dict> expected_output_data =
         DeserializeJSONTestData(expected_output_path, &error);
     ASSERT_TRUE(expected_output_data);
     EXPECT_EQ(std::string(), error);
@@ -271,7 +272,7 @@ TEST_F(ExtensionInfoGeneratorUnitTest, BasicInfoTest) {
 
   const char kName[] = "extension name";
   const char kVersion[] = "1.0.0.1";
-  std::string id = crx_file::id_util::GenerateId("alpha");
+  ExtensionId id = crx_file::id_util::GenerateId("alpha");
   base::Value::Dict manifest =
       base::Value::Dict()
           .Set("name", kName)
@@ -995,8 +996,8 @@ TEST_F(ExtensionInfoGeneratorUnitTest, Blocklisted) {
   const scoped_refptr<const Extension> extension2 = CreateExtension(
       "test2", base::Value::List(), ManifestLocation::kInternal);
 
-  std::string id1 = extension1->id();
-  std::string id2 = extension2->id();
+  const ExtensionId& id1 = extension1->id();
+  const ExtensionId& id2 = extension2->id();
   ASSERT_NE(id1, id2);
 
   ExtensionInfoGenerator::ExtensionInfoList info_list =
@@ -1078,7 +1079,7 @@ TEST_F(ExtensionInfoGeneratorUnitTest,
   ASSERT_TRUE(registry()->enabled_extensions().Contains(extension->id()));
 
   // Save the id, as |extension| will be destroyed during updating.
-  std::string extension_id = extension->id();
+  ExtensionId extension_id = extension->id();
 
   // Update to a new version with increased permissions.
   path = base_path.AppendASCII("v2");
@@ -1203,7 +1204,7 @@ TEST_P(ExtensionInfoGeneratorUnitTestSupervised,
   }
 
   // Save the id, as |extension| will be destroyed during updating.
-  std::string extension_id = extension->id();
+  ExtensionId extension_id = extension->id();
 
   ExtensionPrefs* prefs = ExtensionPrefs::Get(profile());
   if (AreExtensionPermissionsEnabled()) {

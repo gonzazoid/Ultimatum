@@ -17,7 +17,7 @@
 #include "chrome/browser/signin/bound_session_credentials/bound_session_refresh_cookie_fetcher_impl.h"
 #include "chrome/browser/signin/bound_session_credentials/bound_session_switches.h"
 #include "chrome/browser/signin/bound_session_credentials/session_binding_helper.h"
-#include "chrome/browser/signin/wait_for_network_callback_helper_chrome.h"
+#include "chrome/common/renderer_configuration.mojom.h"
 #include "content/public/browser/storage_partition.h"
 #include "services/network/public/cpp/network_connection_tracker.h"
 
@@ -40,13 +40,13 @@ BoundSessionCookieControllerImpl::BoundSessionCookieControllerImpl(
     content::StoragePartition* storage_partition,
     network::NetworkConnectionTracker* network_connection_tracker,
     const bound_session_credentials::BoundSessionParams& bound_session_params,
-    Delegate* delegate)
+    Delegate* delegate,
+    bool is_off_the_record_profile)
     : BoundSessionCookieController(bound_session_params, delegate),
       key_service_(key_service),
       storage_partition_(storage_partition),
       network_connection_tracker_(network_connection_tracker),
-      wait_for_network_callback_helper_(
-          std::make_unique<WaitForNetworkCallbackHelperChrome>()) {
+      is_off_the_record_profile_(is_off_the_record_profile) {
   CHECK(!bound_session_params.wrapped_key().empty());
   base::span<const uint8_t> wrapped_key =
       base::as_bytes(base::make_span(bound_session_params.wrapped_key()));
@@ -56,7 +56,7 @@ BoundSessionCookieControllerImpl::BoundSessionCookieControllerImpl(
   // key assertion.
   session_binding_helper_->MaybeLoadBindingKey();
 
-  absl::optional<base::TimeDelta> cookie_rotation_delay =
+  std::optional<base::TimeDelta> cookie_rotation_delay =
       bound_session_credentials::GetCookieRotationDelayIfSetByCommandLine();
 
   if (cookie_rotation_delay) {
@@ -76,55 +76,40 @@ BoundSessionCookieControllerImpl::BoundSessionCookieControllerImpl(
 
 BoundSessionCookieControllerImpl::~BoundSessionCookieControllerImpl() {
   // On shutdown or session termination, resume blocked requests if any.
-  ResumeBlockedRequests(
-      ResumeBlockedRequestsTrigger::kShutdownOrSessionTermination);
+  ResumeBlockedRequests(chrome::mojom::ResumeBlockedRequestsTrigger::
+                            kShutdownOrSessionTermination);
   RecordNumberOfSuccessiveTimeoutIfAny(successive_timeout_);
 }
 
 void BoundSessionCookieControllerImpl::Initialize() {
   network_connection_observer_.Observe(network_connection_tracker_);
+  is_offline_ = network_connection_tracker_->IsOffline();
   CreateBoundCookiesObservers();
   MaybeRefreshCookie();
 }
 
 void BoundSessionCookieControllerImpl::OnConnectionChanged(
     network::mojom::ConnectionType type) {
-  if (type == network::mojom::ConnectionType::CONNECTION_NONE) {
-    // Let network requests fail now while there is no internet connection,
-    // instead of holding them up until the network is back or timeout occurs.
-    // The network could come back shortly before the timeout which would result
-    // in requests being released without a valid cookie.
-    ResumeBlockedRequests(
-        ResumeBlockedRequestsTrigger::kNetworkConnectionOffline);
+  if (is_offline_ && type != network::mojom::ConnectionType::CONNECTION_NONE) {
+    // We are back online. Schedule a new cookie rotation if needed.
+    MaybeScheduleCookieRotation();
   }
-}
 
-bool BoundSessionCookieControllerImpl::IsConnectionTypeAvailableAndOffline() {
-  network::mojom::ConnectionType type;
-  return network_connection_tracker_->GetConnectionType(
-             &type, base::BindOnce(
-                        &BoundSessionCookieControllerImpl::OnConnectionChanged,
-                        weak_ptr_factory_.GetWeakPtr())) &&
-         type == network::mojom::ConnectionType::CONNECTION_NONE;
+  is_offline_ = type == network::mojom::ConnectionType::CONNECTION_NONE;
 }
 
 void BoundSessionCookieControllerImpl::HandleRequestBlockedOnCookie(
-    base::OnceClosure resume_blocked_request) {
+    chrome::mojom::BoundSessionRequestThrottledHandler::
+        HandleRequestBlockedOnCookieCallback resume_blocked_request) {
   if (AreAllCookiesFresh()) {
     // Cookie is fresh.
-    std::move(resume_blocked_request).Run();
+    std::move(resume_blocked_request)
+        .Run(chrome::mojom::ResumeBlockedRequestsTrigger::kCookieAlreadyFresh);
     return;
   }
 
   resume_blocked_requests_.push_back(std::move(resume_blocked_request));
   MaybeRefreshCookie();
-
-  if (IsConnectionTypeAvailableAndOffline()) {
-    // See the comment in `OnConnectionChanged()` for explanation.
-    ResumeBlockedRequests(
-        ResumeBlockedRequestsTrigger::kNetworkConnectionOffline);
-    return;
-  }
 
   if (!resume_blocked_requests_timer_.IsRunning() &&
       !resume_blocked_requests_.empty()) {
@@ -157,7 +142,8 @@ void BoundSessionCookieControllerImpl::SetCookieExpirationTimeAndNotify(
   base::Time old_min_expiration_time = min_cookie_expiration_time();
   it->second = expiration_time;
   if (AreAllCookiesFresh()) {
-    ResumeBlockedRequests(ResumeBlockedRequestsTrigger::kObservedFreshCookies);
+    ResumeBlockedRequests(
+        chrome::mojom::ResumeBlockedRequestsTrigger::kObservedFreshCookies);
     RecordNumberOfSuccessiveTimeoutIfAny(successive_timeout_);
     successive_timeout_ = 0;
   }
@@ -192,8 +178,8 @@ BoundSessionCookieControllerImpl::CreateRefreshCookieFetcher() const {
   return refresh_cookie_fetcher_factory_for_testing_.is_null()
              ? std::make_unique<BoundSessionRefreshCookieFetcherImpl>(
                    storage_partition_->GetURLLoaderFactoryForBrowserProcess(),
-                   *wait_for_network_callback_helper_, *session_binding_helper_,
-                   url_, std::move(cookie_names))
+                   *session_binding_helper_, url_, std::move(cookie_names),
+                   is_off_the_record_profile_)
              : refresh_cookie_fetcher_factory_for_testing_.Run(
                    storage_partition_->GetCookieManagerForBrowserProcess(),
                    url_, std::move(cookie_names));
@@ -236,10 +222,12 @@ void BoundSessionCookieControllerImpl::OnCookieRefreshFetched(
     BoundSessionRefreshCookieFetcher::Result result) {
   refresh_cookie_fetcher_.reset();
 
-  ResumeBlockedRequestsTrigger trigger =
+  chrome::mojom::ResumeBlockedRequestsTrigger trigger =
       result == BoundSessionRefreshCookieFetcher::Result::kSuccess
-          ? ResumeBlockedRequestsTrigger::kCookieRefreshFetchSuccess
-          : ResumeBlockedRequestsTrigger::kCookieRefreshFetchFailure;
+          ? chrome::mojom::ResumeBlockedRequestsTrigger::
+                kCookieRefreshFetchSuccess
+          : chrome::mojom::ResumeBlockedRequestsTrigger::
+                kCookieRefreshFetchFailure;
   // Resume blocked requests regardless of the result.
   // `SetCookieExpirationTimeAndNotify()` should be called around the same time
   // as `OnCookieRefreshFetched()` if the fetch was successful.
@@ -273,15 +261,17 @@ void BoundSessionCookieControllerImpl::MaybeScheduleCookieRotation() {
 }
 
 void BoundSessionCookieControllerImpl::ResumeBlockedRequests(
-    ResumeBlockedRequestsTrigger trigger) {
+    chrome::mojom::ResumeBlockedRequestsTrigger trigger) {
   resume_blocked_requests_timer_.Stop();
   if (resume_blocked_requests_.empty()) {
     return;
   }
-  std::vector<base::OnceClosure> callbacks;
+  std::vector<chrome::mojom::BoundSessionRequestThrottledHandler::
+                  HandleRequestBlockedOnCookieCallback>
+      callbacks;
   std::swap(callbacks, resume_blocked_requests_);
   for (auto& callback : callbacks) {
-    std::move(callback).Run();
+    std::move(callback).Run(trigger);
   }
   base::UmaHistogramEnumeration(
       "Signin.BoundSessionCredentials.ResumeThrottledRequestsTrigger", trigger);
@@ -291,6 +281,6 @@ void BoundSessionCookieControllerImpl::OnResumeBlockedRequestsTimeout() {
   // Reset the fetcher, it has been taking at least
   // kResumeBlockedRequestTimeout. New requests will trigger a new fetch.
   refresh_cookie_fetcher_.reset();
-  ResumeBlockedRequests(ResumeBlockedRequestsTrigger::kTimeout);
+  ResumeBlockedRequests(chrome::mojom::ResumeBlockedRequestsTrigger::kTimeout);
   successive_timeout_++;
 }

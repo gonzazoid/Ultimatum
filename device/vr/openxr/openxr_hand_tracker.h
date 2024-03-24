@@ -8,6 +8,7 @@
 #include <optional>
 
 #include "base/memory/raw_ref.h"
+#include "device/vr/openxr/openxr_extension_handler_factory.h"
 #include "device/vr/public/mojom/openxr_interaction_profile_type.mojom-forward.h"
 #include "device/vr/public/mojom/vr_service.mojom-forward.h"
 #include "third_party/openxr/src/include/openxr/openxr.h"
@@ -19,7 +20,6 @@ class Transform;
 namespace device {
 
 class GamepadButton;
-enum class GamepadMapping;
 enum class OpenXrButtonType;
 enum class OpenXrHandednessType;
 class OpenXrExtensionHelper;
@@ -38,8 +38,6 @@ class OpenXrExtensionHelper;
 class OpenXrHandController {
  public:
   virtual mojom::OpenXrInteractionProfileType interaction_profile() const = 0;
-
-  virtual GamepadMapping gamepad_mapping() const = 0;
 
   // Gets the `base_from_grip` transform, where the `base` space is the one that
   // was passed in to "Update".
@@ -86,6 +84,24 @@ class OpenXrHandTracker {
 
   XrHandJointLocationEXT joint_locations_buffer_[XR_HAND_JOINT_COUNT_EXT];
   XrHandJointLocationsEXT locations_{XR_TYPE_HAND_JOINT_LOCATIONS_EXT};
+};
+
+class OpenXrHandTrackerFactory : public OpenXrExtensionHandlerFactory {
+ public:
+  OpenXrHandTrackerFactory();
+  ~OpenXrHandTrackerFactory() override;
+
+  const base::flat_set<std::string_view>& GetRequestedExtensions()
+      const override;
+  std::set<device::mojom::XRSessionFeature> GetSupportedFeatures(
+      const OpenXrExtensionEnumeration* extension_enum) const override;
+
+  bool IsEnabled(
+      const OpenXrExtensionEnumeration* extension_enum) const override;
+  std::unique_ptr<OpenXrHandTracker> CreateHandTracker(
+      const OpenXrExtensionHelper& extension_helper,
+      XrSession session,
+      OpenXrHandednessType type) const override;
 };
 
 }  // namespace device

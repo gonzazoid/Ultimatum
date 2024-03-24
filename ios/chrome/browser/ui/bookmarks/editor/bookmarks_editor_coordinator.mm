@@ -6,6 +6,7 @@
 
 #import <MaterialComponents/MaterialSnackbar.h>
 
+#import "base/memory/raw_ptr.h"
 #import "base/metrics/user_metrics.h"
 #import "base/metrics/user_metrics_action.h"
 #import "base/strings/sys_string_conversions.h"
@@ -17,6 +18,7 @@
 #import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
 #import "ios/chrome/browser/shared/public/commands/snackbar_commands.h"
 #import "ios/chrome/browser/shared/ui/table_view/table_view_navigation_controller.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
 #import "ios/chrome/browser/sync/model/sync_service_factory.h"
 #import "ios/chrome/browser/ui/bookmarks/bookmark_utils_ios.h"
 #import "ios/chrome/browser/ui/bookmarks/editor/bookmarks_editor_coordinator_delegate.h"
@@ -34,7 +36,7 @@
     BookmarksEditorMediatorDelegate,
     BookmarksFolderChooserCoordinatorDelegate> {
   // BookmarkNode to edit.
-  const bookmarks::BookmarkNode* _node;
+  raw_ptr<const bookmarks::BookmarkNode> _node;
 
   // The editor view controller owned and presented by this coordinator.
   // It is wrapped in a TableViewNavigationController.
@@ -97,6 +99,8 @@
                       accountBookmarkModel:accountBookmarkModel
                               bookmarkNode:_node
                                      prefs:browserState->GetPrefs()
+                     authenticationService:AuthenticationServiceFactory::
+                                               GetForBrowserState(browserState)
                                syncService:syncService
                               browserState:browserState];
   _mediator.consumer = _viewController;

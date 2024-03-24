@@ -8,6 +8,7 @@
 #include <map>
 #include <set>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/safe_browsing/core/browser/db/test_database_manager.h"
 #include "services/network/public/mojom/fetch_api.mojom.h"
@@ -49,7 +50,6 @@ class FakeSafeBrowsingDatabaseManager
   bool CheckUrlForSubresourceFilter(const GURL& url, Client* client) override;
   bool CheckResourceUrl(const GURL& url, Client* client) override;
   void CancelCheck(Client* client) override;
-  bool ChecksAreAlwaysAsync() const override;
   bool CanCheckRequestDestination(
       network::mojom::RequestDestination /* request_destination */)
       const override;
@@ -63,7 +63,7 @@ class FakeSafeBrowsingDatabaseManager
   void OnCheckUrlForSubresourceFilterComplete(base::WeakPtr<Client> client,
                                               const GURL& url);
 
-  std::set<Client*> checks_;
+  std::set<raw_ptr<Client, SetExperimental>> checks_;
   std::map<
       GURL,
       std::pair<safe_browsing::SBThreatType, safe_browsing::ThreatMetadata>>

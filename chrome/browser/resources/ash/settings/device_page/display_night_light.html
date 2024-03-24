@@ -11,10 +11,6 @@
     pointer-events: none;
   }
 
-  #NightLightLabelDiv {
-    align-self: start;
-  }
-
   .text-area {
     margin: 10px 0;
   }
@@ -86,7 +82,7 @@
         <settings-privacy-hub-geolocation-warning-text
             id="warningText"
             warning-text-with-anchor=
-                "$i18n{displayNightLightGeolocationWarningText}"
+                "[[geolocationWarningText_]]"
             on-link-clicked="openGeolocationDialog_">
         </settings-privacy-hub-geolocation-warning-text>
       </template>

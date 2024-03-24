@@ -27,15 +27,15 @@ import org.mockito.junit.MockitoRule;
 import org.robolectric.RuntimeEnvironment;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.base.test.util.Features;
+import org.chromium.base.test.util.Features.DisableFeatures;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.preferences.Pref;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
 import org.chromium.chrome.browser.signin.services.SigninPreferencesManager;
-import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.chrome.test.util.browser.signin.AccountManagerTestRule;
 import org.chromium.components.prefs.PrefService;
 import org.chromium.components.signin.base.AccountInfo;
@@ -186,7 +186,9 @@ public class FullScreenSyncPromoTest {
         final AccountInfo accountInfo =
                 mAccountManagerTestRule.addAccount(
                         "test@gmail.com",
-                        mAccountCapabilitiesBuilder.setCanOfferExtendedSyncPromos(true).build());
+                        mAccountCapabilitiesBuilder
+                                .setCanShowHistorySyncOptInsWithoutMinorModeRestrictions(true)
+                                .build());
         when(mIdentityManagerMock.findExtendedAccountInfoByEmailAddress(accountInfo.getEmail()))
                 .thenReturn(accountInfo);
         mPrefManager.setSigninPromoLastShownVersion(40);
@@ -217,7 +219,9 @@ public class FullScreenSyncPromoTest {
         final AccountInfo account1 =
                 mAccountManagerTestRule.addAccount(
                         "test1@gmail.com",
-                        mAccountCapabilitiesBuilder.setCanOfferExtendedSyncPromos(true).build());
+                        mAccountCapabilitiesBuilder
+                                .setCanShowHistorySyncOptInsWithoutMinorModeRestrictions(true)
+                                .build());
         when(mIdentityManagerMock.findExtendedAccountInfoByEmailAddress(account1.getEmail()))
                 .thenReturn(account1);
         mAccountManagerTestRule.addAccount("test2@gmail.com");
@@ -268,7 +272,9 @@ public class FullScreenSyncPromoTest {
     public void promoHiddenWhenDefaultAccountCanNotOfferExtendedSyncPromos() {
         mAccountManagerTestRule.addAccount(
                 "test1@gmail.com",
-                mAccountCapabilitiesBuilder.setCanOfferExtendedSyncPromos(false).build());
+                mAccountCapabilitiesBuilder
+                        .setCanShowHistorySyncOptInsWithoutMinorModeRestrictions(false)
+                        .build());
         mAccountManagerTestRule.addAccount("test2@gmail.com");
         mPrefManager.setSigninPromoLastShownVersion(38);
 
@@ -284,11 +290,15 @@ public class FullScreenSyncPromoTest {
         final AccountInfo account1 =
                 mAccountManagerTestRule.addAccount(
                         "test1@gmail.com",
-                        mAccountCapabilitiesBuilder.setCanOfferExtendedSyncPromos(true).build());
+                        mAccountCapabilitiesBuilder
+                                .setCanShowHistorySyncOptInsWithoutMinorModeRestrictions(true)
+                                .build());
         final AccountInfo account2 =
                 mAccountManagerTestRule.addAccount(
                         "test2@gmail.com",
-                        mAccountCapabilitiesBuilder.setCanOfferExtendedSyncPromos(false).build());
+                        mAccountCapabilitiesBuilder
+                                .setCanShowHistorySyncOptInsWithoutMinorModeRestrictions(false)
+                                .build());
         when(mIdentityManagerMock.findExtendedAccountInfoByEmailAddress(eq(account1.getEmail())))
                 .thenReturn(account1);
         when(mIdentityManagerMock.findExtendedAccountInfoByEmailAddress(eq(account2.getEmail())))

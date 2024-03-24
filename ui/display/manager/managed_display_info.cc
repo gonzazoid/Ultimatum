@@ -360,7 +360,7 @@ ManagedDisplayInfo::ManagedDisplayInfo()
       clear_overscan_insets_(false),
       bits_per_channel_(0),
       variable_refresh_rate_state_(kVrrNotCapable),
-      vsync_rate_min_(absl::nullopt) {}
+      vsync_rate_min_(std::nullopt) {}
 
 ManagedDisplayInfo::ManagedDisplayInfo(int64_t id,
                                        const std::string& name,
@@ -383,7 +383,7 @@ ManagedDisplayInfo::ManagedDisplayInfo(int64_t id,
       clear_overscan_insets_(false),
       bits_per_channel_(0),
       variable_refresh_rate_state_(kVrrNotCapable),
-      vsync_rate_min_(absl::nullopt) {}
+      vsync_rate_min_(std::nullopt) {}
 
 ManagedDisplayInfo::ManagedDisplayInfo(const ManagedDisplayInfo& other) =
     default;
@@ -431,6 +431,8 @@ void ManagedDisplayInfo::Copy(const ManagedDisplayInfo& native_info) {
 
   active_rotation_source_ = native_info.active_rotation_source_;
   touch_support_ = native_info.touch_support_;
+  connection_type_ = native_info.connection_type_;
+  physical_size_ = native_info.physical_size_;
   device_scale_factor_ = native_info.device_scale_factor_;
   DCHECK(!native_info.bounds_in_native_.IsEmpty());
   bounds_in_native_ = native_info.bounds_in_native_;

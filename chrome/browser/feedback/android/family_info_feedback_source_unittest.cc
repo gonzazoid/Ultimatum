@@ -27,7 +27,7 @@
 #include "components/supervised_user/core/browser/proto_fetcher.h"
 #include "components/supervised_user/core/browser/supervised_user_service.h"
 #include "components/supervised_user/core/browser/supervised_user_url_filter.h"
-#include "components/supervised_user/core/common/supervised_user_utils.h"
+#include "components/supervised_user/core/browser/supervised_user_utils.h"
 #include "content/public/test/browser_task_environment.h"
 #include "google_apis/gaia/google_service_auth_error.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -160,7 +160,8 @@ TEST_P(FamilyInfoFeedbackSourceForChildFilterBehaviorTest,
       EXPECT_EQ("allow_certain_sites", expected_feedback_value);
       break;
     case (supervised_user::FilteringBehavior::kAllow):
-      EXPECT_EQ("allow_all_sites", expected_feedback_value);
+      // Safe sites is enabled by default.
+      EXPECT_EQ("block_mature_sites", expected_feedback_value);
       break;
     default:
       // Remaining combinations are not tested.

@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {CrButtonElement} from 'chrome://resources/ash/common/cr_elements/cr_button/cr_button.js';
 import {isRTL} from 'chrome://resources/ash/common/util.js';
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
 
 import type {VolumeManager} from '../background/js/volume_manager.js';
 import {maybeShowTooltip} from '../common/js/dom_utils.js';
@@ -895,15 +895,18 @@ export class DirectoryTreeContainer {
       element: XfTreeItem, isRoot: boolean, fileData: FileData|null,
       androidAppData: AndroidApp|null) {
     if (androidAppData) {
-      chrome.fileManagerPrivate.selectAndroidPickerApp(androidAppData, () => {
-        if (chrome.runtime.lastError) {
-          console.error(
-              'selectAndroidPickerApp error: ',
-              chrome.runtime.lastError.message);
-        } else {
-          window.close();
-        }
-      });
+      // Exclude "icon" filed before sending it to the API.
+      const {icon: _, ...androidAppDataForApi} = androidAppData;
+      chrome.fileManagerPrivate.selectAndroidPickerApp(
+          androidAppDataForApi, () => {
+            if (chrome.runtime.lastError) {
+              console.error(
+                  'selectAndroidPickerApp error: ',
+                  chrome.runtime.lastError.message);
+            } else {
+              window.close();
+            }
+          });
       return;
     }
 
@@ -1202,15 +1205,19 @@ export class DirectoryTreeContainer {
     const state = this.store_.getState();
     const {search, currentDirectory} = state;
     const isSearchActive = search?.status !== undefined && !!(search?.query);
-    let isCurrentDIrectoryInsideDrive = false;
+    let isCurrentDirectoryInsideDrive = false;
     if (currentDirectory?.key) {
-      const currentDirectoryEntry = getFileData(state, currentDirectory.key)!;
-      isCurrentDIrectoryInsideDrive = isEntryInsideDrive(currentDirectoryEntry);
+      const currentDirectoryEntry = getFileData(state, currentDirectory.key);
+      // The current directory might not exist if it unmounts.
+      if (currentDirectoryEntry) {
+        isCurrentDirectoryInsideDrive =
+            isEntryInsideDrive(currentDirectoryEntry);
+      }
     }
     const isSearchInCurrentFolder =
         // When searching in Drive, the search location option will only include
         // ROOT_FOLDER ("Google Drive"), not include THIS_FOLDER.
-        (isCurrentDIrectoryInsideDrive &&
+        (isCurrentDirectoryInsideDrive &&
          search?.options?.location === SearchLocation.ROOT_FOLDER) ||
         search?.options?.location === SearchLocation.THIS_FOLDER;
     return isSearchActive && !isSearchInCurrentFolder;

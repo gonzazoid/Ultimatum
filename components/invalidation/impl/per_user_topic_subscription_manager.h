@@ -7,6 +7,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
@@ -20,7 +21,6 @@
 #include "components/invalidation/public/invalidation_util.h"
 #include "components/invalidation/public/invalidator_state.h"
 #include "net/base/backoff_entry.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefRegistrySimple;
 class PrefService;
@@ -39,12 +39,16 @@ namespace invalidation {
 // topics.
 class INVALIDATION_EXPORT PerUserTopicSubscriptionManager {
  public:
+  using RequestType = PerUserTopicSubscriptionRequest::RequestType;
   class Observer {
    public:
     virtual void OnSubscriptionChannelStateChanged(
         SubscriptionChannelState state) = 0;
-    virtual void OnSubscriptionRequestStarted(Topic topic) = 0;
-    virtual void OnSubscriptionRequestFinished(Topic topic, Status code) = 0;
+    virtual void OnSubscriptionRequestStarted(Topic topic,
+                                              RequestType request_type) = 0;
+    virtual void OnSubscriptionRequestFinished(Topic topic,
+                                               RequestType request_type,
+                                               Status code) = 0;
   };
 
   PerUserTopicSubscriptionManager(
@@ -95,7 +99,7 @@ class INVALIDATION_EXPORT PerUserTopicSubscriptionManager {
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);
 
-  virtual absl::optional<Topic> LookupSubscribedPublicTopicByPrivateTopic(
+  virtual std::optional<Topic> LookupSubscribedPublicTopicByPrivateTopic(
       const std::string& private_topic) const;
 
   TopicSet GetSubscribedTopicsForTest() const;
@@ -103,6 +107,15 @@ class INVALIDATION_EXPORT PerUserTopicSubscriptionManager {
   bool HaveAllRequestsFinishedForTest() const {
     return pending_subscriptions_.empty();
   }
+
+ protected:
+  // These are protected so that the mock can access them.
+  void NotifySubscriptionChannelStateChange(
+      SubscriptionChannelState invalidator_state);
+  void NotifySubscriptionRequestStarted(Topic topic, RequestType request_type);
+  void NotifySubscriptionRequestFinished(Topic topic,
+                                         RequestType request_type,
+                                         Status code);
 
  private:
   struct SubscriptionEntry;
@@ -135,11 +148,6 @@ class INVALIDATION_EXPORT PerUserTopicSubscriptionManager {
 
   void DropAllSavedSubscriptionsOnTokenChange();
   TokenStateOnSubscriptionRequest DropAllSavedSubscriptionsOnTokenChangeImpl();
-
-  void NotifySubscriptionChannelStateChange(
-      SubscriptionChannelState invalidator_state);
-  void NotifySubscriptionRequestStarted(Topic topic);
-  void NotifySubscriptionRequestFinished(Topic topic, Status code);
 
   const raw_ptr<PrefService> pref_service_;
   const raw_ptr<IdentityProvider> identity_provider_;

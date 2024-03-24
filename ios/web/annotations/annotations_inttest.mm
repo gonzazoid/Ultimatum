@@ -6,6 +6,7 @@
 #import <WebKit/WebKit.h>
 
 #import "base/memory/ptr_util.h"
+#import "base/memory/raw_ptr.h"
 #import "base/notreached.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
@@ -71,10 +72,13 @@ class TestAnnotationTextObserver : public AnnotationsTextObserver {
   }
 
   void OnDecorated(WebState* web_state,
+                   int annotations,
                    int successes,
-                   int annotations) override {
-    successes_ = successes;
+                   int failures,
+                   const base::Value::List& cancelled) override {
     annotations_ = annotations;
+    successes_ = successes;
+    failures_ = failures;
   }
 
   void OnClick(WebState* web_state,
@@ -87,6 +91,7 @@ class TestAnnotationTextObserver : public AnnotationsTextObserver {
 
   const std::string& extracted_text() const { return extracted_text_; }
   int successes() const { return successes_; }
+  int failures() const { return failures_; }
   int annotations() const { return annotations_; }
   int clicks() const { return clicks_; }
   int seq_id() const { return seq_id_; }
@@ -96,7 +101,7 @@ class TestAnnotationTextObserver : public AnnotationsTextObserver {
 
  private:
   std::string extracted_text_, click_data_;
-  int successes_, annotations_, clicks_, seq_id_;
+  int successes_, failures_, annotations_, clicks_, seq_id_;
   base::Value::Dict metadata_;
 };
 
@@ -118,6 +123,7 @@ class AnnotationTextManagerTest : public web::WebTestWithWebState {
     AnnotationsTextManager::CreateForWebState(web_state());
     auto* manager = AnnotationsTextManager::FromWebState(web_state());
     manager->AddObserver(&observer_);
+    manager->SetSupportedTypes(NSTextCheckingAllTypes);
 
     WKWebViewConfigurationProvider& configuration_provider =
         WKWebViewConfigurationProvider::FromBrowserState(GetBrowserState());
@@ -278,7 +284,7 @@ class AnnotationTextManagerTest : public web::WebTestWithWebState {
   TestAnnotationTextObserver* observer() { return &observer_; }
 
   base::test::ScopedFeatureList feature_;
-  JavaScriptContentWorld* content_world_;
+  raw_ptr<JavaScriptContentWorld> content_world_;
   TestAnnotationTextObserver observer_;
   AnnotationsTestJavaScriptFeature js_test_feature_;
 };
@@ -296,6 +302,25 @@ TEST_F(AnnotationTextManagerTest, ExtractText) {
             "\nCastro Street, Mountain View, CA"
             "\nEnjoy",
             observer()->extracted_text());
+}
+
+// Tests no page text extraction if there is no supported type.
+TEST_F(AnnotationTextManagerTest, ExtractNoText) {
+  auto* manager = AnnotationsTextManager::FromWebState(web_state());
+  manager->SetSupportedTypes(0);
+
+  int seq_id = observer()->seq_id();
+
+  ASSERT_TRUE(LoadHtml("<html><body>"
+                       "<p>You'll find it on</p>"
+                       "<p>Castro Street, <span>Mountain View</span>, CA</p>"
+                       "<p>Enjoy</p>"
+                       "</body></html>"));
+  ASSERT_TRUE(WaitForWebFramesCount(1));
+  EXPECT_FALSE(WaitUntilConditionOrTimeout(kWaitForActionTimeout, ^{
+    return observer()->seq_id() > seq_id;
+  }));
+  EXPECT_EQ("", observer()->extracted_text());
 }
 
 TEST_F(AnnotationTextManagerTest, CheckMetadata) {

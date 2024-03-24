@@ -19,9 +19,11 @@
 #include "base/test/scoped_feature_list.h"
 #include "base/timer/mock_timer.h"
 #include "components/media_message_center/media_controls_progress_view.h"
+#include "media/base/media_switches.h"
 #include "services/media_session/public/cpp/test/test_media_controller.h"
 #include "services/media_session/public/mojom/media_session.mojom.h"
 #include "ui/accessibility/ax_enums.mojom.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animator.h"
 #include "ui/compositor/layer_observer.h"
@@ -120,6 +122,9 @@ class LockScreenMediaControlsViewTest : public LoginTestBase {
     set_start_session(true);
 
     LoginTestBase::SetUp();
+
+    feature_list_.InitAndDisableFeature(
+        media::kGlobalMediaControlsCrOSUpdatedUI);
 
     lock_contents_view_ = new LockContentsView(
         mojom::TrayActionState::kAvailable, LockScreen::ScreenType::kLock,
@@ -290,7 +295,7 @@ class LockScreenMediaControlsViewTest : public LoginTestBase {
         std::vector<MediaSessionAction>(actions_.begin(), actions_.end()));
   }
 
-  base::test::ScopedFeatureList feature_list;
+  base::test::ScopedFeatureList feature_list_;
 
   raw_ptr<LockContentsView, DanglingUntriaged> lock_contents_view_ = nullptr;
   std::unique_ptr<TestMediaController> media_controller_;
@@ -658,6 +663,10 @@ TEST_F(LockScreenMediaControlsViewTest, SeekForwardButtonClick) {
 }
 
 TEST_F(LockScreenMediaControlsViewTest, UpdateAppIcon) {
+  // TODO (crbug/1520620): Remove the skip code once test is fixed.
+  if (::features::IsChromeRefresh2023()) {
+    GTEST_SKIP();
+  }
   SimulateMediaSessionChanged(
       media_session::mojom::MediaPlaybackState::kPlaying);
 

@@ -98,7 +98,7 @@ class ZstdSourceStream : public FilterSourceStream {
   void* customMalloc(size_t size) {
     void* address = malloc(size);
     CHECK(address);
-    malloc_sizes_.insert(std::make_pair(address, size));
+    malloc_sizes_.emplace(address, size);
     total_allocated_ += size;
     if (total_allocated_ > max_allocated_) {
       max_allocated_ = total_allocated_;
@@ -143,6 +143,10 @@ class ZstdSourceStream : public FilterSourceStream {
 
     if (ZSTD_isError(result)) {
       decoding_status_ = ZstdDecodingStatus::kDecodingError;
+      if (ZSTD_getErrorCode(result) ==
+          ZSTD_error_frameParameter_windowTooLarge) {
+        return base::unexpected(ERR_ZSTD_WINDOW_SIZE_TOO_BIG);
+      }
       return base::unexpected(ERR_CONTENT_DECODING_FAILED);
     } else if (input.pos < input.size) {
       // Given a valid frame, zstd won't consume the last byte of the frame

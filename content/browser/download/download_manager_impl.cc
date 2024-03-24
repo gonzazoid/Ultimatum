@@ -34,6 +34,7 @@
 #include "components/download/public/common/download_item_factory.h"
 #include "components/download/public/common/download_item_impl.h"
 #include "components/download/public/common/download_stats.h"
+#include "components/download/public/common/download_target_info.h"
 #include "components/download/public/common/download_task_runner.h"
 #include "components/download/public/common/download_url_parameters.h"
 #include "components/download/public/common/download_utils.h"
@@ -71,7 +72,6 @@
 #include "content/public/common/content_client.h"
 #include "content/public/common/url_constants.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
-#include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "net/base/elements_upload_data_stream.h"
 #include "net/base/load_flags.h"
@@ -82,6 +82,7 @@
 #include "services/network/public/cpp/features.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
+#include "services/network/public/cpp/url_loader_factory_builder.h"
 #include "services/network/public/cpp/url_util.h"
 #include "services/network/public/cpp/wrapper_shared_url_loader_factory.h"
 #include "third_party/blink/public/common/loader/referrer_utils.h"
@@ -215,48 +216,31 @@ class DownloadItemFactoryImpl : public download::DownloadItemFactory {
 std::unique_ptr<network::PendingSharedURLLoaderFactory>
 CreatePendingSharedURLLoaderFactory(StoragePartitionImpl* storage_partition,
                                     RenderFrameHost* rfh) {
-  mojo::PendingRemote<network::mojom::URLLoaderFactory> proxy_factory_remote;
-  mojo::PendingReceiver<network::mojom::URLLoaderFactory>
-      proxy_factory_receiver;
+  network::URLLoaderFactoryBuilder factory_builder;
+
   if (rfh) {
-    bool should_proxy = false;
-
-    // Create an intermediate pipe that can be used to proxy the download's
-    // URLLoaderFactory.
-    mojo::PendingRemote<network::mojom::URLLoaderFactory>
-        maybe_proxy_factory_remote;
-    mojo::PendingReceiver<network::mojom::URLLoaderFactory>
-        maybe_proxy_factory_receiver =
-            maybe_proxy_factory_remote.InitWithNewPipeAndPassReceiver();
-
-    // Allow DevTools to potentially inject itself into the proxy pipe.
-    should_proxy = devtools_instrumentation::WillCreateURLLoaderFactory(
-        static_cast<RenderFrameHostImpl*>(rfh), /*is_navigation=*/true,
-        /*is_download=*/true, &maybe_proxy_factory_receiver,
-        nullptr /* factory_override */);
+    // Allow DevTools to potentially inject itself into `factory_builder`.
+    devtools_instrumentation::WillCreateURLLoaderFactoryParams::ForFrame(
+        static_cast<RenderFrameHostImpl*>(rfh))
+        .Run(/*is_navigation=*/true,
+             /*is_download=*/true, factory_builder,
+             nullptr /* factory_override */);
 
     // Also allow the Content embedder to inject itself if it wants to.
-    should_proxy |= GetContentClient()->browser()->WillCreateURLLoaderFactory(
+    GetContentClient()->browser()->WillCreateURLLoaderFactory(
         rfh->GetSiteInstance()->GetBrowserContext(), rfh,
         rfh->GetProcess()->GetID(),
         ContentBrowserClient::URLLoaderFactoryType::kDownload, url::Origin(),
         std::nullopt /* navigation_id */, ukm::kInvalidSourceIdObj,
-        &maybe_proxy_factory_receiver, nullptr /* header_client */,
+        factory_builder, nullptr /* header_client */,
         nullptr /* bypass_redirect_checks */, nullptr /* disable_secure_dns */,
         nullptr /* factory_override */,
         nullptr /* navigation_response_task_runner */);
-
-    // If anyone above indicated that they care about proxying, pass the
-    // intermediate pipe along to the NetworkDownloadPendingURLLoaderFactory.
-    if (should_proxy) {
-      proxy_factory_remote = std::move(maybe_proxy_factory_remote);
-      proxy_factory_receiver = std::move(maybe_proxy_factory_receiver);
-    }
   }
 
   return std::make_unique<NetworkDownloadPendingURLLoaderFactory>(
       storage_partition->url_loader_factory_getter(),
-      std::move(proxy_factory_remote), std::move(proxy_factory_receiver));
+      std::move(factory_builder));
 }
 
 void RecordDownloadOpenerType(RenderFrameHost* current,
@@ -369,10 +353,10 @@ void DownloadManagerImpl::GetNextId(GetNextIdCallback callback) {
   if (!is_history_download_id_retrieved_ && id_callbacks_.size() == 1u) {
     if (delegate_) {
       delegate_->GetNextId(
-          base::BindOnce(&DownloadManagerImpl::OnHistoryNextIdRetrived,
+          base::BindOnce(&DownloadManagerImpl::OnHistoryNextIdRetrieved,
                          weak_factory_.GetWeakPtr()));
     } else {
-      OnHistoryNextIdRetrived(download::DownloadItem::kInvalidId);
+      OnHistoryNextIdRetrieved(download::DownloadItem::kInvalidId);
     }
   }
 }
@@ -462,7 +446,7 @@ DownloadManagerImpl::SerializedEmbedderDownloadDataToStoragePartitionConfig(
   return config;
 }
 
-void DownloadManagerImpl::OnHistoryNextIdRetrived(uint32_t next_id) {
+void DownloadManagerImpl::OnHistoryNextIdRetrieved(uint32_t next_id) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   is_history_download_id_retrieved_ = true;
   if (next_id == download::DownloadItem::kInvalidId)
@@ -479,21 +463,15 @@ StoragePartitionConfig DownloadManagerImpl::GetStoragePartitionConfigForSiteUrl(
 
 void DownloadManagerImpl::DetermineDownloadTarget(
     download::DownloadItemImpl* item,
-    DownloadTargetCallback callback) {
-  // Note that this next call relies on
-  // DownloadItemImplDelegate::DownloadTargetCallback and
-  // DownloadManagerDelegate::DownloadTargetCallback having the same
-  // type.  If the types ever diverge, gasket code will need to
-  // be written here.
+    download::DownloadTargetCallback callback) {
   if (!delegate_ || !delegate_->DetermineDownloadTarget(item, &callback)) {
     base::FilePath target_path = item->GetForcedFilePath();
     // TODO(asanka): Determine a useful path if |target_path| is empty.
-    std::move(callback).Run(
-        target_path, download::DownloadItem::TARGET_DISPOSITION_OVERWRITE,
-        download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
-        download::DownloadItem::InsecureDownloadStatus::UNKNOWN, target_path,
-        base::FilePath(), std::string() /*mime_type*/,
-        download::DOWNLOAD_INTERRUPT_REASON_NONE);
+    download::DownloadTargetInfo target_info;
+    target_info.target_path = target_path;
+    target_info.intermediate_path = target_path;
+
+    std::move(callback).Run(std::move(target_info));
   }
 }
 

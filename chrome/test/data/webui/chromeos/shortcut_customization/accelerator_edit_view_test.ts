@@ -13,12 +13,12 @@ import {strictQuery} from 'chrome://resources/ash/common/typescript_utils/strict
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {AcceleratorEditViewElement} from 'chrome://shortcut-customization/js/accelerator_edit_view.js';
 import {AcceleratorLookupManager} from 'chrome://shortcut-customization/js/accelerator_lookup_manager.js';
-import {fakeAcceleratorConfig, fakeLayoutInfo} from 'chrome://shortcut-customization/js/fake_data.js';
+import {fakeAcceleratorConfig, fakeDefaultAccelerators, fakeLayoutInfo} from 'chrome://shortcut-customization/js/fake_data.js';
 import {FakeShortcutProvider} from 'chrome://shortcut-customization/js/fake_shortcut_provider.js';
 import {setShortcutProviderForTesting} from 'chrome://shortcut-customization/js/mojo_interface_provider.js';
 import {setShortcutInputProviderForTesting} from 'chrome://shortcut-customization/js/shortcut_input_mojo_interface_provider.js';
 import {AcceleratorConfigResult, AcceleratorSource, Modifier} from 'chrome://shortcut-customization/js/shortcut_types.js';
-import {AcceleratorResultData, Subactions} from 'chrome://shortcut-customization/mojom-webui/ash/webui/shortcut_customization_ui/mojom/shortcut_customization.mojom-webui.js';
+import {AcceleratorResultData, Subactions} from 'chrome://shortcut-customization/mojom-webui/shortcut_customization.mojom-webui.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 import {isVisible} from 'chrome://webui-test/test_util.js';
@@ -34,6 +34,7 @@ suite('acceleratorEditViewTest', function() {
 
   setup(() => {
     provider = new FakeShortcutProvider();
+    provider.setFakeGetDefaultAcceleratorsForId(fakeDefaultAccelerators);
     setShortcutProviderForTesting(provider);
     setShortcutInputProviderForTesting(shortcutInputProvider);
 
@@ -338,7 +339,9 @@ suite('acceleratorEditViewTest', function() {
         'Press 1-4 modifiers and 1 other key on your keyboard. To exit ' +
         'editing mode, press alt + esc.';
     const statusMessageElement = strictQuery(
-        '#acceleratorInfoText', editViewElement!.shadowRoot, HTMLDivElement);
+        '#container',
+        editViewElement!.shadowRoot!.querySelector('#status')!.shadowRoot,
+        HTMLDivElement);
     assertEquals(expectedHintMessage, statusMessageElement.textContent!.trim());
   });
 

@@ -286,6 +286,7 @@ class FakeKeyboardPrefHandler : public KeyboardPrefHandler {
   void InitializeWithDefaultKeyboardSettings(
       const mojom::KeyboardPolicies& keyboard_policies,
       mojom::Keyboard* keyboard) override {
+    keyboard->settings = CreateNewKeyboardSettings();
     num_initialize_default_keyboard_settings_calls_++;
   }
 
@@ -387,6 +388,14 @@ class FakeInputDeviceSettingsControllerObserver
     num_pen_buttons_pressed_++;
   }
 
+  void OnCustomizableMouseObservingStarted(const mojom::Mouse& mouse) override {
+    num_mouse_observing_started_++;
+  }
+
+  void OnCustomizableMouseObservingStopped() override {
+    num_mouse_observing_stopped_++;
+  }
+
   uint32_t num_keyboards_connected() { return num_keyboards_connected_; }
   uint32_t num_graphics_tablets_connected() {
     return num_graphics_tablets_connected_;
@@ -407,6 +416,12 @@ class FakeInputDeviceSettingsControllerObserver
   uint32_t num_mouse_buttons_pressed() { return num_mouse_buttons_pressed_; }
   uint32_t num_pen_buttons_pressed() { return num_pen_buttons_pressed_; }
   uint32_t num_tablet_buttons_pressed() { return num_tablet_buttons_pressed_; }
+  uint32_t num_mouse_observing_started() {
+    return num_mouse_observing_started_;
+  }
+  uint32_t num_mouse_observing_stopped() {
+    return num_mouse_observing_stopped_;
+  }
 
  private:
   uint32_t num_keyboards_connected_ = 0;
@@ -419,6 +434,8 @@ class FakeInputDeviceSettingsControllerObserver
   uint32_t num_mouse_buttons_pressed_ = 0;
   uint32_t num_tablet_buttons_pressed_ = 0;
   uint32_t num_pen_buttons_pressed_ = 0;
+  uint32_t num_mouse_observing_started_ = 0;
+  uint32_t num_mouse_observing_stopped_ = 0;
 };
 
 class InputDeviceSettingsControllerTest : public NoSessionAshTestBase {
@@ -472,22 +489,27 @@ class InputDeviceSettingsControllerTest : public NoSessionAshTestBase {
     auto user_2_prefs = std::make_unique<TestingPrefServiceSimple>();
     RegisterUserProfilePrefs(user_2_prefs->registry(), /*country=*/"",
                              /*for_test=*/true);
-    session_controller->AddUserSession(kUserEmail1,
-                                       user_manager::USER_TYPE_REGULAR,
-                                       /*provide_pref_service=*/false);
-    session_controller->SetUserPrefService(account_id_1,
-                                           std::move(user_1_prefs));
-    session_controller->AddUserSession(kUserEmail2,
-                                       user_manager::USER_TYPE_REGULAR,
-                                       /*provide_pref_service=*/false);
-    session_controller->SetUserPrefService(account_id_2,
-                                           std::move(user_2_prefs));
-    session_controller->AddUserSession(kUserEmail3,
-                                       user_manager::USER_TYPE_REGULAR,
-                                       /*provide_pref_service=*/false);
 
-    session_controller->SwitchActiveUser(account_id_1);
-    session_controller->SetSessionState(session_manager::SessionState::ACTIVE);
+    if (should_sign_in_) {
+      session_controller->AddUserSession(kUserEmail1,
+                                         user_manager::UserType::kRegular,
+                                         /*provide_pref_service=*/false);
+      session_controller->SetUserPrefService(account_id_1,
+                                             std::move(user_1_prefs));
+      session_controller->AddUserSession(kUserEmail2,
+                                         user_manager::UserType::kRegular,
+                                         /*provide_pref_service=*/false);
+      session_controller->SetUserPrefService(account_id_2,
+                                             std::move(user_2_prefs));
+      session_controller->AddUserSession(kUserEmail3,
+                                         user_manager::UserType::kRegular,
+                                         /*provide_pref_service=*/false);
+
+      session_controller->SwitchActiveUser(account_id_1);
+      session_controller->SetSessionState(
+          session_manager::SessionState::ACTIVE);
+    }
+
     // Reset the `num_keyboard_settings_initialized_` to account for the
     // `InitializeKeyboardSettings` call made after test setup where we
     // simualate
@@ -525,6 +547,11 @@ class InputDeviceSettingsControllerTest : public NoSessionAshTestBase {
       scoped_resetter_;
   raw_ptr<FakeKeyboardPrefHandler, DanglingUntriaged> keyboard_pref_handler_ =
       nullptr;
+
+  // Used by other instances of the InputDeviceSettingsControllerTest to control
+  // whether or not to sign in within the SetUp() function. Configured to sign
+  // in by default.
+  bool should_sign_in_ = true;
 };
 
 TEST_F(InputDeviceSettingsControllerTest, KeyboardAddingOne) {
@@ -996,7 +1023,7 @@ TEST_F(InputDeviceSettingsControllerTest, RecordSetMouseSettingsValidMetric) {
       /*reverse_scrolling=*/kDefaultReverseScrolling,
       /*acceleration_enabled=*/kDefaultAccelerationEnabled,
       /*scroll_sensitivity=*/kDefaultSensitivity,
-      /*scroll_acceleration=*/kDefaultScrollAcceleration,
+      /*scroll_acceleration=*/kDefaultScrollAccelerationEnabled,
       /*button_remappings=*/mojo::Clone(button_remappings));
 
   // Set mouse with valid id and invalid settings.
@@ -1314,10 +1341,12 @@ TEST_F(InputDeviceSettingsControllerTest, ObservingButtons) {
   controller_->StartObservingButtons(kSampleMouseUsb.id);
   ASSERT_EQ(1u, rewriter->mice_to_observe().size());
   EXPECT_TRUE(rewriter->mice_to_observe().contains(kSampleMouseUsb.id));
+  EXPECT_EQ(1u, observer_->num_mouse_observing_started());
 
   controller_->StopObservingButtons();
   ASSERT_EQ(0u, rewriter->mice_to_observe().size());
   ASSERT_EQ(0u, rewriter->graphics_tablets_to_observe().size());
+  EXPECT_EQ(1u, observer_->num_mouse_observing_stopped());
 
   controller_->StartObservingButtons(kSampleGraphicsTablet.id);
   ASSERT_EQ(1u, rewriter->graphics_tablets_to_observe().size());
@@ -1539,6 +1568,61 @@ TEST_F(InputDeviceSettingsControllerTest,
   pref_service->SetDict(prefs::kPointingStickInternalSettings,
                         updated_dict.Clone());
   EXPECT_EQ(2u, observer_->num_pointing_stick_settings_updated());
+}
+
+class InputDeviceSettingsControllerNoSignInTest
+    : public InputDeviceSettingsControllerTest {
+ public:
+  InputDeviceSettingsControllerNoSignInTest() { should_sign_in_ = false; }
+};
+
+TEST_F(InputDeviceSettingsControllerNoSignInTest,
+       NoCrashOnPodSelectionRaceConditionMouse) {
+  ui::DeviceDataManagerTestApi().SetMouseDevices({kSampleMouseUsb});
+
+  auto* mouse = controller_->GetMouse(kSampleMouseUsb.id);
+  ASSERT_TRUE(mouse);
+  ASSERT_TRUE(mouse->settings);
+}
+
+TEST_F(InputDeviceSettingsControllerNoSignInTest,
+       NoCrashOnPodSelectionRaceConditionKeyboard) {
+  ui::DeviceDataManagerTestApi().SetKeyboardDevices({kSampleKeyboardInternal});
+
+  auto* keyboard = controller_->GetKeyboard(kSampleKeyboardInternal.id);
+  ASSERT_TRUE(keyboard);
+  ASSERT_TRUE(keyboard->settings);
+}
+
+TEST_F(InputDeviceSettingsControllerNoSignInTest,
+       NoCrashOnPodSelectionRaceConditionTouchpad) {
+  ui::DeviceDataManagerTestApi().SetTouchpadDevices({kSampleTouchpadInternal});
+
+  auto* touchpad = controller_->GetTouchpad(kSampleTouchpadInternal.id);
+  ASSERT_TRUE(touchpad);
+  ASSERT_TRUE(touchpad->settings);
+}
+
+TEST_F(InputDeviceSettingsControllerNoSignInTest,
+       NoCrashOnPodSelectionRaceConditionPointingStick) {
+  ui::DeviceDataManagerTestApi().SetPointingStickDevices(
+      {kSamplePointingStickExternal});
+
+  auto* pointing_stick =
+      controller_->GetPointingStick(kSamplePointingStickExternal.id);
+  ASSERT_TRUE(pointing_stick);
+  ASSERT_TRUE(pointing_stick->settings);
+}
+
+TEST_F(InputDeviceSettingsControllerNoSignInTest,
+       NoCrashOnPodSelectionRaceConditionGraphicsTablet) {
+  ui::DeviceDataManagerTestApi().SetGraphicsTabletDevices(
+      {kSampleGraphicsTablet});
+
+  auto* graphics_tablet =
+      controller_->GetGraphicsTablet(kSampleGraphicsTablet.id);
+  ASSERT_TRUE(graphics_tablet);
+  ASSERT_TRUE(graphics_tablet->settings);
 }
 
 }  // namespace ash

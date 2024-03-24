@@ -111,14 +111,13 @@ class IdleTaskControllerFrameScheduler : public FrameScheduler {
   void SetFrameVisible(bool) override {}
   bool IsFrameVisible() const override { return true; }
   void SetVisibleAreaLarge(bool) override {}
-  bool IsVisibleAreaLarge() const override { return false; }
   void SetHadUserActivation(bool) override {}
-  bool HadUserActivation() const override { return false; }
   bool IsPageVisible() const override { return true; }
   void SetPaused(bool) override {}
   void SetShouldReportPostedTasksWhenDisabled(bool) override {}
   void SetCrossOriginToNearestMainFrame(bool) override {}
   bool IsCrossOriginToNearestMainFrame() const override { return false; }
+  void SetAgentClusterId(const base::UnguessableToken&) override {}
   void SetIsAdFrame(bool is_ad_frame) override {}
   bool IsAdFrame() const override { return false; }
   bool IsInEmbeddedFrameTree() const override { return false; }

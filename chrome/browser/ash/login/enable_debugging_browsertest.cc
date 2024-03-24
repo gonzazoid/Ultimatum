@@ -217,7 +217,9 @@ class EnableDebuggingTestBase : public OobeBaseTest {
     WaitForOobeUI();
     test::OobeJS().ExpectHidden(kDebuggingScreenId);
     InvokeEnableDebuggingScreen();
-    test::OobeJS().ExpectVisiblePath(kRemoveProtectionDialog);
+    test::OobeJS()
+        .CreateVisibilityWaiter(true, kRemoveProtectionDialog)
+        ->Wait();
     test::OobeJS().ExpectVisiblePath(kRemoveProtectionButton);
     test::OobeJS().ExpectVisiblePath(kHelpLink);
     debug_daemon_client_->WaitUntilCalled();
@@ -230,7 +232,7 @@ class EnableDebuggingTestBase : public OobeBaseTest {
     WaitForOobeUI();
     test::OobeJS().ExpectHidden(kDebuggingScreenId);
     InvokeEnableDebuggingScreen();
-    test::OobeJS().ExpectVisiblePath(kSetupDialog);
+    test::OobeJS().CreateVisibilityWaiter(true, kSetupDialog)->Wait();
     debug_daemon_client_->WaitUntilCalled();
     base::RunLoop().RunUntilIdle();
 
@@ -302,14 +304,7 @@ IN_PROC_BROWSER_TEST_F(EnableDebuggingDevTest, ShowSetup) {
 
 // Show setup screen. Type in matching passwords.
 // Click on [Enable] button. Wait until done screen is shown.
-// TODO(b/311477912): enable the flaky test.
-#if BUILDFLAG(IS_CHROMEOS) && defined(ADDRESS_SANITIZER) && \
-    defined(LEAK_SANITIZER)
-#define MAYBE_SetupMatchingPasswords DISABLED_SetupMatchingPasswords
-#else
-#define MAYBE_SetupMatchingPasswords SetupMatchingPasswords
-#endif
-IN_PROC_BROWSER_TEST_F(EnableDebuggingDevTest, MAYBE_SetupMatchingPasswords) {
+IN_PROC_BROWSER_TEST_F(EnableDebuggingDevTest, SetupMatchingPasswords) {
   ShowSetupScreen();
   debug_daemon_client_->ResetWait();
   test::OobeJS().TypeIntoPath("test0000", kPasswordInput);
@@ -353,7 +348,7 @@ IN_PROC_BROWSER_TEST_F(EnableDebuggingDevTest, ShowOnTestImages) {
   WaitForOobeUI();
   test::OobeJS().ExpectHidden(kDebuggingScreenId);
   InvokeEnableDebuggingScreen();
-  test::OobeJS().ExpectVisiblePath(kRemoveProtectionDialog);
+  test::OobeJS().CreateVisibilityWaiter(true, kRemoveProtectionDialog)->Wait();
   debug_daemon_client_->WaitUntilCalled();
   base::RunLoop().RunUntilIdle();
 

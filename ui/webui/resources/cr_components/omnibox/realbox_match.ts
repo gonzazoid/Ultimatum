@@ -13,11 +13,12 @@ import {loadTimeData} from '//resources/js/load_time_data.js';
 import {sanitizeInnerHtml} from '//resources/js/parse_html_subset.js';
 import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {ACMatchClassification, Action, AutocompleteMatch, NavigationPredictor, OmniboxPopupSelection, PageHandlerInterface, SelectionLineState, SideType} from './omnibox.mojom-webui.js';
+import type {ACMatchClassification, Action, AutocompleteMatch, OmniboxPopupSelection, PageHandlerInterface} from './omnibox.mojom-webui.js';
+import {NavigationPredictor, SelectionLineState, SideType} from './omnibox.mojom-webui.js';
 import {RealboxBrowserProxy} from './realbox_browser_proxy.js';
-import {RealboxIconElement} from './realbox_icon.js';
+import type {RealboxIconElement} from './realbox_icon.js';
 import {getTemplate} from './realbox_match.html.js';
-import {decodeString16, mojoTimeTicks, sideTypeToClass} from './utils.js';
+import {decodeString16, mojoTimeTicks} from './utils.js';
 
 
 // clang-format off
@@ -146,6 +147,11 @@ export class RealboxMatchElement extends PolymerElement {
         reflectToAttribute: true,
       },
 
+      renderType: {
+        type: String,
+        reflectToAttribute: true,
+      },
+
       showCrNonInlinedHoverFill: {
         type: Boolean,
         computed: 'computeShowCrNonInlinedHoverFill_(hasAction)',
@@ -153,13 +159,6 @@ export class RealboxMatchElement extends PolymerElement {
       },
 
       sideType: Number,
-
-      /** String representation of `sideType` to use in CSS. */
-      sideTypeClass_: {
-        type: String,
-        computed: 'computeSideTypeClass_(sideType)',
-        reflectToAttribute: true,
-      },
 
       //========================================================================
       // Private properties
@@ -230,7 +229,6 @@ export class RealboxMatchElement extends PolymerElement {
   private removeButtonAriaLabel_: string;
   private removeButtonTitle_: string;
   private separatorText_: string;
-  private sideTypeClass_: string;
   private tailSuggestPrefix_: string;
 
   private pageHandler_: PageHandlerInterface;
@@ -427,14 +425,11 @@ export class RealboxMatchElement extends PolymerElement {
         loadTimeData.getBoolean('realboxCr23HoverFillShape') && this.hasAction;
   }
 
-  private computeSideTypeClass_(): string {
-    return sideTypeToClass(this.sideType);
-  }
-
   private showActionsInlined_(): boolean {
     // Always show inlined div when feature is enabled, so that it will
     // grow and push other elements like remove button to the right.
-    return this.inlinedActions && !this.showCrNonInlinedHoverFill;
+    return this.inlinedActions && !this.showCrNonInlinedHoverFill &&
+        this.sideType === SideType.kDefaultPrimary;
   }
 
   private showActionsUnderneath_(match: AutocompleteMatch): boolean {
@@ -492,18 +487,24 @@ export class RealboxMatchElement extends PolymerElement {
   }
 
   updateSelection(selection: OmniboxPopupSelection) {
+    this.$['focus-indicator'].classList.toggle(
+        'selected-within',
+        selection.state !== SelectionLineState.kNormal &&
+            selection.line === this.matchIndex);
+
     this.$.remove.classList.toggle(
         'selected',
-        selection.state === SelectionLineState.kFocusedButtonRemoveSuggestion);
+        selection.state === SelectionLineState.kFocusedButtonRemoveSuggestion &&
+            selection.line === this.matchIndex);
 
-    const actions =
-        Array.from(this.shadowRoot!.querySelectorAll('cr-realbox-action'));
-    actions.forEach((action, index) => {
-      action.classList.toggle(
-          'selected',
-          selection.state === SelectionLineState.kFocusedButtonAction &&
-              selection.actionIndex === index);
-    });
+    [...this.shadowRoot!.querySelectorAll('cr-realbox-action')].forEach(
+        (action, index) => {
+          action.classList.toggle(
+              'selected',
+              selection.state === SelectionLineState.kFocusedButtonAction &&
+                  selection.actionIndex === index &&
+                  selection.line === this.matchIndex);
+        });
   }
 }
 

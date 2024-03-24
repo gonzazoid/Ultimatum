@@ -5,7 +5,8 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_VIEW_TRANSITION_VIEW_TRANSITION_SUPPLEMENT_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_VIEW_TRANSITION_VIEW_TRANSITION_SUPPLEMENT_H_
 
-#include "third_party/blink/public/mojom/frame/frame.mojom-blink.h"
+#include "third_party/blink/public/mojom/frame/frame.mojom-blink-forward.h"
+#include "third_party/blink/public/mojom/navigation/navigation_params.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_view_transition_callback.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_view_transition_options.h"
 #include "third_party/blink/renderer/core/core_export.h"
@@ -51,6 +52,7 @@ class CORE_EXPORT ViewTransitionSupplement
   // |ViewTransitionStateCallback|.
   static void SnapshotDocumentForNavigation(
       Document&,
+      mojom::blink::PageConcealEventParamsPtr,
       ViewTransition::ViewTransitionStateCallback);
 
   // Creates a ViewTransition using cached state from the previous Document
@@ -99,15 +101,15 @@ class CORE_EXPORT ViewTransitionSupplement
       ScriptState*,
       Document&,
       V8ViewTransitionCallback* callback,
-      const absl::optional<Vector<String>>& types,
+      const std::optional<Vector<String>>& types,
       ExceptionState&);
 
-  DOMViewTransition* StartTransition(
-      Document& document,
-      V8ViewTransitionCallback* callback,
-      const absl::optional<Vector<String>>& types,
-      ExceptionState& exception_state);
+  DOMViewTransition* StartTransition(Document& document,
+                                     V8ViewTransitionCallback* callback,
+                                     const std::optional<Vector<String>>& types,
+                                     ExceptionState& exception_state);
   void StartTransition(Document& document,
+                       mojom::blink::PageConcealEventParamsPtr,
                        ViewTransition::ViewTransitionStateCallback callback);
   void StartTransition(Document& document,
                        ViewTransitionState transition_state);
@@ -118,8 +120,7 @@ class CORE_EXPORT ViewTransitionSupplement
 
   VectorOf<std::unique_ptr<ViewTransitionRequest>> pending_requests_;
 
-  mojom::blink::ViewTransitionSameOriginOptIn cross_document_opt_in_ =
-      mojom::blink::ViewTransitionSameOriginOptIn::kDisabled;
+  mojom::blink::ViewTransitionSameOriginOptIn cross_document_opt_in_;
 };
 
 }  // namespace blink

@@ -28,14 +28,14 @@ class TestResponseHolder : public mojom::StreamingResponder {
 
   // Accumulated responses so far from whoever controls the remote
   // StreamingResponder endpoint.
-  const std::vector<std::string> responses() const { return responses_; }
+  const std::vector<std::string>& responses() const { return responses_; }
 
   // Spins a RunLoop until this object observes completion of its response.
   void WaitForCompletion();
 
   // mojom::StreamingResponder:
-  void OnResponse(const std::string& text) override;
-  void OnComplete(mojom::ResponseStatus status) override;
+  void OnResponse(mojom::ResponseChunkPtr chunk) override;
+  void OnComplete(mojom::ResponseSummaryPtr summary) override;
 
  private:
   base::RunLoop run_loop_;

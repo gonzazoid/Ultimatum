@@ -132,13 +132,13 @@ bool PageNodeImpl::IsAudible() const {
   return is_audible_.value();
 }
 
-absl::optional<base::TimeDelta> PageNodeImpl::GetTimeSinceLastAudibleChange()
+std::optional<base::TimeDelta> PageNodeImpl::GetTimeSinceLastAudibleChange()
     const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (audible_change_time_.has_value()) {
     return base::TimeTicks::Now() - audible_change_time_.value();
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 bool PageNodeImpl::HasPictureInPicture() const {
@@ -222,7 +222,7 @@ const WebContentsProxy& PageNodeImpl::GetContentsProxy() const {
   return contents_proxy();
 }
 
-const absl::optional<freezing::FreezingVote>& PageNodeImpl::GetFreezingVote()
+const std::optional<freezing::FreezingVote>& PageNodeImpl::GetFreezingVote()
     const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return freezing_vote_.value();
@@ -498,7 +498,7 @@ void PageNodeImpl::set_has_nonempty_beforeunload(
 }
 
 void PageNodeImpl::set_freezing_vote(
-    absl::optional<freezing::FreezingVote> freezing_vote) {
+    std::optional<freezing::FreezingVote> freezing_vote) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   freezing_vote_.SetAndMaybeNotify(this, freezing_vote);
 }
@@ -514,15 +514,8 @@ void PageNodeImpl::OnJoiningGraph() {
 
   // Make sure all weak pointers, even `weak_this_` that was created on the UI
   // thread in the constructor, can only be dereferenced on the graph sequence.
-  //
-  // If this is the first pointer dereferenced, it will bind all pointers from
-  // `weak_factory_` to the current sequence. If not, get() will DCHECK.
-  // DCHECK'ing the return value of get() prevents the compiler from optimizing
-  // it away.
-  //
-  // TODO(crbug.com/1134162): Use WeakPtrFactory::BindToCurrentSequence for this
-  // (it's clearer but currently not exposed publicly).
-  DCHECK(GetWeakPtr().get());
+  weak_factory_.BindToCurrentSequence(
+      base::subtle::BindWeakPtrFactoryPassKey());
 }
 
 void PageNodeImpl::OnBeforeLeavingGraph() {

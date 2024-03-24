@@ -11,6 +11,7 @@
 #include "gpu/command_buffer/common/shared_image_trace_utils.h"
 #include "gpu/gpu_export.h"
 #include "gpu/ipc/common/gpu_memory_buffer_handle_info.h"
+#include "ui/gfx/color_space.h"
 #include "ui/gfx/gpu_memory_buffer.h"
 
 namespace gpu {
@@ -70,9 +71,25 @@ class GPU_EXPORT ClientSharedImage
     raw_ptr<gfx::GpuMemoryBuffer> buffer_;
   };
 
-  explicit ClientSharedImage(const Mailbox& mailbox);
+  struct Metadata {
+    viz::SharedImageFormat format;
+    gfx::Size size;
+    gfx::ColorSpace color_space;
+    GrSurfaceOrigin surface_origin;
+    SkAlphaType alpha_type;
+    uint32_t usage;
+  };
+
+  explicit ClientSharedImage(
+      const Mailbox& mailbox,
+      const Metadata& metadata,
+      const SyncToken& sync_token,
+      scoped_refptr<SharedImageInterfaceHolder> sii_holder);
   ClientSharedImage(const Mailbox& mailbox,
-                    GpuMemoryBufferHandleInfo handle_info);
+                    const Metadata& metadata,
+                    const SyncToken& sync_token,
+                    GpuMemoryBufferHandleInfo handle_info,
+                    scoped_refptr<SharedImageInterfaceHolder> sii_holder);
 
   const Mailbox& mailbox() { return mailbox_; }
 
@@ -103,13 +120,18 @@ class GPU_EXPORT ClientSharedImage
 
   static scoped_refptr<ClientSharedImage> CreateForTesting() {
     return base::MakeRefCounted<ClientSharedImage>(
-        Mailbox::GenerateForSharedImage());
+        Mailbox::GenerateForSharedImage(), Metadata(), gpu::SyncToken(),
+        nullptr);
   }
 
   static scoped_refptr<ClientSharedImage> CreateForTesting(
       const Mailbox& mailbox,
-      std::unique_ptr<gfx::GpuMemoryBuffer> gpu_memory_buffer) {
-    auto client_si = base::MakeRefCounted<ClientSharedImage>(mailbox);
+      const Metadata& metadata,
+      const SyncToken& sync_token,
+      std::unique_ptr<gfx::GpuMemoryBuffer> gpu_memory_buffer,
+      scoped_refptr<SharedImageInterfaceHolder> sii_holder) {
+    auto client_si = base::MakeRefCounted<ClientSharedImage>(
+        mailbox, metadata, sync_token, sii_holder);
     client_si->gpu_memory_buffer_ = std::move(gpu_memory_buffer);
     return client_si;
   }
@@ -119,7 +141,10 @@ class GPU_EXPORT ClientSharedImage
   ~ClientSharedImage();
 
   const Mailbox mailbox_;
+  const Metadata metadata_;
+  SyncToken creation_sync_token_;
   std::unique_ptr<gfx::GpuMemoryBuffer> gpu_memory_buffer_;
+  scoped_refptr<SharedImageInterfaceHolder> sii_holder_;
 };
 
 }  // namespace gpu

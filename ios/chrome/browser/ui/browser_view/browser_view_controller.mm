@@ -8,6 +8,7 @@
 #import "base/apple/bundle_locations.h"
 #import "base/apple/foundation_util.h"
 #import "base/ios/ios_util.h"
+#import "base/memory/raw_ptr.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/task/sequenced_task_runner.h"
 #import "components/enterprise/idle/idle_features.h"
@@ -31,10 +32,13 @@
 #import "ios/chrome/browser/shared/public/commands/application_commands.h"
 #import "ios/chrome/browser/shared/public/commands/find_in_page_commands.h"
 #import "ios/chrome/browser/shared/public/commands/help_commands.h"
+#import "ios/chrome/browser/shared/public/commands/omnibox_commands.h"
 #import "ios/chrome/browser/shared/public/commands/popup_menu_commands.h"
 #import "ios/chrome/browser/shared/public/commands/reading_list_add_command.h"
+#import "ios/chrome/browser/shared/public/commands/settings_commands.h"
 #import "ios/chrome/browser/shared/public/commands/text_zoom_commands.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/public/features/features_utils.h"
 #import "ios/chrome/browser/shared/ui/util/named_guide.h"
 #import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/shared/ui/util/url_with_title.h"
@@ -59,6 +63,7 @@
 #import "ios/chrome/browser/ui/main_content/main_content_ui_state.h"
 #import "ios/chrome/browser/ui/main_content/web_scroll_view_main_content_ui_forwarder.h"
 #import "ios/chrome/browser/ui/ntp/new_tab_page_coordinator.h"
+#import "ios/chrome/browser/ui/omnibox/omnibox_ui_features.h"
 #import "ios/chrome/browser/ui/popup_menu/overflow_menu/feature_flags.h"
 #import "ios/chrome/browser/ui/popup_menu/popup_menu_coordinator.h"
 #import "ios/chrome/browser/ui/side_swipe/side_swipe_mediator.h"
@@ -92,7 +97,7 @@
 #import "ios/web/public/ui/crw_web_view_proxy.h"
 #import "ios/web/public/ui/crw_web_view_scroll_view_proxy.h"
 #import "ios/web/public/web_state_observer_bridge.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 #import "services/metrics/public/cpp/ukm_builders.h"
 #import "ui/base/device_form_factor.h"
 #import "ui/base/l10n/l10n_util.h"
@@ -214,16 +219,16 @@ enum HeaderBehaviour {
   UIView* _fakeStatusBarView;
 
   // The service used to load url parameters in current or new tab.
-  UrlLoadingBrowserAgent* _urlLoadingBrowserAgent;
+  raw_ptr<UrlLoadingBrowserAgent> _urlLoadingBrowserAgent;
 
   // Used to report usage of a single Browser's tab.
-  TabUsageRecorderBrowserAgent* _tabUsageRecorderBrowserAgent;
+  raw_ptr<TabUsageRecorderBrowserAgent> _tabUsageRecorderBrowserAgent;
 
   // Used to get the layout guide center.
   LayoutGuideCenter* _layoutGuideCenter;
 
   // Used to add or cancel a page placeholder for next navigation.
-  PagePlaceholderBrowserAgent* _pagePlaceholderBrowserAgent;
+  raw_ptr<PagePlaceholderBrowserAgent> _pagePlaceholderBrowserAgent;
 }
 
 // Activates/deactivates the object. This will enable/disable the ability for
@@ -682,12 +687,6 @@ enum HeaderBehaviour {
   [self.omniboxCommandsHandler cancelOmniboxEdit];
 }
 
-// TODO:(crbug.com/1385847): Remove this when BVC is refactored to not know
-// about model layer objects such as webstates.
-- (void)displayCurrentTab {
-  [self displayTabView];
-}
-
 #pragma mark - browser_view_controller+private.h
 
 - (void)setActive:(BOOL)active {
@@ -787,7 +786,7 @@ enum HeaderBehaviour {
   _isShutdown = YES;
 
   // Disconnect child coordinators.
-  if (base::FeatureList::IsEnabled(kModernTabStrip)) {
+  if (IsModernTabStripOrRaccoonEnabled()) {
     [self.tabStripCoordinator stop];
     self.tabStripCoordinator = nil;
   } else {
@@ -869,7 +868,10 @@ enum HeaderBehaviour {
   self.typingShield.autoresizingMask = initialViewAutoresizing;
   self.typingShield.accessibilityIdentifier = @"Typing Shield";
   self.typingShield.accessibilityLabel = l10n_util::GetNSString(IDS_CANCEL);
-
+  if (IsIpadPopoutOmniboxEnabled()) {
+    self.typingShield.backgroundColor =
+        [UIColor colorNamed:kOmniboxPopoutOverlayColor];
+  }
   [self.typingShield addTarget:self
                         action:@selector(shieldWasTapped:)
               forControlEvents:UIControlEventTouchUpInside];
@@ -984,7 +986,7 @@ enum HeaderBehaviour {
     [self.toolbarCoordinator stop];
     self.toolbarCoordinator = nil;
     _toolbarUIState = nil;
-    if (base::FeatureList::IsEnabled(kModernTabStrip)) {
+    if (IsModernTabStripOrRaccoonEnabled()) {
       [self.tabStripCoordinator stop];
       self.tabStripCoordinator = nil;
     } else {
@@ -1060,7 +1062,7 @@ enum HeaderBehaviour {
     [self showTabStripView:self.tabStripView];
     [self.tabStripView layoutSubviews];
     const bool canShowTabStrip = IsRegularXRegularSizeClass(self);
-    if (base::FeatureList::IsEnabled(kModernTabStrip)) {
+    if (IsModernTabStripOrRaccoonEnabled()) {
       [self.tabStripCoordinator hideTabStrip:!canShowTabStrip];
     } else {
       [self.legacyTabStripCoordinator hideTabStrip:!canShowTabStrip];
@@ -1130,7 +1132,7 @@ enum HeaderBehaviour {
 }
 
 - (void)completedTransition {
-  if (!base::FeatureList::IsEnabled(kModernTabStrip)) {
+  if (!IsModernTabStripOrRaccoonEnabled()) {
     if (self.tabStripView) {
       [self.legacyTabStripCoordinator tabStripSizeDidChange];
     }
@@ -1269,7 +1271,7 @@ enum HeaderBehaviour {
 
 - (UIStatusBarStyle)preferredStatusBarStyle {
   if (IsRegularXRegularSizeClass(self) && !_isOffTheRecord &&
-      !base::FeatureList::IsEnabled(kModernTabStrip)) {
+      !IsModernTabStripOrRaccoonEnabled()) {
     return self.tabStripView.frame.origin.y < kTabStripAppearanceOffset
                ? UIStatusBarStyleDefault
                : UIStatusBarStyleLightContent;
@@ -1293,8 +1295,13 @@ enum HeaderBehaviour {
   _fakeStatusBarView = [[UIView alloc] initWithFrame:statusBarFrame];
   [_fakeStatusBarView setAutoresizingMask:UIViewAutoresizingFlexibleWidth];
   if (ui::GetDeviceFormFactor() == ui::DEVICE_FORM_FACTOR_TABLET) {
-    if (base::FeatureList::IsEnabled(kModernTabStrip)) {
-      _fakeStatusBarView.backgroundColor = [UIColor colorNamed:kGrey200Color];
+    if (IsModernTabStripOrRaccoonEnabled()) {
+      _fakeStatusBarView.backgroundColor =
+          [UIColor colorNamed:kGroupedPrimaryBackgroundColor];
+      // Force the UserInterfaceStyle update in incognito.
+      _fakeStatusBarView.overrideUserInterfaceStyle =
+          _isOffTheRecord ? UIUserInterfaceStyleDark
+                          : UIUserInterfaceStyleUnspecified;
     } else {
       _fakeStatusBarView.backgroundColor = UIColor.blackColor;
     }
@@ -1320,7 +1327,7 @@ enum HeaderBehaviour {
   }
 
   if (ui::GetDeviceFormFactor() == ui::DEVICE_FORM_FACTOR_TABLET) {
-    if (base::FeatureList::IsEnabled(kModernTabStrip)) {
+    if (IsModernTabStripOrRaccoonEnabled()) {
       [self.tabStripCoordinator start];
     } else {
       self.legacyTabStripCoordinator.presentationProvider = self;
@@ -1377,8 +1384,9 @@ enum HeaderBehaviour {
 }
 
 - (void)addConstraintsToTabStrip {
-  if (!base::FeatureList::IsEnabled(kModernTabStrip))
+  if (!IsModernTabStripOrRaccoonEnabled()) {
     return;
+  }
 
   self.tabStripView.translatesAutoresizingMaskIntoConstraints = NO;
   [NSLayoutConstraint activateConstraints:@[
@@ -1494,8 +1502,7 @@ enum HeaderBehaviour {
     UIView* primaryToolbarView =
         self.toolbarCoordinator.primaryToolbarViewController.view;
     if (ui::GetDeviceFormFactor() == ui::DEVICE_FORM_FACTOR_TABLET) {
-      if (base::FeatureList::IsEnabled(kModernTabStrip) &&
-          self.tabStripCoordinator) {
+      if (IsModernTabStripOrRaccoonEnabled() && self.tabStripCoordinator) {
         UIViewController* tabStripViewController =
             self.tabStripCoordinator.viewController;
         [self addChildViewController:tabStripViewController];
@@ -1669,6 +1676,7 @@ enum HeaderBehaviour {
 
   [self.popupMenuCommandsHandler dismissPopupMenuAnimated:NO];
   [self.helpHandler hideAllHelpBubbles];
+  [self.omniboxCommandsHandler cancelOmniboxEdit];
 }
 
 // Returns the appropriate frame for the NTP.
@@ -2064,7 +2072,10 @@ enum HeaderBehaviour {
   }
   [_sideSwipeMediator setEnabled:NO];
 
-  if (!IsVisibleURLNewTabPage(self.currentWebState)) {
+  // TODO(b/324393850): Remove this condition when Omnibox iPad popout is
+  // launched.
+  if (!IsVisibleURLNewTabPage(self.currentWebState) ||
+      IsIpadPopoutOmniboxEnabled()) {
     // Tapping on web content area should dismiss the keyboard. Tapping on NTP
     // gesture should propagate to NTP view.
     [self.view insertSubview:self.typingShield aboveSubview:self.contentArea];

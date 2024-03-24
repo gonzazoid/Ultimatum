@@ -8,12 +8,12 @@
 #include <stdint.h>
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "build/build_config.h"
 #include "services/network/public/mojom/referrer_policy.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/navigation/impression.h"
 #include "third_party/blink/public/mojom/context_menu/context_menu.mojom-forward.h"
 #include "third_party/blink/public/mojom/forms/form_control_type.mojom-shared.h"
@@ -51,9 +51,9 @@ struct BLINK_COMMON_EXPORT UntrustworthyContextMenuParams {
   // Will be empty if |link_url| is empty.
   std::u16string link_text;
 
-  // The impression declared by the link. May be absl::nullopt even if
+  // The impression declared by the link. May be std::nullopt even if
   // |link_url| is non-empty.
-  absl::optional<blink::Impression> impression;
+  std::optional<blink::Impression> impression;
 
   // The link URL to be used ONLY for "copy link address". We don't validate
   // this field in the frontend process.
@@ -148,8 +148,6 @@ struct BLINK_COMMON_EXPORT UntrustworthyContextMenuParams {
   // Indicates whether the context menu is invoked on a non-form,
   // non-form-control element that is contenteditable. Thus, it is mutually
   // exclusive with `form_control_type`.
-  // TODO(crbug.com/1427131): Only true if AutofillUseDomNodeIdForRendererId
-  // is enabled.
   bool is_content_editable_for_autofill = false;
 
   // Identifies the element the context menu was invoked on if either

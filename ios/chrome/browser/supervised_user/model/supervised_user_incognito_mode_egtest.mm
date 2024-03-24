@@ -41,20 +41,13 @@ NSString* const kTestLearnMoreLabel = @"Learn more";
 
 @implementation SupervisedUserIncognitoModeTestCase
 
-- (AppLaunchConfiguration)appConfigurationForTestCase {
-  AppLaunchConfiguration config;
-  config.features_enabled.push_back(
-      supervised_user::kFilterWebsitesForSupervisedUsersOnDesktopAndIOS);
-  return config;
-}
-
 // Signs in with a supervised account.
 - (void)signInWithSupervisedAccount {
   FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
   [SigninEarlGrey addFakeIdentity:fakeIdentity];
   [SigninEarlGrey setIsSubjectToParentalControls:YES forIdentity:fakeIdentity];
 
-  [SigninEarlGreyUI signinWithFakeIdentity:fakeIdentity enableSync:NO];
+  [SigninEarlGrey signinWithFakeIdentity:fakeIdentity];
   [SigninEarlGrey verifySignedInWithFakeIdentity:fakeIdentity];
 }
 

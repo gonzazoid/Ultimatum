@@ -15,6 +15,8 @@ import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
 
+import org.chromium.chrome.browser.magic_stack.ModuleDelegate.ModuleType;
+
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
@@ -32,7 +34,7 @@ public class HomeModulesContextMenuManager {
         ContextMenuItemId.NUM_ENTRIES
     })
     @Retention(RetentionPolicy.SOURCE)
-    @interface ContextMenuItemId {
+    public @interface ContextMenuItemId {
         /** The "hide module" menu item is default shown on the context menu. */
         int HIDE_MODULE = 0;
 
@@ -43,16 +45,22 @@ public class HomeModulesContextMenuManager {
     }
 
     private final ModuleDelegate mModuleDelegate;
-    private final Point mContextMenuStartPointion;
+    private final Point mContextMenuStartPosition;
+    private final HomeModulesConfigManager mHomeModuleConfigManager;
+
+    private Boolean mHasModuleToCustomize;
 
     /**
      * @param moduleDelegate The instance of magic stack {@link ModuleDelegate}.
      * @param startPosition The starting position to show the context menu.
      */
     public HomeModulesContextMenuManager(
-            @NonNull ModuleDelegate moduleDelegate, @NonNull Point startPosition) {
+            @NonNull ModuleDelegate moduleDelegate,
+            @NonNull Point startPosition,
+            @NonNull HomeModulesConfigManager homeModulesConfigManager) {
         mModuleDelegate = moduleDelegate;
-        mContextMenuStartPointion = startPosition;
+        mContextMenuStartPosition = startPosition;
+        mHomeModuleConfigManager = homeModulesConfigManager;
     }
 
     /**
@@ -83,11 +91,9 @@ public class HomeModulesContextMenuManager {
                         .setOnMenuItemClickListener(listener);
             } else {
                 Context context = associatedView.getContext();
-                String item =
-                        context.getString(
-                                R.string.home_modules_context_menu_hide_module,
-                                moduleProvider.getModuleTitle(context));
-                contextMenu.add(item).setOnMenuItemClickListener(listener);
+                contextMenu
+                        .add(moduleProvider.getModuleContextMenuHideText(context))
+                        .setOnMenuItemClickListener(listener);
             }
             hasItems = true;
         }
@@ -109,7 +115,7 @@ public class HomeModulesContextMenuManager {
             @NonNull MenuItem menuItem, @NonNull ModuleProvider moduleProvider) {
         switch (menuItem.getItemId()) {
             case ContextMenuItemId.HIDE_MODULE:
-                mModuleDelegate.onHideModuleFromContextMenu(moduleProvider.getModuleType());
+                mModuleDelegate.removeModuleAndDisable(moduleProvider.getModuleType());
                 HomeModulesMetricsUtils.recordContextMenuRemoveModule(
                         mModuleDelegate.getHostSurfaceType(), moduleProvider.getModuleType());
                 return true;
@@ -127,10 +133,16 @@ public class HomeModulesContextMenuManager {
     /** Returns whether to show a context menu item. */
     @VisibleForTesting
     boolean shouldShowItem(@ContextMenuItemId int itemId, @NonNull ModuleProvider moduleProvider) {
-        if (itemId == ContextMenuItemId.HIDE_MODULE
-                || itemId == ContextMenuItemId.SHOW_CUSTOMIZE_SETTINGS) {
+        if (mHasModuleToCustomize == null) {
+            mHasModuleToCustomize = mHomeModuleConfigManager.hasModuleShownInSettings();
+        }
+        if (itemId == ContextMenuItemId.SHOW_CUSTOMIZE_SETTINGS && mHasModuleToCustomize) {
+            return true;
+        } else if (itemId == ContextMenuItemId.HIDE_MODULE
+                && moduleProvider.getModuleType() != ModuleType.SINGLE_TAB) {
             return true;
         }
+
         return moduleProvider.isContextMenuItemSupported(itemId);
     }
 
@@ -161,6 +173,10 @@ public class HomeModulesContextMenuManager {
 
     /** Returns the starting position of the context menu. */
     Point getContextMenuOffset() {
-        return mContextMenuStartPointion;
+        return mContextMenuStartPosition;
+    }
+
+    void resetHasModuleToCustomizeForTesting() {
+        mHasModuleToCustomize = null;
     }
 }

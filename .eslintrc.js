@@ -66,6 +66,21 @@ module.exports = {
     'no-restricted-syntax': ['error', {
       'selector': 'CallExpression[callee.object.name=JSON][callee.property.name=parse] > CallExpression[callee.object.name=JSON][callee.property.name=stringify]',
       'message': 'Don\'t use JSON.parse(JSON.stringify(...)) to clone objects. Use structuredClone() instead.',
+    },
+    {
+      // https://google.github.io/styleguide/tsguide.html#return-type-only-generics
+      'selector': 'TSAsExpression > CallExpression > MemberExpression[property.name=/^querySelector$/]',
+      'message': 'Don\'t use \'querySelector(...) as Type\'. Use the type parameter, \'querySelector<Type>(...)\' instead',
+    },
+    {
+      // https://google.github.io/styleguide/tsguide.html#return-type-only-generics
+      'selector': 'TSAsExpression > CallExpression > MemberExpression[property.name=/^querySelectorAll$/]',
+      'message': 'Don\'t use \'querySelectorAll(...) as Type\'. Use the type parameter, \'querySelectorAll<Type>(...)\' instead',
+    },
+    {
+      // Prevent a common misuse of "!" operator.
+      "selector": "TSNonNullExpression > CallExpression > MemberExpression[property.name=/^querySelectorAll$/]",
+      "message": "Remove unnecessary \"!\" non-null operator after querySelectorAll(). It always returns a non-null result",
     }],
     'no-throw-literal': 'error',
     'no-trailing-spaces': 'error',
@@ -121,6 +136,9 @@ module.exports = {
 
       // https://google.github.io/styleguide/tsguide.html#interfaces-vs-type-aliases
       '@typescript-eslint/consistent-type-definitions': ['error', 'interface'],
+
+      // https://google.github.io/styleguide/tsguide.html#import-type
+      '@typescript-eslint/consistent-type-imports': 'error',
 
       // https://google.github.io/styleguide/tsguide.html#visibility
       '@typescript-eslint/explicit-member-accessibility': ['error', {

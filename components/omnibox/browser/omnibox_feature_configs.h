@@ -46,16 +46,23 @@ regressions. 3 steps:
 
 (3) Override the config in tests:
 
+  omnibox_feature_configs::ScopedConfigForTesting<
+      omnibox_feature_configs::MyFeature> scoped_config;
+  scoped_config.Get().enabled = true;
+  scoped_config.Get().my_param = 1;
+  scoped_config.Reset();
+  scoped_config.Get().enabled = true;
+  scoped_config.Get().my_param = 2;
+
+  instead of:
+
   base::test::ScopedFeatureList scoped_feature_list;
   scoped_feature_list_.InitAndEnableFeatureWithParameters(
       omnibox_feature_configs::MyFeature::kMyFeature, {{"my_param", "1"}});
-  omnibox_feature_configs::ScopedConfigForTesting<
-      omnibox_feature_configs::MyFeature> scoped_config;
-
   scoped_feature_list.Reset();
   scoped_feature_list_.InitAndEnableFeatureWithParameters(
       omnibox_feature_configs::MyFeature::kMyFeature, {{"my_param", "2"}});
-  scoped_config.Reset();
+
 */
 
 // A substitute for `BASE_DECLARE_FEATURE` for nesting in structs.
@@ -75,14 +82,16 @@ class Config {
 template <class T>
 class ScopedConfigForTesting : Config<T> {
  public:
-  ScopedConfigForTesting() : original_config_(T::Get()) { Reset(); }
+  ScopedConfigForTesting() : original_config_(Get()) { Reset(); }
   ScopedConfigForTesting(const ScopedConfigForTesting&) = delete;
   ScopedConfigForTesting& operator=(const ScopedConfigForTesting&) = delete;
-  ~ScopedConfigForTesting() { const_cast<T&>(T::Get()) = original_config_; }
-  void Reset() { const_cast<T&>(T::Get()) = {}; }
+  ~ScopedConfigForTesting() { Get() = original_config_; }
+
+  T& Get() { return const_cast<T&>(T::Get()); }
+  void Reset() { Get() = {}; }
 
  private:
-  T original_config_;
+  const T original_config_;
 };
 
 // Add new configs below, ordered alphabetically.
@@ -126,6 +135,41 @@ struct ForceAllowedToBeDefault : Config<ForceAllowedToBeDefault> {
   bool enabled;
 };
 
+// If enabled, only suggestions from the keyword mode provider and historical
+// keyword mode suggestions will be shown in keyword mode.
+struct LimitKeywordModeSuggestions : Config<LimitKeywordModeSuggestions> {
+  DECLARE_FEATURE(kLimitKeywordModeSuggestions);
+  LimitKeywordModeSuggestions();
+  bool enabled;
+
+  // If enabled, limits document provider suggestions except for the Google
+  // Drive keyword engine.
+  bool limit_document_suggestions;
+  // If enabled, limits history cluster suggestions in keyword mode.
+  bool limit_history_cluster_suggestions;
+  // If enabled, limits default search engine suggestions in keyword mode.
+  bool limit_dse_suggestions;
+  // If enabled, limits on device head uggestions in keyword mode.
+  bool limit_on_device_head_suggestions;
+};
+
+// If enabled, NTP Realbox second column will allow displaying contextual and
+// trending suggestions.
+struct RealboxContextualAndTrendingSuggestions
+    : Config<RealboxContextualAndTrendingSuggestions> {
+  DECLARE_FEATURE(kRealboxContextualAndTrendingSuggestions);
+  RealboxContextualAndTrendingSuggestions();
+  bool enabled;
+
+  // The total number of matches a Section can contain across all Groups.
+  size_t total_limit;
+  // The total number of matches the `omnibox::GROUP_PREVIOUS_SEARCH_RELATED`
+  // Group can contain.
+  size_t contextual_suggestions_limit;
+  // The total number of matches the `omnibox::GROUP_TRENDS` Group can contain.
+  size_t trending_suggestions_limit;
+};
+
 // If enabled, the shortcut provider is more aggressive in scoring.
 struct ShortcutBoosting : Config<ShortcutBoosting> {
   DECLARE_FEATURE(kShortcutBoost);
@@ -148,6 +192,33 @@ struct ShortcutBoosting : Config<ShortcutBoosting> {
   // shortcuts are grouped with URLs, like traditionally, regardless of
   // `group_with_searches`.
   bool group_with_searches;
+};
+
+// If enabled, affects autocompleted keywords (e.g. input 'youtu Ispiryan' ->
+// match 'Ispiryan - Search YouTube').
+// 1) These autocompleted keywords will be scored `score` instead of the default
+//    450.
+// 2) Autocompletes keyword even when the full keyword is typed ('youtube.com').
+//    Otherwise, only incomplete keywords ('youtube.co') are autocompleted.
+struct VitalizeAutocompletedKeywords : Config<VitalizeAutocompletedKeywords> {
+  DECLARE_FEATURE(kVitalizeAutocompletedKeywords);
+  VitalizeAutocompletedKeywords();
+  bool enabled;
+  // Should probably be less than 1100; i.e. the score for complete keywords
+  // in `SearchProvider::CalculateRelevanceForKeywordVerbatim()`. Otherwise, it
+  // would be weird if the input 'youtube.co Ispiryan' produces a higher scored
+  // keyword match than 'youtube.com Ispiryan'.
+  int score;
+};
+
+// If enabled, omnibox reports the number of zero-prefix suggestions shown in
+// the session which ends when autocomplete clears the set of results. The
+// current behavior incorrectly reports the number of zero-prefix suggestions in
+// the last set of results, which would be 0 for non-zps queries.
+struct ReportNumZPSInSession : Config<ReportNumZPSInSession> {
+  DECLARE_FEATURE(kReportNumZPSInSession);
+  ReportNumZPSInSession();
+  bool enabled;
 };
 
 #undef DECLARE_FEATURE

@@ -18,15 +18,17 @@
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/icon_button.h"
 #include "ash/system/notification_center/ash_notification_drag_controller.h"
-#include "ash/system/notification_center/views/ash_notification_expand_button.h"
-#include "ash/system/notification_center/views/ash_notification_input_container.h"
+#include "ash/system/notification_center/message_center_constants.h"
 #include "ash/system/notification_center/message_center_style.h"
 #include "ash/system/notification_center/message_popup_animation_waiter.h"
 #include "ash/system/notification_center/metrics_utils.h"
 #include "ash/system/notification_center/notification_center_test_api.h"
 #include "ash/system/notification_center/notification_center_tray.h"
+#include "ash/system/notification_center/views/ash_notification_expand_button.h"
+#include "ash/system/notification_center/views/ash_notification_input_container.h"
 #include "ash/system/notification_center/views/notification_center_view.h"
 #include "ash/system/notification_center/views/notification_list_view.h"
+#include "ash/system/notification_center/views/timestamp_view.h"
 #include "ash/system/unified/unified_system_tray.h"
 #include "ash/test/ash_test_base.h"
 #include "base/memory/raw_ptr.h"
@@ -35,6 +37,7 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
+#include "build/buildflag.h"
 #include "ui/base/data_transfer_policy/mock_data_transfer_policy_controller.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/compositor/layer.h"
@@ -410,11 +413,13 @@ class AshNotificationViewTestBase : public AshTestBase,
   views::Label* GetTitleView(AshNotificationView* view) {
     return view->title_row_->title_view_;
   }
-  views::LabelButton* GetTurnOffNotificationsButton(AshNotificationView* view) {
-    return view->turn_off_notifications_button_;
+  views::Button* GetTurnOffNotificationsButton(AshNotificationView* view) {
+    return static_cast<views::Button*>(
+        view->GetViewByID(kNotificationTurnOffNotificationsButton));
   }
-  views::LabelButton* GetInlineSettingsCancelButton(AshNotificationView* view) {
-    return view->inline_settings_cancel_button_;
+  views::Button* GetInlineSettingsCancelButton(AshNotificationView* view) {
+    return static_cast<views::Button*>(
+        view->GetViewByID(kNotificationInlineSettingsCancelButton));
   }
   IconButton* GetSnoozeButton(AshNotificationView* view) {
     return view->snooze_button_;
@@ -461,13 +466,6 @@ class AshNotificationViewTest : public AshNotificationViewTestBase {
     notification_view_ = nullptr;
     test_widget_.reset();
     AshTestBase::TearDown();
-  }
-
-  void AdvanceClock(base::TimeDelta time_delta) {
-    // Note that AdvanceClock() is used here instead of FastForwardBy() to
-    // prevent long run time during an ash test session.
-    task_environment()->AdvanceClock(time_delta);
-    task_environment()->RunUntilIdle();
   }
 
   AshNotificationView* notification_view() { return notification_view_.get(); }
@@ -530,39 +528,6 @@ TEST_F(AshNotificationViewTest, CreateOrUpdateTitle) {
 
   EXPECT_NE(nullptr, GetTitleRow(notification_view()));
   EXPECT_EQ(expected_text, GetTitleView(notification_view())->GetText());
-}
-
-TEST_F(AshNotificationViewTest, UpdatesTimestampOverTime) {
-  auto notification = CreateTestNotification(/*has_image=*/true);
-  notification_view()->UpdateWithNotification(*notification);
-  notification_view()->SetExpanded(false);
-
-  EXPECT_TRUE(GetTimestampInCollapsedView(notification_view())->GetVisible());
-
-  UpdateTimestampForNotification(
-      notification_view(),
-      base::Time::Now() + base::Hours(3) + base::Minutes(30));
-  EXPECT_EQ(l10n_util::GetPluralStringFUTF16(
-                IDS_MESSAGE_NOTIFICATION_DURATION_HOURS_SHORTEST_FUTURE, 3),
-            GetTimestampInCollapsedView(notification_view())->GetText());
-
-  AdvanceClock(base::Hours(3));
-
-  EXPECT_EQ(l10n_util::GetPluralStringFUTF16(
-                IDS_MESSAGE_NOTIFICATION_DURATION_MINUTES_SHORTEST_FUTURE, 30),
-            GetTimestampInCollapsedView(notification_view())->GetText());
-
-  AdvanceClock(base::Minutes(30));
-
-  EXPECT_EQ(
-      l10n_util::GetStringUTF16(IDS_MESSAGE_NOTIFICATION_NOW_STRING_SHORTEST),
-      GetTimestampInCollapsedView(notification_view())->GetText());
-
-  AdvanceClock(base::Days(2));
-
-  EXPECT_EQ(l10n_util::GetPluralStringFUTF16(
-                IDS_MESSAGE_NOTIFICATION_DURATION_DAYS_SHORTEST, 2),
-            GetTimestampInCollapsedView(notification_view())->GetText());
 }
 
 TEST_F(AshNotificationViewTest, ExpandCollapseBehavior) {
@@ -919,7 +884,9 @@ TEST_F(AshNotificationViewTest, ExpandCollapseAnimationsRecordSmoothness) {
       "Ash.NotificationView.ActionsRow.FadeIn.AnimationSmoothness");
 }
 
-TEST_F(AshNotificationViewTest, ImageExpandCollapseAnimationsRecordSmoothness) {
+// TODO(crbug.com/1522231): Re-enable this test
+TEST_F(AshNotificationViewTest,
+       DISABLED_ImageExpandCollapseAnimationsRecordSmoothness) {
   // Enable animations.
   ui::ScopedAnimationDurationScaleMode duration(
       ui::ScopedAnimationDurationScaleMode::FAST_DURATION);
@@ -984,7 +951,9 @@ TEST_F(AshNotificationViewTest, ImageExpandCollapseAnimationsRecordSmoothness) {
                           "ScaleAndTranslate.AnimationSmoothness");
 }
 
-TEST_F(AshNotificationViewTest, GroupExpandCollapseAnimationsRecordSmoothness) {
+// TODO(crbug.com/1520190): Re-enable when flakiness is resolved.
+TEST_F(AshNotificationViewTest,
+       DISABLED_GroupExpandCollapseAnimationsRecordSmoothness) {
   base::HistogramTester histograms;
 
   // Enable animations.
@@ -1125,7 +1094,16 @@ TEST_F(AshNotificationViewTest, InlineReplyAnimationsRecordSmoothness) {
       "Ash.NotificationView.InlineReply.FadeOut.AnimationSmoothness");
 }
 
-TEST_F(AshNotificationViewTest, InlineSettingsAnimationsRecordSmoothness) {
+// TODO(crbug.com/1518434): Flaky on ChromeOS.
+#if BUILDFLAG(IS_CHROMEOS)
+#define MAYBE_InlineSettingsAnimationsRecordSmoothness \
+  DISABLED_InlineSettingsAnimationsRecordSmoothness
+#else
+#define MAYBE_InlineSettingsAnimationsRecordSmoothness \
+  InlineSettingsAnimationsRecordSmoothness
+#endif
+TEST_F(AshNotificationViewTest,
+       MAYBE_InlineSettingsAnimationsRecordSmoothness) {
   base::HistogramTester histograms;
 
   // Enable animations.

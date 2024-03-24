@@ -2097,7 +2097,7 @@ class RenderViewHostDestructionObserver : public WebContentsObserver {
     watched_render_view_hosts_.erase(rvh);
   }
 
-  std::set<RenderViewHost*> watched_render_view_hosts_;
+  std::set<raw_ptr<RenderViewHost, SetExperimental>> watched_render_view_hosts_;
 };
 
 // Crashes under ThreadSanitizer, http://crbug.com/356758.
@@ -2129,7 +2129,7 @@ IN_PROC_BROWSER_TEST_P(RenderFrameHostManagerTest,
   SiteInstance* blank_site_instance =
       shell()->web_contents()->GetPrimaryMainFrame()->GetSiteInstance();
   EXPECT_EQ(shell()->web_contents()->GetLastCommittedURL(), GURL());
-  EXPECT_EQ(blank_site_instance->GetSiteURL(), GURL::EmptyGURL());
+  EXPECT_EQ(blank_site_instance->GetSiteURL(), GURL());
   rvh_observers.EnsureRVHGetsDestructed(blank_rvh);
 
   // Now navigate to the view-source URL and ensure we got a different
@@ -2788,7 +2788,7 @@ IN_PROC_BROWSER_TEST_P(RenderFrameHostManagerTest,
   entries.push_back(std::move(cloned_entry));
   Shell* new_shell =
       Shell::CreateNewWindow(shell()->web_contents()->GetBrowserContext(),
-                             GURL::EmptyGURL(), nullptr, gfx::Size());
+                             GURL(), nullptr, gfx::Size());
   FrameTreeNode* new_root =
       static_cast<WebContentsImpl*>(new_shell->web_contents())
           ->GetPrimaryFrameTree()
@@ -6061,6 +6061,15 @@ IN_PROC_BROWSER_TEST_P(
   // In this test case, the spare RenderProcessHost will be used, so verify it
   // and ensure it is ready.
   EXPECT_EQ(spare_rph, speculative_rph);
+
+  // If LoadUrl finished before the task to call
+  // RenderProcessHostImpl::OnChannelConnected is run, wait for the task to be
+  // run.
+  if (!spare_rph->IsReady()) {
+    RenderProcessHostWatcher ready_waiter(
+        spare_rph, RenderProcessHostWatcher::WATCH_FOR_PROCESS_READY);
+    ready_waiter.Wait();
+  }
   EXPECT_TRUE(spare_rph->IsReady());
 
   // The creation of the speculative RenderFrameHost should change the

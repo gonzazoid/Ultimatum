@@ -18,7 +18,7 @@
 #include "components/sync_bookmarks/bookmark_model_view.h"
 #include "components/sync_bookmarks/bookmark_sync_service.h"
 #include "components/undo/bookmark_undo_service.h"
-#include "ios/chrome/browser/favicon/favicon_service_factory.h"
+#include "ios/chrome/browser/favicon/model/favicon_service_factory.h"
 #include "ios/chrome/browser/history/model/history_service_factory.h"
 
 BookmarkClientImpl::BookmarkClientImpl(
@@ -40,10 +40,6 @@ void BookmarkClientImpl::Init(bookmarks::BookmarkModel* model) {
     managed_bookmark_service_->BookmarkModelCreated(model);
   }
   model_ = model;
-}
-
-bool BookmarkClientImpl::AreFoldersForAccountStorageAllowed() {
-  return false;
 }
 
 base::CancelableTaskTracker::TaskId
@@ -91,15 +87,15 @@ BookmarkClientImpl::GetLoadManagedNodeCallback() {
   return bookmarks::LoadManagedNodeCallback();
 }
 
-bookmarks::metrics::StorageStateForUma
-BookmarkClientImpl::GetStorageStateForUma() {
+bool BookmarkClientImpl::IsSyncFeatureEnabledIncludingBookmarksForUma() {
   switch (storage_type_for_uma_) {
     case bookmarks::StorageType::kAccount:
-      return bookmarks::metrics::StorageStateForUma::kAccount;
+      // Not reachable because AccountBookmarkModelFactory exercises
+      // `LoadAccountBookmarksFileAsLocalOrSyncableBookmarks()` and in that case
+      // BookmarkModel doesn't exercise this predicate.
+      NOTREACHED_NORETURN();
     case bookmarks::StorageType::kLocalOrSyncable:
-      return bookmark_sync_service_->IsTrackingMetadata()
-                 ? bookmarks::metrics::StorageStateForUma::kSyncEnabled
-                 : bookmarks::metrics::StorageStateForUma::kLocalOnly;
+      return bookmark_sync_service_->IsTrackingMetadata();
   }
   NOTREACHED_NORETURN();
 }
@@ -119,11 +115,19 @@ bool BookmarkClientImpl::IsNodeManaged(const bookmarks::BookmarkNode* node) {
   return false;
 }
 
-std::string BookmarkClientImpl::EncodeBookmarkSyncMetadata() {
+std::string BookmarkClientImpl::EncodeLocalOrSyncableBookmarkSyncMetadata() {
   return bookmark_sync_service_->EncodeBookmarkSyncMetadata();
 }
 
-void BookmarkClientImpl::DecodeBookmarkSyncMetadata(
+std::string BookmarkClientImpl::EncodeAccountBookmarkSyncMetadata() {
+  // On iOS, for historic reasons, a dedicated BookmarkModel is used for account
+  // bookmarks and, counter-intuitively, the local-or-syncable nodes within are
+  // used to represent account data. The same is true for sync metadata, so
+  // account sync metadata remains unused.
+  return std::string();
+}
+
+void BookmarkClientImpl::DecodeLocalOrSyncableBookmarkSyncMetadata(
     const std::string& metadata_str,
     const base::RepeatingClosure& schedule_save_closure) {
   // On iOS, for historic reasons, a dedicated BookmarkModel is used for account
@@ -135,6 +139,13 @@ void BookmarkClientImpl::DecodeBookmarkSyncMetadata(
       metadata_str, schedule_save_closure,
       std::make_unique<
           sync_bookmarks::BookmarkModelViewUsingLocalOrSyncableNodes>(model_));
+}
+
+void BookmarkClientImpl::DecodeAccountBookmarkSyncMetadata(
+    const std::string& metadata_str,
+    const base::RepeatingClosure& schedule_save_closure) {
+  // See comment in `EncodeAccountBookmarkSyncMetadata()` for rationale about
+  // why account sync metadata remains unused on iOS.
 }
 
 void BookmarkClientImpl::OnBookmarkNodeRemovedUndoable(

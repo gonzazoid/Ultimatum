@@ -151,6 +151,11 @@ display::ManagedDisplayInfo CreateDisplayInfo(int64_t id, gfx::Rect bounds) {
   display::ManagedDisplayInfo info = display::CreateDisplayInfo(id, bounds);
   info.SetRotation(display::Display::ROTATE_0,
                    display::Display::RotationSource::ACTIVE);
+  // Each display should have at least one native mode.
+  display::ManagedDisplayMode mode(bounds.size(), /*refresh_rate=*/60.f,
+                                   /*is_interlaced=*/true,
+                                   /*native=*/true);
+  info.SetManagedDisplayModes({mode});
   return info;
 }
 
@@ -1066,6 +1071,36 @@ TEST_F(WorkspaceLayoutManagerTest,
 
   // Now, the PiP window has returned to its original position.
   EXPECT_EQ(old_bounds, pip_window->GetBoundsInScreen());
+}
+
+// Tests no crash after keyboard bounds change. Regression test for
+// https://b/325673844.
+TEST_F(WorkspaceLayoutManagerTest,
+       NoCrashAfterKeyboardDisplacingBoundsChanged) {
+  std::unique_ptr<aura::Window> window1(CreateTestWindow());
+  WindowState* window_state = WindowState::Get(window1.get());
+  const WindowSnapWMEvent snap_left(WM_EVENT_SNAP_PRIMARY);
+  window_state->OnWMEvent(&snap_left);
+
+  // Show the virtual keyboard.
+  SetVirtualKeyboardEnabled(true);
+  auto* keyboard_controller = keyboard::KeyboardUIController::Get();
+  keyboard_controller->ShowKeyboard(true);
+  EXPECT_TRUE(window_state->IsSnapped());
+
+  // Hide the virtual keyboard.
+  keyboard_controller->HideKeyboardByUser();
+  EXPECT_TRUE(window_state->IsSnapped());
+
+  // Test that click on the caption button does not crash.
+  const gfx::Rect window_bounds(window1->GetBoundsInScreen());
+  const gfx::Point drag_point(window_bounds.CenterPoint().x(),
+                              window_bounds.y() + 10);
+  auto* event_generator = GetEventGenerator();
+  event_generator->set_current_screen_location(drag_point);
+  event_generator->ClickLeftButton();
+
+  // TODO(sophiewen): Test the snapped window bounds.
 }
 
 // Following "Solo" tests were originally written for BaseLayoutManager.
@@ -2295,6 +2330,11 @@ TEST_F(WorkspaceLayoutManagerBackdropTest, BackdropForSplitViewTest) {
   // still be the same as the container bounds.
   std::unique_ptr<aura::Window> window2(CreateWindow(bounds));
   split_view_controller()->SnapWindow(window2.get(), SnapPosition::kSecondary);
+
+  // The split view divider is also a child of the default desk container. Spin
+  // the run loop here so that the post task to close the divider widget when
+  // snapping two windows gets run.
+  base::RunLoop().RunUntilIdle();
 
   EXPECT_EQ(4U, default_container()->children().size());
   for (aura::Window* child : default_container()->children()) {

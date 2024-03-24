@@ -13,7 +13,6 @@
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/button_util.h"
 #import "ios/chrome/common/ui/util/device_util.h"
-#import "ios/chrome/common/ui/util/sdk_forward_declares.h"
 #import "ui/base/l10n/l10n_util_mac.h"
 
 namespace {
@@ -119,7 +118,7 @@ CALayer* CreateOmniboxFieldLayer(BOOL isEmpty) {
                             faviconImage:(UIImage*)image {
   self = [super initWithFrame:CGRectMake(0, 0, 0, 0)];
   if (self) {
-    CHECK((!name && !image) || (name && image))
+    CHECK((!name && !image) || (name && image), base::NotFatalUntil::M124)
         << "name: " << name << ", image: " << image;
 
     _isEmptyFakeOmnibox = !name && !image;
@@ -175,9 +174,12 @@ CALayer* CreateOmniboxFieldLayer(BOOL isEmpty) {
     if (_isEmptyFakeOmnibox) {
       _imageView.image = DefaultSymbolWithPointSize(kMagnifyingglassSymbol,
                                                     kMagnifyingGlassSize);
+      [self
+          setAccessibilityIdentifier:kFakeEmptyOmniboxAccessibilityIdentifier];
     } else {
       self.faviconImage = image;
       _imageView.image = image;
+      [self setAccessibilityIdentifier:kFakeOmniboxAccessibilityIdentifier];
     }
   }
   return self;
@@ -203,7 +205,7 @@ CALayer* CreateOmniboxFieldLayer(BOOL isEmpty) {
 #pragma mark - Properties
 
 - (void)setFaviconImage:(UIImage*)faviconImage {
-  CHECK(!_isEmptyFakeOmnibox);
+  CHECK(!_isEmptyFakeOmnibox, base::NotFatalUntil::M124);
   _faviconImage = faviconImage;
   _imageView.image = faviconImage;
 }

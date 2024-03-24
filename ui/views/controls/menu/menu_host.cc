@@ -53,11 +53,10 @@ namespace internal {
 class PreMenuEventDispatchHandler : public ui::EventHandler,
                                     aura::WindowObserver {
  public:
-  PreMenuEventDispatchHandler(const MenuController* controller,
+  PreMenuEventDispatchHandler(MenuController* controller,
                               SubmenuView* submenu,
                               aura::Window* window)
-      : menu_controller_(const_cast<MenuController*>(controller)),
-        submenu_(submenu) {
+      : menu_controller_(controller->AsWeakPtr()), submenu_(submenu) {
     window_observation_.Observe(window);
     window->AddPreTargetHandler(this);
   }
@@ -91,7 +90,8 @@ class PreMenuEventDispatchHandler : public ui::EventHandler,
 
   base::ScopedObservation<aura::Window, aura::WindowObserver>
       window_observation_{this};
-  const raw_ptr<MenuController, DanglingUntriaged> menu_controller_;
+  // Non-null unless the menu is closing.
+  const base::WeakPtr<MenuController> menu_controller_;
   const raw_ptr<SubmenuView> submenu_;
 };
 #endif  // USE_AURA
@@ -141,11 +141,12 @@ void MenuHost::InitMenuHost(const InitParams& init_params) {
                                        : gfx::NativeWindow();
   params.bounds = init_params.bounds;
 
+#if BUILDFLAG(IS_OZONE)
+  params.frame_insets =
+      submenu_->GetScrollViewContainer()->outside_border_insets();
+#endif
+
 #if defined(USE_AURA)
-  // TODO(msisov): remove kMenutype once positioning of anchored windows
-  // finally migrates to a new path.
-  params.init_properties_container.SetProperty(aura::client::kMenuType,
-                                               init_params.menu_type);
   params.init_properties_container.SetProperty(aura::client::kOwnedWindowAnchor,
                                                init_params.owned_window_anchor);
 #endif
@@ -162,7 +163,7 @@ void MenuHost::InitMenuHost(const InitParams& init_params) {
   params.force_software_compositing = true;
 #endif
   Init(std::move(params));
-  absl::optional<std::string> show_menu_host_duration_histogram =
+  std::optional<std::string> show_menu_host_duration_histogram =
       menu_controller->TakeShowMenuHostDurationHistogram();
   CHECK(!menu_controller->TakeShowMenuHostDurationHistogram().has_value());
   if (show_menu_host_duration_histogram.has_value()) {

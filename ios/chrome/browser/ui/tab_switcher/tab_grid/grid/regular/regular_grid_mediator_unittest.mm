@@ -5,6 +5,7 @@
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/grid/regular/regular_grid_mediator.h"
 
 #import "base/containers/contains.h"
+#import "base/memory/raw_ptr.h"
 #import "components/policy/core/common/policy_pref_names.h"
 #import "components/sessions/core/tab_restore_service.h"
 #import "components/sync_preferences/testing_pref_service_syncable.h"
@@ -50,7 +51,7 @@ class RegularGridMediatorTest : public GridMediatorTestClass {
 
  protected:
   RegularGridMediator* mediator_ = nullptr;
-  sessions::TabRestoreService* tab_restore_service_ = nullptr;
+  raw_ptr<sessions::TabRestoreService> tab_restore_service_ = nullptr;
 };
 
 #pragma mark - Command tests
@@ -107,18 +108,15 @@ TEST_F(RegularGridMediatorTest, UndoCloseAllItemsCommandWithNTP) {
 
   // Add three new tabs.
   auto web_state1 = CreateFakeWebStateWithURL(GURL("https://test/url1"));
-  browser_->GetWebStateList()->InsertWebState(0, std::move(web_state1),
-                                              WebStateList::INSERT_FORCE_INDEX,
-                                              WebStateOpener());
+  browser_->GetWebStateList()->InsertWebState(
+      std::move(web_state1), WebStateList::InsertionParams::AtIndex(0));
   // Second tab is a NTP.
   auto web_state2 = CreateFakeWebStateWithURL(GURL(kChromeUINewTabURL));
-  browser_->GetWebStateList()->InsertWebState(1, std::move(web_state2),
-                                              WebStateList::INSERT_FORCE_INDEX,
-                                              WebStateOpener());
+  browser_->GetWebStateList()->InsertWebState(
+      std::move(web_state2), WebStateList::InsertionParams::AtIndex(1));
   auto web_state3 = CreateFakeWebStateWithURL(GURL("https://test/url2"));
-  browser_->GetWebStateList()->InsertWebState(2, std::move(web_state3),
-                                              WebStateList::INSERT_FORCE_INDEX,
-                                              WebStateOpener());
+  browser_->GetWebStateList()->InsertWebState(
+      std::move(web_state3), WebStateList::InsertionParams::AtIndex(2));
   browser_->GetWebStateList()->ActivateWebStateAt(0);
 
   // Closing item does not add them to the recently closed.

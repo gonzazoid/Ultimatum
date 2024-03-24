@@ -187,7 +187,6 @@ int32_t NormalizingIterator::GetNextChar() {
 FieldTypeSet GetUserVisibleTypes() {
   static const FieldTypeSet user_visible_type = {
       NAME_FULL,
-      NAME_HONORIFIC_PREFIX,
       ADDRESS_HOME_STREET_ADDRESS,
       ADDRESS_HOME_CITY,
       ADDRESS_HOME_DEPENDENT_LOCALITY,
@@ -718,21 +717,6 @@ bool AutofillProfileComparator::MergeAddresses(const AutofillProfile& p1,
                                         p2.use_date() < p1.use_date());
 }
 
-bool AutofillProfileComparator::MergeBirthdates(const AutofillProfile& p1,
-                                                const AutofillProfile& p2,
-                                                Birthdate& birthdate) const {
-  DCHECK(HaveMergeableBirthdates(p1, p2));
-
-  for (FieldType component : Birthdate::GetRawComponents()) {
-    const std::u16string& component1 = p1.GetInfo(component, app_locale_);
-    const std::u16string& component2 = p2.GetInfo(component, app_locale_);
-    birthdate.SetInfo(component, component1.empty() ? component2 : component1,
-                      app_locale_);
-  }
-
-  return true;
-}
-
 bool AutofillProfileComparator::ProfilesHaveDifferentSettingsVisibleValues(
     const AutofillProfile& p1,
     const AutofillProfile& p2,
@@ -941,18 +925,6 @@ bool AutofillProfileComparator::HaveMergeableAddresses(
     const AutofillProfile& p2) const {
   // Note that p1 is the newer address. Using p2 as the base.
   return p2.GetAddress().IsStructuredAddressMergeable(p1.GetAddress());
-}
-
-bool AutofillProfileComparator::HaveMergeableBirthdates(
-    const AutofillProfile& p1,
-    const AutofillProfile& p2) const {
-  return base::ranges::all_of(
-      Birthdate::GetRawComponents(), [&](FieldType component) {
-        const std::u16string& component1 = p1.GetInfo(component, app_locale_);
-        const std::u16string& component2 = p2.GetInfo(component, app_locale_);
-        return component1.empty() || component2.empty() ||
-               component1 == component2;
-      });
 }
 
 }  // namespace autofill

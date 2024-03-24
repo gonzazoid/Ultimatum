@@ -445,7 +445,7 @@ chromium-metrics-reviews@google.com.
   <int value="1" label="DriveFs interface not available"/>
   <int value="2" label="Timed out waiting for metadata"/>
   <int value="3" label="Metadata not available"/>
-  <int value="4" label="Empty or invalid alternate URL"/>
+  <int value="4" label="Invalid alternate URL"/>
   <int value="5" label="Alternate URL does not allow editing"/>
   <int value="6" label="Unexpected alternate URL"/>
   <int value="7" label="Success"/>
@@ -453,6 +453,10 @@ chromium-metrics-reviews@google.com.
   <int value="9" label="No Drive service"/>
   <int value="10" label="Drive authentication not ready"/>
   <int value="11" label="Metered connection"/>
+  <int value="12" label="Empty alternate URL"/>
+  <int value="13" label="Local file waiting for upload"/>
+  <int value="14" label="Disable Drive preference set"/>
+  <int value="15" label="Drive disabled for account type"/>
 </enum>
 
 <enum name="OfficeFileHandler">
@@ -695,6 +699,9 @@ chromium-metrics-reviews@google.com.
   <int value="10" label="Local file task"/>
   <int value="11" label="File already being uploaded"/>
   <int value="12" label="Cannot get fallback choice"/>
+  <int value="13" label="Cannot show setup dialog"/>
+  <int value="14" label="Cannot show move confirmation"/>
+  <int value="15" label="No files to open"/>
 </enum>
 
 <enum name="RestoreFailedNoParentType">

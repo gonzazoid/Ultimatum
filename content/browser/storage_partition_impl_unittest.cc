@@ -206,9 +206,10 @@ class RemoveInterestGroupTester {
     static_cast<InterestGroupManagerImpl*>(
         storage_partition_->GetInterestGroupManager())
         ->GetInterestGroupsForOwner(
-            origin, base::BindOnce(
-                        &RemoveInterestGroupTester::GetInterestGroupsCallback,
-                        base::Unretained(this), loop.QuitClosure()));
+            /*devtools_auction_id=*/std::nullopt, origin,
+            base::BindOnce(
+                &RemoveInterestGroupTester::GetInterestGroupsCallback,
+                base::Unretained(this), loop.QuitClosure()));
     loop.Run();
     return get_interest_group_success_;
   }
@@ -2485,7 +2486,7 @@ TEST_F(StoragePartitionImplTest, PrivateNetworkAccessPermission) {
       browser_context()->GetDefaultStoragePartition());
   base::test::TestFuture<bool> grant_permission;
   partition->OnPrivateNetworkAccessPermissionRequired(
-      GURL::EmptyGURL(), net::IPAddress(192, 163, 1, 1), "test-id", "test-name",
+      GURL(), net::IPAddress(192, 163, 1, 1), "test-id", "test-name",
       base::BindOnce(grant_permission.GetCallback()));
   EXPECT_FALSE(grant_permission.Get());
 }

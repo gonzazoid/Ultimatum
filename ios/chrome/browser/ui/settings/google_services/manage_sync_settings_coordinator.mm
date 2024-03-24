@@ -26,6 +26,7 @@
 #import "ios/chrome/browser/shared/public/commands/browsing_data_commands.h"
 #import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
 #import "ios/chrome/browser/shared/public/commands/open_new_tab_command.h"
+#import "ios/chrome/browser/shared/public/commands/settings_commands.h"
 #import "ios/chrome/browser/shared/public/commands/show_signin_command.h"
 #import "ios/chrome/browser/shared/public/commands/snackbar_commands.h"
 #import "ios/chrome/browser/shared/ui/symbols/chrome_icon.h"
@@ -40,9 +41,10 @@
 #import "ios/chrome/browser/sync/model/sync_setup_service.h"
 #import "ios/chrome/browser/sync/model/sync_setup_service_factory.h"
 #import "ios/chrome/browser/ui/authentication/signout_action_sheet/signout_action_sheet_coordinator.h"
-#import "ios/chrome/browser/ui/settings/google_services/accounts_table_view_controller.h"
 #import "ios/chrome/browser/ui/settings/google_services/bulk_upload/bulk_upload_coordinator.h"
 #import "ios/chrome/browser/ui/settings/google_services/bulk_upload/bulk_upload_coordinator_delegate.h"
+#import "ios/chrome/browser/ui/settings/google_services/manage_accounts/accounts_coordinator.h"
+#import "ios/chrome/browser/ui/settings/google_services/manage_accounts/accounts_table_view_controller.h"
 #import "ios/chrome/browser/ui/settings/google_services/manage_sync_settings_command_handler.h"
 #import "ios/chrome/browser/ui/settings/google_services/manage_sync_settings_constants.h"
 #import "ios/chrome/browser/ui/settings/google_services/manage_sync_settings_mediator.h"
@@ -52,7 +54,7 @@
 #import "ios/chrome/browser/ui/settings/sync/sync_encryption_passphrase_table_view_controller.h"
 #import "ios/chrome/browser/ui/settings/sync/sync_encryption_table_view_controller.h"
 #import "ios/chrome/grit/ios_strings.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 #import "ui/base/l10n/l10n_util.h"
 
 using signin_metrics::AccessPoint;
@@ -73,6 +75,8 @@ using DismissViewCallback = SystemIdentityManager::DismissViewCallback;
   BOOL _settingsAreDismissed;
   // The coordinator for the view Save in Account.
   BulkUploadCoordinator* _bulkUploadCoordinator;
+  // The coordinator for the Accounts view.
+  AccountsCoordinator* _accountsCoordinator;
 }
 
 // View controller.
@@ -195,7 +199,7 @@ using DismissViewCallback = SystemIdentityManager::DismissViewCallback;
   viewController.browsingDataHandler =
       HandlerForProtocol(dispatcher, BrowsingDataCommands);
   viewController.settingsHandler =
-      HandlerForProtocol(dispatcher, ApplicationSettingsCommands);
+      HandlerForProtocol(dispatcher, SettingsCommands);
   viewController.snackbarHandler =
       HandlerForProtocol(dispatcher, SnackbarCommands);
 
@@ -214,6 +218,8 @@ using DismissViewCallback = SystemIdentityManager::DismissViewCallback;
   [super stop];
   [self.mediator disconnect];
   [self stopBulkUpload];
+  [_accountsCoordinator stop];
+  _accountsCoordinator = nil;
   self.mediator = nil;
   self.viewController = nil;
   // This coordinator displays the main view and it is in charge to enable sync
@@ -296,6 +302,11 @@ using DismissViewCallback = SystemIdentityManager::DismissViewCallback;
     }
 
     if (_baseNavigationController) {
+      if (self.viewController.presentedViewController) {
+        [self.viewController.presentedViewController
+            dismissViewControllerAnimated:YES
+                               completion:nil];
+      }
       [self.baseNavigationController popToViewController:self.viewController
                                                 animated:NO];
       [self.baseNavigationController popViewControllerAnimated:YES];
@@ -323,8 +334,8 @@ using DismissViewCallback = SystemIdentityManager::DismissViewCallback;
   [self stopBulkUpload];
   base::RecordAction(base::UserMetricsAction("BulkUploadSettingsOpen"));
   _bulkUploadCoordinator = [[BulkUploadCoordinator alloc]
-      initWithBaseNavigationController:self.navigationControllerForChildPages
-                               browser:self.browser];
+      initWithBaseViewController:self.viewController
+                         browser:self.browser];
   _bulkUploadCoordinator.delegate = self;
   [_bulkUploadCoordinator start];
 }
@@ -409,18 +420,13 @@ using DismissViewCallback = SystemIdentityManager::DismissViewCallback;
 }
 
 - (void)showAccountsPage {
-  AccountsTableViewController* accountsTableViewController =
-      [[AccountsTableViewController alloc] initWithBrowser:self.browser
-                                 closeSettingsOnAddAccount:NO];
-
-  accountsTableViewController.applicationCommandsHandler = HandlerForProtocol(
-      self.browser->GetCommandDispatcher(), ApplicationCommands);
-  accountsTableViewController.signoutDismissalByParentCoordinator = YES;
-  accountsTableViewController.navigationItem.rightBarButtonItem =
-      self.viewController.navigationItem.rightBarButtonItem;
-  [self.navigationControllerForChildPages
-      pushViewController:accountsTableViewController
-                animated:YES];
+  AccountsCoordinator* accountsCoordinator = [[AccountsCoordinator alloc]
+      initWithBaseNavigationController:self.navigationControllerForChildPages
+                               browser:self.browser
+             closeSettingsOnAddAccount:NO];
+  accountsCoordinator.signoutDismissalByParentCoordinator = YES;
+  _accountsCoordinator = accountsCoordinator;
+  [accountsCoordinator start];
 }
 
 - (void)showManageYourGoogleAccount {
@@ -450,8 +456,24 @@ using DismissViewCallback = SystemIdentityManager::DismissViewCallback;
 
 #pragma mark - SyncErrorSettingsCommandHandler
 
-- (void)openPassphraseDialog {
+- (void)openPassphraseDialogWithModalPresentation:(BOOL)presentModally {
   DCHECK(self.mediator.shouldEncryptionItemBeEnabled);
+  if (presentModally) {
+    CHECK(self.syncService->GetUserSettings()->IsPassphraseRequired());
+    SyncEncryptionPassphraseTableViewController* controllerToPresent =
+        [[SyncEncryptionPassphraseTableViewController alloc]
+            initWithBrowser:self.browser];
+    controllerToPresent.presentModally = YES;
+    UINavigationController* navigationController =
+        [[UINavigationController alloc]
+            initWithRootViewController:controllerToPresent];
+    [self.viewController
+        configureHandlersForRootViewController:controllerToPresent];
+    [self.viewController presentViewController:navigationController
+                                      animated:YES
+                                    completion:nil];
+    return;
+  }
   UIViewController<SettingsRootViewControlling>* controllerToPush;
   // If there was a sync error, prompt the user to enter the passphrase.
   // Otherwise, show the full encryption options.

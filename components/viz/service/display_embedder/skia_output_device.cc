@@ -120,11 +120,13 @@ SkiaOutputDevice::SkiaOutputDevice(
     GrDirectContext* gr_context,
     skgpu::graphite::Context* graphite_context,
     gpu::MemoryTracker* memory_tracker,
-    DidSwapBufferCompleteCallback did_swap_buffer_complete_callback)
+    DidSwapBufferCompleteCallback did_swap_buffer_complete_callback,
+    ReleaseOverlaysCallback release_overlays_callback)
     : gr_context_(gr_context),
       graphite_context_(graphite_context),
       did_swap_buffer_complete_callback_(
           std::move(did_swap_buffer_complete_callback)),
+      release_overlays_callback_(std::move(release_overlays_callback)),
       memory_type_tracker_(
           std::make_unique<gpu::MemoryTypeTracker>(memory_tracker)),
       latency_tracker_(std::make_unique<ui::LatencyTracker>()),
@@ -185,16 +187,12 @@ void SkiaOutputDevice::SetEnableDCLayers(bool enable) {
   NOTREACHED();
 }
 
-void SkiaOutputDevice::SetGpuVSyncEnabled(bool enabled) {
-  NOTREACHED();
-}
-
 bool SkiaOutputDevice::IsPrimaryPlaneOverlay() const {
   return false;
 }
 
 void SkiaOutputDevice::SchedulePrimaryPlane(
-    const absl::optional<OverlayProcessorInterface::OutputSurfaceOverlayPlane>&
+    const std::optional<OverlayProcessorInterface::OutputSurfaceOverlayPlane>&
         plane) {
   if (plane)
     NOTIMPLEMENTED();
@@ -233,7 +231,7 @@ void SkiaOutputDevice::FinishSwapBuffers(
     gfx::SwapCompletionResult result,
     const gfx::Size& size,
     OutputSurfaceFrame frame,
-    const absl::optional<gfx::Rect>& damage_area,
+    const std::optional<gfx::Rect>& damage_area,
     std::vector<gpu::Mailbox> released_overlays,
     const gpu::Mailbox& primary_plane_mailbox) {
   DCHECK(!pending_swaps_.empty());
@@ -335,7 +333,7 @@ uint64_t SkiaOutputDevice::SwapInfo::SwapId() {
 
 const gpu::SwapBuffersCompleteParams& SkiaOutputDevice::SwapInfo::Complete(
     gfx::SwapCompletionResult result,
-    const absl::optional<gfx::Rect>& damage_rect,
+    const std::optional<gfx::Rect>& damage_rect,
     std::vector<gpu::Mailbox> released_overlays,
     const gpu::Mailbox& primary_plane_mailbox,
     int64_t swap_trace_id) {

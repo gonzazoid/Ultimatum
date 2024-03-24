@@ -323,8 +323,8 @@ void DownloadItemNotification::Close(bool by_user) {
 }
 
 void DownloadItemNotification::Click(
-    const absl::optional<int>& button_index,
-    const absl::optional<std::u16string>& reply) {
+    const std::optional<int>& button_index,
+    const std::optional<std::u16string>& reply) {
   if (!item_)
     return;
 
@@ -418,10 +418,7 @@ void DownloadItemNotification::Click(
     case download::DownloadItem::INTERRUPTED:
       base::RecordAction(
           UserMetricsAction("DownloadNotification.Click_Stopped"));
-      GetBrowser()->OpenURL(content::OpenURLParams(
-          GURL(chrome::kChromeUIDownloadsURL), content::Referrer(),
-          WindowOpenDisposition::NEW_FOREGROUND_TAB, ui::PAGE_TRANSITION_LINK,
-          false /* is_renderer_initiated */));
+      chrome::ShowDownloads(GetBrowser());
       CloseNotification();
       break;
     case download::DownloadItem::COMPLETE:
@@ -727,7 +724,7 @@ DownloadItemNotification::GetExtraActions() const {
       // opened already.
       if (!in_review_) {
         if (enterprise_connectors::ShouldPromptReviewForDownload(
-                profile(), item_->GetDangerType())) {
+                profile(), item_->GetDownloadItem())) {
           actions->push_back(DownloadCommands::REVIEW);
         } else {
           actions->push_back(DownloadCommands::KEEP);

@@ -8,55 +8,48 @@ config("jni_include_dir") {
   include_dirs = [ jni_headers_dir ]
 }
 
-config("use_chromium_base_define") {
-  defines = [ "USE_CHROMIUM_BASE" ]
-}
-
 config("toolchain_define") {
   if (is_robolectric) {
     defines = [ "JNI_ZERO_IS_ROBOLECTRIC" ]
   }
 }
 
-source_set("jni_export") {
-  sources = [ "jni_export.h" ]
-}
-
-# Base depends on this transitively, so we have to avoid deps onto base.
-# Eventually, it will make sense to merge this with :jni_zero once it also no
-# longer depends on //base.
-component("jni_zero_utils") {
+# These are intended to only be used within jni_zero and the code it generates
+# and are not external APIs.
+source_set("jni_zero_internals") {
   sources = [
-    "core.cc",
-    "core.h",
+    "jni_export.h",
     "logging.cc",
     "logging.h",
-    "scoped_java_ref.cc",
-    "scoped_java_ref.h",
   ]
-  public_deps = [ ":jni_export" ]
-  configs += [ ":toolchain_define" ]
+  visibility = [ ":*" ]
   if (is_android) {
     libs = [ "log" ]
   }
   if (is_robolectric) {
     public_configs = [ "//third_party/jdk:jdk" ]
   }
+  configs += [ ":toolchain_define" ]
 }
 
-source_set("jni_zero") {
-  sources = [
-    "jni_int_wrapper.h",
-    "jni_zero_helper.h",
-  ]
-
+# Just used by generated code. Cannot set visibility since it's depended on by a
+# template which gets instantiated everywhere.
+source_set("generated_file_helper") {
+  sources = [ "jni_zero_helper.h" ]
   public_deps = [
-    ":jni_export",
-    ":jni_zero_utils",
-    "//base",
+    ":jni_zero",
+    ":jni_zero_internals",
   ]
+}
 
-  public_configs = [ ":use_chromium_base_define" ]
+# This is the public target that we intend others to use.
+component("jni_zero") {
+  sources = [
+    "jni_zero.cc",
+    "jni_zero.h",
+  ]
+  public_deps = [ ":jni_zero_internals" ]
+  configs += [ ":toolchain_define" ]
 }
 
 if (enable_java_templates && is_android) {
@@ -73,6 +66,7 @@ if (enable_java_templates && is_android) {
       "java/src/org/jni_zero/CheckDiscard.java",
       "java/src/org/jni_zero/JNINamespace.java",
       "java/src/org/jni_zero/JniStaticTestMocker.java",
+      "java/src/org/jni_zero/JniType.java",
       "java/src/org/jni_zero/NativeClassQualifiedName.java",
       "java/src/org/jni_zero/NativeLibraryLoadedStatus.java",
       "java/src/org/jni_zero/NativeMethods.java",

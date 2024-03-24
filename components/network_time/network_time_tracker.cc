@@ -4,8 +4,10 @@
 
 #include "components/network_time/network_time_tracker.h"
 
-#include <memory>
 #include <stdint.h>
+
+#include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -37,7 +39,6 @@
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 // Time updates happen in two ways. First, other components may call
 // UpdateNetworkTime() if they happen to obtain the time securely. This will
@@ -139,16 +140,16 @@ const uint32_t kTimeServerMaxSkewSeconds = 10;
 const char kTimeServiceURL[] = "http://clients2.google.com/time/1/current";
 
 // This is an ECDSA prime256v1 named-curve key.
-const int kKeyVersion = 7;
+const int kKeyVersion = 8;
 const uint8_t kKeyPubBytes[] = {
     0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02,
     0x01, 0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07, 0x03,
-    0x42, 0x00, 0x04, 0x9F, 0xB4, 0x82, 0x7E, 0xAE, 0x02, 0xA2, 0xF2, 0x9C,
-    0x32, 0x8E, 0xF8, 0x00, 0xFC, 0x75, 0x45, 0xCF, 0x45, 0x36, 0x01, 0x71,
-    0x93, 0x57, 0x54, 0x1C, 0xA7, 0xC5, 0x09, 0xDA, 0xB1, 0xBC, 0x36, 0xB1,
-    0x44, 0x1C, 0x2E, 0x12, 0x58, 0x2F, 0xE2, 0x27, 0x40, 0x40, 0x42, 0xEE,
-    0x95, 0x7A, 0xAC, 0xE4, 0x33, 0xAC, 0xAA, 0x09, 0x6F, 0x5C, 0x0F, 0x94,
-    0xA7, 0xB4, 0xB5, 0xE2, 0x6B, 0xB6, 0xC4};
+    0x42, 0x00, 0x04, 0x62, 0x54, 0x7B, 0x74, 0x30, 0xD7, 0x1A, 0x9C, 0x73,
+    0x88, 0xC8, 0xEE, 0x9B, 0x27, 0x57, 0xCA, 0x2C, 0xCA, 0x93, 0xBF, 0xEA,
+    0x1B, 0xD1, 0x07, 0x58, 0xBB, 0xFF, 0x83, 0x70, 0x30, 0xD0, 0x3C, 0xC7,
+    0x7B, 0x40, 0x60, 0x8D, 0x3E, 0x11, 0x4E, 0x0C, 0x97, 0x16, 0xBF, 0xA7,
+    0x31, 0xAC, 0x29, 0xBC, 0x27, 0x13, 0x69, 0xB8, 0x4D, 0x2B, 0x67, 0x1C,
+    0x90, 0x4C, 0x44, 0x50, 0x6E, 0xD1, 0xE1};
 
 std::string GetServerProof(
     scoped_refptr<net::HttpResponseHeaders> response_headers) {
@@ -171,7 +172,8 @@ NetworkTimeTracker::NetworkTimeTracker(
     std::unique_ptr<base::Clock> clock,
     std::unique_ptr<const base::TickClock> tick_clock,
     PrefService* pref_service,
-    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory)
+    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
+    std::optional<FetchBehavior> fetch_behavior)
     : server_url_(kTimeServiceURL),
       max_response_size_(1024),
       backoff_(kBackoffInterval.Get()),
@@ -179,14 +181,15 @@ NetworkTimeTracker::NetworkTimeTracker(
       clock_(std::move(clock)),
       tick_clock_(std::move(tick_clock)),
       pref_service_(pref_service),
-      time_query_completed_(false) {
+      time_query_completed_(false),
+      fetch_behavior_(fetch_behavior) {
   const base::Value::Dict& time_mapping =
       pref_service_->GetDict(prefs::kNetworkTimeMapping);
-  absl::optional<double> time_js = time_mapping.FindDouble(kPrefTime);
-  absl::optional<double> ticks_js = time_mapping.FindDouble(kPrefTicks);
-  absl::optional<double> uncertainty_js =
+  std::optional<double> time_js = time_mapping.FindDouble(kPrefTime);
+  std::optional<double> ticks_js = time_mapping.FindDouble(kPrefTicks);
+  std::optional<double> uncertainty_js =
       time_mapping.FindDouble(kPrefUncertainty);
-  absl::optional<double> network_time_js =
+  std::optional<double> network_time_js =
       time_mapping.FindDouble(kPrefNetworkTime);
   if (time_js && ticks_js && uncertainty_js && network_time_js) {
     time_at_last_measurement_ =
@@ -275,7 +278,7 @@ bool NetworkTimeTracker::AreTimeFetchesEnabled() const {
 }
 
 NetworkTimeTracker::FetchBehavior NetworkTimeTracker::GetFetchBehavior() const {
-  return kFetchBehavior.Get();
+  return fetch_behavior_.value_or(kFetchBehavior.Get());
 }
 
 void NetworkTimeTracker::SetTimeServerURLForTesting(const GURL& url) {
@@ -369,7 +372,7 @@ NetworkTimeTracker::NetworkTimeResult NetworkTimeTracker::GetNetworkTime(
 
 bool NetworkTimeTracker::StartTimeFetch(base::OnceClosure closure) {
   DCHECK(thread_checker_.CalledOnValidThread());
-  FetchBehavior behavior = kFetchBehavior.Get();
+  FetchBehavior behavior = GetFetchBehavior();
   if (behavior != FETCHES_ON_DEMAND_ONLY &&
       behavior != FETCHES_IN_BACKGROUND_AND_ON_DEMAND) {
     return false;
@@ -469,8 +472,9 @@ void NetworkTimeTracker::CheckTime() {
 bool NetworkTimeTracker::UpdateTimeFromResponse(
     std::unique_ptr<std::string> response_body) {
   int response_code = 0;
-  if (time_fetcher_->ResponseInfo() && time_fetcher_->ResponseInfo()->headers)
+  if (time_fetcher_->ResponseInfo() && time_fetcher_->ResponseInfo()->headers) {
     response_code = time_fetcher_->ResponseInfo()->headers->response_code();
+  }
   if (response_code != 200 || !response_body) {
     time_query_completed_ = true;
     DVLOG(1) << "fetch failed code=" << response_code;
@@ -486,7 +490,7 @@ bool NetworkTimeTracker::UpdateTimeFromResponse(
     return false;
   }
   response.remove_prefix(5);  // Skips leading )]}'\n
-  absl::optional<base::Value> value = base::JSONReader::Read(response);
+  std::optional<base::Value> value = base::JSONReader::Read(response);
   if (!value) {
     DVLOG(1) << "bad JSON";
     return false;
@@ -495,7 +499,7 @@ bool NetworkTimeTracker::UpdateTimeFromResponse(
     DVLOG(1) << "not a dictionary";
     return false;
   }
-  absl::optional<double> current_time_millis =
+  std::optional<double> current_time_millis =
       value->GetDict().FindDouble("current_time_millis");
   if (!current_time_millis) {
     DVLOG(1) << "no current_time_millis";
@@ -555,7 +559,7 @@ void NetworkTimeTracker::OnURLLoaderComplete(
 void NetworkTimeTracker::QueueCheckTime(base::TimeDelta delay) {
   DCHECK_GE(delay, base::TimeDelta()) << "delay must be non-negative";
   // Check if the user is opted in to background time fetches.
-  FetchBehavior behavior = kFetchBehavior.Get();
+  FetchBehavior behavior = GetFetchBehavior();
   if (behavior == FETCHES_IN_BACKGROUND_ONLY ||
       behavior == FETCHES_IN_BACKGROUND_AND_ON_DEMAND) {
     timer_.Start(FROM_HERE, delay,

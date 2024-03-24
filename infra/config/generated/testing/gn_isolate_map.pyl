@@ -330,6 +330,10 @@
     "label": "//cc:cc_unittests",
     "type": "windowed_test_launcher",
   },
+  "check_chrome_static_initializers": {
+    "label": "//chrome/android:check_chrome_static_initializers",
+    "type": "additional_compile_target",
+  },
   "chrome": {
     "label": "//chrome:chrome",
     "type": "additional_compile_target",
@@ -659,6 +663,10 @@
   },
   "cronet_package": {
     "label": "//components/cronet:cronet_package",
+    "type": "additional_compile_target",
+  },
+  "cronet_package_ci": {
+    "label": "//components/cronet:cronet_package_ci",
     "type": "additional_compile_target",
   },
   "cronet_perf_test_apk": {
@@ -1031,10 +1039,6 @@
       "--test-launcher-jobs=1",
     ],
   },
-  "lacros_chrome_unittests": {
-    "label": "//chrome/test:lacros_chrome_unittests",
-    "type": "console_test_launcher",
-  },
   "latency_unittests": {
     "label": "//ui/latency:latency_unittests",
     "type": "console_test_launcher",
@@ -1197,10 +1201,6 @@
     "label": "//chrome/android:monochrome_public_test_ar_apk",
     "type": "console_test_launcher",
   },
-  "monochrome_static_initializers": {
-    "label": "//chrome/android:monochrome_static_initializers",
-    "type": "additional_compile_target",
-  },
   "nacl_helper": {
     "label": "//components/nacl/loader:nacl_helper",
     "type": "additional_compile_target",
@@ -1248,6 +1248,10 @@
   "ondevice_model_example": {
     "label": "//components/optimization_guide/internal:ondevice_model_example",
     "type": "additional_compile_target",
+  },
+  "ondevice_stability_tests": {
+    "label": "//components/optimization_guide/internal/testing:ondevice_stability_tests",
+    "type": "generated_script",
   },
   "openscreen_unittests": {
     "label": "//chrome/browser/media/router:openscreen_unittests",
@@ -1580,7 +1584,7 @@
     ],
   },
   "telemetry_gpu_integration_test_fuchsia": {
-    "label": "//chrome/test:telemetry_gpu_integration_test_fuchsia",
+    "label": "//content/test:telemetry_gpu_integration_test_fuchsia",
     "type": "script",
     "script": "//testing/scripts/run_gpu_integration_test_as_googletest.py",
     "args": [

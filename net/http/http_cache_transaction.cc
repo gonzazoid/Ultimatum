@@ -97,8 +97,8 @@ enum ExternallyConditionalizedType {
 };
 
 bool ShouldByPassCacheForFirstPartySets(
-    const absl::optional<int64_t>& clear_at_run_id,
-    const absl::optional<int64_t>& written_at_run_id) {
+    const std::optional<int64_t>& clear_at_run_id,
+    const std::optional<int64_t>& written_at_run_id) {
   return clear_at_run_id.has_value() &&
          (!written_at_run_id.has_value() ||
           written_at_run_id.value() < clear_at_run_id.value());
@@ -656,6 +656,18 @@ void HttpCache::Transaction::CloseConnectionOnDestruction() {
     network_trans_->CloseConnectionOnDestruction();
   } else if (InWriters()) {
     entry_->writers()->CloseConnectionOnDestruction();
+  }
+}
+
+bool HttpCache::Transaction::IsMdlMatchForMetrics() const {
+  if (network_transaction_info_.previous_mdl_match_for_metrics) {
+    return true;
+  }
+  const HttpTransaction* transaction = GetOwnedOrMovedNetworkTransaction();
+  if (transaction) {
+    return transaction->IsMdlMatchForMetrics();
+  } else {
+    return false;
   }
 }
 
@@ -3928,6 +3940,10 @@ void HttpCache::Transaction::SaveNetworkTransactionInfo(
   }
   network_transaction_info_.old_remote_endpoint = IPEndPoint();
   transaction.GetRemoteEndpoint(&network_transaction_info_.old_remote_endpoint);
+
+  if (transaction.IsMdlMatchForMetrics()) {
+    network_transaction_info_.previous_mdl_match_for_metrics = true;
+  }
 }
 
 void HttpCache::Transaction::OnIOComplete(int result) {
@@ -3965,7 +3981,7 @@ void HttpCache::Transaction::OnCacheIOComplete(int result) {
     // transaction was being processed that now needs to be processed.
     if (pending_io_result_) {
       int stored_result = pending_io_result_.value();
-      pending_io_result_ = absl::nullopt;
+      pending_io_result_ = std::nullopt;
       OnIOComplete(stored_result);
     }
   } else {

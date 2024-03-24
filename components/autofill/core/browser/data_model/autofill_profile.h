@@ -21,7 +21,6 @@
 #include "components/autofill/core/browser/data_model/address.h"
 #include "components/autofill/core/browser/data_model/autofill_data_model.h"
 #include "components/autofill/core/browser/data_model/autofill_i18n_api.h"
-#include "components/autofill/core/browser/data_model/birthdate.h"
 #include "components/autofill/core/browser/data_model/contact_info.h"
 #include "components/autofill/core/browser/data_model/phone_number.h"
 #include "components/autofill/core/browser/profile_token_quality.h"
@@ -99,16 +98,9 @@ class AutofillProfile : public AutofillDataModel {
 
   std::u16string GetRawInfo(FieldType type) const override;
 
-  int GetRawInfoAsInt(FieldType type) const override;
-
   void SetRawInfoWithVerificationStatus(FieldType type,
                                         const std::u16string& value,
                                         VerificationStatus status) override;
-
-  void SetRawInfoAsIntWithVerificationStatus(
-      FieldType type,
-      int value,
-      VerificationStatus status) override;
 
   void GetSupportedTypes(FieldTypeSet* supported_types) const override;
 
@@ -179,12 +171,6 @@ class AutofillProfile : public AutofillDataModel {
   // mergeable by an AutofillProfileComparator.
   bool MergeDataFrom(const AutofillProfile& profile,
                      const std::string& app_locale);
-
-  // Saves info from |profile| into |this|, provided |this| and |profile| do not
-  // have any direct conflicts (i.e. data is present but different).
-  // Returns true if |this| and |profile| are similar.
-  bool SaveAdditionalInfo(const AutofillProfile& profile,
-                          const std::string& app_locale);
 
   // Creates a differentiating label for each of the |profiles|.
   // Labels consist of the minimal differentiating combination of:
@@ -257,7 +243,7 @@ class AutofillProfile : public AutofillDataModel {
   // Returns true if the profile contains any structured data. This can be any
   // name type but the full name, or for addresses, the street name or house
   // number.
-  bool HasStructuredData();
+  bool HasStructuredData() const;
 
   // Returns a constant reference to the |name_| field.
   const NameInfo& GetNameInfo() const { return name_; }
@@ -338,9 +324,9 @@ class AutofillProfile : public AutofillDataModel {
 
   // Utilities for listing and lookup of the data members that constitute
   // user-visible profile information.
-  std::array<const FormGroup*, 6> FormGroups() const {
+  std::array<const FormGroup*, 5> FormGroups() const {
     // Adjust the return type size as necessary.
-    return {&name_, &email_, &company_, &phone_number_, &address_, &birthdate_};
+    return {&name_, &email_, &company_, &phone_number_, &address_};
   }
 
   const FormGroup* FormGroupForType(const AutofillType& type) const;
@@ -371,7 +357,6 @@ class AutofillProfile : public AutofillDataModel {
   CompanyInfo company_;
   PhoneNumber phone_number_;
   Address address_;
-  Birthdate birthdate_;
 
   // The label is chosen by the user and can contain an arbitrary value.
   // However, there are two labels that play a special role to indicate that an

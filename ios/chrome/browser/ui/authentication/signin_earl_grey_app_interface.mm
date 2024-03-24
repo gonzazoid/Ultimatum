@@ -40,7 +40,7 @@
 #import "ios/chrome/browser/ui/authentication/cells/table_view_identity_cell.h"
 #import "ios/chrome/test/app/chrome_test_util.h"
 #import "ios/testing/earl_grey/earl_grey_app.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 #import "url/gurl.h"
 
 @implementation SigninEarlGreyAppInterface
@@ -99,6 +99,16 @@
       AuthenticationServiceFactory::GetForBrowserState(browserState);
   authentication_service->SignOut(signin_metrics::ProfileSignout::kTest,
                                   /*force_clear_browsing_data=*/false, nil);
+}
+
++ (void)signinWithFakeIdentity:(FakeSystemIdentity*)identity {
+  [self addFakeIdentity:identity];
+  ChromeBrowserState* browserState =
+      chrome_test_util::GetOriginalBrowserState();
+  AuthenticationService* authenticationService =
+      AuthenticationServiceFactory::GetForBrowserState(browserState);
+  authenticationService->SignIn(
+      identity, signin_metrics::AccessPoint::ACCESS_POINT_SETTINGS);
 }
 
 + (void)triggerReauthDialogWithFakeIdentity:(FakeSystemIdentity*)identity {
@@ -167,14 +177,17 @@
   mutator->set_can_have_email_address_displayed(value);
 }
 
-+ (void)setCanOfferExtendedChromeSyncPromos:(BOOL)value
-                                forIdentity:(FakeSystemIdentity*)fakeIdentity {
++ (void)setCanShowHistorySyncOptInsWithoutMinorModeRestrictions:(BOOL)value
+                                                    forIdentity:
+                                                        (FakeSystemIdentity*)
+                                                            fakeIdentity {
   FakeSystemIdentityManager* systemIdentityManager =
       FakeSystemIdentityManager::FromSystemIdentityManager(
           GetApplicationContext()->GetSystemIdentityManager());
   AccountCapabilitiesTestMutator* mutator =
       systemIdentityManager->GetCapabilitiesMutator(fakeIdentity);
-  mutator->set_can_offer_extended_chrome_sync_promos(value);
+  mutator->set_can_show_history_sync_opt_ins_without_minor_mode_restrictions(
+      value);
 }
 
 + (void)setSelectedType:(syncer::UserSelectableType)type enabled:(BOOL)enabled {

@@ -11,9 +11,11 @@
 #include "ash/components/arc/test/connection_holder_util.h"
 #include "ash/components/arc/test/fake_app_instance.h"
 #include "base/memory/raw_ptr.h"
+#include "base/metrics/histogram_base.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
@@ -54,6 +56,7 @@
 #include "ui/events/base_event_utils.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/views/controls/button/checkbox.h"
+#include "ui/views/view_utils.h"
 #include "ui/views/widget/any_widget_observer.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_observer.h"
@@ -203,8 +206,9 @@ class IntentPickerBubbleViewBrowserTestChromeOS : public InProcessBrowserTest {
   }
 
   views::Checkbox* remember_selection_checkbox() {
-    return static_cast<views::Checkbox*>(intent_picker_bubble()->GetViewByID(
-        IntentPickerBubbleView::ViewId::kRememberCheckbox));
+    return views::AsViewClass<views::Checkbox>(
+        intent_picker_bubble()->GetViewByID(
+            IntentPickerBubbleView::ViewId::kRememberCheckbox));
   }
 
   // TODO(crbug.com/1265991): There should be an explicit signal we can wait on

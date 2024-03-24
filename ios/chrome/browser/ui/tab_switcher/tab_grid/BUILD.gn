@@ -24,12 +24,12 @@ source_set("tab_grid") {
     "//components/prefs/ios",
     "//components/search_engines",
     "//components/strings",
-    "//components/supervised_user/core/browser:supervised_user_preferences",
+    "//components/supervised_user/core/browser",
     "//components/supervised_user/core/common",
     "//ios/chrome/app/strings",
     "//ios/chrome/browser/bookmarks/model",
     "//ios/chrome/browser/bring_android_tabs/model",
-    "//ios/chrome/browser/favicon",
+    "//ios/chrome/browser/favicon/model",
     "//ios/chrome/browser/feature_engagement/model",
     "//ios/chrome/browser/find_in_page/model",
     "//ios/chrome/browser/find_in_page/model:util",
@@ -47,6 +47,7 @@ source_set("tab_grid") {
     "//ios/chrome/browser/shared/model/browser_state",
     "//ios/chrome/browser/shared/model/prefs:pref_names",
     "//ios/chrome/browser/shared/model/url:constants",
+    "//ios/chrome/browser/shared/model/utils",
     "//ios/chrome/browser/shared/model/web_state_list",
     "//ios/chrome/browser/shared/public/commands",
     "//ios/chrome/browser/shared/public/features",
@@ -120,12 +121,6 @@ source_set("tab_grid_page_mutator") {
   ]
 }
 
-source_set("tab_collection_commands") {
-  sources = [ "tab_collection_commands.h" ]
-
-  deps = [ "//base" ]
-}
-
 source_set("tab_grid_ui_constants") {
   sources = [
     "tab_grid_constants.h",
@@ -152,7 +147,6 @@ source_set("tab_grid_ui") {
   ]
 
   deps = [
-    ":tab_collection_commands",
     ":tab_grid_activity_observer",
     ":tab_grid_metrics",
     ":tab_grid_page_mutator",
@@ -161,6 +155,7 @@ source_set("tab_grid_ui") {
     "//base",
     "//ios/chrome/app/strings",
     "//ios/chrome/browser/crash_report/model",
+    "//ios/chrome/browser/default_browser/model:utils",
     "//ios/chrome/browser/shared/public/commands",
     "//ios/chrome/browser/shared/public/features",
     "//ios/chrome/browser/shared/ui/symbols",
@@ -168,6 +163,8 @@ source_set("tab_grid_ui") {
     "//ios/chrome/browser/shared/ui/util",
     "//ios/chrome/browser/tabs/model:features",
     "//ios/chrome/browser/tabs/model/inactive_tabs:features",
+    "//ios/chrome/browser/ui/bubble:constants",
+    "//ios/chrome/browser/ui/bubble/gesture_iph/",
     "//ios/chrome/browser/ui/incognito_reauth:incognito_reauth_scene_agent",
     "//ios/chrome/browser/ui/keyboard",
     "//ios/chrome/browser/ui/menu",
@@ -222,6 +219,7 @@ source_set("unit_tests") {
     "//ios/chrome/browser/ui/popup_menu",
     "//ios/chrome/browser/ui/tab_switcher/tab_grid/grid:grid_ui",
     "//ios/chrome/browser/ui/tab_switcher/tab_grid/grid/incognito",
+    "//ios/chrome/browser/ui/tab_switcher/tab_grid/pinned_tabs:pinned_tabs_ui",
     "//ios/chrome/browser/ui/tab_switcher/tab_grid/toolbars:toolbars_ui",
     "//ios/chrome/common/ui/reauthentication",
     "//ios/chrome/test:block_cleanup_test",
@@ -238,6 +236,7 @@ source_set("eg2_tests") {
   testonly = true
   sources = [
     "tab_grid_egtest.mm",
+    "tab_grid_gesture_iph_egtest.mm",
     "tab_grid_transition_egtest.mm",
   ]
 
@@ -245,6 +244,7 @@ source_set("eg2_tests") {
     ":tab_grid_ui_constants",
     "//base",
     "//components/bookmarks/common",
+    "//components/feature_engagement/public",
     "//components/sync/base:features",
     "//ios/chrome/app/strings",
     "//ios/chrome/browser/metrics/model:eg_test_support+eg2",
@@ -254,6 +254,7 @@ source_set("eg2_tests") {
     "//ios/chrome/browser/ui/authentication:eg_test_support+eg2",
     "//ios/chrome/browser/ui/authentication/signin:constants",
     "//ios/chrome/browser/ui/bookmarks:eg_test_support+eg2",
+    "//ios/chrome/browser/ui/bubble/gesture_iph:constants",
     "//ios/chrome/browser/ui/history:constants",
     "//ios/chrome/browser/ui/popup_menu:constants",
     "//ios/chrome/browser/ui/reading_list:eg_test_support+eg2",
@@ -264,8 +265,10 @@ source_set("eg2_tests") {
     "//ios/chrome/browser/ui/tab_switcher/tab_grid/grid:grid_ui_constants",
     "//ios/chrome/browser/ui/tab_switcher/test:utils",
     "//ios/chrome/common/ui/table_view:cells_constants",
+    "//ios/chrome/test:eg_test_support+eg2",
     "//ios/chrome/test/earl_grey:eg_test_support+eg2",
     "//ios/testing/earl_grey:eg_test_support+eg2",
+    "//ios/testing/earl_grey:launch_configuration",
     "//ios/web/public/test/http_server",
     "//net:test_support",
     "//ui/base",

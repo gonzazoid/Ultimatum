@@ -4,14 +4,16 @@
 
 import 'chrome://resources/cr_components/settings_prefs/prefs.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
-import 'chrome://resources/cr_elements/md_select.css.js';
+import 'chrome://resources/ash/common/cr_elements/md_select.css.js';
 import './customize_button_select.js';
 import '../settings_shared.css.js';
-import '/shared/settings/controls/settings_dropdown_menu.js';
+import '../controls/settings_dropdown_menu.js';
 import '../os_settings_icons.html.js';
 
+import {CrIconButtonElement} from 'chrome://resources/ash/common/cr_elements/cr_icon_button/cr_icon_button.js';
+import {I18nMixin} from 'chrome://resources/ash/common/cr_elements/i18n_mixin.js';
 import {strictQuery} from 'chrome://resources/ash/common/typescript_utils/strict_query.js';
-import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
 import {PolymerElementProperties} from 'chrome://resources/polymer/v3_0/polymer/interfaces.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
@@ -29,7 +31,15 @@ export interface CustomizeButtonRowElement {
   $: {
     container: HTMLDivElement,
     remappingActionDropdown: CustomizeButtonSelectElement,
+    renameButton: CrIconButtonElement,
+    reorderButton: CrIconButtonElement,
   };
+}
+
+declare global {
+  interface HTMLElementEventMap {
+    'reorder-button-direction': ReorderButtonDirectionEvent;
+  }
 }
 
 /**
@@ -41,6 +51,9 @@ export interface CustomizeButtonRowElement {
 export type ShowRenamingDialogEvent = CustomEvent<{buttonIndex: number}>;
 export type ShowKeyCustomizationDialogEvent =
     CustomEvent<{buttonIndex: number}>;
+export type ReorderButtonEvent =
+    CustomEvent<{originIndex: number, destinationIndex: number}>;
+export type ReorderButtonDirectionEvent = CustomEvent<{direction: boolean}>;
 
 const CustomizeButtonRowElementBase = I18nMixin(PolymerElement);
 
@@ -100,6 +113,10 @@ export class CustomizeButtonRowElement extends CustomizeButtonRowElementBase {
         type: Object,
         value: null,
       },
+
+      hasLauncherButton: {
+        type: Boolean,
+      },
     };
   }
 
@@ -112,6 +129,7 @@ export class CustomizeButtonRowElement extends CustomizeButtonRowElementBase {
   buttonRemappingList: ButtonRemapping[];
   remappingIndex: number;
   actionList: ActionChoice[];
+  hasLauncherButton: boolean;
   private buttonPressObserverReceiver: ButtonPressObserverReceiver;
   private buttonRemapping_: ButtonRemapping;
   private buttonRemappingName_: string;
@@ -125,6 +143,31 @@ export class CustomizeButtonRowElement extends CustomizeButtonRowElementBase {
     this.observeButtonPresses();
     // Focus dropdown right away as this button was just pressed.
     this.$.remappingActionDropdown!.focus();
+
+    this.$.reorderButton!.addEventListener(
+        'keydown', this.handleKeyDownReorderButton_);
+    this.addEventListener(
+        'reorder-button-direction', this.onButtonReorderDirectEvent_);
+  }
+
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this.$.reorderButton!.removeEventListener(
+        'keydown', this.handleKeyDownReorderButton_);
+    this.removeEventListener(
+        'reorder-button-direction', this.onButtonReorderDirectEvent_);
+  }
+
+  /**
+   * Focuses the reordering button for this row.
+   */
+  focusReorderingButton(): void {
+    this.$.reorderButton.focus();
+  }
+
+  override focus(): void {
+    assert(this.$.remappingActionDropdown);
+    this.$.remappingActionDropdown.focus();
   }
 
   private observeButtonPresses(): void {
@@ -250,6 +293,36 @@ export class CustomizeButtonRowElement extends CustomizeButtonRowElementBase {
 
   private isDropdownDisabled_(): boolean {
     return this.isBeingDragged_;
+  }
+
+  private getReorderButtonLabel_(): string {
+    return this.i18n('buttonReorderingAriaLabel', this.buttonRemappingName_);
+  }
+
+  private onButtonReorderDirectEvent_(e: ReorderButtonDirectionEvent): void {
+    const destinationIndex =
+        this.remappingIndex + (e.detail.direction ? -1 : 1);
+    this.dispatchEvent(new CustomEvent('reorder-button', {
+      bubbles: true,
+      composed: true,
+      detail: {originIndex: this.remappingIndex, destinationIndex},
+    }));
+  }
+
+  private handleKeyDownReorderButton_(e: KeyboardEvent): void {
+    if (!e.ctrlKey) {
+      return;
+    }
+
+    const isArrowUp = e.key === 'ArrowUp';
+    const isArrowDown = e.key === 'ArrowDown';
+    if (isArrowUp || isArrowDown) {
+      this.dispatchEvent(new CustomEvent('reorder-button-direction', {
+        bubbles: true,
+        composed: true,
+        detail: {direction: isArrowUp ? true : false},
+      }));
+    }
   }
 }
 

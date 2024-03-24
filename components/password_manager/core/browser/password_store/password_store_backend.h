@@ -59,6 +59,9 @@ class PasswordStoreBackend {
   // after the shutdown has concluded and it is safe to delete the backend.
   virtual void Shutdown(base::OnceClosure shutdown_completed) = 0;
 
+  // Necessary condition to offer saving passwords.
+  virtual bool IsAbleToSavePasswords() = 0;
+
   // Returns the complete list of PasswordForms (regardless of their blocklist
   // status). Callback is called on the main sequence.
   virtual void GetAllLoginsAsync(LoginsOrErrorReply callback) = 0;
@@ -150,6 +153,14 @@ class PasswordStoreBackend {
 
   // Propagates sync initialization event.
   virtual void OnSyncServiceInitialized(syncer::SyncService* sync_service) = 0;
+
+  // Records calls to the `AddLoginAsync()` from the password store.
+  // TODO: crbug.com/327126704 - Remove this method after UPM is launched.
+  virtual void RecordAddLoginAsyncCalledFromTheStore() = 0;
+
+  // Records calls to the `UpdateLoginAsync()` from the password store.
+  // TODO: crbug.com/327126704 - Remove this method after UPM is launched.
+  virtual void RecordUpdateLoginAsyncCalledFromTheStore() = 0;
 
   // Get a WeakPtr to the instance.
   virtual base::WeakPtr<PasswordStoreBackend> AsWeakPtr() = 0;

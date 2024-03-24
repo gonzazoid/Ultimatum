@@ -5,9 +5,11 @@
 // clang-format off
 import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
-import {flush, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import type {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {ClearBrowsingDataBrowserProxyImpl, ContentSetting, ContentSettingsTypes, CookieControlsMode, SafetyHubBrowserProxyImpl, SafetyHubEvent, SiteSettingsPrefsBrowserProxyImpl} from 'chrome://settings/lazy_load.js';
-import {CrLinkRowElement, CrSettingsPrefs, HatsBrowserProxyImpl, MetricsBrowserProxyImpl, PrivacyGuideInteractions, PrivacyPageBrowserProxyImpl, Route, Router, routes, SettingsPrefsElement, SettingsPrivacyPageElement, StatusAction, SyncStatus, TrustSafetyInteraction} from 'chrome://settings/settings.js';
+import type {CrLinkRowElement, Route, SettingsPrefsElement, SettingsPrivacyPageElement, SyncStatus} from 'chrome://settings/settings.js';
+import {CrSettingsPrefs, HatsBrowserProxyImpl, MetricsBrowserProxyImpl, PrivacyGuideInteractions, PrivacyPageBrowserProxyImpl, Router, routes, StatusAction, TrustSafetyInteraction} from 'chrome://settings/settings.js';
 import {assertEquals, assertFalse, assertTrue, assertThrows} from 'chrome://webui-test/chai_assert.js';
 import {isChildVisible, isVisible} from 'chrome://webui-test/test_util.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
@@ -35,6 +37,7 @@ const redesignedPages: Route[] = [
   routes.SITE_SETTINGS_IDLE_DETECTION,
   routes.SITE_SETTINGS_IMAGES,
   routes.SITE_SETTINGS_JAVASCRIPT,
+  routes.SITE_SETTINGS_JAVASCRIPT_JIT,
   routes.SITE_SETTINGS_LOCAL_FONTS,
   routes.SITE_SETTINGS_LOCATION,
   routes.SITE_SETTINGS_MICROPHONE,
@@ -56,11 +59,12 @@ const redesignedPages: Route[] = [
   routes.SITE_SETTINGS_WEB_PRINTING,
   // </if>
 
+  routes.SITE_SETTINGS_WINDOW_MANAGEMENT,
+
   // TODO(crbug.com/1128902) After restructure add coverage for elements on
   // routes which depend on flags being enabled.
   // routes.SITE_SETTINGS_BLUETOOTH_SCANNING,
   // routes.SITE_SETTINGS_BLUETOOTH_DEVICES,
-  // routes.SITE_SETTINGS_WINDOW_MANAGEMENT,
 
   // Doesn't contain toggle or radio buttons
   // routes.SITE_SETTINGS_INSECURE_CONTENT,
@@ -220,7 +224,7 @@ suite('PrivacyPage', function() {
     await flushTasks();
 
     const categorySettingExceptions =
-        page.shadowRoot!.querySelectorAll('storage-access-site-list')!;
+        page.shadowRoot!.querySelectorAll('storage-access-site-list');
 
     assertEquals(2, categorySettingExceptions.length);
     assertTrue(isVisible(categorySettingExceptions[0]!));

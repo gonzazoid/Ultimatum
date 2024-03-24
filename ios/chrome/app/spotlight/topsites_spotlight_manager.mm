@@ -7,6 +7,7 @@
 #import <memory>
 
 #import "base/functional/bind.h"
+#import "base/memory/raw_ptr.h"
 #import "base/memory/ref_counted.h"
 #import "base/strings/sys_string_conversions.h"
 #import "components/bookmarks/browser/bookmark_model.h"
@@ -18,11 +19,11 @@
 #import "ios/chrome/app/spotlight/spotlight_interface.h"
 #import "ios/chrome/app/spotlight/spotlight_logger.h"
 #import "ios/chrome/browser/bookmarks/model/local_or_syncable_bookmark_model_factory.h"
-#import "ios/chrome/browser/favicon/ios_chrome_large_icon_service_factory.h"
+#import "ios/chrome/browser/favicon/model/ios_chrome_large_icon_service_factory.h"
 #import "ios/chrome/browser/history/model/top_sites_factory.h"
 #import "ios/chrome/browser/sync/model/sync_observer_bridge.h"
 #import "ios/chrome/browser/sync/model/sync_service_factory.h"
-#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_mediator.h"
+#import "ios/chrome/browser/ui/content_suggestions/cells/most_visited_tiles_mediator.h"
 
 class SpotlightTopSitesBridge;
 class SpotlightTopSitesCallbackBridge;
@@ -35,7 +36,7 @@ class SpotlightTopSitesCallbackBridge;
   // Bridge to register for top sites callbacks.
   std::unique_ptr<SpotlightTopSitesCallbackBridge> _topSitesCallbackBridge;
 
-  bookmarks::BookmarkModel* _bookmarkModel;             // weak
+  raw_ptr<bookmarks::BookmarkModel> _bookmarkModel;  // weak
 
   scoped_refptr<history::TopSites> _topSites;
 
@@ -106,7 +107,7 @@ class SpotlightTopSitesBridge : public history::TopSitesObserver {
 
  private:
   __weak TopSitesSpotlightManager* owner_;
-  history::TopSites* top_sites_;
+  raw_ptr<history::TopSites> top_sites_;
 };
 
 @implementation TopSitesSpotlightManager
@@ -182,7 +183,7 @@ class SpotlightTopSitesBridge : public history::TopSitesObserver {
 - (void)onMostVisitedURLsAvailable:
     (const history::MostVisitedURLList&)top_sites {
   NSUInteger sitesToIndex =
-      MIN(top_sites.size(), [ContentSuggestionsMediator maxSitesShown]);
+      MIN(top_sites.size(), [MostVisitedTilesMediator maxSitesShown]);
   for (size_t i = 0; i < sitesToIndex; i++) {
     const GURL& URL = top_sites[i].url;
 

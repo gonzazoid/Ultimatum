@@ -69,6 +69,7 @@
 #include "chrome/browser/ui/views/page_action/page_action_icon_params.h"
 #include "chrome/browser/ui/views/page_info/page_info_bubble_view.h"
 #include "chrome/browser/ui/views/passwords/manage_passwords_icon_views.h"
+#include "chrome/browser/ui/views/permissions/chip/permission_chip_view.h"
 #include "chrome/browser/ui/views/permissions/chip/permission_dashboard_view.h"
 #include "chrome/browser/ui/views/send_tab_to_self/send_tab_to_self_icon_view.h"
 #include "chrome/browser/ui/views/sharing_hub/sharing_hub_icon_view.h"
@@ -234,8 +235,8 @@ void LocationBarView::Init() {
             browser_, this, permission_dashboard_view_);
   } else {
     chip_controller_ = std::make_unique<ChipController>(
-        browser_, AddChildViewAt(std::make_unique<OmniboxChipButton>(
-                                     OmniboxChipButton::PressedCallback()),
+        browser_, AddChildViewAt(std::make_unique<PermissionChipView>(
+                                     PermissionChipView::PressedCallback()),
                                  0));
   }
 
@@ -598,7 +599,7 @@ void LocationBarView::OnKeywordFaviconFetched(const gfx::Image& icon) {
   selected_keyword_view_->SetCustomImage(icon);
 }
 
-void LocationBarView::Layout() {
+void LocationBarView::Layout(PassKey) {
   if (!IsInitialized())
     return;
 
@@ -889,7 +890,7 @@ void LocationBarView::Layout() {
     position_view(omnibox_additional_text_view_, omnibox_additional_text_width);
   }
 
-  View::Layout();
+  LayoutSuperclass<View>(this);
 }
 
 void LocationBarView::OnThemeChanged() {
@@ -913,7 +914,7 @@ void LocationBarView::OnThemeChanged() {
 }
 
 void LocationBarView::ChildPreferredSizeChanged(views::View* child) {
-  Layout();
+  DeprecatedLayoutImmediately();
   SchedulePaint();
 }
 
@@ -947,7 +948,7 @@ void LocationBarView::Update(WebContents* contents) {
   if (qr_generator_icon)
     qr_generator_icon->SetVisible(false);
 
-  OnChanged();  // NOTE: Calls Layout().
+  OnChanged();  // NOTE: Triggers layout.
 
   // A permission prompt may be suspended due to an invalid state (empty or
   // editing location bar). Restore the suspended prompt if possible.
@@ -1163,6 +1164,13 @@ void LocationBarView::RefreshBackground() {
   // correctly enable subpixel AA.
   omnibox_view_->SetBackgroundColor(background_color);
 
+  // The divider between indicators and request chips should have the same color
+  // as the omnibox.
+  if (base::FeatureList::IsEnabled(
+          content_settings::features::kLeftHandSideActivityIndicators)) {
+    permission_dashboard_view_->SetDividerBackgroundColor(background_color);
+  }
+
   SchedulePaint();
 }
 
@@ -1263,7 +1271,7 @@ void LocationBarView::FocusSearch() {
 
 void LocationBarView::UpdateContentSettingsIcons() {
   if (RefreshContentSettingViews()) {
-    Layout();
+    DeprecatedLayoutImmediately();
     SchedulePaint();
   }
 }
@@ -1438,7 +1446,7 @@ void LocationBarView::OnChanged() {
       omnibox_view_ && omnibox_view_->model()->user_input_in_progress() &&
       !omnibox_view_->GetText().empty() &&
       IsVirtualKeyboardVisible(GetWidget()));
-  Layout();
+  DeprecatedLayoutImmediately();
   SchedulePaint();
   UpdateSendTabToSelfIcon();
   UpdateQRCodeGeneratorIcon();
@@ -1495,10 +1503,6 @@ void LocationBarView::OnOmniboxHovered(bool is_hovering) {
   } else {
     hover_animation_.Hide();
   }
-}
-
-void LocationBarView::FocusAndSelectAll() {
-  FocusLocation(true);
 }
 
 void LocationBarView::OnTouchUiChanged() {

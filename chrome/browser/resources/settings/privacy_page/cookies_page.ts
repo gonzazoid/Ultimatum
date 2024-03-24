@@ -12,29 +12,32 @@ import 'chrome://resources/cr_components/settings_prefs/prefs.js';
 import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
 import 'chrome://resources/cr_elements/cr_link_row/cr_link_row.js';
 import 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
-import '/shared/settings/controls/settings_toggle_button.js';
+import '../controls/settings_toggle_button.js';
 import '../icons.html.js';
 import '../settings_shared.css.js';
 import '../site_settings/site_list.js';
 import './collapse_radio_button.js';
 import './do_not_track_toggle.js';
-import '/shared/settings/controls/settings_radio_group.js';
+import '../controls/settings_radio_group.js';
 
-import {SettingsRadioGroupElement} from '/shared/settings/controls/settings_radio_group.js';
-import {SettingsToggleButtonElement} from '/shared/settings/controls/settings_toggle_button.js';
 import {PrefsMixin} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
-import {CrToastElement} from 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
+import type {CrToastElement} from 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
 import {assert} from 'chrome://resources/js/assert.js';
 import {focusWithoutInk} from 'chrome://resources/js/focus_without_ink.js';
+import {OpenWindowProxyImpl} from 'chrome://resources/js/open_window_proxy.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {FocusConfig} from '../focus_config.js';
+import type {SettingsRadioGroupElement} from '../controls/settings_radio_group.js';
+import type {SettingsToggleButtonElement} from '../controls/settings_toggle_button.js';
+import type {FocusConfig} from '../focus_config.js';
 import {loadTimeData} from '../i18n_setup.js';
-import {MetricsBrowserProxy, MetricsBrowserProxyImpl, PrivacyElementInteractions} from '../metrics_browser_proxy.js';
+import type {MetricsBrowserProxy} from '../metrics_browser_proxy.js';
+import {MetricsBrowserProxyImpl, PrivacyElementInteractions} from '../metrics_browser_proxy.js';
 import {routes} from '../route.js';
-import {Route, RouteObserverMixin, Router} from '../router.js';
+import type {Route} from '../router.js';
+import {RouteObserverMixin, Router} from '../router.js';
 import {ContentSetting, ContentSettingsTypes, CookieControlsMode} from '../site_settings/constants.js';
 import {CookiePrimarySetting} from '../site_settings/site_settings_prefs_browser_proxy.js';
 
@@ -129,6 +132,24 @@ export class SettingsCookiesPageElement extends SettingsCookiesPageElementBase {
             loadTimeData.getBoolean('is3pcdCookieSettingsRedesignEnabled'),
       },
 
+      isCookieSettingsUiAlignmentEnabled_: {
+        type: Boolean,
+        value: () =>
+            loadTimeData.getBoolean('isCookieSettingsUiAlignmentEnabled'),
+      },
+
+      isCookiesUiV2_: {
+        type: Boolean,
+        value: () =>
+            (loadTimeData.getBoolean('isCookieSettingsUiAlignmentEnabled') ||
+             loadTimeData.getBoolean('is3pcdCookieSettingsRedesignEnabled')),
+      },
+
+      isIpProtectionAvailable_: {
+        type: Boolean,
+        value: () => loadTimeData.getBoolean('isIpProtectionV1Enabled'),
+      },
+
       showTrackingProtectionRollbackNotice_: {
         type: Boolean,
         value: () => loadTimeData.getBoolean(
@@ -150,6 +171,9 @@ export class SettingsCookiesPageElement extends SettingsCookiesPageElementBase {
   focusConfig: FocusConfig;
   private enableFirstPartySetsUI_: boolean;
   private is3pcdRedesignEnabled_: boolean;
+  private isCookieSettingsUiAlignmentEnabled_: boolean;
+  private isIpProtectionAvailable_: boolean;
+  private isCookiesUiV2_: boolean;
 
   private metricsBrowserProxy_: MetricsBrowserProxy =
       MetricsBrowserProxyImpl.getInstance();
@@ -183,6 +207,13 @@ export class SettingsCookiesPageElement extends SettingsCookiesPageElementBase {
     }
   }
 
+  private getPageDescription_(): string {
+    return this.i18n(
+        this.isCookieSettingsUiAlignmentEnabled_ ?
+            'thirdPartyCookiesAlignedPageDescription' :
+            'thirdPartyCookiesPageDescription');
+  }
+
   private getThirdPartyCookiesPageBlockThirdPartyIncognitoBulTwoLabel_():
       string {
     return this.i18n(
@@ -200,6 +231,11 @@ export class SettingsCookiesPageElement extends SettingsCookiesPageElementBase {
 
   private onSiteDataClick_() {
     Router.getInstance().navigateTo(routes.SITE_SETTINGS_ALL);
+  }
+
+  private onIpProtectionLearnMoreClicked_() {
+    OpenWindowProxyImpl.getInstance().openUrl(
+        loadTimeData.getString('ipProtectionLearnMoreUrl'));
   }
 
   private onGeneratedPrefsUpdated_() {
@@ -220,6 +256,11 @@ export class SettingsCookiesPageElement extends SettingsCookiesPageElementBase {
       this.metricsBrowserProxy_.recordAction(
           'Settings.PrivacySandbox.Block3PCookies');
     }
+  }
+
+  private onIpProtectionChanged_() {
+    this.metricsBrowserProxy_.recordSettingsPageHistogram(
+        PrivacyElementInteractions.IP_PROTECTION);
   }
 
   private onCookieControlsModeChanged_() {

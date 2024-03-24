@@ -461,8 +461,9 @@ class AcceleratorConfigurationProviderTest : public AshTestBase {
     return accelerator_iter->second;
   }
 
-  uint32_t GetNonConfigurableIdFromAccelerator(ui::Accelerator accelerator) {
-    return provider_->non_configurable_accelerator_to_id_.Get(accelerator);
+  std::vector<uint32_t> GetNonConfigurableIdFromAccelerator(
+      ui::Accelerator accelerator) {
+    return provider_->FindNonConfigurableIdFromAccelerator(accelerator);
   }
 
   std::unique_ptr<AcceleratorConfigurationProvider> provider_;
@@ -769,16 +770,28 @@ TEST_F(AcceleratorConfigurationProviderTest, TopRowKeyAcceleratorRemapped) {
       // search + esc -> search + esc
       {/*trigger_on_press=*/true, ui::VKEY_ESCAPE, ui::EF_COMMAND_DOWN,
        AcceleratorAction::kShowTaskManager},
+      // shift + zoom -> shift + VKEY_ZOOM (no change)
+      {/*trigger_on_press=*/true, ui::VKEY_ZOOM, ui::EF_SHIFT_DOWN,
+       AcceleratorAction::kToggleFullscreen},
       // shift + zoom -> shift + search + VKEY_ZOOM
       {/*trigger_on_press=*/true, ui::VKEY_ZOOM,
        ui::EF_SHIFT_DOWN | ui::EF_COMMAND_DOWN,
        AcceleratorAction::kToggleFullscreen},
+      // zoom -> VKEY_ZOOM (no change)
+      {/*trigger_on_press=*/true, ui::VKEY_ZOOM, ui::EF_NONE,
+       AcceleratorAction::kToggleFullscreen},
       // zoom -> search + VKEY_ZOOM
       {/*trigger_on_press=*/true, ui::VKEY_ZOOM, ui::EF_COMMAND_DOWN,
        AcceleratorAction::kToggleFullscreen},
+      // brightness_up -> VKEY_BRIGHTNESS_UP (no change)
+      {/*trigger_on_press=*/true, ui::VKEY_BRIGHTNESS_UP, ui::EF_NONE,
+       AcceleratorAction::kBrightnessUp},
       // brightness_up -> search + VKEY_BRIGHTNESS_UP
       {/*trigger_on_press=*/true, ui::VKEY_BRIGHTNESS_UP, ui::EF_COMMAND_DOWN,
        AcceleratorAction::kBrightnessUp},
+      // alt + brightness_up -> alt + VKEY_BRIGHTNESS_UP (no change)
+      {/*trigger_on_press=*/true, ui::VKEY_BRIGHTNESS_UP, ui::EF_ALT_DOWN,
+       AcceleratorAction::kKeyboardBrightnessUp},
       // alt + brightness_up -> alt + search + VKEY_BRIGHTNESS_UP
       {/*trigger_on_press=*/true, ui::VKEY_BRIGHTNESS_UP,
        ui::EF_ALT_DOWN | ui::EF_COMMAND_DOWN,
@@ -1198,9 +1211,10 @@ TEST_F(AcceleratorConfigurationProviderTest, NonConfigurableReverseLookup) {
     if (accelerators_details.IsStandardAccelerator()) {
       for (const auto& accelerator :
            accelerators_details.accelerators.value()) {
-        const uint32_t found_id =
+        std::vector<uint32_t> found_ids =
             GetNonConfigurableIdFromAccelerator(accelerator);
-        EXPECT_EQ(ambient_action_id, found_id);
+        ASSERT_FALSE(found_ids.empty());
+        EXPECT_TRUE(base::Contains(found_ids, ambient_action_id));
       }
     }
   }
@@ -1662,6 +1676,26 @@ TEST_F(AcceleratorConfigurationProviderTest, AddAcceleratorBadAccelerator) {
                           search_function_accelerator, &result);
   EXPECT_EQ(mojom::AcceleratorConfigResult::kSearchWithFunctionKeyNotAllowed,
             result->result);
+
+  // Brightness down key, typically in top-row.
+  const ui::Accelerator brightness_down_accelerator(ui::VKEY_BRIGHTNESS_DOWN,
+                                                    ui::EF_COMMAND_DOWN);
+  ash::shortcut_customization::mojom::
+      AcceleratorConfigurationProviderAsyncWaiter(provider_.get())
+          .AddAccelerator(mojom::AcceleratorSource::kAsh, kToggleMirrorMode,
+                          brightness_down_accelerator, &result);
+  EXPECT_EQ(mojom::AcceleratorConfigResult::kNonStandardWithSearch,
+            result->result);
+
+  // Calculator key, typically not in top-row.
+  const ui::Accelerator mail_accelerator(ui::VKEY_MEDIA_LAUNCH_MAIL,
+                                         ui::EF_COMMAND_DOWN);
+  ash::shortcut_customization::mojom::
+      AcceleratorConfigurationProviderAsyncWaiter(provider_.get())
+          .AddAccelerator(mojom::AcceleratorSource::kAsh, kToggleMirrorMode,
+                          mail_accelerator, &result);
+  EXPECT_EQ(mojom::AcceleratorConfigResult::kNonStandardWithSearch,
+            result->result);
 }
 
 TEST_F(AcceleratorConfigurationProviderTest, AddAcceleratorExceedsMaximum) {
@@ -1694,6 +1728,99 @@ TEST_F(AcceleratorConfigurationProviderTest, AddAcceleratorExceedsMaximum) {
                           AcceleratorAction::kToggleMirrorMode, accelerator,
                           &result);
   EXPECT_EQ(mojom::AcceleratorConfigResult::kMaximumAcceleratorsReached,
+            result->result);
+}
+
+TEST_F(AcceleratorConfigurationProviderTest, ReAddDefaultAccelerator) {
+  // Initialize default accelerators.
+  const AcceleratorData test_data[] = {
+      {/*trigger_on_press=*/true, ui::VKEY_Z, ui::EF_NONE,
+       AcceleratorAction::kTakeScreenshot},
+      {/*trigger_on_press=*/true, ui::VKEY_D,
+       ui::EF_CONTROL_DOWN | ui::EF_SHIFT_DOWN | ui::EF_ALT_DOWN,
+       AcceleratorAction::kTakeScreenshot},
+  };
+
+  AshAcceleratorConfiguration* config =
+      Shell::Get()->ash_accelerator_configuration();
+  config->Initialize(test_data);
+  base::RunLoop().RunUntilIdle();
+
+  // Verify accelerators are populated.
+  EXPECT_EQ(sizeof(test_data) / sizeof(AcceleratorData),
+            config->GetAllAccelerators().size());
+
+  AcceleratorResultDataPtr result;
+  // Remove first accelerator 'z'.
+  const ui::Accelerator removed_accelerator(ui::VKEY_Z, ui::EF_NONE);
+  ash::shortcut_customization::mojom::
+      AcceleratorConfigurationProviderAsyncWaiter(provider_.get())
+          .RemoveAccelerator(mojom::AcceleratorSource::kAsh,
+                             AcceleratorAction::kTakeScreenshot,
+                             removed_accelerator, &result);
+  base::RunLoop().RunUntilIdle();
+  EXPECT_EQ(mojom::AcceleratorConfigResult::kSuccess, result->result);
+
+  // Remove second accelerator 'alt+shift+ctrl+d'.
+  const ui::Accelerator removed_accelerator2(
+      ui::VKEY_D, ui::EF_CONTROL_DOWN | ui::EF_SHIFT_DOWN | ui::EF_ALT_DOWN);
+  ash::shortcut_customization::mojom::
+      AcceleratorConfigurationProviderAsyncWaiter(provider_.get())
+          .RemoveAccelerator(mojom::AcceleratorSource::kAsh,
+                             AcceleratorAction::kTakeScreenshot,
+                             removed_accelerator2, &result);
+  base::RunLoop().RunUntilIdle();
+  EXPECT_EQ(mojom::AcceleratorConfigResult::kSuccess, result->result);
+
+  // Re-add a default accelerator 'z' and expect a successful operation.
+  const ui::Accelerator accelerator(ui::VKEY_Z, ui::EF_NONE);
+  ash::shortcut_customization::mojom::
+      AcceleratorConfigurationProviderAsyncWaiter(provider_.get())
+          .AddAccelerator(mojom::AcceleratorSource::kAsh,
+                          AcceleratorAction::kTakeScreenshot, accelerator,
+                          &result);
+  EXPECT_EQ(mojom::AcceleratorConfigResult::kSuccess, result->result);
+
+  // Add non-default accelerator 'y' and expect a 'missing modifier' error.
+  const ui::Accelerator accelerator2(ui::VKEY_Y, ui::EF_NONE);
+  ash::shortcut_customization::mojom::
+      AcceleratorConfigurationProviderAsyncWaiter(provider_.get())
+          .AddAccelerator(mojom::AcceleratorSource::kAsh,
+                          AcceleratorAction::kTakeScreenshot, accelerator2,
+                          &result);
+  EXPECT_EQ(mojom::AcceleratorConfigResult::kMissingModifier, result->result);
+
+  // Re-add a default accelerator 'ctrl+alt+shift+d' and expect successful
+  // addition without any warnings.
+  const ui::Accelerator accelerator3(
+      ui::VKEY_D, ui::EF_CONTROL_DOWN | ui::EF_SHIFT_DOWN | ui::EF_ALT_DOWN);
+  ash::shortcut_customization::mojom::
+      AcceleratorConfigurationProviderAsyncWaiter(provider_.get())
+          .AddAccelerator(mojom::AcceleratorSource::kAsh,
+                          AcceleratorAction::kTakeScreenshot, accelerator3,
+                          &result);
+  EXPECT_EQ(mojom::AcceleratorConfigResult::kSuccess, result->result);
+
+  // Add 'ctrl+alt+shift+d' and expect a 'conflict' error.
+  const ui::Accelerator accelerator4(
+      ui::VKEY_D, ui::EF_CONTROL_DOWN | ui::EF_SHIFT_DOWN | ui::EF_ALT_DOWN);
+  ash::shortcut_customization::mojom::
+      AcceleratorConfigurationProviderAsyncWaiter(provider_.get())
+          .AddAccelerator(mojom::AcceleratorSource::kAsh,
+                          AcceleratorAction::kTakeScreenshot, accelerator4,
+                          &result);
+  EXPECT_EQ(mojom::AcceleratorConfigResult::kConflict, result->result);
+
+  // Add non-default accelerator 'ctrl+alt+shift+e', expect a non search
+  // accelerator warning.
+  const ui::Accelerator accelerator5(
+      ui::VKEY_E, ui::EF_CONTROL_DOWN | ui::EF_SHIFT_DOWN | ui::EF_ALT_DOWN);
+  ash::shortcut_customization::mojom::
+      AcceleratorConfigurationProviderAsyncWaiter(provider_.get())
+          .AddAccelerator(mojom::AcceleratorSource::kAsh,
+                          AcceleratorAction::kTakeScreenshot, accelerator5,
+                          &result);
+  EXPECT_EQ(mojom::AcceleratorConfigResult::kNonSearchAcceleratorWarning,
             result->result);
 }
 
@@ -3101,9 +3228,12 @@ TEST_F(AcceleratorConfigurationProviderTest, GetDefaultAcceleratorsForId) {
           // [brightness_up] -> [search + brightness_up].
           [&](const std::vector<ui::Accelerator>& default_accelerators) {
             const ui::Accelerator expected_accelerator(ui::VKEY_BRIGHTNESS_UP,
-                                                       ui::EF_COMMAND_DOWN);
-            EXPECT_EQ(1u, default_accelerators.size());
+                                                       ui::EF_NONE);
+            const ui::Accelerator expected_accelerator2(ui::VKEY_BRIGHTNESS_UP,
+                                                        ui::EF_COMMAND_DOWN);
+            EXPECT_EQ(2u, default_accelerators.size());
             EXPECT_TRUE(expected_accelerator == default_accelerators[0]);
+            EXPECT_TRUE(expected_accelerator2 == default_accelerators[1]);
           }));
 }
 

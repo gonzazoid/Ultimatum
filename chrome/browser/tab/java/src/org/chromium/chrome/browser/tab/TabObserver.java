@@ -8,6 +8,8 @@ import android.graphics.Bitmap;
 
 import androidx.annotation.Nullable;
 
+import org.chromium.base.Token;
+import org.chromium.chrome.browser.tab.Tab.LoadUrlResult;
 import org.chromium.components.find_in_page.FindMatchRectsDetails;
 import org.chromium.components.find_in_page.FindNotificationDetails;
 import org.chromium.content_public.browser.LoadUrlParams;
@@ -63,14 +65,12 @@ public interface TabObserver {
 
     /**
      * Called when loadUrl is triggered on a a {@link Tab}.
-     * @param tab      The notifying {@link Tab}.
-     * @param params   The params describe the page being loaded.
-     * @param loadType The type of load that was performed.
      *
-     * @see Tab$TabLoadStatus#PAGE_LOAD_FAILED
-     * @see Tab$TabLoadStatus#DEFAULT_PAGE_LOAD
+     * @param tab The notifying {@link Tab}.
+     * @param params The params describe the page being loaded.
+     * @param loadUrlResult The result of the loadUrl.
      */
-    void onLoadUrl(Tab tab, LoadUrlParams params, int loadType);
+    void onLoadUrl(Tab tab, LoadUrlParams params, LoadUrlResult loadUrlResult);
 
     /**
      * Called when a tab has started to load a page.
@@ -358,10 +358,21 @@ public interface TabObserver {
      */
     default void onTimestampChanged(Tab tab, long timestampMillis) {}
 
+    // TODO(crbug/1524345): deprecate RootId once TabGroupId has finished replacing it.
     /**
-     * Broadcast that root identifier on a {@link Tab} has changed
+     * Broadcast that root identifier on a {@link Tab} has changed. This method will be functionally
+     * replaced by onTabGroupIdChanged as part of https://crbug.com/1523745.
+     *
      * @param tab {@link Tab} root identifier has changed on
      * @param newRootId new value of new root id
      */
     default void onRootIdChanged(Tab tab, int newRootId) {}
+
+    /**
+     * Broadcast that tab group ID on a {@link Tab} has changed.
+     *
+     * @param tab The {@link Tab} root identifier has changed on
+     * @param tabGroupId The new tab group ID, may be null.
+     */
+    default void onTabGroupIdChanged(Tab tab, @Nullable Token tabGroupId) {}
 }

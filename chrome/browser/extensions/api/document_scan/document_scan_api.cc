@@ -4,6 +4,7 @@
 
 #include "chrome/browser/extensions/api/document_scan/document_scan_api.h"
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -11,7 +12,6 @@
 #include "base/functional/bind.h"
 #include "chrome/browser/extensions/api/document_scan/document_scan_api_handler.h"
 #include "chrome/browser/extensions/chrome_extension_function_details.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/crosapi/crosapi_ash.h"
@@ -56,8 +56,8 @@ ExtensionFunction::ResponseAction DocumentScanScanFunction::Run() {
 }
 
 void DocumentScanScanFunction::OnScanCompleted(
-    absl::optional<api::document_scan::ScanResults> scan_results,
-    absl::optional<std::string> error) {
+    std::optional<api::document_scan::ScanResults> scan_results,
+    std::optional<std::string> error) {
   if (error) {
     Respond(Error(*error));
     return;
@@ -83,7 +83,7 @@ ExtensionFunction::ResponseAction DocumentScanGetScannerListFunction::Run() {
   DocumentScanAPIHandler::Get(browser_context())
       ->GetScannerList(
           ChromeExtensionFunctionDetails(this).GetNativeWindowForUI(),
-          extension_, std::move(params->filter),
+          extension_, user_gesture(), std::move(params->filter),
           base::BindOnce(
               &DocumentScanGetScannerListFunction::OnScannerListReceived,
               this));
@@ -198,7 +198,7 @@ ExtensionFunction::ResponseAction DocumentScanStartScanFunction::Run() {
   DocumentScanAPIHandler::Get(browser_context())
       ->StartScan(
           ChromeExtensionFunctionDetails(this).GetNativeWindowForUI(),
-          extension_, std::move(params->scanner_handle),
+          extension_, user_gesture(), std::move(params->scanner_handle),
           std::move(params->options),
           base::BindOnce(&DocumentScanStartScanFunction::OnResponseReceived,
                          this));

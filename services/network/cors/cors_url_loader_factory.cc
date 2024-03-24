@@ -229,6 +229,8 @@ CorsURLLoaderFactory::CorsURLLoaderFactory(
           std::move(params->url_loader_network_observer)),
       shared_dictionary_observer_(
           std::move(params->shared_dictionary_observer)),
+      require_cross_site_request_for_cookies_(
+          params->require_cross_site_request_for_cookies),
       origin_access_list_(origin_access_list),
       resource_block_list_(resource_block_list) {
   DCHECK(context_);
@@ -245,7 +247,7 @@ CorsURLLoaderFactory::CorsURLLoaderFactory(
 
   if (context_->GetSharedDictionaryManager() && client_security_state_ &&
       client_security_state_->is_web_secure_context) {
-    absl::optional<net::SharedDictionaryIsolationKey> isolation_key =
+    std::optional<net::SharedDictionaryIsolationKey> isolation_key =
         net::SharedDictionaryIsolationKey::MaybeCreate(params->isolation_info);
     if (isolation_key) {
       shared_dictionary_storage_ =
@@ -407,7 +409,7 @@ void CorsURLLoaderFactory::CreateLoaderAndStart(
         IsTrustedNavigationRequestFromSecureContext(resource_request)) {
       // For trusted navigation requests, we need to get a storage using
       // `isolation_info_ptr`.
-      absl::optional<net::SharedDictionaryIsolationKey> isolation_key =
+      std::optional<net::SharedDictionaryIsolationKey> isolation_key =
           net::SharedDictionaryIsolationKey::MaybeCreate(*isolation_info_ptr);
       if (isolation_key) {
         shared_dictionary_storage =
@@ -415,11 +417,6 @@ void CorsURLLoaderFactory::CreateLoaderAndStart(
       }
     }
 
-    mojo::PendingRemote<mojom::URLLoaderNetworkServiceObserver> observer_remote;
-    if (url_loader_network_service_observer_.is_bound()) {
-      url_loader_network_service_observer_->Clone(
-          observer_remote.InitWithNewPipeAndPassReceiver());
-    }
     auto loader = std::make_unique<CorsURLLoader>(
         std::move(receiver), process_id_, request_id, options,
         base::BindOnce(&CorsURLLoaderFactory::DestroyCorsURLLoader,
@@ -574,9 +571,19 @@ bool CorsURLLoaderFactory::IsValidRequest(const ResourceRequest& request,
     return false;
   }
 
+  // Validate that `require_cross_site_request_for_cookies_` is respected by an
+  // empty SiteForCookies (indicating a cross-site request being made).
+  if (require_cross_site_request_for_cookies_ &&
+      !request.site_for_cookies.IsNull()) {
+    mojo::ReportBadMessage(
+        "CorsURLLoaderFactory: all requests in this context must be "
+        "cross-site");
+    return false;
+  }
+
   // By default we compare the `request_initiator` to the lock below.  This is
   // overridden for renderer navigations, however.
-  absl::optional<url::Origin> origin_to_validate = request.request_initiator;
+  std::optional<url::Origin> origin_to_validate = request.request_initiator;
 
   // Ensure that renderer requests are covered either by CORS or CORB.
   if (process_id_ != mojom::kBrowserProcessId) {

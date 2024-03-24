@@ -2,7 +2,6 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/config/chromebox_for_meetings/buildflags.gni")
 import("//build/config/chromeos/ui_mode.gni")
 import("//chrome/common/features.gni")
 import("//third_party/closure_compiler/compile_js.gni")
@@ -45,6 +44,7 @@ group("resources") {
     "parent_access:resources",
     "password_change:resources",
     "remote_maintenance_curtain:resources",
+    "seal:resources",
     "sensor_info:resources",
     "set_time_dialog:resources",
     "supervision:resources",
@@ -93,18 +93,13 @@ group("closure_compile") {
     "crostini_upgrader:closure_compile",
     "emulator:closure_compile",
     "gaia_action_buttons:closure_compile",
-    "login:closure_compile",
     "multidevice_internals:closure_compile",
     "multidevice_setup:closure_compile",
-    "network_ui:closure_compile",
     "password_change:closure_compile",
     "smb_shares:closure_compile",
     "sys_internals:closure_compile",
     "vm:closure_compile",
   ]
-  if (is_cfm) {
-    deps += [ "chromebox_for_meetings:closure_compile" ]
-  }
 }
 
 js_type_check("closure_compile_local") {

@@ -40,8 +40,12 @@ tags of the format `Gact2.0Omaha{tag}ahamO0.2tcaG`, but Chromium-branded and
 Google-branded builds assume the first case.
 
 ##### Brand code
-The brand code is a string of up to 4 characters long. The brand code is
-persisted during the install, over-installs, and updates.
+The brand code is a string of arbitrary length. The brand code is persisted
+during the first install of the app. Over-installs and updates do not modify
+the brand code.
+
+Note: the limit used to be 4 characters in the previous implementation of the
+updater.
 
 On macOS, the brand code (as well as AP parameter and the app version) can be
 specified using a path to a plist file and a key within that plist file. When
@@ -448,6 +452,17 @@ The updater removes the following Omaha registrations:
   registry at `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`.
 * Removes the Omaha Core and UA tasks.
 
+#### Runtime mode (Windows)
+Similar to Omaha, the updater supports command lines of the form:
+`UpdaterSetup.exe /install "runtime=true"`
+`UpdaterSetup.exe /install "runtime=true&needsadmin=false"`
+`UpdaterSetup.exe /install "runtime=true&needsadmin=true"`
+
+The "runtime" argument in the tag tells the updater to install itself and stay
+on the system without any associated application. The updater will stay on for
+at least `kMaxServerStartsBeforeFirstReg` wakes. This feature is used to expose
+the COM API to a process that will install applications via that API.
+
 ### Installer User Interface
 During installation, the user is presented with a UI that displays the progress
 of the download and installation. The user may close the dialog, which cancels
@@ -823,6 +838,8 @@ The `EnrollmentMandatory` REG_DWORD value is also read from
 
 #### macOS
 The enrollment token is searched in the order:
+* Managed Preference value with key `CloudManagementEnrollmentToken` in domain
+ `{MAC_BROWSER_BUNDLE_IDENTIFIER}`.
 * Managed Preference value with key `EnrollmentToken` in domain
  `{MAC_BROWSER_BUNDLE_IDENTIFIER}`.
 * File
@@ -1117,6 +1134,9 @@ sychronizing traffic to the first second of each minute (or the first
 millisecond of each second).
 
 Background updates can be disabled entirely through policy.
+
+Users can trigger an immediate run of the periodic tasks by calling the
+RunPeriodicTasks RPC, even for a system updater.
 
 #### Windows Scheduling of Updates
 The update wake task is scheduled using the OS task scheduler.
@@ -1416,6 +1436,10 @@ key that defines the application command path is in HKLM, both of which mitigate
 the threat of a non-admin attacker. An Admin attacker would already be able to
 bypass any signature checking by binplanting a DLL, or just by performing
 whatever changes they like on the system, so is outside the threat model.
+
+#### Telemetry
+A ping with the value `kEventAppCommandBegin` = `40` is sent if usagestats are
+enabled when an app command is launched.
 
 ### Policy Status API
 The feature allows Chrome and other applications to query the policies that are

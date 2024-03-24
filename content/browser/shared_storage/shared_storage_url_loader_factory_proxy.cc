@@ -35,11 +35,15 @@ SharedStorageURLLoaderFactoryProxy::SharedStorageURLLoaderFactoryProxy(
         frame_url_loader_factory,
     mojo::PendingReceiver<network::mojom::URLLoaderFactory> pending_receiver,
     const url::Origin& frame_origin,
-    const GURL& script_url)
+    const GURL& script_url,
+    network::mojom::CredentialsMode credentials_mode,
+    const net::SiteForCookies& site_for_cookies)
     : frame_url_loader_factory_(std::move(frame_url_loader_factory)),
       receiver_(this, std::move(pending_receiver)),
       frame_origin_(frame_origin),
-      script_url_(script_url) {}
+      script_url_(script_url),
+      credentials_mode_(credentials_mode),
+      site_for_cookies_(site_for_cookies) {}
 
 SharedStorageURLLoaderFactoryProxy::~SharedStorageURLLoaderFactoryProxy() =
     default;
@@ -51,8 +55,6 @@ void SharedStorageURLLoaderFactoryProxy::CreateLoaderAndStart(
     const network::ResourceRequest& url_request,
     mojo::PendingRemote<network::mojom::URLLoaderClient> client,
     const net::MutableNetworkTrafficAnnotationTag& traffic_annotation) {
-  DCHECK(frame_origin_.IsSameOriginWith(script_url_));
-
   if (url_request.url != script_url_) {
     receiver_.ReportBadMessage("Unexpected request");
     return;
@@ -63,9 +65,10 @@ void SharedStorageURLLoaderFactoryProxy::CreateLoaderAndStart(
   new_request.headers.SetHeader(net::HttpRequestHeaders::kAccept,
                                 "application/javascript");
   new_request.redirect_mode = network::mojom::RedirectMode::kError;
-  new_request.credentials_mode = network::mojom::CredentialsMode::kSameOrigin;
+  new_request.credentials_mode = credentials_mode_;
+  new_request.site_for_cookies = site_for_cookies_;
   new_request.request_initiator = frame_origin_;
-  new_request.mode = network::mojom::RequestMode::kSameOrigin;
+  new_request.mode = network::mojom::RequestMode::kCors;
 
   // TODO(crbug/1268616): create a new factory when the current one gets
   // disconnected.

@@ -3,12 +3,13 @@
 # found in the LICENSE file.
 """Definitions of builders in the chromium.angle builder group."""
 
-load("//lib/builders.star", "os", "reclient", "sheriff_rotations", "xcode")
+load("//lib/builders.star", "os", "reclient", "sheriff_rotations")
 load("//lib/builder_config.star", "builder_config")
 load("//lib/builder_health_indicators.star", "health_spec")
 load("//lib/ci.star", "ci")
 load("//lib/consoles.star", "consoles")
 load("//lib/gn_args.star", "gn_args")
+load("//lib/xcode.star", "xcode")
 
 ci.defaults.set(
     executable = "recipe:angle_chromium",
@@ -56,6 +57,7 @@ ci.gpu.linux_builder(
             config = "android",
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.ANDROID,
         ),
         android_config = builder_config.android_config(
             config = "main_builder_mb",
@@ -97,6 +99,7 @@ ci.thin_tester(
             config = "android",
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.ANDROID,
         ),
         android_config = builder_config.android_config(
             config = "main_builder_mb",
@@ -129,6 +132,7 @@ ci.gpu.linux_builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.FUCHSIA,
         ),
         build_gs_bucket = "chromium-angle-archive",
     ),

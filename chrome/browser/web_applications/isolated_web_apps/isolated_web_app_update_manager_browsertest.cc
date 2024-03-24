@@ -4,6 +4,8 @@
 
 #include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_update_manager.h"
 
+#include <optional>
+
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/scoped_observation.h"
@@ -20,12 +22,12 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
-#include "chrome/browser/ui/web_applications/test/isolated_web_app_builder.h"
 #include "chrome/browser/ui/web_applications/test/isolated_web_app_test_utils.h"
 #include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_location.h"
 #include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_trust_checker.h"
 #include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_url_info.h"
 #include "chrome/browser/web_applications/isolated_web_apps/policy/isolated_web_app_policy_constants.h"
+#include "chrome/browser/web_applications/isolated_web_apps/test/isolated_web_app_builder.h"
 #include "chrome/browser/web_applications/test/web_app_icon_test_utils.h"
 #include "chrome/browser/web_applications/test/web_app_test_observers.h"
 #include "chrome/browser/web_applications/test/web_app_test_utils.h"
@@ -54,25 +56,23 @@ using ::testing::NotNull;
 using ::testing::Optional;
 using ::testing::VariantWith;
 
+inline constexpr uint8_t kTestPublicKey[] = {
+    0xE4, 0xD5, 0x16, 0xC9, 0x85, 0x9A, 0xF8, 0x63, 0x56, 0xA3, 0x51,
+    0x66, 0x7D, 0xBD, 0x00, 0x43, 0x61, 0x10, 0x1A, 0x92, 0xD4, 0x02,
+    0x72, 0xFE, 0x2B, 0xCE, 0x81, 0xBB, 0x3B, 0x71, 0x3F, 0x2D};
+
+inline constexpr uint8_t kTestPrivateKey[] = {
+    0x1F, 0x27, 0x3F, 0x93, 0xE9, 0x59, 0x4E, 0xC7, 0x88, 0x82, 0xC7, 0x49,
+    0xF8, 0x79, 0x3D, 0x8C, 0xDB, 0xE4, 0x60, 0x1C, 0x21, 0xF1, 0xD9, 0xF9,
+    0xBC, 0x3A, 0xB5, 0xC7, 0x7F, 0x2D, 0x95, 0xE1,
+    // public key (part of the private key)
+    0xE4, 0xD5, 0x16, 0xC9, 0x85, 0x9A, 0xF8, 0x63, 0x56, 0xA3, 0x51, 0x66,
+    0x7D, 0xBD, 0x00, 0x43, 0x61, 0x10, 0x1A, 0x92, 0xD4, 0x02, 0x72, 0xFE,
+    0x2B, 0xCE, 0x81, 0xBB, 0x3B, 0x71, 0x3F, 0x2D};
+
 constexpr base::StringPiece kUpdateManifestFileName = "update_manifest.json";
 constexpr base::StringPiece kBundle304FileName = "bundle304.swbn";
 constexpr base::StringPiece kBundle706FileName = "bundle706.swbn";
-
-constexpr base::StringPiece kTestManifest = R"({
-      "name": "$1",
-      "version": "$2",
-      "id": "/",
-      "scope": "/",
-      "start_url": "/index.html",
-      "display": "standalone",
-      "icons": [
-        {
-          "src": "256x256-green.png",
-          "sizes": "256x256",
-          "type": "image/png"
-        }
-      ]
-    })";
 
 class ServiceWorkerVersionStartedRunningWaiter
     : public content::ServiceWorkerContextObserver {
@@ -119,70 +119,11 @@ class IsolatedWebAppUpdateManagerBrowserTest
  protected:
   void SetUpOnMainThread() override {
     IsolatedWebAppBrowserTestHarness::SetUpOnMainThread();
-    SetTrustedWebBundleIdsForTesting({url_info_.web_bundle_id()});
     SetUpFilesAndServer();
+    AddTrustedWebBundleIdForTesting(url_info_->web_bundle_id());
   }
 
   void SetUpFilesAndServer() {
-    auto key_pair =
-        web_package::WebBundleSigner::KeyPair(kTestPublicKey, kTestPrivateKey);
-
-    TestSignedWebBundleBuilder builder(key_pair);
-    builder.AddManifest(base::ReplaceStringPlaceholders(
-        kTestManifest, {"app-3.0.4", base::Version("3.0.4").GetString()},
-        /*offsets=*/nullptr));
-    builder.AddPngImage(
-        "/256x256-green.png",
-        test::BitmapAsPng(CreateSquareIcon(256, SK_ColorGREEN)));
-    builder.AddHtml("/index.html", R"(
-      <head>
-        <link rel="manifest" href="/manifest.webmanifest">
-        <script type="text/javascript" src="/register-sw.js"></script>
-        <title>3.0.4</title>
-      </head>
-      <body>
-        <h1>Hello from version 3.0.4</h1>
-      </body>
-    )");
-    builder.AddJavaScript("/register-sw.js", R"(
-      window.trustedTypes.createPolicy('default', {
-        createHTML: (html) => html,
-        createScriptURL: (url) => url,
-        createScript: (script) => script,
-      });
-      if (location.search.includes('register-sw=1')) {
-        navigator.serviceWorker.register("/sw.js");
-      }
-    )");
-    builder.AddJavaScript("/sw.js", R"(
-      self.addEventListener('install', (event) => {
-        self.skipWaiting();
-      });
-      self.addEventListener("fetch", (event) => {
-        console.log("SW: used fetch: " + event.request.url);
-        event.respondWith(new Response("", {
-          status: 404,
-          statusText: "Not Found",
-        }));
-      });
-    )");
-    TestSignedWebBundle bundle304 = builder.Build();
-
-    TestSignedWebBundle bundle706 = TestSignedWebBundleBuilder::BuildDefault(
-        TestSignedWebBundleBuilder::BuildOptions()
-            .SetKeyPair(key_pair)
-            .SetAppName("app-7.0.6")
-            .SetVersion(base::Version("7.0.6"))
-            .SetIndexHTMLContent(R"(
-      <head>
-        <link rel="manifest" href="/manifest.webmanifest">
-        <title>7.0.6</title>
-      </head>
-      <body>
-        <h1>Hello from version 7.0.6</h1>
-      </body>
-    )"));
-
     base::ScopedAllowBlockingForTesting allow_blocking;
     // We cannot use `ScopedTempDir` here because the directory must survive
     // restarts for the `PRE_` tests to work. Use a directory within the profile
@@ -192,10 +133,64 @@ class IsolatedWebAppUpdateManagerBrowserTest
     iwa_server_.ServeFilesFromDirectory(temp_dir_);
     EXPECT_TRUE(iwa_server_.Start());
 
-    EXPECT_TRUE(
-        base::WriteFile(temp_dir_.Append(kBundle304FileName), bundle304.data));
-    EXPECT_TRUE(
-        base::WriteFile(temp_dir_.Append(kBundle706FileName), bundle706.data));
+    auto key_pair =
+        web_package::WebBundleSigner::KeyPair(kTestPublicKey, kTestPrivateKey);
+    auto bundle_id = web_package::SignedWebBundleId::CreateForEd25519PublicKey(
+        key_pair.public_key);
+    url_info_ = IsolatedWebAppUrlInfo::CreateFromSignedWebBundleId(bundle_id);
+
+    auto builder = IsolatedWebAppBuilder(
+        ManifestBuilder().SetName("app-3.0.4").SetVersion("3.0.4"));
+    builder.AddHtml("/", R"(
+        <head>
+          <script type="text/javascript" src="/register-sw.js"></script>
+          <title>3.0.4</title>
+        </head>
+        <body>
+          <h1>Hello from version 3.0.4</h1>
+        </body>)");
+    builder.AddJs("/register-sw.js", R"(
+        window.trustedTypes.createPolicy('default', {
+          createHTML: (html) => html,
+          createScriptURL: (url) => url,
+          createScript: (script) => script,
+        });
+        if (location.search.includes('register-sw=1')) {
+          navigator.serviceWorker.register("/sw.js");
+        }
+      )");
+    builder.AddJs("/sw.js", R"(
+        self.addEventListener('install', (event) => {
+          self.skipWaiting();
+        });
+        self.addEventListener("fetch", (event) => {
+          console.log("SW: used fetch: " + event.request.url);
+          event.respondWith(new Response("", {
+            status: 404,
+            statusText: "Not Found",
+          }));
+        });
+      )");
+    base::FilePath bundle_304_path = temp_dir_.Append(kBundle304FileName);
+    std::vector<uint8_t> bundle_304_contents =
+        builder.BuildInMemoryBundle(key_pair);
+    CHECK(base::WriteFile(bundle_304_path, bundle_304_contents));
+
+    base::FilePath bundle_706_path = temp_dir_.Append(kBundle706FileName);
+    std::vector<uint8_t> bundle_706_contents =
+        IsolatedWebAppBuilder(
+            ManifestBuilder().SetName("app-7.0.6").SetVersion("7.0.6"))
+            .AddHtml("/", R"(
+                <head>
+                  <title>7.0.6</title>
+                </head>
+                <body>
+                  <h1>Hello from version 7.0.6</h1>
+                </body>
+            )")
+            .BuildInMemoryBundle(key_pair);
+    CHECK(base::WriteFile(bundle_706_path, bundle_706_contents));
+
     EXPECT_TRUE(base::WriteFile(
         temp_dir_.Append(kUpdateManifestFileName),
         base::ReplaceStringPlaceholders(
@@ -214,9 +209,7 @@ class IsolatedWebAppUpdateManagerBrowserTest
   }
 
   base::test::ScopedFeatureList scoped_feature_list_;
-  IsolatedWebAppUrlInfo url_info_ =
-      IsolatedWebAppUrlInfo::CreateFromSignedWebBundleId(
-          *web_package::SignedWebBundleId::Create(kTestEd25519WebBundleId));
+  std::optional<IsolatedWebAppUrlInfo> url_info_;
   base::FilePath temp_dir_;
   net::EmbeddedTestServer iwa_server_;
 };
@@ -226,7 +219,7 @@ IN_PROC_BROWSER_TEST_F(IsolatedWebAppUpdateManagerBrowserTest, Succeeds) {
       prefs::kIsolatedWebAppInstallForceList,
       base::Value::List().Append(
           base::Value::Dict()
-              .Set(kPolicyWebBundleIdKey, url_info_.web_bundle_id().id())
+              .Set(kPolicyWebBundleIdKey, url_info_->web_bundle_id().id())
               .Set(kPolicyUpdateManifestUrlKey,
                    iwa_server_
                        .GetURL(base::StrCat({"/", kUpdateManifestFileName}))
@@ -237,7 +230,7 @@ IN_PROC_BROWSER_TEST_F(IsolatedWebAppUpdateManagerBrowserTest, Succeeds) {
                                           InstallIsolatedWebAppCommandError>>
         future;
     provider().scheduler().InstallIsolatedWebApp(
-        url_info_,
+        url_info_.value(),
         InstalledBundle{.path = temp_dir_.Append(kBundle304FileName)},
         base::Version("3.0.4"), /*optional_keep_alive=*/nullptr,
         /*optional_profile_keep_alive=*/nullptr, future.GetCallback());
@@ -246,20 +239,20 @@ IN_PROC_BROWSER_TEST_F(IsolatedWebAppUpdateManagerBrowserTest, Succeeds) {
 
   WebAppTestManifestUpdatedObserver manifest_updated_observer(
       &provider().install_manager());
-  manifest_updated_observer.BeginListening({url_info_.app_id()});
+  manifest_updated_observer.BeginListening({url_info_->app_id()});
 
   EXPECT_THAT(provider().iwa_update_manager().DiscoverUpdatesNow(), Eq(1ul));
 
   manifest_updated_observer.Wait();
   const WebApp* web_app =
-      provider().registrar_unsafe().GetAppById(url_info_.app_id());
+      provider().registrar_unsafe().GetAppById(url_info_->app_id());
   EXPECT_THAT(web_app,
               test::IwaIs(Eq("app-7.0.6"),
                           test::IsolationDataIs(
                               VariantWith<InstalledBundle>(_),
                               Eq(base::Version("7.0.6")),
                               /*controlled_frame_partitions=*/_,
-                              /*pending_update_info=*/Eq(absl::nullopt))));
+                              /*pending_update_info=*/Eq(std::nullopt))));
 }
 
 IN_PROC_BROWSER_TEST_F(IsolatedWebAppUpdateManagerBrowserTest,
@@ -268,7 +261,7 @@ IN_PROC_BROWSER_TEST_F(IsolatedWebAppUpdateManagerBrowserTest,
       prefs::kIsolatedWebAppInstallForceList,
       base::Value::List().Append(
           base::Value::Dict()
-              .Set(kPolicyWebBundleIdKey, url_info_.web_bundle_id().id())
+              .Set(kPolicyWebBundleIdKey, url_info_->web_bundle_id().id())
               .Set(kPolicyUpdateManifestUrlKey,
                    iwa_server_
                        .GetURL(base::StrCat({"/", kUpdateManifestFileName}))
@@ -279,7 +272,7 @@ IN_PROC_BROWSER_TEST_F(IsolatedWebAppUpdateManagerBrowserTest,
                                           InstallIsolatedWebAppCommandError>>
         future;
     provider().scheduler().InstallIsolatedWebApp(
-        url_info_,
+        url_info_.value(),
         InstalledBundle{.path = temp_dir_.Append(kBundle304FileName)},
         base::Version("3.0.4"), /*optional_keep_alive=*/nullptr,
         /*optional_profile_keep_alive=*/nullptr, future.GetCallback());
@@ -288,12 +281,12 @@ IN_PROC_BROWSER_TEST_F(IsolatedWebAppUpdateManagerBrowserTest,
 
   WebAppTestManifestUpdatedObserver manifest_updated_observer(
       &provider().install_manager());
-  manifest_updated_observer.BeginListening({url_info_.app_id()});
+  manifest_updated_observer.BeginListening({url_info_->app_id()});
 
   // Open the app, which will register the Service Worker.
   content::RenderFrameHost* app_frame =
-      OpenApp(url_info_.app_id(), "?register-sw=1");
-  EXPECT_THAT(provider().ui_manager().GetNumWindowsForApp(url_info_.app_id()),
+      OpenApp(url_info_->app_id(), "?register-sw=1");
+  EXPECT_THAT(provider().ui_manager().GetNumWindowsForApp(url_info_->app_id()),
               Eq(1ul));
 
   // Wait for the Service Worker to start running.
@@ -302,7 +295,7 @@ IN_PROC_BROWSER_TEST_F(IsolatedWebAppUpdateManagerBrowserTest,
   ServiceWorkerVersionStartedRunningWaiter waiter(storage_partition);
   waiter.AwaitStartedRunning();
   test::CheckServiceWorkerStatus(
-      url_info_.origin().GetURL(), storage_partition,
+      url_info_->origin().GetURL(), storage_partition,
       content::ServiceWorkerCapability::SERVICE_WORKER_WITH_FETCH_HANDLER);
 
   EXPECT_THAT(provider().iwa_update_manager().DiscoverUpdatesNow(), Eq(1ul));
@@ -311,19 +304,19 @@ IN_PROC_BROWSER_TEST_F(IsolatedWebAppUpdateManagerBrowserTest,
   Browser* app_browser = GetBrowserFromFrame(app_frame);
   app_browser->window()->Close();
   ui_test_utils::WaitForBrowserToClose(app_browser);
-  EXPECT_THAT(provider().ui_manager().GetNumWindowsForApp(url_info_.app_id()),
+  EXPECT_THAT(provider().ui_manager().GetNumWindowsForApp(url_info_->app_id()),
               Eq(0ul));
 
   manifest_updated_observer.Wait();
   const WebApp* web_app =
-      provider().registrar_unsafe().GetAppById(url_info_.app_id());
+      provider().registrar_unsafe().GetAppById(url_info_->app_id());
   EXPECT_THAT(web_app,
               test::IwaIs(Eq("app-7.0.6"),
                           test::IsolationDataIs(
                               VariantWith<InstalledBundle>(_),
                               Eq(base::Version("7.0.6")),
                               /*controlled_frame_partitions=*/_,
-                              /*pending_update_info=*/Eq(absl::nullopt))));
+                              /*pending_update_info=*/Eq(std::nullopt))));
 }
 
 // TODO(crbug.com/1479463): Session restore does not restore app windows on
@@ -338,7 +331,7 @@ IN_PROC_BROWSER_TEST_F(IsolatedWebAppUpdateManagerBrowserTest,
       prefs::kIsolatedWebAppInstallForceList,
       base::Value::List().Append(
           base::Value::Dict()
-              .Set(kPolicyWebBundleIdKey, url_info_.web_bundle_id().id())
+              .Set(kPolicyWebBundleIdKey, url_info_->web_bundle_id().id())
               .Set(kPolicyUpdateManifestUrlKey,
                    iwa_server_
                        .GetURL(base::StrCat({"/", kUpdateManifestFileName}))
@@ -354,7 +347,7 @@ IN_PROC_BROWSER_TEST_F(IsolatedWebAppUpdateManagerBrowserTest,
                                           InstallIsolatedWebAppCommandError>>
         future;
     provider().scheduler().InstallIsolatedWebApp(
-        url_info_,
+        url_info_.value(),
         InstalledBundle{.path = temp_dir_.Append(kBundle304FileName)},
         base::Version("3.0.4"), /*optional_keep_alive=*/nullptr,
         /*optional_profile_keep_alive=*/nullptr, future.GetCallback());
@@ -362,14 +355,14 @@ IN_PROC_BROWSER_TEST_F(IsolatedWebAppUpdateManagerBrowserTest,
   }
 
   // Open the app to prevent the update from being applied.
-  OpenApp(url_info_.app_id());
-  EXPECT_THAT(provider().ui_manager().GetNumWindowsForApp(url_info_.app_id()),
+  OpenApp(url_info_->app_id());
+  EXPECT_THAT(provider().ui_manager().GetNumWindowsForApp(url_info_->app_id()),
               Eq(1ul));
   EXPECT_THAT(provider().iwa_update_manager().DiscoverUpdatesNow(), Eq(1ul));
 
   while (true) {
     const WebApp* app =
-        provider().registrar_unsafe().GetAppById(url_info_.app_id());
+        provider().registrar_unsafe().GetAppById(url_info_->app_id());
     if (app->isolation_data()->pending_update_info().has_value()) {
       break;
     }
@@ -384,24 +377,24 @@ IN_PROC_BROWSER_TEST_F(IsolatedWebAppUpdateManagerBrowserTest,
                        AppliesUpdateOnStartupIfAppWindowNeverCloses) {
   // Wait for the update to be applied if it hasn't already.
   const WebApp* app =
-      provider().registrar_unsafe().GetAppById(url_info_.app_id());
+      provider().registrar_unsafe().GetAppById(url_info_->app_id());
   if (app->isolation_data()->version != base::Version("7.0.6")) {
     WebAppTestManifestUpdatedObserver manifest_updated_observer(
         &provider().install_manager());
-    manifest_updated_observer.BeginListening({url_info_.app_id()});
+    manifest_updated_observer.BeginListening({url_info_->app_id()});
     manifest_updated_observer.Wait();
   }
 
-  EXPECT_THAT(provider().registrar_unsafe().GetAppById(url_info_.app_id()),
+  EXPECT_THAT(provider().registrar_unsafe().GetAppById(url_info_->app_id()),
               test::IwaIs(Eq("app-7.0.6"),
                           test::IsolationDataIs(
                               VariantWith<InstalledBundle>(_),
                               Eq(base::Version("7.0.6")),
                               /*controlled_frame_partitions=*/_,
-                              /*pending_update_info=*/Eq(absl::nullopt))));
+                              /*pending_update_info=*/Eq(std::nullopt))));
 
   Browser* app_window =
-      AppBrowserController::FindForWebApp(*profile(), url_info_.app_id());
+      AppBrowserController::FindForWebApp(*profile(), url_info_->app_id());
   ASSERT_THAT(app_window, NotNull());
   content::WebContents* web_contents =
       app_window->tab_strip_model()->GetActiveWebContents();

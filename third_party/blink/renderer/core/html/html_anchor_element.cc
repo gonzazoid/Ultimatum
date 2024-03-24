@@ -571,8 +571,8 @@ void HTMLAnchorElement::HandleClick(Event& event) {
                       WebFeature::kAnchorClickDispatchForNonConnectedNode);
   }
 
-  Document& top_document = GetDocument().TopDocument();
-  if (auto* sender = AnchorElementMetricsSender::From(top_document)) {
+  if (auto* sender =
+          AnchorElementMetricsSender::GetForFrame(GetDocument().GetFrame())) {
     sender->MaybeReportClickedMetricsOnClick(*this);
   }
 
@@ -615,15 +615,12 @@ void HTMLAnchorElement::HandleClick(Event& event) {
     String download_attr =
         static_cast<String>(FastGetAttribute(html_names::kDownloadAttr));
     if (download_attr.length() > kMaxDownloadAttrLength) {
-      ConsoleMessage* console_message = MakeGarbageCollected<ConsoleMessage>(
+      AddConsoleMessage(
           mojom::blink::ConsoleMessageSource::kRendering,
           mojom::blink::ConsoleMessageLevel::kError,
           String::Format("Download attribute for anchor element is too long. "
                          "Max: %d, given: %d",
                          kMaxDownloadAttrLength, download_attr.length()));
-      console_message->SetNodes(GetDocument().GetFrame(),
-                                {this->GetDomNodeId()});
-      GetDocument().AddConsoleMessage(console_message);
       return;
     }
 
@@ -712,8 +709,8 @@ Node::InsertionNotificationRequest HTMLAnchorElement::InsertedInto(
       HTMLElement::InsertedInto(insertion_point);
   LogAddElementIfIsolatedWorldAndInDocument("a", html_names::kHrefAttr);
 
-  Document& top_document = GetDocument().TopDocument();
-  if (auto* sender = AnchorElementMetricsSender::From(top_document)) {
+  if (auto* sender =
+          AnchorElementMetricsSender::GetForFrame(GetDocument().GetFrame())) {
     sender->AddAnchorElement(*this);
   }
 
@@ -726,6 +723,7 @@ Node::InsertionNotificationRequest HTMLAnchorElement::InsertedInto(
       static const bool warm_up_on_inserted_into_dom =
           features::kSpeculativeServiceWorkerWarmUpOnInsertedIntoDom.Get();
       if (warm_up_on_visible || warm_up_on_inserted_into_dom) {
+        Document& top_document = GetDocument().TopDocument();
         if (auto* observer =
                 AnchorElementObserverForServiceWorker::From(top_document)) {
           if (warm_up_on_visible) {

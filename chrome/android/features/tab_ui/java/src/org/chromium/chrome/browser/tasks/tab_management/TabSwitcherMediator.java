@@ -514,8 +514,7 @@ class TabSwitcherMediator
     private void updateTopControlsProperties() {
         // If the Start surface is enabled, it will handle the margins and positioning of the tab
         // switcher. So, we shouldn't do it here.
-        if (ReturnToChromeUtil.isStartSurfaceEnabled(mContext)
-                && !ReturnToChromeUtil.isStartSurfaceRefactorEnabled(mContext)) {
+        if (mIsStartSurfaceEnabled && !mIsStartSurfaceRefactorEnabled) {
             mContainerViewModel.set(TOP_MARGIN, 0);
             mContainerViewModel.set(SHADOW_TOP_OFFSET, 0);
             return;
@@ -794,7 +793,8 @@ class TabSwitcherMediator
         }
 
         if (!mContainerViewModel.get(IS_VISIBLE)) {
-            assert !BackPressManager.isEnabled() : "Invisible container: Backpress must be handled";
+            assert !BackPressManager.isEnabled()
+                    : "Invisible container: Back press must be handled";
             return false;
         }
 
@@ -804,7 +804,7 @@ class TabSwitcherMediator
         }
 
         if (mTabModelSelector.getCurrentTab() == null) {
-            assert !BackPressManager.isEnabled() : "No tab: Backpress must be handled";
+            assert !BackPressManager.isEnabled() : "No tab: Back press must be handled";
             return false;
         }
 
@@ -950,8 +950,8 @@ class TabSwitcherMediator
         mHandler.postDelayed(mClearTabListRunnable, HARD_CLEANUP_DELAY_MS);
         mIsTransitionInProgress = false;
         notifyBackPressStateChangedInternal();
-        if (ChromeFeatureList.sGridTabSwitcherAndroidAnimations.isEnabled()
-                && ReturnToChromeUtil.isStartSurfaceRefactorEnabled(mContext)) {
+        if (mIsStartSurfaceRefactorEnabled
+                && ChromeFeatureList.sGridTabSwitcherAndroidAnimations.isEnabled()) {
             // Ensure we skip animating here as the UI is entirely occluded already.
             boolean previousAnimateVisibilityChangesValue =
                     mContainerViewModel.get(ANIMATE_VISIBILITY_CHANGES);
@@ -1145,5 +1145,16 @@ class TabSwitcherMediator
         return mTabListEditorControllerSupplier == null
                 ? null
                 : mTabListEditorControllerSupplier.get();
+    }
+
+    /**
+     * Refresh the tab switcher's tab list and perform an out-of-band update on the UI. If the tab
+     * switcher is not visible, this will no-op.
+     */
+    public void refreshTabList() {
+        if (!mContainerViewModel.get(IS_VISIBLE)) return;
+
+        mResetHandler.resetWithTabList(
+                mTabModelSelector.getTabModelFilterProvider().getCurrentTabModelFilter(), false);
     }
 }

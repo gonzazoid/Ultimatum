@@ -7,6 +7,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 
 #include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
@@ -22,13 +23,9 @@
 #include "components/performance_manager/public/resource_attribution/query_results.h"
 #include "components/performance_manager/public/resource_attribution/resource_contexts.h"
 #include "components/performance_manager/resource_attribution/graph_change.h"
+#include "components/performance_manager/resource_attribution/performance_manager_aliases.h"
 
-namespace performance_manager {
-class Graph;
-class PageNode;
-}
-
-namespace performance_manager::resource_attribution {
+namespace resource_attribution {
 
 // Periodically collect CPU usage from process nodes.
 //
@@ -36,10 +33,11 @@ namespace performance_manager::resource_attribution {
 // measurement for a node may not arrive until after it's removed from the
 // graph. So this is not a decorator as defined in
 // components/performance_manager/README.md
-class CPUMeasurementMonitor : public FrameNode::ObserverDefaultImpl,
-                              public ProcessNode::ObserverDefaultImpl,
-                              public WorkerNode::ObserverDefaultImpl,
-                              public NodeDataDescriberDefaultImpl {
+class CPUMeasurementMonitor
+    : public FrameNode::ObserverDefaultImpl,
+      public ProcessNode::ObserverDefaultImpl,
+      public WorkerNode::ObserverDefaultImpl,
+      public performance_manager::NodeDataDescriberDefaultImpl {
  public:
   CPUMeasurementMonitor();
   ~CPUMeasurementMonitor() override;
@@ -62,9 +60,9 @@ class CPUMeasurementMonitor : public FrameNode::ObserverDefaultImpl,
 
   // Updates the CPU measurements for each ProcessNode being tracked and returns
   // the estimated CPU usage of each frame and worker in those processes, and
-  // all pages containing them. Each QueryResult variant will contain a
+  // all pages containing them. Each QueryResults object will contain a
   // CPUTimeResult.
-  std::map<ResourceContext, QueryResult> UpdateAndGetCPUMeasurements();
+  QueryResultMap UpdateAndGetCPUMeasurements();
 
   // FrameNode::Observer:
   void OnFrameNodeAdded(const FrameNode* frame_node) override;
@@ -114,7 +112,7 @@ class CPUMeasurementMonitor : public FrameNode::ObserverDefaultImpl,
 
     // Returns the most recent measurement that was taken during
     // MeasureAndDistributeCPUUsage().
-    base::TimeDelta most_recent_measurement() const {
+    std::optional<base::TimeDelta> most_recent_measurement() const {
       return most_recent_measurement_;
     }
 
@@ -133,7 +131,7 @@ class CPUMeasurementMonitor : public FrameNode::ObserverDefaultImpl,
     std::unique_ptr<CPUMeasurementDelegate> delegate_;
 
     // The most recent CPU measurement that was taken.
-    base::TimeDelta most_recent_measurement_;
+    std::optional<base::TimeDelta> most_recent_measurement_;
 
     // Last time CPU measurements were taken (for calculating the total length
     // of a measurement interval).
@@ -165,6 +163,22 @@ class CPUMeasurementMonitor : public FrameNode::ObserverDefaultImpl,
       const std::map<ResourceContext, CPUTimeResult>& measurement_deltas,
       GraphChange graph_change = NoGraphChange());
 
+  // Adds the measurement in `delta` to the result for `context`. The start time
+  // of `delta` must follow the end time of the result. Used for adding
+  // successive measurements of process, frame and worker contexts, so the
+  // algorithm in the metadata for the result should match that of `delta`.
+  // There may be gaps between deltas, such as if a process died and was
+  // restarted.
+  void ApplySequentialDelta(const ResourceContext& context,
+                            const CPUTimeResult& delta);
+
+  // Adds the measurement in `delta` to the result for `context`. Delta may
+  // start before the result or end after it. Used for adding frame and worker
+  // measurements to page contexts, since the frames and workers can be added in
+  // any order.
+  void ApplyOverlappingDelta(const PageContext& context,
+                             const CPUTimeResult& delta);
+
   // Returns description of the most recent measurement of `context` for
   // NodeDataDescriber, or an empty dict if there is none.
   base::Value::Dict DescribeContextData(const ResourceContext& context) const;
@@ -189,6 +203,6 @@ class CPUMeasurementMonitor : public FrameNode::ObserverDefaultImpl,
   raw_ptr<Graph> graph_ GUARDED_BY_CONTEXT(sequence_checker_) = nullptr;
 };
 
-}  // namespace performance_manager::resource_attribution
+}  // namespace resource_attribution
 
 #endif  // COMPONENTS_PERFORMANCE_MANAGER_RESOURCE_ATTRIBUTION_CPU_MEASUREMENT_MONITOR_H_

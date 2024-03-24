@@ -105,10 +105,13 @@ void StatisticsRecorder::RegisterHistogramProvider(
 // static
 HistogramBase* StatisticsRecorder::RegisterOrDeleteDuplicate(
     HistogramBase* histogram) {
+  CHECK(histogram);
+
   uint64_t hash = histogram->name_hash();
 
   // Ensure that histograms use HashMetricName() to compute their hash, since
-  // that function is used to look up histograms.
+  // that function is used to look up histograms. Intentionally a DCHECK since
+  // this is expensive.
   DCHECK_EQ(hash, HashMetricName(histogram->histogram_name()));
 
   // Declared before |auto_lock| so that the histogram is deleted after the lock
@@ -378,7 +381,7 @@ void StatisticsRecorder::RemoveHistogramSampleObserver(
   EnsureGlobalRecorderWhileLocked();
 
   auto iter = top_->observers_.find(hash);
-  DCHECK(iter != top_->observers_.end());
+  CHECK(iter != top_->observers_.end(), base::NotFatalUntil::M125);
 
   auto result = iter->second->RemoveObserver(observer);
   if (result ==

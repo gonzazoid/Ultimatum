@@ -5,20 +5,19 @@
 #ifndef COMPONENTS_PRIVACY_SANDBOX_PRIVACY_SANDBOX_SETTINGS_IMPL_H_
 #define COMPONENTS_PRIVACY_SANDBOX_PRIVACY_SANDBOX_SETTINGS_IMPL_H_
 
-#include "components/browsing_topics/common/common_types.h"
-#include "components/privacy_sandbox/privacy_sandbox_settings.h"
-
+#include <optional>
 #include <set>
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
+#include "components/browsing_topics/common/common_types.h"
 #include "components/prefs/pref_change_registrar.h"
+#include "components/privacy_sandbox/privacy_sandbox_settings.h"
 #include "components/privacy_sandbox/tpcd_experiment_eligibility.h"
 #include "components/privacy_sandbox/tracking_protection_settings.h"
 #include "components/privacy_sandbox/tracking_protection_settings_observer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class HostContentSettingsMap;
 class PrefService;
@@ -86,10 +85,12 @@ class PrivacySandboxSettingsImpl : public PrivacySandboxSettings,
   bool IsSharedStorageAllowed(
       const url::Origin& top_frame_origin,
       const url::Origin& accessing_origin,
+      std::string* out_debug_message = nullptr,
       content::RenderFrameHost* console_frame = nullptr) const override;
   bool IsSharedStorageSelectURLAllowed(
       const url::Origin& top_frame_origin,
-      const url::Origin& accessing_origin) const override;
+      const url::Origin& accessing_origin,
+      std::string* out_debug_message = nullptr) const override;
   bool IsPrivateAggregationAllowed(
       const url::Origin& top_frame_origin,
       const url::Origin& reporting_origin) const override;
@@ -185,9 +186,9 @@ class PrivacySandboxSettingsImpl : public PrivacySandboxSettings,
   // environment or the reason why it is not allowed.
   Status GetM1TopicAllowedStatus() const;
 
-  // Whether Attribution Reporting API can be allowed given the current
-  // environment or the reason why it is not allowed.
-  Status GetM1AttributionReportingAllowedStatus(
+  // Whether ad measurement APIs can be allowed given the current environment or
+  // the reason why it is not allowed.
+  Status GetM1AdMeasurementAllowedStatus(
       const url::Origin& top_frame_origin,
       const url::Origin& reporting_origin) const;
 

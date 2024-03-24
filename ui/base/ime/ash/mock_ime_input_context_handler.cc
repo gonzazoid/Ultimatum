@@ -4,6 +4,8 @@
 
 #include "ui/base/ime/ash/mock_ime_input_context_handler.h"
 
+#include <string_view>
+
 #include "base/logging.h"
 #include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
@@ -72,14 +74,14 @@ void MockIMEInputContextHandler::SetAutocorrectRange(
   std::move(callback).Run(autocorrect_enabled_);
 }
 
-absl::optional<ui::GrammarFragment>
+std::optional<ui::GrammarFragment>
 MockIMEInputContextHandler::GetGrammarFragmentAtCursor() {
   for (const auto& fragment : grammar_fragments_) {
     if (fragment.range.Contains(cursor_range_)) {
       return fragment;
     }
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 bool MockIMEInputContextHandler::ClearGrammarFragments(
@@ -114,7 +116,7 @@ void MockIMEInputContextHandler::DeleteSurroundingText(
 void MockIMEInputContextHandler::ReplaceSurroundingText(
     uint32_t length_before_selection,
     uint32_t length_after_selection,
-    const base::StringPiece16 replacement_text) {
+    const std::u16string_view replacement_text) {
   last_replace_surrounding_text_arg_.length_before_selection =
       length_before_selection;
   last_replace_surrounding_text_arg_.length_after_selection =

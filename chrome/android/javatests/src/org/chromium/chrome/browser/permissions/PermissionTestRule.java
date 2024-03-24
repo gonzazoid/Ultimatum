@@ -30,6 +30,7 @@ import org.chromium.chrome.test.util.ChromeTabUtils;
 import org.chromium.chrome.test.util.InfoBarTestAnimationListener;
 import org.chromium.chrome.test.util.InfoBarUtil;
 import org.chromium.components.browser_ui.modaldialog.ModalDialogTestUtils;
+import org.chromium.components.browser_ui.modaldialog.ModalDialogView;
 import org.chromium.components.infobars.InfoBar;
 import org.chromium.components.permissions.PermissionDialogController;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
@@ -153,8 +154,27 @@ public class PermissionTestRule extends ChromeTabbedActivityTestRule {
                 () -> getInfoBarContainer().addAnimationListener(mListener));
     }
 
-    public void setUpUrl(final String url) {
-        loadUrl(getURL(url));
+    /**
+     * Navigates to a relative URL in relation to the embedded server host directly without going
+     * through the UrlBar. This bypasses the page preloading mechanism of the UrlBar.
+     *
+     * @param relativeUrl The relative URL for which an absolute URL will be computed and loaded in
+     *     the current tab.
+     */
+    public void setUpUrl(final String relativeUrl) {
+        loadUrl(getURL(relativeUrl));
+    }
+
+    /**
+     * Navigates to a relative URL in relation to the specified host directly without going through
+     * the UrlBar. This bypasses the page preloading mechanism of the UrlBar.
+     *
+     * @param relativeUrl The relative URL for which an absolute URL will be computed and loaded in
+     *     the current tab.
+     * @param hostName The host name which should be used.
+     */
+    public void setupUrlWithHostName(String hostName, String relativeUrl) {
+        loadUrl(getURLWithHostName(hostName, relativeUrl));
     }
 
     public String getURL(String url) {
@@ -349,7 +369,11 @@ public class PermissionTestRule extends ChromeTabbedActivityTestRule {
                     default -> throw new IllegalStateException("Unexpected value: " + decision);
                 };
 
-        ViewUtils.onViewWaiting(allOf(withTagValue(is(buttonId)), isDisplayed())).perform(click());
+        ViewUtils.onViewWaiting(
+                        allOf(
+                                withTagValue(is(ModalDialogView.getTagForButtonType(buttonId))),
+                                isDisplayed()))
+                .perform(click());
     }
 
     /** Wait for the permission dialog to be in the expected shown state. */

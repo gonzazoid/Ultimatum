@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "base/check.h"
@@ -26,7 +27,6 @@
 #include "components/policy/core/common/cloud/cloud_policy_store.h"
 #include "components/policy/core/common/cloud/device_management_service.h"
 #include "components/policy/core/common/cloud/dm_token.h"
-#include "components/policy/core/common/cloud/encrypted_reporting_job_configuration.h"
 #include "components/policy/core/common/cloud/mock_cloud_policy_client.h"
 #include "components/policy/core/common/cloud/mock_cloud_policy_service.h"
 #include "components/policy/core/common/cloud/mock_cloud_policy_store.h"
@@ -37,7 +37,6 @@
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_network_connection_tracker.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chromeos/ash/components/system/fake_statistics_provider.h"
@@ -106,11 +105,11 @@ ReportingServerConnector::TestEnvironment::TestEnvironment()
   auto delegate =
       std::make_unique<FakeDelegate>(device_management_service_.get());
   SetEncryptedReportingClient(
-      std::make_unique<EncryptedReportingClient>(std::move(delegate)));
+      EncryptedReportingClient::Create(std::move(delegate)));
 }
 
 ReportingServerConnector::TestEnvironment::~TestEnvironment() {
-  policy::EncryptedReportingJobConfiguration::ResetUploadsStateForTest();
+  EncryptedReportingClient::ResetUploadsStateForTest();
   base::Singleton<ReportingServerConnector>::OnExit(nullptr);
 }
 
@@ -122,7 +121,7 @@ base::Value::Dict ReportingServerConnector::TestEnvironment::request_body(
   CHECK(request.request_body);
   CHECK(request.request_body->elements());
 
-  absl::optional<base::Value> body =
+  std::optional<base::Value> body =
       base::JSONReader::Read(request.request_body->elements()
                                  ->at(0)
                                  .As<network::DataElementBytes>()

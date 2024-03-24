@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -22,7 +23,6 @@
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/browsing_data/content/browsing_data_helper.h"
-#include "components/browsing_data/core/features.h"
 #include "components/content_settings/browser/page_specific_content_settings.h"
 #include "components/content_settings/browser/ui/cookie_controls_controller.h"
 #include "components/content_settings/core/browser/content_settings_registry.h"
@@ -71,7 +71,6 @@
 #include "net/ssl/ssl_connection_status_flags.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/boringssl/src/include/openssl/ssl.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -117,7 +116,6 @@ ContentSettingsType kPermissionType[] = {
 #if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN)
     ContentSettingsType::PROTECTED_MEDIA_IDENTIFIER,
 #endif
-    ContentSettingsType::MIDI,
     ContentSettingsType::MIDI_SYSEX,
     ContentSettingsType::CLIPBOARD_READ_WRITE,
 #if BUILDFLAG(IS_ANDROID)
@@ -139,6 +137,7 @@ ContentSettingsType kPermissionType[] = {
 #if !BUILDFLAG(IS_ANDROID)
     ContentSettingsType::AUTO_PICTURE_IN_PICTURE,
 #endif  // !BUILDFLAG(IS_ANDROID)
+    ContentSettingsType::AUTOMATIC_FULLSCREEN,
 };
 
 // The list of setting types which request permission for a pair of requesting
@@ -327,26 +326,20 @@ PageInfo::~PageInfo() {
 }
 
 void PageInfo::OnStatusChanged(CookieControlsStatus status,
+                               bool controls_visible,
+                               bool protections_on,
                                CookieControlsEnforcement enforcement,
                                CookieBlocking3pcdStatus blocking_status,
                                base::Time expiration) {
-  if (status != status_ || enforcement != enforcement_ ||
+  if (controls_visible_ != controls_visible ||
+      protections_on_ != protections_on || enforcement != enforcement_ ||
       blocking_status != blocking_status_ ||
       expiration != cookie_exception_expiration_) {
-    status_ = status;
+    controls_visible_ = controls_visible;
+    protections_on_ = protections_on;
     enforcement_ = enforcement;
     blocking_status_ = blocking_status;
     cookie_exception_expiration_ = expiration;
-    PresentSiteData(base::DoNothing());
-  }
-}
-
-void PageInfo::OnSitesCountChanged(int allowed_third_party_sites_count,
-                                   int blocked_third_party_sites_count) {
-  if (allowed_third_party_sites_count_ != allowed_third_party_sites_count ||
-      blocked_third_party_sites_count_ != blocked_third_party_sites_count) {
-    allowed_third_party_sites_count_ = allowed_third_party_sites_count;
-    blocked_third_party_sites_count_ = blocked_third_party_sites_count;
     PresentSiteData(base::DoNothing());
   }
 }
@@ -360,8 +353,7 @@ void PageInfo::OnBreakageConfidenceLevelChanged(
 }
 
 void PageInfo::OnThirdPartyToggleClicked(bool block_third_party_cookies) {
-  DCHECK(status_ != CookieControlsStatus::kDisabled);
-  DCHECK(status_ != CookieControlsStatus::kUninitialized);
+  DCHECK(controls_visible_);
   RecordPageInfoAction(block_third_party_cookies
                            ? PAGE_INFO_COOKIES_BLOCKED_FOR_SITE
                            : PAGE_INFO_COOKIES_ALLOWED_FOR_SITE);
@@ -575,7 +567,7 @@ void PageInfo::UpdatePermissions() {
 void PageInfo::OnSitePermissionChanged(
     ContentSettingsType type,
     ContentSetting setting,
-    absl::optional<url::Origin> requesting_origin,
+    std::optional<url::Origin> requesting_origin,
     bool is_one_time) {
   ContentSettingChangedViaPageInfo(type);
 
@@ -622,7 +614,7 @@ void PageInfo::OnSitePermissionChanged(
     // Retrieve latest permission action for the current origin and the current
     // content settings type. Note that these values are only kept in memory and
     // not persisted across browser sessions.
-    absl::optional<permissions::PermissionActionTime> entry =
+    std::optional<permissions::PermissionActionTime> entry =
         permissions::PermissionsClient::Get()
             ->GetOriginKeyedPermissionActionService(
                 web_contents_->GetBrowserContext())
@@ -1208,7 +1200,7 @@ void PageInfo::PopulatePermissionInfo(PermissionInfo& permission_info,
           url::Origin::Create(site_url_), permission_info.requesting_origin);
     } else if (permission_info.type ==
                ContentSettingsType::FEDERATED_IDENTITY_API) {
-      absl::optional<content::PermissionResult> embargo_result =
+      std::optional<content::PermissionResult> embargo_result =
           delegate_->GetPermissionDecisionAutoblocker()->GetEmbargoResult(
               site_url_, permission_info.type);
       if (embargo_result) {
@@ -1264,6 +1256,12 @@ bool PageInfo::ShouldShowPermission(
   }
 #endif  // !BUILDFLAG(IS_ANDROID)
 
+  if (info.type == ContentSettingsType::AUTOMATIC_FULLSCREEN &&
+      !base::FeatureList::IsEnabled(
+          features::kAutomaticFullscreenContentSetting)) {
+    return false;
+  }
+
   const bool is_incognito =
       web_contents_->GetBrowserContext()->IsOffTheRecord();
 #if BUILDFLAG(IS_ANDROID)
@@ -1317,32 +1315,6 @@ bool PageInfo::ShouldShowPermission(
           features::kWebBluetoothNewPermissionsBackend) &&
       !PageInfo::IsPermissionFactoryDefault(info, is_incognito)) {
     return true;
-  }
-
-  if (base::FeatureList::IsEnabled(features::kBlockMidiByDefault)) {
-    ContentSetting midi_sysex_setting = GetContentSettings()->GetContentSetting(
-        site_url_, site_url_, ContentSettingsType::MIDI_SYSEX);
-    // At most one of MIDI and MIDI-SysEx should be displayed in the page info
-    // bubble. Show MIDI-SysEx if it's allowed since it has higher access to
-    // MIDI devices, show MIDI otherwise.
-    // Don't show MIDI if SysEx is allowed.
-    if (info.type == ContentSettingsType::MIDI &&
-        midi_sysex_setting == ContentSetting::CONTENT_SETTING_ALLOW) {
-      return false;
-    }
-    // Don't show MIDI-SysEx if it is not allowed. Technically having MIDI_SYSEX
-    // blocked and MIDI default is legal, but with the current implementation
-    // blocking either permission with block both permissions so we don't have
-    // to handle that case.
-    if (info.type == ContentSettingsType::MIDI_SYSEX &&
-        midi_sysex_setting != ContentSetting::CONTENT_SETTING_ALLOW) {
-      return false;
-    }
-  } else {
-    // Don't show MIDI.
-    if (info.type == ContentSettingsType::MIDI) {
-      return false;
-    }
   }
 
   // Show the content setting when it has a non-default value.
@@ -1478,14 +1450,6 @@ void PageInfo::PresentSiteDataInternal(base::OnceClosure done) {
 
   PageInfoUI::CookiesNewInfo cookies_info;
   cookies_info.allowed_sites_count = GetSitesWithAllowedCookiesAccessCount();
-  // TODO(crbug.com/1446230): Clean up and remove the fallback after the feature
-  // was launched. If blocked_third_party_sites_count_ isn't set, use fallback
-  // and count the sites.
-  cookies_info.blocked_third_party_sites_count =
-      blocked_third_party_sites_count_.value_or(
-          GetThirdPartySitesWithBlockedCookiesAccessCount(site_url_));
-  cookies_info.allowed_third_party_sites_count =
-      allowed_third_party_sites_count_.value_or(0);
 
 #if !BUILDFLAG(IS_ANDROID)
   if (base::FeatureList::IsEnabled(
@@ -1498,7 +1462,8 @@ void PageInfo::PresentSiteDataInternal(base::OnceClosure done) {
   }
 #endif
 
-  cookies_info.status = status_;
+  cookies_info.controls_visible = controls_visible_;
+  cookies_info.protections_on = protections_on_;
   cookies_info.enforcement = enforcement_;
   cookies_info.blocking_status = blocking_status_;
   cookies_info.expiration = cookie_exception_expiration_;
@@ -1511,16 +1476,8 @@ void PageInfo::PresentSiteDataInternal(base::OnceClosure done) {
 
 void PageInfo::PresentSiteData(base::OnceClosure done) {
   auto* settings = GetPageSpecificContentSettings();
-  if (settings) {
-    if (base::FeatureList::IsEnabled(
-            browsing_data::features::kMigrateStorageToBDM) &&
-        weak_factory_.GetWeakPtr()) {
-      PresentSiteDataInternal(std::move(done));
-    } else {
-      settings->allowed_local_shared_objects().UpdateIgnoredEmptyStorageKeys(
-          base::BindOnce(&PageInfo::PresentSiteDataInternal,
-                         weak_factory_.GetWeakPtr(), std::move(done)));
-    }
+  if (settings && weak_factory_.GetWeakPtr()) {
+    PresentSiteDataInternal(std::move(done));
   } else {
     std::move(done).Run();
   }

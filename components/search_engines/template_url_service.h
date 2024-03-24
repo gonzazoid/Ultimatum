@@ -19,7 +19,6 @@
 #include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/time/default_clock.h"
@@ -51,6 +50,10 @@ struct TemplateURLData;
 #if BUILDFLAG(IS_ANDROID)
 class TemplateUrlServiceAndroid;
 #endif
+
+namespace search_engines {
+class SearchEngineChoiceService;
+}
 
 namespace syncer {
 class SyncData;
@@ -114,9 +117,7 @@ class TemplateURLService final : public WebDataServiceConsumer,
 
   // Search metadata that's often used to persist into History.
   struct SearchMetadata {
-    // This field is not a raw_ptr<> because it was filtered by the rewriter
-    // for: #union
-    RAW_PTR_EXCLUSION const TemplateURL* template_url;
+    raw_ptr<const TemplateURL> template_url;
     GURL normalized_url;
     std::u16string search_terms;
   };
@@ -134,12 +135,14 @@ class TemplateURLService final : public WebDataServiceConsumer,
 
   TemplateURLService(
       PrefService* prefs,
+      search_engines::SearchEngineChoiceService* search_engine_choice_service,
       std::unique_ptr<SearchTermsData> search_terms_data,
       const scoped_refptr<KeywordWebDataService>& web_data_service,
       std::unique_ptr<TemplateURLServiceClient> client,
       const base::RepeatingClosure& dsp_change_callback
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-      , bool for_lacros_main_profile
+      ,
+      bool for_lacros_main_profile
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
   );
 
@@ -152,6 +155,7 @@ class TemplateURLService final : public WebDataServiceConsumer,
   // some template URL data.
   explicit TemplateURLService(
       PrefService* prefs,
+      search_engines::SearchEngineChoiceService* search_engine_choice_service,
       base::span<const TemplateURLService::Initializer> initializers = {});
 
   TemplateURLService(const TemplateURLService&) = delete;
@@ -374,7 +378,7 @@ class TemplateURLService final : public WebDataServiceConsumer,
       const std::u16string& search_terms) const;
 
   // Returns search metadata if |url| is a valid Search URL.
-  absl::optional<SearchMetadata> ExtractSearchMetadata(const GURL& url) const;
+  std::optional<SearchMetadata> ExtractSearchMetadata(const GURL& url) const;
 
   // Returns true if the default search provider supports the side search
   // feature.
@@ -473,10 +477,10 @@ class TemplateURLService final : public WebDataServiceConsumer,
 
   // Returns the locale-direction-adjusted short name for the given keyword.
   // Also sets the out param to indicate whether the keyword belongs to an
-  // Omnibox extension.
-  std::u16string GetKeywordShortName(
-      const std::u16string& keyword,
-      bool* is_omnibox_api_extension_keyword) const;
+  // Omnibox extension or the AskGoogle starter pack engine.
+  std::u16string GetKeywordShortName(const std::u16string& keyword,
+                                     bool* is_omnibox_api_extension_keyword,
+                                     bool* is_ask_google_keyword) const;
 
   // Called by the history service when a URL is visited.
   void OnHistoryURLVisited(const URLVisitedDetails& details);
@@ -495,13 +499,13 @@ class TemplateURLService final : public WebDataServiceConsumer,
   // Process new search engine changes from Sync, merging them into our local
   // data. This may send notifications if local search engines are added,
   // updated or removed.
-  absl::optional<syncer::ModelError> ProcessSyncChanges(
+  std::optional<syncer::ModelError> ProcessSyncChanges(
       const base::Location& from_here,
       const syncer::SyncChangeList& change_list) override;
   // Merge initial search engine data from Sync and push any local changes up
   // to Sync. This may send notifications if local search engines are added,
   // updated or removed.
-  absl::optional<syncer::ModelError> MergeDataAndStartSyncing(
+  std::optional<syncer::ModelError> MergeDataAndStartSyncing(
       syncer::ModelType type,
       const syncer::SyncDataList& initial_sync_data,
       std::unique_ptr<syncer::SyncChangeProcessor> sync_processor) override;
@@ -570,10 +574,13 @@ class TemplateURLService final : public WebDataServiceConsumer,
   // data, an appropriate SyncChange is added to |change_list|.  If the sync
   // data is bad for some reason, an ACTION_DELETE change is added and the
   // function returns NULL.
+  // `search_engine_choice_service` is used to obtain the country code (for the
+  // list of prepopulated engines).
   static std::unique_ptr<TemplateURL>
   CreateTemplateURLFromTemplateURLAndSyncData(
       TemplateURLServiceClient* client,
       PrefService* prefs,
+      search_engines::SearchEngineChoiceService* search_engine_choice_service,
       const SearchTermsData& search_terms_data,
       const TemplateURL* existing_turl,
       const syncer::SyncData& sync_data,
@@ -726,8 +733,10 @@ class TemplateURLService final : public WebDataServiceConsumer,
   // country, update all its fields save for the keyword, short name and id so
   // that they match the internal prepopulated URL. TemplateURLs not coming from
   // a prepopulated URL are not modified.
-  static void UpdateTemplateURLIfPrepopulated(TemplateURL* existing_turl,
-                                              PrefService* prefs);
+  static void UpdateTemplateURLIfPrepopulated(
+      TemplateURL* existing_turl,
+      PrefService* prefs,
+      search_engines::SearchEngineChoiceService* search_engine_choice_service);
 
   // If the TemplateURL's sync GUID matches the kSyncedDefaultSearchProviderGUID
   // preference it will be used to update the DSE in prefs.
@@ -868,6 +877,9 @@ class TemplateURLService final : public WebDataServiceConsumer,
 
   // ---------- Browser state related members ---------------------------------
   raw_ptr<PrefService> prefs_ = nullptr;
+
+  raw_ptr<search_engines::SearchEngineChoiceService>
+      search_engine_choice_service_ = nullptr;
 
   std::unique_ptr<SearchTermsData> search_terms_data_ =
       std::make_unique<SearchTermsData>();

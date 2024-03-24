@@ -60,8 +60,6 @@ source_set("chromeos") {
 source_set("common") {
   defines = [ "MEDIA_GPU_IMPLEMENTATION" ]
   sources = [
-    "chromeos_compressed_gpu_memory_buffer_video_frame_utils.cc",
-    "chromeos_compressed_gpu_memory_buffer_video_frame_utils.h",
     "chromeos_status.h",
     "dmabuf_video_frame_pool.cc",
     "dmabuf_video_frame_pool.h",
@@ -83,8 +81,6 @@ source_set("common") {
     "oop_video_decoder.h",
     "platform_video_frame_pool.cc",
     "platform_video_frame_pool.h",
-    "platform_video_frame_utils.cc",
-    "platform_video_frame_utils.h",
     "shaders/shaders.h",
     "vd_video_decode_accelerator.cc",
     "vd_video_decode_accelerator.h",
@@ -96,6 +92,8 @@ source_set("common") {
   # TODO(crbug.com/1012587): Merge :fourcc to :common.
   public_deps = [
     ":fourcc",
+    ":video_frame_resource",
+    ":video_frame_utils",
     "//gpu/ipc/service",
     "//media/mojo/mojom/stable:stable_video_decoder",
     "//ui/ozone",
@@ -161,6 +159,47 @@ source_set("fourcc") {
   ]
 }
 
+# This needs to be separate from :common since it is depended on by
+# //media/gpu:video_frame_mapper_common.
+source_set("video_frame_resource") {
+  sources = [
+    "frame_resource.cc",
+    "frame_resource.h",
+    "video_frame_resource.cc",
+    "video_frame_resource.h",
+  ]
+
+  deps = [
+    ":video_frame_utils",
+    "//base",
+    "//media",
+  ]
+}
+
+source_set("video_frame_utils") {
+  defines = [ "MEDIA_GPU_IMPLEMENTATION" ]
+  sources = [
+    "chromeos_compressed_gpu_memory_buffer_video_frame_utils.cc",
+    "chromeos_compressed_gpu_memory_buffer_video_frame_utils.h",
+    "platform_video_frame_utils.cc",
+    "platform_video_frame_utils.h",
+  ]
+
+  deps = [
+    "//base",
+    "//build/config/linux/libdrm",
+    "//gpu/ipc/common:common",
+    "//media",
+    "//media/gpu:buffer_validation",
+    "//media/gpu:common",
+    "//ui/gfx:buffer_types",
+    "//ui/gfx:gfx_switches",
+    "//ui/gfx:memory_buffer",
+    "//ui/gfx/linux:drm",
+    "//ui/gfx/linux:gbm",
+  ]
+}
+
 source_set("video_frame_mapper") {
   defines = [ "MEDIA_GPU_IMPLEMENTATION" ]
   sources = [
@@ -177,7 +216,6 @@ source_set("video_frame_mapper") {
     "//media/gpu:command_buffer_helper",
     "//media/gpu:common",
     "//media/gpu:video_frame_mapper_common",
-    "//third_party/libyuv",
   ]
 }
 
@@ -258,6 +296,12 @@ test("image_processor_test") {
     "//ui/gl",
     "//ui/gl:test_support",
   ]
+  if (use_vaapi) {
+    deps += [ "//media/gpu/vaapi:vaapi" ]
+  }
+  if (use_v4l2_codec) {
+    deps += [ "//media/gpu/v4l2" ]
+  }
   if (enable_vulkan) {
     deps += [ "//gpu/command_buffer/service:gles2" ]
   }

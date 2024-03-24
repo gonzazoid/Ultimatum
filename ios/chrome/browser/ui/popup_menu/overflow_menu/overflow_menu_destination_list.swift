@@ -26,7 +26,6 @@ extension View {
 }
 
 /// A view displaying a list of destinations.
-@available(iOS 15, *)
 struct OverflowMenuDestinationList: View {
   enum Constants {
     /// Padding breakpoints for each width. The ranges should be inclusive of
@@ -96,8 +95,6 @@ struct OverflowMenuDestinationList: View {
   // The allotted width of this view.
   var width: CGFloat
 
-  var extraTopMargin: CGFloat
-
   weak var metricsHandler: PopupMenuMetricsHandler?
 
   @ObservedObject var uiConfiguration: OverflowMenuUIConfiguration
@@ -117,7 +114,6 @@ struct OverflowMenuDestinationList: View {
   init(
     destinations: Binding<[OverflowMenuDestination]>,
     width: CGFloat,
-    extraTopMargin: CGFloat = 0,
     metricsHandler: PopupMenuMetricsHandler? = nil,
     uiConfiguration: OverflowMenuUIConfiguration,
     dragHandler: DestinationDragHandler? = nil,
@@ -125,7 +121,6 @@ struct OverflowMenuDestinationList: View {
   ) {
     self._destinations = destinations
     self.width = width
-    self.extraTopMargin = extraTopMargin
     self.metricsHandler = metricsHandler
     self.uiConfiguration = uiConfiguration
     dragHandlerContainer = DestinationDragHandlerContainer(dragHandler: dragHandler)
@@ -214,7 +209,7 @@ struct OverflowMenuDestinationList: View {
           }
         }
         .fixedSize(horizontal: false, vertical: true)
-        .padding([.top], Constants.defaultTopMargin + extraTopMargin)
+        .padding([.top], Constants.defaultTopMargin)
         .padding([.bottom], Constants.defaultBottomMargin)
         .overlay {
           GeometryReader { innerGeometry in

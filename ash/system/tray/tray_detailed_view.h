@@ -33,14 +33,19 @@ class TriView;
 
 class ASH_EXPORT TrayDetailedView : public views::View,
                                     public ViewClickListener {
+  METADATA_HEADER(TrayDetailedView, views::View)
+
  public:
-  METADATA_HEADER(TrayDetailedView);
   explicit TrayDetailedView(DetailedViewDelegate* delegate);
 
   TrayDetailedView(const TrayDetailedView&) = delete;
   TrayDetailedView& operator=(const TrayDetailedView&) = delete;
 
   ~TrayDetailedView() override;
+
+  // views::View:
+  void Layout(PassKey) override;
+  int GetHeightForWidth(int width) const override;
 
   // ViewClickListener:
   // Don't override this --- override HandleViewClicked.
@@ -52,10 +57,6 @@ class ASH_EXPORT TrayDetailedView : public views::View,
   views::ScrollView* scroll_view_for_testing() { return scroller_; }
 
  protected:
-  // views::View:
-  void Layout() override;
-  int GetHeightForWidth(int width) const override;
-
   // Exposes the layout manager of this view to give control to subclasses.
   views::BoxLayout* box_layout() { return box_layout_; }
 

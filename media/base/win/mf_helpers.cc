@@ -19,6 +19,7 @@
 #include "base/win/windows_version.h"
 #include "media/base/audio_codecs.h"
 #include "media/base/audio_decoder_config.h"
+#include "media/base/channel_layout.h"
 #include "media/base/win/mf_helpers.h"
 #if BUILDFLAG(ENABLE_PLATFORM_AC4_AUDIO)
 #include "media/formats/mp4/ac4.h"
@@ -302,16 +303,26 @@ ChannelLayout ChannelConfigToChannelLayout(ChannelConfig config) {
       return CHANNEL_LAYOUT_MONO;
     case KSAUDIO_SPEAKER_STEREO:
       return CHANNEL_LAYOUT_STEREO;
+    case KSAUDIO_SPEAKER_2POINT1:
+      return CHANNEL_LAYOUT_2POINT1;
+    case KSAUDIO_SPEAKER_3POINT0:
+      return CHANNEL_LAYOUT_SURROUND;
+    case KSAUDIO_SPEAKER_3POINT1:
+      return CHANNEL_LAYOUT_3_1;
     case KSAUDIO_SPEAKER_QUAD:
       return CHANNEL_LAYOUT_QUAD;
     case KSAUDIO_SPEAKER_SURROUND:
       return CHANNEL_LAYOUT_4_0;
+    case KSAUDIO_SPEAKER_5POINT0:
+      return CHANNEL_LAYOUT_5_0;
     case KSAUDIO_SPEAKER_5POINT1:
       return CHANNEL_LAYOUT_5_1_BACK;
     case KSAUDIO_SPEAKER_5POINT1_SURROUND:
       return CHANNEL_LAYOUT_5_1;
+    case KSAUDIO_SPEAKER_7POINT0:
+      return CHANNEL_LAYOUT_7_0;
     case KSAUDIO_SPEAKER_7POINT1:
-      return CHANNEL_LAYOUT_7_1_WIDE;
+      return CHANNEL_LAYOUT_7_1_WIDE_BACK;
     case KSAUDIO_SPEAKER_7POINT1_SURROUND:
       return CHANNEL_LAYOUT_7_1;
     case KSAUDIO_SPEAKER_DIRECTOUT:
@@ -403,19 +414,19 @@ HRESULT GetDefaultAudioType(const AudioDecoderConfig decoder_config,
                                            samples_per_second));
   }
 
-  int bits_per_sample = decoder_config.bytes_per_frame() * 8;
+  int bits_per_sample = decoder_config.bytes_per_channel() * 8;
   if (bits_per_sample > 0) {
     RETURN_IF_FAILED(
         media_type->SetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, bits_per_sample));
   }
 
   if (uncompressed) {
-    unsigned long block_alignment = channels * (bits_per_sample / 8);
+    unsigned long block_alignment = decoder_config.bytes_per_frame();
     if (block_alignment > 0) {
       RETURN_IF_FAILED(
           media_type->SetUINT32(MF_MT_AUDIO_BLOCK_ALIGNMENT, block_alignment));
     }
-    unsigned long average_bps = samples_per_second * (bits_per_sample / 8);
+    unsigned long average_bps = samples_per_second * block_alignment;
     if (average_bps > 0) {
       RETURN_IF_FAILED(
           media_type->SetUINT32(MF_MT_AUDIO_AVG_BYTES_PER_SECOND, average_bps));

@@ -74,6 +74,10 @@ public class ModalDialogViewBinder
             view.setFooterMessage(model.get(ModalDialogProperties.FOOTER_MESSAGE));
         } else if (ModalDialogProperties.TITLE_SCROLLABLE == propertyKey) {
             view.setTitleScrollable(model.get(ModalDialogProperties.TITLE_SCROLLABLE));
+        } else if (ModalDialogProperties.WRAP_CUSTOM_VIEW_IN_SCROLLABLE == propertyKey) {
+            assert checkCustomViewScrollConsistency(model);
+            view.setWrapCustomViewInScrollable(
+                    model.get(ModalDialogProperties.WRAP_CUSTOM_VIEW_IN_SCROLLABLE));
         } else if (ModalDialogProperties.CONTROLLER == propertyKey) {
             view.setOnButtonClickedCallback(
                     (buttonType) -> {
@@ -104,7 +108,8 @@ public class ModalDialogViewBinder
             boolean ignoreHeightConstraint =
                     dialogStyle == ModalDialogProperties.DialogStyles.FULLSCREEN_DIALOG
                             || dialogStyle
-                                    == ModalDialogProperties.DialogStyles.FULLSCREEN_DARK_DIALOG;
+                                    == ModalDialogProperties.DialogStyles.FULLSCREEN_DARK_DIALOG
+                            || dialogStyle == ModalDialogProperties.DialogStyles.DIALOG_WHEN_LARGE;
             view.setIgnoreConstraints(ignoreWidthConstraints, ignoreHeightConstraint);
         } else if (ModalDialogProperties.BUTTON_TAP_PROTECTION_PERIOD_MS == propertyKey) {
             view.setButtonTapProtectionDurationMs(
@@ -170,6 +175,17 @@ public class ModalDialogViewBinder
         boolean buttonGroupConfigured = isButtongroupWithTextButtonsConfigured(model);
         return (defaultButtonsConfigured ^ buttonGroupConfigured)
                 || (!defaultButtonsConfigured && !buttonGroupConfigured);
+    }
+
+    /**
+     * Checks that if a custom view that should be shown in a ScrollView, it is not itself a scroll
+     * container.
+     */
+    private static boolean checkCustomViewScrollConsistency(PropertyModel model) {
+        View customView = model.get(ModalDialogProperties.CUSTOM_VIEW);
+        return customView == null
+                || model.get(ModalDialogProperties.WRAP_CUSTOM_VIEW_IN_SCROLLABLE)
+                        != customView.isScrollContainer();
     }
 
     private static boolean isButtongroupWithTextButtonsConfigured(PropertyModel model) {

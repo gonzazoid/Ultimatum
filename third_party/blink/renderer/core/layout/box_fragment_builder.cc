@@ -44,7 +44,7 @@ const LayoutResult& BoxFragmentBuilder::LayoutResultForPropagation(
 }
 
 void BoxFragmentBuilder::AddBreakBeforeChild(LayoutInputNode child,
-                                             absl::optional<BreakAppeal> appeal,
+                                             std::optional<BreakAppeal> appeal,
                                              bool is_forced_break) {
   // If there's a pre-set break token, we shouldn't be here.
   DCHECK(!break_token_);
@@ -103,8 +103,8 @@ void BoxFragmentBuilder::AddBreakBeforeChild(LayoutInputNode child,
 void BoxFragmentBuilder::AddResult(
     const LayoutResult& child_layout_result,
     const LogicalOffset offset,
-    absl::optional<const BoxStrut> margins,
-    absl::optional<LogicalOffset> relative_offset,
+    std::optional<const BoxStrut> margins,
+    std::optional<LogicalOffset> relative_offset,
     const OofInlineContainer<LogicalOffset>* inline_container) {
   const auto& fragment = child_layout_result.GetPhysicalFragment();
 
@@ -157,7 +157,7 @@ void BoxFragmentBuilder::AddResult(
 
 void BoxFragmentBuilder::AddResult(const LayoutResult& child_layout_result,
                                    const LogicalOffset offset) {
-  AddResult(child_layout_result, offset, absl::nullopt, absl::nullopt, nullptr);
+  AddResult(child_layout_result, offset, std::nullopt, std::nullopt, nullptr);
 }
 
 void BoxFragmentBuilder::AddChild(
@@ -165,7 +165,7 @@ void BoxFragmentBuilder::AddChild(
     const LogicalOffset& child_offset,
     const MarginStrut* margin_strut,
     bool is_self_collapsing,
-    absl::optional<LogicalOffset> relative_offset,
+    std::optional<LogicalOffset> relative_offset,
     const OofInlineContainer<LogicalOffset>* inline_container) {
 #if DCHECK_IS_ON()
   needs_inflow_bounds_explicitly_set_ = !!relative_offset;
@@ -381,14 +381,37 @@ void BoxFragmentBuilder::PropagateBreakInfo(
        !child_fragment.IsFloatingOrOutOfFlowPositioned()) ||
       child_layout_result.ShouldForceSameFragmentationFlow();
 
+  // If we're paginated, monolithic overflow will be placed on subsequent pages,
+  // even though there are no fragments for the content there. We need to be
+  // aware of such overflow when laying out subsequent pages, so that we can
+  // move past it, rather than overlapping with it. This approach works (kind
+  // of) because in our implementation, pages are stacked in the block
+  // direction, so that the block-start offset of the next page is the same as
+  // the block-end offset of the preceding page.
+  //
+  // We need to reserve space for monolithic overflow caused by any child that
+  // is in the same flow as its parent, so that subsequent content in this flow
+  // gets pushed below the monolithic overflow. If we're at the root, even
+  // include content from parallel flows, since we want to encompass everything
+  // in that case, in order to create enough pages for it.
+  //
+  // Some children disable this monolithic overflow propagation, if they are
+  // out-of-flow and inside another out-of-flow (so that the containing block
+  // chain is broken), and the outer out-of-flow has clipped overflow.
+  //
+  // TODO(mstensho): Figure out if the !IsFragmentainerBoxType() condition below
+  // makes any sense.
   if (GetConstraintSpace().IsPaginated() &&
       ((child_is_in_same_flow && !IsFragmentainerBoxType()) ||
-       Node().IsPaginatedRoot())) {
+       Node().IsPaginatedRoot()) &&
+      (!child_box_fragment ||
+       !child_box_fragment->IsMonolithicOverflowPropagationDisabled())) {
     DCHECK(GetConstraintSpace().HasKnownFragmentainerBlockSize());
     // Include overflow inside monolithic content if this is for a page
     // fragment. Otherwise just use the fragment size.
     LayoutUnit block_size;
-    if (Node().IsPaginatedRoot()) {
+    if (Node().IsPaginatedRoot() &&
+        !child_fragment.HasNonVisibleBlockOverflow()) {
       // The root node is guaranteed to be block-level, so there should be a
       // child box fragment here.
       DCHECK(child_box_fragment);
@@ -407,11 +430,7 @@ void BoxFragmentBuilder::PropagateBreakInfo(
         fragment_block_end - FragmentainerSpaceLeft(GetConstraintSpace());
     if (fragmentainer_overflow > LayoutUnit()) {
       // This child overflows the page, because there's something monolithic
-      // inside. We need to be aware of this when laying out subsequent pages,
-      // so that we can move past it, rather than overlapping with it. This
-      // approach works (kind of) because in our implementation, pages are
-      // stacked in the block direction, so that the block-start offset of the
-      // next page is the same as the block-end offset of the preceding page.
+      // inside.
       ReserveSpaceForMonolithicOverflow(fragmentainer_overflow);
     }
   }
@@ -575,42 +594,6 @@ const LayoutResult* BoxFragmentBuilder::ToBoxFragment(
 
   return MakeGarbageCollected<LayoutResult>(
       LayoutResult::BoxFragmentBuilderPassKey(), std::move(fragment), this);
-}
-
-LogicalOffset BoxFragmentBuilder::GetChildOffset(
-    const LayoutObject* object) const {
-  DCHECK(!RuntimeEnabledFeatures::LayoutNewContainingBlockEnabled());
-  DCHECK(object);
-
-  if (const FragmentItemsBuilder* items_builder = items_builder_) {
-    if (auto offset = items_builder->LogicalOffsetFor(*object))
-      return *offset;
-    // Out-of-flow objects may be in |FragmentItems| or in |children_|.
-  }
-
-  for (const auto& child : children_) {
-    if (child.fragment->GetLayoutObject() == object)
-      return child.offset;
-
-    // TODO(layout-dev): ikilpatrick thinks we may need to traverse
-    // further than the initial line-box children for a nested inline
-    // container. We could not come up with a testcase, it would be
-    // something with split inlines, and nested oof/fixed descendants maybe.
-    if (child.fragment->IsLineBox()) {
-      const auto& line_box_fragment =
-          To<PhysicalLineBoxFragment>(*child.fragment);
-      for (const auto& line_box_child : line_box_fragment.Children()) {
-        if (line_box_child->GetLayoutObject() == object) {
-          return child.offset + line_box_child.Offset().ConvertToLogical(
-                                    GetWritingDirection(),
-                                    line_box_fragment.Size(),
-                                    line_box_child->Size());
-        }
-      }
-    }
-  }
-  DUMP_WILL_BE_NOTREACHED_NORETURN();
-  return LogicalOffset();
 }
 
 void BoxFragmentBuilder::AdjustFragmentainerDescendant(

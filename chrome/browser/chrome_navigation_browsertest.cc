@@ -625,8 +625,9 @@ IN_PROC_BROWSER_TEST_F(ChromeNavigationBrowserTest,
     std::string content =
         EvalJs(web_contents, "document.body ? document.body.innerText : '';")
             .ExtractString();
-    if (content.find("HTTP ERROR 404") != std::string::npos)
+    if (content.find("HTTP ERROR 404") != std::string::npos) {
       break;
+    }
     base::RunLoop run_loop;
     base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, run_loop.QuitClosure(), TestTimeouts::tiny_timeout());

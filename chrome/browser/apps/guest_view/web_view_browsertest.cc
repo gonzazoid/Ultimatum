@@ -36,7 +36,6 @@
 #include "chrome/browser/lifetime/application_lifetime_desktop.h"
 #include "chrome/browser/net/profile_network_context_service.h"
 #include "chrome/browser/net/profile_network_context_service_factory.h"
-#include "chrome/browser/policy/policy_test_utils.h"
 #include "chrome/browser/preloading/prefetch/no_state_prefetch/no_state_prefetch_link_manager_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/renderer_context_menu/render_view_context_menu.h"
@@ -63,7 +62,6 @@
 #include "components/guest_view/browser/test_guest_view_manager.h"
 #include "components/no_state_prefetch/browser/no_state_prefetch_link_manager.h"
 #include "components/permissions/test/mock_permission_prompt_factory.h"
-#include "components/policy/policy_constants.h"
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/core/browser/db/fake_database_manager.h"
 #include "components/security_interstitials/content/security_interstitial_tab_helper.h"
@@ -109,7 +107,6 @@
 #include "extensions/browser/api/declarative_webrequest/webrequest_constants.h"
 #include "extensions/browser/api/extensions_api_client.h"
 #include "extensions/browser/app_window/native_app_window.h"
-#include "extensions/browser/guest_view/guest_view_feature_util.h"
 #include "extensions/browser/guest_view/web_view/web_view_guest.h"
 #include "extensions/browser/guest_view/web_view/web_view_renderer_state.h"
 #include "extensions/browser/process_map.h"
@@ -306,7 +303,7 @@ class SelectControlWaiter : public aura::WindowObserver,
   SelectControlWaiter& operator=(const SelectControlWaiter&) = delete;
   ~SelectControlWaiter() override {
     aura::Env::GetInstance()->RemoveObserver(this);
-    for (auto* window : observed_windows_) {
+    for (aura::Window* window : observed_windows_) {
       window->RemoveObserver(this);
     }
   }
@@ -338,7 +335,7 @@ class SelectControlWaiter : public aura::WindowObserver,
 
  private:
   std::unique_ptr<base::RunLoop> run_loop_;
-  std::set<aura::Window*> observed_windows_;
+  std::set<raw_ptr<aura::Window, SetExperimental>> observed_windows_;
   bool wait_for_widget_shown_ = false;
 };
 
@@ -868,44 +865,6 @@ using WebViewVisibilityTest = WebViewTest;
 using WebViewSpeechAPITest = WebViewTest;
 using WebViewAccessibilityTest = WebViewTest;
 
-// Used to test that enterprise policy can revert MPArch related changes. For
-// ease of testing, instead of further parameterizing the tests which actually
-// exercise the behaviour differences, we only check the method which computes
-// whether the changes take effect.
-class WebViewPolicyTest : public policy::PolicyTest {
- public:
-  WebViewPolicyTest() {
-    scoped_feature_list_.InitAndEnableFeature(
-        extensions_features::kWebviewTagMPArchBehavior);
-  }
-
-  void SetPermissiveBehaviorPolicy(bool allowed) {
-    policy::PolicyMap policies;
-    SetPolicy(&policies,
-              policy::key::kChromeAppsWebViewPermissiveBehaviorAllowed,
-              base::Value(allowed));
-    UpdateProviderPolicy(policies);
-  }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-};
-
-IN_PROC_BROWSER_TEST_F(WebViewPolicyTest, MPArchBehaviorRevertedByPolicy) {
-  SetPermissiveBehaviorPolicy(true);
-
-  EXPECT_FALSE(
-      extensions::AreWebviewMPArchBehaviorsEnabled(browser()->profile()));
-}
-
-IN_PROC_BROWSER_TEST_F(WebViewPolicyTest,
-                       ExplicitlyDisabledBehaviorPolicyHasNoEffect) {
-  SetPermissiveBehaviorPolicy(false);
-
-  EXPECT_TRUE(
-      extensions::AreWebviewMPArchBehaviorsEnabled(browser()->profile()));
-}
-
 class WebViewNewWindowTest : public WebViewTest,
                              public testing::WithParamInterface<bool> {
  public:
@@ -1113,7 +1072,14 @@ IN_PROC_BROWSER_TEST_F(WebViewTest, AutoplayPolicy) {
 }
 
 // This test exercises the webview spatial navigation API
-IN_PROC_BROWSER_TEST_F(WebViewTest, SpatialNavigationJavascriptAPI) {
+// TODO(https://crbug.com/1520415): Flaky timeouts on Mac and Cros.
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_CHROMEOS_ASH)
+#define MAYBE_SpatialNavigationJavascriptAPI \
+  DISABLED_SpatialNavigationJavascriptAPI
+#else
+#define MAYBE_SpatialNavigationJavascriptAPI SpatialNavigationJavascriptAPI
+#endif
+IN_PROC_BROWSER_TEST_F(WebViewTest, MAYBE_SpatialNavigationJavascriptAPI) {
   base::CommandLine::ForCurrentProcess()->AppendSwitch(
       switches::kEnableSpatialNavigation);
 
@@ -3949,17 +3915,7 @@ class WebViewCaptureTest : public WebViewTest {
   }
 };
 
-// TODO(crbug.com/1087381): Flaky on mac
-// TODO(crbug.com/1052397): Revisit once build flag switch of lacros-chrome is
-// complete.
-#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_CHROMEOS) ||             \
-    ((BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)) && \
-     defined(ADDRESS_SANITIZER))
-#define MAYBE_Shim_TestZoomAPI DISABLED_Shim_TestZoomAPI
-#else
-#define MAYBE_Shim_TestZoomAPI Shim_TestZoomAPI
-#endif
-IN_PROC_BROWSER_TEST_F(WebViewTest, MAYBE_Shim_TestZoomAPI) {
+IN_PROC_BROWSER_TEST_F(WebViewTest, Shim_TestZoomAPI) {
   TestHelper("testZoomAPI", "web_view/shim", NO_TEST_SERVER);
 }
 
@@ -4051,8 +4007,7 @@ IN_PROC_BROWSER_TEST_F(WebViewTest, Shim_TestPerOriginZoomMode) {
   TestHelper("testPerOriginZoomMode", "web_view/shim", NO_TEST_SERVER);
 }
 
-// TODO(crbug.com/935665): Test has flaky failures on all platforms.
-IN_PROC_BROWSER_TEST_F(WebViewTest, DISABLED_Shim_TestPerViewZoomMode) {
+IN_PROC_BROWSER_TEST_F(WebViewTest, Shim_TestPerViewZoomMode) {
   TestHelper("testPerViewZoomMode", "web_view/shim", NO_TEST_SERVER);
 }
 
@@ -5057,14 +5012,18 @@ IN_PROC_BROWSER_TEST_P(WebViewGuestScrollTest, TestGuestWheelScrollsBubble) {
   // Make sure wheel events don't get filtered.
   float scroll_magnitude = 15.f;
 
+  display::ScreenInfo screen_info =
+      GetGuestWebContents()->GetRenderWidgetHostView()->GetScreenInfo();
   {
     // Scroll the embedder from a position in the embedder that is not over
     // the guest.
-    gfx::Point embedder_scroll_location(
-        embedder_rect.x() + embedder_rect.width() / 2,
-        (embedder_rect.y() + guest_rect.y()) / 2);
+    gfx::Point embedder_scroll_location = gfx::ScaleToRoundedPoint(
+        gfx::Point(embedder_rect.x() + embedder_rect.width() / 2,
+                   (embedder_rect.y() + guest_rect.y()) / 2),
+        1 / screen_info.device_scale_factor);
 
-    gfx::PointF expected_offset(0.f, scroll_magnitude);
+    gfx::PointF expected_offset(
+        0.f, scroll_magnitude * screen_info.device_scale_factor);
 
     content::SimulateMouseEvent(embedder_contents,
                                 blink::WebInputEvent::Type::kMouseMove,
@@ -5087,8 +5046,9 @@ IN_PROC_BROWSER_TEST_P(WebViewGuestScrollTest, TestGuestWheelScrollsBubble) {
   guest_rect.set_x(guest_rect.x() - embedder_rect.x());
   guest_rect.set_y(guest_rect.y() - embedder_rect.y());
   {
-    gfx::Point guest_scroll_location(guest_rect.x() + guest_rect.width() / 2,
-                                     guest_rect.y());
+    gfx::Point guest_scroll_location = gfx::ScaleToRoundedPoint(
+        gfx::Point(guest_rect.x() + guest_rect.width() / 2, guest_rect.y()),
+        1 / screen_info.device_scale_factor);
 
     content::SimulateMouseEvent(embedder_contents,
                                 blink::WebInputEvent::Type::kMouseMove,

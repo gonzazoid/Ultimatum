@@ -33,6 +33,7 @@
 #include "chrome/browser/ash/file_manager/file_tasks.h"
 #include "chrome/browser/ash/file_manager/fileapi_util.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
+#include "chrome/browser/ash/file_manager/trash_common_util.h"
 #include "chrome/browser/ash/file_manager/url_util.h"
 #include "chrome/browser/ash/file_manager/volume_manager.h"
 #include "chrome/browser/ash/file_system_provider/mount_path_util.h"
@@ -42,6 +43,7 @@
 #include "chrome/browser/ash/fileapi/recent_model_factory.h"
 #include "chrome/browser/ash/guest_os/guest_os_share_path.h"
 #include "chrome/browser/ash/guest_os/public/guest_os_service.h"
+#include "chrome/browser/ash/policy/local_user_files/policy_utils.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/chromeos/upload_office_to_cloud/upload_office_to_cloud.h"
@@ -60,6 +62,7 @@
 #include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
 #include "chrome/browser/ui/webui/ash/cloud_upload/cloud_upload_dialog.h"
+#include "chrome/browser/ui/webui/ash/cloud_upload/cloud_upload_util.h"
 #include "chrome/common/extensions/api/file_manager_private.h"
 #include "chrome/common/extensions/api/file_manager_private_internal.h"
 #include "chrome/common/extensions/extension_constants.h"
@@ -248,7 +251,7 @@ FileManagerPrivateGetPreferencesFunction::Run() {
   result.arc_enabled = prefs->GetBoolean(arc::prefs::kArcEnabled);
   result.arc_removable_media_access_enabled =
       prefs->GetBoolean(arc::prefs::kArcHasAccessToRemovableMedia);
-  result.trash_enabled = prefs->GetBoolean(ash::prefs::kFilesAppTrashEnabled);
+  result.trash_enabled = file_manager::trash::IsTrashEnabledForProfile(profile);
   std::vector<std::string> folder_shortcuts;
   const auto& value_list = prefs->GetList(ash::prefs::kFilesAppFolderShortcuts);
   for (const base::Value& value : value_list) {
@@ -261,6 +264,8 @@ FileManagerPrivateGetPreferencesFunction::Run() {
   result.office_file_moved_google_drive =
       prefs->GetTime(prefs::kOfficeFileMovedToGoogleDrive)
           .InMillisecondsFSinceUnixEpoch();
+  result.local_user_files_allowed =
+      policy::local_user_files::LocalUserFilesAllowed();
 
   return RespondNow(WithArguments(result.ToValue()));
 }
@@ -419,15 +424,14 @@ FileManagerPrivateOpenSettingsSubpageFunction::Run() {
   return RespondNow(NoArguments());
 }
 
-FileManagerPrivateInternalGetMimeTypeFunction::
-    FileManagerPrivateInternalGetMimeTypeFunction() = default;
+FileManagerPrivateGetMimeTypeFunction::FileManagerPrivateGetMimeTypeFunction() =
+    default;
 
-FileManagerPrivateInternalGetMimeTypeFunction::
-    ~FileManagerPrivateInternalGetMimeTypeFunction() = default;
+FileManagerPrivateGetMimeTypeFunction::
+    ~FileManagerPrivateGetMimeTypeFunction() = default;
 
-ExtensionFunction::ResponseAction
-FileManagerPrivateInternalGetMimeTypeFunction::Run() {
-  using fmpi::GetMimeType::Params;
+ExtensionFunction::ResponseAction FileManagerPrivateGetMimeTypeFunction::Run() {
+  using fmp::GetMimeType::Params;
   const optional<Params> params = Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
@@ -442,13 +446,13 @@ FileManagerPrivateInternalGetMimeTypeFunction::Run() {
 
   app_file_handler_util::GetMimeTypeForLocalPath(
       profile, file_system_url.path(),
-      base::BindOnce(
-          &FileManagerPrivateInternalGetMimeTypeFunction::OnGetMimeType, this));
+      base::BindOnce(&FileManagerPrivateGetMimeTypeFunction::OnGetMimeType,
+                     this));
 
   return RespondLater();
 }
 
-void FileManagerPrivateInternalGetMimeTypeFunction::OnGetMimeType(
+void FileManagerPrivateGetMimeTypeFunction::OnGetMimeType(
     const std::string& mimeType) {
   Respond(WithArguments(mimeType));
 }
@@ -518,7 +522,9 @@ FileManagerPrivateAddProvidedFileSystemFunction::Run() {
   // Show Connect To OneDrive dialog only when mounting ODFS for the first time.
   // There will already a ODFS mount if the user is requesting a new mount to
   // replace the unauthenticated one.
-  if (chromeos::cloud_upload::IsMicrosoftOfficeCloudUploadAllowed(profile) &&
+  if (ash::cloud_upload::
+          IsMicrosoftOfficeOneDriveIntegrationAllowedAndOdfsInstalled(
+              profile) &&
       params->provider_id == extension_misc::kODFSExtensionId &&
       first_file_system) {
     // Get Files App window, if it exists.

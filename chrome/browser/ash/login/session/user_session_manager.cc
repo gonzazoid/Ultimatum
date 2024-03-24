@@ -86,12 +86,9 @@
 #include "chrome/browser/ash/login/startup_utils.h"
 #include "chrome/browser/ash/login/ui/input_events_blocker.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
-#include "chrome/browser/ash/login/users/chrome_user_manager.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/net/alwayson_vpn_pre_connect_url_allowlist_service.h"
 #include "chrome/browser/ash/net/alwayson_vpn_pre_connect_url_allowlist_service_factory.h"
-#include "chrome/browser/ash/notifications/update_notification.h"
-#include "chrome/browser/ash/notifications/update_notification_showing_controller.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/ash/policy/handlers/adb_sideloading_allowance_mode_policy_handler.h"
 #include "chrome/browser/ash/policy/handlers/minimum_version_policy_handler.h"
@@ -997,7 +994,7 @@ bool UserSessionManager::RespectLocalePreference(
           << " Selected '" << pref_locale << "'";
 
   Profile::AppLocaleChangedVia app_locale_changed_via =
-      user->GetType() == user_manager::USER_TYPE_PUBLIC_ACCOUNT
+      user->GetType() == user_manager::UserType::kPublicAccount
           ? Profile::APP_LOCALE_CHANGED_VIA_PUBLIC_SESSION_LOGIN
           : Profile::APP_LOCALE_CHANGED_VIA_LOGIN;
 
@@ -1229,9 +1226,9 @@ void UserSessionManager::OnUsersSignInConstraintsChanged() {
   const user_manager::UserList& logged_in_users =
       user_manager->GetLoggedInUsers();
   for (user_manager::User* user : logged_in_users) {
-    if (user->GetType() != user_manager::USER_TYPE_REGULAR &&
-        user->GetType() != user_manager::USER_TYPE_GUEST &&
-        user->GetType() != user_manager::USER_TYPE_CHILD) {
+    if (user->GetType() != user_manager::UserType::kRegular &&
+        user->GetType() != user_manager::UserType::kGuest &&
+        user->GetType() != user_manager::UserType::kChild) {
       continue;
     }
     if (!user_manager->IsUserAllowed(*user)) {
@@ -1249,7 +1246,7 @@ void UserSessionManager::ChildAccountStatusReceivedCallback(Profile* profile) {
 void UserSessionManager::StopChildStatusObserving(Profile* profile) {
   if (waiting_for_child_account_status_ &&
       !SessionStartupPref::TypeIsManaged(profile->GetPrefs())) {
-    MaybeLaunchHelpApp(profile);
+    MaybeLaunchHelpAppForFirstRun(profile);
   }
   waiting_for_child_account_status_ = false;
 }
@@ -1262,7 +1259,7 @@ void UserSessionManager::CreateUserSession(const UserContext& user_context,
   StoreUserContextDataBeforeProfileIsCreated();
   session_manager::SessionManager::Get()->CreateSession(
       user_context_.GetAccountId(), user_context_.GetUserIDHash(),
-      user_context.GetUserType() == user_manager::USER_TYPE_CHILD);
+      user_context.GetUserType() == user_manager::UserType::kChild);
 }
 
 void UserSessionManager::PreStartSession(StartSessionType start_session_type) {
@@ -1434,9 +1431,9 @@ void UserSessionManager::InitProfilePreferences(
   DVLOG(1) << "Initializing profile preferences";
   const user_manager::User* user =
       ProfileHelper::Get()->GetUserByProfile(profile);
-  if (user->GetType() == user_manager::USER_TYPE_KIOSK_APP &&
+  if (user->GetType() == user_manager::UserType::kKioskApp &&
       profile->IsNewProfile()) {
-    ChromeUserManager::Get()->SetIsCurrentUserNew(true);
+    user_manager::UserManager::Get()->SetIsCurrentUserNew(true);
   }
 
   if (user->is_active()) {
@@ -1610,9 +1607,9 @@ void UserSessionManager::InitProfilePreferences(
     }
 
     user = user_manager->FindUser(user_context.GetAccountId());
-    bool is_child = user->GetType() == user_manager::USER_TYPE_CHILD;
+    bool is_child = user->GetType() == user_manager::UserType::kChild;
     DCHECK(is_child ==
-           (user_context.GetUserType() == user_manager::USER_TYPE_CHILD));
+           (user_context.GetUserType() == user_manager::UserType::kChild));
 
     signin::Tribool is_under_advanced_protection = signin::Tribool::kUnknown;
     if (IsOnlineSignin(user_context)) {
@@ -1875,7 +1872,7 @@ void UserSessionManager::FinalizePrepareProfile(Profile* profile) {
 
     VLOG(1) << "Clearing all secrets";
     user_context_.ClearSecrets();
-    if (user->GetType() == user_manager::USER_TYPE_CHILD) {
+    if (user->GetType() == user_manager::UserType::kChild) {
       if (base::FeatureList::IsEnabled(
               ::features::kDMServerOAuthForChildUser)) {
         VLOG(1) << "Waiting for child policy refresh before showing session UI";
@@ -1925,7 +1922,7 @@ void UserSessionManager::InitializeBrowser(Profile* profile) {
   }
 }
 
-void UserSessionManager::MaybeLaunchHelpApp(Profile* profile) const {
+void UserSessionManager::MaybeLaunchHelpAppForFirstRun(Profile* profile) const {
   if (first_run::ShouldLaunchHelpApp(profile)) {
     // Don't open default Chrome window if we're going to launch the first-run
     // app. Because we don't want the first-run app to be hidden in the
@@ -1954,7 +1951,7 @@ bool UserSessionManager::MaybeStartNewUserOnboarding(Profile* profile) {
   // start URLs via policy.
   if (!SessionStartupPref::TypeIsManaged(prefs)) {
     if (child_service->IsChildAccountStatusKnown())
-      MaybeLaunchHelpApp(profile);
+      MaybeLaunchHelpAppForFirstRun(profile);
     else
       waiting_for_child_account_status_ = true;
   }
@@ -2184,9 +2181,6 @@ void UserSessionManager::StartTetherServiceIfPossible(Profile* profile) {
 }
 
 void UserSessionManager::ShowNotificationsIfNeeded(Profile* profile) {
-  // Checks whether to show the update notification.
-  MaybeShowUpdateNotification(profile);
-
   // Check to see if this profile should show TPM Firmware Update Notification
   // and show the message accordingly.
   tpm_firmware_update::ShowNotificationIfNeeded(profile);
@@ -2292,8 +2286,7 @@ void UserSessionManager::RestorePendingUserSessions() {
         user_manager::UserManager::Get()->FindUser(account_id);
     UserContext user_context =
         user ? UserContext(*user)
-             : UserContext(user_manager::UserType::USER_TYPE_REGULAR,
-                           account_id);
+             : UserContext(user_manager::UserType::kRegular, account_id);
     user_context.SetUserIDHash(user_id_hash);
     user_context.SetIsUsingOAuth(false);
 
@@ -2549,7 +2542,8 @@ void UserSessionManager::LaunchBrowser(Profile* profile) {
   browser_creator.LaunchBrowser(
       *base::CommandLine::ForCurrentProcess(), profile, base::FilePath(),
       chrome::startup::IsProcessStartup::kYes, first_run,
-      std::make_unique<OldLaunchModeRecorder>());
+      std::make_unique<OldLaunchModeRecorder>(),
+      /*restore_tabbed_browser=*/true);
 }
 
 // static
@@ -2632,17 +2626,6 @@ void UserSessionManager::MaybeShowU2FNotification() {
   if (!u2f_notification_) {
     u2f_notification_ = std::make_unique<U2FNotification>();
     u2f_notification_->Check();
-  }
-}
-
-void UserSessionManager::MaybeShowUpdateNotification(Profile* profile) {
-  if (!ProfileHelper::IsPrimaryProfile(profile)) {
-    return;
-  }
-
-  if (features::IsUpdateNotificationEnabled() && !update_notification_) {
-    GetUpdateNotificationShowingController(profile)
-        ->MaybeShowUpdateNotification();
   }
 }
 
@@ -2737,15 +2720,6 @@ UserSessionManager::GetHelpAppNotificationController(Profile* profile) {
         std::make_unique<HelpAppNotificationController>(profile);
   }
   return help_app_notification_controller_.get();
-}
-
-UpdateNotificationShowingController*
-UserSessionManager::GetUpdateNotificationShowingController(Profile* profile) {
-  if (!update_notification_showing_controller_) {
-    update_notification_showing_controller_ =
-        std::make_unique<UpdateNotificationShowingController>(profile);
-  }
-  return update_notification_showing_controller_.get();
 }
 
 }  // namespace ash

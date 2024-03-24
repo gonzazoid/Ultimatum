@@ -42,7 +42,6 @@ class TestRasterInterface;
 class TestSharedImageInterface : public gpu::SharedImageInterface {
  public:
   TestSharedImageInterface();
-  ~TestSharedImageInterface() override;
 
   scoped_refptr<gpu::ClientSharedImage> CreateSharedImage(
       SharedImageFormat format,
@@ -97,7 +96,7 @@ class TestSharedImageInterface : public gpu::SharedImageInterface {
       base::StringPiece debug_label,
       gfx::GpuMemoryBufferHandle buffer_handle) override;
 
-  scoped_refptr<gpu::ClientSharedImage> CreateSharedImage(
+  SharedImageInterface::SharedImageMapping CreateSharedImage(
       SharedImageFormat format,
       const gfx::Size& size,
       const gfx::ColorSpace& color_space,
@@ -125,6 +124,11 @@ class TestSharedImageInterface : public gpu::SharedImageInterface {
   scoped_refptr<gpu::ClientSharedImage> AddReferenceToSharedImage(
       const gpu::SyncToken& sync_token,
       const gpu::Mailbox& mailbox,
+      SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
       uint32_t usage) override;
 
   void DestroySharedImage(const gpu::SyncToken& sync_token,
@@ -152,6 +156,7 @@ class TestSharedImageInterface : public gpu::SharedImageInterface {
 
   gpu::SyncToken GenVerifiedSyncToken() override;
   gpu::SyncToken GenUnverifiedSyncToken() override;
+  void VerifySyncToken(gpu::SyncToken& sync_token) override;
   void WaitSyncToken(const gpu::SyncToken& sync_token) override;
 
   void Flush() override;
@@ -178,6 +183,9 @@ class TestSharedImageInterface : public gpu::SharedImageInterface {
   void UseTestGMBInSharedImageCreationWithBufferUsage() {
     test_gmb_manager_ = std::make_unique<TestGpuMemoryBufferManager>();
   }
+
+ protected:
+  ~TestSharedImageInterface() override;
 
  private:
   mutable base::Lock lock_;
@@ -207,7 +215,7 @@ class TestContextProvider
   static scoped_refptr<TestContextProvider> Create(
       std::unique_ptr<TestGLES2Interface> gl);
   static scoped_refptr<TestContextProvider> Create(
-      std::unique_ptr<TestSharedImageInterface> sii);
+      scoped_refptr<TestSharedImageInterface> sii);
   static scoped_refptr<TestContextProvider> Create(
       std::unique_ptr<TestContextSupport> support);
 
@@ -231,7 +239,7 @@ class TestContextProvider
       std::unique_ptr<TestContextSupport> support,
       std::unique_ptr<TestGLES2Interface> gl,
       std::unique_ptr<gpu::raster::RasterInterface> raster,
-      std::unique_ptr<TestSharedImageInterface> sii,
+      scoped_refptr<TestSharedImageInterface> sii,
       bool support_locking);
 
   TestContextProvider(const TestContextProvider&) = delete;
@@ -294,7 +302,7 @@ class TestContextProvider
   std::unique_ptr<TestRasterInterface> raster_context_;
 
   std::unique_ptr<ContextCacheController> cache_controller_;
-  std::unique_ptr<TestSharedImageInterface> shared_image_interface_;
+  scoped_refptr<TestSharedImageInterface> shared_image_interface_;
   [[maybe_unused]] const bool support_locking_;
   bool bound_ = false;
 

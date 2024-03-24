@@ -11,6 +11,8 @@ import("//build/config/chromeos/ui_mode.gni")
 component("app_types") {
   output_name = "APP_TYPES"
   sources = [
+    "app.cc",
+    "app.h",
     "app_launch_util.cc",
     "app_launch_util.h",
     "app_types.cc",
@@ -285,6 +287,21 @@ source_set("preferred_apps") {
   visibility = [ "//components/services/app_service/*" ]
 }
 
+source_set("app_shortcut_image") {
+  sources = [
+    "app_shortcut_image.cc",
+    "app_shortcut_image.h",
+  ]
+
+  deps = [
+    "//base",
+    "//cc/paint",
+    "//ui/gfx",
+  ]
+
+  visibility = [ "//components/services/app_service/*" ]
+}
+
 source_set("crosapi_utils") {
   sources = [ "crosapi_utils.h" ]
 
@@ -299,7 +316,7 @@ source_set("unit_tests") {
     "app_capability_access_cache_wrapper_unittest.cc",
     "app_registry_cache_unittest.cc",
     "app_registry_cache_wrapper_unittest.cc",
-    "app_types_unittest.cc",
+    "app_unittest.cc",
     "app_update_unittest.cc",
     "capability_access_update_unittest.cc",
     "icon_cache_unittest.cc",

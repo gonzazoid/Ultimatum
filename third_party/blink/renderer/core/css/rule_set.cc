@@ -697,6 +697,11 @@ void RuleSet::AddPositionFallbackRule(StyleRulePositionFallback* rule) {
   position_fallback_rules_.push_back(rule);
 }
 
+void RuleSet::AddFunctionRule(StyleRuleFunction* rule) {
+  need_compaction_ = true;
+  function_rules_.push_back(rule);
+}
+
 void RuleSet::AddViewTransitionRule(StyleRuleViewTransition* rule) {
   need_compaction_ = true;
   view_transition_rules_.push_back(rule);
@@ -708,9 +713,7 @@ void RuleSet::AddChildRules(const HeapVector<Member<StyleRuleBase>>& rules,
                             const ContainerQuery* container_query,
                             CascadeLayer* cascade_layer,
                             const StyleScope* style_scope) {
-  for (unsigned i = 0; i < rules.size(); ++i) {
-    StyleRuleBase* rule = rules[i].Get();
-
+  for (StyleRuleBase* rule : rules) {
     if (auto* style_rule = DynamicTo<StyleRule>(rule)) {
       AddStyleRule(style_rule, medium, add_rule_flags, container_query,
                    cascade_layer, style_scope);
@@ -719,8 +722,9 @@ void RuleSet::AddChildRules(const HeapVector<Member<StyleRuleBase>>& rules,
       AddPageRule(page_rule);
     } else if (auto* media_rule = DynamicTo<StyleRuleMedia>(rule)) {
       if (MatchMediaForAddRules(medium, media_rule->MediaQueries())) {
-        AddChildRules(media_rule->ChildRules(), medium, add_rule_flags,
-                      container_query, cascade_layer, style_scope);
+        AddChildRules(media_rule->ChildRules().RawChildRules(), medium,
+                      add_rule_flags, container_query, cascade_layer,
+                      style_scope);
       }
     } else if (auto* font_face_rule = DynamicTo<StyleRuleFontFace>(rule)) {
       font_face_rule->SetCascadeLayer(cascade_layer);
@@ -752,10 +756,14 @@ void RuleSet::AddChildRules(const HeapVector<Member<StyleRuleBase>>& rules,
                    DynamicTo<StyleRulePositionFallback>(rule)) {
       position_fallback_rule->SetCascadeLayer(cascade_layer);
       AddPositionFallbackRule(position_fallback_rule);
+    } else if (auto* function_rule = DynamicTo<StyleRuleFunction>(rule)) {
+      // TODO(sesse): Set the cascade layer here?
+      AddFunctionRule(function_rule);
     } else if (auto* supports_rule = DynamicTo<StyleRuleSupports>(rule)) {
       if (supports_rule->ConditionIsSupported()) {
-        AddChildRules(supports_rule->ChildRules(), medium, add_rule_flags,
-                      container_query, cascade_layer, style_scope);
+        AddChildRules(supports_rule->ChildRules().RawChildRules(), medium,
+                      add_rule_flags, container_query, cascade_layer,
+                      style_scope);
       }
     } else if (auto* container_rule = DynamicTo<StyleRuleContainer>(rule)) {
       const ContainerQuery* inner_container_query =
@@ -764,13 +772,14 @@ void RuleSet::AddChildRules(const HeapVector<Member<StyleRuleBase>>& rules,
         inner_container_query =
             inner_container_query->CopyWithParent(container_query);
       }
-      AddChildRules(container_rule->ChildRules(), medium, add_rule_flags,
-                    inner_container_query, cascade_layer, style_scope);
+      AddChildRules(container_rule->ChildRules().RawChildRules(), medium,
+                    add_rule_flags, inner_container_query, cascade_layer,
+                    style_scope);
     } else if (auto* layer_block_rule = DynamicTo<StyleRuleLayerBlock>(rule)) {
       CascadeLayer* sub_layer =
           GetOrAddSubLayer(cascade_layer, layer_block_rule->GetName());
-      AddChildRules(layer_block_rule->ChildRules(), medium, add_rule_flags,
-                    container_query, sub_layer, style_scope);
+      AddChildRules(layer_block_rule->ChildRules().RawChildRules(), medium,
+                    add_rule_flags, container_query, sub_layer, style_scope);
     } else if (auto* layer_statement_rule =
                    DynamicTo<StyleRuleLayerStatement>(rule)) {
       for (const auto& layer_name : layer_statement_rule->GetNames()) {
@@ -781,11 +790,12 @@ void RuleSet::AddChildRules(const HeapVector<Member<StyleRuleBase>>& rules,
       if (style_scope) {
         inner_style_scope = inner_style_scope->CopyWithParent(style_scope);
       }
-      AddChildRules(scope_rule->ChildRules(), medium, add_rule_flags,
-                    container_query, cascade_layer, inner_style_scope);
+      AddChildRules(scope_rule->ChildRules().RawChildRules(), medium,
+                    add_rule_flags, container_query, cascade_layer,
+                    inner_style_scope);
     } else if (auto* starting_style_rule =
                    DynamicTo<StyleRuleStartingStyle>(rule)) {
-      AddChildRules(starting_style_rule->ChildRules(), medium,
+      AddChildRules(starting_style_rule->ChildRules().RawChildRules(), medium,
                     add_rule_flags | kRuleIsStartingStyle, container_query,
                     cascade_layer, style_scope);
     }
@@ -973,8 +983,8 @@ void RuleSet::AddStyleRule(StyleRule* style_rule,
 
   // Nested rules are taken to be added immediately after their parent rule.
   if (style_rule->ChildRules() != nullptr) {
-    AddChildRules(*style_rule->ChildRules(), medium, add_rule_flags,
-                  container_query, cascade_layer, style_scope);
+    AddChildRules(style_rule->ChildRules()->RawChildRules(), medium,
+                  add_rule_flags, container_query, cascade_layer, style_scope);
   }
 }
 
@@ -1393,6 +1403,7 @@ void RuleSet::Trace(Visitor* visitor) const {
   visitor->Trace(property_rules_);
   visitor->Trace(counter_style_rules_);
   visitor->Trace(position_fallback_rules_);
+  visitor->Trace(function_rules_);
   visitor->Trace(root_element_rules_);
   visitor->Trace(media_query_set_results_);
   visitor->Trace(implicit_outer_layer_);

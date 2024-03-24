@@ -4,6 +4,7 @@
 
 #include "components/performance_manager/public/resource_attribution/worker_context.h"
 
+#include <optional>
 #include <utility>
 
 #include "base/check.h"
@@ -12,11 +13,11 @@
 #include "components/performance_manager/graph/worker_node_impl.h"
 #include "components/performance_manager/public/graph/graph.h"
 #include "components/performance_manager/public/performance_manager.h"
+#include "components/performance_manager/resource_attribution/performance_manager_aliases.h"
 #include "content/public/browser/browser_thread.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 
-namespace performance_manager::resource_attribution {
+namespace resource_attribution {
 
 WorkerContext::WorkerContext(const blink::WorkerToken& token,
                              base::WeakPtr<WorkerNode> weak_node)
@@ -33,14 +34,14 @@ WorkerContext::WorkerContext(WorkerContext&& other) = default;
 WorkerContext& WorkerContext::operator=(WorkerContext&& other) = default;
 
 // static
-absl::optional<WorkerContext> WorkerContext::FromWorkerToken(
+std::optional<WorkerContext> WorkerContext::FromWorkerToken(
     const blink::WorkerToken& token) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   base::WeakPtr<WorkerNode> worker_node =
       PerformanceManager::GetWorkerNodeForToken(token);
   if (!worker_node.MaybeValid()) {
     // This token was never seen by PerformanceManager.
-    return absl::nullopt;
+    return std::nullopt;
   }
   return WorkerContext(token, std::move(worker_node));
 }
@@ -64,10 +65,10 @@ WorkerContext WorkerContext::FromWorkerNode(const WorkerNode* node) {
 }
 
 // static
-absl::optional<WorkerContext> WorkerContext::FromWeakWorkerNode(
+std::optional<WorkerContext> WorkerContext::FromWeakWorkerNode(
     base::WeakPtr<WorkerNode> node) {
   if (!node) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return FromWorkerNode(node.get());
 }
@@ -86,4 +87,4 @@ std::string WorkerContext::ToString() const {
   return base::StrCat({"WorkerContext:", token_.ToString()});
 }
 
-}  // namespace performance_manager::resource_attribution
+}  // namespace resource_attribution

@@ -21,7 +21,7 @@
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/omnibox/browser/location_bar_model.h"
-#include "net/base/mac/url_conversions.h"
+#include "net/base/apple/url_conversions.h"
 #include "ui/base/accelerators/platform_accelerator_cocoa.h"
 #include "ui/base/l10n/l10n_util_mac.h"
 #include "ui/gfx/geometry/rect.h"
@@ -169,17 +169,17 @@ bool CanShare() {
 
   gfx::Rect rectInWidget =
       browserView->ConvertRectToWidget(contentsView->bounds());
-  ui::GrabWindowSnapshotAsync(
-      _windowForShare, rectInWidget,
-      base::BindOnce(
-          [](ShareMenuController* controller, base::OnceClosure closure,
-             gfx::Image image) {
-            if (!image.IsEmpty()) {
-              controller->_snapshotForShare = image.ToNSImage();
-            }
-            std::move(closure).Run();
-          },
-          self, std::move(closure)));
+  ui::GrabWindowSnapshot(_windowForShare, rectInWidget,
+                         base::BindOnce(
+                             [](ShareMenuController* controller,
+                                base::OnceClosure closure, gfx::Image image) {
+                               if (!image.IsEmpty()) {
+                                 controller->_snapshotForShare =
+                                     image.ToNSImage();
+                               }
+                               std::move(closure).Run();
+                             },
+                             self, std::move(closure)));
 }
 
 - (void)clearTransitionData {

@@ -65,6 +65,12 @@ enum class SessionEvent {
   kMaxValue = kCloseButtonClicked,
 };
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+// Used by ash window manager to place the caption bubble in the correct
+// container.
+extern const ui::ClassProperty<bool>* const kIsCaptionBubbleKey;
+#endif
+
 using ResetInactivityTimerCallback = base::RepeatingCallback<void()>;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -77,8 +83,9 @@ using ResetInactivityTimerCallback = base::RepeatingCallback<void()>;
 //
 class CaptionBubble : public views::BubbleDialogDelegateView,
                       public gfx::AnimationDelegate {
+  METADATA_HEADER(CaptionBubble, views::BubbleDialogDelegateView)
+
  public:
-  METADATA_HEADER(CaptionBubble);
   CaptionBubble(PrefService* profile_prefs,
                 const std::string& application_locale,
                 base::OnceClosure destroyed_callback);
@@ -99,7 +106,7 @@ class CaptionBubble : public views::BubbleDialogDelegateView,
   void SetModel(CaptionBubbleModel* model);
 
   // Changes the caption style of the caption bubble.
-  void UpdateCaptionStyle(absl::optional<ui::CaptionStyle> caption_style);
+  void UpdateCaptionStyle(std::optional<ui::CaptionStyle> caption_style);
 
   // Returns whether the bubble has activity. Activity is defined as
   // transcription received from the speech service or user interacting with the
@@ -280,7 +287,7 @@ class CaptionBubble : public views::BubbleDialogDelegateView,
   raw_ptr<views::Checkbox> media_foundation_renderer_error_checkbox_ = nullptr;
 #endif
 
-  absl::optional<ui::CaptionStyle> caption_style_;
+  std::optional<ui::CaptionStyle> caption_style_;
   raw_ptr<CaptionBubbleModel> model_ = nullptr;
   raw_ptr<PrefService> profile_prefs_;
 

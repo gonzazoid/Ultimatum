@@ -13,6 +13,7 @@
 #import "base/i18n/time_formatting.h"
 #import "base/ios/device_util.h"
 #import "base/logging.h"
+#import "base/memory/raw_ptr.h"
 #import "base/metrics/field_trial.h"
 #import "base/no_destructor.h"
 #import "base/rand_util.h"
@@ -34,6 +35,7 @@
 #import "ios/chrome/browser/upgrade/model/upgrade_recommended_details.h"
 #import "ios/chrome/common/channel_info.h"
 #import "ios/public/provider/chrome/browser/omaha/omaha_api.h"
+#import "ios/public/provider/chrome/browser/raccoon/raccoon_api.h"
 #import "ios/web/public/thread/web_task_traits.h"
 #import "ios/web/public/thread/web_thread.h"
 #import "net/base/backoff_entry.h"
@@ -110,7 +112,7 @@ class XmlElement {
   }
 
  private:
-  XmlWriter* writer_ = nullptr;
+  raw_ptr<XmlWriter> writer_ = nullptr;
   const std::string name_;
 };
 
@@ -541,7 +543,9 @@ std::string OmahaService::GetPingContent(const std::string& requestId,
     request_element.AddAttribute("requestid", requestId);
     request_element.AddAttribute("sessionid", sessionId);
     request_element.AddAttribute("hardware_class",
-                                 ios::device_util::GetPlatform());
+                                 ios::provider::IsRaccoonEnabled()
+                                     ? "iPad0,0"
+                                     : ios::device_util::GetPlatform());
 
     {
       // Set up <os platform="ios"... />

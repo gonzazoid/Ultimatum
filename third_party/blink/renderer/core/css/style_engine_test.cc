@@ -911,7 +911,7 @@ TEST_F(StyleEngineTest, RuleSetInvalidationHost) {
   ASSERT_TRUE(host);
 
   ShadowRoot& shadow_root =
-      host->AttachShadowRootInternal(ShadowRootType::kOpen);
+      host->AttachShadowRootForTesting(ShadowRootType::kOpen);
 
   shadow_root.setInnerHTML("<div></div><div></div><div></div>");
   UpdateAllLifecyclePhases();
@@ -962,7 +962,7 @@ TEST_F(StyleEngineTest, RuleSetInvalidationSlotted) {
   ASSERT_TRUE(host);
 
   ShadowRoot& shadow_root =
-      host->AttachShadowRootInternal(ShadowRootType::kOpen);
+      host->AttachShadowRootForTesting(ShadowRootType::kOpen);
 
   shadow_root.setInnerHTML("<slot name=other></slot><slot></slot>");
   UpdateAllLifecyclePhases();
@@ -987,7 +987,7 @@ TEST_F(StyleEngineTest, RuleSetInvalidationHostContext) {
   ASSERT_TRUE(host);
 
   ShadowRoot& shadow_root =
-      host->AttachShadowRootInternal(ShadowRootType::kOpen);
+      host->AttachShadowRootForTesting(ShadowRootType::kOpen);
 
   shadow_root.setInnerHTML("<div></div><div class=a></div><div></div>");
   UpdateAllLifecyclePhases();
@@ -1296,7 +1296,7 @@ TEST_F(StyleEngineTest, StyleSheetsForStyleSheetList_ShadowRoot) {
 
   UpdateAllLifecyclePhases();
   ShadowRoot& shadow_root =
-      host->AttachShadowRootInternal(ShadowRootType::kOpen);
+      host->AttachShadowRootForTesting(ShadowRootType::kOpen);
 
   shadow_root.setInnerHTML("<style>span { color: green }</style>");
   EXPECT_TRUE(GetStyleEngine().NeedsActiveStyleUpdate());
@@ -2570,7 +2570,7 @@ TEST_F(StyleEngineTest, ShadowRootStyleRecalcCrash) {
   ASSERT_TRUE(host);
 
   ShadowRoot& shadow_root =
-      host->AttachShadowRootInternal(ShadowRootType::kOpen);
+      host->AttachShadowRootForTesting(ShadowRootType::kOpen);
 
   shadow_root.setInnerHTML(R"HTML(
     <span id=span></span>
@@ -2600,7 +2600,7 @@ TEST_F(StyleEngineTest, GetComputedStyleOutsideFlatTreeCrash) {
 
   GetDocument()
       .getElementById(AtomicString("host"))
-      ->AttachShadowRootInternal(ShadowRootType::kOpen);
+      ->AttachShadowRootForTesting(ShadowRootType::kOpen);
   UpdateAllLifecyclePhases();
   GetDocument().body()->EnsureComputedStyle();
   GetDocument()
@@ -3097,7 +3097,7 @@ TEST_F(StyleEngineTest, GetComputedStyleOutsideFlatTree) {
   auto* inner = GetDocument().getElementById(AtomicString("inner"));
   auto* innermost = GetDocument().getElementById(AtomicString("innermost"));
 
-  host->AttachShadowRootInternal(ShadowRootType::kOpen);
+  host->AttachShadowRootForTesting(ShadowRootType::kOpen);
   UpdateAllLifecyclePhases();
 
   EXPECT_TRUE(host->GetComputedStyle());
@@ -3166,9 +3166,9 @@ TEST_F(StyleEngineTest, MoveSlottedOutsideFlatTree) {
   auto* span = host1->firstChild();
 
   ShadowRoot& shadow_root =
-      host1->AttachShadowRootInternal(ShadowRootType::kOpen);
+      host1->AttachShadowRootForTesting(ShadowRootType::kOpen);
   shadow_root.setInnerHTML("<slot></slot>");
-  host2->AttachShadowRootInternal(ShadowRootType::kOpen);
+  host2->AttachShadowRootForTesting(ShadowRootType::kOpen);
 
   UpdateAllLifecyclePhases();
 
@@ -3185,7 +3185,7 @@ TEST_F(StyleEngineTest, StyleRecalcRootInShadowTree) {
   )HTML");
   Element* host = GetDocument().getElementById(AtomicString("host"));
   ShadowRoot& shadow_root =
-      host->AttachShadowRootInternal(ShadowRootType::kOpen);
+      host->AttachShadowRootForTesting(ShadowRootType::kOpen);
   shadow_root.setInnerHTML("<div><span></span></div>");
   UpdateAllLifecyclePhases();
 
@@ -3207,7 +3207,7 @@ TEST_F(StyleEngineTest, StyleRecalcRootOutsideFlatTree) {
   auto* ensured = GetDocument().getElementById(AtomicString("ensured"));
   auto* span = To<Element>(ensured->firstChild());
 
-  host->AttachShadowRootInternal(ShadowRootType::kOpen);
+  host->AttachShadowRootForTesting(ShadowRootType::kOpen);
 
   UpdateAllLifecyclePhases();
 
@@ -3236,7 +3236,7 @@ TEST_F(StyleEngineTest, RemoveStyleRecalcRootFromFlatTree) {
   auto* span = To<Element>(host->firstChild());
 
   ShadowRoot& shadow_root =
-      host->AttachShadowRootInternal(ShadowRootType::kOpen);
+      host->AttachShadowRootForTesting(ShadowRootType::kOpen);
   shadow_root.setInnerHTML("<div><slot></slot></div>");
 
   UpdateAllLifecyclePhases();
@@ -3270,7 +3270,7 @@ TEST_F(StyleEngineTest, SlottedWithEnsuredStyleOutsideFlatTree) {
   auto* span = To<Element>(host->firstChild());
 
   ShadowRoot& shadow_root =
-      host->AttachShadowRootInternal(ShadowRootType::kOpen);
+      host->AttachShadowRootForTesting(ShadowRootType::kOpen);
   shadow_root.setInnerHTML(R"HTML(
     <div><slot name="default"></slot></div>
   )HTML");
@@ -3305,7 +3305,7 @@ TEST_F(StyleEngineTest, ForceReattachRecalcRootAttachShadow) {
 
   // Attaching the shadow root will call FlatTreePositionChanged() on the span
   // child of the host. The style recalc root should still be #reattach.
-  host->AttachShadowRootInternal(ShadowRootType::kOpen);
+  host->AttachShadowRootForTesting(ShadowRootType::kOpen);
   EXPECT_EQ(reattach, GetStyleRecalcRoot());
 }
 
@@ -3814,8 +3814,6 @@ TEST_F(StyleEngineTest, InternalForcedProperties) {
 }
 
 TEST_F(StyleEngineTest, HasViewportUnitFlags) {
-  ScopedCSSViewportUnits4ForTest flag(true);
-
   struct {
     const char* value;
     bool has_static;
@@ -3884,8 +3882,6 @@ TEST_F(StyleEngineTest, HasViewportUnitFlags) {
 }
 
 TEST_F(StyleEngineTest, DynamicViewportUnitInvalidation) {
-  ScopedCSSViewportUnits4ForTest flag(true);
-
   GetDocument().body()->setInnerHTML(R"HTML(
   <style>
     #target_px { width: 1px; }
@@ -3935,8 +3931,6 @@ TEST_F(StyleEngineTest, DynamicViewportUnitInvalidation) {
 }
 
 TEST_F(StyleEngineTest, DynamicViewportUnitsInMediaQuery) {
-  ScopedCSSViewportUnits4ForTest flag(true);
-
   // Changes in the dynamic viewport should not affect NeedsActiveStyleUpdate
   // when we don't use dynamic viewport units.
   {
@@ -4098,8 +4092,6 @@ class TestMediaQueryListListener : public MediaQueryListListener {
 }  // namespace
 
 TEST_F(StyleEngineTest, DynamicViewportUnitsInMediaQueryMatcher) {
-  ScopedCSSViewportUnits4ForTest flag(true);
-
   auto& matcher = GetDocument().GetMediaQueryMatcher();
   auto* listener = MakeGarbageCollected<TestMediaQueryListListener>();
   matcher.AddViewportListener(listener);
@@ -4568,35 +4560,6 @@ TEST_F(StyleEngineContainerQueryTest,
   EXPECT_FALSE(GetDocument().NeedsLayoutTreeUpdateForNode(*a));
 }
 
-TEST_F(StyleEngineTest, CSSViewportUnits4RuntimeFlag) {
-  Vector<String> units = {"vi",  "vb",    "svi",   "svb",   "svw",
-                          "svh", "svmin", "svmax", "lvi",   "lvb",
-                          "lvw", "lvh",   "lvmin", "lvmax", "dvi",
-                          "dvb", "dvw",   "dvh",   "dvmin", "dvmax"};
-
-  for (const String& unit : units) {
-    String css = "top: 1" + unit;
-    SCOPED_TRACE(testing::Message() << unit);
-
-    {
-      ScopedCSSViewportUnits4ForTest flag(false);
-      const CSSPropertyValueSet* set =
-          css_test_helpers::ParseDeclarationBlock(css);
-      ASSERT_TRUE(set);
-      EXPECT_EQ(0u, set->PropertyCount());
-    }
-
-    {
-      ScopedCSSViewportUnits4ForTest flag(true);
-      const CSSPropertyValueSet* set =
-          css_test_helpers::ParseDeclarationBlock(css);
-      ASSERT_TRUE(set);
-      EXPECT_EQ(1u, set->PropertyCount());
-      EXPECT_TRUE(set->HasProperty(CSSPropertyID::kTop));
-    }
-  }
-}
-
 TEST_F(StyleEngineTest, VideoControlsReject) {
   GetDocument().body()->setInnerHTML(R"HTML(
     <video controls></video>
@@ -4640,7 +4603,7 @@ TEST_F(StyleEngineTest, FastRejectForHostChild) {
   Element* host = GetDocument().getElementById(AtomicString("host"));
   ASSERT_TRUE(host);
   ShadowRoot& shadow_root =
-      host->AttachShadowRootInternal(ShadowRootType::kOpen);
+      host->AttachShadowRootForTesting(ShadowRootType::kOpen);
   shadow_root.setInnerHTML(R"HTML(
     <slot></slot>
   )HTML");
@@ -4675,7 +4638,7 @@ TEST_F(StyleEngineTest, RejectSlottedSelector) {
   Element* host = GetDocument().getElementById(AtomicString("host"));
   ASSERT_TRUE(host);
   ShadowRoot& shadow_root =
-      host->AttachShadowRootInternal(ShadowRootType::kOpen);
+      host->AttachShadowRootForTesting(ShadowRootType::kOpen);
   shadow_root.setInnerHTML(R"HTML(
     <style>
       .notfound ::slotted(span) {
@@ -4838,9 +4801,10 @@ TEST_F(StyleEngineTest, ScrollbarPartPseudoDoesNotMatchElement) {
   GetDocument().Lifecycle().AdvanceTo(DocumentLifecycle::kInStyleRecalc);
   GetStyleEngine().RecalcStyle();
 
-  // We have one UA rule for <div> that matches.
-  // None of the ::-webkit-scrollbar-* rules should match.
-  EXPECT_EQ(1u, stats->rules_matched);
+  // We have two UA rule for <div> that match:
+  //  div { display: block; }
+  //  div { unicode-bidi: isolate; }
+  EXPECT_EQ(stats->rules_matched, 2u);
 }
 
 TEST_F(StyleEngineTest, AudioUAStyleNameSpace) {
@@ -4902,7 +4866,7 @@ TEST_F(StyleEngineTest, NonDirtyStyleRecalcRoot) {
   auto* slotted = GetDocument().getElementById(AtomicString("slotted"));
 
   ShadowRoot& shadow_root =
-      host->AttachShadowRootInternal(ShadowRootType::kOpen);
+      host->AttachShadowRootForTesting(ShadowRootType::kOpen);
   shadow_root.setInnerHTML("<slot></slot>");
   UpdateAllLifecyclePhases();
 
@@ -5137,7 +5101,7 @@ TEST_F(StyleEngineTest, CascadeLayersInOriginsAndTreeScopes) {
   StyleSheetKey user_key("user_layers");
   GetStyleEngine().InjectSheet(user_key, user_sheet, WebCssOrigin::kUser);
 
-  GetDocument().body()->setInnerHTMLWithDeclarativeShadowDOMForTesting(R"HTML(
+  GetDocument().body()->setHTMLUnsafe(R"HTML(
     <style>
       @layer bar, foo;
     </style>
@@ -5309,7 +5273,7 @@ TEST_F(StyleEngineTest, CascadeLayersNotExplicitlyDeclared) {
 }
 
 TEST_F(StyleEngineTest, CascadeLayersSheetsRemoved) {
-  GetDocument().body()->setInnerHTMLWithDeclarativeShadowDOMForTesting(R"HTML(
+  GetDocument().body()->setHTMLUnsafe(R"HTML(
     <style>
       @layer bar, foo;
     </style>
@@ -5349,7 +5313,7 @@ TEST_F(StyleEngineTest, NonSlottedStyleDirty) {
   GetDocument().body()->setInnerHTML("<div id=host></div>");
   auto* host = GetDocument().getElementById(AtomicString("host"));
   ASSERT_TRUE(host);
-  host->AttachShadowRootInternal(ShadowRootType::kOpen);
+  host->AttachShadowRootForTesting(ShadowRootType::kOpen);
   UpdateAllLifecyclePhases();
 
   // Add a child element to a shadow host with no slots. The inserted element is
@@ -7040,9 +7004,261 @@ TEST_F(StyleEngineTest, UseCountCSSDeclarationAfterNestedRule) {
   EXPECT_TRUE(IsUseCounted(WebFeature::kCSSDeclarationAfterNestedRule));
 }
 
+TEST_F(StyleEngineTest, UseCountCSSBareDeclarationRequiresShift_Empty) {
+  SetBodyInnerHTML(R"HTML(
+    <style>
+    </style>
+    <div></div>
+  )HTML");
+  EXPECT_FALSE(IsUseCounted(WebFeature::kCSSBareDeclarationShift));
+}
+
+TEST_F(StyleEngineTest, UseCountCSSBareDeclarationRequiresShift_NoNesting) {
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      div {
+        color: green;
+      }
+    </style>
+    <div></div>
+  )HTML");
+  EXPECT_FALSE(IsUseCounted(WebFeature::kCSSBareDeclarationShift));
+}
+
+TEST_F(StyleEngineTest,
+       UseCountCSSBareDeclarationRequiresShift_TrailingUncontested) {
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      div {
+        & { color: pink; }
+        width: 100px;
+      }
+    </style>
+    <div></div>
+  )HTML");
+  EXPECT_FALSE(IsUseCounted(WebFeature::kCSSBareDeclarationShift));
+}
+
+TEST_F(StyleEngineTest,
+       UseCountCSSBareDeclarationRequiresShift_TrailingDuplicate) {
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      div {
+        width: 50px;
+        & { color: pink; }
+        width: 100px;
+      }
+    </style>
+    <div></div>
+  )HTML");
+  EXPECT_FALSE(IsUseCounted(WebFeature::kCSSBareDeclarationShift));
+}
+
+TEST_F(StyleEngineTest, UseCountCSSBareDeclarationRequiresShift_LaterRuleWins) {
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      div {
+        & { color: red; }
+        width: 100px;
+      }
+      div {
+        width: 42px;
+      }
+    </style>
+    <div id=a></div>
+  )HTML");
+  EXPECT_FALSE(IsUseCounted(WebFeature::kCSSBareDeclarationShift));
+}
+
+TEST_F(StyleEngineTest,
+       UseCountCSSBareDeclarationRequiresShift_HigherSpecificityWins) {
+  // Rule with higher specificity overwrites the invisible rule.
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      #a {
+        width: 42px;
+      }
+      div {
+        & { width: 33px; }
+        width: 100px;
+      }
+    </style>
+    <div id=a></div>
+  )HTML");
+  EXPECT_FALSE(IsUseCounted(WebFeature::kCSSBareDeclarationShift));
+}
+
+TEST_F(StyleEngineTest,
+       UseCountCSSBareDeclarationRequiresShift_ExplicitAmpersand) {
+  // The explicit '&' rule matches with specificity equal to :is(.a,.x.y.z),
+  // but the invisible rule expanded into the full/unwrapped selector list
+  // at parse time, and matches with the specificity of just '.a'.
+  // Therefore the invisible rule doesn't make a difference here.
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      .a, .x.y.z {
+        & { width: 33px; }
+        width: 100px;
+      }
+    </style>
+    <div class=a></div>
+  )HTML");
+  EXPECT_FALSE(IsUseCounted(WebFeature::kCSSBareDeclarationShift));
+}
+
+TEST_F(StyleEngineTest, UseCountCSSBareDeclarationRequiresShift_TrailingWin) {
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      div {
+        & { width: 33px; }
+        width: 100px;
+      }
+    </style>
+    <div></div>
+  )HTML");
+  EXPECT_TRUE(IsUseCounted(WebFeature::kCSSBareDeclarationShift));
+}
+
+TEST_F(StyleEngineTest,
+       UseCountCSSBareDeclarationRequiresShift_TrailingWinMedia) {
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      div {
+        @media (width) {
+          width: 33px;
+        }
+        width: 100px;
+      }
+    </style>
+    <div></div>
+  )HTML");
+  EXPECT_TRUE(IsUseCounted(WebFeature::kCSSBareDeclarationShift));
+}
+
+TEST_F(StyleEngineTest,
+       UseCountCSSBareDeclarationRequiresShift_TrailingWinSelectorList) {
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      h1, h2, h3, div {
+        & { width: 33px; }
+        width: 100px;
+      }
+    </style>
+    <div></div>
+  )HTML");
+  EXPECT_TRUE(IsUseCounted(WebFeature::kCSSBareDeclarationShift));
+}
+
+TEST_F(StyleEngineTest, UseCountCSSBareDeclarationRequiresShift_DeeplyNested) {
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      .a {
+        &.b {
+          &.c {
+            & { width: 33px; }
+            width: 100px;
+          }
+        }
+      }
+    </style>
+    <div class="a b c"></div>
+  )HTML");
+  EXPECT_TRUE(IsUseCounted(WebFeature::kCSSBareDeclarationShift));
+}
+
+TEST_F(StyleEngineTest, UseCountCSSNestedGroupRuleSpecificity_NoNesting) {
+  SetBodyInnerHTML(R"HTML(
+    <style>
+    </style>
+    <div></div>
+  )HTML");
+  EXPECT_FALSE(IsUseCounted(WebFeature::kCSSNestedGroupRuleSpecificity));
+}
+
+TEST_F(StyleEngineTest, UseCountCSSNestedGroupRuleSpecificity_NoContest) {
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      div, .x.y.z {
+        @media (width) {
+          width: 33px;
+        }
+      }
+    </style>
+    <div></div>
+  )HTML");
+  EXPECT_FALSE(IsUseCounted(WebFeature::kCSSNestedGroupRuleSpecificity));
+}
+
+TEST_F(StyleEngineTest, UseCountCSSNestedGroupRuleSpecificity_LaterRuleWins) {
+  // Lowering the specificity of the implicit &-rule does not matter here,
+  // because there is anyway another rule with even higher specificity that
+  // wins the cascade.
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      div, .x.y.z {
+        @media (width) {
+          width: 33px;
+        }
+      }
+      :is(div, .x.y.z.w) {
+        width: 100px;
+      }
+    </style>
+    <div class=a></div>
+  )HTML");
+  EXPECT_FALSE(IsUseCounted(WebFeature::kCSSNestedGroupRuleSpecificity));
+}
+
+TEST_F(StyleEngineTest,
+       UseCountCSSNestedGroupRuleSpecificity_LaterRuleIsAffected) {
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      div, .x.y.z {
+        @media (width) {
+          width: 33px;
+        }
+      }
+      div {
+        width: 100px;
+      }
+    </style>
+    <div class=a></div>
+  )HTML");
+  EXPECT_TRUE(IsUseCounted(WebFeature::kCSSNestedGroupRuleSpecificity));
+}
+
+TEST_F(StyleEngineTest,
+       UseCountCSSNestedGroupRuleSpecificity_NoBareDeclarationShift) {
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      div, .x.y.z {
+        @media (width) {
+          width: 33px;
+          div:where(&) {
+            width: 100px;
+          }
+        }
+      }
+    </style>
+    <div class=a></div>
+  )HTML");
+  EXPECT_TRUE(IsUseCounted(WebFeature::kCSSNestedGroupRuleSpecificity));
+
+  // The kBareDeclarationShift should at no point have been set
+  // by nested group rules.
+  EXPECT_FALSE(IsUseCounted(WebFeature::kCSSBareDeclarationShift));
+}
+
 TEST_F(StyleEngineTest, EnsureAppRegionTriggersRelayout) {
-  GetDocument().GetFrame()->SetSupportsAppRegion(true);
-  GetDocument().body()->setInnerHTML(R"HTML(
+  frame_test_helpers::WebViewHelper web_view_helper;
+  WebViewImpl* web_view_impl = web_view_helper.Initialize();
+  web_view_impl->SetSupportsAppRegion(true);
+  web_view_impl->MainFrameWidget()->UpdateAllLifecyclePhases(
+      DocumentUpdateReason::kTest);
+
+  Document* document =
+      To<LocalFrame>(web_view_impl->GetPage()->MainFrame())->GetDocument();
+  document->body()->setInnerHTML(R"HTML(
     <head>
     <style>
       .drag {
@@ -7058,31 +7274,64 @@ TEST_F(StyleEngineTest, EnsureAppRegionTriggersRelayout) {
     </body>
   )HTML");
 
-  Element* drag_element =
-      GetDocument().getElementById(AtomicString("drag-region"));
+  Element* drag_element = document->getElementById(AtomicString("drag-region"));
 
-  auto regions = GetDocument().AnnotatedRegions();
+  auto regions = document->AnnotatedRegions();
   auto* it =
       std::find_if(regions.begin(), regions.end(),
                    [](blink::AnnotatedRegionValue s) { return s.draggable; });
   EXPECT_EQ(it, regions.end()) << "There should be no drag regions";
 
   drag_element->classList().Add(AtomicString("drag"));
-  UpdateAllLifecyclePhases();
+  web_view_impl->MainFrameWidget()->UpdateAllLifecyclePhases(
+      DocumentUpdateReason::kTest);
 
-  regions = GetDocument().AnnotatedRegions();
+  regions = document->AnnotatedRegions();
   it = std::find_if(regions.begin(), regions.end(),
                     [](blink::AnnotatedRegionValue s) { return s.draggable; });
   EXPECT_NE(it, regions.end()) << "There should be one drag region";
 
   drag_element->classList().Add(AtomicString("no-drag"));
-  UpdateAllLifecyclePhases();
+  web_view_impl->MainFrameWidget()->UpdateAllLifecyclePhases(
+      DocumentUpdateReason::kTest);
 
-  regions = GetDocument().AnnotatedRegions();
+  regions = document->AnnotatedRegions();
   it = std::find_if(regions.begin(), regions.end(),
                     [](blink::AnnotatedRegionValue s) { return s.draggable; });
 
   EXPECT_EQ(it, regions.end()) << "There should be no drag regions";
+}
+
+TEST_F(StyleEngineTest, ForcedColorsLightDark) {
+  ScopedForcedColorsForTest scoped_feature(true);
+  ColorSchemeHelper color_scheme_helper(GetDocument());
+  color_scheme_helper.SetForcedColors(GetDocument(), ForcedColors::kActive);
+  GetDocument().body()->setInnerHTML(R"HTML(
+    <style>
+      :root { color-scheme: light only; }
+      #light-dark {
+        color: light-dark(GrayText, red);
+      }
+      #reference {
+        color: GrayText;
+      }
+    </style>
+    <div id="light-dark"></div>
+    <div id="reference"></div>
+  )HTML");
+  UpdateAllLifecyclePhases();
+
+  const ComputedStyle& light_dark =
+      GetDocument()
+          .getElementById(AtomicString("light-dark"))
+          ->ComputedStyleRef();
+  const ComputedStyle& reference =
+      GetDocument()
+          .getElementById(AtomicString("reference"))
+          ->ComputedStyleRef();
+
+  EXPECT_EQ(light_dark.VisitedDependentColor(GetCSSPropertyColor()),
+            reference.VisitedDependentColor(GetCSSPropertyColor()));
 }
 
 }  // namespace blink

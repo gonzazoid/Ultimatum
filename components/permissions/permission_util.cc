@@ -85,7 +85,7 @@ PermissionRequestGestureType PermissionUtil::GetGestureType(bool user_gesture) {
                       : PermissionRequestGestureType::NO_GESTURE;
 }
 
-absl::optional<blink::mojom::PermissionsPolicyFeature>
+std::optional<blink::mojom::PermissionsPolicyFeature>
 PermissionUtil::GetPermissionsPolicyFeature(ContentSettingsType permission) {
   PermissionType permission_type;
   bool success =
@@ -93,7 +93,7 @@ PermissionUtil::GetPermissionsPolicyFeature(ContentSettingsType permission) {
   DCHECK(success);
   return success
              ? blink::PermissionTypeToPermissionsPolicyFeature(permission_type)
-             : absl::nullopt;
+             : std::nullopt;
 }
 
 bool PermissionUtil::GetPermissionType(ContentSettingsType type,
@@ -194,6 +194,9 @@ bool PermissionUtil::GetPermissionType(ContentSettingsType type,
       break;
     case ContentSettingsType::WEB_PRINTING:
       *out = PermissionType::WEB_PRINTING;
+      break;
+    case ContentSettingsType::SPEAKER_SELECTION:
+      *out = PermissionType::SPEAKER_SELECTION;
       break;
     default:
       return false;
@@ -336,6 +339,8 @@ ContentSettingsType PermissionUtil::PermissionTypeToContentSettingTypeSafe(
       return ContentSettingsType::CAPTURED_SURFACE_CONTROL;
     case PermissionType::WEB_PRINTING:
       return ContentSettingsType::WEB_PRINTING;
+    case PermissionType::SPEAKER_SELECTION:
+      return ContentSettingsType::SPEAKER_SELECTION;
     case PermissionType::NUM:
       break;
   }
@@ -425,7 +430,7 @@ bool PermissionUtil::IsPermissionBlockedInPartition(
 GURL PermissionUtil::GetCanonicalOrigin(ContentSettingsType permission,
                                         const GURL& requesting_origin,
                                         const GURL& embedding_origin) {
-  absl::optional<GURL> override_origin =
+  std::optional<GURL> override_origin =
       PermissionsClient::Get()->OverrideCanonicalOrigin(requesting_origin,
                                                         embedding_origin);
   if (override_origin)

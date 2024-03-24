@@ -126,7 +126,7 @@ source_set("settings") {
     "//ios/chrome/browser/commerce/model/push_notification",
     "//ios/chrome/browser/content_settings/model",
     "//ios/chrome/browser/default_browser/model:utils",
-    "//ios/chrome/browser/favicon",
+    "//ios/chrome/browser/favicon/model",
     "//ios/chrome/browser/feature_engagement/model",
     "//ios/chrome/browser/history/model",
     "//ios/chrome/browser/language/model",
@@ -196,6 +196,8 @@ source_set("settings") {
     "//ios/chrome/browser/ui/settings/elements:enterprise_info_popover_view_controller",
     "//ios/chrome/browser/ui/settings/google_services",
     "//ios/chrome/browser/ui/settings/google_services:constants",
+    "//ios/chrome/browser/ui/settings/google_services/manage_accounts",
+    "//ios/chrome/browser/ui/settings/google_services/manage_accounts:manage_accounts_ui",
     "//ios/chrome/browser/ui/settings/language:language",
     "//ios/chrome/browser/ui/settings/language:language_ui",
     "//ios/chrome/browser/ui/settings/notifications",
@@ -254,8 +256,6 @@ source_set("test_support") {
   sources = [
     "passphrase_table_view_controller_test.h",
     "passphrase_table_view_controller_test.mm",
-    "personal_data_manager_finished_profile_tasks_waiter.cc",
-    "personal_data_manager_finished_profile_tasks_waiter.h",
   ]
   deps = [
     ":settings",
@@ -298,7 +298,9 @@ source_set("unit_tests") {
   sources = [
     "about_chrome_table_view_controller_unittest.mm",
     "import_data_table_view_controller_unittest.mm",
-    "search_engine_table_view_controller_choice_screen_unittest.mm",
+    "search_engine_table_view_controller_eea_unittest.mm",
+    "search_engine_table_view_controller_non_eea_unittest.mm",
+    "search_engine_table_view_controller_unittest.h",
     "search_engine_table_view_controller_unittest.mm",
     "settings_navigation_controller_unittest.mm",
     "settings_root_table_view_controller_unittest.mm",
@@ -337,7 +339,7 @@ source_set("unit_tests") {
     "//ios/chrome/browser/browsing_data/model",
     "//ios/chrome/browser/browsing_data/model:counters",
     "//ios/chrome/browser/content_settings/model",
-    "//ios/chrome/browser/favicon",
+    "//ios/chrome/browser/favicon/model",
     "//ios/chrome/browser/history/model",
     "//ios/chrome/browser/passwords/model",
     "//ios/chrome/browser/policy/model:policy_util",
@@ -405,7 +407,6 @@ source_set("eg_app_support+eg2") {
     "//components/search_engines",
     "//components/supervised_user/core/browser",
     "//components/supervised_user/core/browser:mocked",
-    "//components/supervised_user/core/browser:supervised_user_preferences",
     "//components/supervised_user/core/common",
     "//ios/chrome/app:app_internal",
     "//ios/chrome/browser/content_settings/model",
@@ -435,7 +436,6 @@ source_set("eg_test_support+eg2") {
   deps = [
     "//base",
     "//components/supervised_user/core/browser",
-    "//components/supervised_user/core/browser:supervised_user_preferences",
     "//components/supervised_user/core/common",
     "//ios/testing/earl_grey:eg_test_support+eg2",
   ]
@@ -445,6 +445,7 @@ source_set("eg2_tests") {
   configs += [ "//build/config/ios:xctest_config" ]
   testonly = true
   sources = [
+    "search_engine_settings_choice_screen_egtest.mm",
     "search_engine_settings_egtest.mm",
     "settings_accessibility_egtest.mm",
     "settings_egtest.mm",
@@ -456,6 +457,7 @@ source_set("eg2_tests") {
     "//base/test:test_support",
     "//build:branding_buildflags",
     "//components/policy:generated",
+    "//components/search_engines",
     "//components/strings",
     "//components/supervised_user/core/browser",
     "//components/supervised_user/core/common",
@@ -472,6 +474,7 @@ source_set("eg2_tests") {
     "//ios/chrome/browser/ui/authentication/cells:constants",
     "//ios/chrome/browser/ui/authentication/history_sync:pref_names",
     "//ios/chrome/browser/ui/authentication/signin:constants",
+    "//ios/chrome/browser/ui/search_engine_choice:earl_grey_ui_test_util",
     "//ios/chrome/browser/ui/settings:constants",
     "//ios/chrome/browser/ui/settings/elements:constants",
     "//ios/chrome/common/ui/promo_style:constants",

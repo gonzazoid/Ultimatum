@@ -7,14 +7,13 @@
 
 #include <array>
 #include <memory>
+#include <optional>
 
 #include "base/functional/bind.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/image/image_skia.h"
-#include "ui/views/action_view_interface.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/controls/button/label_button_image_container.h"
 #include "ui/views/controls/button/label_button_label.h"
@@ -90,7 +89,7 @@ class VIEWS_EXPORT LabelButton : public Button, public NativeThemeDelegate {
   // Sets the text colors shown for the non-disabled states to |color|.
   // TODO(crbug.com/1421316): Get rid of SkColor versions of these functions in
   // favor of the ColorId versions.
-  virtual void SetEnabledTextColors(absl::optional<SkColor> color);
+  virtual void SetEnabledTextColors(std::optional<SkColor> color);
 
   // Sets the text colors shown for the non-disabled states to |color_id|.
   void SetEnabledTextColorIds(ui::ColorId color_id);
@@ -150,7 +149,7 @@ class VIEWS_EXPORT LabelButton : public Button, public NativeThemeDelegate {
   gfx::Size CalculatePreferredSize() const override;
   gfx::Size GetMinimumSize() const override;
   int GetHeightForWidth(int w) const override;
-  void Layout() override;
+  void Layout(PassKey) override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   void AddLayerToRegion(ui::Layer* new_layer,
                         views::LayerRegion region) override;
@@ -184,11 +183,6 @@ class VIEWS_EXPORT LabelButton : public Button, public NativeThemeDelegate {
     return image_container_->GetView();
   }
   View* image_container_view() { return image_container_->GetView(); }
-  // TODO(ahmedmoussa): `image()` to be removed in the following CL.
-  const ImageView* image() const {
-    return static_cast<const ImageView*>(image_container_view());
-  }
-  ImageView* image() { return static_cast<ImageView*>(image_container_view()); }
   Label* label() const { return label_; }
   InkDropContainerView* ink_drop_container() const {
     return ink_drop_container_;
@@ -343,7 +337,7 @@ VIEW_BUILDER_PROPERTY(std::u16string, Text)
 VIEW_BUILDER_PROPERTY(gfx::HorizontalAlignment, HorizontalAlignment)
 VIEW_BUILDER_PROPERTY(gfx::Size, MinSize)
 VIEW_BUILDER_PROPERTY(gfx::Size, MaxSize)
-VIEW_BUILDER_PROPERTY(absl::optional<SkColor>, EnabledTextColors)
+VIEW_BUILDER_PROPERTY(std::optional<SkColor>, EnabledTextColors)
 VIEW_BUILDER_PROPERTY(bool, IsDefault)
 VIEW_BUILDER_PROPERTY(int, ImageLabelSpacing)
 VIEW_BUILDER_PROPERTY(bool, ImageCentered)

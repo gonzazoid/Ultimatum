@@ -446,16 +446,6 @@ void SkiaOutputSurfaceImpl::SetUpdateVSyncParametersCallback(
   update_vsync_parameters_callback_ = std::move(callback);
 }
 
-void SkiaOutputSurfaceImpl::SetGpuVSyncEnabled(bool enabled) {
-  auto task = base::BindOnce(&SkiaOutputSurfaceImplOnGpu::SetGpuVSyncEnabled,
-                             base::Unretained(impl_on_gpu_.get()), enabled);
-  gpu_task_scheduler_->ScheduleOrRetainGpuTask(std::move(task), {});
-}
-
-void SkiaOutputSurfaceImpl::SetGpuVSyncCallback(GpuVSyncCallback callback) {
-  gpu_vsync_callback_ = std::move(callback);
-}
-
 void SkiaOutputSurfaceImpl::SetVSyncDisplayID(int64_t display_id) {
   auto task = base::BindOnce(&SkiaOutputSurfaceImplOnGpu::SetVSyncDisplayID,
                              base::Unretained(impl_on_gpu_.get()), display_id);
@@ -489,8 +479,12 @@ SkCanvas* SkiaOutputSurfaceImpl::BeginPaintCurrentFrame() {
     // purpose of creating Graphite TextureInfo i.e. it will have CopySrc and
     // CopyDst usage. So don't treat it like a root surface which generally
     // won't have or support those usages.
-    skgpu::graphite::TextureInfo texture_info =
-        gpu::GraphiteBackendTextureInfo(gr_context_type_, format_);
+    skgpu::graphite::TextureInfo texture_info = gpu::GraphiteBackendTextureInfo(
+        gr_context_type_, format_, /*readonly=*/false, /*plane_index=*/0,
+        /*is_yuv_plane=*/false,
+        /*mipmapped=*/false, /*scanout_dcomp_surface=*/false,
+        /*supports_multiplanar_rendering=*/false,
+        /*supports_multiplanar_copy=*/false);
     CHECK(texture_info.isValid());
     current_paint_.emplace(graphite_recorder_, image_info, texture_info);
   } else {
@@ -596,7 +590,7 @@ sk_sp<SkImage> SkiaOutputSurfaceImpl::MakePromiseSkImageFromYUV(
       formats[i] =
           GetGrBackendFormatForTexture(context->format(), /*plane_index=*/0,
                                        context->mailbox_holder().texture_target,
-                                       /*ycbcr_info=*/absl::nullopt,
+                                       /*ycbcr_info=*/std::nullopt,
                                        /*yuv_color_space=*/gfx::ColorSpace());
       // NOTE: We don't have promises for individual planes, but still need
       // format for fallback.
@@ -756,7 +750,7 @@ SkiaOutputSurfaceImpl::CreateImageContext(
     const gfx::Size& size,
     SharedImageFormat format,
     bool maybe_concurrent_reads,
-    const absl::optional<gpu::VulkanYCbCrInfo>& ycbcr_info,
+    const std::optional<gpu::VulkanYCbCrInfo>& ycbcr_info,
     sk_sp<SkColorSpace> color_space,
     bool raw_draw_if_possible) {
   return std::make_unique<ImageContextImpl>(
@@ -765,10 +759,8 @@ SkiaOutputSurfaceImpl::CreateImageContext(
       /*is_for_render_pass=*/false, raw_draw_if_possible);
 }
 
-#if !BUILDFLAG(IS_CHROMEOS_LACROS)
 DBG_FLAG_FBOOL("skia_gpu.swap_buffers.force_disable_makecurrent",
                force_disable_makecurrent)
-#endif
 
 void SkiaOutputSurfaceImpl::SwapBuffers(OutputSurfaceFrame frame) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
@@ -796,18 +788,14 @@ void SkiaOutputSurfaceImpl::SwapBuffers(OutputSurfaceFrame frame) {
   auto callback =
       base::BindOnce(&SkiaOutputSurfaceImplOnGpu::SwapBuffers,
                      base::Unretained(impl_on_gpu_.get()), std::move(frame));
+
+  // Normally MakeCurrent isn't needed for SwapBuffers, but it used to be called
+  // unconditionally, both for historical reasons and edge cases too.
+  // Now, we call MakeCurrent here only appropriated, and delay it in some other
+  // circumstances.
   bool make_current =
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-      // Normally we don't need MakeCurrent for SwapBuffers, but it is done
-      // historically and there are edge cases too.
-      // For lacros, we do not call MakeCurrent here, and delay it where
-      // appropriated.
-      //
-      // TODO(crbug.com/1494032): Extend that approach for other platforms.
-      false;
-#else
+      capabilities_.present_requires_make_current &&
       !force_disable_makecurrent();  // Defaults to false.
-#endif
 
   EnqueueGpuTask(std::move(callback), std::move(resource_sync_tokens_),
                  make_current,
@@ -885,9 +873,10 @@ SkCanvas* SkiaOutputSurfaceImpl::BeginPaintRenderPass(
         SkImageInfo::Make(gfx::SizeToSkISize(surface_size), color_type,
                           static_cast<SkAlphaType>(alpha_type), color_space);
     skgpu::graphite::TextureInfo texture_info = gpu::GraphiteBackendTextureInfo(
-        gr_context_type_, format, /*plane_index=*/0,
+        gr_context_type_, format, /*readonly=*/false, /*plane_index=*/0,
         /*is_yuv_plane=*/false, mipmap == skgpu::Mipmapped::kYes,
-        scanout_dcomp_surface);
+        scanout_dcomp_surface, /*supports_multiplanar_rendering=*/false,
+        /*supports_multiplanar_copy=*/false);
     if (!texture_info.isValid()) {
       DLOG(ERROR) << "BeginPaintRenderPass: invalid Graphite TextureInfo";
       return nullptr;
@@ -1020,7 +1009,7 @@ sk_sp<SkImage> SkiaOutputSurfaceImpl::MakePromiseSkImageFromRenderPass(
     gpu::MailboxHolder mailbox_holder(mailbox, gpu::SyncToken(), GL_TEXTURE_2D);
     image_context = std::make_unique<ImageContextImpl>(
         mailbox_holder, size, format, /*maybe_concurrent_reads=*/false,
-        /*ycbcr_info=*/absl::nullopt, std::move(color_space),
+        /*ycbcr_info=*/std::nullopt, std::move(color_space),
         /*is_for_render_pass=*/true);
   }
   if (!image_context->has_image()) {
@@ -1123,29 +1112,9 @@ bool SkiaOutputSurfaceImpl::Initialize() {
 
   weak_ptr_ = weak_ptr_factory_.GetWeakPtr();
 
-  // This runner could be called from vsync or GPU thread after |this| is
-  // destroyed. We post directly to display compositor thread to check
-  // |weak_ptr_| as |dependency_| may have been destroyed.
-#if BUILDFLAG(IS_ANDROID)
-  // Callback is never used on Android. Doesn't work with WebView because
-  // calling it bypasses SkiaOutputSurfaceDependency.
-  GpuVSyncCallback vsync_callback_runner = base::DoNothing();
-#else
-  GpuVSyncCallback vsync_callback_runner = base::BindRepeating(
-      [](scoped_refptr<base::SingleThreadTaskRunner> runner,
-         base::WeakPtr<SkiaOutputSurfaceImpl> weak_ptr,
-         base::TimeTicks timebase, base::TimeDelta interval) {
-        runner->PostTask(FROM_HERE,
-                         base::BindOnce(&SkiaOutputSurfaceImpl::OnGpuVSync,
-                                        weak_ptr, timebase, interval));
-      },
-      base::SingleThreadTaskRunner::GetCurrentDefault(), weak_ptr_);
-#endif
-
   bool result = false;
-  auto callback =
-      base::BindOnce(&SkiaOutputSurfaceImpl::InitializeOnGpuThread,
-                     base::Unretained(this), vsync_callback_runner, &result);
+  auto callback = base::BindOnce(&SkiaOutputSurfaceImpl::InitializeOnGpuThread,
+                                 base::Unretained(this), &result);
   EnqueueGpuTask(std::move(callback), {}, /*make_current=*/false,
                  /*need_framebuffer=*/false);
   // |capabilities_| will be initialized in InitializeOnGpuThread(), so have to
@@ -1178,9 +1147,7 @@ bool SkiaOutputSurfaceImpl::Initialize() {
   return result;
 }
 
-void SkiaOutputSurfaceImpl::InitializeOnGpuThread(
-    GpuVSyncCallback vsync_callback_runner,
-    bool* result) {
+void SkiaOutputSurfaceImpl::InitializeOnGpuThread(bool* result) {
   auto did_swap_buffer_complete_callback = base::BindRepeating(
       &SkiaOutputSurfaceImpl::DidSwapBuffersComplete, weak_ptr_);
   auto buffer_presented_callback =
@@ -1191,14 +1158,17 @@ void SkiaOutputSurfaceImpl::InitializeOnGpuThread(
       &SkiaOutputSurfaceImpl::ScheduleOrRetainGpuTask, weak_ptr_);
   auto add_child_window_to_browser_callback = base::BindRepeating(
       &SkiaOutputSurfaceImpl::AddChildWindowToBrowser, weak_ptr_);
+  auto release_overlays_callback =
+      base::BindRepeating(&SkiaOutputSurfaceImpl::ReleaseOverlays, weak_ptr_);
 
   impl_on_gpu_ = SkiaOutputSurfaceImplOnGpu::Create(
       dependency_, renderer_settings_, gpu_task_scheduler_->GetSequenceId(),
       display_compositor_controller_->controller_on_gpu(),
       std::move(did_swap_buffer_complete_callback),
       std::move(buffer_presented_callback), std::move(context_lost_callback),
-      std::move(schedule_gpu_task), std::move(vsync_callback_runner),
-      std::move(add_child_window_to_browser_callback));
+      std::move(schedule_gpu_task),
+      std::move(add_child_window_to_browser_callback),
+      std::move(release_overlays_callback));
   if (!impl_on_gpu_) {
     *result = false;
     return;
@@ -1371,6 +1341,13 @@ void SkiaOutputSurfaceImpl::DidSwapBuffersComplete(
     client_->DidSwapWithSize(pixel_size);
 }
 
+void SkiaOutputSurfaceImpl::ReleaseOverlays(
+    std::vector<gpu::Mailbox> released_overlays) {
+  if (!released_overlays.empty()) {
+    client_->DidReceiveReleasedOverlays(released_overlays);
+  }
+}
+
 void SkiaOutputSurfaceImpl::BufferPresented(
     const gfx::PresentationFeedback& feedback) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
@@ -1394,13 +1371,6 @@ void SkiaOutputSurfaceImpl::AddChildWindowToBrowser(
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK(client_);
   client_->AddChildWindowToBrowser(child_window);
-}
-
-void SkiaOutputSurfaceImpl::OnGpuVSync(base::TimeTicks timebase,
-                                       base::TimeDelta interval) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  if (gpu_vsync_callback_)
-    gpu_vsync_callback_.Run(timebase, interval);
 }
 
 void SkiaOutputSurfaceImpl::ScheduleGpuTaskForTesting(
@@ -1525,7 +1495,7 @@ GrBackendFormat SkiaOutputSurfaceImpl::GetGrBackendFormatForTexture(
     SharedImageFormat si_format,
     int plane_index,
     uint32_t gl_texture_target,
-    const absl::optional<gpu::VulkanYCbCrInfo>& ycbcr_info,
+    const std::optional<gpu::VulkanYCbCrInfo>& ycbcr_info,
     const gfx::ColorSpace& yuv_color_space) {
 #if BUILDFLAG(ENABLE_VULKAN)
   if (gr_context_type_ == gpu::GrContextType::kVulkan) {
@@ -1761,5 +1731,23 @@ bool SkiaOutputSurfaceImpl::SupportsBGRA() const {
                              GrRenderable::kYes)
       .isValid();
 }
+
+#if BUILDFLAG(ENABLE_VULKAN) && BUILDFLAG(IS_CHROMEOS) && \
+    BUILDFLAG(USE_V4L2_CODEC)
+void SkiaOutputSurfaceImpl::DetileOverlay(gpu::Mailbox input,
+                                          const gfx::Size& input_visible_size,
+                                          gpu::SyncToken input_sync_token,
+                                          gpu::Mailbox output,
+                                          const gfx::RectF& display_rect,
+                                          const gfx::RectF& crop_rect,
+                                          gfx::OverlayTransform transform) {
+  auto task = base::BindOnce(&SkiaOutputSurfaceImplOnGpu::DetileOverlay,
+                             base::Unretained(impl_on_gpu_.get()), input,
+                             input_visible_size, output, display_rect,
+                             crop_rect, transform);
+  EnqueueGpuTask(std::move(task), {input_sync_token}, /*make_current=*/false,
+                 /*need_framebuffer=*/false);
+}
+#endif
 
 }  // namespace viz

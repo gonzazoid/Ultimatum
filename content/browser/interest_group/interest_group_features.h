@@ -18,7 +18,13 @@ CONTENT_EXPORT BASE_DECLARE_FEATURE(
     kEnableUpdatingExecutionModeToFrozenContext);
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kEnableUpdatingUserBiddingSignals);
 
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kFledgeEnableWALForInterestGroupStorage);
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kFledgeFacilitatedTestingSignalsHeaders);
+
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kFledgePrefetchBandAKeys);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kFledgeStoreBandAKeysInDB);
+
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kDetectInconsistentPageImpl);
 
 }  // namespace features
 

@@ -17,6 +17,7 @@
 #include "chrome/browser/ash/file_manager/volume_manager.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_info.h"
 #include "chrome/browser/ash/file_system_provider/service.h"
+#include "chrome/browser/chromeos/upload_office_to_cloud/upload_office_to_cloud.h"
 #include "chrome/browser/ui/ash/system_web_apps/system_web_app_ui_utils.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window.h"
@@ -236,6 +237,13 @@ bool IsOfficeWebAppInstalled(Profile* profile) {
   return installed;
 }
 
+bool IsMicrosoftOfficeOneDriveIntegrationAllowedAndOdfsInstalled(
+    Profile* profile) {
+  return chromeos::cloud_upload::IsMicrosoftOfficeOneDriveIntegrationAllowed(
+             profile) &&
+         IsODFSInstalled(profile);
+}
+
 bool UrlIsOnODFS(Profile* profile, const FileSystemURL& url) {
   ash::file_system_provider::util::FileSystemURLParser parser(url);
   if (!parser.Parse()) {
@@ -308,6 +316,13 @@ void GetODFSEntryMetadata(
     GetODFSEntryMetadataCallback callback) {
   file_system->GetActions(
       {path}, base::BindOnce(&OnGetODFSEntryActions, std::move(callback)));
+}
+
+bool PathIsOnDriveFS(Profile* profile, const base::FilePath& file_path) {
+  drive::DriveIntegrationService* integration_service =
+      drive::DriveIntegrationServiceFactory::FindForProfile(profile);
+  base::FilePath relative_path;
+  return integration_service->GetRelativeDrivePath(file_path, &relative_path);
 }
 
 std::optional<base::File::Error> GetFirstTaskError(

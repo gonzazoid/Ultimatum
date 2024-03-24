@@ -4,6 +4,7 @@
 
 #include "chrome/test/supervised_user/family_member.h"
 
+#include <optional>
 #include <string>
 
 #include "base/containers/flat_map.h"
@@ -19,7 +20,6 @@
 #include "components/supervised_user/core/browser/supervised_user_preferences.h"
 #include "components/supervised_user/core/browser/supervised_user_service.h"
 #include "google_apis/gaia/core_account_id.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/page_transition_types.h"
 #include "url/gurl.h"
 
@@ -40,11 +40,14 @@ CoreAccountId GetAccountId(Profile* profile) {
   return identity_manager->GetPrimaryAccountId(signin::ConsentLevel::kSignin);
 }
 
-GURL GetControlListUrlFor(FamilyMember& member, std::string_view page) {
-  return GURL(
-      base::StrCat({"https://families.google.com/u/0/manage/family/child/",
-                    GetAccountId(member.browser()->profile()).ToString(),
-                    "/exceptions/", page}));
+std::string GetFamilyMemberSettingsUrlBase(const FamilyMember& member) {
+  return base::StrCat({"https://families.google.com/u/0/manage/family/child/",
+                       GetAccountId(member.browser()->profile()).ToString()});
+}
+
+GURL GetControlListUrlFor(const FamilyMember& member, std::string_view page) {
+  return GURL(base::StrCat(
+      {GetFamilyMemberSettingsUrlBase(member), "/exceptions/", page}));
 }
 }  // namespace
 
@@ -60,15 +63,36 @@ FamilyMember::FamilyMember(
                          add_tab_function) {}
 FamilyMember::~FamilyMember() = default;
 
-GURL FamilyMember::GetBlockListUrlFor(FamilyMember& member) const {
+GURL FamilyMember::GetBlockListUrlFor(const FamilyMember& member) const {
   return GetControlListUrlFor(member, "blocked");
 }
 
-GURL FamilyMember::GetAllowListUrlFor(FamilyMember& member) const {
+GURL FamilyMember::GetAllowListUrlFor(const FamilyMember& member) const {
   return GetControlListUrlFor(member, "allowed");
+}
+
+GURL FamilyMember::GetPermissionsUrlFor(const FamilyMember& member) const {
+  return GURL(
+      base::StrCat({GetFamilyMemberSettingsUrlBase(member), "/permissions"}));
 }
 
 void FamilyMember::TurnOnSync() {
   sign_in_functions_.TurnOnSync(account_, 0);
 }
+
+CoreAccountId FamilyMember::GetAccountId() const {
+  supervised_user::SupervisedUserService* supervised_user_service =
+      SupervisedUserServiceFactory::GetForProfile(browser()->profile());
+  CHECK(supervised_user_service) << "Incognito mode is not supported.";
+  CHECK(
+      supervised_user::IsUrlFilteringEnabled(*browser()->profile()->GetPrefs()))
+      << "Blocklist control page is only available to user who have that "
+         "feature enabled. Check if member is a subject to parental controls.";
+
+  signin::IdentityManager* identity_manager =
+      IdentityManagerFactory::GetForProfile(browser()->profile());
+
+  return identity_manager->GetPrimaryAccountId(signin::ConsentLevel::kSignin);
+}
+
 }  // namespace supervised_user

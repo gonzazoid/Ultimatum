@@ -26,7 +26,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import org.chromium.base.Log;
-import org.chromium.base.test.util.DoNotBatch;
+import org.chromium.base.test.util.Batch;
 import org.chromium.net.CronetTestRule.CronetImplementation;
 import org.chromium.net.CronetTestRule.IgnoreFor;
 import org.chromium.net.CronetTestRule.RequiresMinAndroidApi;
@@ -51,7 +51,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /** Test functionality of BidirectionalStream interface. */
-@DoNotBatch(reason = "crbug/1459563")
+@Batch(Batch.UNIT_TESTS)
 @RunWith(AndroidJUnit4.class)
 @IgnoreFor(
         implementations = {CronetImplementation.FALLBACK},
@@ -1597,39 +1597,14 @@ public class BidirectionalStreamTest {
         assertThat(stream.isDone()).isTrue();
     }
 
-    /** Callback that shuts down the engine when the stream has succeeded or failed. */
-    private class ShutdownTestBidirectionalStreamCallback extends TestBidirectionalStreamCallback {
-        @Override
-        public void onSucceeded(BidirectionalStream stream, UrlResponseInfo info) {
-            mCronetEngine.shutdown();
-            // Clear mCronetEngine so it doesn't get shut down second time in tearDown().
-            mCronetEngine = null;
-            super.onSucceeded(stream, info);
-        }
-
-        @Override
-        public void onFailed(
-                BidirectionalStream stream, UrlResponseInfo info, CronetException error) {
-            mCronetEngine.shutdown();
-            // Clear mCronetEngine so it doesn't get shut down second time in tearDown().
-            mCronetEngine = null;
-            super.onFailed(stream, info, error);
-        }
-
-        @Override
-        public void onCanceled(BidirectionalStream stream, UrlResponseInfo info) {
-            mCronetEngine.shutdown();
-            // Clear mCronetEngine so it doesn't get shut down second time in tearDown().
-            mCronetEngine = null;
-            super.onCanceled(stream, info);
-        }
-    }
-
     @Test
     @SmallTest
+    @IgnoreFor(
+            implementations = {CronetImplementation.AOSP_PLATFORM},
+            reason = "ActiveRequestCount is not available in AOSP")
     public void testCronetEngineShutdown() throws Exception {
         // Test that CronetEngine cannot be shut down if there are any active streams.
-        TestBidirectionalStreamCallback callback = new ShutdownTestBidirectionalStreamCallback();
+        TestBidirectionalStreamCallback callback = new TestBidirectionalStreamCallback();
         // Block callback when response starts to verify that shutdown fails
         // if there are active streams.
         callback.setAutoAdvance(false);
@@ -1657,13 +1632,18 @@ public class BidirectionalStreamTest {
         callback.setAutoAdvance(true);
         callback.startNextRead(stream);
         callback.blockForDone();
+        waitForActiveRequestCount(0);
+        mCronetEngine.shutdown();
     }
 
     @Test
     @SmallTest
+    @IgnoreFor(
+            implementations = {CronetImplementation.AOSP_PLATFORM},
+            reason = "ActiveRequestCount is not available in AOSP")
     public void testCronetEngineShutdownAfterStreamFailure() throws Exception {
         // Test that CronetEngine can be shut down after stream reports a failure.
-        TestBidirectionalStreamCallback callback = new ShutdownTestBidirectionalStreamCallback();
+        TestBidirectionalStreamCallback callback = new TestBidirectionalStreamCallback();
         BidirectionalStream.Builder builder =
                 mCronetEngine.newBidirectionalStreamBuilder(
                         Http2TestServer.getEchoMethodUrl(), callback, callback.getExecutor());
@@ -1672,14 +1652,18 @@ public class BidirectionalStreamTest {
         callback.setFailure(FailureType.THROW_SYNC, ResponseStep.ON_READ_COMPLETED);
         callback.blockForDone();
         assertThat(callback.mOnErrorCalled).isTrue();
-        assertThat(mCronetEngine).isNull();
+        waitForActiveRequestCount(0);
+        mCronetEngine.shutdown();
     }
 
     @Test
     @SmallTest
+    @IgnoreFor(
+            implementations = {CronetImplementation.AOSP_PLATFORM},
+            reason = "ActiveRequestCount is not available in AOSP")
     public void testCronetEngineShutdownAfterStreamCancel() throws Exception {
         // Test that CronetEngine can be shut down after stream is canceled.
-        TestBidirectionalStreamCallback callback = new ShutdownTestBidirectionalStreamCallback();
+        TestBidirectionalStreamCallback callback = new TestBidirectionalStreamCallback();
         BidirectionalStream.Builder builder =
                 mCronetEngine.newBidirectionalStreamBuilder(
                         Http2TestServer.getEchoMethodUrl(), callback, callback.getExecutor());
@@ -1696,7 +1680,8 @@ public class BidirectionalStreamTest {
         stream.cancel();
         callback.blockForDone();
         assertThat(callback.mOnCanceledCalled).isTrue();
-        assertThat(mCronetEngine).isNull();
+        waitForActiveRequestCount(0);
+        mCronetEngine.shutdown();
     }
 
     /*
@@ -1858,7 +1843,8 @@ public class BidirectionalStreamTest {
     }
 
     @Test
-    @RequiresMinAndroidApi(Build.VERSION_CODES.M)
+    // TODO(crbug/1521765): Enable on Android M once fixed.
+    @RequiresMinAndroidApi(Build.VERSION_CODES.N)
     public void testBindToDefaultNetworkSucceeds() {
         ConnectivityManagerDelegate delegate =
                 new ConnectivityManagerDelegate(mTestRule.getTestFramework().getContext());

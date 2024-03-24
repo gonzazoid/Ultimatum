@@ -17,6 +17,7 @@
 #include "base/notreached.h"
 #include "base/ranges/algorithm.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/test/values_test_util.h"
 #include "components/account_id/account_id.h"
 #include "components/user_manager/user_type.h"
 #include "test_wallpaper_controller.h"
@@ -217,11 +218,12 @@ bool TestWallpaperController::SetThirdPartyWallpaper(
 void TestWallpaperController::SetSeaPenWallpaper(
     const AccountId& account_id,
     const ash::SeaPenImage& sea_pen_image,
-    const std::string& query_info,
+    const ash::personalization_app::mojom::SeaPenQueryPtr& query,
     SetWallpaperCallback callback) {
   ++sea_pen_wallpaper_count_;
   wallpaper_info_ = ash::WallpaperInfo();
   wallpaper_info_->type = ash::WallpaperType::kSeaPen;
+  sea_pen_query_ = query.Clone();
   std::move(callback).Run(/*success=*/true);
 }
 
@@ -232,7 +234,15 @@ void TestWallpaperController::SetSeaPenWallpaperFromFile(
   ++sea_pen_wallpaper_count_;
   wallpaper_info_ = ash::WallpaperInfo();
   wallpaper_info_->type = ash::WallpaperType::kSeaPen;
+  wallpaper_info_->user_file_path = sea_pen_file_path.value();
   std::move(callback).Run(/*success=*/true);
+}
+
+void TestWallpaperController::GetSeaPenMetadata(
+    const AccountId& account_id,
+    const base::FilePath& sea_pen_file_path,
+    GetSeaPenMetadataCallback callback) {
+  std::move(callback).Run(std::move(sea_pen_metadata_));
 }
 
 void TestWallpaperController::DeleteRecentSeaPenImage(

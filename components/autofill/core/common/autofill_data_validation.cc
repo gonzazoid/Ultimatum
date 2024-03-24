@@ -7,6 +7,7 @@
 #include "base/ranges/algorithm.h"
 #include "base/types/cxx23_to_underlying.h"
 #include "components/autofill/core/common/autofill_constants.h"
+#include "components/autofill/core/common/autofill_util.h"
 #include "components/autofill/core/common/form_data.h"
 #include "components/autofill/core/common/form_field_data.h"
 #include "components/autofill/core/common/password_form_fill_data.h"

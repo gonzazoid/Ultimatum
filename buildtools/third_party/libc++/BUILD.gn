@@ -69,7 +69,10 @@ target(_libcxx_target_type, "libc++") {
     libs = [ "atomic" ]
   }
 
-  inputs = [ "__config_site" ]
+  inputs = [
+    "__assertion_handler",
+    "__config_site",
+  ]
 
   # TODO(crbug.com/1458042): Move this build file to third_party/libc++/BUILD.gn once submodule migration is done
   sources = [
@@ -193,7 +196,7 @@ target(_libcxx_target_type, "libc++") {
       # specified in the C++ spec 3.7.4p2, which makes them always have default
       # visibility.  This option is needed to force hidden visibility since
       # -fvisibility=hidden doesn't have the desired effect.
-      cflags = [ "-fvisibility-global-new-delete-hidden" ]
+      cflags = [ "-fvisibility-global-new-delete=force-hidden" ]
     } else {
       defines += [
         # This resets the visibility to default only for the various

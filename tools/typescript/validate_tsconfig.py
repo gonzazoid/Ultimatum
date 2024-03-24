@@ -78,7 +78,7 @@ def validateTsconfigJson(tsconfig, tsconfig_file, is_base_tsconfig):
             f' Use the dedicated |{tslibrary_flag}| attribute in '+ \
             'ts_library() instead.'
 
-    if 'ui/file_manager/tsconfig_base.json' in tsconfig_file:
+    if 'ui/file_manager' in tsconfig_file:
       # File manager uses ts_library() in an unsupported way. Just return true
       # here for this special case.
       return True, None
@@ -120,11 +120,13 @@ def validateJavaScriptAllowed(source_dir, out_dir, is_ios):
       # TODO(b/314827247): Migrate media_app_ui to TypeScript and remove
       # exception.
       'ash/webui/media_app_ui/',
+      # TODO(b/313562946): Migrate help_app_ui mojo pipeline to TypeScript and
+      # remove.
+      'ash/webui/help_app_ui/',
       # TODO(b/315002705): Migrate shimless_rma to TypeScript and remove
       # exception.
       'ash/webui/shimless_rma/',
       'ash/webui/shortcut_customization_ui/',
-      'ash/webui/sample_system_web_app_ui/',
       # TODO(b/267329383): Migrate A11y to TypeScript.
       'chrome/browser/resources/chromeos/accessibility',
       'ui/file_manager/',
@@ -142,6 +144,9 @@ def validateJavaScriptAllowed(source_dir, out_dir, is_ios):
       # TODO(crbug.com/1511758): Migrate to TypeScript.
       'chrome/browser/resources/device_log',
       'chrome/test/data/webui',
+      # TODO(crbug.com/1337318): Migrate bluetooth-internals to TypeScript and
+      # remove exception.
+      'chrome/test/data/webui/bluetooth_internals',
       'chrome/test/data/webui/chromeos',
       'chrome/test/data/webui/chromeos/ash_common',
       'chrome/test/data/webui/cr_components/chromeos',
@@ -175,6 +180,12 @@ def getTargetPath(gen_dir, root_gen_dir):
 
 
 def isInAshFolder(path):
+  nested_lacros_folders = [
+    'chrome/browser/resources/chromeos/kerberos',
+  ]
+  if any(path.startswith(folder) for folder in nested_lacros_folders):
+    return False
+
   # TODO (https://crbug.com/1506296): Organize Ash WebUI code under fewer
   # directories.
   ash_folders = [
@@ -182,18 +193,32 @@ def isInAshFolder(path):
       'ash/webui',
       'chrome/browser/resources/ash',
       'chrome/browser/resources/chromeos',
+      'chrome/browser/resources/nearby_internals',
       'chrome/browser/resources/nearby_share',
       'ui/file_manager',
 
       # Test folders
       'chrome/test/data/webui/chromeos',
       'chrome/test/data/webui/cr_components/chromeos',
+      'chrome/test/data/webui/nearby_share',
       'chrome/test/data/webui/settings/chromeos',
   ]
   return any(path.startswith(folder) for folder in ash_folders)
 
 
+def isBrowserOnlyDep(dep):
+  browser_only_deps = [
+      '//ui/webui/resources/cr_elements',
+      '//ui/webui/resources/cr_components/localized_link',
+      '//ui/webui/resources/cr_components/managed_footnote',
+  ]
+  return any(dep.startswith(dep_folder) for dep_folder in browser_only_deps)
+
+
 def isDependencyAllowed(is_ash_target, raw_dep, target_path):
+  if is_ash_target and isBrowserOnlyDep(raw_dep):
+    return False
+
   is_ash_dep = isInAshFolder(raw_dep[2:])
   if not is_ash_dep or is_ash_target:
     return True
@@ -219,8 +244,6 @@ def isUnsupportedJsTarget(gen_dir, root_gen_dir):
   target_path = getTargetPath(gen_dir, root_gen_dir)
   exceptions = [
       'ash/webui/color_internals/resources',
-      'ash/webui/sample_system_web_app_ui/resources/trusted',
-      'ash/webui/sample_system_web_app_ui/resources/untrusted',
       'chrome/browser/resources/chromeos/accessibility/select_to_speak',
   ]
   return target_path in exceptions
@@ -249,7 +272,6 @@ def validateRootDir(root_dir, gen_dir, root_gen_dir, is_ios):
   exceptions = [
       # ChromeOS cases
       'ash/webui/color_internals/mojom',
-      'ash/webui/sample_system_web_app_ui/mojom',
       # TODO(b/315150183): Migrate A11y code to use path mappings.
       'chrome/browser/resources/chromeos/accessibility/accessibility_common',
       'chrome/browser/resources/chromeos/accessibility/braille_ime',

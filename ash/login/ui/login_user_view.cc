@@ -210,7 +210,7 @@ class LoginUserView::UserImage : public NonAccessibleView {
 
     bool is_managed =
         user.user_account_manager ||
-        user.basic_user_info.type == user_manager::USER_TYPE_PUBLIC_ACCOUNT;
+        user.basic_user_info.type == user_manager::UserType::kPublicAccount;
     enterprise_icon_container_->SetVisible(is_managed);
   }
 
@@ -266,7 +266,7 @@ class LoginUserView::UserImage : public NonAccessibleView {
   base::WeakPtrFactory<UserImage> weak_factory_{this};
 };
 
-BEGIN_METADATA(LoginUserView, UserImage, NonAccessibleView)
+BEGIN_METADATA(LoginUserView, UserImage)
 END_METADATA
 
 // Shows the user's name.
@@ -335,7 +335,7 @@ class LoginUserView::UserLabel : public NonAccessibleView {
   const int label_width_;
 };
 
-BEGIN_METADATA(LoginUserView, UserLabel, NonAccessibleView)
+BEGIN_METADATA(LoginUserView, UserLabel)
 END_METADATA
 
 // A button embedded inside of LoginUserView, which is activated whenever the
@@ -373,7 +373,7 @@ class LoginUserView::TapButton : public views::Button {
   const raw_ptr<LoginUserView> parent_;
 };
 
-BEGIN_METADATA(LoginUserView, TapButton, views::Button)
+BEGIN_METADATA(LoginUserView, TapButton)
 END_METADATA
 
 // LoginUserView is defined after LoginUserView::UserLabel so it can access the
@@ -593,8 +593,8 @@ gfx::Size LoginUserView::CalculatePreferredSize() const {
   }
 }
 
-void LoginUserView::Layout() {
-  views::View::Layout();
+void LoginUserView::Layout(PassKey) {
+  LayoutSuperclass<views::View>(this);
   tap_button_->SetBoundsRect(GetLocalBounds());
 }
 
@@ -632,7 +632,7 @@ void LoginUserView::UpdateCurrentUserState() {
     accessible_name = l10n_util::GetStringFUTF16(
         IDS_ASH_LOGIN_POD_MANAGED_ACCESSIBLE_NAME, email);
   } else if (current_user_.basic_user_info.type ==
-             user_manager::USER_TYPE_PUBLIC_ACCOUNT) {
+             user_manager::UserType::kPublicAccount) {
     accessible_name = l10n_util::GetStringFUTF16(
         IDS_ASH_LOGIN_POD_MANAGED_ACCESSIBLE_NAME,
         base::UTF8ToUTF16(current_user_.basic_user_info.display_name));
@@ -653,7 +653,7 @@ void LoginUserView::UpdateCurrentUserState() {
 
   user_image_->UpdateForUser(current_user_);
   user_label_->UpdateForUser(current_user_);
-  Layout();
+  DeprecatedLayoutImmediately();
 }
 
 void LoginUserView::UpdateOpacity() {
@@ -693,8 +693,7 @@ void LoginUserView::UpdateOpacity() {
 }
 
 void LoginUserView::SetLargeLayout() {
-  auto* layout = SetLayoutManager(std::make_unique<views::TableLayout>());
-  layout
+  SetLayoutManager(std::make_unique<views::TableLayout>())
       ->AddColumn(views::LayoutAlignment::kEnd, views::LayoutAlignment::kCenter,
                   1.0f, views::TableLayout::ColumnSize::kUsePreferred, 0, 0)
       .AddPaddingColumn(views::TableLayout::kFixedSize,
@@ -714,7 +713,7 @@ void LoginUserView::SetLargeLayout() {
       .AddRows(1, views::TableLayout::kFixedSize);
 
   AddChildView(tap_button_.get());
-  layout->SetChildViewIgnoredByLayout(tap_button_, true);
+  tap_button_->SetProperty(views::kViewIgnoredByLayoutKey, true);
 
   AddChildView(user_image_.get());
   user_image_->SetProperty(views::kTableColAndRowSpanKey, gfx::Size(5, 1));

@@ -27,10 +27,26 @@ std::string SerialTracker::ToString(EventType type) {
       return "pointer_enter";
     case POINTER_LEAVE:
       return "pointer_leave";
-    case POINTER_BUTTON_DOWN:
-      return "button_down";
-    case POINTER_BUTTON_UP:
-      return "button_down";
+    case POINTER_LEFT_BUTTON_DOWN:
+      return "left_button_down";
+    case POINTER_LEFT_BUTTON_UP:
+      return "left_button_up";
+    case POINTER_MIDDLE_BUTTON_DOWN:
+      return "middle_button_down";
+    case POINTER_MIDDLE_BUTTON_UP:
+      return "middle_button_up";
+    case POINTER_RIGHT_BUTTON_DOWN:
+      return "right_button_down";
+    case POINTER_RIGHT_BUTTON_UP:
+      return "right_button_up";
+    case POINTER_FORWARD_BUTTON_DOWN:
+      return "forward_button_down";
+    case POINTER_FORWARD_BUTTON_UP:
+      return "forward_button_up";
+    case POINTER_BACK_BUTTON_DOWN:
+      return "back_button_down";
+    case POINTER_BACK_BUTTON_UP:
+      return "back_button_up";
     case TOUCH_DOWN:
       return "touch_down";
     case TOUCH_UP:
@@ -59,27 +75,10 @@ uint32_t SerialTracker::GetNextSerial(EventType type) {
   if ((max_event_ - min_event_) > kMaxEventsTracked)
     min_event_ = max_event_ - kMaxEventsTracked;
 
-  switch (type) {
-    case EventType::POINTER_BUTTON_DOWN:
-      pointer_down_serial_ = serial;
-      break;
-    case EventType::POINTER_BUTTON_UP:
-      pointer_down_serial_ = absl::nullopt;
-      break;
-    case EventType::TOUCH_DOWN:
-      touch_down_serial_ = serial;
-      break;
-    case EventType::TOUCH_UP:
-      touch_down_serial_ = absl::nullopt;
-      break;
-    default:
-      break;
-  }
-
   return serial;
 }
 
-absl::optional<SerialTracker::EventType> SerialTracker::GetEventType(
+std::optional<SerialTracker::EventType> SerialTracker::GetEventType(
     uint32_t serial) const {
   if (max_event_ < min_event_) {
     // The valid range has partially overflowed the 32 bit space, so we should
@@ -88,7 +87,7 @@ absl::optional<SerialTracker::EventType> SerialTracker::GetEventType(
     if (!((serial < max_event_) || (serial >= min_event_))) {
       LOG(ERROR) << "Failed to find event type for serial. serial(" << serial
                  << ") is in the void range";
-      return absl::nullopt;
+      return std::nullopt;
     }
   } else {
     // Normal, non-overflowed case. Reject the serial number if it isn't in the
@@ -96,25 +95,11 @@ absl::optional<SerialTracker::EventType> SerialTracker::GetEventType(
     if (!((serial < max_event_) && (serial >= min_event_))) {
       LOG(ERROR) << "Failed to find event type for serial. serial(" << serial
                  << ") is outside of the range.";
-      return absl::nullopt;
+      return std::nullopt;
     }
   }
 
   return events_[serial % kMaxEventsTracked];
-}
-
-absl::optional<uint32_t> SerialTracker::GetPointerDownSerial() {
-  return pointer_down_serial_;
-}
-
-absl::optional<uint32_t> SerialTracker::GetTouchDownSerial() {
-  return touch_down_serial_;
-}
-
-void SerialTracker::ResetTouchDownSerial() {
-  // TODO(crbug.com/1371493): Remove these when the issue is fixed.
-  LOG(ERROR) << "Resetting touch downs serial";
-  touch_down_serial_ = absl::nullopt;
 }
 
 uint32_t SerialTracker::MaybeNextKeySerial() {
@@ -124,14 +109,12 @@ uint32_t SerialTracker::MaybeNextKeySerial() {
 }
 
 void SerialTracker::ResetKeySerial() {
-  key_serial_ = absl::nullopt;
+  key_serial_ = std::nullopt;
 }
 
 std::string SerialTracker::ToString() const {
   std::ostringstream ss;
-  ss << "min=" << min_event_ << ", max=" << max_event_
-     << ", pointer down=" << (pointer_down_serial_ ? *pointer_down_serial_ : 0)
-     << ", touch_down=" << (touch_down_serial_ ? *touch_down_serial_ : 0);
+  ss << "min=" << min_event_ << ", max=" << max_event_;
   return ss.str();
 }
 

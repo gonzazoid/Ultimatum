@@ -5,6 +5,7 @@
 #include "chrome/browser/chromeos/policy/dlp/dlp_content_manager.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -34,7 +35,6 @@
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/browser/guest_view/mime_handler_view/mime_handler_view_guest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/views/widget/widget.h"
 #include "url/gurl.h"
 
@@ -61,10 +61,8 @@ void ReportEvent(GURL url,
   DlpRulesManager::RuleMetadata rule_metadata;
   const std::string src_pattern = rules_manager->GetSourceUrlPattern(
       url, restriction, level, &rule_metadata);
-  if (src_pattern.empty()) {
-    LOG(ERROR) << "DlpContentManager failed to get the source URL pattern.";
-  }
-  reporting_manager->ReportEvent(src_pattern, restriction, level,
+  const std::string src_url = url.is_empty() ? src_pattern : url.spec();
+  reporting_manager->ReportEvent(src_url, restriction, level,
                                  rule_metadata.name,
                                  rule_metadata.obfuscated_id);
 }
@@ -88,23 +86,23 @@ bool IsReported(RestrictionLevelAndUrl restriction_info) {
 
 // Maps restriction to the correct suffix used for logging WarnProceeded
 // metrics. Returns the suffix for supported restrictions and null otherwise.
-const absl::optional<std::string> RestrictionToWarnProceededUMASuffix(
+const std::optional<std::string> RestrictionToWarnProceededUMASuffix(
     DlpRulesManager::Restriction restriction) {
   switch (restriction) {
     case DlpRulesManager::Restriction::kScreenShare:
-      return absl::make_optional(
+      return std::make_optional(
           data_controls::dlp::kScreenShareWarnProceededUMA);
     case DlpRulesManager::Restriction::kPrinting:
-      return absl::make_optional(data_controls::dlp::kPrintingWarnProceededUMA);
+      return std::make_optional(data_controls::dlp::kPrintingWarnProceededUMA);
     case DlpRulesManager::Restriction::kScreenshot:
-      return absl::make_optional(
+      return std::make_optional(
           data_controls::dlp::kScreenshotWarnProceededUMA);
     case DlpRulesManager::Restriction::kUnknownRestriction:
     case DlpRulesManager::Restriction::kClipboard:
     case DlpRulesManager::Restriction::kPrivacyScreen:
     case DlpRulesManager::Restriction::kFiles:
       NOTREACHED();
-      return absl::nullopt;
+      return std::nullopt;
   }
 }
 
@@ -540,12 +538,9 @@ void DlpContentManager::ReportWarningProceededEvent(
     DlpRulesManager::RuleMetadata rule_metadata;
     const std::string src_pattern = rules_manager->GetSourceUrlPattern(
         url, restriction, DlpRulesManager::Level::kWarn, &rule_metadata);
-    if (src_pattern.empty()) {
-      LOG(ERROR) << "DlpContentManager failed to get the source URL pattern.";
-    }
-    reporting_manager->ReportWarningProceededEvent(src_pattern, restriction,
-                                                   rule_metadata.name,
-                                                   rule_metadata.obfuscated_id);
+    const std::string src_url = url.is_empty() ? src_pattern : url.spec();
+    reporting_manager->ReportWarningProceededEvent(
+        src_url, restriction, rule_metadata.name, rule_metadata.obfuscated_id);
   }
 }
 

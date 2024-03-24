@@ -8,10 +8,10 @@
 #include <stddef.h>
 
 #include <set>
-#include <string>
 
 #include "components/keyed_service/core/keyed_service.h"
 #include "content/public/browser/site_instance.h"
+#include "extensions/common/extension_id.h"
 #include "extensions/common/features/feature.h"
 #include "extensions/common/mojom/context_type.mojom-forward.h"
 
@@ -91,14 +91,14 @@ class ProcessMap : public KeyedService {
 
   size_t size() const { return items_.size(); }
 
-  bool Insert(const std::string& extension_id, int process_id);
+  bool Insert(const ExtensionId& extension_id, int process_id);
 
   int RemoveAllFromProcess(int process_id);
 
-  bool Contains(const std::string& extension_id, int process_id) const;
+  bool Contains(const ExtensionId& extension_id, int process_id) const;
   bool Contains(int process_id) const;
 
-  std::set<std::string> GetExtensionsInProcess(int process_id) const;
+  std::set<ExtensionId> GetExtensionsInProcess(int process_id) const;
 
   // Returns true if the given `process_id` is considered a privileged context
   // for the given `extension`. That is, if it would *probably* correspond to a
@@ -199,10 +199,10 @@ class ProcessMap : public KeyedService {
   }
 
  private:
-  struct Item;
+  using ProcessId = int;
+  using Item = std::pair<ExtensionId, ProcessId>;
 
-  typedef std::set<Item> ItemSet;
-  ItemSet items_;
+  std::set<Item> items_;
 
   // Whether the process map belongs to the browser context used on Chrome OS
   // lock screen.

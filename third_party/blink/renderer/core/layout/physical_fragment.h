@@ -8,10 +8,10 @@
 #include <unicode/ubidi.h>
 
 #include <iterator>
+#include <optional>
 
 #include "base/containers/span.h"
 #include "base/dcheck_is_on.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/editing/forward.h"
 #include "third_party/blink/renderer/core/layout/anchor_query.h"
@@ -33,7 +33,6 @@ namespace blink {
 class ComputedStyle;
 class FragmentBuilder;
 class FragmentData;
-class FragmentItem;
 class Node;
 class PaintLayer;
 enum class OutlineType;
@@ -481,17 +480,6 @@ class CORE_EXPORT PhysicalFragment : public GarbageCollected<PhysicalFragment> {
   // check if there were newer generations.
   const PhysicalFragment* PostLayout() const;
 
-  // Em height box. including contents, in the local coordinate.
-  PhysicalRect ComputeRubyEmHeightBox(
-      const PhysicalBoxFragment& container) const;
-
-  // ComputeRubyEmHeightBox(), with transforms applied wrt container if needed.
-  // This does not include any offsets from the parent (including relpos).
-  PhysicalRect ComputeRubyEmHeightBoxForPropagation(
-      const PhysicalBoxFragment& container) const;
-  void AdjustRubyEmHeightBoxForPropagation(const PhysicalBoxFragment& container,
-                                           PhysicalRect* overflow) const;
-
   // Helper functions to convert between |PhysicalRect| and |LogicalRect| of a
   // child.
   LogicalRect ConvertChildToLogical(const PhysicalRect& physical_rect) const;
@@ -520,7 +508,7 @@ class CORE_EXPORT PhysicalFragment : public GarbageCollected<PhysicalFragment> {
   // found, the subtree established by |target| will be dumped as well.
   String DumpFragmentTree(DumpFlags,
                           const PhysicalFragment* target = nullptr,
-                          absl::optional<PhysicalOffset> = absl::nullopt,
+                          std::optional<PhysicalOffset> = std::nullopt,
                           unsigned indent = 2) const;
 
   // Dump the fragment tree, starting at |root| (searching inside legacy
@@ -723,18 +711,6 @@ class CORE_EXPORT PhysicalFragment : public GarbageCollected<PhysicalFragment> {
  protected:
   const ComputedStyle& SlowEffectiveStyle() const;
 
-  void AddRubyEmHeightBoxForInlineChild(const PhysicalBoxFragment& container,
-                                        const ComputedStyle& container_style,
-                                        const FragmentItem& line,
-                                        bool has_hanging,
-                                        const InlineCursor& cursor,
-                                        PhysicalRect* overflow) const;
-
-  static void AdjustRubyEmHeightBoxForHanging(
-      const PhysicalRect& rect,
-      const WritingMode container_writing_mode,
-      PhysicalRect* overflow);
-
   void AddOutlineRectsForNormalChildren(
       OutlineRectCollector& collector,
       const PhysicalOffset& additional_offset,
@@ -797,7 +773,7 @@ class CORE_EXPORT PhysicalFragment : public GarbageCollected<PhysicalFragment> {
   uint8_t has_last_baseline_ : 1;                               // NOLINT
   uint8_t use_last_baseline_for_inline_baseline_ : 1;           // NOLINT
   const uint8_t has_fragmented_out_of_flow_data_ : 1;           // NOLINT
-  const uint8_t has_out_of_flow_fragment_child_ : 1;            // NOLINT
+  uint8_t has_out_of_flow_fragment_child_ : 1;                  // NOLINT
   const uint8_t has_out_of_flow_in_fragmentainer_subtree_ : 1;  // NOLINT
 
   // The following are only used by PhysicalLineBoxFragment.

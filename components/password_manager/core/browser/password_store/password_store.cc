@@ -24,9 +24,9 @@
 #include "base/task/thread_pool.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
+#include "components/affiliations/core/browser/affiliation_service.h"
 #include "components/autofill/core/common/form_data.h"
 #include "components/password_manager/core/browser/affiliation/affiliated_match_helper.h"
-#include "components/password_manager/core/browser/affiliation/affiliation_service.h"
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_manager_metrics_util.h"
 #include "components/password_manager/core/browser/password_store/password_store_backend.h"
@@ -116,6 +116,7 @@ void PasswordStore::AddLogins(const std::vector<PasswordForm>& forms,
     CHECK(!form.blocked_by_user ||
           (form.username_value.empty() && form.password_value.empty()));
     backend_->AddLoginAsync(form, barrier_callback);
+    backend_->RecordAddLoginAsyncCalledFromTheStore();
   }
 }
 
@@ -143,6 +144,7 @@ void PasswordStore::UpdateLogins(const std::vector<PasswordForm>& forms,
     CHECK(!form.blocked_by_user ||
           (form.username_value.empty() && form.password_value.empty()));
     backend_->UpdateLoginAsync(form, barrier_callback);
+    backend_->RecordUpdateLoginAsyncCalledFromTheStore();
   }
 }
 
@@ -181,6 +183,7 @@ void PasswordStore::UpdateLoginWithPrimaryKey(
   backend_->RemoveLoginAsync(old_primary_key, barrier_callback);
   backend_->AddLoginAsync(new_form_with_correct_password_issues,
                           barrier_callback);
+  backend_->RecordAddLoginAsyncCalledFromTheStore();
 }
 
 void PasswordStore::RemoveLogin(const PasswordForm& form) {
@@ -333,7 +336,7 @@ void PasswordStore::RemoveObserver(Observer* observer) {
 
 bool PasswordStore::IsAbleToSavePasswords() const {
   DCHECK(main_task_runner_->RunsTasksInCurrentSequence());
-  return init_status_ == InitStatus::kSuccess && backend_;
+  return backend_ && backend_->IsAbleToSavePasswords();
 }
 
 void PasswordStore::ShutdownOnUIThread() {
@@ -387,7 +390,6 @@ PasswordStore::~PasswordStore() {
 
 void PasswordStore::OnInitCompleted(bool success) {
   DCHECK(main_task_runner_->RunsTasksInCurrentSequence());
-  init_status_ = success ? InitStatus::kSuccess : InitStatus::kFailure;
 
   TRACE_EVENT_NESTABLE_ASYNC_END0(
       "passwords", "PasswordStore::InitOnBackgroundSequence", this);

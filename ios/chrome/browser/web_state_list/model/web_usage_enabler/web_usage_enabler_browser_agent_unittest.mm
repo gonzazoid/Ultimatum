@@ -4,6 +4,7 @@
 
 #import "ios/chrome/browser/web_state_list/model/web_usage_enabler/web_usage_enabler_browser_agent.h"
 
+#import "base/memory/raw_ptr.h"
 #import "base/test/task_environment.h"
 #import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
 #import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
@@ -39,8 +40,8 @@ class WebUsageEnablerBrowserAgentTest : public PlatformTest {
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<TestChromeBrowserState> browser_state_;
   std::unique_ptr<TestBrowser> browser_;
-  WebStateList* web_state_list_;
-  WebUsageEnablerBrowserAgent* enabler_;
+  raw_ptr<WebStateList> web_state_list_;
+  raw_ptr<WebUsageEnablerBrowserAgent> enabler_;
 
   std::unique_ptr<web::FakeWebState> CreateWebState(const char* url) {
     auto test_web_state = std::make_unique<web::FakeWebState>();
@@ -55,9 +56,9 @@ class WebUsageEnablerBrowserAgentTest : public PlatformTest {
   }
 
   void AppendNewWebState(const char* url, WebStateOpener opener) {
-    web_state_list_->InsertWebState(WebStateList::kInvalidIndex,
-                                    CreateWebState(url),
-                                    WebStateList::INSERT_NO_FLAGS, opener);
+    web_state_list_->InsertWebState(
+        CreateWebState(url),
+        WebStateList::InsertionParams::Automatic().WithOpener(opener));
   }
 
   bool InitialLoadTriggeredForLastWebState() {
@@ -104,14 +105,15 @@ TEST_F(WebUsageEnablerBrowserAgentTest, EnableWebUsage) {
 TEST_F(WebUsageEnablerBrowserAgentTest, DisableInitialLoad) {
   enabler_->SetWebUsageEnabled(true);
 
-  // Insert with FORCE_INDEX to not activate and not trigger a load.
-  web_state_list_->InsertWebState(0, CreateWebState(kURL),
-                                  WebStateList::INSERT_FORCE_INDEX,
-                                  WebStateOpener());
+  // Insert with AtIndex and without activating to not trigger a load.
+  web_state_list_->InsertWebState(
+      CreateWebState(kURL),
+      WebStateList::InsertionParams::AtIndex(0).Activate(false));
   EXPECT_FALSE(InitialLoadTriggeredForLastWebState());
 
-  // Insert without FORCE_INDEX and verify LoadIfNecessary() was called.
+  // Insert with activating and verify LoadIfNecessary() was called.
   web_state_list_->InsertWebState(
-      0, CreateWebState(kURL), WebStateList::INSERT_ACTIVATE, WebStateOpener());
+      CreateWebState(kURL),
+      WebStateList::InsertionParams::Automatic().Activate());
   EXPECT_TRUE(InitialLoadTriggeredForLastWebState());
 }

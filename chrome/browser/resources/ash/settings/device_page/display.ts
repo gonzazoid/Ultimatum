@@ -7,28 +7,26 @@
  * 'settings-display' is the settings subpage for display settings.
  */
 
-import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
-import 'chrome://resources/cr_elements/cr_link_row/cr_link_row.js';
-import 'chrome://resources/cr_elements/cr_tabs/cr_tabs.js';
-import 'chrome://resources/cr_elements/cr_toggle/cr_toggle.js';
-import 'chrome://resources/cr_elements/policy/cr_policy_pref_indicator.js';
-import 'chrome://resources/cr_elements/md_select.css.js';
+import 'chrome://resources/ash/common/cr_elements/cr_checkbox/cr_checkbox.js';
+import 'chrome://resources/ash/common/cr_elements/cr_link_row/cr_link_row.js';
+import 'chrome://resources/ash/common/cr_elements/cr_tabs/cr_tabs.js';
+import 'chrome://resources/ash/common/cr_elements/cr_toggle/cr_toggle.js';
+import 'chrome://resources/ash/common/cr_elements/policy/cr_policy_pref_indicator.js';
+import 'chrome://resources/ash/common/cr_elements/md_select.css.js';
 import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 import './display_layout.js';
 import './display_overscan_dialog.js';
 import './display_night_light.js';
-import '/shared/settings/controls/settings_slider.js';
+import '../controls/settings_slider.js';
 import '../settings_shared.css.js';
 import '../settings_vars.css.js';
-import 'chrome://resources/cr_elements/cr_slider/cr_slider.js';
-import 'chrome://resources/cr_elements/cr_shared_style.css.js';
+import 'chrome://resources/ash/common/cr_elements/cr_slider/cr_slider.js';
+import 'chrome://resources/ash/common/cr_elements/cr_shared_style.css.js';
 
-import {DropdownMenuOptionList} from '/shared/settings/controls/settings_dropdown_menu.js';
-import {SettingsSliderElement} from '/shared/settings/controls/settings_slider.js';
 import {PrefsMixin} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
-import {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
-import {CrSliderElement, SliderTick} from 'chrome://resources/cr_elements/cr_slider/cr_slider.js';
-import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {CrCheckboxElement} from 'chrome://resources/ash/common/cr_elements/cr_checkbox/cr_checkbox.js';
+import {CrSliderElement, SliderTick} from 'chrome://resources/ash/common/cr_elements/cr_slider/cr_slider.js';
+import {I18nMixin} from 'chrome://resources/ash/common/cr_elements/i18n_mixin.js';
 import {assert} from 'chrome://resources/js/assert.js';
 import {focusWithoutInk} from 'chrome://resources/js/focus_without_ink.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
@@ -38,7 +36,9 @@ import {assertExists, cast, castExists} from '../assert_extras.js';
 import {DeepLinkingMixin} from '../common/deep_linking_mixin.js';
 import {isRevampWayfindingEnabled} from '../common/load_time_booleans.js';
 import {RouteObserverMixin} from '../common/route_observer_mixin.js';
-import {DisplayConfigurationObserverReceiver, DisplaySettingsProviderInterface, DisplaySettingsType, TabletModeObserverReceiver} from '../mojom-webui/display_settings_provider.mojom-webui.js';
+import {DropdownMenuOptionList} from '../controls/settings_dropdown_menu.js';
+import {SettingsSliderElement} from '../controls/settings_slider.js';
+import {DisplayConfigurationObserverReceiver, DisplaySettingsOrientationOption, DisplaySettingsProviderInterface, DisplaySettingsType, TabletModeObserverReceiver} from '../mojom-webui/display_settings_provider.mojom-webui.js';
 import {Setting} from '../mojom-webui/setting.mojom-webui.js';
 import {Route, routes} from '../router.js';
 
@@ -1253,9 +1253,20 @@ export class SettingsDisplayElement extends SettingsDisplayElementBase {
     getDisplayApi()
         .setDisplayProperties(this.selectedDisplay.id, properties)
         .then(() => this.setPropertiesCallback_());
+
+    let orientation = DisplaySettingsOrientationOption.k0Degree;
+    if (value === -1) {
+      orientation = DisplaySettingsOrientationOption.kAuto;
+    } else if (value === 90) {
+      orientation = DisplaySettingsOrientationOption.k90Degree;
+    } else if (value === 180) {
+      orientation = DisplaySettingsOrientationOption.k180Degree;
+    } else if (value === 270) {
+      orientation = DisplaySettingsOrientationOption.k270Degree;
+    }
     this.displaySettingsProvider.recordChangingDisplaySettings(
         DisplaySettingsType.kOrientation,
-        {isInternalDisplay: this.selectedDisplay.isInternal});
+        {isInternalDisplay: this.selectedDisplay.isInternal, orientation});
   }
 
   private onMirroredClick_(event: Event): void {
@@ -1273,7 +1284,9 @@ export class SettingsDisplayElement extends SettingsDisplayElementBase {
       }
     });
     this.displaySettingsProvider.recordChangingDisplaySettings(
-        DisplaySettingsType.kMirrorMode, /*value=*/ {});
+        DisplaySettingsType.kMirrorMode, /*value=*/ {
+          mirrorModeStatus: mirrorModeInfo.mode === MirrorMode.NORMAL,
+        });
   }
 
   private onUnifiedDesktopClick_(): void {
@@ -1284,7 +1297,8 @@ export class SettingsDisplayElement extends SettingsDisplayElementBase {
         .setDisplayProperties(this.primaryDisplayId, properties)
         .then(() => this.setPropertiesCallback_());
     this.displaySettingsProvider.recordChangingDisplaySettings(
-        DisplaySettingsType.kUnifiedMode, /*value=*/ {});
+        DisplaySettingsType.kUnifiedMode,
+        /*value=*/ {unifiedModeStatus: properties.isUnified});
   }
 
   private onOverscanClick_(e: Event): void {

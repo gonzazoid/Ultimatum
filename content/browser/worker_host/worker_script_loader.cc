@@ -6,6 +6,7 @@
 
 #include "base/functional/bind.h"
 #include "content/browser/loader/navigation_loader_interceptor.h"
+#include "content/browser/loader/response_head_update_params.h"
 #include "content/browser/service_worker/service_worker_main_resource_handle.h"
 #include "content/browser/service_worker/service_worker_main_resource_loader_interceptor.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -92,8 +93,7 @@ void WorkerScriptLoader::Start() {
                        weak_factory_.GetWeakPtr(), interceptor_.get()),
         base::BindOnce(
             [](base::WeakPtr<WorkerScriptLoader> self,
-               bool /*reset_subresource_loader_params*/,
-               const ResponseHeadUpdateParams&) {
+               ResponseHeadUpdateParams) {
               if (self) {
                 self->LoadFromNetwork();
               }
@@ -107,7 +107,7 @@ void WorkerScriptLoader::Start() {
 
 void WorkerScriptLoader::MaybeStartLoader(
     ServiceWorkerMainResourceLoaderInterceptor* interceptor,
-    scoped_refptr<network::SharedURLLoaderFactory> single_request_factory) {
+    std::optional<NavigationLoaderInterceptor::Result> interceptor_result) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(!completed_);
   DCHECK(interceptor);
@@ -118,15 +118,14 @@ void WorkerScriptLoader::MaybeStartLoader(
     return;
   }
 
-  // Create SubresourceLoaderParams for intercepting subresource requests and
-  // populating the "controller" field in ServiceWorkerContainer. This can be
-  // null if the interceptor is not interested in this request.
   subresource_loader_params_ =
-      interceptor->MaybeCreateSubresourceLoaderParams();
+      interceptor_result
+          ? std::move(interceptor_result->subresource_loader_params)
+          : SubresourceLoaderParams();
 
-  if (single_request_factory) {
+  if (interceptor_result && interceptor_result->single_request_factory) {
     // The interceptor elected to handle the request. Use it.
-    url_loader_factory_ = std::move(single_request_factory);
+    url_loader_factory_ = std::move(interceptor_result->single_request_factory);
     url_loader_.reset();
     url_loader_factory_->CreateLoaderAndStart(
         url_loader_.BindNewPipeAndPassReceiver(), request_id_, options_,
@@ -145,7 +144,6 @@ void WorkerScriptLoader::LoadFromNetwork() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(!completed_);
 
-  default_loader_used_ = true;
   url_loader_client_receiver_.reset();
   url_loader_factory_ = default_loader_factory_;
   url_loader_.reset();

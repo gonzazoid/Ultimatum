@@ -4,6 +4,8 @@
 
 #include "media/gpu/chromeos/mailbox_video_frame_converter.h"
 
+#include <optional>
+
 #include "base/containers/contains.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
@@ -22,7 +24,6 @@
 #include "media/base/video_util.h"
 #include "media/gpu/chromeos/platform_video_frame_utils.h"
 #include "media/gpu/macros.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/gpu_memory_buffer.h"
 #include "ui/gl/gl_bindings.h"
 
@@ -99,10 +100,10 @@ class GpuDelegateImpl : public MailboxVideoFrameConverter::GpuDelegate {
     return !!gpu_channel_;
   }
 
-  absl::optional<gpu::SharedImageCapabilities> GetCapabilities() override {
+  std::optional<gpu::SharedImageCapabilities> GetCapabilities() override {
     DCHECK(gpu_task_runner_->BelongsToCurrentThread());
     if (!gpu_channel_) {
-      return absl::nullopt;
+      return std::nullopt;
     }
 
     gpu::SharedImageStub* shared_image_stub = gpu_channel_->shared_image_stub();
@@ -341,7 +342,9 @@ void MailboxVideoFrameConverter::ConvertFrame(scoped_refptr<VideoFrame> frame) {
     return OnError(FROM_HERE, "Invalid frame.");
 
   VideoFrame* origin_frame =
-      !unwrap_frame_cb_.is_null() ? unwrap_frame_cb_.Run(*frame) : frame.get();
+      !get_original_frame_cb_.is_null()
+          ? get_original_frame_cb_.Run(GetSharedMemoryId(*frame))
+          : frame.get();
   if (!origin_frame)
     return OnError(FROM_HERE, "Failed to get origin frame.");
 
@@ -555,7 +558,7 @@ bool MailboxVideoFrameConverter::GenerateSharedImageOnGPUThread(
   const gfx::Size shared_image_size =
       GetRectSizeFromOrigin(destination_visible_rect);
 
-  const absl::optional<gpu::SharedImageCapabilities> shared_image_caps =
+  const std::optional<gpu::SharedImageCapabilities> shared_image_caps =
       gpu_delegate_->GetCapabilities();
 
   if (!shared_image_caps.has_value()) {
@@ -567,9 +570,12 @@ bool MailboxVideoFrameConverter::GenerateSharedImageOnGPUThread(
   // and, potentially, for overlays (Scanout).
   uint32_t shared_image_usage =
       gpu::SHARED_IMAGE_USAGE_DISPLAY_READ | gpu::SHARED_IMAGE_USAGE_SCANOUT;
+
+  // These SharedImages might also be used for zero-copy import into WebGPU to
+  // serve as the sources of WebGPU reads (e.g., for video effects processing).
   if (video_frame->metadata().is_webgpu_compatible &&
       !shared_image_caps->disable_webgpu_shared_images) {
-    shared_image_usage |= gpu::SHARED_IMAGE_USAGE_WEBGPU;
+    shared_image_usage |= gpu::SHARED_IMAGE_USAGE_WEBGPU_READ;
   }
 
   gpu::SharedImageStub::SharedImageDestructionCallback destroy_shared_image_cb;
@@ -674,10 +680,10 @@ bool MailboxVideoFrameConverter::HasPendingFrames() const {
   return !input_frame_queue_.empty();
 }
 
-void MailboxVideoFrameConverter::set_unwrap_frame_cb(
-    UnwrapFrameCB unwrap_frame_cb) {
+void MailboxVideoFrameConverter::set_get_original_frame_cb(
+    GetOriginalFrameCB get_original_frame_cb) {
   DCHECK(parent_task_runner_->RunsTasksInCurrentSequence());
-  unwrap_frame_cb_ = std::move(unwrap_frame_cb);
+  get_original_frame_cb_ = std::move(get_original_frame_cb);
 }
 
 void MailboxVideoFrameConverter::OnError(const base::Location& location,

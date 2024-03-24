@@ -20,7 +20,7 @@ otherwise manipulates that input, it definitely should be fuzzed!
    alongside. (In the future, you'll be able to add them right into your
    unit test code directly.)
 2. Add a gn target definition a lot like a normal unit test, but with
-   `enable_fuzztest = true`. See below for details. Create a `.cc` file.
+   `fuzztests = [ list-of-fuzztests ]`. See below for details. Create a `.cc` file.
 3. In the unit tests code, `#include "third_party/fuzztest/src/fuzztest/fuzztest.h"`
 4. Add a `FUZZ_TEST` macro, which might be as simple as `FUZZ_TEST(MyApiTest, ExistingFunctionWhichTakesUntrustedInput)`
    (though you may wish to structure things differently, see below)
@@ -52,7 +52,7 @@ if (fuzztest_supported) {
   test("hypothetical_fuzztests") {
     sources = [ "hypothetical_fuzztests.cc" ]
 
-    enable_fuzztest = true
+    fuzztests = ['MyApiTest.MyApiCanSuccessfullyParseAnyString']
 
     deps = [
       ":hypothetical_component",
@@ -61,6 +61,8 @@ if (fuzztest_supported) {
   }
 }
 ```
+
+You may also need to add `third_party/fuzztest` to your DEPS file.
 
 ## Adding `FUZZ_TEST` support to a target
 
@@ -71,15 +73,15 @@ we don't yet support this option in Chromium.
 ***
 
 In the near future we'll support adding `FUZZ_TEST`s alongside existing
-unit tests, even in the same .cc file. You will add an extra
-`enable_fuzztest = true` line:
+unit tests, even in the same .cc file.
 
 ```
 if (is_linux) {
   test("existing_unit_tests") {
     sources = [ "existing_unit_tests.cc" ] # add FUZZ_TESTs here
 
-    enable_fuzztest = true   # add this!
+    fuzztests = ['MyApiTest.ApiWorksAlways']
+      # Add this!
 
     deps = [
       ":existing_component",
@@ -173,10 +175,17 @@ run for one second:
 
 On other platforms, the test will be ignored.
 
-If you want to try actually fuzzing with FuzzTest, add the gn argument
-`enable_fuzztest_fuzz = true`. You can then run your unit test
-with the extra command line argument `--fuzz=`, optionally specifying a test
-name. You'll see lots of output as it explores your code:
+If you want to try actually fuzzing with FuzzTest, modify your gn arguments to
+contain:
+
+```
+enable_fuzztest_fuzz=true
+is_component_build=false
+```
+
+You can then run your unit test with the extra command line argument `--fuzz=`,
+optionally specifying a test name. You'll see lots of output as it explores your
+code:
 
 ```
 [*] Corpus size:     1 | Edges covered:     73 | Fuzzing time:        1.60482ms | Total runs:  1.00e+00 | Runs/secs:   623 | Max stack usage:        0

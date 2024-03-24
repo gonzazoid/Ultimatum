@@ -4,12 +4,12 @@
 
 #include "components/sync/base/user_selectable_type.h"
 
+#include <optional>
 #include <ostream>
 
 #include "base/notreached.h"
 #include "build/chromeos_buildflags.h"
 #include "components/sync/base/model_type.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace syncer {
 
@@ -35,10 +35,11 @@ constexpr char kAppsTypeName[] = "apps";
 constexpr char kReadingListTypeName[] = "readingList";
 constexpr char kTabsTypeName[] = "tabs";
 constexpr char kSavedTabGroupsTypeName[] = "savedTabGroups";
+constexpr char kSharedTabGroupDataTypeName[] = "sharedTabGroupData";
 constexpr char kPaymentsTypeName[] = "payments";
 
 UserSelectableTypeInfo GetUserSelectableTypeInfo(UserSelectableType type) {
-  static_assert(47 == syncer::GetNumModelTypes(),
+  static_assert(49 == syncer::GetNumModelTypes(),
                 "Almost always when adding a new ModelType, you must tie it to "
                 "a UserSelectableType below (new or existing) so the user can "
                 "disable syncing of that data. Today you must also update the "
@@ -80,7 +81,7 @@ UserSelectableTypeInfo GetUserSelectableTypeInfo(UserSelectableType type) {
       // In Ash, "Apps" part of Chrome OS settings.
       return {kAppsTypeName, UNSPECIFIED};
 #else
-      return {kAppsTypeName, APPS, {APPS, APP_SETTINGS, WEB_APPS}};
+      return {kAppsTypeName, APPS, {APPS, APP_SETTINGS, WEB_APPS, WEB_APKS}};
 #endif
     case UserSelectableType::kReadingList:
       return {kReadingListTypeName, READING_LIST, {READING_LIST}};
@@ -88,6 +89,10 @@ UserSelectableTypeInfo GetUserSelectableTypeInfo(UserSelectableType type) {
       return {kTabsTypeName, SESSIONS, {SESSIONS}};
     case UserSelectableType::kSavedTabGroups:
       return {kSavedTabGroupsTypeName, SAVED_TAB_GROUP, {SAVED_TAB_GROUP}};
+    case UserSelectableType::kSharedTabGroupData:
+      return {kSharedTabGroupDataTypeName,
+              SHARED_TAB_GROUP_DATA,
+              {SHARED_TAB_GROUP_DATA}};
     case UserSelectableType::kPayments:
       return {kPaymentsTypeName,
               AUTOFILL_WALLET_DATA,
@@ -132,7 +137,7 @@ const char* GetUserSelectableTypeName(UserSelectableType type) {
   return GetUserSelectableTypeInfo(type).type_name;
 }
 
-absl::optional<UserSelectableType> GetUserSelectableTypeFromString(
+std::optional<UserSelectableType> GetUserSelectableTypeFromString(
     const std::string& type) {
   if (type == kBookmarksTypeName) {
     return UserSelectableType::kBookmarks;
@@ -167,7 +172,10 @@ absl::optional<UserSelectableType> GetUserSelectableTypeFromString(
   if (type == kSavedTabGroupsTypeName) {
     return UserSelectableType::kSavedTabGroups;
   }
-  return absl::nullopt;
+  if (type == kSharedTabGroupDataTypeName) {
+    return UserSelectableType::kSharedTabGroupData;
+  }
+  return std::nullopt;
 }
 
 std::string UserSelectableTypeSetToString(UserSelectableTypeSet types) {
@@ -205,7 +213,7 @@ std::string UserSelectableOsTypeSetToString(UserSelectableOsTypeSet types) {
   return result;
 }
 
-absl::optional<UserSelectableOsType> GetUserSelectableOsTypeFromString(
+std::optional<UserSelectableOsType> GetUserSelectableOsTypeFromString(
     const std::string& type) {
   if (type == kOsAppsTypeName) {
     return UserSelectableOsType::kOsApps;
@@ -232,7 +240,7 @@ absl::optional<UserSelectableOsType> GetUserSelectableOsTypeFromString(
   if (type == kPreferencesTypeName) {
     return UserSelectableOsType::kOsPreferences;
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 ModelTypeSet UserSelectableOsTypeToAllModelTypes(UserSelectableOsType type) {

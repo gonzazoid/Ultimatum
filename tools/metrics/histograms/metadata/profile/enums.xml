@@ -100,6 +100,7 @@ chromium-metrics-reviews@google.com.
   <int value="2"
       label="ProfileAlreadySetUp (syncing on Lacros or signed in on Dice)"/>
   <int value="3" label="SkippedByPolicies"/>
+  <int value="4" label="ForceSignin"/>
 </enum>
 
 <enum name="GuestProfileCreatedType">
@@ -396,6 +397,7 @@ chromium-metrics-reviews@google.com.
   <int value="36" label="kWebAppUninstall"/>
   <int value="37" label="kOsIntegrationForceUnregistration"/>
   <int value="38" label="kRemoteDebugging"/>
+  <int value="39" label="kHeadlessCommand"/>
 </enum>
 
 <enum name="ProfileMenuActionableItem">

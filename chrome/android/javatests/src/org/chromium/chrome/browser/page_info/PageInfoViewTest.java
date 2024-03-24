@@ -57,6 +57,8 @@ import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
+import org.chromium.base.test.util.Features;
+import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.chrome.browser.FederatedIdentityTestUtils;
 import org.chromium.chrome.browser.app.ChromeActivity;
 import org.chromium.chrome.browser.browsing_data.BrowsingDataBridge;
@@ -69,15 +71,13 @@ import org.chromium.chrome.browser.history.StubbedHistoryProvider;
 import org.chromium.chrome.browser.notifications.channels.SiteChannelsManager;
 import org.chromium.chrome.browser.offlinepages.OfflinePageUtils;
 import org.chromium.chrome.browser.preferences.Pref;
-import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.util.ChromeAccessibilityUtil;
 import org.chromium.chrome.test.ChromeJUnit4RunnerDelegate;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.chrome.test.R;
 import org.chromium.chrome.test.batch.BlankCTATabInitialStateRule;
-import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
 import org.chromium.components.browser_ui.site_settings.ContentSettingException;
 import org.chromium.components.browser_ui.site_settings.WebsitePreferenceBridge;
 import org.chromium.components.browser_ui.site_settings.WebsitePreferenceBridgeJni;
@@ -254,7 +254,7 @@ public class PageInfoViewTest {
     private void setThirdPartyCookieBlocking(@CookieControlsMode int value) {
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
-                    UserPrefs.get(Profile.getLastUsedRegularProfile())
+                    UserPrefs.get(ProfileManager.getLastUsedRegularProfile())
                             .setInteger(COOKIE_CONTROLS_MODE, value);
                 });
     }
@@ -262,7 +262,7 @@ public class PageInfoViewTest {
     private void enableTrackingProtection() {
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
-                    UserPrefs.get(Profile.getLastUsedRegularProfile())
+                    UserPrefs.get(ProfileManager.getLastUsedRegularProfile())
                             .setBoolean(Pref.TRACKING_PROTECTION3PCD_ENABLED, true);
                 });
     }
@@ -270,7 +270,7 @@ public class PageInfoViewTest {
     private void blockAll3PC() {
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
-                    UserPrefs.get(Profile.getLastUsedRegularProfile())
+                    UserPrefs.get(ProfileManager.getLastUsedRegularProfile())
                             .setBoolean(Pref.BLOCK_ALL3PC_TOGGLE_ENABLED, true);
                 });
     }
@@ -297,13 +297,13 @@ public class PageInfoViewTest {
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     WebsitePreferenceBridge.setContentSettingDefaultScope(
-                            Profile.getLastUsedRegularProfile(),
+                            ProfileManager.getLastUsedRegularProfile(),
                             ContentSettingsType.GEOLOCATION,
                             url,
                             url,
                             ContentSettingValues.ALLOW);
                     WebsitePreferenceBridge.setContentSettingDefaultScope(
-                            Profile.getLastUsedRegularProfile(),
+                            ProfileManager.getLastUsedRegularProfile(),
                             ContentSettingsType.NOTIFICATIONS,
                             url,
                             url,
@@ -323,7 +323,7 @@ public class PageInfoViewTest {
                             expectBlock,
                             WebsitePreferenceBridgeJni.get()
                                     .getPermissionSettingForOrigin(
-                                            Profile.getLastUsedRegularProfile(),
+                                            ProfileManager.getLastUsedRegularProfile(),
                                             ContentSettingsType.NOTIFICATIONS,
                                             url,
                                             url));
@@ -331,7 +331,7 @@ public class PageInfoViewTest {
                             expectAllow,
                             WebsitePreferenceBridgeJni.get()
                                     .getPermissionSettingForOrigin(
-                                            Profile.getLastUsedRegularProfile(),
+                                            ProfileManager.getLastUsedRegularProfile(),
                                             ContentSettingsType.GEOLOCATION,
                                             url,
                                             "*"));
@@ -343,13 +343,13 @@ public class PageInfoViewTest {
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     WebsitePreferenceBridge.setContentSettingDefaultScope(
-                            Profile.getLastUsedRegularProfile(),
+                            ProfileManager.getLastUsedRegularProfile(),
                             ContentSettingsType.MEDIASTREAM_MIC,
                             url,
                             url,
                             ContentSettingValues.DEFAULT);
                     WebsitePreferenceBridge.setContentSettingDefaultScope(
-                            Profile.getLastUsedRegularProfile(),
+                            ProfileManager.getLastUsedRegularProfile(),
                             ContentSettingsType.MEDIASTREAM_CAMERA,
                             url,
                             url,
@@ -361,7 +361,7 @@ public class PageInfoViewTest {
         CallbackHelper helper = new CallbackHelper();
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
-                    BrowsingDataBridge.getInstance()
+                    BrowsingDataBridge.getForProfile(ProfileManager.getLastUsedRegularProfile())
                             .clearBrowsingData(
                                     helper::notifyCalled,
                                     new int[] {BrowsingDataType.SITE_SETTINGS},
@@ -378,7 +378,7 @@ public class PageInfoViewTest {
                             new ArrayList<ContentSettingException>();
                     WebsitePreferenceBridgeJni.get()
                             .getContentSettingsExceptions(
-                                    Profile.getLastUsedRegularProfile(), type, exceptions);
+                                    ProfileManager.getLastUsedRegularProfile(), type, exceptions);
                     Iterator<ContentSettingException> exceptionIt = exceptions.iterator();
                     while (exceptionIt.hasNext()) {
                         ContentSettingException exception = exceptionIt.next();
@@ -619,7 +619,7 @@ public class PageInfoViewTest {
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     WebsitePreferenceBridge.setContentSettingDefaultScope(
-                            Profile.getLastUsedRegularProfile(),
+                            ProfileManager.getLastUsedRegularProfile(),
                             ContentSettingsType.SOUND,
                             url,
                             url,
@@ -641,12 +641,12 @@ public class PageInfoViewTest {
                 () -> {
                     WebsitePreferenceBridgeJni.get()
                             .setEphemeralGrantForTesting(
-                                    Profile.getLastUsedRegularProfile(),
+                                    ProfileManager.getLastUsedRegularProfile(),
                                     ContentSettingsType.GEOLOCATION,
                                     url,
                                     url);
                     WebsitePreferenceBridge.setContentSettingDefaultScope(
-                            Profile.getLastUsedRegularProfile(),
+                            ProfileManager.getLastUsedRegularProfile(),
                             ContentSettingsType.MEDIASTREAM_CAMERA,
                             url,
                             url,
@@ -676,7 +676,7 @@ public class PageInfoViewTest {
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     assertTrue(
-                            UserPrefs.get(Profile.getLastUsedRegularProfile())
+                            UserPrefs.get(ProfileManager.getLastUsedRegularProfile())
                                     .getBoolean(IN_CONTEXT_COOKIE_CONTROLS_OPENED));
                 });
         mRenderTestRule.render(getPageInfoView(), "PageInfo_CookiesSubpage_Toggle_Off");
@@ -704,7 +704,7 @@ public class PageInfoViewTest {
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     assertTrue(
-                            UserPrefs.get(Profile.getLastUsedRegularProfile())
+                            UserPrefs.get(ProfileManager.getLastUsedRegularProfile())
                                     .getBoolean(IN_CONTEXT_COOKIE_CONTROLS_OPENED));
                 });
         mRenderTestRule.render(getPageInfoView(), "PageInfo_TrackingProtectionSubpage_Toggle_Off");
@@ -731,7 +731,7 @@ public class PageInfoViewTest {
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     assertTrue(
-                            UserPrefs.get(Profile.getLastUsedRegularProfile())
+                            UserPrefs.get(ProfileManager.getLastUsedRegularProfile())
                                     .getBoolean(IN_CONTEXT_COOKIE_CONTROLS_OPENED));
                 });
         mRenderTestRule.render(

@@ -10,6 +10,7 @@
 #include <optional>
 
 #include "base/containers/unique_ptr_adapters.h"
+#import "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "components/safe_browsing/core/browser/db/database_manager.h"
@@ -20,10 +21,6 @@
 #include "ios/web/public/web_state_observer.h"
 #import "ios/web/public/web_state_user_data.h"
 #include "url/gurl.h"
-
-namespace web {
-class NavigationItem;
-}
 
 class SafeBrowsingClient;
 @protocol SafeBrowsingTabHelperDelegate;
@@ -100,26 +97,6 @@ class SafeBrowsingTabHelper
       base::TimeTicks delay_start_time;
     };
 
-    // Represents the policy decision for a URL loaded in a sub frame.
-    // ShouldAllowRequest() is not executed for consecutive loads of the same
-    // URL, so it's possible for multiple sub frames to load the same URL and
-    // share the policy decision generated from a single ShouldAllowRequest()
-    // call.  If multiple ShouldAllowResponse() calls are received before the
-    // url check has finished, they are added to `response_callbacks`.
-    struct SubFrameUrlQuery {
-      SubFrameUrlQuery();
-      SubFrameUrlQuery(SubFrameUrlQuery&& decision);
-      ~SubFrameUrlQuery();
-
-      std::optional<web::WebStatePolicyDecider::PolicyDecision> decision;
-      std::list<web::WebStatePolicyDecider::PolicyDecisionCallback>
-          response_callbacks;
-
-      // The times at which navigations were delayed waiting for the result of
-      // this query. This list has the same ordering as `response_callbacks`.
-      std::list<base::TimeTicks> delay_start_times;
-    };
-
     // web::WebStatePolicyDecider implementation
     void ShouldAllowRequest(
         NSURLRequest* request,
@@ -130,15 +107,6 @@ class SafeBrowsingTabHelper
         web::WebStatePolicyDecider::ResponseInfo response_info,
         web::WebStatePolicyDecider::PolicyDecisionCallback callback) override;
 
-    // Implementations of ShouldAllowResponse() for main frame and sub frame
-    // navigations.
-    void HandleMainFrameResponsePolicy(
-        const GURL& url,
-        web::WebStatePolicyDecider::PolicyDecisionCallback callback);
-    void HandleSubFrameResponsePolicy(
-        const GURL& url,
-        web::WebStatePolicyDecider::PolicyDecisionCallback callback);
-
     // Returns the oldest query for `url` that has not yet received a decision.
     // If there are no queries for `url` or if all such queries have already
     // been decided, returns null.
@@ -147,15 +115,6 @@ class SafeBrowsingTabHelper
     // Callback invoked when a main frame query for `url` has finished with
     // `decision` after performing a check of type `performed_check`.
     void OnMainFrameUrlQueryDecided(
-        const GURL& url,
-        web::WebStatePolicyDecider::PolicyDecision decision,
-        safe_browsing::SafeBrowsingUrlCheckerImpl::PerformedCheck
-            performed_check);
-
-    // Callback invoked when a sub frame url query for the NavigationItem with
-    // `navigation_item_id` has finished with `decision` after performing a
-    // check of type `performed_check`.
-    void OnSubFrameUrlQueryDecided(
         const GURL& url,
         web::WebStatePolicyDecider::PolicyDecision decision,
         safe_browsing::SafeBrowsingUrlCheckerImpl::PerformedCheck
@@ -173,9 +132,9 @@ class SafeBrowsingTabHelper
     MainFrameRedirectChainDecision();
 
     // The URL check query manager.
-    SafeBrowsingQueryManager* query_manager_;
+    raw_ptr<SafeBrowsingQueryManager> query_manager_;
     // The safe browsing client.
-    SafeBrowsingClient* client_ = nullptr;
+    raw_ptr<SafeBrowsingClient> client_ = nullptr;
     // The pending query for the main frame navigation, if any.
     std::optional<MainFrameUrlQuery> pending_main_frame_query_;
     // The previous query for main frame, navigation, if any. This is tracked
@@ -186,9 +145,6 @@ class SafeBrowsingTabHelper
     // current `pending_main_frame_query_`. This does not include
     // `pending_main_frame_query_` itself.
     std::list<MainFrameUrlQuery> pending_main_frame_redirect_chain_;
-    // A map associating the pending policy decisions for each URL loaded into a
-    // sub frame.
-    std::map<const GURL, SubFrameUrlQuery> pending_sub_frame_queries_;
   };
 
   // Helper object that observes results of URL check queries.
@@ -208,8 +164,8 @@ class SafeBrowsingTabHelper
     void SafeBrowsingQueryManagerDestroyed(
         SafeBrowsingQueryManager* manager) override;
 
-    web::WebState* web_state_ = nullptr;
-    PolicyDecider* policy_decider_ = nullptr;
+    raw_ptr<web::WebState> web_state_ = nullptr;
+    raw_ptr<PolicyDecider> policy_decider_ = nullptr;
     base::ScopedObservation<SafeBrowsingQueryManager,
                             SafeBrowsingQueryManager::Observer>
         scoped_observation_{this};
@@ -234,7 +190,7 @@ class SafeBrowsingTabHelper
         web::NavigationContext* navigation_context) override;
     void WebStateDestroyed(web::WebState* web_state) override;
 
-    PolicyDecider* policy_decider_ = nullptr;
+    raw_ptr<PolicyDecider> policy_decider_ = nullptr;
     base::ScopedObservation<web::WebState, web::WebStateObserver>
         scoped_observation_{this};
   };

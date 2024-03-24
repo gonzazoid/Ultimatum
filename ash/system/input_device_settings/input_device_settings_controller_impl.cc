@@ -231,11 +231,14 @@ mojom::PointingStickPtr BuildMojomPointingStick(
 
 mojom::GraphicsTabletPtr BuildMojomGraphicsTablet(
     const ui::InputDevice& graphics_tablet,
-    mojom::CustomizationRestriction customization_restriction) {
+    mojom::CustomizationRestriction customization_restriction,
+    mojom::GraphicsTabletButtonConfig graphics_tablet_button_config) {
   mojom::GraphicsTabletPtr mojom_graphics_tablet = mojom::GraphicsTablet::New();
   mojom_graphics_tablet->name = graphics_tablet.name;
   mojom_graphics_tablet->id = graphics_tablet.id;
   mojom_graphics_tablet->customization_restriction = customization_restriction;
+  mojom_graphics_tablet->graphics_tablet_button_config =
+      graphics_tablet_button_config;
   mojom_graphics_tablet->device_key =
       Shell::Get()->input_device_key_alias_manager()->GetAliasedDeviceKey(
           graphics_tablet);
@@ -681,6 +684,24 @@ void InputDeviceSettingsControllerImpl::RegisterProfilePrefs(
       prefs::kGraphicsTabletTabletButtonRemappingsDictPref);
   pref_registry->RegisterDictionaryPref(
       prefs::kGraphicsTabletPenButtonRemappingsDictPref);
+  pref_registry->RegisterIntegerPref(
+      prefs::kF11KeyModifier,
+      static_cast<int>(ui::mojom::ExtendedFkeysModifier::kDisabled));
+  pref_registry->RegisterIntegerPref(
+      prefs::kF12KeyModifier,
+      static_cast<int>(ui::mojom::ExtendedFkeysModifier::kDisabled));
+  pref_registry->RegisterIntegerPref(
+      prefs::kHomeAndEndKeysModifier,
+      static_cast<int>(ui::mojom::SixPackShortcutModifier::kNone));
+  pref_registry->RegisterIntegerPref(
+      prefs::kPageUpAndPageDownKeysModifier,
+      static_cast<int>(ui::mojom::SixPackShortcutModifier::kNone));
+  pref_registry->RegisterIntegerPref(
+      prefs::kDeleteKeyModifier,
+      static_cast<int>(ui::mojom::SixPackShortcutModifier::kNone));
+  pref_registry->RegisterIntegerPref(
+      prefs::kInsertKeyModifier,
+      static_cast<int>(ui::mojom::SixPackShortcutModifier::kNone));
 }
 
 void InputDeviceSettingsControllerImpl::OnActiveUserPrefServiceChanged(
@@ -1486,6 +1507,18 @@ InputDeviceSettingsControllerImpl::GetMouseCustomizationRestriction(
   return mojom::CustomizationRestriction::kDisableKeyEventRewrites;
 }
 
+mojom::CustomizationRestriction
+InputDeviceSettingsControllerImpl::GetGraphicsTabletCustomizationRestriction(
+    const ui::InputDevice& graphics_tablet) {
+  const auto* graphics_tablet_metadata =
+      GetGraphicsTabletMetadata(graphics_tablet);
+  if (graphics_tablet_metadata) {
+    return graphics_tablet_metadata->customization_restriction;
+  }
+
+  return mojom::CustomizationRestriction::kAllowCustomizations;
+}
+
 mojom::MouseButtonConfig
 InputDeviceSettingsControllerImpl::GetMouseButtonConfig(
     const ui::InputDevice& mouse) {
@@ -1495,6 +1528,18 @@ InputDeviceSettingsControllerImpl::GetMouseButtonConfig(
   }
 
   return mojom::MouseButtonConfig::kNoConfig;
+}
+
+mojom::GraphicsTabletButtonConfig
+InputDeviceSettingsControllerImpl::GetGraphicsTabletButtonConfig(
+    const ui::InputDevice& graphics_tablet) {
+  const auto* graphics_tablet_metadata =
+      GetGraphicsTabletMetadata(graphics_tablet);
+  if (graphics_tablet_metadata) {
+    return graphics_tablet_metadata->graphics_tablet_button_config;
+  }
+
+  return mojom::GraphicsTabletButtonConfig::kNoConfig;
 }
 
 void InputDeviceSettingsControllerImpl::OnKeyboardListUpdated(
@@ -1579,7 +1624,9 @@ void InputDeviceSettingsControllerImpl::OnGraphicsTabletListUpdated(
     std::vector<DeviceId> graphics_tablet_ids_to_remove) {
   for (const auto& graphics_tablet : graphics_tablets_to_add) {
     auto mojom_graphics_tablet = BuildMojomGraphicsTablet(
-        graphics_tablet, mojom::CustomizationRestriction::kAllowCustomizations);
+        graphics_tablet,
+        GetGraphicsTabletCustomizationRestriction(graphics_tablet),
+        GetGraphicsTabletButtonConfig(graphics_tablet));
     InitializeGraphicsTabletSettings(mojom_graphics_tablet.get());
     if (features::IsPeripheralNotificationEnabled()) {
       notification_controller_->NotifyGraphicsTabletFirstTimeConnected(
@@ -1709,6 +1756,14 @@ void InputDeviceSettingsControllerImpl::InitializeGraphicsTabletSettings(
     return;
   }
 
+  // If there is no active account id or local state isn't initialized, use
+  // default graphics tablet settings. This can happen as an uncommon race
+  // condition when first signing in on the login screen.
+  if (!active_account_id_ || !local_state_) {
+    graphics_tablet->settings = mojom::GraphicsTabletSettings::New();
+    return;
+  }
+
   graphics_tablet_pref_handler_->InitializeLoginScreenGraphicsTabletSettings(
       local_state_, active_account_id_.value(), graphics_tablet);
 }
@@ -1731,6 +1786,30 @@ void InputDeviceSettingsControllerImpl::InitializeTouchpadSettings(
 
   touchpad_pref_handler_->InitializeLoginScreenTouchpadSettings(
       local_state_, active_account_id_.value(), touchpad);
+}
+
+const mojom::Mouse* InputDeviceSettingsControllerImpl::GetMouse(DeviceId id) {
+  return FindMouse(id);
+}
+
+const mojom::Touchpad* InputDeviceSettingsControllerImpl::GetTouchpad(
+    DeviceId id) {
+  return FindTouchpad(id);
+}
+
+const mojom::Keyboard* InputDeviceSettingsControllerImpl::GetKeyboard(
+    DeviceId id) {
+  return FindKeyboard(id);
+}
+
+const mojom::GraphicsTablet*
+InputDeviceSettingsControllerImpl::GetGraphicsTablet(DeviceId id) {
+  return FindGraphicsTablet(id);
+}
+
+const mojom::PointingStick* InputDeviceSettingsControllerImpl::GetPointingStick(
+    DeviceId id) {
+  return FindPointingStick(id);
 }
 
 mojom::Mouse* InputDeviceSettingsControllerImpl::FindMouse(DeviceId id) {
@@ -1773,6 +1852,9 @@ void InputDeviceSettingsControllerImpl::StartObservingButtons(DeviceId id) {
       rewriter->StartObservingMouse(duplicate_id,
                                     mouse->customization_restriction);
     }
+    for (auto& observer : observers_) {
+      observer.OnCustomizableMouseObservingStarted(*mouse);
+    }
     return;
   }
 
@@ -1799,6 +1881,10 @@ void InputDeviceSettingsControllerImpl::StopObservingButtons() {
           ->peripheral_customization_event_rewriter();
   CHECK(rewriter);
   rewriter->StopObserving();
+
+  for (auto& observer : observers_) {
+    observer.OnCustomizableMouseObservingStopped();
+  }
 }
 
 void InputDeviceSettingsControllerImpl::OnMouseButtonPressed(

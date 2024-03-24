@@ -28,7 +28,6 @@
 #include "ui/gfx/buffer_types.h"
 #include "ui/gfx/geometry/size.h"
 
-class GrDirectContext;
 class GrBackendTexture;
 class SkImage;
 
@@ -38,7 +37,6 @@ class SkImage;
 namespace gfx {
 
 class ColorSpace;
-class GpuMemoryBuffer;
 
 }  // namespace gfx
 
@@ -241,7 +239,6 @@ class PLATFORM_EXPORT CanvasResource
   viz::SharedImageFormat GetSharedImageFormat() const;
   gfx::BufferFormat GetBufferFormat() const;
   gfx::ColorSpace GetColorSpace() const;
-  GrDirectContext* GetGrContext() const;
   virtual base::WeakPtr<WebGraphicsContext3DProviderWrapper>
   ContextProviderWrapper() const {
     NOTREACHED();
@@ -460,10 +457,6 @@ class PLATFORM_EXPORT CanvasResourceRasterSharedImage final
   // This can be accessed on any thread, irrespective of whether there are
   // active readers or not.
   bool is_origin_clean_ = true;
-
-  // GMB based software raster path. The resource is written to on the CPU but
-  // passed using the mailbox to the display compositor for use as an overlay.
-  std::unique_ptr<gfx::GpuMemoryBuffer> gpu_memory_buffer_;
 
   // Accessed on any thread.
   const gfx::Size size_;

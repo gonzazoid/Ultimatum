@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <map>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -80,7 +81,6 @@
 #include "chrome/browser/status_icons/status_tray.h"
 #include "chrome/browser/ui/browser_dialogs.h"
 #include "chrome/browser/update_client/chrome_update_query_params_delegate.h"
-#include "chrome/browser/webapps/chrome_webapps_client.h"
 #include "chrome/common/buildflags.h"
 #include "chrome/common/channel_info.h"
 #include "chrome/common/chrome_constants.h"
@@ -146,6 +146,8 @@
 
 #if BUILDFLAG(IS_WIN)
 #include "base/win/windows_version.h"
+#include "chrome/browser/browser_features.h"
+#include "components/os_crypt/async/browser/dpapi_key_provider.h"
 #elif BUILDFLAG(IS_MAC)
 #include "chrome/browser/chrome_browser_main_mac.h"
 #include "chrome/browser/media/webrtc/system_media_capture_permissions_stats_mac.h"
@@ -161,6 +163,7 @@
 #include "chrome/browser/accessibility/accessibility_prefs/android/accessibility_prefs_controller.h"
 #include "chrome/browser/flags/android/chrome_feature_list.h"
 #include "chrome/browser/ssl/chrome_security_state_client.h"
+#include "chrome/browser/webapps/webapps_client_android.h"
 #include "chrome/browser/webauthn/android/chrome_webauthn_client_android.h"
 #include "components/webauthn/android/webauthn_client_android.h"
 #else
@@ -175,6 +178,7 @@
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/usb/usb_system_tray_icon.h"
+#include "chrome/browser/webapps/webapps_client_desktop.h"
 #include "components/gcm_driver/gcm_client_factory.h"
 #include "components/gcm_driver/gcm_desktop_utils.h"
 #include "components/keep_alive_registry/keep_alive_registry.h"
@@ -214,7 +218,6 @@
 #if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/first_run/upgrade_util.h"
 #include "chrome/browser/ui/profiles/profile_picker.h"
-#include "components/enterprise/browser/controller/chrome_browser_cloud_management_controller.h"
 #endif
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
@@ -230,10 +233,12 @@
 #include "chrome/browser/hid/hid_pinned_notification.h"
 #include "chrome/browser/screen_ai/screen_ai_downloader_chromeos.h"
 #include "chrome/browser/usb/usb_pinned_notification.h"
+#include "components/crash/core/app/crashpad.h"
 #elif !BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/hid/hid_status_icon.h"
 #include "chrome/browser/screen_ai/screen_ai_downloader_non_chromeos.h"
 #include "chrome/browser/usb/usb_status_icon.h"
+#include "components/enterprise/browser/controller/chrome_browser_cloud_management_controller.h"
 #endif
 
 #if BUILDFLAG(IS_WIN) || (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS))
@@ -348,7 +353,11 @@ void BrowserProcessImpl::Init() {
   ChromeMediaSessionClient::GetInstance();
 
   // Make sure webapps client has been set.
-  webapps::ChromeWebappsClient::GetInstance();
+#if BUILDFLAG(IS_ANDROID)
+  webapps::WebappsClientAndroid::CreateSingleton();
+#else
+  webapps::WebappsClientDesktop::CreateSingleton();
+#endif
 
 #if !BUILDFLAG(IS_ANDROID)
   KeepAliveRegistry::GetInstance()->SetIsShuttingDown(false);
@@ -441,7 +450,7 @@ void BrowserProcessImpl::StartTearDown() {
     safe_browsing_service()->ShutDown();
   network_time_tracker_.reset();
 
-#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS)
   // Initial cleanup for ChromeBrowserCloudManagement, shutdown components that
   // depend on profile and notification system. For example, ProfileManager
   // observer and KeyServices observer need to be removed before profiles.
@@ -690,6 +699,20 @@ void BrowserProcessImpl::EndSession() {
   // http://crbug.com/125207
   base::ScopedAllowBaseSyncPrimitivesOutsideBlockingScope allow_wait;
 
+#if BUILDFLAG(IS_CHROMEOS)
+  // The browser is already shutting down, so the DeleteFile inside
+  // DeleteCrashpadIsReadyFile cannot causing UI jank. Also, this code
+  // cannot use other MayBlock threads, as the process will be disappearing
+  // momentarily.
+  {
+    base::ScopedAllowBlocking allow_delete;
+    // Crashes after this point will generate a bunch of unnecessary work
+    // in crash reporter, so call this function as late as possible, after
+    // approximately everything that can crash is complete.
+    crash_reporter::DeleteCrashpadIsReadyFile();
+  }
+#endif
+
   // We must write that the profile and metrics service shutdown cleanly,
   // otherwise on startup we'll think we crashed. So we block until done and
   // then proceed with normal shutdown.
@@ -719,7 +742,9 @@ void BrowserProcessImpl::EndSession() {
 metrics_services_manager::MetricsServicesManager*
 BrowserProcessImpl::GetMetricsServicesManager() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (!metrics_services_manager_) {
+  // Only create the objects if teardown hasn't started yet, as otherwise these
+  // may have already been destroyed.
+  if (!metrics_services_manager_ && !tearing_down_) {
     auto client =
         std::make_unique<ChromeMetricsServicesManagerClient>(local_state());
     metrics_services_manager_client_ = client.get();
@@ -732,7 +757,11 @@ BrowserProcessImpl::GetMetricsServicesManager() {
 
 metrics::MetricsService* BrowserProcessImpl::metrics_service() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return GetMetricsServicesManager()->GetMetricsService();
+  auto* metrics_services_manager = GetMetricsServicesManager();
+  if (metrics_services_manager_) {
+    return metrics_services_manager->GetMetricsService();
+  }
+  return nullptr;
 }
 
 embedder_support::OriginTrialsSettingsStorage*
@@ -780,7 +809,11 @@ PrefService* BrowserProcessImpl::local_state() {
 
 variations::VariationsService* BrowserProcessImpl::variations_service() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return GetMetricsServicesManager()->GetVariationsService();
+  auto* metrics_services_manager = GetMetricsServicesManager();
+  if (metrics_services_manager_) {
+    return metrics_services_manager->GetVariationsService();
+  }
+  return nullptr;
 }
 
 BrowserProcessPlatformPart* BrowserProcessImpl::platform_part() {
@@ -1277,13 +1310,26 @@ void BrowserProcessImpl::PreMainMessageLoopRun() {
     breadcrumbs::DeleteBreadcrumbFiles(user_data_dir);
   }
 
-  // For now, initialize OSCryptAsync with no providers. This delegates all
+  // OSCryptAsync provider configuration. If empty, this delegates all
   // encryption operations to OSCrypt.
-  // TODO(crbug.com/1373092): Add providers behind features, as support for them
-  // is added.
-  os_crypt_async_ = std::make_unique<os_crypt_async::OSCryptAsync>(
-      std::vector<
-          std::pair<size_t, std::unique_ptr<os_crypt_async::KeyProvider>>>());
+  std::vector<std::pair<size_t, std::unique_ptr<os_crypt_async::KeyProvider>>>
+      providers;
+
+#if BUILDFLAG(IS_WIN)
+  // TODO(crbug.com/1373092): For Windows, continue to add providers behind
+  // features, as support for them is added.
+  if (base::FeatureList::IsEnabled(features::kEnableDPAPIEncryptionProvider)) {
+    // The DPAPI key provider requires OSCrypt::Init to have already been called
+    // to initialize the key storage. This happens in
+    // ChromeBrowserMainPartsWin::PreCreateMainMessageLoop.
+    providers.emplace_back(std::make_pair(
+        /*precedence=*/10u,
+        std::make_unique<os_crypt_async::DPAPIKeyProvider>(local_state())));
+  }
+#endif  // BUILDFLAG(IS_WIN)
+
+  os_crypt_async_ =
+      std::make_unique<os_crypt_async::OSCryptAsync>(std::move(providers));
 
   // Trigger async initialization of OSCrypt key providers.
   std::ignore = os_crypt_async_->GetInstance(base::DoNothing());
@@ -1329,7 +1375,7 @@ void BrowserProcessImpl::CreatePrintPreviewDialogController() {
 #if BUILDFLAG(ENABLE_PRINT_PREVIEW)
   DCHECK(!print_preview_dialog_controller_);
   print_preview_dialog_controller_ =
-      base::MakeRefCounted<printing::PrintPreviewDialogController>();
+      std::make_unique<printing::PrintPreviewDialogController>();
 #else
   NOTIMPLEMENTED();
 #endif
@@ -1408,7 +1454,8 @@ void BrowserProcessImpl::CreateNetworkTimeTracker() {
   network_time_tracker_ = std::make_unique<network_time::NetworkTimeTracker>(
       base::WrapUnique(new base::DefaultClock()),
       base::WrapUnique(new base::DefaultTickClock()), local_state(),
-      system_network_context_manager()->GetSharedURLLoaderFactory());
+      system_network_context_manager()->GetSharedURLLoaderFactory(),
+      std::nullopt);
 }
 
 void BrowserProcessImpl::ApplyDefaultBrowserPolicy() {

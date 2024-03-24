@@ -11,10 +11,8 @@ namespace autofill {
 TestCreditCardSaveManager::TestCreditCardSaveManager(
     AutofillDriver* driver,
     AutofillClient* client,
-    payments::TestPaymentsNetworkInterface* payments_network_interface,
     PersonalDataManager* personal_data_manager)
     : CreditCardSaveManager(client,
-                            payments_network_interface,
                             "en-US",
                             personal_data_manager) {}
 
@@ -77,7 +75,7 @@ void TestCreditCardSaveManager::set_upload_request_card(
   upload_request_.card = std::move(card);
 }
 
-payments::PaymentsNetworkInterface::UploadRequestDetails*
+payments::PaymentsNetworkInterface::UploadCardRequestDetails*
 TestCreditCardSaveManager::upload_request() {
   return &upload_request_;
 }

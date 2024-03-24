@@ -142,7 +142,7 @@ int CalculateScoreFromFactors(size_t typed_length,
 // Populate scoring signals from the shortcut match to ACMatch.
 void PopulateScoringSignals(const ShortcutMatch& shortcut_match,
                             AutocompleteMatch* match) {
-  match->scoring_signals = absl::make_optional<ScoringSignals>();
+  match->scoring_signals = std::make_optional<ScoringSignals>();
   match->scoring_signals->set_shortcut_visit_count(
       shortcut_match.aggregate_number_of_hits);
   match->scoring_signals->set_shortest_shortcut_len(
@@ -545,13 +545,15 @@ AutocompleteMatch ShortcutsProvider::ShortcutToACMatch(
   // allows, for example, the input of "foo.c" to autocomplete to "foo.com" for
   // a fill_into_edit of "http://foo.com".
   const bool is_search_type = AutocompleteMatch::IsSearchType(match.type);
-  const bool is_starter_pack = AutocompleteMatch::IsStarterPackType(match.type);
 
+  const bool is_starter_pack = AutocompleteMatch::IsStarterPackType(match.type);
   if (OmniboxFieldTrial::IsKeywordModeRefreshEnabled()) {
     DCHECK(!is_starter_pack);
-    DCHECK(is_search_type != match.keyword.empty());
+    DCHECK(is_search_type != match.keyword.empty())
+        << "type: " << match.type << ", keyword: " << match.keyword;
   } else {
-    DCHECK(is_search_type != match.keyword.empty() || is_starter_pack);
+    DCHECK(is_search_type != match.keyword.empty() || is_starter_pack)
+        << "type: " << match.type << ", keyword: " << match.keyword;
   }
 
   const bool keyword_matches =

@@ -204,32 +204,10 @@ SimplifiedLayoutAlgorithm::SimplifiedLayoutAlgorithm(
   previous_physical_container_size_ = physical_fragment.Size();
 }
 
-void SimplifiedLayoutAlgorithm::CloneOldChildren() {
-  const auto& previous_fragment =
-      To<PhysicalBoxFragment>(previous_result_.GetPhysicalFragment());
-  for (const auto& child_link : previous_fragment.Children()) {
-    const auto& child_fragment = *child_link.get();
-    AddChildFragment(child_link, child_fragment);
-  }
-}
-
 void SimplifiedLayoutAlgorithm::AppendNewChildFragment(
     const PhysicalFragment& fragment,
     LogicalOffset offset) {
   container_builder_.AddChild(fragment, offset);
-}
-
-const LayoutResult*
-SimplifiedLayoutAlgorithm::CreateResultAfterManualChildLayout() {
-  if (container_builder_.HasOutOfFlowFragmentainerDescendants()) {
-    container_builder_.AddMulticolWithPendingOOFs(Node());
-  }
-
-  const LayoutResult* result = container_builder_.ToBoxFragment();
-  if (result->GetPhysicalFragment().IsOutOfFlowPositioned()) {
-    result->CopyMutableOutOfFlowData(previous_result_);
-  }
-  return result;
 }
 
 const LayoutResult* SimplifiedLayoutAlgorithm::Layout() {
@@ -352,7 +330,7 @@ void SimplifiedLayoutAlgorithm::AddChildFragment(
                            previous_physical_container_size_)
           .ToLogical(old_fragment.Offset(), new_fragment.Size());
   // Any relative offset will have already been applied, avoid re-adding one.
-  absl::optional<LogicalOffset> relative_offset = LogicalOffset();
+  std::optional<LogicalOffset> relative_offset = LogicalOffset();
 
   // Add the new fragment to the builder.
   container_builder_.AddChild(new_fragment, child_offset, margin_strut,

@@ -9,6 +9,8 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/system/notification_center/views/ash_notification_view.h"
+#include "ash/system/notification_center/views/conversation_notification_view.h"
+#include "ash/system/notification_center/views/pinned_notification_view.h"
 #include "base/lazy_instance.h"
 #include "base/logging.h"
 #include "build/chromeos_buildflags.h"
@@ -49,6 +51,8 @@ std::unique_ptr<message_center::MessageView> MessageViewFactory::Create(
       break;
     case message_center::NOTIFICATION_TYPE_CUSTOM:
       return GetCustomNotificationView(notification, shown_in_popup);
+    case message_center::NOTIFICATION_TYPE_CONVERSATION:
+      return std::make_unique<ConversationNotificationView>(notification);
     default:
       // If the caller asks for an unrecognized kind of view (entirely possible
       // if an application is running on an older version of this code that
@@ -60,6 +64,11 @@ std::unique_ptr<message_center::MessageView> MessageViewFactory::Create(
                    << ". Falling back to simple notification type.";
       break;
   }
+
+  if (features::AreOngoingProcessesEnabled() && notification.pinned()) {
+    return std::make_unique<PinnedNotificationView>(notification);
+  }
+
   return std::make_unique<AshNotificationView>(notification, shown_in_popup);
 }
 

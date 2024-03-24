@@ -24,6 +24,8 @@ enum class AutoEnrollmentResult {
   kNoEnrollment,
   // Check completed successfully, device is disabled.
   kDisabled,
+  // Check completed successfully, enrollment is suggested but not enforced.
+  kSuggestedEnrollment,
 };
 
 // Represents a state determination error due to a timeout.
@@ -36,6 +38,12 @@ struct AutoEnrollmentSafeguardTimeoutError {
 struct AutoEnrollmentSystemClockSyncError {
   constexpr bool operator==(const AutoEnrollmentSystemClockSyncError&) const =
       default;
+};
+
+// Represents an error while retrieving state keys.
+struct AutoEnrollmentStateKeysRetrievalError {
+  constexpr bool operator==(
+      const AutoEnrollmentStateKeysRetrievalError&) const = default;
 };
 
 // Represents an error during state determination request to DMServer. May
@@ -71,6 +79,7 @@ struct AutoEnrollmentStateRetrievalResponseError {
 using AutoEnrollmentError =
     absl::variant<AutoEnrollmentSafeguardTimeoutError,
                   AutoEnrollmentSystemClockSyncError,
+                  AutoEnrollmentStateKeysRetrievalError,
                   AutoEnrollmentDMServerError,
                   AutoEnrollmentStateAvailabilityResponseError,
                   AutoEnrollmentPsmError,

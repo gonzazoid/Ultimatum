@@ -58,8 +58,8 @@ compiled with different flags, or linked against a different C++ standard
 library, but do not with the toolchain and configuration that we use to build
 Chrome. We discuss some of these cases elsewhere in this FAQ.
 
-If we become aware of them, these issues may be triaged as `Type=Bug-Security,
-Security_Impact=None` or as `Type=Bug` because they do not affect the production
+If we become aware of them, these issues may be triaged as `Type=Vulnerability,
+Security_Impact-None` or as `Type=Bug` because they do not affect the production
 version of Chrome. They may or may not be immediately visible to the public in
 the bug tracker, and may or may not be identified as security issues. If fixes
 are landed, they may or may not be merged from HEAD to a release branch. Chrome
@@ -299,6 +299,36 @@ would want to dismiss. [Example](https://crbug.com/854455#c11).
 Note that a user navigating to a download will cause a file to be
 [downloaded](https://crbug.com/1114592).
 
+<a name="TOC-security-properties-not-inherited-using-contextual-menu-"></a>
+### Sandbox/CSP/etc... security properties are not inherited when navigating using the middle-click/contextual-menu - is this a security bug?
+
+The security properties of the document providing the URL are not used/inherited
+when the user deliberately opens a link in a popup using one of:
+
+- Ctrl + left-click (Open link in new tab)
+- Shift + left-click (Open link in new window)
+- Middle-click (Open a link in a new tab)
+- Right-click > "Open link in ..."
+
+These methods of following a link have more or less the same implications as the
+user copying the link's URL and pasting it into a newly-opened window. We treat
+them as user-initiated top-level navigations, and as such will not apply or
+inherit policy restrictions into the new context
+
+Example of security related properties:
+
+- Content-Security-Policy
+- Cross-Origin-Embedder-Policy
+- Cross-Origin-Opener-Policy
+- Origin
+- Referrer
+- Sandbox
+- etc...
+
+These browser's actions/shortcuts are specific to Chrome. They are different
+from the behavior specified by the web-platform, such as using executing
+`window.open()` or opening a link with the `target=_blank` attribute.
+
 ## Areas outside Chrome's Threat Model
 
 <a name="TOC-Are-privacy-issues-considered-security-bugs-"></a>
@@ -342,11 +372,11 @@ X-XSS-Protection header.
 No. Denial of Service (DoS) issues are treated as **abuse** or **stability**
 issues rather than security vulnerabilities.
 
-*    If you find a reproducible crash, we encourage you to [report
-     it](https://bugs.chromium.org/p/chromium/issues/entry?template=Crash%20Report).
+*    If you find a reproducible crash (e.g. a way to hit a `CHECK`),
+     we encourage you to [report it](https://issues.chromium.org/new).
 *    If you find a site that is abusing the user experience (e.g. preventing you
      from leaving a site), we encourage you to [report
-     it](https://crbug.com/new).
+     it](https://issues.chromium.org/new).
 
 DoS issues are not considered under the security vulnerability rewards program;
 the [severity guidelines](severity-guidelines.md) outline the types of bugs that

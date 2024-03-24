@@ -157,7 +157,7 @@ VariationsIdsProvider::GetVariationsVectorForWebPropertiesKeys() {
 }
 
 void VariationsIdsProvider::SetLowEntropySourceValue(
-    absl::optional<int> low_entropy_source_value) {
+    std::optional<int> low_entropy_source_value) {
   // The low entropy source value is an integer that is between 0 and 7999,
   // inclusive. See components/metrics/metrics_state_manager.cc for the logic to
   // generate it.
@@ -442,10 +442,7 @@ std::string VariationsIdsProvider::GenerateBase64EncodedProto(
 
   std::string serialized;
   proto.SerializeToString(&serialized);
-
-  std::string hashed;
-  base::Base64Encode(serialized, &hashed);
-  return hashed;
+  return base::Base64Encode(serialized);
 }
 
 bool VariationsIdsProvider::AddVariationIdsToSet(

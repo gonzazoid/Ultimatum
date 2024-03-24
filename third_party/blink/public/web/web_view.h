@@ -31,7 +31,8 @@
 #ifndef THIRD_PARTY_BLINK_PUBLIC_WEB_WEB_VIEW_H_
 #define THIRD_PARTY_BLINK_PUBLIC_WEB_WEB_VIEW_H_
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
 #include "third_party/blink/public/common/dom_storage/session_storage_namespace_id.h"
 #include "third_party/blink/public/common/fenced_frame/redacted_fenced_frame_config.h"
 #include "third_party/blink/public/common/page/browsing_context_group_info.h"
@@ -130,12 +131,14 @@ class BLINK_EXPORT WebView {
   // frame. Set on create to avoid races. Passing in nullopt indicates the
   // default base background color should be used.
   // TODO(yuzus): Remove |is_hidden| and start using |PageVisibilityState|.
+  // |color_provider_colors| is used to create color providers that live in the
+  // Page. Passing in nullptr indicates the default color maps should be used.
   static WebView* Create(
       WebViewClient*,
       bool is_hidden,
       bool is_prerendering,
       bool is_inside_portal,
-      absl::optional<blink::FencedFrame::DeprecatedFencedFrameMode>
+      std::optional<blink::FencedFrame::DeprecatedFencedFrameMode>
           fenced_frame_mode,
       bool compositing_enabled,
       bool widgets_never_composited,
@@ -144,8 +147,9 @@ class BLINK_EXPORT WebView {
           page_handle,
       scheduler::WebAgentGroupScheduler& agent_group_scheduler,
       const SessionStorageNamespaceId& session_storage_namespace_id,
-      absl::optional<SkColor> page_base_background_color,
-      const BrowsingContextGroupInfo& browsing_context_group_info);
+      std::optional<SkColor> page_base_background_color,
+      const BrowsingContextGroupInfo& browsing_context_group_info,
+      const ColorProviderColorMaps* color_provider_colors);
 
   // Destroys the WebView synchronously.
   virtual void Close() = 0;
@@ -300,7 +304,7 @@ class BLINK_EXPORT WebView {
 
   // Override the screen orientation override.
   virtual void SetScreenOrientationOverrideForTesting(
-      absl::optional<display::mojom::ScreenOrientation> orientation) = 0;
+      std::optional<display::mojom::ScreenOrientation> orientation) = 0;
 
   // Set the window rect synchronously for testing. The normal flow is an
   // asynchronous request to the browser.
@@ -368,12 +372,6 @@ class BLINK_EXPORT WebView {
 
   virtual void SetDeviceColorSpaceForTesting(
       const gfx::ColorSpace& color_space) = 0;
-
-  // Sets the initial color maps for this WebView. All frames in a WebView
-  // share the same color map; updates to the color map will be broadcast
-  // over the `UpdateColorProviders()` Mojo IPC.
-  virtual void SetColorProviders(
-      const ColorProviderColorMaps& color_provider_colors) = 0;
 
   // Scheduling -----------------------------------------------------------
 
@@ -466,7 +464,7 @@ class BLINK_EXPORT WebView {
   // History list ---------------------------------------------------------
   virtual void SetHistoryListFromNavigation(
       int32_t history_offset,
-      absl::optional<int32_t> history_length) = 0;
+      std::optional<int32_t> history_length) = 0;
   virtual void IncreaseHistoryListFromNavigation() = 0;
 
   // Session history -----------------------------------------------------

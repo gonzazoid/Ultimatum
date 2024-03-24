@@ -4,6 +4,7 @@
 
 #import "ios/chrome/browser/ui/autofill/autofill_profile_edit_mediator.h"
 
+#import "base/memory/raw_ptr.h"
 #import "base/strings/sys_string_conversions.h"
 #import "components/autofill/core/browser/geo/autofill_country.h"
 #import "components/autofill/core/browser/personal_data_manager.h"
@@ -49,7 +50,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 @end
 
 @implementation AutofillProfileEditMediator {
-  autofill::AutofillProfile* _autofillProfile;
+  raw_ptr<autofill::AutofillProfile> _autofillProfile;
 }
 
 - (instancetype)initWithDelegate:
@@ -258,9 +259,6 @@ typedef NS_ENUM(NSInteger, ItemType) {
         autofill::AutofillType(field.autofillType),
         GetApplicationContext()->GetApplicationLocale()));
     switch (autofillUIType) {
-      case AutofillUITypeProfileHonorificPrefix:
-        [self.consumer setHonorificPrefix:fieldValue];
-        break;
       case AutofillUITypeProfileCompanyName:
         [self.consumer setCompanyName:fieldValue];
         break;

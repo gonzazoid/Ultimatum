@@ -39,18 +39,22 @@ import org.chromium.base.Callback;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.Features;
+import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.bookmarks.BookmarkListEntry.ViewType;
 import org.chromium.chrome.browser.bookmarks.BookmarkUiPrefs.BookmarkRowDisplayPref;
+import org.chromium.chrome.browser.bookmarks.BookmarkUiPrefs.BookmarkRowSortOrder;
 import org.chromium.chrome.browser.feature_engagement.TrackerFactory;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.components.bookmarks.BookmarkId;
 import org.chromium.components.bookmarks.BookmarkItem;
 import org.chromium.components.bookmarks.BookmarkType;
 import org.chromium.components.commerce.core.ShoppingService;
 import org.chromium.components.feature_engagement.Tracker;
+import org.chromium.components.sync.SyncFeatureMap;
 import org.chromium.ui.base.TestActivity;
 import org.chromium.ui.modelutil.MVCListAdapter.ListItem;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
@@ -64,6 +68,7 @@ import java.util.Arrays;
 @Batch(Batch.UNIT_TESTS)
 @RunWith(BaseRobolectricTestRunner.class)
 @EnableFeatures(ChromeFeatureList.ANDROID_IMPROVED_BOOKMARKS)
+@DisableFeatures(SyncFeatureMap.ENABLE_BOOKMARK_FOLDERS_FOR_ACCOUNT_STORAGE)
 public class BookmarkFolderPickerMediatorTest {
     @Rule
     public final MockitoRule mMockitoRule = MockitoJUnit.rule().strictness(Strictness.LENIENT);
@@ -251,7 +256,7 @@ public class BookmarkFolderPickerMediatorTest {
         mActivityScenarioRule.getScenario().onActivity((activity) -> mActivity = activity);
 
         // Setup profile-related factories.
-        Profile.setLastUsedProfileForTesting(mProfile);
+        ProfileManager.setLastUsedProfileForTesting(mProfile);
         TrackerFactory.setTrackerForTests(mTracker);
 
         // Setup BookmarkModel.
@@ -318,6 +323,7 @@ public class BookmarkFolderPickerMediatorTest {
 
         // Setup BookmarkUiPrefs
         doReturn(BookmarkRowDisplayPref.COMPACT).when(mBookmarkUiPrefs).getBookmarkRowDisplayPref();
+        doReturn(BookmarkRowSortOrder.MANUAL).when(mBookmarkUiPrefs).getBookmarkRowDisplayPref();
 
         mMediator =
                 new BookmarkFolderPickerMediator(
@@ -426,14 +432,6 @@ public class BookmarkFolderPickerMediatorTest {
     }
 
     @Test
-    public void testRootFolder() {
-        mMediator.populateFoldersForParentId(mRootFolderId);
-        assertEquals(4, mModelList.size());
-        assertEquals("Move to…", mModel.get(BookmarkFolderPickerProperties.TOOLBAR_TITLE));
-        assertFalse(mModel.get(BookmarkFolderPickerProperties.MOVE_BUTTON_ENABLED));
-    }
-
-    @Test
     public void testOptionsItemSelected_BackPressed() {
         mMediator.optionsItemSelected(android.R.id.home);
         assertEquals(
@@ -488,7 +486,28 @@ public class BookmarkFolderPickerMediatorTest {
     }
 
     @Test
-    @EnableFeatures(ChromeFeatureList.ENABLE_BOOKMARK_FOLDERS_FOR_ACCOUNT_STORAGE)
+    public void testRootFolders() {
+        BookmarkModel bookmarkModel = FakeBookmarkModel.createModel();
+        BookmarkId id =
+                bookmarkModel.addBookmark(
+                        bookmarkModel.getMobileFolderId(),
+                        0,
+                        "title",
+                        new GURL("https://google.com"));
+        remakeMediator(bookmarkModel, id);
+
+        mMediator.populateFoldersForParentId(bookmarkModel.getRootFolderId());
+        assertEquals("Move to…", mModel.get(BookmarkFolderPickerProperties.TOOLBAR_TITLE));
+        BookmarkModelListTestUtil.verifyModelListHasViewTypes(
+                mModelList,
+                ViewType.IMPROVED_BOOKMARK_COMPACT,
+                ViewType.IMPROVED_BOOKMARK_COMPACT,
+                ViewType.IMPROVED_BOOKMARK_COMPACT,
+                ViewType.IMPROVED_BOOKMARK_COMPACT);
+    }
+
+    @Test
+    @EnableFeatures(SyncFeatureMap.ENABLE_BOOKMARK_FOLDERS_FOR_ACCOUNT_STORAGE)
     public void testRootFolders_withAccount() {
         BookmarkModel bookmarkModel = FakeBookmarkModel.createModel();
         BookmarkId id =
@@ -501,13 +520,29 @@ public class BookmarkFolderPickerMediatorTest {
 
         mMediator.populateFoldersForParentId(bookmarkModel.getRootFolderId());
         assertEquals("Move to…", mModel.get(BookmarkFolderPickerProperties.TOOLBAR_TITLE));
-        BookmarkModelListTestUtil.verifyModelListHaViewTypes(
+        BookmarkModelListTestUtil.verifyModelListHasViewTypes(
                 mModelList,
                 ViewType.SECTION_HEADER,
                 ViewType.IMPROVED_BOOKMARK_COMPACT,
+                ViewType.IMPROVED_BOOKMARK_COMPACT,
+                ViewType.IMPROVED_BOOKMARK_COMPACT,
+                ViewType.IMPROVED_BOOKMARK_COMPACT,
                 ViewType.SECTION_HEADER,
                 ViewType.IMPROVED_BOOKMARK_COMPACT,
                 ViewType.IMPROVED_BOOKMARK_COMPACT,
+                ViewType.IMPROVED_BOOKMARK_COMPACT,
                 ViewType.IMPROVED_BOOKMARK_COMPACT);
+        BookmarkModelListTestUtil.verifyModelListHasBookmarkIds(
+                mModelList,
+                null,
+                bookmarkModel.getAccountOtherFolderId(),
+                bookmarkModel.getAccountDesktopFolderId(),
+                bookmarkModel.getAccountMobileFolderId(),
+                bookmarkModel.getAccountReadingListFolder(),
+                null,
+                bookmarkModel.getOtherFolderId(),
+                bookmarkModel.getDesktopFolderId(),
+                bookmarkModel.getMobileFolderId(),
+                bookmarkModel.getLocalOrSyncableReadingListFolder());
     }
 }

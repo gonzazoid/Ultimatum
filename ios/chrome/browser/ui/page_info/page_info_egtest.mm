@@ -7,8 +7,11 @@
 
 #import "base/ios/ios_util.h"
 #import "base/test/ios/wait_util.h"
+#import "components/optimization_guide/core/optimization_guide_switches.h"
 #import "components/strings/grit/components_branded_strings.h"
 #import "ios/chrome/browser/overlays/model/public/web_content_area/alert_constants.h"
+#import "ios/chrome/browser/ui/page_info/features.h"
+#import "ios/chrome/browser/ui/page_info/page_info_app_interface.h"
 #import "ios/chrome/browser/ui/page_info/page_info_constants.h"
 #import "ios/chrome/browser/ui/permissions/permissions_app_interface.h"
 #import "ios/chrome/browser/ui/permissions/permissions_constants.h"
@@ -41,12 +44,37 @@ id<GREYMatcher> MicrophonePermissionsSwitch(BOOL isOn) {
       kPageInfoMicrophoneSwitchAccessibilityIdentifier, isOn);
 }
 
+void AddAboutThisSiteHint(GURL url) {
+  [PageInfoAppInterface
+      addAboutThisSiteHintForURL:
+          [NSString stringWithCString:url.spec().c_str()
+                             encoding:[NSString defaultCStringEncoding]]
+                     description:
+                         @"A domain used in illustrative examples in documents"
+                aboutThisSiteURL:@"https://diner.com"];
+}
+
 }  // namespace
 
 @interface PageInfoTestCase : ChromeTestCase
 @end
 
 @implementation PageInfoTestCase
+
+- (AppLaunchConfiguration)appConfigurationForTestCase {
+  AppLaunchConfiguration config;
+  config.relaunch_policy = NoForceRelaunchAndResetState;
+
+  if ([self isRunningTest:@selector(testLegacySecuritySection)]) {
+    config.features_disabled.push_back(kRevampPageInfoIos);
+  } else {
+    config.features_enabled.push_back(kRevampPageInfoIos);
+  }
+  config.additional_args.push_back(
+      std::string("-") +
+      optimization_guide::switches::kDisableCheckingUserPermissionsForTesting);
+  return config;
+}
 
 // Checks that if the alert for site permissions pops up, and allow it.
 - (void)checkAndAllowPermissionAlerts {
@@ -266,6 +294,19 @@ id<GREYMatcher> MicrophonePermissionsSwitch(BOOL isOn) {
                      kPageInfoViewNavigationBarAccessibilityIdentifier)]
       assertWithMatcher:grey_sufficientlyVisible()];
 
+  // Check that the navigation bar has both the page info's page title and the
+  // page URL.
+  [[EarlGrey selectElementWithMatcher:grey_text(l10n_util::GetNSString(
+                                          IDS_IOS_PAGE_INFO_SITE_INFORMATION))]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  [[EarlGrey selectElementWithMatcher:
+                 grey_text([NSString
+                     stringWithCString:[ChromeEarlGrey webStateVisibleURL]
+                                           .host()
+                                           .c_str()
+                              encoding:[NSString defaultCStringEncoding]])]
+      assertWithMatcher:grey_sufficientlyVisible()];
+
   // Rotate to landscape mode and check the navigation bar is still visible.
   [EarlGrey rotateDeviceToOrientation:UIDeviceOrientationLandscapeRight
                                 error:nil];
@@ -279,6 +320,135 @@ id<GREYMatcher> MicrophonePermissionsSwitch(BOOL isOn) {
   [[EarlGrey selectElementWithMatcher:
                  grey_accessibilityID(
                      kPageInfoViewNavigationBarAccessibilityIdentifier)]
+      assertWithMatcher:grey_sufficientlyVisible()];
+}
+
+// Tests the legacy security section by checking that the correct site security
+// label and that the security footer are displayed.
+- (void)testLegacySecuritySection {
+  GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
+  [ChromeEarlGrey loadURL:self.testServer->GetURL("/")];
+  [ChromeEarlGreyUI openPageInfo];
+
+  // Check that "Site Security | Not secure” is displayed.
+  [[EarlGrey selectElementWithMatcher:grey_text(l10n_util::GetNSString(
+                                          IDS_IOS_PAGE_INFO_SITE_SECURITY))]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  [[EarlGrey selectElementWithMatcher:
+                 grey_text(l10n_util::GetNSString(
+                     IDS_IOS_PAGE_INFO_SECURITY_STATUS_NOT_SECURE))]
+      assertWithMatcher:grey_sufficientlyVisible()];
+
+  // Check that the security footer is displayed.
+  [[EarlGrey
+      selectElementWithMatcher:
+          grey_accessibilityID(kPageInfoSecurityFooterAccessibilityIdentifier)]
+      assertWithMatcher:grey_sufficientlyVisible()];
+}
+
+// Tests the security section by checking that the correct connection label is
+// displayed, that no security footer is displayed and that clicking on the
+// security row leads to the security subpage.
+- (void)testSecuritySection {
+  GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
+  [ChromeEarlGrey loadURL:self.testServer->GetURL("/")];
+  [ChromeEarlGreyUI openPageInfo];
+
+  // Check that “Connection | Not secure” is displayed.
+  [[EarlGrey selectElementWithMatcher:grey_text(l10n_util::GetNSString(
+                                          IDS_IOS_PAGE_INFO_CONNECTION))]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  [[EarlGrey selectElementWithMatcher:
+                 grey_text(l10n_util::GetNSString(
+                     IDS_IOS_PAGE_INFO_SECURITY_STATUS_NOT_SECURE))]
+      assertWithMatcher:grey_sufficientlyVisible()];
+
+  // Check that the security footer is not displayed.
+  [[EarlGrey
+      selectElementWithMatcher:
+          grey_accessibilityID(kPageInfoSecurityFooterAccessibilityIdentifier)]
+      assertWithMatcher:grey_notVisible()];
+
+  // Check that tapping on the security row leads to the security subpage.
+  [[EarlGrey selectElementWithMatcher:
+                 grey_text(l10n_util::GetNSString(
+                     IDS_IOS_PAGE_INFO_SECURITY_STATUS_NOT_SECURE))]
+      performAction:grey_tap()];
+
+  [[EarlGrey
+      selectElementWithMatcher:
+          grey_accessibilityID(kPageInfoSecurityViewAccessibilityIdentifier)]
+      assertWithMatcher:grey_sufficientlyVisible()];
+}
+
+// Most of the tests for AboutThisSite section are in chrome-internal
+// (chrome/test/external_url/external_url_ssl_app_interface.mm).
+// It seems that https pages in egtests always have an invalid certificate,
+// NET::ERR_CERT_AUTHORITY_INVALID, which makes the page unsecure. The
+// AboutThisSite section should only be available for secure pages. Tests in
+// chrome-internal can use real pages and so we are able to test Page Info with
+// secure pages.
+
+// Tests that the AboutThisSite section does not appear even if optimization
+// guide returns a hint but the connection is HTTP. The AboutThisSite section
+// should only appear for secure pages.
+- (void)testAboutThisSiteSectionWithHttp {
+  GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
+  GURL url = self.testServer->GetURL("/");
+
+  AddAboutThisSiteHint(url);
+  [ChromeEarlGrey loadURL:url];
+  [ChromeEarlGreyUI openPageInfo];
+
+  // Check that AboutThisSite section is not displayed.
+  [[EarlGrey selectElementWithMatcher:grey_text(l10n_util::GetNSString(
+                                          IDS_IOS_PAGE_INFO_ABOUT_THIS_PAGE))]
+      assertWithMatcher:grey_nil()];
+}
+
+// Tests that the AboutThisSite section does not appear even if the connection
+// is HTTPs and optimization guide returns a hint but the certificate is not
+// valid. The AboutThisSite section should only appear for secure pages.
+- (void)testAboutThisSiteSectionWithHttpsInvalidCert {
+  net::EmbeddedTestServer https_server(net::EmbeddedTestServer::TYPE_HTTPS);
+  GREYAssertTrue(https_server.Start(), @"Test server failed to start.");
+  GURL url = https_server.GetURL("/");
+
+  AddAboutThisSiteHint(url);
+  [ChromeEarlGrey loadURL:url];
+  [ChromeEarlGreyUI openPageInfo];
+
+  // Check that AboutThisSite section is not displayed.
+  [[EarlGrey selectElementWithMatcher:grey_text(l10n_util::GetNSString(
+                                          IDS_IOS_PAGE_INFO_ABOUT_THIS_PAGE))]
+      assertWithMatcher:grey_nil()];
+}
+
+// Tests that we don't crash when showing the page info twice (prevent
+// regression from (crbug.com/1486309).
+- (void)testShowingPageInfoTwice {
+  GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
+  [ChromeEarlGrey loadURL:self.testServer->GetURL("/")];
+  [ChromeEarlGreyUI openPageInfo];
+
+  // Check that the page info view has appeared.
+  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
+                                          kPageInfoViewAccessibilityIdentifier)]
+      assertWithMatcher:grey_sufficientlyVisible()];
+
+  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
+                                          kPageInfoViewAccessibilityIdentifier)]
+      performAction:grey_swipeFastInDirection(kGREYDirectionDown)];
+
+  // Check that the page info view has disappeared.
+  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
+                                          kPageInfoViewAccessibilityIdentifier)]
+      assertWithMatcher:grey_not(grey_sufficientlyVisible())];
+
+  // Reopen the page.
+  [ChromeEarlGreyUI openPageInfo];
+  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
+                                          kPageInfoViewAccessibilityIdentifier)]
       assertWithMatcher:grey_sufficientlyVisible()];
 }
 

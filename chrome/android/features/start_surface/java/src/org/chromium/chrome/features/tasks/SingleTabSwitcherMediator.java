@@ -18,8 +18,10 @@ import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Size;
 
+import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
+import org.chromium.base.Callback;
 import org.chromium.base.ObserverList;
 import org.chromium.base.StrictModeContext;
 import org.chromium.base.metrics.RecordUserAction;
@@ -28,6 +30,8 @@ import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.compositor.layouts.content.TabContentManager;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.chrome.browser.magic_stack.ModuleDelegate;
+import org.chromium.chrome.browser.magic_stack.ModuleDelegate.ModuleType;
 import org.chromium.chrome.browser.tab.EmptyTabObserver;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabObserver;
@@ -42,13 +46,16 @@ import org.chromium.chrome.browser.tasks.pseudotab.PseudoTab;
 import org.chromium.chrome.browser.tasks.tab_management.TabListFaviconProvider;
 import org.chromium.chrome.browser.tasks.tab_management.TabManagementDelegate.TabSwitcherType;
 import org.chromium.chrome.browser.tasks.tab_management.TabSwitcher;
+import org.chromium.chrome.browser.tasks.tab_management.TabSwitcher.OnTabSelectingListener;
 import org.chromium.chrome.browser.tasks.tab_management.TabSwitcher.TabSwitcherViewObserver;
 import org.chromium.chrome.browser.tasks.tab_management.TabUiFeatureUtilities;
 import org.chromium.chrome.browser.tasks.tab_management.ThumbnailProvider;
 import org.chromium.chrome.browser.util.BrowserUiUtils;
+import org.chromium.chrome.browser.util.BrowserUiUtils.HostSurface;
 import org.chromium.chrome.browser.util.BrowserUiUtils.ModuleTypeOnStartAndNtp;
 import org.chromium.chrome.features.start_surface.StartSurfaceConfiguration;
 import org.chromium.chrome.features.start_surface.StartSurfaceUserData;
+import org.chromium.components.embedder_support.util.UrlUtilities;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.url.GURL;
 
@@ -61,8 +68,8 @@ public class SingleTabSwitcherMediator implements TabSwitcher.Controller {
     private final TabModelSelector mTabModelSelector;
     private final PropertyModel mPropertyModel;
     private final TabListFaviconProvider mTabListFaviconProvider;
-    private final TabModelObserver mNormalTabModelObserver;
-    private final TabModelSelectorObserver mTabModelSelectorObserver;
+    private TabModelObserver mNormalTabModelObserver;
+    private TabModelSelectorObserver mTabModelSelectorObserver;
     private final ObservableSupplierImpl<Boolean> mBackPressChangedSupplier =
             new ObservableSupplierImpl<>();
     private final boolean mIsSurfacePolishEnabled;
@@ -76,13 +83,17 @@ public class SingleTabSwitcherMediator implements TabSwitcher.Controller {
     private ThumbnailProvider mThumbnailProvider;
     private Size mThumbnailSize;
 
+    @Nullable private ModuleDelegate mModuleDelegate;
+
     SingleTabSwitcherMediator(
             Context context,
             PropertyModel propertyModel,
             TabModelSelector tabModelSelector,
             TabListFaviconProvider tabListFaviconProvider,
             TabContentManager tabContentManager,
-            boolean isSurfacePolishEnabled) {
+            @Nullable Callback<Integer> singleTabCardClickedCallback,
+            boolean isSurfacePolishEnabled,
+            @Nullable ModuleDelegate moduleDelegate) {
         mTabModelSelector = tabModelSelector;
         mPropertyModel = propertyModel;
         mTabListFaviconProvider = tabListFaviconProvider;
@@ -91,6 +102,15 @@ public class SingleTabSwitcherMediator implements TabSwitcher.Controller {
         mThumbnailProvider = getThumbnailProvider(tabContentManager);
         if (mThumbnailProvider != null) {
             mThumbnailSize = getThumbnailSize(mContext);
+        }
+        mModuleDelegate = moduleDelegate;
+        if (singleTabCardClickedCallback != null
+                && mModuleDelegate != null
+                && mModuleDelegate.getHostSurfaceType() == HostSurface.START_SURFACE) {
+            // When the feature magic stack is enabled and shown on Start surface, we wrap the
+            // singleTabCardClickedCallback as the mTabSelectingListener which is notified if the
+            // single tab card is clicked.
+            mTabSelectingListener = singleTabCardClickedCallback::onResult;
         }
 
         mPropertyModel.set(FAVICON, mTabListFaviconProvider.getDefaultFaviconDrawable(false));
@@ -116,17 +136,32 @@ public class SingleTabSwitcherMediator implements TabSwitcher.Controller {
                             return;
                         }
 
-                        assert mPropertyModel.get(IS_VISIBLE);
+                        assert mPropertyModel.get(IS_VISIBLE) || mModuleDelegate != null;
 
                         mSelectedTabDidNotChangedAfterShown = false;
-                        updateSelectedTab(tab);
+                        if (mModuleDelegate != null
+                                && type == TabSelectionType.FROM_CLOSE
+                                && UrlUtilities.isNtpUrl(tab.getUrl())) {
+                            // When the single tab card is shown as a module, it needs to change its
+                            // visibility if the previously selected Tab is deleted and the newly
+                            // selected Tab is a NTP.
+                            moduleDelegate.removeModule(getModuleType());
+                        } else {
+                            updateSelectedTab(tab);
+                        }
+
                         if (type == TabSelectionType.FROM_CLOSE
                                 || type == TabSelectionType.FROM_UNDO
                                 || mShouldIgnoreNextSelect) {
                             mShouldIgnoreNextSelect = false;
                             return;
                         }
-                        mTabSelectingListener.onTabSelecting(tab.getId());
+                        // When the single tab card is shown on magic stack, it doesn't need to
+                        // notify its mTabSelectingListener, but only update its own card. This is
+                        // because the host surface of the magic stack has its own TabModelObserver.
+                        if (mModuleDelegate == null && mTabSelectingListener != null) {
+                            mTabSelectingListener.onTabSelecting(tab.getId());
+                        }
                     }
                 };
         mTabModelSelectorObserver =
@@ -152,8 +187,8 @@ public class SingleTabSwitcherMediator implements TabSwitcher.Controller {
 
                             Tab tab = normalTabModel.getTabAt(selectedTabIndex);
                             mPropertyModel.set(TITLE, tab.getTitle());
-                            if (isSurfacePolishEnabled) {
-                                mPropertyModel.set(URL, tab.getUrl().getHost());
+                            if (mIsSurfacePolishEnabled) {
+                                mPropertyModel.set(URL, getDomainUrl(tab.getUrl()));
                             }
                             if (mTabTitleAvailableTime == null) {
                                 mTabTitleAvailableTime = SystemClock.elapsedRealtime();
@@ -172,8 +207,13 @@ public class SingleTabSwitcherMediator implements TabSwitcher.Controller {
     }
 
     void initWithNative() {
-        if (mFaviconInitialized || !mTabModelSelector.isTabStateInitialized()) return;
+        if (mFaviconInitialized || !mTabModelSelector.isTabStateInitialized()) {
+            return;
+        }
 
+        mTabListFaviconProvider.initWithNative(
+                mTabModelSelector.getModel(/* isIncognito= */ false).getProfile());
+        mFaviconInitialized = true;
         TabModel normalTabModel = mTabModelSelector.getModel(false);
         int selectedTabIndex = normalTabModel.index();
         if (selectedTabIndex != TabList.INVALID_TAB_INDEX) {
@@ -181,12 +221,12 @@ public class SingleTabSwitcherMediator implements TabSwitcher.Controller {
             Tab tab = normalTabModel.getTabAt(selectedTabIndex);
             updateFavicon(tab);
             mayUpdateTabThumbnail(tab);
-            mFaviconInitialized = true;
         }
     }
 
     private void updateFavicon(Tab tab) {
-        assert mTabListFaviconProvider.isInitialized();
+        if (!mTabListFaviconProvider.isInitialized()) return;
+
         mTabListFaviconProvider.getFaviconDrawableForUrlAsync(
                 tab.getUrl(),
                 false,
@@ -229,6 +269,8 @@ public class SingleTabSwitcherMediator implements TabSwitcher.Controller {
 
     @Override
     public void hideTabSwitcherView(boolean animate) {
+        if (!mPropertyModel.get(IS_VISIBLE)) return;
+
         mShouldIgnoreNextSelect = false;
         mTabModelSelector
                 .getTabModelFilterProvider()
@@ -265,9 +307,11 @@ public class SingleTabSwitcherMediator implements TabSwitcher.Controller {
                 activeTab = PseudoTab.getActiveTabFromStateFile(mContext);
             }
             if (activeTab != null) {
+                maybeNotifyDataAvailable(activeTab.getUrl());
+
                 mPropertyModel.set(TITLE, activeTab.getTitle());
                 if (mIsSurfacePolishEnabled) {
-                    mPropertyModel.set(URL, activeTab.getUrl().getHost());
+                    mPropertyModel.set(URL, getDomainUrl(activeTab.getUrl()));
                 }
                 if (mTabTitleAvailableTime == null) {
                     mTabTitleAvailableTime = SystemClock.elapsedRealtime();
@@ -282,7 +326,11 @@ public class SingleTabSwitcherMediator implements TabSwitcher.Controller {
             int selectedTabIndex = normalTabModel.index();
             if (selectedTabIndex != TabList.INVALID_TAB_INDEX) {
                 assert normalTabModel.getCount() > 0;
-                updateSelectedTab(normalTabModel.getTabAt(selectedTabIndex));
+
+                Tab activeTab = normalTabModel.getTabAt(selectedTabIndex);
+                maybeNotifyDataAvailable(activeTab.getUrl());
+                updateSelectedTab(activeTab);
+
                 if (mTabTitleAvailableTime == null) {
                     mTabTitleAvailableTime = SystemClock.elapsedRealtime();
                 }
@@ -290,12 +338,40 @@ public class SingleTabSwitcherMediator implements TabSwitcher.Controller {
         }
         mPropertyModel.set(IS_VISIBLE, true);
 
+        // When the single tab module is shown in the magic stack, there isn't any observer any
+        // more, early exits here.
+        if (mModuleDelegate != null) return;
+
         for (TabSwitcherViewObserver observer : mObservers) {
             observer.startedShowing();
         }
         for (TabSwitcherViewObserver observer : mObservers) {
             observer.finishedShowing();
         }
+    }
+
+    /**
+     * Notifies the {@link mModuleDelegate} whether there is data to show if exists.
+     *
+     * @param currentTabUrl The Url of the current Tab.
+     */
+    private void maybeNotifyDataAvailable(GURL currentTabUrl) {
+        if (mModuleDelegate == null) return;
+
+        // When the single tab module is shown in the magic stack,
+        if (UrlUtilities.isNtpUrl(currentTabUrl)) {
+            mModuleDelegate.onDataFetchFailed(getModuleType());
+            hideTabSwitcherView(false);
+            return;
+        }
+
+        mModuleDelegate.onDataReady(getModuleType(), mPropertyModel);
+    }
+
+    void showModule() {
+        assert mModuleDelegate != null;
+        initWithNative();
+        showTabSwitcherView(false);
     }
 
     @Override
@@ -365,7 +441,7 @@ public class SingleTabSwitcherMediator implements TabSwitcher.Controller {
                     mPropertyModel.set(FAVICON, favicon);
                 });
         if (mIsSurfacePolishEnabled) {
-            mPropertyModel.set(URL, tab.getUrl().getHost());
+            mPropertyModel.set(URL, getDomainUrl(tab.getUrl()));
             mayUpdateTabThumbnail(tab);
         }
     }
@@ -375,7 +451,9 @@ public class SingleTabSwitcherMediator implements TabSwitcher.Controller {
         if (mSelectedTabDidNotChangedAfterShown) {
             RecordUserAction.record("MobileTabReturnedToCurrentTab.SingleTabCard");
         }
-        mTabSelectingListener.onTabSelecting(mTabModelSelector.getCurrentTabId());
+        if (mTabSelectingListener != null) {
+            mTabSelectingListener.onTabSelecting(mTabModelSelector.getCurrentTabId());
+        }
     }
 
     static ThumbnailProvider getThumbnailProvider(TabContentManager tabContentManager) {
@@ -389,9 +467,29 @@ public class SingleTabSwitcherMediator implements TabSwitcher.Controller {
 
     @VisibleForTesting
     public static Size getThumbnailSize(Context context) {
-        int size =
-                context.getResources()
-                        .getDimensionPixelSize(R.dimen.single_tab_module_tab_thumbnail_size);
+        int resourceId =
+                StartSurfaceConfiguration.useMagicStack()
+                        ? R.dimen.single_tab_module_tab_thumbnail_size_big
+                        : R.dimen.single_tab_module_tab_thumbnail_size;
+        int size = context.getResources().getDimensionPixelSize(resourceId);
         return new Size(size, size);
+    }
+
+    @ModuleType
+    int getModuleType() {
+        return ModuleDelegate.ModuleType.SINGLE_TAB;
+    }
+
+    static String getDomainUrl(GURL url) {
+        if (StartSurfaceConfiguration.useMagicStack()) {
+            String domainUrl = UrlUtilities.getDomainAndRegistry(url.getSpec(), false);
+            return !TextUtils.isEmpty(domainUrl) ? domainUrl : url.getHost();
+        } else {
+            return url.getHost();
+        }
+    }
+
+    OnTabSelectingListener getTabSelectingListenerForTesting() {
+        return mTabSelectingListener;
     }
 }

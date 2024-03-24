@@ -5,47 +5,52 @@
 #ifndef CHROME_BROWSER_UI_ASH_BIRCH_BIRCH_KEYED_SERVICE_H_
 #define CHROME_BROWSER_UI_ASH_BIRCH_BIRCH_KEYED_SERVICE_H_
 
-#include "base/files/file_path.h"
-#include "base/memory/raw_ptr.h"
-#include "base/memory/weak_ptr.h"
+#include <memory>
+
+#include "ash/shell_observer.h"
 #include "base/scoped_observation.h"
-#include "base/time/time.h"
-#include "chrome/browser/ash/file_suggest/file_suggest_keyed_service.h"
 #include "components/keyed_service/core/keyed_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Profile;
 
 namespace ash {
 
-struct BirchFileItem;
+class Shell;
+class BirchClientImpl;
+class BirchFileSuggestProvider;
+class BirchRecentTabsProvider;
 
 // A keyed service which is used to manage data providers for the birch feature.
 // Fetched data will be sent to the `BirchModel` to be stored.
-class BirchKeyedService : public KeyedService,
-                          public FileSuggestKeyedService::Observer {
+class BirchKeyedService : public ShellObserver, public KeyedService {
  public:
   explicit BirchKeyedService(Profile* profile);
   BirchKeyedService(const BirchKeyedService&) = delete;
   BirchKeyedService& operator=(const BirchKeyedService&) = delete;
   ~BirchKeyedService() override;
 
-  // FileSuggestKeyedService::Observer:
-  void OnFileSuggestionUpdated(FileSuggestionType type) override;
+  BirchFileSuggestProvider* GetFileSuggestProviderForTest() {
+    return file_suggest_provider_.get();
+  }
 
-  void OnSuggestedFileDataUpdated(
-      const absl::optional<std::vector<FileSuggestData>>& suggest_results);
+  // ShellObserver:
+  void OnShellDestroying() override;
+
+  void RequestBirchDataFetch();
 
  private:
-  void OnFileInfoRetrieved(std::vector<BirchFileItem> file_items);
+  void ShutdownBirch();
 
-  const raw_ptr<FileSuggestKeyedService> file_suggest_service_;
+  // Whether shutdown of BirchKeyedService has already begun.
+  bool is_shutdown_ = false;
 
-  base::ScopedObservation<FileSuggestKeyedService,
-                          FileSuggestKeyedService::Observer>
-      file_suggest_service_observation_{this};
+  std::unique_ptr<BirchFileSuggestProvider> file_suggest_provider_;
 
-  base::WeakPtrFactory<BirchKeyedService> weak_factory_{this};
+  std::unique_ptr<BirchRecentTabsProvider> recent_tabs_provider_;
+
+  std::unique_ptr<BirchClientImpl> birch_client_impl_;
+
+  base::ScopedObservation<Shell, ShellObserver> shell_observation_{this};
 };
 
 }  // namespace ash

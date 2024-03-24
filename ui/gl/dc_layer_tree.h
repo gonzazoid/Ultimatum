@@ -235,6 +235,11 @@ class GL_EXPORT DCLayerTree {
     return ink_renderer_.get();
   }
 
+  bool HasPendingOverlaysForTesting() const {
+    CHECK_IS_TEST();
+    return pending_overlays_.size() > 0;
+  }
+
   // Owns a list of |VisualSubtree|s that represent visual layers.
   class VisualTree {
    public:
@@ -320,7 +325,7 @@ class GL_EXPORT DCLayerTree {
           const gfx::Transform& quad_to_root_transform,
           const gfx::RRectF& rounded_corner_bounds,
           float opacity,
-          const absl::optional<gfx::Rect>& clip_rect_in_root);
+          const std::optional<gfx::Rect>& clip_rect_in_root);
 
       IDCompositionVisual2* container_visual() const {
         return clip_visual_.Get();
@@ -410,7 +415,7 @@ class GL_EXPORT DCLayerTree {
       gfx::Transform quad_to_root_transform_;
 
       // Clip rect in root space.
-      absl::optional<gfx::Rect> clip_rect_in_root_;
+      std::optional<gfx::Rect> clip_rect_in_root_;
 
       // Rounded corner clip in root space
       gfx::RRectF rounded_corner_bounds_;
@@ -448,8 +453,8 @@ class GL_EXPORT DCLayerTree {
     VisualSubtreeMap BuildMapAndAssignMatchingSubtrees(
         const std::vector<std::unique_ptr<DCLayerOverlayParams>>& overlays,
         std::vector<std::unique_ptr<VisualSubtree>>& visual_subtrees,
-        std::vector<absl::optional<size_t>>& overlay_index_to_reused_subtree,
-        std::vector<absl::optional<size_t>>& subtree_index_to_overlay);
+        std::vector<std::optional<size_t>>& overlay_index_to_reused_subtree,
+        std::vector<std::optional<size_t>>& subtree_index_to_overlay);
 
     // This function is called as part of |BuildTreeOptimized|.
     // For each overlay that has no match attempts to find unused subtree of
@@ -462,8 +467,8 @@ class GL_EXPORT DCLayerTree {
     // Returns previous frame subtree first unused index.
     size_t ReuseUnmatchedSubtrees(
         std::vector<std::unique_ptr<VisualSubtree>>& new_visual_subtrees,
-        std::vector<absl::optional<size_t>>& overlay_index_to_reused_subtree,
-        std::vector<absl::optional<size_t>>& subtree_index_to_overlay);
+        std::vector<std::optional<size_t>>& overlay_index_to_reused_subtree,
+        std::vector<std::optional<size_t>>& subtree_index_to_overlay);
 
     // This function is called as part of |BuildTreeOptimized|.
     // Detaches unused subtrees of the previous frame from root starting with
@@ -482,9 +487,9 @@ class GL_EXPORT DCLayerTree {
     // Returns true if commit is needed.
     bool DetachReusedSubtreesThatNeedRepositioningFromRoot(
         const std::vector<std::unique_ptr<VisualSubtree>>& new_visual_subtrees,
-        const std::vector<absl::optional<size_t>>&
+        const std::vector<std::optional<size_t>>&
             overlay_index_to_reused_subtree,
-        const std::vector<absl::optional<size_t>>& subtree_index_to_overlay,
+        const std::vector<std::optional<size_t>>& subtree_index_to_overlay,
         std::vector<bool>& prev_subtree_is_attached_to_root);
 
     // Detaches given subtree from the root.

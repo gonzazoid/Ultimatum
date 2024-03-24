@@ -63,6 +63,11 @@ base::WeakPtr<ObservationImpl> ObservationImpl::GetWeakPtr() {
   return weak_factory_.GetWeakPtr();
 }
 
+std::optional<FresnelImportDataRequest>
+ObservationImpl::GenerateImportRequestBodyForTesting() {
+  return GenerateImportRequestBody();
+}
+
 void ObservationImpl::CheckMembershipOprf() {
   PsmClientManager* psm_client_manager = GetParams()->GetPsmClientManager();
 
@@ -428,6 +433,50 @@ std::optional<FresnelImportData> ObservationImpl::GenerateObservationImportData(
     LOG(ERROR) << "Failed to generate observation import data for period = "
                << period;
     return std::nullopt;
+  }
+
+  // Finch flag is disabled by default.
+  if (base::FeatureList::IsEnabled(
+          features::kDeviceActiveClientChurnObservationNewDeviceMetadata)) {
+    std::optional<base::Time> first_active_week_ts =
+        utils::GetFirstActiveWeek();
+
+    if (!first_active_week_ts.has_value() ||
+        first_active_week_ts.value() == base::Time() ||
+        first_active_week_ts.value() == base::Time::UnixEpoch()) {
+      LOG(ERROR) << "Failed to retrieve first active week from VPD. Leaving "
+                    "first active and last powerwash week unset.";
+    } else {
+      bool within_date_range = utils::IsFirstActiveUnderFourMonthsAgo(
+          active_ts, first_active_week_ts.value());
+
+      PrefService* local_state = GetParams()->GetLocalState();
+      bool is_new_churn_metadata_attached_previously = local_state->GetBoolean(
+          prefs::kDeviceActiveChurnObservationFirstObservedNewChurnMetadata);
+
+      // Privacy approved 4 months of first active week history.
+      // Reference b/316402479.
+      // In order for analysts to avoid double counting on the server-side,
+      // We also want to confirm the device never attached the new device
+      // churn metadata in previous observation pings.
+      if (within_date_range && !is_new_churn_metadata_attached_previously) {
+        observation_metadata->set_first_active_week(
+            utils::ConvertTimeToISO8601String(first_active_week_ts.value()));
+
+        // Last powerwash week is read from preserved file and stored in
+        // |ReportControllerInitializer|.
+        observation_metadata->set_last_powerwash_week(
+            GetParams()->GetChromeDeviceParams().last_powerwash_week);
+
+        // New device churn metadata is attached in only one observation ping
+        // on a device. Devices that perform anything other than a safe
+        // powerwash will reset the |last_powerwash_week| and
+        // |is_new_churn_metadata_attached_previously| values.
+        local_state->SetBoolean(
+            prefs::kDeviceActiveChurnObservationFirstObservedNewChurnMetadata,
+            true);
+      }
+    }
   }
 
   import_data.set_plaintext_id(psm_id.value().sensitive_id());

@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include <cmath>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -15,7 +16,6 @@
 #include "base/containers/contains.h"
 #include "base/strings/strcat.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/common_export.h"
 #include "third_party/blink/public/common/interest_group/ad_display_size_utils.h"
 #include "third_party/blink/public/mojom/interest_group/interest_group_types.mojom.h"
@@ -71,12 +71,12 @@ InterestGroup::Ad::Ad(base::PassKey<content::InterestGroupStorage>,
     : render_url_(render_url) {}
 InterestGroup::Ad::Ad(
     GURL render_gurl,
-    absl::optional<std::string> metadata,
-    absl::optional<std::string> size_group,
-    absl::optional<std::string> buyer_reporting_id,
-    absl::optional<std::string> buyer_and_seller_reporting_id,
-    absl::optional<std::string> ad_render_id,
-    absl::optional<std::vector<url::Origin>> allowed_reporting_origins)
+    std::optional<std::string> metadata,
+    std::optional<std::string> size_group,
+    std::optional<std::string> buyer_reporting_id,
+    std::optional<std::string> buyer_and_seller_reporting_id,
+    std::optional<std::string> ad_render_id,
+    std::optional<std::vector<url::Origin>> allowed_reporting_origins)
     : size_group(std::move(size_group)),
       metadata(std::move(metadata)),
       buyer_reporting_id(std::move(buyer_reporting_id)),
@@ -191,6 +191,11 @@ bool InterestGroup::IsValid() const {
       trusted_bidding_signals_slot_size_mode !=
           blink::mojom::InterestGroup::TrustedBiddingSignalsSlotSizeMode::
               kAllSlotsRequestedSizes) {
+    return false;
+  }
+
+  // `max_trusted_bidding_signals_url_length` must not be negative.
+  if (max_trusted_bidding_signals_url_length < 0) {
     return false;
   }
 
@@ -336,6 +341,7 @@ size_t InterestGroup::EstimateSize() const {
     }
   }
   size += sizeof(trusted_bidding_signals_slot_size_mode);
+  size += sizeof(max_trusted_bidding_signals_url_length);
   if (user_bidding_signals) {
     size += user_bidding_signals->size();
   }
@@ -383,7 +389,8 @@ bool InterestGroup::IsEqualForTesting(const InterestGroup& other) const {
                   all_sellers_capabilities, execution_mode, bidding_url,
                   bidding_wasm_helper_url, update_url,
                   trusted_bidding_signals_url, trusted_bidding_signals_keys,
-                  trusted_bidding_signals_slot_size_mode, user_bidding_signals,
+                  trusted_bidding_signals_slot_size_mode,
+                  max_trusted_bidding_signals_url_length, user_bidding_signals,
                   ads, ad_components, ad_sizes, size_groups,
                   auction_server_request_flags, additional_bid_key,
                   aggregation_coordinator_origin) ==
@@ -396,6 +403,7 @@ bool InterestGroup::IsEqualForTesting(const InterestGroup& other) const {
                   other.trusted_bidding_signals_url,
                   other.trusted_bidding_signals_keys,
                   other.trusted_bidding_signals_slot_size_mode,
+                  other.max_trusted_bidding_signals_url_length,
                   other.user_bidding_signals, other.ads, other.ad_components,
                   other.ad_sizes, other.size_groups,
                   other.auction_server_request_flags, other.additional_bid_key,

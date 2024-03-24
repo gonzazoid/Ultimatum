@@ -199,6 +199,10 @@ void LoggedInSpokenFeedbackTest::SendMouseMoveTo(const gfx::Point& location) {
   event_generator_->MoveMouseTo(location.x(), location.y());
 }
 
+void LoggedInSpokenFeedbackTest::SetMouseSourceDeviceId(int id) {
+  event_generator_->set_mouse_source_device_id(id);
+}
+
 bool LoggedInSpokenFeedbackTest::PerformAcceleratorAction(
     AcceleratorAction action) {
   return AcceleratorController::Get()->PerformActionIfEnabled(action, {});
@@ -700,6 +704,9 @@ IN_PROC_BROWSER_TEST_P(SpokenFeedbackTest, DISABLED_OpenContextMenu) {
 // Verifies that speaking text under mouse works for Shelf button and voice
 // announcements should not be stacked when mouse goes over many Shelf buttons
 IN_PROC_BROWSER_TEST_P(SpokenFeedbackTest, SpeakingTextUnderMouseForShelfItem) {
+  SetMouseSourceDeviceId(1);
+  AccessibilityManager::Get()->profile()->GetPrefs()->SetBoolean(
+      prefs::kAccessibilityChromeVoxSpeakTextUnderMouse, true);
   // Add the ShelfItem to the ShelfModel after enabling the ChromeVox. Because
   // when an extension is enabled, the ShelfItems which are not recorded as
   // pinned apps in user preference will be removed.
@@ -718,9 +725,6 @@ IN_PROC_BROWSER_TEST_P(SpokenFeedbackTest, SpeakingTextUnderMouseForShelfItem) {
           std::make_unique<AppShortcutShelfItemController>(ShelfID(app_id)),
           STATUS_CLOSED, /*pinned=*/true, base::ASCIIToUTF16(app_title));
     }
-
-    // Enable the function of speaking text under mouse.
-    EventRewriterController::Get()->SetSendMouseEvents(true);
 
     // Focus on the Shelf because voice text for focusing on Shelf is fixed.
     // Wait until voice announcements are finished.
@@ -744,6 +748,41 @@ IN_PROC_BROWSER_TEST_P(SpokenFeedbackTest, SpeakingTextUnderMouseForShelfItem) {
 
   sm_.ExpectSpeechPattern("MockApp*");
   sm_.ExpectSpeech("Button");
+
+  sm_.Replay();
+}
+
+IN_PROC_BROWSER_TEST_P(SpokenFeedbackTest, SpeakingTextUnderSynthesizedMouse) {
+  AccessibilityManager::Get()->profile()->GetPrefs()->SetBoolean(
+      prefs::kAccessibilityChromeVoxSpeakTextUnderMouse, true);
+
+  EnableChromeVox();
+
+  AutomationTestUtils test_utils(extension_misc::kChromeVoxExtensionId);
+  sm_.Call([&test_utils]() {
+    test_utils.SetUpTestSupport();
+    // Enable the function of speaking text under mouse.
+    EventRewriterController::Get()->SetSendMouseEvents(true);
+  });
+
+  sm_.Call([this]() {
+    NavigateToUrl(GURL(R"(data:text/html;charset=utf-8,
+            <button id="b1" autofocus>First</button>
+            <button id="b2">Second</button>
+            <button id="b3">Third</button>
+        )"));
+  });
+  sm_.ExpectSpeech("First");
+  sm_.Call([this, &test_utils]() {
+    gfx::Rect b2_bounds = test_utils.GetNodeBoundsInRoot("Second", "button");
+    SendMouseMoveTo(b2_bounds.CenterPoint());
+  });
+  sm_.ExpectSpeech("Second");
+  sm_.Call([this, &test_utils]() {
+    gfx::Rect b3_bounds = test_utils.GetNodeBoundsInRoot("Third", "button");
+    SendMouseMoveTo(b3_bounds.CenterPoint());
+  });
+  sm_.ExpectSpeech("Third");
 
   sm_.Replay();
 }
@@ -2297,7 +2336,7 @@ IN_PROC_BROWSER_TEST_F(DeskTemplatesSpokenFeedbackTest, DeskTemplatesBasic) {
 
   // TODO(crbug.com/1360638): Remove the conditional here when the Save & Recall
   // flag flip has landed since it will always be true.
-  if (saved_desk_util::IsSavedDesksEnabled()) {
+  if (saved_desk_util::ShouldShowSavedDesksButtons()) {
     sm_.Call([this]() { SendKeyPressWithShift(ui::VKEY_TAB); });
     sm_.ExpectSpeechPattern("Save desk for later");
     sm_.ExpectSpeech("Button");

@@ -65,7 +65,7 @@ constexpr char kPastEventsColorId[] = "0";
 // id "0", it's not part of the Calendar API color, but it's used for past
 // events for a gray out effect.
 constexpr auto kEventHexColorCodes =
-    base::MakeFixedFlatMap<base::StringPiece, base::StringPiece>(
+    base::MakeFixedFlatMap<std::string_view, std::string_view>(
         {{"0", "1B1B1F"},
          {"1", "6994FF"},
          {"2", "3CBD8E"},
@@ -219,7 +219,7 @@ CalendarEventListItemView::CalendarEventListItemView(
   const auto [start_time_accessible_name, end_time_accessible_name] =
       event_date_formatter_util::GetStartAndEndTimeAccessibleNames(start_time,
                                                                    end_time);
-  GetViewAccessibility().OverrideRole(ax::mojom::Role::kButton);
+  GetViewAccessibility().SetRole(ax::mojom::Role::kButton);
   const std::u16string event_item_index_in_list_string =
       l10n_util::GetStringFUTF16(
           IDS_ASH_CALENDAR_EVENT_POSITION_ACCESSIBLE_DESCRIPTION,
@@ -378,7 +378,7 @@ void CalendarEventListItemView::OnJoinMeetingButtonPressed(
       video_conference_url_);
 }
 
-BEGIN_METADATA(CalendarEventListItemView, views::View);
+BEGIN_METADATA(CalendarEventListItemView);
 END_METADATA
 
 }  // namespace ash

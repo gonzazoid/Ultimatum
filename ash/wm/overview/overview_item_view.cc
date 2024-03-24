@@ -94,7 +94,7 @@ OverviewItemView::OverviewItemView(
 
   header_view()->UpdateIconView(window);
 
-  // Call this last as it calls `Layout()` which relies on the some of the other
+  // Call this last as it triggers layout, which relies on some of the other
   // elements existing.
   SetShowPreview(show_preview);
 }
@@ -148,7 +148,7 @@ void OverviewItemView::RefreshPreviewView() {
     return;
 
   preview_view()->RecreatePreviews();
-  Layout();
+  DeprecatedLayoutImmediately();
 }
 
 gfx::Size OverviewItemView::GetPreviewViewSize() const {
@@ -313,7 +313,7 @@ void OverviewItemView::OnThemeChanged() {
   UpdateFocusState(is_focused());
 }
 
-BEGIN_METADATA(OverviewItemView, WindowMiniView)
+BEGIN_METADATA(OverviewItemView)
 END_METADATA
 
 }  // namespace ash

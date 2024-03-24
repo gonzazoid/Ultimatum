@@ -71,7 +71,8 @@ void AuthFactorEditor::AddKioskKey(std::unique_ptr<UserContext> context,
     LOGIN_LOG(ERROR) << "Adding Kiosk key while one already exists";
     std::move(callback).Run(
         std::move(context),
-        AuthenticationError{user_data_auth::CRYPTOHOME_ADD_CREDENTIALS_FAILED});
+        AuthenticationError{cryptohome::ErrorWrapper::CreateFromErrorCodeOnly(
+            user_data_auth::CRYPTOHOME_ADD_CREDENTIALS_FAILED)});
     return;
   }
 
@@ -269,7 +270,7 @@ void AuthFactorEditor::AddPinFactor(std::unique_ptr<UserContext> context,
 
   cryptohome::AuthFactorCommonMetadata metadata;
   cryptohome::PinMetadata pin_metadata =
-      cryptohome::PinMetadata::CreateWithoutSalt();
+      cryptohome::PinMetadata::Create(salt);
   cryptohome::AuthFactor factor(ref, std::move(metadata),
                                 std::move(pin_metadata));
 
@@ -307,7 +308,7 @@ void AuthFactorEditor::ReplacePinFactor(std::unique_ptr<UserContext> context,
 
   cryptohome::AuthFactorCommonMetadata metadata;
   cryptohome::PinMetadata pin_metadata =
-      cryptohome::PinMetadata::CreateWithoutSalt();
+      cryptohome::PinMetadata::Create(salt);
   cryptohome::AuthFactor factor(ref, std::move(metadata),
                                 std::move(pin_metadata));
 
@@ -474,7 +475,11 @@ void AuthFactorEditor::SetPasswordFactorImpl(
 
   cryptohome::AuthFactorCommonMetadata metadata;
   cryptohome::PasswordMetadata password_metadata =
-      cryptohome::PasswordMetadata::CreateWithoutSalt();
+      label == cryptohome::KeyLabel{kCryptohomeLocalPasswordKeyLabel}
+          ? cryptohome::PasswordMetadata::CreateForLocalPassword(
+                cryptohome::SystemSalt(system_salt))
+          : cryptohome::PasswordMetadata::CreateForOnlinePassword(
+                cryptohome::SystemSalt(system_salt));
   cryptohome::AuthFactor factor(ref, std::move(metadata),
                                 std::move(password_metadata));
 
@@ -506,7 +511,11 @@ void AuthFactorEditor::ReplacePasswordFactorImpl(
 
   cryptohome::AuthFactorCommonMetadata metadata;
   cryptohome::PasswordMetadata password_metadata =
-      cryptohome::PasswordMetadata::CreateWithoutSalt();
+      label == cryptohome::KeyLabel{kCryptohomeLocalPasswordKeyLabel}
+          ? cryptohome::PasswordMetadata::CreateForLocalPassword(
+                cryptohome::SystemSalt(system_salt))
+          : cryptohome::PasswordMetadata::CreateForOnlinePassword(
+                cryptohome::SystemSalt(system_salt));
   cryptohome::AuthFactor factor(ref, std::move(metadata),
                                 std::move(password_metadata));
 
@@ -518,6 +527,64 @@ void AuthFactorEditor::ReplacePasswordFactorImpl(
       request, base::BindOnce(&AuthFactorEditor::OnUpdateAuthFactor,
                               weak_factory_.GetWeakPtr(), std::move(context),
                               std::move(callback)));
+}
+
+void AuthFactorEditor::UpdatePasswordFactorMetadata(
+    std::unique_ptr<UserContext> context,
+    const cryptohome::KeyLabel& label,
+    const cryptohome::SystemSalt& system_salt,
+    AuthOperationCallback callback) {
+  LOGIN_LOG(EVENT) << "Updating password metadata with label: " << label;
+
+  user_data_auth::UpdateAuthFactorMetadataRequest request;
+  request.set_auth_session_id(context->GetAuthSessionId());
+
+  cryptohome::AuthFactorRef ref{cryptohome::AuthFactorType::kPassword, label};
+
+  request.set_auth_factor_label(ref.label().value());
+
+  cryptohome::AuthFactorCommonMetadata metadata;
+  cryptohome::PasswordMetadata password_metadata =
+      label == cryptohome::KeyLabel{kCryptohomeLocalPasswordKeyLabel}
+          ? cryptohome::PasswordMetadata::CreateForLocalPassword(system_salt)
+          : cryptohome::PasswordMetadata::CreateForOnlinePassword(system_salt);
+  cryptohome::AuthFactor factor(ref, std::move(metadata),
+                                std::move(password_metadata));
+
+  cryptohome::SerializeAuthFactor(factor, request.mutable_auth_factor());
+  client_->UpdateAuthFactorMetadata(
+      request, base::BindOnce(&AuthFactorEditor::OnUpdateAuthFactorMetadata,
+                              weak_factory_.GetWeakPtr(), std::move(context),
+                              std::move(callback)));
+}
+
+void AuthFactorEditor::UpdatePinFactorMetadata(
+    std::unique_ptr<UserContext> context,
+    cryptohome::PinSalt salt,
+    AuthOperationCallback callback) {
+  DCHECK(!context->GetAuthSessionId().empty());
+
+  user_data_auth::UpdateAuthFactorMetadataRequest request;
+  request.set_auth_session_id(context->GetAuthSessionId());
+
+  request.set_auth_factor_label(kCryptohomePinLabel);
+
+  cryptohome::AuthFactorRef ref{cryptohome::AuthFactorType::kPin,
+                                KeyLabel{kCryptohomePinLabel}};
+
+  cryptohome::AuthFactorCommonMetadata metadata;
+  cryptohome::PinMetadata pin_metadata = cryptohome::PinMetadata::Create(salt);
+  cryptohome::AuthFactor factor(ref, std::move(metadata),
+                                std::move(pin_metadata));
+
+  cryptohome::SerializeAuthFactor(factor, request.mutable_auth_factor());
+
+  auto on_updated_callback = base::BindOnce(
+      &AuthFactorEditor::OnUpdateAuthFactorMetadata, weak_factory_.GetWeakPtr(),
+      std::move(context), std::move(callback));
+  LOGIN_LOG(EVENT) << "Updating pin factor metadata";
+  client_->UpdateAuthFactorMetadata(std::move(request),
+                                    std::move(on_updated_callback));
 }
 
 /// ---- private callbacks ----
@@ -555,10 +622,9 @@ void AuthFactorEditor::OnListAuthFactors(
     }
     auto factor = cryptohome::DeserializeAuthFactor(
         factor_with_status_proto.auth_factor(), fallback_type);
-    // Dirty hack below, as cryptohome does not send correct value as a part of
-    // PIN status, but uses indirect signal of listing no intents instead.
     if (factor.ref().type() == cryptohome::AuthFactorType::kPin) {
-      bool locked = factor_with_status_proto.available_for_intents_size() == 0;
+      bool locked =
+          factor_with_status_proto.status_info().time_available_in() > 0;
       cryptohome::PinStatus replacement_status{locked};
       cryptohome::AuthFactor replacement_factor{
           factor.ref(), factor.GetCommonMetadata(), factor.GetPinMetadata(),
@@ -644,6 +710,22 @@ void AuthFactorEditor::OnRemoveAuthFactor(
 
   CHECK(reply.has_value());
   LOGIN_LOG(EVENT) << "Successfully removed auth factor";
+  context->ClearAuthFactorsConfiguration();
+  std::move(callback).Run(std::move(context), std::nullopt);
+}
+
+void AuthFactorEditor::OnUpdateAuthFactorMetadata(
+    std::unique_ptr<UserContext> context,
+    AuthOperationCallback callback,
+    std::optional<user_data_auth::UpdateAuthFactorMetadataReply> reply) {
+  auto error = user_data_auth::ReplyToCryptohomeError(reply);
+  if (cryptohome::HasError(error)) {
+    LOGIN_LOG(ERROR) << "UpdateAuthFactorMetadata failed with error " << error;
+    std::move(callback).Run(std::move(context), AuthenticationError{error});
+    return;
+  }
+  CHECK(reply.has_value());
+  LOGIN_LOG(EVENT) << "Successfully updated auth factor metadata";
   context->ClearAuthFactorsConfiguration();
   std::move(callback).Run(std::move(context), std::nullopt);
 }

@@ -23,6 +23,7 @@ import org.chromium.chrome.browser.browsing_data.TimePeriod;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.metrics.util.UkmUtilsForTest;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.signin.services.UnifiedConsentServiceBridge;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
@@ -59,7 +60,7 @@ public class UkmTest {
 
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
-                    Profile profile = Profile.getLastUsedRegularProfile();
+                    Profile profile = ProfileManager.getLastUsedRegularProfile();
                     UnifiedConsentServiceBridge.setUrlKeyedAnonymizedDataCollectionEnabled(
                             profile, true);
                     Assert.assertTrue(UkmUtilsForTest.isEnabled());
@@ -73,12 +74,12 @@ public class UkmTest {
                         .longValue();
         Assert.assertFalse("Non-zero client id: " + originalClientId, originalClientId == 0);
 
-        // Record some dummy UKM data (adding a Source).
+        // Record some placeholder UKM data (adding a Source).
         final long sourceId = 0x54321;
 
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
-                    // Write data under a dummy sourceId and verify it is there.
+                    // Write data under a placeholder sourceId and verify it is there.
                     UkmUtilsForTest.recordSourceWithId(sourceId);
                     Assert.assertTrue(UkmUtilsForTest.hasSourceWithId(sourceId));
                 });
@@ -87,7 +88,7 @@ public class UkmTest {
         // Clear all browsing history.
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
-                    BrowsingDataBridge.getInstance()
+                    BrowsingDataBridge.getForProfile(ProfileManager.getLastUsedRegularProfile())
                             .clearBrowsingData(
                                     new OnClearBrowsingDataListener() {
                                         @Override

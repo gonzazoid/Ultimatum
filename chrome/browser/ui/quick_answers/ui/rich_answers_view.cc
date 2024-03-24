@@ -11,10 +11,8 @@
 #include "chrome/browser/ui/quick_answers/ui/quick_answers_util.h"
 #include "chrome/browser/ui/quick_answers/ui/quick_answers_view.h"
 #include "chrome/browser/ui/quick_answers/ui/rich_answers_definition_view.h"
-#include "chrome/browser/ui/quick_answers/ui/rich_answers_pre_target_handler.h"
 #include "chrome/browser/ui/quick_answers/ui/rich_answers_translation_view.h"
 #include "chrome/browser/ui/quick_answers/ui/rich_answers_unit_conversion_view.h"
-#include "chrome/browser/ui/views/editor_menu/utils/focus_search.h"
 #include "chromeos/components/quick_answers/public/cpp/controller/quick_answers_controller.h"
 #include "chromeos/components/quick_answers/quick_answers_model.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
@@ -26,6 +24,7 @@
 #include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
+#include "ui/compositor/layer.h"
 #include "ui/display/screen.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/gfx/vector_icon_types.h"
@@ -65,7 +64,7 @@ constexpr auto kMainViewInsets = gfx::Insets::TLBR(20, 20, 16, 20);
 constexpr int kSettingsButtonSizeDip = 20;
 
 // Border corner radius.
-constexpr int kBorderCornerRadius = 12;
+constexpr int kRoundedCornerRadius = 12;
 
 // Google search link.
 constexpr auto kSearchLinkViewInsets = gfx::Insets::TLBR(0, 60, 20, 20);
@@ -82,18 +81,10 @@ RichAnswersView::RichAnswersView(
     const ResultType result_type)
     : anchor_view_bounds_(anchor_view_bounds),
       controller_(std::move(controller)),
-      result_type_(result_type),
-      rich_answers_view_handler_(
-          std::make_unique<RichAnswersPreTargetHandler>(this)),
-      focus_search_(std::make_unique<chromeos::editor_menu::FocusSearch>(
-          this,
-          base::BindRepeating(&RichAnswersView::GetFocusableViews,
-                              base::Unretained(this)))) {
+      result_type_(result_type) {
   InitLayout();
 
-  // Focus.
   SetFocusBehavior(views::View::FocusBehavior::ALWAYS);
-  set_suppress_default_focus_handling();
 }
 
 RichAnswersView::~RichAnswersView() = default;
@@ -130,52 +121,52 @@ views::UniqueWidgetPtr RichAnswersView::CreateWidget(
   CHECK(child_view);
 
   views::Widget::InitParams params;
-  params.activatable = views::Widget::InitParams::Activatable::kNo;
+  params.activatable = views::Widget::InitParams::Activatable::kYes;
   params.shadow_elevation = 2;
   params.shadow_type = views::Widget::InitParams::ShadowType::kDrop;
   params.type = views::Widget::InitParams::TYPE_POPUP;
   params.z_order = ui::ZOrderLevel::kFloatingUIElement;
-  params.corner_radius = kBorderCornerRadius;
+  params.corner_radius = kRoundedCornerRadius;
   params.name = kWidgetName;
-
   views::UniqueWidgetPtr widget =
       std::make_unique<views::Widget>(std::move(params));
+
   RichAnswersView* rich_answers_view =
       widget->SetContentsView(std::move(child_view));
   rich_answers_view->UpdateBounds();
+  rich_answers_view->SetPaintToLayer();
+  rich_answers_view->layer()->SetRoundedCornerRadius(
+      gfx::RoundedCornersF(kRoundedCornerRadius));
+  rich_answers_view->layer()->SetIsFastRoundedCorner(true);
+
   return widget;
 }
 
-void RichAnswersView::OnFocus() {
-  View* wants_focus = focus_search_->FindNextFocusableView(
-      nullptr, views::FocusSearch::SearchDirection::kForwards,
-      views::FocusSearch::TraversalDirection::kDown,
-      views::FocusSearch::StartingViewPolicy::kCheckStartingView,
-      views::FocusSearch::AnchoredDialogPolicy::kSkipAnchoredDialog, nullptr,
-      nullptr);
-  if (wants_focus != this) {
-    wants_focus->RequestFocus();
-  } else {
-    NotifyAccessibilityEvent(ax::mojom::Event::kFocus, true);
+void RichAnswersView::AddedToWidget() {
+  widget_observation_.Observe(GetWidget());
+}
+
+void RichAnswersView::OnWidgetDestroying(views::Widget* widget) {
+  widget_observation_.Reset();
+}
+
+void RichAnswersView::OnKeyEvent(ui::KeyEvent* event) {
+  // TODO(b/283135347): Track rich card interaction types for metrics.
+  if (event->type() != ui::ET_KEY_PRESSED) {
+    return;
+  }
+
+  if (event->key_code() == ui::VKEY_ESCAPE) {
+    QuickAnswersController::Get()->DismissQuickAnswers(
+        quick_answers::QuickAnswersExitPoint::kUnspecified);
   }
 }
 
 void RichAnswersView::OnThemeChanged() {
   views::View::OnThemeChanged();
 
-  SetBorder(views::CreateRoundedRectBorder(
-      /*thickness=*/2, kBorderCornerRadius,
-      GetColorProvider()->GetColor(ui::kColorPrimaryBackground)));
-  SetBackground(views::CreateRoundedRectBackground(
-      GetColorProvider()->GetColor(ui::kColorPrimaryBackground),
-      kBorderCornerRadius, /*for_border_thickness=*/2));
-
   search_link_label_->SetEnabledColor(
       GetColorProvider()->GetColor(cros_tokens::kCrosSysPrimary));
-}
-
-views::FocusTraversable* RichAnswersView::GetPaneFocusTraversable() {
-  return focus_search_.get();
 }
 
 void RichAnswersView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
@@ -183,6 +174,15 @@ void RichAnswersView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
 
   node_data->SetName(
       l10n_util::GetStringUTF8(IDS_RICH_ANSWERS_VIEW_A11Y_NAME_TEXT));
+}
+
+void RichAnswersView::OnWidgetActivationChanged(views::Widget* widget,
+                                                bool active) {
+  // TODO(b/283135347): Track rich card interaction types for metrics.
+  if (!active && widget->IsVisible()) {
+    QuickAnswersController::Get()->DismissQuickAnswers(
+        quick_answers::QuickAnswersExitPoint::kUnspecified);
+  }
 }
 
 ui::ImageModel RichAnswersView::GetIconImageModelForTesting() {
@@ -209,11 +209,16 @@ void RichAnswersView::InitLayout() {
 }
 
 void RichAnswersView::SetUpBaseView() {
-  auto* scroll_view = AddChildView(std::make_unique<views::ScrollView>());
-  scroll_view->SetHorizontalScrollBarMode(
-      views::ScrollView::ScrollBarMode::kDisabled);
-  scroll_view->SetDrawOverflowIndicator(false);
-  scroll_view->ClipHeightTo(kMinimumRichCardHeight, kMaximumRichCardHeight);
+  views::ScrollView* scroll_view = AddChildView(
+      views::Builder<views::ScrollView>()
+          .ClipHeightTo(kMinimumRichCardHeight, kMaximumRichCardHeight)
+          .SetBackgroundThemeColorId(ui::kColorPrimaryBackground)
+          .SetHorizontalScrollBarMode(
+              views::ScrollView::ScrollBarMode::kDisabled)
+          .SetDrawOverflowIndicator(false)
+          .SetAllowKeyboardScrolling(true)
+          .Build());
+
   base_view_ = scroll_view->SetContents(std::make_unique<views::View>());
   auto* base_layout =
       base_view_->SetLayoutManager(std::make_unique<views::FlexLayout>());
@@ -263,13 +268,7 @@ void RichAnswersView::AddResultTypeIcon() {
 views::View* RichAnswersView::AddSettingsButtonTo(views::View* container_view) {
   CHECK(container_view);
 
-  auto* settings_button_container = container_view->AddChildView(
-      views::Builder<views::FlexLayoutView>()
-          .SetOrientation(views::LayoutOrientation::kHorizontal)
-          .SetMainAxisAlignment(views::LayoutAlignment::kEnd)
-          .Build());
-
-  settings_button_ = settings_button_container->AddChildView(
+  settings_button_ = container_view->AddChildView(
       std::make_unique<views::ImageButton>(base::BindRepeating(
           &QuickAnswersUiController::OnSettingsButtonPressed, controller_)));
   settings_button_->SetImageModel(
@@ -278,9 +277,9 @@ views::View* RichAnswersView::AddSettingsButtonTo(views::View* container_view) {
                                      cros_tokens::kColorPrimary,
                                      /*icon_size=*/kSettingsButtonSizeDip));
   settings_button_->SetTooltipText(l10n_util::GetStringUTF16(
-      IDS_QUICK_ANSWERS_SETTINGS_BUTTON_TOOLTIP_TEXT));
+      IDS_RICH_ANSWERS_VIEW_SETTINGS_BUTTON_A11Y_NAME_TEXT));
 
-  return settings_button_container;
+  return settings_button_;
 }
 
 void RichAnswersView::AddHeaderViewsTo(views::View* container_view,
@@ -290,6 +289,8 @@ void RichAnswersView::AddHeaderViewsTo(views::View* container_view,
   // - settings_button_view (flex=0): no resize
   views::BoxLayoutView* box_layout_view =
       container_view->AddChildView(CreateHorizontalBoxLayoutView());
+  box_layout_view->SetCrossAxisAlignment(
+      views::BoxLayout::CrossAxisAlignment::kCenter);
 
   auto* header_label =
       box_layout_view->AddChildView(QuickAnswersTextLabel::CreateLabelWithStyle(
@@ -344,24 +345,13 @@ void RichAnswersView::UpdateBounds() {
   GetWidget()->SetBounds(bounds);
 }
 
-std::vector<views::View*> RichAnswersView::GetFocusableViews() {
-  std::vector<views::View*> focusable_views;
-  focusable_views.push_back(this);
-
-  if (settings_button_ && settings_button_->GetVisible()) {
-    focusable_views.push_back(settings_button_);
-  }
-
-  return focusable_views;
-}
-
 views::View* RichAnswersView::GetContentView() {
   CHECK(content_view_);
 
   return content_view_;
 }
 
-BEGIN_METADATA(RichAnswersView, views::View)
+BEGIN_METADATA(RichAnswersView)
 END_METADATA
 
 }  // namespace quick_answers

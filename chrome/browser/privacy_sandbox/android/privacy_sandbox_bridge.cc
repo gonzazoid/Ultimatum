@@ -45,7 +45,8 @@ ScopedJavaLocalRef<jobjectArray> ToJavaTopicsArray(
   for (const auto& topic : topics) {
     j_topics.push_back(Java_PrivacySandboxBridge_createTopic(
         env, topic.topic_id().value(), topic.taxonomy_version(),
-        ConvertUTF16ToJavaString(env, topic.GetLocalizedRepresentation())));
+        ConvertUTF16ToJavaString(env, topic.GetLocalizedRepresentation()),
+        ConvertUTF16ToJavaString(env, topic.GetLocalizedDescription())));
   }
   return base::android::ToJavaArrayOfObjects(
       env, base::android::GetClass(env, TOPICS_JAVA_CLASS), j_topics);
@@ -71,6 +72,23 @@ JNI_PrivacySandboxBridge_GetCurrentTopTopics(JNIEnv* env) {
 static ScopedJavaLocalRef<jobjectArray>
 JNI_PrivacySandboxBridge_GetBlockedTopics(JNIEnv* env) {
   return ToJavaTopicsArray(env, GetPrivacySandboxService()->GetBlockedTopics());
+}
+
+static ScopedJavaLocalRef<jobjectArray>
+JNI_PrivacySandboxBridge_GetFirstLevelTopics(JNIEnv* env) {
+  return ToJavaTopicsArray(env,
+                           GetPrivacySandboxService()->GetFirstLevelTopics());
+}
+
+static ScopedJavaLocalRef<jobjectArray>
+JNI_PrivacySandboxBridge_GetChildTopicsCurrentlyAssigned(
+    JNIEnv* env,
+    jint topic_id,
+    jint taxonomy_version) {
+  return ToJavaTopicsArray(
+      env, GetPrivacySandboxService()->GetChildTopicsCurrentlyAssigned(
+               privacy_sandbox::CanonicalTopic(browsing_topics::Topic(topic_id),
+                                               taxonomy_version)));
 }
 
 static void JNI_PrivacySandboxBridge_SetTopicAllowed(JNIEnv* env,

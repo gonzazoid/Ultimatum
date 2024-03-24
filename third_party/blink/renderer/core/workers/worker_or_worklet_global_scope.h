@@ -65,14 +65,15 @@ class CORE_EXPORT WorkerOrWorkletGlobalScope
       std::unique_ptr<WebContentSettingsClient>,
       scoped_refptr<WebWorkerFetchContext>,
       WorkerReportingProxy&,
-      bool is_worker_loaded_from_data_url);
+      bool is_worker_loaded_from_data_url,
+      bool is_default_world_of_isolate);
   ~WorkerOrWorkletGlobalScope() override;
 
   // EventTarget
   const AtomicString& InterfaceName() const override;
 
   // ScriptWrappable
-  v8::MaybeLocal<v8::Value> Wrap(ScriptState*) final;
+  v8::Local<v8::Value> Wrap(ScriptState*) final;
   v8::Local<v8::Object> AssociateWithWrapper(
       v8::Isolate*,
       const WrapperTypeInfo*,
@@ -92,7 +93,8 @@ class CORE_EXPORT WorkerOrWorkletGlobalScope
 
   // BackForwardCacheLoaderHelperImpl::Delegate
   void EvictFromBackForwardCache(
-      mojom::blink::RendererEvictionReason reason) override {}
+      mojom::blink::RendererEvictionReason reason,
+      std::unique_ptr<SourceLocation> source_location) override {}
   void DidBufferLoadWhileInBackForwardCache(bool update_process_wide_count,
                                             size_t num_bytes) override {}
 
@@ -202,7 +204,7 @@ class CORE_EXPORT WorkerOrWorkletGlobalScope
                                    SourceLocation* location);
 
   // Called when BestEffortServiceWorker(crbug.com/1420517) is enabled.
-  virtual absl::optional<
+  virtual std::optional<
       mojo::PendingRemote<network::mojom::blink::URLLoaderFactory>>
   FindRaceNetworkRequestURLLoaderFactory(
       const base::UnguessableToken& token) = 0;

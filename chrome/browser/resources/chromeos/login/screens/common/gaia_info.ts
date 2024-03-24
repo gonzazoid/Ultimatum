@@ -2,25 +2,25 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import '//resources/cr_elements/chromeos/cros_color_overrides.css.js';
-import '//resources/cr_elements/cr_radio_button/cr_card_radio_button.js';
-import '//resources/cr_elements/cr_radio_group/cr_radio_group.js';
+import '//resources/ash/common/cr_elements/cros_color_overrides.css.js';
+import '//resources/ash/common/cr_elements/cr_radio_button/cr_card_radio_button.js';
+import '//resources/ash/common/cr_elements/cr_radio_group/cr_radio_group.js';
 import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
 import '../../components/oobe_icons.html.js';
 import '../../components/oobe_illo_icons.html.js';
 import '../../components/common_styles/oobe_common_styles.css.js';
 import '../../components/common_styles/cr_card_radio_group_styles.css.js';
 import '../../components/common_styles/oobe_dialog_host_styles.css.js';
-import '../../components/dialogs/oobe_adaptive_dialog.js';
 import '../../components/oobe_cr_lottie.js';
 
 import {PolymerElementProperties} from '//resources/polymer/v3_0/polymer/interfaces.js';
-import {mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {afterNextRender, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
 import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.js';
 import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
-import {OOBE_UI_STATE} from '../../components/display_manager_types.js';
+import {OobeAdaptiveDialog} from '../../components/dialogs/oobe_adaptive_dialog.js';
+import {OobeUiState} from '../../components/display_manager_types.js';
 import type {OobeCrLottie} from '../../components/oobe_cr_lottie.js';
 
 import {getTemplate} from './gaia_info.html.js';
@@ -66,7 +66,7 @@ export class GaiaInfoScreen extends GaiaInfoScreenElementBase {
       /**
        * The currently selected flow type.
        */
-      selectedFlowType_: {
+      selectedFlowType: {
         type: String,
         value: '',
       },
@@ -74,15 +74,15 @@ export class GaiaInfoScreen extends GaiaInfoScreenElementBase {
        * Whether Quick start feature is enabled. If it's enabled the quick start
        * button will be shown in the gaia info screen.
        */
-      isQuickStartVisible_: {
+      isQuickStartVisible: {
         type: Boolean,
         value: false,
       },
     };
   }
 
-  private selectedFlowType_: string;
-  private isQuickStartVisible_: boolean;
+  private selectedFlowType: string;
+  private isQuickStartVisible: boolean;
 
   override get EXTERNAL_API(): string[] {
     return ['setQuickStartVisible'];
@@ -93,12 +93,12 @@ export class GaiaInfoScreen extends GaiaInfoScreenElementBase {
   }
 
   onBeforeShow(): void {
-    this.selectedFlowType_ = '';
-    this.setAnimationPlaying_(true);
+    this.selectedFlowType = '';
+    this.setAnimationPlaying(true);
   }
 
   onBeforeHide(): void {
-    this.setAnimationPlaying_(false);
+    this.setAnimationPlaying(false);
   }
 
   // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -112,33 +112,39 @@ export class GaiaInfoScreen extends GaiaInfoScreenElementBase {
   }
 
   setQuickStartVisible(): void {
-    this.isQuickStartVisible_ = true;
+    this.isQuickStartVisible = true;
+    afterNextRender(this, () => {
+      const dialog = this.shadowRoot?.querySelector('#gaiaInfoDialog');
+      if (!this.hidden && dialog instanceof OobeAdaptiveDialog){
+        dialog.focus();
+      }
+    });
   }
 
   // eslint-disable-next-line @typescript-eslint/naming-convention
-  override getOobeUIInitialState(): OOBE_UI_STATE {
-    return OOBE_UI_STATE.GAIA_INFO;
+  override getOobeUIInitialState(): OobeUiState {
+    return OobeUiState.GAIA_INFO;
   }
 
-  private onNextClicked_(): void {
-    if (this.isQuickStartVisible_ &&
-        this.selectedFlowType_ == UserCreationFlowType.QUICKSTART) {
+  private onNextClicked(): void {
+    if (this.isQuickStartVisible &&
+        this.selectedFlowType === UserCreationFlowType.QUICKSTART) {
       this.userActed(UserAction.QUICKSTART);
     } else {
       this.userActed(UserAction.MANUAL);
     }
   }
 
-  private onBackClicked_(): void {
+  private onBackClicked(): void {
     this.userActed(UserAction.BACK);
   }
 
-  private isNextButtonEnabled_(
+  private isNextButtonEnabled(
       isQuickStartVisible: boolean, selectedFlowType: string): boolean {
     return (!isQuickStartVisible) || selectedFlowType !== '';
   }
 
-  private setAnimationPlaying_(play: boolean): void {
+  private setAnimationPlaying(play: boolean): void {
     const gaiaInfoAnimation =
         this.shadowRoot!.querySelector<OobeCrLottie>('#gaiaInfoAnimation');
     if (gaiaInfoAnimation) {

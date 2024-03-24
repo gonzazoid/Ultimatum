@@ -13,10 +13,7 @@ namespace {
 
 class TestNativeTheme : public NativeTheme {
  public:
-  TestNativeTheme()
-      : NativeTheme(/*should_only_use_dark_colors=*/false,
-                    /*system_theme=*/ui::SystemTheme::kDefault,
-                    /*theme_to_update=*/nullptr) {}
+  TestNativeTheme() : NativeTheme(false) {}
   TestNativeTheme(const TestNativeTheme&) = delete;
   TestNativeTheme& operator=(const TestNativeTheme&) = delete;
   ~TestNativeTheme() override = default;
@@ -38,8 +35,8 @@ class TestNativeTheme : public NativeTheme {
              const gfx::Rect& rect,
              const ExtraParams& extra,
              ColorScheme color_scheme = ColorScheme::kDefault,
-             const absl::optional<SkColor>& accent_color =
-                 absl::nullopt) const override {}
+             const std::optional<SkColor>& accent_color =
+                 std::nullopt) const override {}
   bool SupportsNinePatch(Part part) const override { return false; }
   gfx::Size GetNinePatchCanvasSize(Part part) const override {
     return gfx::Size();

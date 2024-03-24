@@ -11,6 +11,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engine_choice/search_engine_choice_dialog_service.h"
 #include "chrome/browser/search_engine_choice/search_engine_choice_dialog_service_factory.h"
+#include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/search_engine_choice/search_engine_choice_tab_helper.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/toolbar_button_provider.h"
@@ -22,6 +23,8 @@
 #include "content/public/browser/web_contents.h"
 #include "third_party/blink/public/common/page/page_zoom.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/views/controls/webview/webview.h"
+#include "ui/views/view_class_properties.h"
 
 namespace {
 // The minimum height and maximum dialog dimensions.
@@ -30,6 +33,16 @@ namespace {
 constexpr int kMinHeight = 376;
 constexpr int kPreferredMaxDialogWidth = 1077;
 constexpr int kPreferredMaxDialogHeight = 768;
+
+// This function is effectivley a copy of `DialogDelegate::GetCornerRadius()`.
+int GetWebViewCornerRadius() {
+#if BUILDFLAG(IS_MAC)
+  return 2;
+#else
+  return views::LayoutProvider::Get()->GetCornerRadiusMetric(
+      views::ShapeContextTokens::kDialogRadius);
+#endif
+}
 
 }  // namespace
 void ShowSearchEngineChoiceDialog(
@@ -135,6 +148,8 @@ void SearchEngineChoiceDialogView::Initialize() {
                  std::max(kMinHeight, max_height));
 
   web_view_->SetPreferredSize(gfx::Size(std::min(width, max_width), height));
+  web_view_->SetProperty(views::kElementIdentifierKey,
+                         kSearchEngineChoiceDialogId);
 
   auto* web_ui = web_view_->GetWebContents()
                      ->GetWebUI()
@@ -156,6 +171,15 @@ void SearchEngineChoiceDialogView::ShowNativeView() {
   if (!widget) {
     return;
   }
+
+  // This solution is inspired by the code in `WebUIBubbleDialogView`, it
+  // applies the round corners to the inner web_view to match the view rounded
+  // corners.
+  // TODO(b/325270794): Investigate having `SearchEngineChoiceDialogView`
+  // inherit from `WebUIBubbleDialogView` instead of `views::View` in order to
+  // implicitly get this effect and potentially fix other issues.
+  web_view_->holder()->SetCornerRadii(
+      gfx::RoundedCornersF(GetWebViewCornerRadius()));
 
   constrained_window::UpdateWebContentsModalDialogPosition(
       widget, browser_->window()->GetWebContentsModalDialogHost());

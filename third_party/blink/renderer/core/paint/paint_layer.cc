@@ -1263,7 +1263,7 @@ PaintLayer* PaintLayer::HitTestLayer(
   }
 
   HitTestingTransformState* local_transform_state = nullptr;
-  STACK_UNINITIALIZED absl::optional<HitTestingTransformState> storage;
+  STACK_UNINITIALIZED std::optional<HitTestingTransformState> storage;
 
   if (applied_transform) {
     // We computed the correct state in the caller (above code), so just
@@ -1597,7 +1597,7 @@ PaintLayer* PaintLayer::HitTestLayerByApplyingTransform(
   // been flattened (losing z) by our container.
   gfx::PointF local_point = new_transform_state.MappedPoint();
   PhysicalRect bounds_of_mapped_area = new_transform_state.BoundsOfMappedArea();
-  absl::optional<HitTestLocation> new_location;
+  std::optional<HitTestLocation> new_location;
   if (recursion_data.location.IsRectBasedTest())
     new_location.emplace(local_point, new_transform_state.MappedQuad());
   else
@@ -1796,18 +1796,10 @@ gfx::RectF PaintLayer::FilterReferenceBox() const {
 
 gfx::RectF PaintLayer::BackdropFilterReferenceBox() const {
   if (const auto* layout_inline = DynamicTo<LayoutInline>(GetLayoutObject())) {
-    return RuntimeEnabledFeatures::ReferenceBoxNoPixelSnappingEnabled()
-               ? gfx::RectF(
-                     gfx::SizeF(layout_inline->PhysicalLinesBoundingBox().size))
-               : gfx::RectF(
-                     ToEnclosingRect(layout_inline->PhysicalLinesBoundingBox())
-                         .size());
+    return gfx::RectF(
+        gfx::SizeF(layout_inline->PhysicalLinesBoundingBox().size));
   }
-
-  const auto* layout_box = GetLayoutBox();
-  return RuntimeEnabledFeatures::ReferenceBoxNoPixelSnappingEnabled()
-             ? gfx::RectF(layout_box->PhysicalBorderBoxRect())
-             : gfx::RectF(layout_box->DeprecatedPixelSnappedBorderBoxRect());
+  return gfx::RectF(GetLayoutBox()->PhysicalBorderBoxRect());
 }
 
 gfx::RRectF PaintLayer::BackdropFilterBounds() const {
@@ -2240,13 +2232,13 @@ void PaintLayer::UpdateCompositorFilterOperationsForBackdropFilter(
   // approximate.
   FilterOperations filter_operations = style.BackdropFilter();
   filter_operations.Operations().AppendVector(style.Filter().Operations());
-  // Use kClamp tile mode to avoid pixel moving filters bringing in black
-  // transparent pixels from the viewport edge.
+  // NOTE: Backdrop filters will have their input cropped to the their layer
+  // bounds with a mirror edge mode, but this is the responsibility of the
+  // compositor to apply, regardless of the actual filter operations added here.
   operations =
       FilterEffectBuilder(reference_box, zoom,
                           style.VisitedDependentColor(GetCSSPropertyColor()),
-                          style.UsedColorScheme(), nullptr, nullptr,
-                          SkTileMode::kClamp)
+                          style.UsedColorScheme(), nullptr, nullptr)
           .BuildFilterOperations(filter_operations);
   // Note that |operations| may be empty here, if the |filter_operations| list
   // contains only invalid filters (e.g. invalid reference filters). See

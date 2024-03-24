@@ -60,8 +60,6 @@ constexpr char kGivenNameBase[] = "given_name";
 const char kTermsOfServiceUrl[] = "htpps://terms-of-service.com";
 const char kPrivacyPolicyUrl[] = "https://privacy-policy.com";
 
-constexpr int kDesiredAvatarSize = 30;
-
 content::IdentityRequestAccount CreateTestIdentityRequestAccount(
     const std::string& account_suffix,
     content::IdentityRequestAccount::LoginState login_state) {
@@ -69,7 +67,7 @@ content::IdentityRequestAccount CreateTestIdentityRequestAccount(
       std::string(kIdBase) + account_suffix,
       std::string(kEmailBase) + account_suffix,
       std::string(kNameBase) + account_suffix,
-      std::string(kGivenNameBase) + account_suffix, GURL::EmptyGURL(),
+      std::string(kGivenNameBase) + account_suffix, GURL(),
       /*login_hints=*/std::vector<std::string>(),
       /*domain_hints=*/std::vector<std::string>(), login_state);
 }
@@ -135,8 +133,9 @@ class AccountSelectionBubbleViewTest : public ChromeViewsTestBase {
     dialog_ = new AccountSelectionBubbleView(
         kTopFrameETLDPlusOne, iframe_etld_plus_one, title,
         blink::mojom::RpContext::kSignIn, show_auto_reauthn_checkbox,
-        anchor_widget_->GetContentsView(), shared_url_loader_factory(),
-        /*observer=*/nullptr);
+        /*browser=*/nullptr, anchor_widget_->GetContentsView(),
+        shared_url_loader_factory(),
+        /*observer=*/nullptr, /*widget_observer=*/nullptr);
     views::BubbleDialogDelegateView::CreateBubble(dialog_)->Show();
   }
 
@@ -146,18 +145,20 @@ class AccountSelectionBubbleViewTest : public ChromeViewsTestBase {
       const content::IdentityProviderMetadata& idp_metadata,
       const std::string& terms_of_service_url,
       bool show_auto_reauthn_checkbox = false,
-      bool exclude_iframe = true) {
+      bool exclude_iframe = true,
+      bool request_permission = true) {
     CreateAccountSelectionBubble(/*exclude_title=*/false, exclude_iframe,
                                  show_auto_reauthn_checkbox);
     IdentityProviderDisplayData idp_data(
         kIdpETLDPlusOne, idp_metadata,
         CreateTestClientMetadata(terms_of_service_url), {account},
-        /*request_permission=*/true, /*has_login_status_mismatch=*/false);
+        request_permission, /*has_login_status_mismatch=*/false);
     dialog_->ShowSingleAccountConfirmDialog(
         kTopFrameETLDPlusOne,
         exclude_iframe ? std::nullopt
                        : std::make_optional<std::u16string>(kIframeETLDPlusOne),
         account, idp_data, show_back_button);
+    dialog_->SizeToContents();
   }
 
   void CreateMultiAccountPicker(
@@ -179,6 +180,7 @@ class AccountSelectionBubbleViewTest : public ChromeViewsTestBase {
         CreateTestClientMetadata(/*terms_of_service_url=*/""), account_list,
         /*request_permission=*/true, /*has_login_status_mismatch=*/false);
     dialog_->ShowMultiAccountPicker(idp_data);
+    dialog_->SizeToContents();
   }
 
   void CreateMultiIdpAccountPicker(
@@ -187,6 +189,7 @@ class AccountSelectionBubbleViewTest : public ChromeViewsTestBase {
                                  /*exclude_iframe=*/true,
                                  /*show_auto_reauthn_checkbox=*/false);
     dialog_->ShowMultiAccountPicker(idp_data_list);
+    dialog_->SizeToContents();
   }
 
   void CheckAccountRow(views::View* row, const std::string& account_suffix) {
@@ -253,7 +256,8 @@ class AccountSelectionBubbleViewTest : public ChromeViewsTestBase {
     std::vector<std::string> expected_class_names = {"ImageButton", "Label",
                                                      "ImageButton"};
     if (expect_idp_brand_icon_in_header) {
-      expected_class_names.insert(expected_class_names.begin(), "IdpImageView");
+      expected_class_names.insert(expected_class_names.begin(),
+                                  "BrandIconImageView");
     }
     EXPECT_THAT(GetChildClassNames(header),
                 testing::ElementsAreArray(expected_class_names));
@@ -513,7 +517,7 @@ class AccountSelectionBubbleViewTest : public ChromeViewsTestBase {
                    const std::u16string& expected_idp) {
     // Order: Brand icon, title.
     EXPECT_THAT(GetChildClassNames(idp_account),
-                testing::ElementsAre("IdpImageView", "Label"));
+                testing::ElementsAre("BrandIconImageView", "Label"));
 
     views::Label* title_view =
         static_cast<views::Label*>(idp_account->children()[1]);
@@ -651,6 +655,38 @@ TEST_F(AccountSelectionBubbleViewTest, ReturningAccount) {
   CreateSingleAccountPicker(
       /*show_back_button=*/false, account, content::IdentityProviderMetadata(),
       /*terms_of_service_url=*/"");
+
+  std::vector<raw_ptr<views::View, VectorExperimental>> children =
+      dialog()->children();
+  ASSERT_EQ(children.size(), 3u);
+  PerformHeaderChecks(children[0], kTitleSignIn,
+                      /*expected_subtitle=*/std::nullopt,
+                      /*expect_idp_brand_icon_in_header=*/true);
+
+  views::View* single_account_chooser = children[2];
+  std::vector<raw_ptr<views::View, VectorExperimental>> chooser_children =
+      single_account_chooser->children();
+  ASSERT_EQ(chooser_children.size(), 2u);
+  views::View* single_account_row = chooser_children[0];
+
+  CheckAccountRow(single_account_row, kAccountSuffix);
+
+  // Check the "Continue as" button.
+  views::MdTextButton* button =
+      static_cast<views::MdTextButton*>(chooser_children[1]);
+  EXPECT_EQ(button->GetText(),
+            base::UTF8ToUTF16("Continue as " + std::string(kGivenNameBase) +
+                              kAccountSuffix));
+}
+
+TEST_F(AccountSelectionBubbleViewTest, NewAccountWithoutRequestPermission) {
+  const std::string kAccountSuffix = "suffix";
+  content::IdentityRequestAccount account = CreateTestIdentityRequestAccount(
+      kAccountSuffix, content::IdentityRequestAccount::LoginState::kSignUp);
+  CreateSingleAccountPicker(
+      /*show_back_button=*/false, account, content::IdentityProviderMetadata(),
+      /*terms_of_service_url=*/"", /*show_auto_reauthn_checkbox=*/false,
+      /*exclude_iframe=*/true, /*request_permission=*/false);
 
   std::vector<raw_ptr<views::View, VectorExperimental>> children =
       dialog()->children();

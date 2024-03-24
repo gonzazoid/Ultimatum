@@ -32,6 +32,7 @@
 #include "components/omnibox/browser/document_provider.h"
 #include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/omnibox/common/omnibox_features.h"
+#include "components/search_engines/search_engine_type.h"
 #include "components/search_engines/search_engine_utils.h"
 #include "components/search_engines/template_url.h"
 #include "components/search_engines/template_url_service.h"
@@ -279,6 +280,7 @@ AutocompleteMatch::AutocompleteMatch(const AutocompleteMatch& match)
       allowed_to_be_default_match(match.allowed_to_be_default_match),
       destination_url(match.destination_url),
       stripped_destination_url(match.stripped_destination_url),
+      extra_headers(match.extra_headers),
       image_dominant_color(match.image_dominant_color),
       image_url(match.image_url),
       entity_id(match.entity_id),
@@ -341,6 +343,7 @@ AutocompleteMatch& AutocompleteMatch::operator=(
   allowed_to_be_default_match = std::move(match.allowed_to_be_default_match);
   destination_url = std::move(match.destination_url);
   stripped_destination_url = std::move(match.stripped_destination_url);
+  extra_headers = std::move(match.extra_headers);
   image_dominant_color = std::move(match.image_dominant_color);
   image_url = std::move(match.image_url);
   entity_id = std::move(match.entity_id);
@@ -410,6 +413,7 @@ AutocompleteMatch& AutocompleteMatch::operator=(
   allowed_to_be_default_match = match.allowed_to_be_default_match;
   destination_url = match.destination_url;
   stripped_destination_url = match.stripped_destination_url;
+  extra_headers = match.extra_headers;
   image_dominant_color = match.image_dominant_color;
   image_url = match.image_url;
   entity_id = match.entity_id;
@@ -619,6 +623,9 @@ const gfx::VectorIcon& AutocompleteMatch::GetVectorIcon(
           case KEYWORD_MODE_STARTER_PACK_TABS:
             return use_chrome_refresh_icons ? omnibox::kProductChromeRefreshIcon
                                             : omnibox::kProductIcon;
+
+          case KEYWORD_MODE_STARTER_PACK_ASK_GOOGLE:
+            return omnibox::kSparkIcon;
           default:
             break;
         }
@@ -816,11 +823,8 @@ bool AutocompleteMatch::IsSearchType(Type type) {
          type == AutocompleteMatchType::SEARCH_OTHER_ENGINE ||
          type == AutocompleteMatchType::CALCULATOR ||
          type == AutocompleteMatchType::VOICE_SUGGEST ||
-#if BUILDFLAG(IS_ANDROID)
-         // iOS tests fail if Clipboard searches are annotated as searches.
          type == AutocompleteMatchType::CLIPBOARD_TEXT ||
          type == AutocompleteMatchType::CLIPBOARD_IMAGE ||
-#endif
          IsSpecializedSearchType(type);
 }
 
@@ -1051,19 +1055,42 @@ void AutocompleteMatch::LogSearchEngineUsed(
   DCHECK(template_url_service);
 
   TemplateURL* template_url = match.GetTemplateURL(template_url_service, false);
-  if (template_url) {
-    SearchEngineType search_engine_type =
-        match.destination_url.is_valid()
-            ? SearchEngineUtils::GetEngineType(match.destination_url)
-            : SEARCH_ENGINE_OTHER;
-    UMA_HISTOGRAM_ENUMERATION("Omnibox.SearchEngineType", search_engine_type,
-                              SEARCH_ENGINE_MAX);
-    if (template_url->created_by_policy() ==
-        TemplateURLData::CreatedByPolicy::kDefaultSearchProvider) {
+  if (!template_url) {
+    return;
+  }
+
+  SearchEngineType search_engine_type =
+      match.destination_url.is_valid()
+          ? SearchEngineUtils::GetEngineType(match.destination_url)
+          : SEARCH_ENGINE_OTHER;
+  UMA_HISTOGRAM_ENUMERATION("Omnibox.SearchEngineType", search_engine_type,
+                            SEARCH_ENGINE_MAX);
+
+  if (template_url->created_by_policy() ==
+      TemplateURLData::CreatedByPolicy::kNoPolicy) {
+    return;
+  }
+
+  UMA_HISTOGRAM_ENUMERATION("Omnibox.SearchEngineType.SetByEnterprisePolicy",
+                            search_engine_type, SEARCH_ENGINE_MAX);
+
+  switch (template_url->created_by_policy()) {
+    case TemplateURLData::CreatedByPolicy::kDefaultSearchProvider:
       UMA_HISTOGRAM_ENUMERATION(
-          "Omnibox.SearchEngineType.SetByEnterprisePolicy", search_engine_type,
-          SEARCH_ENGINE_MAX);
-    }
+          "Omnibox.SearchEngineType.SetByEnterprisePolicy."
+          "DefaultSearchProvider",
+          search_engine_type, SEARCH_ENGINE_MAX);
+      break;
+
+    case TemplateURLData::CreatedByPolicy::kSiteSearch:
+      UMA_HISTOGRAM_ENUMERATION(
+          "Omnibox.SearchEngineType.SetByEnterprisePolicy."
+          "SiteSearchSettings",
+          search_engine_type, SEARCH_ENGINE_MAX);
+      break;
+
+    default:
+      NOTREACHED();
   }
 }
 
@@ -1467,6 +1494,7 @@ size_t AutocompleteMatch::EstimateMemoryUsage() const {
   res += base::trace_event::EstimateMemoryUsage(prefix_autocompletion);
   res += base::trace_event::EstimateMemoryUsage(destination_url);
   res += base::trace_event::EstimateMemoryUsage(stripped_destination_url);
+  res += base::trace_event::EstimateMemoryUsage(extra_headers);
   res += base::trace_event::EstimateMemoryUsage(image_dominant_color);
   res += base::trace_event::EstimateMemoryUsage(image_url);
   res += base::trace_event::EstimateMemoryUsage(entity_id);
@@ -1596,7 +1624,7 @@ void AutocompleteMatch::MergeScoringSignals(const AutocompleteMatch& other) {
           other.GetAdditionalInfo(kACMatchPropertyScoringSignalsMerged));
 
   if (!scoring_signals.has_value()) {
-    scoring_signals = absl::make_optional<ScoringSignals>();
+    scoring_signals = std::make_optional<ScoringSignals>();
   }
 
   // Take the maximum.

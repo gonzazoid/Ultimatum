@@ -438,8 +438,8 @@ void BoxFragmentPainter::PaintInternal(const PaintInfo& paint_info) {
 
   // For text-combine-upright:all, we need to realize canvas here for scaling
   // to fit text content in 1em and shear for "font-style: oblique -15deg".
-  absl::optional<DrawingRecorder> recorder;
-  absl::optional<GraphicsContextStateSaver> graphics_context_state_saver;
+  std::optional<DrawingRecorder> recorder;
+  std::optional<GraphicsContextStateSaver> graphics_context_state_saver;
   const auto* const text_combine =
       DynamicTo<LayoutTextCombine>(box_fragment_.GetLayoutObject());
   if (UNLIKELY(text_combine)) {
@@ -476,14 +476,21 @@ void BoxFragmentPainter::PaintInternal(const PaintInfo& paint_info) {
     // We need to call PaintObject twice: one for painting background in the
     // border box space, and the other for painting background in the scrolling
     // contents space.
-    auto paint_location = To<LayoutBox>(*box_fragment_.GetLayoutObject())
-                              .GetBackgroundPaintLocation();
+    const LayoutBox& box = To<LayoutBox>(*box_fragment_.GetLayoutObject());
+    auto paint_location = box.GetBackgroundPaintLocation();
     if (!(paint_location & kBackgroundPaintInBorderBoxSpace))
       info.SetSkipsBackground(true);
     PaintObject(info, paint_offset);
     info.SetSkipsBackground(false);
 
-    if (paint_location & kBackgroundPaintInContentsSpace) {
+    if ((RuntimeEnabledFeatures::HitTestOpaquenessEnabled() &&
+         // We need to record hit test data for the scrolling contents.
+         box.ScrollsOverflow()) ||
+        (paint_location & kBackgroundPaintInContentsSpace)) {
+      if (!(paint_location & kBackgroundPaintInContentsSpace)) {
+        DCHECK(RuntimeEnabledFeatures::HitTestOpaquenessEnabled());
+        info.SetSkipsBackground(true);
+      }
       // If possible, paint overflow controls before scrolling background to
       // make it easier to merge scrolling background and scrolling contents
       // into the same layer. The function checks if it's appropriate to paint
@@ -493,7 +500,9 @@ void BoxFragmentPainter::PaintInternal(const PaintInfo& paint_info) {
       info.SetIsPaintingBackgroundInContentsSpace(true);
       PaintObject(info, paint_offset);
       info.SetIsPaintingBackgroundInContentsSpace(false);
+      info.SetSkipsBackground(false);
     }
+
     if (ShouldPaintDescendantBlockBackgrounds(original_phase))
       info.phase = PaintPhase::kDescendantBlockBackgroundsOnly;
   }
@@ -687,7 +696,7 @@ void BoxFragmentPainter::PaintCaretsIfNeeded(
 
   // Apply overflow clip if needed.
   // reveal-caret-of-multiline-contenteditable.html needs this.
-  absl::optional<ScopedPaintChunkProperties> paint_chunk_properties;
+  std::optional<ScopedPaintChunkProperties> paint_chunk_properties;
   if (const auto* fragment = paint_state.FragmentToPaint()) {
     if (const auto* properties = fragment->PaintProperties()) {
       if (const auto* overflow_clip = properties->OverflowClip()) {
@@ -753,7 +762,7 @@ void BoxFragmentPainter::PaintLineBoxes(const PaintInfo& paint_info,
   DCHECK(items_);
   EnsureInlineContext();
   InlineCursor children(box_fragment_, *items_);
-  absl::optional<ScopedSVGPaintState> paint_state;
+  std::optional<ScopedSVGPaintState> paint_state;
   if (box_fragment_.IsSvgText())
     paint_state.emplace(*box_fragment_.GetLayoutObject(), paint_info);
 
@@ -891,8 +900,8 @@ void BoxFragmentPainter::PaintFloatingChildren(
     const PaintInfo& paint_info) {
   DCHECK(container.HasFloatingDescendantsForPaint());
   const PaintInfo* local_paint_info = &paint_info;
-  absl::optional<ScopedPaintState> paint_state;
-  absl::optional<ScopedBoxContentsPaintState> contents_paint_state;
+  std::optional<ScopedPaintState> paint_state;
+  std::optional<ScopedBoxContentsPaintState> contents_paint_state;
   if (const auto* box = DynamicTo<LayoutBox>(container.GetLayoutObject())) {
     paint_state.emplace(To<PhysicalBoxFragment>(container), paint_info);
     contents_paint_state.emplace(*paint_state, *box);
@@ -1021,7 +1030,7 @@ void BoxFragmentPainter::PaintBoxDecorationBackground(
 
   PhysicalRect paint_rect;
   const DisplayItemClient* background_client = nullptr;
-  absl::optional<ScopedBoxContentsPaintState> contents_paint_state;
+  std::optional<ScopedBoxContentsPaintState> contents_paint_state;
   gfx::Rect visual_rect;
   if (paint_info.IsPaintingBackgroundInContentsSpace()) {
     // For the case where we are painting the background in the contents space,
@@ -1063,7 +1072,12 @@ void BoxFragmentPainter::PaintBoxDecorationBackground(
   }
 
   Element* element = DynamicTo<Element>(layout_object.GetNode());
-  if (element && element->GetRegionCaptureCropId()) {
+  if (element && element->GetRegionCaptureCropId() &&
+      // TODO(wangxianzhu): This is to avoid the side-effect of
+      // HitTestOpaqueness on region capture data. Verify if the side-effect
+      // really matters.
+      !(paint_info.IsPaintingBackgroundInContentsSpace() &&
+        paint_info.ShouldSkipBackground())) {
     paint_info.context.GetPaintController().RecordRegionCaptureData(
         *background_client, *(element->GetRegionCaptureCropId()),
         ToPixelSnappedRect(paint_rect));
@@ -1089,7 +1103,7 @@ void BoxFragmentPainter::PaintBoxDecorationBackgroundWithRect(
   }
 
   const auto& box = To<LayoutBox>(*box_fragment_.GetLayoutObject());
-  absl::optional<DisplayItemCacheSkipper> cache_skipper;
+  std::optional<DisplayItemCacheSkipper> cache_skipper;
   if (RuntimeEnabledFeatures::PaintUnderInvalidationCheckingEnabled() &&
       ShouldSkipPaintUnderInvalidationChecking(box)) {
     cache_skipper.emplace(paint_info.context);
@@ -1732,6 +1746,12 @@ void BoxFragmentPainter::PaintBoxItem(const FragmentItem& item,
   }
 
   if (child_fragment.IsAtomicInline() || child_fragment.IsListMarker()) {
+    // Establish a display item fragment scope here, in case there are multiple
+    // fragment items for the same layout object. This is unusual for atomic
+    // inlines, but might happen e.g. if an text-overflow ellipsis is associated
+    // with the layout object.
+    ScopedDisplayItemFragment display_item_fragment(paint_info.context,
+                                                    item.FragmentId());
     PaintFragment(child_fragment, paint_info);
     return;
   }

@@ -7,7 +7,6 @@
 #include "ash/frame_sink/frame_sink_host.h"
 #include "ash/frame_sink/ui_resource.h"
 #include "base/check.h"
-#include "base/feature_list.h"
 #include "base/logging.h"
 #include "base/trace_event/trace_event.h"
 #include "cc/paint/display_item_list.h"
@@ -17,7 +16,6 @@
 #include "components/viz/common/resources/resource_id.h"
 #include "components/viz/common/resources/shared_image_format_utils.h"
 #include "gpu/command_buffer/client/client_shared_image.h"
-#include "gpu/command_buffer/client/gpu_memory_buffer_manager.h"
 #include "gpu/command_buffer/client/shared_image_interface.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
 #include "ui/aura/env.h"
@@ -33,7 +31,6 @@
 #include "ui/gfx/geometry/size_conversions.h"
 #include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/geometry/transform.h"
-#include "ui/gfx/gpu_memory_buffer.h"
 #include "ui/views/widget/widget.h"
 
 namespace ash {
@@ -44,11 +41,6 @@ constexpr viz::SharedImageFormat kSharedImageFormat =
                  : viz::SinglePlaneFormat::kBGRA_8888;
 
 constexpr uint32_t kUiSourceId = 1u;
-
-BASE_FEATURE(kUseMappableSIInViewTreeHostRootViewFrameFactory,
-             "UseMappableSIInViewTreeHostRootViewFrameFactory",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
 }  // namespace
 
 // -----------------------------------------------------------------------------
@@ -75,28 +67,9 @@ ViewTreeHostRootViewFrameFactory::CreateUiResource(
   DCHECK(ui_source_id > 0);
 
   auto resource = std::make_unique<ViewTreeHostUiResource>();
-
-  auto buffer_usage = gfx::BufferUsage::SCANOUT_CPU_READ_WRITE;
-  if (!base::FeatureList::IsEnabled(
-          kUseMappableSIInViewTreeHostRootViewFrameFactory)) {
-    resource->gpu_memory_buffer =
-        aura::Env::GetInstance()
-            ->context_factory()
-            ->GetGpuMemoryBufferManager()
-            ->CreateGpuMemoryBuffer(
-                size, viz::SinglePlaneSharedImageFormatToBufferFormat(format),
-                buffer_usage, gpu::kNullSurfaceHandle, nullptr);
-
-    if (!resource->gpu_memory_buffer) {
-      LOG(ERROR) << "Failed to create GPU memory buffer";
-      return nullptr;
-    }
-  }
-
   resource->context_provider = aura::Env::GetInstance()
                                    ->context_factory()
                                    ->SharedMainThreadRasterContextProvider();
-
   if (!resource->context_provider) {
     LOG(ERROR) << "Failed to acquire a context provider";
     return nullptr;
@@ -110,26 +83,15 @@ ViewTreeHostRootViewFrameFactory::CreateUiResource(
     usage |= gpu::SHARED_IMAGE_USAGE_SCANOUT;
   }
 
-  if (base::FeatureList::IsEnabled(
-          kUseMappableSIInViewTreeHostRootViewFrameFactory)) {
-    CHECK(!resource->gpu_memory_buffer);
-    auto client_shared_image = sii->CreateSharedImage(
-        format, size, gfx::ColorSpace(), kTopLeft_GrSurfaceOrigin,
-        kPremul_SkAlphaType, usage, "FastInkRootViewFrame",
-        gpu::kNullSurfaceHandle, buffer_usage);
-    if (!client_shared_image) {
-      LOG(ERROR) << "Failed to create MappableSharedImage";
-      return nullptr;
-    }
-    resource->SetClientSharedImage(std::move(client_shared_image));
-  } else {
-    auto client_shared_image = sii->CreateSharedImage(
-        format, size, gfx::ColorSpace(), kTopLeft_GrSurfaceOrigin,
-        kPremul_SkAlphaType, usage, "FastInkRootViewFrame",
-        resource->gpu_memory_buffer->CloneHandle());
-    CHECK(client_shared_image);
-    resource->SetClientSharedImage(std::move(client_shared_image));
+  auto client_shared_image = sii->CreateSharedImage(
+      format, size, gfx::ColorSpace(), kTopLeft_GrSurfaceOrigin,
+      kPremul_SkAlphaType, usage, "FastInkRootViewFrame",
+      gpu::kNullSurfaceHandle, gfx::BufferUsage::SCANOUT_CPU_READ_WRITE);
+  if (!client_shared_image) {
+    LOG(ERROR) << "Failed to create MappableSharedImage";
+    return nullptr;
   }
+  resource->SetClientSharedImage(std::move(client_shared_image));
 
   resource->sync_token = sii->GenVerifiedSyncToken();
   resource->damaged = true;
@@ -255,12 +217,6 @@ void ViewTreeHostRootViewFrameFactory::Paint(
     const gfx::Rect& invalidation_rect,
     const gfx::Transform& rotate_transform,
     ViewTreeHostUiResource* resource) {
-  auto* gpu_buffer = resource->gpu_memory_buffer.get();
-  DCHECK(gpu_buffer || base::FeatureList::IsEnabled(
-                           kUseMappableSIInViewTreeHostRootViewFrameFactory));
-
-  std::unique_ptr<gpu::ClientSharedImage::ScopedMapping> mapping;
-
   auto display_item_list = base::MakeRefCounted<cc::DisplayItemList>();
   float dsf = widget_->GetCompositor()->device_scale_factor();
 
@@ -270,51 +226,25 @@ void ViewTreeHostRootViewFrameFactory::Paint(
   widget_->OnNativeWidgetPaint(context);
   display_item_list->Finalize();
 
-  std::unique_ptr<SkCanvas> canvas;
-  if (base::FeatureList::IsEnabled(
-          kUseMappableSIInViewTreeHostRootViewFrameFactory)) {
-    DCHECK(!gpu_buffer);
-
-    CHECK(resource->client_shared_image());
-    mapping = resource->client_shared_image()->Map();
-    if (!mapping) {
-      TRACE_EVENT0("ui", "ViewTreeHostRootView::Paint::Map");
-      LOG(ERROR) << "MapSharedImage Failed.";
-      return;
-    }
-    SkImageInfo info = SkImageInfo::MakeN32Premul(mapping->Size().width(),
-                                                  mapping->Size().height());
-
-    uint8_t* data = static_cast<uint8_t*>(mapping->Memory(0));
-    int stride = mapping->Stride(0);
-
-    canvas = SkCanvas::MakeRasterDirect(info, data, stride);
-  } else {
-    if (!gpu_buffer->Map()) {
-      TRACE_EVENT0("ui", "ViewTreeHostRootView::Paint::Map");
-      LOG(ERROR) << "Failed to map GPU memory buffer";
-      return;
-    }
-
-    SkImageInfo info = SkImageInfo::MakeN32Premul(
-        gpu_buffer->GetSize().width(), gpu_buffer->GetSize().height());
-
-    uint8_t* data = static_cast<uint8_t*>(gpu_buffer->memory(0));
-    int stride = gpu_buffer->stride(0);
-
-    canvas = SkCanvas::MakeRasterDirect(info, data, stride);
+  CHECK(resource->client_shared_image());
+  auto mapping = resource->client_shared_image()->Map();
+  if (!mapping) {
+    TRACE_EVENT0("ui", "ViewTreeHostRootView::Paint::Map");
+    LOG(ERROR) << "MapSharedImage Failed.";
+    return;
   }
 
+  SkImageInfo info = SkImageInfo::MakeN32Premul(mapping->Size().width(),
+                                                mapping->Size().height());
+  uint8_t* data = static_cast<uint8_t*>(mapping->Memory(0));
+  int stride = mapping->Stride(0);
+
+  auto canvas = SkCanvas::MakeRasterDirect(info, data, stride);
   canvas->setMatrix(gfx::TransformToFlattenedSkMatrix(rotate_transform));
 
   display_item_list->Raster(canvas.get());
 
   TRACE_EVENT0("ui", "ViewTreeHostRootView::Paint::Unmap");
-
-  // Unmap to flush writes to buffer.
-  base::FeatureList::IsEnabled(kUseMappableSIInViewTreeHostRootViewFrameFactory)
-      ? mapping.reset()
-      : gpu_buffer->Unmap();
 }
 
 void ViewTreeHostRootViewFrameFactory::AppendQuad(

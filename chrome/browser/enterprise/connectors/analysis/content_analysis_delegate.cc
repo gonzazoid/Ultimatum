@@ -26,6 +26,7 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/enterprise/connectors/analysis/analysis_settings.h"
 #include "chrome/browser/enterprise/connectors/analysis/content_analysis_dialog.h"
+#include "chrome/browser/enterprise/connectors/analysis/content_analysis_features.h"
 #include "chrome/browser/enterprise/connectors/analysis/files_request_handler.h"
 #include "chrome/browser/enterprise/connectors/analysis/page_print_analysis_request.h"
 #include "chrome/browser/enterprise/connectors/common.h"
@@ -117,6 +118,34 @@ ContentAnalysisDelegate::Data& ContentAnalysisDelegate::Data::operator=(
     ContentAnalysisDelegate::Data&& other) = default;
 ContentAnalysisDelegate::Data::~Data() = default;
 
+void ContentAnalysisDelegate::Data::AddClipboardData(
+    const content::ClipboardPasteData& clipboard_paste_data) {
+  if (!clipboard_paste_data.text.empty()) {
+    text.push_back(base::UTF16ToUTF8(clipboard_paste_data.text));
+  }
+  if (!clipboard_paste_data.html.empty()) {
+    text.push_back(base::UTF16ToUTF8(clipboard_paste_data.html));
+  }
+  if (!clipboard_paste_data.svg.empty()) {
+    text.push_back(base::UTF16ToUTF8(clipboard_paste_data.svg));
+  }
+  if (!clipboard_paste_data.rtf.empty()) {
+    text.push_back(clipboard_paste_data.rtf);
+  }
+  if (!clipboard_paste_data.png.empty()) {
+    // Send image only to local agent for analysis.
+    if (settings.cloud_or_local_settings.is_local_analysis()) {
+      image = std::string(clipboard_paste_data.png.begin(),
+                          clipboard_paste_data.png.end());
+    }
+  }
+  if (!clipboard_paste_data.custom_data.empty()) {
+    for (const auto& entry : clipboard_paste_data.custom_data) {
+      text.push_back(base::UTF16ToUTF8(entry.second));
+    }
+  }
+}
+
 ContentAnalysisDelegate::Result::Result() = default;
 ContentAnalysisDelegate::Result::Result(Result&& other) = default;
 ContentAnalysisDelegate::Result::~Result() = default;
@@ -124,7 +153,7 @@ ContentAnalysisDelegate::Result::~Result() = default;
 ContentAnalysisDelegate::~ContentAnalysisDelegate() = default;
 
 void ContentAnalysisDelegate::BypassWarnings(
-    absl::optional<std::u16string> user_justification) {
+    std::optional<std::u16string> user_justification) {
   if (callback_.is_null())
     return;
 
@@ -139,7 +168,8 @@ void ContentAnalysisDelegate::BypassWarnings(
     ReportAnalysisConnectorWarningBypass(
         profile_, url_, url_, "", "", "Text data", std::string(), "text/plain",
         extensions::SafeBrowsingPrivateEventRouter::kTriggerWebContentUpload,
-        access_point_, content_size, text_response_, user_justification);
+        GetContentTransferMethod(), access_point_, content_size, text_response_,
+        user_justification);
   }
 
   // Mark the full image as complying and report a warning bypass.
@@ -150,7 +180,8 @@ void ContentAnalysisDelegate::BypassWarnings(
         profile_, url_, url_, "", "", "Image data", std::string(),
         /*mime_type*/ std::string(),
         extensions::SafeBrowsingPrivateEventRouter::kTriggerWebContentUpload,
-        access_point_, data_.image.size(), image_response_, user_justification);
+        GetContentTransferMethod(), access_point_, data_.image.size(),
+        image_response_, user_justification);
   }
 
   if (!warned_file_indices_.empty()) {
@@ -170,7 +201,8 @@ void ContentAnalysisDelegate::BypassWarnings(
         /*sha256*/ std::string(),
         /*mime_type*/ std::string(),
         extensions::SafeBrowsingPrivateEventRouter::kTriggerPagePrint,
-        access_point_, /*content_size*/ -1, page_response_, user_justification);
+        GetContentTransferMethod(), access_point_, /*content_size*/ -1,
+        page_response_, user_justification);
   }
 
   RunCallback();
@@ -203,8 +235,18 @@ void ContentAnalysisDelegate::Cancel(bool warning) {
   RunCallback();
 }
 
-absl::optional<std::u16string> ContentAnalysisDelegate::GetCustomMessage()
+std::optional<std::u16string> ContentAnalysisDelegate::GetCustomMessage()
     const {
+  // Rule-based custom messages take precedence over policy-based.
+  if (IsDialogCustomRuleMessageEnabled()) {
+    std::u16string custom_rule_message =
+        GetCustomRuleString(custom_rule_message_);
+    if (!custom_rule_message.empty()) {
+      return l10n_util::GetStringFUTF16(IDS_DEEP_SCANNING_DIALOG_CUSTOM_MESSAGE,
+                                        custom_rule_message);
+    }
+  }
+
   auto element = data_.settings.tags.find(final_result_tag_);
   if (element != data_.settings.tags.end() &&
       !element->second.custom_message.message.empty()) {
@@ -212,10 +254,10 @@ absl::optional<std::u16string> ContentAnalysisDelegate::GetCustomMessage()
                                       element->second.custom_message.message);
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
-absl::optional<GURL> ContentAnalysisDelegate::GetCustomLearnMoreUrl() const {
+std::optional<GURL> ContentAnalysisDelegate::GetCustomLearnMoreUrl() const {
   auto element = data_.settings.tags.find(final_result_tag_);
   if (element != data_.settings.tags.end() &&
       element->second.custom_message.learn_more_url.is_valid() &&
@@ -223,7 +265,20 @@ absl::optional<GURL> ContentAnalysisDelegate::GetCustomLearnMoreUrl() const {
     return element->second.custom_message.learn_more_url;
   }
 
-  return absl::nullopt;
+  return std::nullopt;
+}
+
+std::optional<std::vector<std::pair<gfx::Range, GURL>>>
+ContentAnalysisDelegate::GetCustomRuleMessageRanges() const {
+  size_t offset;
+  l10n_util::GetStringFUTF16(IDS_DEEP_SCANNING_DIALOG_CUSTOM_MESSAGE,
+                             std::u16string{}, &offset);
+  std::vector<std::pair<gfx::Range, GURL>> custom_rule_message_ranges =
+      GetCustomRuleStyles(custom_rule_message_, offset);
+  if (!custom_rule_message_ranges.empty()) {
+    return custom_rule_message_ranges;
+  }
+  return std::nullopt;
 }
 
 bool ContentAnalysisDelegate::BypassRequiresJustification() const {
@@ -252,9 +307,9 @@ std::u16string ContentAnalysisDelegate::GetBypassJustificationLabel() const {
   return l10n_util::GetStringUTF16(id);
 }
 
-absl::optional<std::u16string>
+std::optional<std::u16string>
 ContentAnalysisDelegate::OverrideCancelButtonText() const {
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 // static
@@ -464,11 +519,12 @@ void ContentAnalysisDelegate::StringRequestCallback(
   MaybeReportDeepScanningVerdict(
       profile_, url_, url_, "", "", "Text data", std::string(), "text/plain",
       extensions::SafeBrowsingPrivateEventRouter::kTriggerWebContentUpload,
-      access_point_, content_size, result, response,
+      GetContentTransferMethod(), access_point_, content_size, result, response,
       CalculateEventResult(data_.settings, text_complies, should_warn));
 
   UpdateFinalResult(string_request_result_.final_result,
-                    string_request_result_.tag);
+                    string_request_result_.tag,
+                    string_request_result_.custom_rule_message);
 
   if (should_warn) {
     text_warning_ = true;
@@ -508,11 +564,13 @@ void ContentAnalysisDelegate::ImageRequestCallback(
       profile_, url_, url_, "", "", "Image data", std::string(),
       /*mime_type*/ std::string(),
       extensions::SafeBrowsingPrivateEventRouter::kTriggerWebContentUpload,
-      access_point_, data_.image.size(), result, response,
+      GetContentTransferMethod(), access_point_, data_.image.size(), result,
+      response,
       CalculateEventResult(data_.settings, image_complies, should_warn));
 
   UpdateFinalResult(image_request_result_.final_result,
-                    image_request_result_.tag);
+                    image_request_result_.tag,
+                    image_request_result_.custom_rule_message);
 
   if (should_warn) {
     image_warning_ = true;
@@ -537,7 +595,8 @@ void ContentAnalysisDelegate::FilesRequestCallback(
     if (result == FinalContentAnalysisResult::WARNING) {
       warned_file_indices_.push_back(index);
     }
-    UpdateFinalResult(result, results[index].tag);
+    UpdateFinalResult(result, results[index].tag,
+                      results[index].custom_rule_message);
   }
   files_request_results_ = std::move(results);
   files_request_complete_ = true;
@@ -594,11 +653,13 @@ void ContentAnalysisDelegate::PageRequestCallback(
       /*sha256*/ std::string(),
       /*mime_type*/ std::string(),
       extensions::SafeBrowsingPrivateEventRouter::kTriggerPagePrint,
-      access_point_, /*content_size*/ -1, result, response,
+      GetContentTransferMethod(), access_point_, /*content_size*/ -1, result,
+      response,
       CalculateEventResult(data_.settings, result_.page_result, should_warn));
 
   UpdateFinalResult(request_handler_result.final_result,
-                    request_handler_result.tag);
+                    request_handler_result.tag,
+                    request_handler_result.custom_rule_message);
 
   if (should_warn) {
     page_warning_ = true;
@@ -641,7 +702,8 @@ ContentAnalysisDelegate::UploadData() {
     // MultiFileRequestHandler is owned by this class.
     files_request_handler_ = FilesRequestHandler::Create(
         GetBinaryUploadService(), profile_, data_.settings, url_, "", "",
-        user_action_id_, title_, access_point_, data_.reason, data_.paths,
+        user_action_id_, title_, GetContentTransferMethod(), access_point_,
+        data_.reason, data_.paths,
         base::BindOnce(&ContentAnalysisDelegate::FilesRequestCallback,
                        GetWeakPtr()));
     files_request_complete_ = !files_request_handler_->UploadData();
@@ -923,10 +985,13 @@ void ContentAnalysisDelegate::RunCallback() {
 
 void ContentAnalysisDelegate::UpdateFinalResult(
     FinalContentAnalysisResult result,
-    const std::string& tag) {
+    const std::string& tag,
+    const ContentAnalysisResponse::Result::TriggeredRule::CustomRuleMessage&
+        custom_rule_message) {
   if (result < final_result_) {
     final_result_ = result;
     final_result_tag_ = tag;
+    custom_rule_message_ = custom_rule_message;
   }
 }
 
@@ -951,6 +1016,29 @@ void ContentAnalysisDelegate::AckAllRequests() {
       upload_service->MaybeAcknowledge(std::move(ack));
     }
   }
+}
+
+std::string ContentAnalysisDelegate::GetContentTransferMethod() const {
+  switch (data_.reason) {
+    case enterprise_connectors::ContentAnalysisRequest::UNKNOWN:
+    case enterprise_connectors::ContentAnalysisRequest::PRINT_PREVIEW_PRINT:
+    case enterprise_connectors::ContentAnalysisRequest::SYSTEM_DIALOG_PRINT:
+    case enterprise_connectors::ContentAnalysisRequest::NORMAL_DOWNLOAD:
+    case enterprise_connectors::ContentAnalysisRequest::SAVE_AS_DOWNLOAD:
+      return "";
+
+    case enterprise_connectors::ContentAnalysisRequest::CLIPBOARD_PASTE:
+      if (!data_.paths.empty()) {
+        return "CONTENT_TRANSFER_METHOD_FILE_PASTE";
+      }
+      break;
+    case enterprise_connectors::ContentAnalysisRequest::DRAG_AND_DROP:
+      return "CONTENT_TRANSFER_METHOD_DRAG_AND_DROP";
+    case enterprise_connectors::ContentAnalysisRequest::FILE_PICKER_DIALOG:
+      return "CONTENT_TRANSFER_METHOD_FILE_PICKER";
+  }
+
+  return "";
 }
 
 }  // namespace enterprise_connectors

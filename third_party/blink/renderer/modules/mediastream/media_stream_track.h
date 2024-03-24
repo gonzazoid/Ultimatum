@@ -13,7 +13,6 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_capture_handle.h"
-#include "third_party/blink/renderer/bindings/modules/v8/v8_captured_wheel_action.h"
 #include "third_party/blink/renderer/modules/event_target_modules.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
@@ -33,6 +32,7 @@ static const char kContentHintStringVideoDetail[] = "detail";
 static const char kContentHintStringVideoText[] = "text";
 
 class AudioSourceProvider;
+class DOMException;
 class ImageCapture;
 class MediaConstraints;
 class MediaTrackCapabilities;
@@ -73,7 +73,7 @@ class MODULES_EXPORT MediaStreamTrack
     MediaStreamSource::ReadyState ready_state;
     // Set only if
     // track_impl_subtype->IsSubclass(BrowserCaptureMediaStreamTrack::GetStaticWrapperTypeInfo())
-    absl::optional<uint32_t> sub_capture_target_version;
+    std::optional<uint32_t> sub_capture_target_version;
   };
 
   // See SetFromTransferredStateImplForTesting in ./test/transfer_test_utils.h.
@@ -142,39 +142,44 @@ class MODULES_EXPORT MediaStreamTrack
   // asks to deliver a wheel event on the captured tab's viewport.
   // This is subject to a permission policy on the capturing origin.
   //
-  // If successful, |callback| is invoked with `true` and an empty string.
-  // If unsuccessful, it is invoked with `false` and an error message.
-  virtual void SendWheel(
-      CapturedWheelAction* action,
-      base::OnceCallback<void(bool, const String&)> callback) = 0;
-
-  // When called on a "live" video track associated with tab-capture,
-  // returns the zoom level of the capture tab's viewport.
-  // This is subject to a permission policy on the capturing origin.
+  // `relative_x` is a value from [0, 1). It denotes the relative position
+  // in the coordinate space of the captured surface, which is unknown to the
+  // capturer. A value of 0 denotes the leftmost pixel; increasing values denote
+  // values further to the right. The sender of the message scales from its own
+  // coordinate space down to the relative values, and the receiver scales back
+  // up to its own coordinates.
   //
-  // If successful, |callback| is invoked with the zoom level in percentage
-  // points and an empty string.
-  // If unsuccessful, it is invoked with `absl::nullopt` and an error message.
-  virtual void GetZoomLevel(
-      base::OnceCallback<void(absl::optional<int>, const String&)>
-          callback) = 0;
+  // `relative_y` is defined analogously to `relative_x`.
+  //
+  // `wheel_delta_x` and `wheel_delta_y` represent the scroll deltas.
+  //
+  // `callback` is used to report the result. If set to `nullptr`, success
+  // is reported. Otherwise, the indicated exception described the issue
+  // encountered.
+  virtual void SendWheel(double relative_x,
+                         double relative_y,
+                         int wheel_delta_x,
+                         int wheel_delta_y,
+                         base::OnceCallback<void(DOMException*)> callback) = 0;
 
   // When called on a "live" video track associated with tab-capture, asks to
   // set the zoom level on the captured tab's viewport.  This is subject to a
   // permission policy on the capturing origin.
   //
-  // If successful, |callback| is invoked with `true` and an empty string.
-  // If unsuccessful, it is invoked with `false` and an error message.
+  // `callback` is used to report the result. If set to `nullptr`, success
+  // is reported. Otherwise, the indicated exception described the issue
+  // encountered.
   virtual void SetZoomLevel(
       int zoom_level,
-      base::OnceCallback<void(bool, const String&)> callback) = 0;
+      base::OnceCallback<void(DOMException*)> callback) = 0;
 #endif
 
   virtual std::unique_ptr<AudioSourceProvider> CreateWebAudioSource(
-      int context_sample_rate) = 0;
+      int context_sample_rate,
+      uint32_t context_buffer_size) = 0;
 
   virtual ImageCapture* GetImageCapture() = 0;
-  virtual absl::optional<const MediaStreamDevice> device() const = 0;
+  virtual std::optional<const MediaStreamDevice> device() const = 0;
   // This function is called on the track by the serializer once it has been
   // serialized for transfer to another context.
   // Prepares the track for a potentially cross-renderer transfer. After this

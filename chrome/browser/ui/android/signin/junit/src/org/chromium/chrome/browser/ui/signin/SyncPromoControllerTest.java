@@ -22,6 +22,8 @@ import org.mockito.quality.Strictness;
 
 import org.chromium.base.shared_preferences.SharedPreferencesManager;
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.base.test.util.Features;
+import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
 import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
@@ -29,8 +31,6 @@ import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
 import org.chromium.chrome.browser.sync.SyncServiceFactory;
 import org.chromium.chrome.features.start_surface.StartSurfaceConfiguration;
-import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
 import org.chromium.chrome.test.util.browser.signin.AccountManagerTestRule;
 import org.chromium.components.signin.identitymanager.IdentityManager;
 import org.chromium.components.signin.metrics.SigninAccessPoint;
@@ -108,10 +108,14 @@ public class SyncPromoControllerTest {
     public void shouldHideSyncPromoForNTPWhenDefaultAccountCannotOfferSyncPromos() {
         mAccountManagerTestRule.addAccount(
                 "test1@gmail.com",
-                mAccountCapabilitiesBuilder.setCanOfferExtendedSyncPromos(false).build());
+                mAccountCapabilitiesBuilder
+                        .setCanShowHistorySyncOptInsWithoutMinorModeRestrictions(false)
+                        .build());
         mAccountManagerTestRule.addAccount(
                 "test2@gmail.com",
-                mAccountCapabilitiesBuilder.setCanOfferExtendedSyncPromos(true).build());
+                mAccountCapabilitiesBuilder
+                        .setCanShowHistorySyncOptInsWithoutMinorModeRestrictions(true)
+                        .build());
 
         Assert.assertFalse(mSyncPromoController.canShowSyncPromo());
     }
@@ -128,10 +132,14 @@ public class SyncPromoControllerTest {
     public void shouldShowSyncPromoForNTPWhenSecondaryAccountCannotOfferSyncPromos() {
         mAccountManagerTestRule.addAccount(
                 "test1@gmail.com",
-                mAccountCapabilitiesBuilder.setCanOfferExtendedSyncPromos(true).build());
+                mAccountCapabilitiesBuilder
+                        .setCanShowHistorySyncOptInsWithoutMinorModeRestrictions(true)
+                        .build());
         mAccountManagerTestRule.addAccount(
                 "test2@gmail.com",
-                mAccountCapabilitiesBuilder.setCanOfferExtendedSyncPromos(false).build());
+                mAccountCapabilitiesBuilder
+                        .setCanShowHistorySyncOptInsWithoutMinorModeRestrictions(false)
+                        .build());
 
         Assert.assertTrue(mSyncPromoController.canShowSyncPromo());
     }

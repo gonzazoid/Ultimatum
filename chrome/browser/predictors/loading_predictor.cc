@@ -86,7 +86,7 @@ bool IsPreconnectExpensive() {
     return false;
   }
 
-  absl::optional<base::android::RadioSignalLevel> maybe_level =
+  std::optional<base::android::RadioSignalLevel> maybe_level =
       base::android::RadioUtils::GetCellSignalLevel();
   return maybe_level.has_value() &&
          *maybe_level <= base::android::RadioSignalLevel::kModerate;
@@ -159,7 +159,7 @@ bool LoadingPredictor::PrepareForPageLoad(
     const GURL& url,
     HintOrigin origin,
     bool preconnectable,
-    absl::optional<PreconnectPrediction> preconnect_prediction) {
+    std::optional<PreconnectPrediction> preconnect_prediction) {
   if (shutdown_)
     return true;
 
@@ -170,13 +170,22 @@ bool LoadingPredictor::PrepareForPageLoad(
 
   if (origin == HintOrigin::OMNIBOX) {
     // Omnibox hints are lightweight and need a special treatment.
-    HandleOmniboxHint(url, preconnectable);
+    HandleHintByOrigin(url, preconnectable, /*only_allow_https=*/false,
+                       omnibox_preconnect_data_);
     return true;
   }
 
   if (origin == HintOrigin::BOOKMARK_BAR) {
     // Bookmark hints are lightweight and need a special treatment.
-    HandleBookmarkBarHint(url, preconnectable);
+    HandleHintByOrigin(url, /*preconnectable=*/true, /*only_allow_https=*/true,
+                       bookmark_bar_preconnect_data_);
+    return true;
+  }
+
+  if (origin == HintOrigin::NEW_TAB_PAGE) {
+    // New Tab Page hints are lightweight and need a special treatment.
+    HandleHintByOrigin(url, /*preconnectable=*/true, /*only_allow_https=*/true,
+                       new_tab_page_preconnect_data_);
     return true;
   }
 
@@ -203,6 +212,29 @@ bool LoadingPredictor::PrepareForPageLoad(
     AddInitialUrlToPreconnectPrediction(url, &prediction);
   }
 
+  // LCPP: AutoPreconnectLCPOrigins experiment (crbug.com/1518996)
+  // Preconnect to LCPP predicted LCP origins in all platforms including those
+  // without optimization guide.
+  if (base::FeatureList::IsEnabled(
+          blink::features::kLCPPAutoPreconnectLcpOrigin)) {
+    std::optional<LcppData> lcpp_data =
+        resource_prefetch_predictor()->GetLcppData(url);
+    if (lcpp_data) {
+      auto network_anonymization_key =
+          net::NetworkAnonymizationKey::CreateSameSite(
+              net::SchemefulSite(url::Origin::Create(url)));
+      size_t count = 0;
+      for (const GURL& preconnect_origin :
+           PredictPreconnectableOrigins(*lcpp_data)) {
+        prediction.requests.emplace_back(url::Origin::Create(preconnect_origin),
+                                         1, network_anonymization_key);
+        ++count;
+      }
+      base::UmaHistogramCounts10000("Blink.LCPP.PreconnectPredictionCount",
+                                    count);
+    }
+  }
+
   // LCPP: set fonts to be prefetched to prefetch_requests.
   // TODO(crbug.com/1493768): make prefetch work for platforms without the
   // optimization guide.
@@ -211,7 +243,7 @@ bool LoadingPredictor::PrepareForPageLoad(
       base::FeatureList::IsEnabled(features::kLoadingPredictorPrefetch) &&
       features::kLoadingPredictorPrefetchSubresourceType.Get() ==
           features::PrefetchSubresourceType::kAll) {
-    absl::optional<LcppData> lcpp_data =
+    std::optional<LcppData> lcpp_data =
         resource_prefetch_predictor()->GetLcppData(url);
     if (lcpp_data) {
       auto network_anonymization_key =
@@ -392,60 +424,46 @@ void LoadingPredictor::MaybeRemovePreconnect(const GURL& url) {
     prefetch_manager_->Stop(url);
 }
 
-void LoadingPredictor::HandleOmniboxHint(const GURL& url, bool preconnectable) {
-  if (!url.is_valid() || !url.has_host() || !IsPreconnectAllowed(profile_))
+void LoadingPredictor::HandleHintByOrigin(const GURL& url,
+                                          bool preconnectable,
+                                          bool only_allow_https,
+                                          PreconnectData& preconnect_data) {
+  if (!url.is_valid() || !url.has_host() || !IsPreconnectAllowed(profile_) ||
+      (only_allow_https && url.scheme() != url::kHttpsScheme)) {
     return;
+  }
 
-  url::Origin origin = url::Origin::Create(url);
-  bool is_new_origin = origin != last_omnibox_origin_;
-  last_omnibox_origin_ = origin;
-  net::SchemefulSite site = net::SchemefulSite(origin);
-  auto network_anonymization_key =
+  const url::Origin origin = url::Origin::Create(url);
+  // When constructing an Origin from a GURL results in an opaque origin, the
+  // resulting origin is guaranteed to be unique; trying to create another
+  // origin from the same URL will result in a different unique opaque origin,
+  // so any preconnect attempt would never be used anyway.
+  if (origin.opaque()) {
+    return;
+  }
+
+  // Tracking whether this is a new origin request. If so, then
+  // preconnect/presolve immediately. If the origins are the same, then
+  // preconnect/presolve after a given threshold.
+  const bool is_new_origin = origin != preconnect_data.last_origin_;
+  preconnect_data.last_origin_ = origin;
+  const net::SchemefulSite site = net::SchemefulSite(origin);
+  const auto network_anonymization_key =
       net::NetworkAnonymizationKey::CreateSameSite(site);
   base::TimeTicks now = base::TimeTicks::Now();
   if (preconnectable) {
-    if (is_new_origin || now - last_omnibox_preconnect_time_ >=
+    if (is_new_origin || now - preconnect_data.last_preconnect_time_ >=
                              kMinDelayBetweenPreconnectRequests) {
-      last_omnibox_preconnect_time_ = now;
+      preconnect_data.last_preconnect_time_ = now;
       preconnect_manager()->StartPreconnectUrl(url, true,
                                                network_anonymization_key);
     }
     return;
   }
 
-  if (is_new_origin || now - last_omnibox_preresolve_time_ >=
+  if (is_new_origin || now - preconnect_data.last_preresolve_time_ >=
                            kMinDelayBetweenPreresolveRequests) {
-    last_omnibox_preresolve_time_ = now;
-    preconnect_manager()->StartPreresolveHost(url, network_anonymization_key);
-  }
-}
-
-void LoadingPredictor::HandleBookmarkBarHint(const GURL& url,
-                                             bool preconnectable) {
-  if (!url.is_valid() || !url.has_host() || !IsPreconnectAllowed(profile_)) {
-    return;
-  }
-
-  url::Origin origin = url::Origin::Create(url);
-  bool is_new_origin = origin != last_bookmark_bar_origin_;
-  last_bookmark_bar_origin_ = origin;
-  net::SchemefulSite site = net::SchemefulSite(origin);
-  auto network_anonymization_key =
-      net::NetworkAnonymizationKey::CreateSameSite(site);
-  base::TimeTicks now = base::TimeTicks::Now();
-  if (preconnectable && url.SchemeIs("https")) {
-    if (is_new_origin || now - last_bookmark_bar_preconnect_time_ >=
-                             kMinDelayBetweenPreconnectRequests) {
-      last_bookmark_bar_preconnect_time_ = now;
-      preconnect_manager()->StartPreconnectUrl(url, true,
-                                               network_anonymization_key);
-    }
-    return;
-  }
-
-  if (is_new_origin || now - last_bookmark_bar_preresolve_time_ >=
-                           kMinDelayBetweenPreresolveRequests) {
-    last_bookmark_bar_preresolve_time_ = now;
+    preconnect_data.last_preresolve_time_ = now;
     preconnect_manager()->StartPreresolveHost(url, network_anonymization_key);
   }
 }
@@ -530,7 +548,7 @@ void LoadingPredictor::MaybePrewarmResources(
     return;
   }
 
-  absl::optional<LcppData> lcpp_data =
+  std::optional<LcppData> lcpp_data =
       resource_prefetch_predictor()->GetLcppData(top_frame_main_resource_url);
 
   if (!lcpp_data || !IsValidLcppStat(lcpp_data->lcpp_stat())) {

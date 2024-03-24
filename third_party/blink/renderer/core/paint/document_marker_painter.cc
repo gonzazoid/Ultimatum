@@ -26,7 +26,7 @@ namespace blink {
 
 namespace {
 
-#if !BUILDFLAG(IS_MAC)
+#if !BUILDFLAG(IS_APPLE)
 
 static const float kMarkerWidth = 4;
 static const float kMarkerHeight = 2;
@@ -65,7 +65,7 @@ PaintRecord RecordMarker(Color blink_color) {
   return recorder.finishRecordingAsPicture();
 }
 
-#else  // !BUILDFLAG(IS_MAC)
+#else  // !BUILDFLAG(IS_APPLE)
 
 static const float kMarkerWidth = 4;
 static const float kMarkerHeight = 3;
@@ -88,7 +88,7 @@ PaintRecord RecordMarker(Color blink_color) {
   return recorder.finishRecordingAsPicture();
 }
 
-#endif  // !BUILDFLAG(IS_MAC)
+#endif  // !BUILDFLAG(IS_APPLE)
 
 void DrawDocumentMarker(GraphicsContext& context,
                         const gfx::PointF& pt,
@@ -99,7 +99,7 @@ void DrawDocumentMarker(GraphicsContext& context,
   SkScalar origin_x = WebCoreFloatToSkScalar(pt.x());
   SkScalar origin_y = WebCoreFloatToSkScalar(pt.y());
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   // Make sure to draw only complete dots, and finish inside the marked text.
   float spacing = kMarkerSpacing * zoom;
   width -= fmodf(width + spacing, kMarkerWidth * zoom) - spacing;
@@ -226,7 +226,7 @@ void DocumentMarkerPainter::PaintDocumentMarker(
     const ComputedStyle& style,
     DocumentMarker::MarkerType marker_type,
     const LineRelativeRect& local_rect,
-    absl::optional<Color> custom_marker_color) {
+    std::optional<Color> custom_marker_color) {
   // IMPORTANT: The misspelling underline is not considered when calculating the
   // text bounds, so we have to make sure to fit within those bounds.  This
   // means the top pixel(s) of the underline will overlap the bottom pixel(s) of
@@ -299,6 +299,7 @@ TextPaintStyle DocumentMarkerPainter::ComputeTextPaintStyleFrom(
   text_style.stroke_width = style.TextStrokeWidth();
   text_style.color_scheme = style.UsedColorScheme();
   text_style.shadow = nullptr;
+  text_style.paint_order = style.PaintOrder();
   if (marker.GetType() == DocumentMarker::kTextMatch)
     return text_style;
   return HighlightStyleUtils::HighlightPaintingStyle(

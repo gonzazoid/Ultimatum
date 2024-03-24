@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/side_panel/read_anything/read_anything_side_panel_controller.h"
+
 #include <algorithm>
 #include <memory>
 
@@ -11,7 +12,6 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/side_panel/read_anything/read_anything_tab_helper.h"
-#include "chrome/browser/ui/views/bubble/bubble_contents_wrapper.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/side_panel/read_anything/read_anything_container_view.h"
 #include "chrome/browser/ui/views/side_panel/read_anything/read_anything_controller.h"
@@ -23,13 +23,11 @@
 #include "chrome/browser/ui/webui/side_panel/read_anything/read_anything_prefs.h"
 #include "chrome/browser/ui/webui/side_panel/read_anything/read_anything_untrusted_page_handler.h"
 #include "chrome/browser/ui/webui/side_panel/read_anything/read_anything_untrusted_ui.h"
+#include "chrome/browser/ui/webui/top_chrome/webui_contents_wrapper.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/language/core/browser/language_model.h"
 #include "components/language/core/browser/language_model_manager.h"
 #include "components/language/core/common/locale_util.h"
-#include "read_anything_controller.h"
-#include "read_anything_coordinator.h"
-#include "read_anything_side_panel_controller.h"
 #include "ui/accessibility/accessibility_features.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_types.h"
@@ -66,40 +64,44 @@ void ReadAnythingSidePanelController::InitModelWithUserPrefs() {
   std::string prefs_lang = language_model->GetLanguages().front().lang_code;
   prefs_lang = language::ExtractBaseLanguage(prefs_lang);
 
-  std::string prefs_font_name;
-  prefs_font_name =
+  std::string prefs_font_name =
       Profile::FromBrowserContext(web_contents_->GetBrowserContext())
           ->GetPrefs()
           ->GetString(prefs::kAccessibilityReadAnythingFontName);
 
-  double prefs_font_scale;
-  prefs_font_scale =
+  double prefs_font_scale =
       Profile::FromBrowserContext(web_contents_->GetBrowserContext())
           ->GetPrefs()
           ->GetDouble(prefs::kAccessibilityReadAnythingFontScale);
 
-  read_anything::mojom::Colors prefs_colors;
-  prefs_colors = static_cast<read_anything::mojom::Colors>(
+  bool prefs_links_enabled =
       Profile::FromBrowserContext(web_contents_->GetBrowserContext())
           ->GetPrefs()
-          ->GetInteger(prefs::kAccessibilityReadAnythingColorInfo));
+          ->GetBoolean(prefs::kAccessibilityReadAnythingLinksEnabled);
 
-  read_anything::mojom::LineSpacing prefs_line_spacing;
-  prefs_line_spacing = static_cast<read_anything::mojom::LineSpacing>(
-      Profile::FromBrowserContext(web_contents_->GetBrowserContext())
-          ->GetPrefs()
-          ->GetInteger(prefs::kAccessibilityReadAnythingLineSpacing));
+  read_anything::mojom::Colors prefs_colors =
+      static_cast<read_anything::mojom::Colors>(
+          Profile::FromBrowserContext(web_contents_->GetBrowserContext())
+              ->GetPrefs()
+              ->GetInteger(prefs::kAccessibilityReadAnythingColorInfo));
 
-  read_anything::mojom::LetterSpacing prefs_letter_spacing;
-  prefs_letter_spacing = static_cast<read_anything::mojom::LetterSpacing>(
-      Profile::FromBrowserContext(web_contents_->GetBrowserContext())
-          ->GetPrefs()
-          ->GetInteger(prefs::kAccessibilityReadAnythingLetterSpacing));
+  read_anything::mojom::LineSpacing prefs_line_spacing =
+      static_cast<read_anything::mojom::LineSpacing>(
+          Profile::FromBrowserContext(web_contents_->GetBrowserContext())
+              ->GetPrefs()
+              ->GetInteger(prefs::kAccessibilityReadAnythingLineSpacing));
+
+  read_anything::mojom::LetterSpacing prefs_letter_spacing =
+      static_cast<read_anything::mojom::LetterSpacing>(
+          Profile::FromBrowserContext(web_contents_->GetBrowserContext())
+              ->GetPrefs()
+              ->GetInteger(prefs::kAccessibilityReadAnythingLetterSpacing));
 
   model_->Init(
       /* lang code = */ prefs_lang,
-      /* font_name = */ prefs_font_name,
+      /* font name = */ prefs_font_name,
       /* font scale = */ prefs_font_scale,
+      /* links enabled = */ prefs_links_enabled,
       /* colors = */ prefs_colors,
       /* line spacing = */ prefs_line_spacing,
       /* letter spacing = */ prefs_letter_spacing);

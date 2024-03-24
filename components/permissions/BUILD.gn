@@ -2,8 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-# TODO(crbug.com/1327384): Make `permissions_common` source_set.
-component("permissions_common") {
+source_set("permissions_common") {
   sources = [
     "constants.cc",
     "constants.h",
@@ -51,6 +50,8 @@ source_set("permissions") {
     "contexts/payment_handler_permission_context.h",
     "contexts/sensor_permission_context.cc",
     "contexts/sensor_permission_context.h",
+    "contexts/speaker_selection_permission_context.cc",
+    "contexts/speaker_selection_permission_context.h",
     "contexts/wake_lock_permission_context.cc",
     "contexts/wake_lock_permission_context.h",
     "contexts/webxr_permission_context.cc",
@@ -133,8 +134,8 @@ source_set("permissions") {
     "//services/metrics/public/cpp:ukm_builders",
     "//sql",
     "//third_party/blink/public/common",
-    "//third_party/sqlite",
     "//ui/base",
+    "//ui/strings:ui_strings_grit",
     "//url",
   ]
   if (is_mac || is_chromeos) {
@@ -188,9 +189,9 @@ source_set("permissions") {
       "//components/prefs",
       "//components/resources:android_resources",
       "//components/security_state/core:core",
+      "//components/strings:components_strings_grit",
       "//third_party/jni_zero",
       "//ui/android",
-      "//ui/strings:ui_strings_grit",
     ]
   } else {
     sources += [
@@ -319,7 +320,6 @@ source_set("unit_tests") {
     "//sql",
     "//sql:test_support",
     "//testing/gtest",
-    "//third_party/sqlite",
     "//url",
   ]
   if (is_android) {

@@ -35,13 +35,13 @@ import org.chromium.base.test.params.ParameterizedRunner;
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.DisableIf;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
-import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.settings.SettingsActivity;
 import org.chromium.chrome.test.ChromeJUnit4RunnerDelegate;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.chrome.test.batch.BlankCTATabInitialStateRule;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.components.browser_ui.settings.ChromeSwitchPreference;
 import org.chromium.components.browser_ui.site_settings.ChosenObjectInfo;
 import org.chromium.components.browser_ui.site_settings.ContentSettingException;
@@ -101,7 +101,6 @@ public class SingleWebsiteSettingsTest {
 
     @Test
     @SmallTest
-    @EnableFeatures(PermissionsAndroidFeatureList.BLOCK_MIDI_BY_DEFAULT)
     @UseMethodParameter(SingleWebsiteSettingsParams.class)
     public void testExceptionToggleShowing(
             @ContentSettingsType.EnumType int contentSettingsType,
@@ -113,16 +112,11 @@ public class SingleWebsiteSettingsTest {
                 contentSettingsType == ContentSettingsType.NOTIFICATIONS
                         && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O);
 
-        // TODO(http://crbug.com/1450349) Remove this conditional once MIDI permissions project is
-        // fully launched
-        if (contentSettingsType != ContentSettingsType.MIDI_SYSEX) {
-            new SingleExceptionTestCase(contentSettingsType, contentSettingValue).run();
-        }
+        new SingleExceptionTestCase(contentSettingsType, contentSettingValue).run();
     }
 
     @Test
     @SmallTest
-    @EnableFeatures(PermissionsAndroidFeatureList.BLOCK_MIDI_BY_DEFAULT)
     @DisableIf.Build(
             sdk_is_less_than = Build.VERSION_CODES.O,
             message = "Notification does not have a toggle when disabled.")
@@ -148,7 +142,6 @@ public class SingleWebsiteSettingsTest {
 
     @Test
     @SmallTest
-    @EnableFeatures(PermissionsAndroidFeatureList.BLOCK_MIDI_BY_DEFAULT)
     public void testDesktopSiteException() {
         SettingsActivity settingsActivity =
                 SiteSettingsTestUtils.startSingleWebsitePreferences(
@@ -209,10 +202,7 @@ public class SingleWebsiteSettingsTest {
 
     @Test
     @SmallTest
-    @EnableFeatures({
-        PermissionsAndroidFeatureList.PERMISSION_STORAGE_ACCESS,
-        PermissionsAndroidFeatureList.BLOCK_MIDI_BY_DEFAULT
-    })
+    @EnableFeatures(PermissionsAndroidFeatureList.PERMISSION_STORAGE_ACCESS)
     public void testStorageAccessPermission() {
         int type = ContentSettingsType.STORAGE_ACCESS;
         GURL example = new GURL("https://example.com");
@@ -268,7 +258,7 @@ public class SingleWebsiteSettingsTest {
                 () -> {
                     result[0] =
                             WebsitePreferenceBridge.getContentSetting(
-                                    Profile.getLastUsedRegularProfile(),
+                                    ProfileManager.getLastUsedRegularProfile(),
                                     contentSettingType,
                                     primaryUrl,
                                     secondaryUrl);
@@ -366,7 +356,7 @@ public class SingleWebsiteSettingsTest {
         // Set setting explicitly to write it to prefs.
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
-                    info.setContentSetting(Profile.getLastUsedRegularProfile(), setting);
+                    info.setContentSetting(ProfileManager.getLastUsedRegularProfile(), setting);
                 });
         website.addEmbeddedPermission(info);
         return website;

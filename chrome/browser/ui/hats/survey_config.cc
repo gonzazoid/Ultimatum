@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "survey_config.h"
+#include <optional>
 
 #include "base/feature_list.h"
 #include "base/features.h"
@@ -139,28 +140,22 @@ std::vector<hats::SurveyConfig> GetAllSurveyConfigs() {
   default_survey.product_specific_string_data_fields = {"Test Field 3"};
   survey_configs.emplace_back(default_survey);
 
-  // Permissions surveys.
-  for (auto& trigger_id_pair : permissions::PermissionHatsTriggerHelper::
-           GetPermissionPromptTriggerIdPairs(
-               kHatsSurveyTriggerPermissionsPrompt)) {
-    // trigger_id_pair has structure <trigger_name, trigger_id>. trigger_name is
-    // a unique name used by the HaTS service integration, and trigger_id is an
-    // ID that specifies a survey in the Listnr backend.
-    survey_configs.emplace_back(
-        &permissions::features::kPermissionsPromptSurvey, trigger_id_pair.first,
-        trigger_id_pair.second,
-        std::vector<std::string>{
-            permissions::kPermissionsPromptSurveyHadGestureKey},
-        std::vector<std::string>{
-            permissions::kPermissionsPromptSurveyPromptDispositionKey,
-            permissions::kPermissionsPromptSurveyPromptDispositionReasonKey,
-            permissions::kPermissionsPromptSurveyActionKey,
-            permissions::kPermissionsPromptSurveyRequestTypeKey,
-            permissions::kPermissionsPromptSurveyReleaseChannelKey,
-            permissions::kPermissionsPromptSurveyDisplayTimeKey,
-            permissions::kPermissionPromptSurveyOneTimePromptsDecidedBucketKey,
-            permissions::kPermissionPromptSurveyUrlKey});
-  }
+  // Permission prompt survey
+  survey_configs.emplace_back(
+      &permissions::features::kPermissionsPromptSurvey,
+      kHatsSurveyTriggerPermissionsPrompt,
+      /*presupplied_trigger_id=*/std::nullopt,
+      std::vector<std::string>{
+          permissions::kPermissionsPromptSurveyHadGestureKey},
+      std::vector<std::string>{
+          permissions::kPermissionsPromptSurveyPromptDispositionKey,
+          permissions::kPermissionsPromptSurveyPromptDispositionReasonKey,
+          permissions::kPermissionsPromptSurveyActionKey,
+          permissions::kPermissionsPromptSurveyRequestTypeKey,
+          permissions::kPermissionsPromptSurveyReleaseChannelKey,
+          permissions::kPermissionsPromptSurveyDisplayTimeKey,
+          permissions::kPermissionPromptSurveyOneTimePromptsDecidedBucketKey,
+          permissions::kPermissionPromptSurveyUrlKey});
 
 #if !BUILDFLAG(IS_ANDROID)
   // Dev tools surveys.
@@ -196,10 +191,10 @@ std::vector<hats::SurveyConfig> GetAllSurveyConfigs() {
       /*presupplied_trigger_id=*/
       features::kHappinessTrackingSurveysForSecurityPageTriggerId.Get(),
       std::vector<std::string>{},
-      std::vector<std::string>{"Security Page User Action",
-                               "Safe Browsing Setting Before Trigger",
-                               "Safe Browsing Setting After Trigger",
-                               "Client Channel", "Time On Page"});
+      std::vector<std::string>{
+          "Security Page User Action", "Safe Browsing Setting Before Trigger",
+          "Safe Browsing Setting After Trigger", "Client Channel",
+          "Time On Page", "Friendlier Safe Browsing Settings"});
   survey_configs.emplace_back(
       &features::kHappinessTrackingSurveysForDesktopPrivacyGuide,
       kHatsSurveyTriggerPrivacyGuide);
@@ -403,10 +398,11 @@ std::vector<hats::SurveyConfig> GetAllSurveyConfigs() {
       features::kHappinessTrackingSurveysExtensionsSafetyHubTriggerId.Get(),
       std::vector<std::string>{},
       std::vector<std::string>{
-          "Average extension age in days",
+          "Average extension age in days", "Age of profile in days",
           "Time since last extension was installed in days",
-          "Number of extensions installed", "Time on extension page in minutes",
-          "Number of extensions removed", "Number of extensions kept",
+          "Number of extensions installed", "Time on extension page in seconds",
+          "Extension review panel shown", "Number of extensions removed",
+          "Number of extensions kept",
           "Number of non-trigger extensions removed", "Client Channel"});
 
   // Autofill surveys.

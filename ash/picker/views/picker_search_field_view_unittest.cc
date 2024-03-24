@@ -8,6 +8,7 @@
 
 #include "ash/test/ash_test_base.h"
 #include "base/test/test_future.h"
+#include "base/time/time.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/views/controls/textfield/textfield.h"

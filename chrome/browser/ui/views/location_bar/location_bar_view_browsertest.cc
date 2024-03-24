@@ -36,6 +36,7 @@
 #include "content/public/common/content_features.h"
 #include "content/public/test/back_forward_cache_util.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "net/cert/ct_policy_status.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/ssl/ssl_info.h"
@@ -231,7 +232,7 @@ IN_PROC_BROWSER_TEST_F(TouchLocationBarViewBrowserTest,
   GetLocationBarView()->SetImeInlineAutocompletion(u"歌");
   EXPECT_TRUE(ime_inline_autocomplete_view->GetVisible());
 
-  GetLocationBarView()->Layout();
+  GetLocationBarView()->DeprecatedLayoutImmediately();
 
   // Make sure the IME inline autocomplete view starts at the end of
   // |omnibox_view_views|.

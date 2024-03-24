@@ -24,7 +24,6 @@
 #include "chrome/common/extensions/api/cookies.h"
 #include "chrome/common/url_constants.h"
 #include "content/public/browser/web_contents.h"
-#include "cookies_helpers.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/permissions/permissions_data.h"
 #include "net/cookies/canonical_cookie.h"
@@ -106,7 +105,7 @@ Cookie CreateCookie(const net::CanonicalCookie& canonical_cookie,
   cookie.path = base::IsStringUTF8(canonical_cookie.Path())
                     ? canonical_cookie.Path()
                     : std::string();
-  cookie.secure = canonical_cookie.IsSecure();
+  cookie.secure = canonical_cookie.SecureAttribute();
   cookie.http_only = canonical_cookie.IsHttpOnly();
 
   switch (canonical_cookie.SameSite()) {
@@ -183,7 +182,7 @@ GURL GetURLFromCanonicalCookie(const net::CanonicalCookie& cookie) {
   DCHECK(!cookie.Domain().empty());
 
   return net::cookie_util::CookieOriginToURL(cookie.Domain(),
-                                             cookie.IsSecure());
+                                             cookie.SecureAttribute());
 }
 
 void AppendMatchingCookiesFromCookieListToVector(
@@ -209,7 +208,8 @@ void AppendMatchingCookiesFromCookieAccessResultListToVector(
     const net::CanonicalCookie& cookie = cookie_with_access_result.cookie;
     AppendCookieToVectorIfMatchAndHasHostPermission(
         cookie, details, extension, match_vector,
-        net::CookiePartitionKeyCollection());
+        CookiePartitionKeyCollectionFromApiPartitionKey(
+            details->partition_key));
   }
 }
 
@@ -222,9 +222,9 @@ void AppendToTabIdList(Browser* browser, base::Value::List& tab_ids) {
 }
 
 bool ValidateCookieApiPartitionKey(
-    const absl::optional<extensions::api::cookies::CookiePartitionKey>&
+    const std::optional<extensions::api::cookies::CookiePartitionKey>&
         partition_key,
-    absl::optional<net::CookiePartitionKey>& net_partition_key,
+    std::optional<net::CookiePartitionKey>& net_partition_key,
     std::string& error_message) {
   if (partition_key &&
       base::FeatureList::IsEnabled(net::features::kPartitionedCookies)) {
@@ -248,27 +248,34 @@ bool CookieMatchesPartitionKeyCollection(
   return cookie_partition_key_collection.Contains(*cookie.PartitionKey());
 }
 
-bool CookieMatchesPartitionKeyInDetails(
-    const absl::optional<extensions::api::cookies::CookiePartitionKey>&
-        partition_key,
-    const net::CanonicalCookie& cookie) {
-  if (!partition_key) {
-    return !cookie.IsPartitioned();
+bool CanonicalCookiePartitionKeyMatchesApiCookiePartitionKey(
+    const std::optional<extensions::api::cookies::CookiePartitionKey>&
+        api_partition_key,
+    const absl::optional<net::CookiePartitionKey>& net_partition_key) {
+  if (!api_partition_key.has_value()) {
+    return !net_partition_key.has_value();
   }
 
-  if (cookie.IsPartitioned() && !cookie.PartitionKey()->IsSerializeable()) {
+  if (!net_partition_key.has_value()) {
     return false;
   }
 
-  std::string serialized_partition_key;
-  return net::CookiePartitionKey::Serialize(cookie.PartitionKey(),
-                                            serialized_partition_key) &&
-         serialized_partition_key == partition_key->top_level_site.value();
+  // If both keys are present, they both must be serializable for a match.
+  if (!net_partition_key->IsSerializeable() ||
+      !api_partition_key->top_level_site.has_value()) {
+    return false;
+  }
+
+  std::string serialized_net_partition_key;
+  return net::CookiePartitionKey::Serialize(net_partition_key,
+                                            serialized_net_partition_key) &&
+         serialized_net_partition_key ==
+             api_partition_key->top_level_site.value();
 }
 
 net::CookiePartitionKeyCollection
 CookiePartitionKeyCollectionFromApiPartitionKey(
-    const absl::optional<extensions::api::cookies::CookiePartitionKey>&
+    const std::optional<extensions::api::cookies::CookiePartitionKey>&
         partition_key) {
   if (!partition_key) {
     return net::CookiePartitionKeyCollection();
@@ -278,7 +285,7 @@ CookiePartitionKeyCollectionFromApiPartitionKey(
     return net::CookiePartitionKeyCollection::ContainsAll();
   }
 
-  absl::optional<net::CookiePartitionKey> net_partition_key;
+  std::optional<net::CookiePartitionKey> net_partition_key;
   if (!net::CookiePartitionKey::Deserialize(
           partition_key->top_level_site.value(), net_partition_key)) {
     return net::CookiePartitionKeyCollection();
@@ -312,8 +319,9 @@ bool MatchFilter::MatchesCookie(
   if (details_->path && *details_->path != cookie.Path())
     return false;
 
-  if (details_->secure && *details_->secure != cookie.IsSecure())
+  if (details_->secure && *details_->secure != cookie.SecureAttribute()) {
     return false;
+  }
 
   if (details_->session && *details_->session != !cookie.IsPersistent())
     return false;

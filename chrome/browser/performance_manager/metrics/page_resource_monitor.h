@@ -7,6 +7,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -17,8 +18,7 @@
 #include "components/performance_manager/public/resource_attribution/queries.h"
 #include "components/performance_manager/public/resource_attribution/query_results.h"
 #include "components/performance_manager/public/resource_attribution/resource_contexts.h"
-#include "components/system_cpu/pressure_sample.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/system_cpu/cpu_sample.h"
 
 namespace performance_manager::metrics {
 
@@ -104,7 +104,7 @@ class PageResourceMonitor : public resource_attribution::QueryResultObserver,
   void OnPageResourceUsageResult(
       const resource_attribution::QueryResultMap& results,
       const PageCPUUsageMap& page_cpu_usage,
-      absl::optional<system_cpu::PressureSample> system_cpu);
+      std::optional<system_cpu::CpuSample> system_cpu);
 
   // Asynchronously checks if the CPU metrics are still above the threshold
   // after a delay.
@@ -114,12 +114,12 @@ class PageResourceMonitor : public resource_attribution::QueryResultObserver,
   // page and system CPU measurements are ready.
   void OnDelayedCPUInterventionMetricsResult(
       const PageCPUUsageMap& page_cpu_usage,
-      absl::optional<system_cpu::PressureSample> system_cpu);
+      std::optional<system_cpu::CpuSample> system_cpu);
 
   // Log CPU intervention metrics with the provided suffix.
   void LogCPUInterventionMetrics(
       const PageCPUUsageMap& page_cpu_usage,
-      const absl::optional<system_cpu::PressureSample>& system_cpu,
+      const std::optional<system_cpu::CpuSample>& system_cpu,
       const base::TimeTicks now,
       CPUInterventionSuffix histogram_suffix);
 
@@ -129,13 +129,16 @@ class PageResourceMonitor : public resource_attribution::QueryResultObserver,
   resource_attribution::ScopedResourceUsageQuery resource_query_
       GUARDED_BY_CONTEXT(sequence_checker_);
 
+  // Manages notificatoin subscriptions to `resource_query_`.
+  resource_attribution::ScopedQueryObservation query_observation_{this};
+
   // Timer which handles logging high CPU after a potential delay.
   base::OneShotTimer log_cpu_on_delay_timer_
       GUARDED_BY_CONTEXT(sequence_checker_);
 
   // Keeps track of whether the browser has exceeded the CPU threshold.
-  absl::optional<base::TimeTicks> time_of_last_cpu_threshold_exceeded_
-      GUARDED_BY_CONTEXT(sequence_checker_) = absl::nullopt;
+  std::optional<base::TimeTicks> time_of_last_cpu_threshold_exceeded_
+      GUARDED_BY_CONTEXT(sequence_checker_) = std::nullopt;
 
   // Time of last PageResourceUsage collection.
   base::TimeTicks time_of_last_resource_usage_

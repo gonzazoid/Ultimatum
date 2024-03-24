@@ -36,9 +36,15 @@ BASE_FEATURE(kCustomizeChromeSidePanelExtensionsCard,
              "CustomizeChromeSidePanelExtensionsCard",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
-// If enabled, shows wallpaper search within the Cusotmize Chrome Side Panel.
+// If enabled, shows wallpaper search within the Customize Chrome Side Panel.
 BASE_FEATURE(kCustomizeChromeWallpaperSearch,
              "CustomizeChromeWallpaperSearch",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// If enabled, shows entry point on Customize Chrome Side Panel's Appearance
+// page for Wallpaper Search.";
+BASE_FEATURE(kCustomizeChromeWallpaperSearchButton,
+             "CustomizeChromeWallpaperSearchButton",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 // If enabled, shows inspiration card in Customize Chrome Side Panel Wallpaper
@@ -131,12 +137,6 @@ BASE_FEATURE(kNtpBackgroundImageErrorDetection,
 BASE_FEATURE(kNtpChromeCartModule,
              "NtpChromeCartModule",
              base::FEATURE_ENABLED_BY_DEFAULT);
-
-// If enabled, Comprehensive Theming color changes will be applied to the
-// Realbox on the New Tab Page.
-BASE_FEATURE(kNtpComprehensiveThemeRealbox,
-             "NtpComprehensiveThemeRealbox",
-             base::FEATURE_DISABLED_BY_DEFAULT);
 
 #if !defined(OFFICIAL_BUILD)
 // If enabled, dummy modules will be shown.
@@ -343,6 +343,12 @@ BASE_FEATURE(kNtpHistoryClustersModuleMaxClusters,
              "NtpHistoryClustersMaxClusters",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
+// Dummy feature to set the history clusters rankers' metrics data query time
+// range in days.
+BASE_FEATURE(kNtpHistoryClustersModuleRankingMetricsQueryDays,
+             "NtpHistoryClustersModuleRankingMetricsQueryDays",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
 // If enabled, module headers will display an associated icon.
 BASE_FEATURE(kNtpModulesHeaderIcon,
              "NtpModulesHeaderIcon",
@@ -392,8 +398,29 @@ BASE_FEATURE(kNtpHistoryClustersModuleEnableContentClustering,
              "HistoryClustersModuleEnableContentClustering",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
+// If enabled, the Tab Resumption module will be shown.
 BASE_FEATURE(kNtpTabResumptionModule,
              "NtpTabResumptionModule",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kNtpTabResumptionModuleCategories,
+             "NtpTabResumptionModuleCategories",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Dummy feature to set how recent tabs must be to be shown.
+BASE_FEATURE(kNtpTabResumptionModuleTimeLimit,
+             "NtpTabResumptionModuleTimeLimit",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// If enabled, shows entry point on New Tab Page for Customize Chrome Side Panel
+// Wallpaper Search.
+BASE_FEATURE(kNtpWallpaperSearchButton,
+             "NtpWallpaperSearchButton",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// If enabled, animates New Tab Page's Wallpaper Search Button.
+BASE_FEATURE(kNtpWallpaperSearchButtonAnimation,
+             "NtpWallpaperSearchButtonAnimation",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 const char kNtpModuleIgnoredCriteriaThreshold[] =
@@ -458,11 +485,24 @@ const char kNtpHistoryClustersModuleCategoriesBoostlistParam[] =
     "NtpHistoryClustersModuleCategoriesBoostlistParam";
 const char kNtpHistoryClustersModuleMaxClustersParam[] =
     "NtpHistoryClustersModuleMaxClustersParam";
+const char kNtpHistoryClustersModuleMaxCategoriesToRecordParam[] =
+    "NtpHistoryClustersModuleMaxCategoriesToRecordParam";
+const char kNtpHistoryClustersModuleMinCategoryWeightToRecordParam[] =
+    "NtpHistoryClustersModuleMinCategoryWeightToRecordParam";
+const char kNtpHistoryClustersModuleRankingMetricsQueryDaysParam[] =
+    "NtpHistoryClustersModuleRankingMetricsQueryDaysParam";
 const char kNtpHistoryClustersModuleScoreThresholdParam[] =
     "NtpHistoryClustersModuleScoreThresholdParam";
 const char kNtpRealboxWidthBehaviorParam[] = "NtpRealboxWidthBehaviorParam";
+const char kNtpTabResumptionModuleCategoriesBlocklistParam[] =
+    "NtpTabResumptionModuleCategoriesBlocklistParam";
 const char kNtpTabResumptionModuleDataParam[] =
     "NtpTabResumptionModuleDataParam";
+const char kNtpTabResumptionModuleTimeLimitParam[] =
+    "NtpTabResumptionModuleTimeLimitParam";
+const char kNtpTabResumptionModuleVisibilityThresholdDataParam[] =
+    "NtpTabResumptionModuleVisibilityThresholdDataParam";
+const char kWallpaperSearchHatsDelayParam[] = "WallpaperSearchHatsDelayParam";
 
 const base::FeatureParam<bool> kNtpRealboxCr23ExpandedStateBgMatchesOmnibox(
     &ntp_features::kRealboxCr23Theming,

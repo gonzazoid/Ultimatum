@@ -2,47 +2,157 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'chrome://feedback/app.js';
+
+import type {FeedbackAppElement} from 'chrome://feedback/app.js';
 import {FeedbackBrowserProxyImpl} from 'chrome://feedback/js/feedback_browser_proxy.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {OpenWindowProxyImpl} from 'chrome://resources/js/open_window_proxy.js';
-import {getRequiredElement} from 'chrome://resources/js/util.js';
 import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {TestOpenWindowProxy} from 'chrome://webui-test/test_open_window_proxy.js';
 import {eventToPromise, isVisible} from 'chrome://webui-test/test_util.js';
 
 import {TestFeedbackBrowserProxy} from './test_feedback_browser_proxy.js';
 
-declare global {
-  interface Window {
-    whenTestSetupDoneResolver: {resolve: () => Promise<void>};
-  }
-}
+const USER_EMAIL = 'dummy_user_email';
 
 suite('FeedbackTest', function() {
+  let app: FeedbackAppElement;
   let browserProxy: TestFeedbackBrowserProxy;
+  let openWindowProxy: TestOpenWindowProxy;
 
-  suiteSetup(function() {
-    const whenReadyForTesting =
-        eventToPromise('ready-for-testing', document.documentElement);
+  setup(async function() {
+    openWindowProxy = new TestOpenWindowProxy();
+    OpenWindowProxyImpl.setInstance(openWindowProxy);
 
-    // Signal to the prod page that test setup steps have completed.
     browserProxy = new TestFeedbackBrowserProxy();
+    browserProxy.setUserEmail(USER_EMAIL);
     FeedbackBrowserProxyImpl.setInstance(browserProxy);
-    window.whenTestSetupDoneResolver.resolve();
 
-    // Wait for any remaining prod code executes before test cases execute.
-    return whenReadyForTesting;
+    app = await createFeedbackAppElement();
   });
 
-  teardown(function() {
-    browserProxy.reset();
+  async function createFeedbackAppElement(): Promise<FeedbackAppElement> {
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
+    const app: FeedbackAppElement = document.createElement('feedback-app');
+    document.body.appendChild(app);
+    await eventToPromise('ready-for-testing', app);
+    return app;
+  }
 
-    // Note: The UI is not recreated between tests, so must clear any state that
-    // could leak between tests here.
+  test('Layout', function() {
+    // Description
+    assertTrue(isVisible(app.getRequiredElement('#free-form-text')));
+    assertTrue(isVisible(app.getRequiredElement('#description-text')));
+
+    // Additional Info
+    assertTrue(isVisible(app.getRequiredElement('#additional-info-label')));
+
+    // URL
+    assertTrue(isVisible(app.getRequiredElement('#page-url-label')));
+    assertTrue(isVisible(app.getRequiredElement('#page-url-text')));
+
+    // Email drop-down select
+    assertTrue(isVisible(app.getRequiredElement('#user-email')));
+    const select =
+        app.getRequiredElement<HTMLSelectElement>('#user-email-drop-down');
+    assertTrue(isVisible(select));
+    assertEquals(2, select.options.length);
+    assertFalse(isVisible(app.getRequiredElement('#anonymous-user-option')));
+
+    // Attach File
+    assertTrue(isVisible(app.getRequiredElement('#attach-file-label')));
+    assertTrue(isVisible(app.getRequiredElement('#attach-file')));
+    assertTrue(isVisible(app.getRequiredElement('#attach-file-note')));
+
+    // Consent
+    assertTrue(isVisible(app.getRequiredElement('#consent-checkbox')));
+    assertTrue(isVisible(app.getRequiredElement('#consent-chk-label')));
+
+    // Screenshot
+    const checkbox =
+        app.getRequiredElement<HTMLInputElement>('#screenshot-checkbox');
+    assertTrue(isVisible(checkbox));
+    assertFalse(checkbox.checked);
+    assertTrue(isVisible(app.getRequiredElement('#screenshot-chk-label')));
+
+    const image = app.getRequiredElement<HTMLImageElement>('#screenshot-image');
+    assertTrue(!!image.src);
+    assertTrue(!!image.alt);
+
+    // Privacy note
+    assertTrue(isVisible(app.getRequiredElement('#privacy-note')));
+  });
+
+  test('ScreenshotFailed', async function() {
+    browserProxy.setUserMedia(Promise.reject(
+        {name: 'error', message: 'error', constraintName: 'error'}));
+    app = await createFeedbackAppElement();
+
+    const checkbox =
+        app.getRequiredElement<HTMLInputElement>('#screenshot-checkbox');
+    assertTrue(checkbox.disabled);
+    assertFalse(checkbox.checked);
+
+    const image = app.getRequiredElement<HTMLImageElement>('#screenshot-image');
+    assertEquals('', image.src);
+    assertEquals('', image.alt);
+  });
+
+  test('SysInfo', function() {
+    const checkbox =
+        app.getRequiredElement<HTMLInputElement>('#sys-info-checkbox');
+    assertTrue(isVisible(checkbox));
+    assertTrue(checkbox.checked);
+
+    assertTrue(isVisible(app.getRequiredElement('#sys-info-label')));
+
+    const sysInfoUrl =
+        app.getRequiredElement<HTMLAnchorElement>('#sys-info-url');
+
+    // Prevent clicking system info link from opening a new window.
+    sysInfoUrl.href = '#';
+    sysInfoUrl.target = '_self';
+
+    sysInfoUrl.click();
+    return browserProxy.whenCalled('showSystemInfo');
+  });
+
+  test('SendReport', async function() {
+    const DESCRIPTION_TEXT = 'feedback test';
+    const PAGE_URL = 'chrome://feedback';
+
+    app.getRequiredElement('#description-text').textContent = DESCRIPTION_TEXT;
+    app.getRequiredElement<HTMLInputElement>('#page-url-text').value = PAGE_URL;
+    app.getRequiredElement<HTMLInputElement>('#screenshot-checkbox').click();
+
+    const button = app.getRequiredElement('#send-report-button');
+    button.click();
+
+    const feedbackInfo = await browserProxy.whenCalled('sendFeedback');
+    assertEquals(DESCRIPTION_TEXT, feedbackInfo.description);
+    assertEquals(PAGE_URL, feedbackInfo.pageUrl);
+    assertEquals(USER_EMAIL, feedbackInfo.email);
+    assertTrue(!!feedbackInfo.screenshot);
+    assertTrue(!!feedbackInfo.systemInformation);
+  });
+
+  test('SendReportWithoutUserEmail', async function() {
+    app.getRequiredElement('#description-text').textContent = 'test';
+    // Select the anonymous-user-option which is always listed after
+    // user-email-option when logged in.
+    app.getRequiredElement<HTMLSelectElement>('#user-email-drop-down')
+        .options[1]!.selected = true;
+
+    const button = app.getRequiredElement('#send-report-button');
+    button.click();
+
+    const feedbackInfo = await browserProxy.whenCalled('sendFeedback');
+    assertEquals('', feedbackInfo.email);
   });
 
   test('CloseButtonClosesDialog', function() {
-    const button = getRequiredElement('cancel-button');
+    const button = app.getRequiredElement('#cancel-button');
     button.click();
     return browserProxy.whenCalled('closeDialog');
   });
@@ -50,13 +160,11 @@ suite('FeedbackTest', function() {
 
 suite('AIFeedbackTest', function() {
   const LOG_ID: string = 'TEST_LOG_ID';
+  let app: FeedbackAppElement;
   let browserProxy: TestFeedbackBrowserProxy;
   let openWindowProxy: TestOpenWindowProxy;
 
-  suiteSetup(function() {
-    const whenReadyForTesting =
-        eventToPromise('ready-for-testing', document.documentElement);
-
+  setup(async function() {
     openWindowProxy = new TestOpenWindowProxy();
     OpenWindowProxyImpl.setInstance(openWindowProxy);
 
@@ -68,23 +176,19 @@ suite('AIFeedbackTest', function() {
       aiMetadata: JSON.stringify({log_id: LOG_ID}),
     }));
     FeedbackBrowserProxyImpl.setInstance(browserProxy);
-    window.whenTestSetupDoneResolver.resolve();
 
-    // Wait for any remaining prod code executes before test cases execute.
-    return whenReadyForTesting;
-  });
-
-  teardown(function() {
-    browserProxy.reset();
-
-    // Note: The UI is not recreated between tests, so must clear any state that
-    // could leak between tests here.
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
+    app = document.createElement('feedback-app');
+    document.body.appendChild(app);
+    await eventToPromise('ready-for-testing', app);
   });
 
   function simulateSendReport() {
     // Make sure description is not empty and send button is not disabled.
-    getRequiredElement<HTMLTextAreaElement>('description-text').value = 'test';
-    const button = getRequiredElement<HTMLButtonElement>('send-report-button');
+    app.getRequiredElement<HTMLTextAreaElement>('#description-text').value =
+        'test';
+    const button =
+        app.getRequiredElement<HTMLButtonElement>('#send-report-button');
     // Send button is being disabled after click in production code, but in
     // tests we want to be able to click on the button multiple times.
     button.disabled = false;
@@ -94,17 +198,17 @@ suite('AIFeedbackTest', function() {
   test('Description', function() {
     assertEquals(
         loadTimeData.getString('freeFormTextAi'),
-        getRequiredElement('free-form-text').textContent);
+        app.getRequiredElement('#free-form-text').textContent);
   });
 
   test('NoEmail', function() {
-    assertFalse(isVisible(getRequiredElement('user-email')));
-    assertFalse(isVisible(getRequiredElement('consent-container')));
+    assertFalse(isVisible(app.getRequiredElement('#user-email')));
+    assertFalse(isVisible(app.getRequiredElement('#consent-container')));
   });
 
   test('OffensiveContainerVisibility', async function() {
-    assertTrue(isVisible(getRequiredElement('offensive-container')));
-    getRequiredElement('offensive-checkbox').click();
+    assertTrue(isVisible(app.getRequiredElement('#offensive-container')));
+    app.getRequiredElement('#offensive-checkbox').click();
     simulateSendReport();
     const feedbackInfo: chrome.feedbackPrivate.FeedbackInfo =
         await browserProxy.whenCalled('sendFeedback');
@@ -112,7 +216,7 @@ suite('AIFeedbackTest', function() {
   });
 
   test('IncludeServerLogs', async function() {
-    assertTrue(isVisible(getRequiredElement('log-id-container')));
+    assertTrue(isVisible(app.getRequiredElement('#log-id-container')));
     simulateSendReport();
     const feedbackInfo: chrome.feedbackPrivate.FeedbackInfo =
         await browserProxy.whenCalled('sendFeedback');
@@ -120,8 +224,8 @@ suite('AIFeedbackTest', function() {
   });
 
   test('ExcludeServerLogs', async function() {
-    assertTrue(isVisible(getRequiredElement('log-id-container')));
-    getRequiredElement('log-id-checkbox').click();
+    assertTrue(isVisible(app.getRequiredElement('#log-id-container')));
+    app.getRequiredElement('#log-id-checkbox').click();
     simulateSendReport();
     const feedbackInfo: chrome.feedbackPrivate.FeedbackInfo =
         await browserProxy.whenCalled('sendFeedback');

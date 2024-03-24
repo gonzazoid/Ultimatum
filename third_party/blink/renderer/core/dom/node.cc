@@ -925,9 +925,11 @@ Node* Node::cloneNode(bool deep, ExceptionState& exception_state) const {
   NodeCloningData data;
   if (deep) {
     data.Put(CloneOption::kIncludeDescendants);
-    auto* fragment = DynamicTo<DocumentFragment>(this);
-    if (fragment && fragment->IsTemplateContent()) {
-      data.Put(CloneOption::kIncludeShadowRoots);
+    if (!RuntimeEnabledFeatures::ShadowRootClonableEnabled()) {
+      auto* fragment = DynamicTo<DocumentFragment>(this);
+      if (fragment && fragment->IsTemplateContent()) {
+        data.Put(CloneOption::kIncludeAllShadowRoots);
+      }
     }
   }
   return Clone(GetDocument(), data, /*append_to*/ nullptr);
@@ -1064,7 +1066,7 @@ void Node::SetIsLink(bool is_link) {
 
 void Node::SetNeedsStyleInvalidation() {
   DCHECK(IsContainerNode());
-  DCHECK(!GetDocument().InPostLifecycleSteps());
+  DCHECK(!GetDocument().InvalidationDisallowed());
   SetFlag(kNeedsStyleInvalidationFlag);
   MarkAncestorsWithChildNeedsStyleInvalidation();
 }
@@ -1255,7 +1257,7 @@ void Node::MarkAncestorsWithChildNeedsReattachLayoutTree() {
 void Node::SetNeedsReattachLayoutTree() {
   DCHECK(GetDocument().InStyleRecalc());
   DCHECK(GetDocument().GetStyleEngine().MarkReattachAllowed());
-  DCHECK(!GetDocument().InPostLifecycleSteps());
+  DCHECK(!GetDocument().InvalidationDisallowed());
   DCHECK(IsElementNode() || IsTextNode());
   DCHECK(InActiveDocument());
   SetFlag(kNeedsReattachLayoutTree);
@@ -1265,7 +1267,7 @@ void Node::SetNeedsReattachLayoutTree() {
 void Node::SetNeedsStyleRecalc(StyleChangeType change_type,
                                const StyleChangeReasonForTracing& reason) {
   DCHECK(GetDocument().GetStyleEngine().MarkStyleDirtyAllowed());
-  DCHECK(!GetDocument().InPostLifecycleSteps());
+  DCHECK(!GetDocument().InvalidationDisallowed());
   DCHECK(change_type != kNoStyleChange);
   DCHECK(IsElementNode() || IsTextNode());
 
@@ -3280,29 +3282,6 @@ void Node::FlatTreeParentChanged() {
     // parent box may have changed.
     SetForceReattachLayoutTree();
   }
-  AddCandidateDirectionalityForSlot();
-}
-
-void Node::AddCandidateDirectionalityForSlot() {
-  if (RuntimeEnabledFeatures::CSSPseudoDirEnabled()) {
-    // This code is not needed for the new dir=auto inheritance rules.
-    return;
-  }
-
-  ShadowRoot* root = ShadowRootOfParent();
-  if (!root || !root->HasSlotAssignment()) {
-    // We should add this node as a candidate that needs to recalculate its
-    // direcationality if the parent slot has the dir auto flag.
-    if (auto* parent_slot = DynamicTo<HTMLSlotElement>(parentElement())) {
-      if (parent_slot->SelfOrAncestorHasDirAutoAttribute())
-        root = ContainingShadowRoot();
-    }
-
-    if (!root)
-      return;
-  }
-
-  root->GetSlotAssignment().GetCandidateDirectionality().insert(this);
 }
 
 void Node::RemovedFromFlatTree() {
@@ -3357,39 +3336,6 @@ void Node::SetCachedDirectionality(TextDirection direction) {
       ClearFlag(kCachedDirectionalityIsRtl);
       break;
   }
-  if (!RuntimeEnabledFeatures::CSSPseudoDirEnabled()) {
-    ClearFlag(kNeedsInheritDirectionalityFromParent);
-  }
-}
-
-bool Node::NeedsInheritDirectionalityFromParent() const {
-  CHECK(!RuntimeEnabledFeatures::CSSPseudoDirEnabled());
-  return GetFlag(kNeedsInheritDirectionalityFromParent);
-}
-
-void Node::SetNeedsInheritDirectionalityFromParent() {
-  CHECK(!RuntimeEnabledFeatures::CSSPseudoDirEnabled());
-  SetFlag(kNeedsInheritDirectionalityFromParent);
-}
-
-void Node::ClearNeedsInheritDirectionalityFromParent() {
-  CHECK(!RuntimeEnabledFeatures::CSSPseudoDirEnabled());
-  ClearFlag(kNeedsInheritDirectionalityFromParent);
-}
-
-bool Node::DirAutoInheritsFromParent() const {
-  return RuntimeEnabledFeatures::CSSPseudoDirEnabled() &&
-         GetFlag(kDirAutoInheritsFromParent);
-}
-
-void Node::SetDirAutoInheritsFromParent() {
-  CHECK(RuntimeEnabledFeatures::CSSPseudoDirEnabled());
-  return SetFlag(kDirAutoInheritsFromParent);
-}
-
-void Node::ClearDirAutoInheritsFromParent() {
-  CHECK(RuntimeEnabledFeatures::CSSPseudoDirEnabled());
-  return ClearFlag(kDirAutoInheritsFromParent);
 }
 
 void Node::Trace(Visitor* visitor) const {

@@ -97,7 +97,7 @@ class DelayedReleaser {
   DelayedReleaser(DelayedReleaser&&) = delete;
   DelayedReleaser& operator=(DelayedReleaser&&) = delete;
 
-  static void Add(std::unique_ptr<HardwareBuffer> ahwb, GLuint opengl_buffer,
+  static void Add(std::shared_ptr<HardwareBuffer> ahwb, GLuint opengl_buffer,
                   EGLSyncKHR ssbo_sync, GLsync ssbo_read,
                   Tensor::FinishingFunc&& ahwb_written,
                   std::shared_ptr<mediapipe::GlContext> gl_context,
@@ -178,7 +178,7 @@ class DelayedReleaser {
   }
 
  protected:
-  std::unique_ptr<HardwareBuffer> ahwb_;
+  std::shared_ptr<HardwareBuffer> ahwb_;
   GLuint opengl_buffer_;
   // TODO: use wrapper instead.
   EGLSyncKHR fence_sync_;
@@ -189,7 +189,7 @@ class DelayedReleaser {
   std::function<void()> release_callback_;
   static inline std::deque<std::unique_ptr<DelayedReleaser>> to_release_;
 
-  DelayedReleaser(std::unique_ptr<HardwareBuffer> ahwb, GLuint opengl_buffer,
+  DelayedReleaser(std::shared_ptr<HardwareBuffer> ahwb, GLuint opengl_buffer,
                   EGLSyncKHR fence_sync, GLsync ssbo_read,
                   Tensor::FinishingFunc&& ahwb_written,
                   std::shared_ptr<mediapipe::GlContext> gl_context,
@@ -212,7 +212,7 @@ Tensor::AHardwareBufferView Tensor::GetAHardwareBufferReadView() const {
       << "Tensor conversion between OpenGL texture and AHardwareBuffer is not "
          "supported.";
   bool transfer = ahwb_ == nullptr;
-  ABSL_CHECK(AllocateAHardwareBuffer())
+  ABSL_CHECK_OK(AllocateAHardwareBuffer())
       << "AHardwareBuffer is not supported on the target system.";
   valid_ |= kValidAHardwareBuffer;
   if (transfer) {
@@ -250,7 +250,7 @@ void Tensor::CreateEglSyncAndFd() const {
 Tensor::AHardwareBufferView Tensor::GetAHardwareBufferWriteView(
     int size_alignment) const {
   auto lock(absl::make_unique<absl::MutexLock>(&view_mutex_));
-  ABSL_CHECK(AllocateAHardwareBuffer(size_alignment))
+  ABSL_CHECK_OK(AllocateAHardwareBuffer(size_alignment))
       << "AHardwareBuffer is not supported on the target system.";
   valid_ = kValidAHardwareBuffer;
   return {ahwb_.get(),
@@ -260,7 +260,7 @@ Tensor::AHardwareBufferView Tensor::GetAHardwareBufferWriteView(
           &release_callback_,  std::move(lock)};
 }
 
-bool Tensor::AllocateAHardwareBuffer(int size_alignment) const {
+absl::Status Tensor::AllocateAHardwareBuffer(int size_alignment) const {
   // Mark current tracking key as Ahwb-use.
   if (auto it = ahwb_usage_track_.find(ahwb_tracking_key_);
       it != ahwb_usage_track_.end()) {
@@ -286,20 +286,19 @@ bool Tensor::AllocateAHardwareBuffer(int size_alignment) const {
     spec.usage = HardwareBufferSpec::AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN |
                  HardwareBufferSpec::AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN |
                  HardwareBufferSpec::AHARDWAREBUFFER_USAGE_GPU_DATA_BUFFER;
-    auto new_ahwb = HardwareBuffer::Create(spec);
-    if (!new_ahwb.ok()) {
-      ABSL_LOG(ERROR) << "Allocation of NDK Hardware Buffer failed: "
-                      << new_ahwb.status();
-      return false;
+    if (hardware_buffer_pool_ == nullptr) {
+      MP_ASSIGN_OR_RETURN(auto new_ahwb, HardwareBuffer::Create(spec));
+      ahwb_ = std::make_shared<HardwareBuffer>(std::move(new_ahwb));
+    } else {
+      MP_ASSIGN_OR_RETURN(ahwb_, hardware_buffer_pool_->GetBuffer(spec));
     }
-    ahwb_ = std::make_unique<HardwareBuffer>(std::move(*new_ahwb));
   }
-  return true;
+  return absl::OkStatus();
 }
 
 bool Tensor::AllocateAhwbMapToSsbo() const {
   if (__builtin_available(android 26, *)) {
-    if (AllocateAHardwareBuffer()) {
+    if (AllocateAHardwareBuffer().ok()) {
       if (MapAHardwareBufferToGlBuffer(ahwb_->GetAHardwareBuffer(), bytes())
               .ok()) {
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
@@ -376,6 +375,7 @@ bool Tensor::InsertAhwbToSsboFence() const {
 }
 
 void Tensor::MoveAhwbStuff(Tensor* src) {
+  hardware_buffer_pool_ = std::exchange(src->hardware_buffer_pool_, nullptr);
   ahwb_ = std::exchange(src->ahwb_, nullptr);
   fence_sync_ = std::exchange(src->fence_sync_, EGL_NO_SYNC_KHR);
   ssbo_read_ = std::exchange(src->ssbo_read_, static_cast<GLsync>(0));

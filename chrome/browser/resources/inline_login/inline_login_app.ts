@@ -4,14 +4,16 @@
 
 import 'chrome://resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
 
+import type {AuthCompletedCredentials, AuthParams} from 'chrome://chrome-signin/gaia_auth_host/authenticator.js';
+import {Authenticator} from 'chrome://chrome-signin/gaia_auth_host/authenticator.js';
 import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
-import {PaperSpinnerLiteElement} from 'chrome://resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
-import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {assert} from 'chrome://resources/js/assert.js';
+import type {PaperSpinnerLiteElement} from 'chrome://resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {AuthCompletedCredentials, Authenticator, AuthParams} from 'chrome://chrome-signin/gaia_auth_host/authenticator.js';
 import {getTemplate} from './inline_login_app.html.js';
-import {InlineLoginBrowserProxy, InlineLoginBrowserProxyImpl} from './inline_login_browser_proxy.js';
+import type {InlineLoginBrowserProxy} from './inline_login_browser_proxy.js';
+import {InlineLoginBrowserProxyImpl} from './inline_login_browser_proxy.js';
 
 interface NewWindowProperties {
   targetUrl: string;
@@ -116,10 +118,6 @@ export class InlineLoginAppElement extends InlineLoginAppElementBase {
         e => this.onAuthCompleted_(e as CustomEvent<AuthCompletedCredentials>));
     this.authenticator_.addEventListener(
         'showIncognito', () => this.onShowIncognito_());
-    this.authenticator_.addEventListener(
-        'getAccounts', () => this.onGetAccounts_());
-    this.authenticator_.addEventListener(
-        'getDeviceId', () => this.onGetDeviceId_());
   }
 
   private onDropLink_(e: CustomEvent<string>) {
@@ -152,20 +150,6 @@ export class InlineLoginAppElement extends InlineLoginAppElementBase {
 
   private onShowIncognito_() {
     this.browserProxy_.showIncognito();
-  }
-
-  private onGetAccounts_() {
-    this.browserProxy_.getAccounts().then(result => {
-      assert(this.authenticator_);
-      this.authenticator_.getAccountsResponse(result);
-    });
-  }
-
-  private onGetDeviceId_() {
-    this.browserProxy_.getDeviceId().then(deviceId => {
-      assert(this.authenticator_);
-      this.authenticator_.getDeviceIdResponse(deviceId);
-    });
   }
 
   /**

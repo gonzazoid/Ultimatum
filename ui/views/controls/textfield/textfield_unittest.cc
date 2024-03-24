@@ -378,13 +378,22 @@ class TestTextfield : public views::Textfield {
   }
 
   void OnAccessibilityEvent(ax::mojom::Event event_type) override {
-    if (event_type == ax::mojom::Event::kTextSelectionChanged)
-      ++accessibility_selection_fired_count_;
+    accessibility_events_.push_back(event_type);
   }
 
-  int GetAccessibilitySelectionFiredCount() {
-    return accessibility_selection_fired_count_;
+  std::vector<ax::mojom::Event> GetAccessibilityEventsOfTypes(
+      const std::vector<ax::mojom::Event>& event_types) {
+    std::vector<ax::mojom::Event> filtered_events;
+    for (const auto& event : accessibility_events_) {
+      if (std::find(event_types.begin(), event_types.end(), event) !=
+          event_types.end()) {
+        filtered_events.push_back(event);
+      }
+    }
+    return filtered_events;
   }
+
+  void ClearAccessibilityEvents() { accessibility_events_.clear(); }
 
  private:
   // views::View:
@@ -410,7 +419,7 @@ class TestTextfield : public views::Textfield {
   bool key_handled_ = false;
   bool key_received_ = false;
   int event_flags_ = 0;
-  int accessibility_selection_fired_count_ = 0;
+  std::vector<ax::mojom::Event> accessibility_events_;
 
   base::WeakPtrFactory<TestTextfield> weak_ptr_factory_{this};
 };
@@ -4850,23 +4859,52 @@ TEST_F(TextfieldTest, AccessibilitySelectionEvents) {
   InitTextfield();
   textfield_->SetText(kText);
   EXPECT_TRUE(textfield_->HasFocus());
-  int previous_selection_fired_count =
-      textfield_->GetAccessibilitySelectionFiredCount();
-  textfield_->SelectAll(false);
-  EXPECT_LT(previous_selection_fired_count,
-            textfield_->GetAccessibilitySelectionFiredCount());
-  previous_selection_fired_count =
-      textfield_->GetAccessibilitySelectionFiredCount();
 
-  // No selection event when textfield blurred, even though text is
-  // deselected.
+  std::vector<ax::mojom::Event> event_type = {
+      ax::mojom::Event::kTextSelectionChanged};
+  std::vector<ax::mojom::Event> previous_selection_events =
+      textfield_->GetAccessibilityEventsOfTypes(event_type);
+
+  textfield_->SelectAll(false);
+
+  std::vector<ax::mojom::Event> selection_events =
+      textfield_->GetAccessibilityEventsOfTypes(event_type);
+  EXPECT_LT(previous_selection_events.size(), selection_events.size());
+  previous_selection_events = selection_events;
+
+  // Validate that there's no selection event fired when the textfield blurred,
+  // even though the text lost selection.
   widget_->GetFocusManager()->ClearFocus();
   EXPECT_FALSE(textfield_->HasFocus());
   textfield_->ClearSelection();
   EXPECT_FALSE(textfield_->HasSelection());
+
+  selection_events = textfield_->GetAccessibilityEventsOfTypes(event_type);
   // Has not changed.
-  EXPECT_EQ(previous_selection_fired_count,
-            textfield_->GetAccessibilitySelectionFiredCount());
+  EXPECT_EQ(previous_selection_events.size(), selection_events.size());
+}
+
+TEST_F(TextfieldTest, AccessibilitySelectionEventsOnInitialFocus) {
+  // Initialize the textfield so we have text to select.
+  const std::u16string kText = u"abcdef";
+  InitTextfield();
+  textfield_->SetText(kText);
+
+  // Ensure focus isn't on the textfield yet.
+  widget_->GetFocusManager()->ClearFocus();
+  // Clear all the accessibility events we got so far.
+  textfield_->ClearAccessibilityEvents();
+
+  // Setting the focus should fire a focus event and a text selection event, in
+  // that order.
+  textfield_->RequestFocus();
+  std::vector<ax::mojom::Event> events =
+      textfield_->GetAccessibilityEventsOfTypes(
+          {ax::mojom::Event::kFocus, ax::mojom::Event::kTextSelectionChanged});
+
+  EXPECT_EQ(2u, events.size());
+  EXPECT_EQ(ax::mojom::Event::kFocus, events[0]);
+  EXPECT_EQ(ax::mojom::Event::kTextSelectionChanged, events[1]);
 }
 
 TEST_F(TextfieldTest, FocusReasonMouse) {
@@ -5199,6 +5237,41 @@ TEST_F(TextfieldTest, AccessibleGraphemeOffsetsElidedTail) {
   textfield_->GetViewAccessibility().GetAccessibleNodeData(&node_data);
   std::vector<int32_t> expected_offsets = {0, 10, 20, 30, 40, 40, 40};
   EXPECT_EQ(node_data.GetIntListAttribute(
+                ax::mojom::IntListAttribute::kCharacterOffsets),
+            expected_offsets);
+}
+
+TEST_F(TextfieldTest, AccessibleGraphemeOffsetsIndependentOfDisplayOffset) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(::features::kUiaProvider);
+  InitTextfield();
+
+  // Size the textfield wide enough to hold 10 characters.
+  gfx::test::RenderTextTestApi render_text_test_api(
+      GetTextfieldTestApi().GetRenderText());
+  constexpr int kGlyphWidth = 10;
+  render_text_test_api.SetGlyphWidth(kGlyphWidth);
+  GetTextfieldTestApi().GetRenderText()->SetDisplayRect(
+      gfx::Rect(kGlyphWidth * 10, 20));
+  textfield_->SetTextWithoutCaretBoundsChangeNotification(
+      u"3.141592653589793238462", 0);
+  GetTextfieldTestApi().SetDisplayOffsetX(0);
+
+  ui::AXNodeData node_data;
+  textfield_->GetViewAccessibility().GetAccessibleNodeData(&node_data);
+  std::vector<int32_t> expected_offsets = {
+      0,   10,  20,  30,  40,  50,  60,  70,  80,  90,  100, 110,
+      120, 130, 140, 150, 160, 170, 180, 190, 200, 210, 220, 230};
+  EXPECT_EQ(node_data.GetIntListAttribute(
+                ax::mojom::IntListAttribute::kCharacterOffsets),
+            expected_offsets);
+  GetTextfieldTestApi().SetDisplayOffsetX(-100);
+  EXPECT_EQ(GetTextfieldTestApi().GetDisplayOffsetX(), -100);
+
+  ui::AXNodeData node_data_2;
+  textfield_->GetViewAccessibility().GetAccessibleNodeData(&node_data_2);
+  // The offsets should be the same.
+  EXPECT_EQ(node_data_2.GetIntListAttribute(
                 ax::mojom::IntListAttribute::kCharacterOffsets),
             expected_offsets);
 }

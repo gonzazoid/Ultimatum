@@ -12,7 +12,8 @@ import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './app.html.js';
-import {TabSearchApiProxy, TabSearchApiProxyImpl} from './tab_search_api_proxy.js';
+import type {TabSearchApiProxy} from './tab_search_api_proxy.js';
+import {TabSearchApiProxyImpl} from './tab_search_api_proxy.js';
 
 export class TabSearchAppElement extends PolymerElement {
   static get is() {
@@ -35,10 +36,7 @@ export class TabSearchAppElement extends PolymerElement {
 
       tabIcons_: {
         type: Array,
-        value: () =>
-            ['images/tab_search.svg',
-             'images/auto_tab_groups.svg',
-    ],
+        value: () => ['images/tab_search.svg', 'images/auto_tab_groups.svg'],
       },
 
       tabOrganizationEnabled_: {
@@ -65,6 +63,9 @@ export class TabSearchAppElement extends PolymerElement {
     const callbackRouter = this.apiProxy_.getCallbackRouter();
     this.listenerIds_.push(callbackRouter.tabSearchTabIndexChanged.addListener(
         this.onTabIndexChanged_.bind(this)));
+    this.listenerIds_.push(
+        callbackRouter.tabOrganizationEnabledChanged.addListener(
+            this.onTabOrganizationEnabledChanged_.bind(this)));
   }
 
   override disconnectedCallback() {
@@ -75,6 +76,10 @@ export class TabSearchAppElement extends PolymerElement {
 
   private onTabIndexChanged_(index: number) {
     this.selectedTabIndex_ = index;
+  }
+
+  private onTabOrganizationEnabledChanged_(enabled: boolean) {
+    this.tabOrganizationEnabled_ = enabled;
   }
 
   private onSelectedTabChanged_(event: CustomEvent<{value: number}>) {

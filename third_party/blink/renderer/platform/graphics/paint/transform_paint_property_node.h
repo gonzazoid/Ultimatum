@@ -46,9 +46,6 @@ class PLATFORM_EXPORT TransformPaintPropertyNodeOrAlias
   // changed status of the paths from |this| and |relative_to_node| to the root.
   bool Changed(PaintPropertyChangeType change,
                const TransformPaintPropertyNodeOrAlias& relative_to_node) const;
-  bool ChangedExceptScroll(
-      PaintPropertyChangeType change,
-      const TransformPaintPropertyNodeOrAlias& relative_to_node) const;
 
   void AddChanged(PaintPropertyChangeType changed) {
     DCHECK_NE(PaintPropertyChangeType::kUnchanged, changed);
@@ -121,8 +118,7 @@ class PLATFORM_EXPORT TransformPaintPropertyNode
     CompositingReasons direct_compositing_reasons = CompositingReason::kNone;
     CompositorElementId compositor_element_id;
     std::unique_ptr<CompositorStickyConstraint> sticky_constraint;
-    std::unique_ptr<cc::AnchorPositionScrollersData>
-        anchor_position_scrollers_data;
+    std::unique_ptr<cc::AnchorPositionScrollData> anchor_position_scroll_data;
     // If a visible frame is rooted at this node, this represents the element
     // ID of the containing document.
     CompositorElementId visible_frame_element_id;
@@ -227,9 +223,8 @@ class PLATFORM_EXPORT TransformPaintPropertyNode
     return state_.sticky_constraint.get();
   }
 
-  const cc::AnchorPositionScrollersData* GetAnchorPositionScrollersData()
-      const {
-    return state_.anchor_position_scrollers_data.get();
+  const cc::AnchorPositionScrollData* GetAnchorPositionScrollData() const {
+    return state_.anchor_position_scroll_data.get();
   }
 
   // If this is a scroll offset translation (i.e., has an associated scroll

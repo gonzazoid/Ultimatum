@@ -15,6 +15,8 @@ public class ContentFeatureList {
     public static final String ACCESSIBILITY_INCLUDE_LONG_CLICK_ACTION =
             "AccessibilityIncludeLongClickAction";
 
+    public static final String ACCESSIBILITY_JNI_OPTIMIZATIONS = "AccessibilityJNIOptimizations";
+
     public static final String ACCESSIBILITY_PAGE_ZOOM = "AccessibilityPageZoom";
     // Field trial param associated with the Page Zoom feature.
     public static final String ACCESSIBILITY_PAGE_ZOOM_PARAM = "AdjustForOSLevel";
@@ -22,10 +24,9 @@ public class ContentFeatureList {
     public static final String ACCESSIBILITY_PAGE_ZOOM_ENHANCEMENTS =
             "AccessibilityPageZoomEnhancements";
 
-    public static final String ACCESSIBILITY_PERFORMANCE_FILTERING =
-            "AccessibilityPerformanceFiltering";
+    public static final String ACCESSIBILITY_UNIFIED_SNAPSHOTS = "AccessibilityUnifiedSnapshots";
 
-    public static final String AUTO_DISABLE_ACCESSIBILITY_V2 = "AutoDisableAccessibilityV2";
+    public static final String ANDROID_OPEN_PDF_INLINE = "AndroidOpenPdfInline";
 
     public static final String MOUSE_AND_TRACKPAD_DROPDOWN_MENU = "MouseAndTrackpadDropdownMenu";
 

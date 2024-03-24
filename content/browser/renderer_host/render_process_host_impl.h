@@ -21,6 +21,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/safe_ref.h"
+#include "base/memory/unsafe_shared_memory_region.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation_traits.h"
 #include "base/task/single_thread_task_runner.h"
@@ -243,6 +244,7 @@ class CONTENT_EXPORT RenderProcessHostImpl
   int GetID() const override;
   base::SafeRef<RenderProcessHost> GetSafeRef() const override;
   bool IsInitializedAndNotDead() override;
+  bool IsDeletingSoon() override;
   void SetBlocked(bool blocked) override;
   bool IsBlocked() override;
   base::CallbackListSubscription RegisterBlockStateChangedCallback(
@@ -301,9 +303,6 @@ class CONTENT_EXPORT RenderProcessHostImpl
   void DisableRefCounts() override;
   bool AreRefCountsDisabled() override;
   mojom::Renderer* GetRendererInterface() override;
-  void CreateURLLoaderFactory(
-      mojo::PendingReceiver<network::mojom::URLLoaderFactory> receiver,
-      network::mojom::URLLoaderFactoryParamsPtr params) override;
 
   bool MayReuseHost() override;
   bool IsUnused() override;
@@ -364,8 +363,8 @@ class CONTENT_EXPORT RenderProcessHostImpl
 
   // Return the set of previously stored data for a `frame_token`.
   // The routing ID and frame tokens were stored on the IO thread via the
-  // RenderMessageFilter::GenerateFrameRoutingID mojo call. Returns false if
-  // `frame_token` was not found in the token table.
+  // RenderMessageFilter::GenerateSingleFrameRoutingInfo mojo call. Returns
+  // false if `frame_token` was not found in the token table.
   bool TakeStoredDataForFrameToken(const blink::LocalFrameToken& frame_token,
                                    int32_t& new_routing_id,
                                    base::UnguessableToken& devtools_frame_token,
@@ -462,14 +461,20 @@ class CONTENT_EXPORT RenderProcessHostImpl
   static RenderProcessHost* GetProcessHostForSiteInstance(
       SiteInstanceImpl* site_instance);
 
-  // Should be called when |browser_context| is used in a navigation.
+  // Should be called when `site_instance` is used in a navigation.
   //
   // The SpareRenderProcessHostManager can decide how to respond (for example,
   // by shutting down the spare process to conserve resources, or alternatively
   // by making sure that the spare process belongs to the same BrowserContext as
   // the most recent navigation).
-  static void NotifySpareManagerAboutRecentlyUsedBrowserContext(
-      BrowserContext* browser_context);
+  //
+  // If `ignore_delay` is false, delays new spare renderer creation as per
+  // embedder's setting. Otherwise, the spare renderer creation might have been
+  // deferred previously, and this is a signal that it should now be started
+  // immediately.
+  static void NotifySpareManagerAboutRecentlyUsedSiteInstance(
+      SiteInstance* site_instance,
+      bool ignore_delay = false);
 
   // This enum backs a histogram, so do not change the order of entries or
   // remove entries and update enums.xml if adding new entries.
@@ -784,17 +789,6 @@ class CONTENT_EXPORT RenderProcessHostImpl
   int keep_alive_ref_count() const { return keep_alive_ref_count_; }
   int worker_ref_count() const { return worker_ref_count_; }
 
-  // Allows overriding the URLLoaderFactory creation via CreateURLLoaderFactory.
-  // Passing a null callback will restore the default behavior.
-  // This method must be called either on the UI thread or before threads start.
-  // This |url_loader_factory_callback| is run on the UI thread.
-  using CreateNetworkFactoryCallback = base::RepeatingCallback<void(
-      mojo::PendingReceiver<network::mojom::URLLoaderFactory> receiver,
-      int worker_process_id,
-      mojo::PendingRemote<network::mojom::URLLoaderFactory> original_factory)>;
-  static void SetNetworkFactoryForTesting(
-      const CreateNetworkFactoryCallback& url_loader_factory_callback);
-
 #if BUILDFLAG(IS_ANDROID)
   // Notifies the renderer process of memory pressure level.
   void NotifyMemoryPressureToRenderer(
@@ -970,11 +964,29 @@ class CONTENT_EXPORT RenderProcessHostImpl
   // Called if the backgrounded or visibility state of the process changes.
   void SendProcessStateToRenderer();
 
-  // Creates a PersistentMemoryAllocator and shares it with the renderer
-  // process for it to store histograms from that process. The allocator is
-  // available for extraction by a SubprocesMetricsProvider in order to
-  // report those histograms to UMA.
-  void CreateSharedRendererHistogramAllocator();
+  // Creates an UnsafeSharedMemoryRegion and PersistentMemoryAllocator for
+  // the renderer process to store histograms. The allocator is available for
+  // extraction by a SubprocesMetricsProvider in order to report those
+  // histograms to UMA. This must be called before launching the renderer
+  // process.
+  void CreateMetricsAllocator();
+
+  // Shares the histogram UnsafeSharedMemoryRegion, post launch, with the child
+  // renderer process via IPC. This also serves to and notify the child to send
+  // any early histograms it may have recorded before the shared memory region
+  // became available to it. This must be called just after launching the
+  // renderer process.
+  //
+  // If passing the memory region on launch is enabled, a duplicate handle to
+  // the memory region may have already been passed to the renderer process
+  // during launch. If so, the passing of the shmem handle is a NOP. There may
+  // still be early histograms recorded before the child reads its launch
+  // parameters to learn of the shared memory region.
+  //
+  // TODO(crbug/1028263): It may be possible to completely remove this once
+  // passing the memory region on launch is rolled-out, if the shmem parameter
+  // is consumed before the child records any histograms.
+  void ShareMetricsMemoryRegion();
 
   // Retrieves the details of the terminating child process.
   //
@@ -1291,6 +1303,7 @@ class CONTENT_EXPORT RenderProcessHostImpl
 
   // The memory allocator, if any, in which the renderer will write its metrics.
   std::unique_ptr<base::PersistentMemoryAllocator> metrics_allocator_;
+  base::UnsafeSharedMemoryRegion metrics_memory_region_;
 
   bool channel_connected_ = false;
   bool sent_render_process_ready_ = false;

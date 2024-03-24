@@ -169,11 +169,25 @@ cc_library(
             "-lnativewindow",  # Provides <android/hardware_buffer.h> to vendor binaries on Android API >= 26.
         ],
     }),
-    visibility = ["//mediapipe/gpu:__pkg__"],
+    visibility = [
+        "//mediapipe/framework:__pkg__",
+        "//mediapipe/gpu:__pkg__",
+    ],
     deps = [
         "//mediapipe/framework/port:ret_check",
         "//mediapipe/framework/port:statusor",
         "@com_google_absl//absl/log:absl_check",
+    ],
+)
+
+cc_library(
+    name = "hardware_buffer_pool",
+    hdrs = ["hardware_buffer_pool.h"],
+    visibility = ["//mediapipe/framework:__pkg__"],
+    deps = [
+        ":hardware_buffer",
+        "//mediapipe/gpu:multi_pool",
+        "//mediapipe/gpu:reusable_pool",
     ],
 )
 
@@ -473,7 +487,7 @@ config_setting(
         "MEDIAPIPE_NO_JNI": "1",
     },
     values = {"crosstool_top": "//external:android/crosstool"},
-    visibility = ["//visibility:private"],
+    visibility = ["//mediapipe/framework:__pkg__"],
 )
 
 cc_library(
@@ -497,16 +511,6 @@ cc_library(
         ],
         "//conditions:default": [],
     }),
-    defines = select({
-        # Excludes AHardwareBuffer features from vendor processes
-        "//mediapipe/framework:android_no_jni": ["MEDIAPIPE_NO_JNI"],
-        # unless they're linked against nativewindow.
-        ":android_link_native_window": [
-            "MEDIAPIPE_ANDROID_LINK_NATIVE_WINDOW",
-            "MEDIAPIPE_NO_JNI",
-        ],
-        "//conditions:default": [],
-    }),
     linkopts = select({
         "//mediapipe:apple": [
             "-framework CoreVideo",
@@ -517,11 +521,13 @@ cc_library(
         "//mediapipe/framework:android_no_jni": [],
     }),
     deps = [
+        "//mediapipe/framework:memory_manager",
         "//mediapipe/framework:port",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log:absl_check",
         "@com_google_absl//absl/log:absl_log",
         "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/synchronization",
     ] + select({
         "//mediapipe/gpu:disable_gpu": [],
@@ -531,11 +537,13 @@ cc_library(
         ],
         "//mediapipe:android": [
             ":hardware_buffer",
+            ":hardware_buffer_pool",
             "//mediapipe/gpu:gl_base",
             "//mediapipe/gpu:gl_context",
         ],
         ":android_link_native_window": [
             ":hardware_buffer",
+            ":hardware_buffer_pool",
             "//mediapipe/gpu:gl_base",
             "//mediapipe/gpu:gl_context",
         ],

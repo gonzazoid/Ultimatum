@@ -7,6 +7,7 @@ package org.chromium.chrome.browser.customtabs.content;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -33,11 +34,11 @@ import org.robolectric.annotation.Implementation;
 import org.robolectric.annotation.Implements;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.base.test.util.Features;
 import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.customtabs.CustomTabIntentDataProvider;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
-import org.chromium.chrome.test.util.browser.Features;
 import org.chromium.components.embedder_support.util.UrlUtilities;
 import org.chromium.components.embedder_support.util.UrlUtilitiesJni;
 import org.chromium.content_public.browser.LoadUrlParams;
@@ -68,6 +69,7 @@ public class CustomTabActivityUrlLoadingTest {
     @Rule public Features.JUnitProcessor processor = new Features.JUnitProcessor();
 
     @Mock private Profile mProfile;
+    @Mock private Profile mIncognitoProfile;
 
     private CustomTabActivityTabController mTabController;
     private CustomTabActivityNavigationController mNavigationController;
@@ -81,7 +83,11 @@ public class CustomTabActivityUrlLoadingTest {
     public void setUp() {
         MockitoAnnotations.initMocks(this);
         mocker.mock(UrlUtilitiesJni.TEST_HOOKS, mUrlUtilitiesJniMock);
-        Profile.setLastUsedProfileForTesting(mProfile);
+
+        when(env.profileProvider.getOriginalProfile()).thenReturn(mProfile);
+        when(env.profileProvider.getOffTheRecordProfile(eq(true))).thenReturn(mIncognitoProfile);
+        when(mIncognitoProfile.isOffTheRecord()).thenReturn(true);
+
         mTabController = env.createTabController();
         mNavigationController = env.createNavigationController(mTabController);
         mIntentHandler = env.createIntentHandler(mNavigationController);

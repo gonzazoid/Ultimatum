@@ -14,7 +14,7 @@
 
 #include "base/atomic_sequence_num.h"
 #include "base/base_export.h"
-#include "base/cancelable_callback.h"
+#include "base/callback_list.h"
 #include "base/containers/circular_deque.h"
 #include "base/debug/crash_logging.h"
 #include "base/feature_list.h"
@@ -154,11 +154,13 @@ class BASE_EXPORT SequenceManagerImpl
       CurrentThread::DestructionObserver* destruction_observer);
   void RemoveDestructionObserver(
       CurrentThread::DestructionObserver* destruction_observer);
-  void RegisterOnNextIdleCallback(OnceClosure on_next_idle_callback);
-  // TODO(alexclarke): Remove this as part of https://crbug.com/825327.
+  [[nodiscard]] CallbackListSubscription RegisterOnNextIdleCallback(
+      OnceClosure on_next_idle_callback);
+
+  // Sets / returns the default TaskRunner. Thread-safe.
   void SetTaskRunner(scoped_refptr<SingleThreadTaskRunner> task_runner);
-  // TODO(alexclarke): Remove this as part of https://crbug.com/825327.
   scoped_refptr<SingleThreadTaskRunner> GetTaskRunner();
+
   bool IsBoundToCurrentThread() const;
   MessagePump* GetMessagePump() const;
   bool IsType(MessagePumpType type) const;
@@ -326,7 +328,7 @@ class BASE_EXPORT SequenceManagerImpl
     //   internal scheduling code does not expect queues to be pulled
     //   from underneath.
 
-    std::set<internal::TaskQueueImpl*> active_queues;
+    std::set<raw_ptr<internal::TaskQueueImpl, SetExperimental>> active_queues;
 
     std::map<internal::TaskQueueImpl*, std::unique_ptr<internal::TaskQueueImpl>>
         queues_to_delete;
@@ -346,9 +348,9 @@ class BASE_EXPORT SequenceManagerImpl
     ObserverList<CurrentThread::DestructionObserver>::Unchecked
         destruction_observers;
 
-    // If non-null, invoked the next time OnIdle() completes without scheduling
-    // additional work.
-    OnceClosure on_next_idle_callback;
+    // Notified the next time `OnIdle()` completes without scheduling additional
+    // work.
+    OnceClosureList on_next_idle_callbacks;
   };
 
   void CompleteInitializationOnBoundThread();

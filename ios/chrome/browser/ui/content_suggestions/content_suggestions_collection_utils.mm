@@ -16,10 +16,10 @@
 #import "ios/chrome/browser/ui/start_surface/start_surface_features.h"
 #import "ios/chrome/browser/ui/toolbar/public/toolbar_constants.h"
 #import "ios/chrome/browser/ui/toolbar/public/toolbar_utils.h"
-#import "ios/chrome/common/button_configuration_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/pointer_interaction_util.h"
 #import "ios/chrome/common/ui/util/ui_util.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/components/ui_util/dynamic_type_util.h"
 #import "ui/base/device_form_factor.h"
@@ -260,7 +260,8 @@ CGFloat HeightForLogoHeader(BOOL logo_is_showing,
     // Returns sufficient vertical space for the Identity Disc to be
     // displayed.
     return ntp_home::kIdentityAvatarDimension +
-           2 * ntp_home::kIdentityAvatarMargin;
+           2 * (ntp_home::kIdentityAvatarMargin +
+                ntp_home::kIdentityAvatarPadding);
   }
 
   header_height += kTopSpacingMaterial;
@@ -270,20 +271,6 @@ CGFloat HeightForLogoHeader(BOOL logo_is_showing,
 
 CGFloat HeaderBottomPadding() {
   return kNTPShrunkLogoSearchFieldBottomPadding;
-}
-
-UIImageView* CreateMagnifyingGlassView() {
-  UIImageView* image_view = [[UIImageView alloc] init];
-  image_view.translatesAutoresizingMaskIntoConstraints = NO;
-  image_view.contentMode = UIViewContentModeScaleAspectFit;
-  image_view.userInteractionEnabled = NO;
-
-  UIImage* magnifying_glass_image = DefaultSymbolWithPointSize(
-      kMagnifyingglassSymbol, kSymbolContentSuggestionsPointSize);
-  image_view.tintColor = [UIColor colorNamed:kGrey500Color];
-
-  [image_view setImage:magnifying_glass_image];
-  return image_view;
 }
 
 void ConfigureSearchHintLabel(UILabel* search_hint_label,
@@ -362,15 +349,6 @@ UIView* NearestAncestor(UIView* view, Class of_class) {
   return NearestAncestor([view superview], of_class);
 }
 
-BOOL ShouldShowWiderMagicStackLayer(UITraitCollection* traitCollection,
-                                    UIWindow* window) {
-  // Some iphone devices in landscape mode are still small enough to have a
-  // Compact  UIUserInterfaceSizeClass.
-  return traitCollection.horizontalSizeClass ==
-             UIUserInterfaceSizeClassRegular ||
-         IsLandscape(window);
-}
-
 UIColor* SearchHintLabelColor() {
   if (IsIOSLargeFakeboxEnabled()) {
     return [UIColor colorNamed:kGrey800Color];
@@ -378,6 +356,15 @@ UIColor* SearchHintLabelColor() {
     return [UIColor colorNamed:@"fake_omnibox_placeholder_color"];
   }
   return [UIColor colorNamed:kTextfieldPlaceholderColor];
+}
+
+int SetUpListTitleStringID() {
+  return IsIOSTipsNotificationsEnabled() ? IDS_IOS_SET_UP_LIST_TIPS_TITLE
+                                         : IDS_IOS_SET_UP_LIST_TITLE;
+}
+
+NSString* SetUpListTitleString() {
+  return l10n_util::GetNSString(SetUpListTitleStringID());
 }
 
 }  // namespace content_suggestions

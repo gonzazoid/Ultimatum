@@ -8,6 +8,7 @@
 #import <vector>
 
 #import "base/i18n/case_conversion.h"
+#import "base/memory/raw_ptr.h"
 #import "base/strings/utf_string_conversions.h"
 #import "components/sessions/core/tab_restore_service_impl.h"
 #import "ios/chrome/browser/history/model/history_service_factory.h"
@@ -114,8 +115,8 @@ class TabsSearchServiceTest : public PlatformTest {
 
     web::FakeWebState* inserted_web_state = fake_web_state.get();
     browser->GetWebStateList()->InsertWebState(
-        WebStateList::kInvalidIndex, std::move(fake_web_state),
-        WebStateList::INSERT_ACTIVATE, WebStateOpener());
+        std::move(fake_web_state),
+        WebStateList::InsertionParams::Automatic().Activate());
     return inserted_web_state;
   }
 
@@ -138,7 +139,7 @@ class TabsSearchServiceTest : public PlatformTest {
   std::unique_ptr<Browser> other_browser_;
   std::unique_ptr<Browser> incognito_browser_;
   std::unique_ptr<Browser> other_incognito_browser_;
-  BrowserList* browser_list_;
+  raw_ptr<BrowserList> browser_list_;
 };
 
 // Tests that no results are returned when there are no WebStates.
@@ -546,7 +547,7 @@ TEST_F(TabsSearchServiceTest, RecentlyClosedMatchTitleAllClosed) {
   // Add a webstate which will not match `kSearchQueryMatchesAll`.
   AppendNewWebState(browser_.get(), u"X", GURL("http://abc.xyz"));
 
-  browser_->GetWebStateList()->CloseAllWebStates(WebStateList::CLOSE_NO_FLAGS);
+  CloseAllWebStates(*browser_->GetWebStateList(), WebStateList::CLOSE_NO_FLAGS);
 
   __block bool results_received = false;
   search_service()->SearchRecentlyClosed(

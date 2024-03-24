@@ -8,12 +8,12 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/accessibility/ax_enums.mojom-forward.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/accessibility/ax_node_position.h"
@@ -121,12 +121,11 @@ class VIEWS_EXPORT ViewAXPlatformNodeDelegate
   const ui::AXUniqueId& GetUniqueId() const override;
   std::vector<int32_t> GetColHeaderNodeIds() const override;
   std::vector<int32_t> GetColHeaderNodeIds(int col_index) const override;
-  absl::optional<int32_t> GetCellId(int row_index,
-                                    int col_index) const override;
+  std::optional<int32_t> GetCellId(int row_index, int col_index) const override;
   bool IsOrderedSetItem() const override;
   bool IsOrderedSet() const override;
-  absl::optional<int> GetPosInSet() const override;
-  absl::optional<int> GetSetSize() const override;
+  std::optional<int> GetPosInSet() const override;
+  std::optional<int> GetSetSize() const override;
 
   bool TableHasColumnOrRowHeaderNodeForTesting() const;
 
@@ -134,8 +133,18 @@ class VIEWS_EXPORT ViewAXPlatformNodeDelegate
   gfx::RectF GetInlineTextRect(const int start_offset,
                                const int end_offset) const;
 
+  // Return the bounds relative to the container bounds. This functions applies
+  // the horizontal scroll offset and clips the bounds to the container bounds.
+  // TODO(accessibility): Add support for vertical scroll offsets if needed.
+  // There's no known use case for this yet.
+  gfx::RectF RelativeToContainerBounds(
+      const gfx::RectF& bounds,
+      ui::AXOffscreenResult* offscreen_result) const;
+
   AtomicViewAXTreeManager* GetAtomicViewAXTreeManagerForTesting()
       const override;
+
+  virtual gfx::Point ScreenToDIPPoint(const gfx::Point& screen_point) const;
 
  protected:
   explicit ViewAXPlatformNodeDelegate(View* view);

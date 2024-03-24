@@ -17,7 +17,9 @@
 #include "ash/accelerators/ash_accelerator_configuration.h"
 #include "ash/accelerators/ash_focus_manager_factory.h"
 #include "ash/accelerators/magnifier_key_scroller.h"
+#include "ash/accelerators/modifier_key_combo_recorder.h"
 #include "ash/accelerators/pre_target_accelerator_handler.h"
+#include "ash/accelerators/rapid_key_sequence_recorder.h"
 #include "ash/accelerators/shortcut_input_handler.h"
 #include "ash/accelerators/spoken_feedback_toggler.h"
 #include "ash/accelerometer/accelerometer_reader.h"
@@ -159,13 +161,13 @@
 #include "ash/system/keyboard_brightness_control_delegate.h"
 #include "ash/system/locale/locale_update_controller_impl.h"
 #include "ash/system/media/media_notification_provider.h"
-#include "ash/system/notification_center/message_center_ash_impl.h"
-#include "ash/system/notification_center/message_center_controller.h"
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/model/virtual_keyboard_model.h"
 #include "ash/system/nearby_share/nearby_share_controller_impl.h"
 #include "ash/system/network/sms_observer.h"
 #include "ash/system/night_light/night_light_controller_impl.h"
+#include "ash/system/notification_center/message_center_ash_impl.h"
+#include "ash/system/notification_center/message_center_controller.h"
 #include "ash/system/pcie_peripheral/pcie_peripheral_notification_controller.h"
 #include "ash/system/power/adaptive_charging_controller.h"
 #include "ash/system/power/backlights_forced_off_setter.h"
@@ -222,11 +224,13 @@
 #include "ash/wm/system_modal_container_layout_manager.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "ash/wm/tablet_mode/tablet_mode_window_manager.h"
+#include "ash/wm/tile_group/window_tiling_controller.h"
 #include "ash/wm/toplevel_window_event_handler.h"
 #include "ash/wm/video_detector.h"
 #include "ash/wm/window_animations.h"
 #include "ash/wm/window_cycle/window_cycle_controller.h"
 #include "ash/wm/window_properties.h"
+#include "ash/wm/window_restore/pine_controller.h"
 #include "ash/wm/window_restore/window_restore_controller.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm/wm_shadow_controller_delegate.h"
@@ -304,6 +308,8 @@ namespace {
 
 using aura::Window;
 using views::Widget;
+
+constexpr int kTooltipMaxWidth = 296;
 
 // A Corewm VisibilityController subclass that calls the Ash animation routine
 // so we can pick up our extended animations. See ash/wm/window_animations.h.
@@ -785,6 +791,8 @@ Shell::~Shell() {
 
   // `shortcut_input_handler_` must be cleaned up before
   // `event_rewriter_controller_`.
+  modifier_key_combo_recorder_.reset();
+  rapid_key_sequence_recorder_.reset();
   shortcut_input_handler_.reset();
   // `AccessibilityEventRewriter` references objects owned by
   // EventRewriterController directly, so it must be reset first to avoid
@@ -969,6 +977,7 @@ Shell::~Shell() {
   backlights_forced_off_setter_.reset();
 
   float_controller_.reset();
+  pine_controller_.reset();
   pip_controller_.reset();
   screen_pinning_controller_.reset();
 
@@ -1368,6 +1377,8 @@ void Shell::Init(
   keyboard_modifier_metrics_recorder_ =
       std::make_unique<KeyboardModifierMetricsRecorder>();
   event_rewriter_controller_ = std::make_unique<EventRewriterControllerImpl>();
+  modifier_key_combo_recorder_ = std::make_unique<ModifierKeyComboRecorder>();
+  rapid_key_sequence_recorder_ = std::make_unique<RapidKeySequenceRecorder>();
 
   env_filter_ = std::make_unique<::wm::CompoundEventFilter>();
   AddPreTargetHandler(env_filter_.get());
@@ -1420,10 +1431,7 @@ void Shell::Init(
   desks_controller_ = std::make_unique<DesksController>();
   saved_desk_delegate_ = shell_delegate_->CreateSavedDeskDelegate();
   // Initialized here since it depends on desks.
-  if (base::FeatureList::IsEnabled(features::kAppLaunchAutomation) ||
-      chromeos::features::IsDeskProfilesEnabled()) {
-    saved_desk_controller_ = std::make_unique<SavedDeskController>();
-  }
+  saved_desk_controller_ = std::make_unique<SavedDeskController>();
 
   Shell::SetRootWindowForNewWindows(GetPrimaryRootWindow());
 
@@ -1573,8 +1581,7 @@ void Shell::Init(
   // used in its constructor.
   app_list_controller_ = std::make_unique<AppListControllerImpl>();
 
-  if (features::IsBirchFeatureEnabled() &&
-      switches::IsBirchSecretKeyMatched()) {
+  if (features::IsForestFeatureEnabled()) {
     birch_model_ = std::make_unique<BirchModel>();
   }
 
@@ -1590,10 +1597,11 @@ void Shell::Init(
 
   video_detector_ = std::make_unique<VideoDetector>();
 
+  auto tooltip_aura = std::make_unique<views::corewm::TooltipAura>(
+      base::BindRepeating(&StyleUtil::CreateAshStyleTooltipView));
+  tooltip_aura->SetMaxWidth(kTooltipMaxWidth);
   tooltip_controller_ = std::make_unique<views::corewm::TooltipController>(
-      std::make_unique<views::corewm::TooltipAura>(
-          base::BindRepeating(&StyleUtil::CreateAshStyleTooltipView)),
-      activation_client());
+      std::move(tooltip_aura), activation_client());
   AddPreTargetHandler(tooltip_controller_.get());
 
   modality_filter_ = std::make_unique<SystemModalContainerEventFilter>(this);
@@ -1645,10 +1653,8 @@ void Shell::Init(
   // `SystemNotificationController` is created, because
   // `SystemNotificationController` ctor will creat an instance of
   // `PowerSoundsController`, which will access and play the initialized sounds.
-  if (features::AreSystemSoundsEnabled()) {
     system_sounds_delegate_ = shell_delegate_->CreateSystemSoundsDelegate();
     system_sounds_delegate_->Init();
-  }
 
   privacy_hub_controller_ = PrivacyHubController::CreatePrivacyHubController();
 
@@ -1745,6 +1751,9 @@ void Shell::Init(
   projector_controller_ = std::make_unique<ProjectorControllerImpl>();
 
   float_controller_ = std::make_unique<FloatController>();
+  if (features::IsForestFeatureEnabled()) {
+    pine_controller_ = std::make_unique<PineController>();
+  }
   pip_controller_ = std::make_unique<PipController>();
 
   multitask_menu_nudge_delegate_ =
@@ -1768,6 +1777,10 @@ void Shell::Init(
   if (features::IsPickerUpdateEnabled() &&
       PickerController::IsFeatureKeyMatched()) {
     picker_controller_ = std::make_unique<PickerController>();
+  }
+
+  if (features::IsTilingWindowResizeEnabled()) {
+    window_tiling_controller_ = std::make_unique<WindowTilingController>();
   }
 
   // Injects the factory which fulfills the implementation of the text context

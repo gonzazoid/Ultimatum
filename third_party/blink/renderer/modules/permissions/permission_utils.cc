@@ -127,6 +127,8 @@ String PermissionNameToString(PermissionName name) {
       return "top-level-storage-access";
     case PermissionName::CAPTURED_SURFACE_CONTROL:
       return "captured-surface-control";
+    case PermissionName::SPEAKER_SELECTION:
+      return "speaker-selection";
   }
   NOTREACHED();
   return "unknown";
@@ -372,12 +374,22 @@ PermissionDescriptorPtr ParsePermissionDescriptor(
     return CreatePermissionDescriptor(PermissionName::DISPLAY_CAPTURE);
   }
   if (name == V8PermissionName::Enum::kCapturedSurfaceControl) {
-    if (!RuntimeEnabledFeatures::CapturedSurfaceControlEnabled()) {
+    if (!RuntimeEnabledFeatures::CapturedSurfaceControlEnabled(
+            ExecutionContext::From(script_state))) {
       exception_state.ThrowTypeError(
           "The Captured Surface Control API is not enabled.");
       return nullptr;
     }
     return CreatePermissionDescriptor(PermissionName::CAPTURED_SURFACE_CONTROL);
+  }
+  if (name == V8PermissionName::Enum::kSpeakerSelection) {
+    if (!RuntimeEnabledFeatures::SpeakerSelectionEnabled(
+            ExecutionContext::From(script_state))) {
+      exception_state.ThrowTypeError(
+          "The Speaker Selection API is not enabled.");
+      return nullptr;
+    }
+    return CreatePermissionDescriptor(PermissionName::SPEAKER_SELECTION);
   }
   return nullptr;
 }

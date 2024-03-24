@@ -140,7 +140,7 @@ BASE_FEATURE(kMdnsResponderGeneratedNameListing,
 // Implementing ORB in Chromium is tracked in https://crbug.com/1178928
 BASE_FEATURE(kOpaqueResponseBlockingV02,
              "OpaqueResponseBlockingV02",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Treat ORB blocked responses to script-initiated fetches as errors too.
 // Complements ORB v0.2, which exempts script-initiated fetches.
@@ -395,16 +395,6 @@ const base::FeatureParam<bool> kPrefetchNoVarySearchShippedByDefault{
 BASE_FEATURE(kCompressionDictionaryTransportBackend,
              "CompressionDictionaryTransportBackend",
              base::FEATURE_ENABLED_BY_DEFAULT);
-const base::FeatureParam<CompressionDictionaryTransportBackendVersion>::Option
-    kCompressionDictionaryTransportBackendVersionOptions[] = {
-        {CompressionDictionaryTransportBackendVersion::kV1, "v1"},
-        {CompressionDictionaryTransportBackendVersion::kV2, "v2"}};
-const base::FeatureParam<CompressionDictionaryTransportBackendVersion>
-    kCompressionDictionaryTransportBackendVersion{
-        &kCompressionDictionaryTransportBackend,
-        "CompressionDictionaryTransportBackendVersion",
-        CompressionDictionaryTransportBackendVersion::kV1,
-        &kCompressionDictionaryTransportBackendVersionOptions};
 
 // When both this feature and the kCompressionDictionaryTransportBackend feature
 // are enabled, the following will happen:
@@ -468,8 +458,13 @@ const base::FeatureParam<bool> kSkipTpcdMitigationsForAdsMetadata{
     &kSkipTpcdMitigationsForAds, /*name=*/"SkipTpcdMitigationsForAdsMetadata",
     /*default_value=*/false};
 // Controls whether we ignore checks on the deprecation trial for 3PC.
-const base::FeatureParam<bool> kSkipTpcdMitigationsForAdsSupport{
+const base::FeatureParam<bool> kSkipTpcdMitigationsForAdsTrial{
     &kSkipTpcdMitigationsForAds, /*name=*/"SkipTpcdMitigationsForAdsSupport",
+    /*default_value=*/false};
+// Controls whether we ignore checks on the top-level deprecation trial for 3PC.
+const base::FeatureParam<bool> kSkipTpcdMitigationsForAdsTopLevelTrial{
+    &kSkipTpcdMitigationsForAds,
+    /*name=*/"SkipTpcdMitigationsForAdsTopLevelTrial",
     /*default_value=*/false};
 
 }  // namespace network::features

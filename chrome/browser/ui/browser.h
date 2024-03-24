@@ -219,6 +219,13 @@ class Browser : public TabStripModelObserver,
     kDeskTemplate,
   };
 
+  // Represents the reasons for force showing bookmark bar.
+  enum ForceShowBookmarkBarFlag {
+    kNone = 0,
+    kTabGroupsTutorialActive = 1 << 0,
+    kTabGroupSaved = 1 << 1,
+  };
+
   // Represents whether a value was known to be explicitly specified.
   enum class ValueSpecified { kUnknown, kSpecified, kUnspecified };
 
@@ -596,8 +603,7 @@ class Browser : public TabStripModelObserver,
   void ResetTryToCloseWindow();
 
   // Figure out if there are tabs that have beforeunload handlers.
-  // It starts beforeunload/unload processing as a side-effect.
-  bool TabsNeedBeforeUnloadFired();
+  bool TabsNeedBeforeUnloadFired() const;
 
   // Browser closing consists of the following phases:
   //
@@ -786,7 +792,7 @@ class Browser : public TabStripModelObserver,
   }
 
   // True when the mouse cursor is locked.
-  bool IsMouseLocked() const;
+  bool IsPointerLocked() const;
 
   // Called each time the browser window is shown.
   void OnWindowDidShow();
@@ -818,6 +824,10 @@ class Browser : public TabStripModelObserver,
 
   StatusBubble* GetStatusBubbleForTesting();
 
+  // Sets or clears the flags to force showing bookmark bar.
+  void SetForceShowBookmarkBarFlag(ForceShowBookmarkBarFlag flag);
+  void ClearForceShowBookmarkBarFlag(ForceShowBookmarkBarFlag flag);
+
  private:
   friend class BrowserTest;
   friend class ExclusiveAccessTest;
@@ -835,6 +845,9 @@ class Browser : public TabStripModelObserver,
   FRIEND_TEST_ALL_PREFIXES(ExclusiveAccessTest,
                            TabEntersPresentationModeFromWindowed);
   FRIEND_TEST_ALL_PREFIXES(BrowserCloseTest, LastGuest);
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+  FRIEND_TEST_ALL_PREFIXES(BrowserTest, URLElisionExtensionSetsPref);
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
   // Used to describe why a tab is being detached. This is used by
   // TabDetachedAtImpl.
@@ -869,6 +882,9 @@ class Browser : public TabStripModelObserver,
     // Change is the result of switching the option of showing toolbar in full
     // screen. Only used on Mac.
     BOOKMARK_BAR_STATE_CHANGE_TOOLBAR_OPTION_CHANGE,
+
+    // Change is the result of a force show reason
+    BOOKMARK_BAR_STATE_CHANGE_FORCE_SHOW,
   };
 
   explicit Browser(const CreateParams& params);
@@ -985,10 +1001,10 @@ class Browser : public TabStripModelObserver,
                  const gfx::Rect& selection_rect,
                  int active_match_ordinal,
                  bool final_update) override;
-  void RequestToLockMouse(content::WebContents* web_contents,
+  void RequestPointerLock(content::WebContents* web_contents,
                           bool user_gesture,
                           bool last_unlocked_by_target) override;
-  void LostMouseLock() override;
+  void LostPointerLock() override;
   void RequestKeyboardLock(content::WebContents* web_contents,
                            bool esc_key_locked) override;
   void CancelKeyboardLockRequest(content::WebContents* web_contents) override;
@@ -1216,6 +1232,8 @@ class Browser : public TabStripModelObserver,
       const content::StoragePartitionConfig& partition_config,
       content::SessionStorageNamespace* session_storage_namespace);
 
+  void SetURLElisionExtensionIDForTesting(const char* extension_id);
+
   // Data members /////////////////////////////////////////////////////////////
 
   PrefChangeRegistrar profile_pref_registrar_;
@@ -1386,6 +1404,16 @@ class Browser : public TabStripModelObserver,
 #if defined(USE_AURA)
   std::unique_ptr<OverscrollPrefManager> overscroll_pref_manager_;
 #endif
+
+  int force_show_bookmark_bar_flags_ = ForceShowBookmarkBarFlag::kNone;
+
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+  // ID of an extension that historically was used to prevent URL elision in the
+  // omnibox, and now is being deprecated by migration to a pref. Only set by
+  // tests.
+  // TODO(crbug/324934130): remove after ~M125 or so.
+  static const char* url_elision_extension_id_;
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
   // The following factory is used for chrome update coalescing.
   base::WeakPtrFactory<Browser> chrome_updater_factory_{this};

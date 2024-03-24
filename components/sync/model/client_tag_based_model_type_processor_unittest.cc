@@ -15,11 +15,9 @@
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/threading/platform_thread.h"
 #include "components/sync/base/client_tag_hash.h"
-#include "components/sync/base/features.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/base/sync_mode.h"
 #include "components/sync/engine/commit_and_get_updates_types.h"
@@ -227,7 +225,7 @@ class TestModelTypeSyncBridge : public FakeModelTypeSyncBridge {
     return supports_incremental_updates_;
   }
 
-  absl::optional<ModelError> MergeFullSyncData(
+  std::optional<ModelError> MergeFullSyncData(
       std::unique_ptr<MetadataChangeList> metadata_change_list,
       EntityChangeList entity_data) override {
     merge_call_count_++;
@@ -239,7 +237,7 @@ class TestModelTypeSyncBridge : public FakeModelTypeSyncBridge {
     return FakeModelTypeSyncBridge::MergeFullSyncData(
         std::move(metadata_change_list), std::move(entity_data));
   }
-  absl::optional<ModelError> ApplyIncrementalSyncChanges(
+  std::optional<ModelError> ApplyIncrementalSyncChanges(
       std::unique_ptr<MetadataChangeList> metadata_change_list,
       EntityChangeList entity_changes) override {
     apply_call_count_++;
@@ -514,7 +512,7 @@ class ClientTagBasedModelTypeProcessorTest : public ::testing::Test {
     EXPECT_TRUE(expect_error_);
     histogram_tester_->ExpectBucketCount("Sync.ModelTypeErrorSite.PREFERENCE",
                                          *expect_error_, /*count=*/1);
-    expect_error_ = absl::nullopt;
+    expect_error_ = std::nullopt;
     error_reported_ = true;
     // Do not expect for a start callback anymore.
     if (run_loop_) {
@@ -550,7 +548,7 @@ class ClientTagBasedModelTypeProcessorTest : public ::testing::Test {
   std::unique_ptr<MockModelTypeWorker> worker_;
 
   // Whether to expect an error from the processor (and from which site).
-  absl::optional<ClientTagBasedModelTypeProcessor::ErrorSite> expect_error_;
+  std::optional<ClientTagBasedModelTypeProcessor::ErrorSite> expect_error_;
   std::unique_ptr<base::HistogramTester> histogram_tester_;
   bool error_reported_ = false;
 };
@@ -3322,36 +3320,24 @@ TEST_F(ClientTagBasedModelTypeProcessorTest,
       "Sync.ClearMetadataWhileStopped.DelayedClear", 0);
 }
 
-// The param indicates whether the password notes feature is enabled.
 class PasswordsClientTagBasedModelTypeProcessorTest
-    : public testing::WithParamInterface<bool>,
-      public ClientTagBasedModelTypeProcessorTest {
+    : public ClientTagBasedModelTypeProcessorTest {
  public:
   PasswordsClientTagBasedModelTypeProcessorTest() {
-    feature_list_.InitWithFeatureState(syncer::kPasswordNotesWithBackup,
-                                       GetParam());
   }
 
  protected:
   ModelType GetModelType() override { return PASSWORDS; }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
 };
 
-TEST_P(PasswordsClientTagBasedModelTypeProcessorTest,
+TEST_F(PasswordsClientTagBasedModelTypeProcessorTest,
        ShouldSetPasswordsRedownloadedForNotesFlag) {
   ModelReadyToSync();
   OnSyncStarting();
   worker()->UpdateFromServer(UpdateResponseDataList());
 
-  EXPECT_EQ(base::FeatureList::IsEnabled(syncer::kPasswordNotesWithBackup),
-            db()->model_type_state()
-                .notes_enabled_before_initial_sync_for_passwords());
+  EXPECT_TRUE(db()->model_type_state()
+                  .notes_enabled_before_initial_sync_for_passwords());
 }
-
-INSTANTIATE_TEST_SUITE_P(All,
-                         PasswordsClientTagBasedModelTypeProcessorTest,
-                         testing::Bool());
 
 }  // namespace syncer

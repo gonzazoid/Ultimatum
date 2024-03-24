@@ -4,8 +4,9 @@
 
 #include "third_party/blink/renderer/core/paint/paint_invalidator.h"
 
+#include <optional>
+
 #include "base/trace_event/trace_event.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
 #include "third_party/blink/renderer/core/editing/frame_selection.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
@@ -259,8 +260,8 @@ bool PaintInvalidator::InvalidatePaint(
     UpdateLayoutShiftTracking(object, fragment_tree_builder_context, context);
     if (RuntimeEnabledFeatures::IntersectionOptimizationEnabled() &&
         object.ShouldCheckLayoutForPaintInvalidation()) {
-      object.GetMutableForPainting()
-          .InvalidateIntersectionObserverCachedRects();
+      object.GetFrameView()->SetIntersectionObservationState(
+          LocalFrameView::kDesired);
     }
   } else {
     context.old_paint_offset = context.fragment_data->PaintOffset();

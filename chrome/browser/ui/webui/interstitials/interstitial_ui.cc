@@ -280,7 +280,7 @@ CreateHttpsOnlyModePage(content::WebContents* web_contents) {
       security_interstitials::https_only_mode::HttpInterstitialState{});
 }
 
-std::unique_ptr<safe_browsing::SafeBrowsingBlockingPage>
+std::unique_ptr<security_interstitials::SecurityInterstitialPage>
 CreateSafeBrowsingBlockingPage(content::WebContents* web_contents) {
   safe_browsing::SBThreatType threat_type =
       safe_browsing::SB_THREAT_TYPE_URL_MALWARE;
@@ -335,9 +335,11 @@ CreateSafeBrowsingBlockingPage(content::WebContents* web_contents) {
   // parts which depend on the NavigationEntry are not hit.
   auto* ui_manager =
       g_browser_process->safe_browsing_service()->ui_manager().get();
-  return base::WrapUnique<safe_browsing::SafeBrowsingBlockingPage>(
-      ui_manager->blocking_page_factory()->CreateSafeBrowsingPage(
-          ui_manager, web_contents, main_frame_url, {resource}, true));
+  return base::WrapUnique<security_interstitials::SecurityInterstitialPage>(
+      ui_manager->CreateBlockingPage(
+          web_contents, main_frame_url, {resource},
+          /*forward_extension_event=*/false,
+          /*blocked_page_shown_timestamp=*/absl::nullopt));
 }
 
 std::unique_ptr<EnterpriseBlockPage> CreateEnterpriseBlockPage(
@@ -345,6 +347,7 @@ std::unique_ptr<EnterpriseBlockPage> CreateEnterpriseBlockPage(
   const GURL kRequestUrl("https://enterprise-block.example.net");
   return std::make_unique<EnterpriseBlockPage>(
       web_contents, kRequestUrl,
+      safe_browsing::SafeBrowsingBlockingPage::UnsafeResourceList(),
       std::make_unique<EnterpriseBlockControllerClient>(web_contents,
                                                         kRequestUrl));
 }

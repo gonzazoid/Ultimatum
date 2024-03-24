@@ -121,6 +121,7 @@
 #include "third_party/blink/renderer/platform/graphics/accelerated_static_bitmap_image.h"
 #include "third_party/blink/renderer/platform/graphics/canvas_2d_layer_bridge.h"
 #include "third_party/blink/renderer/platform/graphics/canvas_resource_provider.h"
+#include "third_party/blink/renderer/platform/graphics/gpu/image_extractor.h"
 #include "third_party/blink/renderer/platform/graphics/gpu/shared_gpu_context.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
 #include "third_party/blink/renderer/platform/graphics/skia/sk_image_info_hash.h"
@@ -1228,8 +1229,6 @@ WebGLRenderingContextBase::WebGLRenderingContextBase(
       task_runner_(task_runner),
       num_gl_errors_to_console_allowed_(kMaxGLErrorsAllowedToConsole),
       context_type_(context_type),
-      program_completion_queries_(
-          base::LRUCache<WebGLProgram*, GLuint>::NO_AUTO_EVICT),
       number_of_user_allocated_multisampled_renderbuffers_(0) {
   DCHECK(context_provider);
 
@@ -1941,7 +1940,7 @@ bool WebGLRenderingContextBase::CopyRenderingResultsFromDrawingBuffer(
   // ImageOrientation of the UnacceleratedStaticBitmapImage.
   ImageDrawOptions draw_options;
   draw_options.clamping_mode = Image::kDoNotClampImageToSourceRect;
-  image->Draw(resource_provider->Canvas(), flags, gfx::RectF(dest_rect),
+  image->Draw(&resource_provider->Canvas(), flags, gfx::RectF(dest_rect),
               gfx::RectF(src_rect), draw_options);
   return true;
 }
@@ -2290,6 +2289,12 @@ void WebGLRenderingContextBase::blendFuncSeparate(GLenum src_rgb,
   if (isContextLost() ||
       !ValidateBlendFuncFactors("blendFuncSeparate", src_rgb, dst_rgb))
     return;
+
+  if (!ValidateBlendFuncExtendedFactors("blendFuncSeparate", src_alpha,
+                                        dst_alpha)) {
+    return;
+  }
+
   ContextGL()->BlendFuncSeparate(src_rgb, dst_rgb, src_alpha, dst_alpha);
 }
 
@@ -3261,10 +3266,10 @@ WebGLActiveInfo* WebGLRenderingContextBase::getActiveUniform(
                                                type, size);
 }
 
-absl::optional<HeapVector<Member<WebGLShader>>>
+std::optional<HeapVector<Member<WebGLShader>>>
 WebGLRenderingContextBase::getAttachedShaders(WebGLProgram* program) {
   if (!ValidateWebGLProgramOrShader("getAttachedShaders", program))
-    return absl::nullopt;
+    return std::nullopt;
 
   HeapVector<Member<WebGLShader>> shader_objects;
   for (GLenum shaderType : {GL_VERTEX_SHADER, GL_FRAGMENT_SHADER}) {
@@ -3936,13 +3941,13 @@ ScriptValue WebGLRenderingContextBase::getParameter(ScriptState* script_state,
       SynthesizeGLError(GL_INVALID_ENUM, "getParameter",
                         "invalid parameter name, EXT_clip_control not enabled");
       return ScriptValue::CreateNull(script_state->GetIsolate());
-    case GL_MAX_DUAL_SOURCE_DRAW_BUFFERS_EXT:  // EXT_blend_func_extended
-      if (ExtensionEnabled(kEXTBlendFuncExtendedName)) {
+    case GL_MAX_DUAL_SOURCE_DRAW_BUFFERS_EXT:  // WEBGL_blend_func_extended
+      if (ExtensionEnabled(kWebGLBlendFuncExtendedName)) {
         return GetUnsignedIntParameter(script_state, pname);
       }
       SynthesizeGLError(
           GL_INVALID_ENUM, "getParameter",
-          "invalid parameter name, EXT_blend_func_extended not enabled");
+          "invalid parameter name, WEBGL_blend_func_extended not enabled");
       return ScriptValue::CreateNull(script_state->GetIsolate());
     case GL_MAX_COLOR_ATTACHMENTS_EXT:  // EXT_draw_buffers BEGIN
       if (ExtensionEnabled(kWebGLDrawBuffersName) || IsWebGL2())
@@ -4195,10 +4200,10 @@ String WebGLRenderingContextBase::getShaderSource(WebGLShader* shader) {
   return EnsureNotNull(shader->Source());
 }
 
-absl::optional<Vector<String>>
+std::optional<Vector<String>>
 WebGLRenderingContextBase::getSupportedExtensions() {
   if (isContextLost())
-    return absl::nullopt;
+    return std::nullopt;
 
   Vector<String> result;
 
@@ -5008,7 +5013,7 @@ void WebGLRenderingContextBase::ReadPixelsHelper(GLint x,
   // we want to avoid this error. Therefore we provide temporary memory here if
   // 'ArrayBufferView' does not provide a backing store but we actually read
   // zero pixels.
-  absl::optional<Vector<uint8_t>> buffer;
+  std::optional<Vector<uint8_t>> buffer;
   if (!data && (width == 0 || height == 0)) {
     buffer.emplace(32);
     data = buffer->data();
@@ -5500,8 +5505,8 @@ void WebGLRenderingContextBase::TexImageStaticBitmapImage(
 bool WebGLRenderingContextBase::ValidateTexFunc(
     TexImageParams params,
     TexFuncValidationSourceType source_type,
-    absl::optional<GLsizei> source_width,
-    absl::optional<GLsizei> source_height) {
+    std::optional<GLsizei> source_width,
+    std::optional<GLsizei> source_height) {
   // Overwrite `params.width` and `params.height` with `source_width` and
   // `source_height`. If `params.depth` is unspecified, set it to 1.
   if (source_width)
@@ -5556,7 +5561,7 @@ bool WebGLRenderingContextBase::ValidateValueFitNonNegInt32(
   return true;
 }
 
-// TODO(fmalita): figure why WebGLImageConversion::ImageExtractor can't handle
+// TODO(fmalita): figure why ImageExtractor can't handle
 // SVG-backed images, and get rid of this intermediate step.
 scoped_refptr<Image> WebGLRenderingContextBase::DrawImageIntoBufferForTexImage(
     scoped_refptr<Image> pass_image,
@@ -5579,7 +5584,7 @@ scoped_refptr<Image> WebGLRenderingContextBase::DrawImageIntoBufferForTexImage(
   }
 
   if (!image->CurrentFrameKnownToBeOpaque())
-    resource_provider->Canvas()->clear(SkColors::kTransparent);
+    resource_provider->Canvas().clear(SkColors::kTransparent);
 
   gfx::Rect src_rect(image->Size());
   gfx::Rect dest_rect(0, 0, width, height);
@@ -5588,7 +5593,7 @@ scoped_refptr<Image> WebGLRenderingContextBase::DrawImageIntoBufferForTexImage(
   // https://crbug.com/672299
   ImageDrawOptions draw_options;
   draw_options.clamping_mode = Image::kDoNotClampImageToSourceRect;
-  image->Draw(resource_provider->Canvas(), flags, gfx::RectF(dest_rect),
+  image->Draw(&resource_provider->Canvas(), flags, gfx::RectF(dest_rect),
               gfx::RectF(src_rect), draw_options);
   return resource_provider->Snapshot(FlushReason::kWebGLTexImage);
 }
@@ -5668,8 +5673,8 @@ void WebGLRenderingContextBase::TexImageHelperDOMArrayBufferView(
     return;
   if (!ValidateTexImageBinding(params))
     return;
-  if (!ValidateTexFunc(params, kSourceArrayBufferView, absl::nullopt,
-                       absl::nullopt)) {
+  if (!ValidateTexFunc(params, kSourceArrayBufferView, std::nullopt,
+                       std::nullopt)) {
     return;
   }
   if (!ValidateTexFuncData(params, pixels, null_disposition, src_offset))
@@ -5810,7 +5815,7 @@ void WebGLRenderingContextBase::TexImageHelperHTMLImageElement(
     return;
   }
 
-  WebGLImageConversion::ImageExtractor image_extractor(
+  ImageExtractor image_extractor(
       image_for_render.get(), params.unpack_premultiply_alpha,
       unpack_colorspace_conversion_ == GL_NONE
           ? nullptr
@@ -6472,8 +6477,8 @@ void WebGLRenderingContextBase::TexImageHelperImageBitmap(
     return;
   }
 
-  if (!ValidateTexFunc(params, kSourceImageBitmap, absl::nullopt,
-                       absl::nullopt)) {
+  if (!ValidateTexFunc(params, kSourceImageBitmap, std::nullopt,
+                       std::nullopt)) {
     return;
   }
 
@@ -8471,6 +8476,31 @@ bool WebGLRenderingContextBase::ValidateBlendFuncFactors(
                       "incompatible src and dst");
     return false;
   }
+
+  return ValidateBlendFuncExtendedFactors(function_name, src, dst);
+}
+
+bool WebGLRenderingContextBase::ValidateBlendFuncExtendedFactors(
+    const char* function_name,
+    GLenum src,
+    GLenum dst) {
+  // TODO(crbug.com/882580): this validation is done in the
+  // passthrough command decoder; this helper can be removed once the
+  // validating command decoder is completely unshipped.
+  if (src == GL_SRC1_COLOR_EXT || dst == GL_SRC1_COLOR_EXT ||
+      src == GL_SRC1_ALPHA_EXT || dst == GL_SRC1_ALPHA_EXT ||
+      src == GL_ONE_MINUS_SRC1_COLOR_EXT ||
+      dst == GL_ONE_MINUS_SRC1_COLOR_EXT ||
+      src == GL_ONE_MINUS_SRC1_ALPHA_EXT ||
+      dst == GL_ONE_MINUS_SRC1_ALPHA_EXT ||
+      (dst == GL_SRC_ALPHA_SATURATE && !IsWebGL2())) {
+    if (!ExtensionEnabled(kWebGLBlendFuncExtendedName)) {
+      SynthesizeGLError(GL_INVALID_ENUM, function_name,
+                        "invalid value, WEBGL_blend_func_extended not enabled");
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -9049,6 +9079,8 @@ void WebGLRenderingContextBase::Trace(Visitor* visitor) const {
   visitor->Trace(texture_units_);
   visitor->Trace(extensions_);
   visitor->Trace(make_xr_compatible_resolver_);
+  visitor->Trace(program_completion_query_list_);
+  visitor->Trace(program_completion_query_map_);
   CanvasRenderingContext::Trace(visitor);
 }
 
@@ -9103,33 +9135,52 @@ WebGLRenderingContextBase::getHTMLOrOffscreenCanvas() const {
 
 void WebGLRenderingContextBase::addProgramCompletionQuery(WebGLProgram* program,
                                                           GLuint query) {
-  auto old_query = program_completion_queries_.Get(program);
-  if (old_query != program_completion_queries_.end()) {
-    ContextGL()->DeleteQueriesEXT(1, &old_query->second);
+  auto old_query = program_completion_query_map_.find(program);
+  if (old_query != program_completion_query_map_.end()) {
+    ContextGL()->DeleteQueriesEXT(1, &old_query->value);
+    // If this program's been inserted into the map already, then it
+    // exists in the list, too. Clear it out from there so that its
+    // new addition doesn't introduce a duplicate.
+    wtf_size_t old_index = program_completion_query_list_.Find(program);
+    DCHECK_NE(old_index, WTF::kNotFound);
+    program_completion_query_list_.EraseAt(old_index);
   }
-  program_completion_queries_.Put(program, query);
-  if (program_completion_queries_.size() > kMaxProgramCompletionQueries) {
-    auto oldest = program_completion_queries_.rbegin();
-    ContextGL()->DeleteQueriesEXT(1, &oldest->second);
-    program_completion_queries_.Erase(oldest);
+  program_completion_query_map_.Set(program, query);
+  program_completion_query_list_.push_back(program);
+  if (program_completion_query_map_.size() > kMaxProgramCompletionQueries) {
+    DCHECK_GT(program_completion_query_list_.size(), 0u);
+    WebGLProgram* program_to_remove = program_completion_query_list_[0];
+    auto program_iter = program_completion_query_map_.find(program_to_remove);
+    DCHECK_NE(program_iter, program_completion_query_map_.end());
+    ContextGL()->DeleteQueriesEXT(1, &program_iter->value);
+    program_completion_query_map_.erase(program_iter);
+    program_completion_query_list_.EraseAt(0);
   }
 }
 
 void WebGLRenderingContextBase::clearProgramCompletionQueries() {
-  for (auto query : program_completion_queries_) {
-    ContextGL()->DeleteQueriesEXT(1, &query.second);
+  if (destruction_in_progress_) {
+    // GC has started so we can't touch program_completion_query_{map,list}_.
+    // That's OK; we don't need to clean up because the context and object are
+    // about to be destroyed anyway.
+    return;
   }
-  program_completion_queries_.Clear();
+
+  for (auto iter : program_completion_query_map_) {
+    ContextGL()->DeleteQueriesEXT(1, &iter.value);
+  }
+  program_completion_query_map_.clear();
+  program_completion_query_list_.clear();
 }
 
 bool WebGLRenderingContextBase::checkProgramCompletionQueryAvailable(
     WebGLProgram* program,
     bool* completed) {
   GLuint id = 0;
-  auto found = program_completion_queries_.Get(program);
-  if (found != program_completion_queries_.end()) {
-    id = found->second;
-    GLuint available;
+  auto found = program_completion_query_map_.find(program);
+  if (found != program_completion_query_map_.end()) {
+    id = found->value;
+    GLuint available = 0;
     ContextGL()->GetQueryObjectuivEXT(id, GL_QUERY_RESULT_AVAILABLE,
                                       &available);
     if (available) {

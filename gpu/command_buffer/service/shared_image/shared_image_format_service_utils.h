@@ -93,6 +93,10 @@ class GPU_GLES2_EXPORT GLFormatCaps {
   bool ext_texture_rg() const { return ext_texture_rg_; }
   bool ext_texture_norm16() const { return ext_texture_norm16_; }
   bool disable_r8_shared_images() const { return disable_r8_shared_images_; }
+  bool enable_texture_half_float_linear() const {
+    return enable_texture_half_float_linear_;
+  }
+  bool is_atleast_gles3() const { return is_atleast_gles3_; }
 
  private:
   // Return fallback gl format if the GL data, internal, tex storage format is
@@ -104,6 +108,8 @@ class GPU_GLES2_EXPORT GLFormatCaps {
   bool ext_texture_rg_ = false;
   bool ext_texture_norm16_ = false;
   bool disable_r8_shared_images_ = false;
+  bool enable_texture_half_float_linear_ = false;
+  bool is_atleast_gles3_ = false;
 };
 
 // Following functions return the appropriate Vulkan format for a
@@ -170,29 +176,30 @@ GPU_GLES2_EXPORT unsigned int ToMTLPixelFormat(viz::SharedImageFormat format,
 GPU_GLES2_EXPORT skgpu::graphite::TextureInfo GraphiteBackendTextureInfo(
     GrContextType gr_context_type,
     viz::SharedImageFormat format,
-    int plane_index = 0,
-    bool is_yuv_plane = false,
-    bool mipmapped = false,
-    bool scanout_dcomp_surface = false,
-    bool supports_multiplanar_rendering = false,
-    bool supports_multiplanar_copy = false);
+    bool readonly,
+    int plane_index,
+    bool is_yuv_plane,
+    bool mipmapped,
+    bool scanout_dcomp_surface,
+    bool supports_multiplanar_rendering,
+    bool supports_multiplanar_copy);
 
 GPU_GLES2_EXPORT skgpu::graphite::TextureInfo GraphitePromiseTextureInfo(
     GrContextType gr_context_type,
     viz::SharedImageFormat format,
     int plane_index = 0,
-    bool mipmapped = false,
-    bool scanout_dcomp_surface = false);
+    bool mipmapped = false);
 
 #if BUILDFLAG(SKIA_USE_DAWN)
 GPU_GLES2_EXPORT skgpu::graphite::DawnTextureInfo DawnBackendTextureInfo(
     viz::SharedImageFormat format,
-    bool is_yuv_plane = false,
-    int plane_index = 0,
-    bool mipmapped = false,
-    bool scanout_dcomp_surface = false,
-    bool supports_multiplanar_rendering = false,
-    bool support_multiplanar_copy = false);
+    bool readonly,
+    bool is_yuv_plane,
+    int plane_index,
+    bool mipmapped,
+    bool scanout_dcomp_surface,
+    bool supports_multiplanar_rendering,
+    bool support_multiplanar_copy);
 #endif
 
 #if BUILDFLAG(SKIA_USE_METAL)

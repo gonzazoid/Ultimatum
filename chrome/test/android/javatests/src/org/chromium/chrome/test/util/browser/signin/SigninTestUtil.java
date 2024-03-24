@@ -19,11 +19,10 @@ import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.SyncFirstSetupCompleteSource;
-import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.signin.SigninFirstRunFragment;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
 import org.chromium.chrome.browser.signin.services.SigninManager;
-import org.chromium.components.signin.AccountUtils;
 import org.chromium.components.signin.SigninFeatureMap;
 import org.chromium.components.signin.SigninFeatures;
 import org.chromium.components.signin.base.CoreAccountInfo;
@@ -45,7 +44,7 @@ public final class SigninTestUtil {
         return TestThreadUtils.runOnUiThreadBlockingNoException(
                 () -> {
                     return IdentityServicesProvider.get()
-                            .getIdentityManager(Profile.getLastUsedRegularProfile())
+                            .getIdentityManager(ProfileManager.getLastUsedRegularProfile())
                             .getPrimaryAccountInfo(consentLevel);
                 });
     }
@@ -67,7 +66,7 @@ public final class SigninTestUtil {
                 () -> {
                     SigninManager signinManager =
                             IdentityServicesProvider.get()
-                                    .getSigninManager(Profile.getLastUsedRegularProfile());
+                                    .getSigninManager(ProfileManager.getLastUsedRegularProfile());
                     signinManager.signin(
                             coreAccountInfo,
                             SigninAccessPoint.UNKNOWN,
@@ -115,9 +114,9 @@ public final class SigninTestUtil {
                 () -> {
                     SigninManager signinManager =
                             IdentityServicesProvider.get()
-                                    .getSigninManager(Profile.getLastUsedRegularProfile());
+                                    .getSigninManager(ProfileManager.getLastUsedRegularProfile());
                     signinManager.signinAndEnableSync(
-                            AccountUtils.createAccountFromName(coreAccountInfo.getEmail()),
+                            coreAccountInfo,
                             SigninAccessPoint.UNKNOWN,
                             new SigninManager.SignInCallback() {
                                 @Override
@@ -157,7 +156,7 @@ public final class SigninTestUtil {
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     IdentityServicesProvider.get()
-                            .getAccountTrackerService(Profile.getLastUsedRegularProfile())
+                            .getAccountTrackerService(ProfileManager.getLastUsedRegularProfile())
                             .legacySeedAccountsIfNeeded(ch::notifyCalled);
                 });
         try {
@@ -183,7 +182,7 @@ public final class SigninTestUtil {
                 () -> {
                     final SigninManager signinManager =
                             IdentityServicesProvider.get()
-                                    .getSigninManager(Profile.getLastUsedRegularProfile());
+                                    .getSigninManager(ProfileManager.getLastUsedRegularProfile());
                     signinManager.runAfterOperationInProgress(
                             () ->
                                     signinManager.signOut(

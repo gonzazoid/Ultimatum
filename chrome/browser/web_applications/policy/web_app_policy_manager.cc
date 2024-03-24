@@ -5,12 +5,11 @@
 #include "chrome/browser/web_applications/policy/web_app_policy_manager.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/barrier_callback.h"
-#include "base/barrier_closure.h"
 #include "base/check_deref.h"
 #include "base/containers/contains.h"
 #include "base/containers/flat_map.h"
@@ -19,6 +18,7 @@
 #include "base/functional/bind.h"
 #include "base/functional/callback_forward.h"
 #include "base/functional/callback_helpers.h"
+#include "base/functional/concurrent_closures.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
@@ -51,7 +51,6 @@
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/manifest/manifest.h"
 #include "url/url_constants.h"
 
@@ -158,6 +157,10 @@ void WebAppPolicyManager::Start(
                  base::BindOnce(
                      &WebAppPolicyManager::InitChangeRegistrarAndRefreshPolicy,
                      weak_ptr_factory_.GetWeakPtr(), enable_pwa_support));
+}
+
+void WebAppPolicyManager::Shutdown() {
+  weak_ptr_factory_.InvalidateWeakPtrs();
 }
 
 void WebAppPolicyManager::ReinstallPlaceholderAppIfNecessary(
@@ -354,7 +357,7 @@ void WebAppPolicyManager::RefreshPolicyInstalledApps(
                    : PlaceholderResolutionBehavior::kWaitForAppWindowsClosed)
             : PlaceholderResolutionBehavior::kClose;
 
-    absl::optional<webapps::AppId> app_id =
+    std::optional<webapps::AppId> app_id =
         provider_->registrar_unsafe().LookupExternalAppId(
             install_options.install_url);
 
@@ -453,25 +456,25 @@ void WebAppPolicyManager::ApplyPolicySettings() {
   // login and force unregistration, it is still safe, since both functions
   // invoke commands, so the Run on OS login will always be scheduled before the
   // force unregistration, and execution will be synchronous.
-  auto policy_settings_applied_callback = base::BarrierClosure(
-      /*num_closures=*/2,
-      base::BindOnce(&WebAppPolicyManager::OnSyncPolicySettingsCommandsComplete,
-                     weak_ptr_factory_.GetWeakPtr()));
-  ApplyRunOnOsLoginPolicySettings(policy_settings_applied_callback);
-  ApplyForceOSUnregistrationPolicySettings(policy_settings_applied_callback);
+  base::ConcurrentClosures concurrent;
+  ApplyRunOnOsLoginPolicySettings(concurrent.CreateClosure());
+  ApplyForceOSUnregistrationPolicySettings(concurrent.CreateClosure());
+  std::move(concurrent)
+      .Done(base::BindOnce(
+          &WebAppPolicyManager::OnSyncPolicySettingsCommandsComplete,
+          weak_ptr_factory_.GetWeakPtr()));
 }
 
 void WebAppPolicyManager::ApplyRunOnOsLoginPolicySettings(
     base::OnceClosure policy_settings_applied_callback) {
-  std::vector<webapps::AppId> app_ids_to_sync =
-      provider_->registrar_unsafe().GetAppIds();
-  auto callback_for_sync_commands = base::BarrierClosure(
-      app_ids_to_sync.size(), std::move(policy_settings_applied_callback));
+  base::ConcurrentClosures concurrent;
   WebAppProvider* provider = WebAppProvider::GetForLocalAppsUnchecked(profile_);
-  for (const webapps::AppId& app_id : app_ids_to_sync) {
+  for (const webapps::AppId& app_id :
+       provider_->registrar_unsafe().GetAppIds()) {
     provider->scheduler().SyncRunOnOsLoginMode(app_id,
-                                               callback_for_sync_commands);
+                                               concurrent.CreateClosure());
   }
+  std::move(concurrent).Done(std::move(policy_settings_applied_callback));
 }
 
 void WebAppPolicyManager::ApplyForceOSUnregistrationPolicySettings(
@@ -481,7 +484,9 @@ void WebAppPolicyManager::ApplyForceOSUnregistrationPolicySettings(
     return;
   }
 
-  base::flat_set<webapps::AppId> app_ids_for_force_unregistration;
+  base::ConcurrentClosures concurrent;
+  SynchronizeOsOptions options;
+  options.force_unregister_os_integration = true;
   for (const auto& [manifest_string, setting] : settings_by_url_) {
     const GURL manifest_id = GURL(manifest_string);
     if (!manifest_id.is_valid()) {
@@ -495,24 +500,12 @@ void WebAppPolicyManager::ApplyForceOSUnregistrationPolicySettings(
     }
 
     if (setting.force_unregister_os_integration) {
-      app_ids_for_force_unregistration.insert(app_id);
+      provider_->scheduler().SynchronizeOsIntegration(
+          app_id, concurrent.CreateClosure(), options);
     }
   }
 
-  if (app_ids_for_force_unregistration.empty()) {
-    std::move(policy_settings_applied_callback).Run();
-    return;
-  }
-
-  SynchronizeOsOptions options;
-  options.force_unregister_os_integration = true;
-  auto callback_for_synchronize_complete =
-      base::BarrierClosure(app_ids_for_force_unregistration.size(),
-                           std::move(policy_settings_applied_callback));
-  for (const auto& app_id : app_ids_for_force_unregistration) {
-    provider_->scheduler().SynchronizeOsIntegration(
-        app_id, callback_for_synchronize_complete, options);
-  }
+  std::move(concurrent).Done(std::move(policy_settings_applied_callback));
 }
 
 ExternalInstallOptions WebAppPolicyManager::ParseInstallPolicyEntry(
@@ -523,12 +516,12 @@ ExternalInstallOptions WebAppPolicyManager::ParseInstallPolicyEntry(
   const GURL install_gurl(CHECK_DEREF(install_url));
   const std::string* default_launch_container =
       entry.FindString(kDefaultLaunchContainerKey);
-  const absl::optional<bool> create_desktop_shortcut =
+  const std::optional<bool> create_desktop_shortcut =
       entry.FindBool(kCreateDesktopShortcutKey);
   const std::string* fallback_app_name = entry.FindString(kFallbackAppNameKey);
   const base::Value::List* uninstall_and_replace =
       entry.FindList(kUninstallAndReplaceKey);
-  const absl::optional<bool> install_as_shortcut =
+  const std::optional<bool> install_as_shortcut =
       entry.FindBool(kInstallAsShortcut);
 
   DCHECK(!default_launch_container ||
@@ -768,7 +761,7 @@ bool WebAppPolicyManager::WebAppSetting::Parse(const base::Value::Dict& dict,
   }
 
   if (IsForceUnregistrationPolicyEnabled()) {
-    absl::optional<bool> force_unregistration_value =
+    std::optional<bool> force_unregistration_value =
         dict.FindBool(kForceUnregisterOsIntegration);
     force_unregister_os_integration =
         force_unregistration_value.value_or(false);
@@ -888,7 +881,7 @@ void WebAppPolicyManager::PopulateDisabledWebAppsIdsLists() {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   DCHECK(system_web_apps_delegate_map_);
   for (const ash::SystemWebAppType& app_type : disabled_system_apps_) {
-    absl::optional<webapps::AppId> app_id =
+    std::optional<webapps::AppId> app_id =
         GetAppIdForSystemApp(provider_->registrar_unsafe(),
                              *system_web_apps_delegate_map_, app_type);
     if (app_id.has_value()) {

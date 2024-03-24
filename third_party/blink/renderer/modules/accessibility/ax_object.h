@@ -30,13 +30,13 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_ACCESSIBILITY_AX_OBJECT_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_ACCESSIBILITY_AX_OBJECT_H_
 
+#include <optional>
 #include <ostream>
 #include <utility>
 
 #include "base/dcheck_is_on.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ref.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
 #include "third_party/blink/public/web/web_ax_enums.h"
 #include "third_party/blink/renderer/core/accessibility/axid.h"
@@ -521,6 +521,17 @@ class MODULES_EXPORT AXObject : public GarbageCollected<AXObject> {
   bool AccessibilityIsIgnoredButIncludedInTree() const;
   // Is visibility:hidden or display:none being used to hide this element.
   bool IsHiddenViaStyle() const;
+  // Whether this is part of the label or description for another element.
+  // This is used to ensure hidden objects are included in the tree, and the
+  // implementation currently only ensures that an element's ancestor was part
+  // of a label or description at some point during the lifetime of the page, as
+  // the relation cache does not bother clear old aria-labelledby/describedby
+  // ids. However, for purposes of preventing too many hidden objects from being
+  // serialized, it works well.
+  bool IsUsedForLabelOrDescription() const;
+  bool CachedIsUsedForLabelOrDescription() const {
+    return cached_is_used_for_label_or_description_;
+  }
 
   // Whether objects are included in the tree. Nodes that are included in the
   // tree are serialized, even if they are ignored. This allows browser-side
@@ -720,7 +731,7 @@ class MODULES_EXPORT AXObject : public GarbageCollected<AXObject> {
   // of this attribute. As an optimization, goes up until the deepest line
   // breaking object which, in most cases, is the paragraph containing this
   // object.
-  absl::optional<const DocumentMarker::MarkerType>
+  std::optional<const DocumentMarker::MarkerType>
   GetAriaSpellingOrGrammarMarker() const;
 
   // For all inline text objects: Returns the horizontal pixel offset of each
@@ -1176,6 +1187,19 @@ class MODULES_EXPORT AXObject : public GarbageCollected<AXObject> {
   // highlighted via a "*" notation.
   std::string GetAXTreeForThis() const;
   void ShowAXTreeForThis() const;
+
+  // Starting from |this|, make sure there is an included parent path
+  // to the root, and that it's also possible to reach the included object
+  // by traversing downwards through included children.
+  void CheckIncludedObjectConnectedToRoot() const;
+#endif
+
+#if EXPENSIVE_DCHECKS_ARE_ON()
+  // Check that all objects in the subtree, even unincluded ones, are flagged as
+  // being part of a name or description, so that the algorithm for determining
+  // whether ignored objects should be included can return true for hidden nodes
+  // needed for label or description computations.
+  void CheckSubtreeIsForLabelOrDescription(const AXObject*) const;
 #endif
 
   // Get or create the first ancestor that's not accessibility ignored.
@@ -1494,21 +1518,25 @@ class MODULES_EXPORT AXObject : public GarbageCollected<AXObject> {
   mutable bool children_dirty_ : 1 = false;
 
   // Do the rest of the cached_* member variables need to be recomputed?
-  mutable bool cached_values_need_update_ : 1;
+  mutable bool cached_values_need_update_ : 1 = true;
   // Do children need to recompute their cached values?
-  mutable bool child_cached_values_need_update_ : 1;
+  mutable bool child_cached_values_need_update_ : 1 = false;
 
-  // The following cached attribute values (the ones starting with m_cached*)
-  // are only valid if last_modification_count_ matches
-  // AXObjectCacheImpl::ModificationCount().
-  mutable bool cached_is_ignored_ : 1;
-  mutable bool cached_is_ignored_but_included_in_tree_ : 1;
-  mutable bool cached_is_inert_ : 1;
-  mutable bool cached_is_aria_hidden_ : 1;
-  mutable bool cached_is_hidden_by_child_tree_ : 1;
-  mutable bool cached_is_hidden_via_style_ : 1;
-  mutable bool cached_is_descendant_of_disabled_node_ : 1;
-  mutable bool cached_can_set_focus_attribute_ : 1;
+  // The following cached attribute values (the ones starting with cached_**)
+  // are only valid if cached_values_need_update_ is false.
+  // Objects are marked ignored at construction time (and thus by default they
+  // not included in the tree), so that if object becomes included in Init()
+  // or in a future page update, the included node count will be incremented via
+  // AXObjectCacheImpl::UpdateIncludedNodeCount().
+  mutable bool cached_is_ignored_ : 1 = true;
+  mutable bool cached_is_ignored_but_included_in_tree_ : 1 = false;
+  mutable bool cached_is_inert_ : 1 = false;
+  mutable bool cached_is_aria_hidden_ : 1 = false;
+  mutable bool cached_is_hidden_by_child_tree_ : 1 = false;
+  mutable bool cached_is_hidden_via_style_ : 1 = false;
+  mutable bool cached_is_used_for_label_or_description_ : 1;
+  mutable bool cached_is_descendant_of_disabled_node_ : 1 = false;
+  mutable bool cached_can_set_focus_attribute_ : 1 = false;
 
   mutable Member<AXObject> cached_live_region_root_;
   mutable gfx::RectF cached_local_bounding_box_rect_for_accessibility_;
@@ -1524,6 +1552,7 @@ class MODULES_EXPORT AXObject : public GarbageCollected<AXObject> {
   unsigned ComputeAriaRowIndex() const;
   const ComputedStyle* GetComputedStyle() const;
   bool ComputeIsHiddenViaStyle(const ComputedStyle*) const;
+  bool ComputeIsUsedForLabelOrDescription() const;
   bool ComputeIsInertViaStyle(const ComputedStyle*,
                               IgnoredReasons* = nullptr) const;
 
@@ -1555,7 +1584,7 @@ class MODULES_EXPORT AXObject : public GarbageCollected<AXObject> {
   // from the parent.
   bool ShouldDestroyWhenDetachingFromParent() const;
 
-  const absl::optional<ui::AXTreeID>& child_tree_id() const {
+  const std::optional<ui::AXTreeID>& child_tree_id() const {
     return child_tree_id_;
   }
   // Attaches the tree with the given ID to this object as a child tree and
@@ -1574,7 +1603,7 @@ class MODULES_EXPORT AXObject : public GarbageCollected<AXObject> {
   //
   // TODO(nektar): Use sparse data to store this value since it is not needed by
   // most objects taking up valuable space.
-  absl::optional<ui::AXTreeID> child_tree_id_;
+  std::optional<ui::AXTreeID> child_tree_id_;
 
   FRIEND_TEST_ALL_PREFIXES(AccessibilityTest, GetParentNodeForComputeParent);
 };

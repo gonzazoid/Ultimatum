@@ -208,8 +208,7 @@ class PasswordSaveManagerImplTestBase : public testing::Test {
     observed_form_.url = origin;
     observed_form_.action = action;
     observed_form_.name = u"sign-in";
-    observed_form_.unique_renderer_id = autofill::FormRendererId(1);
-    observed_form_.is_form_tag = true;
+    observed_form_.renderer_id = autofill::FormRendererId(1);
 
     observed_form_only_password_fields_ = observed_form_;
 
@@ -218,21 +217,21 @@ class PasswordSaveManagerImplTestBase : public testing::Test {
     field.id_attribute = field.name;
     field.name_attribute = field.name;
     field.form_control_type = autofill::FormControlType::kInputText;
-    field.unique_renderer_id = autofill::FieldRendererId(1);
+    field.renderer_id = autofill::FieldRendererId(1);
     observed_form_.fields.push_back(field);
 
     field.name = u"username";
     field.id_attribute = field.name;
     field.name_attribute = field.name;
     field.form_control_type = autofill::FormControlType::kInputText;
-    field.unique_renderer_id = autofill::FieldRendererId(2);
+    field.renderer_id = autofill::FieldRendererId(2);
     observed_form_.fields.push_back(field);
 
     field.name = u"password";
     field.id_attribute = field.name;
     field.name_attribute = field.name;
     field.form_control_type = autofill::FormControlType::kInputPassword;
-    field.unique_renderer_id = autofill::FieldRendererId(3);
+    field.renderer_id = autofill::FieldRendererId(3);
     observed_form_.fields.push_back(field);
     observed_form_only_password_fields_.fields.push_back(field);
 
@@ -240,7 +239,7 @@ class PasswordSaveManagerImplTestBase : public testing::Test {
     field.id_attribute = field.name;
     field.name_attribute = field.name;
     field.form_control_type = autofill::FormControlType::kInputPassword;
-    field.unique_renderer_id = autofill::FieldRendererId(5);
+    field.renderer_id = autofill::FieldRendererId(5);
     observed_form_only_password_fields_.fields.push_back(field);
 
     submitted_form_ = observed_form_;
@@ -978,8 +977,7 @@ TEST_P(PasswordSaveManagerImplTest, UpdatePasswordValueMultiplePasswordFields) {
 
   PasswordForm expected = password_save_manager_impl()->GetPendingCredentials();
   expected.password_value = password;
-  expected.password_element_renderer_id =
-      submitted_form.fields[0].unique_renderer_id;
+  expected.password_element_renderer_id = submitted_form.fields[0].renderer_id;
   expected.password_element = submitted_form.fields[0].name;
 
   // Simulate that the user updates value to save for the first password field
@@ -2067,6 +2065,53 @@ TEST_F(MultiStorePasswordSaveManagerTest, BlockMovingWhenExistsInBothStores) {
   password_save_manager_impl()->BlockMovingToAccountStoreFor(user2_id_hash);
 }
 
+TEST_F(
+    MultiStorePasswordSaveManagerTest,
+    PresaveGeneratedPasswordInAccountStoreIfOptedInAndDefaultStoreIsAccount) {
+  ON_CALL(*client()->GetPasswordFeatureManager(), IsOptedInForAccountStorage)
+      .WillByDefault(Return(true));
+  ON_CALL(*client()->GetPasswordFeatureManager(), GetDefaultPasswordStore)
+      .WillByDefault(Return(PasswordForm::Store::kAccountStore));
+
+  EXPECT_CALL(*mock_profile_form_saver(), Save).Times(0);
+  EXPECT_CALL(*mock_account_form_saver(), Save);
+
+  password_save_manager_impl()->PresaveGeneratedPassword(
+      parsed_submitted_form_);
+}
+
+TEST_F(
+    MultiStorePasswordSaveManagerTest,
+    PresaveGeneratedPasswordInAccountStoreIfOptedInAndDefaultStoreIsProfile) {
+  ON_CALL(*client()->GetPasswordFeatureManager(), IsOptedInForAccountStorage)
+      .WillByDefault(Return(true));
+  ON_CALL(*client()->GetPasswordFeatureManager(), GetDefaultPasswordStore)
+      .WillByDefault(Return(PasswordForm::Store::kProfileStore));
+
+  EXPECT_CALL(*mock_profile_form_saver(), Save).Times(0);
+  EXPECT_CALL(*mock_account_form_saver(), Save);
+
+  password_save_manager_impl()->PresaveGeneratedPassword(
+      parsed_submitted_form_);
+}
+
+TEST_F(MultiStorePasswordSaveManagerTest,
+       PresaveGeneratedPasswordInProfileStoreIfOptedOutOfAccountStorage) {
+  // Generation is offered only to users who are either syncing or have opted-in
+  // for account store. Therefore, if the user isn't opted in, it is guaranteed
+  // they are syncing and the password should be stored in the profile store.
+  ON_CALL(*client()->GetPasswordFeatureManager(), IsOptedInForAccountStorage)
+      .WillByDefault(Return(false));
+  ON_CALL(*client()->GetPasswordFeatureManager(), GetDefaultPasswordStore)
+      .WillByDefault(Return(PasswordForm::Store::kProfileStore));
+
+  EXPECT_CALL(*mock_profile_form_saver(), Save);
+  EXPECT_CALL(*mock_account_form_saver(), Save).Times(0);
+
+  password_save_manager_impl()->PresaveGeneratedPassword(
+      parsed_submitted_form_);
+}
+
 // Since conflicts in the profile store should not be taken into account during
 // generation, below is a parameterized fixture to run the same tests for all 4
 // combinations that can exist there (no matches, same username match, empty
@@ -2186,22 +2231,6 @@ TEST_P(MultiStorePasswordSaveManagerGenerationConflictTest,
       Save(MatchesUsernameAndPassword(parsed_submitted_form_.username_value,
                                       parsed_submitted_form_.password_value),
            _, _));
-
-  password_save_manager_impl()->PresaveGeneratedPassword(
-      parsed_submitted_form_);
-}
-
-// Regression test for https://crbug.com/1275457
-TEST_P(
-    MultiStorePasswordSaveManagerGenerationConflictTest,
-    PresaveGeneratedPasswordInProfileStoreIfUserOptedInToAccountStoreBeforeAndNowSyncing) {
-  ON_CALL(*client()->GetPasswordFeatureManager(),
-          ComputePasswordAccountStorageUsageLevel)
-      .WillByDefault(
-          Return(features_util::PasswordAccountStorageUsageLevel::kSyncing));
-
-  EXPECT_CALL(*mock_profile_form_saver(), Save);
-  EXPECT_CALL(*mock_account_form_saver(), Save).Times(0);
 
   password_save_manager_impl()->PresaveGeneratedPassword(
       parsed_submitted_form_);

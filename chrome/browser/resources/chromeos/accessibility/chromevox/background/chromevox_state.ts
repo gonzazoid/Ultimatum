@@ -7,7 +7,9 @@
  *     ChromeVox state, to avoid direct dependencies on the Background
  *     object and to facilitate mocking for tests.
  */
-import {constants} from '../../common/constants.js';
+import {constants} from '/common/constants.js';
+import {TestImportManager} from '/common/testing/test_import_manager.js';
+
 // Temporarily re-define BrailleKeyEvent below, during the TypeScript migration.
 import {BrailleKeyCommand} from '../common/braille/braille_key_types.js';
 import {NavBraille} from '../common/braille/nav_braille.js';
@@ -53,3 +55,5 @@ export abstract class ChromeVoxState {
   abstract onBrailleKeyEvent(evt: BrailleKeyEvent, content: NavBraille):
       boolean;
 }
+
+TestImportManager.exportForTesting(ChromeVoxState);

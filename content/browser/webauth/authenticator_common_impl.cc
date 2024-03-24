@@ -469,7 +469,7 @@ blink::mojom::PRFValuesPtr PRFResultsToValues(
   auto prf_values = blink::mojom::PRFValues::New();
   DCHECK(results.size() == 32 || results.size() == 64);
   prf_values->first =
-      device::fido_parsing_utils::Materialize(results.subspan(0, 32));
+      device::fido_parsing_utils::Materialize(results.first(32u));
   if (results.size() == 64) {
     prf_values->second =
         device::fido_parsing_utils::Materialize(results.subspan(32, 32));
@@ -627,6 +627,7 @@ void AuthenticatorCommonImpl::StartMakeCredentialRequest(
       req_state_->caller_origin, req_state_->relying_party_id, RequestSource(),
       device::FidoRequestType::kMakeCredential,
       req_state_->make_credential_options->resident_key,
+      req_state_->ctap_make_credential_request->user_verification,
       base::span<const device::CableDiscoveryData>(),
       GetWebAuthenticationDelegate()->IsEnclaveAuthenticatorAvailable(
           GetBrowserContext()),
@@ -680,7 +681,8 @@ void AuthenticatorCommonImpl::StartGetAssertionRequest(
   req_state_->request_delegate->ConfigureDiscoveries(
       req_state_->caller_origin, req_state_->relying_party_id, RequestSource(),
       device::FidoRequestType::kGetAssertion,
-      /*resident_key_requirement=*/std::nullopt, cable_pairings,
+      /*resident_key_requirement=*/std::nullopt,
+      req_state_->ctap_get_assertion_request->user_verification, cable_pairings,
       GetWebAuthenticationDelegate()->IsEnclaveAuthenticatorAvailable(
           GetBrowserContext()),
       discovery_factory());
@@ -1072,9 +1074,7 @@ void AuthenticatorCommonImpl::GetAssertion(
 
   if (!options->is_conditional) {
     BeginRequestTimeout(options->timeout);
-  } else if (options->timeout &&
-             base::FeatureList::IsEnabled(
-                 device::kWebAuthConditionalUIExperimentation)) {
+  } else if (options->timeout) {
     // These are magic values that a site can set to experiment with different
     // conditional UI behaviours.
     //
@@ -1477,6 +1477,12 @@ void AuthenticatorCommonImpl::OnRegisterResponse(
               kHybridTransportError,
           blink::mojom::AuthenticatorStatus::NOT_ALLOWED_ERROR);
       return;
+    case device::MakeCredentialStatus::kEnclaveError:
+      SignalFailureToRequestDelegate(
+          AuthenticatorRequestClientDelegate::InterestingFailureReason::
+              kEnclaveError,
+          blink::mojom::AuthenticatorStatus::NOT_ALLOWED_ERROR);
+      return;
     case device::MakeCredentialStatus::kUserConsentDenied:
       SignalFailureToRequestDelegate(
           AuthenticatorRequestClientDelegate::InterestingFailureReason::
@@ -1787,6 +1793,12 @@ void AuthenticatorCommonImpl::OnSignResponse(
       SignalFailureToRequestDelegate(
           AuthenticatorRequestClientDelegate::InterestingFailureReason::
               kNoPasskeys,
+          blink::mojom::AuthenticatorStatus::NOT_ALLOWED_ERROR);
+      return;
+    case device::GetAssertionStatus::kEnclaveError:
+      SignalFailureToRequestDelegate(
+          AuthenticatorRequestClientDelegate::InterestingFailureReason::
+              kEnclaveError,
           blink::mojom::AuthenticatorStatus::NOT_ALLOWED_ERROR);
       return;
     case device::GetAssertionStatus::kSuccess:

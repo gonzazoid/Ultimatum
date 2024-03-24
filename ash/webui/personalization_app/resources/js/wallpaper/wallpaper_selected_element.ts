@@ -10,7 +10,7 @@
 import 'chrome://resources/ash/common/personalization/cros_button_style.css.js';
 import 'chrome://resources/ash/common/personalization/personalization_shared_icons.html.js';
 import 'chrome://resources/ash/common/personalization/wallpaper.css.js';
-import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/ash/common/cr_elements/cr_button/cr_button.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import 'chrome://resources/polymer/v3_0/iron-iconset-svg/iron-iconset-svg.js';
 import '../../common/icons.html.js';
@@ -209,7 +209,9 @@ export class WallpaperSelectedElement extends WithPersonalizationStore {
         state => state.wallpaper.loading.setImage > 0 ||
             state.wallpaper.loading.selected.image ||
             state.wallpaper.loading.selected.attribution ||
-            state.wallpaper.loading.refreshWallpaper);
+            state.wallpaper.loading.refreshWallpaper ||
+            state.wallpaper.seaPen.loading.currentSelected ||
+            state.wallpaper.seaPen.loading.setImage > 0);
     this.watch('dailyRefreshState_', state => state.wallpaper.dailyRefresh);
     this.watch(
         'imagesByCollectionId_', state => state.wallpaper.backdrop.images);

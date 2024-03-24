@@ -83,15 +83,14 @@ void UserCreationScreen::SetUserCreationScreenExitTestDelegate(
 }
 
 bool UserCreationScreen::MaybeSkip(WizardContext& context) {
-  if (g_browser_process->platform_part()
-          ->browser_policy_connector_ash()
-          ->IsDeviceEnterpriseManaged() ||
-      context.skip_to_login_for_tests) {
-    context.is_user_creation_enabled = false;
+  const bool is_managed = g_browser_process->platform_part()
+                              ->browser_policy_connector_ash()
+                              ->IsDeviceEnterpriseManaged();
+  context.is_user_creation_enabled = !is_managed;
+  if (context.skip_to_login_for_tests || is_managed) {
     RunExitCallback(Result::SKIPPED);
     return true;
   }
-  context.is_user_creation_enabled = true;
   return false;
 }
 
@@ -170,6 +169,13 @@ bool UserCreationScreen::HandleAccelerator(LoginAcceleratorAction action) {
     return true;
   }
   return false;
+}
+
+void UserCreationScreen::SetDefaultStep() {
+  if (!view_) {
+    return;
+  }
+  view_->SetDefaultStep();
 }
 
 void UserCreationScreen::UpdateState(NetworkError::ErrorReason reason) {

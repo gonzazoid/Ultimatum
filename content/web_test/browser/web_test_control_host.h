@@ -139,7 +139,7 @@ class WebTestControlHost : public WebContentsObserver,
   std::unique_ptr<BluetoothChooser> RunBluetoothChooser(
       RenderFrameHost* frame,
       const BluetoothChooser::EventHandler& event_handler);
-  void RequestToLockMouse(WebContents* web_contents);
+  void RequestPointerLock(WebContents* web_contents);
 
   WebTestResultPrinter* printer() { return printer_.get(); }
   void set_printer(WebTestResultPrinter* printer) { printer_.reset(printer); }
@@ -267,6 +267,10 @@ class WebTestControlHost : public WebContentsObserver,
   void SetLCPPNavigationHint(
       blink::mojom::LCPCriticalPathPredictorNavigationTimeHintPtr hint)
       override;
+  // Sets the Protocol Handler Registry in automation mode to avoid the
+  // permission prompt in tests.
+  void SetRegisterProtocolHandlerMode(
+      mojom::WebTestControlHost::AutoResponseMode mode) override;
 
   void DiscardMainWindow();
   void FlushInputAndStartTest(WeakDocumentPtr rfh);
@@ -383,9 +387,12 @@ class WebTestControlHost : public WebContentsObserver,
   base::ScopedMultiSourceObservation<RenderProcessHost,
                                      RenderProcessHostObserver>
       render_process_host_observations_{this};
-  std::set<RenderProcessHost*> all_observed_render_process_hosts_;
-  std::set<RenderProcessHost*> main_window_render_process_hosts_;
-  std::set<RenderViewHost*> main_window_render_view_hosts_;
+  std::set<raw_ptr<RenderProcessHost, SetExperimental>>
+      all_observed_render_process_hosts_;
+  std::set<raw_ptr<RenderProcessHost, SetExperimental>>
+      main_window_render_process_hosts_;
+  std::set<raw_ptr<RenderViewHost, SetExperimental>>
+      main_window_render_view_hosts_;
 
   // Changes reported by WebTestRuntimeFlagsChanged() that have accumulated
   // since PrepareForWebTest (i.e. changes that need to be sent to a fresh

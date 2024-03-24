@@ -8,6 +8,7 @@
 #include "base/at_exit.h"
 #include "base/command_line.h"
 #include "base/debug/stack_trace.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
@@ -23,10 +24,6 @@
 #include "ui/ozone/demo/simple_renderer_factory.h"
 #include "ui/ozone/demo/window_manager.h"
 #include "ui/ozone/public/ozone_platform.h"
-
-#if BUILDFLAG(IS_CHROMEOS)
-#include "ui/gfx/linux/gbm_util.h"  // nogncheck
-#endif
 
 const char kHelp[] = "help";
 
@@ -77,11 +74,7 @@ int main(int argc, char** argv) {
   params.single_process = true;
   ui::OzonePlatform::InitializeForUI(params);
   ui::KeyboardLayoutEngineManager::GetKeyboardLayoutEngine()
-      ->SetCurrentLayoutByName("us");
-
-#if BUILDFLAG(IS_CHROMEOS)
-  ui::EnsureIntelMediaCompressionEnvVarIsSet();
-#endif
+      ->SetCurrentLayoutByName("us", base::DoNothing());
 
   ui::OzonePlatform::InitializeForGPU(params);
 

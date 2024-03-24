@@ -22,6 +22,12 @@ enum class PreventedReason;
 
 namespace welcome_tour_prefs {
 
+// Retrieves the time that the given `interaction` first occurred after the
+// tour. If the time has not been set, returns `std::nullopt`.
+ASH_EXPORT std::optional<base::Time> GetTimeOfFirstInteraction(
+    PrefService* prefs,
+    welcome_tour_metrics::Interaction interaction);
+
 // Retrieves the time that the tour was first completed. If the time has not
 // been set, returns `std::nullopt`.
 ASH_EXPORT std::optional<base::Time> GetTimeOfFirstTourCompletion(

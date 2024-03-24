@@ -27,6 +27,7 @@
 #include "chrome/browser/history/history_tab_helper.h"
 #include "chrome/browser/metrics/chrome_metrics_service_accessor.h"
 #include "chrome/browser/password_manager/account_password_store_factory.h"
+#include "chrome/browser/password_manager/affiliation_service_factory.h"
 #include "chrome/browser/password_manager/chrome_webauthn_credentials_delegate.h"
 #include "chrome/browser/password_manager/chrome_webauthn_credentials_delegate_factory.h"
 #include "chrome/browser/password_manager/field_info_manager_factory.h"
@@ -116,14 +117,14 @@
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/build_info.h"
 #include "chrome/browser/android/tab_android.h"
-#include "chrome/browser/autofill/manual_filling_controller.h"
+#include "chrome/browser/keyboard_accessory/android/manual_filling_controller.h"
+#include "chrome/browser/keyboard_accessory/android/password_accessory_controller.h"
+#include "chrome/browser/keyboard_accessory/android/password_accessory_controller_impl.h"
 #include "chrome/browser/password_manager/android/account_chooser_dialog_android.h"
 #include "chrome/browser/password_manager/android/auto_signin_first_run_dialog_android.h"
 #include "chrome/browser/password_manager/android/auto_signin_prompt_controller.h"
 #include "chrome/browser/password_manager/android/cred_man_controller.h"
 #include "chrome/browser/password_manager/android/credential_leak_controller_android.h"
-#include "chrome/browser/password_manager/android/password_accessory_controller.h"
-#include "chrome/browser/password_manager/android/password_accessory_controller_impl.h"
 #include "chrome/browser/password_manager/android/password_checkup_launcher_helper_impl.h"
 #include "chrome/browser/password_manager/android/password_generation_controller.h"
 #include "chrome/browser/password_manager/android/password_manager_error_message_helper_bridge_impl.h"
@@ -190,12 +191,6 @@ url::Origin URLToOrigin(GURL url) {
   return url::Origin::Create(url.DeprecatedGetOriginAsURL());
 }
 #endif
-
-const syncer::SyncService* GetSyncServiceForProfile(Profile* profile) {
-  if (SyncServiceFactory::HasSyncService(profile))
-    return SyncServiceFactory::GetForProfile(profile);
-  return nullptr;
-}
 
 }  // namespace
 
@@ -663,7 +658,8 @@ void ChromePasswordManagerClient::NotifyUserCredentialsWereLeaked(
                     sync_service)
           : "";
   (new CredentialLeakControllerAndroid(
-       leak_type, url, username, web_contents()->GetTopLevelNativeWindow(),
+       leak_type, url, username, profile_,
+       web_contents()->GetTopLevelNativeWindow(),
        std::make_unique<PasswordCheckupLauncherHelperImpl>(),
        std::move(metrics_recorder), account))
       ->ShowDialog();
@@ -709,7 +705,15 @@ PrefService* ChromePasswordManagerClient::GetLocalStatePrefs() const {
 }
 
 const syncer::SyncService* ChromePasswordManagerClient::GetSyncService() const {
-  return GetSyncServiceForProfile(profile_);
+  if (SyncServiceFactory::HasSyncService(profile_)) {
+    return SyncServiceFactory::GetForProfile(profile_);
+  }
+  return nullptr;
+}
+
+affiliations::AffiliationService*
+ChromePasswordManagerClient::GetAffiliationService() {
+  return AffiliationServiceFactory::GetForProfile(profile_);
 }
 
 password_manager::PasswordStoreInterface*
@@ -733,13 +737,6 @@ ChromePasswordManagerClient::GetAccountPasswordStore() const {
 password_manager::PasswordReuseManager*
 ChromePasswordManagerClient::GetPasswordReuseManager() const {
   return PasswordReuseManagerFactory::GetForProfile(profile_);
-}
-
-password_manager::SyncState ChromePasswordManagerClient::GetPasswordSyncState()
-    const {
-  const syncer::SyncService* sync_service =
-      SyncServiceFactory::GetForProfile(profile_);
-  return password_manager::sync_util::GetPasswordSyncState(sync_service);
 }
 
 bool ChromePasswordManagerClient::WasLastNavigationHTTPError() const {
@@ -1077,12 +1074,19 @@ void ChromePasswordManagerClient::AutomaticGenerationAvailable(
               CPMD_BAD_ORIGIN_AUTOMATIC_GENERATION_STATUS_CHANGED)) {
     return;
   }
-#if BUILDFLAG(IS_ANDROID)
   password_manager::ContentPasswordManagerDriver* driver =
       GetDriverFactory()->GetDriverForFrame(rfh);
   // This method is called over Mojo via a RenderFrameHostReceiverSet; the
   // current target frame must be live.
   CHECK(driver);
+  // This guards against possibility that generation was available on page load
+  // but later became unavailable due to inability to save passwords.
+  if (!driver->GetPasswordGenerationHelper() ||
+      !driver->GetPasswordGenerationHelper()->IsGenerationEnabled(
+          /*log_debug_data*/ false)) {
+    return;
+  }
+#if BUILDFLAG(IS_ANDROID)
   if (!ShouldAcceptFocusEvent(web_contents(), driver,
                               FocusedFieldType::kFillablePasswordField)) {
     return;
@@ -1107,12 +1111,6 @@ void ChromePasswordManagerClient::AutomaticGenerationAvailable(
   driver->GetPasswordAutofillManager()->MaybeShowPasswordSuggestions(
       element_bounds_in_screen_space, ui_data.text_direction);
 #else
-  password_manager::ContentPasswordManagerDriver* driver =
-      GetDriverFactory()->GetDriverForFrame(rfh);
-  // This method is called over Mojo via a RenderFrameHostReceiverSet; the
-  // current target frame must be live.
-  CHECK(driver);
-
   // Attempt to show the autofill dropdown UI first.
   gfx::RectF element_bounds_in_top_frame_space =
       TransformToRootCoordinates(driver->render_frame_host(), ui_data.bounds);
@@ -1376,12 +1374,9 @@ ChromePasswordManagerClient::ChromePasswordManagerClient(
 #if BUILDFLAG(ENABLE_DICE_SUPPORT)
       credentials_filter_(
           this,
-          base::BindRepeating(&GetSyncServiceForProfile, profile_),
           DiceWebSigninInterceptorFactory::GetForProfile(profile_)),
 #else
-      credentials_filter_(
-          this,
-          base::BindRepeating(&GetSyncServiceForProfile, profile_)),
+      credentials_filter_(this),
 #endif  // BUILDFLAG(ENABLE_DICE_SUPPORT)
 #if BUILDFLAG(ENABLE_DICE_SUPPORT) || BUILDFLAG(IS_CHROMEOS_LACROS)
       account_storage_auth_helper_(
@@ -1618,8 +1613,8 @@ void ChromePasswordManagerClient::ShowPasswordGenerationPopup(
   gfx::RectF element_bounds_in_screen_space =
       GetBoundsInScreenSpace(element_bounds_in_top_frame_space);
   password_manager_.SetGenerationElementAndTypeForForm(
-      driver, ui_data.form_data.unique_renderer_id,
-      ui_data.generation_element_id, type);
+      driver, ui_data.form_data.renderer_id, ui_data.generation_element_id,
+      type);
 
   popup_controller_ = PasswordGenerationPopupControllerImpl::GetOrCreate(
       popup_controller_, element_bounds_in_screen_space, ui_data,

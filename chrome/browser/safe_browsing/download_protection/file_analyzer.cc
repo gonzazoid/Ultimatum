@@ -86,7 +86,8 @@ void FileAnalyzer::Start(const base::FilePath& target_path,
     StartExtractDmgFeatures();
 #endif
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
-  } else if (inspection_type == DownloadFileType::OFFICE_DOCUMENT) {
+  } else if (inspection_type == DownloadFileType::OFFICE_DOCUMENT &&
+             !base::FeatureList::IsEnabled(kMaldocaSkipCheck)) {
     StartExtractDocumentFeatures();
 #endif
   } else if (base::FeatureList::IsEnabled(kSevenZipEvaluationEnabled) &&
@@ -184,6 +185,8 @@ void FileAnalyzer::OnZipAnalysisFinished(
 
   results_.archive_summary.set_file_count(archive_results.file_count);
   results_.archive_summary.set_directory_count(archive_results.directory_count);
+  results_.archive_summary.set_is_encrypted(
+      archive_results.encryption_info.is_encrypted);
   results_.encryption_info = archive_results.encryption_info;
 
   std::move(callback_).Run(std::move(results_));
@@ -240,6 +243,8 @@ void FileAnalyzer::OnRarAnalysisFinished(
 
   results_.archive_summary.set_file_count(archive_results.file_count);
   results_.archive_summary.set_directory_count(archive_results.directory_count);
+  results_.archive_summary.set_is_encrypted(
+      archive_results.encryption_info.is_encrypted);
   results_.encryption_info = archive_results.encryption_info;
 
   std::move(callback_).Run(std::move(results_));
@@ -266,10 +271,11 @@ void FileAnalyzer::ExtractFileOrDmgFeatures(
     bool download_file_has_koly_signature) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  if (download_file_has_koly_signature)
+  if (download_file_has_koly_signature) {
     StartExtractDmgFeatures();
-  else
+  } else {
     StartExtractFileFeatures();
+  }
 }
 
 void FileAnalyzer::OnDmgAnalysisFinished(
@@ -312,6 +318,8 @@ void FileAnalyzer::OnDmgAnalysisFinished(
         ClientDownloadRequest::ArchiveSummary::TOO_LARGE);
   }
 
+  results_.archive_summary.set_is_encrypted(
+      archive_results.encryption_info.is_encrypted);
   results_.encryption_info = archive_results.encryption_info;
 
   std::move(callback_).Run(std::move(results_));
@@ -415,6 +423,8 @@ void FileAnalyzer::OnSevenZipAnalysisFinished(
 
   results_.archive_summary.set_file_count(archive_results.file_count);
   results_.archive_summary.set_directory_count(archive_results.directory_count);
+  results_.archive_summary.set_is_encrypted(
+      archive_results.encryption_info.is_encrypted);
   results_.encryption_info = archive_results.encryption_info;
 
   std::move(callback_).Run(std::move(results_));

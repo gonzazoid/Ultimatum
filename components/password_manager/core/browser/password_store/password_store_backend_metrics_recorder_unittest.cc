@@ -21,6 +21,7 @@ constexpr auto kLatencyDelta = base::Milliseconds(123u);
 
 constexpr char kSomeBackend[] = "SomeBackend";
 constexpr char kSomeMethod[] = "MethodName";
+
 constexpr char kSpecificMetric[] =
     "PasswordManager.PasswordStoreSomeBackend.MethodName";
 constexpr char kDurationMetric[] =
@@ -33,6 +34,29 @@ constexpr char kApiErrorMetric[] =
     "PasswordManager.PasswordStoreSomeBackend.MethodName.APIError";
 constexpr char kConnectionResultMetric[] =
     "PasswordManager.PasswordStoreSomeBackend.MethodName.ConnectionResultCode";
+
+// Metrics including the store infix.
+constexpr char kSpecificMetricWithStoreInfix[] =
+    "PasswordManager.PasswordStoreSomeBackend.Account.MethodName";
+constexpr char kDurationMetricWithStoreInfix[] =
+    "PasswordManager.PasswordStoreSomeBackend.Account.MethodName.Latency";
+constexpr char kSuccessMetricWithStoreInfix[] =
+    "PasswordManager.PasswordStoreSomeBackend.Account.MethodName.Success";
+constexpr char kOverallSuccessMetricWithStoreInfix[] =
+    "PasswordManager.PasswordStoreSomeBackend.Account.Success";
+constexpr char kErrorCodeMetricWithStoreInfix[] =
+    "PasswordManager.PasswordStoreSomeBackend.Account.MethodName.ErrorCode";
+constexpr char kOverallErrorCodeMetricWithStoreInfix[] =
+    "PasswordManager.PasswordStoreSomeBackend.Account.ErrorCode";
+constexpr char kApiErrorMetricWithStoreInfix[] =
+    "PasswordManager.PasswordStoreSomeBackend.Account.MethodName.APIError";
+constexpr char kOverallApiErrorMetricWithStoreInfix[] =
+    "PasswordManager.PasswordStoreSomeBackend.Account.APIError";
+constexpr char kConnectionResultMetricWithStoreInfix[] =
+    "PasswordManager.PasswordStoreSomeBackend.Account.MethodName."
+    "ConnectionResultCode";
+
+// Overall metrics.
 constexpr char kOverallMetric[] =
     "PasswordManager.PasswordStoreBackend.MethodName";
 constexpr char kDurationOverallMetric[] =
@@ -47,7 +71,9 @@ constexpr char kConnectionResultOverallMetric[] =
     "PasswordManager.PasswordStoreAndroidBackend.ConnectionResultCode";
 }  // anonymous namespace
 
-class PasswordStoreBackendMetricsRecorderTest : public testing::Test {
+class PasswordStoreBackendMetricsRecorderTest
+    : public testing::TestWithParam<PasswordStoreBackendMetricsRecorder::
+                                        PasswordStoreAndroidBackendType> {
  public:
   void AdvanceClock(base::TimeDelta millis) {
     // AdvanceClock is used here because FastForwardBy doesn't work for the
@@ -63,19 +89,37 @@ class PasswordStoreBackendMetricsRecorderTest : public testing::Test {
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
 };
 
-TEST_F(PasswordStoreBackendMetricsRecorderTest, RecordMetrics_Success) {
+TEST_P(PasswordStoreBackendMetricsRecorderTest, RecordMetrics_Success) {
   using base::Bucket;
   base::HistogramTester histogram_tester;
 
-  PasswordStoreBackendMetricsRecorder metrics_recorder =
-      PasswordStoreBackendMetricsRecorder(BackendInfix(kSomeBackend),
-                                          MetricInfix(kSomeMethod));
+  bool has_store_type = GetParam() !=
+                        PasswordStoreBackendMetricsRecorder::
+                            PasswordStoreAndroidBackendType::kNone;
+  PasswordStoreBackendMetricsRecorder metrics_recorder;
+  if (has_store_type) {
+    metrics_recorder = PasswordStoreBackendMetricsRecorder(
+        BackendInfix(kSomeBackend), MethodName(kSomeMethod), GetParam());
+  } else {
+    metrics_recorder = PasswordStoreBackendMetricsRecorder(
+        BackendInfix(kSomeBackend), MethodName(kSomeMethod),
+        PasswordStoreBackendMetricsRecorder::PasswordStoreAndroidBackendType::
+            kNone);
+  }
 
   // Checking started requests in the overall and backend-specific histogram.
   EXPECT_THAT(histogram_tester.GetAllSamples(kSpecificMetric),
               ElementsAre(Bucket(/* Requested */ 0, 1)));
   EXPECT_THAT(histogram_tester.GetAllSamples(kOverallMetric),
               ElementsAre(Bucket(/* Requested */ 0, 1)));
+  // Checking started the store-type-specific histogram.
+  if (has_store_type) {
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSpecificMetricWithStoreInfix),
+                ElementsAre(Bucket(/* Requested */ 0, 1)));
+  } else {
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSpecificMetricWithStoreInfix),
+                IsEmpty());
+  }
 
   AdvanceClock(kLatencyDelta);
 
@@ -102,15 +146,51 @@ TEST_F(PasswordStoreBackendMetricsRecorderTest, RecordMetrics_Success) {
   EXPECT_THAT(
       histogram_tester.GetAllSamples(kOverallMetric),
       ElementsAre(Bucket(/* Requested */ 0, 1), Bucket(/* Completed */ 2, 1)));
+
+  // Checking the store-type-specific histograms.
+  if (has_store_type) {
+    histogram_tester.ExpectTotalCount(kDurationMetricWithStoreInfix, 1);
+    histogram_tester.ExpectTimeBucketCount(kDurationMetricWithStoreInfix,
+                                           kLatencyDelta, 1);
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSuccessMetricWithStoreInfix),
+                ElementsAre(Bucket(true, 1)));
+    histogram_tester.ExpectUniqueSample(kOverallSuccessMetricWithStoreInfix,
+                                        true, 1);
+
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSpecificMetricWithStoreInfix),
+                ElementsAre(Bucket(/* Requested */ 0, 1),
+                            Bucket(/* Completed */ 2, 1)));
+  } else {
+    histogram_tester.ExpectTotalCount(kDurationMetricWithStoreInfix, 0);
+    histogram_tester.ExpectTimeBucketCount(kDurationMetricWithStoreInfix,
+                                           kLatencyDelta, 0);
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSuccessMetricWithStoreInfix),
+                IsEmpty());
+    histogram_tester.ExpectUniqueSample(kOverallSuccessMetricWithStoreInfix,
+                                        true, 0);
+
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSpecificMetricWithStoreInfix),
+                IsEmpty());
+  }
 }
 
-TEST_F(PasswordStoreBackendMetricsRecorderTest, RecordMetrics_ExternalError) {
+TEST_P(PasswordStoreBackendMetricsRecorderTest, RecordMetrics_ExternalError) {
   using base::Bucket;
   base::HistogramTester histogram_tester;
 
-  PasswordStoreBackendMetricsRecorder metrics_recorder =
-      PasswordStoreBackendMetricsRecorder(BackendInfix(kSomeBackend),
-                                          MetricInfix(kSomeMethod));
+  bool has_store_type = GetParam() !=
+                        PasswordStoreBackendMetricsRecorder::
+                            PasswordStoreAndroidBackendType::kNone;
+  PasswordStoreBackendMetricsRecorder metrics_recorder;
+  if (has_store_type) {
+    metrics_recorder = PasswordStoreBackendMetricsRecorder(
+        BackendInfix(kSomeBackend), MethodName(kSomeMethod), GetParam());
+  } else {
+    metrics_recorder = PasswordStoreBackendMetricsRecorder(
+        BackendInfix(kSomeBackend), MethodName(kSomeMethod),
+        PasswordStoreBackendMetricsRecorder::PasswordStoreAndroidBackendType::
+            kNone);
+  }
 
   AdvanceClock(kLatencyDelta);
 
@@ -129,6 +209,46 @@ TEST_F(PasswordStoreBackendMetricsRecorderTest, RecordMetrics_ExternalError) {
               ElementsAre(Bucket(11010, 1)));  // No access.
   EXPECT_THAT(histogram_tester.GetAllSamples(kConnectionResultMetric),
               IsEmpty());
+  // Checking records in the store-type-specific histograms.
+  if (has_store_type) {
+    histogram_tester.ExpectTotalCount(kDurationMetricWithStoreInfix, 1);
+    histogram_tester.ExpectTimeBucketCount(kDurationMetricWithStoreInfix,
+                                           kLatencyDelta, 1);
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSuccessMetricWithStoreInfix),
+                ElementsAre(Bucket(false, 1)));
+    EXPECT_THAT(histogram_tester.GetAllSamples(kErrorCodeMetricWithStoreInfix),
+                ElementsAre(Bucket(7, 1)));  // External
+    EXPECT_THAT(
+        histogram_tester.GetAllSamples(kOverallErrorCodeMetricWithStoreInfix),
+        ElementsAre(Bucket(7, 1)));
+    EXPECT_THAT(histogram_tester.GetAllSamples(kApiErrorMetricWithStoreInfix),
+                ElementsAre(Bucket(11010, 1)));  // No access.
+    EXPECT_THAT(
+        histogram_tester.GetAllSamples(kOverallApiErrorMetricWithStoreInfix),
+        ElementsAre(Bucket(11010, 1)));
+    EXPECT_THAT(
+        histogram_tester.GetAllSamples(kConnectionResultMetricWithStoreInfix),
+        IsEmpty());
+  } else {
+    histogram_tester.ExpectTotalCount(kDurationMetricWithStoreInfix, 0);
+    histogram_tester.ExpectTimeBucketCount(kDurationMetricWithStoreInfix,
+                                           kLatencyDelta, 0);
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSuccessMetricWithStoreInfix),
+                IsEmpty());
+    EXPECT_THAT(histogram_tester.GetAllSamples(kErrorCodeMetricWithStoreInfix),
+                IsEmpty());
+    EXPECT_THAT(
+        histogram_tester.GetAllSamples(kOverallErrorCodeMetricWithStoreInfix),
+        IsEmpty());
+    EXPECT_THAT(histogram_tester.GetAllSamples(kApiErrorMetricWithStoreInfix),
+                IsEmpty());
+    EXPECT_THAT(
+        histogram_tester.GetAllSamples(kOverallApiErrorMetricWithStoreInfix),
+        IsEmpty());
+    EXPECT_THAT(
+        histogram_tester.GetAllSamples(kConnectionResultMetricWithStoreInfix),
+        IsEmpty());
+  }
 
   // Checking records in the overall histogram
   histogram_tester.ExpectTotalCount(kDurationOverallMetric, 1);
@@ -150,18 +270,37 @@ TEST_F(PasswordStoreBackendMetricsRecorderTest, RecordMetrics_ExternalError) {
   EXPECT_THAT(
       histogram_tester.GetAllSamples(kOverallMetric),
       ElementsAre(Bucket(/* Requested */ 0, 1), Bucket(/* Completed */ 2, 1)));
+  // Checking completed requests in the store-type-specific histograms.
+  if (has_store_type) {
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSpecificMetricWithStoreInfix),
+                ElementsAre(Bucket(/* Requested */ 0, 1),
+                            Bucket(/* Completed */ 2, 1)));
+  } else {
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSpecificMetricWithStoreInfix),
+                IsEmpty());
+  }
 }
 
-TEST_F(PasswordStoreBackendMetricsRecorderTest,
+TEST_P(PasswordStoreBackendMetricsRecorderTest,
        RecordMetrics_ExternalErrorWithConnectionResult) {
   using base::Bucket;
   base::HistogramTester histogram_tester;
 
   const int kApiUnavailableConnectionResult = 16;
 
-  PasswordStoreBackendMetricsRecorder metrics_recorder =
-      PasswordStoreBackendMetricsRecorder(BackendInfix(kSomeBackend),
-                                          MetricInfix(kSomeMethod));
+  bool has_store_type = GetParam() !=
+                        PasswordStoreBackendMetricsRecorder::
+                            PasswordStoreAndroidBackendType::kNone;
+  PasswordStoreBackendMetricsRecorder metrics_recorder;
+  if (has_store_type) {
+    metrics_recorder = PasswordStoreBackendMetricsRecorder(
+        BackendInfix(kSomeBackend), MethodName(kSomeMethod), GetParam());
+  } else {
+    metrics_recorder = PasswordStoreBackendMetricsRecorder(
+        BackendInfix(kSomeBackend), MethodName(kSomeMethod),
+        PasswordStoreBackendMetricsRecorder::PasswordStoreAndroidBackendType::
+            kNone);
+  }
 
   AdvanceClock(kLatencyDelta);
 
@@ -181,6 +320,46 @@ TEST_F(PasswordStoreBackendMetricsRecorderTest,
               ElementsAre(Bucket(11010, 1)));  // No access.
   EXPECT_THAT(histogram_tester.GetAllSamples(kConnectionResultMetric),
               ElementsAre(Bucket(kApiUnavailableConnectionResult, 1)));
+  // Checking records in the store-type-specific histograms.
+  if (has_store_type) {
+    histogram_tester.ExpectTotalCount(kDurationMetricWithStoreInfix, 1);
+    histogram_tester.ExpectTimeBucketCount(kDurationMetricWithStoreInfix,
+                                           kLatencyDelta, 1);
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSuccessMetricWithStoreInfix),
+                ElementsAre(Bucket(false, 1)));
+    EXPECT_THAT(histogram_tester.GetAllSamples(kErrorCodeMetricWithStoreInfix),
+                ElementsAre(Bucket(7, 1)));  // External
+    EXPECT_THAT(
+        histogram_tester.GetAllSamples(kOverallErrorCodeMetricWithStoreInfix),
+        ElementsAre(Bucket(7, 1)));
+    EXPECT_THAT(histogram_tester.GetAllSamples(kApiErrorMetricWithStoreInfix),
+                ElementsAre(Bucket(11010, 1)));  // No access.
+    EXPECT_THAT(
+        histogram_tester.GetAllSamples(kOverallApiErrorMetricWithStoreInfix),
+        ElementsAre(Bucket(11010, 1)));
+    EXPECT_THAT(
+        histogram_tester.GetAllSamples(kConnectionResultMetricWithStoreInfix),
+        ElementsAre(Bucket(kApiUnavailableConnectionResult, 1)));
+  } else {
+    histogram_tester.ExpectTotalCount(kDurationMetricWithStoreInfix, 0);
+    histogram_tester.ExpectTimeBucketCount(kDurationMetricWithStoreInfix,
+                                           kLatencyDelta, 0);
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSuccessMetricWithStoreInfix),
+                IsEmpty());
+    EXPECT_THAT(histogram_tester.GetAllSamples(kErrorCodeMetricWithStoreInfix),
+                IsEmpty());
+    EXPECT_THAT(
+        histogram_tester.GetAllSamples(kOverallErrorCodeMetricWithStoreInfix),
+        IsEmpty());
+    EXPECT_THAT(histogram_tester.GetAllSamples(kApiErrorMetricWithStoreInfix),
+                IsEmpty());
+    EXPECT_THAT(
+        histogram_tester.GetAllSamples(kOverallApiErrorMetricWithStoreInfix),
+        IsEmpty());
+    EXPECT_THAT(
+        histogram_tester.GetAllSamples(kConnectionResultMetricWithStoreInfix),
+        IsEmpty());
+  }
 
   // Checking records in the overall histogram
   histogram_tester.ExpectTotalCount(kDurationOverallMetric, 1);
@@ -202,25 +381,54 @@ TEST_F(PasswordStoreBackendMetricsRecorderTest,
   EXPECT_THAT(
       histogram_tester.GetAllSamples(kOverallMetric),
       ElementsAre(Bucket(/* Requested */ 0, 1), Bucket(/* Completed */ 2, 1)));
+  // Checking completed requests in the store-type-specific histogram.
+  if (has_store_type) {
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSpecificMetricWithStoreInfix),
+                ElementsAre(Bucket(/* Requested */ 0, 1),
+                            Bucket(/* Completed */ 2, 1)));
+  } else {
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSpecificMetricWithStoreInfix),
+                IsEmpty());
+  }
 }
 
-TEST_F(PasswordStoreBackendMetricsRecorderTest, RecordMetrics_Cancelled) {
+TEST_P(PasswordStoreBackendMetricsRecorderTest,
+       RecordMetrics_CancelledTimeout) {
   using base::Bucket;
   base::HistogramTester histogram_tester;
 
-  PasswordStoreBackendMetricsRecorder metrics_recorder =
-      PasswordStoreBackendMetricsRecorder(BackendInfix(kSomeBackend),
-                                          MetricInfix(kSomeMethod));
+  bool has_store_type = GetParam() !=
+                        PasswordStoreBackendMetricsRecorder::
+                            PasswordStoreAndroidBackendType::kNone;
+  PasswordStoreBackendMetricsRecorder metrics_recorder;
+  if (has_store_type) {
+    metrics_recorder = PasswordStoreBackendMetricsRecorder(
+        BackendInfix(kSomeBackend), MethodName(kSomeMethod), GetParam());
+  } else {
+    metrics_recorder = PasswordStoreBackendMetricsRecorder(
+        BackendInfix(kSomeBackend), MethodName(kSomeMethod),
+        PasswordStoreBackendMetricsRecorder::PasswordStoreAndroidBackendType::
+            kNone);
+  }
 
   AdvanceClock(kLatencyDelta);
 
-  metrics_recorder.RecordMetrics(SuccessStatus::kCancelled,
+  metrics_recorder.RecordMetrics(SuccessStatus::kCancelledTimeout,
                                  /*error=*/std::nullopt);
 
   // Checking records in the backend-specific histogram.
   histogram_tester.ExpectTotalCount(kDurationMetric, 0);
   EXPECT_THAT(histogram_tester.GetAllSamples(kSuccessMetric),
               ElementsAre(Bucket(false, 1)));
+  // Checking records in the store-type-specific histograms.
+  histogram_tester.ExpectTotalCount(kDurationMetricWithStoreInfix, 0);
+  if (has_store_type) {
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSuccessMetricWithStoreInfix),
+                ElementsAre(Bucket(false, 1)));
+  } else {
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSuccessMetricWithStoreInfix),
+                IsEmpty());
+  }
 
   // Checking records in the overall histogram.
   histogram_tester.ExpectTotalCount(kDurationOverallMetric, 0);
@@ -234,6 +442,84 @@ TEST_F(PasswordStoreBackendMetricsRecorderTest, RecordMetrics_Cancelled) {
   EXPECT_THAT(
       histogram_tester.GetAllSamples(kOverallMetric),
       ElementsAre(Bucket(/* Requested */ 0, 1), Bucket(/* Timeout */ 1, 1)));
+  // Checking timed-out requests in the store-type-specific histograms.
+  if (has_store_type) {
+    EXPECT_THAT(
+        histogram_tester.GetAllSamples(kSpecificMetricWithStoreInfix),
+        ElementsAre(Bucket(/* Requested */ 0, 1), Bucket(/* Timeout */ 1, 1)));
+  } else {
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSpecificMetricWithStoreInfix),
+                IsEmpty());
+  }
 }
+
+TEST_P(PasswordStoreBackendMetricsRecorderTest,
+       RecordMetrics_CancelledPwdSyncStateChanged) {
+  using base::Bucket;
+  base::HistogramTester histogram_tester;
+
+  bool has_store_type = GetParam() !=
+                        PasswordStoreBackendMetricsRecorder::
+                            PasswordStoreAndroidBackendType::kNone;
+  PasswordStoreBackendMetricsRecorder metrics_recorder;
+  if (has_store_type) {
+    metrics_recorder = PasswordStoreBackendMetricsRecorder(
+        BackendInfix(kSomeBackend), MethodName(kSomeMethod), GetParam());
+  } else {
+    metrics_recorder = PasswordStoreBackendMetricsRecorder(
+        BackendInfix(kSomeBackend), MethodName(kSomeMethod),
+        PasswordStoreBackendMetricsRecorder::PasswordStoreAndroidBackendType::
+            kNone);
+  }
+
+  AdvanceClock(kLatencyDelta);
+
+  metrics_recorder.RecordMetrics(SuccessStatus::kCancelledPwdSyncStateChanged,
+                                 /*error=*/std::nullopt);
+
+  // Checking records in the backend-specific histogram.
+  histogram_tester.ExpectTotalCount(kDurationMetric, 0);
+  EXPECT_THAT(histogram_tester.GetAllSamples(kSuccessMetric),
+              ElementsAre(Bucket(false, 1)));
+  // Checking records in the store-type-specific histograms.
+  histogram_tester.ExpectTotalCount(kDurationMetricWithStoreInfix, 0);
+  if (has_store_type) {
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSuccessMetricWithStoreInfix),
+                ElementsAre(Bucket(false, 1)));
+  } else {
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSuccessMetricWithStoreInfix),
+                IsEmpty());
+  }
+
+  // Checking records in the overall histogram.
+  histogram_tester.ExpectTotalCount(kDurationOverallMetric, 0);
+  EXPECT_THAT(histogram_tester.GetAllSamples(kSuccessOverallMetric),
+              ElementsAre(Bucket(false, 1)));
+
+  // Checking timed-out requests in the overall and backend-specific histogram.
+  EXPECT_THAT(histogram_tester.GetAllSamples(kSpecificMetric),
+              ElementsAre(Bucket(/* Requested */ 0, 1),
+                          Bucket(/* CancelledPwdSyncStateChanged */ 3, 1)));
+  EXPECT_THAT(histogram_tester.GetAllSamples(kOverallMetric),
+              ElementsAre(Bucket(/* Requested */ 0, 1),
+                          Bucket(/* CancelledPwdSyncStateChanged */ 3, 1)));
+  // Checking timed-out requests in the store-type-specific histograms.
+  if (has_store_type) {
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSpecificMetricWithStoreInfix),
+                ElementsAre(Bucket(/* Requested */ 0, has_store_type ? 1 : 0),
+                            Bucket(/* CancelledPwdSyncStateChanged */ 3, 1)));
+  } else {
+    EXPECT_THAT(histogram_tester.GetAllSamples(kSpecificMetricWithStoreInfix),
+                IsEmpty());
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    PasswordStoreBackendMetricsRecorderTest,
+    testing::Values(PasswordStoreBackendMetricsRecorder::
+                        PasswordStoreAndroidBackendType::kNone,
+                    PasswordStoreBackendMetricsRecorder::
+                        PasswordStoreAndroidBackendType::kAccount));
 
 }  // namespace password_manager

@@ -39,6 +39,12 @@
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
+namespace content {
+
+struct EvalJsResult;
+
+}  // namespace content
+
 namespace media_router {
 
 // Base class that generates an access code cast dialog and all objects that are
@@ -84,7 +90,7 @@ class AccessCodeCastIntegrationBrowserTest
   int WaitForAddSinkErrorCode(content::WebContents* dialog_contents);
 
   bool HasSinkInDevicesDict(const MediaSink::Id& sink_id);
-  absl::optional<base::Time> GetDeviceAddedTimeFromDict(
+  std::optional<base::Time> GetDeviceAddedTimeFromDict(
       const MediaSink::Id& sink_id);
 
   void SetUpOnMainThread() override;

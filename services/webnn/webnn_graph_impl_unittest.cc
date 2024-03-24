@@ -13,6 +13,7 @@
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "components/ml/webnn/features.mojom-features.h"
 #include "components/ml/webnn/graph_validation_utils.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -105,41 +106,25 @@ bool ValidateInputsForComputing(
   mojo::Remote<mojom::WebNNContextProvider> provider_remote;
   WebNNContextProviderImpl::Create(
       provider_remote.BindNewPipeAndPassReceiver());
-  base::RunLoop run_loop_create_context;
-  bool is_callback_called = false;
+
+  base::test::TestFuture<mojom::CreateContextResultPtr> create_context_future;
+  provider_remote->CreateWebNNContext(mojom::CreateContextOptions::New(),
+                                      create_context_future.GetCallback());
+  mojom::CreateContextResultPtr create_context_result =
+      create_context_future.Take();
   mojo::Remote<mojom::WebNNContext> webnn_context;
-  auto options = mojom::CreateContextOptions::New();
-  provider_remote->CreateWebNNContext(
-      std::move(options),
-      base::BindLambdaForTesting([&](mojom::CreateContextResultPtr result) {
-        ASSERT_TRUE(result->is_context_remote());
-        webnn_context.Bind(std::move(result->get_context_remote()));
-        is_callback_called = true;
-        run_loop_create_context.Quit();
-      }));
-  run_loop_create_context.Run();
-  EXPECT_TRUE(is_callback_called);
+  webnn_context.Bind(std::move(create_context_result->get_context_remote()));
 
   // Creates WebNN Graph mojo interface with the graph information which is
   // validated before compiling.
+  base::test::TestFuture<mojom::CreateGraphResultPtr> create_graph_future;
+  webnn_context->CreateGraph(std::move(graph_info),
+                             create_graph_future.GetCallback());
+  mojom::CreateGraphResultPtr create_graph_result = create_graph_future.Take();
   mojo::Remote<mojom::WebNNGraph> webnn_graph;
-  base::RunLoop run_loop_create_graph;
-  is_callback_called = false;
-  webnn_context->CreateGraph(
-      std::move(graph_info),
-      base::BindLambdaForTesting(
-          [&](mojom::CreateGraphResultPtr create_graph_result) {
-            webnn_graph.Bind(
-                std::move(create_graph_result->get_graph_remote()));
-            is_callback_called = true;
-            run_loop_create_graph.Quit();
-          }));
-  run_loop_create_graph.Run();
-  EXPECT_TRUE(is_callback_called);
+  webnn_graph.Bind(std::move(create_graph_result->get_graph_remote()));
 
   // Validate the inputs in the `Compute` function.
-  base::RunLoop run_loop_compute;
-  is_callback_called = false;
   bool valid = true;
   // Set up the error handler for bad mojo messages.
   mojo::SetDefaultProcessErrorHandler(
@@ -150,14 +135,9 @@ bool ValidateInputsForComputing(
         valid = false;
       }));
 
-  webnn_graph->Compute(
-      std::move(inputs),
-      base::BindLambdaForTesting([&](mojom::ComputeResultPtr result) {
-        is_callback_called = true;
-        run_loop_compute.Quit();
-      }));
-  run_loop_compute.Run();
-  EXPECT_TRUE(is_callback_called);
+  base::test::TestFuture<mojom::ComputeResultPtr> compute_future;
+  webnn_graph->Compute(std::move(inputs), compute_future.GetCallback());
+  EXPECT_TRUE(compute_future.Wait());
 
   mojo::SetDefaultProcessErrorHandler(base::NullCallback());
   return valid;
@@ -177,19 +157,23 @@ class WebNNGraphImplTest : public testing::Test {
   WebNNGraphImplTest& operator=(const WebNNGraphImplTest&) = delete;
 
   void SetUp() override {
-    WebNNContextProviderImpl::SetBackendForTesting(&backend_for_testing);
+    WebNNContextProviderImpl::SetBackendForTesting(&backend_for_testing_);
   }
   void TearDown() override {
     WebNNContextProviderImpl::SetBackendForTesting(nullptr);
   }
 
  protected:
-  WebNNGraphImplTest() = default;
+  WebNNGraphImplTest()
+      : scoped_feature_list_(
+            webnn::mojom::features::kWebMachineLearningNeuralNetwork) {}
   ~WebNNGraphImplTest() override = default;
 
  private:
-  FakeWebNNBackend backend_for_testing;
+  base::test::ScopedFeatureList scoped_feature_list_;
   base::test::TaskEnvironment task_environment_;
+
+  FakeWebNNBackend backend_for_testing_;
 };
 
 struct OperandInfo {
@@ -305,7 +289,7 @@ TEST_F(WebNNGraphImplTest, ArgMinMaxTest) {
           "input", {2, 3, 4, 5}, mojom::Operand::DataType::kInt64);
       builder.BuildArgMinMax(kind, input_operand_id, input_operand_id, {0},
                              true, false);
-      EXPECT_EQ(WebNNGraphImpl::ValidateGraph(builder.GetGraphInfo()), false);
+      EXPECT_FALSE(WebNNGraphImpl::ValidateGraph(builder.GetGraphInfo()));
     }
   }
 }
@@ -427,8 +411,8 @@ TEST_F(WebNNGraphImplTest, ClampTest) {
 
 struct HardSigmoidTester {
   OperandInfo input;
-  absl::optional<float> alpha;
-  absl::optional<float> beta;
+  std::optional<float> alpha;
+  std::optional<float> beta;
   OperandInfo output;
   bool expected;
 
@@ -498,28 +482,28 @@ TEST_F(WebNNGraphImplTest, HardSigmoidTest) {
 
 struct Activation {
   mojom::Activation::Tag kind;
-  absl::optional<ClampTester::ClampAttributes> clamp_attributes;
-  absl::optional<float> elu_alpha;
-  absl::optional<float> hard_sigmoid_alpha;
-  absl::optional<float> hard_sigmoid_beta;
-  absl::optional<float> leaky_relu_alpha;
-  absl::optional<float> linear_alpha;
-  absl::optional<float> linear_beta;
-  absl::optional<float> softplus_steepness;
+  std::optional<ClampTester::ClampAttributes> clamp_attributes;
+  std::optional<float> elu_alpha;
+  std::optional<float> hard_sigmoid_alpha;
+  std::optional<float> hard_sigmoid_beta;
+  std::optional<float> leaky_relu_alpha;
+  std::optional<float> linear_alpha;
+  std::optional<float> linear_beta;
+  std::optional<float> softplus_steepness;
 };
 
 struct BatchNormalizationTester {
   OperandInfo input;
   OperandInfo mean;
   OperandInfo variance;
-  absl::optional<OperandInfo> scale;
-  absl::optional<OperandInfo> bias;
+  std::optional<OperandInfo> scale;
+  std::optional<OperandInfo> bias;
   struct BatchNormalizationAttributes {
-    absl::optional<uint64_t> scale_operand_id;
-    absl::optional<uint64_t> bias_operand_id;
+    std::optional<uint64_t> scale_operand_id;
+    std::optional<uint64_t> bias_operand_id;
     uint32_t axis = 1;
     float epsilon = 1e-5;
-    absl::optional<Activation> activation;
+    std::optional<Activation> activation;
   };
   BatchNormalizationAttributes attributes;
   OperandInfo output;
@@ -1177,8 +1161,8 @@ struct Conv2dTester {
     uint32_t groups = 1;
     mojom::InputOperandLayout input_layout =
         mojom::InputOperandLayout::kChannelsFirst;
-    absl::optional<OperandInfo> bias;
-    absl::optional<Activation> activation;
+    std::optional<OperandInfo> bias;
+    std::optional<Activation> activation;
   };
   Conv2dAttributes attributes;
   OperandInfo output;
@@ -1192,7 +1176,7 @@ struct Conv2dTester {
     uint64_t filter_operand_id =
         builder.BuildInput("filter", filter.dimensions, filter.type);
 
-    absl::optional<uint64_t> bias_operand_id;
+    std::optional<uint64_t> bias_operand_id;
     if (attributes.bias) {
       bias_operand_id = builder.BuildInput("bias", attributes.bias->dimensions,
                                            attributes.bias->type);
@@ -1604,7 +1588,7 @@ TEST_F(WebNNGraphImplTest, Conv2dTest) {
 
     builder.BuildConv2d(mojom::Conv2d_Type::kDirect, input_operand_id,
                         filter_operand_id, input_operand_id,
-                        Conv2dTester::Conv2dAttributes{}, absl::nullopt);
+                        Conv2dTester::Conv2dAttributes{}, std::nullopt);
 
     EXPECT_FALSE(WebNNGraphImpl::ValidateGraph(builder.GetGraphInfo()));
   }
@@ -1618,7 +1602,7 @@ TEST_F(WebNNGraphImplTest, Conv2dTest) {
 
     builder.BuildConv2d(mojom::Conv2d_Type::kDirect, input_operand_id,
                         filter_operand_id, filter_operand_id,
-                        Conv2dTester::Conv2dAttributes{}, absl::nullopt);
+                        Conv2dTester::Conv2dAttributes{}, std::nullopt);
 
     EXPECT_FALSE(WebNNGraphImpl::ValidateGraph(builder.GetGraphInfo()));
   }
@@ -1941,7 +1925,7 @@ TEST_F(WebNNGraphImplTest, ConvTranspose2dTest) {
 
     builder.BuildConv2d(mojom::Conv2d_Type::kTransposed, input_operand_id,
                         filter_operand_id, input_operand_id,
-                        Conv2dTester::Conv2dAttributes{}, absl::nullopt);
+                        Conv2dTester::Conv2dAttributes{}, std::nullopt);
 
     EXPECT_FALSE(WebNNGraphImpl::ValidateGraph(builder.GetGraphInfo()));
   }
@@ -1955,7 +1939,7 @@ TEST_F(WebNNGraphImplTest, ConvTranspose2dTest) {
 
     builder.BuildConv2d(mojom::Conv2d_Type::kTransposed, input_operand_id,
                         filter_operand_id, filter_operand_id,
-                        Conv2dTester::Conv2dAttributes{}, absl::nullopt);
+                        Conv2dTester::Conv2dAttributes{}, std::nullopt);
 
     EXPECT_FALSE(WebNNGraphImpl::ValidateGraph(builder.GetGraphInfo()));
   }
@@ -2795,9 +2779,9 @@ TEST_F(WebNNGraphImplTest, GatherTest) {
 struct GemmTester {
   OperandInfo a;
   OperandInfo b;
-  absl::optional<OperandInfo> c;
+  std::optional<OperandInfo> c;
   struct GemmAttributes {
-    absl::optional<uint64_t> c_operand_id;
+    std::optional<uint64_t> c_operand_id;
     float alpha = 1.0;
     float beta = 1.0;
     bool a_transpose = false;
@@ -2939,11 +2923,11 @@ TEST_F(WebNNGraphImplTest, GemmTest) {
 
 struct InstanceNormalizationTester {
   OperandInfo input;
-  absl::optional<OperandInfo> scale;
-  absl::optional<OperandInfo> bias;
+  std::optional<OperandInfo> scale;
+  std::optional<OperandInfo> bias;
   struct InstanceNormalizationAttributes {
-    absl::optional<uint64_t> scale_operand_id;
-    absl::optional<uint64_t> bias_operand_id;
+    std::optional<uint64_t> scale_operand_id;
+    std::optional<uint64_t> bias_operand_id;
     mojom::InputOperandLayout layout =
         mojom::InputOperandLayout::kChannelsFirst;
     float epsilon = 1e-5;
@@ -3141,11 +3125,11 @@ TEST_F(WebNNGraphImplTest, InstanceNormalizationTest) {
 
 struct LayerNormalizationTester {
   OperandInfo input;
-  absl::optional<OperandInfo> scale;
-  absl::optional<OperandInfo> bias;
+  std::optional<OperandInfo> scale;
+  std::optional<OperandInfo> bias;
   struct LayerNormalizationAttributes {
-    absl::optional<uint64_t> scale_operand_id;
-    absl::optional<uint64_t> bias_operand_id;
+    std::optional<uint64_t> scale_operand_id;
+    std::optional<uint64_t> bias_operand_id;
     std::vector<uint32_t> axes;
     float epsilon = 1e-5;
   };
@@ -3585,6 +3569,7 @@ struct Pool2dTester {
 
   void Test() {
     Test(mojom::Pool2d::Kind::kAveragePool2d);
+    Test(mojom::Pool2d::Kind::kL2Pool2d);
     Test(mojom::Pool2d::Kind::kMaxPool2d);
   }
 
@@ -4114,7 +4099,7 @@ struct Resample2dTester {
   struct Resample2dAttributes {
     mojom::Resample2d::InterpolationMode mode =
         mojom::Resample2d::InterpolationMode::kNearestNeighbor;
-    absl::optional<std::vector<float>> scales;
+    std::optional<std::vector<float>> scales;
     std::vector<uint32_t> axes = {2, 3};
   };
   Resample2dAttributes attributes;
@@ -4503,7 +4488,13 @@ TEST_F(WebNNGraphImplTest, SliceTest) {
   }
 }
 
-enum class FloatingPointUnaryKind { kLeakyRelu, kLinear, kSigmoid, kTanh };
+enum class FloatingPointUnaryKind {
+  kHardSwish,
+  kLeakyRelu,
+  kLinear,
+  kSigmoid,
+  kTanh
+};
 
 struct FloatingPointUnaryTester {
   OperandInfo input;
@@ -4511,6 +4502,7 @@ struct FloatingPointUnaryTester {
   bool expected;
 
   void Test() {
+    Test(FloatingPointUnaryKind::kHardSwish);
     Test(FloatingPointUnaryKind::kLeakyRelu);
     Test(FloatingPointUnaryKind::kLinear);
     Test(FloatingPointUnaryKind::kSigmoid);
@@ -4525,6 +4517,9 @@ struct FloatingPointUnaryTester {
     uint64_t output_operand_id =
         builder.BuildOutput("output", output.dimensions, output.type);
     switch (kind) {
+      case FloatingPointUnaryKind::kHardSwish:
+        builder.BuildHardSwish(input_operand_id, output_operand_id);
+        break;
       case FloatingPointUnaryKind::kLeakyRelu:
         builder.BuildLeakyRelu(input_operand_id, output_operand_id,
                                /*alpha*/ 1.0);
@@ -4819,7 +4814,7 @@ TEST_F(WebNNGraphImplTest, SoftplusTest) {
 
     builder.BuildSoftplus(input_operand_id, input_operand_id,
                           /*steepness*/ 1.0);
-    EXPECT_EQ(WebNNGraphImpl::ValidateGraph(builder.GetGraphInfo()), false);
+    EXPECT_FALSE(WebNNGraphImpl::ValidateGraph(builder.GetGraphInfo()));
   }
 }
 
@@ -4884,7 +4879,7 @@ TEST_F(WebNNGraphImplTest, SoftsignTest) {
     uint64_t input_operand_id =
         builder.BuildInput("input", {4, 6}, mojom::Operand::DataType::kFloat32);
     builder.BuildSoftsign(input_operand_id, input_operand_id);
-    EXPECT_EQ(WebNNGraphImpl::ValidateGraph(builder.GetGraphInfo()), false);
+    EXPECT_FALSE(WebNNGraphImpl::ValidateGraph(builder.GetGraphInfo()));
   }
 }
 
@@ -4997,7 +4992,7 @@ TEST_F(WebNNGraphImplTest, ValidateSplitTest) {
     builder.BuildSplit(input_operand_id, {input_operand_id}, 0);
     builder.BuildSplit(input_operand_id,
                        {builder.BuildOutput("output", {4, 6}, kFloat32)}, 0);
-    EXPECT_EQ(WebNNGraphImpl::ValidateGraph(builder.GetGraphInfo()), false);
+    EXPECT_FALSE(WebNNGraphImpl::ValidateGraph(builder.GetGraphInfo()));
   }
 }
 
@@ -5290,10 +5285,6 @@ TEST_F(WebNNGraphImplTest, WhereTest) {
 }
 
 TEST_F(WebNNGraphImplTest, ValidateInputsTest) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(
-      webnn::mojom::features::kWebMachineLearningNeuralNetwork);
-
   const std::vector<uint32_t> dimensions = {3, 5};
   // Build the graph with mojo type.
   GraphInfoBuilder builder;
@@ -5306,7 +5297,7 @@ TEST_F(WebNNGraphImplTest, ValidateInputsTest) {
   builder.BuildElementWiseBinary(mojom::ElementWiseBinary::Kind::kAdd,
                                  lhs_operand_id, rhs_operand_id,
                                  output_operand_id);
-  EXPECT_EQ(WebNNGraphImpl::ValidateGraph(builder.GetGraphInfo()), true);
+  EXPECT_TRUE(WebNNGraphImpl::ValidateGraph(builder.GetGraphInfo()));
 
   auto byte_length =
       ValidateAndCalculateByteLength(sizeof(uint8_t), dimensions).value();
@@ -5315,44 +5306,39 @@ TEST_F(WebNNGraphImplTest, ValidateInputsTest) {
     base::flat_map<std::string, mojo_base::BigBuffer> inputs;
     inputs["lhs"] = std::vector<uint8_t>(byte_length);
     inputs["rhs"] = std::vector<uint8_t>(byte_length);
-    EXPECT_EQ(
-        ValidateInputsForComputing(builder.CloneGraphInfo(), std::move(inputs)),
-        true);
+    EXPECT_TRUE(ValidateInputsForComputing(builder.CloneGraphInfo(),
+                                           std::move(inputs)));
   }
   {
     // Test the invalid inputs for invalid input size.
     base::flat_map<std::string, mojo_base::BigBuffer> inputs;
     inputs["lhs"] = std::vector<uint8_t>(byte_length);
-    EXPECT_EQ(
-        ValidateInputsForComputing(builder.CloneGraphInfo(), std::move(inputs)),
-        false);
+    EXPECT_FALSE(ValidateInputsForComputing(builder.CloneGraphInfo(),
+                                            std::move(inputs)));
   }
   {
     // Test the invalid inputs for invalid input name.
     base::flat_map<std::string, mojo_base::BigBuffer> inputs;
     inputs["a_different_input_name"] = std::vector<uint8_t>(byte_length);
     inputs["rhs"] = std::vector<uint8_t>(byte_length);
-    EXPECT_EQ(
-        ValidateInputsForComputing(builder.CloneGraphInfo(), std::move(inputs)),
-        false);
+    EXPECT_FALSE(ValidateInputsForComputing(builder.CloneGraphInfo(),
+                                            std::move(inputs)));
   }
   {
     // Test the invalid inputs for invalid first input byte length.
     base::flat_map<std::string, mojo_base::BigBuffer> inputs;
     inputs["lhs"] = std::vector<uint8_t>(20);
     inputs["rhs"] = std::vector<uint8_t>(byte_length);
-    EXPECT_EQ(
-        ValidateInputsForComputing(builder.CloneGraphInfo(), std::move(inputs)),
-        false);
+    EXPECT_FALSE(ValidateInputsForComputing(builder.CloneGraphInfo(),
+                                            std::move(inputs)));
   }
   {
     // Test the invalid inputs for invalid second input byte length.
     base::flat_map<std::string, mojo_base::BigBuffer> inputs;
     inputs["lhs"] = std::vector<uint8_t>(byte_length);
     inputs["rhs"] = std::vector<uint8_t>(20);
-    EXPECT_EQ(
-        ValidateInputsForComputing(builder.CloneGraphInfo(), std::move(inputs)),
-        false);
+    EXPECT_FALSE(ValidateInputsForComputing(builder.CloneGraphInfo(),
+                                            std::move(inputs)));
   }
 }
 
@@ -5407,10 +5393,10 @@ TEST_F(WebNNGraphImplTest, BuildMultipleInputsAppendingConstants) {
   uint64_t input_a_operand_id =
       builder.BuildInput("input_a", {2, 2}, mojom::Operand::DataType::kFloat32);
   std::vector<float> constant_data = {5.0, 6.0, 7.0, 8.0};
-  uint64_t constant_a_operand_id = builder.BuildConstant(
-      {2, 2}, mojom::Operand::DataType::kFloat32,
-      base::make_span(reinterpret_cast<const uint8_t*>(constant_data.data()),
-                      constant_data.size() * sizeof(float)));
+  uint64_t constant_a_operand_id =
+      builder.BuildConstant({2, 2}, mojom::Operand::DataType::kFloat32,
+                            base::as_byte_span(constant_data));
+
   uint64_t intermediate_1_operand_id = builder.BuildIntermediateOperand(
       {2, 2}, mojom::Operand::DataType::kFloat32);
   builder.BuildGemm(input_a_operand_id, constant_a_operand_id,
@@ -5418,17 +5404,16 @@ TEST_F(WebNNGraphImplTest, BuildMultipleInputsAppendingConstants) {
 
   uint64_t input_b_operand_id =
       builder.BuildInput("input_b", {2, 2}, mojom::Operand::DataType::kFloat32);
-  uint64_t constant_b_operand_id = builder.BuildConstant(
-      {2, 2}, mojom::Operand::DataType::kFloat32,
-      base::make_span(reinterpret_cast<const uint8_t*>(constant_data.data()),
-                      constant_data.size() * sizeof(float)));
+  uint64_t constant_b_operand_id =
+      builder.BuildConstant({2, 2}, mojom::Operand::DataType::kFloat32,
+                            base::as_byte_span(constant_data));
   uint64_t intermediate_2_operand_id = builder.BuildIntermediateOperand(
       {2, 2}, mojom::Operand::DataType::kFloat32);
   builder.BuildGemm(input_b_operand_id, constant_b_operand_id,
                     intermediate_2_operand_id, GemmTester::GemmAttributes());
   builder.BuildGemm(intermediate_1_operand_id, intermediate_2_operand_id,
                     output_operand_id, GemmTester::GemmAttributes());
-  EXPECT_EQ(WebNNGraphImpl::ValidateGraph(builder.GetGraphInfo()), true);
+  EXPECT_TRUE(WebNNGraphImpl::ValidateGraph(builder.GetGraphInfo()));
 }
 
 // Test building a graph with two inputs and two constant in the following
@@ -5445,10 +5430,9 @@ TEST_F(WebNNGraphImplTest, BuildMultipleConstantsAppendingInputs) {
   uint64_t output_operand_id =
       builder.BuildOutput("output", {2, 2}, mojom::Operand::DataType::kFloat32);
   std::vector<float> constant_data = {5.0, 6.0, 7.0, 8.0};
-  uint64_t constant_a_operand_id = builder.BuildConstant(
-      {2, 2}, mojom::Operand::DataType::kFloat32,
-      base::make_span(reinterpret_cast<const uint8_t*>(constant_data.data()),
-                      constant_data.size() * sizeof(float)));
+  uint64_t constant_a_operand_id =
+      builder.BuildConstant({2, 2}, mojom::Operand::DataType::kFloat32,
+                            base::as_byte_span(constant_data));
   uint64_t input_a_operand_id =
       builder.BuildInput("input_a", {2, 2}, mojom::Operand::DataType::kFloat32);
   uint64_t intermediate_1_operand_id = builder.BuildIntermediateOperand(
@@ -5458,10 +5442,9 @@ TEST_F(WebNNGraphImplTest, BuildMultipleConstantsAppendingInputs) {
 
   uint64_t input_b_operand_id =
       builder.BuildInput("input_b", {2, 2}, mojom::Operand::DataType::kFloat32);
-  uint64_t constant_b_operand_id = builder.BuildConstant(
-      {2, 2}, mojom::Operand::DataType::kFloat32,
-      base::make_span(reinterpret_cast<const uint8_t*>(constant_data.data()),
-                      constant_data.size() * sizeof(float)));
+  uint64_t constant_b_operand_id =
+      builder.BuildConstant({2, 2}, mojom::Operand::DataType::kFloat32,
+                            base::as_byte_span(constant_data));
   uint64_t intermediate_2_operand_id = builder.BuildIntermediateOperand(
       {2, 2}, mojom::Operand::DataType::kFloat32);
   builder.BuildGemm(constant_b_operand_id, input_b_operand_id,
@@ -5469,7 +5452,7 @@ TEST_F(WebNNGraphImplTest, BuildMultipleConstantsAppendingInputs) {
 
   builder.BuildGemm(intermediate_1_operand_id, intermediate_2_operand_id,
                     output_operand_id, GemmTester::GemmAttributes());
-  EXPECT_EQ(WebNNGraphImpl::ValidateGraph(builder.GetGraphInfo()), true);
+  EXPECT_TRUE(WebNNGraphImpl::ValidateGraph(builder.GetGraphInfo()));
 }
 
 }  // namespace webnn

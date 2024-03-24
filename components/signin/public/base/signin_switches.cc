@@ -16,6 +16,11 @@ namespace switches {
 BASE_FEATURE(kSeedAccountsRevamp,
              "SeedAccountsRevamp",
              base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Feature to apply enterprise policies on signin regardless of sync status.
+BASE_FEATURE(kEnterprisePolicyOnSignin,
+             "EnterprisePolicyOnSignin",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 #endif
 
 // Clears the token service before using it. This allows simulating the
@@ -41,6 +46,14 @@ const base::FeatureParam<EnableBoundSessionCredentialsDiceSupport>
         &kEnableBoundSessionCredentials, "dice-support",
         EnableBoundSessionCredentialsDiceSupport::kDisabled,
         &enable_bound_session_credentials_dice_support};
+
+// Restricts the DBSC registration URL path to a single allowed string.
+// Set to "/" to denote an empty path.
+// Set to an empty string to remove the restriction.
+const base::FeatureParam<std::string>
+    kEnableBoundSessionCredentialsExclusiveRegistrationPath{
+        &kEnableBoundSessionCredentials, "exclusive-registration-path",
+        "/RegisterSession"};
 
 // Enables Chrome refresh tokens binding to a device. Requires
 // "EnableBoundSessionCredentials" being enabled as a prerequisite.
@@ -81,29 +94,55 @@ BASE_FEATURE(kRestoreSignedInAccountAndSettingsFromBackup,
              base::FEATURE_DISABLED_BY_DEFAULT);
 #endif
 
-// Enables a new version of the sync confirmation UI.
-BASE_FEATURE(kTangibleSync,
-             "TangibleSync",
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
-             base::FEATURE_DISABLED_BY_DEFAULT
-#else
-             // Fully rolled out on desktop: crbug.com/1430054
-             base::FEATURE_ENABLED_BY_DEFAULT
-#endif
-
-);
-
+#if BUILDFLAG(IS_ANDROID)
 // Enables the search engine choice feature for existing users.
+// TODO(b/316859558): Not used for shipping purposes, remove this feature.
 BASE_FEATURE(kSearchEngineChoice,
              "SearchEngineChoice",
              base::FEATURE_DISABLED_BY_DEFAULT);
-
-// Enables the search engine choice feature in the FRE.
-BASE_FEATURE(kSearchEngineChoiceFre,
-             "SearchEngineChoiceFre",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+#endif
 
 BASE_FEATURE(kUnoDesktop, "UnoDesktop", base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kExplicitBrowserSigninUIOnDesktop,
+             "ExplicitBrowserSigninUIOnDesktop",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+const base::FeatureParam<bool> kInterceptBubblesDismissibleByAvatarButton{
+    &kExplicitBrowserSigninUIOnDesktop,
+    /*name=*/"bubble_dismissible_by_avatar_button",
+    /*default_value=*/true};
+
+bool IsExplicitBrowserSigninUIOnDesktopEnabled(
+    ExplicitBrowserSigninPhase phase) {
+  if (phase == ExplicitBrowserSigninPhase::kFull) {
+    return base::FeatureList::IsEnabled(kExplicitBrowserSigninUIOnDesktop);
+  }
+  return base::FeatureList::IsEnabled(kExplicitBrowserSigninUIOnDesktop) ||
+         base::FeatureList::IsEnabled(kUnoDesktop);
+}
+
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN) || \
+    BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
+BASE_FEATURE(kMinorModeRestrictionsForHistorySyncOptIn,
+             "MinorModeRestrictionsForHistorySyncOptIn",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+constexpr int kMinorModeRestrictionsFetchDeadlineDefaultValueMs =
+#if BUILDFLAG(IS_ANDROID)
+    // Based on Signin.AccountCapabilities.UserVisibleLatency
+    400;
+#elif BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
+    // Based on Signin.SyncOptIn.PreSyncConfirmationLatency
+    900;
+#elif BUILDFLAG(IS_IOS)
+    // Based on Signin.AccountCapabilities.UserVisibleLatency
+    1000;
+#endif
+
+const base::FeatureParam<int> kMinorModeRestrictionsFetchDeadlineMs{
+    &kMinorModeRestrictionsForHistorySyncOptIn,
+    /*name=*/"MinorModeRestrictionsFetchDeadlineMs",
+    kMinorModeRestrictionsFetchDeadlineDefaultValueMs};
+#endif
 
 #if BUILDFLAG(IS_IOS)
 BASE_FEATURE(kRemoveSignedInAccountsDialog,

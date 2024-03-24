@@ -11,6 +11,7 @@
 #import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
 #import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
 #import "ios/chrome/browser/shared/model/web_state_list/web_state_opener.h"
+#import "ios/chrome/browser/tabs/model/features.h"
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/grid/grid_mediator_test.h"
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/grid/incognito/incognito_grid_mediator.h"
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/grid/regular/regular_grid_mediator.h"
@@ -19,6 +20,7 @@
 #import "ios/chrome/browser/ui/tab_switcher/test/fake_tab_collection_consumer.h"
 #import "ios/web/public/test/fakes/fake_web_frames_manager.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
+#import "ios/web/public/web_state_id.h"
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
 
@@ -93,6 +95,22 @@ class BaseGridMediatorWithPriceDropIndicatorsTest
 
 #pragma mark - Consumer tests
 
+// Tests drag and dropping an item that has been closed.
+TEST_P(BaseGridMediatorTest, DragAndDropClosedItem) {
+  std::unique_ptr<web::FakeWebState> web_state =
+      CreateFakeWebStateWithURL(GURL("https://google.com"));
+  web::WebStateID item_identifier = web_state.get()->GetUniqueIdentifier();
+  browser_->GetWebStateList()->InsertWebState(
+      std::move(web_state), WebStateList::InsertionParams::AtIndex(1));
+
+  [mediator_ switchToMode:TabGridModeSelection];
+  [mediator_ addToSelectionItemID:item_identifier];
+
+  browser_->GetWebStateList()->CloseWebStateAt(1,
+                                               WebStateList::CLOSE_USER_ACTION);
+  EXPECT_EQ(0UL, [mediator_ allSelectedDragItems].count);
+}
+
 // Tests that the consumer is populated after the tab model is set on the
 // mediator.
 TEST_P(BaseGridMediatorTest, ConsumerPopulateItems) {
@@ -103,11 +121,11 @@ TEST_P(BaseGridMediatorTest, ConsumerPopulateItems) {
 // Tests that the consumer is notified when a web state is inserted.
 TEST_P(BaseGridMediatorTest, ConsumerInsertItem) {
   ASSERT_EQ(3UL, consumer_.items.size());
-  auto web_state = CreateFakeWebStateWithURL(GURL());
+  std::unique_ptr<web::FakeWebState> web_state =
+      CreateFakeWebStateWithURL(GURL());
   web::WebStateID item_identifier = web_state.get()->GetUniqueIdentifier();
-  browser_->GetWebStateList()->InsertWebState(1, std::move(web_state),
-                                              WebStateList::INSERT_FORCE_INDEX,
-                                              WebStateOpener());
+  browser_->GetWebStateList()->InsertWebState(
+      std::move(web_state), WebStateList::InsertionParams::AtIndex(1));
   EXPECT_EQ(4UL, consumer_.items.size());
   // The same ID should be selected after the insertion, since the new web state
   // wasn't selected.
@@ -139,7 +157,8 @@ TEST_P(BaseGridMediatorTest, ConsumerUpdateSelectedItem) {
 // The selected item is replaced, so the new selected item id should be the
 // id of the new item.
 TEST_P(BaseGridMediatorTest, ConsumerReplaceItem) {
-  auto new_web_state = CreateFakeWebStateWithURL(GURL());
+  std::unique_ptr<web::FakeWebState> new_web_state =
+      CreateFakeWebStateWithURL(GURL());
   web::WebStateID new_item_identifier = new_web_state->GetUniqueIdentifier();
   @autoreleasepool {
     browser_->GetWebStateList()->ReplaceWebStateAt(1, std::move(new_web_state));
@@ -167,9 +186,75 @@ TEST_P(BaseGridMediatorTest, SelectItemCommand) {
   // Previous selected index is 1.
   web::WebStateID identifier =
       browser_->GetWebStateList()->GetWebStateAt(2)->GetUniqueIdentifier();
-  [mediator_ selectItemWithID:identifier];
+  [mediator_ selectItemWithID:identifier pinned:NO];
   EXPECT_EQ(2, browser_->GetWebStateList()->active_index());
   EXPECT_EQ(identifier, consumer_.selectedItemID);
+}
+
+// Tests that the active index is updated when `-selectItemWithID:` is called.
+// Tests that the consumer's selected index is updated with pinned state.
+TEST_P(BaseGridMediatorTest, SelectPinnedItemCommand) {
+  if (GetParam() == TEST_INCOGNITO_MEDIATOR || !IsPinnedTabsEnabled()) {
+    // Test only available in non-incognito when pinned tabs are enabled.
+    return;
+  }
+  WebStateList* web_state_list = browser_->GetWebStateList();
+  web::WebStateID identifier_0 =
+      web_state_list->GetWebStateAt(0)->GetUniqueIdentifier();
+  web::WebStateID identifier_1 =
+      web_state_list->GetWebStateAt(1)->GetUniqueIdentifier();
+  web::WebStateID identifier_2 =
+      web_state_list->GetWebStateAt(2)->GetUniqueIdentifier();
+  [mediator_ setPinState:YES forItemWithID:identifier_0];
+  ASSERT_EQ(1, browser_->GetWebStateList()->active_index());
+  ASSERT_EQ(identifier_1, consumer_.selectedItemID);
+
+  [mediator_ selectItemWithID:identifier_0 pinned:YES];
+
+  EXPECT_EQ(0, browser_->GetWebStateList()->active_index());
+  EXPECT_EQ(identifier_0, consumer_.selectedItemID);
+
+  [mediator_ selectItemWithID:identifier_2 pinned:NO];
+
+  EXPECT_EQ(2, browser_->GetWebStateList()->active_index());
+  EXPECT_EQ(identifier_2, consumer_.selectedItemID);
+
+  // Selecting the pinned one with pinned = NO fails.
+  [mediator_ selectItemWithID:identifier_0 pinned:NO];
+
+  EXPECT_EQ(2, browser_->GetWebStateList()->active_index());
+  EXPECT_EQ(identifier_2, consumer_.selectedItemID);
+}
+
+// Tests the pinned tab command.
+TEST_P(BaseGridMediatorTest, PinItemCommand) {
+  if (GetParam() == TEST_INCOGNITO_MEDIATOR || !IsPinnedTabsEnabled()) {
+    // Test only available in non-incognito when pinned tabs are enabled.
+    return;
+  }
+  WebStateList* web_state_list = browser_->GetWebStateList();
+  // At first the second web state is active.
+  ASSERT_EQ(1, web_state_list->active_index());
+  ASSERT_EQ(0, web_state_list->pinned_tabs_count());
+
+  web::WebStateID selected_identifier =
+      web_state_list->GetWebStateAt(1)->GetUniqueIdentifier();
+  web::WebStateID identifier =
+      web_state_list->GetWebStateAt(2)->GetUniqueIdentifier();
+
+  [mediator_ setPinState:YES forItemWithID:identifier];
+
+  // The pinned web state moved to the first position, moving the others.
+  EXPECT_EQ(1, web_state_list->pinned_tabs_count());
+  EXPECT_EQ(2, web_state_list->active_index());
+  EXPECT_EQ(selected_identifier, consumer_.selectedItemID);
+
+  [mediator_ setPinState:NO forItemWithID:identifier];
+
+  // The pinned web state moves back to the end of the WebStateList.
+  EXPECT_EQ(0, web_state_list->pinned_tabs_count());
+  EXPECT_EQ(1, web_state_list->active_index());
+  EXPECT_EQ(selected_identifier, consumer_.selectedItemID);
 }
 
 // Tests that the WebStateList count is decremented when
@@ -341,7 +426,8 @@ TEST_P(BaseGridMediatorWithPriceDropIndicatorsTest,
   web::WebState* web_state_to_select =
       browser_->GetWebStateList()->GetWebStateAt(2);
   // No need to set a null price drop - it will be null by default.
-  [mediator_ selectItemWithID:web_state_to_select->GetUniqueIdentifier()];
+  [mediator_ selectItemWithID:web_state_to_select->GetUniqueIdentifier()
+                       pinned:NO];
   EXPECT_EQ(1, user_action_tester_.GetActionCount(kHasNoPriceDropUserAction));
   EXPECT_EQ(0, user_action_tester_.GetActionCount(kHasPriceDropUserAction));
 }
@@ -352,7 +438,8 @@ TEST_P(BaseGridMediatorWithPriceDropIndicatorsTest,
       browser_->GetWebStateList()->GetWebStateAt(2);
   // Add a fake price drop.
   SetFakePriceDrop(web_state_to_select);
-  [mediator_ selectItemWithID:web_state_to_select->GetUniqueIdentifier()];
+  [mediator_ selectItemWithID:web_state_to_select->GetUniqueIdentifier()
+                       pinned:NO];
   EXPECT_EQ(1, user_action_tester_.GetActionCount(kHasPriceDropUserAction));
   EXPECT_EQ(0, user_action_tester_.GetActionCount(kHasNoPriceDropUserAction));
 }

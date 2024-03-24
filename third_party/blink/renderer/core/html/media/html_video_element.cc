@@ -330,15 +330,12 @@ void HTMLVideoElement::OnLoadFinished() {
   // element actually becomes visible to complete the load.
   if (web_media_player_->DidLazyLoad() && !PotentiallyPlaying()) {
     lazy_load_intersection_observer_ = IntersectionObserver::Create(
-        /* (root) margin */ Vector<Length>(),
-        /* scroll_margin */ Vector<Length>(),
-        /* thresholds */ {IntersectionObserver::kMinimumThreshold},
-        /* document */ &GetDocument(),
-        /* callback */
+        GetDocument(),
         WTF::BindRepeating(&HTMLVideoElement::OnIntersectionChangedForLazyLoad,
                            WrapWeakPersistent(this)),
-        /* ukm_metric_id */
-        LocalFrameUkmAggregator::kMediaIntersectionObserver);
+        LocalFrameUkmAggregator::kMediaIntersectionObserver,
+        IntersectionObserver::Params{
+            .thresholds = {IntersectionObserver::kMinimumThreshold}});
     lazy_load_intersection_observer_->observe(this);
   }
 
@@ -388,9 +385,6 @@ bool HTMLVideoElement::HasReadableVideoFrame() const {
 void HTMLVideoElement::OnFirstFrame(base::TimeTicks frame_time,
                                     size_t bytes_to_first_frame) {
   DCHECK(GetWebMediaPlayer());
-  if (!base::FeatureList::IsEnabled(features::kLCPVideoFirstFrame)) {
-    return;
-  }
   LayoutObject* layout_object = GetLayoutObject();
   // HasLocalBorderBoxProperties will be false in some cases, specifically
   // picture-in-picture video may return false here.
@@ -501,7 +495,7 @@ bool HTMLVideoElement::IsDefaultPosterImageURL() const {
 
 scoped_refptr<StaticBitmapImage> HTMLVideoElement::CreateStaticBitmapImage(
     bool allow_accelerated_images,
-    absl::optional<gfx::Size> size) {
+    std::optional<gfx::Size> size) {
   media::PaintCanvasVideoRenderer* video_renderer = nullptr;
   scoped_refptr<media::VideoFrame> media_video_frame;
   if (auto* wmp = GetWebMediaPlayer()) {
@@ -582,7 +576,7 @@ gfx::Size HTMLVideoElement::BitmapSourceSize() const {
 
 ScriptPromise HTMLVideoElement::CreateImageBitmap(
     ScriptState* script_state,
-    absl::optional<gfx::Rect> crop_rect,
+    std::optional<gfx::Rect> crop_rect,
     const ImageBitmapOptions* options,
     ExceptionState& exception_state) {
   if (getNetworkState() == HTMLMediaElement::kNetworkEmpty) {
@@ -668,8 +662,7 @@ void HTMLVideoElement::OnEnteredPictureInPicture() {
   }
   picture_in_picture_interstitial_->Show();
 
-  if (RuntimeEnabledFeatures::CSSPictureInPictureEnabled())
-    PseudoStateChanged(CSSSelector::kPseudoPictureInPicture);
+  PseudoStateChanged(CSSSelector::kPseudoPictureInPicture);
 
   DCHECK(GetWebMediaPlayer());
   GetWebMediaPlayer()->OnDisplayTypeChanged(GetDisplayType());
@@ -679,8 +672,7 @@ void HTMLVideoElement::OnExitedPictureInPicture() {
   if (picture_in_picture_interstitial_)
     picture_in_picture_interstitial_->Hide();
 
-  if (RuntimeEnabledFeatures::CSSPictureInPictureEnabled())
-    PseudoStateChanged(CSSSelector::kPseudoPictureInPicture);
+  PseudoStateChanged(CSSSelector::kPseudoPictureInPicture);
 
   if (GetWebMediaPlayer())
     GetWebMediaPlayer()->OnDisplayTypeChanged(GetDisplayType());

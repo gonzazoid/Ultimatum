@@ -10,7 +10,6 @@
 #include "base/hash/hash.h"
 #include "base/rand_util.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/uuid.h"
 #include "build/build_config.h"
 #include "chrome/browser/sync/test/integration/encryption_helper.h"
@@ -22,8 +21,6 @@
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_store/password_store_interface.h"
 #include "components/password_manager/core/common/password_manager_features.h"
-#include "components/signin/public/base/signin_switches.h"
-#include "components/sync/base/features.h"
 #include "components/sync/engine/cycle/entity_change_metric_recording.h"
 #include "components/sync/test/fake_server_http_post_provider.h"
 #include "content/public/test/browser_test.h"
@@ -55,14 +52,9 @@ static const char* kValidPassphrase = "passphrase!";
 
 class TwoClientPasswordsSyncTest : public SyncTest {
  public:
-  TwoClientPasswordsSyncTest() : SyncTest(TWO_CLIENT) {
-    feature_list_.InitAndDisableFeature(switches::kUnoDesktop);
-  }
+  TwoClientPasswordsSyncTest() : SyncTest(TWO_CLIENT) {}
 
   ~TwoClientPasswordsSyncTest() override = default;
-
- private:
-  base::test::ScopedFeatureList feature_list_;
 };
 
 class TwoClientPasswordsSyncTestWithVerifier
@@ -602,20 +594,7 @@ IN_PROC_BROWSER_TEST_F(
   ASSERT_TRUE(AwaitQuiescence());
 }
 
-class TwoClientPasswordsSyncTestWithNotes : public SyncTest {
- public:
-  TwoClientPasswordsSyncTestWithNotes() : SyncTest(TWO_CLIENT) {
-    feature_list_.InitWithFeatures(
-        /*enabled_features=*/{syncer::kPasswordNotesWithBackup},
-        /*disabled_features=*/{});
-  }
-  ~TwoClientPasswordsSyncTestWithNotes() override = default;
-
- private:
-  base::test::ScopedFeatureList feature_list_;
-};
-
-IN_PROC_BROWSER_TEST_F(TwoClientPasswordsSyncTestWithNotes,
+IN_PROC_BROWSER_TEST_F(TwoClientPasswordsSyncTest,
                        SyncPasswordNotesBetweenDevices) {
   ASSERT_TRUE(SetupSync()) << "SetupSync() failed.";
   ASSERT_TRUE(AllProfilesContainSamePasswordForms());
@@ -653,7 +632,7 @@ IN_PROC_BROWSER_TEST_F(TwoClientPasswordsSyncTestWithNotes,
 
 // This tests the  logic for reading and writing the notes backup blob when
 // notes are empty.
-IN_PROC_BROWSER_TEST_F(TwoClientPasswordsSyncTestWithNotes,
+IN_PROC_BROWSER_TEST_F(TwoClientPasswordsSyncTest,
                        SyncPasswordWithEmptyNotesBetweenDevices) {
   ASSERT_TRUE(SetupSync()) << "SetupSync() failed.";
   ASSERT_TRUE(AllProfilesContainSamePasswordForms());

@@ -1434,8 +1434,9 @@ class AutomationNode {
 
     // Check permissions.
     if (!IsInteractPermitted()) {
-      throw new Error(actionType + ' requires {"desktop": true} or' +
-          ' {"interact": true} in the "automation" manifest key.');
+      throw new Error(
+          actionType + ' requires {"desktop": true} in the ' +
+          '"automation" manifest key.');
     }
 
     let requestID = -1;
@@ -2200,6 +2201,19 @@ class AtpAutomation {
 
   getFocus(callback) {
     let focusedNodeInfo = natives.GetFocus();
+    if (!focusedNodeInfo) {
+      callback(null);
+      return;
+    }
+    const tree = AutomationRootNode.getOrCreate(focusedNodeInfo.treeId);
+    if (tree) {
+      callback(tree.get(focusedNodeInfo.nodeId));
+      return;
+    }
+  }
+
+  getAccessibilityFocus(callback) {
+    let focusedNodeInfo = natives.GetAccessibilityFocus();
     if (!focusedNodeInfo) {
       callback(null);
       return;

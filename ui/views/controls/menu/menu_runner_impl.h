@@ -53,9 +53,9 @@ class VIEWS_EXPORT MenuRunnerImpl : public MenuRunnerImplInterface,
                  MenuAnchorPosition anchor,
                  int32_t run_types,
                  gfx::NativeView native_view_for_gestures,
-                 absl::optional<gfx::RoundedCornersF> corners = absl::nullopt,
-                 absl::optional<std::string> show_menu_host_duration_histogram =
-                     absl::nullopt) override;
+                 std::optional<gfx::RoundedCornersF> corners = std::nullopt,
+                 std::optional<std::string> show_menu_host_duration_histogram =
+                     std::nullopt) override;
   void Cancel() override;
   base::TimeTicks GetClosingEventTime() const override;
 
@@ -73,17 +73,17 @@ class VIEWS_EXPORT MenuRunnerImpl : public MenuRunnerImplInterface,
   // Returns true if mnemonics should be shown in the menu.
   bool ShouldShowMnemonics(int32_t run_types);
 
-  // The menu.
-  std::unique_ptr<MenuItemView> menu_;
-
-  // Any sibling menus. Does not include |menu_|. We own these too.
-  std::set<MenuItemView*> sibling_menus_;
-
   // Created and set as the delegate of the MenuItemView if Release() is
   // invoked.  This is done to make sure the delegate isn't notified after
   // Release() is invoked. We do this as we assume the delegate is no longer
   // valid if MenuRunner has been deleted.
   std::unique_ptr<MenuDelegate> empty_delegate_;
+
+  // The menu.
+  std::unique_ptr<MenuItemView> menu_;
+
+  // Any sibling menus. Does not include |menu_|. We own these too.
+  std::set<raw_ptr<MenuItemView, SetExperimental>> sibling_menus_;
 
   // Are we in run waiting for it to return?
   bool running_ = false;

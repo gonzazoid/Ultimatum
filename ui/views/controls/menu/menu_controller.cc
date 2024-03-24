@@ -427,14 +427,14 @@ struct MenuController::MenuPart {
   //       but is over a menu (for example, the mouse is over a separator or
   //       empty menu), this is null and parent is the menu the mouse was
   //       clicked on.
-  raw_ptr<MenuItemView> menu = nullptr;
+  raw_ptr<MenuItemView, DanglingUntriaged> menu = nullptr;
 
   // If type is kMenuItem but the mouse is not over a menu item this is the
   // parent of the menu item the user clicked on. Otherwise this is null.
-  raw_ptr<MenuItemView> parent = nullptr;
+  raw_ptr<MenuItemView, DanglingUntriaged> parent = nullptr;
 
   // This is the submenu the mouse is over.
-  raw_ptr<SubmenuView> submenu = nullptr;
+  raw_ptr<SubmenuView, DanglingUntriaged> submenu = nullptr;
 
   // Whether the controller should apply SELECTION_OPEN_SUBMENU to this item.
   bool should_submenu_show = false;
@@ -527,18 +527,18 @@ struct MenuController::SelectByCharDetails {
   SelectByCharDetails() = default;
 
   // Index of the first menu with the specified mnemonic.
-  absl::optional<size_t> first_match;
+  std::optional<size_t> first_match;
 
   // If true there are multiple menu items with the same mnemonic.
   bool has_multiple = false;
 
   // Index of the selected item; may remain nullopt.
-  absl::optional<size_t> index_of_item;
+  std::optional<size_t> index_of_item;
 
   // If there are multiple matches this is the index of the item after the
   // currently selected item whose mnemonic matches. This may remain nullopt
   // even though there are matches.
-  absl::optional<size_t> next_match;
+  std::optional<size_t> next_match;
 };
 
 // MenuController:State ------------------------------------------------------
@@ -2239,7 +2239,6 @@ void MenuController::OpenMenuImpl(MenuItemView* item, bool show) {
       // (crbug.com/1414232) The item to be open is a submenu. Make sure
       // params.context is set.
       DCHECK(params.context);
-      params.menu_type = ui::MenuType::kChildMenu;
     } else if (state_.context_menu) {
       if (!menu_stack_.empty()) {
         auto* last_menu_item = menu_stack_.back().first.item.get();
@@ -2250,10 +2249,8 @@ void MenuController::OpenMenuImpl(MenuItemView* item, bool show) {
       } else {
         params.context = owner_;
       }
-      params.menu_type = ui::MenuType::kRootContextMenu;
     } else {
       params.context = owner_;
-      params.menu_type = ui::MenuType::kRootMenu;
     }
     item->GetSubmenu()->ShowAt(params);
 
@@ -3540,7 +3537,7 @@ void MenuController::SetChildMenuOpenDirectionAtDepth(
 }
 
 void MenuController::SetMenuRoundedCorners(
-    absl::optional<gfx::RoundedCornersF> corners) {
+    std::optional<gfx::RoundedCornersF> corners) {
   rounded_corners_ = corners;
 }
 

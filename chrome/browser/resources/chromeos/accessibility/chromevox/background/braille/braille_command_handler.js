@@ -5,10 +5,12 @@
 /**
  * @fileoverview ChromeVox braille commands.
  */
-import {AutomationPredicate} from '../../../common/automation_predicate.js';
-import {AutomationUtil} from '../../../common/automation_util.js';
-import {EventGenerator} from '../../../common/event_generator.js';
-import {KeyCode} from '../../../common/key_code.js';
+import {AutomationPredicate} from '/common/automation_predicate.js';
+import {AutomationUtil} from '/common/automation_util.js';
+import {EventGenerator} from '/common/event_generator.js';
+import {KeyCode} from '/common/key_code.js';
+import {TestImportManager} from '/common/testing/test_import_manager.js';
+
 import {BrailleCommandData} from '../../common/braille/braille_command_data.js';
 import {BrailleKeyCommand, BrailleKeyEvent} from '../../common/braille/braille_key_types.js';
 import {NavBraille} from '../../common/braille/nav_braille.js';
@@ -260,3 +262,5 @@ export class BrailleCommandHandler {
 
 /** @type {BrailleCommandHandler} */
 BrailleCommandHandler.instance;
+
+TestImportManager.exportForTesting(BrailleCommandHandler);

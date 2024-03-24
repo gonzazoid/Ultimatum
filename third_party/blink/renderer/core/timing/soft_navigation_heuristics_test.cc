@@ -14,6 +14,7 @@
 #include "third_party/blink/renderer/platform/scheduler/public/task_attribution_info.h"
 #include "third_party/blink/renderer/platform/scheduler/public/task_attribution_tracker.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
@@ -42,6 +43,7 @@ class SoftNavigationHeuristicsTest : public testing::Test {
   }
 
  private:
+  test::TaskEnvironment task_environment_;
   std::unique_ptr<DummyPageHolder> page_holder_;
 };
 
@@ -51,13 +53,18 @@ class SoftNavigationHeuristicsTest : public testing::Test {
 TEST_F(SoftNavigationHeuristicsTest,
        EarlyReturnOnInvalidPendingInteractionTimestamp) {
   auto* test_heuristics = CreateSoftNavigationHeuristicsForTest();
-  test_heuristics->InteractionCallbackCalled(
-      GetScriptStateForTest(), SoftNavigationHeuristics::EventScopeType::kClick,
-      true);
-  // Since pending_interaction_timestamp_ is not set, the execution of
-  // InteractionCallbackCalled would return early. As a result, the
-  // initial_interaction_encountered_ would not be set true.
-  ASSERT_FALSE(test_heuristics->GetInitialInteractionEncounteredForTest());
+  // A non-new interaction will try to use the pending timestamp, which will
+  // never have been set in this case.
+  SoftNavigationHeuristics::EventScope event_scope(
+      test_heuristics->CreateEventScope(
+          SoftNavigationHeuristics::EventScope::Type::kKeyboard,
+          /*is_new_interaction=*/false));
+  // NextId() required so that the first task ID is non-zero (because we hash on
+  // key).
+  auto* task = MakeGarbageCollected<scheduler::TaskAttributionInfo>(
+      scheduler::TaskAttributionId().NextId(), nullptr);
+  test_heuristics->OnCreateTaskScope(*task);
+  ASSERT_TRUE(test_heuristics->GetInitialInteractionEncounteredForTest());
 }
 
 TEST_F(SoftNavigationHeuristicsTest, UmaHistogramRecording) {
@@ -132,12 +139,13 @@ TEST_F(SoftNavigationHeuristicsTest, ResetHeuristicOnSetBecameEmpty) {
   Persistent<scheduler::TaskAttributionInfo> root_task = nullptr;
   // Simulate a click.
   {
-    SoftNavigationEventScope event_scope(
-        heuristics, SoftNavigationHeuristics::EventScopeType::kClick,
-        /*is_new_interaction=*/true);
+    SoftNavigationHeuristics::EventScope event_scope(
+        heuristics->CreateEventScope(
+            SoftNavigationHeuristics::EventScope::Type::kClick,
+            /*is_new_interaction=*/true));
     std::unique_ptr<TaskScope> task_scope = tracker->CreateTaskScope(
         script_state, /*parent_task=*/nullptr, TaskScopeType::kCallback);
-    root_task = tracker->RunningTask(script_state);
+    root_task = tracker->RunningTask(script_state->GetIsolate());
   }
   EXPECT_TRUE(root_task);
   EXPECT_GT(heuristics->GetLastInteractionTaskIdForTest(), 0u);
@@ -147,7 +155,7 @@ TEST_F(SoftNavigationHeuristicsTest, ResetHeuristicOnSetBecameEmpty) {
   {
     std::unique_ptr<TaskScope> task_scope = tracker->CreateTaskScope(
         script_state, root_task, TaskScopeType::kCallback);
-    descendant_task = tracker->RunningTask(script_state);
+    descendant_task = tracker->RunningTask(script_state->GetIsolate());
   }
   EXPECT_TRUE(descendant_task);
 
@@ -162,6 +170,38 @@ TEST_F(SoftNavigationHeuristicsTest, ResetHeuristicOnSetBecameEmpty) {
   descendant_task = nullptr;
   ThreadState::Current()->CollectAllGarbageForTesting();
   EXPECT_EQ(heuristics->GetLastInteractionTaskIdForTest(), 0u);
+}
+
+TEST_F(SoftNavigationHeuristicsTest, NestedEventScopesAreMerged) {
+  auto current_task_id = scheduler::TaskAttributionId().NextId();
+  auto* heuristics = CreateSoftNavigationHeuristicsForTest();
+
+  SoftNavigationHeuristics::EventScope outer_event_scope(
+      heuristics->CreateEventScope(
+          SoftNavigationHeuristics::EventScope::Type::kClick,
+          /*is_new_interaction=*/true));
+  auto* task1 = MakeGarbageCollected<scheduler::TaskAttributionInfo>(
+      current_task_id, nullptr);
+  heuristics->OnCreateTaskScope(*task1);
+
+  scheduler::TaskAttributionIdType interaction_id1 =
+      heuristics->GetLastInteractionTaskIdForTest();
+  EXPECT_GT(interaction_id1, 0u);
+
+  current_task_id = current_task_id.NextId();
+  EXPECT_NE(current_task_id.value(), interaction_id1);
+
+  SoftNavigationHeuristics::EventScope inner_event_scope(
+      heuristics->CreateEventScope(
+          SoftNavigationHeuristics::EventScope::Type::kNavigate,
+          /*is_new_interaction=*/true));
+  auto* task2 = MakeGarbageCollected<scheduler::TaskAttributionInfo>(
+      current_task_id, nullptr);
+  heuristics->OnCreateTaskScope(*task2);
+
+  scheduler::TaskAttributionIdType interaction_id2 =
+      heuristics->GetLastInteractionTaskIdForTest();
+  EXPECT_EQ(interaction_id1, interaction_id2);
 }
 
 }  // namespace blink

@@ -9,6 +9,7 @@
 #include "third_party/blink/renderer/core/layout/geometry/logical_offset.h"
 #include "third_party/blink/renderer/core/layout/geometry/logical_size.h"
 #include "third_party/blink/renderer/platform/geometry/layout_rect.h"
+#include "ui/gfx/geometry/rect_f.h"
 
 namespace blink {
 
@@ -90,6 +91,13 @@ struct CORE_EXPORT LogicalRect {
     offset.block_offset -= block_start;
     size.inline_size += inline_start + inline_end;
     size.block_size += block_start + block_end;
+  }
+
+  void ContractEdges(LayoutUnit block_start,
+                     LayoutUnit inline_end,
+                     LayoutUnit block_end,
+                     LayoutUnit inline_start) {
+    ExpandEdges(-block_start, -inline_end, -block_end, -inline_start);
   }
 
   // Update inline-start offset without changing the inline-end offset.

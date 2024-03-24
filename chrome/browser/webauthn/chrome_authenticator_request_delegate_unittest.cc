@@ -94,7 +94,7 @@ class MockCableDiscoveryFactory : public device::FidoDiscoveryFactory {
   void set_cable_data(
       device::FidoRequestType request_type,
       std::vector<device::CableDiscoveryData> data,
-      const absl::optional<std::array<uint8_t, device::cablev2::kQRKeySize>>&
+      const std::optional<std::array<uint8_t, device::cablev2::kQRKeySize>>&
           qr_generator_key) override {
     cable_data = std::move(data);
     qr_key = qr_generator_key;
@@ -107,7 +107,7 @@ class MockCableDiscoveryFactory : public device::FidoDiscoveryFactory {
   }
 
   std::vector<device::CableDiscoveryData> cable_data;
-  absl::optional<std::array<uint8_t, device::cablev2::kQRKeySize>> qr_key;
+  std::optional<std::array<uint8_t, device::cablev2::kQRKeySize>> qr_key;
   bool aoa_configured = false;
 };
 
@@ -269,7 +269,7 @@ TEST_F(ChromeAuthenticatorRequestDelegateTest, CableConfiguration) {
     const char* origin;
     std::vector<device::CableDiscoveryData> extensions;
     device::FidoRequestType request_type;
-    absl::optional<device::ResidentKeyRequirement> resident_key_requirement;
+    std::optional<device::ResidentKeyRequirement> resident_key_requirement;
     Result expected_result;
     // expected_result_with_system_hybrid is the behaviour that should occur
     // when the operating system supports hybrid itself. (I.e. recent versions
@@ -280,7 +280,7 @@ TEST_F(ChromeAuthenticatorRequestDelegateTest, CableConfiguration) {
           "https://example.com",
           {},
           device::FidoRequestType::kGetAssertion,
-          absl::nullopt,
+          std::nullopt,
           Result::k3rdParty,
           Result::kNone,
       },
@@ -289,7 +289,7 @@ TEST_F(ChromeAuthenticatorRequestDelegateTest, CableConfiguration) {
           "https://example.com",
           {v1_extension},
           device::FidoRequestType::kGetAssertion,
-          absl::nullopt,
+          std::nullopt,
           Result::k3rdParty,
           Result::kNone,
       },
@@ -298,7 +298,7 @@ TEST_F(ChromeAuthenticatorRequestDelegateTest, CableConfiguration) {
           "https://example.com",
           {v2_extension},
           device::FidoRequestType::kGetAssertion,
-          absl::nullopt,
+          std::nullopt,
           Result::k3rdParty,
           Result::kNone,
       },
@@ -308,7 +308,7 @@ TEST_F(ChromeAuthenticatorRequestDelegateTest, CableConfiguration) {
           "https://accounts.google.com",
           {},
           device::FidoRequestType::kGetAssertion,
-          absl::nullopt,
+          std::nullopt,
           Result::k3rdParty,
           Result::kNone,
       },
@@ -343,7 +343,7 @@ TEST_F(ChromeAuthenticatorRequestDelegateTest, CableConfiguration) {
           "https://accounts.google.com",
           {v1_extension},
           device::FidoRequestType::kGetAssertion,
-          absl::nullopt,
+          std::nullopt,
           NONE_ON_LINUX(Result::kV1),
           Result::kV1,
       },
@@ -351,7 +351,7 @@ TEST_F(ChromeAuthenticatorRequestDelegateTest, CableConfiguration) {
           "https://accounts.google.com",
           {v2_extension},
           device::FidoRequestType::kGetAssertion,
-          absl::nullopt,
+          std::nullopt,
           Result::kServerLink,
           Result::kServerLink,
       },
@@ -406,7 +406,8 @@ TEST_F(ChromeAuthenticatorRequestDelegateTest, CableConfiguration) {
           url::Origin::Create(GURL(test.origin)), test.origin,
           content::AuthenticatorRequestClientDelegate::RequestSource::
               kWebAuthentication,
-          test.request_type, test.resident_key_requirement, test.extensions,
+          test.request_type, test.resident_key_requirement,
+          device::UserVerificationRequirement::kRequired, test.extensions,
           /*is_enclave_authenticator_available=*/false, &discovery_factory);
 
       switch (windows_has_hybrid == kWinHybridNoPasskeySyncing
@@ -467,7 +468,8 @@ TEST_F(ChromeAuthenticatorRequestDelegateTest, NoExtraDiscoveriesWithoutUI) {
         content::AuthenticatorRequestClientDelegate::RequestSource::
             kWebAuthentication,
         device::FidoRequestType::kMakeCredential,
-        device::ResidentKeyRequirement::kPreferred, {},
+        device::ResidentKeyRequirement::kPreferred,
+        device::UserVerificationRequirement::kRequired, {},
         /*is_enclave_authenticator_available=*/false, &discovery_factory);
 
     EXPECT_EQ(discovery_factory.qr_key.has_value(), !disable_ui);
@@ -678,11 +680,11 @@ TEST_F(ChromeAuthenticatorRequestDelegateTest, MaybeGetRelyingPartyIdOverride) {
   static const struct {
     std::string rp_id;
     std::string origin;
-    absl::optional<std::string> expected;
+    std::optional<std::string> expected;
   } kTests[] = {
-      {"example.com", "https://example.com", absl::nullopt},
-      {"foo.com", "https://example.com", absl::nullopt},
-      {"example.com", kExtensionOrigin, absl::nullopt},
+      {"example.com", "https://example.com", std::nullopt},
+      {"foo.com", "https://example.com", std::nullopt},
+      {"example.com", kExtensionOrigin, std::nullopt},
       {kExtensionId, kExtensionOrigin, kExtensionOrigin},
   };
   for (const auto& test : kTests) {
@@ -736,7 +738,8 @@ TEST_F(ChromeAuthenticatorRequestDelegateTest, GpmPasskeys) {
       content::AuthenticatorRequestClientDelegate::RequestSource::
           kWebAuthentication,
       device::FidoRequestType::kGetAssertion,
-      /*resident_key_requirement=*/absl::nullopt,
+      /*resident_key_requirement=*/std::nullopt,
+      device::UserVerificationRequirement::kRequired,
       /*pairings_from_extension=*/std::vector<device::CableDiscoveryData>(),
       /*is_enclave_authenticator_available=*/false, &discovery_factory);
 
@@ -798,7 +801,8 @@ TEST_F(ChromeAuthenticatorRequestDelegateTest, GpmPasskeys_NoSyncPairedPhones) {
       content::AuthenticatorRequestClientDelegate::RequestSource::
           kWebAuthentication,
       device::FidoRequestType::kGetAssertion,
-      /*resident_key_requirement=*/absl::nullopt,
+      /*resident_key_requirement=*/std::nullopt,
+      device::UserVerificationRequirement::kRequired,
       /*pairings_from_extension=*/std::vector<device::CableDiscoveryData>(),
       /*is_enclave_authenticator_available=*/false, &discovery_factory);
 
@@ -851,7 +855,8 @@ TEST_F(ChromeAuthenticatorRequestDelegateTest, GpmPasskeys_ShadowedPasskeys) {
       content::AuthenticatorRequestClientDelegate::RequestSource::
           kWebAuthentication,
       device::FidoRequestType::kGetAssertion,
-      /*resident_key_requirement=*/absl::nullopt,
+      /*resident_key_requirement=*/std::nullopt,
+      device::UserVerificationRequirement::kRequired,
       /*pairings_from_extension=*/std::vector<device::CableDiscoveryData>(),
       /*is_enclave_authenticator_available=*/false, &discovery_factory);
 
@@ -1154,20 +1159,20 @@ TEST_F(ChromeAuthenticatorRequestDelegatePrivateTest, DaysSinceDate) {
   const base::Time now = base::Time::FromTimeT(1691188997);  // 2023-08-04
   const struct {
     char input[16];
-    absl::optional<int> expected_result;
+    std::optional<int> expected_result;
   } kTestCases[] = {
-      {"", absl::nullopt},          //
-      {"2023-08-", absl::nullopt},  //
-      {"2023-08-04", 0},            //
-      {"2023-08-03", 1},            //
-      {"2023-8-3", 1},              //
-      {"2023-07-04", 31},           //
-      {"2001-11-23", 7924},         //
+      {"", std::nullopt},          //
+      {"2023-08-", std::nullopt},  //
+      {"2023-08-04", 0},           //
+      {"2023-08-03", 1},           //
+      {"2023-8-3", 1},             //
+      {"2023-07-04", 31},          //
+      {"2001-11-23", 7924},        //
   };
 
   for (const auto& test : kTestCases) {
     SCOPED_TRACE(test.input);
-    const absl::optional<int> result =
+    const std::optional<int> result =
         ChromeAuthenticatorRequestDelegate::DaysSinceDate(test.input, now);
     EXPECT_EQ(result, test.expected_result);
   }

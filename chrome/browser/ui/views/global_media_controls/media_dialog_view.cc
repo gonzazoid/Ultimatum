@@ -32,6 +32,7 @@
 #include "chrome/grit/generated_resources.h"
 #include "components/global_media_controls/public/constants.h"
 #include "components/global_media_controls/public/media_item_manager.h"
+#include "components/global_media_controls/public/views/media_item_ui_detailed_view.h"
 #include "components/global_media_controls/public/views/media_item_ui_list_view.h"
 #include "components/global_media_controls/public/views/media_item_ui_view.h"
 #include "components/live_caption/caption_util.h"
@@ -212,9 +213,11 @@ void MediaDialogView::RefreshMediaItem(
   }
   bool show_devices =
       entry_point_ == GlobalMediaControlsEntryPoint::kPresentation;
-  observed_items_[id]->UpdateFooterView(BuildFooter(id, item, profile_));
-  observed_items_[id]->UpdateDeviceSelector(BuildDeviceSelector(
-      id, item, service_, service_, profile_, entry_point_, show_devices));
+  observed_items_[id]->UpdateFooterView(
+      BuildFooter(id, item, profile_, media_color_theme_));
+  observed_items_[id]->UpdateDeviceSelector(
+      BuildDeviceSelector(id, item, service_, service_, profile_, entry_point_,
+                          show_devices, media_color_theme_));
 
   UpdateBubbleSize();
 }
@@ -271,8 +274,6 @@ void MediaDialogView::UpdateBubbleSize() {
         live_translate_container_->GetPreferredSize().height();
     live_translate_container_->SetPreferredSize(
         gfx::Size(width, live_translate_height));
-
-    live_translate_subtitle_->SetTextStyle(views::style::STYLE_SECONDARY);
 
     live_translate_label_wrapper_->SetPreferredSize(gfx::Size(
         width, live_translate_label_wrapper_->GetPreferredSize().height()));
@@ -400,6 +401,14 @@ MediaDialogView::MediaDialogView(
       prefs::kLiveTranslateEnabled,
       base::BindRepeating(&MediaDialogView::OnLiveTranslateEnabledChanged,
                           base::Unretained(this)));
+
+#if !BUILDFLAG(IS_CHROMEOS)
+  // MediaDialogView can be built on CrOS but the updated UI should only be
+  // enabled for non-CrOS platforms.
+  if (base::FeatureList::IsEnabled(media::kGlobalMediaControlsUpdatedUI)) {
+    media_color_theme_ = GetMediaColorTheme();
+  }
+#endif
 }
 
 MediaDialogView::~MediaDialogView() {
@@ -574,14 +583,6 @@ void MediaDialogView::InitializeLiveTranslateSection() {
   live_translate_title_ = live_translate_label_wrapper->AddChildView(
       std::move(live_translate_title));
 
-  auto live_translate_subtitle =
-      std::make_unique<views::Label>(l10n_util::GetStringUTF16(
-          IDS_GLOBAL_MEDIA_CONTROLS_LIVE_TRANSLATE_SUBTITLE));
-  live_translate_subtitle->SetHorizontalAlignment(
-      gfx::HorizontalAlignment::ALIGN_LEFT);
-  live_translate_subtitle_ = live_translate_label_wrapper->AddChildView(
-      std::move(live_translate_subtitle));
-
   live_translate_label_wrapper_ = live_translate_container->AddChildView(
       std::move(live_translate_label_wrapper));
 
@@ -667,9 +668,11 @@ MediaDialogView::BuildMediaItemUIView(
   bool show_devices =
       entry_point_ == GlobalMediaControlsEntryPoint::kPresentation;
   return std::make_unique<global_media_controls::MediaItemUIView>(
-      id, item, BuildFooter(id, item, profile_),
+      id, item, BuildFooter(id, item, profile_, media_color_theme_),
       BuildDeviceSelector(id, item, service_, service_, profile_, entry_point_,
-                          show_devices));
+                          show_devices, media_color_theme_),
+      /*notification_theme=*/absl::nullopt, media_color_theme_,
+      global_media_controls::MediaDisplayPage::kMediaDialogView);
 }
 
 BEGIN_METADATA(MediaDialogView)

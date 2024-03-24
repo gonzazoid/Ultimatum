@@ -10,6 +10,11 @@
 
 namespace url {
 
+// If you add or remove a feature related to URLs, you may need to
+// correspondingly update the EarlyAccess allow list in app shims
+// (chrome/app_shim/app_shim_controller.mm). See https://crbug.com/1520386 for
+// more details.
+
 COMPONENT_EXPORT(URL) BASE_DECLARE_FEATURE(kUseIDNA2008NonTransitional);
 
 // Returns true if Chrome is using IDNA 2008 in Non-Transitional mode.
@@ -21,11 +26,6 @@ COMPONENT_EXPORT(URL) bool IsRecordingIDNA2008Metrics();
 // Returns true if kStandardCompliantNonSpecialSchemeURLParsing feature is
 // enabled. See url::kStandardCompliantNonSpecialSchemeURLParsing for details.
 COMPONENT_EXPORT(URL) bool IsUsingStandardCompliantNonSpecialSchemeURLParsing();
-
-// When enabled, allows resolving of a bare fragment containing a colon against
-// a non-hierarchical URL. (For example '#foo:bar' against 'about:blank'.)
-COMPONENT_EXPORT(URL)
-BASE_DECLARE_FEATURE(kResolveBareFragmentWithColonOnNonHierarchical);
 
 // When enabled, Chrome uses standard-compliant URL parsing for non-special
 // scheme URLs. See https://crbug.com/1416006 for details.

@@ -41,6 +41,7 @@ import org.chromium.base.ContextUtils;
 import org.chromium.base.IntentUtils;
 import org.chromium.base.shared_preferences.SharedPreferencesManager;
 import org.chromium.base.test.util.CommandLineFlags;
+import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.chrome.browser.bookmarks.BookmarkModel;
 import org.chromium.chrome.browser.browserservices.intents.WebappConstants;
 import org.chromium.chrome.browser.commerce.ShoppingFeatures;
@@ -52,10 +53,10 @@ import org.chromium.chrome.browser.notifications.channels.ChromeChannelDefinitio
 import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.chrome.browser.price_tracking.PriceDropNotificationManagerImpl.DismissNotificationChromeActivity;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.chrome.test.batch.BlankCTATabInitialStateRule;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
 import org.chromium.components.browser_ui.notifications.MockNotificationManagerProxy;
 import org.chromium.components.commerce.core.CommerceSubscription;
 import org.chromium.components.commerce.core.IdentifierType;
@@ -109,7 +110,7 @@ public class PriceDropNotificationManagerTest {
         when(mMockBookmarkModel.isBookmarkModelLoaded()).thenReturn(true);
         PriceDropNotificationManagerImpl.setBookmarkModelForTesting(mMockBookmarkModel);
         ShoppingServiceFactory.setShoppingServiceForTesting(mMockShoppingService);
-        Profile.setLastUsedProfileForTesting(mMockProfile);
+        ProfileManager.setLastUsedProfileForTesting(mMockProfile);
         ShoppingFeatures.setShoppingListEligibleForTesting(true);
     }
 

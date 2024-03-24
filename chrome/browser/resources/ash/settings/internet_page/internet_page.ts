@@ -10,11 +10,11 @@
 
 import 'chrome://resources/ash/common/cellular_setup/cellular_setup_icons.html.js';
 import 'chrome://resources/ash/common/network/sim_lock_dialogs.js';
-import 'chrome://resources/cr_elements/cr_expand_button/cr_expand_button.js';
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
-import 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
-import 'chrome://resources/cr_elements/icons.html.js';
-import 'chrome://resources/cr_elements/policy/cr_policy_indicator.js';
+import 'chrome://resources/ash/common/cr_elements/cr_expand_button/cr_expand_button.js';
+import 'chrome://resources/ash/common/cr_elements/cr_icon_button/cr_icon_button.js';
+import 'chrome://resources/ash/common/cr_elements/cr_toast/cr_toast.js';
+import 'chrome://resources/ash/common/cr_elements/icons.html.js';
+import 'chrome://resources/ash/common/cr_elements/policy/cr_policy_indicator.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import 'chrome://resources/polymer/v3_0/paper-tooltip/paper-tooltip.js';
 import 'chrome://resources/cr_components/settings_prefs/prefs.js';
@@ -40,9 +40,9 @@ import {MojoInterfaceProviderImpl} from 'chrome://resources/ash/common/network/m
 import {NetworkListenerBehavior, NetworkListenerBehaviorInterface} from 'chrome://resources/ash/common/network/network_listener_behavior.js';
 import {OncMojo} from 'chrome://resources/ash/common/network/onc_mojo.js';
 import {PrefsMixin, PrefsMixinInterface} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
-import {CrToastElement} from 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
-import {I18nMixin, I18nMixinInterface} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {WebUiListenerMixin, WebUiListenerMixinInterface} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {CrToastElement} from 'chrome://resources/ash/common/cr_elements/cr_toast/cr_toast.js';
+import {I18nMixin, I18nMixinInterface} from 'chrome://resources/ash/common/cr_elements/i18n_mixin.js';
+import {WebUiListenerMixin, WebUiListenerMixinInterface} from 'chrome://resources/ash/common/cr_elements/web_ui_listener_mixin.js';
 import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {CrosNetworkConfigInterface, GlobalPolicy, NetworkStateProperties, StartConnectResult, VpnProvider} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/cros_network_config.mojom-webui.js';
@@ -52,7 +52,6 @@ import {afterNextRender, DomRepeatEvent, mixinBehaviors, PolymerElement} from 'c
 import {castExists} from '../assert_extras.js';
 import {DeepLinkingMixin, DeepLinkingMixinInterface} from '../common/deep_linking_mixin.js';
 import {RouteOriginMixin, RouteOriginMixinInterface} from '../common/route_origin_mixin.js';
-import {recordSettingChange} from '../metrics_recorder.js';
 import {Section} from '../mojom-webui/routes.mojom-webui.js';
 import {Setting} from '../mojom-webui/setting.mojom-webui.js';
 import {Route, Router, routes} from '../router.js';
@@ -305,6 +304,11 @@ class SettingsInternetPageElement extends SettingsInternetPageElementBase {
         value: false,
       },
 
+      isProviderLocked_: {
+        type: Boolean,
+        computed: 'showProviderLocked_(subpageType_, deviceStates)',
+      },
+
       /**
        * eSIM network used in internet detail menu.
        */
@@ -390,6 +394,7 @@ class SettingsInternetPageElement extends SettingsInternetPageElementBase {
   private showHotspotConfigDialog_: boolean;
   private showInternetConfig_: boolean;
   private showSimLockDialog_: boolean;
+  private isProviderLocked_: boolean;
   private showSpinner_: boolean;
   private subpageType_: NetworkType;
   private vpnIsProhibited_: boolean;
@@ -601,7 +606,7 @@ class SettingsInternetPageElement extends SettingsInternetPageElementBase {
       event: CustomEvent<{enabled: boolean, type: NetworkType}>): void {
     this.networkConfig_.setNetworkTypeEnabledState(
         event.detail.type, event.detail.enabled);
-    recordSettingChange();
+    // TODO(b/282233232) recordSettingChange() for enabling/disabling device.
   }
 
   private onShowConfig_(
@@ -762,7 +767,7 @@ class SettingsInternetPageElement extends SettingsInternetPageElementBase {
         'OncType' + OncMojo.getNetworkTypeString(this.subpageType_));
   }
 
-  private isProviderLocked_(): boolean {
+  private showProviderLocked_(): boolean {
     if (!this.isCellularCarrierLockEnabled_) {
       return false;
     }
@@ -866,7 +871,7 @@ class SettingsInternetPageElement extends SettingsInternetPageElementBase {
   private onAddThirdPartyVpnClick_(event: DomRepeatEvent<VpnProvider>): void {
     const provider = event.model.item;
     this.browserProxy_.addThirdPartyVpn(provider.appId);
-    recordSettingChange();
+    // TODO(b/282233232) recordSettingChange() for adding third party VPN.
   }
 
   private showNetworksSubpage_(type: NetworkType): void {

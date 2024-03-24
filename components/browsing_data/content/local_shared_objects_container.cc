@@ -14,12 +14,7 @@
 #include "components/browsing_data/content/cache_storage_helper.h"
 #include "components/browsing_data/content/canonical_cookie_hash.h"
 #include "components/browsing_data/content/cookie_helper.h"
-#include "components/browsing_data/content/database_helper.h"
-#include "components/browsing_data/content/file_system_helper.h"
-#include "components/browsing_data/content/indexed_db_helper.h"
 #include "components/browsing_data/content/local_storage_helper.h"
-#include "components/browsing_data/content/service_worker_helper.h"
-#include "components/browsing_data/content/shared_worker_helper.h"
 #include "components/browsing_data/core/browsing_data_utils.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/common/url_constants.h"
@@ -44,23 +39,12 @@ bool SameDomainOrHost(const GURL& gurl1, const GURL& gurl2) {
 LocalSharedObjectsContainer::LocalSharedObjectsContainer(
     content::StoragePartition* storage_partition,
     bool ignore_empty_localstorage,
-    const std::vector<storage::FileSystemType>& additional_file_system_types,
     browsing_data::CookieHelper::IsDeletionDisabledCallback callback)
     : cookies_(base::MakeRefCounted<CannedCookieHelper>(storage_partition,
                                                         std::move(callback))),
-      databases_(base::MakeRefCounted<CannedDatabaseHelper>(storage_partition)),
-      file_systems_(base::MakeRefCounted<CannedFileSystemHelper>(
-          storage_partition->GetFileSystemContext(),
-          additional_file_system_types)),
-      indexed_dbs_(
-          base::MakeRefCounted<CannedIndexedDBHelper>(storage_partition)),
       local_storages_(base::MakeRefCounted<CannedLocalStorageHelper>(
           storage_partition,
           /*update_ignored_empty_keys_on_fetch=*/ignore_empty_localstorage)),
-      service_workers_(base::MakeRefCounted<CannedServiceWorkerHelper>(
-          storage_partition->GetServiceWorkerContext())),
-      shared_workers_(
-          base::MakeRefCounted<CannedSharedWorkerHelper>(storage_partition)),
       cache_storages_(
           base::MakeRefCounted<CannedCacheStorageHelper>(storage_partition)),
       session_storages_(base::MakeRefCounted<CannedLocalStorageHelper>(
@@ -72,12 +56,7 @@ LocalSharedObjectsContainer::~LocalSharedObjectsContainer() = default;
 size_t LocalSharedObjectsContainer::GetObjectCount() const {
   size_t count = 0;
   count += cookies()->GetCookieCount();
-  count += databases()->GetCount();
-  count += file_systems()->GetCount();
-  count += indexed_dbs()->GetCount();
   count += local_storages()->GetCount();
-  count += service_workers()->GetCount();
-  count += shared_workers()->GetSharedWorkerCount();
   count += cache_storages()->GetCount();
   count += session_storages()->GetCount();
   return count;
@@ -147,27 +126,10 @@ LocalSharedObjectsContainer::GetObjectCountPerOriginMap() const {
     origins[storage_key.origin()]++;
   }
 
-  for (const auto& storage_key : indexed_dbs()->GetStorageKeys()) {
-    // TODO(https://crbug.com/1199077): Use the real StorageKey once migrated.
-    origins[storage_key.origin()]++;
-  }
-
-  for (const auto& origin : service_workers()->GetOrigins())
-    origins[origin]++;
-
-  for (const auto& info : shared_workers()->GetSharedWorkerInfo())
-    origins[info.storage_key.origin()]++;
-
   for (const auto& storage_key : cache_storages()->GetStorageKeys()) {
     // TODO(https://crbug.com/1199077): Use the real StorageKey once migrated.
     origins[storage_key.origin()]++;
   }
-
-  for (const auto& origin : file_systems()->GetOrigins())
-    origins[origin]++;
-
-  for (const auto& origin : databases()->GetOrigins())
-    origins[origin]++;
 
   return origins;
 }
@@ -179,12 +141,7 @@ void LocalSharedObjectsContainer::UpdateIgnoredEmptyStorageKeys(
 
 void LocalSharedObjectsContainer::Reset() {
   cookies_->Reset();
-  databases_->Reset();
-  file_systems_->Reset();
-  indexed_dbs_->Reset();
   local_storages_->Reset();
-  service_workers_->Reset();
-  shared_workers_->Reset();
   cache_storages_->Reset();
   session_storages_->Reset();
 }

@@ -349,7 +349,9 @@ class HoldingSpaceTrayBubble::ChildBubbleContainer
     layout_animation_->Show();
   }
 
-  void Layout() override { layout_manager_.ApplyLayout(current_layout_); }
+  void Layout(PassKey) override {
+    layout_manager_.ApplyLayout(current_layout_);
+  }
 
   void OnPaint(gfx::Canvas* canvas) override {
     views::View::OnPaint(canvas);
@@ -421,7 +423,7 @@ class HoldingSpaceTrayBubble::ChildBubbleContainer
       view_bounds_changed_observers_by_view_;
 };
 
-BEGIN_METADATA(HoldingSpaceTrayBubble, ChildBubbleContainer, views::View)
+BEGIN_METADATA(HoldingSpaceTrayBubble, ChildBubbleContainer)
 END_METADATA
 
 // HoldingSpaceTrayBubble ------------------------------------------------------

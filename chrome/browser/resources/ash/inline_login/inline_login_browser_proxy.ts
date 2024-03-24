@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {AuthCompletedCredentials} from 'chrome://chrome-signin/gaia_auth_host/authenticator.js';
+import type {AuthCompletedCredentials} from 'chrome://chrome-signin/gaia_auth_host/authenticator.js';
 import {sendWithPromise} from 'chrome://resources/js/cr.js';
 
 export interface InlineLoginBrowserProxy {
@@ -25,13 +25,6 @@ export interface InlineLoginBrowserProxy {
    * Send 'completeLogin' message to complete login.
    */
   completeLogin(credentials: AuthCompletedCredentials): void;
-
-  /**
-   * Send 'lstFetchResults' message.
-   * @param arg The string representation of the json data returned by
-   *     the sign in dialog after it has finished the sign in process.
-   */
-  lstFetchResults(arg: string): void;
 
   /**
    * Send 'metricsHandler:recordAction' message.
@@ -87,10 +80,6 @@ export class InlineLoginBrowserProxyImpl implements InlineLoginBrowserProxy {
 
   completeLogin(credentials: AuthCompletedCredentials) {
     chrome.send('completeLogin', [credentials]);
-  }
-
-  lstFetchResults(arg: string) {
-    chrome.send('lstFetchResults', [arg]);
   }
 
   recordAction(metricsAction: string) {

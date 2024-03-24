@@ -9,7 +9,7 @@
  * a subpage with lots of other settings on Chrome OS.
  */
 import 'chrome://resources/cr_elements/cr_link_row/cr_link_row.js';
-import '/shared/settings/controls/settings_toggle_button.js';
+import '../controls/settings_toggle_button.js';
 import '../settings_page/settings_animated_pages.js';
 import '../settings_shared.css.js';
 // clang-format off
@@ -28,22 +28,23 @@ import './live_caption_section.js';
 import {CaptionsBrowserProxyImpl} from '/shared/settings/a11y_page/captions_browser_proxy.js';
 // </if>
 // clang-format on
-import {SettingsToggleButtonElement} from '/shared/settings/controls/settings_toggle_button.js';
 import {PrefsMixin} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
 import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {BaseMixin} from '../base_mixin.js';
+import type {SettingsToggleButtonElement} from '../controls/settings_toggle_button.js';
 import {loadTimeData} from '../i18n_setup.js';
 import {routes} from '../route.js';
 import {Router} from '../router.js';
 
-import {AccessibilityBrowserProxy, AccessibilityBrowserProxyImpl} from './a11y_browser_proxy.js';
+import type {AccessibilityBrowserProxy} from './a11y_browser_proxy.js';
+import {AccessibilityBrowserProxyImpl} from './a11y_browser_proxy.js';
 import {getTemplate} from './a11y_page.html.js';
 
 // clang-format off
 // <if expr="not is_chromeos">
-import {LanguageHelper, LanguagesModel} from '../languages_page/languages_types.js';
+import type {LanguageHelper, LanguagesModel} from '../languages_page/languages_types.js';
 
 // </if>
 // clang-format on
@@ -166,8 +167,7 @@ export class SettingsA11yPageElement extends SettingsA11yPageElementBase {
         value: function() {
           let showOverscroll = false;
           // <if expr="is_win or is_linux or is_macosx">
-          showOverscroll = loadTimeData.getBoolean(
-              'overscrollHistoryNavigationSettingEnabled');
+          showOverscroll = true;
           // </if>
           return showOverscroll;
         },

@@ -36,9 +36,9 @@ public interface BaseCarouselSuggestionViewBinder {
             } else {
                 adapter.getModelList().clear();
             }
-        } else if (key == BaseCarouselSuggestionViewProperties.ITEM_WIDTH) {
-            view.getItemDecoration()
-                    .setItemWidth(model.get(BaseCarouselSuggestionViewProperties.ITEM_WIDTH));
+            view.resetSelection();
+        } else if (key == BaseCarouselSuggestionViewProperties.ITEM_DECORATION) {
+            view.setItemDecoration(model.get(BaseCarouselSuggestionViewProperties.ITEM_DECORATION));
         } else if (key == BaseCarouselSuggestionViewProperties.CONTENT_DESCRIPTION) {
             view.setContentDescription(
                     model.get(BaseCarouselSuggestionViewProperties.CONTENT_DESCRIPTION));

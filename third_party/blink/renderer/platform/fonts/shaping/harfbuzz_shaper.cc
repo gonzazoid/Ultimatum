@@ -436,7 +436,7 @@ void HarfBuzzShaper::CommitGlyphs(RangeContext* range_data,
   BufferSlice next_slice;
   unsigned run_start_index = slice.start_character_index;
   for (const BufferSlice* current_slice = &slice;;) {
-    auto run = ShapeResult::RunInfo::Create(
+    auto* run = MakeGarbageCollected<ShapeResult::RunInfo>(
         current_font, direction, canvas_rotation, script, run_start_index,
         current_slice->num_glyphs, current_slice->num_characters);
     unsigned next_start_glyph;
@@ -664,7 +664,7 @@ void SplitUntilNextCaseChange(
     SmallCapsIterator::SmallCapsBehavior& small_caps_behavior) {
   // TODO(layout-dev): Add support for latin-1 to SmallCapsIterator.
   const UChar* normalized_buffer;
-  absl::optional<String> utf16_text;
+  std::optional<String> utf16_text;
   if (text.Is8Bit()) {
     utf16_text.emplace(text);
     utf16_text->Ensure16Bit();
@@ -784,7 +784,7 @@ void HarfBuzzShaper::ShapeSegment(
     fallback_chars_hint.ReserveInitialCapacity(range_data->end -
                                                range_data->start);
   }
-  scoped_refptr<FontDataForRangeSet> current_font_data_for_range_set;
+  FontDataForRangeSet* current_font_data_for_range_set = nullptr;
   while (!range_data->reshape_queue.empty()) {
     ReshapeQueueItem current_queue_item = range_data->reshape_queue.TakeFirst();
 
@@ -847,7 +847,7 @@ void HarfBuzzShaper::ShapeSegment(
     if (needs_caps_handling) {
       case_map_intend = caps_support.NeedsCaseChange(small_caps_behavior);
       if (caps_support.NeedsSyntheticFont(small_caps_behavior))
-        adjusted_font = font_data->SmallCapsFontData(font_description).get();
+        adjusted_font = font_data->SmallCapsFontData(font_description);
     }
 
     CaseMappingHarfBuzzBufferFiller(
@@ -865,8 +865,12 @@ void HarfBuzzShaper::ShapeSegment(
     HanKerning han_kerning(
         text_, shape_start, shape_end, *adjusted_font, font_description,
         {.is_horizontal = HB_DIRECTION_IS_HORIZONTAL(direction),
+         .is_line_start = range_data->options.is_line_start &&
+                          range_data->start == shape_start,
          .apply_start = range_data->options.han_kerning_start &&
-                        range_data->start == shape_start},
+                        range_data->start == shape_start,
+         .apply_end = range_data->options.han_kerning_end &&
+                      range_data->end == shape_end},
         &range_data->font_features);
 
     if (!ShapeRange(range_data->buffer, range_data->font_features,
@@ -878,6 +882,10 @@ void HarfBuzzShaper::ShapeSegment(
     ExtractShapeResults(range_data, font_cycle_queued, current_queue_item,
                         adjusted_font, segment.script, canvas_rotation,
                         !fallback_iterator.HasNext(), result);
+
+    if (UNLIKELY(!han_kerning.UnsafeToBreakBefore().empty())) {
+      result->AddUnsafeToBreak(han_kerning.UnsafeToBreakBefore());
+    }
 
     hb_buffer_reset(range_data->buffer);
   }
@@ -897,23 +905,23 @@ void HarfBuzzShaper::ShapeSegment(
   }
 }
 
-scoped_refptr<ShapeResult> HarfBuzzShaper::Shape(const Font* font,
-                                                 TextDirection direction,
-                                                 unsigned start,
-                                                 unsigned end) const {
+ShapeResult* HarfBuzzShaper::Shape(const Font* font,
+                                   TextDirection direction,
+                                   unsigned start,
+                                   unsigned end) const {
   DCHECK_GE(end, start);
   DCHECK_LE(end, text_.length());
 
   const unsigned length = end - start;
-  scoped_refptr<ShapeResult> result =
-      ShapeResult::Create(font, start, length, direction);
+  ShapeResult* result =
+      MakeGarbageCollected<ShapeResult>(font, start, length, direction);
   RangeContext range_data(font, direction, start, end);
   if (text_.Is8Bit()) {
     // 8-bit text is guaranteed to horizontal latin-1.
     RunSegmenter::RunSegmenterRange segment_range = {
         start, end, USCRIPT_LATIN, OrientationIterator::kOrientationKeep,
         FontFallbackPriority::kText};
-    ShapeSegment(&range_data, segment_range, result.get());
+    ShapeSegment(&range_data, segment_range, result);
 
   } else {
     // Run segmentation needs to operate on the entire string, regardless of the
@@ -926,7 +934,7 @@ scoped_refptr<ShapeResult> HarfBuzzShaper::Shape(const Font* font,
       // Only shape segments overlapping with the range indicated by start and
       // end. Not only those strictly within.
       if (start < segment_range.end && end > segment_range.start)
-        ShapeSegment(&range_data, segment_range, result.get());
+        ShapeSegment(&range_data, segment_range, result);
 
       // Break if beyond the requested range. Because RunSegmenter is
       // incremental, further ranges are not needed. This also allows reusing
@@ -937,12 +945,12 @@ scoped_refptr<ShapeResult> HarfBuzzShaper::Shape(const Font* font,
   }
 
 #if EXPENSIVE_DCHECKS_ARE_ON()
-  CheckShapeResultRange(result.get(), start, end, text_, font);
+  CheckShapeResultRange(result, start, end, text_, font);
 #endif
   return result;
 }
 
-scoped_refptr<ShapeResult> HarfBuzzShaper::Shape(
+ShapeResult* HarfBuzzShaper::Shape(
     const Font* font,
     TextDirection direction,
     unsigned start,
@@ -956,23 +964,23 @@ scoped_refptr<ShapeResult> HarfBuzzShaper::Shape(
   DCHECK_EQ(end, ranges[ranges.size() - 1].end);
 
   const unsigned length = end - start;
-  scoped_refptr<ShapeResult> result =
-      ShapeResult::Create(font, start, length, direction);
+  ShapeResult* result =
+      MakeGarbageCollected<ShapeResult>(font, start, length, direction);
   RangeContext range_data(font, direction, start, end, options);
   for (const RunSegmenter::RunSegmenterRange& segmented_range : ranges) {
     DCHECK_GE(segmented_range.end, segmented_range.start);
     DCHECK_GE(segmented_range.start, start);
     DCHECK_LE(segmented_range.end, end);
-    ShapeSegment(&range_data, segmented_range, result.get());
+    ShapeSegment(&range_data, segmented_range, result);
   }
 
 #if EXPENSIVE_DCHECKS_ARE_ON()
-  CheckShapeResultRange(result.get(), start, end, text_, font);
+  CheckShapeResultRange(result, start, end, text_, font);
 #endif
   return result;
 }
 
-scoped_refptr<ShapeResult> HarfBuzzShaper::Shape(
+ShapeResult* HarfBuzzShaper::Shape(
     const Font* font,
     TextDirection direction,
     unsigned start,
@@ -985,20 +993,19 @@ scoped_refptr<ShapeResult> HarfBuzzShaper::Shape(
   DCHECK_LE(end, pre_segmented.end);
 
   const unsigned length = end - start;
-  scoped_refptr<ShapeResult> result =
-      ShapeResult::Create(font, start, length, direction);
+  ShapeResult* result =
+      MakeGarbageCollected<ShapeResult>(font, start, length, direction);
   RangeContext range_data(font, direction, start, end, options);
-  ShapeSegment(&range_data, pre_segmented, result.get());
+  ShapeSegment(&range_data, pre_segmented, result);
 
 #if EXPENSIVE_DCHECKS_ARE_ON()
-  CheckShapeResultRange(result.get(), start, end, text_, font);
+  CheckShapeResultRange(result, start, end, text_, font);
 #endif
   return result;
 }
 
-scoped_refptr<ShapeResult> HarfBuzzShaper::Shape(
-    const Font* font,
-    TextDirection direction) const {
+ShapeResult* HarfBuzzShaper::Shape(const Font* font,
+                                   TextDirection direction) const {
   return Shape(font, direction, 0, text_.length());
 }
 

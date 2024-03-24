@@ -50,6 +50,7 @@
 #include "components/variations/service/variations_field_trial_creator.h"
 #include "components/variations/service/variations_service.h"
 #include "components/variations/service/variations_service_client.h"
+#include "components/variations/synthetic_trial_registry.h"
 #include "components/variations/variations_safe_seed_store_local_state.h"
 #include "components/variations/variations_switches.h"
 #include "content/public/browser/client_certificate_delegate.h"
@@ -77,6 +78,9 @@
 #include "media/mojo/mojom/media_service.mojom.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
+#include "net/base/features.h"
+#include "net/dns/public/dns_over_https_config.h"
+#include "net/dns/public/secure_dns_mode.h"
 #include "net/ssl/client_cert_identity.h"
 #include "services/device/public/cpp/geolocation/location_system_permission_status.h"
 #include "services/network/public/cpp/features.h"
@@ -372,7 +376,7 @@ ShellContentBrowserClient::CreateURLLoaderThrottles(
     const base::RepeatingCallback<WebContents*()>& wc_getter,
     NavigationUIData* navigation_ui_data,
     int frame_tree_node_id,
-    absl::optional<int64_t> navigation_id) {
+    std::optional<int64_t> navigation_id) {
   std::vector<std::unique_ptr<blink::URLLoaderThrottle>> result;
 
   auto* factory = custom_handlers::SimpleProtocolHandlerRegistryFactory::
@@ -487,14 +491,16 @@ bool ShellContentBrowserClient::IsSharedStorageAllowed(
     content::BrowserContext* browser_context,
     content::RenderFrameHost* rfh,
     const url::Origin& top_frame_origin,
-    const url::Origin& accessing_origin) {
+    const url::Origin& accessing_origin,
+    std::string* out_debug_message) {
   return true;
 }
 
 bool ShellContentBrowserClient::IsSharedStorageSelectURLAllowed(
     content::BrowserContext* browser_context,
     const url::Origin& top_frame_origin,
-    const url::Origin& accessing_origin) {
+    const url::Origin& accessing_origin,
+    std::string* out_debug_message) {
   return true;
 }
 
@@ -703,6 +709,25 @@ void ShellContentBrowserClient::GetAdditionalMappedFilesForChildProcess(
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) ||
         // BUILDFLAG(IS_ANDROID)
 
+// Note that ShellContentBrowserClient overrides this method to work around
+// test flakiness that happens when NetworkService::SetTestDohConfigForTesting()
+// is used.
+// TODO(crbug.com/1521190): Remove that override once the flakiness is fixed.
+void ShellContentBrowserClient::OnNetworkServiceCreated(
+    network::mojom::NetworkService* network_service) {
+  // TODO(bashi): Consider enabling this for Android. Excluded because the
+  // built-in resolver may not work on older SDK versions.
+#if !BUILDFLAG(IS_ANDROID)
+  if (base::FeatureList::IsEnabled(net::features::kAsyncDns)) {
+    network_service->ConfigureStubHostResolver(
+        /*insecure_dns_client_enabled=*/true,
+        /*secure_dns_mode=*/net::SecureDnsMode::kAutomatic,
+        net::DnsOverHttpsConfig(),
+        /*additional_dns_types_enabled=*/true);
+  }
+#endif
+}
+
 void ShellContentBrowserClient::ConfigureNetworkContextParams(
     BrowserContext* context,
     bool in_memory,
@@ -868,12 +893,13 @@ void ShellContentBrowserClient::SetUpFieldTrials() {
   // null.
   // TODO(crbug/1248066): Consider passing a low entropy source.
   variations::PlatformFieldTrials platform_field_trials;
+  variations::SyntheticTrialRegistry synthetic_trial_registry;
   field_trial_creator.SetUpFieldTrials(
       variation_ids,
       command_line.GetSwitchValueASCII(
           variations::switches::kForceVariationIds),
       feature_overrides, std::move(feature_list), metrics_state_manager.get(),
-      &platform_field_trials, &safe_seed_manager,
+      &synthetic_trial_registry, &platform_field_trials, &safe_seed_manager,
       /*add_entropy_source_to_variations_ids=*/false);
 }
 

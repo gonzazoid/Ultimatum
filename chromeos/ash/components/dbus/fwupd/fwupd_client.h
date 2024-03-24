@@ -14,12 +14,26 @@
 #include "base/observer_list.h"
 #include "chromeos/ash/components/dbus/fwupd/fwupd_device.h"
 #include "chromeos/ash/components/dbus/fwupd/fwupd_properties.h"
+#include "chromeos/ash/components/dbus/fwupd/fwupd_properties_dbus.h"
 #include "chromeos/ash/components/dbus/fwupd/fwupd_request.h"
 #include "chromeos/ash/components/dbus/fwupd/fwupd_update.h"
 #include "chromeos/dbus/common/dbus_client.h"
 
+// Enum from ash/webui/firmware_update_ui/firmware_update.mojom mirrored here
+// to avoid an illegal include from ash/webui.
+enum DeviceRequestId {
+  kDoNotPowerOff,
+  kReplugInstall,
+  kInsertUSBCable,
+  kRemoveUSBCable,
+  kPressUnlock,
+  kRemoveReplug,
+  kReplugPower,
+};
+
 namespace ash {
 using FirmwareInstallOptions = std::map<std::string, bool>;
+using FwupdStringToRequestIdMap = std::map<std::string, DeviceRequestId>;
 
 // FwupdClient is used for handling signals from the fwupd daemon.
 class COMPONENT_EXPORT(ASH_DBUS_FWUPD) FwupdClient
@@ -55,8 +69,8 @@ class COMPONENT_EXPORT(ASH_DBUS_FWUPD) FwupdClient
   static void Shutdown();
 
   void SetPropertiesForTesting(uint32_t percentage, uint32_t status) {
-    properties_->percentage.ReplaceValue(percentage);
-    properties_->status.ReplaceValue(status);
+    properties_->SetPercentage(percentage);
+    properties_->SetStatus(status);
   }
 
   // Query fwupd for updates that are available for a particular device.
@@ -68,6 +82,14 @@ class COMPONENT_EXPORT(ASH_DBUS_FWUPD) FwupdClient
   virtual void InstallUpdate(const std::string& device_id,
                              base::ScopedFD file_descriptor,
                              FirmwareInstallOptions options) = 0;
+
+  // The following three member functions are used in FakeFwupdClient, and are
+  // functionally no-ops outside of a testing environment.
+  virtual void TriggerPropertiesChangeForTesting(uint32_t percentage,
+                                                 uint32_t status) = 0;
+  virtual void TriggerSuccessfulUpdateForTesting() = 0;
+  virtual bool HasUpdateStartedForTesting() = 0;
+  virtual void EmitDeviceRequestForTesting(uint32_t device_request_id) = 0;
 
  protected:
   friend class FwupdClientTest;
@@ -87,7 +109,7 @@ class COMPONENT_EXPORT(ASH_DBUS_FWUPD) FwupdClient
   int device_signal_call_count_for_testing_ = 0;
 
   // Holds the Fwupd Dbus properties for percentage and status.
-  std::unique_ptr<FwupdProperties> properties_;
+  std::unique_ptr<FwupdDbusProperties> properties_;
 
   base::ObserverList<Observer> observers_;
 };

@@ -190,6 +190,10 @@
   self.webContentAreaShowingHTTPAuthDialog = NO;
 }
 
+- (void)overlayPresenterDestroyed:(OverlayPresenter*)presenter {
+  self.webContentAreaOverlayPresenter = nullptr;
+}
+
 #pragma mark - private
 
 - (web::WebState*)currentWebState {
@@ -199,8 +203,8 @@
 - (void)notifyConsumerOfChangedLocation {
   [self.consumer updateLocationText:[self currentLocationString]
                            clipTail:[self locationShouldClipTail]];
-  GURL URL = self.currentWebState ? self.currentWebState->GetVisibleURL()
-                                  : GURL::EmptyGURL();
+  GURL URL =
+      self.currentWebState ? self.currentWebState->GetVisibleURL() : GURL();
   BOOL isNTP = IsURLNewTabPage(URL);
   if (isNTP) {
     [self.consumer updateAfterNavigatingToNTP];

@@ -40,18 +40,17 @@ import org.robolectric.annotation.LooperMode;
 import org.chromium.base.supplier.OneshotSupplierImpl;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Batch;
+import org.chromium.base.test.util.Features;
+import org.chromium.base.test.util.Features.DisableFeatures;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.app.bookmarks.BookmarkAddEditFolderActivity;
 import org.chromium.chrome.browser.app.bookmarks.BookmarkEditActivity;
-import org.chromium.chrome.browser.app.bookmarks.BookmarkFolderPickerActivity;
 import org.chromium.chrome.browser.app.bookmarks.BookmarkFolderSelectActivity;
 import org.chromium.chrome.browser.bookmarks.BookmarkUiPrefs.BookmarkRowDisplayPref;
 import org.chromium.chrome.browser.bookmarks.BookmarkUiPrefs.BookmarkRowSortOrder;
 import org.chromium.chrome.browser.bookmarks.BookmarkUiState.BookmarkUiMode;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
-import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.components.bookmarks.BookmarkId;
 import org.chromium.components.bookmarks.BookmarkItem;
 import org.chromium.components.browser_ui.widget.dragreorder.DragReorderableRecyclerViewAdapter;
@@ -94,6 +93,7 @@ public class BookmarkToolbarMediatorTest {
     @Mock private BookmarkAddNewFolderCoordinator mBookmarkAddNewFolderCoordinator;
     @Mock private PropertyObserver<PropertyKey> mPropertyObserver;
     @Mock private Runnable mEndSearchRunnable;
+    @Mock private BookmarkMoveSnackbarManager mBookmarkMoveSnackbarManager;
 
     @Spy private Context mContext;
 
@@ -143,7 +143,8 @@ public class BookmarkToolbarMediatorTest {
                         mBookmarkOpener,
                         mBookmarkUiPrefs,
                         mBookmarkAddNewFolderCoordinator,
-                        mEndSearchRunnable);
+                        mEndSearchRunnable,
+                        mBookmarkMoveSnackbarManager);
         mBookmarkDelegateSupplier.set(mBookmarkDelegate);
     }
 
@@ -181,7 +182,8 @@ public class BookmarkToolbarMediatorTest {
                         mBookmarkOpener,
                         mBookmarkUiPrefs,
                         mBookmarkAddNewFolderCoordinator,
-                        mEndSearchRunnable);
+                        mEndSearchRunnable,
+                        mBookmarkMoveSnackbarManager);
     }
 
     @Test
@@ -368,7 +370,7 @@ public class BookmarkToolbarMediatorTest {
         assertTrue(
                 mModel.get(BookmarkToolbarProperties.MENU_ID_CLICKED_FUNCTION)
                         .apply(R.id.selection_mode_move_menu_id));
-        verifyActivityLaunched(BookmarkFolderPickerActivity.class);
+        verify(mBookmarkMoveSnackbarManager).startFolderPickerAndObserveResult(mBookmarkId);
     }
 
     @Test

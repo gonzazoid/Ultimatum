@@ -639,14 +639,13 @@ MouseWheelEvent::MouseWheelEvent(const MouseWheelEvent& mouse_wheel_event)
   DCHECK_EQ(ET_MOUSEWHEEL, type());
 }
 
-MouseWheelEvent::MouseWheelEvent(
-    const gfx::Vector2d& offset,
-    const gfx::PointF& location,
-    const gfx::PointF& root_location,
-    base::TimeTicks time_stamp,
-    int flags,
-    int changed_button_flags,
-    const absl::optional<gfx::Vector2d> tick_120ths)
+MouseWheelEvent::MouseWheelEvent(const gfx::Vector2d& offset,
+                                 const gfx::PointF& location,
+                                 const gfx::PointF& root_location,
+                                 base::TimeTicks time_stamp,
+                                 int flags,
+                                 int changed_button_flags,
+                                 const std::optional<gfx::Vector2d> tick_120ths)
     : MouseEvent(ET_UNKNOWN,
                  location,
                  root_location,
@@ -1082,7 +1081,10 @@ DomKey KeyEvent::GetDomKey() const {
 }
 
 void KeyEvent::OnFlagsUpdated() {
+  // TODO(https://crbug.com/324462727): this is problematic on windows.
+#if BUILDFLAG(IS_CHROMEOS)
   key_ = DomKey::NONE;
+#endif
 }
 
 char16_t KeyEvent::GetCharacter() const {

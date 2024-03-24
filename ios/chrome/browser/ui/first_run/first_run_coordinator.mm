@@ -6,6 +6,7 @@
 
 #import <UIKit/UIKit.h>
 
+#import "base/apple/foundation_util.h"
 #import "base/feature_list.h"
 #import "base/metrics/histogram_functions.h"
 #import "base/notreached.h"
@@ -33,9 +34,6 @@
 @property(nonatomic, strong) ChromeCoordinator* childCoordinator;
 @property(nonatomic, strong) UINavigationController* navigationController;
 
-// YES if First Run was completed.
-@property(nonatomic, assign) BOOL completed;
-
 @end
 
 @implementation FirstRunCoordinator
@@ -58,7 +56,8 @@
 - (void)start {
   [self presentScreen:[self.screenProvider nextScreenType]];
   void (^completion)(void) = ^{
-    base::UmaHistogramEnumeration("FirstRun.Stage", first_run::kStart);
+    base::UmaHistogramEnumeration(first_run::kFirstRunStageHistogram,
+                                  first_run::kStart);
   };
   [self.navigationController setNavigationBarHidden:YES animated:NO];
   [self.baseViewController presentViewController:self.navigationController
@@ -67,22 +66,19 @@
 }
 
 - (void)stop {
-  void (^completion)(void) = ^{
-  };
-  if (self.completed) {
-    __weak __typeof(self) weakSelf = self;
-    completion = ^{
-      base::UmaHistogramEnumeration("FirstRun.Stage", first_run::kComplete);
-      WriteFirstRunSentinel();
-      [weakSelf.delegate didFinishPresentingScreens];
-    };
+  if (self.childCoordinator) {
+    // If the child coordinator is not nil, then the FRE is stopped because
+    // Chrome is being shutdown.
+    InterruptibleChromeCoordinator* interruptibleChildCoordinator =
+        base::apple::ObjCCast<InterruptibleChromeCoordinator>(
+            self.childCoordinator);
+    [interruptibleChildCoordinator
+        interruptWithAction:SigninCoordinatorInterrupt::UIShutdownNoDismiss
+                 completion:nil];
+    [self.childCoordinator stop];
+    self.childCoordinator = nil;
   }
-
-  [self.childCoordinator stop];
-  self.childCoordinator = nil;
-
-  [self.baseViewController dismissViewControllerAnimated:YES
-                                              completion:completion];
+  [self.baseViewController dismissViewControllerAnimated:YES completion:nil];
   _navigationController = nil;
   [super stop];
 }
@@ -95,12 +91,6 @@
   [self presentScreen:[self.screenProvider nextScreenType]];
 }
 
-- (void)skipAllScreens {
-  [self.childCoordinator stop];
-  self.childCoordinator = nil;
-  [self willFinishPresentingScreens];
-}
-
 #pragma mark - Helper
 
 // Presents the screen of certain `type`.
@@ -108,7 +98,11 @@
   // If no more screen need to be present, call delegate to stop presenting
   // screens.
   if (type == kStepsCompleted) {
-    [self willFinishPresentingScreens];
+    // The user went through all screens of the FRE.
+    base::UmaHistogramEnumeration(first_run::kFirstRunStageHistogram,
+                                  first_run::kComplete);
+    WriteFirstRunSentinel();
+    [self.delegate didFinishFirstRun];
     return;
   }
   self.childCoordinator = [self createChildCoordinatorWithScreenType:type];
@@ -163,11 +157,6 @@
       break;
   }
   return nil;
-}
-
-- (void)willFinishPresentingScreens {
-  self.completed = YES;
-  [self.delegate willFinishPresentingScreens];
 }
 
 #pragma mark - HistorySyncCoordinatorDelegate

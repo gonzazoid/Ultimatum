@@ -4,6 +4,8 @@
 
 #include "components/services/storage/service_worker/service_worker_database.h"
 
+#include <optional>
+
 #include "base/command_line.h"
 #include "base/debug/crash_logging.h"
 #include "base/files/file_util.h"
@@ -23,8 +25,8 @@
 #include "services/network/public/cpp/web_sandbox_flags.h"
 #include "services/network/public/mojom/ip_address_space.mojom-shared.h"
 #include "services/network/public/mojom/referrer_policy.mojom.h"
+#include "services/network/public/mojom/service_worker_router_info.mojom-shared.h"
 #include "services/network/public/mojom/web_sandbox_flags.mojom-shared.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/service_worker/service_worker_router_rule.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_ancestor_frame_type.mojom.h"
@@ -281,7 +283,7 @@ int64_t AccumulateResourceSizeInBytes(
   return total_size_bytes;
 }
 
-absl::optional<std::vector<liburlpattern::Part>> ConvertToBlinkParts(
+std::optional<std::vector<liburlpattern::Part>> ConvertToBlinkParts(
     const google::protobuf::RepeatedPtrField<
         storage::ServiceWorkerRegistrationData::RouterRules::RuleV1::Condition::
             URLPattern::Part>& parts) {
@@ -310,7 +312,7 @@ absl::optional<std::vector<liburlpattern::Part>> ConvertToBlinkParts(
       case ServiceWorkerRegistrationData::RouterRules::RuleV1::Condition::
           URLPattern::Part::PATTERN_NOT_SET:
         // If URLPattern is used, one of the part must be set.
-        return absl::nullopt;
+        return std::nullopt;
       case ServiceWorkerRegistrationData::RouterRules::RuleV1::Condition::
           URLPattern::Part::kFixed:
         part.type = liburlpattern::PartType::kFixed;
@@ -668,6 +670,10 @@ bool WriteToBlinkCondition(
             request.destination =
                 network::mojom::RequestDestination::kSpeculationRules;
             break;
+          case ServiceWorkerRegistrationData::RouterRules::RuleV1::Condition::
+              Request::kJsonDestination:
+            request.destination = network::mojom::RequestDestination::kJson;
+            break;
         }
       }
       out_request = request;
@@ -989,6 +995,11 @@ void WriteConditionToProtoWithHelper(
               ServiceWorkerRegistrationData::RouterRules::RuleV1::Condition::
                   Request::kSpeculationRulesDestination);
           break;
+        case network::mojom::RequestDestination::kJson:
+          mutable_request->set_destination(
+              ServiceWorkerRegistrationData::RouterRules::RuleV1::Condition::
+                  Request::kJsonDestination);
+          break;
       }
     }
   }
@@ -1144,7 +1155,7 @@ ServiceWorkerDatabase::GetStorageKeysWithRegistrations(
       if (blink::StorageKey::ShouldSkipKeyDueToPartitioning(key_str))
         continue;
 
-      absl::optional<blink::StorageKey> key =
+      std::optional<blink::StorageKey> key =
           blink::StorageKey::Deserialize(key_str);
       if (!key) {
         status = Status::kErrorCorrupted;
@@ -1336,7 +1347,7 @@ ServiceWorkerDatabase::Status ServiceWorkerDatabase::GetAllRegistrations(
       if (blink::StorageKey::ShouldSkipKeyDueToPartitioning(reg_key_string))
         continue;
 
-      absl::optional<blink::StorageKey> key =
+      std::optional<blink::StorageKey> key =
           blink::StorageKey::Deserialize(reg_key_string);
       if (!key)
         break;
@@ -1412,7 +1423,7 @@ ServiceWorkerDatabase::Status ServiceWorkerDatabase::ReadRegistrationStorageKey(
   // registration IDs associated with partitioned entries.
   DCHECK(!blink::StorageKey::ShouldSkipKeyDueToPartitioning(value));
 
-  absl::optional<blink::StorageKey> parsed =
+  std::optional<blink::StorageKey> parsed =
       blink::StorageKey::Deserialize(value);
   if (!parsed) {
     status = Status::kErrorCorrupted;
@@ -2730,22 +2741,24 @@ ServiceWorkerDatabase::Status ServiceWorkerDatabase::ParseRegistrationData(
             return Status::kErrorCorrupted;
           case ServiceWorkerRegistrationData::RouterRules::RuleV1::Source::
               kNetworkSource:
-            source.type = blink::ServiceWorkerRouterSource::Type::kNetwork;
+            source.type =
+                network::mojom::ServiceWorkerRouterSourceType::kNetwork;
             source.network_source.emplace();
             break;
           case ServiceWorkerRegistrationData::RouterRules::RuleV1::Source::
               kRaceSource:
-            source.type = blink::ServiceWorkerRouterSource::Type::kRace;
+            source.type = network::mojom::ServiceWorkerRouterSourceType::kRace;
             source.race_source.emplace();
             break;
           case ServiceWorkerRegistrationData::RouterRules::RuleV1::Source::
               kFetchEventSource:
-            source.type = blink::ServiceWorkerRouterSource::Type::kFetchEvent;
+            source.type =
+                network::mojom::ServiceWorkerRouterSourceType::kFetchEvent;
             source.fetch_event_source.emplace();
             break;
           case ServiceWorkerRegistrationData::RouterRules::RuleV1::Source::
               kCacheSource:
-            source.type = blink::ServiceWorkerRouterSource::Type::kCache;
+            source.type = network::mojom::ServiceWorkerRouterSourceType::kCache;
             blink::ServiceWorkerRouterCacheSource cache_source;
             if (s.cache_source().has_cache_name()) {
               cache_source.cache_name = s.cache_source().cache_name();
@@ -2951,16 +2964,16 @@ void ServiceWorkerDatabase::WriteRegistrationDataInBatch(
         ServiceWorkerRegistrationData::RouterRules::RuleV1::Source* source =
             v1->add_source();
         switch (s.type) {
-          case blink::ServiceWorkerRouterSource::Type::kNetwork:
+          case network::mojom::ServiceWorkerRouterSourceType::kNetwork:
             source->mutable_network_source();
             break;
-          case blink::ServiceWorkerRouterSource::Type::kRace:
+          case network::mojom::ServiceWorkerRouterSourceType::kRace:
             source->mutable_race_source();
             break;
-          case blink::ServiceWorkerRouterSource::Type::kFetchEvent:
+          case network::mojom::ServiceWorkerRouterSourceType::kFetchEvent:
             source->mutable_fetch_event_source();
             break;
-          case blink::ServiceWorkerRouterSource::Type::kCache:
+          case network::mojom::ServiceWorkerRouterSourceType::kCache:
             auto* cache_source = source->mutable_cache_source();
             if (s.cache_source->cache_name) {
               cache_source->set_cache_name(*s.cache_source->cache_name);

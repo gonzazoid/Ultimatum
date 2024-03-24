@@ -10,6 +10,7 @@ erikchen@chromium.org
 alexilin@chromium.org
 blundell@chromium.org
 droger@chromium.org
+grt@chromium.org
 treib@chromium.org
 vasilii@chromium.org
 
@@ -62,7 +63,7 @@ per-file browser/internal=*
 per-file browser/media/engagement_internal=*
 per-file browser/nearby_sharing/internal=*
 per-file browser/resources/chromeos/quickoffice=*
-per-file browser/resources/settings_internal=*
+per-file browser/resources/settings/internal=*
 per-file browser/spellchecker/internal=*
 per-file installer/mac/internal=*
 per-file test/data/firefox3_profile/searchplugins=*

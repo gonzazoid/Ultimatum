@@ -281,6 +281,11 @@ chromium-metrics-reviews@google.com.
   <int value="1" label="Opened"/>
 </enum>
 
+<enum name="BooleanThumbsUp">
+  <int value="0" label="Thumbs down"/>
+  <int value="1" label="Thumbs up"/>
+</enum>
+
 <enum name="BrowserDataBackMigratorFinalStatus">
   <int value="0" label="Succeeded"/>
   <int value="1" label="PreMigrationCleanUpDeleteTmpDirFailed"/>
@@ -342,6 +347,24 @@ chromium-metrics-reviews@google.com.
 <enum name="CalendarKeyboardNavigationSource">
   <int value="0" label="Tab"/>
   <int value="1" label="Arrow Keys"/>
+</enum>
+
+<enum name="CalendarUserAction">
+  <int value="0" label="Date cell"/>
+  <int value="1" label="Month down arrow"/>
+  <int value="2" label="Month up arrow"/>
+  <int value="3" label="Scrolled"/>
+  <int value="4" label="Keyboard navigation"/>
+  <int value="5" label="Event list item"/>
+  <int value="6" label="Item in up next list"/>
+  <int value="7" label="Join button in event list"/>
+  <int value="8" label="Join button in up next"/>
+  <int value="9" label="Reset to today button"/>
+  <int value="10" label="Open today's events from up next list"/>
+  <int value="11" label="Scrolled within up next list"/>
+  <int value="12" label="Launched calendar from empty event list"/>
+  <int value="13" label="Event list closed"/>
+  <int value="14" label="Settings button pressed"/>
 </enum>
 
 <enum name="CalendarViewScrollSource">
@@ -436,6 +459,12 @@ chromium-metrics-reviews@google.com.
   <int value="2" label="Delete file"/>
 </enum>
 
+<enum name="ClassroomUserAction">
+  <int value="0" label="Assignment list selected"/>
+  <int value="1" label="Header icon pressed"/>
+  <int value="2" label="Student assignment pressed"/>
+</enum>
+
 <enum name="DataFetchEventSource">
   <int value="0" label="PostLoginFullRestore"/>
   <int value="1" label="Overview"/>
@@ -459,6 +488,18 @@ chromium-metrics-reviews@google.com.
   <int value="2" label="Invalid argument (e.g. wrong ID format)"/>
   <int value="3" label="Exceeed maximum number of templates"/>
   <int value="4" label="Desk template is too large"/>
+</enum>
+
+<enum name="DeskProfilesSelectProfileSource">
+  <int value="0" label="Profile button"/>
+  <int value="1" label="Desk action context menu"/>
+  <int value="2" label="New desk button drop"/>
+</enum>
+
+<enum name="DeskProfilesUsageStatus">
+  <int value="0" label="Conditions are not met"/>
+  <int value="1" label="Conditions are met"/>
+  <int value="2" label="Desk profiles are enabled"/>
 </enum>
 
 <enum name="DesksAssignToAllDesksSource">
@@ -509,6 +550,7 @@ chromium-metrics-reviews@google.com.
   <int value="15"
       label="Desk switch by clicking on a mini view in the desk button desk
              bar"/>
+  <int value="16" label="Desk switch due to session restore"/>
 </enum>
 
 <enum name="DockedAction">
@@ -1054,6 +1096,17 @@ chromium-metrics-reviews@google.com.
   <int value="5" label="Hit maximum number of template status"/>
 </enum>
 
+<enum name="FocusModeEndSessionSource">
+  <int value="0" label="Focus panel"/>
+  <int value="1" label="Contextual panel"/>
+  <int value="2" label="Feature pod"/>
+</enum>
+
+<enum name="FocusModeStartSessionSource">
+  <int value="0" label="Focus panel"/>
+  <int value="1" label="Feature pod"/>
+</enum>
+
 <enum name="GlanceableStudentAssignmentList">
   <int value="0" label="Assigned"/>
   <int value="1" label="NoDueDate"/>
@@ -1130,6 +1183,11 @@ chromium-metrics-reviews@google.com.
   <int value="4" label="System tray"/>
   <int value="5" label="Virtual keyboard tray"/>
   <int value="6" label="IME tray"/>
+</enum>
+
+<enum name="ModifyGlanceablesTaskResult">
+  <int value="0" label="Change committed"/>
+  <int value="1" label="No change"/>
 </enum>
 
 <enum name="MoveMigratorResumeStep">
@@ -1256,6 +1314,11 @@ chromium-metrics-reviews@google.com.
   <int value="22" label="Capture Mode Education Shortcut Nudge"/>
   <int value="23" label="Capture Mode Education Shortcut Tutorial"/>
   <int value="24" label="Capture Mode Education Quick Settings Nudge"/>
+  <int value="25" label="Game Dashboard Controls Nudge"/>
+  <int value="26"
+      label="Website Telemetry Reporting Nudge (deprecated 01/2024)"/>
+  <int value="27" label="Standalone Window Migration Ux"/>
+  <int value="28" label="Focus Mode Ending Moment Nudge"/>
 </enum>
 
 <enum name="OnDeviceToServerSpeechRecognitionFallbackReason">
@@ -1611,7 +1674,8 @@ chromeos/ash/components/peripheral_notification/peripheral_notification_manager.
   <int value="1" label="Waiting For Startup Delay"/>
   <int value="2" label="Waiting For Oobe Completed"/>
   <int value="3" label="Waiting For Device Settings Trusted"/>
-  <int value="4" label="ReportController Initialized"/>
+  <int value="4" label="Waiting For Last Powerwash Time File to be read."/>
+  <int value="5" label="ReportController Initialized"/>
 </enum>
 
 <enum name="ReportTrustedStatus">
@@ -1638,6 +1702,27 @@ chromeos/ash/components/peripheral_notification/peripheral_notification_manager.
   <int value="0" label="CancelledDialog"/>
   <int value="1" label="AcceptedDialog"/>
   <int value="2" label="AlreadyAcceptedDialog"/>
+</enum>
+
+<enum name="SeaPenTemplateId">
+<!-- Defined in ash/webui/common/mojom/sea_pen.mojom -->
+
+  <int value="0" label="kFlower"/>
+  <int value="1" label="kMineral"/>
+  <int value="2" label="kArt"/>
+  <int value="3" label="kCharacters"/>
+  <int value="4" label="kTerrain"/>
+  <int value="5" label="kCurious"/>
+  <int value="6" label="kDreamscapes"/>
+  <int value="7" label="kTranslucent"/>
+  <int value="8" label="kScifi"/>
+  <int value="100" label="kVcBackgroundSimple"/>
+  <int value="101" label="kVcBackgroundOffice"/>
+  <int value="102" label="kVcBackgroundTerrainVc"/>
+  <int value="103" label="kVcBackgroundCafe"/>
+  <int value="104" label="kVcBackgroundArt"/>
+  <int value="105" label="kVcBackgroundDreamscapesVc"/>
+  <int value="106" label="kVcBackgroundCharacters"/>
 </enum>
 
 <enum name="SetWallpaperResult">
@@ -1759,6 +1844,7 @@ chromeos/ash/components/peripheral_notification/peripheral_notification_manager.
   <int value="2" label="Session exit due to window destruction"/>
   <int value="3" label="Session exit due to shutdown"/>
   <int value="4" label="Session exit due to unspecified reasons"/>
+  <int value="5" label="Session exit due to converting to tablet mode"/>
 </enum>
 
 <enum name="SplitViewSwapWindowsSource">
@@ -1770,6 +1856,26 @@ chromeos/ash/components/peripheral_notification/peripheral_notification_manager.
   <int value="0" label="Remained on the home screen"/>
   <int value="1" label="Transitioned to overview"/>
   <int value="2" label="Went back on the home screen"/>
+</enum>
+
+<enum name="TasksUserAction">
+  <int value="0" label="Active task list changed"/>
+  <int value="1" label="Task marked complete"/>
+  <int value="2" label="Task marked incomplete"/>
+  <int value="3" label="Add task started"/>
+  <int value="4" label="Modify task started"/>
+  <int value="5" label="Header button clicked"/>
+  <int value="6" label="Add new task button clicked"/>
+  <int value="7" label="Footer button clicked"/>
+  <int value="8" label="Edit in Google Tasks button clicked"/>
+</enum>
+
+<enum name="TimeManagementGlanceablesFeatureStatus">
+  <int value="0" label="Disabled"/>
+  <int value="1" label="Enabled - trusted tester"/>
+  <int value="2" label="Enabled - GlanceablesV2 flag"/>
+  <int value="3" label="Enabled with pref bypass switch"/>
+  <int value="4" label="Enabled - full launch"/>
 </enum>
 
 <enum name="ToastCatalogName">
@@ -2364,7 +2470,7 @@ chromeos/ash/components/peripheral_notification/peripheral_notification_manager.
 <enum name="WindowSnapActionSource">
   <int value="0" label="Not specified"/>
   <int value="1" label="Drag window to screen edge to snap"/>
-  <int value="2" label="Use window caption button to snap"/>
+  <int value="2" label="Long press window caption button to snap"/>
   <int value="3" label="Use keyboard shortcut to snap"/>
   <int value="4" label="Drag or select overview window to snap"/>
   <int value="5" label="Long press overview button to snap"/>
@@ -2383,6 +2489,9 @@ chromeos/ash/components/peripheral_notification/peripheral_notification_manager.
   <int value="15"
       label="Window is snapped when updating a window in snap group"/>
   <int value="16" label="Window is snapped in test"/>
+  <int value="17"
+      label="Window is snapped by long pressing lacros window caption button
+             or window layout menu"/>
 </enum>
 
 <enum name="WindowSplittingDragType">

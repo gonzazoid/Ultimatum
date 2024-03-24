@@ -12,7 +12,7 @@
 #include "base/task/thread_pool.h"
 #include "base/trace_event/trace_event.h"
 #include "media/base/format_utils.h"
-#include "media/base/video_frame.h"
+#include "media/gpu/chromeos/frame_resource.h"
 #include "media/gpu/chromeos/platform_video_frame_utils.h"
 #include "media/gpu/macros.h"
 #include "ui/gfx/buffer_types.h"
@@ -66,27 +66,22 @@ bool CreateAndAttachShader(GLuint program,
 }
 
 std::unique_ptr<ui::NativePixmapGLBinding> CreateAndBindImage(
-    const VideoFrame* video_frame,
+    const FrameResource* frame,
     GLenum target,
     GLuint texture_id,
     bool should_split_planes,
     int plane) {
   CHECK(plane == 0 || plane == 1);
 
-  if (video_frame->format() != PIXEL_FORMAT_NV12) {
+  if (frame->format() != PIXEL_FORMAT_NV12) {
     LOG(ERROR) << "The frame's format is not NV12";
-    return nullptr;
-  }
-
-  if (!video_frame->visible_rect().origin().IsOrigin()) {
-    LOG(ERROR) << "The frame's visible rectangle's origin is not (0, 0)";
     return nullptr;
   }
 
   // Create a native pixmap from the frame's memory buffer handle. Not using
   // CreateNativePixmapDmaBuf() because we should be using the visible size.
   gfx::GpuMemoryBufferHandle gpu_memory_buffer_handle =
-      CreateGpuMemoryBufferHandle(video_frame);
+      frame->CreateGpuMemoryBufferHandle();
   if (gpu_memory_buffer_handle.is_null() ||
       gpu_memory_buffer_handle.type != gfx::NATIVE_PIXMAP) {
     LOG(ERROR) << "Failed to create native GpuMemoryBufferHandle";
@@ -94,7 +89,7 @@ std::unique_ptr<ui::NativePixmapGLBinding> CreateAndBindImage(
   }
 
   auto buffer_format =
-      VideoPixelFormatToGfxBufferFormat(video_frame->layout().format());
+      VideoPixelFormatToGfxBufferFormat(frame->layout().format());
   if (!buffer_format) {
     LOG(ERROR) << "Unexpected video frame format";
     return nullptr;
@@ -102,7 +97,7 @@ std::unique_ptr<ui::NativePixmapGLBinding> CreateAndBindImage(
 
   if (!should_split_planes) {
     auto native_pixmap = base::MakeRefCounted<gfx::NativePixmapDmaBuf>(
-        video_frame->coded_size(), *buffer_format,
+        frame->coded_size(), *buffer_format,
         std::move(gpu_memory_buffer_handle.native_pixmap_handle));
     DCHECK(native_pixmap->AreDmaBufFdsValid());
 
@@ -110,20 +105,18 @@ std::unique_ptr<ui::NativePixmapGLBinding> CreateAndBindImage(
     return ui::OzonePlatform::GetInstance()
         ->GetSurfaceFactoryOzone()
         ->GetCurrentGLOzone()
-        ->ImportNativePixmap(
-            std::move(native_pixmap), gfx::BufferFormat::YUV_420_BIPLANAR,
-            gfx::BufferPlane::DEFAULT, video_frame->coded_size(),
-            gfx::ColorSpace(), target, texture_id);
+        ->ImportNativePixmap(std::move(native_pixmap),
+                             gfx::BufferFormat::YUV_420_BIPLANAR,
+                             gfx::BufferPlane::DEFAULT, frame->coded_size(),
+                             gfx::ColorSpace(), target, texture_id);
   }
 
   base::CheckedNumeric<int> uv_width(0);
   base::CheckedNumeric<int> uv_height(0);
 
   if (plane == 1) {
-    uv_width = GetNV12PlaneDimension<int>(
-        video_frame->visible_rect().size().width(), plane);
-    uv_height = GetNV12PlaneDimension<int>(
-        video_frame->visible_rect().size().height(), plane);
+    uv_width = GetNV12PlaneDimension<int>(frame->coded_size().width(), plane);
+    uv_height = GetNV12PlaneDimension<int>(frame->coded_size().height(), plane);
 
     if (!uv_width.IsValid() || !uv_height.IsValid()) {
       LOG(ERROR) << "Could not compute the UV plane's dimensions";
@@ -133,7 +126,7 @@ std::unique_ptr<ui::NativePixmapGLBinding> CreateAndBindImage(
 
   const gfx::Size plane_size =
       plane ? gfx::Size(uv_width.ValueOrDie(), uv_height.ValueOrDie())
-            : video_frame->visible_rect().size();
+            : frame->coded_size();
 
   const gfx::BufferFormat plane_format =
       plane ? gfx::BufferFormat::RG_88 : gfx::BufferFormat::R_8;
@@ -182,10 +175,14 @@ bool GLImageProcessorBackend::IsSupported(const PortConfig& input_config,
     return false;
   }
 
-  if ((input_config.fourcc != Fourcc(Fourcc::MM21) &&
-       input_config.fourcc != Fourcc(Fourcc::NV12)) ||
-      output_config.fourcc != Fourcc(Fourcc::NV12)) {
-    VLOGF(2) << "The GLImageProcessor only supports MM21->NV12 and NV12->NV12.";
+  if (!((input_config.fourcc == Fourcc(Fourcc::MM21) &&
+         output_config.fourcc == Fourcc(Fourcc::NV12)) ||
+        (input_config.fourcc == Fourcc(Fourcc::NV12) &&
+         output_config.fourcc == Fourcc(Fourcc::NV12)) ||
+        (input_config.fourcc == Fourcc(Fourcc::NM12) &&
+         output_config.fourcc == Fourcc(Fourcc::NM12)))) {
+    VLOGF(2) << "The GLImageProcessor only supports MM21->NV12, NV12->NV12, "
+                "and NM12->NM12.";
     return false;
   }
 
@@ -193,14 +190,6 @@ bool GLImageProcessorBackend::IsSupported(const PortConfig& input_config,
       input_config.fourcc == Fourcc(Fourcc::MM21)) {
     VLOGF(2)
         << "The GLImageProcessorBackend only supports scaling for NV12->NV12.";
-    return false;
-  }
-
-  // In general, this check is not a safe assumption. However, it takes care of
-  // most cases in real usage and it's a good first version.
-  if (!input_config.visible_rect.origin().IsOrigin() ||
-      !output_config.visible_rect.origin().IsOrigin()) {
-    VLOGF(2) << "The GLImageProcessorBackend does not support transposition.";
     return false;
   }
 
@@ -317,25 +306,77 @@ void GLImageProcessorBackend::InitializeTask(base::WaitableEvent* done,
   glGenFramebuffersEXT(1, &fb_id_);
   glGenTextures(1, &dst_texture_id_);
 
+  // These calculations are used to calculate vertices such that
+  // regions that were meant to be cropped out would be clipped out
+  // by GL naturally. GL's vertex space is from [-1 1] and everything outside
+  // will be clipped out.
+  //
+  // To do this, the absolute coordinate space vertices of the texture:
+  //    Example: |input_config_.visible_rect.x()|
+  //
+  // These absolute coordinate space vertices are converted to relative
+  // space texture coordinates:
+  //    Example: |input_left / input_width|
+  const float input_width =
+      static_cast<float>(input_config_.visible_rect.width());
+  const float input_height =
+      static_cast<float>(input_config_.visible_rect.height());
+  const float input_coded_width =
+      static_cast<float>(input_config_.size.width());
+  const float input_coded_height =
+      static_cast<float>(input_config_.size.height());
+
+  const float input_left = static_cast<float>(input_config_.visible_rect.x());
+  const float input_top = static_cast<float>(input_config_.visible_rect.y());
+
+  const float normalized_left = input_left / input_width;
+  const float normalized_top = input_top / input_height;
+
+  const float x_start = -1.0f - normalized_left * 2.0f;
+
+  const float x_end = 1.0f + (input_coded_width - input_width - input_left) /
+                                 input_width * 2.0f;
+
+  const float y_start = -1.0f - normalized_top * 2.0f;
+
+  const float y_end = 1.0f + (input_coded_height - input_height - input_top) /
+                                 input_height * 2.0f;
+
+  const float vertices[] = {
+      // clang-format off
+    x_end,   y_start, 0.0f,
+    x_end,   y_end,   0.0f,
+    x_start, y_start, 0.0f,
+    x_start, y_end,   0.0f
+      // clang-format on
+  };
+
+  GLuint vbo_id;
+  glGenBuffersARB(1, &vbo_id);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo_id);
+  glBufferData(GL_ARRAY_BUFFER, 12 * sizeof(float), vertices, GL_STATIC_DRAW);
+
+  GLuint vao_id;
+  glGenVertexArraysOES(1, &vao_id);
+  glBindVertexArrayOES(vao_id);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo_id);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+  glEnableVertexAttribArray(0);
+
   // Create a vertex shader program which will be used for both scaling and
   // conversion shader programs.
   GLuint program = glCreateProgram();
   constexpr GLchar kVertexShader[] =
       "#version 300 es\n"
+      "layout(location = 0) in vec3 vertex_position;\n"
       "out vec2 texPos;\n"
       "void main() {\n"
-      "  vec2 pos[4];\n"
-      "  pos[0] = vec2(-1.0, -1.0);\n"
-      "  pos[1] = vec2(1.0, -1.0);\n"
-      "  pos[2] = vec2(-1.0, 1.0);\n"
-      "  pos[3] = vec2(1.0, 1.0);\n"
-      "  gl_Position.xy = pos[gl_VertexID];\n"
-      "  gl_Position.zw = vec2(0.0, 1.0);\n"
+      "  gl_Position = vec4(vertex_position, 1.0);\n"
       "  vec2 uvs[4];\n"
-      "  uvs[0] = vec2(0.0, 0.0);\n"
-      "  uvs[1] = vec2(1.0, 0.0);\n"
-      "  uvs[2] = vec2(0.0, 1.0);\n"
-      "  uvs[3] = vec2(1.0, 1.0);\n"
+      "  uvs[0] = vec2(1.0, 0.0);\n"
+      "  uvs[1] = vec2(1.0, 1.0);\n"
+      "  uvs[2] = vec2(0.0, 0.0);\n"
+      "  uvs[3] = vec2(0.0, 1.0);\n"
       "  texPos = uvs[gl_VertexID];\n"
       "}\n";
   if (!CreateAndAttachShader(program, GL_VERTEX_SHADER, kVertexShader,
@@ -346,7 +387,9 @@ void GLImageProcessorBackend::InitializeTask(base::WaitableEvent* done,
   }
 
   const bool scaling = (input_config_.fourcc == Fourcc(Fourcc::NV12) &&
-                        output_config_.fourcc == Fourcc(Fourcc::NV12));
+                        output_config_.fourcc == Fourcc(Fourcc::NV12)) ||
+                       (input_config_.fourcc == Fourcc(Fourcc::NM12) &&
+                        output_config_.fourcc == Fourcc(Fourcc::NM12));
 
   if (scaling) {
     // Creates a fragment shader program to do NV12 scaling.
@@ -438,6 +481,8 @@ void GLImageProcessorBackend::InitializeTask(base::WaitableEvent* done,
   }
 
   glLinkProgram(program);
+  glBindAttribLocation(program, 0, "vertex_position");
+
   GLint result = GL_FALSE;
   glGetProgramiv(program, GL_LINK_STATUS, &result);
   if (!result) {
@@ -503,11 +548,12 @@ GLImageProcessorBackend::~GLImageProcessorBackend() {
   }
 }
 
-void GLImageProcessorBackend::Process(scoped_refptr<VideoFrame> input_frame,
-                                      scoped_refptr<VideoFrame> output_frame,
-                                      FrameReadyCB cb) {
+void GLImageProcessorBackend::ProcessFrame(
+    scoped_refptr<FrameResource> input_frame,
+    scoped_refptr<FrameResource> output_frame,
+    FrameResourceReadyCB cb) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(backend_sequence_checker_);
-  TRACE_EVENT2("media", "GLImageProcessorBackend::Process", "input_frame",
+  TRACE_EVENT2("media", "GLImageProcessorBackend::ProcessFrame", "input_frame",
                input_frame->AsHumanReadableString(), "output_frame",
                output_frame->AsHumanReadableString());
   SCOPED_UMA_HISTOGRAM_TIMER("GLImageProcessorBackend::Process");
@@ -529,7 +575,10 @@ void GLImageProcessorBackend::Process(scoped_refptr<VideoFrame> input_frame,
   // have a valid image prior to attaching it to the framebuffer.
 
   const bool scaling = (input_config_.fourcc == Fourcc(Fourcc::NV12) &&
-                        output_config_.fourcc == Fourcc(Fourcc::NV12));
+                        output_config_.fourcc == Fourcc(Fourcc::NV12)) ||
+                       (input_config_.fourcc == Fourcc(Fourcc::NM12) &&
+                        output_config_.fourcc == Fourcc(Fourcc::NM12));
+
   const int num_planes = scaling ? 2 : 1;
   const auto gl_texture_target =
       scaling ? GL_TEXTURE_2D : GL_TEXTURE_EXTERNAL_OES;

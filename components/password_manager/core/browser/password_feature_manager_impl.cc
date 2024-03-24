@@ -26,12 +26,10 @@ PasswordFeatureManagerImpl::PasswordFeatureManagerImpl(
 
 bool PasswordFeatureManagerImpl::IsGenerationEnabled() const {
   switch (password_manager::sync_util::GetPasswordSyncState(sync_service_)) {
-    case SyncState::kNotSyncing:
+    case sync_util::SyncState::kNotActive:
       return ShouldShowAccountStorageOptIn();
-    case SyncState::kSyncingWithCustomPassphrase:
-    case SyncState::kSyncingNormalEncryption:
-    case SyncState::kAccountPasswordsActiveNormalEncryption:
-    case SyncState::kAccountPasswordsActiveWithCustomPassphrase:
+    case sync_util::SyncState::kActiveWithNormalEncryption:
+    case sync_util::SyncState::kActiveWithCustomPassphrase:
       return true;
   }
 }
@@ -58,17 +56,19 @@ bool PasswordFeatureManagerImpl::IsBiometricAuthenticationBeforeFillingEnabled()
 }
 
 bool PasswordFeatureManagerImpl::IsOptedInForAccountStorage() const {
-  return features_util::IsOptedInForAccountStorage(sync_service_);
+  return features_util::IsOptedInForAccountStorage(pref_service_,
+                                                   sync_service_);
 }
 
 bool PasswordFeatureManagerImpl::ShouldShowAccountStorageOptIn() const {
-  return features_util::ShouldShowAccountStorageOptIn(sync_service_);
+  return features_util::ShouldShowAccountStorageOptIn(pref_service_,
+                                                      sync_service_);
 }
 
 bool PasswordFeatureManagerImpl::ShouldShowAccountStorageReSignin(
     const GURL& current_page_url) const {
-  return features_util::ShouldShowAccountStorageReSignin(sync_service_,
-                                                         current_page_url);
+  return features_util::ShouldShowAccountStorageReSignin(
+      pref_service_, sync_service_, current_page_url);
 }
 
 bool PasswordFeatureManagerImpl::ShouldShowAccountStorageBubbleUi() const {
@@ -97,6 +97,10 @@ void PasswordFeatureManagerImpl::OptInToAccountStorage() {
   features_util::OptInToAccountStorage(pref_service_, sync_service_);
 }
 
+void PasswordFeatureManagerImpl::OptOutOfAccountStorage() {
+  features_util::OptOutOfAccountStorage(pref_service_, sync_service_);
+}
+
 void PasswordFeatureManagerImpl::OptOutOfAccountStorageAndClearSettings() {
   features_util::OptOutOfAccountStorageAndClearSettings(pref_service_,
                                                         sync_service_);
@@ -110,6 +114,13 @@ void PasswordFeatureManagerImpl::SetDefaultPasswordStore(
 bool PasswordFeatureManagerImpl::
     ShouldOfferOptInAndMoveToAccountStoreAfterSavingLocally() const {
   return ShouldShowAccountStorageOptIn() && !IsDefaultPasswordStoreSet();
+}
+
+bool PasswordFeatureManagerImpl::ShouldChangeDefaultPasswordStore() const {
+  return IsOptedInForAccountStorage() && IsDefaultPasswordStoreSet() &&
+         GetDefaultPasswordStore() == PasswordForm::Store::kProfileStore &&
+         base::FeatureList::IsEnabled(
+             password_manager::features::kButterOnDesktopFollowup);
 }
 
 #endif  // !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)

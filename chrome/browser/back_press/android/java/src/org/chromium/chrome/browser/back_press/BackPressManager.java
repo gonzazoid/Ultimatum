@@ -13,11 +13,11 @@ import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.Callback;
+import org.chromium.base.cached_flags.BooleanCachedFieldTrialParameter;
 import org.chromium.base.lifetime.Destroyable;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
 import org.chromium.base.supplier.Supplier;
-import org.chromium.chrome.browser.flags.BooleanCachedFieldTrialParameter;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.components.browser_ui.widget.gesture.BackPressHandler;
 import org.chromium.components.browser_ui.widget.gesture.BackPressHandler.BackPressResult;
@@ -39,7 +39,7 @@ import java.util.List;
  */
 public class BackPressManager implements Destroyable {
     public static final BooleanCachedFieldTrialParameter TAB_HISTORY_RECOVER =
-            new BooleanCachedFieldTrialParameter(
+            ChromeFeatureList.newBooleanCachedFieldTrialParameter(
                     ChromeFeatureList.BACK_GESTURE_REFACTOR, "tab_history_recover", false);
     private static final SparseIntArray sMetricsMap;
     private static final int sMetricsMaxValue;
@@ -88,8 +88,11 @@ public class BackPressManager implements Destroyable {
                     recordSystemBackCountIfBeforeFirstVisibleContent();
                     mLastCalledHandlerType = -1;
                     BackPressManager.this.handleBackPress();
+
                     // This means this back is triggered by a gesture rather than the back button.
-                    if (mLastBackEvent != null && mLastCalledHandlerType != -1) {
+                    if (mLastBackEvent != null
+                            && mLastCalledHandlerType != -1
+                            && mIsGestureNavEnabledSupplier.get()) {
                         BackPressMetrics.recordBackPressFromEdge(
                                 mLastCalledHandlerType, mLastBackEvent.getSwipeEdge());
 
@@ -98,6 +101,7 @@ public class BackPressManager implements Destroyable {
                                     mLastBackEvent.getSwipeEdge());
                         }
                     }
+
                     mActiveHandler = null;
                     mLastBackEvent = null;
                 }
@@ -139,6 +143,7 @@ public class BackPressManager implements Destroyable {
     private boolean mBackBeforeFirstVisibleContentRecorded;
     private Supplier<Boolean> mIsFirstVisibleContentDrawnSupplier;
     private Runnable mOnBackPressed;
+    private Supplier<Boolean> mIsGestureNavEnabledSupplier = () -> false;
 
     /**
      * @return True if the back gesture refactor is enabled.
@@ -280,6 +285,11 @@ public class BackPressManager implements Destroyable {
     /** Set a supplier to provide whether first visible content has been drawn. */
     public void setIsFirstVisibleContentDrawnSupplier(Supplier<Boolean> supplier) {
         mIsFirstVisibleContentDrawnSupplier = supplier;
+    }
+
+    /** Set a supplier to provide whether gesture nav mode is on when called. */
+    public void setIsGestureNavEnabledSupplier(Supplier<Boolean> supplier) {
+        mIsGestureNavEnabledSupplier = supplier;
     }
 
     /**

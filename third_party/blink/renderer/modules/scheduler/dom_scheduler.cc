@@ -176,7 +176,8 @@ scheduler::TaskAttributionIdType DOMScheduler::taskId(
     return 0;
   }
   scheduler::TaskAttributionInfo* task =
-      scheduler->GetTaskAttributionTracker()->RunningTask(script_state);
+      scheduler->GetTaskAttributionTracker()->RunningTask(
+          script_state->GetIsolate());
   // task cannot be nullptr here, as a task has presumably already ran in order
   // for this API call to be called.
   DCHECK(task);
@@ -194,7 +195,7 @@ AtomicString DOMScheduler::isAncestor(
     return AtomicString("unknown");
   }
   const scheduler::TaskAttributionInfo* current_task =
-      tracker->RunningTask(script_state);
+      tracker->RunningTask(script_state->GetIsolate());
   return current_task &&
                  tracker->IsAncestor(*current_task,
                                      scheduler::TaskAttributionId(parent_id))
@@ -251,7 +252,7 @@ DOMScheduler::SchedulingState DOMScheduler::GetSchedulingStateFromOptions(
     CHECK(RuntimeEnabledFeatures::SchedulerYieldEnabled(
         ExecutionContext::From(script_state)));
     if (auto* inherited_state =
-            ScriptWrappableTaskState::GetCurrent(script_state)) {
+            ScriptWrappableTaskState::GetCurrent(script_state->GetIsolate())) {
       inherited_abort_source = inherited_state->GetAbortSource();
       inherited_priority_source = inherited_state->GetPrioritySource();
     }

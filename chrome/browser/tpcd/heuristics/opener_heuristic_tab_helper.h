@@ -5,13 +5,14 @@
 #ifndef CHROME_BROWSER_TPCD_HEURISTICS_OPENER_HEURISTIC_TAB_HELPER_H_
 #define CHROME_BROWSER_TPCD_HEURISTICS_OPENER_HEURISTIC_TAB_HELPER_H_
 
+#include <optional>
+
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/dips/dips_utils.h"
 #include "components/content_settings/core/browser/cookie_settings.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_contents_user_data.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class Clock;
@@ -19,16 +20,6 @@ class Clock;
 
 // TODO(rtarpine): remove dependence on DIPSService.
 class DIPSState;
-
-enum class OptionalBool {
-  kUnknown = 0,
-  kFalse = 1,
-  kTrue = 2,
-};
-
-inline OptionalBool ToOptionalBool(bool b) {
-  return b ? OptionalBool::kTrue : OptionalBool::kFalse;
-}
 
 // Observers a WebContents to detect pop-ups with user interaction, in order to
 // grant storage access.
@@ -47,17 +38,29 @@ class OpenerHeuristicTabHelper
     ~PopupObserver() override;
 
     // Set the time that the user previously interacted with this pop-up's site.
-    void SetPastInteractionTime(base::Time time);
+    void SetPastInteractionTime(TimestampRange interaction_times);
 
    private:
     // Emit the OpenerHeuristic.PopupPastInteraction UKM event if we have all
     // the necessary information, and create a storage access grant if
     // supported.
     void EmitPastInteractionIfReady();
-    // Emit the OpenerHeuristic.TopLevel UKM event.
-    void EmitTopLevel(const GURL& tracker_url,
-                      OptionalBool has_iframe,
-                      bool is_current_interaction);
+
+    // Does three things:
+
+    // Emits a UKM event for the top-level site (if not a repeat).
+
+    // If `should_record_popup_and_maybe_grant` is True, stores a popup in the
+    // DIPS DB.
+
+    // If `should_record_popup_and_maybe_grant`, and eligible per experiment
+    // flags, creates a storage access grant.
+    void EmitTopLevelAndCreateGrant(const GURL& tracker_url,
+                                    OptionalBool has_iframe,
+                                    bool is_current_interaction,
+                                    bool should_record_popup_and_maybe_grant,
+                                    base::TimeDelta grant_duration);
+
     // Create a storage access grant, if eligible per experiment flags.
     void MaybeCreateOpenerHeuristicGrant(const GURL& url,
                                          base::TimeDelta grant_duration);
@@ -80,12 +83,15 @@ class OpenerHeuristicTabHelper
     const ukm::SourceId opener_source_id_;
     // The URL of the page that opened the pop-up.
     const GURL opener_url_;
-    // How long after the user last interacted with the site until the pop-up
-    // opened.
-    absl::optional<base::TimeDelta> time_since_interaction_;
+    // Whether the user last interacted with the site before the pop-up opened,
+    // and how long ago.
+    struct FieldNotSet {};
+    struct NoInteraction {};
+    absl::variant<FieldNotSet, NoInteraction, base::TimeDelta>
+        time_since_interaction_;
     // A source ID for `initial_url_`.
-    absl::optional<ukm::SourceId> initial_source_id_;
-    absl::optional<base::Time> commit_time_;
+    std::optional<ukm::SourceId> initial_source_id_;
+    std::optional<base::Time> commit_time_;
     size_t url_index_ = 0;
     bool interaction_reported_ = false;
     bool toplevel_reported_ = false;
@@ -124,7 +130,7 @@ class OpenerHeuristicTabHelper
                          const content::CookieAccessDetails& details);
   void EmitPostPopupCookieAccess(const ukm::SourceId& source_id,
                                  const content::CookieAccessDetails& details,
-                                 absl::optional<PopupsStateValue> value);
+                                 std::optional<PopupsStateValue> value);
   // Check whether `source_render_frame_host` is a valid popup initiator frame,
   // per the experiment flags.
   bool PassesIframeInitiatorCheck(

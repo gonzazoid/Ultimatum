@@ -601,8 +601,8 @@ void MediaCodecVideoDecoder::OnOverlayInfoChanged(
   surface_chooser_helper_.SetIsPersistentVideo(
       overlay_info_.is_persistent_video);
   surface_chooser_helper_.UpdateChooserState(
-      overlay_changed ? absl::make_optional(CreateOverlayFactoryCb())
-                      : absl::nullopt);
+      overlay_changed ? std::make_optional(CreateOverlayFactoryCb())
+                      : std::nullopt);
 }
 
 void MediaCodecVideoDecoder::OnSurfaceChosen(
@@ -779,7 +779,7 @@ void MediaCodecVideoDecoder::OnCodecConfigured(
   // Since we can't get the coded size w/o rendering the frame, we try to guess
   // in cases where we are unable to render the frame (resolution changes). If
   // we can't guess, there will be a visible rendering glitch.
-  absl::optional<gfx::Size> coded_size_alignment;
+  std::optional<gfx::Size> coded_size_alignment;
   if (base::FeatureList::IsEnabled(kMediaCodecCodedSizeGuessing)) {
     coded_size_alignment = MediaCodecUtil::LookupCodedSizeAlignment(name);
     if (coded_size_alignment) {
@@ -1105,6 +1105,13 @@ void MediaCodecVideoDecoder::ForwardVideoFrame(
   // way, often sRGB.  In that case, don't confuse things with HDR metadata.
   if (frame->ColorSpace().IsHDR() && decoder_config_.hdr_metadata()) {
     frame->set_hdr_metadata(decoder_config_.hdr_metadata());
+  }
+
+  if (media_crypto_context_) {
+    frame->metadata().protected_video = true;
+    if (requires_secure_codec_) {
+      frame->metadata().hw_protected = true;
+    }
   }
 
   if (reset_generation == reset_generation_) {

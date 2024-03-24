@@ -7,7 +7,7 @@
 #include <memory>
 
 #include "base/memory/weak_ptr.h"
-#include "chrome/browser/ui/views/bubble/bubble_contents_wrapper.h"
+#include "chrome/browser/ui/webui/top_chrome/webui_contents_wrapper.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/views/chrome_views_test_base.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -17,34 +17,34 @@
 namespace ash {
 namespace {
 
-class TestBubbleContentsWrapper
-    : public BubbleContentsWrapper,
-      public base::SupportsWeakPtr<TestBubbleContentsWrapper> {
+class TestWebUIContentsWrapper final : public WebUIContentsWrapper {
  public:
-  explicit TestBubbleContentsWrapper(Profile* profile)
-      : BubbleContentsWrapper(GURL(""),
-                              profile,
-                              /*task_manager_string_id=*/0,
-                              /*webui_resizes_host=*/true,
-                              /*esc_closes_ui=*/false,
-                              /*webui_name=*/"Test") {}
-  TestBubbleContentsWrapper(const TestBubbleContentsWrapper&) = delete;
-  TestBubbleContentsWrapper& operator=(const TestBubbleContentsWrapper&) =
-      delete;
-  ~TestBubbleContentsWrapper() override = default;
+  explicit TestWebUIContentsWrapper(Profile* profile)
+      : WebUIContentsWrapper(GURL(""),
+                             profile,
+                             /*task_manager_string_id=*/0,
+                             /*webui_resizes_host=*/true,
+                             /*esc_closes_ui=*/false,
+                             /*webui_name=*/"Test") {}
+  TestWebUIContentsWrapper(const TestWebUIContentsWrapper&) = delete;
+  TestWebUIContentsWrapper& operator=(const TestWebUIContentsWrapper&) = delete;
+  ~TestWebUIContentsWrapper() override = default;
 
-  // BubbleContentsWrapper:
+  // WebUIContentsWrapper:
   void ReloadWebContents() override {}
-  base::WeakPtr<BubbleContentsWrapper> GetWeakPtr() override {
-    return AsWeakPtr();
+  base::WeakPtr<WebUIContentsWrapper> GetWeakPtr() override {
+    return weak_ptr_factory_.GetWeakPtr();
   }
+
+ private:
+  base::WeakPtrFactory<TestWebUIContentsWrapper> weak_ptr_factory_{this};
 };
 
 using MakoRewriteViewTest = ChromeViewsTestBase;
 
 TEST_F(MakoRewriteViewTest, ResizesToWebViewSize) {
   TestingProfile profile;
-  TestBubbleContentsWrapper contents_wrapper(&profile);
+  TestWebUIContentsWrapper contents_wrapper(&profile);
 
   auto mako_rewrite_view = std::make_unique<MakoRewriteView>(
       &contents_wrapper, /*caret_bounds=*/gfx::Rect(20, 20));
@@ -58,9 +58,9 @@ TEST_F(MakoRewriteViewTest, ResizesToWebViewSize) {
   EXPECT_EQ(mako_rewrite_view_ptr->GetBoundsInScreen().size(), kWebViewSize);
 }
 
-TEST_F(MakoRewriteViewTest, DefaultBoundsLeftAlignedWithCaret) {
+TEST_F(MakoRewriteViewTest, DefaultBoundsAtBottomLeftOfCaret) {
   TestingProfile profile;
-  TestBubbleContentsWrapper contents_wrapper(&profile);
+  TestWebUIContentsWrapper contents_wrapper(&profile);
 
   constexpr gfx::Rect kCaretBounds(30, 40, 0, 10);
   auto mako_rewrite_view =
@@ -71,28 +71,15 @@ TEST_F(MakoRewriteViewTest, DefaultBoundsLeftAlignedWithCaret) {
   mako_rewrite_view_ptr->ResizeDueToAutoResize(/*source=*/nullptr,
                                                gfx::Size(100, 200));
 
+  // Should be left aligned and below the caret.
   EXPECT_EQ(mako_rewrite_view_ptr->GetBoundsInScreen().x(), kCaretBounds.x());
+  EXPECT_GE(mako_rewrite_view_ptr->GetBoundsInScreen().y(),
+            kCaretBounds.bottom());
 }
 
-TEST_F(MakoRewriteViewTest, DefaultBoundsBelowCaret) {
+TEST_F(MakoRewriteViewTest, AtTopLeftOfCaretForCaretAtScreenBottom) {
   TestingProfile profile;
-  TestBubbleContentsWrapper contents_wrapper(&profile);
-
-  constexpr gfx::Rect kCaretBounds(30, 40, 0, 10);
-  auto mako_rewrite_view =
-      std::make_unique<MakoRewriteView>(&contents_wrapper, kCaretBounds);
-  auto* mako_rewrite_view_ptr = mako_rewrite_view.get();
-  views::BubbleDialogDelegateView::CreateBubble(std::move(mako_rewrite_view));
-
-  mako_rewrite_view_ptr->ResizeDueToAutoResize(/*source=*/nullptr,
-                                               gfx::Size(100, 200));
-
-  EXPECT_GE(mako_rewrite_view_ptr->GetBoundsInScreen().y(), kCaretBounds.y());
-}
-
-TEST_F(MakoRewriteViewTest, AboveCaretAtScreenBottom) {
-  TestingProfile profile;
-  TestBubbleContentsWrapper contents_wrapper(&profile);
+  TestWebUIContentsWrapper contents_wrapper(&profile);
 
   const int screen_bottom =
       display::Screen::GetScreen()->GetPrimaryDisplay().work_area().bottom();
@@ -104,8 +91,49 @@ TEST_F(MakoRewriteViewTest, AboveCaretAtScreenBottom) {
 
   mako_rewrite_view_ptr->ResizeDueToAutoResize(/*source=*/nullptr,
                                                gfx::Size(100, 200));
+  // Should be left aligned and above the caret.
+  EXPECT_EQ(mako_rewrite_view_ptr->GetBoundsInScreen().x(), caret_bounds.x());
+  EXPECT_LE(mako_rewrite_view_ptr->GetBoundsInScreen().bottom(),
+            caret_bounds.y());
+}
 
-  EXPECT_LE(mako_rewrite_view_ptr->GetBoundsInScreen().y(), caret_bounds.y());
+TEST_F(MakoRewriteViewTest, OnScreenWithoutOverlapForSmallSelection) {
+  TestingProfile profile;
+  TestWebUIContentsWrapper contents_wrapper(&profile);
+
+  constexpr gfx::Rect kSelectionBounds(100, 40, 200, 100);
+  auto mako_rewrite_view =
+      std::make_unique<MakoRewriteView>(&contents_wrapper, kSelectionBounds);
+  auto* mako_rewrite_view_ptr = mako_rewrite_view.get();
+  views::BubbleDialogDelegateView::CreateBubble(std::move(mako_rewrite_view));
+
+  mako_rewrite_view_ptr->ResizeDueToAutoResize(/*source=*/nullptr,
+                                               gfx::Size(100, 200));
+
+  EXPECT_TRUE(
+      display::Screen::GetScreen()->GetPrimaryDisplay().work_area().Contains(
+          mako_rewrite_view_ptr->GetBoundsInScreen()));
+  EXPECT_FALSE(
+      mako_rewrite_view_ptr->GetBoundsInScreen().Intersects(kSelectionBounds));
+}
+
+TEST_F(MakoRewriteViewTest, OnScreenForLargeSelection) {
+  TestingProfile profile;
+  TestWebUIContentsWrapper contents_wrapper(&profile);
+
+  const gfx::Rect selection_bounds =
+      display::Screen::GetScreen()->GetPrimaryDisplay().work_area();
+  auto mako_rewrite_view =
+      std::make_unique<MakoRewriteView>(&contents_wrapper, selection_bounds);
+  auto* mako_rewrite_view_ptr = mako_rewrite_view.get();
+  views::BubbleDialogDelegateView::CreateBubble(std::move(mako_rewrite_view));
+
+  mako_rewrite_view_ptr->ResizeDueToAutoResize(/*source=*/nullptr,
+                                               gfx::Size(100, 200));
+
+  EXPECT_TRUE(
+      display::Screen::GetScreen()->GetPrimaryDisplay().work_area().Contains(
+          mako_rewrite_view_ptr->GetBoundsInScreen()));
 }
 
 }  // namespace

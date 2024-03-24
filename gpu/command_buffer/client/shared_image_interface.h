@@ -44,15 +44,17 @@ namespace gpu {
 class ClientSharedImage;
 class GpuMemoryBufferManager;
 struct SharedImageCapabilities;
+class SharedImageInterfaceHolder;
 
 // An interface to create shared images and swap chains that can be imported
 // into other APIs. This interface is thread-safe and (essentially) stateless.
 // It is asynchronous in the same sense as GLES2Interface or RasterInterface in
 // that commands are executed asynchronously on the service side, but can be
 // synchronized using SyncTokens. See //docs/design/gpu_synchronization.md.
-class GPU_EXPORT SharedImageInterface {
+class GPU_EXPORT SharedImageInterface
+    : public base::RefCountedThreadSafe<SharedImageInterface> {
  public:
-  virtual ~SharedImageInterface() = default;
+  SharedImageInterface();
 
   // Creates a shared image of requested |format|, |size| and |color_space|.
   // |usage| is a combination of |SharedImageUsage| bits that describes which
@@ -158,11 +160,25 @@ class GPU_EXPORT SharedImageInterface {
       base::StringPiece debug_label,
       gfx::GpuMemoryBufferHandle buffer_handle) = 0;
 
+  struct GPU_EXPORT SharedImageMapping {
+    SharedImageMapping(SharedImageMapping& mapped) = delete;
+    SharedImageMapping& operator=(SharedImageMapping& mapped) = delete;
+    SharedImageMapping();
+    SharedImageMapping(SharedImageMapping&& mapped);
+    SharedImageMapping(scoped_refptr<ClientSharedImage> shared_image,
+                       base::WritableSharedMemoryMapping mapping);
+    SharedImageMapping& operator=(SharedImageMapping&& mapped);
+    ~SharedImageMapping();
+
+    scoped_refptr<ClientSharedImage> shared_image;
+    base::WritableSharedMemoryMapping mapping;
+  };
+
   // Creates a shared image with the usage of gpu::SHARED_IMAGE_USAGE_CPU_WRITE
   // only. A shared memory buffer is created internally and a shared image is
   // created out this buffer. This method is used by the software compositor
   // only.
-  virtual scoped_refptr<ClientSharedImage> CreateSharedImage(
+  virtual SharedImageMapping CreateSharedImage(
       viz::SharedImageFormat format,
       const gfx::Size& size,
       const gfx::ColorSpace& color_space,
@@ -245,6 +261,11 @@ class GPU_EXPORT SharedImageInterface {
   virtual scoped_refptr<ClientSharedImage> AddReferenceToSharedImage(
       const SyncToken& sync_token,
       const Mailbox& mailbox,
+      viz::SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
       uint32_t usage) = 0;
 
   struct GPU_EXPORT SwapChainSharedImages {
@@ -316,6 +337,9 @@ class GPU_EXPORT SharedImageInterface {
   // commands on this interface have executed on the service side.
   virtual SyncToken GenVerifiedSyncToken() = 0;
 
+  // Verifies the SyncToken.
+  virtual void VerifySyncToken(gpu::SyncToken& sync_token) = 0;
+
   // Wait on this SyncToken to be released before executing new commands on
   // this interface on the service side. This is an async wait for all the
   // previous commands which will be sent to server on the next flush().
@@ -344,9 +368,42 @@ class GPU_EXPORT SharedImageInterface {
   // DestroySharedImage().
   virtual scoped_refptr<ClientSharedImage> NotifyMailboxAdded(
       const Mailbox& mailbox,
+      viz::SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
       uint32_t usage);
 
   virtual const SharedImageCapabilities& GetCapabilities() = 0;
+
+  void Release() const;
+
+ protected:
+  friend class base::RefCountedThreadSafe<SharedImageInterface>;
+  virtual ~SharedImageInterface();
+
+  scoped_refptr<SharedImageInterfaceHolder> holder_;
+};
+
+// |SharedImageInterfaceHolder| provides thread-safe access to
+// |SharedImageInterface| via a weak reference.
+class GPU_EXPORT SharedImageInterfaceHolder
+    : public base::RefCountedThreadSafe<SharedImageInterfaceHolder> {
+ public:
+  SharedImageInterfaceHolder(SharedImageInterface* sii);
+
+  scoped_refptr<SharedImageInterface> Get();
+
+ private:
+  friend base::RefCountedThreadSafe<SharedImageInterfaceHolder>;
+  friend SharedImageInterface;
+  ~SharedImageInterfaceHolder();
+
+  void OnDestroy();
+
+  mutable base::Lock lock_;
+  raw_ptr<SharedImageInterface> sii_ GUARDED_BY(lock_);
 };
 
 }  // namespace gpu

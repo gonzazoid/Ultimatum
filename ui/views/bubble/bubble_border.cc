@@ -9,6 +9,7 @@
 #include <tuple>
 #include <utility>
 
+#include "base/check.h"
 #include "base/check_op.h"
 #include "base/no_destructor.h"
 #include "cc/paint/paint_flags.h"
@@ -131,7 +132,7 @@ SkPath GetVisibleArrowPath(BubbleBorder::Arrow arrow,
 
 const gfx::ShadowValues& GetShadowValues(
     const ui::ColorProvider* color_provider,
-    const absl::optional<int>& elevation,
+    const std::optional<int>& elevation,
     BubbleBorder::Shadow shadow_type) {
   // If the color provider does not exist the shadow values are being created in
   // order to calculate Insets. In that case the color plays no role so always
@@ -206,8 +207,8 @@ const gfx::ShadowValues& GetShadowValues(
   return shadow_map->find(key)->second;
 }
 
-bool ShouldDrawStrokeForArgs(const absl::optional<bool>& draw_border_stroke,
-                             const absl::optional<int>& elevation,
+bool ShouldDrawStrokeForArgs(const std::optional<bool>& draw_border_stroke,
+                             const std::optional<int>& elevation,
                              BubbleBorder::Shadow shadow_type) {
   return draw_border_stroke.value_or(!elevation.has_value() &&
                                      shadow_type != BubbleBorder::NO_SHADOW);
@@ -215,7 +216,7 @@ bool ShouldDrawStrokeForArgs(const absl::optional<bool>& draw_border_stroke,
 
 const cc::PaintFlags& GetBorderAndShadowFlags(
     const ui::ColorProvider* color_provider,
-    const absl::optional<int>& elevation,
+    const std::optional<int>& elevation,
     BubbleBorder::Shadow shadow_type) {
   // The flags are always the same for any elevation and color combination, so
   // construct them once and cache.
@@ -243,7 +244,7 @@ void DrawBorderAndShadowImpl(
     gfx::Canvas* canvas,
     const ui::ColorProvider* color_provider,
     bool draw_stroke = true,
-    const absl::optional<int>& elevation = absl::nullopt,
+    const std::optional<int>& elevation = std::nullopt,
     BubbleBorder::Shadow shadow_type = BubbleBorder::STANDARD_SHADOW) {
   if (draw_stroke) {
     // Provide a 1 px border outside the bounds.
@@ -268,8 +269,8 @@ BubbleBorder::~BubbleBorder() = default;
 
 // static
 gfx::Insets BubbleBorder::GetBorderAndShadowInsets(
-    const absl::optional<int>& elevation,
-    const absl::optional<bool>& draw_border_stroke,
+    const std::optional<int>& elevation,
+    const std::optional<bool>& draw_border_stroke,
     BubbleBorder::Shadow shadow_type) {
   return gfx::Insets(
              ShouldDrawStrokeForArgs(draw_border_stroke, elevation, shadow_type)
@@ -510,9 +511,11 @@ gfx::Size BubbleBorder::GetSizeForContentsSize(
 
 bool BubbleBorder::AddArrowToBubbleCornerAndPointTowardsAnchor(
     const gfx::Rect& anchor_rect,
-    gfx::Rect& popup_bounds) {
+    gfx::Rect& popup_bounds,
+    int popup_min_y) {
   // This function should only be called for a visible arrow.
   DCHECK(arrow_ != Arrow::NONE && arrow_ != Arrow::FLOAT);
+  CHECK_GE(popup_bounds.y(), popup_min_y);
 
   // The total size of the arrow in its normal direction.
   const int kVisibleArrowDiamater = 2 * kVisibleArrowRadius;
@@ -618,6 +621,14 @@ bool BubbleBorder::AddArrowToBubbleCornerAndPointTowardsAnchor(
       GetContentsBoundsOffsetToPlaceVisibleArrow(arrow_, false);
   popup_bounds.set_origin(popup_bounds.origin() + popup_offset);
   visible_arrow_rect_.set_origin(visible_arrow_rect_.origin() + popup_offset);
+
+  // Adjust positions if the shifted popup violates the min y restrictions.
+  int min_y_overlay = popup_min_y - popup_bounds.y();
+  if (min_y_overlay > 0) {
+    // gfx::Vector2d min_y_offset{0, min_y_overlay};
+    popup_bounds.Offset(0, min_y_overlay);
+    visible_arrow_rect_.Offset(0, min_y_overlay);
+  }
 
   set_visible_arrow(true);
   return true;

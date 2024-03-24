@@ -305,6 +305,12 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
   // still return an invalid process with a null handle.
   virtual bool IsInitializedAndNotDead() = 0;
 
+  // Returns true iff the decision has been made to delete `this`.
+  //
+  // If this returns true, then no new child processes will be associated
+  // with `this`.
+  virtual bool IsDeletingSoon() = 0;
+
   // Returns the renderer channel.
   virtual IPC::ChannelProxy* GetChannel() = 0;
 
@@ -546,16 +552,6 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
   // MockRenderProcessHost usage in tests.
   virtual mojom::Renderer* GetRendererInterface() = 0;
 
-  // Create an URLLoaderFactory from |this| renderer process.
-  //
-  // This method will bind |receiver| with a new URLLoaderFactory created from
-  // the storage partition's Network Context. Note that the URLLoaderFactory
-  // returned by this method does NOT support auto-reconnect after a crash of
-  // Network Service.
-  virtual void CreateURLLoaderFactory(
-      mojo::PendingReceiver<network::mojom::URLLoaderFactory> receiver,
-      network::mojom::URLLoaderFactoryParamsPtr params) = 0;
-
   // Whether this process is locked out from ever being reused for sites other
   // than the ones it currently has.
   virtual bool MayReuseHost() = 0;
@@ -779,6 +775,9 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
 
   // Return the spare RenderProcessHost, if it exists. There is at most one
   // globally-used spare RenderProcessHost at any time.
+  // TODO(crbug.com/1519190): remove the non-test method once the performance
+  // investigation is finished.
+  static RenderProcessHost* GetSpareRenderProcessHost();
   static RenderProcessHost* GetSpareRenderProcessHostForTesting();
 
   // Registers a callback to be notified when the spare RenderProcessHost is

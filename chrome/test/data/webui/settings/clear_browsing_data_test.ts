@@ -6,18 +6,19 @@
 import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
 import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {flushTasks, waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
-import {ClearBrowsingDataBrowserProxyImpl, ClearBrowsingDataResult, SettingsCheckboxElement, SettingsClearBrowsingDataDialogElement, SettingsHistoryDeletionDialogElement, SettingsPasswordsDeletionDialogElement, TimePeriodExperiment, TimePeriod} from 'chrome://settings/lazy_load.js';
-import {CrButtonElement, loadTimeData, StatusAction, SyncBrowserProxyImpl, SettingsDropdownMenuElement} from 'chrome://settings/settings.js';
+import type {ClearBrowsingDataResult, SettingsCheckboxElement, SettingsClearBrowsingDataDialogElement, SettingsHistoryDeletionDialogElement, SettingsPasswordsDeletionDialogElement} from 'chrome://settings/lazy_load.js';
+import {ClearBrowsingDataBrowserProxyImpl, TimePeriodExperiment, TimePeriod} from 'chrome://settings/lazy_load.js';
+import type {CrButtonElement, SettingsDropdownMenuElement} from 'chrome://settings/settings.js';
+import {loadTimeData, StatusAction, SyncBrowserProxyImpl} from 'chrome://settings/settings.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {eventToPromise, isVisible} from 'chrome://webui-test/test_util.js';
+import {flushTasks, waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
+import {isChildVisible, isVisible, eventToPromise} from 'chrome://webui-test/test_util.js';
 
 import {TestClearBrowsingDataBrowserProxy} from './test_clear_browsing_data_browser_proxy.js';
 import {TestSyncBrowserProxy} from './test_sync_browser_proxy.js';
 
 // <if expr="not is_chromeos">
 import {Router, routes} from 'chrome://settings/settings.js';
-import {isChildVisible} from 'chrome://webui-test/test_util.js';
 // </if>
 
 // clang-format on
@@ -427,6 +428,87 @@ suite('ClearBrowsingDataAllPlatforms', function() {
     element.remove();
   });
 
+  async function assertDropdownSelectionPersisted(
+      tabIndex: number, tabName: string, prefName: string) {
+    assertTrue(element.$.clearBrowsingDataDialog.open);
+    // The user selects the tab of interest.
+    const crTabs = element.shadowRoot!.querySelector('cr-tabs');
+    assertTrue(!!crTabs);
+    crTabs.selected = tabIndex;
+
+    const timePeriodDropdown = getTimePeriodDropdown(tabName, element);
+    const selectElement =
+        timePeriodDropdown.shadowRoot!.querySelector('select');
+    assertTrue(!!selectElement);
+
+    // Ensure the test starts with a known pref and dropdown value.
+    element.setPrefValue(prefName, TimePeriod.LAST_DAY);
+    await waitAfterNextRender(timePeriodDropdown);
+    assertEquals(TimePeriod.LAST_DAY.toString(), selectElement.value);
+
+    // Changing the dropdown selection does not persist its value to the pref.
+    selectElement.value = TimePeriod.LAST_WEEK.toString();
+    assertEquals(TimePeriod.LAST_DAY, element.getPref(prefName).value);
+
+    // Select a datatype for deletion to enable the clear button.
+    assertTrue(!!element.$.cookiesCheckbox);
+    element.$.cookiesCheckbox.$.checkbox.click();
+    assertTrue(!!element.$.cookiesCheckboxBasic);
+    element.$.cookiesCheckboxBasic.$.checkbox.click();
+    // Confirming the deletion persists the dropdown selection to the pref and
+    // sends the time range for clearing.
+    const actionButton =
+        element.shadowRoot!.querySelector<CrButtonElement>('.action-button');
+    assertTrue(!!actionButton);
+    actionButton.click();
+    assertEquals(TimePeriod.LAST_WEEK, element.getPref(prefName).value);
+    const args = await testBrowserProxy.whenCalled('clearBrowsingData');
+    const timeRange = args[1];
+    assertEquals(TimePeriod.LAST_WEEK, timeRange);
+  }
+
+  test('dropdownSelectionPersisted_Basic', function() {
+    return assertDropdownSelectionPersisted(
+        /*tabIndex*/ 0, 'basic-tab', 'browser.clear_data.time_period_basic');
+  });
+
+  test('dropdownSelectionPersisted_Advanced', function() {
+    return assertDropdownSelectionPersisted(
+        /*tabIndex*/ 1, 'advanced-tab', 'browser.clear_data.time_period');
+  });
+
+  test('tabSelection', async function() {
+    assertTrue(element.$.clearBrowsingDataDialog.open);
+
+    // Ensure the test starts with a known pref state and tab selection.
+    element.setPrefValue('browser.last_clear_browsing_data_tab', 0);
+    await waitAfterNextRender(element);
+    assertEquals(
+        0, element.getPref('browser.last_clear_browsing_data_tab').value);
+    assertTrue(isChildVisible(element, '#basic-tab'));
+
+    // Changing the tab selection changes the visible tab, but does not persist
+    // the tab selection to the pref.
+    const crTabs = element.shadowRoot!.querySelector('cr-tabs');
+    assertTrue(!!crTabs);
+    crTabs.selected = 1;
+    await waitAfterNextRender(element);
+    assertEquals(
+        0, element.getPref('browser.last_clear_browsing_data_tab').value);
+    assertTrue(isChildVisible(element, '#advanced-tab'));
+
+    // Select a datatype for deletion to enable the clear button.
+    assertTrue(!!element.$.cookiesCheckbox);
+    element.$.cookiesCheckbox.$.checkbox.click();
+    // Confirming the deletion persists the tab selection to the pref.
+    const actionButton =
+        element.shadowRoot!.querySelector<CrButtonElement>('.action-button');
+    assertTrue(!!actionButton);
+    actionButton.click();
+    assertEquals(
+        1, element.getPref('browser.last_clear_browsing_data_tab').value);
+  });
+
   test('ClearBrowsingDataTap', async function() {
     assertTrue(element.$.clearBrowsingDataDialog.open);
 
@@ -779,17 +861,13 @@ suite('ClearBrowsingDataForSupervisedUsers', function() {
   test(
       'Additional information shown for supervised users when clearing cookies',
       async function() {
-        loadTimeData.overrideValues({
-          clearingCookiesKeepsSupervisedUsersSignedIn: true,
-        });
         document.body.appendChild(element);
         await testBrowserProxy.whenCalled('initialize');
 
         assertTrue(element.$.clearBrowsingDataDialog.open);
 
         // Supervised users will see additional text informing them they will
-        // not be signed out when cookies are cleared and
-        // `kClearingCookiesKeepsSupervisedUsersSignedIn` flag enabled.
+        // not be signed out when cookies are cleared
         const checkbox =
             element.shadowRoot!.querySelector<SettingsCheckboxElement>(
                 '#cookiesCheckboxBasic')!;

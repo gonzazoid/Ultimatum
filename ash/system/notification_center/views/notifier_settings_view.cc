@@ -65,6 +65,7 @@
 #include "ui/views/layout/fill_layout.h"
 #include "ui/views/layout/table_layout.h"
 #include "ui/views/painter.h"
+#include "ui/views/view_class_properties.h"
 #include "ui/views/widget/widget.h"
 
 namespace ash {
@@ -126,7 +127,7 @@ class NotifierButtonWrapperView : public views::View {
   ~NotifierButtonWrapperView() override;
 
   // views::View:
-  void Layout() override;
+  void Layout(PassKey) override;
   gfx::Size CalculatePreferredSize() const override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   void OnFocus() override;
@@ -155,7 +156,7 @@ NotifierButtonWrapperView::NotifierButtonWrapperView(views::View* contents)
 
 NotifierButtonWrapperView::~NotifierButtonWrapperView() = default;
 
-void NotifierButtonWrapperView::Layout() {
+void NotifierButtonWrapperView::Layout(PassKey) {
   int contents_width = width();
   int contents_height = contents_->GetHeightForWidth(contents_width);
   int y = std::max((height() - contents_height) / 2, 0);
@@ -491,7 +492,7 @@ void NotifierSettingsView::NotifierButton::GridChanged() {
   // constructor, and replace TableLayout with BoxLayout.  Toggle the visibility
   // of the policy icon dynamically as needed.
 
-  auto* layout = SetLayoutManager(std::make_unique<views::TableLayout>());
+  auto* const layout = SetLayoutManager(std::make_unique<views::TableLayout>());
   layout
       // Add a column for the checkbox.
       ->AddPaddingColumn(views::TableLayout::kFixedSize,
@@ -523,7 +524,8 @@ void NotifierSettingsView::NotifierButton::GridChanged() {
       .AddRows(1, views::TableLayout::kFixedSize);
 
   // FocusRing is a child of Button. Ignore it.
-  layout->SetChildViewIgnoredByLayout(views::FocusRing::Get(this), true);
+  views::FocusRing::Get(this)->SetProperty(views::kViewIgnoredByLayoutKey,
+                                           true);
 
   if (!GetEnabled()) {
     auto policy_enforced_icon = std::make_unique<views::ImageView>();
@@ -538,10 +540,10 @@ void NotifierSettingsView::NotifierButton::GridChanged() {
     AddChildView(std::move(policy_enforced_icon));
   }
 
-  Layout();
+  DeprecatedLayoutImmediately();
 }
 
-BEGIN_METADATA(NotifierSettingsView, NotifierButton, views::Button)
+BEGIN_METADATA(NotifierSettingsView, NotifierButton)
 END_METADATA
 
 // NotifierSettingsView -------------------------------------------------------
@@ -659,7 +661,8 @@ NotifierSettingsView::NotifierSettingsView() {
     auto scroller = std::make_unique<views::ScrollView>();
     scroller->SetBackgroundColor(std::nullopt);
     scroll_bar_ = scroller->SetVerticalScrollBar(
-        std::make_unique<views::OverlayScrollBar>(/*horizontal=*/false));
+        std::make_unique<views::OverlayScrollBar>(
+            views::ScrollBar::Orientation::kVertical));
     scroller->SetDrawOverflowIndicator(false);
     scroller_ = AddChildView(std::move(scroller));
 
@@ -736,7 +739,7 @@ void NotifierSettingsView::OnNotifiersUpdated(
 
   contents_view_ptr->SetBoundsRect(
       gfx::Rect(contents_view_ptr->GetPreferredSize()));
-  Layout();
+  DeprecatedLayoutImmediately();
 }
 
 void NotifierSettingsView::OnNotifierIconUpdated(const NotifierId& notifier_id,
@@ -746,7 +749,7 @@ void NotifierSettingsView::OnNotifierIconUpdated(const NotifierId& notifier_id,
   if (features::IsSettingsAppNotificationSettingsEnabled()) {
     return;
   }
-  for (auto* button : buttons_) {
+  for (NotifierButton* button : buttons_) {
     if (button->notifier_id() == notifier_id) {
       button->UpdateIconImage(icon);
       return;
@@ -754,7 +757,7 @@ void NotifierSettingsView::OnNotifierIconUpdated(const NotifierId& notifier_id,
   }
 }
 
-void NotifierSettingsView::Layout() {
+void NotifierSettingsView::Layout(PassKey) {
   int header_height = header_view_->GetHeightForWidth(width());
   header_view_->SetBounds(0, 0, width(), header_height);
   // |scroller_| and |no_notifiers_view_| do not exist when notifications

@@ -7,7 +7,7 @@
 #import "base/strings/sys_string_conversions.h"
 #import "build/branding_buildflags.h"
 #import "components/search_engines/search_engines_switches.h"
-#import "ios/chrome/browser/promos_manager/features.h"
+#import "ios/chrome/browser/promos_manager/model/features.h"
 #import "ios/chrome/browser/shared/model/prefs/pref_names.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/ui/authentication/signin_matchers.h"
@@ -289,10 +289,6 @@ void SkipScreensBeforeOmniboxPositionChoice() {
   config.additional_args.push_back("-NextPromoForDisplayOverride");
   config.additional_args.push_back("promos_manager::Promo::OmniboxPosition");
   config.relaunch_policy = ForceRelaunchByCleanShutdown;
-
-  // Disable FET in promo manager as the initialization takes too much time and
-  // causes the test to fail (crbug.com/1505431).
-  config.features_disabled.push_back(kPromosManagerUsesFET);
 
   std::string bottomOptionByDefault =
       std::string(kBottomOmniboxPromoDefaultPosition.name) + ":" +

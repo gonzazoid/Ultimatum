@@ -5,12 +5,167 @@
 #include "ash/system/input_device_settings/input_device_settings_metadata.h"
 
 #include "ash/public/mojom/input_device_settings.mojom.h"
+#include "ash/strings/grit/ash_strings.h"
 #include "ash/system/input_device_settings/input_device_settings_utils.h"
 #include "base/no_destructor.h"
+#include "ui/base/l10n/l10n_util.h"
 #include "ui/events/devices/input_device.h"
 #include "ui/events/devices/keyboard_device.h"
+#include "ui/events/event_constants.h"
+#include "ui/events/keycodes/dom/dom_code.h"
+#include "ui/events/keycodes/dom/dom_key.h"
 
 namespace ash {
+
+namespace {
+
+std::vector<mojom::ButtonRemappingPtr> GetDefaultButtonRemappingList() {
+  return {};
+}
+
+std::vector<mojom::ButtonRemappingPtr> GetFiveKeyButtonRemappingList() {
+  std::vector<mojom::ButtonRemappingPtr> array;
+  array.push_back(mojom::ButtonRemapping::New(
+      /*name=*/l10n_util::GetStringUTF8(
+          IDS_SETTINGS_CUSTOMIZATION_MIDDLE_BUTTON_DEFAULT_NAME),
+      /*button=*/
+      mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kMiddle),
+      /*remapping_action=*/nullptr));
+  array.push_back(mojom::ButtonRemapping::New(
+      /*name=*/l10n_util::GetStringUTF8(
+          IDS_SETTINGS_CUSTOMIZATION_FORWARD_BUTTON_DEFAULT_NAME),
+      /*button=*/
+      mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kExtra),
+      /*remapping_action=*/nullptr));
+  array.push_back(mojom::ButtonRemapping::New(
+      /*name=*/l10n_util::GetStringUTF8(
+          IDS_SETTINGS_CUSTOMIZATION_BACK_BUTTON_DEFAULT_NAME),
+      /*button=*/
+      mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kSide),
+      /*remapping_action=*/nullptr));
+  return array;
+}
+
+std::vector<mojom::ButtonRemappingPtr> GetLogitechSixKeyButtonRemappingList() {
+  std::vector<mojom::ButtonRemappingPtr> array;
+  array.push_back(mojom::ButtonRemapping::New(
+      /*name=*/l10n_util::GetStringUTF8(
+          IDS_SETTINGS_CUSTOMIZATION_MIDDLE_BUTTON_DEFAULT_NAME),
+      /*button=*/
+      mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kMiddle),
+      /*remapping_action=*/nullptr));
+  array.push_back(mojom::ButtonRemapping::New(
+      /*name=*/l10n_util::GetStringUTF8(
+          IDS_SETTINGS_CUSTOMIZATION_FORWARD_BUTTON_DEFAULT_NAME),
+      /*button=*/
+      mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kExtra),
+      /*remapping_action=*/nullptr));
+  array.push_back(mojom::ButtonRemapping::New(
+      /*name=*/l10n_util::GetStringUTF8(
+          IDS_SETTINGS_CUSTOMIZATION_BACK_BUTTON_DEFAULT_NAME),
+      /*button=*/
+      mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kSide),
+      /*remapping_action=*/nullptr));
+  array.push_back(mojom::ButtonRemapping::New(
+      /*name=*/l10n_util::GetStringUTF8(
+          IDS_SETTINGS_CUSTOMIZATION_SIDE_BUTTON_DEFAULT_NAME),
+      /*button=*/
+      mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kForward),
+      /*remapping_action=*/nullptr));
+  return array;
+}
+
+std::vector<mojom::ButtonRemappingPtr>
+GetLogitechSixKeyWithTabButtonRemappingList() {
+  std::vector<mojom::ButtonRemappingPtr> array;
+  array.push_back(mojom::ButtonRemapping::New(
+      /*name=*/l10n_util::GetStringUTF8(
+          IDS_SETTINGS_CUSTOMIZATION_MIDDLE_BUTTON_DEFAULT_NAME),
+      /*button=*/
+      mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kMiddle),
+      /*remapping_action=*/nullptr));
+  array.push_back(mojom::ButtonRemapping::New(
+      /*name=*/l10n_util::GetStringUTF8(
+          IDS_SETTINGS_CUSTOMIZATION_FORWARD_BUTTON_DEFAULT_NAME),
+      /*button=*/
+      mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kExtra),
+      /*remapping_action=*/nullptr));
+  array.push_back(mojom::ButtonRemapping::New(
+      /*name=*/l10n_util::GetStringUTF8(
+          IDS_SETTINGS_CUSTOMIZATION_BACK_BUTTON_DEFAULT_NAME),
+      /*button=*/
+      mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kSide),
+      /*remapping_action=*/nullptr));
+  array.push_back(mojom::ButtonRemapping::New(
+      /*name=*/l10n_util::GetStringUTF8(
+          IDS_SETTINGS_CUSTOMIZATION_SIDE_BUTTON_DEFAULT_NAME),
+      /*button=*/
+      mojom::Button::NewVkey(ui::VKEY_TAB),
+      /*remapping_action=*/nullptr));
+  return array;
+}
+
+std::vector<mojom::ButtonRemappingPtr>
+GetWacomStandardPenButtonRemappingList() {
+  std::vector<mojom::ButtonRemappingPtr> array;
+  array.push_back(mojom::ButtonRemapping::New(
+      /*name=*/l10n_util::GetStringUTF8(
+          IDS_SETTINGS_CUSTOMIZATION_PEN_FRONT_BUTTON_NAME),
+      /*button=*/
+      mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kMiddle),
+      mojom::RemappingAction::NewStaticShortcutAction(
+          mojom::StaticShortcutAction::kRightClick)));
+  array.push_back(mojom::ButtonRemapping::New(
+      /*name=*/l10n_util::GetStringUTF8(
+          IDS_SETTINGS_CUSTOMIZATION_PEN_REAR_BUTTON_NAME),
+      /*button=*/
+      mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kRight),
+      mojom::RemappingAction::NewStaticShortcutAction(
+          mojom::StaticShortcutAction::kMiddleClick)));
+  return array;
+}
+
+std::vector<mojom::ButtonRemappingPtr>
+GetWacomStandardFourButtonRemappingList() {
+  std::vector<mojom::ButtonRemappingPtr> array;
+  array.push_back(mojom::ButtonRemapping::New(
+      /*name=*/l10n_util::GetStringUTF8(
+          IDS_SETTINGS_CUSTOMIZATION_TABLET_EXPRESS_KEY_1_NAME),
+      /*button=*/
+      mojom::Button::NewVkey(ui::VKEY_BUTTON_0),
+      mojom::RemappingAction::NewKeyEvent(mojom::KeyEvent::New(
+          ui::VKEY_SHIFT, static_cast<int>(ui::DomCode::SHIFT_LEFT),
+          static_cast<int>(ui::DomKey::SHIFT), ui::EF_SHIFT_DOWN,
+          /*key_display=*/""))));
+  array.push_back(mojom::ButtonRemapping::New(
+      /*name=*/l10n_util::GetStringUTF8(
+          IDS_SETTINGS_CUSTOMIZATION_TABLET_EXPRESS_KEY_2_NAME),
+      /*button=*/
+      mojom::Button::NewVkey(ui::VKEY_BUTTON_1),
+      mojom::RemappingAction::NewKeyEvent(mojom::KeyEvent::New(
+          ui::VKEY_MENU, static_cast<int>(ui::DomCode::ALT_LEFT),
+          static_cast<int>(ui::DomKey::ALT), ui::EF_ALT_DOWN,
+          /*key_display=*/""))));
+  array.push_back(mojom::ButtonRemapping::New(
+      /*name=*/l10n_util::GetStringUTF8(
+          IDS_SETTINGS_CUSTOMIZATION_TABLET_EXPRESS_KEY_3_NAME),
+      /*button=*/
+      mojom::Button::NewVkey(ui::VKEY_BUTTON_2),
+      mojom::RemappingAction::NewKeyEvent(mojom::KeyEvent::New(
+          ui::VKEY_CONTROL, static_cast<int>(ui::DomCode::CONTROL_LEFT),
+          static_cast<int>(ui::DomKey::CONTROL), ui::EF_CONTROL_DOWN,
+          /*key_display=*/""))));
+  array.push_back(mojom::ButtonRemapping::New(
+      /*name=*/l10n_util::GetStringUTF8(
+          IDS_SETTINGS_CUSTOMIZATION_TABLET_EXPRESS_KEY_4_NAME),
+      /*button=*/
+      mojom::Button::NewVkey(ui::VKEY_BUTTON_3),
+      mojom::RemappingAction::NewAcceleratorAction(
+          AcceleratorAction::kToggleOverview)));
+  return array;
+}
+
+}  // namespace
 
 const base::flat_map<VendorProductId, MouseMetadata>& GetMouseMetadataList() {
   const static base::NoDestructor<
@@ -24,31 +179,109 @@ const base::flat_map<VendorProductId, MouseMetadata>& GetMouseMetadataList() {
           {{0xffff, 0xffff},
            {mojom::CustomizationRestriction::kDisallowCustomizations,
             mojom::MouseButtonConfig::kNoConfig}},
-          // Razer Naga Pro (USB Dongle)
-          {{0x1532, 0x0090},
-           {mojom::CustomizationRestriction::
-                kAllowAlphabetOrNumberKeyEventRewrites,
+          // Logitech M720 Triathlon (USB Dongle)
+          {{0x046d, 0x405e},
+           {mojom::CustomizationRestriction::kAllowTabEventRewrites,
             mojom::MouseButtonConfig::kNoConfig}},
-          // Razer Naga Pro (Bluetooth)
-          {{0x1532, 0x0092},
+          // Logitech MX Master 2S (USB Dongle)
+          {{0x046d, 0x4069},
+           {mojom::CustomizationRestriction::kAllowTabEventRewrites,
+            mojom::MouseButtonConfig::kLogitechSixKeyWithTab}},
+          // Logitech MX Master 3 (USB Dongle)
+          {{0x046d, 0x4082},
+           {mojom::CustomizationRestriction::kAllowTabEventRewrites,
+            mojom::MouseButtonConfig::kLogitechSixKeyWithTab}},
+          // Logitech ERGO M575 (USB Dongle)
+          {{0x046d, 0x4096},
+           {mojom::CustomizationRestriction::kDisableKeyEventRewrites,
+            mojom::MouseButtonConfig::kFiveKey}},
+          // Logitech M510 (USB Dongle)
+          {{0x046d, 0x4051},
            {mojom::CustomizationRestriction::
-                kAllowAlphabetOrNumberKeyEventRewrites,
+                kAllowHorizontalScrollWheelRewrites,
             mojom::MouseButtonConfig::kNoConfig}},
           // HP 690/695 Mouse
-          {{0x3f0, 0x804a},
-           {mojom::CustomizationRestriction::
-                kAllowAlphabetOrNumberKeyEventRewrites,
+          {{0x03f0, 0x804a},
+           {mojom::CustomizationRestriction::kDisableKeyEventRewrites,
+            mojom::MouseButtonConfig::kFiveKey}},
+          // Logitech M650 L
+          {{0x046d, 0xb02a},
+           {mojom::CustomizationRestriction::kDisableKeyEventRewrites,
             mojom::MouseButtonConfig::kFiveKey}},
           // Logitech MX Master 3S (Bluetooth)
           {{0x046d, 0xb034},
+           {mojom::CustomizationRestriction::kDisableKeyEventRewrites,
+            mojom::MouseButtonConfig::kLogitechSixKey}},
+          // Logitech MX Master 3S B (Bluetooth)
+          {{0x046d, 0xb035},
            {mojom::CustomizationRestriction::kDisableKeyEventRewrites,
             mojom::MouseButtonConfig::kLogitechSixKey}},
           // Logitech MX Anywhere 3S (Bluetooth)
           {{0x046d, 0xb037},
            {mojom::CustomizationRestriction::kDisableKeyEventRewrites,
             mojom::MouseButtonConfig::kFiveKey}},
+          // Logitech M500 (USB)
+          {{0x046d, 0xc069},
+           {mojom::CustomizationRestriction::
+                kAllowHorizontalScrollWheelRewrites,
+            mojom::MouseButtonConfig::kNoConfig}},
+          // SteelSeries Aerox 9 WL (USB)
+          {{0x1038, 0x185a},
+           {mojom::CustomizationRestriction::
+                kAllowAlphabetOrNumberKeyEventRewrites,
+            mojom::MouseButtonConfig::kNoConfig}},
+          // Razer Naga Pro (USB Dongle)
+          {{0x1532, 0x0090},
+           {mojom::CustomizationRestriction::
+                kAllowAlphabetOrNumberKeyEventRewrites,
+            mojom::MouseButtonConfig::kNoConfig}},
       });
   return *mouse_metadata_list;
+}
+
+const base::flat_map<VendorProductId, GraphicsTabletMetadata>&
+GetGraphicsTabletMetadataList() {
+  const static base::NoDestructor<
+      base::flat_map<VendorProductId, GraphicsTabletMetadata>>
+      graphics_tablet_metadata_list({
+          // Fake data for testing.
+          {{0xeeee, 0xeeee},
+           {mojom::CustomizationRestriction::kAllowCustomizations,
+            mojom::GraphicsTabletButtonConfig::kNoConfig}},
+          // One by Wacom S
+          {{0x056a, 0x037a},
+           {mojom::CustomizationRestriction::kAllowCustomizations,
+            mojom::GraphicsTabletButtonConfig::kWacomStandardPenOnly}},
+          // One by Wacom M
+          {{0x056a, 0x0301},
+           {mojom::CustomizationRestriction::kAllowCustomizations,
+            mojom::GraphicsTabletButtonConfig::kWacomStandardPenOnly}},
+          // Wacom One Pen Tablet S
+          {{0x056a, 0x0100},
+           {mojom::CustomizationRestriction::kAllowCustomizations,
+            mojom::GraphicsTabletButtonConfig::kWacomStandardPenOnly}},
+          // Wacom One pen tablet M
+          {{0x056a, 0x0102},
+           {mojom::CustomizationRestriction::kAllowCustomizations,
+            mojom::GraphicsTabletButtonConfig::kWacomStandardPenOnly}},
+          // Wacom One Pen Display 11
+          {{0x056a, 0x03Ce},
+           {mojom::CustomizationRestriction::kAllowCustomizations,
+            mojom::GraphicsTabletButtonConfig::kWacomStandardPenOnly}},
+          // Wacom One Pen Display 13 Touch
+          {{0x056a, 0x03Cb},
+           {mojom::CustomizationRestriction::kAllowCustomizations,
+            mojom::GraphicsTabletButtonConfig::kWacomStandardPenOnly}},
+          // Wacom Intuos S
+          {{0x056a, 0x0374},
+           {mojom::CustomizationRestriction::kAllowCustomizations,
+            mojom::GraphicsTabletButtonConfig::kWacomStandardFourButtons}},
+          // Wacom Intuos M
+          {{0x056a, 0x0375},
+           {mojom::CustomizationRestriction::kAllowCustomizations,
+            mojom::GraphicsTabletButtonConfig::kWacomStandardFourButtons}},
+      });
+  return *graphics_tablet_metadata_list;
 }
 
 const base::flat_map<VendorProductId, KeyboardMetadata>&
@@ -130,7 +363,42 @@ GetKeyboardMouseComboMetadataList() {
   return *keyboard_mouse_combo_metadata_list;
 }
 
+const base::flat_map<VendorProductId, VendorProductId>& GetVidPidAliasList() {
+  const static base::NoDestructor<
+      base::flat_map<VendorProductId, VendorProductId>>
+      vid_pid_alias_list({
+          // Logitech ERGO M575 (Bluetooth -> USB Dongle)
+          {{0x46d, 0xb027}, {0x46d, 0x4096}},
+          // Logitech MX Master 2S (Bluetooth -> USB Dongle)
+          {{0x046d, 0xb019}, {0x046d, 0x4069}},
+          // Logitech MX Master 3 (Bluetooth -> USB Dongle)
+          {{0x046d, 0xb023}, {0x046d, 0x4082}},
+          // Logitech M720 Triathlon (Bluetooth -> USB Dongle)
+          {{0x046d, 0xb015}, {0x046d, 0x405e}},
+          // Wacom Intuos S (Bluetooth -> USB)
+          {{0x056a, 0x0376}, {0x056a, 0x0374}},
+          // Wacom Intuos S (Bluetooth -> USB)
+          {{0x056a, 0x03c5}, {0x056a, 0x0374}},
+          // Wacom Intuos M (Bluetooth -> USB)
+          {{0x056a, 0x0378}, {0x056a, 0x0375}},
+          // Wacom Intuos M (Bluetooth -> USB)
+          {{0x056a, 0x03c7}, {0x056a, 0x0375}},
+          // SteelSeries Aerox 9 WL (USB Dongle -> USB)
+          {{0x1038, 0x1858}, {0x1038, 0x185a}},
+          // SteelSeries Aerox 9 WL (Bluetooth -> USB)
+          {{0x0111, 0x185a}, {0x1038, 0x185a}},
+          // Razer Naga Pro (Bluetooth -> USB Dongle)
+          {{0x1532, 0x0092}, {0x1532, 0x0090}},
+      });
+  return *vid_pid_alias_list;
+}
+
 bool MouseMetadata::operator==(const MouseMetadata& other) const {
+  return customization_restriction == other.customization_restriction;
+}
+
+bool GraphicsTabletMetadata::operator==(
+    const GraphicsTabletMetadata& other) const {
   return customization_restriction == other.customization_restriction;
 }
 
@@ -140,30 +408,69 @@ bool KeyboardMouseComboMetadata::operator==(
 }
 
 const MouseMetadata* GetMouseMetadata(const ui::InputDevice& device) {
-  const auto iter =
-      GetMouseMetadataList().find({device.vendor_id, device.product_id});
+  VendorProductId vid_pid = {device.vendor_id, device.product_id};
+
+  const auto alias_iter = GetVidPidAliasList().find(vid_pid);
+  if (alias_iter != GetVidPidAliasList().end()) {
+    vid_pid = alias_iter->second;
+  }
+
+  const auto iter = GetMouseMetadataList().find(vid_pid);
   if (iter != GetMouseMetadataList().end()) {
     return &(iter->second);
   }
+
+  return nullptr;
+}
+
+const GraphicsTabletMetadata* GetGraphicsTabletMetadata(
+    const ui::InputDevice& device) {
+  VendorProductId vid_pid = {device.vendor_id, device.product_id};
+
+  const auto alias_iter = GetVidPidAliasList().find(vid_pid);
+  if (alias_iter != GetVidPidAliasList().end()) {
+    vid_pid = alias_iter->second;
+  }
+
+  const auto iter = GetGraphicsTabletMetadataList().find(
+      {vid_pid.vendor_id, vid_pid.product_id});
+  if (iter != GetGraphicsTabletMetadataList().end()) {
+    return &(iter->second);
+  }
+
   return nullptr;
 }
 
 const KeyboardMetadata* GetKeyboardMetadata(const ui::InputDevice& device) {
-  const auto iter =
-      GetKeyboardMetadataList().find({device.vendor_id, device.product_id});
+  VendorProductId vid_pid = {device.vendor_id, device.product_id};
+
+  const auto alias_iter = GetVidPidAliasList().find(vid_pid);
+  if (alias_iter != GetVidPidAliasList().end()) {
+    vid_pid = alias_iter->second;
+  }
+
+  const auto iter = GetKeyboardMetadataList().find(vid_pid);
   if (iter != GetKeyboardMetadataList().end()) {
     return &(iter->second);
   }
+
   return nullptr;
 }
 
 const KeyboardMouseComboMetadata* GetKeyboardMouseComboMetadata(
     const ui::InputDevice& device) {
-  const auto iter = GetKeyboardMouseComboMetadataList().find(
-      {device.vendor_id, device.product_id});
+  VendorProductId vid_pid = {device.vendor_id, device.product_id};
+
+  const auto alias_iter = GetVidPidAliasList().find(vid_pid);
+  if (alias_iter != GetVidPidAliasList().end()) {
+    vid_pid = alias_iter->second;
+  }
+
+  const auto iter = GetKeyboardMouseComboMetadataList().find(vid_pid);
   if (iter != GetKeyboardMouseComboMetadataList().end()) {
     return &(iter->second);
   }
+
   return nullptr;
 }
 
@@ -187,56 +494,6 @@ DeviceType GetDeviceType(const ui::InputDevice& device) {
   return DeviceType::kUnknown;
 }
 
-std::vector<mojom::ButtonRemappingPtr> GetDefaultButtonRemappingList() {
-  return {};
-}
-
-// TODO(dpad, b/286930911): Translate button names
-std::vector<mojom::ButtonRemappingPtr> GetFiveKeyButtonRemappingList() {
-  std::vector<mojom::ButtonRemappingPtr> array;
-  array.push_back(mojom::ButtonRemapping::New(
-      /*name=*/"Middle button",
-      /*button=*/
-      mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kMiddle),
-      /*remapping_action=*/nullptr));
-  array.push_back(mojom::ButtonRemapping::New(
-      /*name=*/"Forward button",
-      /*button=*/
-      mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kExtra),
-      /*remapping_action=*/nullptr));
-  array.push_back(mojom::ButtonRemapping::New(
-      /*name=*/"Back button",
-      /*button=*/
-      mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kSide),
-      /*remapping_action=*/nullptr));
-  return array;
-}
-
-std::vector<mojom::ButtonRemappingPtr> GetLogitechSixKeyButtonRemappingList() {
-  std::vector<mojom::ButtonRemappingPtr> array;
-  array.push_back(mojom::ButtonRemapping::New(
-      /*name=*/"Middle button",
-      /*button=*/
-      mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kMiddle),
-      /*remapping_action=*/nullptr));
-  array.push_back(mojom::ButtonRemapping::New(
-      /*name=*/"Forward button",
-      /*button=*/
-      mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kExtra),
-      /*remapping_action=*/nullptr));
-  array.push_back(mojom::ButtonRemapping::New(
-      /*name=*/"Back button",
-      /*button=*/
-      mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kSide),
-      /*remapping_action=*/nullptr));
-  array.push_back(mojom::ButtonRemapping::New(
-      /*name=*/"Side button",
-      /*button=*/
-      mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kForward),
-      /*remapping_action=*/nullptr));
-  return array;
-}
-
 std::vector<mojom::ButtonRemappingPtr> GetButtonRemappingListForConfig(
     mojom::MouseButtonConfig mouse_button_config) {
   switch (mouse_button_config) {
@@ -246,6 +503,30 @@ std::vector<mojom::ButtonRemappingPtr> GetButtonRemappingListForConfig(
       return GetFiveKeyButtonRemappingList();
     case mojom::MouseButtonConfig::kLogitechSixKey:
       return GetLogitechSixKeyButtonRemappingList();
+    case mojom::MouseButtonConfig::kLogitechSixKeyWithTab:
+      return GetLogitechSixKeyWithTabButtonRemappingList();
+  }
+}
+
+std::vector<mojom::ButtonRemappingPtr> GetPenButtonRemappingListForConfig(
+    mojom::GraphicsTabletButtonConfig graphics_tablet_button_config) {
+  switch (graphics_tablet_button_config) {
+    case mojom::GraphicsTabletButtonConfig::kNoConfig:
+      return GetDefaultButtonRemappingList();
+    case mojom::GraphicsTabletButtonConfig::kWacomStandardPenOnly:
+    case mojom::GraphicsTabletButtonConfig::kWacomStandardFourButtons:
+      return GetWacomStandardPenButtonRemappingList();
+  }
+}
+
+std::vector<mojom::ButtonRemappingPtr> GetTabletButtonRemappingListForConfig(
+    mojom::GraphicsTabletButtonConfig graphics_tablet_button_config) {
+  switch (graphics_tablet_button_config) {
+    case mojom::GraphicsTabletButtonConfig::kNoConfig:
+    case mojom::GraphicsTabletButtonConfig::kWacomStandardPenOnly:
+      return GetDefaultButtonRemappingList();
+    case mojom::GraphicsTabletButtonConfig::kWacomStandardFourButtons:
+      return GetWacomStandardFourButtonRemappingList();
   }
 }
 

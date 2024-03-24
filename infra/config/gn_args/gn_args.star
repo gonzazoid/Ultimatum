@@ -107,9 +107,9 @@ gn_args.config(
 )
 
 gn_args.config(
-    name = "android_low_end",
+    name = "android_low_end_secondary_toolchain",
     args = {
-        "is_high_end_android": False,
+        "is_high_end_android_secondary_toolchain": False,
     },
 )
 
@@ -407,8 +407,8 @@ gn_args.config(
         "enable_websockets": False,
         "include_transport_security_state_preload_list": False,
         "is_cronet_build": True,
-        "use_crash_key_stubs": True,
         "use_platform_icu_alternatives": True,
+        "enable_rust": False,
     },
 )
 
@@ -477,7 +477,6 @@ gn_args.config(
     configs = [
         "debug",
         "full_symbols",
-        "disable_nacl",
         "shared",
     ],
 )
@@ -486,13 +485,6 @@ gn_args.config(
     name = "devtools_do_typecheck",
     args = {
         "devtools_skip_typecheck": False,
-    },
-)
-
-gn_args.config(
-    name = "disable_nacl",
-    args = {
-        "enable_nacl": False,
     },
 )
 
@@ -716,6 +708,11 @@ gn_args.config(
     args = {
         "ios_code_signing_identity_description": "iPhone Developer",
     },
+)
+
+gn_args.config(
+    name = "ios_developer",
+    configs = ["ios_simulator", "debug"],
 )
 
 gn_args.config(
@@ -1293,7 +1290,6 @@ gn_args.config(
     },
     configs = [
         "x86",
-        "disable_nacl",
     ],
 )
 

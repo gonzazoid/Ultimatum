@@ -4,6 +4,7 @@
 
 #include "chrome/updater/policy/service.h"
 
+#include <algorithm>
 #include <concepts>
 #include <functional>
 #include <optional>
@@ -63,6 +64,20 @@ PolicyService::PolicyManagers SortManagers(
   return {managers_vector, managers_map};
 }
 
+#if BUILDFLAG(IS_WIN)
+bool CloudPolicyOverridesPlatformPolicy(
+    PolicyService::PolicyManagerVector providers) {
+  PolicyService::PolicyManagerVector::const_iterator it =
+      std::find_if(providers.begin(), providers.end(),
+                   [](scoped_refptr<PolicyManagerInterface> p) {
+                     return p && p->CloudPolicyOverridesPlatformPolicy();
+                   });
+
+  return it == providers.end() ? false
+                               : *(*it)->CloudPolicyOverridesPlatformPolicy();
+}
+#endif
+
 }  // namespace
 
 PolicyService::PolicyManagerVector CreatePolicyManagerVector(
@@ -81,20 +96,25 @@ PolicyService::PolicyManagerVector CreatePolicyManagerVector(
   if (dm_policy_manager) {
     managers.push_back(std::move(dm_policy_manager));
   }
+  scoped_refptr<PolicyManagerInterface> external_constants_policy_manager =
+      external_constants ? base::MakeRefCounted<PolicyManager>(
+                               external_constants->GroupPolicies())
+                         : nullptr;
 #if BUILDFLAG(IS_WIN)
   auto group_policy_manager = base::MakeRefCounted<GroupPolicyManager>(
       should_take_policy_critical_section,
       external_constants->IsMachineManaged());
-  if (group_policy_manager->CloudPolicyOverridesPlatformPolicy()) {
+  if (CloudPolicyOverridesPlatformPolicy({dm_policy_manager,
+                                          group_policy_manager,
+                                          external_constants_policy_manager})) {
     VLOG(1) << __func__ << ": CloudPolicyOverridesPlatformPolicy=1";
     managers.push_back(std::move(group_policy_manager));
   } else {
     managers.insert(managers.begin(), std::move(group_policy_manager));
   }
 #endif
-  if (external_constants) {
-    managers.insert(managers.begin(), base::MakeRefCounted<PolicyManager>(
-                                          external_constants->GroupPolicies()));
+  if (external_constants_policy_manager) {
+    managers.insert(managers.begin(), external_constants_policy_manager);
   }
 #if BUILDFLAG(IS_MAC)
   // Managed preference policy manager is being deprecated and thus has a lower
@@ -191,6 +211,12 @@ std::string PolicyService::source() const {
     }
   }
   return base::JoinString(sources, ";");
+}
+
+PolicyStatus<bool> PolicyService::CloudPolicyOverridesPlatformPolicy() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return QueryPolicy(
+      &PolicyManagerInterface::CloudPolicyOverridesPlatformPolicy);
 }
 
 PolicyStatus<base::TimeDelta> PolicyService::GetLastCheckPeriod() const {
@@ -325,6 +351,18 @@ base::Value PolicyService::GetAllPolicies() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   base::Value::Dict policies;
 
+  const PolicyStatus<bool> cloud_policy_override_platform_policy =
+      CloudPolicyOverridesPlatformPolicy();
+  if (cloud_policy_override_platform_policy) {
+    policies.Set(
+        "CloudPolicyOverridesPlatformPolicy",
+        base::Value::Dict()
+            .Set("value", cloud_policy_override_platform_policy.policy())
+            .Set("source",
+                 cloud_policy_override_platform_policy.effective_policy()
+                     ->source));
+  }
+
   const PolicyStatus<base::TimeDelta> last_check_period = GetLastCheckPeriod();
   if (last_check_period) {
     policies.Set(
@@ -448,6 +486,16 @@ base::Value PolicyService::GetAllPolicies() const {
 std::string PolicyService::GetAllPoliciesAsString() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   std::vector<std::string> policies;
+
+  const PolicyStatus<bool> cloud_policy_override_platform_policy =
+      CloudPolicyOverridesPlatformPolicy();
+  if (cloud_policy_override_platform_policy) {
+    policies.push_back(base::StringPrintf(
+        "CloudPolicyOverridesPlatformPolicy = %d (%s)",
+        cloud_policy_override_platform_policy.policy(),
+        cloud_policy_override_platform_policy.effective_policy()
+            ->source.c_str()));
+  }
 
   const PolicyStatus<base::TimeDelta> last_check_period = GetLastCheckPeriod();
   if (last_check_period) {

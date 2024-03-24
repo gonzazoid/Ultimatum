@@ -93,8 +93,14 @@ build_webui("build") {
     "clear_browsing_data_dialog/clear_browsing_data_dialog.ts",
     "clear_browsing_data_dialog/history_deletion_dialog.ts",
     "clear_browsing_data_dialog/passwords_deletion_dialog.ts",
+    "controls/controlled_button.ts",
+    "controls/controlled_radio_button.ts",
     "controls/settings_checkbox_list_entry.ts",
     "controls/settings_checkbox.ts",
+    "controls/settings_dropdown_menu.ts",
+    "controls/settings_radio_group.ts",
+    "controls/settings_slider.ts",
+    "controls/settings_toggle_button.ts",
     "downloads_page/downloads_page.ts",
     "on_startup_page/on_startup_page.ts",
     "on_startup_page/startup_url_dialog.ts",
@@ -123,7 +129,6 @@ build_webui("build") {
     "privacy_page/cookies_page.ts",
     "privacy_page/do_not_track_toggle.ts",
     "privacy_page/personalization_options.ts",
-    "privacy_page/preloading_page.ts",
     "privacy_page/privacy_guide/privacy_guide_completion_fragment.ts",
     "privacy_page/privacy_guide/privacy_guide_completion_link_row.ts",
     "privacy_page/privacy_guide/privacy_guide_cookies_fragment.ts",
@@ -139,6 +144,8 @@ build_webui("build") {
     "privacy_page/privacy_guide/privacy_guide_welcome_fragment.ts",
     "privacy_page/privacy_guide/step_indicator.ts",
     "privacy_page/privacy_page.ts",
+    "privacy_page/secure_dns.ts",
+    "privacy_page/secure_dns_input.ts",
     "privacy_page/security_keys_bio_enroll_dialog.ts",
     "privacy_page/security_keys_credential_management_dialog.ts",
     "privacy_page/security_keys_pin_field.ts",
@@ -322,10 +329,12 @@ build_webui("build") {
     "site_settings/site_settings_prefs_browser_proxy.ts",
     "site_settings/website_usage_browser_proxy.ts",
     "site_settings_page/site_settings_page_util.ts",
+    "time.ts",
     "tooltip_mixin.ts",
   ]
 
   if (is_chromeos_ash) {
+    web_component_files += [ "privacy_page/secure_dns_dialog.ts" ]
     non_web_component_files +=
         [ "people_page/account_manager_browser_proxy.ts" ]
   } else {
@@ -356,8 +365,13 @@ build_webui("build") {
 
   icons_html_files = [
     "icons.html",
+    "privacy_sandbox/privacy_sandbox_icons.html",
     "site_settings/all_sites_icons.html",
   ]
+
+  if (is_chrome_branded) {
+    icons_html_files += [ "internal/icons.html" ]
+  }
 
   css_files = [
     "settings_columned_section.css",

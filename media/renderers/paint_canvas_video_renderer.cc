@@ -86,6 +86,10 @@ namespace media {
 
 namespace {
 
+BASE_FEATURE(kAddSharedImageRasterUsageWithNonOOPR,
+             "PCVRAddSharedImageRasterUsageWithNonOOPR",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
 // Return the full-range RGB component of the color space of this frame's
 // content. This will replace several color spaces (Rec601, Rec709, and
 // Apple's Rec709) with sRGB, for compatibility with existing behavior.
@@ -183,6 +187,7 @@ const gpu::MailboxHolder& GetVideoFrameMailboxHolder(VideoFrame* video_frame) {
          PIXEL_FORMAT_XBGR == video_frame->format() ||
          PIXEL_FORMAT_XB30 == video_frame->format() ||
          PIXEL_FORMAT_XR30 == video_frame->format() ||
+         PIXEL_FORMAT_YV12 == video_frame->format() ||
          PIXEL_FORMAT_NV12 == video_frame->format() ||
          PIXEL_FORMAT_NV12A == video_frame->format() ||
          PIXEL_FORMAT_P016LE == video_frame->format() ||
@@ -680,6 +685,7 @@ void ConvertVideoFrameToRGBPixelsTask(const VideoFrame* video_frame,
   done->Run();
 }
 
+#if !BUILDFLAG(IS_ANDROID)
 // Valid gl texture internal format that can try to use direct uploading path.
 bool ValidFormatForDirectUploading(
     viz::RasterContextProvider* raster_context_provider,
@@ -704,6 +710,7 @@ bool ValidFormatForDirectUploading(
       return false;
   }
 }
+#endif
 
 std::tuple<SkYUVAInfo::PlaneConfig, SkYUVAInfo::Subsampling>
 VideoPixelFormatAsSkYUVAInfoValues(VideoPixelFormat format) {
@@ -726,52 +733,19 @@ VideoPixelFormatAsSkYUVAInfoValues(VideoPixelFormat format) {
   }
 }
 
+#if !BUILDFLAG(IS_ANDROID)
 // Controls whether the one-copy path when copying a VideoFrame to a GL texture
-// is enabled or disabled. This codepath is disabled on Android by default
-// pending the full transition of the codebase to the passthrough decoder and
-// the transition of this function away from using legacy mailboxes to do 1-copy
-// upload (see crbug.com/1494365 for details). On Android, this Feature serves
-// as a reverse-killswitch while we roll out the complete disabling of this
-// codepath.
-// TODO(crbug.com/1494365): Remove the usage of this feature for Android once
-// explicit disabling has safely rolled out and make
-// UploadOfVideoFrameToGLTexture() unconditionally disabled on Android.
-// On all other platforms, the one-copy path being enabled is the default
+// is enabled or disabled. The one-copy path being enabled is the default
 // production state, with this Feature being used to be able to disable this
 // path for performance testing.
 BASE_FEATURE(kOneCopyUploadOfVideoFrameToGLTexture,
              "OneCopyUploadOfVideoFrameToGLTexture",
-#if BUILDFLAG(IS_ANDROID)
-             base::FEATURE_DISABLED_BY_DEFAULT);
-#else
              base::FEATURE_ENABLED_BY_DEFAULT);
-#endif
-
-// Controls whether the one-copy path when copying a pure software VideoFrame
-// (i.e., a VideoFrame with no textures) to a GL texture is enabled or disabled.
-// It is not possible to support this codepath via MultiplanarSharedImage: these
-// VideoFrames have format I420, and it is not possible across all platforms to
-// upload the VideoFrame's data via raster to a MultiplanarSI with format I420
-// that is accessible by WebGL. Such an SI must be backed by a native buffer to
-// be accessible to WebGL, and native buffer-backed I420 SharedImages are in
-// general not supported (and *cannot* be supported on Windows). 1-copy of pure
-// software VideoFrames *is* supported in the legacy 1-copy implementation that
-// uses legacy mailboxes to perform the copy, but we are in the process of
-// eliminating this implementation. Whether 1 GPU-GPU copy or 2 GPU-GPU copies
-// are performed for pure video software upload should not be a significant
-// factor in performance, as dominant factor in terms of performance will be the
-// fact that the VideoFrame's data needs to be uploaded from the CPU to the GPU.
-// This Feature serves as a reverse-killswitch while we roll out the complete
-// disabling of this codepath.
-// TODO(crbug.com/1410164): Remove the usage of this feature disabling has
-// safely rolled out.
-BASE_FEATURE(kOneCopyUploadOfPureSoftwareVideoFrameToGLTexture,
-             "OneCopyUploadOfPureSoftwareVideoFrameToGLTexture",
-             base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE(kOneCopyLegacyMPVideoFrameUploadViaSI,
              "OneCopyLegacyMPVideoFrameUploadViaSI",
              base::FEATURE_ENABLED_BY_DEFAULT);
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 }  // anonymous namespace
 
@@ -1197,16 +1171,10 @@ void PaintCanvasVideoRenderer::Paint(
   // Make sure to flush so we can remove the videoframe from the generator.
   canvas->flush();
 
-  if (video_frame->HasTextures()) {
-    // Synchronize |video_frame| with the read operations in UpdateLastImage(),
-    // which are triggered by canvas->flush().
-    SynchronizeVideoFrameRead(std::move(video_frame),
-                              raster_context_provider->RasterInterface(),
-                              raster_context_provider->ContextSupport());
-  }
   // Because we are not retaining a reference to the VideoFrame, it would be
   // invalid for the texture_backing to directly wrap its texture(s), as they
-  // will be recycled.
+  // will be recycled. For this reason, we also do not need to synchronize video
+  // frame read here since it's already taken care of in UpdateLastImage().
   DCHECK(!CacheBackingWrapsTexture());
 }
 
@@ -1520,6 +1488,10 @@ bool PaintCanvasVideoRenderer::CopyVideoFrameTexturesToGLTexture(
     // alpha been requested. And dst texture mipLevel must be 0.
     // TODO(crbug.com/1155003): Figure out whether premultiply options here are
     // accurate.
+    // NOTE: The direct upload path is not supported on Android (see comment on
+    // UploadVideoFrameToGLTexture()).
+    // TODO(crbug.com/1494365): Enable on Android.
+#if !BUILDFLAG(IS_ANDROID)
     if ((media::IsOpaque(video_frame->format()) || premultiply_alpha) &&
         level == 0 &&
         (video_frame->NumTextures() > 1 ||
@@ -1534,6 +1506,7 @@ bool PaintCanvasVideoRenderer::CopyVideoFrameTexturesToGLTexture(
         }
       }
     }
+#endif  // !BUILDFLAG(IS_ANDROID)
 
     if (!UpdateLastImage(video_frame, raster_context_provider,
                          true /* allow_wrap_texture */)) {
@@ -1600,6 +1573,7 @@ bool PaintCanvasVideoRenderer::CopyVideoFrameTexturesToGLTexture(
   return true;
 }
 
+#if !BUILDFLAG(IS_ANDROID)
 bool PaintCanvasVideoRenderer::UploadVideoFrameToGLTexture(
     viz::RasterContextProvider* raster_context_provider,
     gpu::gles2::GLES2Interface* destination_gl,
@@ -1630,34 +1604,52 @@ bool PaintCanvasVideoRenderer::UploadVideoFrameToGLTexture(
     return false;
   }
 
-  if (!video_frame->HasTextures() &&
-      !base::FeatureList::IsEnabled(
-          kOneCopyUploadOfPureSoftwareVideoFrameToGLTexture)) {
+  // It is not possible to support one-copy upload of pure software VideoFrames
+  // via MultiplanarSharedImage: these VideoFrames have format I420, and it is
+  // not possible across all platforms to upload the VideoFrame's data via
+  // raster to a MultiplanarSI with format I420 that is accessible by WebGL.
+  // Such an SI must be backed by a native buffer to be accessible to WebGL, and
+  // native buffer-backed I420 SharedImages are in general not supported (and
+  // *cannot* be supported on Windows). NOTE: Whether 1 GPU-GPU copy or 2
+  // GPU-GPU copies are performed for pure video software upload should not be a
+  // significant factor in performance, as the dominant factor in terms of
+  // performance will be the fact that the VideoFrame's data needs to be
+  // uploaded from the CPU to the GPU.
+  if (!video_frame->HasTextures()) {
     return false;
   }
 
   DCHECK(video_frame->metadata().texture_origin_is_top_left);
 
+  // All platforms except Android (on which this code does not run) exclusively
+  // use the passthrough decoder, which supports YUV->RGB conversion.
+  CHECK(destination_gl_capabilities.supports_yuv_to_rgb_conversion);
+
   // Determine whether to use legacy mailboxes to perform the upload.
   // We use legacy mailboxes iff one of the following is true:
-  // * `destination_gl` does not support YUV-RGB conversion.
   // * The VideoFrame is holding a legacy mailbox.
-  // * The VideoFrame is pure software.
-  // * The Video is not MultiplanarSI and the codepath to handle legacy
+  // * The VideoFrame is not MultiplanarSI and the codepath to handle legacy
   //   multiplanar via ConvertYUVAMailboxesToTexture() is not enabled.
-  bool yuv_rgb_conversion_not_supported =
-      !destination_gl_capabilities.supports_yuv_to_rgb_conversion;
+  CHECK(video_frame->HasTextures());
   bool video_frame_is_legacy_mailbox =
-      video_frame->HasTextures() &&
       !video_frame->mailbox_holder(0).mailbox.IsSharedImage();
-  bool video_frame_is_pure_sw = !video_frame->HasTextures();
   bool video_frame_is_not_mp_si =
-      video_frame_is_pure_sw ||
       video_frame->shared_image_format_type() == SharedImageFormatType::kLegacy;
 
+  // It is not possible for VideoFrames holding legacy mailboxes to reach this
+  // function. The reason is the following:
+  // * VideoFrames holding legacy mailboxes must have exactly one texture
+  // * By definition, they are not using multiplanar SharedImages (since they
+  // are not using SharedImage at all)
+  // * This function only has two entrypoints: One from
+  // CopyVideoFrameTexturesToGLTexture() that is conditional on the mailbox
+  // either having more than one texture or holding a multiplanar SharedImage,
+  // and one from CopyVideoFrameYUVDataToGLTexture(), which itself is a codepath
+  // that is used only when the VideoFrame has no textures.
+  DUMP_WILL_BE_CHECK(!video_frame_is_legacy_mailbox);
+
   bool use_legacy_mailboxes_for_upload =
-      yuv_rgb_conversion_not_supported || video_frame_is_legacy_mailbox ||
-      video_frame_is_pure_sw ||
+      video_frame_is_legacy_mailbox ||
       (video_frame_is_not_mp_si &&
        !base::FeatureList::IsEnabled(kOneCopyLegacyMPVideoFrameUploadViaSI));
 
@@ -1704,10 +1696,8 @@ bool PaintCanvasVideoRenderer::UploadVideoFrameToGLTexture(
     destination_gl->WaitSyncTokenCHROMIUM(
         mailbox_holder.sync_token.GetConstData());
 
-    if (video_frame->HasTextures()) {
-      SynchronizeVideoFrameRead(std::move(video_frame), source_ri,
-                                raster_context_provider->ContextSupport());
-    }
+    SynchronizeVideoFrameRead(std::move(video_frame), source_ri,
+                              raster_context_provider->ContextSupport());
   } else {
     // Trigger resource allocation for dst texture to back SkSurface.
     // Dst texture size should equal to video frame visible rect.
@@ -1729,7 +1719,6 @@ bool PaintCanvasVideoRenderer::UploadVideoFrameToGLTexture(
           video_frame->visible_rect().height(), flip_y,
           mailbox_holder.mailbox.name);
     } else {
-      CHECK(video_frame->HasTextures());
       CHECK_LE(static_cast<int>(video_frame->NumTextures()),
                SkYUVAInfo::kMaxPlanes);
 
@@ -1768,6 +1757,7 @@ bool PaintCanvasVideoRenderer::UploadVideoFrameToGLTexture(
 
   return true;
 }
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 bool PaintCanvasVideoRenderer::CopyVideoFrameYUVDataToGLTexture(
     viz::RasterContextProvider* raster_context_provider,
@@ -1810,6 +1800,10 @@ bool PaintCanvasVideoRenderer::CopyVideoFrameYUVDataToGLTexture(
   // alpha been requested. And dst texture mipLevel must be 0.
   // TODO(crbug.com/1155003): Figure out whether premultiply options here are
   // accurate.
+  // NOTE: The direct upload path is not supported on Android (see comment on
+  // UploadVideoFrameToGLTexture()).
+  // TODO(crbug.com/1494365): Enable on Android.
+#if !BUILDFLAG(IS_ANDROID)
   if ((media::IsOpaque(video_frame->format()) || premultiply_alpha) &&
       level == 0) {
     if (base::FeatureList::IsEnabled(kOneCopyUploadOfVideoFrameToGLTexture)) {
@@ -1821,6 +1815,7 @@ bool PaintCanvasVideoRenderer::CopyVideoFrameYUVDataToGLTexture(
       }
     }
   }
+#endif  // !BUILDFLAG(IS_ANDROID)
 
   auto* sii = raster_context_provider->SharedImageInterface();
   gpu::raster::RasterInterface* source_ri =
@@ -1845,10 +1840,17 @@ bool PaintCanvasVideoRenderer::CopyVideoFrameYUVDataToGLTexture(
     // intermediate SI over the raster interface - the usage bits depend on
     // whether OOP-Raster is enabled.
     if (raster_context_provider->ContextCapabilities().gpu_rasterization) {
-      usage |= gpu::SHARED_IMAGE_USAGE_RASTER |
+      usage |= gpu::SHARED_IMAGE_USAGE_RASTER_WRITE |
                gpu::SHARED_IMAGE_USAGE_OOP_RASTERIZATION;
     } else {
       usage |= gpu::SHARED_IMAGE_USAGE_GLES2_WRITE;
+      // RASTER_WRITE usage should be included as these SharedImages are written
+      // via raster, but historically this usage was included only for OOP-R.
+      // Currently in the process of adding with a killswitch.
+      // TODO(crbug.com/1524353): Remove this killswitch post-safe rollout.
+      if (base::FeatureList::IsEnabled(kAddSharedImageRasterUsageWithNonOOPR)) {
+        usage = usage | gpu::SHARED_IMAGE_USAGE_RASTER_WRITE;
+      }
     }
 
     yuv_cache_.shared_image = sii->CreateSharedImage(
@@ -2078,7 +2080,7 @@ bool PaintCanvasVideoRenderer::UpdateLastImage(
         // We copy the contents of the source VideoFrame *into* the
         // cached SI over the raster interface - the usage bits depend on
         // whether OOP-Raster is enabled.
-        flags |= gpu::SHARED_IMAGE_USAGE_RASTER;
+        flags |= gpu::SHARED_IMAGE_USAGE_RASTER_WRITE;
         if (gpu_rasterization) {
           flags |= gpu::SHARED_IMAGE_USAGE_OOP_RASTERIZATION;
         } else {

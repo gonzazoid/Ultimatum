@@ -150,8 +150,7 @@ TEST_P(ParentAccessUiHandlerImplTestParameterized, GetParentAccessUrl) {
         url::Component key;
         url::Component value;
         std::map<std::string, std::string> query_parts;
-        while (url::ExtractQueryKeyValue(query_str.c_str(), &query, &key,
-                                         &value)) {
+        while (url::ExtractQueryKeyValue(query_str, &query, &key, &value)) {
           query_parts[query_str.substr(key.begin, key.len)] =
               query_str.substr(value.begin, value.len);
         }
@@ -265,9 +264,8 @@ TEST_P(ParentAccessUiHandlerImplTestParameterized,
   expire_time->set_nanos(567890);
 
   // Encode the proto in base64.
-  std::string encoded_parent_access_callback;
-  base::Base64Encode(parent_access_callback.SerializeAsString(),
-                     &encoded_parent_access_callback);
+  std::string encoded_parent_access_callback =
+      base::Base64Encode(parent_access_callback.SerializeAsString());
 
   EXPECT_CALL(delegate_,
               SetApproved(pat->token(), base::Time::FromSecondsSinceUnixEpoch(
@@ -321,9 +319,8 @@ TEST_P(ParentAccessUiHandlerImplTestParameterized,
 TEST_P(ParentAccessUiHandlerImplTestParameterized,
        OnInvalidParentAccessCallback) {
   // Encode the proto in base64.
-  std::string encoded_parent_access_callback;
-  base::Base64Encode("INVALID_SERIALIZED_CALLBACK",
-                     &encoded_parent_access_callback);
+  std::string encoded_parent_access_callback =
+      base::Base64Encode("INVALID_SERIALIZED_CALLBACK");
 
   EXPECT_CALL(delegate_, SetApproved(_, _)).Times(0);
 
@@ -452,9 +449,8 @@ TEST_P(ParentAccessUiHandlerImplTestParameterized, ConsentDeclinedParsed) {
   parent_access_callback.mutable_on_consent_declined();
 
   // Encode the proto in base64.
-  std::string encoded_parent_access_callback;
-  base::Base64Encode(parent_access_callback.SerializeAsString(),
-                     &encoded_parent_access_callback);
+  std::string encoded_parent_access_callback =
+      base::Base64Encode(parent_access_callback.SerializeAsString());
 
   base::RunLoop run_loop;
   parent_access_ui_handler_->OnParentAccessCallbackReceived(
@@ -491,9 +487,8 @@ TEST_P(ParentAccessUiHandlerImplTestParameterized, OnPageSizeChangedIgnored) {
   parent_access_callback.mutable_on_page_size_changed();
 
   // Encode the proto in base64.
-  std::string encoded_parent_access_callback;
-  base::Base64Encode(parent_access_callback.SerializeAsString(),
-                     &encoded_parent_access_callback);
+  std::string encoded_parent_access_callback =
+      base::Base64Encode(parent_access_callback.SerializeAsString());
 
   base::RunLoop run_loop;
   parent_access_ui_handler_->OnParentAccessCallbackReceived(
@@ -532,9 +527,8 @@ TEST_P(ParentAccessUiHandlerImplTestParameterized,
   parent_access_callback.mutable_on_communication_established();
 
   // Encode the proto in base64.
-  std::string encoded_parent_access_callback;
-  base::Base64Encode(parent_access_callback.SerializeAsString(),
-                     &encoded_parent_access_callback);
+  std::string encoded_parent_access_callback =
+      base::Base64Encode(parent_access_callback.SerializeAsString());
 
   base::RunLoop run_loop;
   parent_access_ui_handler_->OnParentAccessCallbackReceived(
@@ -616,8 +610,7 @@ TEST_P(ParentAccessUiHandlerImplTestParameterized, ParsingErrorMetricRecorded) {
 
   // Receive non-parseable callback.
   base::RunLoop run_loop;
-  std::string encoded_not_a_callback;
-  base::Base64Encode("not_a_callback", &encoded_not_a_callback);
+  std::string encoded_not_a_callback = base::Base64Encode("not_a_callback");
   parent_access_ui_handler_->OnParentAccessCallbackReceived(
       encoded_not_a_callback,
       base::BindLambdaForTesting(

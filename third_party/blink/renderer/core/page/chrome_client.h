@@ -177,6 +177,10 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
 
   virtual void SetKeyboardFocusURL(Element*) {}
 
+  // Returns true if the page should support drag regions via the app-region
+  // CSS property.
+  virtual bool SupportsAppRegion() = 0;
+
   // Allow document lifecycle updates to be run in order to produce composited
   // outputs. Updates are blocked from occurring during loading navigation in
   // order to prevent contention and allow Blink to proceed more quickly. This
@@ -217,7 +221,7 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
   // compositing.
   // Returns null if the compositing stack has not been initialized yet.
   // |frame| must be a local frame.
-  virtual absl::optional<int> GetMaxRenderBufferBounds(
+  virtual std::optional<int> GetMaxRenderBufferBounds(
       LocalFrame& frame) const = 0;
 
   // Start a system drag and drop operation.

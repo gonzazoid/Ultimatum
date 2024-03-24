@@ -37,6 +37,7 @@ import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.DoNotBatch;
 import org.chromium.base.test.util.Feature;
+import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.base.test.util.HistogramWatcher;
 import org.chromium.base.test.util.JniMocker;
 import org.chromium.base.test.util.UserActionTester;
@@ -48,13 +49,12 @@ import org.chromium.chrome.browser.preferences.Pref;
 import org.chromium.chrome.browser.privacy_guide.PrivacyGuideInteractions;
 import org.chromium.chrome.browser.privacy_sandbox.FakePrivacySandboxBridge;
 import org.chromium.chrome.browser.privacy_sandbox.PrivacySandboxBridgeJni;
-import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.settings.SettingsActivityTestRule;
 import org.chromium.chrome.browser.signin.SigninCheckerProvider;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.R;
 import org.chromium.chrome.test.util.ChromeRenderTestRule;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
 import org.chromium.chrome.test.util.browser.signin.SigninTestRule;
 import org.chromium.components.policy.test.annotations.Policies;
 import org.chromium.components.user_prefs.UserPrefs;
@@ -137,21 +137,21 @@ public class PrivacySettingsFragmentTest {
     private void setPrivacyGuideViewed(boolean isViewed) {
         TestThreadUtils.runOnUiThreadBlocking(
                 () ->
-                        UserPrefs.get(Profile.getLastUsedRegularProfile())
+                        UserPrefs.get(ProfileManager.getLastUsedRegularProfile())
                                 .setBoolean(Pref.PRIVACY_GUIDE_VIEWED, isViewed));
     }
 
     private boolean isPrivacyGuideViewed() throws ExecutionException {
         return TestThreadUtils.runOnUiThreadBlocking(
                 () ->
-                        UserPrefs.get(Profile.getLastUsedRegularProfile())
+                        UserPrefs.get(ProfileManager.getLastUsedRegularProfile())
                                 .getBoolean(Pref.PRIVACY_GUIDE_VIEWED));
     }
 
     private void setShowTrackingProtection(boolean show) {
         TestThreadUtils.runOnUiThreadBlocking(
                 () ->
-                        UserPrefs.get(Profile.getLastUsedRegularProfile())
+                        UserPrefs.get(ProfileManager.getLastUsedRegularProfile())
                                 .setBoolean(Pref.TRACKING_PROTECTION3PCD_ENABLED, show));
     }
 
@@ -389,7 +389,7 @@ public class PrivacySettingsFragmentTest {
     public void testPrivacyGuideNotDisplayedWhenUserIsChild() {
         // TODO(crbug.com/1433652): Remove once SigninChecker is automatically created.
         TestThreadUtils.runOnUiThreadBlockingNoException(
-                () -> SigninCheckerProvider.get(Profile.getLastUsedRegularProfile()));
+                () -> SigninCheckerProvider.get(ProfileManager.getLastUsedRegularProfile()));
         mSigninTestRule.addChildTestAccountThenWaitForSignin();
         mSettingsActivityTestRule.startSettingsActivity();
         onView(withText(R.string.privacy_guide_pref_summary)).check(doesNotExist());

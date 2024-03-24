@@ -204,6 +204,13 @@ bool CachedMatchedProperties::operator==(
         matched_properties_types[i].is_fallback_style) {
       return false;
     }
+    if (properties[i].types_.signal != matched_properties_types[i].signal) {
+      return false;
+    }
+    if (properties[i].types_.is_invisible !=
+        matched_properties_types[i].is_invisible) {
+      return false;
+    }
   }
   return true;
 }

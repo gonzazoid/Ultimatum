@@ -7,11 +7,13 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <string>
 #include <tuple>
 
 #include "base/allocator/partition_alloc_support.h"
 #include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_buildflags.h"
+#include "base/containers/flat_set.h"
 #include "base/debug/crash_logging.h"
 #include "base/feature_list.h"
 #include "base/functional/callback_helpers.h"
@@ -25,7 +27,6 @@
 #include "components/gwp_asan/client/gwp_asan_features.h"
 #include "components/gwp_asan/client/lightweight_detector/poison_metadata_recorder.h"
 #include "components/gwp_asan/common/crash_key_name.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(USE_ALLOCATOR_SHIM)
 #include "components/gwp_asan/client/lightweight_detector/malloc_shims.h"
@@ -120,7 +121,12 @@ constexpr int kMaxEvictionTaskIntervalMs = 10000;
 
 BASE_FEATURE(kLightweightUafDetector,
              "LightweightUafDetector",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+#if BUILDFLAG(IS_WIN)
+             base::FEATURE_ENABLED_BY_DEFAULT
+#else
+             base::FEATURE_DISABLED_BY_DEFAULT
+#endif
+);
 
 constexpr base::FeatureParam<LightweightDetectorMode>::Option
     kLightweightUafDetectorModeOptions[] = {
@@ -199,15 +205,48 @@ size_t AllocationSamplingFrequency(const base::Feature& feature) {
   return frequency.ValueOrDie();
 }
 
+// Don't use both GWP-ASan and LUD at the same time for performance
+// reasons. When both features are enabled, we prefer GWP-ASan to
+// compensate for its lower sampling rate.
+bool IsMutuallyExclusiveFeatureAllowed(const base::Feature& feature) {
+  static auto disabled_features = []() {
+    constexpr double kGwpAsanPickProbability = 0.9;
+
+    base::flat_set<const base::Feature*> disabled_features;
+
+    bool gwp_asan_enabled =
+        base::FeatureList::IsEnabled(internal::kGwpAsanMalloc) ||
+        base::FeatureList::IsEnabled(internal::kGwpAsanPartitionAlloc);
+    bool lud_enabled =
+        base::FeatureList::IsEnabled(internal::kLightweightUafDetector);
+    if (gwp_asan_enabled && lud_enabled) {
+      if (base::RandDouble() <= kGwpAsanPickProbability) {
+        disabled_features.emplace(&internal::kLightweightUafDetector);
+      } else {
+        disabled_features.emplace(&internal::kGwpAsanMalloc);
+        disabled_features.emplace(&internal::kGwpAsanPartitionAlloc);
+      }
+    }
+
+    return disabled_features;
+  }();
+
+  return disabled_features.find(&feature) == disabled_features.end();
+}
+
 }  // namespace
 
 // Exported for testing.
-GWP_ASAN_EXPORT absl::optional<AllocatorSettings> GetAllocatorSettings(
+GWP_ASAN_EXPORT std::optional<AllocatorSettings> GetAllocatorSettings(
     const base::Feature& feature,
     bool boost_sampling,
     const char* process_type) {
   if (!base::FeatureList::IsEnabled(feature))
-    return absl::nullopt;
+    return std::nullopt;
+
+  if (!IsMutuallyExclusiveFeatureAllowed(feature)) {
+    return std::nullopt;
+  }
 
   static_assert(
       AllocatorState::kMaxRequestedSlots <= std::numeric_limits<int>::max(),
@@ -224,7 +263,7 @@ GWP_ASAN_EXPORT absl::optional<AllocatorSettings> GetAllocatorSettings(
   if (total_pages < 1 || total_pages > kMaxRequestedSlots) {
     DLOG(ERROR) << feature.name
                 << " TotalPages is out-of-range: " << total_pages;
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   int max_metadata = GetFieldTrialParamByFeatureAsInt(feature, "MaxMetadata",
@@ -233,7 +272,7 @@ GWP_ASAN_EXPORT absl::optional<AllocatorSettings> GetAllocatorSettings(
     DLOG(ERROR) << feature.name
                 << " MaxMetadata is out-of-range: " << max_metadata
                 << " with TotalPages = " << total_pages;
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   int max_allocations = GetFieldTrialParamByFeatureAsInt(
@@ -242,15 +281,15 @@ GWP_ASAN_EXPORT absl::optional<AllocatorSettings> GetAllocatorSettings(
     DLOG(ERROR) << feature.name
                 << " MaxAllocations is out-of-range: " << max_allocations
                 << " with MaxMetadata = " << max_metadata;
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   size_t alloc_sampling_freq = AllocationSamplingFrequency(feature);
   if (!alloc_sampling_freq)
-    return absl::nullopt;
+    return std::nullopt;
 
   if (!SampleProcess(feature, boost_sampling))
-    return absl::nullopt;
+    return std::nullopt;
 
   return AllocatorSettings{
       static_cast<size_t>(max_allocations), static_cast<size_t>(max_metadata),
@@ -265,6 +304,10 @@ bool MaybeEnableLightweightDetectorInternal(bool boost_sampling,
   const auto& feature = kLightweightUafDetector;
 
   if (!base::FeatureList::IsEnabled(feature)) {
+    return false;
+  }
+
+  if (!IsMutuallyExclusiveFeatureAllowed(feature)) {
     return false;
   }
 

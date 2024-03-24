@@ -121,7 +121,7 @@ class TestGeolocationPermissionContextDelegate
 
  private:
   TestingPrefServiceSimple prefs_;
-  absl::optional<url::Origin> dse_origin_;
+  std::optional<url::Origin> dse_origin_;
 };
 }  // namespace
 
@@ -514,7 +514,10 @@ std::u16string GeolocationPermissionContextTests::GetPromptText() {
       PermissionRequestManager::FromWebContents(web_contents());
   PermissionRequest* request = manager->Requests().front();
 #if BUILDFLAG(IS_ANDROID)
-  return request->GetDialogMessageText();
+  return request
+      ->GetDialogAnnotatedMessageText(
+          /*embedding_origin=*/request->requesting_origin())
+      .text;
 #else
   return base::ASCIIToUTF16(request->requesting_origin().spec()) +
          request->GetMessageTextFragment();

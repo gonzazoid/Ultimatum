@@ -8,10 +8,10 @@
  * and existing networks.
  */
 
-import '//resources/cr_elements/action_link.css.js';
-import '//resources/cr_elements/cr_dialog/cr_dialog.js';
-import '//resources/cr_elements/cr_toggle/cr_toggle.js';
-import '//resources/cr_elements/policy/cr_policy_indicator.js';
+import '//resources/ash/common/cr_elements/action_link.css.js';
+import '//resources/ash/common/cr_elements/cr_dialog/cr_dialog.js';
+import '//resources/ash/common/cr_elements/cr_toggle/cr_toggle.js';
+import '//resources/ash/common/cr_elements/policy/cr_policy_indicator.js';
 import '//resources/js/action_link.js';
 import '//resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
@@ -162,6 +162,13 @@ Polymer({
       type: String,
       notify: true,
     },
+
+    /**
+     * The prefilled network configuration. This can be empty if nothing to
+     * prefill or the configuration will be synced according to `this.guid`.
+     * @type {?ConfigProperties}
+     */
+    prefilledProperties: Object,
 
     /** @private {?ManagedProperties} */
     managedProperties_: {

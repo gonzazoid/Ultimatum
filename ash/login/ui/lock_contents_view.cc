@@ -150,7 +150,7 @@ keyboard::KeyboardUIController* GetKeyboardControllerForWidget(
 }
 
 bool IsPublicAccountUser(const LoginUserInfo& user) {
-  return user.basic_user_info.type == user_manager::USER_TYPE_PUBLIC_ACCOUNT;
+  return user.basic_user_info.type == user_manager::UserType::kPublicAccount;
 }
 
 //
@@ -550,15 +550,15 @@ void LockContentsView::SetHasKioskApp(bool has_kiosk_apps) {
   UpdateKioskDefaultMessageVisibility();
 }
 
-void LockContentsView::Layout() {
-  View::Layout();
+void LockContentsView::Layout(PassKey) {
+  LayoutSuperclass<View>(this);
   LayoutTopHeader();
   LayoutBottomStatusIndicator();
   LayoutUserAddingScreenIndicator();
   LayoutPublicSessionView();
 
   if (users_list_) {
-    users_list_->Layout();
+    users_list_->DeprecatedLayoutImmediately();
   }
 }
 
@@ -737,7 +737,7 @@ void LockContentsView::ApplyUserChanges(
 
   // Force layout.
   PreferredSizeChanged();
-  Layout();
+  DeprecatedLayoutImmediately();
 
   // If one of the child views had focus before we deleted them, then this view
   // will get focused. Move focus back to the primary big view.
@@ -1319,126 +1319,6 @@ void LockContentsView::OnDeviceEnterpriseInfoChanged() {
 
 void LockContentsView::OnEnterpriseAccountDomainChanged() {}
 
-void LockContentsView::ShowAuthErrorMessageForDebug(int unlock_attempt) {
-  LoginBigUserView* big_view = CurrentBigUserView();
-  if (!big_view->auth_user()) {
-    return;
-  }
-
-  const AccountId account_id =
-      big_view->GetCurrentUser().basic_user_info.account_id;
-  UserState* user_state = FindStateForUser(account_id);
-
-  auth_error_bubble_->ShowAuthError(
-      /*anchor_view = */ big_view->auth_user()->GetActiveInputView(),
-      /*unlock_attempt = */ unlock_attempt,
-      /*show_pin = */ user_state->show_pin,
-      /*is_login_screen = */ screen_type_ == LockScreen::ScreenType::kLogin);
-}
-
-void LockContentsView::ToggleManagementForUserForDebug(const AccountId& user) {
-  auto replace = [](const LoginUserInfo& user_info) {
-    auto changed = user_info;
-    if (user_info.user_account_manager) {
-      changed.user_account_manager.reset();
-    } else {
-      changed.user_account_manager = "example@example.com";
-    }
-    return changed;
-  };
-
-  LoginBigUserView* big = TryToFindBigUser(user, false /*require_auth_active*/);
-  if (big) {
-    big->UpdateForUser(replace(big->GetCurrentUser()));
-    return;
-  }
-
-  LoginUserView* user_view =
-      users_list_ ? users_list_->GetUserView(user) : nullptr;
-  if (user_view) {
-    user_view->UpdateForUser(replace(user_view->current_user()),
-                             false /*animate*/);
-    return;
-  }
-}
-
-void LockContentsView::SetMultiUserSignInPolicyForUserForDebug(
-    const AccountId& user,
-    user_manager::MultiUserSignInPolicy policy) {
-  auto replace = [policy](const LoginUserInfo& user_info) {
-    auto changed = user_info;
-    changed.multi_user_sign_in_policy = policy;
-    changed.is_multi_user_sign_in_allowed =
-        policy == user_manager::MultiUserSignInPolicy::kUnrestricted;
-    return changed;
-  };
-
-  LoginBigUserView* big = TryToFindBigUser(user, false /*require_auth_active*/);
-  if (big) {
-    big->UpdateForUser(replace(big->GetCurrentUser()));
-  }
-
-  LoginUserView* user_view =
-      users_list_ ? users_list_->GetUserView(user) : nullptr;
-  if (user_view) {
-    user_view->UpdateForUser(replace(user_view->current_user()),
-                             false /*animate*/);
-  }
-
-  LayoutAuth(CurrentBigUserView(), nullptr /*opt_to_hide*/, true /*animate*/);
-}
-
-void LockContentsView::ToggleForceOnlineSignInForUserForDebug(
-    const AccountId& user) {
-  UserState* state = FindStateForUser(user);
-  if (!state) {
-    LOG(ERROR) << "Unable to find user forcing online sign in";
-    return;
-  }
-  state->force_online_sign_in = !state->force_online_sign_in;
-
-  LoginBigUserView* big_user =
-      TryToFindBigUser(user, true /*require_auth_active*/);
-  if (big_user && big_user->auth_user()) {
-    LayoutAuth(big_user, nullptr /*opt_to_hide*/, true /*animate*/);
-  }
-}
-
-void LockContentsView::ToggleDisableTpmForUserForDebug(const AccountId& user) {
-  UserState* state = FindStateForUser(user);
-  if (!state) {
-    LOG(ERROR) << "Unable to find user to toggle TPM disabled message";
-    return;
-  }
-  if (state->time_until_tpm_unlock.has_value()) {
-    state->time_until_tpm_unlock = std::nullopt;
-  } else {
-    state->time_until_tpm_unlock = base::Minutes(5);
-  }
-
-  LoginBigUserView* big_user =
-      TryToFindBigUser(user, true /*require_auth_active*/);
-  if (big_user && big_user->auth_user()) {
-    LayoutAuth(big_user, nullptr /*opt_to_hide*/, true /*animate*/);
-  }
-}
-
-void LockContentsView::UndoForceOnlineSignInForUserForDebug(
-    const AccountId& user) {
-  UserState* state = FindStateForUser(user);
-  if (!state) {
-    LOG(ERROR) << "Unable to find user forcing online sign in";
-    return;
-  }
-  state->force_online_sign_in = false;
-
-  LoginBigUserView* big_user =
-      TryToFindBigUser(user, true /*require_auth_active*/);
-  if (big_user && big_user->auth_user()) {
-    LayoutAuth(big_user, nullptr /*opt_to_hide*/, true /*animate*/);
-  }
-}
-
 void LockContentsView::FocusNextWidget(bool reverse) {
   Shelf* shelf = Shelf::ForWindow(GetWidget()->GetNativeWindow());
   // Tell the focus direction to the status area or the shelf so they can focus
@@ -1448,12 +1328,9 @@ void LockContentsView::FocusNextWidget(bool reverse) {
         ->status_area_widget_delegate()
         ->set_default_last_focusable_child(reverse);
     Shell::Get()->focus_cycler()->FocusWidget(shelf->GetStatusAreaWidget());
-  } else if (features::IsUseLoginShelfWidgetEnabled()) {
+  } else {
     shelf->login_shelf_widget()->SetDefaultLastFocusableChild(reverse);
     Shell::Get()->focus_cycler()->FocusWidget(shelf->login_shelf_widget());
-  } else {
-    shelf->shelf_widget()->set_default_last_focusable_child(reverse);
-    Shell::Get()->focus_cycler()->FocusWidget(shelf->shelf_widget());
   }
 }
 
@@ -1526,7 +1403,7 @@ void LockContentsView::HideMediaControlsLayout() {
   // Don't allow media keys to be used on lock screen since controls are hidden.
   Shell::Get()->media_controller()->SetMediaControlsDismissed(true);
 
-  Layout();
+  DeprecatedLayoutImmediately();
 }
 
 void LockContentsView::CreateMediaControlsLayout() {
@@ -1544,7 +1421,7 @@ void LockContentsView::CreateMediaControlsLayout() {
   AddDisplayLayoutAction(base::BindRepeating(
       &LockContentsView::SetMediaControlsSpacing, base::Unretained(this)));
 
-  Layout();
+  DeprecatedLayoutImmediately();
 }
 
 void LockContentsView::OnWillChangeFocus(View* focused_before,
@@ -1791,7 +1668,7 @@ void LockContentsView::DoLayout() {
     action.Run(landscape);
   }
 
-  // SizeToPreferredSize will call Layout().
+  // SizeToPreferredSize will trigger layout.
   SizeToPreferredSize();
 }
 
@@ -1802,7 +1679,7 @@ void LockContentsView::LayoutTopHeader() {
                                   note_action_->GetPreferredSize().height());
   top_header_->SetPreferredSize(gfx::Size(preferred_width, preferred_height));
   top_header_->SizeToPreferredSize();
-  top_header_->Layout();
+  top_header_->DeprecatedLayoutImmediately();
   // Position the top header - the origin is offset to the left from the top
   // right corner of the entire view by the width of this top header view.
   top_header_->SetPosition(GetLocalBounds().top_right() -
@@ -1823,7 +1700,7 @@ void LockContentsView::LayoutBottomStatusIndicator() {
   // If the management bubble is currently displayed, we need to re-layout it as
   // the bottom status indicator is its anchor view.
   if (management_bubble_->GetVisible()) {
-    management_bubble_->Layout();
+    management_bubble_->DeprecatedLayoutImmediately();
   }
 }
 
@@ -2047,7 +1924,7 @@ void LockContentsView::LayoutAuth(LoginBigUserView* to_update,
   capture_animation_state_pre_layout(opt_to_hide);
   enable_auth(to_update);
   disable_auth(opt_to_hide);
-  Layout();
+  DeprecatedLayoutImmediately();
   apply_animation_post_layout(to_update);
   apply_animation_post_layout(opt_to_hide);
   ongoing_auth_layout_ = false;
@@ -2286,7 +2163,7 @@ void LockContentsView::SetDisplayStyle(DisplayStyle style) {
   main_view_->SetVisible(!show_expanded_view);
   top_header_->SetVisible(!show_expanded_view);
   bottom_status_indicator_->SetVisible(!show_expanded_view);
-  Layout();
+  DeprecatedLayoutImmediately();
 }
 
 bool LockContentsView::OnKeyPressed(const ui::KeyEvent& event) {
@@ -2444,16 +2321,6 @@ void LockContentsView::UpdateKioskDefaultMessageVisibility() {
   kiosk_default_message_->SetVisible(!has_kiosk_apps_);
 }
 
-void LockContentsView::SetKioskLicenseModeForTesting(
-    bool is_kiosk_license_mode) {
-  kiosk_license_mode_ = is_kiosk_license_mode;
-
-  // Normally when management device mode is updated, via
-  // OnDeviceEnterpriseInfoChanged, it updates the visibility of Kiosk default
-  // meesage too.
-  UpdateKioskDefaultMessageVisibility();
-}
-
 void LockContentsView::RecordAndResetPasswordAttempts(
     AuthEventsRecorder::AuthenticationOutcome outcome,
     AccountId account_id) {
@@ -2462,7 +2329,7 @@ void LockContentsView::RecordAndResetPasswordAttempts(
   unlock_attempt_by_user_[account_id] = 0;
 }
 
-BEGIN_METADATA(LockContentsView, NonAccessibleView)
+BEGIN_METADATA(LockContentsView)
 END_METADATA
 
 }  // namespace ash

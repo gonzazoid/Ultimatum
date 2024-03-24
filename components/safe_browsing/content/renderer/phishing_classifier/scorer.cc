@@ -14,6 +14,7 @@
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/not_fatal_until.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/task/sequenced_task_runner.h"
@@ -159,6 +160,13 @@ std::string GetModelInput(const SkBitmap& bitmap, int width, int height) {
       bitmap, skia::ImageOperations::RESIZE_GOOD, static_cast<int>(width),
       static_cast<int>(height));
 
+  if (downsampled.drawsNothing()) {
+    return std::string();
+  }
+
+  CHECK_EQ(downsampled.width(), width, base::NotFatalUntil::M125);
+  CHECK_EQ(downsampled.height(), height, base::NotFatalUntil::M125);
+
   // Format as an RGB buffer for input into the model
   std::string data;
   for (int y = 0; y < height; ++y) {
@@ -296,6 +304,11 @@ void OnImageEmbedderCreated(
 }
 #endif
 
+int* GetLiveScorerCount() {
+  static int count = 0;
+  return &count;
+}
+
 }  // namespace
 
 #if BUILDFLAG(BUILD_WITH_TFLITE_LIB)
@@ -359,8 +372,14 @@ double Scorer::LogOdds2Prob(const double log_odds) const {
   return odds / (odds + 1.0);
 }
 
-Scorer::Scorer() = default;
-Scorer::~Scorer() = default;
+Scorer::Scorer() {
+  *GetLiveScorerCount() += 1;
+  base::UmaHistogramCounts1000("SBClientPhishing.LiveScorersAtCreation",
+                               *GetLiveScorerCount());
+}
+Scorer::~Scorer() {
+  *GetLiveScorerCount() -= 1;
+}
 
 // static
 ScorerStorage* ScorerStorage::GetInstance() {
@@ -616,8 +635,9 @@ int Scorer::image_embedding_tflite_model_version() const {
 
 void ScorerStorage::SetScorer(std::unique_ptr<Scorer> scorer) {
   scorer_ = std::move(scorer);
-  for (Observer& obs : observers_)
+  for (Observer& obs : observers_) {
     obs.OnScorerChanged();
+  }
 }
 
 void ScorerStorage::ClearScorer() {

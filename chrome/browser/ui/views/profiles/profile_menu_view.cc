@@ -41,6 +41,7 @@
 #include "chrome/browser/ui/browser_navigator.h"
 #include "chrome/browser/ui/browser_navigator_params.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
+#include "chrome/browser/ui/managed_ui.h"
 #include "chrome/browser/ui/passwords/ui_utils.h"
 #include "chrome/browser/ui/profiles/profile_colors_util.h"
 #include "chrome/browser/ui/profiles/profile_picker.h"
@@ -155,8 +156,11 @@ void ProfileMenuView::BuildMenu() {
 //  ChromeOS doesn't support multi-profile.
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
   if (!(profile->IsGuestSession())) {
-    SetProfileManagementHeading(
-        l10n_util::GetStringUTF16(IDS_PROFILES_LIST_PROFILES_TITLE));
+    SetProfileManagementHeading(l10n_util::GetStringUTF16(
+        switches::IsExplicitBrowserSigninUIOnDesktopEnabled(
+            switches::ExplicitBrowserSigninPhase::kFull)
+            ? IDS_PROFILE_MENU_PROFILES_LIST_TITLE
+            : IDS_PROFILES_LIST_PROFILES_TITLE));
     BuildAvailableProfiles();
 
     // Users should not be able to manage profiles from WebApps.
@@ -513,12 +517,36 @@ void ProfileMenuView::BuildIdentity() {
         IsSyncPaused(profile)
             ? l10n_util::GetStringUTF16(IDS_PROFILES_LOCAL_PROFILE_STATE)
             : base::UTF8ToUTF16(account_info.email);
+    auto account_manager = chrome::GetAccountManagerIdentity(profile);
+    management_label_ =
+        account_manager
+            ? l10n_util::GetStringFUTF16(IDS_PROFILES_MANAGED_BY,
+                                         base::UTF8ToUTF16(*account_manager))
+            : std::u16string();
+
+    auto management_environment =
+        chrome::enterprise_util::GetManagementEnvironment(
+            profile, identity_manager->FindExtendedAccountInfoByAccountId(
+                         identity_manager->GetPrimaryAccountId(
+                             signin::ConsentLevel::kSignin)));
+
+    const gfx::VectorIcon* badge = nullptr;
+    if (management_environment !=
+        chrome::enterprise_util::ManagementEnvironment::kNone) {
+      badge = &vector_icons::kBusinessIcon;
+    }
+
+    auto badge_image_model =
+        badge ? ui::ImageModel::FromVectorIcon(*badge, ui::kColorMenuIcon, 16)
+              : ui::ImageModel();
+
     SetProfileIdentityInfo(
         profile_name, background_color, edit_button_params,
-        ui::ImageModel::FromImage(account_info.account_image), menu_title_,
-        menu_subtitle_);
+        ui::ImageModel::FromImage(account_info.account_image),
+        badge_image_model, menu_title_, menu_subtitle_, management_label_);
   } else {
-    if (base::FeatureList::IsEnabled(switches::kUnoDesktop) &&
+    if (switches::IsExplicitBrowserSigninUIOnDesktopEnabled(
+            switches::ExplicitBrowserSigninPhase::kExperimental) &&
         account.IsEmpty()) {
       account_info =
           signin_ui_util::GetSingleAccountForPromos(identity_manager);
@@ -526,6 +554,7 @@ void ProfileMenuView::BuildIdentity() {
     menu_title_ = l10n_util::GetStringUTF16(IDS_PROFILES_LOCAL_PROFILE_STATE);
     // The email may be empty.
     menu_subtitle_ = base::UTF8ToUTF16(account_info.email);
+    management_label_ = std::u16string();
     SetProfileIdentityInfo(
         profile_name, background_color, edit_button_params,
         ui::ImageModel::FromImage(
@@ -537,7 +566,7 @@ void ProfileMenuView::BuildIdentity() {
             !account_info.IsEmpty()
                 ? account_info.account_image
                 : profile_attributes->GetAvatarIcon(kIdentityImageSize)),
-        menu_title_, menu_subtitle_);
+        ui::ImageModel(), menu_title_, menu_subtitle_, management_label_);
   }
 }
 
@@ -546,6 +575,7 @@ void ProfileMenuView::BuildGuestIdentity() {
 
   menu_title_ = l10n_util::GetStringUTF16(IDS_GUEST_PROFILE_NAME);
   menu_subtitle_ = std::u16string();
+  management_label_ = std::u16string();
   if (guest_window_count > 1) {
     menu_subtitle_ = l10n_util::GetPluralStringFUTF16(
         IDS_GUEST_WINDOW_COUNT_MESSAGE, guest_window_count);
@@ -556,8 +586,9 @@ void ProfileMenuView::BuildGuestIdentity() {
   SetProfileIdentityInfo(
       /*profile_name=*/std::u16string(),
       /*background_color=*/SK_ColorTRANSPARENT,
-      /*edit_button=*/std::nullopt, profiles::GetGuestAvatar(), menu_title_,
-      menu_subtitle_, header_art_icon);
+      /*edit_button=*/std::nullopt, profiles::GetGuestAvatar(),
+      ui::ImageModel(), menu_title_, menu_subtitle_, management_label_,
+      header_art_icon);
 }
 
 void ProfileMenuView::BuildAutofillButtons() {
@@ -644,7 +675,8 @@ void ProfileMenuView::BuildSyncInfo() {
         l10n_util::GetStringUTF16(IDS_PROFILES_DICE_NOT_SYNCING_TITLE);
     button_text = l10n_util::GetStringUTF16(IDS_PROFILES_DICE_SIGNIN_BUTTON);
     show_sync_badge = true;
-  } else if (base::FeatureList::IsEnabled(switches::kUnoDesktop) &&
+  } else if (switches::IsExplicitBrowserSigninUIOnDesktopEnabled(
+                 switches::ExplicitBrowserSigninPhase::kExperimental) &&
              !account_info_for_promos.IsEmpty()) {
     account_info = account_info_for_promos;
     description = l10n_util::GetStringUTF16(IDS_PROFILES_DICE_SYNC_PROMO);
@@ -778,7 +810,11 @@ void ProfileMenuView::BuildAvailableProfiles() {
       !web_app::AppBrowserController::IsWebApp(browser())) {
     AddAvailableProfile(
         profiles::GetGuestAvatar(),
-        l10n_util::GetStringUTF16(IDS_GUEST_PROFILE_NAME),
+        l10n_util::GetStringUTF16(
+            switches::IsExplicitBrowserSigninUIOnDesktopEnabled(
+                switches::ExplicitBrowserSigninPhase::kFull)
+                ? IDS_PROFILE_MENU_OPEN_GUEST_PROFILE
+                : IDS_GUEST_PROFILE_NAME),
         /*is_guest=*/true,
         /*is_enabled=*/true,
         base::BindRepeating(&ProfileMenuView::OnGuestProfileButtonClicked,

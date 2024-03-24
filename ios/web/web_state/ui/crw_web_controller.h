@@ -217,14 +217,14 @@ class WebStateImpl;
 // Gets a mapping of all permissions and their states. Only works on iOS 15+.
 - (NSDictionary<NSNumber*, NSNumber*>*)statesForAllPermissions;
 
-// Downloads the file from the `request` at `destination` path.
+// Downloads the current page as a file at `destination` path.
 // `completion_handler` is used to retrieve the created CRWWebViewDownload, so
 // the caller can manage the launched download.
-- (void)downloadCurrentPageWithRequest:(NSURLRequest*)request
-                       destinationPath:(NSString*)destination
-                              delegate:(id<CRWWebViewDownloadDelegate>)delegate
-                               handler:
-                                   (void (^)(id<CRWWebViewDownload>))handler;
+- (void)downloadCurrentPageToDestinationPath:(NSString*)destination
+                                    delegate:
+                                        (id<CRWWebViewDownloadDelegate>)delegate
+                                     handler:(void (^)(id<CRWWebViewDownload>))
+                                                 handler;
 
 // Returns whether the Find interaction is supported and can be enabled.
 - (BOOL)findInteractionSupported;
@@ -249,6 +249,12 @@ class WebStateImpl;
 
 // Returns the under page background color.
 - (UIColor*)underPageBackgroundColor;
+
+#pragma mark Fullscreen Message Handlers
+
+// Handles the viewport fit value, `isCover` is true when the "viewport-fit" is
+// equal to "cover".
+- (void)handleViewportFit:(BOOL)isCover;
 
 #pragma mark Navigation Message Handlers
 
@@ -283,6 +289,8 @@ class WebStateImpl;
 // Returns the current page loading phase.
 // TODO(crbug.com/956511): Remove this once refactor is done.
 @property(nonatomic, readonly, assign) web::WKNavigationState navigationState;
+// YES if the web container view fill the screen.
+@property(nonatomic, readonly) BOOL isCover;
 
 // Injects a CRWWebViewContentView for testing.  Takes ownership of
 // `webViewContentView`.

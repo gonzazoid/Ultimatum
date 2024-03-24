@@ -11,6 +11,7 @@
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
 #include "base/ios/ios_util.h"
+#import "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #import "base/test/ios/wait_util.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -32,7 +33,7 @@
 #include "ios/web/public/test/fakes/fake_browser_state.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
 #include "ios/web/public/test/web_task_environment.h"
-#include "net/base/mac/url_conversions.h"
+#include "net/base/apple/url_conversions.h"
 #include "net/cookies/cookie_util.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -153,7 +154,7 @@ class FakeWebState : public web::FakeWebState {
   }
 
  private:
-  web::WebStatePolicyDecider* decider_;
+  raw_ptr<web::WebStatePolicyDecider> decider_;
 };
 
 }  // namespace
@@ -304,7 +305,7 @@ class AccountConsistencyServiceTest : public PlatformTest {
     network::mojom::CookieDeletionFilterPtr filter =
         network::mojom::CookieDeletionFilter::New();
     filter->including_domains =
-        absl::optional<std::vector<std::string>>({kGoogleDomain});
+        std::optional<std::vector<std::string>>({kGoogleDomain});
     cookie_manager->DeleteCookies(std::move(filter),
                                   base::OnceCallback<void(uint)>());
   }
@@ -321,8 +322,6 @@ class AccountConsistencyServiceTest : public PlatformTest {
   }
 
   // Properties available for tests.
-  // Creates test threads, necessary for ActiveStateManager that needs a UI
-  // thread.
   web::WebTaskEnvironment task_environment_;
   web::FakeBrowserState browser_state_;
   sync_preferences::TestingPrefServiceSyncable prefs_;

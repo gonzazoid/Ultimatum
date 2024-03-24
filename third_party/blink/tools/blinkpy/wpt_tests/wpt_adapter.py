@@ -11,6 +11,7 @@ import logging
 import os
 import optparse
 import signal
+import subprocess
 import sys
 from collections import defaultdict
 from datetime import datetime
@@ -26,7 +27,7 @@ from blinkpy.w3c.wpt_results_processor import WPTResultsProcessor
 from blinkpy.web_tests.controllers.web_test_finder import WebTestFinder
 from blinkpy.web_tests.models.test_expectations import TestExpectations
 from blinkpy.web_tests.port import factory
-from blinkpy.wpt_tests.product import make_product_registry
+from blinkpy.wpt_tests import product
 from blinkpy.wpt_tests.test_loader import TestLoader, wpt_url_to_blink_test
 
 path_finder.bootstrap_wpt_imports()
@@ -143,8 +144,11 @@ class WPTAdapter:
         self.finder = path_finder.PathFinder(self.fs)
         self.options = options
         self.paths = paths
-        self.failure_threshold = 0
-        self.crash_timeout_threshold = 0
+        self._processor = WPTResultsProcessor(
+            self.fs,
+            self.port,
+            artifacts_dir=self.port.artifacts_directory(),
+            reset_results=self.options.reset_results)
         self._expectations = TestExpectations(self.port)
 
     @classmethod
@@ -236,7 +240,8 @@ class WPTAdapter:
         runner_options.no_capture_stdio = True
         runner_options.manifest_download = False
         runner_options.manifest_update = False
-        runner_options.headless = True
+        runner_options.pause_after_test = False
+        runner_options.headless = self.options.headless
 
         # Set up logging as early as possible.
         self._set_up_runner_output_options(runner_options)
@@ -271,7 +276,6 @@ class WPTAdapter:
         if verbose_level >= 3:
             runner_options.webdriver_args.extend([
                 '--verbose',
-                '--log-path=-',
             ])
 
         if self.using_upstream_wpt:
@@ -306,7 +310,8 @@ class WPTAdapter:
         ])
         runner_options.binary_args.extend([
             '--host-resolver-rules='
-            'MAP nonexistent.*.test ^NOTFOUND, MAP *.test 127.0.0.1',
+            'MAP nonexistent.*.test ^NOTFOUND,'
+            'MAP *.test 127.0.0.1, MAP *.test. 127.0.0.1',
             *self.port.additional_driver_flags(),
         ])
         # Implicitly pass `--enable-blink-features=MojoJS,MojoJSTest` to Chrome.
@@ -344,9 +349,10 @@ class WPTAdapter:
             runner_options.fail_on_unexpected = False
             runner_options.restart_on_unexpected = False
         else:
-            # By default, wpt will treat unexpected passes as errors, so we
-            # disable that to be consistent with Chromium CI.
-            runner_options.fail_on_unexpected_pass = False
+            # Unexpected subtest passes in wptrunner are equivalent to baseline
+            # mismatches in `run_web_tests.py`, so don't pass
+            # `--no-fail-on-unexpected-pass`. The test loader always adds
+            # test-level pass expectations to compensate.
             runner_options.restart_on_unexpected = False
             runner_options.restart_on_new_group = False
             # Add `--run-by-dir=0` so that tests can be more evenly distributed
@@ -374,15 +380,6 @@ class WPTAdapter:
                                                      '127.0.0.1.pem')
 
     def _set_up_runner_debugging_options(self, runner_options):
-        self.port.set_option_default('use_xvfb',
-                                     self.port.get_option('headless'))
-        if not self.options.headless:
-            logger.info('Not headless; default to 1 worker to avoid '
-                        'opening too many windows')
-            runner_options.headless = False
-            # Force `--pause-after-test`, since it doesn't make sense to run
-            # tests headfully without giving a chance for interaction.
-            runner_options.pause_after_test = True
         if self.options.wrapper:
             runner_options.debugger = self.options.wrapper[0]
             # `wpt run` expects a plain `str`, not a `List[str]`:
@@ -479,9 +476,9 @@ class WPTAdapter:
             runner_options.test_types = self.options.test_types
             runner_options.retry_unexpected = self.options.num_retries
 
-            self.failure_threshold = self.port.max_allowed_failures(
+            self._processor.failure_threshold = self.port.max_allowed_failures(
                 len(include_tests))
-            self.crash_timeout_threshold = self.port.max_allowed_crash_or_timeouts(
+            self._processor.crash_timeout_threshold = self.port.max_allowed_crash_or_timeouts(
                 len(include_tests))
 
             # sharding is done inside wrapper
@@ -577,7 +574,7 @@ class WPTAdapter:
             # lifecycles.
             from wptrunner.metadata import logger
             logger._state.has_shutdown = False
-            return 1 if exit_code else 0
+            return 1 if exit_code or self._processor.num_regressions > 0 else 0
 
     def _create_extra_run_info(self, run_info_path, tests_root):
         run_info = {
@@ -604,15 +601,7 @@ class WPTAdapter:
 
     @contextlib.contextmanager
     def process_and_upload_results(self, runner_options: argparse.Namespace):
-        artifacts_dir = self.port.artifacts_directory()
-        processor = WPTResultsProcessor(
-            self.fs,
-            self.port,
-            artifacts_dir=artifacts_dir,
-            failure_threshold=self.failure_threshold,
-            crash_timeout_threshold=self.crash_timeout_threshold,
-            reset_results=self.options.reset_results)
-        with processor.stream_results() as events:
+        with self._processor.stream_results() as events:
             runner_options.log.add_handler(events.put)
             try:
                 yield
@@ -620,15 +609,16 @@ class WPTAdapter:
                 # Always copy `results.html` into `layout-test-results/` so that
                 # the partial results can be viewed, and the directory is
                 # archived next run. See crbug.com/1475556.
-                processor.copy_results_viewer()
-                processor.process_results_json(
+                self._processor.copy_results_viewer()
+                self._processor.process_results_json(
                     self.port.get_option('json_test_results'))
         if runner_options.log_wptreport:
-            processor.process_wpt_report(runner_options.log_wptreport[0].name)
+            self._processor.process_wpt_report(
+                runner_options.log_wptreport[0].name)
         if (self.port.get_option('show_results')
-                and processor.num_initial_failures > 0):
+                and self._processor.num_initial_failures > 0):
             self.port.show_results_html_file(
-                self.fs.join(artifacts_dir, 'results.html'))
+                self.fs.join(self.port.artifacts_directory(), 'results.html'))
         if self.options.reset_results:
             self._optimize(runner_options)
 
@@ -664,7 +654,7 @@ def _load_entry_point():
 
 def make_product(port, options):
     name = options.product
-    product_cls = make_product_registry()[name]
+    product_cls = product.make_product_registry()[name]
     return product_cls(port, options)
 
 
@@ -681,10 +671,10 @@ def handle_interrupt_signals():
 def parse_arguments(argv):
     parser = command_line.ArgumentParser(usage='%(prog)s [options] [tests]',
                                          description=__doc__.splitlines()[0])
-    factory.add_configuration_options_group(parser,
-                                            rwt=False,
-                                            product_choices=list(
-                                                make_product_registry()))
+    factory.add_configuration_options_group(
+        parser,
+        rwt=False,
+        product_choices=list(product.make_product_registry()))
     factory.add_logging_options_group(parser)
     factory.add_results_options_group(parser, rwt=False)
     factory.add_testing_options_group(parser, rwt=False)
@@ -701,12 +691,25 @@ def parse_arguments(argv):
     # `--no-expectations` to `run_wpt_tests.py`, and skip reporting results when
     # the flag is passed.
     options.no_expectations = False
-    # Directly tie Xvfb usage to headless mode. Xvfb can supercede a real X
-    # server and therefore should never be started in `--no-headless` mode.
-    # Conversely, the default headless mode should always start Xvfb.
-    options.use_xvfb = options.headless
     return options, args
 
+
+def _install_xcode(xcode_build_version: str):
+    path_finder.add_build_ios_to_sys_path()
+    import xcode_util as xcode
+    if xcode_build_version:
+        try:
+            xcode.install_xcode('../../mac_toolchain', xcode_build_version,
+                                '../../Xcode.app', '../../Runtime-ios-',
+                                product.IOS_VERSION)
+        except subprocess.CalledProcessError as e:
+            logger.error('Xcode build version %s failed to install: %s ',
+                         xcode_build_version, e)
+        else:
+            logger.info('Xcode build version %s successfully installed.',
+                        xcode_build_version)
+    else:
+        logger.warning('Skip the Xcode installation, no xcode_build_version.')
 
 def _run_with_upstream_wpt(host: Host, argv: List[str]) -> int:
     checkout_path = _checkout_upstream_wpt(host)
@@ -763,6 +766,9 @@ def main(argv) -> int:
                 'non-Linux platforms; follow https://crbug.com/1512219 for '
                 'status.')
             return exit_code
+        if (adapter.product.name == 'chrome_ios'
+                and adapter.options.xcode_build_version):
+            _install_xcode(adapter.options.xcode_build_version)
         if adapter.options.use_upstream_wpt:
             exit_code = _run_with_upstream_wpt(host, argv)
         else:

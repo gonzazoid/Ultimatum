@@ -77,6 +77,8 @@ void SetUpTestsIfPresent() {
 
 void RunTestsIfPresent() {}
 
+void SignalAppLaunched() {}
+
 base::TimeDelta PasswordCheckMinimumDuration() {
   // No artificial delays for tests.
   return base::Seconds(0);
@@ -84,6 +86,10 @@ base::TimeDelta PasswordCheckMinimumDuration() {
 
 std::unique_ptr<drive::DriveService> GetOverriddenDriveService() {
   return nullptr;
+}
+
+std::optional<std::string> FETDemoModeOverride() {
+  return std::nullopt;
 }
 
 }  // namespace tests_hook

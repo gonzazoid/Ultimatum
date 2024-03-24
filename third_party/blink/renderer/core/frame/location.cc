@@ -49,14 +49,14 @@ namespace blink {
 
 Location::Location(DOMWindow* dom_window) : dom_window_(dom_window) {}
 
-v8::MaybeLocal<v8::Value> Location::Wrap(ScriptState* script_state) {
+v8::Local<v8::Value> Location::Wrap(ScriptState* script_state) {
   // Note that this check is gated on whether or not |dom_window_| is remote,
   // not whether or not |dom_window_| is cross-origin. If |dom_window_| is
   // local, the |location| property must always return the same wrapper, even if
   // the cross-origin status changes by changing properties like
   // |document.domain|.
   if (IsA<RemoteDOMWindow>(dom_window_.Get())) {
-    DCHECK(!DOMDataStore::ContainsWrapper(this, script_state->GetIsolate()));
+    DCHECK(!DOMDataStore::ContainsWrapper(script_state->GetIsolate(), this));
 
     DOMWrapperWorld& world = script_state->World();
     v8::Isolate* isolate = script_state->GetIsolate();

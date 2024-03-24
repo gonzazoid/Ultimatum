@@ -5,6 +5,7 @@
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/tab_grid_mediator.h"
 
 #import "base/feature_list.h"
+#import "base/memory/raw_ptr.h"
 #import "base/metrics/histogram_macros.h"
 #import "components/feature_engagement/public/event_constants.h"
 #import "components/feature_engagement/public/tracker.h"
@@ -28,9 +29,9 @@
   // Current selected grid.
   id<TabGridPageMutator> _currentPageMutator;
   // Preference service from the application context.
-  PrefService* _prefService;
+  raw_ptr<PrefService> _prefService;
   // Feature engagement tracker.
-  feature_engagement::Tracker* _engagementTracker;
+  raw_ptr<feature_engagement::Tracker> _engagementTracker;
   // Pref observer to track changes to prefs.
   std::unique_ptr<PrefObserverBridge> _prefObserverBridge;
   // Registrar for pref changes notifications.
@@ -53,12 +54,8 @@
     _prefObserverBridge.reset(new PrefObserverBridge(self));
 
     // Register to observe any changes on supervised_user status.
-    if (base::FeatureList::IsEnabled(
-            supervised_user::
-                kFilterWebsitesForSupervisedUsersOnDesktopAndIOS)) {
-      _prefObserverBridge->ObserveChangesForPreference(prefs::kSupervisedUserId,
-                                                       &_prefChangeRegistrar);
-    }
+    _prefObserverBridge->ObserveChangesForPreference(prefs::kSupervisedUserId,
+                                                     &_prefChangeRegistrar);
   }
   return self;
 }
@@ -137,7 +134,7 @@
       case TabSwitcherPageChangeInteraction::kScrollDrag:
       case TabSwitcherPageChangeInteraction::kAccessibilitySwipe:
         _engagementTracker->NotifyEvent(
-            feature_engagement::events::kIOSSwipeLeftForIncognitoUsed);
+            feature_engagement::events::kIOSSwipeRightForIncognitoUsed);
         break;
       case TabSwitcherPageChangeInteraction::kControlTap:
       case TabSwitcherPageChangeInteraction::kControlDrag:

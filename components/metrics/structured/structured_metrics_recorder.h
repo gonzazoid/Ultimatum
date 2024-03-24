@@ -15,11 +15,12 @@
 #include "base/memory/weak_ptr.h"
 #include "components/metrics/metrics_provider.h"
 #include "components/metrics/structured/event.h"
-#include "components/metrics/structured/event_storage.h"
-#include "components/metrics/structured/key_data.h"
-#include "components/metrics/structured/key_data_provider.h"
+#include "components/metrics/structured/lib/event_storage.h"
+#include "components/metrics/structured/lib/key_data.h"
+#include "components/metrics/structured/lib/key_data_provider.h"
 #include "components/metrics/structured/project_validator.h"
 #include "components/metrics/structured/recorder.h"
+#include "third_party/metrics_proto/structured_data.pb.h"
 
 namespace metrics::structured {
 
@@ -38,8 +39,15 @@ namespace metrics::structured {
 class StructuredMetricsRecorder : public Recorder::RecorderImpl,
                                   KeyDataProvider::Observer {
  public:
-  StructuredMetricsRecorder(std::unique_ptr<KeyDataProvider> key_data_provider,
-                            std::unique_ptr<EventStorage> event_storage);
+  // Interface for watching for the recording of Structured Metrics Events.
+  class Observer : public base::CheckedObserver {
+   public:
+    virtual void OnEventRecorded(const StructuredEventProto& event) = 0;
+  };
+
+  StructuredMetricsRecorder(
+      std::unique_ptr<KeyDataProvider> key_data_provider,
+      std::unique_ptr<EventStorage<StructuredEventProto>> event_storage);
   ~StructuredMetricsRecorder() override;
   StructuredMetricsRecorder(const StructuredMetricsRecorder&) = delete;
   StructuredMetricsRecorder& operator=(const StructuredMetricsRecorder&) =
@@ -72,7 +80,13 @@ class StructuredMetricsRecorder : public Recorder::RecorderImpl,
   // KeyDataProvider::Observer:
   void OnKeyReady() override;
 
-  EventStorage* event_storage() { return event_storage_.get(); }
+  // Interface for adding and remove watchers.
+  void AddEventsObserver(Observer* watcher);
+  void RemoveEventsObserver(Observer* watcher);
+
+  EventStorage<StructuredEventProto>* event_storage() {
+    return event_storage_.get();
+  }
 
   KeyDataProvider* key_data_provider() { return key_data_provider_.get(); }
 
@@ -192,12 +206,14 @@ class StructuredMetricsRecorder : public Recorder::RecorderImpl,
   // Adds a project to the diallowed list for testing.
   void AddDisallowedProjectForTest(uint64_t project_name_hash);
 
+  void NotifyEventRecorded(const StructuredEventProto& event);
+
  protected:
   // Key data provider that provides device and profile keys.
   std::unique_ptr<KeyDataProvider> key_data_provider_;
 
   // Storage for events while on device.
-  std::unique_ptr<EventStorage> event_storage_;
+  std::unique_ptr<EventStorage<StructuredEventProto>> event_storage_;
 
   // Whether the metrics provider has completed initialization. Initialization
   // occurs across OnProfileAdded and OnKeyReady. No incoming
@@ -233,6 +249,8 @@ class StructuredMetricsRecorder : public Recorder::RecorderImpl,
   // A set of projects that are not allowed to be recorded. This is a cache of
   // GetDisabledProjects().
   base::flat_set<uint64_t> disallowed_projects_;
+
+  base::ObserverList<Observer> watchers_;
 
   // Callbacks for tests whenever an event is recorded.
   base::RepeatingClosure test_callback_on_record_ = base::DoNothing();

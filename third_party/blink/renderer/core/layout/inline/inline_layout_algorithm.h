@@ -89,7 +89,7 @@ class CORE_EXPORT InlineLayoutAlgorithm final
   void BidiReorder(TextDirection base_direction, LogicalLineItems* line_box);
 
   void PlaceControlItem(const InlineItem&,
-                        const LineInfo&,
+                        const String& text_content,
                         InlineItemResult*,
                         LogicalLineItems* line_box,
                         InlineBoxState*);
@@ -98,15 +98,12 @@ class CORE_EXPORT InlineLayoutAlgorithm final
                    LogicalLineItems* line_box,
                    InlineBoxState*);
   InlineBoxState* PlaceAtomicInline(const InlineItem&,
-                                    const LineInfo&,
                                     InlineItemResult*,
                                     LogicalLineItems* line_box);
   void PlaceBlockInInline(const InlineItem&,
-                          const LineInfo&,
                           InlineItemResult*,
                           LogicalLineItems* line_box);
   void PlaceInitialLetterBox(const InlineItem&,
-                             const LineInfo&,
                              InlineItemResult*,
                              LogicalLineItems* line_box);
   void PlaceLayoutResult(InlineItemResult*,
@@ -122,10 +119,10 @@ class CORE_EXPORT InlineLayoutAlgorithm final
                             LineInfo*,
                             LogicalLineItems* line_box);
   void PlaceRelativePositionedItems(LogicalLineItems* line_box);
-  void PlaceListMarker(const InlineItem&, InlineItemResult*, const LineInfo&);
+  void PlaceListMarker(const InlineItem&, InlineItemResult*);
 
   LayoutUnit ApplyTextAlign(LineInfo*);
-  absl::optional<LayoutUnit> ApplyJustify(LayoutUnit space, LineInfo*);
+  std::optional<LayoutUnit> ApplyJustify(LayoutUnit space, LineInfo*);
 
   // Add any trailing clearance requested by a BR 'clear' attribute on the line.
   // Return true if this was successful (this also includes cases where there is
@@ -143,7 +140,7 @@ class CORE_EXPORT InlineLayoutAlgorithm final
   const ColumnSpannerPath* column_spanner_path_;
 
   MarginStrut end_margin_strut_;
-  absl::optional<int> lines_until_clamp_;
+  std::optional<int> lines_until_clamp_;
 
   FontBaseline baseline_type_ = FontBaseline::kAlphabeticBaseline;
 

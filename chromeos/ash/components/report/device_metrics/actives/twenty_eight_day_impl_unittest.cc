@@ -174,8 +174,7 @@ class TwentyEightDayImplDirectCheckIn : public TwentyEightDayImplBase {
  public:
   void SetUp() override {
     GetScopedFeatureList().InitWithFeatures(
-        /*enabled_features=*/
-        {features::kDeviceActiveClient28DayActiveCheckIn},
+        {},
         /*disabled_features*/ {
             features::kDeviceActiveClient28DayActiveCheckMembership});
 
@@ -226,8 +225,6 @@ class TwentyEightDayImplDirectCheckIn : public TwentyEightDayImplBase {
 };
 
 TEST_F(TwentyEightDayImplDirectCheckIn, QueryFeatureFlagDisabled) {
-  ASSERT_TRUE(base::FeatureList::IsEnabled(
-      features::kDeviceActiveClient28DayActiveCheckIn));
   ASSERT_FALSE(base::FeatureList::IsEnabled(
       features::kDeviceActiveClient28DayActiveCheckMembership));
 }
@@ -306,8 +303,7 @@ class TwentyEightDayImplDirectCheckMembership : public TwentyEightDayImplBase {
     GetScopedFeatureList().InitWithFeatures(
         /*enabled_features=*/
         {features::kDeviceActiveClient28DayActiveCheckMembership},
-        /*disabled_features*/ {
-            features::kDeviceActiveClient28DayActiveCheckIn});
+        /*disabled_features*/ {});
 
     TwentyEightDayImplBase::SetUp();
 
@@ -503,6 +499,8 @@ class TwentyEightDayImplDirectCheckMembership : public TwentyEightDayImplBase {
         prefs::kDeviceActiveChurnObservationMonthlyPingTimestamp);
     GetLocalState()->ClearPref(prefs::kDeviceActiveLastKnownChurnActiveStatus);
     GetLocalState()->ClearPref(
+        prefs::kDeviceActiveChurnObservationFirstObservedNewChurnMetadata);
+    GetLocalState()->ClearPref(
         prefs::kDeviceActiveLastKnownIsActiveCurrentPeriodMinus0);
     GetLocalState()->ClearPref(
         prefs::kDeviceActiveLastKnownIsActiveCurrentPeriodMinus1);
@@ -526,8 +524,6 @@ class TwentyEightDayImplDirectCheckMembership : public TwentyEightDayImplBase {
 TEST_F(TwentyEightDayImplDirectCheckMembership, QueryFeatureFlagEnabled) {
   ASSERT_TRUE(base::FeatureList::IsEnabled(
       features::kDeviceActiveClient28DayActiveCheckMembership));
-  ASSERT_FALSE(base::FeatureList::IsEnabled(
-      features::kDeviceActiveClient28DayActiveCheckIn));
 }
 
 TEST_F(TwentyEightDayImplDirectCheckMembership, BrandNewDeviceFlow) {

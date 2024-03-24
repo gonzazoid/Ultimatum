@@ -45,7 +45,7 @@ class AddressFormEventLogger : public FormEventLoggerBase {
     record_type_count_ = record_type_count;
   }
 
-  void OnDidFillSuggestion(
+  void OnDidFillFormFillingSuggestion(
       const AutofillProfile& profile,
       const FormStructure& form,
       const AutofillField& field,
@@ -53,18 +53,6 @@ class AddressFormEventLogger : public FormEventLoggerBase {
       const AutofillTriggerSource trigger_source);
 
   void OnDidUndoAutofill();
-
-  void OnDidSeeFillableDynamicForm(
-      AutofillMetrics::PaymentsSigninState signin_state_for_metrics,
-      const FormStructure& form);
-
-  void OnDidRefill(
-      AutofillMetrics::PaymentsSigninState signin_state_for_metrics,
-      const FormStructure& form);
-
-  void OnSubsequentRefillAttempt(
-      AutofillMetrics::PaymentsSigninState signin_state_for_metrics,
-      const FormStructure& form);
 
  protected:
   void RecordPollSuggestions() override;

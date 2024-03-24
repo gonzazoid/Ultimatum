@@ -216,8 +216,6 @@ component("fido") {
       "u2f_register_operation.h",
       "u2f_sign_operation.cc",
       "u2f_sign_operation.h",
-      "value_response_conversions.cc",
-      "value_response_conversions.h",
       "virtual_ctap2_device.cc",
       "virtual_ctap2_device.h",
       "virtual_fido_device.cc",
@@ -253,8 +251,6 @@ component("fido") {
       "mac/get_assertion_operation.mm",
       "mac/icloud_keychain.mm",
       "mac/icloud_keychain_sys.mm",
-      "mac/keychain.h",
-      "mac/keychain.mm",
       "mac/make_credential_operation.h",
       "mac/make_credential_operation.mm",
       "mac/operation.h",
@@ -475,13 +471,12 @@ source_set("test_support") {
 
   if (is_mac) {
     sources += [
-      "mac/fake_keychain.h",
-      "mac/fake_keychain.mm",
       "mac/fake_touch_id_context.h",
       "mac/fake_touch_id_context.mm",
       "mac/scoped_touch_id_test_environment.h",
       "mac/scoped_touch_id_test_environment.mm",
     ]
+    deps += [ "//crypto:test_support" ]
   }
 }
 

@@ -28,6 +28,7 @@
 #include "base/win/security_descriptor.h"
 #include "base/win/win_util.h"
 #include "base/win/windows_version.h"
+#include "build/build_config.h"
 #include "sandbox/features.h"
 #include "sandbox/win/src/app_container_base.h"
 #include "sandbox/win/tests/common/controller.h"
@@ -138,8 +139,8 @@ std::wstring GetAppContainerProfileName() {
   appcontainer_id +=
       testing::UnitTest::GetInstance()->current_test_info()->name();
   auto sha1 = base::SHA1HashString(appcontainer_id);
-  std::string profile_name = base::StrCat(
-      {sandbox_base_name, base::HexEncode(sha1.data(), sha1.size())});
+  std::string profile_name =
+      base::StrCat({sandbox_base_name, base::HexEncode(sha1)});
   // CreateAppContainerProfile requires that the profile name is at most 64
   // characters but 50 on WCOS systems.  The size of sha1 is a constant 40, so
   // validate that the base names are sufficiently short that the total length
@@ -464,6 +465,14 @@ TEST_F(AppContainerTest, ChildProcessMitigationLowBox) {
   }
 
   TestRunner runner(JobLevel::kUnprotected, USER_UNPROTECTED, USER_UNPROTECTED);
+
+#if defined(ARCH_CPU_ARM64) && !defined(NDEBUG)
+  // TODO(crbug.com/1524390) A DPLOG issued when CreateProcess() fails conflicts
+  // with Csrss lockdown on Win11 ARM64 - so allow Csrss to allow the process to
+  // run the right exitcode and not an access violation crash.
+  runner.SetDisableCsrss(false);
+#endif  // defined(ARCH_CPU_ARM64) && !defined(NDEBUG)
+
   EXPECT_EQ(SBOX_ALL_OK,
             runner.GetPolicy()->GetConfig()->SetLowBox(kAppContainerSid));
 

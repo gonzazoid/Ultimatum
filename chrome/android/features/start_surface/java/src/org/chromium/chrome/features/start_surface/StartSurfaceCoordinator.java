@@ -46,12 +46,15 @@ import org.chromium.chrome.browser.incognito.reauth.IncognitoReauthController;
 import org.chromium.chrome.browser.init.ChromeActivityNativeDelegate;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
 import org.chromium.chrome.browser.logo.LogoUtils;
+import org.chromium.chrome.browser.magic_stack.HomeModulesConfigManager;
 import org.chromium.chrome.browser.magic_stack.HomeModulesCoordinator;
+import org.chromium.chrome.browser.magic_stack.ModuleRegistry;
 import org.chromium.chrome.browser.multiwindow.MultiWindowModeStateDispatcher;
 import org.chromium.chrome.browser.omnibox.OmniboxFeatures;
 import org.chromium.chrome.browser.omnibox.OmniboxStub;
 import org.chromium.chrome.browser.omnibox.styles.OmniboxResourceProvider;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.share.ShareDelegate;
 import org.chromium.chrome.browser.suggestions.tile.MostVisitedTilesCoordinator;
 import org.chromium.chrome.browser.suggestions.tile.TileGroupDelegateImpl;
@@ -203,6 +206,7 @@ public class StartSurfaceCoordinator implements StartSurface {
     private boolean mIsMVTilesInitialized;
     private final boolean mIsSurfacePolishEnabled;
     private final ObservableSupplier<Integer> mTabStripHeightSupplier;
+    private final OneshotSupplier<ModuleRegistry> mModuleRegistrySupplier;
 
     private class ScrollableContainerDelegateImpl implements ScrollableContainerDelegate {
         @Override
@@ -265,6 +269,7 @@ public class StartSurfaceCoordinator implements StartSurface {
      * @param profileSupplier Supplies the {@Profile}.
      * @param tabSwitcherClickHandler The {@link OnClickListener} for the tab switcher button.
      * @param tabStripHeightSupplier Supplier for the tab strip height.
+     * @param moduleRegistrySupplier Supplier of the {@link ModuleRegistry}.
      */
     public StartSurfaceCoordinator(
             @NonNull Activity activity,
@@ -294,7 +299,8 @@ public class StartSurfaceCoordinator implements StartSurface {
             @NonNull OneshotSupplier<IncognitoReauthController> incognitoReauthControllerSupplier,
             @NonNull OnClickListener tabSwitcherClickHandler,
             @NonNull ObservableSupplier<Profile> profileSupplier,
-            @NonNull ObservableSupplier<Integer> tabStripHeightSupplier) {
+            @NonNull ObservableSupplier<Integer> tabStripHeightSupplier,
+            @NonNull OneshotSupplier<ModuleRegistry> moduleRegistrySupplier) {
         mConstructedTimeNs = SystemClock.elapsedRealtimeNanos();
         mActivity = activity;
         mScrimCoordinator = scrimCoordinator;
@@ -321,6 +327,7 @@ public class StartSurfaceCoordinator implements StartSurface {
         mIncognitoReauthControllerSupplier = incognitoReauthControllerSupplier;
         mProfileSupplier = profileSupplier;
         mTabStripHeightSupplier = tabStripHeightSupplier;
+        mModuleRegistrySupplier = moduleRegistrySupplier;
 
         mUseMagicSpace = mIsStartSurfaceEnabled && StartSurfaceConfiguration.useMagicStack();
         mTabSwitcherCustomViewManagerSupplier = new ObservableSupplierImpl<>();
@@ -396,7 +403,10 @@ public class StartSurfaceCoordinator implements StartSurface {
                                 new HomeModulesCoordinator(
                                         mActivity,
                                         moduleDelegateHost,
-                                        mView.findViewById(R.id.task_surface_header)),
+                                        mView.findViewById(R.id.task_surface_header),
+                                        HomeModulesConfigManager.getInstance(),
+                                        mProfileSupplier,
+                                        mModuleRegistrySupplier.get()),
                         mParentTabSupplier,
                         logoContainerView,
                         mGridTabSwitcher == null ? backPressManager : null,
@@ -563,7 +573,7 @@ public class StartSurfaceCoordinator implements StartSurface {
         mStartSurfaceMediator.initWithNative(
                 mIsStartSurfaceEnabled ? mOmniboxStubSupplier.get() : null,
                 mExploreSurfaceCoordinatorFactory,
-                UserPrefs.get(Profile.getLastUsedRegularProfile()),
+                UserPrefs.get(ProfileManager.getLastUsedRegularProfile()),
                 mSnackbarManager);
 
         if (mGridTabSwitcher != null) {
@@ -997,7 +1007,8 @@ public class StartSurfaceCoordinator implements StartSurface {
                             /* singleTabCardClickedCallback= */ null,
                             /* snapshotParentViewRunnable= */ null,
                             mTabContentManager,
-                            null);
+                            /* uiConfig= */ null,
+                            /* moduleDelegate= */ null);
         }
         View mvTilesContainer = mView.findViewById(R.id.mv_tiles_container);
         mMostVisitedCoordinator =
@@ -1330,7 +1341,7 @@ public class StartSurfaceCoordinator implements StartSurface {
             return;
         }
 
-        Profile profile = Profile.getLastUsedRegularProfile();
+        Profile profile = ProfileManager.getLastUsedRegularProfile();
         MostVisitedTileNavigationDelegate navigationDelegate =
                 new MostVisitedTileNavigationDelegate(mActivity, profile, mParentTabSupplier);
         mSuggestionsUiDelegate =

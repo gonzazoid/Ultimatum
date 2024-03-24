@@ -285,11 +285,13 @@ void FedCmMetrics::RecordIsSignInUser(bool is_sign_in) {
   base::UmaHistogramBoolean("Blink.FedCm.IsSignInUser", is_sign_in);
 }
 
-void FedCmMetrics::RecordWebContentsVisibilityUponReadyToShowDialog(
-    bool is_visible) {
+void FedCmMetrics::RecordWebContentsStatusUponReadyToShowDialog(
+    bool is_visible,
+    bool is_active) {
   if (is_disabled_)
     return;
   base::UmaHistogramBoolean("Blink.FedCm.WebContentsVisible", is_visible);
+  base::UmaHistogramBoolean("Blink.FedCm.WebContentsActive", is_active);
 }
 
 void FedCmMetrics::RecordAutoReauthnMetrics(
@@ -366,10 +368,22 @@ void FedCmMetrics::RecordAccountsDialogShown() {
   base::UmaHistogramBoolean("Blink.FedCm.AccountsDialogShown", true);
 }
 
-void FedCmMetrics::RecordMismatchDialogShown() {
+void FedCmMetrics::RecordMismatchDialogShown(bool has_shown_mismatch,
+                                             bool has_hints) {
   if (is_disabled_) {
     return;
   }
+
+  MismatchDialogType type;
+  if (!has_shown_mismatch) {
+    type = has_hints ? MismatchDialogType::kFirstWithHints
+                     : MismatchDialogType::kFirstWithoutHints;
+  } else {
+    type = has_hints ? MismatchDialogType::kRepeatedWithHints
+                     : MismatchDialogType::kRepeatedWithoutHints;
+  }
+  base::UmaHistogramEnumeration("Blink.FedCm.MismatchDialogType", type);
+
   auto RecordUkm = [&](auto& ukm_builder) {
     ukm_builder.SetMismatchDialogShown(true);
     ukm_builder.SetFedCmSessionID(session_id_);
@@ -580,6 +594,26 @@ void RecordAccountsResponseInvalidReason(
 void RecordSetLoginStatusIgnoredReason(
     FedCmSetLoginStatusIgnoredReason reason) {
   base::UmaHistogramEnumeration("Blink.FedCm.SetLoginStatusIgnored", reason);
+}
+
+void RecordLifecycleStateFailureReason(
+    FedCmLifecycleStateFailureReason reason) {
+  base::UmaHistogramEnumeration("Blink.FedCm.LifecycleStateFailureReason",
+                                reason);
+}
+
+void RecordRawAccountsSize(int size) {
+  CHECK_GT(size, 0);
+  base::UmaHistogramCustomCounts("Blink.FedCm.AccountsSize.Raw", size,
+                                 /*min=*/1,
+                                 /*max=*/10, /*buckets=*/10);
+}
+
+void RecordReadyToShowAccountsSize(int size) {
+  CHECK_GT(size, 0);
+  base::UmaHistogramCustomCounts("Blink.FedCm.AccountsSize.ReadyToShow", size,
+                                 /*min=*/1,
+                                 /*max=*/10, /*buckets=*/10);
 }
 
 }  // namespace content

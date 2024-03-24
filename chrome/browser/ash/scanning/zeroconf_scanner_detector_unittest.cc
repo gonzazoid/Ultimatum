@@ -110,7 +110,7 @@ class ScannerBuilder {
     model_ = model;
     return *this;
   }
-  ScannerBuilder& WithRs(const absl::optional<std::string>& rs) {
+  ScannerBuilder& WithRs(const std::optional<std::string>& rs) {
     rs_ = rs;
     return *this;
   }
@@ -138,7 +138,7 @@ class ScannerBuilder {
   std::string manufacturer_;
   std::string model_;
   std::string uuid_;
-  absl::optional<std::string> rs_;
+  std::optional<std::string> rs_;
   std::vector<std::string> pdl_;
 };
 
@@ -180,7 +180,7 @@ ServiceDescription MakeServiceDescription(const std::string& name,
 ServiceDescription MakeServiceDescription(
     const std::string& name,
     const std::string& service_type,
-    const absl::optional<std::string>& rs) {
+    const std::optional<std::string>& rs) {
   std::vector<std::string> metadata;
   if (rs.has_value()) {
     metadata.push_back(base::StrCat({"rs=", rs.value()}));
@@ -482,7 +482,7 @@ TEST_F(ZeroconfScannerDetectorTest, Rs) {
 // the device name.
 TEST_F(ZeroconfScannerDetectorTest, NoRs) {
   escl_lister_->Announce(MakeServiceDescription(
-      "Scanner1", ZeroconfScannerDetector::kEsclServiceType, absl::nullopt));
+      "Scanner1", ZeroconfScannerDetector::kEsclServiceType, std::nullopt));
   CreateDetector();
   CompleteTasks();
   std::vector<Scanner> expected_scanners = {
@@ -672,10 +672,20 @@ TEST_F(ZeroconfScannerDetectorTest, MetadataPdl) {
   EXPECT_THAT(scanners_, ScannersAreEqual(expected_scanners));
 }
 
+// Test that metadata for a skipped scanner doesn't get converted.
+TEST_F(ZeroconfScannerDetectorTest, MetadataSkippedRecord) {
+  escl_lister_->Announce(MakeServiceDescription(
+      "Scanner1", ZeroconfScannerDetector::kGenericScannerServiceType,
+      {"mfg=EPSON", "mdl=XP-7100 Series"}));
+  CreateDetector();
+  CompleteTasks();
+  EXPECT_TRUE(scanners_.empty());
+}
+
 // Test that a detected scanner can be removed.
 TEST_F(ZeroconfScannerDetectorTest, RemoveAddedScanner) {
   escl_lister_->Announce(MakeServiceDescription(
-      "Scanner1", ZeroconfScannerDetector::kEsclServiceType, absl::nullopt));
+      "Scanner1", ZeroconfScannerDetector::kEsclServiceType, std::nullopt));
   CreateDetector();
   CompleteTasks();
   std::vector<Scanner> expected_scanners = {
@@ -691,7 +701,7 @@ TEST_F(ZeroconfScannerDetectorTest, RemoveAddedScanner) {
 // Test that removing an undetected scanner is ignored.
 TEST_F(ZeroconfScannerDetectorTest, RemoveUnaddedScanner) {
   escl_lister_->Announce(MakeServiceDescription(
-      "Scanner1", ZeroconfScannerDetector::kEsclServiceType, absl::nullopt));
+      "Scanner1", ZeroconfScannerDetector::kEsclServiceType, std::nullopt));
   CreateDetector();
   CompleteTasks();
   std::vector<Scanner> expected_scanners = {
@@ -735,13 +745,13 @@ TEST_F(ZeroconfScannerDetectorTest, CacheFlush) {
   escl_lister_->Announce(MakeServiceDescription(
       "Scanner1", ZeroconfScannerDetector::kEsclServiceType, ""));
   escl_lister_->Announce(MakeServiceDescription(
-      "Scanner2", ZeroconfScannerDetector::kEsclServiceType, absl::nullopt));
+      "Scanner2", ZeroconfScannerDetector::kEsclServiceType, std::nullopt));
   escls_lister_->Announce(MakeServiceDescription(
       "Scanner3", ZeroconfScannerDetector::kEsclsServiceType, ""));
   escls_lister_->Announce(MakeServiceDescription(
       "Scanner4", ZeroconfScannerDetector::kEsclsServiceType, "test"));
   escl_lister_->Announce(MakeServiceDescription(
-      "Scanner5", ZeroconfScannerDetector::kEsclServiceType, absl::nullopt));
+      "Scanner5", ZeroconfScannerDetector::kEsclServiceType, std::nullopt));
   CreateDetector();
   CompleteTasks();
   std::vector<Scanner> expected_scanners = {

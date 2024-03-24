@@ -59,11 +59,13 @@ class UrlCheckerOnSB final {
         bool proceed,
         bool showed_interstitial,
         bool has_post_commit_interstitial_skipped,
-        SafeBrowsingUrlCheckerImpl::PerformedCheck performed_check);
+        SafeBrowsingUrlCheckerImpl::PerformedCheck performed_check,
+        bool all_checks_completed);
     bool proceed;
     bool showed_interstitial;
     bool has_post_commit_interstitial_skipped;
     SafeBrowsingUrlCheckerImpl::PerformedCheck performed_check;
+    bool all_checks_completed;
   };
 
   using OnCompleteCheckCallback =
@@ -81,17 +83,17 @@ class UrlCheckerOnSB final {
   UrlCheckerOnSB(
       GetDelegateCallback delegate_getter,
       int frame_tree_node_id,
-      absl::optional<int64_t> navigation_id,
+      std::optional<int64_t> navigation_id,
       base::RepeatingCallback<content::WebContents*()> web_contents_getter,
       OnCompleteCheckCallback complete_callback,
       bool url_real_time_lookup_enabled,
-      bool can_urt_check_subresource_url,
       bool can_check_db,
       bool can_check_high_confidence_allowlist,
       std::string url_lookup_service_metric_suffix,
       base::WeakPtr<RealTimeUrlLookupServiceBase> url_lookup_service,
       base::WeakPtr<HashRealTimeService> hash_realtime_service,
-      hash_realtime_utils::HashRealTimeSelection hash_realtime_selection);
+      hash_realtime_utils::HashRealTimeSelection hash_realtime_selection,
+      bool is_async_check);
 
   ~UrlCheckerOnSB();
 
@@ -104,10 +106,19 @@ class UrlCheckerOnSB final {
   // Replaces the current |complete_callback_| with the new |callback|.
   void SwapCompleteCallback(OnCompleteCheckCallback callback);
 
+  // Returns a list of URLs that are checked by |url_checker_|.
+  const std::vector<GURL>& GetRedirectChain();
+
   void SetUrlCheckerForTesting(
       std::unique_ptr<SafeBrowsingUrlCheckerImpl> checker);
 
+  std::optional<int64_t> navigation_id() { return navigation_id_; }
+
   bool IsRealTimeCheckForTesting();
+
+  bool IsAsyncCheckForTesting();
+
+  void AddUrlInRedirectChainForTesting(const GURL& url);
 
   base::WeakPtr<UrlCheckerOnSB> AsWeakPtr() {
     return weak_factory_.GetWeakPtr();
@@ -138,20 +149,22 @@ class UrlCheckerOnSB final {
   std::unique_ptr<SafeBrowsingUrlCheckerImpl> url_checker_;
   std::unique_ptr<SafeBrowsingUrlCheckerImpl> url_checker_for_testing_;
   int frame_tree_node_id_;
-  absl::optional<int64_t> navigation_id_;
+  std::optional<int64_t> navigation_id_;
   base::RepeatingCallback<content::WebContents*()> web_contents_getter_;
   OnCompleteCheckCallback complete_callback_;
   bool url_real_time_lookup_enabled_ = false;
-  bool can_urt_check_subresource_url_ = false;
   bool can_check_db_ = true;
   bool can_check_high_confidence_allowlist_ = true;
+  size_t pending_checks_ = 0;
   std::string url_lookup_service_metric_suffix_;
-  GURL last_committed_url_;
+  // A list of URLs that are checked by |url_checker_|.
+  std::vector<GURL> redirect_chain_;
   base::WeakPtr<RealTimeUrlLookupServiceBase> url_lookup_service_;
   base::WeakPtr<HashRealTimeService> hash_realtime_service_;
   hash_realtime_utils::HashRealTimeSelection hash_realtime_selection_ =
       hash_realtime_utils::HashRealTimeSelection::kNone;
   base::TimeTicks creation_time_;
+  bool is_async_check_ = false;
   base::WeakPtrFactory<UrlCheckerOnSB> weak_factory_{this};
 };
 

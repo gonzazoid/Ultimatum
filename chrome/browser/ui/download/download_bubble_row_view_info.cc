@@ -33,12 +33,6 @@ DownloadBubbleRowViewInfoObserver::~DownloadBubbleRowViewInfoObserver() {
   CHECK(!IsInObserverList());
 }
 
-DownloadBubbleRowViewInfo::QuickAction::QuickAction(
-    DownloadCommands::Command command,
-    const std::u16string& hover_text,
-    const gfx::VectorIcon* icon)
-    : command(command), hover_text(hover_text), icon(icon) {}
-
 DownloadBubbleRowViewInfo::DownloadBubbleRowViewInfo(
     DownloadUIModel::DownloadUIModelPtr model)
     : model_(std::move(model)), state_(model_->GetState()) {
@@ -53,7 +47,7 @@ DownloadBubbleRowViewInfo::~DownloadBubbleRowViewInfo() {
 }
 
 void DownloadBubbleRowViewInfo::SetQuickActionsForTesting(
-    const std::vector<QuickAction>& actions) {
+    const std::vector<DownloadBubbleQuickAction>& actions) {
   quick_actions_ = actions;
 }
 
@@ -78,6 +72,12 @@ void DownloadBubbleRowViewInfo::OnDownloadDestroyed(
 
 void DownloadBubbleRowViewInfo::PopulateFromModel() {
   Reset();
+  icon_and_color_ = IconAndColorForDownload(*model_);
+  // Add primary button/quick actions for in-progress (paused or active), and
+  // completed downloads
+  quick_actions_ = QuickActionsForDownload(*model_);
+  progress_bar_ = ProgressBarForDownload(*model_);
+
   switch (model_->GetState()) {
     case DownloadItem::IN_PROGRESS:
     case DownloadItem::COMPLETE:
@@ -93,7 +93,6 @@ void DownloadBubbleRowViewInfo::PopulateFromModel() {
       [[fallthrough]];
     case DownloadItem::CANCELLED:
     case DownloadItem::MAX_DOWNLOAD_STATE:
-      PopulateForCancelled();
       return;
   }
 }
@@ -113,28 +112,16 @@ void DownloadBubbleRowViewInfo::PopulateForInProgressOrComplete() {
   }
 
   if (enterprise_connectors::ShouldPromptReviewForDownload(
-          model_->profile(), model_->GetDangerType())) {
+          model_->profile(), model_->GetDownloadItem())) {
     switch (model_->GetDangerType()) {
       case download::DOWNLOAD_DANGER_TYPE_DANGEROUS_CONTENT:
-        icon_override_ = features::IsChromeRefresh2023()
-                             ? &vector_icons::kDangerousChromeRefreshIcon
-                             : &vector_icons::kDangerousIcon;
-        secondary_color_ = kColorDownloadItemIconDangerous;
         primary_button_command_ = DownloadCommands::Command::REVIEW;
         return;
       case download::DOWNLOAD_DANGER_TYPE_POTENTIALLY_UNWANTED:
-        icon_override_ = features::IsChromeRefresh2023()
-                             ? &kDownloadWarningIcon
-                             : &vector_icons::kNotSecureWarningIcon;
-        secondary_color_ = kColorDownloadItemIconWarning;
         secondary_text_color_ = kColorDownloadItemTextWarning;
         primary_button_command_ = DownloadCommands::Command::REVIEW;
         return;
       case download::DOWNLOAD_DANGER_TYPE_SENSITIVE_CONTENT_WARNING:
-        icon_override_ = features::IsChromeRefresh2023()
-                             ? &views::kInfoChromeRefreshIcon
-                             : &views::kInfoIcon;
-        secondary_color_ = kColorDownloadItemIconWarning;
         secondary_text_color_ = kColorDownloadItemTextWarning;
         primary_button_command_ = DownloadCommands::Command::REVIEW;
         return;
@@ -183,10 +170,6 @@ void DownloadBubbleRowViewInfo::PopulateForInProgressOrComplete() {
 #endif
       if (request_ap_verdicts) {
         has_subpage_ = true;
-        icon_override_ = features::IsChromeRefresh2023()
-                             ? &kDownloadWarningIcon
-                             : &vector_icons::kNotSecureWarningIcon;
-        secondary_color_ = kColorDownloadItemIconWarning;
         secondary_text_color_ = kColorDownloadItemTextWarning;
         return;
       } else {
@@ -196,55 +179,27 @@ void DownloadBubbleRowViewInfo::PopulateForInProgressOrComplete() {
     }
     case download::DOWNLOAD_DANGER_TYPE_SENSITIVE_CONTENT_WARNING: {
       has_subpage_ = true;
-      icon_override_ = features::IsChromeRefresh2023()
-                           ? &views::kInfoChromeRefreshIcon
-                           : &views::kInfoIcon;
-      secondary_color_ = kColorDownloadItemIconWarning;
       secondary_text_color_ = kColorDownloadItemTextWarning;
       primary_button_command_ = DownloadCommands::Command::DISCARD;
       return;
     }
     case download::DOWNLOAD_DANGER_TYPE_PROMPT_FOR_SCANNING: {
-      icon_override_ = features::IsChromeRefresh2023()
-                           ? &kDownloadWarningIcon
-                           : &vector_icons::kNotSecureWarningIcon;
-      secondary_color_ = kColorDownloadItemIconWarning;
       secondary_text_color_ = kColorDownloadItemTextWarning;
       has_subpage_ = true;
       return;
     }
     case download::DOWNLOAD_DANGER_TYPE_PROMPT_FOR_LOCAL_PASSWORD_SCANNING: {
-      icon_override_ = features::IsChromeRefresh2023()
-                           ? &kDownloadWarningIcon
-                           : &vector_icons::kNotSecureWarningIcon;
-      secondary_color_ = kColorDownloadItemIconWarning;
       secondary_text_color_ = kColorDownloadItemTextWarning;
       has_subpage_ = true;
       return;
     }
     case download::DOWNLOAD_DANGER_TYPE_ASYNC_SCANNING:
-      has_progress_bar_ = true;
-      is_progress_bar_looping_ = true;
       has_subpage_ = true;
-      icon_override_ = features::IsChromeRefresh2023()
-                           ? &kDownloadWarningIcon
-                           : &vector_icons::kNotSecureWarningIcon;
-      secondary_color_ = kColorDownloadItemIconWarning;
       return;
     case download::DOWNLOAD_DANGER_TYPE_ASYNC_LOCAL_PASSWORD_SCANNING:
-      has_progress_bar_ = true;
-      is_progress_bar_looping_ = true;
       has_subpage_ = true;
-      icon_override_ = features::IsChromeRefresh2023()
-                           ? &kDownloadWarningIcon
-                           : &vector_icons::kNotSecureWarningIcon;
-      secondary_color_ = kColorDownloadItemIconWarning;
       return;
     case download::DOWNLOAD_DANGER_TYPE_DEEP_SCANNED_FAILED:
-      icon_override_ = features::IsChromeRefresh2023()
-                           ? &kDownloadWarningIcon
-                           : &vector_icons::kNotSecureWarningIcon;
-      secondary_color_ = kColorDownloadItemIconWarning;
       primary_button_command_ = DownloadCommands::Command::OPEN_WHEN_COMPLETE;
       secondary_text_color_ = kColorDownloadItemTextWarning;
       main_button_enabled_ = false;
@@ -262,54 +217,6 @@ void DownloadBubbleRowViewInfo::PopulateForInProgressOrComplete() {
     case download::DOWNLOAD_DANGER_TYPE_MAX:
       break;
   }
-
-  // Add primary button/quick actions for in-progress (paused or active), and
-  // completed downloads
-  bool has_progress_bar = model_->GetState() == DownloadItem::IN_PROGRESS;
-  if (has_progress_bar) {
-    has_progress_bar_ = true;
-    if (model_->IsPaused()) {
-      quick_actions_.emplace_back(
-          DownloadCommands::Command::RESUME,
-          l10n_util::GetStringUTF16(IDS_DOWNLOAD_BUBBLE_RESUME_QUICK_ACTION),
-          features::IsChromeRefresh2023()
-              ? &vector_icons::kPlayArrowChromeRefreshIcon
-              : &vector_icons::kPlayArrowIcon);
-      quick_actions_.emplace_back(
-          DownloadCommands::Command::CANCEL,
-          l10n_util::GetStringUTF16(IDS_DOWNLOAD_BUBBLE_CANCEL_QUICK_ACTION),
-          features::IsChromeRefresh2023()
-              ? &vector_icons::kCancelChromeRefreshIcon
-              : &vector_icons::kCancelIcon);
-    } else {
-      quick_actions_.emplace_back(
-          DownloadCommands::Command::PAUSE,
-          l10n_util::GetStringUTF16(IDS_DOWNLOAD_BUBBLE_PAUSE_QUICK_ACTION),
-          features::IsChromeRefresh2023()
-              ? &vector_icons::kPauseChromeRefreshIcon
-              : &vector_icons::kPauseIcon);
-      quick_actions_.emplace_back(
-          DownloadCommands::Command::CANCEL,
-          l10n_util::GetStringUTF16(IDS_DOWNLOAD_BUBBLE_CANCEL_QUICK_ACTION),
-          features::IsChromeRefresh2023()
-              ? &vector_icons::kCancelChromeRefreshIcon
-              : &vector_icons::kCancelIcon);
-    }
-  } else {
-    quick_actions_.emplace_back(
-        DownloadCommands::Command::SHOW_IN_FOLDER,
-        l10n_util::GetStringUTF16(
-            IDS_DOWNLOAD_BUBBLE_SHOW_IN_FOLDER_QUICK_ACTION),
-        features::IsChromeRefresh2023()
-            ? &vector_icons::kFolderChromeRefreshIcon
-            : &vector_icons::kFolderIcon);
-    quick_actions_.emplace_back(
-        DownloadCommands::Command::OPEN_WHEN_COMPLETE,
-        l10n_util::GetStringUTF16(IDS_DOWNLOAD_BUBBLE_OPEN_QUICK_ACTION),
-        features::IsChromeRefresh2023()
-            ? &vector_icons::kLaunchChromeRefreshIcon
-            : &kOpenInNewIcon);
-  }
 }
 
 void DownloadBubbleRowViewInfo::PopulateForInterrupted(
@@ -320,34 +227,18 @@ void DownloadBubbleRowViewInfo::PopulateForInterrupted(
   switch (model_->GetDangerType()) {
     case download::DOWNLOAD_DANGER_TYPE_BLOCKED_PASSWORD_PROTECTED: {
       has_subpage_ = true;
-      icon_override_ = features::IsChromeRefresh2023()
-                           ? &views::kInfoChromeRefreshIcon
-                           : &views::kInfoIcon;
-      secondary_color_ = kColorDownloadItemIconDangerous;
       return;
     }
     case download::DOWNLOAD_DANGER_TYPE_BLOCKED_TOO_LARGE: {
       has_subpage_ = true;
-      icon_override_ = features::IsChromeRefresh2023()
-                           ? &views::kInfoChromeRefreshIcon
-                           : &views::kInfoIcon;
-      secondary_color_ = kColorDownloadItemIconDangerous;
       return;
     }
     case download::DOWNLOAD_DANGER_TYPE_SENSITIVE_CONTENT_BLOCK: {
       if (enterprise_connectors::ShouldPromptReviewForDownload(
-              model_->profile(), model_->GetDangerType())) {
-        icon_override_ = features::IsChromeRefresh2023()
-                             ? &kDownloadWarningIcon
-                             : &vector_icons::kNotSecureWarningIcon;
-        secondary_color_ = kColorDownloadItemIconDangerous;
+              model_->profile(), model_->GetDownloadItem())) {
         primary_button_command_ = DownloadCommands::Command::REVIEW;
       } else {
         has_subpage_ = true;
-        icon_override_ = features::IsChromeRefresh2023()
-                             ? &views::kInfoChromeRefreshIcon
-                             : &views::kInfoIcon;
-        secondary_color_ = kColorDownloadItemIconDangerous;
       }
       return;
     }
@@ -378,20 +269,12 @@ void DownloadBubbleRowViewInfo::PopulateForInterrupted(
   switch (fail_state) {
     case FailState::FILE_BLOCKED: {
       has_subpage_ = true;
-      icon_override_ = features::IsChromeRefresh2023()
-                           ? &views::kInfoChromeRefreshIcon
-                           : &views::kInfoIcon;
-      secondary_color_ = kColorDownloadItemIconDangerous;
       return;
     }
     case FailState::FILE_NAME_TOO_LONG:
     case FailState::FILE_NO_SPACE:
     case FailState::SERVER_UNAUTHORIZED: {
       has_subpage_ = true;
-      icon_override_ = features::IsChromeRefresh2023()
-                           ? &vector_icons::kFileDownloadOffChromeRefreshIcon
-                           : &vector_icons::kFileDownloadOffIcon;
-      secondary_color_ = kColorDownloadItemIconDangerous;
       return;
     }
     // No Retry in these cases.
@@ -402,10 +285,6 @@ void DownloadBubbleRowViewInfo::PopulateForInterrupted(
     case FailState::SERVER_FORBIDDEN:
     case FailState::FILE_SAME_AS_SOURCE:
     case FailState::SERVER_BAD_CONTENT: {
-      icon_override_ = features::IsChromeRefresh2023()
-                           ? &vector_icons::kFileDownloadOffChromeRefreshIcon
-                           : &vector_icons::kFileDownloadOffIcon;
-      secondary_color_ = kColorDownloadItemIconDangerous;
       return;
     }
     // Try resume if possible or retry if not in these cases, and in the default
@@ -440,19 +319,9 @@ void DownloadBubbleRowViewInfo::PopulateForInterrupted(
       return;
   }
 
-  icon_override_ = features::IsChromeRefresh2023()
-                       ? &vector_icons::kFileDownloadOffChromeRefreshIcon
-                       : &vector_icons::kFileDownloadOffIcon;
-  secondary_color_ = kColorDownloadItemIconDangerous;
   primary_button_command_ = model_->CanResume()
                                 ? DownloadCommands::Command::RESUME
                                 : DownloadCommands::Command::RETRY;
-}
-
-void DownloadBubbleRowViewInfo::PopulateForCancelled() {
-  icon_override_ = features::IsChromeRefresh2023()
-                       ? &vector_icons::kFileDownloadOffChromeRefreshIcon
-                       : &vector_icons::kFileDownloadOffIcon;
 }
 
 void DownloadBubbleRowViewInfo::PopulateForTailoredWarning(
@@ -477,30 +346,20 @@ void DownloadBubbleRowViewInfo::PopulateForFileTypeWarningNoSafeBrowsing() {
 
 void DownloadBubbleRowViewInfo::PopulateSuspiciousUiPattern() {
   has_subpage_ = true;
-  icon_override_ = features::IsChromeRefresh2023()
-                       ? &kDownloadWarningIcon
-                       : &vector_icons::kNotSecureWarningIcon,
-  secondary_color_ = kColorDownloadItemIconWarning;
   secondary_text_color_ = kColorDownloadItemTextWarning;
 }
 
 void DownloadBubbleRowViewInfo::PopulateDangerousUiPattern() {
   has_subpage_ = true;
-  icon_override_ = features::IsChromeRefresh2023()
-                       ? &vector_icons::kDangerousChromeRefreshIcon
-                       : &vector_icons::kDangerousIcon;
-  secondary_color_ = kColorDownloadItemIconDangerous;
   secondary_text_color_ = kColorDownloadItemTextDangerous;
 }
 
 void DownloadBubbleRowViewInfo::Reset() {
-  icon_override_ = nullptr;
-  secondary_color_ = ui::kColorSecondaryForeground;
+  icon_and_color_ = IconAndColor{};
   secondary_text_color_ = std::nullopt;
   quick_actions_.clear();
   main_button_enabled_ = true;
   has_subpage_ = false;
   primary_button_command_ = std::nullopt;
-  has_progress_bar_ = false;
-  is_progress_bar_looping_ = false;
+  progress_bar_ = DownloadBubbleProgressBar::NoProgressBar();
 }

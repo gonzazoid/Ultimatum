@@ -4,31 +4,20 @@
 
 #include "third_party/blink/renderer/core/paint/text_painter_base.h"
 
-#include "base/containers/adapters.h"
 #include "third_party/blink/renderer/core/css/properties/longhands.h"
-#include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/highlight/highlight_style_utils.h"
-#include "third_party/blink/renderer/core/paint/applied_decoration_painter.h"
 #include "third_party/blink/renderer/core/paint/box_painter_base.h"
-#include "third_party/blink/renderer/core/paint/paint_info.h"
-#include "third_party/blink/renderer/core/paint/text_decoration_info.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
-#include "third_party/blink/renderer/core/style/shadow_list.h"
-#include "third_party/blink/renderer/platform/fonts/font.h"
-#include "third_party/blink/renderer/platform/geometry/length_functions.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context_state_saver.h"
-#include "third_party/blink/renderer/platform/wtf/text/character_names.h"
 
 namespace blink {
 
 TextPainterBase::TextPainterBase(GraphicsContext& context,
                                  const Font& font,
                                  const LineRelativeOffset& text_origin,
-                                 InlinePaintContext* inline_context,
                                  bool horizontal)
-    : inline_context_(inline_context),
-      graphics_context_(context),
+    : graphics_context_(context),
       font_(font),
       text_origin_(text_origin),
       horizontal_(horizontal) {}
@@ -78,6 +67,20 @@ void TextPainterBase::UpdateGraphicsContext(
       context.SetStrokeColor(text_style.stroke_color);
     if (text_style.stroke_width != context.StrokeThickness())
       context.SetStrokeThickness(text_style.stroke_width);
+  }
+
+  switch (text_style.paint_order) {
+    case kPaintOrderNormal:
+    case kPaintOrderFillStrokeMarkers:
+    case kPaintOrderFillMarkersStroke:
+    case kPaintOrderMarkersFillStroke:
+      context.SetTextPaintOrder(kFillStroke);
+      break;
+    case kPaintOrderStrokeFillMarkers:
+    case kPaintOrderStrokeMarkersFill:
+    case kPaintOrderMarkersStrokeFill:
+      context.SetTextPaintOrder(kStrokeFill);
+      break;
   }
 
   if (shadow_mode != kTextProperOnly) {
@@ -143,6 +146,7 @@ TextPaintStyle TextPainterBase::TextPaintingStyle(const Document& document,
     text_style.stroke_color = Color::kBlack;
     text_style.emphasis_mark_color = Color::kBlack;
     text_style.shadow = nullptr;
+    text_style.paint_order = kPaintOrderNormal;
   } else {
     text_style.current_color =
         style.VisitedDependentColorFast(GetCSSPropertyColor());
@@ -153,6 +157,7 @@ TextPaintStyle TextPainterBase::TextPaintingStyle(const Document& document,
     text_style.emphasis_mark_color =
         style.VisitedDependentColorFast(GetCSSPropertyTextEmphasisColor());
     text_style.shadow = style.TextShadow();
+    text_style.paint_order = style.PaintOrder();
 
     // Adjust text color when printing with a white background.
     bool force_background_to_white =
@@ -204,181 +209,6 @@ void TextPainterBase::DecorationsStripeIntercepts(
       continue;
     graphics_context_.ClipOut(clip_rect);
   }
-}
-
-void TextPainterBase::PaintDecorationsOnlyLineThrough(
-    TextDecorationInfo& decoration_info,
-    const PaintInfo& paint_info,
-    const TextPaintStyle& text_style,
-    const cc::PaintFlags* flags) {
-  // Updating the graphics context and looping through applied decorations is
-  // expensive, so avoid doing it if there are no ‘line-through’ decorations.
-  if (!decoration_info.HasAnyLine(TextDecorationLine::kLineThrough))
-    return;
-
-  GraphicsContext& context = paint_info.context;
-  GraphicsContextStateSaver state_saver(context);
-  UpdateGraphicsContext(context, text_style, state_saver);
-
-  for (wtf_size_t applied_decoration_index = 0;
-       applied_decoration_index < decoration_info.AppliedDecorationCount();
-       ++applied_decoration_index) {
-    const AppliedTextDecoration& decoration =
-        decoration_info.AppliedDecoration(applied_decoration_index);
-    TextDecorationLine lines = decoration.Lines();
-    if (EnumHasFlags(lines, TextDecorationLine::kLineThrough)) {
-      decoration_info.SetDecorationIndex(applied_decoration_index);
-
-      const float resolved_thickness = decoration_info.ResolvedThickness();
-      context.SetStrokeThickness(resolved_thickness);
-      decoration_info.SetLineThroughLineData();
-      AppliedDecorationPainter decoration_painter(context, decoration_info);
-      // No skip: ink for line-through,
-      // compare https://github.com/w3c/csswg-drafts/issues/711
-      decoration_painter.Paint(flags);
-    }
-  }
-}
-
-// We have two functions to paint text decorations, because we should paint
-// text and decorations in following order:
-//   1. Paint underline or overline text decorations
-//   2. Paint text
-//   3. Paint line through
-void TextPainterBase::PaintUnderOrOverLineDecorations(
-    const TextFragmentPaintInfo& fragment_paint_info,
-    const TextDecorationOffset& decoration_offset,
-    TextDecorationInfo& decoration_info,
-    TextDecorationLine lines_to_paint,
-    const PaintInfo& paint_info,
-    const TextPaintStyle& text_style,
-    const cc::PaintFlags* flags) {
-  // Updating the graphics context and looping through applied decorations is
-  // expensive, so avoid doing it if there are no decorations of the given
-  // |lines_to_paint|, or the only decoration was a ‘line-through’.
-  if (!decoration_info.HasAnyLine(lines_to_paint &
-                                  ~TextDecorationLine::kLineThrough)) {
-    return;
-  }
-
-  GraphicsContext& context = paint_info.context;
-  GraphicsContextStateSaver state_saver(context);
-
-  // Updating Graphics Context for text only (kTextProperOnly),
-  // instead of the default text and shadows (kBothShadowsAndTextProper),
-  // because shadows will be painted by
-  // TextPainterBase::PaintUnderOrOverLineDecorationShadows.
-  UpdateGraphicsContext(context, text_style, state_saver,
-                        ShadowMode::kTextProperOnly);
-
-  PaintUnderOrOverLineDecorationShadows(fragment_paint_info, decoration_offset,
-                                        decoration_info, lines_to_paint, flags,
-                                        text_style, context);
-
-  PaintUnderOrOverLineDecorations(fragment_paint_info, decoration_offset,
-                                  decoration_info, lines_to_paint, flags,
-                                  context);
-}
-
-void TextPainterBase::PaintUnderOrOverLineDecorationShadows(
-    const TextFragmentPaintInfo& fragment_paint_info,
-    const TextDecorationOffset& decoration_offset,
-    TextDecorationInfo& decoration_info,
-    TextDecorationLine lines_to_paint,
-    const cc::PaintFlags* flags,
-    const TextPaintStyle& text_style,
-    GraphicsContext& context) {
-  const ShadowList* shadow_list = text_style.shadow.get();
-  if (!shadow_list) {
-    return;
-  }
-
-  for (const auto& shadow : base::Reversed(shadow_list->Shadows())) {
-    const Color& color = shadow.GetColor().Resolve(text_style.current_color,
-                                                   text_style.color_scheme);
-    // Detect when there's no effective shadow.
-    if (color.IsFullyTransparent()) {
-      continue;
-    }
-
-    const gfx::Vector2dF& offset = shadow.Offset();
-
-    float blur = shadow.Blur();
-    DCHECK_GE(blur, 0);
-    const auto sigma = BlurRadiusToStdDev(blur);
-
-    context.BeginLayer(sk_make_sp<DropShadowPaintFilter>(
-        offset.x(), offset.y(), sigma, sigma, color.toSkColor4f(),
-        DropShadowPaintFilter::ShadowMode::kDrawShadowOnly, nullptr));
-
-    PaintUnderOrOverLineDecorations(fragment_paint_info, decoration_offset,
-                                    decoration_info, lines_to_paint, flags,
-                                    context);
-
-    context.EndLayer();
-  }
-}
-
-void TextPainterBase::PaintUnderOrOverLineDecorations(
-    const TextFragmentPaintInfo& fragment_paint_info,
-    const TextDecorationOffset& decoration_offset,
-    TextDecorationInfo& decoration_info,
-    TextDecorationLine lines_to_paint,
-    const cc::PaintFlags* flags,
-    GraphicsContext& context) {
-  for (wtf_size_t i = 0; i < decoration_info.AppliedDecorationCount(); i++) {
-    decoration_info.SetDecorationIndex(i);
-    context.SetStrokeThickness(decoration_info.ResolvedThickness());
-
-    if (decoration_info.HasSpellingOrGrammerError() &&
-        EnumHasFlags(lines_to_paint, TextDecorationLine::kSpellingError |
-                                         TextDecorationLine::kGrammarError)) {
-      decoration_info.SetSpellingOrGrammarErrorLineData(decoration_offset);
-      // We ignore "text-decoration-skip-ink: auto" for spelling and grammar
-      // error markers.
-      AppliedDecorationPainter decoration_painter(context, decoration_info);
-      decoration_painter.Paint(flags);
-      continue;
-    }
-
-    if (decoration_info.HasUnderline() && decoration_info.FontData() &&
-        EnumHasFlags(lines_to_paint, TextDecorationLine::kUnderline)) {
-      decoration_info.SetUnderlineLineData(decoration_offset);
-      PaintDecorationUnderOrOverLine(fragment_paint_info, context,
-                                     decoration_info,
-                                     TextDecorationLine::kUnderline, flags);
-    }
-
-    if (decoration_info.HasOverline() && decoration_info.FontData() &&
-        EnumHasFlags(lines_to_paint, TextDecorationLine::kOverline)) {
-      decoration_info.SetOverlineLineData(decoration_offset);
-      PaintDecorationUnderOrOverLine(fragment_paint_info, context,
-                                     decoration_info,
-                                     TextDecorationLine::kOverline, flags);
-    }
-  }
-}
-
-void TextPainterBase::PaintDecorationUnderOrOverLine(
-    const TextFragmentPaintInfo& fragment_paint_info,
-    GraphicsContext& context,
-    TextDecorationInfo& decoration_info,
-    TextDecorationLine line,
-    const cc::PaintFlags* flags) {
-  AppliedDecorationPainter decoration_painter(context, decoration_info);
-  if (decoration_info.TargetStyle().TextDecorationSkipInk() ==
-      ETextDecorationSkipInk::kAuto) {
-    // In order to ignore intersects less than 0.5px, inflate by -0.5.
-    gfx::RectF decoration_bounds = decoration_info.Bounds();
-    decoration_bounds.Inset(gfx::InsetsF::VH(0.5, 0));
-    ClipDecorationsStripe(
-        fragment_paint_info,
-        decoration_info.InkSkipClipUpper(decoration_bounds.y()),
-        decoration_bounds.height(),
-        std::min(decoration_info.ResolvedThickness(),
-                 kDecorationClipMaxDilation));
-  }
-  decoration_painter.Paint(flags);
 }
 
 }  // namespace blink

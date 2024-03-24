@@ -287,7 +287,6 @@ class VIEWS_EXPORT DesktopNativeWidgetAura
                    std::unique_ptr<ui::LayerTreeOwner> drag_image_layer_owner);
 
   std::unique_ptr<aura::WindowTreeHost> host_;
-  // DanglingUntriaged because it is assigned a DanglingUntriaged pointer.
   raw_ptr<DesktopWindowTreeHost, DanglingUntriaged> desktop_window_tree_host_;
 
   // See class documentation for Widget in widget.h for a note about ownership.
@@ -337,7 +336,7 @@ class VIEWS_EXPORT DesktopNativeWidgetAura
   // change event in `HandleActivationChanged()`.This is needed as the widget
   // may not have propagated its new activation state to its delegate before the
   // activation client decides which window to activate next.
-  absl::optional<bool> should_activate_;
+  std::optional<bool> should_activate_;
 
   gfx::NativeCursor cursor_;
   // We must manually reference count the number of users of |cursor_manager_|

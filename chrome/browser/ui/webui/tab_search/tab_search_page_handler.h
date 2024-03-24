@@ -6,7 +6,6 @@
 #define CHROME_BROWSER_UI_WEBUI_TAB_SEARCH_TAB_SEARCH_PAGE_HANDLER_H_
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/raw_ptr_exclusion.h"
 #include "chrome/browser/ui/browser_tab_strip_tracker.h"
 #include "chrome/browser/ui/browser_tab_strip_tracker_delegate.h"
 #include "chrome/browser/ui/tabs/organization/tab_data.h"
@@ -19,6 +18,7 @@
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
 #include "chrome/browser/ui/webui/tab_search/tab_search.mojom.h"
+#include "components/optimization_guide/core/model_execution/settings_enabled_observer.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/sessions/core/tab_restore_service.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -31,6 +31,7 @@
 class Browser;
 class MetricsReporter;
 class TabOrganizationService;
+class OptimizationGuideKeyedService;
 
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
@@ -48,11 +49,13 @@ enum class TabSearchRecentlyClosedToggleAction {
   kMaxValue = kCollapse,
 };
 
-class TabSearchPageHandler : public tab_search::mojom::PageHandler,
-                             public TabStripModelObserver,
-                             public BrowserTabStripTrackerDelegate,
-                             public TabOrganizationSession::Observer,
-                             public TabOrganizationObserver {
+class TabSearchPageHandler
+    : public tab_search::mojom::PageHandler,
+      public TabStripModelObserver,
+      public BrowserTabStripTrackerDelegate,
+      public TabOrganizationSession::Observer,
+      public TabOrganizationObserver,
+      public optimization_guide::SettingsEnabledObserver {
  public:
   TabSearchPageHandler(
       mojo::PendingReceiver<tab_search::mojom::PageHandler> receiver,
@@ -130,6 +133,9 @@ class TabSearchPageHandler : public tab_search::mojom::PageHandler,
   void OnSessionCreated(const Browser* browser,
                         TabOrganizationSession* session) override;
 
+  // SettingsEnabledObserver
+  void OnChangeInFeatureCurrentlyEnabledState(bool is_now_enabled) override;
+
  protected:
   void SetTimerForTesting(std::unique_ptr<base::RetainingOneShotTimer> timer);
 
@@ -145,12 +151,8 @@ class TabSearchPageHandler : public tab_search::mojom::PageHandler,
     TabDetails(Browser* browser, TabStripModel* tab_strip_model, int index)
         : browser(browser), tab_strip_model(tab_strip_model), index(index) {}
 
-    // This field is not a raw_ptr<> because it was filtered by the rewriter
-    // for: #union
-    RAW_PTR_EXCLUSION Browser* browser;
-    // This field is not a raw_ptr<> because it was filtered by the rewriter
-    // for: #union
-    RAW_PTR_EXCLUSION TabStripModel* tab_strip_model;
+    raw_ptr<Browser> browser;
+    raw_ptr<TabStripModel> tab_strip_model;
     int index;
   };
 
@@ -196,6 +198,8 @@ class TabSearchPageHandler : public tab_search::mojom::PageHandler,
 
   void NotifyTabIndexPrefChanged(const Profile* profile);
 
+  void NotifyShowFREPrefChanged(const Profile* profile);
+
   mojo::Receiver<tab_search::mojom::PageHandler> receiver_;
   mojo::Remote<tab_search::mojom::Page> page_;
   const raw_ptr<content::WebUI> web_ui_;
@@ -206,6 +210,7 @@ class TabSearchPageHandler : public tab_search::mojom::PageHandler,
   std::unique_ptr<base::RetainingOneShotTimer> debounce_timer_;
   raw_ptr<TabOrganizationService> organization_service_;
   PrefChangeRegistrar pref_change_registrar_;
+  raw_ptr<OptimizationGuideKeyedService> optimization_guide_keyed_service_;
 
   // Tracks how many times |CloseTab()| has been evoked for the currently open
   // instance of Tab Search for logging in UMA.

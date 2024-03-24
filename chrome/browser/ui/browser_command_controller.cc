@@ -40,7 +40,6 @@
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/chrome_pages.h"
-#include "chrome/browser/ui/commander/commander.h"
 #include "chrome/browser/ui/managed_ui.h"
 #include "chrome/browser/ui/page_info/page_info_dialog.h"
 #include "chrome/browser/ui/passwords/ui_utils.h"
@@ -53,7 +52,7 @@
 #include "chrome/browser/ui/singleton_tabs.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_user_gesture_details.h"
-#include "chrome/browser/ui/toolbar/chrome_labs_utils.h"
+#include "chrome/browser/ui/toolbar/chrome_labs/chrome_labs_utils.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
 #include "chrome/browser/ui/web_applications/web_app_dialog_utils.h"
@@ -94,6 +93,7 @@
 #include "extensions/browser/extension_system.h"
 #include "extensions/common/extension_urls.h"
 #include "printing/buildflags/buildflags.h"
+#include "ui/actions/actions.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/events/keycodes/keyboard_codes.h"
 
@@ -959,9 +959,6 @@ bool BrowserCommandController::ExecuteCommandWithDisposition(
     case IDC_SHOW_BETA_FORUM:
       ShowBetaForum(browser_);
       break;
-    case IDC_TOGGLE_QUICK_COMMANDS:
-      ToggleCommander(browser_);
-      break;
     case IDC_DISTILL_PAGE:
       ToggleDistilledView(browser_);
       break;
@@ -1337,8 +1334,6 @@ void BrowserCommandController::InitCommandState() {
       IDC_SHOW_SAVE_LOCAL_CARD_SIGN_IN_PROMO_IF_APPLICABLE, true);
   command_updater_.UpdateCommandEnabled(IDC_CLOSE_SIGN_IN_PROMO, true);
   command_updater_.UpdateCommandEnabled(IDC_CARET_BROWSING_TOGGLE, true);
-  command_updater_.UpdateCommandEnabled(IDC_TOGGLE_QUICK_COMMANDS,
-                                        commander::IsEnabled());
   // Navigation commands
   command_updater_.UpdateCommandEnabled(
       IDC_HOME, normal_window || browser_->is_type_app() ||
@@ -1826,6 +1821,11 @@ void BrowserCommandController::UpdatePrintingState() {
 
   bool print_enabled = CanPrint(browser_);
   command_updater_.UpdateCommandEnabled(IDC_PRINT, print_enabled);
+  if (features::IsToolbarPinningEnabled()) {
+    actions::ActionManager::Get()
+        .FindAction(kActionPrint)
+        ->SetEnabled(print_enabled);
+  }
 #if BUILDFLAG(ENABLE_PRINTING)
   command_updater_.UpdateCommandEnabled(IDC_BASIC_PRINT,
                                         CanBasicPrint(browser_));

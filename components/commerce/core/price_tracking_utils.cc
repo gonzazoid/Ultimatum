@@ -109,7 +109,7 @@ bool IsProductBookmark(bookmarks::BookmarkModel* model,
   return meta && meta->has_shopping_specifics();
 }
 
-absl::optional<int64_t> GetBookmarkLastSubscriptionChangeTime(
+std::optional<int64_t> GetBookmarkLastSubscriptionChangeTime(
     bookmarks::BookmarkModel* model,
     const bookmarks::BookmarkNode* node) {
   std::unique_ptr<power_bookmarks::PowerBookmarkMeta> meta =
@@ -117,9 +117,9 @@ absl::optional<int64_t> GetBookmarkLastSubscriptionChangeTime(
 
   if (!meta || !meta->has_shopping_specifics() ||
       !meta->shopping_specifics().has_last_subscription_change_time()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
-  return absl::make_optional<int64_t>(
+  return std::make_optional<int64_t>(
       meta->shopping_specifics().last_subscription_change_time());
 }
 
@@ -158,7 +158,7 @@ void SetPriceTrackingStateForBookmark(
   // revisiting the page. This logic is here since it's the result of a direct
   // user action, we don't yet want to passively update "normal" bookmarks.
   if (!meta || !meta->has_shopping_specifics()) {
-    absl::optional<ProductInfo> info =
+    std::optional<ProductInfo> info =
         service->GetAvailableProductInfoForUrl(node->url());
 
     // If still no information, do nothing.
@@ -186,7 +186,7 @@ void SetPriceTrackingStateForBookmark(
   std::unique_ptr<std::vector<CommerceSubscription>> subs =
       std::make_unique<std::vector<CommerceSubscription>>();
 
-  absl::optional<UserSeenOffer> user_seen_offer = absl::nullopt;
+  std::optional<UserSeenOffer> user_seen_offer = std::nullopt;
   if (enabled) {
     user_seen_offer.emplace(base::NumberToString(specifics->offer_id()),
                             specifics->current_price().amount_micros(),
@@ -415,7 +415,7 @@ bool CanTrackPrice(const ProductInfo& info) {
   return info.product_cluster_id.has_value();
 }
 
-bool CanTrackPrice(const absl::optional<ProductInfo>& info) {
+bool CanTrackPrice(const std::optional<ProductInfo>& info) {
   return info.has_value() && CanTrackPrice(info.value());
 }
 
@@ -423,13 +423,13 @@ bool CanTrackPrice(const power_bookmarks::ShoppingSpecifics& specifics) {
   return specifics.has_product_cluster_id();
 }
 
-absl::optional<std::u16string> GetBookmarkParentName(
+std::optional<std::u16string> GetBookmarkParentName(
     bookmarks::BookmarkModel* model,
     const GURL& url) {
   const bookmarks::BookmarkNode* node =
       model->GetMostRecentlyAddedUserNodeForURL(url);
-  return node ? absl::optional<std::u16string>(node->parent()->GetTitle())
-              : absl::nullopt;
+  return node ? std::optional<std::u16string>(node->parent()->GetTitle())
+              : std::nullopt;
 }
 
 const bookmarks::BookmarkNode* GetShoppingCollectionBookmarkFolder(
@@ -441,8 +441,10 @@ const bookmarks::BookmarkNode* GetShoppingCollectionBookmarkFolder(
 
   const base::Uuid collection_uuid =
       base::Uuid::ParseLowercase(bookmarks::kShoppingCollectionUuid);
-  const bookmarks::BookmarkNode* collection_node =
-      model->GetNodeByUuid(collection_uuid);
+
+  const bookmarks::BookmarkNode* collection_node = model->GetNodeByUuid(
+      collection_uuid,
+      bookmarks::BookmarkModel::NodeTypeForUuidLookup::kLocalOrSyncableNodes);
 
   CHECK(!collection_node || collection_node->is_folder());
 
@@ -454,8 +456,12 @@ const bookmarks::BookmarkNode* GetShoppingCollectionBookmarkFolder(
     collection_node = model->AddFolder(
         model->other_node(), model->other_node()->children().size(),
         l10n_util::GetStringUTF16(IDS_SHOPPING_COLLECTION_FOLDER_NAME), nullptr,
-        absl::nullopt, collection_uuid);
-    CHECK_EQ(model->GetNodeByUuid(collection_uuid), collection_node);
+        std::nullopt, collection_uuid);
+    CHECK_EQ(
+        model->GetNodeByUuid(collection_uuid,
+                             bookmarks::BookmarkModel::NodeTypeForUuidLookup::
+                                 kLocalOrSyncableNodes),
+        collection_node);
   }
 
   return collection_node;
@@ -467,29 +473,88 @@ bool IsShoppingCollectionBookmarkFolder(const bookmarks::BookmarkNode* node) {
              base::Uuid::ParseLowercase(bookmarks::kShoppingCollectionUuid);
 }
 
-absl::optional<uint64_t> GetProductClusterIdFromBookmark(
+std::optional<uint64_t> GetProductClusterIdFromBookmark(
     const GURL& url,
     bookmarks::BookmarkModel* model) {
   const bookmarks::BookmarkNode* node =
       model->GetMostRecentlyAddedUserNodeForURL(url);
 
   if (!node) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   std::unique_ptr<power_bookmarks::PowerBookmarkMeta> meta =
       power_bookmarks::GetNodePowerBookmarkMeta(model, node);
 
   if (!meta) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   const power_bookmarks::ShoppingSpecifics specifics =
       meta->shopping_specifics();
 
   return specifics.has_product_cluster_id()
-             ? absl::optional<uint64_t>(specifics.product_cluster_id())
-             : absl::nullopt;
+             ? std::optional<uint64_t>(specifics.product_cluster_id())
+             : std::nullopt;
+}
+
+void RemoveDanglingSubscriptions(
+    ShoppingService* shopping_service,
+    bookmarks::BookmarkModel* bookmark_model,
+    base::OnceCallback<void(size_t)> completed_callback) {
+  if (!shopping_service || !bookmark_model) {
+    return;
+  }
+
+  shopping_service->GetAllSubscriptions(
+      commerce::SubscriptionType::kPriceTrack,
+      base::BindOnce(
+          [](base::WeakPtr<ShoppingService> service,
+             bookmarks::BookmarkModel* model,
+             base::OnceCallback<void(size_t)> callback,
+             std::vector<CommerceSubscription> subscriptions) {
+            if (!service) {
+              std::move(callback).Run(0);
+              return;
+            }
+
+            std::unique_ptr<std::vector<CommerceSubscription>> dangling_subs =
+                std::make_unique<std::vector<CommerceSubscription>>();
+
+            for (CommerceSubscription sub : subscriptions) {
+              if (sub.management_type != ManagementType::kUserManaged) {
+                continue;
+              }
+
+              uint64_t cluster_id;
+              if (!base::StringToUint64(sub.id, &cluster_id)) {
+                continue;
+              }
+
+              // If there is at least one bookmark with the corresponding
+              // subscription, no need to clean up.
+              if (GetBookmarksWithClusterId(model, cluster_id, 1).size() > 0) {
+                continue;
+              }
+
+              dangling_subs->push_back(sub);
+            }
+
+            size_t sub_count = dangling_subs->size();
+            if (sub_count > 0) {
+              service->Unsubscribe(
+                  std::move(dangling_subs),
+                  base::BindOnce(
+                      [](base::OnceCallback<void(size_t)> callback,
+                         size_t count,
+                         bool success) { std::move(callback).Run(count); },
+                      std::move(callback), sub_count));
+            } else {
+              std::move(callback).Run(0);
+            }
+          },
+          shopping_service->AsWeakPtr(), bookmark_model,
+          std::move(completed_callback)));
 }
 
 }  // namespace commerce

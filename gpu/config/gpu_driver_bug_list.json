@@ -3043,9 +3043,9 @@
       "os": {
         "type": "android"
       },
-      "gl_renderer": "ANGLE.*Samsung Xclipse 920.*",
+      "gl_renderer": "ANGLE.*Samsung Xclipse.*",
       "comment": [
-        "This issue affects the Samsung Galaxy S22 with Exynos chipsets which uses ANGLE",
+        "This issue affects the Samsung Galaxy S22/23/24 with Exynos chipsets which uses ANGLE",
         "as the system GLES driver, and the cause appears be overly strict validation."
       ],
       "features": [
@@ -3134,9 +3134,10 @@
         "type": "win"
       },
       "vendor_id": "0x8086",
-      "intel_gpu_series": [
-        "meteorlake"
-      ],
+      "intel_gpu_generation": {
+        "op": ">=",
+        "value": "12"
+      },
       "features": [
         "force_dcomp_triple_buffer_video_swap_chain"
       ]
@@ -3286,12 +3287,12 @@
     },
     {
       "id": 423,
-      "description": "Legacy AMD GPUs can't synchronize multiple write streams on SharedImages [b/293613437]",
+      "description": "Legacy AMD GPUs can't synchronize multiple write streams on SharedImages [b/293613437, b/300686930]",
       "os": {
         "type": "chromeos"
       },
       "vendor_id": "0x1002",
-      "device_id": ["0x9802"],
+      "device_id": ["0x9802", "0x9834"],
       "features": [
         "disable_webgpu_shared_images"
       ]
@@ -3358,6 +3359,27 @@
       },
       "features": [
         "disable_media_foundation_frame_size_change"
+      ]
+    },
+    {
+      "id": 428,
+      "cr_bugs": [
+        1401061
+      ],
+      "description": "Don't use Media Foundation hardware security on Polaris-architecture AMD GPUs.",
+      "os": {
+        "type": "win"
+      },
+      "vendor_id": "0x1002",
+      "multi_gpu_category": "active",
+      "device_id": [
+        "0x67c7", "0x67df", "0x67ff", "0x6fdf", "0x67ef", "0x6981",
+        "0x6987", "0x699f", "0x67c2", "0x67d0", "0x6900", "0x6984",
+        "0x67c0", "0x67c1", "0x67e0", "0x67e3", "0x67e8", "0x67eb",
+        "0x6980", "0x6985", "0x6986", "0x6995", "0x6997"
+      ],
+      "features": [
+        "disable_media_foundation_hardware_security"
       ]
     }
   ]

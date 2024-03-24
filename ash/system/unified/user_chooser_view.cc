@@ -49,8 +49,9 @@ namespace {
 
 // A button that will transition to multi profile login UI.
 class AddUserButton : public views::Button {
+  METADATA_HEADER(AddUserButton, views::Button)
+
  public:
-  METADATA_HEADER(AddUserButton);
   explicit AddUserButton(UserChooserDetailedViewController* controller);
 
   AddUserButton(const AddUserButton&) = delete;
@@ -93,12 +94,13 @@ AddUserButton::AddUserButton(UserChooserDetailedViewController* controller)
   label->SetSubpixelRenderingEnabled(false);
 }
 
-BEGIN_METADATA(AddUserButton, views::Button)
+BEGIN_METADATA(AddUserButton)
 END_METADATA
 
 class Separator : public views::View {
+  METADATA_HEADER(Separator, views::View)
+
  public:
-  METADATA_HEADER(Separator);
   explicit Separator(bool between_user) {
     SetUseDefaultFillLayout(true);
     SetBorder(views::CreateEmptyBorder(
@@ -123,7 +125,7 @@ class Separator : public views::View {
   Separator& operator=(const Separator&) = delete;
 };
 
-BEGIN_METADATA(Separator, views::View)
+BEGIN_METADATA(Separator)
 END_METADATA
 
 views::View* CreateAddUserErrorView(const std::u16string& message) {
@@ -148,7 +150,7 @@ views::View* CreateUserAvatarView(int user_index) {
       Shell::Get()->session_controller()->GetUserSession(user_index);
   DCHECK(user_session);
 
-  if (user_session->user_info.type == user_manager::USER_TYPE_GUEST) {
+  if (user_session->user_info.type == user_manager::UserType::kGuest) {
     // In guest mode, the user avatar is just a disabled button pod.
     auto* image_view = new IconButton(
         views::Button::PressedCallback(), IconButton::Type::kMedium,
@@ -170,10 +172,11 @@ std::u16string GetUserItemAccessibleString(int user_index) {
       Shell::Get()->session_controller()->GetUserSession(user_index);
   DCHECK(user_session);
 
-  if (user_session->user_info.type == user_manager::USER_TYPE_GUEST)
+  if (user_session->user_info.type == user_manager::UserType::kGuest) {
     return l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_GUEST_LABEL);
+  }
 
-  if (user_session->user_info.type == user_manager::USER_TYPE_PUBLIC_ACCOUNT) {
+  if (user_session->user_info.type == user_manager::UserType::kPublicAccount) {
     std::string domain_manager = Shell::Get()
                                      ->system_tray_model()
                                      ->enterprise_domain()
@@ -286,7 +289,7 @@ UserItemButton::UserItemButton(PressedCallback callback,
 
 void UserItemButton::SetCaptureState(MediaCaptureState capture_state) {
   capture_icon_->SetVisible(capture_state != MediaCaptureState::kNone);
-  Layout();
+  DeprecatedLayoutImmediately();
 
   int res_id = 0;
   switch (capture_state) {
@@ -323,7 +326,7 @@ void UserItemButton::GetAccessibleNodeData(ui::AXNodeData* node_data) {
   node_data->SetName(GetUserItemAccessibleString(user_index_));
 }
 
-BEGIN_METADATA(UserItemButton, views::Button)
+BEGIN_METADATA(UserItemButton)
 END_METADATA
 
 UserChooserView::UserChooserView(
@@ -401,7 +404,7 @@ void UserChooserView::OnMediaCaptureChanged(
   }
 }
 
-BEGIN_METADATA(UserChooserView, views::View)
+BEGIN_METADATA(UserChooserView)
 END_METADATA
 
 }  // namespace ash

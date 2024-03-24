@@ -71,15 +71,15 @@ TEST_F(ThreadProfilerPlatformConfigurationTest, IsSupported) {
   EXPECT_FALSE(config()->IsSupported(version_info::Channel::BETA));
   EXPECT_FALSE(config()->IsSupported(version_info::Channel::STABLE));
 
-  EXPECT_FALSE(config()->IsSupported(absl::nullopt));
+  EXPECT_FALSE(config()->IsSupported(std::nullopt));
 #else
   EXPECT_FALSE(config()->IsSupported(version_info::Channel::UNKNOWN));
   EXPECT_TRUE(config()->IsSupported(version_info::Channel::CANARY));
   EXPECT_TRUE(config()->IsSupported(version_info::Channel::DEV));
-  EXPECT_FALSE(config()->IsSupported(version_info::Channel::BETA));
+  EXPECT_TRUE(config()->IsSupported(version_info::Channel::BETA));
   EXPECT_FALSE(config()->IsSupported(version_info::Channel::STABLE));
 
-  EXPECT_TRUE(config()->IsSupported(absl::nullopt));
+  EXPECT_TRUE(config()->IsSupported(std::nullopt));
 #endif
 }
 
@@ -88,23 +88,26 @@ MAYBE_PLATFORM_CONFIG_TEST_F(ThreadProfilerPlatformConfigurationTest,
   using RelativePopulations =
       ThreadProfilerPlatformConfiguration::RelativePopulations;
 #if BUILDFLAG(IS_ANDROID)
-  EXPECT_EQ((RelativePopulations{1, 99}),
+  EXPECT_EQ((RelativePopulations{0, 1, 99}),
             config()->GetEnableRates(version_info::Channel::CANARY));
-  EXPECT_EQ((RelativePopulations{1, 99}),
+  EXPECT_EQ((RelativePopulations{0, 1, 99}),
             config()->GetEnableRates(version_info::Channel::DEV));
+  EXPECT_EQ((RelativePopulations{85, 0, 15}),
+            config()->GetEnableRates(version_info::Channel::BETA));
   // Note: death tests aren't supported on Android. Otherwise this test would
   // check that the other inputs result in CHECKs.
 #else
   EXPECT_CHECK_DEATH(config()->GetEnableRates(version_info::Channel::UNKNOWN));
-  EXPECT_EQ((RelativePopulations{80, 20}),
+  EXPECT_EQ((RelativePopulations{0, 80, 20}),
             config()->GetEnableRates(version_info::Channel::CANARY));
-  EXPECT_EQ((RelativePopulations{80, 20}),
+  EXPECT_EQ((RelativePopulations{0, 80, 20}),
             config()->GetEnableRates(version_info::Channel::DEV));
-  EXPECT_CHECK_DEATH(config()->GetEnableRates(version_info::Channel::BETA));
+  EXPECT_EQ((RelativePopulations{100, 0, 0}),
+            config()->GetEnableRates(version_info::Channel::BETA));
   EXPECT_CHECK_DEATH(config()->GetEnableRates(version_info::Channel::STABLE));
 
-  EXPECT_EQ((RelativePopulations{100, 0}),
-            config()->GetEnableRates(absl::nullopt));
+  EXPECT_EQ((RelativePopulations{0, 100, 0}),
+            config()->GetEnableRates(std::nullopt));
 #endif
 }
 

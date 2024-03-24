@@ -16,7 +16,9 @@
 #include "base/test/bind.h"
 #include "base/test/scoped_locale.h"
 #include "base/values.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/skia/include/core/SkColor.h"
 #include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/gfx/paint_vector_icon.h"
 
@@ -24,12 +26,11 @@ namespace ash {
 
 namespace {
 
-std::vector<HoldingSpaceItem::Type> GetHoldingSpaceItemTypes() {
-  std::vector<HoldingSpaceItem::Type> types;
-  for (int i = 0; i <= static_cast<int>(HoldingSpaceItem::Type::kMaxValue); ++i)
-    types.push_back(static_cast<HoldingSpaceItem::Type>(i));
-  return types;
-}
+// Aliases
+using testing::AllOf;
+using testing::Eq;
+using testing::Property;
+using testing::VariantWith;
 
 std::unique_ptr<HoldingSpaceImage> CreateFakeHoldingSpaceImage(
     HoldingSpaceItem::Type type,
@@ -320,25 +321,36 @@ TEST_P(HoldingSpaceItemTest, SecondaryTextColor) {
                        GURL("filesystem::file_system_url")),
       /*image_resolver=*/base::BindOnce(&CreateFakeHoldingSpaceImage));
 
-  // Initially the secondary text color id should be absent.
-  EXPECT_FALSE(holding_space_item->secondary_text_color_id());
+  // Initially the secondary text color variant should be absent.
+  EXPECT_FALSE(holding_space_item->secondary_text_color_variant());
 
-  // It should be possible to update secondary text color id to a new value.
-  EXPECT_TRUE(holding_space_item->SetSecondaryTextColorId(
+  // It should be possible to update secondary text color to a new color id.
+  EXPECT_TRUE(holding_space_item->SetSecondaryTextColorVariant(
       cros_tokens::kTextColorAlert));
-  EXPECT_EQ(holding_space_item->secondary_text_color_id().value(),
-            cros_tokens::kTextColorAlert);
+  EXPECT_THAT(holding_space_item->secondary_text_color_variant().value(),
+              VariantWith<ui::ColorId>(cros_tokens::kTextColorAlert));
 
-  // It should no-op to try to update secondary text color id to existing
-  // values.
-  EXPECT_FALSE(holding_space_item->SetSecondaryTextColorId(
+  // It should no-op to try to update secondary text color to existing values.
+  EXPECT_FALSE(holding_space_item->SetSecondaryTextColorVariant(
       cros_tokens::kTextColorAlert));
-  EXPECT_EQ(holding_space_item->secondary_text_color_id().value(),
-            cros_tokens::kTextColorAlert);
+  EXPECT_THAT(holding_space_item->secondary_text_color_variant().value(),
+              VariantWith<ui::ColorId>(cros_tokens::kTextColorAlert));
 
-  // It should be possible to unset secondary text color id.
-  EXPECT_TRUE(holding_space_item->SetSecondaryTextColorId(std::nullopt));
-  EXPECT_FALSE(holding_space_item->secondary_text_color_id());
+  // It should be possible to update secondary text color to a new
+  // `HoldingSpaceColors` instance. NOTE: Use a light/dark text color for
+  // dark/light modes to improve readability.
+  EXPECT_TRUE(holding_space_item->SetSecondaryTextColorVariant(
+      HoldingSpaceColors(/*dark_mode=*/SK_ColorWHITE,
+                         /*light_mode=*/SK_ColorBLACK)));
+  EXPECT_THAT(
+      holding_space_item->secondary_text_color_variant().value(),
+      VariantWith<HoldingSpaceColors>(
+          AllOf(Property(&HoldingSpaceColors::dark_mode, Eq(SK_ColorWHITE)),
+                Property(&HoldingSpaceColors::light_mode, Eq(SK_ColorBLACK)))));
+
+  // It should be possible to unset secondary text color.
+  EXPECT_TRUE(holding_space_item->SetSecondaryTextColorVariant(std::nullopt));
+  EXPECT_FALSE(holding_space_item->secondary_text_color_variant());
 }
 
 // Tests setting the text for each holding space item type.
@@ -368,8 +380,9 @@ TEST_P(HoldingSpaceItemTest, Text) {
   EXPECT_EQ(holding_space_item->GetText(), u"file_path");
 }
 
-INSTANTIATE_TEST_SUITE_P(All,
-                         HoldingSpaceItemTest,
-                         testing::ValuesIn(GetHoldingSpaceItemTypes()));
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    HoldingSpaceItemTest,
+    testing::ValuesIn(holding_space_util::GetAllItemTypes()));
 
 }  // namespace ash

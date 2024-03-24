@@ -168,8 +168,8 @@ void DictationButtonTray::OnThemeChanged() {
     progress_indicator_->InvalidateLayer();
 }
 
-void DictationButtonTray::Layout() {
-  TrayBackgroundView::Layout();
+void DictationButtonTray::Layout(PassKey) {
+  LayoutSuperclass<TrayBackgroundView>(this);
   UpdateProgressIndicatorBounds();
 }
 
@@ -262,7 +262,7 @@ void DictationButtonTray::TextInputChanged(const ui::TextInputClient* client) {
   CheckDictationStatusAndUpdateIcon();
 }
 
-BEGIN_METADATA(DictationButtonTray, TrayBackgroundView)
+BEGIN_METADATA(DictationButtonTray)
 END_METADATA
 
 }  // namespace ash

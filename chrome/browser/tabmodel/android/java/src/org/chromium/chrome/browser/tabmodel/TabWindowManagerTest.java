@@ -4,9 +4,15 @@
 
 package org.chromium.chrome.browser.tabmodel;
 
+import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.Mockito.when;
+
 import android.app.Activity;
 import android.content.Context;
 import android.os.Build;
+import android.os.Build.VERSION_CODES;
 import android.util.Pair;
 
 import androidx.test.filters.SmallTest;
@@ -16,7 +22,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.robolectric.Robolectric;
 import org.robolectric.android.controller.ActivityController;
@@ -27,6 +32,9 @@ import org.chromium.base.supplier.OneshotSupplier;
 import org.chromium.base.supplier.OneshotSupplierImpl;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Feature;
+import org.chromium.base.test.util.Features.EnableFeatures;
+import org.chromium.base.test.util.HistogramWatcher;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.profiles.ProfileProvider;
 import org.chromium.chrome.browser.tab.MockTab;
@@ -50,6 +58,7 @@ public class TabWindowManagerTest {
     private AsyncTabParamsManager mAsyncTabParamsManager;
     @Mock private ProfileProvider mProfileProvider;
     @Mock private TabCreatorManager mTabCreatorManager;
+    @Mock private MismatchedIndicesHandler mMismatchedIndicesHandler;
     @Mock private Profile mProfile;
     @Mock private Profile mIncognitoProfile;
     private NextTabPolicySupplier mNextTabPolicySupplier = () -> NextTabPolicy.HIERARCHICAL;
@@ -59,7 +68,7 @@ public class TabWindowManagerTest {
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
-        Mockito.when(mIncognitoProfile.isOffTheRecord()).thenReturn(true);
+        when(mIncognitoProfile.isOffTheRecord()).thenReturn(true);
         mProfileProviderSupplier.set(mProfileProvider);
 
         TabModelSelectorFactory mockTabModelSelectorFactory =
@@ -112,12 +121,13 @@ public class TabWindowManagerTest {
                         mProfileProviderSupplier,
                         mTabCreatorManager,
                         mNextTabPolicySupplier,
+                        mMismatchedIndicesHandler,
                         0);
 
-        Assert.assertEquals(0, assignment0.first.intValue());
+        assertEquals(0, assignment0.first.intValue());
         TabModelSelector selector0 = assignment0.second;
         Assert.assertNotNull("Was not able to build the TabModelSelector", selector0);
-        Assert.assertEquals("Unexpected model index", 0, mSubject.getIndexForWindow(activity0));
+        assertEquals("Unexpected model index", 0, mSubject.getIndexForWindow(activity0));
 
         destroyActivity(activityController0);
     }
@@ -139,6 +149,7 @@ public class TabWindowManagerTest {
                         mProfileProviderSupplier,
                         mTabCreatorManager,
                         mNextTabPolicySupplier,
+                        mMismatchedIndicesHandler,
                         0);
         Pair<Integer, TabModelSelector> assignment1 =
                 mSubject.requestSelector(
@@ -146,14 +157,15 @@ public class TabWindowManagerTest {
                         mProfileProviderSupplier,
                         mTabCreatorManager,
                         mNextTabPolicySupplier,
+                        mMismatchedIndicesHandler,
                         1);
 
-        Assert.assertEquals(0, assignment0.first.intValue());
-        Assert.assertEquals(1, assignment1.first.intValue());
+        assertEquals(0, assignment0.first.intValue());
+        assertEquals(1, assignment1.first.intValue());
         Assert.assertNotNull("Was not able to build the TabModelSelector", assignment0.second);
         Assert.assertNotNull("Was not able to build the TabModelSelector", assignment1.second);
-        Assert.assertEquals("Unexpected model index", 0, mSubject.getIndexForWindow(activity0));
-        Assert.assertEquals("Unexpected model index", 1, mSubject.getIndexForWindow(activity1));
+        assertEquals("Unexpected model index", 0, mSubject.getIndexForWindow(activity0));
+        assertEquals("Unexpected model index", 1, mSubject.getIndexForWindow(activity1));
 
         destroyActivity(activityController0);
         destroyActivity(activityController1);
@@ -178,6 +190,7 @@ public class TabWindowManagerTest {
                             mProfileProviderSupplier,
                             mTabCreatorManager,
                             mNextTabPolicySupplier,
+                            mMismatchedIndicesHandler,
                             0));
         }
 
@@ -190,6 +203,7 @@ public class TabWindowManagerTest {
                         mProfileProviderSupplier,
                         mTabCreatorManager,
                         mNextTabPolicySupplier,
+                        mMismatchedIndicesHandler,
                         0));
 
         for (ActivityController<Activity> c : activityControllerList) {
@@ -217,6 +231,7 @@ public class TabWindowManagerTest {
                         mProfileProviderSupplier,
                         mTabCreatorManager,
                         mNextTabPolicySupplier,
+                        mMismatchedIndicesHandler,
                         0);
         // Request 0 again, but should get 1 instead.
         Pair<Integer, TabModelSelector> assignment1 =
@@ -225,14 +240,15 @@ public class TabWindowManagerTest {
                         mProfileProviderSupplier,
                         mTabCreatorManager,
                         mNextTabPolicySupplier,
+                        mMismatchedIndicesHandler,
                         0);
 
-        Assert.assertEquals(0, assignment0.first.intValue());
-        Assert.assertEquals(1, assignment1.first.intValue());
+        assertEquals(0, assignment0.first.intValue());
+        assertEquals(1, assignment1.first.intValue());
         Assert.assertNotNull("Was not able to build the TabModelSelector", assignment0.second);
         Assert.assertNotNull("Was not able to build the TabModelSelector", assignment1.second);
-        Assert.assertEquals("Unexpected model index", 0, mSubject.getIndexForWindow(activity0));
-        Assert.assertEquals("Unexpected model index", 1, mSubject.getIndexForWindow(activity1));
+        assertEquals("Unexpected model index", 0, mSubject.getIndexForWindow(activity0));
+        assertEquals("Unexpected model index", 1, mSubject.getIndexForWindow(activity1));
 
         destroyActivity(activityController0);
         destroyActivity(activityController1);
@@ -258,6 +274,7 @@ public class TabWindowManagerTest {
                         mProfileProviderSupplier,
                         mTabCreatorManager,
                         mNextTabPolicySupplier,
+                        mMismatchedIndicesHandler,
                         2);
         // Request 2 again, but should get 0 instead.
         Pair<Integer, TabModelSelector> assignment1 =
@@ -266,14 +283,15 @@ public class TabWindowManagerTest {
                         mProfileProviderSupplier,
                         mTabCreatorManager,
                         mNextTabPolicySupplier,
+                        mMismatchedIndicesHandler,
                         2);
 
-        Assert.assertEquals(2, assignment0.first.intValue());
-        Assert.assertEquals(0, assignment1.first.intValue());
+        assertEquals(2, assignment0.first.intValue());
+        assertEquals(0, assignment1.first.intValue());
         Assert.assertNotNull("Was not able to build the TabModelSelector", assignment0.second);
         Assert.assertNotNull("Was not able to build the TabModelSelector", assignment1.second);
-        Assert.assertEquals("Unexpected model index", 2, mSubject.getIndexForWindow(activity0));
-        Assert.assertEquals("Unexpected model index", 0, mSubject.getIndexForWindow(activity1));
+        assertEquals("Unexpected model index", 2, mSubject.getIndexForWindow(activity0));
+        assertEquals("Unexpected model index", 0, mSubject.getIndexForWindow(activity1));
 
         destroyActivity(activityController0);
         destroyActivity(activityController1);
@@ -295,15 +313,16 @@ public class TabWindowManagerTest {
                         mProfileProviderSupplier,
                         mTabCreatorManager,
                         mNextTabPolicySupplier,
+                        mMismatchedIndicesHandler,
                         0);
 
-        Assert.assertEquals(0, assignment0.first.intValue());
+        assertEquals(0, assignment0.first.intValue());
         Assert.assertNotNull("Was not able to build the TabModelSelector", assignment0.second);
-        Assert.assertEquals("Unexpected model index", 0, mSubject.getIndexForWindow(activity0));
+        assertEquals("Unexpected model index", 0, mSubject.getIndexForWindow(activity0));
 
         destroyActivity(activityController0);
 
-        Assert.assertEquals(
+        assertEquals(
                 "Still found model",
                 TabWindowManager.INVALID_WINDOW_INDEX,
                 mSubject.getIndexForWindow(activity0));
@@ -325,15 +344,16 @@ public class TabWindowManagerTest {
                         mProfileProviderSupplier,
                         mTabCreatorManager,
                         mNextTabPolicySupplier,
+                        mMismatchedIndicesHandler,
                         0);
 
-        Assert.assertEquals(0, assignment0.first.intValue());
+        assertEquals(0, assignment0.first.intValue());
         Assert.assertNotNull("Was not able to build the TabModelSelector", assignment0.second);
-        Assert.assertEquals("Unexpected model index", 0, mSubject.getIndexForWindow(activity0));
+        assertEquals("Unexpected model index", 0, mSubject.getIndexForWindow(activity0));
 
         destroyActivity(activityController0);
 
-        Assert.assertEquals(
+        assertEquals(
                 "Still found model",
                 TabWindowManager.INVALID_WINDOW_INDEX,
                 mSubject.getIndexForWindow(activity0));
@@ -346,11 +366,12 @@ public class TabWindowManagerTest {
                         mProfileProviderSupplier,
                         mTabCreatorManager,
                         mNextTabPolicySupplier,
+                        mMismatchedIndicesHandler,
                         0);
 
-        Assert.assertEquals(0, assignment1.first.intValue());
+        assertEquals(0, assignment1.first.intValue());
         Assert.assertNotNull("Was not able to build the TabModelSelector", assignment1.second);
-        Assert.assertEquals("Unexpected model index", 0, mSubject.getIndexForWindow(activity1));
+        assertEquals("Unexpected model index", 0, mSubject.getIndexForWindow(activity1));
 
         destroyActivity(activityController1);
     }
@@ -376,6 +397,7 @@ public class TabWindowManagerTest {
                         mProfileProviderSupplier,
                         mTabCreatorManager,
                         mNextTabPolicySupplier,
+                        mMismatchedIndicesHandler,
                         0);
         Pair<Integer, TabModelSelector> assignment1 =
                 mSubject.requestSelector(
@@ -383,18 +405,19 @@ public class TabWindowManagerTest {
                         mProfileProviderSupplier,
                         mTabCreatorManager,
                         mNextTabPolicySupplier,
+                        mMismatchedIndicesHandler,
                         1);
 
-        Assert.assertEquals(0, assignment0.first.intValue());
-        Assert.assertEquals(1, assignment1.first.intValue());
+        assertEquals(0, assignment0.first.intValue());
+        assertEquals(1, assignment1.first.intValue());
         Assert.assertNotNull("Was not able to build the TabModelSelector", assignment0.second);
         Assert.assertNotNull("Was not able to build the TabModelSelector", assignment1.second);
-        Assert.assertEquals("Unexpected model index", 0, mSubject.getIndexForWindow(activity0));
-        Assert.assertEquals("Unexpected model index", 1, mSubject.getIndexForWindow(activity1));
+        assertEquals("Unexpected model index", 0, mSubject.getIndexForWindow(activity0));
+        assertEquals("Unexpected model index", 1, mSubject.getIndexForWindow(activity1));
 
         destroyActivity(activityController1);
 
-        Assert.assertEquals(
+        assertEquals(
                 "Still found model",
                 TabWindowManager.INVALID_WINDOW_INDEX,
                 mSubject.getIndexForWindow(activity1));
@@ -407,12 +430,13 @@ public class TabWindowManagerTest {
                         mProfileProviderSupplier,
                         mTabCreatorManager,
                         mNextTabPolicySupplier,
+                        mMismatchedIndicesHandler,
                         1);
 
-        Assert.assertEquals(1, assignment2.first.intValue());
+        assertEquals(1, assignment2.first.intValue());
         Assert.assertNotNull("Was not able to build the TabModelSelector", assignment2.second);
-        Assert.assertEquals("Unexpected model index", 0, mSubject.getIndexForWindow(activity0));
-        Assert.assertEquals("Unexpected model index", 1, mSubject.getIndexForWindow(activity2));
+        assertEquals("Unexpected model index", 0, mSubject.getIndexForWindow(activity0));
+        assertEquals("Unexpected model index", 1, mSubject.getIndexForWindow(activity2));
 
         destroyActivity(activityController0);
         destroyActivity(activityController2);
@@ -433,6 +457,7 @@ public class TabWindowManagerTest {
                         mProfileProviderSupplier,
                         mTabCreatorManager,
                         mNextTabPolicySupplier,
+                        mMismatchedIndicesHandler,
                         0);
         Pair<Integer, TabModelSelector> assignment1 =
                 mSubject.requestSelector(
@@ -440,6 +465,7 @@ public class TabWindowManagerTest {
                         mProfileProviderSupplier,
                         mTabCreatorManager,
                         mNextTabPolicySupplier,
+                        mMismatchedIndicesHandler,
                         1);
         MockTabModelSelector selector0 = (MockTabModelSelector) assignment0.second;
         MockTabModelSelector selector1 = (MockTabModelSelector) assignment1.second;
@@ -482,6 +508,7 @@ public class TabWindowManagerTest {
                         mProfileProviderSupplier,
                         mTabCreatorManager,
                         mNextTabPolicySupplier,
+                        mMismatchedIndicesHandler,
                         0);
         Pair<Integer, TabModelSelector> assignment1 =
                 mSubject.requestSelector(
@@ -489,6 +516,7 @@ public class TabWindowManagerTest {
                         mProfileProviderSupplier,
                         mTabCreatorManager,
                         mNextTabPolicySupplier,
+                        mMismatchedIndicesHandler,
                         1);
         MockTabModelSelector selector0 = (MockTabModelSelector) assignment0.second;
         MockTabModelSelector selector1 = (MockTabModelSelector) assignment1.second;
@@ -531,6 +559,7 @@ public class TabWindowManagerTest {
                         mProfileProviderSupplier,
                         mTabCreatorManager,
                         mNextTabPolicySupplier,
+                        mMismatchedIndicesHandler,
                         0);
         Pair<Integer, TabModelSelector> assignment1 =
                 mSubject.requestSelector(
@@ -538,6 +567,7 @@ public class TabWindowManagerTest {
                         mProfileProviderSupplier,
                         mTabCreatorManager,
                         mNextTabPolicySupplier,
+                        mMismatchedIndicesHandler,
                         1);
         MockTabModelSelector selector0 = (MockTabModelSelector) assignment0.second;
         MockTabModelSelector selector1 = (MockTabModelSelector) assignment1.second;
@@ -546,14 +576,107 @@ public class TabWindowManagerTest {
         Tab tab3 = selector0.addMockIncognitoTab();
         Tab tab4 = selector1.addMockIncognitoTab();
 
-        Assert.assertEquals(
-                selector0.getModel(/* incognito= */ false), mSubject.getTabModelForTab(tab1));
-        Assert.assertEquals(
-                selector1.getModel(/* incognito= */ false), mSubject.getTabModelForTab(tab2));
-        Assert.assertEquals(
-                selector0.getModel(/* incognito= */ true), mSubject.getTabModelForTab(tab3));
-        Assert.assertEquals(
-                selector1.getModel(/* incognito= */ true), mSubject.getTabModelForTab(tab4));
+        assertEquals(selector0.getModel(/* incognito= */ false), mSubject.getTabModelForTab(tab1));
+        assertEquals(selector1.getModel(/* incognito= */ false), mSubject.getTabModelForTab(tab2));
+        assertEquals(selector0.getModel(/* incognito= */ true), mSubject.getTabModelForTab(tab3));
+        assertEquals(selector1.getModel(/* incognito= */ true), mSubject.getTabModelForTab(tab4));
+
+        destroyActivity(activityController0);
+        destroyActivity(activityController1);
+    }
+
+    @Test
+    @Config(sdk = VERSION_CODES.Q)
+    @EnableFeatures(ChromeFeatureList.TAB_WINDOW_MANAGER_REPORT_INDICES_MISMATCH)
+    public void testAssertIndicesMismatch() {
+        ActivityController<Activity> activityController0 = createActivity();
+        Activity activity0 = activityController0.get();
+        mSubject.requestSelector(
+                activity0,
+                mProfileProviderSupplier,
+                mTabCreatorManager,
+                mNextTabPolicySupplier,
+                mMismatchedIndicesHandler,
+                0);
+
+        ActivityController<Activity> activityController1 = createActivity();
+        Activity activity1 = activityController1.get();
+        try (var ignored =
+                HistogramWatcher.newSingleRecordWatcher(
+                        TabWindowManager.ASSERT_INDICES_MATCH_HISTOGRAM_NAME
+                                + TabWindowManager
+                                        .ASSERT_INDICES_MATCH_HISTOGRAM_SUFFIX_NOT_REASSIGNED)) {
+            mSubject.requestSelector(
+                    activity1,
+                    mProfileProviderSupplier,
+                    mTabCreatorManager,
+                    mNextTabPolicySupplier,
+                    mMismatchedIndicesHandler,
+                    0);
+        } finally {
+            destroyActivity(activityController1);
+        }
+
+        String umaPreExistingActivityDestroyed =
+                "Android.MultiWindowMode.AssertIndicesMatch.PreExistingActivityDestroyed";
+        try (var ignored =
+                HistogramWatcher.newSingleRecordWatcher(umaPreExistingActivityDestroyed)) {
+            destroyActivity(activityController0);
+        }
+    }
+
+    @Test
+    @Config(sdk = VERSION_CODES.Q)
+    @EnableFeatures({ChromeFeatureList.TAB_WINDOW_MANAGER_REPORT_INDICES_MISMATCH})
+    public void testIndexReassignmentWhenIndicesMismatch() {
+        // Simulate successful index mismatch handling, that will trigger reassignment.
+        when(mMismatchedIndicesHandler.handleMismatchedIndices(any(), anyBoolean(), anyBoolean()))
+                .thenReturn(true);
+
+        // Create activity0 and request its tab model selector to use index 0.
+        ActivityController<Activity> activityController0 = createActivity();
+        Activity activity0 = activityController0.get();
+        mSubject.requestSelector(
+                activity0,
+                mProfileProviderSupplier,
+                mTabCreatorManager,
+                mNextTabPolicySupplier,
+                mMismatchedIndicesHandler,
+                0);
+
+        // Create activity1 and request its tab model selector to use index 0.
+        ActivityController<Activity> activityController1 = createActivity();
+        Activity activity1 = activityController1.get();
+
+        try (var ignored =
+                HistogramWatcher.newSingleRecordWatcher(
+                        TabWindowManager.ASSERT_INDICES_MATCH_HISTOGRAM_NAME
+                                + TabWindowManager
+                                        .ASSERT_INDICES_MATCH_HISTOGRAM_SUFFIX_REASSIGNED)) {
+            var assignment =
+                    mSubject.requestSelector(
+                            activity1,
+                            mProfileProviderSupplier,
+                            mTabCreatorManager,
+                            mNextTabPolicySupplier,
+                            mMismatchedIndicesHandler,
+                            0);
+            assertEquals(
+                    "Requested selector's index assignment is incorrect.",
+                    0,
+                    (int) assignment.first);
+        }
+
+        // activity0's index 0 assignment should be cleared and activity1 should be able to use the
+        // requested index 0.
+        assertEquals(
+                "Index for activity0 should be cleared.",
+                TabWindowManager.INVALID_WINDOW_INDEX,
+                mSubject.getIndexForWindow(activity0));
+        assertEquals(
+                "Requested index for activity1 should be used.",
+                0,
+                mSubject.getIndexForWindow(activity1));
 
         destroyActivity(activityController0);
         destroyActivity(activityController1);

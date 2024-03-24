@@ -40,11 +40,13 @@ namespace android {
 class OptimizationGuideBridge;
 }  // namespace android
 class ChromeHintsManager;
-class ModelExecutionEnterprisePolicyBrowserTest;
+class ModelExecutionEnabledBrowserTest;
+class ModelExecutionLiveTest;
 class ModelExecutionManager;
 class ModelInfo;
 class ModelQualityLogEntry;
 class ModelQualityLogsUploaderService;
+class ModelValidatorKeyedService;
 class OnDeviceModelComponentStateManager;
 class OptimizationGuideStore;
 class PredictionManager;
@@ -106,7 +108,7 @@ class OptimizationGuideKeyedService
   // optimization_guide::OptimizationGuideModelProvider implementation:
   void AddObserverForOptimizationTargetModel(
       optimization_guide::proto::OptimizationTarget optimization_target,
-      const absl::optional<optimization_guide::proto::Any>& model_metadata,
+      const std::optional<optimization_guide::proto::Any>& model_metadata,
       optimization_guide::OptimizationTargetModelObserver* observer) override;
   void RemoveObserverForOptimizationTargetModel(
       optimization_guide::proto::OptimizationTarget optimization_target,
@@ -156,7 +158,7 @@ class OptimizationGuideKeyedService
   void AddHintForTesting(
       const GURL& url,
       optimization_guide::proto::OptimizationType optimization_type,
-      const absl::optional<optimization_guide::OptimizationMetadata>& metadata);
+      const std::optional<optimization_guide::OptimizationMetadata>& metadata);
 
   // Override the model file sent to observers of |optimization_target|. Use
   // |TestModelInfoBuilder| to construct the model metadata. For
@@ -174,10 +176,6 @@ class OptimizationGuideKeyedService
     return optimization_guide_logger_.get();
   }
 
-  // Simulates browser restart. Useful for testing controller functionality
-  // where some of the settings change take effect on browser restart.
-  void SimulateBrowserRestartForControllerTesting();
-
  private:
   friend class BrowserView;
   friend class ChromeBrowserMainExtraPartsOptimizationGuide;
@@ -187,7 +185,9 @@ class OptimizationGuideKeyedService
   friend class OptimizationGuideKeyedServiceBrowserTest;
   friend class OptimizationGuideMessageHandler;
   friend class OptimizationGuideWebContentsObserver;
-  friend class optimization_guide::ModelExecutionEnterprisePolicyBrowserTest;
+  friend class optimization_guide::ModelExecutionEnabledBrowserTest;
+  friend class optimization_guide::ModelExecutionLiveTest;
+  friend class optimization_guide::ModelValidatorKeyedService;
   friend class optimization_guide::PredictionManagerBrowserTestBase;
   friend class optimization_guide::PredictionModelDownloadClient;
   friend class optimization_guide::PredictionModelStoreBrowserTestBase;
@@ -240,7 +240,9 @@ class OptimizationGuideKeyedService
           optimization_types,
       optimization_guide::proto::RequestContext request_context,
       optimization_guide::OnDemandOptimizationGuideDecisionRepeatingCallback
-          callback) override;
+          callback,
+      optimization_guide::proto::RequestContextMetadata*
+          request_context_metadata = nullptr) override;
 
   // Returns true if the opt-in setting should be shown for this profile for
   // given `feature`. This should only be called by settings UX.
@@ -279,12 +281,6 @@ class OptimizationGuideKeyedService
 
   // Manages the storing, loading, and fetching of hints.
   std::unique_ptr<optimization_guide::ChromeHintsManager> hints_manager_;
-
-  // TODO(crbug/1358568): Remove this old model store once the new model store
-  // is launched.
-  // The store of optimization target prediction models and features.
-  std::unique_ptr<optimization_guide::OptimizationGuideStore>
-      prediction_model_and_features_store_;
 
   // Manages the storing, loading, and evaluating of optimization target
   // prediction models.

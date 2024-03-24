@@ -80,7 +80,8 @@ def __parse_cros_rewrapper_cmdline(ctx, cmd):
         path.join(toolchainpath, "bin"),
         path.join(toolchainpath, "lib"),
         path.join(toolchainpath, "usr/bin"),
-        path.join(toolchainpath, "usr/lib64"),
+        # TODO: b/320189180 - Simple Chrome builds should use libraries under usr/lib64.
+        # But, Ninja/Reclient also don't use them unexpectedly.
     ])
     rwcfg["inputs"] = inputs
     rwcfg["preserve_symlinks"] = True
@@ -282,18 +283,22 @@ def __step_config(ctx, step_config):
             new_rules.append(new_rule)
             continue
 
-        # clang will always have rewrapper config when use_remoteexec=true.
+        # clang cxx/cc/objcxx/objc will always have rewrapper config when use_remoteexec=true.
         # Remove the native siso handling and replace with custom rewrapper-specific handling.
         # All other rule values are not reused, instead use rewrapper config via handler.
         # (In particular, command_prefix should be avoided because it will be rewrapper.)
-        if rule["name"].startswith("clang/") or rule["name"].startswith("clang-cl/"):
+        if (rule["name"].startswith("clang/cxx") or rule["name"].startswith("clang/cc") or
+            rule["name"].startswith("clang-cl/cxx") or rule["name"].startswith("clang-cl/cc") or
+            rule["name"].startswith("clang/objc")):
             if not rule.get("action"):
                 fail("clang rule %s found without action" % rule["name"])
 
             new_rule = {
                 "name": rule["name"],
                 "action": rule["action"],
+                "exclude_input_patterns": rule.get("exclude_input_patterns"),
                 "handler": "rewrite_rewrapper",
+                "input_root_absolute_path": rule.get("input_root_absolute_path"),
             }
             new_rules.append(new_rule)
             continue

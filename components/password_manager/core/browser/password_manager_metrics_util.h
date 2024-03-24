@@ -27,7 +27,8 @@ struct PasswordForm;
 namespace password_manager::metrics_util {
 
 // These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused.
+// numeric values should never be reused. Needs to stay in sync with the
+// PasswordBubbleDisplayDisposition enum in enums.xml.
 // Metrics: "PasswordBubble.DisplayDisposition"
 enum UIDisplayDisposition {
   AUTOMATIC_WITH_PASSWORD_PENDING = 0,
@@ -50,6 +51,7 @@ enum UIDisplayDisposition {
   AUTOMATIC_ADD_USERNAME_BUBBLE = 17,
   MANUAL_ADD_USERNAME_BUBBLE = 18,
   AUTOMATIC_RELAUNCH_CHROME_BUBBLE = 19,
+  AUTOMATIC_DEFAULT_STORE_CHANGED_BUBBLE = 20,
   NUM_DISPLAY_DISPOSITIONS,
 };
 
@@ -457,7 +459,9 @@ enum class MoveToAccountStoreTrigger {
   // The user explicitly asked to move a password to account store from password
   // details page.
   kExplicitlyTriggeredForSinglePasswordInDetailsInSettings = 4,
-  kMaxValue = kExplicitlyTriggeredForSinglePasswordInDetailsInSettings,
+  // The user clicked a link in a footer of the manage passwords bubble.
+  kExplicitlyTriggeredInPasswordsManagementBubble = 5,
+  kMaxValue = kExplicitlyTriggeredInPasswordsManagementBubble,
 };
 
 // Used to record what exactly was updated during password editing flow.
@@ -574,7 +578,8 @@ enum class PasswordManagementBubbleInteractions {
   kNoteFullySelected = 14,
   kNotePartiallyCopied = 15,
   kNoteFullyCopied = 16,
-  kMaxValue = kNoteFullyCopied,
+  kMovePasswordLinkClicked = 17,
+  kMaxValue = kMovePasswordLinkClicked,
 };
 
 // Represents different causes for showing the password migration warning.
@@ -771,7 +776,7 @@ void LogPasswordReuse(int saved_passwords,
                       PasswordType reused_password_type);
 
 // Log the type of the password dropdown when it's shown.
-void LogPasswordDropdownShown(PasswordDropdownState state, bool off_the_record);
+void LogPasswordDropdownShown(PasswordDropdownState state);
 
 // Log the type of the password dropdown suggestion when chosen.
 void LogPasswordDropdownItemSelected(PasswordDropdownSelectedOption type,
@@ -816,7 +821,8 @@ void LogNewlySavedPasswordMetrics(
     bool is_generated_password,
     bool is_username_empty,
     password_manager::features_util::PasswordAccountStorageUsageLevel
-        account_storage_usage_level);
+        account_storage_usage_level,
+    ukm::SourceId ukm_source_id);
 
 // Log whether the generated password was accepted or rejected for generation of
 // |type| (automatic or manual).

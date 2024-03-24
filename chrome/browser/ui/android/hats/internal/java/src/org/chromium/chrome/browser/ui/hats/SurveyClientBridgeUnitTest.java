@@ -8,7 +8,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -28,6 +27,7 @@ import org.robolectric.Robolectric;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
+import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcherProvider;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.ui.base.WindowAndroid;
 
@@ -37,12 +37,14 @@ import java.util.Map;
 /** Unit test for {@link SurveyClientBridge}. */
 @RunWith(BaseRobolectricTestRunner.class)
 public class SurveyClientBridgeUnitTest {
+
     private static final long TEST_NATIVE_POINTER = 45312L;
     private static final String TEST_TRIGGER = "trigger";
+    private static final String SUPPLIED_TRIGGER_ID = "SomeOtherSurveyTriggerId";
 
     @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule();
 
-    Activity mActivity;
+    LifecycleDispatcherActivity mActivity;
     @Mock SurveyClientFactory mFactory;
     @Mock SurveyClient mDelegateSurveyClient;
     @Mock ActivityLifecycleDispatcher mActivityLifecycleDispatcher;
@@ -50,7 +52,8 @@ public class SurveyClientBridgeUnitTest {
 
     @Before
     public void setup() {
-        mActivity = Robolectric.buildActivity(Activity.class).get();
+        mActivity = Robolectric.buildActivity(LifecycleDispatcherActivity.class).get();
+        mActivity.setLifecycleDispatcher(mActivityLifecycleDispatcher);
         SurveyClientFactory.setInstanceForTesting(mFactory);
 
         doReturn(mDelegateSurveyClient).when(mFactory).createClient(any(), any(), any());
@@ -69,11 +72,43 @@ public class SurveyClientBridgeUnitTest {
                 TEST_TRIGGER, new String[] {}, new String[] {});
         SurveyClientBridge bridge =
                 SurveyClientBridge.create(
-                        TEST_NATIVE_POINTER, TEST_TRIGGER, testDelegate, mProfile);
+                        TEST_NATIVE_POINTER, TEST_TRIGGER, testDelegate, mProfile, "");
         assertNotNull(bridge);
 
         bridge.showSurvey(mActivity, mActivityLifecycleDispatcher);
         verify(mDelegateSurveyClient).showSurvey(mActivity, mActivityLifecycleDispatcher);
+
+        ArgumentCaptor<SurveyConfig> surveyConfigArgumentCaptor =
+                ArgumentCaptor.forClass(SurveyConfig.class);
+        verify(mFactory).createClient(surveyConfigArgumentCaptor.capture(), any(), any());
+
+        assertEquals(
+                TestSurveyUtils.TEST_TRIGGER_ID_FOO,
+                surveyConfigArgumentCaptor.getValue().mTriggerId);
+    }
+
+    @Test
+    public void showSurveyFromJavaWithSuppliedTriggerId() {
+        TestSurveyUtils.TestSurveyUiDelegate testDelegate =
+                new TestSurveyUtils.TestSurveyUiDelegate();
+        TestSurveyUtils.setTestSurveyConfigForTrigger(
+                TEST_TRIGGER, new String[] {}, new String[] {});
+        SurveyClientBridge bridge =
+                SurveyClientBridge.create(
+                        TEST_NATIVE_POINTER,
+                        TEST_TRIGGER,
+                        testDelegate,
+                        mProfile,
+                        SUPPLIED_TRIGGER_ID);
+        assertNotNull(bridge);
+
+        bridge.showSurvey(mActivity, mActivityLifecycleDispatcher);
+        verify(mDelegateSurveyClient).showSurvey(mActivity, mActivityLifecycleDispatcher);
+
+        ArgumentCaptor<SurveyConfig> surveyConfigArgumentCaptor =
+                ArgumentCaptor.forClass(SurveyConfig.class);
+        verify(mFactory).createClient(surveyConfigArgumentCaptor.capture(), any(), any());
+        assertEquals(SUPPLIED_TRIGGER_ID, surveyConfigArgumentCaptor.getValue().mTriggerId);
     }
 
     @Test
@@ -84,7 +119,7 @@ public class SurveyClientBridgeUnitTest {
                 TEST_TRIGGER, new String[] {"bit1", "bit2"}, new String[] {"string1", "string2"});
         SurveyClientBridge bridge =
                 SurveyClientBridge.create(
-                        TEST_NATIVE_POINTER, TEST_TRIGGER, testDelegate, mProfile);
+                        TEST_NATIVE_POINTER, TEST_TRIGGER, testDelegate, mProfile, "");
         assertNotNull(bridge);
 
         Map<String, Boolean> bitValues = Map.of("bit1", true, "bit2", false);
@@ -103,7 +138,7 @@ public class SurveyClientBridgeUnitTest {
         TestSurveyUtils.setTestSurveyConfigForTrigger(TEST_TRIGGER, bitFields, stringFields);
         SurveyClientBridge bridge =
                 SurveyClientBridge.create(
-                        TEST_NATIVE_POINTER, TEST_TRIGGER, testDelegate, mProfile);
+                        TEST_NATIVE_POINTER, TEST_TRIGGER, testDelegate, mProfile, "");
         assertNotNull(bridge);
 
         WindowAndroid window = mock(WindowAndroid.class);
@@ -122,7 +157,7 @@ public class SurveyClientBridgeUnitTest {
         verify(mDelegateSurveyClient)
                 .showSurvey(
                         eq(mActivity),
-                        isNull(),
+                        eq(mActivityLifecycleDispatcher),
                         bitValueCaptor.capture(),
                         stringValueCaptor.capture());
 
@@ -137,5 +172,21 @@ public class SurveyClientBridgeUnitTest {
                 "String PSD value mismatch.",
                 "stringVal2",
                 stringValueCaptor.getValue().get("string2"));
+    }
+
+    // Test activity that allows ActivityLifecycleDispatcherProvider casting in code.
+    static class LifecycleDispatcherActivity extends Activity
+            implements ActivityLifecycleDispatcherProvider {
+
+        private ActivityLifecycleDispatcher mDispatcher;
+
+        public void setLifecycleDispatcher(ActivityLifecycleDispatcher dispatcher) {
+            mDispatcher = dispatcher;
+        }
+
+        @Override
+        public ActivityLifecycleDispatcher getLifecycleDispatcher() {
+            return mDispatcher;
+        }
     }
 }

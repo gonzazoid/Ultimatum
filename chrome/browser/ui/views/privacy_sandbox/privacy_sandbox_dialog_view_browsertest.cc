@@ -15,6 +15,7 @@
 #include "chrome/browser/ui/views/privacy_sandbox/privacy_sandbox_dialog_view.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "ui/views/widget/any_widget_observer.h"
 #include "ui/views/widget/widget.h"
@@ -85,7 +86,8 @@ class PrivacySandboxDialogViewBrowserTest : public DialogBrowserTest {
   raw_ptr<MockPrivacySandboxService, DanglingUntriaged> mock_service_;
 };
 
-#if BUILDFLAG(IS_MAC)
+// TODO(crbug.com/1511604): Re-enable the test.
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
 #define MAYBE_InvokeUi_Consent DISABLED_InvokeUi_Consent
 #else
 #define MAYBE_InvokeUi_Consent InvokeUi_Consent
@@ -102,13 +104,9 @@ IN_PROC_BROWSER_TEST_F(PrivacySandboxDialogViewBrowserTest,
   ShowAndVerifyUi();
 }
 
-#if BUILDFLAG(IS_MAC)
-#define MAYBE_InvokeUi_Notice DISABLED_InvokeUi_Notice
-#else
-#define MAYBE_InvokeUi_Notice InvokeUi_Notice
-#endif
+// TODO(crbug.com/325436918): Re-enable the test.
 IN_PROC_BROWSER_TEST_F(PrivacySandboxDialogViewBrowserTest,
-                       MAYBE_InvokeUi_Notice) {
+                       DISABLED_InvokeUi_Notice) {
   EXPECT_CALL(
       *mock_service(),
       PromptActionOccurred(PrivacySandboxService::PromptAction::kNoticeShown));

@@ -67,12 +67,6 @@ message ContactInfoSpecifics {
     optional TokenMetadata metadata = 2;
   }
 
-  // A token with an integer interpretation of the value.
-  message IntegerToken {
-    optional int64 value = 1;
-    optional TokenMetadata metadata = 2;
-  }
-
   // A globally unique, immutable UUID represented in lowercase.
   optional string guid = 1;
   reserved 2;
@@ -100,12 +94,10 @@ message ContactInfoSpecifics {
   // Tracks the application that applied the last modification to the
   // non-metadata content of the profile. It represents a value in the same
   // `BillableService` enum.
-  // All String- and IntegerToken, and the `profile_label` are considered
-  // non-metadata.
+  // All StringTokens, and the `profile_label` are considered non-metadata.
   optional int32 last_modifier_id = 40;
 
   // Contact info name fields.
-  optional StringToken name_honorific = 6;
   optional StringToken name_first = 7;
   optional StringToken name_middle = 8;
   optional StringToken name_last = 9;
@@ -119,9 +111,9 @@ message ContactInfoSpecifics {
   optional StringToken name_last_conjunction = 11;
   optional StringToken name_last_second = 12;
   optional StringToken name_full = 13;
-  // This value contains the combination of the full name and the honorific
-  // prefix.
-  optional StringToken name_full_with_honorific = 14;
+
+  reserved 14;
+  reserved "name_full_with_honorific";
 
   // Contact info additional fields.
   optional StringToken email_address = 15;
@@ -201,12 +193,23 @@ message ContactInfoSpecifics {
   // address forms require the combination of both in a single field as opposed
   // to each one separately.
   optional StringToken address_overflow_and_landmark = 49;
+  // Combination of types address_street_location and
+  // address_dependent_locality. Note that some address forms require the
+  // combination of both in a single field as opposed to each one separately.
+  optional StringToken address_street_location_and_locality = 52;
 
   // Phone.
   optional StringToken phone_home_whole_number = 33;
 
-  // Birthdate fields.
-  optional IntegerToken birthdate_day = 34;
-  optional IntegerToken birthdate_month = 35;  // Between 1 and 12.
-  optional IntegerToken birthdate_year = 36;   // 4 digits.
+  // Removed in M123.
+  reserved 34;
+  reserved "birthdate_day";
+  reserved 35;
+  reserved "birthdate_month";
+  reserved 36;
+  reserved "birthdate_year";
+
+  // Removed in M122.
+  reserved 6;
+  reserved "name_honorific";
 }

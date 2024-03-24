@@ -40,10 +40,6 @@ BASE_FEATURE(kBlockRepeatedNotificationPermissionPrompts,
              "BlockRepeatedNotificationPermissionPrompts",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
-BASE_FEATURE(kNotificationInteractionHistory,
-             "NotificationInteractionHistory",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
 BASE_FEATURE(kOneTimePermission,
              "OneTimePermission",
              base::FEATURE_DISABLED_BY_DEFAULT);
@@ -121,12 +117,7 @@ BASE_FEATURE(kMitigateUnpartitionedWebviewPermissions,
 // omnibox integration.
 BASE_FEATURE(kPermissionStorageAccessAPI,
              "PermissionStorageAccessAPI",
-#if BUILDFLAG(IS_ANDROID)
-             base::FEATURE_DISABLED_BY_DEFAULT
-#else
-             base::FEATURE_ENABLED_BY_DEFAULT
-#endif
-);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // When enabled "window-placement" may be used as an alias for
 // "window-management". Additionally, reverse mappings (i.e. enum to string)
@@ -140,6 +131,12 @@ BASE_FEATURE(kWindowPlacementPermissionAlias,
 // visible in the Embedded content settings page.
 BASE_FEATURE(kShowRelatedWebsiteSetsPermissionGrants,
              "ShowRelatedWebsiteSetsPermissionGrants",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// When enabled, Quiet prompts triggered by CPSS will have "Get Notifications?"
+// as the the chip text instead of the usual "Notifications Blocked".
+BASE_FEATURE(kCpssQuietChipTextUpdate,
+             "CpssQuietChipTextUpdate",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 }  // namespace features
@@ -188,6 +185,23 @@ const base::FeatureParam<double> kPermissionPredictionsV2HoldbackChance(
 // probability configured for the HaTS survey.
 const base::FeatureParam<std::string> kPermissionsPromptSurveyTriggerId{
     &permissions::features::kPermissionsPromptSurvey, "trigger_id", ""};
+
+// WARNING: This parameter is intended only for a one-off A/B experiment on
+// Clank (see crbug.com/1502780) and will be removed thereafter.
+// The experiment is active iff |experimental_custom_invitation_arm_trigger_id|
+// is configured. If it is active, a coin flip determines whether the generic or
+// a custom invitation is shown. These two cases will use distinct trigger IDs
+// in order to properly convey the survey context to the user in both cases. The
+// parameter specifies the alternate set of trigger IDs for the HaTS surveys
+// that should be shown after a customized invitation was shown. The triggerIds
+// configured in |trigger_id| are used if a generic invitation was shown. The
+// configuration of |experimental_custom_invitation_arm_trigger_id| is analogous
+// to that of |trigger_id|. Custom invitations are hardcoded and only supported
+// for the request types geolocation, camera, and microphone.
+const base::FeatureParam<std::string>
+    kPermissionsPromptSurveyCustomInvitationTriggerId{
+        &permissions::features::kPermissionsPromptSurvey,
+        "experimental_custom_invitation_arm_trigger_id", ""};
 
 // If multiple trigger ids are configured, the trigger id at position p only
 // triggers for the request type at position p of the request type filter,

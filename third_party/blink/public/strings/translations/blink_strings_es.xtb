@@ -1,6 +1,7 @@
 <?xml version="1.0" ?>
 <!DOCTYPE translationbundle>
 <translationbundle lang="es">
+<translation id="1012241361789814178">El depurador se ha pausado en otra pestaña. Haz clic para cambiar a esa pestaña.</translation>
 <translation id="1088086359088493902">Segundos</translation>
 <translation id="1142001580032786438">Mostrar selector de semana</translation>
 <translation id="1171774979989969504">Introduce una dirección de correo electrónico</translation>
@@ -106,7 +107,7 @@
 <translation id="57838592816432529">Silenciar</translation>
 <translation id="5786442179789148008">mostrar menú de velocidad de reproducción</translation>
 <translation id="5787939484346677755">desplegado, opciones de autocompletado disponibles.</translation>
-<translation id="5860033963881614850">Desactivada</translation>
+<translation id="5860033963881614850">Desactivado</translation>
 <translation id="588258955323874662">Pantalla completa</translation>
 <translation id="5888666972993069672">Enviando a <ph name="DEVICE_FRIENDLY_NAME" /> en este momento</translation>
 <translation id="5916664084637901428">Activado</translation>

@@ -4,7 +4,8 @@
 
 #include "third_party/blink/renderer/core/css/container_query.h"
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
 #include "third_party/blink/renderer/core/animation/document_animations.h"
 #include "third_party/blink/renderer/core/animation/element_animations.h"
 #include "third_party/blink/renderer/core/css/css_container_rule.h"
@@ -63,12 +64,12 @@ class ContainerQueryTest : public PageTestBase {
     return &container->GetContainerQuery();
   }
 
-  absl::optional<MediaQueryExpNode::FeatureFlags> FeatureFlagsFrom(
+  std::optional<MediaQueryExpNode::FeatureFlags> FeatureFlagsFrom(
       String query_string) {
     ContainerQuery* query =
         ParseContainerQuery(query_string, UnknownHandling::kAllow);
     if (!query) {
-      return absl::nullopt;
+      return std::nullopt;
     }
     return GetInnerQuery(*query).CollectFeatureFlags();
   }
@@ -1181,8 +1182,6 @@ TEST_F(ContainerQueryTest, CQDependentContentVisibilityHidden) {
 }
 
 TEST_F(ContainerQueryTest, QueryViewportDependency) {
-  ScopedCSSViewportUnits4ForTest viewport_units(true);
-
   SetBodyInnerHTML(R"HTML(
     <style>
       #container {
@@ -1251,7 +1250,7 @@ TEST_F(ContainerQueryTest, TreeScopedReferenceUserOrigin) {
   GetStyleEngine().InjectSheet(user_sheet_key, parsed_user_sheet,
                                WebCssOrigin::kUser);
 
-  GetDocument().body()->setInnerHTMLWithDeclarativeShadowDOMForTesting(R"HTML(
+  GetDocument().body()->setHTMLUnsafe(R"HTML(
     <style>
       @container user-container (width >= 0) {
         div > span {

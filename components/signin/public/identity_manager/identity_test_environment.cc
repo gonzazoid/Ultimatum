@@ -522,7 +522,7 @@ void IdentityTestEnvironment::
         const std::string& token,
         const base::Time& expiration,
         const std::string& id_token) {
-  WaitForAccessTokenRequestIfNecessary(absl::nullopt);
+  WaitForAccessTokenRequestIfNecessary(std::nullopt);
   fake_token_service()->IssueTokenForAllPendingRequests(
       TokenResponseBuilder()
           .WithAccessToken(token)
@@ -552,7 +552,7 @@ void IdentityTestEnvironment::
         const base::Time& expiration,
         const std::string& id_token,
         const ScopeSet& scopes) {
-  WaitForAccessTokenRequestIfNecessary(absl::nullopt);
+  WaitForAccessTokenRequestIfNecessary(std::nullopt);
   fake_token_service()->IssueTokenForScope(scopes,
                                            TokenResponseBuilder()
                                                .WithAccessToken(token)
@@ -564,7 +564,7 @@ void IdentityTestEnvironment::
 void IdentityTestEnvironment::
     WaitForAccessTokenRequestIfNecessaryAndRespondWithError(
         const GoogleServiceAuthError& error) {
-  WaitForAccessTokenRequestIfNecessary(absl::nullopt);
+  WaitForAccessTokenRequestIfNecessary(std::nullopt);
   fake_token_service()->IssueErrorForAllPendingRequests(error);
 }
 
@@ -642,7 +642,7 @@ void IdentityTestEnvironment::HandleOnAccessTokenRequested(
 }
 
 void IdentityTestEnvironment::WaitForAccessTokenRequestIfNecessary(
-    absl::optional<CoreAccountId> account_id) {
+    std::optional<CoreAccountId> account_id) {
   // Handle HandleOnAccessTokenRequested getting called before
   // WaitForAccessTokenRequestIfNecessary.
   if (account_id) {
@@ -767,6 +767,15 @@ void IdentityTestEnvironment::SetTestURLLoaderFactory(
            "SigninClient properly.";
   }
   test_url_loader_factory_ = test_url_loader_factory;
+}
+
+int IdentityTestEnvironment::
+    GetNumCallsToPrepareForFetchingAccountCapabilities() {
+  return static_cast<FakeAccountCapabilitiesFetcherFactory*>(
+             identity_manager()
+                 ->GetAccountFetcherService()
+                 ->GetAccountCapabilitiesFetcherFactoryForTest())
+      ->GetNumCallsToPrepareForFetchingAccountCapabilities();
 }
 
 }  // namespace signin

@@ -196,11 +196,6 @@ BASE_FEATURE(kDCompVisualTreeOptimization,
              "DCompVisualTreeOptimization",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
-// Use presentation feedback event queries (must be enabled) to limit latency.
-BASE_FEATURE(kDirectCompositionLowLatencyPresentation,
-             "DirectCompositionLowLatencyPresentation",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
 // Allow overlay swapchain to present on all GPUs even if they only support
 // software overlays. GPU deny lists limit it to NVIDIA only at the moment.
 BASE_FEATURE(kDirectCompositionSoftwareOverlays,
@@ -349,7 +344,7 @@ BASE_FEATURE(kDXGISwapChainPresentInterval0,
 // SwapChainPresenter::Adjust* functions.
 BASE_FEATURE(kUseSwapChainPresenterFloatingPointAdjustments,
              "UseSwapChainPresenterFloatingPointAdjustments",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 bool SupportsEGLDualGPURendering() {
 #if defined(USE_EGL) && (BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC))

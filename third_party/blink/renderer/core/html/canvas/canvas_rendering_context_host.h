@@ -11,6 +11,7 @@
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/events/event_dispatcher.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
+#include "third_party/blink/renderer/core/fileapi/blob.h"
 #include "third_party/blink/renderer/core/html/canvas/canvas_image_source.h"
 #include "third_party/blink/renderer/core/html/canvas/ukm_parameters.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
@@ -27,9 +28,7 @@ class CanvasRenderingContext;
 class CanvasResource;
 class CanvasResourceDispatcher;
 class FontSelector;
-class ImageEncodeOptions;
 class KURL;
-class ScriptState;
 class StaticBitmapImage;
 
 class CORE_EXPORT CanvasRenderingContextHost : public CanvasResourceHost,
@@ -81,13 +80,6 @@ class CORE_EXPORT CanvasRenderingContextHost : public CanvasResourceHost,
 
   virtual UkmParameters GetUkmParameters() = 0;
 
-  // For deferred canvases this will have the side effect of drawing recorded
-  // commands in order to finalize the frame.
-  ScriptPromise convertToBlob(ScriptState*,
-                              const ImageEncodeOptions*,
-                              ExceptionState&,
-                              const CanvasRenderingContext* const context);
-
   bool IsPaintable() const;
 
   bool PrintedInCurrentTask() const final;
@@ -125,6 +117,8 @@ class CORE_EXPORT CanvasRenderingContextHost : public CanvasResourceHost,
   void CreateCanvasResourceProvider2D(RasterModeHint hint);
   void CreateCanvasResourceProviderWebGL();
   void CreateCanvasResourceProviderWebGPU();
+
+  bool ContextHasOpenLayers(const CanvasRenderingContext*) const;
 
   // Computes the digest that corresponds to the "input" of this canvas,
   // including the context type, and if applicable, canvas digest, and taint

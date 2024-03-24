@@ -12,9 +12,9 @@
 #include "ash/shell.h"
 #include "ash/system/notification_center/message_center_constants.h"
 #include "ash/system/notification_center/message_center_controller.h"
+#include "ash/system/notification_center/notification_center_tray.h"
 #include "ash/system/notification_center/notification_grouping_controller.h"
 #include "ash/system/notification_center/session_state_notification_blocker.h"
-#include "ash/system/notification_center/notification_center_tray.h"
 #include "ash/system/status_area_widget.h"
 #include "base/hash/sha1.h"
 #include "base/metrics/histogram_functions.h"
@@ -103,7 +103,7 @@ size_t GetNotificationCount() {
   return base::ranges::count_if(
       message_center::MessageCenter::Get()
           ->GetVisibleNotificationsWithoutBlocker(blocker_to_ignore),
-      [](auto* notification) {
+      [](message_center::Notification* notification) {
         const std::string& notifier = notification->notifier_id().id;
 
         // Don't count these notifications since we have

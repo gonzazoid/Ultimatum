@@ -7,9 +7,10 @@
 
 #include <stdint.h>
 
+#include <optional>
+
 #include "media/base/media_export.h"
 #include "media/media_buildflags.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
 
@@ -49,6 +50,7 @@ enum EmeCodec : uint32_t {
   EME_CODEC_DTSXP2 = 1 << 20,
   EME_CODEC_DTSE = 1 << 21,
   EME_CODEC_AC4 = 1 << 22,
+  EME_CODEC_IAMF = 1 << 23,
 };
 
 // *_ALL values should only be used for masking, do not use them to specify
@@ -83,6 +85,9 @@ constexpr SupportedCodecs GetMp4AudioCodecs() {
   codecs |= EME_CODEC_MPEG_H_AUDIO;
 #endif  // BUILDFLAG(ENABLE_PLATFORM_MPEG_H_AUDIO)
 #endif  // BUILDFLAG(USE_PROPRIETARY_CODECS)
+#if BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
+  codecs |= EME_CODEC_IAMF;
+#endif  // BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
   return codecs;
 }
 
@@ -185,7 +190,7 @@ enum class EmeConfigRuleState {
 };
 
 struct MEDIA_EXPORT EmeConfig {
-  using Rule = absl::optional<EmeConfig>;
+  using Rule = std::optional<EmeConfig>;
 
   // Refer to the EME spec for definitions on what identifier, persistence, and
   // hw_secure_codecs represent.
@@ -199,8 +204,8 @@ struct MEDIA_EXPORT EmeConfig {
   static EmeConfig::Rule SupportedRule() { return EmeConfig(); }
 
   // To represent an EmeConfig::Rule where the feature is not supported.
-  // Internally, we represent Unsupported as absl::nullopt.
-  static EmeConfig::Rule UnsupportedRule() { return absl::nullopt; }
+  // Internally, we represent Unsupported as std::nullopt.
+  static EmeConfig::Rule UnsupportedRule() { return std::nullopt; }
 };
 
 inline bool operator==(EmeConfig const& lhs, EmeConfig const& rhs) {

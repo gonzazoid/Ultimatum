@@ -6,10 +6,10 @@
 #define CHROME_BROWSER_WEB_APPLICATIONS_TEST_FAKE_OS_INTEGRATION_MANAGER_H_
 
 #include <map>
+#include <optional>
 
 #include "chrome/browser/web_applications/os_integration/os_integration_manager.h"
 #include "components/webapps/common/web_app_id.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace web_app {
 
@@ -44,17 +44,6 @@ class FakeOsIntegrationManager : public OsIntegrationManager {
                      const WebAppInstallInfo& web_app_info,
                      UpdateOsHooksCallback callback) override;
 
-  // FakeOsIntegrationManager skips the execution logic and writes directly
-  // to the DB, even if the execute_and_write_config
-  // param is enabled in features::kOsIntegrationSubManagers. To test the
-  // actual OS integration, use the production version of OsIntegrationManager.
-  //
-  // See OsIntegrationSynchronizeCommandTest as an example of using this
-  // function.
-  void Synchronize(const webapps::AppId& app_id,
-                   base::OnceClosure callback,
-                   absl::optional<SynchronizeOsOptions> options) override;
-
   size_t num_create_shortcuts_calls() const {
     return num_create_shortcuts_calls_;
   }
@@ -87,11 +76,9 @@ class FakeOsIntegrationManager : public OsIntegrationManager {
     can_create_shortcuts_ = can_create_shortcuts;
   }
 
-  absl::optional<bool> did_add_to_desktop() const {
-    return did_add_to_desktop_;
-  }
+  std::optional<bool> did_add_to_desktop() const { return did_add_to_desktop_; }
 
-  absl::optional<InstallOsHooksOptions> get_last_install_options() const {
+  std::optional<InstallOsHooksOptions> get_last_install_options() const {
     return last_options_;
   }
 
@@ -116,11 +103,13 @@ class FakeOsIntegrationManager : public OsIntegrationManager {
   size_t num_unregister_run_on_os_login_calls_ = 0;
   size_t num_add_app_to_quick_launch_bar_calls_ = 0;
   size_t num_register_url_handlers_calls_ = 0;
-  absl::optional<bool> did_add_to_desktop_;
-  absl::optional<InstallOsHooksOptions> last_options_;
+  std::optional<bool> did_add_to_desktop_;
+  std::optional<InstallOsHooksOptions> last_options_;
 
   bool can_create_shortcuts_ = true;
   std::map<webapps::AppId, bool> next_create_shortcut_results_;
+  std::unique_ptr<OsIntegrationManager::ScopedSuppressForTesting>
+      scoped_suppress_;
 };
 
 // Stub test shortcut manager.

@@ -165,7 +165,7 @@ function updateInFlightOperations(inFlightOperations) {
   const existingNodes = container.childNodes;
   for (let i = existingNodes.length - 1; i >= 0; i--) {
     const node = existingNodes[i];
-    if (node.className == 'in-flight-operation') {
+    if (node.className === 'in-flight-operation') {
       container.removeChild(node);
     }
   }
@@ -260,11 +260,13 @@ function updateOtherServiceLogsUrl(url) {
 /**
  * Adds a new row to the syncing paths table upon successful completion.
  * @param {string} path The path that was synced.
- * @param {string} status The drive::FileError as a string.
+ * @param {string} status The drive::FileError as a string without the
+ *     FILE_ERROR_ prefix.
  */
 function onAddSyncPath(path, status) {
   $('mirroring-path-status').textContent = status;
-  if (status !== 'FILE_ERROR_OK') {
+  if (status !== 'OK') {
+    console.error(`Cannot add sync path '${path}': ${status}`);
     return;
   }
 
@@ -294,7 +296,8 @@ function onAddSyncPath(path, status) {
  * @param {string} status The drive::FileError as a string.
  */
 function onRemoveSyncPath(path, status) {
-  if (status !== 'FILE_ERROR_OK') {
+  if (status !== 'OK') {
+    console.error(`Cannot remove sync path '${path}': ${status}`);
     return;
   }
 
@@ -328,7 +331,7 @@ function updateKeyValueList(ul, list) {
   for (let i = 0; i < list.length; i++) {
     const item = list[i];
     let text = item.key;
-    if (item.value != '') {
+    if (item.value !== '') {
       text += ': ' + item.value;
     }
 

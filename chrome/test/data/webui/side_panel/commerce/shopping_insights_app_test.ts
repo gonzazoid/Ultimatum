@@ -4,21 +4,23 @@
 
 import 'chrome://shopping-insights-side-panel.top-chrome/app.js';
 
+import {BrowserProxyImpl} from 'chrome://resources/cr_components/commerce/browser_proxy.js';
+import type {PriceInsightsInfo, ProductInfo} from 'chrome://resources/cr_components/commerce/shopping_service.mojom-webui.js';
+import {PageCallbackRouter, PriceInsightsInfo_PriceBucket} from 'chrome://resources/cr_components/commerce/shopping_service.mojom-webui.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {stringToMojoString16} from 'chrome://resources/js/mojo_type_util.js';
-import {ShoppingInsightsAppElement} from 'chrome://shopping-insights-side-panel.top-chrome/app.js';
-import {PriceTrackingSection} from 'chrome://shopping-insights-side-panel.top-chrome/price_tracking_section.js';
-import {ShoppingServiceApiProxyImpl} from 'chrome://shopping-insights-side-panel.top-chrome/shared/commerce/shopping_service_api_proxy.js';
-import {PageCallbackRouter, PriceInsightsInfo, PriceInsightsInfo_PriceBucket, ProductInfo} from 'chrome://shopping-insights-side-panel.top-chrome/shared/shopping_list.mojom-webui.js';
+import type {ShoppingInsightsAppElement} from 'chrome://shopping-insights-side-panel.top-chrome/app.js';
+import type {PriceTrackingSection} from 'chrome://shopping-insights-side-panel.top-chrome/price_tracking_section.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {fakeMetricsPrivate, MetricsTracker} from 'chrome://webui-test/metrics_test_support.js';
+import type {MetricsTracker} from 'chrome://webui-test/metrics_test_support.js';
+import {fakeMetricsPrivate} from 'chrome://webui-test/metrics_test_support.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 import {TestMock} from 'chrome://webui-test/test_mock.js';
 import {isVisible} from 'chrome://webui-test/test_util.js';
 
 suite('ShoppingInsightsAppTest', () => {
   let shoppingInsightsApp: ShoppingInsightsAppElement;
-  const shoppingServiceApi = TestMock.fromClass(ShoppingServiceApiProxyImpl);
+  const shoppingServiceApi = TestMock.fromClass(BrowserProxyImpl);
   let metrics: MetricsTracker;
 
   const productInfo: ProductInfo = {
@@ -101,7 +103,10 @@ suite('ShoppingInsightsAppTest', () => {
         Promise.resolve({productInfo: productInfo}));
     shoppingServiceApi.setResultFor(
         'isShoppingListEligible', Promise.resolve({eligible: false}));
-    ShoppingServiceApiProxyImpl.setInstance(shoppingServiceApi);
+    shoppingServiceApi.setResultFor(
+        'getPriceTrackingStatusForCurrentUrl',
+        Promise.resolve({tracked: false}));
+    BrowserProxyImpl.setInstance(shoppingServiceApi);
 
     shoppingInsightsApp = document.createElement('shopping-insights-app');
 
@@ -184,7 +189,7 @@ suite('ShoppingInsightsAppTest', () => {
         comment.textContent!.trim());
 
     const feedbackButton =
-        commentRow.shadowRoot!.querySelector('.link') as HTMLElement;
+        commentRow.shadowRoot!.querySelector<HTMLElement>('.link');
     assertTrue(!!feedbackButton);
     assertEquals(
         loadTimeData.getString('feedback'), feedbackButton.textContent!.trim());
@@ -257,7 +262,7 @@ suite('ShoppingInsightsAppTest', () => {
     assertFalse(
         isVisible(attributesRow.shadowRoot!.querySelector('.attributes')));
     const buyOption =
-        attributesRow.shadowRoot!.querySelector('.link') as HTMLElement;
+        attributesRow.shadowRoot!.querySelector<HTMLElement>('.link');
     assertTrue(!!buyOption);
     assertEquals(
         loadTimeData.getString('buyOptions'), buyOption.textContent!.trim());
@@ -338,10 +343,12 @@ suite('ShoppingInsightsAppTest', () => {
           'getPriceTrackingStatusForCurrentUrl');
       await flushTasks();
 
-      const section = shoppingInsightsApp.shadowRoot!.querySelector(
-                          '#priceTrackingSection') as PriceTrackingSection;
+      const section =
+          shoppingInsightsApp.shadowRoot!.querySelector<PriceTrackingSection>(
+              '#priceTrackingSection');
       assertEquals(isVisible(section), eligible);
       if (eligible) {
+        assertTrue(!!section);
         assertEquals(section.priceInsightsInfo, priceInsights1);
         assertEquals(section.productInfo, productInfo);
       }
@@ -368,10 +375,20 @@ suite('ShoppingInsightsAppTest', () => {
     await shoppingServiceApi.whenCalled('getProductInfoForCurrentUrl');
     await shoppingServiceApi.whenCalled('getPriceInsightsInfoForCurrentUrl');
     await shoppingServiceApi.whenCalled('isShoppingListEligible');
+
+    // Price tracking section is not visible before
+    // `getPriceTrackingStatusForCurrentUrl` returns.
+    let section =
+        shoppingInsightsApp.shadowRoot!.querySelector<PriceTrackingSection>(
+            '#priceTrackingSection');
+    assertFalse(isVisible(section));
+
+    await shoppingServiceApi.whenCalled('getPriceTrackingStatusForCurrentUrl');
     await flushTasks();
 
-    const section = shoppingInsightsApp.shadowRoot!.querySelector(
-                        '#priceTrackingSection') as PriceTrackingSection;
-    assertFalse(isVisible(section));
+    section =
+        shoppingInsightsApp.shadowRoot!.querySelector<PriceTrackingSection>(
+            '#priceTrackingSection');
+    assertTrue(isVisible(section));
   });
 });

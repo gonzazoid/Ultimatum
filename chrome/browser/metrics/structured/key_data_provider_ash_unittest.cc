@@ -13,7 +13,7 @@
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
-#include "components/metrics/structured/key_data_provider.h"
+#include "components/metrics/structured/lib/key_data_provider.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -135,9 +135,9 @@ TEST_F(KeyDataProviderAshTest, ReturnsAppropriateSequenceIds) {
 TEST_F(KeyDataProviderAshTest, SequenceEvents_ReturnsDifferentSequenceIds) {
   SetUpProfileKeys();
 
-  absl::optional<uint64_t> device_id =
+  std::optional<uint64_t> device_id =
       key_data_provider_->GetSecondaryId(kCrOSEventsProjectName);
-  absl::optional<uint64_t> profile_id =
+  std::optional<uint64_t> profile_id =
       key_data_provider_->GetId(kCrOSEventsProjectName);
 
   EXPECT_TRUE(device_id.has_value());
@@ -148,9 +148,9 @@ TEST_F(KeyDataProviderAshTest, SequenceEvents_ReturnsDifferentSequenceIds) {
 }
 
 TEST_F(KeyDataProviderAshTest, SequenceEvents_PrimaryIdEmptyOnNoProfileSetup) {
-  absl::optional<uint64_t> device_id =
+  std::optional<uint64_t> device_id =
       key_data_provider_->GetSecondaryId(kCrOSEventsProjectName);
-  absl::optional<uint64_t> profile_id =
+  std::optional<uint64_t> profile_id =
       key_data_provider_->GetId(kCrOSEventsProjectName);
 
   EXPECT_TRUE(device_id.has_value());

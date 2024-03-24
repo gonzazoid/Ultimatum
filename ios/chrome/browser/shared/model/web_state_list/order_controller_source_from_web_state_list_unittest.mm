@@ -47,8 +47,9 @@ class OrderControllerSourceFromWebStateListTest : public PlatformTest {
     test_web_state->SetCurrentURL(GURL(kURL));
     test_web_state->SetNavigationManager(
         std::make_unique<FakeNavigationManager>());
-    web_state_list_.InsertWebState(index, std::move(test_web_state),
-                                   WebStateList::INSERT_FORCE_INDEX, opener);
+    web_state_list_.InsertWebState(
+        std::move(test_web_state),
+        WebStateList::InsertionParams::AtIndex(index).WithOpener(opener));
   }
 
   WebStateList& web_state_list() { return web_state_list_; }
@@ -74,7 +75,7 @@ TEST_F(OrderControllerSourceFromWebStateListTest, GetCount) {
 
   // Test that GetCount() returns the list count when items are
   // removed.
-  web_state_list().CloseAllWebStates(WebStateList::CLOSE_NO_FLAGS);
+  CloseAllWebStates(web_state_list(), WebStateList::CLOSE_NO_FLAGS);
   EXPECT_EQ(0, source.GetCount());
 }
 

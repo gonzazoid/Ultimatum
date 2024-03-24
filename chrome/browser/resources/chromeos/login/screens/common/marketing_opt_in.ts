@@ -7,8 +7,8 @@
  * opt-in screen.
  */
 
-import '//resources/cr_elements/chromeos/cros_color_overrides.css.js';
-import '//resources/cr_elements/cr_toggle/cr_toggle.js';
+import '//resources/ash/common/cr_elements/cros_color_overrides.css.js';
+import '//resources/ash/common/cr_elements/cr_toggle/cr_toggle.js';
 import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
 import '//resources/polymer/v3_0/iron-iconset-svg/iron-iconset-svg.js';
 import '../../components/oobe_a11y_option.js';
@@ -28,7 +28,7 @@ import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../component
 import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.js';
 import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
 import type {OobeAdaptiveDialog} from '../../components/dialogs/oobe_adaptive_dialog.js';
-import {OOBE_UI_STATE} from '../../components/display_manager_types.js';
+import {OobeUiState} from '../../components/display_manager_types.js';
 import type {OobeCrLottie} from '../../components/oobe_cr_lottie.js';
 
 import {getTemplate} from './marketing_opt_in.html.js';
@@ -123,8 +123,8 @@ export class MarketingOptIn extends MarketingScreenElementBase {
   }
 
   // eslint-disable-next-line @typescript-eslint/naming-convention
-  override getOobeUIInitialState() {
-    return OOBE_UI_STATE.MARKETING_OPT_IN;
+  override getOobeUIInitialState(): OobeUiState {
+    return OobeUiState.MARKETING_OPT_IN;
   }
 
   override get EXTERNAL_API(): string[] {
@@ -205,7 +205,7 @@ export class MarketingOptIn extends MarketingScreenElementBase {
    * and for the back button on the accessibility page.
    */
   private onToggleAccessibilityPage(): void {
-    if (this.uiStep == MarketingOptInStep.OVERVIEW) {
+    if (this.uiStep === MarketingOptInStep.OVERVIEW) {
       this.setUIStep(MarketingOptInStep.ACCESSIBILITY);
       this.setAnimationPlay(false);
     } else {

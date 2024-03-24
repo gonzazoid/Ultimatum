@@ -34,6 +34,7 @@
 #include "third_party/blink/renderer/core/css/font_size_functions.h"
 #include "third_party/blink/renderer/core/css/resolver/scoped_style_resolver.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
+#include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
@@ -160,7 +161,7 @@ void CSSFontSelector::FontCacheInvalidated() {
   DispatchInvalidationCallbacks(FontInvalidationReason::kGeneralInvalidation);
 }
 
-scoped_refptr<FontData> CSSFontSelector::GetFontData(
+const FontData* CSSFontSelector::GetFontData(
     const FontDescription& font_description,
     const FontFamily& font_family) {
   const auto& family_name = font_family.FamilyName();
@@ -250,13 +251,13 @@ scoped_refptr<FontData> CSSFontSelector::GetFontData(
       family_name, request_description.GetScript(),
       request_description.GenericFamily(), settings_family_name);
 
-  scoped_refptr<SimpleFontData> font_data =
+  const SimpleFontData* font_data =
       FontCache::Get().GetFontData(request_description, settings_family_name);
   if (font_data && request_description.HasSizeAdjust()) {
     DCHECK(RuntimeEnabledFeatures::CSSFontSizeAdjustEnabled());
     if (auto adjusted_size =
             FontSizeFunctions::MetricsMultiplierAdjustedFontSize(
-                font_data.get(), request_description)) {
+                font_data, request_description)) {
       FontDescription size_adjusted_description(request_description);
       size_adjusted_description.SetAdjustedSize(adjusted_size.value());
       font_data = FontCache::Get().GetFontData(size_adjusted_description,

@@ -251,7 +251,7 @@ ExtensionFunction::ResponseAction CookiesGetFunction::Run() {
   if (!cookie_manager)
     return RespondNow(Error(std::move(error)));
 
-  absl::optional<net::CookiePartitionKey> partition_key;
+  std::optional<net::CookiePartitionKey> partition_key;
   if (!cookies_helpers::ValidateCookieApiPartitionKey(
           parsed_args_->details.partition_key, partition_key, error)) {
     return RespondNow(Error(std::move(error)));
@@ -279,9 +279,10 @@ void CookiesGetFunction::GetCookieListCallback(
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   for (const net::CookieWithAccessResult& cookie_with_access_result :
        cookie_list) {
-    if (!cookies_helpers::CookieMatchesPartitionKeyInDetails(
-            parsed_args_->details.partition_key,
-            cookie_with_access_result.cookie)) {
+    if (!cookies_helpers::
+            CanonicalCookiePartitionKeyMatchesApiCookiePartitionKey(
+                parsed_args_->details.partition_key,
+                cookie_with_access_result.cookie.PartitionKey())) {
       continue;
     }
 
@@ -340,7 +341,7 @@ ExtensionFunction::ResponseAction CookiesGetAllFunction::Run() {
     return RespondNow(Error(std::move(error)));
 
   // make sure user input is valid
-  absl::optional<net::CookiePartitionKey> partition_key;
+  std::optional<net::CookiePartitionKey> partition_key;
   if (!cookies_helpers::ValidateCookieApiPartitionKey(
           parsed_args_->details.partition_key, partition_key, error)) {
     return RespondNow(Error(std::move(error)));
@@ -447,7 +448,7 @@ ExtensionFunction::ResponseAction CookiesSetFunction::Run() {
   if (!cookie_manager)
     return RespondNow(Error(std::move(error)));
 
-  absl::optional<net::CookiePartitionKey> partition_key;
+  std::optional<net::CookiePartitionKey> partition_key;
   if (!cookies_helpers::ValidateCookieApiPartitionKey(
           parsed_args_->details.partition_key, partition_key, error)) {
     return RespondNow(Error(std::move(error)));
@@ -553,16 +554,17 @@ void CookiesSetFunction::GetCookieListCallback(
     return;
   }
 
-  absl::optional<ResponseValue> value;
+  std::optional<ResponseValue> value;
   for (const net::CookieWithAccessResult& cookie_with_access_result :
        cookie_list) {
     // Return the first matching cookie. Relies on the fact that the
     // CookieMonster returns them in canonical order (longest path, then
     // earliest creation time).
 
-    if (!extensions::cookies_helpers::CookieMatchesPartitionKeyInDetails(
-            parsed_args_->details.partition_key,
-            cookie_with_access_result.cookie)) {
+    if (!extensions::cookies_helpers::
+            CanonicalCookiePartitionKeyMatchesApiCookiePartitionKey(
+                parsed_args_->details.partition_key,
+                cookie_with_access_result.cookie.PartitionKey())) {
       continue;
     }
 
@@ -601,7 +603,7 @@ ExtensionFunction::ResponseAction CookiesRemoveFunction::Run() {
   if (!cookie_manager)
     return RespondNow(Error(std::move(error)));
 
-  absl::optional<net::CookiePartitionKey> partition_key;
+  std::optional<net::CookiePartitionKey> partition_key;
   if (!cookies_helpers::ValidateCookieApiPartitionKey(
           parsed_args_->details.partition_key, partition_key, error)) {
     return RespondNow(Error(std::move(error)));

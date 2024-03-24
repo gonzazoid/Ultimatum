@@ -16,10 +16,10 @@
 #include "ash/capture_mode/capture_mode_types.h"
 #include "ash/capture_mode/test_capture_mode_delegate.h"
 #include "ash/constants/ash_features.h"
+#include "ash/constants/ash_pref_names.h"
 #include "ash/display/window_tree_host_manager.h"
 #include "ash/game_dashboard/game_dashboard_context_test_api.h"
 #include "ash/game_dashboard/game_dashboard_controller.h"
-#include "ash/game_dashboard/game_dashboard_widget.h"
 #include "ash/public/cpp/capture_mode/capture_mode_test_api.h"
 #include "ash/public/cpp/window_properties.h"
 #include "ash/screen_util.h"
@@ -78,6 +78,13 @@ class GameDashboardCaptureModeTest : public AshTestBase {
   void SetUp() override {
     AshTestBase::SetUp();
     EXPECT_TRUE(features::IsGameDashboardEnabled());
+
+    // Disable the Game Dashboard welcome dialog for all game windows.
+    PrefService* active_user_prefs =
+        Shell::Get()->session_controller()->GetActivePrefService();
+    ASSERT_TRUE(active_user_prefs);
+    active_user_prefs->SetBoolean(prefs::kGameDashboardShowWelcomeDialog,
+                                  false);
 
     game_window_ = CreateAppWindow(gfx::Rect(0, 100, 300, 200));
     game_window_->SetProperty(kAppIDKey,
@@ -256,7 +263,9 @@ TEST_F(GameDashboardCaptureModeTest, NotificationView) {
 
   controller->EndVideoRecording(EndRecordingReason::kStopRecordingButton);
   EXPECT_FALSE(controller->is_recording_in_progress());
+  EXPECT_FALSE(controller->can_start_new_recording());
   CaptureNotificationWaiter().Wait();
+  EXPECT_TRUE(controller->can_start_new_recording());
 
   const message_center::Notification* notification = GetPreviewNotification();
   EXPECT_TRUE(notification);
@@ -680,6 +689,8 @@ TEST_F(GameDashboardCaptureModeTest, SettingsMenuHeightMinimumBelowBar) {
 }
 
 TEST_F(GameDashboardCaptureModeTest, GameCaptureModeRecordInstantlyTest) {
+  AddDefaultCamera();
+
   // Start a game dashboard initiated capture mode session and check the initial
   // configs for game dashboard initiated capture mode.
   auto* controller = StartGameCaptureModeSession();
@@ -712,6 +723,14 @@ TEST_F(GameDashboardCaptureModeTest, GameCaptureModeRecordInstantlyTest) {
   // Verify that the configs in `CaptureModeController` are restored.
   EXPECT_EQ(controller->audio_recording_mode(), AudioRecordingMode::kOff);
   EXPECT_FALSE(controller->enable_demo_tools());
+
+  // Verify that selfie camera is visible and is parented correctly to the game
+  // window.
+  const auto* camera_controller = controller->camera_controller();
+  const auto* camera_preview_widget =
+      camera_controller->camera_preview_widget();
+  ASSERT_TRUE(camera_preview_widget);
+  EXPECT_EQ(camera_preview_widget->GetNativeWindow()->parent(), game_window());
 }
 
 TEST_F(GameDashboardCaptureModeTest, NoDimmingOfGameDashboardWidgets) {

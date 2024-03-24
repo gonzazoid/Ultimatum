@@ -188,7 +188,7 @@ DCLayerOverlayImage CreateDCompSurface(
 // the bounds of |image|, or |content_rect_override|, if set.
 std::unique_ptr<DCLayerOverlayParams> CreateParamsFromImage(
     DCLayerOverlayImage image,
-    absl::optional<gfx::RectF> content_rect_override = {}) {
+    std::optional<gfx::RectF> content_rect_override = {}) {
   auto params = std::make_unique<DCLayerOverlayParams>();
   params->content_rect =
       content_rect_override.value_or(gfx::RectF(image.size()));
@@ -208,13 +208,8 @@ class DCompPresenterTest : public testing::Test {
     display_ = gl::init::InitializeGLNoExtensionsOneOff(
         /*init_bindings=*/true, /*gpu_preference=*/gl::GpuPreference::kDefault);
 
-    gl_surface_ = init::CreateOffscreenGLSurface(
-        gl::GLSurfaceEGL::GetGLDisplayEGL(), gfx::Size());
-
-    scoped_refptr<GLContext> context = gl::init::CreateGLContext(
-        nullptr, gl_surface_.get(), GLContextAttribs());
-    EXPECT_TRUE(context->MakeCurrent(gl_surface_.get()));
-    context_ = std::move(context);
+    std::tie(gl_surface_, context_) =
+        GLTestHelper::CreateOffscreenGLSurfaceAndContext();
 
     // These tests are assumed to run on battery.
     fake_power_monitor_source_.SetOnBatteryPower(true);
@@ -243,8 +238,7 @@ class DCompPresenterTest : public testing::Test {
     DCompPresenter::Settings settings;
     scoped_refptr<DCompPresenter> presenter =
         base::MakeRefCounted<DCompPresenter>(
-            gl::GLSurfaceEGL::GetGLDisplayEGL(),
-            DCompPresenter::VSyncCallback(), settings);
+            gl::GLSurfaceEGL::GetGLDisplayEGL(), settings);
     EXPECT_TRUE(presenter->Initialize());
 
     // ImageTransportSurfaceDelegate::AddChildWindowToBrowser() is called in
@@ -668,6 +662,29 @@ TEST_F(DCompPresenterTest, BackgroundColorSurfaceMultipleReused) {
     EXPECT_EQ(surfaces_frame1[0], surfaces_frame2[1]);
     EXPECT_EQ(surfaces_frame1[1], surfaces_frame2[0]);
   }
+}
+
+// Check that there is no crash when building the layer tree if
+// there are no overlays.
+// TODO(crbug.com/1519186): Change this test to check whether delegated
+// ink still works when root_surface_visual does not exist.
+TEST_F(DCompPresenterTest, BuildTreeNoCrashWithRootSurfaceVisualNull) {
+  DCHECK(base::FeatureList::IsEnabled(features::kDCompVisualTreeOptimization));
+  std::unique_ptr<gfx::DelegatedInkMetadata> metadata =
+      std::make_unique<gfx::DelegatedInkMetadata>(
+          gfx::PointF(12, 12), /*diameter=*/3, SK_ColorBLACK,
+          base::TimeTicks::Now(), gfx::RectF(10, 10, 90, 90),
+          /*hovering=*/false);
+
+  // Set start point to initialize ink renderer.
+  DCLayerTree* layer_tree = presenter_->GetLayerTreeForTesting();
+  if (!layer_tree->SupportsDelegatedInk()) {
+    return;
+  }
+  layer_tree->SetDelegatedInkTrailStartPoint(std::move(metadata));
+
+  EXPECT_FALSE(layer_tree->HasPendingOverlaysForTesting());
+  EXPECT_TRUE(layer_tree->CommitAndClearPendingOverlays(nullptr));
 }
 
 class DCompPresenterPixelTest : public DCompPresenterTest {
@@ -1664,8 +1681,8 @@ class DCompPresenterSkiaGoldTest : public DCompPresenterPixelTest {
     if (!pixel_diff_->CompareScreenshot(
             ui::test::SkiaGoldPixelDiff::GetGoldenImageName(
                 ::testing::UnitTest::GetInstance()->current_test_info(),
-                capture_name.empty() ? absl::nullopt
-                                     : absl::make_optional(capture_name)),
+                capture_name.empty() ? std::nullopt
+                                     : std::make_optional(capture_name)),
             window_readback, matching_algorithm_.get())) {
       ADD_FAILURE_AT(caller_location.file_name(), caller_location.line_number())
           << "Screenshot mismatch for "
@@ -1834,7 +1851,7 @@ TEST_F(DCompPresenterSkiaGoldTest, SolidColorSimpleOpaque) {
     auto& [color, bounds] = colors[i];
     auto overlay = std::make_unique<DCLayerOverlayParams>();
     overlay->quad_rect = bounds;
-    overlay->background_color = absl::optional<SkColor4f>(color);
+    overlay->background_color = std::optional<SkColor4f>(color);
     overlay->z_order = i + 1;
     presenter_->ScheduleDCLayer(std::move(overlay));
   }
@@ -1893,7 +1910,7 @@ TEST_F(DCompPresenterSkiaGoldTest, OpacityFromSolidColor) {
 
         auto overlay = std::make_unique<DCLayerOverlayParams>();
         overlay->quad_rect = quad_rect;
-        overlay->background_color = absl::optional<SkColor4f>(overlay_color);
+        overlay->background_color = std::optional<SkColor4f>(overlay_color);
         return overlay;
       }));
 
@@ -2009,7 +2026,7 @@ TEST_F(DCompPresenterSkiaGoldTest,
   for (auto& quad : quads) {
     auto overlay = std::make_unique<DCLayerOverlayParams>();
     overlay->quad_rect = quad;
-    overlay->background_color = absl::optional<SkColor4f>(SkColors::kWhite);
+    overlay->background_color = std::optional<SkColor4f>(SkColors::kWhite);
     overlay->z_order = overlay_z_order;
     overlay->rounded_corner_bounds = bounds;
     presenter_->ScheduleDCLayer(std::move(overlay));

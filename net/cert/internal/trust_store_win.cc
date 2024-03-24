@@ -4,6 +4,8 @@
 
 #include "net/cert/internal/trust_store_win.h"
 
+#include <string_view>
+
 #include "base/hash/sha1.h"
 #include "base/location.h"
 #include "base/logging.h"
@@ -72,7 +74,7 @@ bool IsCertTrustedForServerAuth(PCCERT_CONTEXT cert) {
     }
   }
   for (DWORD i = 0; i < usage->cUsageIdentifier; i++) {
-    base::StringPiece eku = base::StringPiece(usage->rgpszUsageIdentifier[i]);
+    std::string_view eku = std::string_view(usage->rgpszUsageIdentifier[i]);
     if ((eku == szOID_PKIX_KP_SERVER_AUTH) ||
         (eku == szOID_ANY_ENHANCED_KEY_USAGE)) {
       return true;
@@ -262,7 +264,7 @@ class TrustStoreWin::Impl {
         !disallowed_cert_store_.get()) {
       return;
     }
-    base::span<const uint8_t> issuer_span = cert->issuer_tlv().AsSpan();
+    base::span<const uint8_t> issuer_span = cert->issuer_tlv();
 
     CERT_NAME_BLOB cert_issuer_blob;
     cert_issuer_blob.cbData = static_cast<DWORD>(issuer_span.size());
@@ -291,7 +293,7 @@ class TrustStoreWin::Impl {
       return bssl::CertificateTrust::ForUnspecified();
     }
 
-    base::span<const uint8_t> cert_span = cert->der_cert().AsSpan();
+    base::span<const uint8_t> cert_span = cert->der_cert();
     base::SHA1Digest cert_hash = base::SHA1HashSpan(cert_span);
     CRYPT_HASH_BLOB cert_hash_blob;
     cert_hash_blob.cbData = static_cast<DWORD>(cert_hash.size());

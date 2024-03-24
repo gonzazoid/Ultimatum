@@ -6,6 +6,9 @@
 #include <string>
 #include "base/json/json_string_value_serializer.h"
 #include "base/json/string_escape.h"
+#include "base/metrics/histogram_functions.h"
+#include "base/metrics/histogram_macros.h"
+#include "base/metrics/user_metrics.h"
 #include "base/strings/string_util.h"
 #include "chrome/browser/browser_features.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
@@ -136,19 +139,24 @@ void AidaClient::SendAidaRequest(
       std::move(aida_request), traffic_annotation);
   simple_url_loader->SetAllowHttpErrorResults(true);
   simple_url_loader->AttachStringForUpload(request);
+  simple_url_loader->SetRetryOptions(
+      /*max_retries=*/3, network::SimpleURLLoader::RETRY_ON_5XX |
+                             network::SimpleURLLoader::RETRY_ON_NETWORK_CHANGE);
 
   network::SimpleURLLoader* simple_url_loader_ptr = simple_url_loader.get();
   simple_url_loader_ptr->DownloadToStringOfUnboundedSizeUntilCrashAndDie(
       url_loader_factory_.get(),
       base::BindOnce(&AidaClient::OnSimpleLoaderComplete,
                      base::Unretained(this), std::move(request),
-                     std::move(callback), std::move(simple_url_loader)));
+                     std::move(callback), std::move(simple_url_loader),
+                     base::TimeTicks::Now()));
 }
 
 void AidaClient::OnSimpleLoaderComplete(
     std::string request,
     base::OnceCallback<void(const std::string&)> callback,
     std::unique_ptr<network::SimpleURLLoader> simple_url_loader,
+    base::TimeTicks start_time,
     std::unique_ptr<std::string> response_body) {
   int response_code = -1;
   if (simple_url_loader->ResponseInfo() &&
@@ -175,5 +183,7 @@ void AidaClient::OnSimpleLoaderComplete(
         {std::move(*response_body)}, nullptr));
     return;
   }
+  base::UmaHistogramTimes("DevTools.AidaResponseTime",
+                          base::TimeTicks::Now() - start_time);
   std::move(callback).Run(std::move(*response_body));
 }

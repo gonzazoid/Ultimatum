@@ -26,7 +26,7 @@ struct VIEWS_EXPORT ChildLayout {
 
   std::string ToString() const;
 
-  raw_ptr<View> child_view = nullptr;
+  raw_ptr<View, DanglingUntriaged> child_view = nullptr;
   bool visible = false;
   gfx::Rect bounds;
   SizeBounds available_size;
@@ -44,6 +44,11 @@ struct VIEWS_EXPORT ProposedLayout {
   ProposedLayout& operator=(ProposedLayout&& other);
 
   bool operator==(const ProposedLayout& other) const = default;
+
+  // Convenience methods to get the child layout for the specified `view`;
+  // return the layout or null if not found.
+  ChildLayout* GetLayoutFor(const View* child_view);
+  const ChildLayout* GetLayoutFor(const View* child_view) const;
 
   std::string ToString() const;
 

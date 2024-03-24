@@ -447,7 +447,7 @@ ShelfAppButton* ShelfView::GetShelfAppButton(const ShelfID& id) {
     return nullptr;
 
   views::View* const view = view_model_->view_at(index);
-  DCHECK_EQ(ShelfAppButton::kViewClassName, view->GetClassName());
+  DCHECK(views::IsViewClass<ShelfAppButton>(view));
   return static_cast<ShelfAppButton*>(view);
 }
 
@@ -482,6 +482,10 @@ int ShelfView::GetShelfShortcutHostBadgeIconSize() const {
 int ShelfView::GetShelfShortcutHostBadgeContainerSize() const {
   return GetShelfShortcutHostBadgeIconSize() +
          ShelfConfig::Get()->GetShelfShortcutHostBadgeBorderSize() * 2;
+}
+
+int ShelfView::GetShelfShortcutTeardropCornerRadiusSize() const {
+  return ShelfConfig::Get()->GetShelfShortcutTeardropCornerRadiusSize();
 }
 
 int ShelfView::GetShelfItemRippleSize() const {
@@ -878,7 +882,7 @@ void ShelfView::OnShelfConfigUpdated() {
 
 bool ShelfView::ShouldEventActivateButton(View* view, const ui::Event& event) {
   // This only applies to app buttons.
-  DCHECK_EQ(ShelfAppButton::kViewClassName, view->GetClassName());
+  DCHECK(views::IsViewClass<ShelfAppButton>(view));
   if (dragging())
     return false;
 
@@ -1312,7 +1316,7 @@ void ShelfView::PointerPressedOnButton(views::View* view,
   is_repost_event_on_same_item_ =
       IsRepostEvent(event) && (last_pressed_index_ == index);
 
-  CHECK_EQ(ShelfAppButton::kViewClassName, view->GetClassName());
+  CHECK(views::IsViewClass<ShelfAppButton>(view));
   drag_view_ = static_cast<ShelfAppButton*>(view);
   drag_origin_ = gfx::Point(event.x(), event.y());
   UMA_HISTOGRAM_ENUMERATION("Ash.ShelfAlignmentUsage",
@@ -2474,7 +2478,7 @@ void ShelfView::ShelfItemChanged(int model_index, const ShelfItem& old_item) {
     case TYPE_APP:
     case TYPE_UNPINNED_BROWSER_SHORTCUT:
     case TYPE_DIALOG: {
-      CHECK_EQ(ShelfAppButton::kViewClassName, view->GetClassName());
+      CHECK(views::IsViewClass<ShelfAppButton>(view));
       ShelfAppButton* button = static_cast<ShelfAppButton*>(view);
       UpdateButton(button, item);
       break;
@@ -2560,7 +2564,7 @@ void ShelfView::OnShelfAlignmentChanged(aura::Window* root_window,
                                         ShelfAlignment old_alignment) {
   LayoutToIdealBounds();
   for (size_t visible_index : visible_views_indices_)
-    view_model_->view_at(visible_index)->Layout();
+    view_model_->view_at(visible_index)->DeprecatedLayoutImmediately();
 
   AnnounceShelfAlignment();
 }
@@ -2663,11 +2667,12 @@ void ShelfView::ShowMenu(std::unique_ptr<ui::SimpleMenuModel> menu_model,
     run_types |= views::MenuRunner::SEND_GESTURE_EVENTS_TO_OWNER;
   }
 
+  // UnsafeDangling triaged in https://crbug.com/1423849.
   shelf_menu_model_adapter_ = std::make_unique<ShelfMenuModelAdapter>(
       item ? item->id.app_id : std::string(), std::move(menu_model), source,
       source_type,
       base::BindOnce(&ShelfView::OnMenuClosed, base::Unretained(this),
-                     base::UnsafeDanglingUntriaged(source)),
+                     base::UnsafeDangling(source)),
       display::Screen::GetScreen()->InTabletMode(),
       /*for_application_menu_items*/ !context_menu);
   shelf_menu_model_adapter_->Run(
@@ -2681,7 +2686,7 @@ void ShelfView::ShowMenu(std::unique_ptr<ui::SimpleMenuModel> menu_model,
     context_menu_shown_callback_.Run();
 }
 
-void ShelfView::OnMenuClosed(views::View* source) {
+void ShelfView::OnMenuClosed(MayBeDangling<views::View> source) {
   context_menu_id_ = ShelfID();
 
   closing_event_time_ = shelf_menu_model_adapter_->GetClosingEventTime();
@@ -2933,7 +2938,7 @@ int ShelfView::OnDragUpdated(const ui::DropTargetEvent& event) {
   return ui::DragDropTypes::DRAG_MOVE;
 }
 
-BEGIN_METADATA(ShelfView, views::AccessiblePaneView)
+BEGIN_METADATA(ShelfView)
 END_METADATA
 
 }  // namespace ash

@@ -47,6 +47,15 @@ class SecureChannelNearbyInitiatorOperationTest : public testing::Test {
         base::BindRepeating(&SecureChannelNearbyInitiatorOperationTest::
                                 OnFailedConnectionAttempt,
                             base::Unretained(this)),
+        base::BindRepeating(&SecureChannelNearbyInitiatorOperationTest::
+                                OnBleDiscoveryStateChanged,
+                            base::Unretained(this)),
+        base::BindRepeating(&SecureChannelNearbyInitiatorOperationTest::
+                                OnNearbyConnectionStateChanged,
+                            base::Unretained(this)),
+        base::BindRepeating(&SecureChannelNearbyInitiatorOperationTest::
+                                OnSecureChannelAuthenticationStateChanged,
+                            base::Unretained(this)),
         device_id_pair_, kTestConnectionPriority, test_task_runner);
     test_task_runner->RunUntilIdle();
   }
@@ -82,6 +91,25 @@ class SecureChannelNearbyInitiatorOperationTest : public testing::Test {
     failure_type_from_callback_ = failure_type;
   }
 
+  void OnBleDiscoveryStateChanged(
+      mojom::DiscoveryResult result,
+      absl::optional<mojom::DiscoveryErrorCode> error_code) {
+    discovery_result_ = result;
+    discovery_error_code_ = error_code;
+  }
+
+  void OnNearbyConnectionStateChanged(
+      mojom::NearbyConnectionStep nearby_connection_step,
+      mojom::NearbyConnectionStepResult result) {
+    nearby_connection_step_ = nearby_connection_step;
+    nearby_connection_step_result_ = result;
+  }
+
+  void OnSecureChannelAuthenticationStateChanged(
+      mojom::SecureChannelState secure_channel_state) {
+    secure_channel_state_ = secure_channel_state;
+  }
+
   const base::test::TaskEnvironment task_environment_;
 
   std::unique_ptr<FakeNearbyConnectionManager> fake_nearby_connection_manager_;
@@ -89,6 +117,12 @@ class SecureChannelNearbyInitiatorOperationTest : public testing::Test {
 
   std::unique_ptr<AuthenticatedChannel> channel_from_callback_;
   std::optional<NearbyInitiatorFailureType> failure_type_from_callback_;
+
+  mojom::DiscoveryResult discovery_result_;
+  absl::optional<mojom::DiscoveryErrorCode> discovery_error_code_;
+  mojom::NearbyConnectionStep nearby_connection_step_;
+  mojom::NearbyConnectionStepResult nearby_connection_step_result_;
+  mojom::SecureChannelState secure_channel_state_;
 
   std::unique_ptr<ConnectToDeviceOperation<NearbyInitiatorFailureType>>
       operation_;

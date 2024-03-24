@@ -33,8 +33,8 @@ import org.chromium.chrome.browser.tabmodel.TabModelObserver;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.tabmodel.TabModelSelectorObserver;
 import org.chromium.chrome.browser.tabmodel.TabModelSelectorTabObserver;
-import org.chromium.chrome.browser.tasks.tab_groups.EmptyTabGroupModelFilterObserver;
 import org.chromium.chrome.browser.tasks.tab_groups.TabGroupModelFilter;
+import org.chromium.chrome.browser.tasks.tab_groups.TabGroupModelFilterObserver;
 import org.chromium.chrome.browser.toolbar.bottom.BottomControlsCoordinator;
 import org.chromium.chrome.browser.toolbar.bottom.BottomControlsCoordinator.BottomControlsVisibilityController;
 import org.chromium.chrome.tab_ui.R;
@@ -106,7 +106,7 @@ public class TabGroupUiMediator implements BackPressHandler {
     private final LayoutStateObserver mLayoutStateObserver;
     private LayoutStateProvider mLayoutStateProvider;
 
-    private TabGroupModelFilter.Observer mTabGroupModelFilterObserver;
+    private TabGroupModelFilterObserver mTabGroupModelFilterObserver;
     private TabModelSelectorTabObserver mTabModelSelectorTabObserver;
     private Callback<Boolean> mOmniboxFocusObserver;
     private boolean mIsTabGroupUiVisible;
@@ -155,17 +155,21 @@ public class TabGroupUiMediator implements BackPressHandler {
                             return;
                         }
 
-                        // TODO(995956): Optimization we can do here if we decided always hide the
-                        // strip if related tab size down to 1.
                         resetTabStripWithRelatedTabsForId(tab.getId());
                     }
 
+                    // TODO(crbug/41496693): Delete this logic once tab groups with one tab are
+                    // launched.
                     @Override
                     public void willCloseTab(Tab tab, boolean animate, boolean didCloseAlone) {
                         if (!mIsTabGroupUiVisible) return;
 
-                        List<Tab> tabList = getTabsToShowForId(tab.getId());
-                        if (tabList.size() == 1) {
+                        // Check if the group the tab was part of is still a tab group.
+                        TabGroupModelFilter filter = getCurrentTabGroupModelFilter();
+                        Tab groupTab = filter.getGroupLastShownTab(tab.getRootId());
+                        if (groupTab == null) return;
+
+                        if (!getCurrentTabGroupModelFilter().isTabInTabGroup(groupTab)) {
                             resetTabStripWithRelatedTabsForId(Tab.INVALID_TAB_ID);
                         }
                     }
@@ -251,10 +255,13 @@ public class TabGroupUiMediator implements BackPressHandler {
                         // probably a leaked observer. Remove this when the TabObservers are removed
                         // during tab reparenting.
                         if (mTabModelSelector.getTabById(tab.getId()) == null) return;
-                        List<Tab> listOfTabs = getTabsToShowForId(tab.getId());
-                        int numTabs = listOfTabs.size();
-                        // This is set to zero because the UI is hidden.
-                        if (!mIsTabGroupUiVisible || numTabs == 1) numTabs = 0;
+
+                        int numTabs = 0;
+                        TabGroupModelFilter filter = getCurrentTabGroupModelFilter();
+                        if (mIsTabGroupUiVisible && filter.isTabInTabGroup(tab)) {
+                            numTabs = filter.getRelatedTabCountForRootId(tab.getRootId());
+                        }
+
                         RecordHistogram.recordCount1MHistogram(
                                 "TabStrip.TabCountOnPageLoad", numTabs);
                     }
@@ -279,7 +286,7 @@ public class TabGroupUiMediator implements BackPressHandler {
                 };
 
         mTabGroupModelFilterObserver =
-                new EmptyTabGroupModelFilterObserver() {
+                new TabGroupModelFilterObserver() {
                     @Override
                     public void didMoveTabOutOfGroup(Tab movedTab, int prevFilterIndex) {
                         if (mIsTabGroupUiVisible && movedTab == mTabModelSelector.getCurrentTab()) {
@@ -288,13 +295,10 @@ public class TabGroupUiMediator implements BackPressHandler {
                     }
                 };
 
-        // TODO(995951): Add observer similar to TabModelSelectorTabModelObserver for
-        // TabModelFilter.
-        ((TabGroupModelFilter)
-                        mTabModelSelector.getTabModelFilterProvider().getTabModelFilter(false))
+        var filterProvider = mTabModelSelector.getTabModelFilterProvider();
+        ((TabGroupModelFilter) filterProvider.getTabModelFilter(false))
                 .addTabGroupObserver(mTabGroupModelFilterObserver);
-        ((TabGroupModelFilter)
-                        mTabModelSelector.getTabModelFilterProvider().getTabModelFilter(true))
+        ((TabGroupModelFilter) filterProvider.getTabModelFilter(true))
                 .addTabGroupObserver(mTabGroupModelFilterObserver);
 
         mOmniboxFocusObserver =
@@ -314,7 +318,7 @@ public class TabGroupUiMediator implements BackPressHandler {
                     mModel.set(TabGroupUiProperties.IS_INCOGNITO, isIncognito);
                 };
 
-        mTabModelSelector.getTabModelFilterProvider().addTabModelFilterObserver(mTabModelObserver);
+        filterProvider.addTabModelFilterObserver(mTabModelObserver);
         mTabModelSelector.addObserver(mTabModelSelectorObserver);
 
         layoutStateProviderSupplier.onAvailable(
@@ -409,15 +413,15 @@ public class TabGroupUiMediator implements BackPressHandler {
         if (mIsShowingOverViewMode) {
             id = Tab.INVALID_TAB_ID;
         }
-        List<Tab> listOfTabs = getTabsToShowForId(id);
-        if (listOfTabs.size() < 2) {
+        Tab tab = mTabModelSelector.getTabById(id);
+        if (tab == null || !getCurrentTabGroupModelFilter().isTabInTabGroup(tab)) {
             mResetHandler.resetStripWithListOfTabs(null);
             mIsTabGroupUiVisible = false;
         } else {
+            List<Tab> listOfTabs = getTabsToShowForId(id);
             mResetHandler.resetStripWithListOfTabs(listOfTabs);
             mIsTabGroupUiVisible = true;
-        }
-        if (mIsTabGroupUiVisible) {
+
             // Post to make sure that the recyclerView already knows how many visible items it has.
             // This is to make sure that we can scroll to a state where the selected tab is in the
             // middle of the strip.
@@ -437,10 +441,12 @@ public class TabGroupUiMediator implements BackPressHandler {
      * @param id  The ID of the tab that will be used to decide the list of tabs to show.
      */
     private List<Tab> getTabsToShowForId(int id) {
-        return mTabModelSelector
-                .getTabModelFilterProvider()
-                .getCurrentTabModelFilter()
-                .getRelatedTabList(id);
+        return getCurrentTabGroupModelFilter().getRelatedTabList(id);
+    }
+
+    private TabGroupModelFilter getCurrentTabGroupModelFilter() {
+        return (TabGroupModelFilter)
+                mTabModelSelector.getTabModelFilterProvider().getCurrentTabModelFilter();
     }
 
     public boolean onBackPressed() {
@@ -467,20 +473,14 @@ public class TabGroupUiMediator implements BackPressHandler {
 
     public void destroy() {
         if (mTabModelSelector != null) {
-            mTabModelSelector
-                    .getTabModelFilterProvider()
-                    .removeTabModelFilterObserver(mTabModelObserver);
+            var filterProvider = mTabModelSelector.getTabModelFilterProvider();
+
+            filterProvider.removeTabModelFilterObserver(mTabModelObserver);
             mTabModelSelector.removeObserver(mTabModelSelectorObserver);
             if (mTabGroupModelFilterObserver != null) {
-                ((TabGroupModelFilter)
-                                mTabModelSelector
-                                        .getTabModelFilterProvider()
-                                        .getTabModelFilter(false))
+                ((TabGroupModelFilter) filterProvider.getTabModelFilter(false))
                         .removeTabGroupObserver(mTabGroupModelFilterObserver);
-                ((TabGroupModelFilter)
-                                mTabModelSelector
-                                        .getTabModelFilterProvider()
-                                        .getTabModelFilter(true))
+                ((TabGroupModelFilter) filterProvider.getTabModelFilter(true))
                         .removeTabGroupObserver(mTabGroupModelFilterObserver);
             }
         }

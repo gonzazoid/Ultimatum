@@ -103,8 +103,9 @@ namespace sharesheet {
 // ------------------------------------------------------
 
 class SharesheetHeaderView::SharesheetImagePreview : public views::View {
+  METADATA_HEADER(SharesheetImagePreview, views::View)
+
  public:
-  METADATA_HEADER(SharesheetImagePreview);
   explicit SharesheetImagePreview(size_t file_count) {
     auto* color_provider = AshColorProvider::Get();
     const bool is_dark_mode_enabled =
@@ -240,7 +241,7 @@ class SharesheetHeaderView::SharesheetImagePreview : public views::View {
   std::vector<raw_ptr<RoundedImageView, VectorExperimental>> image_views_;
 };
 
-BEGIN_METADATA(SharesheetHeaderView, SharesheetImagePreview, views::View)
+BEGIN_METADATA(SharesheetHeaderView, SharesheetImagePreview)
 END_METADATA
 
 // SharesheetHeaderView --------------------------------------------------------
@@ -493,7 +494,7 @@ void SharesheetHeaderView::OnImageLoaded(const gfx::Size& size, size_t index) {
   image_preview_->GetImageViewAt(index)->SchedulePaint();
 }
 
-BEGIN_METADATA(SharesheetHeaderView, views::View)
+BEGIN_METADATA(SharesheetHeaderView)
 END_METADATA
 
 }  // namespace sharesheet

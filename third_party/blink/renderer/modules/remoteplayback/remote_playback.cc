@@ -68,8 +68,8 @@ void RunRemotePlaybackTask(
 
 KURL GetAvailabilityUrl(const WebURL& source,
                         bool is_source_supported,
-                        absl::optional<media::VideoCodec> video_codec,
-                        absl::optional<media::AudioCodec> audio_codec) {
+                        std::optional<media::VideoCodec> video_codec,
+                        std::optional<media::AudioCodec> audio_codec) {
   if (source.IsEmpty() || !source.IsValid() || !is_source_supported) {
     return KURL();
   }
@@ -467,6 +467,15 @@ void RemotePlayback::UpdateAvailabilityUrlsAndStartListening() {
     return;
   }
 
+  // If the video is too short, it's unlikely to be cast. Disable availability
+  // monitoring so that the cast buttons are hidden from the video player.
+  if (!media_element_ || std::isnan(media_element_->duration()) ||
+      media_element_->duration() <= kMinRemotingMediaDurationInSec) {
+    StopListeningForAvailability();
+    availability_urls_.clear();
+    return;
+  }
+
   KURL current_url =
       availability_urls_.empty() ? KURL() : availability_urls_[0];
   KURL new_url = GetAvailabilityUrl(source_, is_source_supported_, video_codec_,
@@ -497,8 +506,8 @@ WebString RemotePlayback::GetPresentationId() {
 }
 
 void RemotePlayback::MediaMetadataChanged(
-    absl::optional<media::VideoCodec> video_codec,
-    absl::optional<media::AudioCodec> audio_codec) {
+    std::optional<media::VideoCodec> video_codec,
+    std::optional<media::AudioCodec> audio_codec) {
   video_codec_ = video_codec;
   audio_codec_ = audio_codec;
 

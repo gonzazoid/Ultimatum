@@ -33,8 +33,7 @@ using testing::AllOf;
 using testing::Property;
 using testing::Unused;
 
-namespace ash {
-namespace smb_client {
+namespace ash::smb_client {
 namespace {
 
 constexpr char kSharePath[] = "smb://share/path";
@@ -453,7 +452,7 @@ TEST_F(SmbFsShareTest, GenerateStableMountIdInput) {
 
   smbfs::SmbFsMounter::MountOptions options2;
   options2.kerberos_options =
-      absl::make_optional<smbfs::SmbFsMounter::KerberosOptions>(
+      std::make_optional<smbfs::SmbFsMounter::KerberosOptions>(
           smbfs::SmbFsMounter::KerberosOptions::Source::kKerberos,
           kKerberosIdentity);
   SmbFsShare share2(&profile_, SmbUrl(kSharePath2), kDisplayName, options2);
@@ -490,5 +489,4 @@ TEST_F(SmbFsShareTest, GenerateStableMountId) {
   EXPECT_EQ(mount_id2.size(), 64u);
 }
 
-}  // namespace smb_client
-}  // namespace ash
+}  // namespace ash::smb_client

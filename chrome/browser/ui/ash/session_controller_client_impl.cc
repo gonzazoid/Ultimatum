@@ -21,11 +21,11 @@
 #include "chrome/browser/app_mode/app_mode_utils.h"
 #include "chrome/browser/ash/crosapi/browser_manager.h"
 #include "chrome/browser/ash/crosapi/browser_util.h"
+#include "chrome/browser/ash/floating_workspace/floating_workspace_service.h"
+#include "chrome/browser/ash/floating_workspace/floating_workspace_util.h"
 #include "chrome/browser/ash/login/demo_mode/demo_session.h"
 #include "chrome/browser/ash/login/lock/screen_locker.h"
 #include "chrome/browser/ash/login/ui/user_adding_screen.h"
-#include "chrome/browser/ash/login/users/chrome_user_manager.h"
-#include "chrome/browser/ash/login/users/multi_profile_user_controller.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
 #include "chrome/browser/browser_process.h"
@@ -47,6 +47,9 @@
 #include "components/prefs/pref_service.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/supervised_user/core/browser/supervised_user_service.h"
+#include "components/user_manager/multi_user/multi_user_sign_in_policy_controller.h"
+#include "components/user_manager/user_manager.h"
+#include "components/user_manager/user_manager_pref_names.h"
 #include "components/user_manager/user_type.h"
 #include "content/public/browser/browser_context.h"
 #include "ui/base/resource/resource_bundle.h"
@@ -132,7 +135,8 @@ void OnAcceptMultiprofilesIntroDialog(bool accept, bool never_show_again) {
     return;
 
   PrefService* prefs = ProfileManager::GetActiveUserProfile()->GetPrefs();
-  prefs->SetBoolean(prefs::kMultiProfileNeverShowIntro, never_show_again);
+  prefs->SetBoolean(user_manager::prefs::kMultiProfileNeverShowIntro,
+                    never_show_again);
   ash::UserAddingScreen::Get()->Start();
 }
 
@@ -199,6 +203,17 @@ SessionControllerClientImpl* SessionControllerClientImpl::Get() {
 }
 
 void SessionControllerClientImpl::PrepareForLock(base::OnceClosure callback) {
+  if (ash::floating_workspace_util::IsFloatingWorkspaceV2Enabled()) {
+    User* active_user = UserManager::Get()->GetActiveUser();
+    Profile* profile = ash::ProfileHelper::Get()->GetProfileByUser(active_user);
+    if (profile) {
+      auto* floating_workspace_service =
+          ash::FloatingWorkspaceService::GetForProfile(profile);
+      if (floating_workspace_service) {
+        floating_workspace_service->CaptureAndUploadActiveDesk();
+      }
+    }
+  }
   session_controller_->PrepareForLock(std::move(callback));
 }
 
@@ -258,7 +273,7 @@ void SessionControllerClientImpl::ShowMultiProfileLogin() {
 
   // Only regular non-supervised users could add other users to current session.
   if (UserManager::Get()->GetActiveUser()->GetType() !=
-      user_manager::USER_TYPE_REGULAR) {
+      user_manager::UserType::kRegular) {
     return;
   }
 
@@ -283,7 +298,7 @@ void SessionControllerClientImpl::ShowMultiProfileLogin() {
     show_intro &=
         !multi_user_util::GetProfileFromAccountId(user->GetAccountId())
              ->GetPrefs()
-             ->GetBoolean(prefs::kMultiProfileNeverShowIntro);
+             ->GetBoolean(user_manager::prefs::kMultiProfileNeverShowIntro);
     if (!show_intro)
       break;
   }
@@ -331,12 +346,12 @@ base::FilePath SessionControllerClientImpl::GetProfilePath(
 }
 
 bool SessionControllerClientImpl::IsEnterpriseManaged() const {
-  const ash::ChromeUserManager* user_manager = ash::ChromeUserManager::Get();
+  const auto* user_manager = UserManager::Get();
   return user_manager && user_manager->IsEnterpriseManaged();
 }
 
 std::optional<int> SessionControllerClientImpl::GetExistingUsersCount() const {
-  const ash::ChromeUserManager* user_manager = ash::ChromeUserManager::Get();
+  const auto* user_manager = UserManager::Get();
   return !user_manager ? std::nullopt
                        : std::optional<int>(user_manager->GetUsers().size());
 }
@@ -427,10 +442,9 @@ SessionControllerClientImpl::GetAddUserSessionPolicy() {
   if (user_manager->GetUsersAllowedForMultiProfile().empty())
     return ash::AddUserSessionPolicy::ERROR_NO_ELIGIBLE_USERS;
 
-  if (static_cast<ash::ChromeUserManager*>(user_manager)
-          ->GetMultiProfileUserController()
-          ->GetPrimaryUserPolicy() !=
-      ash::MultiProfileUserController::ALLOWED) {
+  if (user_manager->GetMultiUserSignInPolicyController()
+          ->GetPrimaryUserPolicy() ==
+      user_manager::MultiUserSignInPolicy::kNotAllowed) {
     return ash::AddUserSessionPolicy::ERROR_NOT_ALLOWED_PRIMARY_USER;
   }
 

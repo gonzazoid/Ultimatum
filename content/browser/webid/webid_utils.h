@@ -28,11 +28,11 @@ enum class IdpSigninStatus;
 
 namespace webid {
 
-// Returns true if |origin| is same-origin with |render_frame_host| and
+// Returns true if `origin` is same site with `render_frame_host` and
 // all its ancestors. Also returns true if there are no ancestors or
-// if |render_frame_host| is null.
-bool IsSameOriginWithAncestors(const url::Origin& origin,
-                               RenderFrameHost* render_frame_host);
+// if `render_frame_host` is null.
+bool IsSameSiteWithAncestors(const url::Origin& origin,
+                             RenderFrameHost* render_frame_host);
 
 void SetIdpSigninStatus(BrowserContext* context,
                         int frame_tree_node_id,
@@ -51,6 +51,10 @@ std::optional<std::string> ComputeConsoleMessageForHttpResponseCode(
 // endpoint URL.
 bool IsEndpointSameOrigin(const GURL& identity_provider_config_url,
                           const GURL& endpoint_url);
+
+// Returns whether the two origins are considered same-site (same eTLD+1). Also
+// ensures that the scheme is the same.
+bool IsSameSite(const url::Origin& origin1, const url::Origin& origin2);
 
 // Returns whether FedCM should fail/skip the accounts endpoint request because
 // the user is not signed-in to the IdP.

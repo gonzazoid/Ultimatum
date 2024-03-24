@@ -46,6 +46,8 @@ std::vector<Command> supported_commands = {
     Command::kOpenPerformanceSettings,
     Command::kOpenNTPAndStartCustomizeChromeTutorial,
     Command::kStartPasswordManagerTutorial,
+    Command::kStartSavedTabGroupTutorial,
+    Command::kOpenAISettings,
 };
 
 const ui::ElementContext kTestContext1(1);
@@ -75,6 +77,11 @@ class TestCommandHandler : public BrowserCommandHandler {
 
   void OpenPasswordManager() override {
     // The functionality of opening the password manager is removed, as it
+    // cannot be executed in a unittest.
+  }
+
+  void OpenAISettings() override {
+    // The functionality of opening the AI settings is removed, as it
     // cannot be executed in a unittest.
   }
 
@@ -109,6 +116,10 @@ class TestCommandHandler : public BrowserCommandHandler {
     default_search_provider_is_google_ = is_google;
   }
 
+  void SetBrowserSupportsSavedTabGroups(bool is_supported) {
+    saved_tab_groups_feature_supported_ = is_supported;
+  }
+
  protected:
   bool BrowserSupportsTabGroups() override {
     return tab_groups_feature_supported_;
@@ -122,6 +133,10 @@ class TestCommandHandler : public BrowserCommandHandler {
     return default_search_provider_is_google_;
   }
 
+  bool BrowserSupportsSavedTabGroups() override {
+    return saved_tab_groups_feature_supported_;
+  }
+
  private:
   bool tutorial_service_exists_;
   std::unique_ptr<CommandUpdater> command_updater_;
@@ -129,6 +144,7 @@ class TestCommandHandler : public BrowserCommandHandler {
   bool tab_groups_feature_supported_ = true;
   bool customize_chrome_side_panel_feature_supported_ = true;
   bool default_search_provider_is_google_ = true;
+  bool saved_tab_groups_feature_supported_ = true;
 };
 
 class TestTutorialService : public user_education::TutorialService {
@@ -195,6 +211,8 @@ class MockCommandHandler : public TestCommandHandler {
   MOCK_METHOD(void, OpenFeedbackForm, ());
 
   MOCK_METHOD(void, OpenPasswordManager, ());
+
+  MOCK_METHOD(void, OpenAISettings, ());
 };
 
 class MockCommandUpdater : public CommandUpdaterImpl {
@@ -609,4 +627,60 @@ TEST_F(BrowserCommandHandlerTest, StartPasswordManagerTutorialCommand) {
 
   // Manually call tutorial started callback.
   command_handler_->OnTutorialStarted(kPasswordManagerTutorialId, &service);
+}
+
+TEST_F(BrowserCommandHandlerTest, StartSavedTabGroupTutorialCommand) {
+  // Command cannot be executed if the tutorial service doesn't exist.
+  command_handler_->SetTutorialServiceExists(false);
+  EXPECT_FALSE(CanExecuteCommand(Command::kStartSavedTabGroupTutorial));
+
+  // Create mock service so the command can be executed.
+  auto bubble_factory_registry =
+      std::make_unique<user_education::HelpBubbleFactoryRegistry>();
+  user_education::TutorialRegistry registry;
+  MockTutorialService service(&registry, bubble_factory_registry.get());
+
+  // Allow command to be executed.
+  command_handler_->SetTutorialServiceExists(true);
+
+  // If the browser does not support saved tab groups, dont run the command.
+  command_handler_->SetBrowserSupportsSavedTabGroups(false);
+  EXPECT_FALSE(CanExecuteCommand(Command::kStartSavedTabGroupTutorial));
+
+  // If the browser supports the new password manager and has a tutorial
+  // service it should allow running commands.
+  command_handler_->SetBrowserSupportsSavedTabGroups(true);
+  EXPECT_TRUE(CanExecuteCommand(Command::kStartSavedTabGroupTutorial));
+
+  ClickInfoPtr info = ClickInfo::New();
+  EXPECT_CALL(*command_handler_, StartTutorial)
+      .WillOnce([&](StartTutorialInPage::Params params) {
+        EXPECT_EQ(params.tutorial_id, kSavedTabGroupTutorialId);
+      });
+  EXPECT_TRUE(
+      ExecuteCommand(Command::kStartSavedTabGroupTutorial, std::move(info)));
+
+  EXPECT_CALL(service, IsRunningTutorial).WillOnce(testing::Return(true));
+  EXPECT_CALL(service, LogStartedFromWhatsNewPage)
+      .WillOnce(
+          [&](user_education::TutorialIdentifier tutorial_id, bool is_running) {
+            EXPECT_EQ(tutorial_id, kSavedTabGroupTutorialId);
+            EXPECT_TRUE(is_running);
+            return;
+          });
+
+  // Manually call tutorial started callback.
+  command_handler_->OnTutorialStarted(kSavedTabGroupTutorialId, &service);
+}
+
+TEST_F(BrowserCommandHandlerTest, OpenAISettingsCommand) {
+  // By default, opening the password manager is allowed.
+  EXPECT_TRUE(CanExecuteCommand(Command::kOpenAISettings));
+  ClickInfoPtr info = ClickInfo::New();
+  info->middle_button = true;
+  info->meta_key = true;
+  // The OpenAISettings command opens a new settings window with the
+  // AI settings and the correct disposition.
+  EXPECT_CALL(*command_handler_, OpenAISettings());
+  EXPECT_TRUE(ExecuteCommand(Command::kOpenAISettings, std::move(info)));
 }

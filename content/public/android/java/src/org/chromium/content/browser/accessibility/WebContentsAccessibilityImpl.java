@@ -326,6 +326,18 @@ public class WebContentsAccessibilityImpl extends AccessibilityNodeProviderCompa
                             public AccessibilityCoordinates getAccessibilityCoordinates() {
                                 return mDelegate.getAccessibilityCoordinates();
                             }
+
+                            @Override
+                            public AccessibilityNodeInfoCompat getInfo(int virtualViewId) {
+                                // There is no implementation for this when the experiment is not
+                                // running, so we will force a crash with assert.
+                                assert ContentFeatureMap.isEnabled(
+                                                ContentFeatureList.ACCESSIBILITY_JNI_OPTIMIZATIONS)
+                                        : "AccessibilityNodeInfoBuilder should not be fetching info"
+                                                + " outside of JNI experiments.";
+
+                                return mNodeInfoCache.get(virtualViewId);
+                            }
                         });
 
         mAutoDisableAccessibilityHandler =
@@ -340,10 +352,6 @@ public class WebContentsAccessibilityImpl extends AccessibilityNodeProviderCompa
                             public void onDisabled() {
                                 assert mNativeObj != 0
                                         : "Native code is not initialized, but disable was called.";
-                                assert ContentFeatureMap.isEnabled(
-                                                ContentFeatureList.AUTO_DISABLE_ACCESSIBILITY_V2)
-                                        : "Disable was called, but Auto-disable accessibility is"
-                                                + " not enabled.";
                                 TraceEvent.begin(
                                         "WebContentsAccessibilityImpl.AutoDisableAccessibilityHandler.onDisabled");
                                 mHistogramRecorder.onDisableCalled(mAutoDisableUsageCounter == 0);
@@ -777,33 +785,30 @@ public class WebContentsAccessibilityImpl extends AccessibilityNodeProviderCompa
             mEventDispatcher.updateRelevantEventTypes(
                     AccessibilityState.relevantEventTypesForCurrentServices());
 
-            // If the auto-disable feature is enabled, then we will disable renderer accessibility
-            // and tear down objects when no accessibility services are running. If we have
-            // disabled then re-enabled the renderer multiple times for this instance, then we
-            // will return early and keep accessibility enabled to prevent further churn.
-            if (ContentFeatureMap.isEnabled(ContentFeatureList.AUTO_DISABLE_ACCESSIBILITY_V2)) {
-                if (mAutoDisableUsageCounter >= AUTO_DISABLE_SINGLE_INSTANCE_TOGGLE_LIMIT
-                        || !mIsAutoDisableAccessibilityCandidate) {
-                    mAutoDisableAccessibilityHandler.cancelDisableTimer();
-                    return;
-                }
+            // When no accessibility services are running, disable renderer accessibility and tear
+            // down objects. If we have disabled then re-enabled the renderer accessibility multiple
+            // times for this instance, return early and keep enabled to prevent further churn.
+            if (mAutoDisableUsageCounter >= AUTO_DISABLE_SINGLE_INSTANCE_TOGGLE_LIMIT
+                    || !mIsAutoDisableAccessibilityCandidate) {
+                mAutoDisableAccessibilityHandler.cancelDisableTimer();
+                return;
+            }
 
-                // The C++ and Java instances are not fully connected until the root manager has
-                // been connected, which will happen asynchronously. Accessibility cannot be auto
-                // disabled and re-enabled when there is no root manager. See note in
-                // {@link web_contents_accessibility_android.h}.
-                if (!isRootManagerConnected()) return;
+            // The C++ and Java instances are not fully connected until the root manager has
+            // been connected, which will happen asynchronously. Accessibility cannot be auto
+            // disabled and re-enabled when there is no root manager. See note in
+            // {@link web_contents_accessibility_android.h}.
+            if (!isRootManagerConnected()) return;
 
-                // If accessibility was auto-disabled, then we do not want to restart a new timer.
-                if (mIsCurrentlyAutoDisabled) return;
+            // If accessibility was auto-disabled, then we do not want to restart a new timer.
+            if (mIsCurrentlyAutoDisabled) return;
 
-                if (!AccessibilityState.isAnyAccessibilityServiceEnabled()) {
-                    mAutoDisableAccessibilityHandler.cancelDisableTimer();
-                    mAutoDisableAccessibilityHandler.startDisableTimer(
-                            NO_ACCESSIBILITY_SERVICES_ENABLED_DELAY_MS);
-                } else {
-                    mAutoDisableAccessibilityHandler.cancelDisableTimer();
-                }
+            if (!AccessibilityState.isAnyAccessibilityServiceEnabled()) {
+                mAutoDisableAccessibilityHandler.cancelDisableTimer();
+                mAutoDisableAccessibilityHandler.startDisableTimer(
+                        NO_ACCESSIBILITY_SERVICES_ENABLED_DELAY_MS);
+            } else {
+                mAutoDisableAccessibilityHandler.cancelDisableTimer();
             }
         }
     }
@@ -884,7 +889,8 @@ public class WebContentsAccessibilityImpl extends AccessibilityNodeProviderCompa
         // so temporarily set the |mAccessibilityEnabledOverride| flag to true, then disable it.
         mAccessibilityEnabledOverride = true;
         String returnString =
-                AccessibilityNodeInfoUtils.toString(createAccessibilityNodeInfo(virtualViewId));
+                AccessibilityNodeInfoUtils.toString(
+                        createAccessibilityNodeInfo(virtualViewId), true);
         mAccessibilityEnabledOverride = false;
         return returnString;
     }
@@ -926,6 +932,46 @@ public class WebContentsAccessibilityImpl extends AccessibilityNodeProviderCompa
         // have one in our cache, then communicate this so web_contents_accessibility_android.cc
         // will update a fraction of the object and for the rest leverage what is already there.
         if (mNodeInfoCache.get(virtualViewId) != null) {
+
+            // -----------------------------[ EXPERIMENTAL ]------------------------------------ //
+            // We take a different approach when the JNI testing feature is enabled.
+            if (ContentFeatureMap.isEnabled(ContentFeatureList.ACCESSIBILITY_JNI_OPTIMIZATIONS)) {
+                // We still need to update the source node id, but we do not need to obtain a new
+                // copy of the node until we are ready to return one to the framework.
+                mNodeInfoCache.get(virtualViewId).setSource(mView, virtualViewId);
+
+                if (WebContentsAccessibilityImplJni.get()
+                        .updateCachedAccessibilityNodeInfo_exp(mNativeObj, virtualViewId)) {
+                    // After successfully re-populating this cached node, update the accessibility
+                    // focus since this would not be included in the update call, and set the
+                    // available actions accordingly, then return result.
+                    mNodeInfoCache
+                            .get(virtualViewId)
+                            .setAccessibilityFocused(mAccessibilityFocusId == virtualViewId);
+
+                    if (mAccessibilityFocusId == virtualViewId) {
+                        mNodeInfoCache
+                                .get(virtualViewId)
+                                .addAction(ACTION_CLEAR_ACCESSIBILITY_FOCUS);
+                        mNodeInfoCache.get(virtualViewId).removeAction(ACTION_ACCESSIBILITY_FOCUS);
+                    } else {
+                        mNodeInfoCache
+                                .get(virtualViewId)
+                                .removeAction(ACTION_CLEAR_ACCESSIBILITY_FOCUS);
+                        mNodeInfoCache.get(virtualViewId).addAction(ACTION_ACCESSIBILITY_FOCUS);
+                    }
+
+                    mHistogramRecorder.incrementNodeWasReturnedFromCache();
+                    return AccessibilityNodeInfoCompat.obtain(mNodeInfoCache.get(virtualViewId));
+                } else {
+                    // If the node is no longer valid, wipe it from the cache and return null
+                    mNodeInfoCache.get(virtualViewId).recycle();
+                    mNodeInfoCache.remove(virtualViewId);
+                    return null;
+                }
+            } // End of special case for Finch experiment, below is original code.
+            // --------------------------------------------------------------------------------- //
+
             AccessibilityNodeInfoCompat cachedNode =
                     AccessibilityNodeInfoCompat.obtain(mNodeInfoCache.get(virtualViewId));
 
@@ -965,6 +1011,28 @@ public class WebContentsAccessibilityImpl extends AccessibilityNodeProviderCompa
             if (virtualViewId == mCurrentRootId) {
                 info.setParent(mView);
             }
+
+            // -----------------------------[ EXPERIMENTAL ]------------------------------------ //
+            // We take a different approach when the JNI testing feature is enabled.
+            if (ContentFeatureMap.isEnabled(ContentFeatureList.ACCESSIBILITY_JNI_OPTIMIZATIONS)) {
+                // Add this node to the cache, which we will remove if populating fails. By doing
+                // this we can pass only the |virtualViewId| over the JNI boundary.
+                mNodeInfoCache.put(virtualViewId, info);
+
+                if (WebContentsAccessibilityImplJni.get()
+                        .populateAccessibilityNodeInfo_exp(mNativeObj, virtualViewId)) {
+                    // After successfully populating this node, add it to our cache then return.
+                    mHistogramRecorder.incrementNodeWasCreatedFromScratch();
+                    // We still need a local copy of the node before passing back to the framework.
+                    mNodeInfoCache.put(virtualViewId, AccessibilityNodeInfoCompat.obtain(info));
+                    return info;
+                } else {
+                    info.recycle();
+                    mNodeInfoCache.remove(virtualViewId);
+                    return null;
+                }
+            } // End of special case for Finch experiment, below is original code.
+            // --------------------------------------------------------------------------------- //
 
             if (WebContentsAccessibilityImplJni.get()
                     .populateAccessibilityNodeInfo(mNativeObj, info, virtualViewId)) {
@@ -2159,6 +2227,13 @@ public class WebContentsAccessibilityImpl extends AccessibilityNodeProviderCompa
                 long nativeWebContentsAccessibilityAndroid,
                 AccessibilityNodeInfoCompat info,
                 int id);
+
+        // These two methods are experimental.
+        boolean updateCachedAccessibilityNodeInfo_exp(
+                long nativeWebContentsAccessibilityAndroid, int id);
+
+        boolean populateAccessibilityNodeInfo_exp(
+                long nativeWebContentsAccessibilityAndroid, int id);
 
         boolean populateAccessibilityEvent(
                 long nativeWebContentsAccessibilityAndroid,

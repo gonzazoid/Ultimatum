@@ -19,7 +19,6 @@
 #include "base/strings/to_string.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/values.h"
-#include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/web_applications/external_install_options.h"
 #include "chrome/browser/web_applications/externally_managed_app_install_task.h"
@@ -40,17 +39,13 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/url_constants.h"
 
-#if BUILDFLAG(IS_CHROMEOS)
-#include "base/containers/cxx20_erase.h"
-#endif
-
 namespace web_app {
 
 ExternallyManagedAppManager::InstallResult::InstallResult() = default;
 
 ExternallyManagedAppManager::InstallResult::InstallResult(
     webapps::InstallResultCode code,
-    absl::optional<webapps::AppId> app_id,
+    std::optional<webapps::AppId> app_id,
     bool did_uninstall_and_replace)
     : code(code),
       app_id(std::move(app_id)),
@@ -161,8 +156,8 @@ void ExternallyManagedAppManager::UninstallApps(
     ExternalInstallSource install_source,
     const UninstallCallback& callback) {
   for (auto& url : uninstall_urls) {
-    provider_->scheduler().RemoveInstallUrl(
-        /*app_id=*/absl::nullopt,
+    provider_->scheduler().RemoveInstallUrlMaybeUninstall(
+        /*app_id=*/std::nullopt,
         ConvertExternalInstallSourceToSource(install_source), url,
         ConvertExternalInstallSourceToUninstallSource(install_source),
         base::BindOnce(
@@ -303,7 +298,7 @@ void ExternallyManagedAppManager::MaybeStartNextOnLockAcquired(
     const ExternalInstallOptions& install_options =
         front->task->install_options();
 
-    absl::optional<webapps::AppId> app_id =
+    std::optional<webapps::AppId> app_id =
         lock.registrar().LookupExternalAppId(install_options.install_url);
     debug_value.Set("app_id_from_install_url", app_id.value_or("<none>"));
 
@@ -320,7 +315,7 @@ void ExternallyManagedAppManager::MaybeStartNextOnLockAcquired(
           std::move(front),
           /*installed_placeholder_app_id=*/is_placeholder_installed
               ? std::move(app_id)
-              : absl::nullopt);
+              : std::nullopt);
       return;
     }
 
@@ -328,7 +323,7 @@ void ExternallyManagedAppManager::MaybeStartNextOnLockAcquired(
     // then no external source has installed it.
     if (!app_id.has_value()) {
       StartInstallationTask(std::move(front),
-                            /*installed_placeholder_app_id=*/absl::nullopt);
+                            /*installed_placeholder_app_id=*/std::nullopt);
       return;
     }
 
@@ -362,7 +357,7 @@ void ExternallyManagedAppManager::MaybeStartNextOnLockAcquired(
                 ->IsPolicyInstalledApp())) {
         debug_value.Set("reinstalling_policy_app", true);
         StartInstallationTask(std::move(front),
-                              /*installed_placeholder_app_id=*/absl::nullopt);
+                              /*installed_placeholder_app_id=*/std::nullopt);
         return;
       } else {
         debug_value.Set("simple_source_addition", true);
@@ -388,7 +383,7 @@ void ExternallyManagedAppManager::MaybeStartNextOnLockAcquired(
     // uninstalled but it wasn't been removed from the map. We should install
     // the app in this case.
     StartInstallationTask(std::move(front),
-                          /*installed_placeholder_app_id=*/absl::nullopt);
+                          /*installed_placeholder_app_id=*/std::nullopt);
     return;
   }
   DCHECK(!current_install_);
@@ -402,7 +397,7 @@ void ExternallyManagedAppManager::MaybeStartNextOnLockAcquired(
 
 void ExternallyManagedAppManager::StartInstallationTask(
     std::unique_ptr<TaskAndCallback> task,
-    absl::optional<webapps::AppId> installed_placeholder_app_id) {
+    std::optional<webapps::AppId> installed_placeholder_app_id) {
   if (IsShuttingDown()) {
     return;
   }
@@ -559,24 +554,6 @@ void ExternallyManagedAppManager::SynchronizeInstalledAppsOnLockAcquired(
   for (const GURL& url_to_remove : urls_to_remove) {
     urls_to_remove_debug->Append(url_to_remove.spec());
   }
-
-#if BUILDFLAG(IS_CHROMEOS)
-  // This check ensures that on Chrome OS, the messages app is not uninstalled
-  // automatically when SynchronizeInstalledApps() is called for preinstalled
-  // apps.
-  // TODO(crbug.com/1239801): Once Messages has been migrated to be a
-  // preinstalled app, this logic can be removed because the
-  // PreInstalledWebAppManager will take care of this.
-  if (!urls_to_remove.empty() &&
-      ConvertExternalInstallSourceToSource(install_source) ==
-          WebAppManagement::kDefault) {
-    base::EraseIf(urls_to_remove, [&](const GURL& url) {
-      return url.spec() ==
-                 "https://messages-web.sandbox.google.com/web/authentication" ||
-             url.spec() == "https://messages.google.com/web/authentication";
-    });
-  }
-#endif
 
   // Run callback immediately if there's no work to be done.
   if (urls_to_remove.empty() && desired_apps_install_options.empty()) {

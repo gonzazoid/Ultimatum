@@ -38,7 +38,6 @@
 #include "chrome/common/pdf_util.h"
 #include "chrome/common/pepper_permission_util.h"
 #include "chrome/common/ppapi_utils.h"
-#include "chrome/common/privacy_budget/privacy_budget_settings_provider.h"
 #include "chrome/common/profiler/thread_profiler.h"
 #include "chrome/common/profiler/unwind_util.h"
 #include "chrome/common/secure_origin_allowlist.h"
@@ -100,6 +99,7 @@
 #include "components/page_load_metrics/renderer/metrics_render_frame_observer.h"
 #include "components/paint_preview/buildflags/buildflags.h"
 #include "components/password_manager/core/common/password_manager_features.h"
+#include "components/pdf/common/constants.h"
 #include "components/permissions/features.h"
 #include "components/safe_browsing/buildflags.h"
 #include "components/safe_browsing/content/renderer/threat_dom_details.h"
@@ -138,7 +138,6 @@
 #include "services/tracing/public/cpp/stack_sampling/tracing_sampler_profiler.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "third_party/blink/public/common/features.h"
-#include "third_party/blink/public/common/privacy_budget/identifiability_study_settings.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-shared.h"
 #include "third_party/blink/public/mojom/page/page_visibility_state.mojom.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -218,7 +217,6 @@
 
 #if BUILDFLAG(ENABLE_PDF)
 #include "chrome/renderer/pdf/chrome_pdf_internal_plugin_delegate.h"
-#include "components/pdf/common/internal_plugin_helpers.h"
 #include "components/pdf/renderer/internal_plugin_renderer_helpers.h"
 #endif  // BUILDFLAG(ENABLE_PDF)
 
@@ -287,7 +285,14 @@ using content::RenderFrame;
 using content::RenderThread;
 using content::WebPluginInfo;
 using content::WebPluginMimeType;
-using extensions::Extension;
+using ExtractAllDatalists = autofill::AutofillAgent::ExtractAllDatalists;
+using FocusRequiresScroll = autofill::AutofillAgent::FocusRequiresScroll;
+using QueryPasswordSuggestions =
+    autofill::AutofillAgent::QueryPasswordSuggestions;
+using SecureContextRequired = autofill::AutofillAgent::SecureContextRequired;
+using UserGestureRequired = autofill::AutofillAgent::UserGestureRequired;
+using UsesKeyboardAccessoryForSuggestions =
+    autofill::AutofillAgent::UsesKeyboardAccessoryForSuggestions;
 
 namespace {
 
@@ -441,6 +446,8 @@ void ChromeContentRendererClient::RenderThreadStarted() {
   chrome_extensions_renderer_client->RenderThreadStarted();
   WebSecurityPolicy::RegisterURLSchemeAsExtension(
       WebString::FromASCII(extensions::kExtensionScheme));
+  WebSecurityPolicy::RegisterURLSchemeAsCodeCacheWithHashing(
+      WebString::FromASCII(extensions::kExtensionScheme));
 #endif
 
 #if BUILDFLAG(ENABLE_SPELLCHECK)
@@ -561,10 +568,6 @@ void ChromeContentRendererClient::RenderThreadStarted() {
       metrics::CallStackProfileBuilder::
           SetParentProfileCollectorForChildProcess(std::move(collector));
     }
-
-    // This is superfluous in single-process mode and triggers a DCHECK
-    blink::IdentifiabilityStudySettings::SetGlobalProvider(
-        std::make_unique<PrivacyBudgetSettingsProvider>());
   }
 }
 
@@ -687,9 +690,14 @@ void ChromeContentRendererClient::RenderFrameCreated(
         render_frame, associated_interfaces);
     auto password_generation_agent = std::make_unique<PasswordGenerationAgent>(
         render_frame, password_autofill_agent.get(), associated_interfaces);
-    new AutofillAgent(render_frame, std::move(password_autofill_agent),
-                      std::move(password_generation_agent),
-                      associated_interfaces);
+    new AutofillAgent(
+        render_frame,
+        {ExtractAllDatalists(false), FocusRequiresScroll(true),
+         QueryPasswordSuggestions(false), SecureContextRequired(false),
+         UserGestureRequired(true),
+         UsesKeyboardAccessoryForSuggestions(BUILDFLAG(IS_ANDROID))},
+        std::move(password_autofill_agent),
+        std::move(password_generation_agent), associated_interfaces);
 
 #if BUILDFLAG(IS_ANDROID)
     if (render_frame->IsMainFrame() &&
@@ -897,7 +905,7 @@ bool ChromeContentRendererClient::OverrideCreatePlugin(
   *plugin = CreatePlugin(render_frame, params, *plugin_info);
 #else  // !BUILDFLAG(ENABLE_PLUGINS)
   PluginUMAReporter::GetInstance()->ReportPluginMissing(orig_mime_type, url);
-  if (orig_mime_type == kPDFMimeType) {
+  if (orig_mime_type == pdf::kPDFMimeType) {
     ReportPDFLoadStatus(
         PDFLoadStatus::kShowedDisabledPluginPlaceholderForEmbeddedPdf);
 
@@ -1040,7 +1048,7 @@ WebPlugin* ChromeContentRendererClient::CreatePlugin(
             app_url = manifest_url;
           }
           bool is_module_allowed = false;
-          const Extension* extension =
+          const extensions::Extension* extension =
               extensions::RendererExtensionRegistry::Get()
                   ->GetExtensionOrAppByURL(manifest_url);
           if (IsNaclAllowed()) {
@@ -1221,7 +1229,7 @@ void ChromeContentRendererClient::GetInterface(
 bool ChromeContentRendererClient::IsNativeNaClAllowed(
     const GURL& app_url,
     bool is_nacl_unrestricted,
-    const Extension* extension) {
+    const extensions::Extension* extension) {
   bool is_invoked_by_webstore_installed_extension = false;
   bool is_extension_unrestricted = false;
   bool is_extension_force_installed = false;
@@ -1263,7 +1271,7 @@ bool ChromeContentRendererClient::IsNativeNaClAllowed(
 // static
 void ChromeContentRendererClient::ReportNaClAppType(
     bool is_pnacl,
-    const Extension* extension) {
+    const extensions::Extension* extension) {
   // These values are persisted to logs. Entries should not be renumbered and
   // numeric values should never be reused.
   enum class NaClAppType {
@@ -1767,8 +1775,8 @@ GURL ChromeContentRendererClient::OverrideFlashEmbedWithHTML(const GURL& url) {
 std::unique_ptr<blink::URLLoaderThrottleProvider>
 ChromeContentRendererClient::CreateURLLoaderThrottleProvider(
     blink::URLLoaderThrottleProviderType provider_type) {
-  return std::make_unique<URLLoaderThrottleProviderImpl>(
-      browser_interface_broker_.get(), provider_type, this);
+  return URLLoaderThrottleProviderImpl::Create(provider_type, this,
+                                               browser_interface_broker_.get());
 }
 
 blink::WebFrame* ChromeContentRendererClient::FindFrame(

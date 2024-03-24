@@ -15,6 +15,7 @@
 #include "ui/aura/client/cursor_client.h"
 #include "ui/aura/env.h"
 #include "ui/aura/host_frame_rate_throttler.h"
+#include "ui/aura/native_window_occlusion_tracker.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_event_dispatcher.h"
 #include "ui/aura/window_tree_host_observer.h"
@@ -137,7 +138,7 @@ gfx::Point WindowTreeHostPlatform::GetLocationOnScreenInPixels() const {
 }
 
 bool WindowTreeHostPlatform::CaptureSystemKeyEventsImpl(
-    absl::optional<base::flat_set<ui::DomCode>> dom_codes) {
+    std::optional<base::flat_set<ui::DomCode>> dom_codes) {
   // Only one KeyboardHook should be active at a time, otherwise there will be
   // problems with event routing (i.e. which Hook takes precedence) and
   // destruction ordering.
@@ -326,9 +327,22 @@ int64_t WindowTreeHostPlatform::OnStateUpdate(
     compositor()->SetExternalPageScaleFactor(latest.raster_scale);
   }
 
+  bool needs_frame = latest.ProducesFrameOnUpdateFrom(old);
+  if (old.occlusion_state != latest.occlusion_state &&
+      NativeWindowOcclusionTracker::
+          IsNativeWindowOcclusionTrackingAlwaysEnabled(this)) {
+    const bool visible_before = compositor()->IsVisible();
+    OnOcclusionStateChanged(latest.occlusion_state);
+    if (!visible_before && compositor()->IsVisible()) {
+      // If the compositor has become visible, make sure to wait for a frame.
+      needs_frame = true;
+    }
+  }
+
   // Only set the sequence ID if this change will produce a frame.
   // If it won't, we may wait indefinitely for a frame that will never come.
-  if (!latest.ProducesFrameOnUpdateFrom(old)) {
+  // If the compositor is not visible, we will not get a frame, so don't wait.
+  if (!needs_frame || !compositor()->IsVisible()) {
     return -1;
   }
 
@@ -349,6 +363,11 @@ void WindowTreeHostPlatform::SetFrameRateThrottleEnabled(bool enabled) {
     HostFrameRateThrottler::GetInstance().AddHost(this);
   else
     HostFrameRateThrottler::GetInstance().RemoveHost(this);
+}
+
+bool WindowTreeHostPlatform::IsNativeWindowOcclusionTrackingAlwaysEnabled() {
+  return NativeWindowOcclusionTracker::
+      IsNativeWindowOcclusionTrackingAlwaysEnabled(this);
 }
 
 }  // namespace aura

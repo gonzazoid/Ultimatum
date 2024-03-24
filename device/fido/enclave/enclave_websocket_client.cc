@@ -15,6 +15,10 @@
 namespace device::enclave {
 namespace {
 
+// WebSockets can negotiate an application-level protocol. In the case of
+// enclave communication, that must be this value:
+constexpr char kEnclaveWebSocketProtocol[] = "cloudauthenticator";
+
 constexpr size_t kMaxIncomingMessageSize = 1 << 20;
 
 constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
@@ -118,16 +122,17 @@ void EnclaveWebSocketClient::Connect() {
       net::HttpRequestHeaders::kAuthorization, "Bearer " + access_token_));
 
   network_context_->CreateWebSocket(
-      service_url_, {}, net::SiteForCookies(), /*has_storage_access=*/false,
-      net::IsolationInfo(), std::move(additional_headers),
-      network::mojom::kBrowserProcessId, url::Origin::Create(service_url_),
+      service_url_, {kEnclaveWebSocketProtocol}, net::SiteForCookies(),
+      /*has_storage_access=*/false, net::IsolationInfo(),
+      std::move(additional_headers), network::mojom::kBrowserProcessId,
+      url::Origin::Create(service_url_),
       network::mojom::kWebSocketOptionBlockAllCookies,
       net::MutableNetworkTrafficAnnotationTag(kTrafficAnnotation),
       std::move(handshake_remote),
       /*url_loader_network_observer=*/mojo::NullRemote(),
       /*auth_handler=*/mojo::NullRemote(),
       /*header_client=*/mojo::NullRemote(),
-      /*throttling_profile_id=*/absl::nullopt);
+      /*throttling_profile_id=*/std::nullopt);
 }
 
 void EnclaveWebSocketClient::InternalWrite(base::span<const uint8_t> data) {
@@ -194,7 +199,7 @@ void EnclaveWebSocketClient::OnConnectionEstablished(
 
   if (pending_write_data_) {
     InternalWrite(*pending_write_data_);
-    pending_write_data_ = absl::nullopt;
+    pending_write_data_ = std::nullopt;
   }
 }
 
@@ -279,10 +284,13 @@ void EnclaveWebSocketClient::ReadFromDataPipe(MojoResult,
 }
 
 void EnclaveWebSocketClient::ProcessCompletedResponse() {
-  on_response_.Run(SocketStatus::kOk, pending_read_data_);
+  std::vector<uint8_t> pending_read_data;
+  pending_read_data.swap(pending_read_data_);
   pending_read_data_index_ = 0;
   pending_read_finished_ = false;
-  pending_read_data_.clear();
+
+  on_response_.Run(SocketStatus::kOk, std::move(pending_read_data));
+  // `this` may have been deleted at this point.
 }
 
 void EnclaveWebSocketClient::ClosePipe(SocketStatus status) {
@@ -291,11 +299,12 @@ void EnclaveWebSocketClient::ClosePipe(SocketStatus status) {
   }
   state_ = State::kDisconnected;
   client_receiver_.reset();
-  pending_write_data_ = absl::nullopt;
+  pending_write_data_ = std::nullopt;
   pending_read_data_index_ = 0;
   pending_read_finished_ = false;
   pending_read_data_.clear();
   on_response_.Run(status, std::vector<uint8_t>());
+  // `this` may have been deleted at this point.
 }
 
 void EnclaveWebSocketClient::OnMojoPipeDisconnect() {

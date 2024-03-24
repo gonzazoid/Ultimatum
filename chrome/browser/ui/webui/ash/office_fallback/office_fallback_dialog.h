@@ -20,6 +20,8 @@ enum class FallbackReason {
   kDriveAuthenticationNotReady,
   kDriveFsInterfaceError,
   kMeteredConnection,
+  kDisableDrivePreferenceSet,
+  kDriveDisabledForAccountType,
 };
 
 using DialogChoiceCallback =
@@ -49,6 +51,8 @@ class OfficeFallbackDialog : public SystemWebDialogDelegate {
                        const std::string& title_text,
                        const std::string& reason_message,
                        const std::string& instructions_message,
+                       const int& width,
+                       const int& height,
                        DialogChoiceCallback callback);
   std::string GetDialogArgs() const override;
   void GetDialogSize(gfx::Size* size) const override;
@@ -60,6 +64,8 @@ class OfficeFallbackDialog : public SystemWebDialogDelegate {
   const std::string title_text_;
   const std::string reason_message_;
   const std::string instructions_message_;
+  const int width_;
+  const int height_;
   DialogChoiceCallback callback_;
 };
 

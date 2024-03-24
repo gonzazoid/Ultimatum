@@ -10,6 +10,7 @@ import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
 import android.animation.RectEvaluator;
 import android.graphics.Bitmap;
+import android.os.SystemClock;
 import android.view.View;
 import android.view.animation.Interpolator;
 import android.widget.ImageView;
@@ -20,11 +21,15 @@ import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.Callback;
+import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.supplier.SyncOneshotSupplier;
 import org.chromium.base.supplier.SyncOneshotSupplierImpl;
+import org.chromium.ui.animation.AnimationPerformanceTracker;
+import org.chromium.ui.animation.AnimationPerformanceTracker.AnimationMetrics;
 import org.chromium.ui.interpolators.Interpolators;
 
 import java.lang.ref.WeakReference;
+import java.util.function.DoubleConsumer;
 
 /** {@link HubLayoutAnimatorProvider} for shrink, expand, and new tab animations. */
 public class ShrinkExpandHubLayoutAnimatorProvider implements HubLayoutAnimatorProvider {
@@ -33,16 +38,16 @@ public class ShrinkExpandHubLayoutAnimatorProvider implements HubLayoutAnimatorP
      * supply a bitmap to and a runnable to execute once fulfilled. Weak references are necessary in
      * the event this callback somehow gets stuck in native thumbnail capture code and a reference
      * to it is held for an extended duration. If this happens a fallback animator will run and it
-     * is desirable for the view and runnable to be available for garabage collection.
+     * is desirable for the view and runnable to be available for garbage collection.
      */
-    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    @VisibleForTesting()
     static class ImageViewWeakRefBitmapCallback implements Callback<Bitmap> {
         private final WeakReference<ImageView> mViewRef;
         private final WeakReference<Runnable> mOnFinishedRunnableRef;
 
         ImageViewWeakRefBitmapCallback(ImageView view, Runnable onFinishedRunnable) {
-            mViewRef = new WeakReference<ImageView>(view);
-            mOnFinishedRunnableRef = new WeakReference<Runnable>(onFinishedRunnable);
+            mViewRef = new WeakReference<>(view);
+            mOnFinishedRunnableRef = new WeakReference<>(onFinishedRunnable);
         }
 
         @Override
@@ -60,6 +65,8 @@ public class ShrinkExpandHubLayoutAnimatorProvider implements HubLayoutAnimatorP
         }
     }
 
+    private final @Nullable AnimationPerformanceTracker mAnimationTracker;
+    private final long mCreationTime = SystemClock.elapsedRealtime();
     private final @HubLayoutAnimationType int mAnimationType;
     private final @NonNull HubContainerView mHubContainerView;
     private final @NonNull SyncOneshotSupplierImpl<HubLayoutAnimator> mAnimatorSupplier;
@@ -67,7 +74,9 @@ public class ShrinkExpandHubLayoutAnimatorProvider implements HubLayoutAnimatorP
     private final @NonNull SyncOneshotSupplier<ShrinkExpandAnimationData> mAnimationDataSupplier;
     private final @Nullable ImageViewWeakRefBitmapCallback mBitmapCallback;
     private final long mDurationMs;
+    private final DoubleConsumer mOnAlphaChange;
 
+    private boolean mWasForcedToFinish;
     private @Nullable ShrinkExpandImageView mShrinkExpandImageView;
     private boolean mLayoutSatisfied;
 
@@ -88,6 +97,7 @@ public class ShrinkExpandHubLayoutAnimatorProvider implements HubLayoutAnimatorP
      * @param backgroundColor The background color to use for new tab animations or if the thumbnail
      *     doesn't cover the animating area.
      * @param durationMs The duration in milliseconds of the animation.
+     * @param onAlphaChange Observer to notify when alpha changes during animations.
      */
     public ShrinkExpandHubLayoutAnimatorProvider(
             @HubLayoutAnimationType int animationType,
@@ -95,23 +105,37 @@ public class ShrinkExpandHubLayoutAnimatorProvider implements HubLayoutAnimatorP
             @NonNull HubContainerView hubContainerView,
             @NonNull SyncOneshotSupplier<ShrinkExpandAnimationData> animationDataSupplier,
             @ColorInt int backgroundColor,
-            long durationMs) {
+            long durationMs,
+            DoubleConsumer onAlphaChange) {
+        assert animationType == HubLayoutAnimationType.EXPAND_NEW_TAB
+                        || animationType == HubLayoutAnimationType.EXPAND_TAB
+                        || animationType == HubLayoutAnimationType.SHRINK_TAB
+                : "Invalid shrink expand HubLayoutAnimationType: " + animationType;
         mAnimationType = animationType;
         mHubContainerView = hubContainerView;
-        mAnimatorSupplier = new SyncOneshotSupplierImpl<HubLayoutAnimator>();
+        mAnimatorSupplier = new SyncOneshotSupplierImpl<>();
         mAnimationDataSupplier = animationDataSupplier;
         mDurationMs = durationMs;
+        mOnAlphaChange = onAlphaChange;
 
         mShrinkExpandImageView = new ShrinkExpandImageView(hubContainerView.getContext());
         mShrinkExpandImageView.setVisibility(View.INVISIBLE);
         mShrinkExpandImageView.setBackgroundColor(backgroundColor);
-        mHubContainerView.addView(mShrinkExpandImageView, 0);
+        mHubContainerView.addView(mShrinkExpandImageView);
 
         mBitmapCallback =
                 needsBitmap
                         ? new ImageViewWeakRefBitmapCallback(
                                 mShrinkExpandImageView, this::maybeSupplyAnimation)
                         : null;
+
+        if (animationType == HubLayoutAnimationType.SHRINK_TAB
+                || animationType == HubLayoutAnimationType.EXPAND_TAB) {
+            mAnimationTracker = new AnimationPerformanceTracker();
+            mAnimationTracker.addListener(this::recordAnimationMetrics);
+        } else {
+            mAnimationTracker = null;
+        }
 
         mAnimationDataSupplier.onAvailable(this::onAnimationDataAvailable);
     }
@@ -143,6 +167,8 @@ public class ShrinkExpandHubLayoutAnimatorProvider implements HubLayoutAnimatorP
     }
 
     private void onAnimationDataAvailable(ShrinkExpandAnimationData animationData) {
+        if (mShrinkExpandImageView == null || mAnimatorSupplier.hasValue()) return;
+
         // Preserve the bitmap because it might have been supplied before the animation data.
         mShrinkExpandImageView.resetKeepingBitmap(animationData.getInitialRect());
 
@@ -159,6 +185,8 @@ public class ShrinkExpandHubLayoutAnimatorProvider implements HubLayoutAnimatorP
     }
 
     private void maybeSupplyAnimation() {
+        if (mShrinkExpandImageView == null || mAnimatorSupplier.hasValue()) return;
+
         boolean bitmapSatisfied =
                 mBitmapCallback == null || mShrinkExpandImageView.getBitmap() != null;
         if (!bitmapSatisfied || !mLayoutSatisfied) return;
@@ -181,11 +209,11 @@ public class ShrinkExpandHubLayoutAnimatorProvider implements HubLayoutAnimatorP
         if (mAnimationType == HubLayoutAnimationType.SHRINK_TAB) {
             mAnimatorSupplier.set(
                     FadeHubLayoutAnimationFactory.createFadeInAnimator(
-                            mHubContainerView, FADE_DURATION_MS));
+                            mHubContainerView, FADE_DURATION_MS, mOnAlphaChange));
         } else if (mAnimationType == HubLayoutAnimationType.EXPAND_TAB) {
             mAnimatorSupplier.set(
                     FadeHubLayoutAnimationFactory.createFadeOutAnimator(
-                            mHubContainerView, FADE_DURATION_MS));
+                            mHubContainerView, FADE_DURATION_MS, mOnAlphaChange));
         } else {
             assert false : "Not reached.";
             // If in production we somehow get here just skip animating entirely.
@@ -195,7 +223,24 @@ public class ShrinkExpandHubLayoutAnimatorProvider implements HubLayoutAnimatorP
     }
 
     private void supplyAnimator() {
+        // A fallback animation has already triggered.
+        if (mAnimatorSupplier.hasValue()) return;
+
         assert mAnimationDataSupplier.hasValue();
+
+        View toolbarView = mHubContainerView.findViewById(R.id.hub_toolbar);
+        boolean isShrink = mAnimationType == HubLayoutAnimationType.SHRINK_TAB;
+        float initialAlpha = isShrink ? 0.0f : 1.0f;
+        float finalAlpha = isShrink ? 1.0f : 0.0f;
+        ObjectAnimator fadeAnimator =
+                ObjectAnimator.ofFloat(toolbarView, View.ALPHA, initialAlpha, finalAlpha);
+        fadeAnimator.setInterpolator(Interpolators.FAST_OUT_LINEAR_IN_INTERPOLATOR);
+        fadeAnimator.addUpdateListener(
+                animation -> {
+                    if (animation.getAnimatedValue() instanceof Float animationAlpha) {
+                        mOnAlphaChange.accept(animationAlpha);
+                    }
+                });
 
         ShrinkExpandAnimationData animationData = mAnimationDataSupplier.get();
         mShrinkExpandAnimator =
@@ -214,25 +259,30 @@ public class ShrinkExpandHubLayoutAnimatorProvider implements HubLayoutAnimatorP
                         animationData.getInitialRect(),
                         animationData.getFinalRect());
         shrinkExpandAnimator.setInterpolator(getInterpolator(mAnimationType));
-        shrinkExpandAnimator.setDuration(mDurationMs);
+        if (mAnimationTracker != null) {
+            shrinkExpandAnimator.addUpdateListener(ignored -> mAnimationTracker.onUpdate());
+        }
 
         // TODO(crbug/1492207): Add the ability to change corner radii of the ShrinkExpandImageView
-        // via ShrinkExpandAnimator as part of the animation. For radiii use data supplied through
+        // via ShrinkExpandAnimator as part of the animation. For radii use data supplied through
         // ShrinkExpandAnimationData.
         // * Near circular -> 0 for new tab.
         // * 0 -> TabThumbnailView radii for shrink.
         // * TabThumbnailView radii -> 0 for expand.
 
-        // TODO(crbug/1492207): Fade in or out the toolbar along with this animation.
         AnimatorSet animatorSet = new AnimatorSet();
-        animatorSet.play(shrinkExpandAnimator);
+        animatorSet.playTogether(shrinkExpandAnimator, fadeAnimator);
+        animatorSet.setDuration(mDurationMs);
 
         HubLayoutAnimationListener listener =
                 new HubLayoutAnimationListener() {
                     @Override
-                    public void onStart() {
+                    public void beforeStart() {
+                        toolbarView.setAlpha(initialAlpha);
+                        mOnAlphaChange.accept(initialAlpha);
                         mHubContainerView.setVisibility(View.VISIBLE);
                         mShrinkExpandImageView.setVisibility(View.VISIBLE);
+                        if (mAnimationTracker != null) mAnimationTracker.onStart();
                     }
 
                     @Override
@@ -248,11 +298,21 @@ public class ShrinkExpandHubLayoutAnimatorProvider implements HubLayoutAnimatorP
                         // the layout dimensions match the expected final state rather than being
                         // transformed from the initial layout parameters.
                         mShrinkExpandImageView.resetKeepingBitmap(animationData.getFinalRect());
+
+                        if (mAnimationTracker != null) {
+                            mWasForcedToFinish = wasForcedToFinish;
+                            mAnimationTracker.onEnd();
+                        }
                     }
 
                     @Override
                     public void afterEnd() {
                         resetState();
+                        // Reset the toolbar to the default alpha of 1. For future animations this
+                        // will be updated again. At this point the Hub is either gone or visible
+                        // so the correct alpha is 1 regardless of the animation direction.
+                        toolbarView.setAlpha(1.0f);
+                        mOnAlphaChange.accept(finalAlpha);
                     }
                 };
 
@@ -274,5 +334,25 @@ public class ShrinkExpandHubLayoutAnimatorProvider implements HubLayoutAnimatorP
             return Interpolators.STANDARD_INTERPOLATOR;
         }
         return Interpolators.EMPHASIZED;
+    }
+
+    private void recordAnimationMetrics(AnimationMetrics metrics) {
+        if (mWasForcedToFinish || metrics.getFrameCount() == 0) return;
+
+        long totalDurationMs = metrics.getLastFrameTimeMs() - mCreationTime;
+
+        assert mAnimationType != HubLayoutAnimationType.EXPAND_NEW_TAB;
+        String suffix = mAnimationType == HubLayoutAnimationType.SHRINK_TAB ? ".Shrink" : ".Expand";
+
+        RecordHistogram.recordCount100Histogram(
+                "GridTabSwitcher.FramePerSecond" + suffix,
+                Math.round(metrics.getFramesPerSecond()));
+        RecordHistogram.recordTimesHistogram(
+                "GridTabSwitcher.MaxFrameInterval" + suffix, metrics.getMaxFrameIntervalMs());
+        RecordHistogram.recordTimesHistogram(
+                "Android.GridTabSwitcher.Animation.TotalDuration" + suffix, totalDurationMs);
+        RecordHistogram.recordTimesHistogram(
+                "Android.GridTabSwitcher.Animation.FirstFrameLatency" + suffix,
+                metrics.getFirstFrameLatencyMs());
     }
 }

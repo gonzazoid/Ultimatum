@@ -54,12 +54,17 @@ class TabStripNewTabButton: UIView {
     configuration.image = closeSymbol
     configuration.baseForegroundColor = UIColor(named: kTextSecondaryColor)
     button.configuration = configuration
-
+    button.accessibilityLabel = L10nUtils.stringWithFixup(
+      messageId: IDS_IOS_TAB_GRID_CREATE_NEW_TAB)
     button.imageView?.contentMode = .center
     button.layer.cornerRadius = TabStripConstants.NewTabButton.cornerRadius
-    button.backgroundColor = UIColor(named: kPrimaryBackgroundColor)
+    button.backgroundColor = UIColor(named: kGroupedSecondaryBackgroundColor)
 
     button.translatesAutoresizingMaskIntoConstraints = false
     button.addTarget(self, action: #selector(buttonTapped), for: .touchUpInside)
+    button.isPointerInteractionEnabled = true
+    if #available(iOS 17.0, *) {
+      button.hoverStyle = .init(shape: .circle)
+    }
   }
 }

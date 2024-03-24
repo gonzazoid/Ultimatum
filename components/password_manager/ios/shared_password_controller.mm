@@ -16,14 +16,15 @@
 #include "base/apple/foundation_util.h"
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
+#import "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
+#include "components/autofill/core/browser/filling_product.h"
 #include "components/autofill/core/browser/form_structure.h"
 #include "components/autofill/core/browser/ui/popup_item_ids.h"
-#include "components/autofill/core/browser/ui/popup_types.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/autofill/core/common/form_data.h"
 #include "components/autofill/core/common/password_form_fill_data.h"
@@ -114,11 +115,11 @@ NSString* const kPasswordFormSuggestionSuffix = @" ••••••••";
 @end
 
 @implementation SharedPasswordController {
-  PasswordManagerInterface* _passwordManager;
+  raw_ptr<PasswordManagerInterface> _passwordManager;
 
   // The WebState this instance is observing. Will be null after
   // -webStateDestroyed: has been called.
-  web::WebState* _webState;
+  raw_ptr<web::WebState> _webState;
 
   PasswordControllerDriverHelper* _driverHelper;
 
@@ -435,12 +436,15 @@ NSString* const kPasswordFormSuggestionSuffix = @" ••••••••";
     completion(NO);
     return;
   }
+
+  BOOL isPasswordField = [self.suggestionHelper isPasswordFieldOnForm:formQuery
+                                                             webFrame:frame];
+
   [self.suggestionHelper
       checkIfSuggestionsAvailableForForm:formQuery
                        completionHandler:^(BOOL suggestionsAvailable) {
                          // Always display "Show All..." for password fields.
-                         completion([formQuery isOnPasswordField] ||
-                                    suggestionsAvailable);
+                         completion(isPasswordField || suggestionsAvailable);
                        }];
 
   if (self.isPasswordGenerated &&
@@ -504,14 +508,12 @@ NSString* const kPasswordFormSuggestionSuffix = @" ••••••••";
     completion({}, self);
     return;
   }
-  NSArray<FormSuggestion*>* rawSuggestions = [self.suggestionHelper
-      retrieveSuggestionsWithFormID:formQuery.uniqueFormID
-                    fieldIdentifier:formQuery.uniqueFieldID
-                         forFrameId:frameId
-                          fieldType:formQuery.fieldType];
+  NSArray<FormSuggestion*>* rawSuggestions =
+      [self.suggestionHelper retrieveSuggestionsWithForm:formQuery];
 
   NSMutableArray<FormSuggestion*>* suggestions = [NSMutableArray array];
-  bool isPasswordField = [formQuery isOnPasswordField];
+  bool isPasswordField = [self.suggestionHelper isPasswordFieldOnForm:formQuery
+                                                             webFrame:frame];
   for (FormSuggestion* rawSuggestion in rawSuggestions) {
     // 1) If this is a focus event or the field is empty show all suggestions.
     // Otherwise:
@@ -562,7 +564,7 @@ NSString* const kPasswordFormSuggestionSuffix = @" ••••••••";
   }
 
   if (suggestionState) {
-    LogPasswordDropdownShown(*suggestionState, [self IsOffTheRecord]);
+    LogPasswordDropdownShown(*suggestionState);
   }
 
   if (suggestions.count == 0 || ![_delegate shouldShowAccountStorageNotice]) {
@@ -662,8 +664,8 @@ NSString* const kPasswordFormSuggestionSuffix = @" ••••••••";
   return SuggestionProviderTypePassword;
 }
 
-- (autofill::PopupType)suggestionType {
-  return autofill::PopupType::kPasswords;
+- (autofill::FillingProduct)mainFillingProduct {
+  return autofill::FillingProduct::kPassword;
 }
 
 #pragma mark - PasswordManagerDriverDelegate
@@ -797,7 +799,7 @@ NSString* const kPasswordFormSuggestionSuffix = @" ••••••••";
           /*log_debug_data*/ true)) {
     return NO;
   }
-  if (![fieldType isEqual:kPasswordFieldType]) {
+  if (![fieldType isEqual:kObfuscatedFieldType]) {
     return NO;
   }
   const PasswordFormGenerationData* generationData =
@@ -854,7 +856,7 @@ NSString* const kPasswordFormSuggestionSuffix = @" ••••••••";
 
     if (found) {
       for (const autofill::FormFieldData& field : form.fields) {
-        if (field.unique_renderer_id == fieldIdentifier) {
+        if (field.renderer_id == fieldIdentifier) {
           fieldSignature = CalculateFieldSignatureForField(field);
           maxLength = field.max_length;
           break;

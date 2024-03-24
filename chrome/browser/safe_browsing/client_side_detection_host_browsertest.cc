@@ -21,6 +21,7 @@
 #include "components/safe_browsing/content/browser/ui_manager.h"
 #include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/proto/client_model.pb.h"
+#include "content/public/browser/browser_context.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/mock_navigation_handle.h"
 #include "content/public/test/prerender_test_util.h"
@@ -36,10 +37,28 @@ namespace {
 using ::testing::_;
 using ::testing::StrictMock;
 
+class FakeDelegate : public ClientSideDetectionService::Delegate {
+  PrefService* GetPrefs() override { return nullptr; }
+  scoped_refptr<network::SharedURLLoaderFactory> GetURLLoaderFactory()
+      override {
+    return nullptr;
+  }
+  scoped_refptr<network::SharedURLLoaderFactory>
+  GetSafeBrowsingURLLoaderFactory() override {
+    return nullptr;
+  }
+  bool ShouldSendModelToBrowserContext(
+      content::BrowserContext* context) override {
+    return true;
+  }
+};
+
 class FakeClientSideDetectionService : public ClientSideDetectionService {
  public:
   FakeClientSideDetectionService()
-      : ClientSideDetectionService(nullptr, nullptr, nullptr) {}
+      : ClientSideDetectionService(std::make_unique<FakeDelegate>(),
+                                   nullptr,
+                                   nullptr) {}
 
   void SendClientReportPhishingRequest(
       std::unique_ptr<ClientPhishingRequest> verdict,
@@ -252,7 +271,8 @@ IN_PROC_BROWSER_TEST_F(ClientSideDetectionHostPrerenderBrowserTest,
   fake_csd_service.SetRequestCallback(run_loop.QuitClosure());
 
   // Bypass the pre-classification checks.
-  csd_host->OnPhishingPreClassificationDone(/*should_classify=*/true);
+  csd_host->OnPhishingPreClassificationDone(
+      ClientSideDetectionType::TRIGGER_MODELS, /*should_classify=*/true);
 
   // A prerendered navigation committing should not cancel classification.
   // We simulate the commit of a prerendered navigation to avoid races
@@ -309,7 +329,8 @@ IN_PROC_BROWSER_TEST_F(ClientSideDetectionHostPrerenderBrowserTest,
   prerender_helper().NavigatePrimaryPage(prerender_url);
 
   // Bypass the pre-classification checks.
-  csd_host->OnPhishingPreClassificationDone(/*should_classify=*/true);
+  csd_host->OnPhishingPreClassificationDone(
+      ClientSideDetectionType::TRIGGER_MODELS, /*should_classify=*/true);
 
   run_loop.Run();
 

@@ -125,7 +125,7 @@ void BlinkAXTreeSource::Selection(
 }
 
 static ui::AXTreeID GetAXTreeID(LocalFrame* local_frame) {
-  const absl::optional<base::UnguessableToken>& embedding_token =
+  const std::optional<base::UnguessableToken>& embedding_token =
       local_frame->GetEmbeddingToken();
   if (embedding_token && !embedding_token->is_empty())
     return ui::AXTreeID::FromToken(embedding_token.value());
@@ -407,39 +407,6 @@ void BlinkAXTreeSource::Trace(Visitor* visitor) const {
   visitor->Trace(ax_object_cache_);
   visitor->Trace(root_);
   visitor->Trace(focus_);
-}
-
-AXObject* BlinkAXTreeSource::GetPluginRoot() {
-  AXObject* root = GetRoot();
-
-  HeapDeque<Member<AXObject>> objs_to_explore;
-  objs_to_explore.push_back(root);
-  while (objs_to_explore.size()) {
-    AXObject* obj = objs_to_explore.front();
-    objs_to_explore.pop_front();
-
-    Node* node = obj->GetNode();
-    if (node && node->IsElementNode()) {
-      Element* element = To<Element>(node);
-      if (element->IsHTMLWithTagName("embed")) {
-        return obj;
-      }
-    }
-
-    // Explore children of this object.
-    CacheChildrenIfNeeded(obj);
-    auto num_children = GetChildCount(obj);
-    for (size_t i = 0; i < num_children; i++) {
-      auto* child = ChildAt(obj, i);
-      if (!child) {
-        continue;
-      }
-      objs_to_explore.push_back(child);
-    }
-    ClearChildCache(obj);
-  }
-
-  return nullptr;
 }
 
 }  // namespace blink

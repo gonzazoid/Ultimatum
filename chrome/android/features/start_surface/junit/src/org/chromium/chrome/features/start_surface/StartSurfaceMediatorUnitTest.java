@@ -79,6 +79,9 @@ import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.supplier.OneshotSupplier;
 import org.chromium.base.supplier.Supplier;
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.base.test.util.Features;
+import org.chromium.base.test.util.Features.DisableFeatures;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.base.test.util.HistogramWatcher;
 import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.R;
@@ -98,6 +101,7 @@ import org.chromium.chrome.browser.omnibox.OmniboxStub;
 import org.chromium.chrome.browser.omnibox.UrlFocusChangeListener;
 import org.chromium.chrome.browser.omnibox.voice.VoiceRecognitionHandler;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.search_engines.TemplateUrlServiceFactory;
 import org.chromium.chrome.browser.tab.MockTab;
 import org.chromium.chrome.browser.tab.Tab;
@@ -117,9 +121,6 @@ import org.chromium.chrome.browser.tasks.tab_management.TabSwitcher.TabSwitcherV
 import org.chromium.chrome.features.start_surface.StartSurface.OnTabSelectingListener;
 import org.chromium.chrome.features.start_surface.StartSurfaceMediator.SecondaryTasksSurfaceInitializer;
 import org.chromium.chrome.features.tasks.TasksSurfaceProperties;
-import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.components.browser_ui.styles.ChromeColors;
 import org.chromium.components.prefs.PrefService;
 import org.chromium.components.search_engines.TemplateUrlService;
@@ -216,7 +217,7 @@ public class StartSurfaceMediatorUnitTest {
 
         doReturn(false).when(mProfile).isOffTheRecord();
         mProfileSupplier.set(mProfile);
-        Profile.setLastUsedProfileForTesting(mProfile);
+        ProfileManager.setLastUsedProfileForTesting(mProfile);
         TemplateUrlServiceFactory.setInstanceForTesting(mTemplateUrlService);
 
         ArrayList<PropertyKey> allProperties =
@@ -1424,6 +1425,7 @@ public class StartSurfaceMediatorUnitTest {
     }
 
     @Test
+    @DisableFeatures(ChromeFeatureList.SURFACE_POLISH)
     public void testNotInitializeLogoWhenShownHomepage() {
         when(mTemplateUrlService.doesDefaultSearchEngineHaveLogo()).thenReturn(true);
 
@@ -1465,6 +1467,7 @@ public class StartSurfaceMediatorUnitTest {
     public void testNotInitializeLogoWhenSurfacePolishedMoveDownLogoDisabled() {
         when(mTemplateUrlService.doesDefaultSearchEngineHaveLogo()).thenReturn(true);
 
+        StartSurfaceConfiguration.SURFACE_POLISH_MOVE_DOWN_LOGO.setForTesting(false);
         Assert.assertFalse(ReturnToChromeUtil.moveDownLogo());
 
         StartSurfaceMediator mediator =
@@ -1807,6 +1810,9 @@ public class StartSurfaceMediatorUnitTest {
 
     @Test
     public void testDefaultSearchEngineChanged() {
+        boolean isMoveDownLogoEnabled =
+                ChromeFeatureList.sSurfacePolish.isEnabled()
+                        && StartSurfaceConfiguration.SURFACE_POLISH_MOVE_DOWN_LOGO.getValue();
         mProfileSupplier = new ObservableSupplierImpl<>();
         StartSurfaceMediator mediator =
                 createStartSurfaceMediator(
@@ -1817,7 +1823,8 @@ public class StartSurfaceMediatorUnitTest {
         showHomepageAndVerify(mediator, StartSurfaceState.SHOWN_HOMEPAGE);
 
         mProfileSupplier.set(mProfile);
-        verify(mTemplateUrlService).addObserver(mTemplateUrlServiceObserverCaptor.capture());
+        verify(mTemplateUrlService, times(isMoveDownLogoEnabled ? 2 : 1))
+                .addObserver(mTemplateUrlServiceObserverCaptor.capture());
         doReturn(true).when(mOmniboxStub).isLensEnabled(LensEntryPoint.TASKS_SURFACE);
         mTemplateUrlServiceObserverCaptor.getValue().onTemplateURLServiceChanged();
         assertTrue(mPropertyModel.get(IS_LENS_BUTTON_VISIBLE));
@@ -1827,7 +1834,8 @@ public class StartSurfaceMediatorUnitTest {
         assertFalse(mPropertyModel.get(IS_LENS_BUTTON_VISIBLE));
 
         mediator.destroy();
-        verify(mTemplateUrlService).removeObserver(mTemplateUrlServiceObserverCaptor.capture());
+        verify(mTemplateUrlService, times(isMoveDownLogoEnabled ? 2 : 1))
+                .removeObserver(mTemplateUrlServiceObserverCaptor.capture());
     }
 
     @Test

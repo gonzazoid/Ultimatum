@@ -55,24 +55,24 @@ constexpr SkFourByteTag kSlntTag = SkSetFourByteTag('s', 'l', 'n', 't');
 constexpr SkFourByteTag kWdthTag = SkSetFourByteTag('w', 'd', 't', 'h');
 constexpr SkFourByteTag kWghtTag = SkSetFourByteTag('w', 'g', 'h', 't');
 
-absl::optional<SkFontParameters::Variation::Axis>
+std::optional<SkFontParameters::Variation::Axis>
 RetrieveVariationDesignParametersByTag(sk_sp<SkTypeface> base_typeface,
                                        SkFourByteTag tag) {
   int axes_count = base_typeface->getVariationDesignParameters(nullptr, 0);
   if (axes_count <= 0)
-    return absl::nullopt;
+    return std::nullopt;
   Vector<SkFontParameters::Variation::Axis> axes;
   axes.resize(axes_count);
   int axes_read =
       base_typeface->getVariationDesignParameters(axes.data(), axes_count);
   if (axes_read <= 0)
-    return absl::nullopt;
+    return std::nullopt;
   for (auto& axis : axes) {
     if (axis.tag == tag) {
       return axis;
     }
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 std::unique_ptr<SkFontArguments::Palette::Override[]>
@@ -103,7 +103,7 @@ FontCustomPlatformData::~FontCustomPlatformData() {
   }
 }
 
-FontPlatformData FontCustomPlatformData::GetFontPlatformData(
+const FontPlatformData* FontCustomPlatformData::GetFontPlatformData(
     float size,
     float adjusted_specified_size,
     bool bold,
@@ -115,7 +115,7 @@ FontPlatformData FontCustomPlatformData::GetFontPlatformData(
     const ResolvedFontFeatures& resolved_font_features,
     FontOrientation orientation,
     const FontVariationSettings* variation_settings,
-    const FontPalette* palette) {
+    const FontPalette* palette) const {
   DCHECK(base_typeface_);
 
   sk_sp<SkTypeface> return_typeface = base_typeface_;
@@ -140,7 +140,7 @@ FontPlatformData FontCustomPlatformData::GetFontPlatformData(
     SkFontArguments::VariationPosition::Coordinate weight_coordinate = {
         kWghtTag, SkFloatToScalar(selection_capabilities.weight.clampToRange(
                       selection_request.weight))};
-    absl::optional<SkFontParameters::Variation::Axis> wght_parameters =
+    std::optional<SkFontParameters::Variation::Axis> wght_parameters =
         RetrieveVariationDesignParametersByTag(base_typeface_, kWghtTag);
     if (selection_capabilities.weight.IsRangeSetFromAuto() && wght_parameters) {
       FontSelectionRange wght_range = {
@@ -156,7 +156,7 @@ FontPlatformData FontCustomPlatformData::GetFontPlatformData(
     SkFontArguments::VariationPosition::Coordinate width_coordinate = {
         kWdthTag, SkFloatToScalar(selection_capabilities.width.clampToRange(
                       selection_request.width))};
-    absl::optional<SkFontParameters::Variation::Axis> wdth_parameters =
+    std::optional<SkFontParameters::Variation::Axis> wdth_parameters =
         RetrieveVariationDesignParametersByTag(base_typeface_, kWdthTag);
     if (selection_capabilities.width.IsRangeSetFromAuto() && wdth_parameters) {
       FontSelectionRange wdth_range = {
@@ -174,7 +174,7 @@ FontPlatformData FontCustomPlatformData::GetFontPlatformData(
     SkFontArguments::VariationPosition::Coordinate slant_coordinate = {
         kSlntTag, SkFloatToScalar(-selection_capabilities.slope.clampToRange(
                       selection_request.slope))};
-    absl::optional<SkFontParameters::Variation::Axis> slnt_parameters =
+    std::optional<SkFontParameters::Variation::Axis> slnt_parameters =
         RetrieveVariationDesignParametersByTag(base_typeface_, kSlntTag);
     if (selection_capabilities.slope.IsRangeSetFromAuto() && slnt_parameters) {
       FontSelectionRange slnt_range = {
@@ -211,7 +211,7 @@ FontPlatformData FontCustomPlatformData::GetFontPlatformData(
       } else if (optical_sizing == kNoneOpticalSizing) {
         // Explicitly set default value to avoid automatic application of
         // optical sizing as it seems to happen on SkTypeface on Mac.
-        absl::optional<SkFontParameters::Variation::Axis> opsz_parameters =
+        std::optional<SkFontParameters::Variation::Axis> opsz_parameters =
             RetrieveVariationDesignParametersByTag(return_typeface, kOpszTag);
         if (opsz_parameters) {
           float opszDefault = opsz_parameters->def;
@@ -246,7 +246,7 @@ FontPlatformData FontCustomPlatformData::GetFontPlatformData(
     SkFontArguments::Palette sk_palette{0, nullptr, 0};
 
     Vector<FontPalette::FontPaletteOverride> color_overrides;
-    absl::optional<uint16_t> palette_index = absl::nullopt;
+    std::optional<uint16_t> palette_index = std::nullopt;
     PaletteInterpolation palette_interpolation(base_typeface_);
     if (RuntimeEnabledFeatures::FontPaletteAnimationEnabled() &&
         palette->IsInterpolablePalette()) {
@@ -276,10 +276,11 @@ FontPlatformData FontCustomPlatformData::GetFontPlatformData(
       return_typeface = palette_typeface;
     }
   }
-  return FontPlatformData(std::move(return_typeface), std::string(), size,
-                          synthetic_bold && !base_typeface_->isBold(),
-                          synthetic_italic && !base_typeface_->isItalic(),
-                          text_rendering, resolved_font_features, orientation);
+  return MakeGarbageCollected<FontPlatformData>(
+      std::move(return_typeface), std::string(), size,
+      synthetic_bold && !base_typeface_->isBold(),
+      synthetic_italic && !base_typeface_->isItalic(), text_rendering,
+      resolved_font_features, orientation);
 }
 
 Vector<VariationAxis> FontCustomPlatformData::GetVariationAxes() const {
@@ -303,7 +304,7 @@ String FontCustomPlatformData::FamilyNameForInspector() const {
                           localized_string.fString.size());
 }
 
-scoped_refptr<FontCustomPlatformData> FontCustomPlatformData::Create(
+FontCustomPlatformData* FontCustomPlatformData::Create(
     SharedBuffer* buffer,
     String& ots_parse_message) {
   DCHECK(buffer);
@@ -320,8 +321,8 @@ scoped_refptr<FontCustomPlatformData> FontCustomPlatformData::Create(
   if (v8::Isolate* isolate = v8::Isolate::TryGetCurrent()) {
     isolate->AdjustAmountOfExternalAllocatedMemory(data_size);
   }
-  return base::AdoptRef(
-      new FontCustomPlatformData(std::move(typeface), data_size));
+  return MakeGarbageCollected<FontCustomPlatformData>(std::move(typeface),
+                                                      data_size);
 }
 
 bool FontCustomPlatformData::MayBeIconFont() const {

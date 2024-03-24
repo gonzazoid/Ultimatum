@@ -5,7 +5,6 @@
 package org.chromium.chrome.browser.readaloud;
 
 import androidx.annotation.IntDef;
-import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
@@ -14,24 +13,25 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
 public class ReadAloudMetrics {
-    @VisibleForTesting public static String IS_READABLE = "ReadAloud.IsPageReadable";
-
-    @VisibleForTesting
+    public static String IS_READABLE = "ReadAloud.IsPageReadable";
     public static String READABILITY_SUCCESS = "ReadAloud.IsPageReadabilitySuccessful";
-
-    @VisibleForTesting
     public static String INELIGIBILITY_REASON = "ReadAloud.Eligibility.IneligiblityReason";
-
-    @VisibleForTesting
     public static String IS_USER_ELIGIBLE = "ReadAloud.Eligibility.IsUserEligible";
-
-    @VisibleForTesting
     public static String IS_TAB_PLAYBACK_CREATION_SUCCESSFUL =
             "ReadAloud.IsTabPlaybackCreationSuccessful";
+    public static String HAS_TAP_TO_SEEK_FOUND_MATCH = "ReadAloud.HasTapToSeekFoundMatch";
 
+    public static String TAB_PLAYBACK_CREATION_SUCCESS = "ReadAloud.TabPlaybackCreationSuccess";
+    public static String TAB_PLAYBACK_CREATION_FAILURE = "ReadAloud.TabPlaybackCreationFailure";
+    public static String TAB_PLAYBACK_WITHOUT_READABILITY_CHECK_ERROR =
+            "ReadAloud.ReadAloudPlaybackWithoutReadabilityCheckError";
     public static String VOICE_CHANGED = "ReadAloud.VoiceChanged.";
-
     public static String VOICE_PREVIEWED = "ReadAloud.VoicePreviewed.";
+    public static String TIME_SPENT_LISTENING = "ReadAloud.DurationListened";
+    public static String TIME_SPENT_LISTENING_LOCKED_SCREEN =
+            "ReadAloud.DurationListened.LockedScreen";
+    public static String HAS_DATE_MODIFIED = "ReadAloud.HasDateModified";
+    public static String READABILITY_SERVER_SIDE = "ReadAloud.ServerReadabilityResult";
 
     /**
      * The reason why we clear the prepared message.
@@ -95,8 +95,25 @@ public class ReadAloudMetrics {
 
     private static float[] sPlaybackSpeeds = {0.5f, 0.8f, 1.0f, 1.2f, 1.5f, 2.0f, 3.0f, 4.0f};
 
+    public static void recordDurationMsListened(long durationMs) {
+        if (durationMs != 0) {
+            RecordHistogram.recordLongTimesHistogram(TIME_SPENT_LISTENING, durationMs);
+        }
+    }
+
+    public static void recordDurationMsListenedLockedScreen(long durationMs) {
+        if (durationMs != 0) {
+            RecordHistogram.recordLongTimesHistogram(
+                    TIME_SPENT_LISTENING_LOCKED_SCREEN, durationMs);
+        }
+    }
+
     public static void recordIsPageReadable(boolean successful) {
         RecordHistogram.recordBooleanHistogram(IS_READABLE, successful);
+    }
+
+    public static void recordServerReadabilityResult(boolean successful) {
+        RecordHistogram.recordBooleanHistogram(READABILITY_SERVER_SIDE, successful);
     }
 
     public static void recordIsPageReadabilitySuccessful(boolean successful) {
@@ -128,6 +145,25 @@ public class ReadAloudMetrics {
         RecordHistogram.recordBooleanHistogram(IS_TAB_PLAYBACK_CREATION_SUCCESSFUL, successful);
     }
 
+    public static void recordHasTapToSeekFoundMatch(boolean matchFound) {
+        RecordHistogram.recordBooleanHistogram(HAS_TAP_TO_SEEK_FOUND_MATCH, matchFound);
+    }
+
+    public static void recordTabCreationSuccess(int entrypoint, int maxVal) {
+        RecordHistogram.recordEnumeratedHistogram(
+                TAB_PLAYBACK_CREATION_SUCCESS, entrypoint, maxVal);
+    }
+
+    public static void recordTabCreationFailure(int entrypoint, int maxVal) {
+        RecordHistogram.recordEnumeratedHistogram(
+                TAB_PLAYBACK_CREATION_FAILURE, entrypoint, maxVal);
+    }
+
+    public static void recordPlaybackWithoutReadabilityCheck(int entrypoint, int maxVal) {
+        RecordHistogram.recordEnumeratedHistogram(
+                TAB_PLAYBACK_WITHOUT_READABILITY_CHECK_ERROR, entrypoint, maxVal);
+    }
+
     public static void recordSpeedChange(float speed) {
         for (int i = 0; i < sPlaybackSpeeds.length; i++) {
             if (speed == sPlaybackSpeeds[i]) {
@@ -147,5 +183,9 @@ public class ReadAloudMetrics {
 
     public static void recordVoicePreviewed(String voiceID) {
         RecordHistogram.recordBooleanHistogram(VOICE_PREVIEWED + voiceID, true);
+    }
+
+    public static void recordHasDateModified(boolean hasDateModified) {
+        RecordHistogram.recordBooleanHistogram(HAS_DATE_MODIFIED, hasDateModified);
     }
 }

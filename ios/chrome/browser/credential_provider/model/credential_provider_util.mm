@@ -12,8 +12,8 @@
 #import "base/task/thread_pool.h"
 #import "base/threading/scoped_blocking_call.h"
 #import "components/password_manager/core/common/password_manager_features.h"
-#import "ios/chrome/browser/favicon/favicon_loader.h"
-#import "ios/chrome/browser/favicon/ios_chrome_favicon_loader_factory.h"
+#import "ios/chrome/browser/favicon/model/favicon_loader.h"
+#import "ios/chrome/browser/favicon/model/ios_chrome_favicon_loader_factory.h"
 #import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
 #import "ios/chrome/common/app_group/app_group_constants.h"
 #import "ios/chrome/common/credential_provider/archivable_credential.h"
@@ -22,7 +22,7 @@
 #import "ios/chrome/common/credential_provider/credential.h"
 #import "ios/chrome/common/ui/favicon/favicon_attributes.h"
 #import "ios/chrome/common/ui/favicon/favicon_constants.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 
 using base::SysUTF16ToNSString;
 using base::UTF8ToUTF16;
@@ -55,8 +55,7 @@ NSString* GetFaviconFileKey(const GURL& url) {
   // a URL (including the scheme and ://) isn't a valid file name).
   unsigned char result[CC_SHA256_DIGEST_LENGTH];
   CC_SHA256(url.spec().data(), url.spec().length(), result);
-  return base::SysUTF8ToNSString(
-      base::HexEncode(result, CC_SHA256_DIGEST_LENGTH));
+  return base::SysUTF8ToNSString(base::HexEncode(result));
 }
 
 void SaveFaviconToSharedAppContainer(FaviconAttributes* attributes,

@@ -42,11 +42,11 @@ const char kSignOut[] = "sign_out";
 const char kCloseTabs[] = "close_tabs";
 #else
 const char kClearSiteSettingsActionName[] = "clear_site_settings";
-#endif  // BUILDFLAG(IS_IOS)
 const char kReloadPagesActionName[] = "reload_pages";
+#endif  // BUILDFLAG(IS_IOS)
 }  // namespace
 
-absl::optional<ActionType> NameToActionType(const std::string& name) {
+std::optional<ActionType> NameToActionType(const std::string& name) {
 #if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
   if (name == kCloseBrowsersActionName) {
     return ActionType::kCloseBrowsers;
@@ -87,11 +87,11 @@ absl::optional<ActionType> NameToActionType(const std::string& name) {
   if (name == kClearSiteSettingsActionName) {
     return ActionType::kClearSiteSettings;
   }
-#endif  // BUILDFLAG(IS_IOS)
   if (name == kReloadPagesActionName) {
     return ActionType::kReloadPages;
   }
-  return absl::nullopt;
+#endif  // BUILDFLAG(IS_IOS)
+  return std::nullopt;
 }
 
 std::string GetActionBrowsingDataTypeName(const std::string& action) {

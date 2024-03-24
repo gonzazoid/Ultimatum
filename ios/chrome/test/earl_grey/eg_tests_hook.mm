@@ -175,6 +175,10 @@ void RunTestsIfPresent() {
   // No-op for Earl Grey.
 }
 
+void SignalAppLaunched() {
+  // No-op for Earl Grey.
+}
+
 base::TimeDelta PasswordCheckMinimumDuration() {
   // No delays for eg tests.
   return base::Seconds(0);
@@ -182,6 +186,19 @@ base::TimeDelta PasswordCheckMinimumDuration() {
 
 std::unique_ptr<drive::DriveService> GetOverriddenDriveService() {
   return std::make_unique<drive::TestDriveService>();
+}
+
+std::optional<std::string> FETDemoModeOverride() {
+  if (!base::CommandLine::ForCurrentProcess()->HasSwitch(
+          test_switches::kEnableIPH)) {
+    // The FET Demo Mode tracker uses the returned string here as the feature
+    // name to enable. Using a feature name that doesn't exist will disable all
+    // IPH in tests. This is the desired behavior for EG tests if no specific
+    // feature is enabled.
+    return "disable_all";
+  }
+  return base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
+      test_switches::kEnableIPH);
 }
 
 }  // namespace tests_hook

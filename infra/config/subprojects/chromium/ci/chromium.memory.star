@@ -7,10 +7,11 @@ load("//lib/args.star", "args")
 load("//lib/branches.star", "branches")
 load("//lib/builder_config.star", "builder_config")
 load("//lib/builder_health_indicators.star", "health_spec")
-load("//lib/builders.star", "os", "reclient", "sheriff_rotations", "xcode")
+load("//lib/builders.star", "os", "reclient", "sheriff_rotations", "siso")
 load("//lib/ci.star", "ci")
 load("//lib/consoles.star", "consoles")
 load("//lib/gn_args.star", "gn_args")
+load("//lib/xcode.star", "xcode")
 
 ci.defaults.set(
     executable = ci.DEFAULT_EXECUTABLE,
@@ -28,6 +29,10 @@ ci.defaults.set(
     reclient_jobs = reclient.jobs.HIGH_JOBS_FOR_CI,
     service_account = ci.DEFAULT_SERVICE_ACCOUNT,
     shadow_service_account = ci.DEFAULT_SHADOW_SERVICE_ACCOUNT,
+    siso_configs = ["builder"],
+    siso_enable_cloud_profiler = True,
+    siso_enable_cloud_trace = True,
+    siso_project = siso.project.DEFAULT_TRUSTED,
 )
 
 consoles.console_view(
@@ -64,6 +69,7 @@ linux_memory_builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         build_gs_bucket = "chromium-memory-archive",
     ),
@@ -102,6 +108,7 @@ linux_memory_builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         build_gs_bucket = "chromium-memory-archive",
     ),
@@ -129,13 +136,13 @@ linux_memory_builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         build_gs_bucket = "chromium-memory-archive",
     ),
     gn_args = gn_args.config(
         configs = [
             "tsan",
-            "disable_nacl",
             "release_builder",
             "reclient",
         ],
@@ -160,6 +167,7 @@ linux_memory_builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         build_gs_bucket = "chromium-memory-archive",
     ),
@@ -201,6 +209,7 @@ linux_memory_builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.CHROMEOS,
         ),
         build_gs_bucket = "chromium-memory-archive",
     ),
@@ -223,6 +232,7 @@ linux_memory_builder(
     # TODO(crbug.com/1030593): Builds take more than 3 hours sometimes. Remove
     # once the builds are faster.
     execution_timeout = 6 * time.hour,
+    siso_enabled = True,
 )
 
 linux_memory_builder(
@@ -244,6 +254,7 @@ linux_memory_builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.CHROMEOS,
         ),
         build_gs_bucket = "chromium-memory-archive",
     ),
@@ -270,6 +281,7 @@ linux_memory_builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.CHROMEOS,
         ),
         build_gs_bucket = "chromium-memory-archive",
     ),
@@ -291,6 +303,7 @@ linux_memory_builder(
         short_name = "bld",
     ),
     execution_timeout = 4 * time.hour,
+    siso_enabled = True,
 )
 
 linux_memory_builder(
@@ -311,6 +324,7 @@ linux_memory_builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.CHROMEOS,
         ),
         build_gs_bucket = "chromium-memory-archive",
     ),
@@ -340,6 +354,7 @@ linux_memory_builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         build_gs_bucket = "chromium-memory-archive",
     ),
@@ -377,6 +392,7 @@ linux_memory_builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         build_gs_bucket = "chromium-memory-archive",
     ),
@@ -407,6 +423,7 @@ linux_memory_builder(
             build_config = builder_config.build_config.RELEASE,
             target_arch = builder_config.target_arch.INTEL,
             target_bits = 64,
+            target_platform = builder_config.target_platform.CHROMEOS,
         ),
         build_gs_bucket = "chromium-memory-archive",
     ),
@@ -445,6 +462,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.MAC,
         ),
         build_gs_bucket = "chromium-memory-archive",
     ),
@@ -452,7 +470,6 @@ ci.builder(
         configs = [
             "asan",
             "minimal_symbols",
-            "disable_nacl",
             "release_builder",
             "reclient",
             "dcheck_always_on",
@@ -485,6 +502,7 @@ linux_memory_builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         build_gs_bucket = "chromium-memory-archive",
     ),
@@ -511,6 +529,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.MAC,
         ),
         build_gs_bucket = "chromium-memory-archive",
     ),
@@ -540,6 +559,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         build_gs_bucket = "chromium-memory-archive",
     ),
@@ -572,6 +592,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         build_gs_bucket = "chromium-memory-archive",
     ),
@@ -603,6 +624,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         build_gs_bucket = "chromium-memory-archive",
     ),
@@ -674,6 +696,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         build_gs_bucket = "chromium-memory-archive",
     ),
@@ -708,6 +731,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.WIN,
         ),
         build_gs_bucket = "chromium-memory-archive",
     ),
@@ -776,4 +800,24 @@ ci.builder(
         short_name = "asn",
     ),
     xcode = xcode.xcode_default,
+)
+
+ci.builder(
+    name = "linux-codeql-generator",
+    description_html = "Compiles a CodeQL database on a Linux host and uploads the result.",
+    executable = "recipe:chrome_codeql_database_builder",
+    # Run once daily at 5am Pacific/1 PM UTC
+    schedule = "0 13 * * *",
+    cores = 32,
+    ssd = True,
+    sheriff_rotations = args.ignore_default(None),
+    console_view_entry = [
+        consoles.console_view_entry(
+            category = "codeql-linux",
+            short_name = "cdql-lnx",
+        ),
+    ],
+    contact_team_email = "chrome-memory-safety-team@google.com",
+    execution_timeout = 15 * time.hour,
+    notifies = ["codeql-infra"],
 )

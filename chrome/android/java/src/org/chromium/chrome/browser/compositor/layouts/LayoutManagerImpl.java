@@ -31,6 +31,7 @@ import org.chromium.chrome.browser.compositor.layouts.Layout.Orientation;
 import org.chromium.chrome.browser.compositor.layouts.components.LayoutTab;
 import org.chromium.chrome.browser.compositor.layouts.content.TabContentManager;
 import org.chromium.chrome.browser.compositor.overlays.strip.StripLayoutHelperManager;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.fullscreen.BrowserControlsManager;
 import org.chromium.chrome.browser.gesturenav.HistoryNavigationCoordinator;
 import org.chromium.chrome.browser.layouts.CompositorModelChangeProcessor;
@@ -329,19 +330,38 @@ public class LayoutManagerImpl
         mContext = host.getContext();
 
         // Overlays are ordered back (closest to the web content) to front.
-        Class[] overlayOrder =
-                new Class[] {
-                    HistoryNavigationCoordinator.getSceneOverlayClass(),
-                    // StripLayoutHelperManager should be updated before
-                    // ScrollingBottomViewSceneLayer Since ScrollingBottomViewSceneLayer change
-                    // the container size, it causes relocation tab strip scene layer.
-                    StripLayoutHelperManager.class,
-                    TopToolbarOverlayCoordinator.class,
-                    ScrollingBottomViewSceneLayer.class,
-                    StatusIndicatorCoordinator.getSceneOverlayClass(),
-                    ContextualSearchPanel.class,
-                    ReadAloudMiniPlayerSceneLayer.class
-                };
+        Class[] overlayOrder;
+        if (ChromeFeatureList.sDynamicTopChrome.isEnabled()) {
+            // When DynamicTopChrome is enabled, place the tab strip behind the toolbar scene layer
+            // as during transition, the toolbar will move up and cover the tab strip.
+            overlayOrder =
+                    new Class[] {
+                        HistoryNavigationCoordinator.getSceneOverlayClass(),
+                        // StripLayoutHelperManager should be updated before
+                        // ScrollingBottomViewSceneLayer Since ScrollingBottomViewSceneLayer change
+                        // the container size, it causes relocation tab strip scene layer.
+                        StripLayoutHelperManager.class,
+                        TopToolbarOverlayCoordinator.class,
+                        ScrollingBottomViewSceneLayer.class,
+                        StatusIndicatorCoordinator.getSceneOverlayClass(),
+                        ContextualSearchPanel.class,
+                        ReadAloudMiniPlayerSceneLayer.class
+                    };
+        } else {
+            overlayOrder =
+                    new Class[] {
+                        HistoryNavigationCoordinator.getSceneOverlayClass(),
+                        TopToolbarOverlayCoordinator.class,
+                        // StripLayoutHelperManager should be updated before
+                        // ScrollingBottomViewSceneLayer Since ScrollingBottomViewSceneLayer change
+                        // the container size, it causes relocation tab strip scene layer.
+                        StripLayoutHelperManager.class,
+                        ScrollingBottomViewSceneLayer.class,
+                        StatusIndicatorCoordinator.getSceneOverlayClass(),
+                        ContextualSearchPanel.class,
+                        ReadAloudMiniPlayerSceneLayer.class
+                    };
+        }
 
         for (int i = 0; i < overlayOrder.length; i++) mOverlayOrderMap.put(overlayOrder[i], i);
 
@@ -776,7 +796,8 @@ public class LayoutManagerImpl
             float previousWidth = getActiveLayout().getWidth();
             float previousHeight = getActiveLayout().getHeight();
 
-            float oldViewportTop = mCachedWindowViewport.top;
+            float oldWindowViewportTop = mCachedWindowViewport.top;
+            float oldVisibleViewportTop = mCachedVisibleViewport.top;
             mHost.getWindowViewport(mCachedWindowViewport);
             mHost.getVisibleViewport(mCachedVisibleViewport);
             getActiveLayout()
@@ -791,7 +812,11 @@ public class LayoutManagerImpl
             float height = mCachedWindowViewport.height() * mPxToDp;
             if (width != previousWidth
                     || height != previousHeight
-                    || oldViewportTop != mCachedVisibleViewport.top) {
+                    // TODO (crbug.com/325501037) - Clean up this odd check comparing the window
+                    // and visible viewport values after fixing the contextual search menu's
+                    // reliance on it.
+                    || oldWindowViewportTop != mCachedVisibleViewport.top
+                    || oldVisibleViewportTop != mCachedVisibleViewport.top) {
                 for (int i = 0; i < mSceneOverlays.size(); i++) {
                     mSceneOverlays
                             .get(i)

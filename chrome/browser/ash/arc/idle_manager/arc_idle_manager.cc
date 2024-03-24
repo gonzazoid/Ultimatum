@@ -39,15 +39,9 @@ class DefaultDelegateImpl : public ArcIdleManager::Delegate {
       return;
     }
     arc_power_bridge->NotifyAndroidIdleState(
-        bridge, enable ? arc::mojom::IdleState::ACTIVE : kDozeState);
+        bridge, enable ? arc::mojom::IdleState::ACTIVE
+                       : arc::mojom::IdleState::INACTIVE);
   }
-
- private:
-  // Use force inactive state if ignore battery status enabled.
-  const arc::mojom::IdleState kDozeState =
-      kEnableArcIdleManagerIgnoreBatteryForPLT.Get()
-          ? arc::mojom::IdleState::FORCE_INACTIVE
-          : arc::mojom::IdleState::INACTIVE;
 };
 
 // Singleton factory for ArcIdleManager.
@@ -181,10 +175,16 @@ void ArcIdleManager::ThrottleInstance(bool should_throttle) {
       RequestDoze(true);
     }
   } else {
-    // Disable Doze mode should execute immediately, otherwise app launch may be
-    // blocked.
+    bool is_running = enable_timer_.IsRunning();
     enable_timer_.Stop();
-    RequestDoze(false);
+    if (!(is_running && !kEnableArcIdleManagerPendingIdleReactivate.Get())) {
+      // Disable Doze mode should execute immediately, otherwise app launch may
+      // be blocked.
+      RequestDoze(false);
+    }
+    // else, we had a scheduled timer to go idle, and we canceled it (i.e., we
+    // are still in active state), and we are not configured to force
+    // reactivation. So no need to request a wake up.
   }
 }
 

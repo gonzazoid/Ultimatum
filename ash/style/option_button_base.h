@@ -18,9 +18,9 @@ struct VectorIcon;
 namespace ash {
 
 class ASH_EXPORT OptionButtonBase : public views::LabelButton {
- public:
-  METADATA_HEADER(OptionButtonBase);
+  METADATA_HEADER(OptionButtonBase, views::LabelButton)
 
+ public:
   // The default padding for the button if the client doesn't explicitly set
   // one.
   static constexpr auto kDefaultPadding = gfx::Insets::TLBR(8, 12, 8, 12);
@@ -64,7 +64,7 @@ class ASH_EXPORT OptionButtonBase : public views::LabelButton {
   // views::LabelButton:
   gfx::Size CalculatePreferredSize() const override;
   gfx::Size GetMinimumSize() const override;
-  void Layout() override;
+  void Layout(PassKey) override;
   void OnThemeChanged() override;
   void NotifyClick(const ui::Event& event) override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;

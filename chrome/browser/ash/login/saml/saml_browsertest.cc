@@ -43,13 +43,13 @@
 #include "chrome/browser/ash/login/test/session_manager_state_waiter.h"
 #include "chrome/browser/ash/login/test/test_predicate_waiter.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
-#include "chrome/browser/ash/login/users/chrome_user_manager.h"
 #include "chrome/browser/ash/login/users/test_users.h"
 #include "chrome/browser/ash/login/wizard_context.h"
 #include "chrome/browser/ash/policy/affiliation/affiliation_test_helper.h"
 #include "chrome/browser/ash/policy/core/device_policy_cros_test_helper.h"
 #include "chrome/browser/ash/policy/test_support/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
+#include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/ash/settings/scoped_testing_cros_settings.h"
 #include "chrome/browser/ash/settings/stub_cros_settings_provider.h"
 #include "chrome/browser/browser_process.h"
@@ -108,7 +108,6 @@
 #include "google_apis/gaia/gaia_urls.h"
 #include "net/cookies/canonical_cookie.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
-
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "url/gurl.h"
@@ -302,9 +301,9 @@ class SamlTestBase : public OobeBaseTest {
   void SetupAuthFlowChangeListener() {
     content::ExecuteScriptAsync(
         GetLoginUI()->GetWebContents(),
-        "$('gaia-signin').authenticator_.addEventListener('authFlowChange',"
+        "$('gaia-signin').authenticator.addEventListener('authFlowChange',"
         "    function f() {"
-        "      $('gaia-signin').authenticator_.removeEventListener("
+        "      $('gaia-signin').authenticator.removeEventListener("
         "          'authFlowChange', f);"
         "      window.domAutomationController.send("
         "          $('gaia-signin').isSamlAuthFlowForTesting() ?"
@@ -656,7 +655,7 @@ IN_PROC_BROWSER_TEST_P(SamlTestWithFeatures, ScrapedSingle) {
   // Make sure that the password is scraped correctly.
   ASSERT_TRUE(content::ExecJs(
       GetLoginUI()->GetWebContents(),
-      "$('gaia-signin').authenticator_.addEventListener('authCompleted',"
+      "$('gaia-signin').authenticator.addEventListener('authCompleted',"
       "    function(e) {"
       "      var password = e.detail.password;"
       "      window.domAutomationController.send(password);"
@@ -982,14 +981,14 @@ IN_PROC_BROWSER_TEST_P(SamlTestWithFeatures, NoticeUpdatedOnRedirect) {
       "  var processEventsAndSendIfHostFound = function() {"
       "    window.setTimeout(function() {"
       "      if (sendIfHostFound()) {"
-      "        $('gaia-signin').authenticator_.removeEventListener("
+      "        $('gaia-signin').authenticator.removeEventListener("
       "            'authDomainChange',"
       "            processEventsAndSendIfHostFound);"
       "      }"
       "    }, 0);"
       "  };"
       "  if (!sendIfHostFound()) {"
-      "    $('gaia-signin').authenticator_.addEventListener("
+      "    $('gaia-signin').authenticator.addEventListener("
       "        'authDomainChange',"
       "        processEventsAndSendIfHostFound);"
       "  }"
@@ -1127,7 +1126,7 @@ class SAMLEnrollmentTest : public SamlTestBase {
 
 SAMLEnrollmentTest::SAMLEnrollmentTest() {
   gaia_frame_parent_ = "authView";
-  authenticator_id_ = "$('enterprise-enrollment').authenticator_";
+  authenticator_id_ = "$('enterprise-enrollment').authenticator";
 }
 
 SAMLEnrollmentTest::~SAMLEnrollmentTest() = default;
@@ -1275,20 +1274,21 @@ void SAMLPolicyTest::SetUpOnMainThread() {
 
   // Give affiliated users appropriate affiliation IDs.
   const base::flat_set<std::string> user_affiliation_ids = {kAffiliationID};
-  ChromeUserManager::Get()->SetUserAffiliation(
+  auto* user_manager = user_manager::UserManager::Get();
+  user_manager->SetUserAffiliation(
       AccountId::FromUserEmailGaiaId(
           saml_test_users::kFirstUserCorpExampleComEmail, kFirstSAMLUserGaiaId),
       user_affiliation_ids);
-  ChromeUserManager::Get()->SetUserAffiliation(
+  user_manager->SetUserAffiliation(
       AccountId::FromUserEmailGaiaId(
           saml_test_users::kSecondUserCorpExampleComEmail,
           kSecondSAMLUserGaiaId),
       user_affiliation_ids);
-  ChromeUserManager::Get()->SetUserAffiliation(
+  user_manager->SetUserAffiliation(
       AccountId::FromUserEmailGaiaId(
           saml_test_users::kThirdUserCorpExampleComEmail, kThirdSAMLUserGaiaId),
       user_affiliation_ids);
-  ChromeUserManager::Get()->SetUserAffiliation(
+  user_manager->SetUserAffiliation(
       AccountId::FromUserEmailGaiaId(kNonSAMLUserEmail, kNonSAMLUserGaiaId),
       user_affiliation_ids);
 
@@ -1382,7 +1382,7 @@ void SAMLPolicyTest::ShowGAIALoginForm() {
   content::DOMMessageQueue message_queue(GetLoginUI()->GetWebContents());
   ASSERT_TRUE(content::ExecJs(
       GetLoginUI()->GetWebContents(),
-      "$('gaia-signin').authenticator_.addEventListener('ready', function() {"
+      "$('gaia-signin').authenticator.addEventListener('ready', function() {"
       "  window.domAutomationController.send('ready');"
       "});"));
   ASSERT_TRUE(LoginScreenTestApi::ClickAddUserButton());

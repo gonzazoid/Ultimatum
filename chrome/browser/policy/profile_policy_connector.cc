@@ -5,6 +5,7 @@
 #include "chrome/browser/policy/profile_policy_connector.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "base/check.h"
@@ -46,7 +47,6 @@
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_contents.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -664,21 +664,21 @@ std::string ProfilePolicyConnector::GetTimeToFirstPolicyLoadMetricSuffix()
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   DCHECK(user_);
   switch (user_->GetType()) {
-    case user_manager::USER_TYPE_REGULAR:
+    case user_manager::UserType::kRegular:
       if (user_manager::UserManager::Get()->IsUserCryptohomeDataEphemeral(
               user_->GetAccountId())) {
         return "Managed.Ephemeral";
       }
       return is_user_new_ ? "Managed.NewPersistent" : "Managed.Existing";
-    case user_manager::USER_TYPE_CHILD:
+    case user_manager::UserType::kChild:
       return "Child";
-    case user_manager::USER_TYPE_PUBLIC_ACCOUNT:
+    case user_manager::UserType::kPublicAccount:
       return "ManagedGuestSession";
-    case user_manager::USER_TYPE_KIOSK_APP:
-    case user_manager::USER_TYPE_ARC_KIOSK_APP:
-    case user_manager::USER_TYPE_WEB_KIOSK_APP:
+    case user_manager::UserType::kKioskApp:
+    case user_manager::UserType::kArcKioskApp:
+    case user_manager::UserType::kWebKioskApp:
       return "Kiosk";
-    case user_manager::USER_TYPE_GUEST:
+    case user_manager::UserType::kGuest:
       // Don't report the metric in uninteresting or unreachable cases.
       return "";
   }

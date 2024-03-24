@@ -28,8 +28,8 @@ const auto kUseDate = base::Time::FromSecondsSinceUnixEpoch(123);
 const auto kModificationDate = base::Time::FromSecondsSinceUnixEpoch(456);
 
 // Returns a profile with all fields set. Contains identical data to the data
-// returned from `ConstructCompleteSpecifics()`.
-AutofillProfile ConstructCompleteProfile(
+// returned from `ConstructBaseSpecifics()`.
+AutofillProfile ConstructBaseProfile(
     AddressCountryCode country_code = AddressCountryCode("ES")) {
   AutofillProfile profile(kGuid, AutofillProfile::Source::kAccount,
                           country_code);
@@ -44,8 +44,6 @@ AutofillProfile ConstructCompleteProfile(
   profile.set_last_modifier_id(kNonChromeModifier);
 
   // Set name-related values and statuses.
-  profile.SetRawInfoWithVerificationStatus(NAME_HONORIFIC_PREFIX, u"Dr.",
-                                           VerificationStatus::kObserved);
   profile.SetRawInfoWithVerificationStatus(NAME_FIRST, u"John",
                                            VerificationStatus::kObserved);
   profile.SetRawInfoWithVerificationStatus(NAME_MIDDLE, u"K.",
@@ -60,9 +58,6 @@ AutofillProfile ConstructCompleteProfile(
                                            VerificationStatus::kParsed);
   profile.SetRawInfoWithVerificationStatus(NAME_FULL, u"John K. Doe",
                                            VerificationStatus::kUserVerified);
-  profile.SetRawInfoWithVerificationStatus(NAME_FULL_WITH_HONORIFIC_PREFIX,
-                                           u"Dr. John K. Doe",
-                                           VerificationStatus::kFormatted);
 
   // Set address-related values and statuses.
   profile.SetRawInfoWithVerificationStatus(ADDRESS_HOME_CITY, u"Mountain View",
@@ -104,11 +99,6 @@ AutofillProfile ConstructCompleteProfile(
   profile.SetRawInfo(COMPANY_NAME, u"Google, Inc.");
   profile.SetRawInfo(PHONE_HOME_WHOLE_NUMBER, u"1.800.555.1234");
 
-  // Set birthdate-related values.
-  profile.SetRawInfoAsInt(BIRTHDATE_DAY, 14);
-  profile.SetRawInfoAsInt(BIRTHDATE_MONTH, 3);
-  profile.SetRawInfoAsInt(BIRTHDATE_4_DIGIT_YEAR, 1997);
-
   // Add some `ProfileTokenQuality` observations.
   test_api(profile.token_quality())
       .AddObservation(NAME_FIRST,
@@ -123,7 +113,7 @@ AutofillProfile ConstructCompleteProfile(
 }
 
 AutofillProfile ConstructCompleteProfileBR() {
-  AutofillProfile profile = ConstructCompleteProfile(AddressCountryCode("BR"));
+  AutofillProfile profile = ConstructBaseProfile(AddressCountryCode("BR"));
   profile.SetRawInfoWithVerificationStatus(ADDRESS_HOME_CITY, u"Belo Horizonte",
                                            VerificationStatus::kObserved);
   profile.SetRawInfoWithVerificationStatus(ADDRESS_HOME_STATE, u"Minas Gerais",
@@ -167,7 +157,7 @@ AutofillProfile ConstructCompleteProfileBR() {
 }
 
 AutofillProfile ConstructCompleteProfileMX() {
-  AutofillProfile profile = ConstructCompleteProfile(AddressCountryCode("MX"));
+  AutofillProfile profile = ConstructBaseProfile(AddressCountryCode("MX"));
   profile.SetRawInfoWithVerificationStatus(
       ADDRESS_HOME_CITY, u"Ciudad de México", VerificationStatus::kObserved);
   profile.SetRawInfoWithVerificationStatus(ADDRESS_HOME_STATE, u"CDMX",
@@ -226,6 +216,33 @@ AutofillProfile ConstructCompleteProfileMX() {
   return profile;
 }
 
+AutofillProfile ConstructCompleteProfileIN() {
+  AutofillProfile profile = ConstructBaseProfile(AddressCountryCode("IN"));
+  profile.SetRawInfoWithVerificationStatus(ADDRESS_HOME_CITY, u"Hyderabad",
+                                           VerificationStatus::kObserved);
+  profile.SetRawInfoWithVerificationStatus(ADDRESS_HOME_STATE, u"Telangana",
+                                           VerificationStatus::kObserved);
+  profile.SetRawInfoWithVerificationStatus(
+      ADDRESS_HOME_STREET_ADDRESS,
+      u"12/110, Flat no. 504, Raja Apartments\n"
+      u"Kondapur, Opp to Ayyappa Swamy temple",
+      VerificationStatus::kFormatted);
+  profile.SetRawInfoWithVerificationStatus(
+      ADDRESS_HOME_STREET_LOCATION_AND_LOCALITY,
+      u"12/110, Flat no. 504, Raja Apartments, Kondapur",
+      VerificationStatus::kFormatted);
+  profile.SetRawInfoWithVerificationStatus(
+      ADDRESS_HOME_STREET_LOCATION, u"12/110, Flat no. 504, Raja Apartments",
+      VerificationStatus::kObserved);
+  profile.SetRawInfoWithVerificationStatus(ADDRESS_HOME_DEPENDENT_LOCALITY,
+                                           u"Kondapur",
+                                           VerificationStatus::kObserved);
+  profile.SetRawInfoWithVerificationStatus(ADDRESS_HOME_LANDMARK,
+                                           u"Opp to Ayyappa Swamy temple",
+                                           VerificationStatus::kObserved);
+  return profile;
+}
+
 // Helper function to set ContactInfoSpecifics::String- and IntegerToken
 // together with their verification status and value_hash.
 template <typename TokenType, typename Value>
@@ -239,8 +256,8 @@ void SetToken(TokenType* token,
 }
 
 // Returns ContactInfoSpecifics with all fields set. Contains identical data to
-// the profile returned from `ConstructCompleteProfile()`.
-ContactInfoSpecifics ConstructCompleteSpecifics() {
+// the profile returned from `ConstructBaseProfile()`.
+ContactInfoSpecifics ConstructBaseSpecifics() {
   ContactInfoSpecifics specifics;
 
   specifics.set_guid(kGuid);
@@ -254,8 +271,6 @@ ContactInfoSpecifics ConstructCompleteSpecifics() {
   specifics.set_last_modifier_id(kNonChromeModifier);
 
   // Set name-related values and statuses.
-  SetToken(specifics.mutable_name_honorific(), "Dr.",
-           ContactInfoSpecifics::OBSERVED);
   SetToken(specifics.mutable_name_first(), "John",
            ContactInfoSpecifics::OBSERVED);
   SetToken(specifics.mutable_name_middle(), "K.",
@@ -270,8 +285,6 @@ ContactInfoSpecifics ConstructCompleteSpecifics() {
            ContactInfoSpecifics::PARSED);
   SetToken(specifics.mutable_name_full(), "John K. Doe",
            ContactInfoSpecifics::USER_VERIFIED);
-  SetToken(specifics.mutable_name_full_with_honorific(), "Dr. John K. Doe",
-           ContactInfoSpecifics::FORMATTED);
 
   // Set address-related values and statuses.
   SetToken(specifics.mutable_address_city(), "Mountain View",
@@ -326,6 +339,8 @@ ContactInfoSpecifics ConstructCompleteSpecifics() {
            ContactInfoSpecifics::VERIFICATION_STATUS_UNSPECIFIED);
   SetToken(specifics.mutable_address_apt_type(), "",
            ContactInfoSpecifics::VERIFICATION_STATUS_UNSPECIFIED);
+  SetToken(specifics.mutable_address_street_location_and_locality(), "",
+           ContactInfoSpecifics::VERIFICATION_STATUS_UNSPECIFIED);
 
   // All of the following types don't store verification statuses in
   // AutofillProfile. This corresponds to `VERIFICATION_STATUS_UNSPECIFIED`.
@@ -335,14 +350,6 @@ ContactInfoSpecifics ConstructCompleteSpecifics() {
   SetToken(specifics.mutable_company_name(), "Google, Inc.",
            ContactInfoSpecifics::VERIFICATION_STATUS_UNSPECIFIED);
   SetToken(specifics.mutable_phone_home_whole_number(), "1.800.555.1234",
-           ContactInfoSpecifics::VERIFICATION_STATUS_UNSPECIFIED);
-
-  // Set birthdate-related values and statuses.
-  SetToken(specifics.mutable_birthdate_day(), 14,
-           ContactInfoSpecifics::VERIFICATION_STATUS_UNSPECIFIED);
-  SetToken(specifics.mutable_birthdate_month(), 3,
-           ContactInfoSpecifics::VERIFICATION_STATUS_UNSPECIFIED);
-  SetToken(specifics.mutable_birthdate_year(), 1997,
            ContactInfoSpecifics::VERIFICATION_STATUS_UNSPECIFIED);
 
   // Add some `ProfileTokenQuality` observations.
@@ -361,7 +368,7 @@ ContactInfoSpecifics ConstructCompleteSpecifics() {
 }
 
 ContactInfoSpecifics ConstructCompleteSpecificsBR() {
-  ContactInfoSpecifics specifics = ConstructCompleteSpecifics();
+  ContactInfoSpecifics specifics = ConstructBaseSpecifics();
 
   SetToken(specifics.mutable_address_country(), "BR",
            ContactInfoSpecifics::OBSERVED);
@@ -410,7 +417,7 @@ ContactInfoSpecifics ConstructCompleteSpecificsBR() {
 }
 
 ContactInfoSpecifics ConstructCompleteSpecificsMX() {
-  ContactInfoSpecifics specifics = ConstructCompleteSpecifics();
+  ContactInfoSpecifics specifics = ConstructBaseSpecifics();
 
   SetToken(specifics.mutable_address_country(), "MX",
            ContactInfoSpecifics::OBSERVED);
@@ -465,9 +472,51 @@ ContactInfoSpecifics ConstructCompleteSpecificsMX() {
   return specifics;
 }
 
+ContactInfoSpecifics ConstructCompleteSpecificsIN() {
+  ContactInfoSpecifics specifics = ConstructBaseSpecifics();
+
+  SetToken(specifics.mutable_address_country(), "IN",
+           ContactInfoSpecifics::OBSERVED);
+  SetToken(specifics.mutable_address_city(), "Hyderabad",
+           ContactInfoSpecifics::OBSERVED);
+  SetToken(specifics.mutable_address_state(), "Telangana",
+           ContactInfoSpecifics::OBSERVED);
+  SetToken(specifics.mutable_address_street_location(),
+           "12/110, Flat no. 504, Raja Apartments",
+           ContactInfoSpecifics::OBSERVED);
+  SetToken(specifics.mutable_address_dependent_locality(), "Kondapur",
+           ContactInfoSpecifics::OBSERVED);
+  SetToken(specifics.mutable_address_landmark(), "Opp to Ayyappa Swamy temple",
+           ContactInfoSpecifics::OBSERVED);
+  SetToken(specifics.mutable_address_street_location_and_locality(),
+           "12/110, Flat no. 504, Raja Apartments, Kondapur",
+           ContactInfoSpecifics::FORMATTED);
+  SetToken(specifics.mutable_address_street_address(),
+           "12/110, Flat no. 504, Raja Apartments\n"
+           "Kondapur, Opp to Ayyappa Swamy temple",
+           ContactInfoSpecifics::FORMATTED);
+
+  // Reset unused tokens from the default info.
+  SetToken(specifics.mutable_address_admin_level_2(), "",
+           ContactInfoSpecifics::VERIFICATION_STATUS_UNSPECIFIED);
+  SetToken(specifics.mutable_address_thoroughfare_name(), "",
+           ContactInfoSpecifics::VERIFICATION_STATUS_UNSPECIFIED);
+  SetToken(specifics.mutable_address_thoroughfare_number(), "",
+           ContactInfoSpecifics::VERIFICATION_STATUS_UNSPECIFIED);
+  SetToken(specifics.mutable_address_subpremise_name(), "",
+           ContactInfoSpecifics::VERIFICATION_STATUS_UNSPECIFIED);
+  SetToken(specifics.mutable_address_apt_num(), "",
+           ContactInfoSpecifics::VERIFICATION_STATUS_UNSPECIFIED);
+  SetToken(specifics.mutable_address_floor(), "",
+           ContactInfoSpecifics::VERIFICATION_STATUS_UNSPECIFIED);
+  SetToken(specifics.mutable_address_sorting_code(), "",
+           ContactInfoSpecifics::VERIFICATION_STATUS_UNSPECIFIED);
+  return specifics;
+}
+
 }  // namespace
 
-enum class I18nCountryModel { kLegacy = 0, kBR = 1, kMX = 2 };
+enum class I18nCountryModel { kLegacy = 0, kBR = 1, kMX = 2, kIN = 3 };
 
 // The tests are parametrized with a country to assert that all custom address
 // models are supported.
@@ -478,6 +527,7 @@ class ContactInfoSyncUtilTest
   ContactInfoSyncUtilTest() {
     features_.InitWithFeatures(
         {features::kAutofillUseI18nAddressModel,
+         features::kAutofillUseINAddressModel,
          features::kAutofillEnableSupportForLandmark,
          features::kAutofillEnableSupportForBetweenStreets,
          features::kAutofillEnableSupportForAddressOverflow,
@@ -485,19 +535,20 @@ class ContactInfoSyncUtilTest
          features::kAutofillEnableSupportForAddressOverflowAndLandmark,
          features::kAutofillEnableSupportForAdminLevel2,
          features::kAutofillEnableSupportForApartmentNumbers,
-         features::kAutofillTrackProfileTokenQuality,
-         features::kAutofillEnableSupportForHonorificPrefixes},
+         features::kAutofillTrackProfileTokenQuality},
         {});
   }
 
   AutofillProfile GetAutofillProfileForCountry(I18nCountryModel country_model) {
     switch (country_model) {
       case I18nCountryModel::kLegacy:
-        return ConstructCompleteProfile();
+        return ConstructBaseProfile();
       case I18nCountryModel::kBR:
         return ConstructCompleteProfileBR();
       case I18nCountryModel::kMX:
         return ConstructCompleteProfileMX();
+      case I18nCountryModel::kIN:
+        return ConstructCompleteProfileIN();
     }
   }
 
@@ -505,11 +556,13 @@ class ContactInfoSyncUtilTest
       I18nCountryModel country_model) {
     switch (country_model) {
       case I18nCountryModel::kLegacy:
-        return ConstructCompleteSpecifics();
+        return ConstructBaseSpecifics();
       case I18nCountryModel::kBR:
         return ConstructCompleteSpecificsBR();
       case I18nCountryModel::kMX:
         return ConstructCompleteSpecificsMX();
+      case I18nCountryModel::kIN:
+        return ConstructCompleteSpecificsIN();
     }
   }
 
@@ -606,7 +659,6 @@ TEST_P(ContactInfoSyncUtilTest, ContactInfoSpecificsFromAutofillProfile) {
       "unsupported_fields";
   *contact_info_specifics_with_only_unknown_fields.mutable_address_city()
        ->mutable_unknown_fields() = "unsupported_field_in_nested_message";
-
   ContactInfoSpecifics contact_info_specifics_from_profile =
       ContactInfoSpecificsFromAutofillProfile(
           GetAutofillProfileForCountry(GetParam()),
@@ -680,6 +732,7 @@ INSTANTIATE_TEST_SUITE_P(AutofillI18nModels,
                          ContactInfoSyncUtilTest,
                          testing::Values(I18nCountryModel::kLegacy,
                                          I18nCountryModel::kBR,
-                                         I18nCountryModel::kMX));
+                                         I18nCountryModel::kMX,
+                                         I18nCountryModel::kIN));
 
 }  // namespace autofill

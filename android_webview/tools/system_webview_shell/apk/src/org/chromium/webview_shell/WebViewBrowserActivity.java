@@ -97,6 +97,15 @@ public class WebViewBrowserActivity extends AppCompatActivity {
     }
 
     @Override
+    public void onBackPressed() {
+        if (mWebView != null && mWebView.canGoBack()) {
+            mWebView.goBack();
+        } else {
+            super.onBackPressed();
+        }
+    }
+
+    @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.main_menu, menu);
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.TRACING_CONTROLLER_BASIC_USAGE)) {
@@ -165,6 +174,12 @@ public class WebViewBrowserActivity extends AppCompatActivity {
                     .setChecked(
                             WebSettingsCompat.isAlgorithmicDarkeningAllowed(
                                     mWebView.getSettings()));
+        }
+
+        menu.findItem(R.id.menu_enable_third_party_cookies).setEnabled(mWebView != null);
+        if (mWebView != null) {
+            menu.findItem(R.id.menu_enable_third_party_cookies)
+                    .setChecked(CookieManager.getInstance().acceptThirdPartyCookies(mWebView));
         }
         return true;
     }
@@ -239,6 +254,13 @@ public class WebViewBrowserActivity extends AppCompatActivity {
                         !WebSettingsCompat.isAlgorithmicDarkeningAllowed(mWebView.getSettings()));
             }
             return true;
+        } else if (itemId == R.id.menu_enable_third_party_cookies) {
+            if (mWebView != null) {
+                boolean enable = !item.isChecked();
+                CookieManager.getInstance().setAcceptThirdPartyCookies(mWebView, enable);
+                item.setChecked(enable);
+                mWebView.reload(); // Reload to apply the settings.
+            }
         } else if (itemId == R.id.menu_multi_profile) {
             startActivity(new Intent(this, WebViewMultiProfileBrowserActivity.class));
             return true;

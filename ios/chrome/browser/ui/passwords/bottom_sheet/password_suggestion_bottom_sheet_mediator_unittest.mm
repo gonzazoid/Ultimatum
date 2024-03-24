@@ -16,9 +16,9 @@
 #import "components/prefs/pref_registry_simple.h"
 #import "components/prefs/testing_pref_service.h"
 #import "ios/chrome/browser/autofill/model/form_suggestion_tab_helper.h"
-#import "ios/chrome/browser/favicon/favicon_service_factory.h"
-#import "ios/chrome/browser/favicon/ios_chrome_favicon_loader_factory.h"
-#import "ios/chrome/browser/favicon/ios_chrome_large_icon_service_factory.h"
+#import "ios/chrome/browser/favicon/model/favicon_service_factory.h"
+#import "ios/chrome/browser/favicon/model/ios_chrome_favicon_loader_factory.h"
+#import "ios/chrome/browser/favicon/model/ios_chrome_large_icon_service_factory.h"
 #import "ios/chrome/browser/history/model/history_service_factory.h"
 #import "ios/chrome/browser/passwords/model/ios_chrome_account_password_store_factory.h"
 #import "ios/chrome/browser/passwords/model/ios_chrome_password_check_manager.h"
@@ -84,7 +84,7 @@ NSString* PrimaryActionLabelForUsernameFill() {
 @property(nonatomic, assign) BOOL askedIfSuggestionsAvailable;
 @property(nonatomic, assign) BOOL askedForSuggestions;
 @property(nonatomic, assign) SuggestionProviderType type;
-@property(nonatomic, readonly) autofill::PopupType suggestionType;
+@property(nonatomic, readonly) autofill::FillingProduct mainFillingProduct;
 
 // Creates a test provider with default suggesstions.
 + (instancetype)providerWithSuggestions;
@@ -236,9 +236,9 @@ class PasswordSuggestionBottomSheetMediatorTest : public PlatformTest {
     FormSuggestionTabHelper::CreateForWebState(test_web_state_.get(),
                                                suggestion_providers_);
 
-    web_state_list_->InsertWebState(0, std::move(test_web_state_),
-                                    WebStateList::INSERT_ACTIVATE,
-                                    WebStateOpener());
+    web_state_list_->InsertWebState(
+        std::move(test_web_state_),
+        WebStateList::InsertionParams::Automatic().Activate());
 
     prefs_ = std::make_unique<TestingPrefServiceSimple>();
     prefs_->registry()->RegisterIntegerPref(

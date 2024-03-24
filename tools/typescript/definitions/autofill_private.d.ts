@@ -15,6 +15,8 @@ declare global {
         email: string;
         isSyncEnabledForAutofillProfiles: boolean;
         isEligibleForAddressAccountStorage: boolean;
+        isAutofillSyncToggleEnabled: boolean;
+        isAutofillSyncToggleAvailable: boolean;
       }
 
       /**
@@ -91,10 +93,6 @@ declare global {
         ADDRESS_HOME_ADDRESS,
         ADDRESS_HOME_ADDRESS_WITH_NAME,
         ADDRESS_HOME_FLOOR,
-        NAME_FULL_WITH_HONORIFIC_PREFIX,
-        BIRTHDATE_DAY,
-        BIRTHDATE_MONTH,
-        BIRTHDATE_4_DIGIT_YEAR,
         PHONE_HOME_CITY_CODE_WITH_TRUNK_PREFIX,
         PHONE_HOME_CITY_AND_NUMBER_WITHOUT_TRUNK_PREFIX,
         PHONE_HOME_NUMBER_PREFIX,
@@ -182,6 +180,7 @@ declare global {
         network?: string;
         imageSrc?: string;
         cvc?: string;
+        productTermsUrl?: string;
         metadata?: AutofillMetadata;
       }
 
@@ -223,6 +222,7 @@ declare global {
       export function getLocalCard(guid: string): Promise<CreditCardEntry|null>;
       export function checkIfDeviceAuthAvailable(): Promise<boolean>;
       export function bulkDeleteAllCvcs(): void;
+      export function setAutofillSyncToggleEnabled(enabled: boolean): void;
 
       export const onPersonalDataChanged: ChromeEvent<
           (addresses: AddressEntry[], creditCards: CreditCardEntry[],

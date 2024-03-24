@@ -4,12 +4,13 @@
 
 #include "ui/native_theme/native_theme_win.h"
 
-#include <windows.h>
 #include <stddef.h>
 #include <uxtheme.h>
 #include <vsstyle.h>
 #include <vssym32.h>
+#include <windows.h>
 
+#include <optional>
 #include <tuple>
 
 #include "base/check.h"
@@ -29,7 +30,6 @@
 #include "cc/paint/paint_flags.h"
 #include "skia/ext/platform_canvas.h"
 #include "skia/ext/skia_utils_win.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "third_party/skia/include/core/SkColorPriv.h"
@@ -195,15 +195,12 @@ NativeTheme::SystemThemeColor SysColorToSystemThemeColor(int system_color) {
 }
 
 NativeTheme* NativeTheme::GetInstanceForNativeUi() {
-  static base::NoDestructor<NativeThemeWin> s_native_theme(
-      /*should_only_use_dark_colors=*/false,
-      /*theme_to_update=*/NativeTheme::GetInstanceForWeb());
+  static base::NoDestructor<NativeThemeWin> s_native_theme(true, false);
   return s_native_theme.get();
 }
 
 NativeTheme* NativeTheme::GetInstanceForDarkUI() {
-  static base::NoDestructor<NativeThemeWin> s_dark_native_theme(
-      /*should_only_use_dark_colors=*/true);
+  static base::NoDestructor<NativeThemeWin> s_dark_native_theme(false, true);
   return s_dark_native_theme.get();
 }
 
@@ -267,7 +264,7 @@ void NativeThemeWin::Paint(cc::PaintCanvas* canvas,
                            const gfx::Rect& rect,
                            const ExtraParams& extra,
                            ColorScheme color_scheme,
-                           const absl::optional<SkColor>& accent_color) const {
+                           const std::optional<SkColor>& accent_color) const {
   if (rect.IsEmpty())
     return;
 
@@ -293,11 +290,9 @@ void NativeThemeWin::Paint(cc::PaintCanvas* canvas,
   }
 }
 
-NativeThemeWin::NativeThemeWin(bool should_only_use_dark_colors,
-                               NativeTheme* theme_to_update)
-    : NativeTheme(should_only_use_dark_colors,
-                  ui::SystemTheme::kDefault,
-                  theme_to_update),
+NativeThemeWin::NativeThemeWin(bool configure_web_instance,
+                               bool should_only_use_dark_colors)
+    : NativeTheme(should_only_use_dark_colors),
       supports_windows_dark_mode_(base::win::IsDarkModeAvailable()),
       color_change_listener_(this) {
   // By default UI should not use the system accent color.
@@ -340,18 +335,29 @@ NativeThemeWin::NativeThemeWin(bool should_only_use_dark_colors,
 
   memset(theme_handles_, 0, sizeof(theme_handles_));
 
-  if (theme_to_update && !IsForcedDarkMode() && !IsForcedHighContrast() &&
-      base::SequencedTaskRunner::HasCurrentDefault()) {
-    theme_to_update->set_use_dark_colors(ShouldUseDarkColors());
-    theme_to_update->set_forced_colors(InForcedColorsMode());
-    theme_to_update->set_preferred_color_scheme(GetPreferredColorScheme());
-    theme_to_update->SetPreferredContrast(GetPreferredContrast());
-    theme_to_update->set_prefers_reduced_transparency(
-        GetPrefersReducedTransparency());
-    theme_to_update->set_system_colors(GetSystemColors());
-    theme_to_update->set_should_use_system_accent_color(
-        should_use_system_accent_color());
-  }
+  if (configure_web_instance)
+    ConfigureWebInstance();
+}
+
+void NativeThemeWin::ConfigureWebInstance() {
+  // Add the web native theme as an observer to stay in sync with color scheme
+  // changes.
+  color_scheme_observer_ =
+      std::make_unique<NativeTheme::ColorSchemeNativeThemeObserver>(
+          NativeTheme::GetInstanceForWeb());
+  AddObserver(color_scheme_observer_.get());
+
+  // Initialize the native theme web instance with the system color info.
+  NativeTheme* web_instance = NativeTheme::GetInstanceForWeb();
+  web_instance->set_use_dark_colors(ShouldUseDarkColors());
+  web_instance->set_forced_colors(InForcedColorsMode());
+  web_instance->set_preferred_color_scheme(GetPreferredColorScheme());
+  web_instance->SetPreferredContrast(GetPreferredContrast());
+  web_instance->set_prefers_reduced_transparency(
+      GetPrefersReducedTransparency());
+  web_instance->set_system_colors(GetSystemColors());
+  web_instance->set_should_use_system_accent_color(
+      should_use_system_accent_color());
 }
 
 NativeThemeWin::~NativeThemeWin() {

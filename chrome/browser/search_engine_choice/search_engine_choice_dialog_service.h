@@ -16,6 +16,7 @@
 #include "chrome/browser/ui/browser_list_observer.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/prefs/pref_registry_simple.h"
+#include "components/search_engines/search_engine_choice/search_engine_choice_service.h"
 #include "components/search_engines/template_url_data.h"
 #include "components/search_engines/template_url_service.h"
 
@@ -48,8 +49,10 @@ class SearchEngineChoiceDialogService : public KeyedService {
     kDialog,
   };
 
-  SearchEngineChoiceDialogService(Profile& profile,
-                                  TemplateURLService& template_url_service);
+  SearchEngineChoiceDialogService(
+      Profile& profile,
+      search_engines::SearchEngineChoiceService& search_engine_choice_service,
+      TemplateURLService& template_url_service);
   ~SearchEngineChoiceDialogService() override;
 
   // Informs the service that a Search Engine Choice dialog has been opened
@@ -115,10 +118,6 @@ class SearchEngineChoiceDialogService : public KeyedService {
   // ensure it is reset at the end of your test.
   static void SetDialogDisabledForTests(bool dialog_disabled);
 
-  // Registers the local state preferences used by the search engine choice
-  // screen.
-  static void RegisterLocalStatePrefs(PrefRegistrySimple* registry);
-
   // Returns a copy of the `ChoiceData` specific to `profile`.
   static search_engines::ChoiceData GetChoiceDataFromProfile(Profile& profile);
 
@@ -161,6 +160,8 @@ class SearchEngineChoiceDialogService : public KeyedService {
 
   // The `KeyedService` lifetime is expected to exceed the profile's.
   const raw_ref<Profile> profile_;
+  const raw_ref<search_engines::SearchEngineChoiceService>
+      search_engine_choice_service_;
   const raw_ref<TemplateURLService> template_url_service_;
   base::WeakPtrFactory<SearchEngineChoiceDialogService> weak_ptr_factory_{this};
 };

@@ -74,14 +74,31 @@ void HostConnectionMetricsLogger::RecordInternalError(
       RecordConnectionResultFailure(
           ConnectionToHostResult_FailureEventType::UNKNOWN_ERROR);
       break;
+    case ConnectionToHostInternalError::CLIENT_CONNECTION_TIMEOUT:
+      RecordConnectionResultFailureClientConnection(
+          ConnectionToHostResult_FailureClientConnectionEventType::TIMEOUT);
+      break;
     case ConnectionToHostInternalError::CLIENT_CONNECTION_INTERNAL_ERROR:
       RecordConnectionResultFailureClientConnection(
           ConnectionToHostResult_FailureClientConnectionEventType::
               INTERNAL_ERROR);
       break;
-    case ConnectionToHostInternalError::CLIENT_CONNECTION_TIMEOUT:
+    case ConnectionToHostInternalError::CLIENT_CONNECTION_WIFI_FAILED_TO_ENABLE:
       RecordConnectionResultFailureClientConnection(
-          ConnectionToHostResult_FailureClientConnectionEventType::TIMEOUT);
+          ConnectionToHostResult_FailureClientConnectionEventType::
+              WIFI_FAILED_TO_ENABLED);
+      break;
+    case ConnectionToHostInternalError::
+        CLIENT_CONNECTION_NETWORK_CONNECTION_HANDLER_FAILED:
+      RecordConnectionResultFailureClientConnection(
+          ConnectionToHostResult_FailureClientConnectionEventType::
+              NETWORK_CONNECTION_HANDLER_FAILED);
+      break;
+    case ConnectionToHostInternalError::
+        CLIENT_CONNECTION_NETWORK_STATE_WAS_NULL:
+      RecordConnectionResultFailureClientConnection(
+          ConnectionToHostResult_FailureClientConnectionEventType::
+              NETWORK_STATE_WAS_NULL);
       break;
     case ConnectionToHostInternalError::
         TETHERING_TIMED_OUT_FIRST_TIME_SETUP_REQUIRED:
@@ -131,7 +148,7 @@ void HostConnectionMetricsLogger::RecordInternalError(
       RecordConnectionResultFailure(
           ConnectionToHostResult_FailureEventType::INVALID_WIFI_AP_CONFIG);
       break;
-  }
+  };
 }
 
 void HostConnectionMetricsLogger::OnActiveHostChanged(
@@ -207,6 +224,14 @@ void HostConnectionMetricsLogger::RecordUnavoidableError(
     case ConnectionToHostResult::PROVISIONING_FAILURE:
       event_type =
           ConnectionToHostResult_UnavoidableErrorEventType::PROVISIONING_FAILED;
+      break;
+    case ConnectionToHostResult::CANCELLED_FOR_NEWER_CONNECTION:
+      event_type = ConnectionToHostResult_UnavoidableErrorEventType::
+          CANCELLED_FOR_NEWER_CONNECTION_ATTEMPT;
+      break;
+    case ConnectionToHostResult::TETHER_SHUTDOWN_DURING_CONNECTION:
+      event_type = ConnectionToHostResult_UnavoidableErrorEventType::
+          SHUT_DOWN_DURING_CONNECTION;
       break;
     default:
       event_type = ConnectionToHostResult_UnavoidableErrorEventType::OTHER;

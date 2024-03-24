@@ -24,9 +24,9 @@ class TabSliderButton;
 // selected, the selector will move from the position of previously selected
 // button to the position of currently selected button.
 class ASH_EXPORT TabSlider : public views::TableLayoutView {
- public:
-  METADATA_HEADER(TabSlider);
+  METADATA_HEADER(TabSlider, views::TableLayoutView)
 
+ public:
   // The init parameters used to initialize the layout, appearance, and behavior
   // of the tab slider.
   struct InitParams {
@@ -76,7 +76,7 @@ class ASH_EXPORT TabSlider : public views::TableLayoutView {
   void OnButtonSelected(TabSliderButton* button);
 
   // views::View:
-  void Layout() override;
+  void Layout(PassKey) override;
 
  private:
   // The view of the selector.

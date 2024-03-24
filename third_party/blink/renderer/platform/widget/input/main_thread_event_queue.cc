@@ -10,6 +10,7 @@
 #include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/task/single_thread_task_runner.h"
+#include "base/time/time.h"
 #include "cc/base/features.h"
 #include "cc/metrics/event_metrics.h"
 #include "third_party/blink/public/common/features.h"
@@ -172,7 +173,7 @@ class QueuedWebInputEvent : public MainThreadEventQueueTask {
       // The |callback| won't be run, so our stored |callback_| should run
       // indicating error.
       HandledEvent(queue, mojom::blink::InputEventResultState::kNotConsumed,
-                   event_->latency_info(), nullptr, absl::nullopt);
+                   event_->latency_info(), nullptr, std::nullopt);
     }
   }
 
@@ -180,7 +181,7 @@ class QueuedWebInputEvent : public MainThreadEventQueueTask {
                     mojom::blink::InputEventResultState ack_result,
                     const ui::LatencyInfo& latency_info,
                     mojom::blink::DidOverscrollParamsPtr overscroll,
-                    absl::optional<cc::TouchAction> touch_action) {
+                    std::optional<cc::TouchAction> touch_action) {
     // callback_ can be null in tests.
     if (callback_) {
       std::move(callback_).Run(ack_result, latency_info, std::move(overscroll),
@@ -193,7 +194,7 @@ class QueuedWebInputEvent : public MainThreadEventQueueTask {
       for (auto&& callback : blocking_coalesced_callbacks_) {
         coalesced_latency_info.set_trace_id(callback.second);
         std::move(callback.first)
-            .Run(ack_result, coalesced_latency_info, nullptr, absl::nullopt);
+            .Run(ack_result, coalesced_latency_info, nullptr, std::nullopt);
       }
     }
 
@@ -215,6 +216,10 @@ class QueuedWebInputEvent : public MainThreadEventQueueTask {
   const WebInputEvent& Event() const { return event_->Event(); }
 
   WebCoalescedInputEvent* mutable_coalesced_event() { return event_.get(); }
+
+  void SetQueuedTimeStamp(base::TimeTicks queued_time) {
+    event_->EventPointer()->SetQueuedTimeStamp(queued_time);
+  }
 
  private:
   FilterResult HandleTouchScrollStartQueued() {
@@ -443,7 +448,7 @@ void MainThreadEventQueue::HandleEvent(
 
   if (callback) {
     std::move(callback).Run(ack_result, cloned_latency_info, nullptr,
-                            absl::nullopt);
+                            std::nullopt);
   }
 }
 
@@ -644,10 +649,10 @@ void MainThreadEventQueue::QueueEvent(
   WebInputEvent::Type input_event_type = WebInputEvent::Type::kUndefined;
   WebInputEventAttribution attribution;
   if (is_input_event) {
-    auto* queued_input_event =
-        static_cast<const QueuedWebInputEvent*>(event.get());
+    auto* queued_input_event = static_cast<QueuedWebInputEvent*>(event.get());
     input_event_type = queued_input_event->Event().GetType();
     attribution = queued_input_event->attribution();
+    queued_input_event->SetQueuedTimeStamp(base::TimeTicks::Now());
   }
 
   {

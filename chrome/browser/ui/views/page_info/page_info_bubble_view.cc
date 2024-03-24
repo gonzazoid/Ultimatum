@@ -304,7 +304,7 @@ gfx::Size PageInfoBubbleView::CalculatePreferredSize() const {
 }
 
 void PageInfoBubbleView::ChildPreferredSizeChanged(views::View* child) {
-  Layout();
+  DeprecatedLayoutImmediately();
   SizeToContents();
 }
 

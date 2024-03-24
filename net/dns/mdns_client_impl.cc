@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -29,7 +30,6 @@
 #include "net/dns/public/util.h"
 #include "net/dns/record_rdata.h"
 #include "net/socket/datagram_socket.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 // TODO(gene): Remove this temporary method of disabling NSEC support once it
 // becomes clear whether this feature should be
@@ -143,7 +143,7 @@ void MDnsConnection::SocketHandler::OnDatagramReceived(int rv) {
 void MDnsConnection::SocketHandler::Send(const scoped_refptr<IOBuffer>& buffer,
                                          unsigned size) {
   if (send_in_progress_) {
-    send_queue_.push(std::make_pair(buffer, size));
+    send_queue_.emplace(buffer, size);
     return;
   }
   int rv =
@@ -256,7 +256,7 @@ int MDnsClientImpl::Core::Init(MDnsSocketFactory* socket_factory) {
 }
 
 bool MDnsClientImpl::Core::SendQuery(uint16_t rrtype, const std::string& name) {
-  absl::optional<std::vector<uint8_t>> name_dns =
+  std::optional<std::vector<uint8_t>> name_dns =
       dns_names_util::DottedNameToNetwork(name);
   if (!name_dns.has_value())
     return false;
@@ -317,7 +317,7 @@ void MDnsClientImpl::Core::HandlePacket(DnsResponse* response,
     // Cleanup time may have changed.
     ScheduleCleanup(cache_.next_expiration());
 
-    update_keys.insert(std::make_pair(update_key, update));
+    update_keys.emplace(update_key, update);
   }
 
   for (const auto& update_key : update_keys) {

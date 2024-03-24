@@ -71,6 +71,7 @@
 
 - (void)sceneStateDidDisableUI:(SceneState*)sceneState {
   [self.firstRunCoordinator stop];
+  self.firstRunCoordinator = nil;
 
   [sceneState removeObserver:self];
   self.presentingSceneState = nil;
@@ -183,14 +184,11 @@
 
 #pragma mark - FirstRunCoordinatorDelegate
 
-- (void)willFinishPresentingScreens {
+- (void)didFinishFirstRun {
   DCHECK(self.appState.initStage == InitStageFirstRun);
   _firstRunUIBlocker.reset();
-
   [self.firstRunCoordinator stop];
-}
-
-- (void)didFinishPresentingScreens {
+  self.firstRunCoordinator = nil;
   [self.appState queueTransitionToNextInitStage];
 }
 

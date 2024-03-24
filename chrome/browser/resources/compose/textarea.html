@@ -104,6 +104,7 @@
     color: var(--google-red-600);
     font-size: 11px;
     line-height: 16px;
+    user-select: text;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -153,6 +154,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     width: 100%;
+    user-select: text;
   }
 
   :host-context([chrome-refresh-2023]) #readonlyText {
@@ -197,7 +199,8 @@
       required
       autofocus
       aria-invalid="[[invalidInput_]]"
-      aria-errormessage="error">
+      aria-errormessage="error"
+      on-change="onChangeTextArea_">
   </textarea>
   <div id="error" class="error" role="region" aria-live="assertive"
       hidden$="[[!invalidInput_]]">

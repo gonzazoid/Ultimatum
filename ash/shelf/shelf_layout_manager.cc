@@ -369,12 +369,6 @@ bool IsInImmersiveFullscreen() {
   return active_window && active_window->IsInImmersiveFullscreen();
 }
 
-int GetShelfSwipeOffset() {
-  return features::IsShelfPalmRejectionSwipeOffsetEnabled()
-             ? kShelfPalmRejectionSwipeOffset
-             : 0;
-}
-
 // Forwards gesture events to ShelfLayoutManager to hide the hotseat
 // when it is kExtended.
 class HotseatEventHandler : public ui::EventHandler,
@@ -786,8 +780,9 @@ void ShelfLayoutManager::UpdateAutoHideForMouseEvent(ui::MouseEvent* event,
 }
 
 void ShelfLayoutManager::UpdateContextualNudges() {
-  if (!ash::features::AreContextualNudgesEnabled())
+  if (!features::IsHideShelfControlsInTabletModeEnabled()) {
     return;
+  }
 
   // Do not allow nudges outside of an active session.
   if (Shell::Get()->session_controller()->GetSessionState() !=
@@ -832,8 +827,9 @@ void ShelfLayoutManager::UpdateContextualNudges() {
 }
 
 void ShelfLayoutManager::HideContextualNudges() {
-  if (!ash::features::AreContextualNudgesEnabled())
+  if (!features::IsHideShelfControlsInTabletModeEnabled()) {
     return;
+  }
 
   shelf_widget_->HideDragHandleNudge(
       contextual_tooltip::DismissNudgeReason::kOther);
@@ -1439,15 +1435,15 @@ void ShelfLayoutManager::OnDisplayMetricsChanged(
     return;
   }
 
+  // Layout may be needed if the display arrangement has changed.
+  LayoutShelf();
+
   // Update |user_work_area_bounds_| for the new display arrangement.
   UpdateShelfWorkAreaInsets();
 }
 
 void ShelfLayoutManager::OnLocaleChanged() {
-  if (features::IsUseLoginShelfWidgetEnabled())
-    shelf_->login_shelf_widget()->HandleLocaleChange();
-  else
-    shelf_->shelf_widget()->HandleLocaleChange();
+  shelf_->login_shelf_widget()->HandleLocaleChange();
   shelf_->status_area_widget()->HandleLocaleChange();
   shelf_->navigation_widget()->HandleLocaleChange();
   if (features::IsDeskButtonEnabled()) {
@@ -1878,10 +1874,7 @@ bool ShelfLayoutManager::SetDimmed(bool dimmed) {
   AnimateOpacity(GetLayer(shelf_->status_area_widget()), target_opacity_,
                  dim_animation_duration, dim_animation_tween);
 
-  if (features::IsUseLoginShelfWidgetEnabled())
-    shelf_->login_shelf_widget()->SetLoginShelfButtonOpacity(target_opacity_);
-  else
-    shelf_widget_->SetLoginShelfButtonOpacity(target_opacity_);
+  shelf_->login_shelf_widget()->SetLoginShelfButtonOpacity(target_opacity_);
 
   return true;
 }
@@ -1916,9 +1909,7 @@ void ShelfLayoutManager::UpdateBoundsAndOpacity(bool animate) {
   if (features::IsDeskButtonEnabled()) {
     shelf_widget_->desk_button_widget()->UpdateLayout(animate);
   }
-  if (features::IsUseLoginShelfWidgetEnabled()) {
-    shelf_->login_shelf_widget()->UpdateLayout(animate);
-  }
+  shelf_->login_shelf_widget()->UpdateLayout(animate);
 
   phase_ = ShelfLayoutPhase::kAtRest;
 }
@@ -1950,27 +1941,19 @@ void ShelfLayoutManager::UpdateTargetBounds(const State& state,
   shelf_->shelf_widget()->CalculateTargetBounds();
   shelf_->status_area_widget()->CalculateTargetBounds();
   shelf_->navigation_widget()->CalculateTargetBounds();
-  // If the desk button should be on the shelf, reserve space for it in the
-  // hotseat before drawing the hotseat.
-  DeskButtonWidget* desk_button = shelf_->desk_button_widget();
-  if (features::IsDeskButtonEnabled() && desk_button->ShouldBeVisible()) {
-    shelf_->hotseat_widget()->ReserveSpaceForAdjacentWidgets(
-        shelf_->IsHorizontalAlignment()
-            ? (base::i18n::IsRTL()
-                   ? gfx::Insets::TLBR(0, 0, 0,
-                                       desk_button->GetPreferredLength())
-                   : gfx::Insets::TLBR(0, desk_button->GetPreferredLength(), 0,
-                                       0))
-            : gfx::Insets::TLBR(desk_button->GetPreferredLength(), 0, 0, 0));
+
+  if (features::IsDeskButtonEnabled() &&
+      shelf_->desk_button_widget()->ShouldReserveSpaceFromShelf()) {
+    // If the desk button should be on the shelf, reserve space for it in the
+    // hotseat before drawing the hotseat.
+    CalculateDeskButtonAndHotseatTargetBounds();
   } else {
+    // If no desk button widget, do not reserve any space.
     shelf_->hotseat_widget()->ReserveSpaceForAdjacentWidgets(gfx::Insets());
+    shelf_->hotseat_widget()->CalculateTargetBounds();
   }
-  shelf_->hotseat_widget()->CalculateTargetBounds();
-  if (features::IsDeskButtonEnabled()) {
-    desk_button->CalculateTargetBounds();
-  }
-  if (features::IsUseLoginShelfWidgetEnabled())
-    shelf_->login_shelf_widget()->CalculateTargetBounds();
+
+  shelf_->login_shelf_widget()->CalculateTargetBounds();
 
   target_opacity_ = ComputeTargetOpacity(state);
 
@@ -2011,32 +1994,20 @@ void ShelfLayoutManager::UpdateWorkAreaInsetsAndNotifyObservers(
       ->UpdateWorkAreaOfDisplayNearestWindow(shelf_native_window, shelf_insets);
 }
 
-void ShelfLayoutManager::HandleScrollableShelfContainerBoundsChange() const {
+void ShelfLayoutManager::HandleScrollableShelfContainerBoundsChange() {
   DeskButtonWidget* desk_button = shelf_widget_->desk_button_widget();
-  if (desk_button && desk_button->IsVisible()) {
-    // The desk button widget bounds depend on the scrollable shelf container
-    // bounds.
-    ScrollableShelfView* scrollable_shelf_view =
-        shelf_->hotseat_widget()->scrollable_shelf_view();
-
-    // In horizontal shelf we shrink the button if it causes shelf overflow when
-    // expanded. We calculate this hypothetically before we recalculate target
-    // bounds because we want to avoid a cycle where the button shrinks, the
-    // shelf is no longer overflown, the button expands because the shelf is no
-    // longer overflown, the shelf is overflown again, etc.
-    bool should_expand =
-        shelf_->IsHorizontalAlignment() &&
-        !scrollable_shelf_view->CalculateShelfOverflowForAvailableLength(
-            scrollable_shelf_view->GetLocalBounds().width() +
-            desk_button->GetPreferredLength() -
-            desk_button->GetPreferredExpandedWidth());
-    if (desk_button->is_expanded() != should_expand) {
-      desk_button->SetExpanded(should_expand);
+  if (desk_button && desk_button->ShouldReserveSpaceFromShelf()) {
+    // If desk button widget changes its state, update hotseat widget layout.
+    const bool old_zero_state = desk_button->zero_state();
+    CalculateDeskButtonAndHotseatTargetBounds();
+    if (desk_button->zero_state() != old_zero_state) {
+      // Update hotseat widget layout with animation.
+      shelf_->hotseat_widget()->UpdateLayout(/*animate=*/true);
+      // Update desk button widget layout without animation.
+      shelf_->desk_button_widget()->UpdateLayout(/*animate=*/false);
     } else {
-      // `SetExpanded` already calculates and sets the target bounds, so we only
-      // have to do this when the shelf is vertical.
-      desk_button->CalculateTargetBounds();
-      desk_button->UpdateLayout(true);
+      // Update desk button widget layout with animation.
+      shelf_->desk_button_widget()->UpdateLayout(/*animate=*/true);
     }
   }
 }
@@ -2079,6 +2050,10 @@ void ShelfLayoutManager::UpdateTargetBoundsForGesture(
         adjusted_shelf_position);
     shelf_->hotseat_widget()->UpdateTargetBoundsForGesture(
         adjusted_shelf_position);
+    if (features::IsDeskButtonEnabled()) {
+      shelf_->desk_button_widget()->UpdateTargetBoundsForGesture(
+          adjusted_shelf_position);
+    }
     shelf_->navigation_widget()->UpdateTargetBoundsForGesture(
         adjusted_shelf_position);
     shelf_->status_area_widget()->UpdateTargetBoundsForGesture(
@@ -2263,7 +2238,9 @@ ShelfAutoHideState ShelfLayoutManager::CalculateAutoHideState(
   if (shelf_widget_->IsActive() || shelf_->navigation_widget()->IsActive() ||
       shelf_->hotseat_widget()->IsActive() ||
       (shelf_widget_->status_area_widget() &&
-       shelf_widget_->status_area_widget()->IsActive())) {
+       shelf_widget_->status_area_widget()->IsActive()) ||
+      (shelf_->desk_button_widget() &&
+       shelf_->desk_button_widget()->IsActive())) {
     return SHELF_AUTO_HIDE_SHOWN;
   }
 
@@ -2417,13 +2394,10 @@ bool ShelfLayoutManager::IsShelfWindow(aura::Window* window) {
       GetDragHandleNudgeWindow(shelf_widget_);
 
   // Calculate whether `window` is contained by the login shelf widget.
-  bool window_in_login_shelf_widget = false;
-  if (features::IsUseLoginShelfWidgetEnabled()) {
-    const aura::Window* login_shelf_window =
-        shelf_->login_shelf_widget()->GetNativeWindow();
-    window_in_login_shelf_widget =
-        (login_shelf_window && login_shelf_window->Contains(window));
-  }
+  const aura::Window* login_shelf_window =
+      shelf_->login_shelf_widget()->GetNativeWindow();
+  bool window_in_login_shelf_widget =
+      (login_shelf_window && login_shelf_window->Contains(window));
 
   // Calculate whether `window` is contained by the desk button widget.
   bool window_in_desk_button_widget = false;
@@ -2733,8 +2707,9 @@ bool ShelfLayoutManager::StartShelfDrag(const ui::LocatedEvent& event_in_screen,
     // For tablet mode, we allow a certain offset between the drag event offset
     // and the hotseat location to avoid accidentally extendeing the hotseat in
     // certain conditions.
-    drag_amount_ =
-        is_tablet_mode && IsActiveWindowStylusApp() ? GetShelfSwipeOffset() : 0;
+    drag_amount_ = is_tablet_mode && IsActiveWindowStylusApp()
+                       ? kShelfPalmRejectionSwipeOffset
+                       : 0;
   }
 
   // If the start location is above the shelf (e.g., on the extended hotseat),
@@ -2781,7 +2756,12 @@ void ShelfLayoutManager::UpdateDrag(const ui::LocatedEvent& event_in_screen,
     last_drag_velocity_ =
         event_in_screen.AsGestureEvent()->details().velocity_y();
   }
-  LayoutShelf();
+
+  // Prevent unnecessary layout and paint work when handling window drag from
+  // shelf.
+  if (!IsWindowDragInProgress()) {
+    LayoutShelf();
+  }
 
   // Request a new hotseat presentation time record if the hotseat bounds
   // changed while the hotseat is in drag. If hotseat bounds remained the
@@ -3166,8 +3146,7 @@ void ShelfLayoutManager::HandleShelfAlignmentChange() {
   // The desk button widget needs to know that the alignment is changing early
   // so that it can calculate the correct preferred length.
   if (features::IsDeskButtonEnabled()) {
-    shelf_->desk_button_widget()->PrepareForAlignmentChange(
-        shelf_->alignment());
+    shelf_->desk_button_widget()->PrepareForAlignmentChange();
   }
 
   UpdateVisibilityState(/*force_layout=*/true);
@@ -3203,6 +3182,47 @@ bool ShelfLayoutManager::IsShelfContainerAnimating() const {
       ->layer()
       ->GetAnimator()
       ->is_animating();
+}
+
+void ShelfLayoutManager::CalculateDeskButtonAndHotseatTargetBounds() {
+  CHECK(features::IsDeskButtonEnabled() && shelf_->desk_button_widget() &&
+        shelf_->desk_button_widget()->ShouldReserveSpaceFromShelf());
+
+  auto reserve_space_for_desk_button_widget = [](Shelf* shelf) {
+    const int length_needed = DeskButtonWidget::GetMaxLength(
+        shelf->IsHorizontalAlignment(),
+        shelf->desk_button_widget()->zero_state());
+    shelf->hotseat_widget()->ReserveSpaceForAdjacentWidgets(
+        shelf->IsHorizontalAlignment()
+            ? (base::i18n::IsRTL() ? gfx::Insets::TLBR(0, 0, 0, length_needed)
+                                   : gfx::Insets::TLBR(0, length_needed, 0, 0))
+            : gfx::Insets::TLBR(length_needed, 0, 0, 0));
+  };
+
+  // First calculate target bounds of the hotseat widget.
+  if (shelf_->IsHorizontalAlignment() &&
+      !shelf_->desk_button_widget()->IsForcedZeroState()) {
+    // Try to reserve length for expanded desk button widget first.
+    shelf_->desk_button_widget()->set_zero_state(false);
+    reserve_space_for_desk_button_widget(shelf_);
+    shelf_->hotseat_widget()->CalculateTargetBounds();
+
+    // If hotseat overflows, reserve length for zero state desk button widget
+    // to save shelf space.
+    if (shelf_->hotseat_widget()->CalculateShelfOverflow(
+            /*use_target_bounds=*/true)) {
+      shelf_->desk_button_widget()->set_zero_state(true);
+      reserve_space_for_desk_button_widget(shelf_);
+      shelf_->hotseat_widget()->CalculateTargetBounds();
+    }
+  } else {
+    shelf_->desk_button_widget()->set_zero_state(true);
+    reserve_space_for_desk_button_widget(shelf_);
+    shelf_->hotseat_widget()->CalculateTargetBounds();
+  }
+
+  // Then calculate target bounds of the desk button widget.
+  shelf_->desk_button_widget()->CalculateTargetBounds();
 }
 
 }  // namespace ash

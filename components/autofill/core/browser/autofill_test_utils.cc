@@ -75,6 +75,14 @@ std::string GetRandomCardNumber() {
   return value;
 }
 
+base::Time GetArbitraryPastTime() {
+  return AutofillClock::Now() - base::Days(5);
+}
+
+base::Time GetArbitraryFutureTime() {
+  return AutofillClock::Now() + base::Days(10);
+}
+
 }  // namespace
 
 void SetFormGroupValues(FormGroup& form_group,
@@ -129,7 +137,7 @@ std::unique_ptr<PrefService> PrefServiceForTesting(
 [[nodiscard]] FormData CreateTestAddressFormData(const char* unique_id) {
   FormData form;
   form.host_frame = MakeLocalFrameToken();
-  form.unique_renderer_id = MakeFormRendererId();
+  form.renderer_id = MakeFormRendererId();
   form.name = u"MyForm" + ASCIIToUTF16(unique_id ? unique_id : "");
   form.button_titles = {std::make_pair(
       u"Submit", mojom::ButtonTitleType::BUTTON_ELEMENT_SUBMIT_TYPE)};
@@ -590,12 +598,53 @@ std::vector<CardUnmaskChallengeOption> GetCardUnmaskChallengeOptions(
             /*challenge_info=*/u"a******b@google.com",
             /*challenge_input_length=*/6U);
         break;
+      case CardUnmaskChallengeOptionType::kThreeDomainSecure: {
+        CardUnmaskChallengeOption challenge_option;
+        challenge_option.id =
+            CardUnmaskChallengeOption::ChallengeOptionId("456");
+        challenge_option.type = type;
+        challenge_option.url_to_open = GURL("https://www.example.com");
+        challenge_options.emplace_back(std::move(challenge_option));
+        break;
+      }
       default:
         NOTREACHED();
         break;
     }
   }
   return challenge_options;
+}
+
+CreditCardFlatRateBenefit GetActiveCreditCardFlatRateBenefit() {
+  return CreditCardFlatRateBenefit(
+      CreditCardBenefitBase::BenefitId("id1"),
+      CreditCardBenefitBase::LinkedCardInstrumentId(1234),
+      /*benefit_description=*/u"Get 2% cashback on any purchase",
+      /*start_time=*/GetArbitraryPastTime(),
+      /*expiry_time=*/GetArbitraryFutureTime());
+}
+
+CreditCardCategoryBenefit GetActiveCreditCardCategoryBenefit() {
+  return CreditCardCategoryBenefit(
+      CreditCardBenefitBase::BenefitId("id2"),
+      CreditCardBenefitBase::LinkedCardInstrumentId(2234),
+      CreditCardCategoryBenefit::BenefitCategory::kSubscription,
+      /*benefit_description=*/u"Get 2x points on purchases on this website",
+      /*start_time=*/GetArbitraryPastTime(),
+      /*expiry_time=*/GetArbitraryFutureTime());
+}
+
+CreditCardMerchantBenefit GetActiveCreditCardMerchantBenefit() {
+  base::flat_set<url::Origin> merchant_domains = {
+      url::Origin::Create(GURL("http://www.example.com")),
+      url::Origin::Create(GURL("http://www.example3.com"))};
+  return CreditCardMerchantBenefit(
+      CreditCardBenefitBase::BenefitId("id3"),
+      CreditCardBenefitBase::LinkedCardInstrumentId(3234),
+      /*benefit_description=*/u"Get 2x points on purchases on this website",
+      merchant_domains,
+      /*start_time=*/GetArbitraryPastTime(),
+      /*expiry_time=*/GetArbitraryFutureTime());
 }
 
 void SetProfileInfo(AutofillProfile* profile,
@@ -826,9 +875,9 @@ void GenerateTestAutofillPopup(
   FormData form;
   FormFieldData field;
   form.host_frame = MakeLocalFrameToken();
-  form.unique_renderer_id = MakeFormRendererId();
+  form.renderer_id = MakeFormRendererId();
   field.host_frame = MakeLocalFrameToken();
-  field.unique_renderer_id = MakeFieldRendererId();
+  field.renderer_id = MakeFieldRendererId();
   field.is_focusable = true;
   field.should_autocomplete = true;
   autofill_external_delegate->OnQuery(
@@ -972,7 +1021,6 @@ BankAccount CreatePixBankAccount(int64_t instrument_id) {
   BankAccount bank_account(
       instrument_id, u"nickname", GURL("http://www.example.com"), u"bank_name",
       u"account_number", BankAccount::AccountType::kChecking);
-  bank_account.AddPaymentRail(PaymentInstrument::PaymentRail::kPix);
   return bank_account;
 }
 

@@ -247,7 +247,7 @@ void RenderViewContextMenuBase::UpdateMenuItem(int command_id,
                                                bool enabled,
                                                bool hidden,
                                                const std::u16string& label) {
-  absl::optional<size_t> index = menu_model_.GetIndexOfCommandId(command_id);
+  std::optional<size_t> index = menu_model_.GetIndexOfCommandId(command_id);
   if (!index.has_value())
     return;
 
@@ -265,7 +265,7 @@ void RenderViewContextMenuBase::UpdateMenuItem(int command_id,
 
 void RenderViewContextMenuBase::UpdateMenuIcon(int command_id,
                                                const ui::ImageModel& icon) {
-  absl::optional<size_t> index = menu_model_.GetIndexOfCommandId(command_id);
+  std::optional<size_t> index = menu_model_.GetIndexOfCommandId(command_id);
   if (!index.has_value())
     return;
 
@@ -277,7 +277,7 @@ void RenderViewContextMenuBase::UpdateMenuIcon(int command_id,
 }
 
 void RenderViewContextMenuBase::RemoveMenuItem(int command_id) {
-  absl::optional<size_t> index = menu_model_.GetIndexOfCommandId(command_id);
+  std::optional<size_t> index = menu_model_.GetIndexOfCommandId(command_id);
   if (!index.has_value())
     return;
 
@@ -306,7 +306,7 @@ void RenderViewContextMenuBase::RemoveAdjacentSeparators() {
 }
 
 void RenderViewContextMenuBase::RemoveSeparatorBeforeMenuItem(int command_id) {
-  absl::optional<size_t> index = menu_model_.GetIndexOfCommandId(command_id);
+  std::optional<size_t> index = menu_model_.GetIndexOfCommandId(command_id);
   // Ignore if command not found or if it's the first menu item.
   if (!index.has_value() || index == size_t{0})
     return;
@@ -319,14 +319,6 @@ void RenderViewContextMenuBase::RemoveSeparatorBeforeMenuItem(int command_id) {
 
   if (toolkit_delegate_)
     toolkit_delegate_->RebuildMenu();
-}
-
-// TODO(crbug.com/1393234): This method returns the RenderViewHost associated
-// with the primary main frame. Using this in the presence of out of process
-// iframes is generally incorrect, and the use of RenderViewHost itself is
-// deprecated. Callers should use GetRenderFrameHost() instead.
-RenderViewHost* RenderViewContextMenuBase::GetRenderViewHost() const {
-  return source_web_contents_->GetPrimaryMainFrame()->GetRenderViewHost();
 }
 
 WebContents* RenderViewContextMenuBase::GetWebContents() const {

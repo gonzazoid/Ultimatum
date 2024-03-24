@@ -22,9 +22,9 @@ class ASH_EXPORT CalendarEventListView
     : public CalendarModel::Observer,
       public CalendarViewController::Observer,
       public views::View {
- public:
-  METADATA_HEADER(CalendarEventListView);
+  METADATA_HEADER(CalendarEventListView, views::View)
 
+ public:
   explicit CalendarEventListView(
       CalendarViewController* calendar_view_controller);
   CalendarEventListView(const CalendarEventListView& other) = delete;
@@ -46,7 +46,7 @@ class ASH_EXPORT CalendarEventListView
                        const google_apis::calendar::EventList* events) override;
 
   // views::View
-  void Layout() override;
+  void Layout(PassKey) override;
 
   // Updates the event list entries.
   void UpdateListItems();

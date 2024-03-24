@@ -18,6 +18,7 @@
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/scoped_observation.h"
 #include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -27,6 +28,7 @@
 #include "components/viz/common/frame_sinks/begin_frame_source.h"
 #include "content/browser/accessibility/browser_accessibility_manager.h"
 #include "content/browser/compositor/image_transport_factory.h"
+#include "content/browser/device_posture/device_posture_platform_provider.h"
 #include "content/browser/renderer_host/render_widget_host_view_base.h"
 #include "content/browser/renderer_host/render_widget_host_view_event_handler.h"
 #include "content/browser/renderer_host/text_input_manager.h"
@@ -34,7 +36,6 @@
 #include "content/common/cursors/webcursor.h"
 #include "content/public/browser/context_menu_params.h"
 #include "content/public/browser/visibility.h"
-#include "services/device/public/mojom/device_posture_provider.mojom.h"
 #include "third_party/blink/public/mojom/input/input_handler.mojom-forward.h"
 #include "third_party/blink/public/mojom/widget/record_content_to_visible_time_request.mojom-forward.h"
 #include "third_party/skia/include/core/SkRegion.h"
@@ -52,20 +53,17 @@
 
 #if BUILDFLAG(IS_WIN)
 #include "content/browser/renderer_host/virtual_keyboard_controller_win.h"
-#include "mojo/public/cpp/bindings/receiver.h"
-#include "mojo/public/cpp/bindings/remote.h"
 #endif
 
 namespace aura_extra {
 class WindowPositionInRootMonitor;
 }
 
-namespace wm {
-class ScopedTooltipDisabler;
-}
+namespace display {
+class Display;
+}  // namespace display
 
 namespace gfx {
-class Display;
 class Point;
 class Rect;
 }
@@ -74,6 +72,10 @@ namespace ui {
 enum class DomCode : uint32_t;
 class InputMethod;
 class LocatedEvent;
+}
+
+namespace wm {
+class ScopedTooltipDisabler;
 }
 
 namespace content {
@@ -103,7 +105,7 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
       public wm::ActivationDelegate,
       public aura::client::FocusChangeObserver,
       public aura::client::CursorClientObserver,
-      public device::mojom::DeviceViewportSegmentsClient {
+      public DevicePosturePlatformProvider::Observer {
  public:
   explicit RenderWidgetHostViewAura(RenderWidgetHost* host);
   RenderWidgetHostViewAura(const RenderWidgetHostViewAura&) = delete;
@@ -122,7 +124,7 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
   void WasUnOccluded() override;
   void WasOccluded() override;
   gfx::Rect GetViewBounds() override;
-  bool IsMouseLocked() override;
+  bool IsPointerLocked() override;
   gfx::Size GetVisibleViewportSize() override;
   void SetInsets(const gfx::Insets& insets) override;
   TouchSelectionControllerClientManager*
@@ -173,12 +175,12 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
   gfx::AcceleratedWidget AccessibilityGetAcceleratedWidget() override;
   gfx::NativeViewAccessible AccessibilityGetNativeViewAccessible() override;
   void SetMainFrameAXTreeID(ui::AXTreeID id) override;
-  blink::mojom::PointerLockResult LockMouse(
+  blink::mojom::PointerLockResult LockPointer(
       bool request_unadjusted_movement) override;
-  blink::mojom::PointerLockResult ChangeMouseLock(
+  blink::mojom::PointerLockResult ChangePointerLock(
       bool request_unadjusted_movement) override;
-  void UnlockMouse() override;
-  bool GetIsMouseLockedUnadjustedMovementForTesting() override;
+  void UnlockPointer() override;
+  bool GetIsPointerLockedUnadjustedMovementForTesting() override;
   bool LockKeyboard(std::optional<base::flat_set<ui::DomCode>> codes) override;
   void UnlockKeyboard() override;
   bool IsKeyboardLocked() override;
@@ -674,14 +676,14 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
   void SetTooltipText(const std::u16string& tooltip_text);
 
 #if BUILDFLAG(IS_WIN)
-  // Ensure that we're connecting to the device posture provider to
-  // get the DisplayFeatures.
-  void EnsureDevicePostureServiceConnection();
+  // Ensure that we're observing the device posture platform provider to
+  // get the display feature changes.
+  void ObserveDevicePosturePlatformProvider();
 #endif
 
-  // DeviceViewportSegmentClient.
-  void OnViewportSegmentsChanged(
-      const std::vector<gfx::Rect>& segments) override;
+  // DevicePosturePlatformProvider::Observer.
+  void OnDisplayFeatureBoundsChanged(
+      const gfx::Rect& display_feature_bounds) override;
 
   // Provided a list of viewport segments, calculate and set the
   // DisplayFeature.
@@ -813,13 +815,14 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
   // are expressed in DIPs relative to the view. See display_feature.h for more
   // details.
   std::optional<DisplayFeature> display_feature_;
-  // Viewport segments returned by the platform.
-  std::vector<gfx::Rect> viewport_segments_;
+  bool display_feature_overridden_for_testing_ = false;
+  // Display feature bounds returned by the OS.
+  gfx::Rect display_feature_bounds_;
 
 #if BUILDFLAG(IS_WIN)
-  mojo::Remote<device::mojom::DevicePostureProvider> device_posture_provider_;
-  mojo::Receiver<device::mojom::DeviceViewportSegmentsClient>
-      device_posture_receiver_{this};
+  base::ScopedObservation<DevicePosturePlatformProvider,
+                          DevicePosturePlatformProvider::Observer>
+      device_posture_observation_{this};
 #endif
 
   std::optional<display::ScopedDisplayObserver> display_observer_;

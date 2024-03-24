@@ -71,40 +71,10 @@ BASE_DECLARE_FEATURE(kMemorySaverMultistateMode);
 // saver option.
 extern const base::FeatureParam<bool> kMemorySaverShowRecommendedBadge;
 
-// This shows more information about discarded tabs in the tab strip and
-// hovercards.
-BASE_DECLARE_FEATURE(kDiscardedTabTreatment);
 // This displays active memory usage in hovercards.
 BASE_DECLARE_FEATURE(kMemoryUsageInHovercards);
 // This enables improved UI for adding site exceptions for tab discarding.
 BASE_DECLARE_FEATURE(kDiscardExceptionsImprovements);
-// This enables improved UI for highlighting memory savings in the page action
-// chip and dialog.
-BASE_DECLARE_FEATURE(kMemorySavingsReportingImprovements);
-
-// The minimum time between instances where the chip is shown in expanded mode.
-extern const base::FeatureParam<base::TimeDelta>
-    kExpandedMemorySaverChipFrequency;
-
-// The minimum discard savings that a tab must have for the chip to be expanded.
-extern const base::FeatureParam<int> kExpandedMemorySaverChipThresholdBytes;
-
-// The minimum time a tab must be discarded before the chip can be shown
-// expanded.
-extern const base::FeatureParam<base::TimeDelta>
-    kExpandedMemorySaverChipDiscardedDuration;
-
-// Percentiles of PMF across all tabs on all browsers.
-extern const base::FeatureParam<int> kMemorySaverChartPmf25PercentileBytes;
-extern const base::FeatureParam<int> kMemorySaverChartPmf50PercentileBytes;
-extern const base::FeatureParam<int> kMemorySaverChartPmf75PercentileBytes;
-extern const base::FeatureParam<int> kMemorySaverChartPmf99PercentileBytes;
-
-// Final opacity of the favicon after the discard animation completes
-extern const base::FeatureParam<double> kDiscardedTabTreatmentOpacity;
-
-// The version of the tab discard treatment on the favicon should be shown
-extern const base::FeatureParam<int> kDiscardedTabTreatmentOption;
 
 // Threshold for when memory usage is labeled as "high".
 extern const base::FeatureParam<int> kMemoryUsageInHovercardsHighThresholdBytes;
@@ -119,12 +89,6 @@ enum class MemoryUsageInHovercardsUpdateTrigger {
 // Sets when memory usage metrics will be fetched to display in hovercards.
 extern const base::FeatureParam<MemoryUsageInHovercardsUpdateTrigger>
     kMemoryUsageInHovercardsUpdateTrigger;
-
-enum class DiscardTabTreatmentOptions {
-  kNone = 0,
-  kFadeFullsizedFavicon = 1,
-  kFadeSmallFaviconWithRing = 2
-};
 
 // This enables the performance controls side panel for learning about and
 // configuring performance settings.

@@ -84,7 +84,7 @@ void PageInfoMainView::ContainerView::Update() {
   PreferredSizeChanged();
 }
 
-BEGIN_METADATA(PageInfoMainView, ContainerView, views::View)
+BEGIN_METADATA(PageInfoMainView, ContainerView)
 END_METADATA
 
 PageInfoMainView::PageInfoMainView(
@@ -178,7 +178,7 @@ void PageInfoMainView::SetCookieInfo(const CookiesNewInfo& cookie_info) {
     tooltip = l10n_util::GetStringUTF16(
         IDS_PAGE_INFO_TRACKING_PROTECTION_COOKIES_TOOLTIP);
 
-    if (cookie_info.status == CookieControlsStatus::kDisabledForSite) {
+    if (!cookie_info.protections_on) {
       label = l10n_util::GetStringUTF16(
           IDS_PAGE_INFO_TRACKING_PROTECTION_SITE_INFO_BUTTON_LABEL_ALLOWED);
     } else if (cookie_info.blocking_status == CookieBlocking3pcdStatus::kAll) {

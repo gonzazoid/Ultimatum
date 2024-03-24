@@ -38,7 +38,9 @@
 #include "components/media_router/common/test/test_helper.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/user_manager.h"
+#include "content/public/browser/web_contents_observer.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "content/public/test/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/events/test/event_generator.h"
@@ -109,7 +111,7 @@ class SystemTrayTrayCastMediaRouterChromeOSTest : public InProcessBrowserTest {
   std::u16string GetNotificationString() {
     message_center::NotificationList::Notifications notification_set =
         message_center::MessageCenter::Get()->GetVisibleNotifications();
-    for (auto* notification : notification_set) {
+    for (message_center::Notification* notification : notification_set) {
       if (notification->id() == kNotificationId) {
         return notification->title();
       }
@@ -293,8 +295,7 @@ class SystemTrayTrayCastAccessCodeChromeOSTest
 
   ash::UserContext CreateUserContext(const AccountId& account_id,
                                      const std::string& password) {
-    ash::UserContext user_context(user_manager::UserType::USER_TYPE_REGULAR,
-                                  account_id);
+    ash::UserContext user_context(user_manager::UserType::kRegular, account_id);
     user_context.SetKey(ash::Key(password));
     user_context.SetPasswordKey(ash::Key(password));
     if (account_id.GetUserEmail() == FakeGaiaMixin::kEnterpriseUser1) {

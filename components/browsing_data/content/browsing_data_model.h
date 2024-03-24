@@ -113,7 +113,7 @@ class BrowsingDataModel {
 
     // Returns the non-1P SchemefulSite this data is partitioned on. Returns
     // base::nullopt if the data is not partitioned, or is the 1P partition.
-    absl::optional<net::SchemefulSite> GetThirdPartyPartitioningSite() const;
+    std::optional<net::SchemefulSite> GetThirdPartyPartitioningSite() const;
 
     // The logical owner of this browsing data. This is the entity which this
     // information will be most strongly associated with in UX surfaces.
@@ -159,8 +159,12 @@ class BrowsingDataModel {
     // Returns the owner of the data identified by the given DataKey and
     // StorageType, or nullopt if the delegate does not manage the entity that
     // owns the given data.
-    virtual absl::optional<DataOwner> GetDataOwner(
+    virtual std::optional<DataOwner> GetDataOwner(
         const DataKey& data_key,
+        StorageType storage_type) const = 0;
+
+    // Returns true if storage type is Cookie-like i.e. non kAPI type.
+    virtual std::optional<bool> IsStorageTypeCookieLike(
         StorageType storage_type) const = 0;
 
     // Returns whether the delegate considers `storage_type` to be blocked by
@@ -169,7 +173,7 @@ class BrowsingDataModel {
     // This method isn't aware of the context in which the data key is being
     // accessed and may return false positive in case it was called for a first
     // party key in a first party context.
-    virtual absl::optional<bool> IsBlockedByThirdPartyCookieBlocking(
+    virtual std::optional<bool> IsBlockedByThirdPartyCookieBlocking(
         const DataKey& data_key,
         StorageType storage_type) const = 0;
 
@@ -282,6 +286,10 @@ class BrowsingDataModel {
   // Virtual to allow an in-memory only fake to be created.
   virtual void RemoveUnpartitionedBrowsingData(const DataOwner& data_owner,
                                                base::OnceClosure completed);
+
+  // Returns true if storage type is Cookie-like i.e. non kAPI type.
+  // This can't be static as it requires to consult the delegate.
+  bool IsStorageTypeCookieLike(StorageType storage_type) const;
 
   // Returns whether the provided `storage_type` is blocked when third party
   // cookies are blocked, utilizing `data_key` to exclude partitioned data.

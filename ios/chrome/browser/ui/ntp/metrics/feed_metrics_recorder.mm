@@ -12,6 +12,9 @@
 #import "base/metrics/user_metrics.h"
 #import "base/metrics/user_metrics_action.h"
 #import "base/time/time.h"
+#import "components/feed/core/common/pref_names.h"
+#import "components/feed/core/v2/public/ios/notice_card_tracker.h"
+#import "components/feed/core/v2/public/ios/prefs.h"
 #import "components/prefs/pref_service.h"
 #import "ios/chrome/browser/metrics/model/constants.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
@@ -56,6 +59,12 @@ using feed::FeedUserActionType;
 // Tracking property to avoid duplicate recordings of the Activity Buckets
 // metric.
 @property(nonatomic, assign) NSDate* activityBucketLastReportedDate;
+
+// Tracks whether user has engaged with the latest refreshed content. The term
+// "engaged" is defined by its usage in this file. For example, it may be
+// similar to `engagedSimpleReportedDiscover`.
+@property(nonatomic, assign, getter=hasEngagedWithLatestRefreshedContent)
+    BOOL engagedWithLatestRefreshedContent;
 
 // Tracking property to record a scroll for Good Visits.
 // TODO(crbug.com/1373650) separate the property below in two, one for each
@@ -165,13 +174,14 @@ using feed::FeedUserActionType;
 
 - (void)recordNTPDidChangeVisibility:(BOOL)visible {
   self.isNTPVisible = visible;
+
   if (visible) {
+    // Sets `feedBecameVisibleTime` before any time based check is ran to
+    // prevent negative values from non-initialized variables.
+    self.feedBecameVisibleTime = base::Time::Now();
     [self recordDiscoverFeedUserActionHistogram:FeedUserActionType::
                                                     kOpenedFeedSurface
                                   asInteraction:NO];
-  }
-
-  if (visible) {
     base::Time lastInteractionTimeForGoodVisitsDate =
         self.prefService->GetTime(kLastInteractionTimeForGoodVisits);
     if (lastInteractionTimeForGoodVisitsDate != base::Time()) {
@@ -230,7 +240,6 @@ using feed::FeedUserActionType;
     // interaction.
     base::Time articleVisitStart =
         self.prefService->GetTime(kArticleVisitTimestampKey);
-    self.feedBecameVisibleTime = base::Time::Now();
 
     if (articleVisitStart != base::Time()) {
       // Report Good Visit if user came back to the NTP after spending
@@ -463,6 +472,7 @@ using feed::FeedUserActionType;
 
 - (void)recordNoticeCardShown:(BOOL)shown {
   base::UmaHistogramBoolean(kDiscoverFeedNoticeCardFulfilled, shown);
+  feed::prefs::SetLastFetchHadNoticeCard(*self.prefService, shown);
 }
 
 - (void)recordFeedArticlesFetchDurationInSeconds:
@@ -557,6 +567,8 @@ using feed::FeedUserActionType;
 - (void)recordActivityLoggingEnabled:(BOOL)loggingEnabled {
   base::UmaHistogramBoolean(kDiscoverFeedActivityLoggingEnabled,
                             loggingEnabled);
+  self.prefService->SetBoolean(feed::prefs::kLastFetchHadLoggingEnabled,
+                               loggingEnabled);
 }
 
 - (void)recordBrokenNTPHierarchy:(BrokenNTPHierarchyRelationship)relationship {
@@ -566,6 +578,10 @@ using feed::FeedUserActionType;
 
 - (void)recordFeedWillRefresh {
   base::RecordAction(base::UserMetricsAction(kFeedWillRefresh));
+  // The feed will have new content so reset the engagement tracking variable.
+  // TODO(crbug.com/1423467): We need to know whether the feed was actually
+  // refreshed, and not just when it was triggered.
+  self.engagedWithLatestRefreshedContent = NO;
 }
 
 - (void)recordFeedSelected:(FeedType)feedType
@@ -617,7 +633,7 @@ using feed::FeedUserActionType;
       base::UmaHistogramSparse(kFollowCountAfterUnfollow, followCount);
       break;
     case FollowCountLogReasonEngaged:
-      base::UmaHistogramSparse(kFollowCountWhenEngaged, followCount);
+      // TODO(b/323593501): Report on-feed-engagement follow count.
       break;
   }
 }
@@ -1018,6 +1034,7 @@ using feed::FeedUserActionType;
   // Chrome run.
   if (scrollDistance > 0 || interacted) {
     [self recordEngagedSimple];
+    self.engagedWithLatestRefreshedContent = YES;
   }
 
   // Report the user as engaged if they have scrolled more than the threshold or
@@ -1033,6 +1050,12 @@ using feed::FeedUserActionType;
 // Checks if a Good Visit should be recorded. `interacted` is YES if it was
 // triggered by an explicit interaction. (e.g. Opening a new Tab in Incognito.)
 - (void)checkEngagementGoodVisitWithInteraction:(BOOL)interacted {
+  // Certain actions can be dispatched by a background thread, such as showing a
+  // snackbar. We shouldn't access the PrefService in the background, so these
+  // are ignored.
+  if (![NSThread isMainThread]) {
+    return;
+  }
   // Determine if this interaction is part of a new session.
   base::Time now = base::Time::Now();
   if ((now - self.lastInteractionTimeForGoodVisits) >

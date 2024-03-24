@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_CHROMEOS_POLICY_DLP_DIALOGS_DLP_WARN_DIALOG_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "chrome/browser/chromeos/policy/dlp/dialogs/policy_dialog_base.h"
@@ -13,7 +14,6 @@
 #include "chrome/browser/chromeos/policy/dlp/dlp_confidential_file.h"
 #include "chrome/browser/chromeos/policy/dlp/dlp_file_destination.h"
 #include "chrome/browser/chromeos/policy/dlp/dlp_files_controller.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 
 namespace policy {
@@ -22,9 +22,9 @@ namespace policy {
 // screen restriction (Screen Capture, Printing, Screen Share) level is set to
 // WARN.
 class DlpWarnDialog : public PolicyDialogBase {
- public:
-  METADATA_HEADER(DlpWarnDialog);
+  METADATA_HEADER(DlpWarnDialog, PolicyDialogBase)
 
+ public:
   // A structure to keep track of optional and configurable parameters of a
   // DlpWarnDialog.
   struct DlpWarnDialogOptions {
@@ -54,7 +54,7 @@ class DlpWarnDialog : public PolicyDialogBase {
     }
 
     Restriction restriction;
-    absl::optional<std::u16string> application_title;
+    std::optional<std::u16string> application_title;
 
     // Non-empty only if the |restriction| is one of kScreenCapture,
     // kVideoCapture, or kScreenshare.
@@ -85,7 +85,7 @@ class DlpWarnDialog : public PolicyDialogBase {
   std::u16string GetCancelButton();
 
   Restriction restriction_;
-  absl::optional<std::u16string> application_title_;
+  std::optional<std::u16string> application_title_;
   DlpConfidentialContents contents_;
 };
 

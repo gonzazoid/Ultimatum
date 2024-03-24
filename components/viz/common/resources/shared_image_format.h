@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include <compare>
+#include <optional>
 #include <string>
 
 #include "base/check.h"
@@ -16,7 +17,6 @@
 #include "mojo/public/cpp/bindings/struct_traits.h"
 #include "mojo/public/cpp/bindings/union_traits.h"
 #include "services/viz/public/mojom/compositing/internal/singleplanar_format.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace viz {
@@ -130,11 +130,11 @@ class COMPONENT_EXPORT(VIZ_SHARED_IMAGE_FORMAT) SharedImageFormat final {
   // Returns estimated size in bytes of an image in this format of `size` or
   // nullopt if size in bytes overflows. Includes all planes for multiplanar
   // formats.
-  absl::optional<size_t> MaybeEstimatedSizeInBytes(const gfx::Size& size) const;
+  std::optional<size_t> MaybeEstimatedSizeInBytes(const gfx::Size& size) const;
 
   // Returns estimated size in bytes for a plane of an image in this format of
   // `size` or nullopt if size in bytes overflows.
-  absl::optional<size_t> MaybeEstimatedPlaneSizeInBytes(
+  std::optional<size_t> MaybeEstimatedPlaneSizeInBytes(
       int plane_index,
       const gfx::Size& size) const;
 
@@ -289,13 +289,15 @@ class SinglePlaneFormat {
       SharedImageFormat(mojom::SingleplanarFormat::RGBX_1010102);
   static constexpr SharedImageFormat kBGRA_1010102 =
       SharedImageFormat(mojom::SingleplanarFormat::BGRX_1010102);
+  static constexpr SharedImageFormat kR_F16 =
+      SharedImageFormat(mojom::SingleplanarFormat::R_F16);
 
   // All known singleplanar formats.
-  static constexpr SharedImageFormat kAll[18] = {
-      kRGBA_8888,     kRGBA_4444,    kBGRA_8888,   kALPHA_8, kLUMINANCE_8,
-      kRGB_565,       kBGR_565,      kETC1,        kR_8,     kRG_88,
-      kLUMINANCE_F16, kRGBA_F16,     kR_16,        kRG_1616, kRGBX_8888,
-      kBGRX_8888,     kRGBA_1010102, kBGRA_1010102};
+  static constexpr SharedImageFormat kAll[19] = {
+      kRGBA_8888,     kRGBA_4444,    kBGRA_8888,    kALPHA_8, kLUMINANCE_8,
+      kRGB_565,       kBGR_565,      kETC1,         kR_8,     kRG_88,
+      kLUMINANCE_F16, kRGBA_F16,     kR_16,         kRG_1616, kRGBX_8888,
+      kBGRX_8888,     kRGBA_1010102, kBGRA_1010102, kR_F16};
 };
 
 // Constants for legacy single-plane representations of multiplanar formats.

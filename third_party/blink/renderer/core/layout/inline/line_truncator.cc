@@ -55,7 +55,7 @@ void LineTruncator::SetupEllipsis() {
           : String(u"...");
   HarfBuzzShaper shaper(ellipsis_text_);
   ellipsis_shape_result_ =
-      ShapeResultView::Create(shaper.Shape(&font, line_direction_).get());
+      ShapeResultView::Create(shaper.Shape(&font, line_direction_));
   ellipsis_width_ = ellipsis_shape_result_->SnappedWidth();
 }
 
@@ -105,7 +105,7 @@ wtf_size_t LineTruncator::AddTruncatedChild(
   LogicalLineItems& line = *line_box;
   const LogicalLineItem& source_item = line[source_index];
   DCHECK(source_item.shape_result);
-  scoped_refptr<ShapeResult> shape_result =
+  const ShapeResult* shape_result =
       source_item.shape_result->CreateShapeResult();
   unsigned text_offset = shape_result->OffsetToFit(position, edge);
   if (IsLtr(edge) ? IsLeftMostOffset(*shape_result, text_offset)
@@ -136,7 +136,7 @@ LayoutUnit LineTruncator::TruncateLine(LayoutUnit line_width,
   // to place the ellipsis. Children maybe truncated or moved as part of the
   // process.
   LogicalLineItem* ellipsized_child = nullptr;
-  absl::optional<LogicalLineItem> truncated_child;
+  std::optional<LogicalLineItem> truncated_child;
   if (IsLtr(line_direction_)) {
     LogicalLineItem* first_child = line_box->FirstInFlowChild();
     for (auto& child : base::Reversed(*line_box)) {
@@ -438,7 +438,7 @@ bool LineTruncator::EllipsizeChild(
     LayoutUnit ellipsis_width,
     bool is_first_child,
     LogicalLineItem* child,
-    absl::optional<LogicalLineItem>* truncated_child) {
+    std::optional<LogicalLineItem>* truncated_child) {
   DCHECK(truncated_child && !*truncated_child);
 
   // Leave out-of-flow children as is.
@@ -493,7 +493,7 @@ bool LineTruncator::TruncateChild(
     LayoutUnit space_for_child,
     bool is_first_child,
     const LogicalLineItem& child,
-    absl::optional<LogicalLineItem>* truncated_child) {
+    std::optional<LogicalLineItem>* truncated_child) {
   DCHECK(truncated_child && !*truncated_child);
 
   // If the space is not enough, try the next child.
@@ -506,8 +506,7 @@ bool LineTruncator::TruncateChild(
 
   // TODO(layout-dev): Add support for OffsetToFit to ShapeResultView to avoid
   // this copy.
-  scoped_refptr<ShapeResult> shape_result =
-      child.shape_result->CreateShapeResult();
+  const ShapeResult* shape_result = child.shape_result->CreateShapeResult();
   DCHECK(shape_result);
   const TextOffsetRange original_offset = child.text_offset;
   // Compute the offset to truncate.

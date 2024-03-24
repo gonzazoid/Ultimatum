@@ -11,18 +11,15 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/scoped_observation.h"
 #include "base/time/time.h"
-#include "chrome/browser/picture_in_picture/picture_in_picture_window_manager.h"
 #include "chrome/browser/ui/autofill/autofill_popup_controller.h"
+#include "chrome/browser/ui/autofill/autofill_popup_hide_helper.h"
+#include "chrome/browser/ui/autofill/next_idle_time_ticks.h"
 #include "chrome/browser/ui/autofill/popup_controller_common.h"
-#include "components/autofill/content/browser/scoped_autofill_managers_observation.h"
-#include "components/autofill/core/browser/autofill_manager.h"
-#include "components/autofill/core/browser/ui/popup_types.h"
+#include "components/autofill/core/browser/ui/popup_hiding_reasons.h"
 #include "components/autofill/core/common/aliases.h"
 #include "components/password_manager/core/browser/password_manager_metrics_util.h"
 #include "content/public/browser/render_widget_host.h"
-#include "content/public/browser/web_contents_observer.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 
 class Profile;
@@ -70,9 +67,6 @@ class ExpandablePopupParentControllerImpl {
 // other, public functions are available to its instantiator.
 class AutofillPopupControllerImpl
     : public AutofillPopupController,
-      public content::WebContentsObserver,
-      public AutofillManager::Observer,
-      public PictureInPictureWindowManager::Observer,
       public ExpandablePopupParentControllerImpl {
  public:
   AutofillPopupControllerImpl(const AutofillPopupControllerImpl&) = delete;
@@ -135,7 +129,6 @@ class AutofillPopupControllerImpl
   bool GetRemovalConfirmationText(int list_index,
                                   std::u16string* title,
                                   std::u16string* body) override;
-  PopupType GetPopupType() const override;
   FillingProduct GetMainFillingProduct() const override;
   bool ShouldIgnoreMouseObservedOutsideItemBoundsCheck() const override;
   base::WeakPtr<AutofillPopupController> OpenSubPopup(
@@ -146,9 +139,6 @@ class AutofillPopupControllerImpl
       const override;
   void HideSubPopup() override;
 
-  // PictureInPictureWindowManager::Observer
-  void OnEnterPictureInPicture() override;
-
   void KeepPopupOpenForTesting() { keep_popup_open_for_testing_ = true; }
 
   // Disables show thresholds. See the documentation of the member for details.
@@ -158,7 +148,7 @@ class AutofillPopupControllerImpl
 
   void SetViewForTesting(base::WeakPtr<AutofillPopupView> view) {
     view_ = std::move(view);
-    time_view_shown_ = base::TimeTicks::Now();
+    time_view_shown_ = NextIdleTimeTicks::CaptureNextIdleTimeTicks();
   }
 
   int GetLineCountForTesting() const { return GetLineCount(); }
@@ -206,17 +196,6 @@ class AutofillPopupControllerImpl
   virtual void HideViewAndDie();
 
  private:
-  // content::WebContentsObserver:
-  void RenderFrameDeleted(content::RenderFrameHost* render_frame_host) override;
-  void DidFinishNavigation(
-      content::NavigationHandle* navigation_handle) override;
-  void OnVisibilityChanged(content::Visibility visibility) override;
-
-  // AutofillManager::Observer:
-  void OnBeforeTextFieldDidChange(AutofillManager& manager,
-                                  FormGlobalId form,
-                                  FieldGlobalId field) override;
-
   // Clear the internal state of the controller. This is needed to ensure that
   // when the popup is reused it doesn't leak values between uses.
   void ClearState();
@@ -224,7 +203,7 @@ class AutofillPopupControllerImpl
   // Returns true iff the focused frame has a pointer lock, which may be used to
   // trick the user into accepting some suggestion (crbug.com/1239496). In such
   // a case, we should hide the popup.
-  bool IsMouseLocked() const;
+  bool IsPointerLocked() const;
 
   // ExpandablePopupParentControllerImpl:
   base::WeakPtr<AutofillPopupView> CreateSubPopupView(
@@ -234,6 +213,7 @@ class AutofillPopupControllerImpl
   // Returns `true` if this popup has no parent, and `false` for sub-popups.
   bool IsRootPopup() const;
 
+  base::WeakPtr<content::WebContents> web_contents_;
   PopupControllerCommon controller_common_;
   base::WeakPtr<AutofillPopupView> view_;
   base::WeakPtr<AutofillPopupDelegate> delegate_;
@@ -245,7 +225,6 @@ class AutofillPopupControllerImpl
     explicit KeyPressObserver(AutofillPopupControllerImpl* observer);
     ~KeyPressObserver();
 
-    bool IsObserving(content::GlobalRenderFrameHostId rfh) const;
     void Observe(content::RenderFrameHost* rfh);
     void Reset();
 
@@ -258,7 +237,7 @@ class AutofillPopupControllerImpl
   // The time the view was shown the last time. It is used to safeguard against
   // accepting suggestions too quickly after a the popup view was shown (see the
   // `show_threshold` parameter of `AcceptSuggestion`).
-  base::TimeTicks time_view_shown_;
+  NextIdleTimeTicks time_view_shown_;
 
   // An override to suppress minimum show thresholds. It should only be set
   // during tests that cannot mock time (e.g. the autofill interactive
@@ -280,16 +259,6 @@ class AutofillPopupControllerImpl
   // the machine that would normally cause the popup to be hidden.
   bool keep_popup_open_for_testing_ = false;
 
-  // Observer needed to check autofill popup overlap with picture-in-picture
-  // window. It is guaranteed that there can only be one
-  // PictureInPictureWindowManager per Chrome instance, therefore, it is also
-  // guaranteed that PictureInPictureWindowManager would outlive its observers.
-  base::ScopedObservation<PictureInPictureWindowManager,
-                          PictureInPictureWindowManager::Observer>
-      picture_in_picture_window_observation_{this};
-
-  ScopedAutofillManagersObservation autofill_managers_observation_{this};
-
   // Callback invoked to try to show the password migration warning on Android.
   // Used to facilitate testing.
   // TODO(crbug.com/1454469): Remove when the warning isn't needed anymore.
@@ -309,6 +278,9 @@ class AutofillPopupControllerImpl
 
   // The open sub-popup controller if any, `nullptr` otherwise.
   base::WeakPtr<AutofillPopupControllerImpl> sub_popup_controller_;
+
+  // This is a helper which detects events that should hide the popup.
+  std::unique_ptr<AutofillPopupHideHelper> popup_hide_helper_;
 
   // AutofillPopupControllerImpl deletes itself. To simplify memory management,
   // we delete the object asynchronously.

@@ -1,3 +1,5 @@
 include_rules = [
-  "+components/autofill/core"
+  "+components/autofill/core",
+  "+components/ukm",
+  "+services/metrics/public/cpp"
 ]

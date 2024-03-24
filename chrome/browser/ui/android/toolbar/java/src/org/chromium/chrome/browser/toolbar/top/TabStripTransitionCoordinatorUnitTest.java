@@ -37,13 +37,19 @@ import org.mockito.junit.MockitoRule;
 import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowLooper;
 
+import org.chromium.base.Callback;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.HistogramWatcher;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsVisibilityManager;
+import org.chromium.chrome.browser.tab.TabObscuringHandler;
+import org.chromium.chrome.browser.tab.TabObscuringHandler.Target;
+import org.chromium.chrome.browser.toolbar.ControlContainer;
 import org.chromium.chrome.browser.toolbar.top.TabStripTransitionCoordinator.TabStripHeightObserver;
 import org.chromium.ui.base.TestActivity;
+import org.chromium.ui.resources.Resource;
+import org.chromium.ui.resources.dynamics.ViewResourceAdapter;
 
 import java.util.concurrent.TimeUnit;
 
@@ -63,11 +69,15 @@ public class TabStripTransitionCoordinatorUnitTest {
             new ActivityScenarioRule<>(TestActivity.class);
 
     @Mock private BrowserControlsVisibilityManager mBrowserControlsVisibilityManager;
+    @Mock private ControlContainer mControlContainer;
+    @Mock private ViewResourceAdapter mViewResourceAdapter;
     @Captor private ArgumentCaptor<BrowserControlsStateProvider.Observer> mBrowserControlsObserver;
+    @Captor private ArgumentCaptor<Callback<Resource>> mOnCaptureReadyCallback;
 
+    private TestControlContainerView mSpyControlContainer;
     private TabStripTransitionCoordinator mCoordinator;
     private TestActivity mActivity;
-    private TestControlContainer mSpyControlContainer;
+    private TabObscuringHandler mTabObscuringHandler = new TabObscuringHandler();
 
     private int mTopControlsContentOffset;
 
@@ -76,15 +86,24 @@ public class TabStripTransitionCoordinatorUnitTest {
     @Before
     public void setup() {
         mActivityScenario.getScenario().onActivity(activity -> mActivity = activity);
-        mSpyControlContainer = TestControlContainer.createSpy(mActivity);
+        mSpyControlContainer = TestControlContainerView.createSpy(mActivity);
         mActivity.setContentView(mSpyControlContainer);
+
+        // Set the mocks for control container and its view resource adapter.
+        doReturn(mSpyControlContainer).when(mControlContainer).getView();
+        doReturn(mViewResourceAdapter).when(mControlContainer).getToolbarResourceAdapter();
+        doNothing()
+                .when(mViewResourceAdapter)
+                .addOnResourceReadyCallback(mOnCaptureReadyCallback.capture());
+        doAnswer(inv -> triggerCapture()).when(mViewResourceAdapter).triggerBitmapCapture();
 
         mCoordinator =
                 new TabStripTransitionCoordinator(
                         mBrowserControlsVisibilityManager,
-                        mSpyControlContainer,
+                        mControlContainer,
                         mSpyControlContainer.toolbarLayout,
-                        TEST_TAB_STRIP_HEIGHT);
+                        TEST_TAB_STRIP_HEIGHT,
+                        mTabObscuringHandler);
         mObserver = new TestObserver();
         mCoordinator.addObserver(mObserver);
 
@@ -166,6 +185,52 @@ public class TabStripTransitionCoordinatorUnitTest {
     }
 
     @Test
+    public void hideTabStripWhileUrlBarFocused() {
+        mCoordinator.onUrlFocusChange(true);
+        setDeviceWidthDp(NARROW_WINDOW_WIDTH);
+        Assert.assertEquals(
+                "Height request should be blocked by the url bar focus.",
+                NOTHING_OBSERVED,
+                mObserver.heightRequested);
+
+        // Url focus animation finished to unblock the transition.
+        mCoordinator.onUrlAnimationFinished(false);
+        ShadowLooper.runUiThreadTasksIncludingDelayedTasks();
+        Assert.assertEquals(
+                "Height request should go through after the url bar focus.",
+                0,
+                mObserver.heightRequested);
+    }
+
+    @Test
+    public void hideTabStripWhileTabObscured() {
+        TabObscuringHandler.Token token = mTabObscuringHandler.obscure(Target.TAB_CONTENT);
+        setDeviceWidthDp(NARROW_WINDOW_WIDTH);
+        Assert.assertEquals(
+                "Height request should be blocked after tab obscured.",
+                NOTHING_OBSERVED,
+                mObserver.heightRequested);
+
+        // Url focus animation finished to unblock the transition
+        mTabObscuringHandler.unobscure(token);
+        ShadowLooper.runUiThreadTasksIncludingDelayedTasks();
+        Assert.assertEquals(
+                "Height request should go through after tab unobscured.",
+                0,
+                mObserver.heightRequested);
+    }
+
+    @Test
+    public void hideTabStripWhileTabAndToolbarObscured() {
+        mTabObscuringHandler.obscure(Target.ALL_TABS_AND_TOOLBAR);
+        setDeviceWidthDp(NARROW_WINDOW_WIDTH);
+        Assert.assertEquals(
+                "Height request should go through when tab and toolbar are obscured.",
+                0,
+                mObserver.heightRequested);
+    }
+
+    @Test
     @Config(qualifiers = "w320dp")
     public void showTabStrip() {
         settleTransitionDuringInitForNarrowWindow();
@@ -209,6 +274,58 @@ public class TabStripTransitionCoordinatorUnitTest {
 
     @Test
     @Config(qualifiers = "w320dp")
+    public void showTabStripWhileUrlBarFocused() {
+        settleTransitionDuringInitForNarrowWindow();
+        mCoordinator.onUrlFocusChange(true);
+        setDeviceWidthDp(600);
+        Assert.assertEquals(
+                "Height request should be blocked by the url bar focus.",
+                NOTHING_OBSERVED,
+                mObserver.heightRequested);
+
+        // Url focus animation finished to unblock the transition
+        mCoordinator.onUrlAnimationFinished(false);
+        ShadowLooper.runUiThreadTasksIncludingDelayedTasks();
+        Assert.assertEquals(
+                "Height request should go through after the url bar focus.",
+                TEST_TAB_STRIP_HEIGHT,
+                mObserver.heightRequested);
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp")
+    public void showTabStripWhileTabObscured() {
+        settleTransitionDuringInitForNarrowWindow();
+        TabObscuringHandler.Token token = mTabObscuringHandler.obscure(Target.TAB_CONTENT);
+        setDeviceWidthDp(600);
+        Assert.assertEquals(
+                "Height request should be blocked after tab obscured.",
+                NOTHING_OBSERVED,
+                mObserver.heightRequested);
+
+        // Url focus animation finished to unblock the transition
+        mTabObscuringHandler.unobscure(token);
+        ShadowLooper.runUiThreadTasksIncludingDelayedTasks();
+        Assert.assertEquals(
+                "Height request should go through after the tab unobscured.",
+                TEST_TAB_STRIP_HEIGHT,
+                mObserver.heightRequested);
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp")
+    public void showTabStripWhileTabAndToolbarObscured() {
+        settleTransitionDuringInitForNarrowWindow();
+        mTabObscuringHandler.obscure(Target.ALL_TABS_AND_TOOLBAR);
+        setDeviceWidthDp(600);
+        Assert.assertEquals(
+                "Height request should go through if both the tab and toolbar are obscured.",
+                TEST_TAB_STRIP_HEIGHT,
+                mObserver.heightRequested);
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp")
     public void showTabStrip_TokenBeforeLayout() {
         settleTransitionDuringInitForNarrowWindow();
         int token = mCoordinator.requestDeferTabStripTransitionToken();
@@ -219,6 +336,7 @@ public class TabStripTransitionCoordinatorUnitTest {
                 mObserver.heightRequested);
 
         mCoordinator.releaseTabStripToken(token);
+        ShadowLooper.runUiThreadTasksIncludingDelayedTasks();
         Assert.assertEquals(
                 "Height request should go through after the token released.",
                 TEST_TAB_STRIP_HEIGHT,
@@ -247,6 +365,7 @@ public class TabStripTransitionCoordinatorUnitTest {
                 mObserver.heightRequested);
 
         mCoordinator.releaseTabStripToken(token);
+        ShadowLooper.runUiThreadTasksIncludingDelayedTasks();
         Assert.assertEquals(
                 "Height request should go through after the token released.",
                 TEST_TAB_STRIP_HEIGHT,
@@ -437,6 +556,13 @@ public class TabStripTransitionCoordinatorUnitTest {
         return observer;
     }
 
+    private Void triggerCapture() {
+        var callback = mOnCaptureReadyCallback.getValue();
+        Assert.assertNotNull("Capture callback is null.", callback);
+        callback.onResult(null);
+        return null;
+    }
+
     // For test cases init with narrow width, the initialization will create an transition request.
     private void settleTransitionDuringInitForNarrowWindow() {
         mTopControlsContentOffset = TEST_TOOLBAR_HEIGHT;
@@ -469,7 +595,7 @@ public class TabStripTransitionCoordinatorUnitTest {
 
     // Due to the complexity to use the real views for top toolbar in robolectric tests, use view
     // mocks for the sake of unit tests.
-    static class TestControlContainer extends FrameLayout {
+    static class TestControlContainerView extends FrameLayout {
         public TestView toolbarLayout;
         public TestView toolbarHairline;
         public TestView findToolbar;
@@ -477,9 +603,9 @@ public class TabStripTransitionCoordinatorUnitTest {
 
         @Nullable public View.OnLayoutChangeListener onLayoutChangeListener;
 
-        static TestControlContainer createSpy(Context context) {
-            TestControlContainer controlContainer =
-                    Mockito.spy(new TestControlContainer(context, null));
+        static TestControlContainerView createSpy(Context context) {
+            TestControlContainerView controlContainer =
+                    Mockito.spy(new TestControlContainerView(context, null));
 
             doReturn(controlContainer.toolbarLayout)
                     .when(controlContainer)
@@ -508,7 +634,7 @@ public class TabStripTransitionCoordinatorUnitTest {
             return controlContainer;
         }
 
-        public TestControlContainer(Context context, @Nullable AttributeSet attrs) {
+        public TestControlContainerView(Context context, @Nullable AttributeSet attrs) {
             super(context, attrs);
 
             toolbarLayout = Mockito.spy(new TestView(context, attrs));

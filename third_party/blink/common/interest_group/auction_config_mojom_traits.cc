@@ -4,6 +4,7 @@
 
 #include "third_party/blink/public/common/interest_group/auction_config_mojom_traits.h"
 
+#include <optional>
 #include <string>
 
 #include "base/containers/contains.h"
@@ -13,9 +14,9 @@
 #include "base/strings/string_util.h"
 #include "base/time/time.h"
 #include "base/uuid.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 #include "third_party/blink/public/common/interest_group/auction_config.h"
+#include "third_party/blink/public/mojom/interest_group/interest_group_types.mojom-shared.h"
 #include "third_party/blink/public/mojom/interest_group/interest_group_types.mojom.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -105,6 +106,11 @@ template struct BLINK_COMMON_EXPORT AdConfigMaybePromiseTraitsHelper<
     blink::mojom::AuctionAdConfigMaybePromiseDirectFromSellerSignalsDataView,
     blink::AuctionConfig::MaybePromiseDirectFromSellerSignals>;
 
+template struct BLINK_COMMON_EXPORT AdConfigMaybePromiseTraitsHelper<
+    blink::mojom::
+        AuctionAdConfigMaybePromiseDeprecatedRenderURLReplacementsDataView,
+    blink::AuctionConfig::MaybePromiseDeprecatedRenderURLReplacements>;
+
 bool StructTraits<blink::mojom::AuctionAdConfigBuyerTimeoutsDataView,
                   blink::AuctionConfig::BuyerTimeouts>::
     Read(blink::mojom::AuctionAdConfigBuyerTimeoutsDataView data,
@@ -114,6 +120,17 @@ bool StructTraits<blink::mojom::AuctionAdConfigBuyerTimeoutsDataView,
     return false;
   }
   return true;
+}
+
+bool StructTraits<blink::mojom::AdKeywordReplacementDataView,
+                  blink::AuctionConfig::AdKeywordReplacement>::
+    Read(blink::mojom::AdKeywordReplacementDataView data,
+         blink::AuctionConfig::AdKeywordReplacement* out) {
+  if (!data.ReadMatch(&out->match) ||
+      !data.ReadReplacement(&out->replacement)) {
+    return false;
+  }
+  return out->IsValid();
 }
 
 bool StructTraits<blink::mojom::AdCurrencyDataView, blink::AdCurrency>::Read(
@@ -154,6 +171,17 @@ bool StructTraits<
   return true;
 }
 
+bool StructTraits<
+    blink::mojom::AuctionReportBuyerDebugModeConfigDataView,
+    blink::AuctionConfig::NonSharedParams::AuctionReportBuyerDebugModeConfig>::
+    Read(blink::mojom::AuctionReportBuyerDebugModeConfigDataView data,
+         blink::AuctionConfig::NonSharedParams::
+             AuctionReportBuyerDebugModeConfig* out) {
+  out->is_enabled = data.is_enabled();
+  out->debug_key = data.debug_key();
+  return true;
+}
+
 bool StructTraits<blink::mojom::AuctionAdServerResponseConfigDataView,
                   blink::AuctionConfig::ServerResponseConfig>::
     Read(blink::mojom::AuctionAdServerResponseConfigDataView data,
@@ -179,14 +207,24 @@ bool StructTraits<blink::mojom::AuctionAdConfigNonSharedParamsDataView,
       !data.ReadAllBuyersPrioritySignals(&out->all_buyers_priority_signals) ||
       !data.ReadAuctionReportBuyerKeys(&out->auction_report_buyer_keys) ||
       !data.ReadAuctionReportBuyers(&out->auction_report_buyers) ||
+      !data.ReadAuctionReportBuyerDebugModeConfig(
+          &out->auction_report_buyer_debug_mode_config) ||
       !data.ReadRequiredSellerCapabilities(
           &out->required_seller_capabilities) ||
       !data.ReadRequestedSize(&out->requested_size) ||
       !data.ReadAllSlotsRequestedSizes(&out->all_slots_requested_sizes) ||
+      !data.ReadPerBuyerMultiBidLimits(&out->per_buyer_multi_bid_limits) ||
       !data.ReadAuctionNonce(&out->auction_nonce) ||
       !data.ReadComponentAuctions(&out->component_auctions)) {
     return false;
   }
+
+  // Negative length limit is invalid.
+  if (data.max_trusted_scoring_signals_url_length() < 0) {
+    return false;
+  }
+  out->max_trusted_scoring_signals_url_length =
+      data.max_trusted_scoring_signals_url_length();
 
   out->all_buyers_group_limit = data.all_buyers_group_limit();
 
@@ -218,6 +256,8 @@ bool StructTraits<blink::mojom::AuctionAdConfigNonSharedParamsDataView,
       !AreBuyerPrioritySignalsValid(*out->all_buyers_priority_signals)) {
     return false;
   }
+
+  out->all_buyers_multi_bid_limit = data.all_buyers_multi_bid_limit();
 
   for (const auto& component_auction : out->component_auctions) {
     // TODO(1457241): Add support for multi-level auctions including server-side
@@ -264,16 +304,11 @@ bool StructTraits<blink::mojom::AuctionAdConfigDataView, blink::AuctionConfig>::
       !data.ReadPerBuyerExperimentGroupIds(
           &out->per_buyer_experiment_group_ids) ||
       !data.ReadAggregationCoordinatorOrigin(
-          &out->aggregation_coordinator_origin)) {
+          &out->aggregation_coordinator_origin) ||
+      !data.ReadDeprecatedRenderUrlReplacements(
+          &out->deprecated_render_url_replacements)) {
     return false;
   }
-
-  // Negative length limit is invalid.
-  if (data.max_trusted_scoring_signals_url_length() < 0) {
-    return false;
-  }
-  out->max_trusted_scoring_signals_url_length =
-      data.max_trusted_scoring_signals_url_length();
 
   out->expects_additional_bids = data.expects_additional_bids();
   // An auction that expects additional bids must have an auction nonce provided
@@ -298,13 +333,8 @@ bool StructTraits<blink::mojom::AuctionAdConfigDataView, blink::AuctionConfig>::
   out->expects_direct_from_seller_signals_header_ad_slot =
       data.expects_direct_from_seller_signals_header_ad_slot();
 
-  if (data.has_seller_experiment_group_id()) {
-    out->seller_experiment_group_id = data.seller_experiment_group_id();
-  }
-
-  if (data.has_all_buyer_experiment_group_id()) {
-    out->all_buyer_experiment_group_id = data.all_buyer_experiment_group_id();
-  }
+  out->seller_experiment_group_id = data.seller_experiment_group_id();
+  out->all_buyer_experiment_group_id = data.all_buyer_experiment_group_id();
 
   // Seller must be HTTPS. This also excludes opaque origins, for which scheme()
   // returns an empty string.
@@ -349,7 +379,7 @@ bool StructTraits<blink::mojom::AuctionAdConfigDataView, blink::AuctionConfig>::
   }
 
   if ((out->direct_from_seller_signals.is_promise() ||
-       out->direct_from_seller_signals.value() != absl::nullopt) &&
+       out->direct_from_seller_signals.value() != std::nullopt) &&
       out->expects_direct_from_seller_signals_header_ad_slot) {
     // `direct_from_seller_signals` and
     // `expects_direct_from_seller_signals_header_ad_slot` may not be both used

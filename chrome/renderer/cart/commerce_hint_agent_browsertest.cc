@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "base/memory/raw_ptr.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_timeouts.h"
 #include "build/build_config.h"
@@ -28,6 +29,7 @@
 #include "content/public/common/content_features.h"
 #include "content/public/test/back_forward_cache_util.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "content/public/test/fenced_frame_test_util.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "net/dns/mock_host_resolver.h"
@@ -774,7 +776,7 @@ IN_PROC_BROWSER_TEST_F(CommerceHintNoRateControlTest, DISABLED_CartPriority) {
 IN_PROC_BROWSER_TEST_F(CommerceHintAgentTest, VisitCheckout) {
   GURL example_url = GURL("https://www.guitarcenter.com/");
 #if !BUILDFLAG(IS_ANDROID)
-  service_->AddCart(example_url, absl::nullopt, kMockExampleProto);
+  service_->AddCart(example_url, std::nullopt, kMockExampleProto);
   WaitForCartCount(kExpectedExampleFallbackCart);
 #endif
 
@@ -790,7 +792,7 @@ IN_PROC_BROWSER_TEST_F(CommerceHintAgentTest, VisitCheckout) {
 IN_PROC_BROWSER_TEST_F(CommerceHintAgentTest, PurchaseByURL) {
   GURL amazon_url = GURL("https://www.amazon.com/");
 #if !BUILDFLAG(IS_ANDROID)
-  service_->AddCart(amazon_url, absl::nullopt, kMockAmazonProto);
+  service_->AddCart(amazon_url, std::nullopt, kMockAmazonProto);
   WaitForCartCount(kExpectedAmazon);
 #endif
 
@@ -806,7 +808,7 @@ IN_PROC_BROWSER_TEST_F(CommerceHintAgentTest, PurchaseByURL) {
 IN_PROC_BROWSER_TEST_F(CommerceHintAgentTest, PurchaseByForm) {
   GURL example_url = GURL("https://www.guitarcenter.com/");
 #if !BUILDFLAG(IS_ANDROID)
-  service_->AddCart(example_url, absl::nullopt, kMockExampleProto);
+  service_->AddCart(example_url, std::nullopt, kMockExampleProto);
   WaitForCartCount(kExpectedExampleFallbackCart);
 #endif
 
@@ -921,10 +923,10 @@ IN_PROC_BROWSER_TEST_F(CommerceHintCacaoTest, Passed) {
   // Need the non-default port here.
   optimization_guide_decider->AddHintForTesting(
       https_server_.GetURL("www.guitarcenter.com", "/"),
-      optimization_guide::proto::SHOPPING_PAGE_PREDICTOR, absl::nullopt);
+      optimization_guide::proto::SHOPPING_PAGE_PREDICTOR, std::nullopt);
   optimization_guide_decider->AddHintForTesting(
       GURL("https://www.guitarcenter.com/cart"),
-      optimization_guide::proto::SHOPPING_PAGE_PREDICTOR, absl::nullopt);
+      optimization_guide::proto::SHOPPING_PAGE_PREDICTOR, std::nullopt);
 
   NavigateToURL("https://www.guitarcenter.com/");
   SendXHR("/add-to-cart", "product: 123");
@@ -1517,7 +1519,7 @@ IN_PROC_BROWSER_TEST_F(CommerceHintOptimizeRendererTest,
   // Need the non-default port here.
   optimization_guide_decider->AddHintForTesting(
       https_server_.GetURL("www.guitarcenter.com", "/cart.html"),
-      optimization_guide::proto::SHOPPING_PAGE_PREDICTOR, absl::nullopt);
+      optimization_guide::proto::SHOPPING_PAGE_PREDICTOR, std::nullopt);
 
   NavigateToURL("https://www.guitarcenter.com/cart.html");
 #if !BUILDFLAG(IS_ANDROID)

@@ -193,6 +193,9 @@ ScopedCFTypeRef<CTFontRef> BestStyleMatchForFamily(
   ScopedCFTypeRef<CFArrayRef> fonts_in_family(
       CTFontCollectionCreateMatchingFontDescriptors(
           collection_from_family.get()));
+  if (!fonts_in_family) {
+    return ScopedCFTypeRef<CTFontRef>(nullptr);
+  }
 
   ScopedCFTypeRef<CTFontRef> matched_font_in_family;
   CTFontSymbolicTraits chosen_traits;
@@ -262,8 +265,10 @@ ScopedCFTypeRef<CTFontRef> MatchUniqueFont(const AtomicString& unique_font_name,
       CTFontCopyFullName(matched_font.get()));
   // If the found font does not match in PostScript name or full font name, it's
   // not the exact match that is required, so return nullptr.
-  if (CFStringCompare(matched_postscript_name.get(), desired_name.get(),
+  if (matched_postscript_name &&
+      CFStringCompare(matched_postscript_name.get(), desired_name.get(),
                       kCFCompareCaseInsensitive) != kCFCompareEqualTo &&
+      matched_full_font_name &&
       CFStringCompare(matched_full_font_name.get(), desired_name.get(),
                       kCFCompareCaseInsensitive) != kCFCompareEqualTo) {
     return ScopedCFTypeRef<CTFontRef>(nullptr);
@@ -277,6 +282,9 @@ void ClampVariationValuesToFontAcceptableRange(
     FontSelectionValue& weight,
     FontSelectionValue& width) {
   ScopedCFTypeRef<CFArrayRef> all_axes(CTFontCopyVariationAxes(ct_font.get()));
+  if (!all_axes) {
+    return;
+  }
   for (CFIndex i = 0; i < CFArrayGetCount(all_axes.get()); ++i) {
     CFDictionaryRef axis =
         CFCast<CFDictionaryRef>(CFArrayGetValueAtIndex(all_axes.get(), i));
@@ -330,10 +338,22 @@ ScopedCFTypeRef<CTFontRef> MatchSystemUIFont(FontSelectionValue desired_weight,
                                              float size) {
   ScopedCFTypeRef<CTFontRef> ct_font(
       CTFontCreateUIFontForLanguage(kCTFontUIFontSystem, size, nullptr));
+  // CoreText should always return a system-ui font.
+  DCHECK(ct_font);
+
+  CTFontSymbolicTraits desired_traits = 0;
 
   if (desired_slant != kNormalSlopeValue) {
+    desired_traits |= kCTFontItalicTrait;
+  }
+
+  if (desired_weight >= kBoldThreshold) {
+    desired_traits |= kCTFontBoldTrait;
+  }
+
+  if (desired_traits) {
     ct_font.reset(CTFontCreateCopyWithSymbolicTraits(
-        ct_font.get(), size, nullptr, kCTFontItalicTrait, kCTFontItalicTrait));
+        ct_font.get(), size, nullptr, desired_traits, desired_traits));
   }
 
   if (desired_weight == kNormalWeightValue &&
@@ -392,6 +412,16 @@ ScopedCFTypeRef<CTFontRef> MatchFontFamily(
   ScopedCFTypeRef<CFStringRef> desired_name(
       desired_family_string.Impl()->CreateCFString());
 
+  // Due to the way we detect whether we can in-process load a font using
+  // `CanLoadInProcess`, compare
+  // third_party/blink/renderer/platform/fonts/mac/font_platform_data_mac.mm,
+  // we cannot match the LastResort font on Mac.
+  // TODO(crbug.com/1519877): We should allow matching LastResort font.
+  if (CFStringCompare(desired_name.get(), CFSTR("LastResort"),
+                      kCFCompareCaseInsensitive) == kCFCompareEqualTo) {
+    return ScopedCFTypeRef<CTFontRef>(nullptr);
+  }
+
   ScopedCFTypeRef<CTFontRef> matched_font(
       CTFontCreateWithName(desired_name.get(), size, nullptr));
   // CoreText should give us *something* but not always an exactly matched font.
@@ -407,8 +437,10 @@ ScopedCFTypeRef<CTFontRef> MatchFontFamily(
 
   // If the found font does not match in PostScript name or font family name,
   // it's not the exact match that is required, so return nullptr.
-  if (CFStringCompare(matched_postscript_name.get(), desired_name.get(),
+  if (matched_postscript_name &&
+      CFStringCompare(matched_postscript_name.get(), desired_name.get(),
                       kCFCompareCaseInsensitive) != kCFCompareEqualTo &&
+      matched_family_name &&
       CFStringCompare(matched_family_name.get(), desired_name.get(),
                       kCFCompareCaseInsensitive) != kCFCompareEqualTo) {
     return ScopedCFTypeRef<CTFontRef>(nullptr);
@@ -417,7 +449,8 @@ ScopedCFTypeRef<CTFontRef> MatchFontFamily(
   CTFontSymbolicTraits desired_traits =
       ComputeDesiredTraits(desired_weight, desired_slant, desired_width);
 
-  if (CFStringCompare(matched_postscript_name.get(), desired_name.get(),
+  if (matched_postscript_name &&
+      CFStringCompare(matched_postscript_name.get(), desired_name.get(),
                       kCFCompareCaseInsensitive) == kCFCompareEqualTo) {
     CTFontSymbolicTraits traits = CTFontGetSymbolicTraits(matched_font.get());
     // Matched a font by PostScript name that has desired traits, so we
@@ -425,6 +458,10 @@ ScopedCFTypeRef<CTFontRef> MatchFontFamily(
     if ((desired_traits & traits) == desired_traits) {
       return matched_font;
     }
+  }
+
+  if (!matched_family_name) {
+    return ScopedCFTypeRef<CTFontRef>(nullptr);
   }
 
   return BestStyleMatchForFamily(matched_family_name, desired_traits,

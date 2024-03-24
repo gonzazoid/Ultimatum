@@ -143,16 +143,16 @@ class NotificationTextButton : public views::MdTextButton {
         GetColorProvider()->GetColor(ui::kColorNotificationActionsBackground));
   }
 
-  void SetEnabledTextColors(absl::optional<SkColor> color) override {
+  void SetEnabledTextColors(std::optional<SkColor> color) override {
     color_ = std::move(color);
     views::MdTextButton::SetEnabledTextColors(color_);
     label()->SetAutoColorReadabilityEnabled(true);
   }
 
-  absl::optional<SkColor> color() const { return color_; }
+  std::optional<SkColor> color() const { return color_; }
 
  private:
-  absl::optional<SkColor> color_;
+  std::optional<SkColor> color_;
 };
 
 BEGIN_METADATA(NotificationTextButton)
@@ -216,7 +216,7 @@ class NotificationView::NotificationViewPathGenerator
       const NotificationViewPathGenerator&) = delete;
 
   // views::HighlightPathGenerator:
-  absl::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override {
+  std::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override {
     gfx::RectF bounds = rect;
     if (!preferred_size_.IsEmpty())
       bounds.set_size(gfx::SizeF(preferred_size_));
@@ -238,8 +238,7 @@ class NotificationView::NotificationViewPathGenerator
   // This custom PathGenerator is used for the ink drop clipping bounds. By
   // setting |preferred_size_| we set the correct clip bounds in
   // GetRoundRect(). This is needed as the correct bounds for the ink drop are
-  // required before a Layout() on the view is run. See
-  // http://crbug.com/915222.
+  // required before the view does layout. See http://crbug.com/915222.
   gfx::Size preferred_size_;
 };
 
@@ -571,7 +570,7 @@ void NotificationView::ToggleInlineSettings(const ui::Event& event) {
     RemoveBackgroundAnimation();
 
   UpdateHeaderViewBackgroundColor();
-  Layout();
+  DeprecatedLayoutImmediately();
   SchedulePaint();
 
   // Call DisableNotification() at the end, because |this| can be deleted at any
@@ -628,8 +627,34 @@ void NotificationView::RemoveLayerFromRegions(ui::Layer* layer) {
     child->DestroyLayer();
 }
 
-void NotificationView::Layout() {
-  NotificationViewBase::Layout();
+void NotificationView::Layout(PassKey) {
+  LayoutSuperclass<NotificationViewBase>(this);
+
+  // We need to call IsExpandable() after doing superclass layout, since whether
+  // we should show expand button or not depends on the current view layout.
+  // (e.g. Show expand button when `message_label_` exceeds one line.)
+  SetExpandButtonVisibility(IsExpandable());
+  header_row()->DeprecatedLayoutImmediately();
+
+  // The notification background is rounded in MessageView layout, but we also
+  // have to round the actions row background here.
+  if (actions_row()->GetVisible()) {
+    constexpr SkScalar kCornerRadius = SkIntToScalar(kNotificationCornerRadius);
+
+    // Use vertically larger clip path, so that actions row's top corners will
+    // not be rounded.
+    SkPath path;
+    gfx::Rect bounds = actions_row()->GetLocalBounds();
+    bounds.set_y(bounds.y() - bounds.height());
+    bounds.set_height(bounds.height() * 2);
+    path.addRoundRect(gfx::RectToSkRect(bounds), kCornerRadius, kCornerRadius);
+
+    action_buttons_row()->SetClipPath(path);
+
+    if (inline_reply()) {
+      inline_reply()->SetClipPath(path);
+    }
+  }
 
   // The animation is needed to run inside of the border.
   ink_drop_container_->SetBoundsRect(GetLocalBounds());
@@ -707,11 +732,11 @@ void NotificationView::HeaderRowPressed() {
   // cause |this| to be deleted.
   if (!weak_ptr)
     return;
-  Layout();
+  DeprecatedLayoutImmediately();
   SchedulePaint();
 }
 
-BEGIN_METADATA(NotificationView, NotificationViewBase)
+BEGIN_METADATA(NotificationView)
 END_METADATA
 
 }  // namespace message_center

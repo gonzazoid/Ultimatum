@@ -5,13 +5,13 @@
 #include "chrome/browser/web_applications/externally_managed_app_manager.h"
 
 #include <memory>
+#include <optional>
 
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "build/build_config.h"
-#include "chrome/browser/apps/app_service/app_registry_cache_waiter.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/web_applications/test/web_app_browsertest_util.h"
@@ -38,7 +38,6 @@
 #include "net/dns/mock_host_resolver.h"
 #include "net/http/http_status_code.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "url/origin.h"
 
@@ -133,7 +132,7 @@ class ExternallyManagedAppManagerBrowserTest
     test::CheckServiceWorkerStatus(url, storage_partition, status);
   }
 
-  absl::optional<webapps::InstallResultCode> result_code_;
+  std::optional<webapps::InstallResultCode> result_code_;
   bool simulate_redirect_ = false;
 };
 
@@ -146,7 +145,7 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest,
   InstallApp(CreateInstallOptions(url));
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall,
             result_code_.value());
-  absl::optional<webapps::AppId> app_id = registrar().LookupExternalAppId(url);
+  std::optional<webapps::AppId> app_id = registrar().LookupExternalAppId(url);
   EXPECT_TRUE(app_id.has_value());
   EXPECT_EQ("Manifest test app", registrar().GetAppShortName(app_id.value()));
 }
@@ -162,13 +161,13 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest,
   InstallApp(CreateInstallOptions(install_url));
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall,
             result_code_.value());
-  absl::optional<webapps::AppId> app_id =
+  std::optional<webapps::AppId> app_id =
       registrar().LookupExternalAppId(install_url);
   EXPECT_TRUE(app_id.has_value());
   EXPECT_EQ("Manifest test app", registrar().GetAppShortName(app_id.value()));
   // Same AppID should be in the registrar using start_url from the manifest.
   EXPECT_TRUE(registrar().IsLocallyInstalled(start_url));
-  absl::optional<webapps::AppId> opt_app_id =
+  std::optional<webapps::AppId> opt_app_id =
       registrar().FindAppWithUrlInScope(start_url);
   EXPECT_TRUE(opt_app_id.has_value());
   EXPECT_EQ(*opt_app_id, app_id);
@@ -185,14 +184,14 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest,
   InstallApp(CreateInstallOptions(install_url));
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall,
             result_code_.value());
-  absl::optional<webapps::AppId> app_id =
+  std::optional<webapps::AppId> app_id =
       registrar().LookupExternalAppId(install_url);
   EXPECT_TRUE(app_id.has_value());
   EXPECT_EQ("Web app banner test page",
             registrar().GetAppShortName(app_id.value()));
   // Same AppID should be in the registrar using install_url.
   EXPECT_TRUE(registrar().IsLocallyInstalled(install_url));
-  absl::optional<webapps::AppId> opt_app_id =
+  std::optional<webapps::AppId> opt_app_id =
       registrar().FindAppWithUrlInScope(install_url);
   ASSERT_TRUE(opt_app_id.has_value());
   EXPECT_EQ(*opt_app_id, app_id);
@@ -219,7 +218,7 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest,
 
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall,
             result_code_.value());
-  absl::optional<webapps::AppId> app_id = registrar().LookupExternalAppId(url);
+  std::optional<webapps::AppId> app_id = registrar().LookupExternalAppId(url);
   ASSERT_TRUE(app_id.has_value());
   EXPECT_TRUE(
       registrar().IsPlaceholderApp(app_id.value(), WebAppManagement::kPolicy));
@@ -243,7 +242,7 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest,
 
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall,
             result_code_.value());
-  absl::optional<webapps::AppId> app_id = registrar().LookupExternalAppId(url);
+  std::optional<webapps::AppId> app_id = registrar().LookupExternalAppId(url);
   ASSERT_TRUE(app_id.has_value());
   EXPECT_TRUE(
       registrar().IsPlaceholderApp(app_id.value(), WebAppManagement::kPolicy));
@@ -253,7 +252,7 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest,
 
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall,
             result_code_.value());
-  absl::optional<webapps::AppId> final_app_id =
+  std::optional<webapps::AppId> final_app_id =
       registrar().LookupExternalAppId(url);
   ASSERT_TRUE(final_app_id.has_value());
   EXPECT_FALSE(registrar().IsPlaceholderApp(final_app_id.value(),
@@ -283,12 +282,11 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest,
   InstallApp(options);
 
   const webapps::AppId placeholder_app_id =
-      GenerateAppId(absl::nullopt, install_url);
-  apps::AppReadinessWaiter(profile(), placeholder_app_id).Await();
+      GenerateAppId(std::nullopt, install_url);
 
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall,
             result_code_.value());
-  absl::optional<webapps::AppId> app_id =
+  std::optional<webapps::AppId> app_id =
       registrar().LookupExternalAppId(install_url);
   ASSERT_TRUE(app_id.has_value());
   EXPECT_EQ(placeholder_app_id, *app_id);
@@ -302,7 +300,7 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest,
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall,
             result_code_.value());
 
-  const webapps::AppId new_app_id = GenerateAppId(absl::nullopt, start_url);
+  const webapps::AppId new_app_id = GenerateAppId(std::nullopt, start_url);
 
   EXPECT_NE(new_app_id, placeholder_app_id);
   EXPECT_FALSE(registrar().IsInstalled(placeholder_app_id));
@@ -334,12 +332,11 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest,
   InstallApp(options);
 
   const webapps::AppId placeholder_app_id =
-      GenerateAppId(absl::nullopt, install_url);
-  apps::AppReadinessWaiter(profile(), placeholder_app_id).Await();
+      GenerateAppId(std::nullopt, install_url);
 
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall,
             result_code_.value());
-  absl::optional<webapps::AppId> app_id =
+  std::optional<webapps::AppId> app_id =
       registrar().LookupExternalAppId(install_url);
   ASSERT_TRUE(app_id.has_value());
   EXPECT_EQ(placeholder_app_id, *app_id);
@@ -353,8 +350,6 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest,
             result_code_.value());
 
   const webapps::AppId new_app_id = GenerateAppId("some_id", start_url);
-
-  base::RunLoop().RunUntilIdle();
 
   EXPECT_NE(new_app_id, placeholder_app_id);
   EXPECT_FALSE(registrar().IsInstalled(placeholder_app_id));
@@ -392,7 +387,7 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest,
 
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall,
             result_code_.value());
-  absl::optional<webapps::AppId> app_id = registrar().LookupExternalAppId(url);
+  std::optional<webapps::AppId> app_id = registrar().LookupExternalAppId(url);
   ASSERT_TRUE(app_id.has_value());
   EXPECT_TRUE(
       registrar().IsPlaceholderApp(app_id.value(), WebAppManagement::kPolicy));
@@ -428,7 +423,7 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest,
 
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall,
             result_code_.value());
-  absl::optional<webapps::AppId> app_id =
+  std::optional<webapps::AppId> app_id =
       registrar().LookupExternalAppId(app_url);
   ASSERT_TRUE(app_id.has_value());
   EXPECT_TRUE(
@@ -494,7 +489,7 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest,
 
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall,
             result_code_.value());
-  absl::optional<webapps::AppId> app_id =
+  std::optional<webapps::AppId> app_id =
       registrar().LookupExternalAppId(app_url);
   ASSERT_TRUE(app_id.has_value());
   EXPECT_TRUE(
@@ -529,7 +524,7 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest,
 
 IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest, ForceReinstall) {
   ASSERT_TRUE(embedded_test_server()->Start());
-  absl::optional<webapps::AppId> app_id;
+  std::optional<webapps::AppId> app_id;
   {
     GURL url(embedded_test_server()->GetURL(
         "/banners/"
@@ -549,7 +544,7 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest, ForceReinstall) {
     install_options.force_reinstall = true;
     InstallApp(std::move(install_options));
 
-    absl::optional<webapps::AppId> new_app_id =
+    std::optional<webapps::AppId> new_app_id =
         registrar().FindAppWithUrlInScope(url);
     EXPECT_TRUE(new_app_id.has_value());
     EXPECT_EQ(new_app_id, app_id);
@@ -561,7 +556,7 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest, ForceReinstall) {
 IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest,
                        PolicyAppOverridesUserInstalledApp) {
   ASSERT_TRUE(embedded_test_server()->Start());
-  absl::optional<webapps::AppId> app_id;
+  std::optional<webapps::AppId> app_id;
   {
     // Install user app
     auto install_info = std::make_unique<WebAppInstallInfo>();
@@ -580,7 +575,7 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest,
     // Install policy app
     GURL url(
         embedded_test_server()->GetURL("/banners/manifest_test_page.html"));
-    absl::optional<webapps::AppId> policy_app_id =
+    std::optional<webapps::AppId> policy_app_id =
         ForceInstallWebApp(profile(), url);
     ASSERT_EQ(policy_app_id, app_id);
     ASSERT_EQ("Manifest test app",
@@ -598,7 +593,7 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest,
   InstallApp(CreateInstallOptions(url));
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall,
             result_code_.value());
-  absl::optional<webapps::AppId> app_id = registrar().LookupExternalAppId(url);
+  std::optional<webapps::AppId> app_id = registrar().LookupExternalAppId(url);
   ASSERT_TRUE(app_id.has_value());
 
   // The installer falls back to installing a web app of the original URL.
@@ -620,7 +615,7 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest,
 
   EXPECT_EQ(webapps::InstallResultCode::kNotValidManifestForWebApp,
             result_code_.value());
-  absl::optional<webapps::AppId> id = registrar().LookupExternalAppId(url);
+  std::optional<webapps::AppId> id = registrar().LookupExternalAppId(url);
   ASSERT_FALSE(id.has_value());
 }
 
@@ -763,7 +758,7 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest,
           }));
   run_loop.Run();
 
-  absl::optional<webapps::AppId> app_id =
+  std::optional<webapps::AppId> app_id =
       registrar().FindAppWithUrlInScope(app_url);
   DCHECK(app_id.has_value());
   EXPECT_EQ(registrar().GetAppDisplayMode(*app_id), DisplayMode::kBrowser);
@@ -806,7 +801,7 @@ IN_PROC_BROWSER_TEST_F(ExternallyManagedAppManagerBrowserTest,
   ASSERT_FALSE(registrar().HasExternalApp(app_id));
 
   // Install policy app
-  absl::optional<webapps::AppId> policy_app_id =
+  std::optional<webapps::AppId> policy_app_id =
       ForceInstallWebApp(profile(), url);
   ASSERT_EQ(policy_app_id, app_id);
 
@@ -1024,13 +1019,12 @@ IN_PROC_BROWSER_TEST_F(PlaceholderUpdateRelaunchBrowserTest,
   AddForceInstalledApp(install_url.spec(), /*app_name=*/"placeholder app");
 
   const webapps::AppId placeholder_app_id =
-      GenerateAppId(absl::nullopt, install_url);
-  apps::AppReadinessWaiter(profile(), placeholder_app_id).Await();
+      GenerateAppId(std::nullopt, install_url);
 
   // Enable prevent-close close for the placeholder.
   AddPreventCloseToApp(install_url.spec(), kRunWindowed);
 
-  absl::optional<webapps::AppId> app_id =
+  std::optional<webapps::AppId> app_id =
       registrar().LookupExternalAppId(install_url);
   ASSERT_TRUE(app_id.has_value());
   EXPECT_EQ(placeholder_app_id, *app_id);
@@ -1067,7 +1061,6 @@ IN_PROC_BROWSER_TEST_F(PlaceholderUpdateRelaunchBrowserTest,
 
   // Wait until the final version of the app is installed.
   const webapps::AppId final_app_id = GenerateAppId("some_id", install_url);
-  apps::AppReadinessWaiter(profile(), final_app_id).Await();
 
   // Check that the placeholder app is indeed closed.
   WaitForNumberOfAppInstances(placeholder_app_id,

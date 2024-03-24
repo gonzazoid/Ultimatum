@@ -83,7 +83,7 @@ void ReportImagePixelInaccuracy(HTMLImageElement* image_element) {
   float document_dpr = document.DevicePixelRatio();
 
   // Get the size attribute calculated width, if any
-  absl::optional<float> sizes_width = image_element->GetResourceWidth();
+  std::optional<float> sizes_width = image_element->GetResourceWidth();
   // Report offset in pixels between intrinsic and layout dimensions
   const float kDPRCap = 2.0;
   float capped_dpr = std::min(document_dpr, kDPRCap);
@@ -189,8 +189,13 @@ bool PaintTimingDetector::NotifyBackgroundImagePaint(
     return false;
   }
 
+  PaintTimingDetector& paint_timing_detector =
+      frame_view->GetPaintTimingDetector();
+  if (paint_timing_detector.IsUnrelatedSoftNavigationPaint(node)) {
+    return false;
+  }
   ImagePaintTimingDetector& image_paint_timing_detector =
-      frame_view->GetPaintTimingDetector().GetImagePaintTimingDetector();
+      paint_timing_detector.GetImagePaintTimingDetector();
   if (!image_paint_timing_detector.IsRecordingLargestImagePaint()) {
     return false;
   }
@@ -223,13 +228,19 @@ bool PaintTimingDetector::NotifyImagePaint(
   if (!frame_view) {
     return false;
   }
+  PaintTimingDetector& paint_timing_detector =
+      frame_view->GetPaintTimingDetector();
   ImagePaintTimingDetector& image_paint_timing_detector =
-      frame_view->GetPaintTimingDetector().GetImagePaintTimingDetector();
+      paint_timing_detector.GetImagePaintTimingDetector();
   if (!image_paint_timing_detector.IsRecordingLargestImagePaint()) {
     return false;
   }
 
   Node* image_node = object.GetNode();
+  if (image_node &&
+      paint_timing_detector.IsUnrelatedSoftNavigationPaint(*image_node)) {
+    return false;
+  }
   HTMLImageElement* element = DynamicTo<HTMLImageElement>(image_node);
   bool is_loaded_after_mouseover =
       element && element->IsChangedShortlyAfterMouseover();
@@ -523,6 +534,11 @@ void PaintTimingDetector::ReportIgnoredContent() {
 const LargestContentfulPaintDetails&
 PaintTimingDetector::LatestLcpDetailsForTest() const {
   return largest_contentful_paint_calculator_->LatestLcpDetails();
+}
+
+bool PaintTimingDetector::IsUnrelatedSoftNavigationPaint(const Node& node) {
+  return (WasLCPRestarted() &&
+          !(IsSoftNavigationDetected() || node.IsModifiedBySoftNavigation()));
 }
 
 ScopedPaintTimingDetectorBlockPaintHook*

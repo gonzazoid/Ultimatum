@@ -61,7 +61,7 @@
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -2423,7 +2423,7 @@ TEST_F(IdentityManagerTest, RefreshAccountInfoIfStale) {
   identity_manager()->GetAccountFetcherService()->OnNetworkInitialized();
   AccountInfo account_info =
       MakeAccountAvailable(identity_manager(), kTestEmail2);
-  identity_manager()->RefreshAccountInfoIfStale();
+  identity_manager()->RefreshAccountInfoIfStale(account_info.account_id);
 
   SimulateSuccessfulFetchOfAccountInfo(
       identity_manager(), account_info.account_id, account_info.email,

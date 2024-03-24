@@ -42,8 +42,6 @@ source_set("filters") {
     "demuxer_manager.h",
     "file_data_source.cc",
     "file_data_source.h",
-    "frame_buffer_pool.cc",
-    "frame_buffer_pool.h",
     "frame_processor.cc",
     "frame_processor.h",
     "memory_data_source.cc",
@@ -244,8 +242,6 @@ source_set("filters") {
 
   if (enable_hls_demuxer) {
     sources += [
-      "hls_codec_detector.cc",
-      "hls_codec_detector.h",
       "hls_data_source_provider.cc",
       "hls_data_source_provider.h",
       "hls_data_source_provider_impl.cc",
@@ -314,7 +310,6 @@ source_set("unit_tests") {
     "decrypting_video_decoder_unittest.cc",
     "fake_video_decoder_unittest.cc",
     "file_data_source_unittest.cc",
-    "frame_buffer_pool_unittest.cc",
     "frame_processor_unittest.cc",
     "ivf_parser_unittest.cc",
     "memory_data_source_unittest.cc",
@@ -322,7 +317,6 @@ source_set("unit_tests") {
     "pipeline_controller_unittest.cc",
     "source_buffer_state_unittest.cc",
     "source_buffer_stream_unittest.cc",
-    "stream_parser_factory_unittest.cc",
     "video_cadence_estimator_unittest.cc",
     "video_decoder_stream_unittest.cc",
     "video_renderer_algorithm_unittest.cc",
@@ -414,7 +408,6 @@ source_set("unit_tests") {
 
   if (enable_hls_demuxer) {
     sources += [
-      "hls_codec_detector_unittest.cc",
       "hls_data_source_provider_impl_unittest.cc",
       "hls_data_source_provider_unittest.cc",
       "hls_manifest_demuxer_engine_unittest.cc",
@@ -422,6 +415,7 @@ source_set("unit_tests") {
       "hls_test_helpers.cc",
       "hls_test_helpers.h",
       "manifest_demuxer_unittest.cc",
+      "stream_parser_factory_unittest.cc",
     ]
   }
 

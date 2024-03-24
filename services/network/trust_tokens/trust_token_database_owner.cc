@@ -90,10 +90,6 @@ NOINLINE TrustTokenDatabaseOwner::TrustTokenDatabaseOwner(
           db_task_runner)),
       db_task_runner_(db_task_runner),
       backing_database_(std::make_unique<sql::Database>(sql::DatabaseOptions{
-          // As they work on deleting the feature (crbug.com/1120969), sql/
-          // owners prefer to see which clients are explicitly okay with using
-          // exclusive locking (the default).
-          .exclusive_locking = true,
           .page_size = 4096,
           .cache_size = 500,
           // TODO(pwnall): Add a meta table and remove this option.
@@ -107,7 +103,7 @@ NOINLINE TrustTokenDatabaseOwner::TrustTokenDatabaseOwner(
           std::make_unique<sqlite_proto::KeyValueData<TrustTokenIssuerConfig>>(
               table_manager_,
               issuer_table_.get(),
-              /*max_num_entries=*/absl::nullopt,
+              /*max_num_entries=*/std::nullopt,
               flush_delay_for_writes)),
       toplevel_table_(std::make_unique<
                       sqlite_proto::KeyValueTable<TrustTokenToplevelConfig>>(
@@ -116,7 +112,7 @@ NOINLINE TrustTokenDatabaseOwner::TrustTokenDatabaseOwner(
                      sqlite_proto::KeyValueData<TrustTokenToplevelConfig>>(
           table_manager_,
           toplevel_table_.get(),
-          /*max_num_entries=*/absl::nullopt,
+          /*max_num_entries=*/std::nullopt,
           flush_delay_for_writes)),
       issuer_toplevel_pair_table_(
           std::make_unique<
@@ -127,7 +123,7 @@ NOINLINE TrustTokenDatabaseOwner::TrustTokenDatabaseOwner(
               sqlite_proto::KeyValueData<TrustTokenIssuerToplevelPairConfig>>(
               table_manager_,
               issuer_toplevel_pair_table_.get(),
-              /*max_num_entries=*/absl::nullopt,
+              /*max_num_entries=*/std::nullopt,
               flush_delay_for_writes)) {
   // This line is boilerplate copied from predictor_database.cc.
   backing_database_->set_histogram_tag("TrustTokens");

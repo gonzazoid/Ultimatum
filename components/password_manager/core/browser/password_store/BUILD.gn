@@ -56,11 +56,12 @@ source_set("password_store_impl") {
   deps = [
     "//base",
     "//build:blink_buildflags",
+    "//components/affiliations/core/browser:affiliations",
+    "//components/affiliations/core/browser:sql_builder",
     "//components/autofill/core/common",
     "//components/os_crypt/sync:os_crypt",
     "//components/password_manager/core/browser:metrics_util",
-    "//components/password_manager/core/browser:sql_builder",
-    "//components/password_manager/core/browser/affiliation",
+    "//components/password_manager/core/browser/affiliation:affiliation_match_helper",
     "//components/password_manager/core/browser/features:password_features",
     "//components/password_manager/core/browser/sync",
     "//components/password_manager/core/common",
@@ -78,8 +79,9 @@ source_set("password_store_impl") {
   ]
   if (is_android) {
     sources += [
-      "android_backend_error.cc",
       "android_backend_error.h",
+      "split_stores_and_local_upm.cc",
+      "split_stores_and_local_upm.h",
     ]
   }
 
@@ -122,7 +124,7 @@ static_library("test_support") {
   deps = [
     ":password_store_impl",
     "//base",
-    "//components/password_manager/core/browser/affiliation",
+    "//components/password_manager/core/browser/affiliation:affiliation_match_helper",
     "//components/sync/model",
     "//testing/gmock",
   ]
@@ -144,7 +146,10 @@ source_set("unit_tests") {
   ]
 
   if (is_android) {
-    sources += [ "password_store_backend_metrics_recorder_unittest.cc" ]
+    sources += [
+      "password_store_backend_metrics_recorder_unittest.cc",
+      "split_stores_and_local_upm_unittest.cc",
+    ]
   }
   if (is_ios) {
     sources += [ "login_database_ios_unittest.cc" ]
@@ -154,11 +159,13 @@ source_set("unit_tests") {
     ":test_support",
     "//base",
     "//base/test:test_support",
+    "//components/affiliations/core/browser:affiliations",
+    "//components/affiliations/core/browser:test_support",
     "//components/autofill/core/common",
     "//components/os_crypt/sync:os_crypt",
     "//components/os_crypt/sync:test_support",
     "//components/password_manager/core/browser:test_support",
-    "//components/password_manager/core/browser/affiliation",
+    "//components/password_manager/core/browser/affiliation:affiliation_match_helper",
     "//components/password_manager/core/browser/affiliation:test_support",
     "//components/password_manager/core/browser/features:password_features",
     "//components/password_manager/core/browser/form_parsing",

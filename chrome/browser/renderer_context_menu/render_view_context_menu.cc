@@ -126,8 +126,8 @@
 #include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/autofill/content/browser/content_autofill_client.h"
+#include "components/autofill/core/browser/ui/popup_hiding_reasons.h"
 #include "components/autofill/core/browser/ui/popup_item_ids.h"
-#include "components/autofill/core/browser/ui/popup_types.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/autofill/core/common/password_generation_util.h"
 #include "components/autofill/core/common/unique_ids.h"
@@ -726,13 +726,13 @@ bool DoesFormControlTypeSupportEmoji(
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 // If the link points to a system web app (in |profile|), return its type.
 // Otherwise nullopt.
-absl::optional<ash::SystemWebAppType> GetLinkSystemAppType(Profile* profile,
-                                                           const GURL& url) {
-  absl::optional<webapps::AppId> link_app_id =
+std::optional<ash::SystemWebAppType> GetLinkSystemAppType(Profile* profile,
+                                                          const GURL& url) {
+  std::optional<webapps::AppId> link_app_id =
       web_app::FindInstalledAppWithUrlInScope(profile, url);
 
   if (!link_app_id)
-    return absl::nullopt;
+    return std::nullopt;
 
   return ash::GetSystemWebAppTypeForAppId(profile, *link_app_id);
 }
@@ -752,6 +752,12 @@ int GetClipboardHistoryCommandId() {
   return chromeos::features::IsClipboardHistoryRefreshEnabled()
              ? IDC_CONTENT_PASTE_FROM_CLIPBOARD
              : IDC_CONTENT_CLIPBOARD_HISTORY_MENU;
+}
+
+bool IsCaptivePortalProfile(Profile* profile) {
+  return chromeos::features::IsCaptivePortalPopupWindowEnabled() &&
+         profile->IsOffTheRecord() &&
+         profile->GetOTRProfileID().IsCaptivePortal();
 }
 
 #endif  // BUILDFLAG(IS_CHROMEOS)
@@ -949,8 +955,8 @@ void RenderViewContextMenu::AppendAllExtensionItems() {
   std::map<std::u16string, std::vector<const Extension*>>
       title_to_extensions_map;
   for (const auto& id : menu_manager->ExtensionIds()) {
-    const Extension* extension = registry->GetExtensionById(
-        id.extension_id, extensions::ExtensionRegistry::ENABLED);
+    const Extension* extension =
+        registry->enabled_extensions().GetByID(id.extension_id);
     // Platform apps have their context menus created directly in
     // AppendPlatformAppItems.
     if (extension && !extension->is_platform_app()) {
@@ -1672,12 +1678,21 @@ void RenderViewContextMenu::AppendLinkItems() {
       show_open_in_new_window = false;
     }
 
+#if BUILDFLAG(IS_CHROMEOS)
+    Profile* profile = GetProfile();
+
+    // Disable opening links in a new tab or window for captive portal signin.
+    if (IsCaptivePortalProfile(profile)) {
+      show_open_in_new_tab = false;
+      show_open_in_new_window = false;
+      show_open_link_off_the_record = false;
+    }
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     const bool in_system_web_dialog =
         ash::SystemWebDialogDelegate::HasInstance(current_url_);
 
-    Profile* profile = GetProfile();
-    absl::optional<ash::SystemWebAppType> link_system_app_type =
+    std::optional<ash::SystemWebAppType> link_system_app_type =
         GetLinkSystemAppType(profile, params_.link_url);
 
     // true if the link points to a WebUI page, including SWA.
@@ -1685,7 +1700,9 @@ void RenderViewContextMenu::AppendLinkItems() {
 
     // Opening a WebUI page in an incognito window makes little sense, so we
     // don't show the item.
-    show_open_link_off_the_record = !link_to_webui;
+    if (link_to_webui) {
+      show_open_link_off_the_record = false;
+    }
 
     // Basically, we don't show "Open link in new tab" and "Open link in new
     // window" items inside SWAs/SystemWebDialogs if that link is to WebUI.
@@ -1720,6 +1737,7 @@ void RenderViewContextMenu::AppendLinkItems() {
       show_open_link_off_the_record = false;
     }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
     if (show_open_in_new_tab) {
       menu_model_.AddItemWithStringId(
@@ -1750,6 +1768,17 @@ void RenderViewContextMenu::AppendLinkItems() {
       menu_model_.AddItemWithStringId(IDC_CONTENT_CONTEXT_OPENLINKPREVIEW,
                                       IDS_CONTENT_CONTEXT_OPENLINKPREVIEW);
       menu_model_.SetIsNewFeatureAt(menu_model_.GetItemCount() - 1, true);
+      // We don't show in-production-help for ChromeOS for now because we should
+      // use a different trigger.
+      //
+      // TODO(b:325390312): Update trigger for ChromeOS and show
+      // in-production-help.
+#if !BUILDFLAG(IS_CHROMEOS)
+      menu_model_.SetMinorText(
+          menu_model_.GetItemCount() - 1,
+          l10n_util::GetStringUTF16(
+              IDS_CONTENT_CONTEXT_OPENLINKPREVIEW_TRIGGER_ALTCLICK));
+#endif  // !BUILDFLAG(IS_CHROMEOS)
     }
 #endif  // !BUILDFLAG(IS_ANDROID)
 
@@ -1785,9 +1814,7 @@ void RenderViewContextMenu::AppendLinkItems() {
         }
       }
 
-      if ((multiple_profiles_open_ ||
-           (base::FeatureList::IsEnabled(features::kDisplayOpenLinkAsProfile) &&
-            has_active_profiles))) {
+      if (multiple_profiles_open_ || has_active_profiles) {
         DCHECK(!target_profiles_entries.empty());
         if (target_profiles_entries.size() == 1) {
           int menu_index = static_cast<int>(profile_link_paths_.size());
@@ -1903,7 +1930,7 @@ void RenderViewContextMenu::AppendOpenInWebAppLinkItems() {
   if (!provider)
     return;
 
-  absl::optional<webapps::AppId> link_app_id =
+  std::optional<webapps::AppId> link_app_id =
       web_app::FindInstalledAppWithUrlInScope(profile, params_.link_url);
   if (!link_app_id)
     return;
@@ -2039,7 +2066,6 @@ void RenderViewContextMenu::AppendVideoItems() {
   if (base::FeatureList::IsEnabled(media::kContextMenuSaveVideoFrameAs)) {
     menu_model_.AddItemWithStringId(IDC_CONTENT_CONTEXT_SAVEVIDEOFRAMEAS,
                                     IDS_CONTENT_CONTEXT_SAVEVIDEOFRAMEAS);
-    menu_model_.SetIsNewFeatureAt(menu_model_.GetItemCount() - 1, true);
   }
   menu_model_.AddItemWithStringId(IDC_CONTENT_CONTEXT_SAVEAVAS,
                                   IDS_CONTENT_CONTEXT_SAVEVIDEOAS);
@@ -2389,7 +2415,7 @@ void RenderViewContextMenu::AppendSpellingAndSearchSuggestionItems() {
       base::RecordAction(
           base::UserMetricsAction("Compose.ContextMenu.ItemSeen"));
       menu_model_.AddItemWithStringId(IDC_CONTEXT_COMPOSE,
-                                      IDS_COMPOSE_SUGGESTION_MAIN_TEXT);
+                                      IDS_COMPOSE_CONTEXT_MENU_TEXT);
       menu_model_.SetElementIdentifierAt(
           menu_model_.GetIndexOfCommandId(IDC_CONTEXT_COMPOSE).value(),
           kComposeMenuItem);
@@ -2605,7 +2631,7 @@ void RenderViewContextMenu::AppendSharingItems() {
 #if !BUILDFLAG(IS_FUCHSIA)
 void RenderViewContextMenu::AppendClickToCallItem() {
   SharingClickToCallEntryPoint entry_point;
-  absl::optional<std::string> phone_number;
+  std::optional<std::string> phone_number;
   std::string selection_text;
   if (ShouldOfferClickToCallForURL(browser_context_, params_.link_url)) {
     entry_point = SharingClickToCallEntryPoint::kRightClickLink;
@@ -2717,6 +2743,17 @@ bool RenderViewContextMenu::IsCommandIdEnabled(int id) const {
     return params_.link_url.is_valid();
   }
 
+  // On ChromeOS a dedicated OTR profile is used for captive portal signin to
+  // protect user privacy. Since some policies prevent Incognito browsing,
+  // disable options that trigger navigation in the context menu.
+  bool navigation_allowed = true;
+#if BUILDFLAG(IS_CHROMEOS)
+  Profile* profile = GetProfile();
+  if (IsCaptivePortalProfile(profile)) {
+    navigation_allowed = false;
+  }
+#endif
+
   switch (id) {
     case IDC_BACK:
       return embedder_web_contents_->GetController().CanGoBack();
@@ -2741,17 +2778,17 @@ bool RenderViewContextMenu::IsCommandIdEnabled(int id) const {
       return IsDevCommandEnabled(id);
 
     case IDC_CONTENT_CONTEXT_TRANSLATE:
-      return IsTranslateEnabled();
+      return navigation_allowed && IsTranslateEnabled();
 
     case IDC_CONTENT_CONTEXT_PARTIAL_TRANSLATE:
-      return true;
+      return navigation_allowed;
 
     case IDC_CONTENT_CONTEXT_OPENLINKNEWTAB:
     case IDC_CONTENT_CONTEXT_OPENLINKNEWWINDOW:
     case IDC_CONTENT_CONTEXT_OPENLINKINPROFILE:
     case IDC_CONTENT_CONTEXT_OPENLINKBOOKMARKAPP:
     case IDC_CONTENT_CONTEXT_OPENLINKPREVIEW:
-      return params_.link_url.is_valid() &&
+      return navigation_allowed && params_.link_url.is_valid() &&
              IsOpenLinkAllowedByDlp(params_.link_url);
 
     case IDC_CONTENT_CONTEXT_COPYLINKLOCATION:
@@ -2775,7 +2812,7 @@ bool RenderViewContextMenu::IsCommandIdEnabled(int id) const {
     case IDC_CONTENT_CONTEXT_SEARCHLENSFORIMAGE:
     case IDC_CONTENT_CONTEXT_TRANSLATEIMAGEWITHWEB:
     case IDC_CONTENT_CONTEXT_TRANSLATEIMAGEWITHLENS:
-      return params_.src_url.is_valid() &&
+      return navigation_allowed && params_.src_url.is_valid() &&
              (params_.src_url.scheme() != content::kChromeUIScheme);
 
     case IDC_CONTENT_CONTEXT_COPYIMAGE:
@@ -2822,7 +2859,8 @@ bool RenderViewContextMenu::IsCommandIdEnabled(int id) const {
       // Currently, a media element can be opened in a new tab iff it can
       // be saved. So rather than duplicating the MediaCanSave flag, we rely
       // on that here.
-      return !!(params_.media_flags & ContextMenuData::kMediaCanSave);
+      return navigation_allowed &&
+             !!(params_.media_flags & ContextMenuData::kMediaCanSave);
 
     case IDC_SAVE_PAGE:
       return IsSavePageEnabled();
@@ -2857,7 +2895,7 @@ bool RenderViewContextMenu::IsCommandIdEnabled(int id) const {
       return !!(params_.edit_flags & ContextMenuDataEditFlags::kCanSelectAll);
 
     case IDC_CONTENT_CONTEXT_OPENLINKOFFTHERECORD:
-      return IsOpenLinkOTREnabled();
+      return navigation_allowed && IsOpenLinkOTREnabled();
 
     case IDC_PRINT:
       return IsPrintPreviewEnabled();
@@ -2865,7 +2903,8 @@ bool RenderViewContextMenu::IsCommandIdEnabled(int id) const {
     case IDC_CONTENT_CONTEXT_SEARCHWEBFOR:
     case IDC_CONTENT_CONTEXT_SEARCHWEBFORNEWTAB:
     case IDC_CONTENT_CONTEXT_GOTOURL:
-      return IsOpenLinkAllowedByDlp(selection_navigation_url_);
+      return navigation_allowed &&
+             IsOpenLinkAllowedByDlp(selection_navigation_url_);
 
     case IDC_SPELLPANEL_TOGGLE:
     case IDC_CONTENT_CONTEXT_LANGUAGE_SETTINGS:
@@ -2876,7 +2915,7 @@ bool RenderViewContextMenu::IsCommandIdEnabled(int id) const {
     case IDC_CONTENT_CONTEXT_WEB_REGION_SEARCH:
       // These region search items will not be added if there is no default
       // search provider available.
-      return true;
+      return navigation_allowed;
 
     case IDC_CONTENT_CONTEXT_GENERATE_QR_CODE:
       return IsQRCodeGeneratorEnabled();
@@ -2904,7 +2943,7 @@ bool RenderViewContextMenu::IsCommandIdEnabled(int id) const {
       return IsRouteMediaEnabled();
 
     case IDC_CONTENT_CONTEXT_OPEN_IN_READING_MODE:
-      return true;
+      return navigation_allowed;
 
     case IDC_CONTENT_CONTEXT_ADD_A_NOTE:
       return IsAddANoteEnabled();
@@ -3466,7 +3505,7 @@ void RenderViewContextMenu::ExecuteCommand(int id, int event_flags) {
       break;
 
     default:
-      NOTREACHED() << "Unhandled id: " << id;
+      DUMP_WILL_BE_NOTREACHED_NORETURN() << "Unhandled id: " << id;
       break;
   }
 }
@@ -3919,7 +3958,7 @@ bool RenderViewContextMenu::IsOpenLinkOTREnabled() const {
 }
 
 void RenderViewContextMenu::ExecOpenWebApp() {
-  absl::optional<webapps::AppId> app_id =
+  std::optional<webapps::AppId> app_id =
       web_app::FindInstalledAppWithUrlInScope(
           Profile::FromBrowserContext(browser_context_), params_.link_url);
   // |app_id| could be nullopt if it has been uninstalled since the user
@@ -3980,10 +4019,14 @@ void RenderViewContextMenu::ExecOpenLinkInProfile(int profile_index) {
 void RenderViewContextMenu::ExecOpenCompose() {
   ChromeComposeClient* client = GetChromeComposeClient();
   if (!client) {
+    compose::LogOpenComposeDialogResult(
+        compose::OpenComposeDialogResult::kNoChromeComposeClient);
     return;
   }
   RenderFrameHost* render_frame_host = GetRenderFrameHost();
   if (!render_frame_host) {
+    compose::LogOpenComposeDialogResult(
+        compose::OpenComposeDialogResult::kNoRenderFrameHost);
     return;
   }
   if (auto* driver = autofill::ContentAutofillDriver::GetForRenderFrameHost(
@@ -3997,6 +4040,9 @@ void RenderViewContextMenu::ExecOpenCompose() {
             frame_token, autofill::FieldRendererId(params_.field_renderer_id)),
         compose::ComposeManagerImpl::UiEntryPoint::kContextMenu);
     new_badge_tracker_.ActionPerformed("compose_menu_item_activated");
+  } else {
+    compose::LogOpenComposeDialogResult(
+        compose::OpenComposeDialogResult::kNoContentAutofillDriver);
   }
 }
 #endif

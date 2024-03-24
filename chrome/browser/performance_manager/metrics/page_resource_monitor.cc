@@ -5,12 +5,14 @@
 #include "chrome/browser/performance_manager/metrics/page_resource_monitor.h"
 
 #include <stdint.h>
+
 #include <algorithm>
 #include <array>
 #include <functional>
 #include <iterator>
 #include <limits>
 #include <numeric>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -19,12 +21,12 @@
 #include "base/functional/bind.h"
 #include "base/functional/callback.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/scoped_observation.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/system/sys_info.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
-#include "base/types/optional_ref.h"
 #include "build/build_config.h"
 #include "chrome/browser/performance_manager/metrics/page_resource_cpu_monitor.h"
 #include "components/performance_manager/public/features.h"
@@ -35,14 +37,13 @@
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace performance_manager::metrics {
 
 namespace {
 
 using system_cpu::CpuProbe;
-using system_cpu::PressureSample;
+using system_cpu::CpuSample;
 using PageMeasurementBackgroundState =
     PageResourceMonitor::PageMeasurementBackgroundState;
 
@@ -105,14 +106,22 @@ bool ContextIsTab(const ResourceContext& context) {
   return page_node && page_node->GetType() == PageType::kTab;
 }
 
+bool IsCPUInterventionEvaluationLoggingEnabled() {
+#if BUILDFLAG(IS_ANDROID)
+  return false;
+#else
+  return base::FeatureList::IsEnabled(
+      features::kCPUInterventionEvaluationLogging);
+#endif
+}
+
 }  // namespace
 
 class PageResourceMonitor::CPUResultConverter {
  public:
   // A callback that's invoked with the converted results.
-  using ResultCallback =
-      base::OnceCallback<void(const PageCPUUsageMap&,
-                              absl::optional<PressureSample>)>;
+  using ResultCallback = base::OnceCallback<void(const PageCPUUsageMap&,
+                                                 std::optional<CpuSample>)>;
 
   explicit CPUResultConverter(std::unique_ptr<CpuProbe> system_cpu_probe);
   ~CPUResultConverter() = default;
@@ -130,7 +139,7 @@ class PageResourceMonitor::CPUResultConverter {
   void StartNextInterval(ResultCallback result_callback,
                          base::TimeTicks time,
                          const QueryResultMap& results,
-                         absl::optional<PressureSample> system_cpu);
+                         std::optional<CpuSample> system_cpu);
 
   std::unique_ptr<CpuProbe> system_cpu_probe_;
   resource_attribution::CPUProportionTracker proportion_tracker_;
@@ -141,10 +150,14 @@ PageResourceMonitor::PageResourceMonitor(bool enable_system_cpu_probe)
     : resource_query_(CPUQueryBuilder()
                           .AddResourceType(ResourceType::kMemorySummary)
                           .CreateScopedQuery()) {
-  resource_query_.AddObserver(this);
+  query_observation_.Observe(&resource_query_);
   resource_query_.Start(kCollectionDelay);
-  cpu_result_converter_ = std::make_unique<CPUResultConverter>(
-      enable_system_cpu_probe ? CpuProbe::Create() : nullptr);
+  std::unique_ptr<CpuProbe> system_cpu_probe;
+  if (enable_system_cpu_probe && IsCPUInterventionEvaluationLoggingEnabled()) {
+    system_cpu_probe = CpuProbe::Create();
+  }
+  cpu_result_converter_ =
+      std::make_unique<CPUResultConverter>(std::move(system_cpu_probe));
   if (base::FeatureList::IsEnabled(features::kResourceAttributionValidation)) {
     cpu_monitor_ = std::make_unique<PageResourceCPUMonitor>();
   }
@@ -196,7 +209,7 @@ PageResourceCPUMonitor* PageResourceMonitor::GetCPUMonitorForTesting() {
 void PageResourceMonitor::OnPageResourceUsageResult(
     const QueryResultMap& results,
     const PageCPUUsageMap& page_cpu_usage,
-    absl::optional<PressureSample> system_cpu) {
+    std::optional<CpuSample> system_cpu) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   // Calculate the overall CPU usage.
@@ -230,11 +243,11 @@ void PageResourceMonitor::OnPageResourceUsageResult(
       ukm.SetTotalRecentCPUUsageAllPages(kCPUUsageFactor * total_cpu_usage);
     }
     // Add memory summary, if this page included it.
-    const base::optional_ref<const MemorySummaryResult> memory_result =
-        resource_attribution::AsResult<MemorySummaryResult>(result);
-    if (memory_result.has_value()) {
-      ukm.SetResidentSetSizeEstimate(memory_result->resident_set_size_kb);
-      ukm.SetPrivateFootprintEstimate(memory_result->private_footprint_kb);
+    if (result.memory_summary_result.has_value()) {
+      ukm.SetResidentSetSizeEstimate(
+          result.memory_summary_result->resident_set_size_kb);
+      ukm.SetPrivateFootprintEstimate(
+          result.memory_summary_result->private_footprint_kb);
     }
     ukm.Record(ukm::UkmRecorder::Get());
   }
@@ -279,9 +292,7 @@ void PageResourceMonitor::OnPageResourceUsageResult(
 
   time_of_last_resource_usage_ = now;
 
-#if !BUILDFLAG(IS_ANDROID)
-  if (base::FeatureList::IsEnabled(
-          performance_manager::features::kCPUInterventionEvaluationLogging)) {
+  if (IsCPUInterventionEvaluationLoggingEnabled()) {
     LogCPUInterventionMetrics(page_cpu_usage, system_cpu, now,
                               CPUInterventionSuffix::kBaseline);
     bool is_cpu_over_threshold =
@@ -308,11 +319,10 @@ void PageResourceMonitor::OnPageResourceUsageResult(
           now - time_of_last_cpu_threshold_exceeded_.value(), base::Minutes(2),
           base::Hours(24), 50);
       log_cpu_on_delay_timer_.AbandonAndStop();
-      time_of_last_cpu_threshold_exceeded_ = absl::nullopt;
+      time_of_last_cpu_threshold_exceeded_ = std::nullopt;
       delayed_cpu_result_converter_.reset();
     }
   }
-#endif
 }
 
 void PageResourceMonitor::CheckDelayedCPUInterventionMetrics() {
@@ -328,7 +338,7 @@ void PageResourceMonitor::CheckDelayedCPUInterventionMetrics() {
 
 void PageResourceMonitor::OnDelayedCPUInterventionMetricsResult(
     const PageCPUUsageMap& page_cpu_usage,
-    absl::optional<PressureSample> system_cpu) {
+    std::optional<CpuSample> system_cpu) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // Now that results are received, stop the delayed CPU probe and proportion
   // tracking.
@@ -349,7 +359,7 @@ void PageResourceMonitor::OnDelayedCPUInterventionMetricsResult(
 
 void PageResourceMonitor::LogCPUInterventionMetrics(
     const PageCPUUsageMap& page_cpu_usage,
-    const absl::optional<PressureSample>& system_cpu,
+    const std::optional<CpuSample>& system_cpu,
     const base::TimeTicks now,
     CPUInterventionSuffix histogram_suffix) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -547,7 +557,7 @@ void PageResourceMonitor::CPUResultConverter::OnResourceUsageUpdated(
   if (system_cpu_probe_) {
     system_cpu_probe_->RequestSample(std::move(next_update_callback));
   } else {
-    std::move(next_update_callback).Run(absl::nullopt);
+    std::move(next_update_callback).Run(std::nullopt);
   }
 }
 
@@ -561,7 +571,7 @@ void PageResourceMonitor::CPUResultConverter::StartNextInterval(
     CPUResultConverter::ResultCallback result_callback,
     base::TimeTicks time,
     const QueryResultMap& results,
-    absl::optional<PressureSample> system_cpu) {
+    std::optional<CpuSample> system_cpu) {
   std::move(result_callback)
       .Run(proportion_tracker_.StartNextInterval(time, results),
            std::move(system_cpu));

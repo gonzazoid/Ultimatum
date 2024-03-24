@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "services/on_device_model/public/cpp/on_device_model.h"
+#include "base/strings/string_number_conversions.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/on_device_model/on_device_model_service.h"
 
@@ -11,7 +12,8 @@ namespace {
 
 class SessionImpl : public OnDeviceModel::Session {
  public:
-  SessionImpl() = default;
+  explicit SessionImpl(std::optional<uint32_t> adaptation_id)
+      : adaptation_id_(std::move(adaptation_id)) {}
   ~SessionImpl() override = default;
 
   SessionImpl(const SessionImpl&) = delete;
@@ -37,17 +39,29 @@ class SessionImpl : public OnDeviceModel::Session {
       mojom::InputOptionsPtr input,
       mojo::PendingRemote<mojom::StreamingResponder> response) override {
     mojo::Remote<mojom::StreamingResponder> remote(std::move(response));
+    if (adaptation_id_) {
+      auto chunk = mojom::ResponseChunk::New();
+      chunk->text =
+          "Adaptation: " + base::NumberToString(*adaptation_id_) + "\n";
+      remote->OnResponse(std::move(chunk));
+    }
     if (!input->ignore_context) {
       for (const std::string& context : context_) {
-        remote->OnResponse("Context: " + context + "\n");
+        auto chunk = mojom::ResponseChunk::New();
+        chunk->text = "Context: " + context + "\n";
+        remote->OnResponse(std::move(chunk));
       }
     }
-    remote->OnResponse("Input: " + input->text + "\n");
-    remote->OnComplete(mojom::ResponseStatus::kOk);
+
+    auto chunk = mojom::ResponseChunk::New();
+    chunk->text = "Input: " + input->text + "\n";
+    remote->OnResponse(std::move(chunk));
+    remote->OnComplete(mojom::ResponseSummary::New());
   }
 
  private:
   std::vector<std::string> context_;
+  std::optional<uint32_t> adaptation_id_;
 };
 
 class OnDeviceModelImpl : public OnDeviceModel {
@@ -58,9 +72,18 @@ class OnDeviceModelImpl : public OnDeviceModel {
   OnDeviceModelImpl(const OnDeviceModelImpl&) = delete;
   OnDeviceModelImpl& operator=(const OnDeviceModelImpl&) = delete;
 
-  std::unique_ptr<Session> CreateSession() override {
-    return std::make_unique<SessionImpl>();
+  std::unique_ptr<Session> CreateSession(
+      std::optional<uint32_t> adaptation_id) override {
+    return std::make_unique<SessionImpl>(std::move(adaptation_id));
   }
+
+  base::expected<uint32_t, mojom::LoadModelResult> LoadAdaptation(
+      mojom::LoadAdaptationParamsPtr params) override {
+    return base::ok(++next_adaptation_id_);
+  }
+
+ private:
+  uint32_t next_adaptation_id_ = 0;
 };
 
 }  // namespace

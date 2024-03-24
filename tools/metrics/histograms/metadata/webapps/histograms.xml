@@ -133,7 +133,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Launch.HomeScreen" enum="LaunchFromHomeScreen"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>dominickn@chromium.org</owner>
   <owner>hartmanng@chromium.org</owner>
   <owner>peconn@chromium.org</owner>
@@ -143,7 +143,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Launch.HomeScreenSource" enum="LaunchFromHomeScreenSource"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>dominickn@chromium.org</owner>
   <owner>hartmanng@chromium.org</owner>
   <owner>peconn@chromium.org</owner>
@@ -181,7 +181,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Launch.WebAppLaunchHandlerClientMode"
-    enum="WebAppLaunchHandlerClientMode" expires_after="2024-05-19">
+    enum="WebAppLaunchHandlerClientMode" expires_after="2024-07-21">
   <owner>alancutter@chromium.org</owner>
   <owner>desktop-pwas-team@google.com</owner>
   <summary>
@@ -351,7 +351,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Webapp.CheckServiceWorker.Time" units="ms"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>asamidoi@chromium.org</owner>
   <owner>chrome-worker@google.com</owner>
   <summary>
@@ -441,7 +441,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram base="true" name="WebApp.Engagement"
-    enum="SiteEngagementServiceEngagementType" expires_after="2024-05-19">
+    enum="SiteEngagementServiceEngagementType" expires_after="2024-07-21">
   <owner>mgiuca@chromium.org</owner>
   <owner>desktop-pwas-team@google.com</owner>
   <summary>
@@ -715,7 +715,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebApp.IconDownloader.Result"
-    enum="WebAppIconDownloaderResult" expires_after="2024-06-02">
+    enum="WebAppIconDownloaderResult" expires_after="2024-08-04">
   <owner>dmurph@chromium.org</owner>
   <owner>desktop-pwas-team@google.com</owner>
   <summary>
@@ -770,7 +770,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebApp.Install.Result" enum="BooleanSuccess"
-    expires_after="2024-05-26">
+    expires_after="2024-07-28">
   <owner>phillis@chromium.org</owner>
   <owner>desktop-pwas-team@google.com</owner>
   <summary>
@@ -982,12 +982,28 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebApp.LaunchSource" enum="LaunchSource"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>phillis@chromium.org</owner>
   <owner>desktop-pwas-team@google.com</owner>
   <summary>
     The number of times web apps are launched, grouped by apps::LaunchSource.
     The equivalent histogram on Android is called Launch.HomeScreenSource.
+  </summary>
+</histogram>
+
+<histogram name="WebApp.Media.SystemMediaControls"
+    enum="WebAppSystemMediaControlsEvent" expires_after="2024-09-10">
+  <owner>dmurph@chromium.org</owner>
+  <owner>stahon@microsoft.com</owner>
+  <owner>stemiel@chromium.org</owner>
+  <summary>
+    Records events when Progressive Web Apps (PWAs) play audio as well as when
+    PWA specific SystemMediaControls are interacted with in the operating
+    system. This can be to play, pause, skip and other similar actions available
+    from the OS. This histogram is only used when instanced PWA system media
+    controls is enabled. The control events (like next) are only fired if the
+    request comes from system media controls (and the OS) not when the media is
+    directly interacted.
   </summary>
 </histogram>
 
@@ -1235,7 +1251,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="WebApp.Preinstalled.WindowExperiment.{UserGroup}.{LinkCapturingChange}"
-    enum="DefaultAppName" expires_after="2024-05-05">
+    enum="DefaultAppName" expires_after="2024-08-04">
   <owner>glenrob@chromium.org</owner>
   <owner>desktop-pwas-team@google.com</owner>
   <summary>
@@ -1367,7 +1383,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebApp.ShortcutsMenu.Win.Results"
-    enum="ShortcutsMenuWinRegistrationResult" expires_after="2024-06-09">
+    enum="ShortcutsMenuWinRegistrationResult" expires_after="2024-08-11">
   <owner>dibyapal@chromium.org</owner>
   <owner>desktop-pwas-team@google.com</owner>
   <summary>
@@ -1391,14 +1407,14 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebApp.ShortcutsMenuRegistration.Result" enum="BooleanSuccess"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>dibyapal@chromium.org</owner>
   <owner>desktop-pwas-team@google.com</owner>
   <summary>Records the result of shortcuts menu registration for PWAs.</summary>
 </histogram>
 
 <histogram name="WebApp.ShortcutsMenuUnregistered.Result" enum="BooleanSuccess"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>dibyapal@chromium.org</owner>
   <owner>desktop-pwas-team@google.com</owner>
   <summary>
@@ -1414,6 +1430,31 @@ chromium-metrics-reviews@google.com.
     Records events associated with the intent picker icon in the omnibox.
     Recorded when the icon is shown or interacted with on Windows, Mac and Linux
     only.
+  </summary>
+</histogram>
+
+<histogram name="WebApp.Sync.CorruptSyncEntity"
+    enum="WebAppManifestIdParseResult" expires_after="2025-01-15">
+  <owner>dmurph@chromium.org</owner>
+  <owner>desktop-pwas-team@google.com</owner>
+  <summary>
+    Records a sync data corruption that was detected after the storage key was
+    parsed. This is detected on startup (if sync is already connected), when
+    signing in to sync, or when sync sends changes to Chrome while it's already
+    running and signed in.
+  </summary>
+</histogram>
+
+<histogram name="WebApp.Sync.InvalidEntity" enum="WebAppStorageKeyParseResult"
+    expires_after="2025-01-15">
+  <owner>dmurph@chromium.org</owner>
+  <owner>desktop-pwas-team@google.com</owner>
+  <summary>
+    Records invalid sync data that was detected, and completely ignored /
+    excluded from the WebAppSyncBridge logic. This is recorded potentially
+    multiple times during startup (if sync is already connected), when signing
+    in to sync, or when sync sends changes to Chrome while it's already running
+    and signed in.
   </summary>
 </histogram>
 
@@ -1444,9 +1485,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Webapp.SystemApps.IconsAreHealthyInSession"
-    enum="BooleanSuccess" expires_after="2024-05-19">
+    enum="BooleanSuccess" expires_after="2024-07-28">
   <owner>qjw@chromium.org</owner>
-  <owner>dominicschulz@chromium.org</owner>
+  <owner>cros-web-apps-infra-team@google.com</owner>
   <summary>
     Records whether system web app icons are healthy for each user session that
     has system web apps installed. Failure indicates that at least one app has
@@ -1455,10 +1496,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Webapp.SystemApps.IconsFixedOnReinstall" enum="BooleanSuccess"
-    expires_after="2024-05-19">
+    expires_after="2024-07-28">
   <owner>qjw@chromium.org</owner>
   <owner>clamclamyan@google.com</owner>
-  <owner>dominicschulz@chromium.org</owner>
+  <owner>cros-web-apps-infra-team@google.com</owner>
   <summary>
     Records whether a reinstall fixes previously broken system web app icons.
     This is recorded during icon check after a reinstall (when icons were broken

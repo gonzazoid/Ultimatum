@@ -72,7 +72,7 @@ class ExtensionManagementApiBrowserTest : public ExtensionBrowserTest {
       const ExtensionManagementApiBrowserTest&) = delete;
 
  protected:
-  bool CrashEnabledExtension(const std::string& extension_id) {
+  bool CrashEnabledExtension(const ExtensionId& extension_id) {
     ExtensionHost* background_host =
         ProcessManager::Get(browser()->profile())
             ->GetBackgroundHostForExtension(extension_id);
@@ -315,7 +315,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionManagementApiBrowserTest,
       test_data_dir_.AppendASCII("api_test/management/packaged_app"), 1);
   ASSERT_TRUE(app);
 
-  const std::string app_id = app->id();
+  const extensions::ExtensionId app_id = app->id();
 
   scoped_refptr<ManagementCreateAppShortcutFunction> create_shortcut_function(
       new ManagementCreateAppShortcutFunction());
@@ -348,7 +348,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionManagementApiBrowserTest,
   // The management API should list this extension.
   scoped_refptr<ManagementGetAllFunction> function =
       base::MakeRefCounted<ManagementGetAllFunction>();
-  absl::optional<base::Value> result =
+  std::optional<base::Value> result =
       test_utils::RunFunctionAndReturnSingleResult(function.get(), "[]",
                                                    browser()->profile());
   ASSERT_TRUE(result->is_list());

@@ -18,15 +18,13 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/test/gmock_move_support.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/test/to_vector.h"
 #include "build/build_config.h"
-#include "components/password_manager/core/browser/affiliation/fake_affiliation_service.h"
+#include "components/affiliations/core/browser/fake_affiliation_service.h"
 #include "components/password_manager/core/browser/affiliation/mock_affiliated_match_helper.h"
 #include "components/password_manager/core/browser/credential_manager_pending_request_task.h"
 #include "components/password_manager/core/browser/credential_manager_utils.h"
-#include "components/password_manager/core/browser/features/password_features.h"
 #include "components/password_manager/core/browser/leak_detection/leak_detection_check.h"
 #include "components/password_manager/core/browser/leak_detection/leak_detection_check_factory.h"
 #include "components/password_manager/core/browser/leak_detection/leak_detection_request_utils.h"
@@ -231,28 +229,20 @@ GURL HttpURLFromHttps(const GURL& https_url) {
 class CredentialManagerImplTest : public testing::Test,
                                   public testing::WithParamInterface<bool> {
  public:
-  CredentialManagerImplTest() {
-    if (GetParam()) {
-      feature_list_.InitAndEnableFeature(
-          password_manager::features::kEnablePasswordsAccountStorage);
-    } else {
-      feature_list_.InitAndDisableFeature(
-          password_manager::features::kEnablePasswordsAccountStorage);
-    }
-  }
+  CredentialManagerImplTest() = default;
 
   void SetUp() override {
     store_ = new TestPasswordStore;
 
-    fake_affiliation_service_ = std::make_unique<FakeAffiliationService>();
+    fake_affiliation_service_ =
+        std::make_unique<affiliations::FakeAffiliationService>();
     auto owning_mock_match_helper =
         std::make_unique<NiceMock<MockAffiliatedMatchHelper>>(
             fake_affiliation_service_.get());
     mock_match_helper_ = owning_mock_match_helper.get();
     store_->Init(/*prefs=*/nullptr, std::move(owning_mock_match_helper));
 
-    if (base::FeatureList::IsEnabled(
-            features::kEnablePasswordsAccountStorage)) {
+    if (GetParam()) {
       account_store_ = new TestPasswordStore(IsAccountStore(true));
       account_store_->Init(/*prefs=*/nullptr,
                            /*affiliated_match_helper=*/nullptr);
@@ -415,7 +405,6 @@ class CredentialManagerImplTest : public testing::Test,
   void RunAllPendingTasks() { task_environment_.RunUntilIdle(); }
 
  protected:
-  base::test::ScopedFeatureList feature_list_;
   base::test::TaskEnvironment task_environment_;
   PasswordForm form_;
   PasswordForm affiliated_form1_;
@@ -426,7 +415,8 @@ class CredentialManagerImplTest : public testing::Test,
   scoped_refptr<TestPasswordStore> store_;
   scoped_refptr<TestPasswordStore> account_store_;
   std::unique_ptr<testing::NiceMock<MockPasswordManagerClient>> client_;
-  std::unique_ptr<FakeAffiliationService> fake_affiliation_service_;
+  std::unique_ptr<affiliations::FakeAffiliationService>
+      fake_affiliation_service_;
   raw_ptr<MockAffiliatedMatchHelper> mock_match_helper_ = nullptr;
   std::unique_ptr<CredentialManagerImpl> cm_service_impl_;
 };

@@ -28,11 +28,12 @@
 #include "components/autofill/core/browser/data_model/autofill_profile_comparator.h"
 #include "components/autofill/core/browser/data_model/borrowed_transliterator.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
+#include "components/autofill/core/browser/data_model/credit_card_benefit.h"
 #include "components/autofill/core/browser/data_model/iban.h"
 #include "components/autofill/core/browser/field_filling_address_util.h"
 #include "components/autofill/core/browser/field_type_utils.h"
 #include "components/autofill/core/browser/field_types.h"
-#include "components/autofill/core/browser/form_parsing/address_field.h"
+#include "components/autofill/core/browser/form_parsing/address_field_parser.h"
 #include "components/autofill/core/browser/form_structure.h"
 #include "components/autofill/core/browser/geo/address_i18n.h"
 #include "components/autofill/core/browser/geo/phone_number_i18n.h"
@@ -56,6 +57,10 @@
 #include "third_party/libaddressinput/src/cpp/include/libaddressinput/address_formatter.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/resource_bundle.h"
+
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+#include "ui/native_theme/native_theme.h"  // nogncheck
+#endif
 
 namespace autofill {
 
@@ -89,13 +94,15 @@ std::map<std::string, AutofillOfferData*> GetCardLinkedOffers(
   return {};
 }
 
-// Returns the formatted phone number to be used in the granular filling
-// suggestions list. `should_use_national_format` is used to define how the
-// phone number should be formatted.
-std::u16string GetFormattedPhoneNumberForGranularFillingSuggestion(
-    const AutofillProfile& profile,
-    const std::string& app_locale,
-    bool should_use_national_format) {
+bool ShouldUseNationalFormatPhoneNumber(FieldType trigger_field_type) {
+  return GroupTypeOfFieldType(trigger_field_type) == FieldTypeGroup::kPhone &&
+         trigger_field_type != PHONE_HOME_WHOLE_NUMBER &&
+         trigger_field_type != PHONE_HOME_COUNTRY_CODE;
+}
+
+std::u16string GetFormattedPhoneNumber(const AutofillProfile& profile,
+                                       const std::string& app_locale,
+                                       bool should_use_national_format) {
   const std::string phone_home_whole_number =
       base::UTF16ToUTF8(profile.GetInfo(PHONE_HOME_WHOLE_NUMBER, app_locale));
   const std::string address_home_country =
@@ -237,6 +244,7 @@ Suggestion GetDeleteAddressProfileSuggestion(Suggestion::BackendId backend_id) {
 Suggestion GetFillFullAddressSuggestion(Suggestion::BackendId backend_id) {
   Suggestion suggestion(l10n_util::GetStringUTF16(
       IDS_AUTOFILL_FILL_ADDRESS_GROUP_POPUP_OPTION_SELECTED));
+  suggestion.main_text.is_primary = Suggestion::Text::IsPrimary(false);
   suggestion.popup_item_id = PopupItemId::kFillFullAddress;
   suggestion.payload = backend_id;
   suggestion.acceptance_a11y_announcement = l10n_util::GetStringUTF16(
@@ -249,6 +257,7 @@ Suggestion GetFillFullNameSuggestion(Suggestion::BackendId backend_id) {
   Suggestion suggestion(l10n_util::GetStringUTF16(
       IDS_AUTOFILL_FILL_NAME_GROUP_POPUP_OPTION_SELECTED));
   suggestion.popup_item_id = PopupItemId::kFillFullName;
+  suggestion.main_text.is_primary = Suggestion::Text::IsPrimary(false);
   suggestion.payload = backend_id;
   suggestion.acceptance_a11y_announcement = l10n_util::GetStringUTF16(
       IDS_AUTOFILL_A11Y_ANNOUNCE_FILL_NAME_GROUP_POPUP_OPTION_SELECTED);
@@ -289,9 +298,8 @@ bool AddAddressFieldByFieldSuggestions(
     CHECK(field_type != ADDRESS_HOME_STREET_ADDRESS);
     std::u16string main_text;
     if (field_type == PHONE_HOME_WHOLE_NUMBER) {
-      main_text = GetFormattedPhoneNumberForGranularFillingSuggestion(
-          profile, app_locale,
-          /*should_use_national_format=*/false);
+      main_text = GetFormattedPhoneNumber(profile, app_locale,
+                                          /*should_use_national_format=*/false);
     } else {
       main_text = GetProfileSuggestionMainText(profile, app_locale, field_type);
     }
@@ -396,25 +404,31 @@ bool AddAddressLineChildSuggestions(const AutofillProfile& profile,
 }
 
 // Adds address related child suggestions to build autofill popup submenu.
-// The param `type` refers to the triggering field type (clicked by the users)
-// and is used to define  whether the `PopupItemId::kFillFullAddress` suggestion
-// will be available.
+// The param `trigger_field_type_group` refers to the type of the field clicked
+// by the user and is used to define whether the `PopupItemId::kFillFullAddress`
+// suggestion will be available. Note that `FieldTypeGroup::kCompany` is also
+// included into the address group.
 void AddAddressChildSuggestions(FieldTypeGroup trigger_field_type_group,
                                 const AutofillProfile& profile,
                                 const std::string& app_locale,
                                 Suggestion& suggestion) {
-  if (trigger_field_type_group == FieldTypeGroup::kAddress) {
+  if (trigger_field_type_group == FieldTypeGroup::kAddress ||
+      trigger_field_type_group == FieldTypeGroup::kCompany) {
     // Note that this suggestion can only be added if address infos exist in the
     // profile.
     suggestion.children.push_back(
         GetFillFullAddressSuggestion(Suggestion::Guid(profile.guid())));
   }
 
+  bool added_company = AddAddressFieldByFieldSuggestions(
+      {COMPANY_NAME}, profile, app_locale, suggestion.children);
   bool added_any_address_line =
       AddAddressLineChildSuggestions(profile, app_locale, suggestion.children);
+  bool added_city = AddAddressFieldByFieldSuggestions(
+      {ADDRESS_HOME_CITY}, profile, app_locale, suggestion.children);
   bool added_zip = AddAddressFieldByFieldSuggestions(
       {ADDRESS_HOME_ZIP}, profile, app_locale, suggestion.children);
-  if (added_any_address_line || added_zip) {
+  if (added_company || added_any_address_line || added_zip || added_city) {
     suggestion.children.push_back(
         AutofillSuggestionGenerator::CreateSeparator());
   }
@@ -442,13 +456,10 @@ void AddContactChildSuggestions(FieldType trigger_field_type,
     const bool is_phone_field =
         trigger_field_type_group == FieldTypeGroup::kPhone;
     if (is_phone_field) {
-      const bool use_national_format_phone_number =
-          trigger_field_type_group == FieldTypeGroup::kPhone &&
-          trigger_field_type != PHONE_HOME_WHOLE_NUMBER &&
-          trigger_field_type != PHONE_HOME_COUNTRY_CODE;
       Suggestion phone_number_suggestion(
-          GetFormattedPhoneNumberForGranularFillingSuggestion(
-              profile, app_locale, use_national_format_phone_number),
+          GetFormattedPhoneNumber(
+              profile, app_locale,
+              ShouldUseNationalFormatPhoneNumber(trigger_field_type)),
           PopupItemId::kFillFullPhoneNumber);
       // `PopupItemId::kAddressFieldByFieldFilling` suggestions do not use
       // profile, therefore only set the backend id in the group filling case.
@@ -499,7 +510,7 @@ void AddFooterChildSuggestions(const AutofillProfile& profile,
   // the user to go back to filling the whole form once in a more fine grained
   // filling experience.
   if (IsAddressType(trigger_field_type) &&
-      (!last_targeted_fields || *last_targeted_fields != kAllFieldTypes)) {
+      (last_targeted_fields && *last_targeted_fields != kAllFieldTypes)) {
     suggestion.children.push_back(GetFillEverythingFromAddressProfileSuggestion(
         Suggestion::Guid(profile.guid())));
   }
@@ -622,8 +633,6 @@ PopupItemId GetProfileSuggestionPopupItemId(
         return PopupItemId::kFillFullPhoneNumber;
       case FieldTypeGroup::kEmail:
         return PopupItemId::kFillFullEmail;
-      case FieldTypeGroup::kBirthdateField:
-        return PopupItemId::kAddressEntry;
       case FieldTypeGroup::kNoGroup:
       case FieldTypeGroup::kCreditCard:
       case FieldTypeGroup::kPasswordField:
@@ -733,7 +742,6 @@ std::vector<std::vector<std::u16string>> GetGranularFillingLabels(
       case FieldTypeGroup::kTransaction:
       case FieldTypeGroup::kUsernameField:
       case FieldTypeGroup::kUnfillable:
-      case FieldTypeGroup::kBirthdateField:
       case FieldTypeGroup::kIban:
         labels.emplace_back();
     }
@@ -777,7 +785,6 @@ FieldTypeSet GetFieldTypesToExcludeFromDifferentiatingLabelsGeneration(
     case FieldTypeGroup::kTransaction:
     case FieldTypeGroup::kUsernameField:
     case FieldTypeGroup::kUnfillable:
-    case FieldTypeGroup::kBirthdateField:
     case FieldTypeGroup::kIban:
       return {triggering_field_type};
   }
@@ -1109,6 +1116,12 @@ std::optional<Suggestion> GetSuggestionForTestAddresses(
   return suggestion;
 }
 
+Suggestion::Text GetBenefitTextWithTermsAppended(
+    const std::u16string& benefit_text) {
+  return Suggestion::Text(l10n_util::GetStringFUTF16(
+      IDS_AUTOFILL_CREDIT_CARD_BENEFIT_TEXT_FOR_SUGGESTIONS, benefit_text));
+}
+
 }  // namespace
 
 AutofillSuggestionGenerator::AutofillSuggestionGenerator(
@@ -1165,10 +1178,20 @@ std::vector<Suggestion> AutofillSuggestionGenerator::GetSuggestionsForProfiles(
   }
   autofill_metrics::LogPreviouslyHiddenProfileSuggestionNumber(
       previously_hidden_profiles_guid.size());
-  return CreateSuggestionsFromProfiles(profiles_to_suggest, field_types,
-                                       last_targeted_fields, trigger_field_type,
-                                       trigger_field.max_length,
-                                       previously_hidden_profiles_guid);
+
+  std::vector<Suggestion> suggestions = CreateSuggestionsFromProfiles(
+      profiles_to_suggest, field_types, last_targeted_fields,
+      trigger_field_type, trigger_field.max_length,
+      previously_hidden_profiles_guid);
+
+  if (suggestions.empty()) {
+    return suggestions;
+  }
+
+  base::ranges::move(GetAddressFooterSuggestions(trigger_field.is_autofilled),
+                     std::back_inserter(suggestions));
+
+  return suggestions;
 }
 
 std::vector<raw_ptr<const AutofillProfile, VectorExperimental>>
@@ -1232,9 +1255,13 @@ AutofillSuggestionGenerator::CreateSuggestionsFromProfiles(
   FieldTypeGroup trigger_field_type_group =
       GroupTypeOfFieldType(trigger_field_type);
   for (const AutofillProfile* profile : profiles) {
-    // Name fields should have `NAME_FULL` as main text.
+    // Name fields should have `NAME_FULL` as main text, unless in field by
+    // field filling mode.
+    const PopupItemId popup_item_id = GetProfileSuggestionPopupItemId(
+        last_targeted_fields, trigger_field_type);
     FieldType main_text_field_type =
         GroupTypeOfFieldType(trigger_field_type) == FieldTypeGroup::kName &&
+                popup_item_id != PopupItemId::kAddressFieldByFieldFilling &&
                 base::FeatureList::IsEnabled(
                     features::kAutofillGranularFillingAvailable)
             ? NAME_FULL
@@ -1243,17 +1270,16 @@ AutofillSuggestionGenerator::CreateSuggestionsFromProfiles(
     std::u16string main_text = GetProfileSuggestionMainText(
         *profile, app_locale, main_text_field_type);
     if (trigger_field_type_group == FieldTypeGroup::kPhone) {
-      main_text = GetPhoneNumberValueForInput(
-          trigger_field_max_length, main_text,
-          profile->GetInfo(PHONE_HOME_CITY_AND_NUMBER, app_locale));
+      main_text = GetFormattedPhoneNumber(
+          *profile, app_locale,
+          ShouldUseNationalFormatPhoneNumber(trigger_field_type));
     }
 
     suggestions.emplace_back(main_text);
     suggestions.back().payload = Suggestion::Guid(profile->guid());
     suggestions.back().acceptance_a11y_announcement =
         l10n_util::GetStringUTF16(IDS_AUTOFILL_A11Y_ANNOUNCE_FILLED_FORM);
-    suggestions.back().popup_item_id = GetProfileSuggestionPopupItemId(
-        last_targeted_fields, trigger_field_type);
+    suggestions.back().popup_item_id = popup_item_id;
     suggestions.back().is_acceptable = IsAddressType(trigger_field_type);
     suggestions.back().hidden_prior_to_address_rewriter_usage =
         previously_hidden_profiles_guid.contains(profile->guid());
@@ -1459,14 +1485,17 @@ void AutofillSuggestionGenerator::AddAddressGranularFillingChildSuggestions(
 
 std::vector<Suggestion>
 AutofillSuggestionGenerator::GetSuggestionsForCreditCards(
-    const FormFieldData& field,
+    const FormFieldData& trigger_field,
     FieldType trigger_field_type,
-    bool& should_display_gpay_logo,
+    AutofillSuggestionTriggerSource trigger_source,
+    bool should_show_scan_credit_card,
+    bool should_show_cards_from_account,
     bool& with_offer,
+    bool& with_cvc,
     autofill_metrics::CardMetadataLoggingContext& metadata_logging_context) {
   std::vector<Suggestion> suggestions;
   // Manual fallback entries are shown for all non credit card fields.
-  const bool is_manual_fallback =
+  const bool is_manual_fallback_for_non_credit_card_field =
       GroupTypeOfFieldType(trigger_field_type) != FieldTypeGroup::kCreditCard;
   const std::string& app_locale = personal_data_->app_locale();
 
@@ -1476,55 +1505,72 @@ AutofillSuggestionGenerator::GetSuggestionsForCreditCards(
 
   // The field value is sanitized before attempting to match it to the user's
   // data.
-  auto field_contents = SanitizeCreditCardFieldValue(field.value);
+  auto field_contents = SanitizeCreditCardFieldValue(trigger_field.value);
 
-  std::vector<CreditCard> cards_to_suggest =
-      GetOrderedCardsToSuggest(*autofill_client_, field_contents.empty());
+  std::vector<CreditCard> cards_to_suggest = GetOrderedCardsToSuggest(
+      *autofill_client_,
+      field_contents.empty() &&
+          trigger_source !=
+              AutofillSuggestionTriggerSource::kManualFallbackPayments);
 
   std::u16string field_contents_lower = base::i18n::ToLower(field_contents);
 
   metadata_logging_context =
       autofill_metrics::GetMetadataLoggingContext(cards_to_suggest);
 
-  // Set `should_display_gpay_logo` to true if all cards are server cards, and
-  // to false if any of the card is a local card.
-  should_display_gpay_logo = base::ranges::all_of(
-      cards_to_suggest, std::not_fn([](const CreditCard& card) {
-        return CreditCard::IsLocalCard(&card);
-      }));
-
   for (const CreditCard& credit_card : cards_to_suggest) {
     // The value of the stored data for this field type in the |credit_card|.
     std::u16string creditcard_field_value =
         credit_card.GetInfo(trigger_field_type, app_locale);
-    if (!is_manual_fallback && creditcard_field_value.empty()) {
+    if (!is_manual_fallback_for_non_credit_card_field &&
+        creditcard_field_value.empty()) {
       continue;
     }
     // Manual fallback suggestions aren't filtered based on the field's content.
-    if (is_manual_fallback || IsValidPaymentsSuggestionForFieldContents(
-                                  base::i18n::ToLower(creditcard_field_value),
-                                  field_contents_lower, trigger_field_type,
-                                  credit_card.record_type() ==
-                                      CreditCard::RecordType::kMaskedServerCard,
-                                  field.is_autofilled)) {
+    if (is_manual_fallback_for_non_credit_card_field ||
+        IsValidPaymentsSuggestionForFieldContents(
+            base::i18n::ToLower(creditcard_field_value), field_contents_lower,
+            trigger_field_type,
+            credit_card.record_type() ==
+                CreditCard::RecordType::kMaskedServerCard,
+            trigger_field.is_autofilled)) {
       bool card_linked_offer_available =
           base::Contains(card_linked_offers_map, credit_card.guid());
       if (ShouldShowVirtualCardOption(&credit_card)) {
         suggestions.push_back(CreateCreditCardSuggestion(
             credit_card, trigger_field_type,
-            /*virtual_card_option=*/true, card_linked_offer_available));
+            /*virtual_card_option=*/true, card_linked_offer_available,
+            trigger_field.origin));
+      }
+      if (!credit_card.cvc().empty()) {
+        with_cvc = true;
       }
       suggestions.push_back(CreateCreditCardSuggestion(
           credit_card, trigger_field_type,
-          /*virtual_card_option=*/false, card_linked_offer_available));
+          /*virtual_card_option=*/false, card_linked_offer_available,
+          trigger_field.origin));
     }
   }
+
+  if (suggestions.empty()) {
+    return suggestions;
+  }
+
+  const bool display_gpay_logo = base::ranges::none_of(
+      cards_to_suggest,
+      [](const CreditCard& card) { return CreditCard::IsLocalCard(&card); });
+  base::ranges::move(
+      GetCreditCardFooterSuggestions(
+          should_show_scan_credit_card, should_show_cards_from_account,
+          trigger_field.is_autofilled, display_gpay_logo),
+      std::back_inserter(suggestions));
 
   return suggestions;
 }
 
 std::vector<Suggestion>
 AutofillSuggestionGenerator::GetSuggestionsForVirtualCardStandaloneCvc(
+    const FormFieldData& trigger_field,
     autofill_metrics::CardMetadataLoggingContext& metadata_logging_context,
     base::flat_map<std::string, VirtualCardUsageData::VirtualCardLastFour>&
         virtual_card_guid_to_last_four_map) {
@@ -1570,6 +1616,18 @@ AutofillSuggestionGenerator::GetSuggestionsForVirtualCardStandaloneCvc(
     }
     suggestions.push_back(suggestion);
   }
+
+  if (suggestions.empty()) {
+    return suggestions;
+  }
+
+  base::ranges::move(
+      GetCreditCardFooterSuggestions(/*should_show_scan_credit_card=*/false,
+                                     /*should_show_cards_from_account=*/false,
+                                     trigger_field.is_autofilled,
+                                     /*with_gpay_logo=*/true),
+      std::back_inserter(suggestions));
+
   return suggestions;
 }
 
@@ -1581,11 +1639,53 @@ Suggestion AutofillSuggestionGenerator::CreateSeparator() {
 }
 
 // static
-Suggestion AutofillSuggestionGenerator::CreateManagePaymentMethodsEntry() {
+Suggestion AutofillSuggestionGenerator::CreateManageAddressesEntry() {
   Suggestion suggestion(
-      l10n_util::GetStringUTF16(IDS_AUTOFILL_MANAGE_PAYMENT_METHODS));
-  suggestion.popup_item_id = PopupItemId::kAutofillOptions;
+      l10n_util::GetStringUTF16(IDS_AUTOFILL_MANAGE_ADDRESSES),
+      PopupItemId::kAutofillOptions);
   suggestion.icon = Suggestion::Icon::kSettings;
+  return suggestion;
+}
+
+// static
+Suggestion AutofillSuggestionGenerator::CreateManagePaymentMethodsEntry(
+    bool with_gpay_logo) {
+  Suggestion suggestion(
+      l10n_util::GetStringUTF16(IDS_AUTOFILL_MANAGE_PAYMENT_METHODS),
+      PopupItemId::kAutofillOptions);
+  // On Android and Desktop, Google Pay branding is shown along with Settings.
+  // So Google Pay Icon is just attached to an existing menu item.
+  if (with_gpay_logo) {
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
+    suggestion.icon = Suggestion::Icon::kGooglePay;
+#else
+    suggestion.icon = Suggestion::Icon::kSettings;
+    suggestion.trailing_icon =
+        ui::NativeTheme::GetInstanceForNativeUi()->ShouldUseDarkColors()
+            ? Suggestion::Icon::kGooglePayDark
+            : Suggestion::Icon::kGooglePay;
+#endif
+  } else {
+    suggestion.icon = Suggestion::Icon::kSettings;
+  }
+  return suggestion;
+}
+
+Suggestion AutofillSuggestionGenerator::CreateClearFormSuggestion() {
+  std::u16string value =
+      base::FeatureList::IsEnabled(features::kAutofillUndo)
+          ? l10n_util::GetStringUTF16(IDS_AUTOFILL_UNDO_MENU_ITEM)
+          : l10n_util::GetStringUTF16(IDS_AUTOFILL_CLEAR_FORM_MENU_ITEM);
+  if constexpr (BUILDFLAG(IS_ANDROID)) {
+    value = base::i18n::ToUpper(value);
+  }
+
+  Suggestion suggestion(value, PopupItemId::kClearForm);
+  suggestion.icon = base::FeatureList::IsEnabled(features::kAutofillUndo)
+                        ? Suggestion::Icon::kUndo
+                        : Suggestion::Icon::kClear;
+  suggestion.acceptance_a11y_announcement =
+      l10n_util::GetStringUTF16(IDS_AUTOFILL_A11Y_ANNOUNCE_CLEARED_FORM);
   return suggestion;
 }
 
@@ -1642,7 +1742,8 @@ std::vector<Suggestion> AutofillSuggestionGenerator::GetSuggestionsForIbans(
             IDR_AUTOFILL_IBAN);
     suggestion.popup_item_id = PopupItemId::kIbanEntry;
     if (iban->record_type() == Iban::kLocalIban) {
-      suggestion.payload = Suggestion::ValueToFill(iban->GetStrippedValue());
+      suggestion.payload =
+          Suggestion::BackendId(Suggestion::Guid(iban->guid()));
     } else {
       CHECK(iban->record_type() == Iban::kServerIban);
       suggestion.payload = Suggestion::BackendId(
@@ -1657,7 +1758,8 @@ std::vector<Suggestion> AutofillSuggestionGenerator::GetSuggestionsForIbans(
   }
 
   suggestions.push_back(CreateSeparator());
-  suggestions.push_back(CreateManagePaymentMethodsEntry());
+  suggestions.push_back(
+      CreateManagePaymentMethodsEntry(/*with_gpay_logo=*/false));
   return suggestions;
 }
 
@@ -1782,7 +1884,8 @@ Suggestion AutofillSuggestionGenerator::CreateCreditCardSuggestion(
     const CreditCard& credit_card,
     FieldType trigger_field_type,
     bool virtual_card_option,
-    bool card_linked_offer_available) const {
+    bool card_linked_offer_available,
+    const url::Origin& origin) const {
   // Manual fallback entries are shown for all non credit card fields.
   const bool is_manual_fallback =
       GroupTypeOfFieldType(trigger_field_type) != FieldTypeGroup::kCreditCard;
@@ -1808,7 +1911,7 @@ Suggestion AutofillSuggestionGenerator::CreateCreditCardSuggestion(
   suggestion.minor_text = std::move(minor_text);
   if (std::vector<Suggestion::Text> card_labels = GetSuggestionLabelsForCard(
           credit_card,
-          is_manual_fallback ? CREDIT_CARD_NUMBER : trigger_field_type);
+          is_manual_fallback ? CREDIT_CARD_NUMBER : trigger_field_type, origin);
       !card_labels.empty()) {
     suggestion.labels.push_back(std::move(card_labels));
   }
@@ -1819,7 +1922,7 @@ Suggestion AutofillSuggestionGenerator::CreateCreditCardSuggestion(
   if (virtual_card_option) {
     // We don't show card linked offers for virtual card options.
     AdjustVirtualCardSuggestionContent(suggestion, credit_card,
-                                       trigger_field_type);
+                                       trigger_field_type, origin);
   } else if (card_linked_offer_available) {
 #if BUILDFLAG(IS_ANDROID)
     // For Keyboard Accessory, set Suggestion::feature_for_iph and change the
@@ -1891,8 +1994,15 @@ AutofillSuggestionGenerator::GetSuggestionMainTextAndMinorTextForCard(
     }
   } else if (trigger_field_type == CREDIT_CARD_VERIFICATION_CODE) {
     CHECK(!credit_card.cvc().empty());
+#if BUILDFLAG(IS_ANDROID)
+    main_text = l10n_util::GetStringFUTF16(
+        IDS_AUTOFILL_CVC_SUGGESTION_MAIN_TEXT,
+        credit_card.CardNameForAutofillDisplay(
+            GetDisplayNicknameForCreditCard(credit_card)));
+#else
     main_text =
         l10n_util::GetStringUTF16(IDS_AUTOFILL_CVC_SUGGESTION_MAIN_TEXT);
+#endif
   } else {
     main_text =
         credit_card.GetInfo(trigger_field_type, personal_data_->app_locale());
@@ -1909,7 +2019,8 @@ AutofillSuggestionGenerator::GetSuggestionMainTextAndMinorTextForCard(
 std::vector<Suggestion::Text>
 AutofillSuggestionGenerator::GetSuggestionLabelsForCard(
     const CreditCard& credit_card,
-    FieldType trigger_field_type) const {
+    FieldType trigger_field_type,
+    const url::Origin& origin) const {
   const std::string& app_locale = personal_data_->app_locale();
 
   // If the focused field is a card number field.
@@ -1918,6 +2029,11 @@ AutofillSuggestionGenerator::GetSuggestionLabelsForCard(
     return {Suggestion::Text(
         credit_card.GetInfo(CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR, app_locale))};
 #else
+    std::optional<Suggestion::Text> benefit_label =
+        GetCreditCardBenefitSuggestionLabel(credit_card, origin);
+    if (benefit_label) {
+      return {*benefit_label};
+    }
     return {Suggestion::Text(
         ShouldSplitCardNameAndLastFourDigits()
             ? credit_card.GetInfo(CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR, app_locale)
@@ -1969,10 +2085,60 @@ AutofillSuggestionGenerator::GetSuggestionLabelsForCard(
       credit_card.CardIdentifierStringAndDescriptiveExpiration(app_locale))};
 }
 
+std::optional<Suggestion::Text>
+AutofillSuggestionGenerator::GetCreditCardBenefitSuggestionLabel(
+    const CreditCard& credit_card,
+    const url::Origin& origin) const {
+  // Benefits are only displayed for app locale set to U.S. English.
+  if (!base::FeatureList::IsEnabled(features::kAutofillEnableCardBenefits) ||
+      personal_data_->app_locale() != "en-US") {
+    return std::nullopt;
+  }
+  CreditCardBenefitBase::LinkedCardInstrumentId benefit_instrument_id(
+      credit_card.instrument_id());
+
+  // 1. Check merchant benefit.
+  std::optional<CreditCardMerchantBenefit> merchant_benefit =
+      personal_data_->GetMerchantBenefitByInstrumentIdAndOrigin(
+          benefit_instrument_id, origin);
+  if (merchant_benefit && merchant_benefit->IsActiveBenefit()) {
+    return GetBenefitTextWithTermsAppended(
+        merchant_benefit->benefit_description());
+  }
+
+  // 2. Check category benefit.
+  CreditCardCategoryBenefit::BenefitCategory category_benefit_type =
+      autofill_client_->GetAutofillOptimizationGuide()
+          ->AttemptToGetEligibleCreditCardBenefitCategory(
+              credit_card.issuer_id(), origin);
+  if (category_benefit_type !=
+      CreditCardCategoryBenefit::BenefitCategory::kUnknownBenefitCategory) {
+    std::optional<CreditCardCategoryBenefit> category_benefit =
+        personal_data_->GetCategoryBenefitByInstrumentIdAndCategory(
+            benefit_instrument_id, category_benefit_type);
+    if (category_benefit && category_benefit->IsActiveBenefit()) {
+      return GetBenefitTextWithTermsAppended(
+          category_benefit->benefit_description());
+    }
+  }
+
+  // 3. Check flat rate benefit.
+  std::optional<CreditCardFlatRateBenefit> flat_rate_benefit =
+      personal_data_->GetFlatRateBenefitByInstrumentId(benefit_instrument_id);
+  if (flat_rate_benefit && flat_rate_benefit->IsActiveBenefit()) {
+    return GetBenefitTextWithTermsAppended(
+        flat_rate_benefit->benefit_description());
+  }
+
+  // No eligible benefit to display.
+  return std::nullopt;
+}
+
 void AutofillSuggestionGenerator::AdjustVirtualCardSuggestionContent(
     Suggestion& suggestion,
     const CreditCard& credit_card,
-    FieldType trigger_field_type) const {
+    FieldType trigger_field_type,
+    const url::Origin& origin) const {
   if (credit_card.record_type() == CreditCard::RecordType::kLocalCard) {
     const CreditCard* server_duplicate_card =
         personal_data_->GetServerCardForLocalCard(&credit_card);
@@ -2032,15 +2198,17 @@ void AutofillSuggestionGenerator::AdjustVirtualCardSuggestionContent(
     }
 #else   // Desktop/Android dropdown.
     if (trigger_field_type == CREDIT_CARD_NUMBER) {
-      // If the focused field is a credit card number field, reset all labels
-      // and populate only the virtual card text.
-      suggestion.labels = {{Suggestion::Text(VIRTUAL_CARD_LABEL)}};
-    } else {
-      // For other fields, add the virtual card text after the original label,
-      // so it will be shown on the third line.
-      suggestion.labels.push_back(
-          std::vector<Suggestion::Text>{Suggestion::Text(VIRTUAL_CARD_LABEL)});
+      // Reset the labels as we only show benefit and virtual card label to
+      // conserve space.
+      suggestion.labels = {};
+      std::optional<Suggestion::Text> benefit_label =
+          GetCreditCardBenefitSuggestionLabel(credit_card, origin);
+      if (benefit_label) {
+        suggestion.labels.push_back({*benefit_label});
+      }
     }
+    suggestion.labels.push_back(
+        std::vector<Suggestion::Text>{Suggestion::Text(VIRTUAL_CARD_LABEL)});
 #endif  // BUILDFLAG(IS_ANDROID)
   }
 }
@@ -2076,6 +2244,56 @@ void AutofillSuggestionGenerator::SetCardArtURL(
     }
 #endif
   }
+}
+
+std::vector<Suggestion>
+AutofillSuggestionGenerator::GetAddressFooterSuggestions(
+    bool is_autofilled) const {
+  std::vector<Suggestion> footer_suggestions;
+
+  footer_suggestions.push_back(CreateSeparator());
+
+  if (is_autofilled) {
+    footer_suggestions.push_back(CreateClearFormSuggestion());
+  }
+
+  footer_suggestions.push_back(CreateManageAddressesEntry());
+
+  return footer_suggestions;
+}
+
+std::vector<Suggestion>
+AutofillSuggestionGenerator::GetCreditCardFooterSuggestions(
+    bool should_show_scan_credit_card,
+    bool should_show_cards_from_account,
+    bool is_autofilled,
+    bool with_gpay_logo) const {
+  std::vector<Suggestion> footer_suggestions;
+  if (should_show_scan_credit_card) {
+    Suggestion scan_credit_card(
+        l10n_util::GetStringUTF16(IDS_AUTOFILL_SCAN_CREDIT_CARD),
+        PopupItemId::kScanCreditCard);
+    scan_credit_card.icon = Suggestion::Icon::kScanCreditCard;
+    footer_suggestions.push_back(scan_credit_card);
+  }
+
+  if (should_show_cards_from_account) {
+    Suggestion show_card_from_account(
+        l10n_util::GetStringUTF16(IDS_AUTOFILL_SHOW_ACCOUNT_CARDS),
+        PopupItemId::kShowAccountCards);
+    show_card_from_account.icon = Suggestion::Icon::kGoogle;
+    footer_suggestions.push_back(show_card_from_account);
+  }
+
+  footer_suggestions.push_back(CreateSeparator());
+
+  if (is_autofilled) {
+    footer_suggestions.push_back(CreateClearFormSuggestion());
+  }
+
+  footer_suggestions.push_back(CreateManagePaymentMethodsEntry(with_gpay_logo));
+
+  return footer_suggestions;
 }
 
 bool AutofillSuggestionGenerator::ShouldShowVirtualCardOptionForServerCard(

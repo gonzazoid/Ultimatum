@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import '//resources/cr_elements/chromeos/cros_color_overrides.css.js';
+import '//resources/ash/common/cr_elements/cros_color_overrides.css.js';
 import '//resources/polymer/v3_0/paper-styles/color.js';
 import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
 import '../../components/oobe_icons.html.js';
@@ -25,6 +25,11 @@ import type {OobeTypes} from '../../components/oobe_types.js';
 import {Oobe} from '../../cr_ui.js';
 
 import {getTemplate} from './demo_preferences.html.js';
+
+// The retailer name input has the max length of 256 characters.
+const RETAILER_NAME_INPUT_MAX_LENGTH = 256;
+// The store number input has the max length of 256 characters.
+const STORE_NUMBER_INPUT_MAX_LENGTH = 256;
 
 const DemoPreferencesScreenBase =
     mixinBehaviors(
@@ -190,7 +195,7 @@ export class DemoPreferencesScreen extends DemoPreferencesScreenBase {
   private setCountryList_(countries: OobeTypes.DemoCountryDsc[]): void {
     this.countries = countries;
     this.shadowRoot!.getElementById('countryDropdownContainer')!.hidden =
-        countries.length == 0;
+        countries.length === 0;
     for (let i = 0; i < countries.length; ++i) {
       const country = countries[i];
       if (country.selected && country.value !== this.countryNotSelectedId) {
@@ -205,12 +210,26 @@ export class DemoPreferencesScreen extends DemoPreferencesScreenBase {
    * Based on the country, retailer name, and store number preferences being
    * correctly set.
    *
+   * We need to check all fields (parameters) are not undefined, not null and
+   * non-empty (console.log(!!"") => false) before checking their value or
+   * length.
+   *
+   * The retailer name must be a non-empty string in the max length of 256
+   * characters.
+   * The store number must be a non-empty numerical string in the max length
+   * of 256 characters.
+   *
+   * TODO(b/324086625): Add help text of the string length limit on the
+   * retailer name field and store number field.
    */
   private userCanContinue_(
       retailerNameInput: string, storeNumberInput: string,
       isCountrySelected: boolean): boolean {
-    return !!retailerNameInput && RegExp('^[0-9]+$').test(storeNumberInput) &&
-        isCountrySelected;
+    return !!retailerNameInput && !!isCountrySelected && !!storeNumberInput &&
+        isCountrySelected &&
+        storeNumberInput.length <= STORE_NUMBER_INPUT_MAX_LENGTH &&
+        retailerNameInput.length <= RETAILER_NAME_INPUT_MAX_LENGTH &&
+        RegExp('^[0-9]+$').test(storeNumberInput);
   }
 
   /**
@@ -218,6 +237,9 @@ export class DemoPreferencesScreen extends DemoPreferencesScreenBase {
    * only consider the input invalid if it's nonempty, thus the different
    * pattern than in {@link userCanContinue_}
    *
+   * TODO(b/324086625): Add help text of the string length limit on the
+   * retailer name field and store number field on the Demo Mode preferences
+   * screen.
    */
   private isStoreNumberInputInvalid_(storeNumberInput: string): boolean {
     return !RegExp('^[0-9]*$').test(storeNumberInput);
@@ -233,7 +255,7 @@ export class DemoPreferencesScreen extends DemoPreferencesScreenBase {
   }
 
   private onInputKeyDown_(e: KeyboardEvent): void {
-    if (e.key == 'Enter' &&
+    if (e.key === 'Enter' &&
         this.userCanContinue_(
             this.retailerNameInput, this.storeNumberInput,
             this.isCountrySelected)) {

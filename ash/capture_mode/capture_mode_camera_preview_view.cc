@@ -89,7 +89,7 @@ void CameraPreviewResizeButton::PseudoBlur() {
   camera_preview_view_->ScheduleRefreshResizeButtonVisibility();
 }
 
-BEGIN_METADATA(CameraPreviewResizeButton, IconButton)
+BEGIN_METADATA(CameraPreviewResizeButton)
 END_METADATA
 
 // -----------------------------------------------------------------------------
@@ -325,7 +325,7 @@ void CameraPreviewView::OnMouseExited(const ui::MouseEvent& event) {
   ScheduleRefreshResizeButtonVisibility();
 }
 
-void CameraPreviewView::Layout() {
+void CameraPreviewView::Layout(PassKey) {
   const gfx::Size resize_button_size = resize_button_->GetPreferredSize();
   const gfx::Rect bounds(
       (width() - resize_button_size.width()) / 2.f,
@@ -469,7 +469,7 @@ void CameraPreviewView::BlurA11yFocus() {
   UpdateA11yOverrideWindow();
 }
 
-BEGIN_METADATA(CameraPreviewView, views::View)
+BEGIN_METADATA(CameraPreviewView)
 END_METADATA
 
 }  // namespace ash

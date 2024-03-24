@@ -56,7 +56,7 @@ SidePanelToolbarContainer::PinnedSidePanelToolbarButton::
       id_(id) {
   SetTooltipText(name);
   SetAccessibleName(accessible_name);
-  GetViewAccessibility().OverrideDescription(
+  GetViewAccessibility().SetDescription(
       std::u16string(), ax::mojom::DescriptionFrom::kAttributeExplicitlyEmpty);
 
   SetVectorIcon(icon);
@@ -112,9 +112,7 @@ SidePanelToolbarContainer::PinnedSidePanelToolbarButton::CreateMenuModel() {
       dialog_model.Build());
 }
 
-BEGIN_METADATA(SidePanelToolbarContainer,
-               PinnedSidePanelToolbarButton,
-               ToolbarButton)
+BEGIN_METADATA(SidePanelToolbarContainer, PinnedSidePanelToolbarButton)
 END_METADATA
 
 ///////////////////////////////////////////////////////////////////////////////

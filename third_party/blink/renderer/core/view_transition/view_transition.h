@@ -59,8 +59,11 @@ class CORE_EXPORT ViewTransition : public GarbageCollected<ViewTransition>,
   static ViewTransition* CreateFromScript(
       Document*,
       V8ViewTransitionCallback*,
-      const absl::optional<Vector<String>>& types,
+      const std::optional<Vector<String>>& types,
       Delegate*);
+
+  // Creates a skipped transition that still runs the specified callbacks.
+  static ViewTransition* CreateSkipped(Document*, V8ViewTransitionCallback*);
 
   // Creates a ViewTransition to cache the state of a Document before a
   // navigation. The cached state is provided to the caller using the
@@ -83,8 +86,10 @@ class CORE_EXPORT ViewTransition : public GarbageCollected<ViewTransition>,
   ViewTransition(PassKey,
                  Document*,
                  V8ViewTransitionCallback*,
-                 const absl::optional<Vector<String>>& types,
+                 const std::optional<Vector<String>>& types,
                  Delegate*);
+  // Skipped transition constructor.
+  ViewTransition(PassKey, Document*, V8ViewTransitionCallback*);
   // Navigation-initiated for-snapshot constructor.
   ViewTransition(PassKey, Document*, ViewTransitionStateCallback, Delegate*);
   // Navigation-initiated from-snapshot constructor.
@@ -322,14 +327,14 @@ class CORE_EXPORT ViewTransition : public GarbageCollected<ViewTransition>,
   const CreationType creation_type_;
 
   Member<Document> document_;
-  Delegate* const delegate_;
+  Delegate* const delegate_ = nullptr;
   const viz::NavigationID navigation_id_;
 
   // The document tag identifies the document to which this transition
   // belongs. It's unique among other local documents.
   uint32_t document_tag_ = 0u;
 
-  Member<ViewTransitionStyleTracker> style_tracker_;
+  Member<ViewTransitionStyleTracker> style_tracker_ = nullptr;
 
   // Manages pausing rendering of the Document between capture and updateDOM
   // callback finishing.
@@ -348,14 +353,12 @@ class CORE_EXPORT ViewTransition : public GarbageCollected<ViewTransition>,
    private:
     std::unique_ptr<cc::ScopedPauseRendering> cc_paused_;
   };
-  absl::optional<ScopedPauseRendering> rendering_paused_scope_;
+  std::optional<ScopedPauseRendering> rendering_paused_scope_;
 
   ViewTransitionStateCallback transition_state_callback_;
 
   // This is the object that implements the IDL interface exposed to script. It
-  // is cleared if the document is torn down. It can also be null when
-  // ViewTransition is created on the outgoing page of a cross-document
-  // navigation (via CreateForSnapshotNavigation).
+  // is cleared if the document is torn down.
   Member<DOMViewTransition> script_delegate_;
 
   bool in_main_lifecycle_update_ = false;
@@ -363,7 +366,7 @@ class CORE_EXPORT ViewTransition : public GarbageCollected<ViewTransition>,
   bool first_animating_frame_ = true;
   bool context_destroyed_ = false;
 
-  absl::optional<Vector<String>> types_;
+  std::optional<Vector<String>> types_;
 };
 
 }  // namespace blink

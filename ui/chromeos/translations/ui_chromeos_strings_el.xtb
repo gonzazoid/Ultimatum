@@ -252,7 +252,7 @@
 <translation id="299638574917407533">Γαλλικά (Καναδά)</translation>
 <translation id="3003189754374775221">Δίκτυο <ph name="NETWORK_INDEX" /> από <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="NETWORK_PROVIDER_NAME" />, Ισχύς σήματος <ph name="SIGNAL_STRENGTH" />%, Σύνδεση</translation>
 <translation id="3003633581067744647">Εναλλαγή σε προβολή μικρογραφιών</translation>
-<translation id="3016566519832145558">Προσοχή: Αυτά τα αρχεία είναι προσωρινά και ενδέχεται να διαγραφούν αυτόματα για να απελευθερωθεί χώρος στη μονάδα δίσκου.</translation>
+<translation id="3016566519832145558">Προσοχή: Αυτά τα αρχεία είναι προσωρινά και ενδέχεται να διαγραφούν αυτόματα για να αποδεσμευτεί χώρος στη μονάδα δίσκου.</translation>
 <translation id="3029114385395636667">Ενεργοποιήστε τα Έγγραφα Google εκτός σύνδεσης για να κάνετε τα Έγγραφα, τα Υπολογιστικά φύλλα και τις Παρουσιάσεις διαθέσιμα εκτός σύνδεσης.</translation>
 <translation id="303198083543495566">Γεωγραφία</translation>
 <translation id="3044404008258011032">Για να επαναφέρετε αυτά τα στοιχεία, σύρετέ τα σε έναν νέο φάκελο εκτός του κάδου. Ο αρχικός φάκελος "<ph name="PARENT_FOLDER_NAME" />" αυτών των στοιχείων έχει διαγραφεί.</translation>
@@ -318,7 +318,7 @@
 <translation id="3511705761158917664">Προετοιμασία για συγχρονισμό <ph name="NUMBER_OF_ITEMS" /> στοιχείων…</translation>
 <translation id="3522708245912499433">Πορτογαλικά</translation>
 <translation id="3523225005467146490">1 φάκελος σε κοινή χρήση με το <ph name="VM_NAME" /></translation>
-<translation id="3524311639100184459">Προσοχή: Αυτά τα αρχεία είναι προσωρινά και ενδέχεται να διαγραφούν αυτόματα για να απελευθερωθεί χώρος στη μονάδα δίσκου.  <ph name="BEGIN_LINK" />Μάθετε περισσότερα<ph name="END_LINK" /></translation>
+<translation id="3524311639100184459">Προσοχή: Αυτά τα αρχεία είναι προσωρινά και ενδέχεται να διαγραφούν αυτόματα για να αποδεσμευτεί χώρος στη μονάδα δίσκου.  <ph name="BEGIN_LINK" />Μάθετε περισσότερα<ph name="END_LINK" /></translation>
 <translation id="3527085408025491307">Φάκελος</translation>
 <translation id="3529424493985988200">Επικοινωνήστε με τον διαχειριστή για λεπτομέρειες.</translation>
 <translation id="3548125359243647069">Έγινε εισαγωγή εσφαλμένου PIN πάρα πολλές φορές.</translation>
@@ -896,9 +896,9 @@
 <translation id="7774365994322694683">Πουλί</translation>
 <translation id="7780322752056734036">Έγινε επαναφορά <ph name="NUMBER_OF_ITEMS" /> στοιχείων</translation>
 <translation id="7781829728241885113">Χθες</translation>
-<translation id="7788080748068240085">Για να αποθηκεύσετε το "<ph name="FILE_NAME" />" εκτός σύνδεσης, θα πρέπει να απελευθερώσετε επιπλέον <ph name="TOTAL_FILE_SIZE" /> χώρο:<ph name="MARKUP_1" />
+<translation id="7788080748068240085">Για να αποθηκεύσετε το "<ph name="FILE_NAME" />" εκτός σύνδεσης, θα πρέπει να αποδεσμεύσετε επιπλέον <ph name="TOTAL_FILE_SIZE" /> χώρο:<ph name="MARKUP_1" />
     <ph name="MARKUP_2" />ξεκαρφιτσώστε αρχεία στα οποία δεν χρειάζεται πλέον να έχετε πρόσβαση<ph name="MARKUP_3" />
-    <ph name="MARKUP_4" />διαγράψτε αρχεία από το φάκελο "Λήψεις"<ph name="MARKUP_5" /></translation>
+    <ph name="MARKUP_4" />διαγράψτε αρχεία από τον φάκελο "Λήψεις"<ph name="MARKUP_5" /></translation>
 <translation id="7794058097940213561">Μορφοποίηση συσκευής</translation>
 <translation id="7799329977874311193">Έγγραφο HTML</translation>
 <translation id="7801354353640549019">Chromebook</translation>

@@ -5,12 +5,15 @@
 #import "ios/chrome/app/docking_promo_app_agent.h"
 
 #import "base/check.h"
+#import "base/memory/raw_ptr.h"
 #import "ios/chrome/app/application_delegate/app_state.h"
 #import "ios/chrome/app/application_delegate/app_state_observer.h"
 #import "ios/chrome/browser/default_browser/model/utils.h"
-#import "ios/chrome/browser/promos_manager/constants.h"
-#import "ios/chrome/browser/promos_manager/promos_manager.h"
+#import "ios/chrome/browser/docking_promo/model/utils.h"
+#import "ios/chrome/browser/promos_manager/model/constants.h"
+#import "ios/chrome/browser/promos_manager/model/promos_manager.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/ui/start_surface/start_surface_util.h"
 
 @interface DockingPromoAppAgent () <AppStateObserver>
 @end
@@ -21,7 +24,7 @@
 
   // Stores the PromosManager, which is used to register the Docking Promo, when
   // appropriate.
-  PromosManager* _promosManager;
+  raw_ptr<PromosManager> _promosManager;
 }
 
 #pragma mark - Initializers
@@ -68,7 +71,20 @@
 
 // Register the promo with the PromosManager, if the conditions are met.
 - (void)maybeRegisterPromo {
-  if (IsChromeLikelyDefaultBrowser()) {
+  if (IsDockingPromoForcedForDisplay()) {
+    [self registerPromo];
+    return;
+  }
+
+  // If the app was never foregrounded, do not register the Docking Promo.
+  if (_appState.lastTimeInForeground.is_null()) {
+    return;
+  }
+
+  base::TimeDelta timeSinceLastForeground =
+      _appState.lastTimeInForeground - base::TimeTicks::Now();
+
+  if (!CanShowDockingPromo(timeSinceLastForeground)) {
     [self deregisterPromo];
     return;
   }

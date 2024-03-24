@@ -46,18 +46,9 @@ void AddOrganizationDetailsToQualityOrganization(
                         organization->names()[0] !=
                             organization->GetDisplayName());
 
-      for (const TabData::TabID response_tab_id :
-           response_organization->tab_ids) {
-        const auto& matching_tab = std::find_if(
-            organization->tab_datas().begin(), organization->tab_datas().end(),
-            [response_tab_id](const std::unique_ptr<TabData>& check_tab_data) {
-              return check_tab_data &&
-                     (check_tab_data->tab_id() == response_tab_id);
-            });
-
-        if (matching_tab == organization->tab_datas().end()) {
-          quality_organization->add_removed_tab_ids(response_tab_id);
-        }
+      for (const TabData::TabID removed_tab_id :
+           organization->user_removed_tab_ids()) {
+        quality_organization->add_removed_tab_ids(removed_tab_id);
       }
 
       break;
@@ -74,7 +65,7 @@ void AddSessionDetailsToQuality(
 
   for (const auto& response_organization :
        session->request()->response()->organizations) {
-    absl::optional<TabOrganization::ID> response_organization_id =
+    std::optional<TabOrganization::ID> response_organization_id =
         response_organization.organization_id;
     TabOrganization* matching_organization_ptr = nullptr;
 

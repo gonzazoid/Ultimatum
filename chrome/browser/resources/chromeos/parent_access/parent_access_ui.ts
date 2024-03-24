@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 import './parent_access_template.js';
-import 'chrome://resources/cr_elements/chromeos/cros_color_overrides.css.js';
+import 'chrome://resources/ash/common/cr_elements/cros_color_overrides.css.js';
 import 'chrome://resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
 
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
@@ -90,7 +90,7 @@ export class ParentAccessUi extends PolymerElement {
     // Otherwise, all requests should be https and in the ALLOWED_HOSTS list.
     const requestIsHttps = requestUrl.protocol === 'https:';
     const requestIsInAllowedHosts = ALLOWED_HOSTS.some(
-        (allowedHost) => requestUrl.host == allowedHost ||
+        (allowedHost) => requestUrl.host === allowedHost ||
             requestUrl.host.endsWith(allowedHost));
 
     return requestIsHttps && requestIsInAllowedHosts;
@@ -118,7 +118,7 @@ export class ParentAccessUi extends PolymerElement {
       const eventOriginFilter = parsedWebviewUrl.origin;
 
       const oauthFetchResult = await this.parentAccessUiHandler.getOauthToken();
-      if (oauthFetchResult.status != GetOauthTokenStatus.kSuccess) {
+      if (oauthFetchResult.status !== GetOauthTokenStatus.kSuccess) {
         throw new Error('OAuth token was not successfully fetched.');
       }
 

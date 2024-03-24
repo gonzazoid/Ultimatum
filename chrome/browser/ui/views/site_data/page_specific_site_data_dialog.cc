@@ -291,11 +291,6 @@ class PageSpecificSiteDataDialogModelDelegate : public ui::DialogModelDelegate {
     DeleteMatchingHostNodeFromModel(allowed_cookies_tree_model_.get(), origin);
     DeleteMatchingHostNodeFromModel(blocked_cookies_tree_model_.get(), origin);
 
-    if (!base::FeatureList::IsEnabled(
-            browsing_data::features::kMigrateStorageToBDM)) {
-      DeletePartitionedStorage(origin);
-    }
-
     // Removing origin from Browsing Data Model to support new storage types.
     // The UI assumes deletion completed successfully, so we're passing
     // `base::DoNothing` callback.
@@ -400,7 +395,8 @@ class PageSpecificSiteDataDialogModelDelegate : public ui::DialogModelDelegate {
                          [](const url::Origin& origin) { return origin; }},
         *entry.data_owner);
     return CreateSite(entry_origin, from_allowed_model,
-                      IsBrowsingDataEntryViewFullyPartitioned(entry));
+                      IsBrowsingDataEntryViewFullyPartitioned(entry) &&
+                          IsOnlyPartitionedStorageAccessAllowed(entry_origin));
   }
 
   bool IsBrowsingDataEntryViewFullyPartitioned(

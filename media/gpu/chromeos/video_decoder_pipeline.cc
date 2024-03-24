@@ -5,11 +5,13 @@
 #include "media/gpu/chromeos/video_decoder_pipeline.h"
 
 #include <memory>
+#include <optional>
 
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/bind_post_task.h"
 #include "base/task/sequenced_task_runner.h"
@@ -28,7 +30,6 @@
 #include "media/gpu/chromeos/platform_video_frame_pool.h"
 #include "media/gpu/macros.h"
 #include "media/media_buildflags.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(USE_VAAPI)
 #include <drm_fourcc.h>
@@ -50,11 +51,11 @@ using PixelLayoutCandidate = ImageProcessor::PixelLayoutCandidate;
 // If |preferred_fourcc| is provided, contained in |candidates|, and considered
 // renderable, it returns that. Otherwise, it goes through
 // |renderable_fourccs| until it finds one that's in |candidates|. If
-// it can't find a renderable format in |candidates|, it returns absl::nullopt.
-absl::optional<Fourcc> PickRenderableFourcc(
+// it can't find a renderable format in |candidates|, it returns std::nullopt.
+std::optional<Fourcc> PickRenderableFourcc(
     const std::vector<Fourcc>& renderable_fourccs,
     const std::vector<Fourcc>& candidates,
-    absl::optional<Fourcc> preferred_fourcc) {
+    std::optional<Fourcc> preferred_fourcc) {
   if (preferred_fourcc && base::Contains(candidates, *preferred_fourcc) &&
       base::Contains(renderable_fourccs, *preferred_fourcc)) {
     return preferred_fourcc;
@@ -63,7 +64,7 @@ absl::optional<Fourcc> PickRenderableFourcc(
     if (base::Contains(candidates, value))
       return value;
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 // Estimates the number of buffers needed in the output frame pool to fill the
@@ -162,12 +163,15 @@ std::unique_ptr<VideoDecoder> VideoDecoderPipeline::Create(
 #if BUILDFLAG(USE_VAAPI)
     create_decoder_function_cb = base::BindOnce(&VaapiVideoDecoder::Create);
 #elif BUILDFLAG(USE_V4L2_CODEC)
-    if (base::FeatureList::IsEnabled(kV4L2FlatStatelessVideoDecoder)) {
-      create_decoder_function_cb =
-          base::BindOnce(&V4L2StatelessVideoDecoder::Create);
-    } else if (base::FeatureList::IsEnabled(kV4L2FlatStatefulVideoDecoder)) {
-      create_decoder_function_cb =
-          base::BindOnce(&V4L2StatefulVideoDecoder::Create);
+    if (base::FeatureList::IsEnabled(kV4L2FlatStatelessVideoDecoder) ||
+        base::FeatureList::IsEnabled(kV4L2FlatStatefulVideoDecoder)) {
+      if (IsV4L2DecoderStateful()) {
+        create_decoder_function_cb =
+            base::BindOnce(&V4L2StatefulVideoDecoder::Create);
+      } else {
+        create_decoder_function_cb =
+            base::BindOnce(&V4L2StatelessVideoDecoder::Create);
+      }
     } else {
       create_decoder_function_cb = base::BindOnce(&V4L2VideoDecoder::Create);
     }
@@ -194,12 +198,15 @@ std::unique_ptr<VideoDecoder> VideoDecoderPipeline::CreateForTesting(
 #if BUILDFLAG(USE_VAAPI)
   create_decoder_function_cb = base::BindOnce(&VaapiVideoDecoder::Create);
 #elif BUILDFLAG(USE_V4L2_CODEC)
-  if (base::FeatureList::IsEnabled(kV4L2FlatStatelessVideoDecoder)) {
-    create_decoder_function_cb =
-        base::BindOnce(&V4L2StatelessVideoDecoder::Create);
-  } else if (base::FeatureList::IsEnabled(kV4L2FlatStatefulVideoDecoder)) {
-    create_decoder_function_cb =
-        base::BindOnce(&V4L2StatefulVideoDecoder::Create);
+  if (base::FeatureList::IsEnabled(kV4L2FlatStatelessVideoDecoder) ||
+      base::FeatureList::IsEnabled(kV4L2FlatStatefulVideoDecoder)) {
+    if (IsV4L2DecoderStateful()) {
+      create_decoder_function_cb =
+          base::BindOnce(&V4L2StatefulVideoDecoder::Create);
+    } else {
+      create_decoder_function_cb =
+          base::BindOnce(&V4L2StatelessVideoDecoder::Create);
+    }
   } else {
     create_decoder_function_cb = base::BindOnce(&V4L2VideoDecoder::Create);
   }
@@ -247,11 +254,11 @@ void VideoDecoderPipeline::NotifySupportKnown(
 }
 
 // static
-absl::optional<SupportedVideoDecoderConfigs>
+std::optional<SupportedVideoDecoderConfigs>
 VideoDecoderPipeline::GetSupportedConfigs(
     VideoDecoderType decoder_type,
     const gpu::GpuDriverBugWorkarounds& workarounds) {
-  absl::optional<SupportedVideoDecoderConfigs> configs;
+  std::optional<SupportedVideoDecoderConfigs> configs;
   switch (decoder_type) {
     case VideoDecoderType::kOutOfProcess:
       configs = OOPVideoDecoder::GetSupportedConfigs();
@@ -262,21 +269,15 @@ VideoDecoderPipeline::GetSupportedConfigs(
       break;
 #elif BUILDFLAG(USE_V4L2_CODEC)
     case VideoDecoderType::kV4L2:
-      if (base::FeatureList::IsEnabled(kV4L2FlatStatelessVideoDecoder)) {
-        configs = V4L2StatelessVideoDecoder::GetSupportedConfigs();
-      } else if (base::FeatureList::IsEnabled(kV4L2FlatStatefulVideoDecoder)) {
-        configs = V4L2StatefulVideoDecoder::GetSupportedConfigs();
-      } else {
-        configs = V4L2VideoDecoder::GetSupportedConfigs();
-      }
+      configs = GetSupportedV4L2DecoderConfigs();
       break;
 #endif
     default:
-      configs = absl::nullopt;
+      configs = std::nullopt;
   }
 
   if (!configs)
-    return absl::nullopt;
+    return std::nullopt;
 
   if (workarounds.disable_accelerated_vp8_decode) {
     base::EraseIf(configs.value(), [](const auto& config) {
@@ -425,7 +426,8 @@ int VideoDecoderPipeline::GetMaxDecodeRequests() const {
   // to be synchronous.
 
 #if BUILDFLAG(USE_V4L2_CODEC)
-  if (base::FeatureList::IsEnabled(kV4L2FlatStatefulVideoDecoder)) {
+  if (base::FeatureList::IsEnabled(kV4L2FlatStatefulVideoDecoder) &&
+      IsV4L2DecoderStateful()) {
     return 4;
   }
 #endif
@@ -512,6 +514,10 @@ void VideoDecoderPipeline::Initialize(const VideoDecoderConfig& config,
     std::move(init_cb).Run(DecoderStatus::Codes::kUnsupportedConfig);
     return;
   }
+  constexpr auto kVideoCodecProfileCount = media::VIDEO_CODEC_PROFILE_MAX + 1;
+  base::UmaHistogramEnumeration(
+      "Media.PlatformVideoDecoding.VideoCodecProfile", config.profile(),
+      static_cast<VideoCodecProfile>(kVideoCodecProfileCount));
 
   needs_bitstream_conversion_ = (config.codec() == VideoCodec::kH264) ||
                                 (config.codec() == VideoCodec::kHEVC);
@@ -541,7 +547,7 @@ void VideoDecoderPipeline::InitializeTask(const VideoDecoderConfig& config,
     // Note: because we std::move(create_decoder_function_cb_), we only reach
     // this code once. Therefore, we don't need to worry about this assignment
     // potentially destroying an existing |decoder_| which means we don't have
-    // to call |frame_converter_|->SetUnwrapFrameCB() here.
+    // to call |frame_converter_|->set_get_original_frame_cb() here.
     decoder_ =
         std::move(create_decoder_function_cb_)
             .Run(media_log_->Clone(), decoder_task_runner_, decoder_weak_this_);
@@ -557,15 +563,15 @@ void VideoDecoderPipeline::InitializeTask(const VideoDecoderConfig& config,
   }
 
   if (frame_converter_) {
-    MailboxVideoFrameConverter::UnwrapFrameCB unwrap_frame_cb;
+    MailboxVideoFrameConverter::GetOriginalFrameCB get_original_frame_cb;
 
     if (uses_oop_video_decoder_) {
       // Note: base::Unretained() is safe because either a) |decoder_| outlives
       // the |frame_converter_| or b) we call
-      // |frame_converter_|->set_unwrap_frame_cb() with a null UnwrapFrameCB
-      // before destroying |decoder_|.
-      unwrap_frame_cb = base::BindRepeating(
-          &OOPVideoDecoder::UnwrapFrame,
+      // |frame_converter_|->set_get_original_frame_cb() with a null
+      // GetOriginalFrameCB before destroying |decoder_|.
+      get_original_frame_cb = base::BindRepeating(
+          &OOPVideoDecoder::GetOriginalFrame,
           base::Unretained(static_cast<OOPVideoDecoder*>(decoder_.get())));
     } else {
       CHECK(main_frame_pool_);
@@ -577,14 +583,15 @@ void VideoDecoderPipeline::InitializeTask(const VideoDecoderConfig& config,
 
       // Note: base::Unretained() is safe because either a) the
       // |main_frame_pool_| outlives |frame_converter_| or b) we call
-      // |frame_converter_|->set_unwrap_frame_cb() with a null UnwrapFrameCB
-      // before destroying |main_frame_pool_|.
-      unwrap_frame_cb =
-          base::BindRepeating(&PlatformVideoFramePool::UnwrapFrame,
+      // |frame_converter_|->set_get_original_frame_cb() with a null
+      // GetOriginalFrameCB before destroying |main_frame_pool_|.
+      get_original_frame_cb =
+          base::BindRepeating(&PlatformVideoFramePool::GetOriginalFrame,
                               base::Unretained(platform_video_frame_pool));
     }
 
-    frame_converter_->set_unwrap_frame_cb(std::move(unwrap_frame_cb));
+    frame_converter_->set_get_original_frame_cb(
+        std::move(get_original_frame_cb));
   }
 
   estimated_num_buffers_for_renderer_ =
@@ -619,7 +626,7 @@ void VideoDecoderPipeline::OnInitializeDone(InitCB init_cb,
         << "VideoDecoderPipeline |decoder_| Initialize() failed, status: "
         << static_cast<int>(status.code());
     if (frame_converter_) {
-      frame_converter_->set_unwrap_frame_cb(base::NullCallback());
+      frame_converter_->set_get_original_frame_cb(base::NullCallback());
     }
 #if BUILDFLAG(IS_CHROMEOS)
     // We always need to destroy |buffer_transcryptor_| if it exists before
@@ -627,16 +634,17 @@ void VideoDecoderPipeline::OnInitializeDone(InitCB init_cb,
     buffer_transcryptor_.reset();
 #endif  // BUILDFLAG(IS_CHROMEOS)
     decoder_.reset();
+  } else {
+    MEDIA_LOG(INFO, media_log_)
+        << "VideoDecoderPipeline |decoder_| Initialize() successful";
   }
-  MEDIA_LOG(INFO, media_log_)
-      << "VideoDecoderPipeline |decoder_| Initialize() successful";
 
 #if BUILDFLAG(IS_CHROMEOS)
   if (decoder_ && decoder_->NeedsTranscryption()) {
     if (!cdm_context) {
       VLOGF(1) << "CdmContext required for transcryption";
       if (frame_converter_) {
-        frame_converter_->set_unwrap_frame_cb(base::NullCallback());
+        frame_converter_->set_get_original_frame_cb(base::NullCallback());
       }
       // We always need to destroy |buffer_transcryptor_| if it exists before
       // |decoder_|.
@@ -774,7 +782,7 @@ void VideoDecoderPipeline::OnDecodeDone(bool is_flush,
   if (is_flush) {
     client_flush_cb_state_.emplace(
         /*flush_cb=*/std::move(decode_cb), /*decoder_decode_status=*/status);
-    CallFlushCbIfNeeded(/*override_status=*/absl::nullopt);
+    CallFlushCbIfNeeded(/*override_status=*/std::nullopt);
     return;
   }
 
@@ -847,7 +855,7 @@ void VideoDecoderPipeline::OnFrameConverted(scoped_refptr<VideoFrame> frame) {
       FROM_HERE, base::BindOnce(client_output_cb_, std::move(frame)));
 
   // After outputting a frame, flush might be completed.
-  CallFlushCbIfNeeded(/*override_status=*/absl::nullopt);
+  CallFlushCbIfNeeded(/*override_status=*/std::nullopt);
   CallApplyResolutionChangeIfNeeded();
 }
 
@@ -896,7 +904,7 @@ void VideoDecoderPipeline::OnError(const std::string& msg) {
 }
 
 void VideoDecoderPipeline::CallFlushCbIfNeeded(
-    absl::optional<DecoderStatus> override_status) {
+    std::optional<DecoderStatus> override_status) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(decoder_sequence_checker_);
 
   if (!client_flush_cb_state_) {
@@ -959,11 +967,11 @@ VideoDecoderPipeline::PickDecoderOutputFormat(
     const std::vector<PixelLayoutCandidate>& candidates,
     const gfx::Rect& decoder_visible_rect,
     const gfx::Size& decoder_natural_size,
-    absl::optional<gfx::Size> output_size,
+    std::optional<gfx::Size> output_size,
     size_t num_codec_reference_frames,
     bool use_protected,
     bool need_aux_frame_pool,
-    absl::optional<DmabufVideoFramePool::CreateFrameCB> allocator) {
+    std::optional<DmabufVideoFramePool::CreateFrameCB> allocator) {
   DVLOGF(3);
   DCHECK_CALLED_ON_VALID_SEQUENCE(decoder_sequence_checker_);
   // Verify |num_codec_reference_frames| has a reasonable value. Anecdotally 16
@@ -981,7 +989,7 @@ VideoDecoderPipeline::PickDecoderOutputFormat(
   // directly renderable. If so, and (VA-API-only) the modifier of buffers
   // provided by the frame pool matches the one supported by the |decoder_|, we
   // don't need an image processor.
-  absl::optional<PixelLayoutCandidate> viable_candidate;
+  std::optional<PixelLayoutCandidate> viable_candidate;
   if (!output_size || *output_size == decoder_visible_rect.size()) {
     for (const auto& fourcc : renderable_fourccs_) {
       for (const auto& candidate : candidates) {
@@ -1014,8 +1022,11 @@ VideoDecoderPipeline::PickDecoderOutputFormat(
   // libva) and a PlatformVideoFramePool.
   CHECK(allocator.has_value());
   CHECK(main_frame_pool_->AsPlatformVideoFramePool());
+  // The custom allocator creates frames backed by GPU memory buffers.
+  // TODO(nhebert): Change the storage type argument when |allocator| switches
+  // to create NativePixmap-backed frames.
   main_frame_pool_->AsPlatformVideoFramePool()->SetCustomFrameAllocator(
-      *allocator);
+      *allocator, VideoFrame::STORAGE_GPU_MEMORY_BUFFER);
 #elif BUILDFLAG(IS_LINUX) && BUILDFLAG(USE_V4L2_CODEC)
   // Linux w/ V4L2 should not use a custom allocator
   // Only tested with video_decode_accelerator_tests
@@ -1031,7 +1042,7 @@ VideoDecoderPipeline::PickDecoderOutputFormat(
     // Currently this is because the frame converter doesn't work, and since
     // the tests don't need to render the frame, it can be bypassed.
     if (frame_converter_) {
-      frame_converter_->set_unwrap_frame_cb(base::NullCallback());
+      frame_converter_->set_get_original_frame_cb(base::NullCallback());
     }
     main_frame_pool_.reset();
     return *viable_candidate;
@@ -1120,10 +1131,26 @@ VideoDecoderPipeline::PickDecoderOutputFormat(
   } else {
     VLOGF(2) << "Initializing ImageProcessor; max buffers: "
              << estimated_num_buffers_for_renderer_;
+    // |output_storage_type| holds the storage type of frames created by
+    // |main_frame_pool_|, which are used as the output frames for the image
+    // processor.
+    // As part of b/277581596, |main_frame_pool_| will be changed to create
+    // NativePixmap frames instead of GPU memory buffer frames. There will be
+    // points during the transition where |main_frame_pool_| will use different
+    // storage types for different platforms. The plan is to migrate the
+    // ChromeOS Chrome browser frame pool first. Then later, Linux and ChromeOS
+    // ARC. To handle correctly configuring |image_processor| during this
+    // transition, the frame pool is being used as the source of truth for the
+    // |output_storage_type|.
+    // TODO(nhebert): Clean up this comment after the NativePixmap migration
+    // completes.
+    const VideoFrame::StorageType output_storage_type =
+        main_frame_pool_->GetFrameStorageType();
     image_processor = ImageProcessorFactory::CreateWithInputCandidates(
         candidates, /*input_visible_rect=*/decoder_visible_rect,
         output_size ? *output_size : decoder_visible_rect.size(),
-        estimated_num_buffers_for_renderer_, decoder_task_runner_,
+        output_storage_type, estimated_num_buffers_for_renderer_,
+        decoder_task_runner_,
         base::BindRepeating(&PickRenderableFourcc, renderable_fourccs_),
         base::BindPostTaskToCurrentDefault(
             base::BindRepeating(&VideoDecoderPipeline::OnError,
@@ -1159,8 +1186,10 @@ VideoDecoderPipeline::PickDecoderOutputFormat(
     auxiliary_frame_pool_->set_parent_task_runner(decoder_task_runner_);
 
 #if BUILDFLAG(IS_LINUX)
+    // TODO(nhebert): Change the storage type argument when |allocator| switches
+    // to create NativePixmap-backed frames.
     auxiliary_frame_pool_->AsPlatformVideoFramePool()->SetCustomFrameAllocator(
-        *allocator);
+        *allocator, VideoFrame::STORAGE_GPU_MEMORY_BUFFER);
 #endif
 
     CroStatus::Or<GpuBufferLayout> status_or_layout =

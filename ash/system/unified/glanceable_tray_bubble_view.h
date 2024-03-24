@@ -34,8 +34,9 @@ class Shelf;
 // container for the child `tasks` and `classroom` glanceables.
 class GlanceableTrayBubbleView : public TrayBubbleView,
                                  public ScreenLayoutObserver {
+  METADATA_HEADER(GlanceableTrayBubbleView, TrayBubbleView)
+
  public:
-  METADATA_HEADER(GlanceableTrayBubbleView);
   GlanceableTrayBubbleView(const InitParams& init_params, Shelf* shelf);
   GlanceableTrayBubbleView(const GlanceableTrayBubbleView&) = delete;
   GlanceableTrayBubbleView& operator=(const GlanceableTrayBubbleView&) = delete;
@@ -49,6 +50,9 @@ class GlanceableTrayBubbleView : public TrayBubbleView,
   }
   CalendarView* GetCalendarView() { return calendar_view_; }
 
+  // views::View:
+  int GetHeightForWidth(int w) const override;
+
   // TrayBubbleView:
   void AddedToWidget() override;
   void OnWidgetClosing(views::Widget* widget) override;
@@ -61,6 +65,7 @@ class GlanceableTrayBubbleView : public TrayBubbleView,
   // role is active).
   void AddClassroomBubbleStudentViewIfNeeded(bool is_role_active);
   void AddTaskBubbleViewIfNeeded(
+      bool fetch_success,
       const ui::ListModel<api::TaskList>* task_lists);
 
   void OnGlanceablesContainerPreferredSizeChanged();

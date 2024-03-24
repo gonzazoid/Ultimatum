@@ -40,12 +40,15 @@ import org.chromium.chrome.browser.multiwindow.MultiWindowModeStateDispatcher;
 import org.chromium.chrome.browser.price_tracking.PriceTrackingFeatures;
 import org.chromium.chrome.browser.price_tracking.PriceTrackingUtilities;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tabmodel.TabCreatorManager;
 import org.chromium.chrome.browser.tabmodel.TabList;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
+import org.chromium.chrome.browser.tabmodel.TabModelUtils;
 import org.chromium.chrome.browser.tasks.ReturnToChromeUtil;
 import org.chromium.chrome.browser.tasks.pseudotab.PseudoTab;
 import org.chromium.chrome.browser.tasks.pseudotab.TabAttributeCache;
+import org.chromium.chrome.browser.tasks.tab_groups.TabGroupModelFilter;
 import org.chromium.chrome.browser.tasks.tab_management.TabListCoordinator.TabListMode;
 import org.chromium.chrome.browser.tasks.tab_management.suggestions.TabSuggestionsOrchestrator;
 import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
@@ -109,7 +112,8 @@ public class TabSwitcherCoordinator
 
     private final MenuOrKeyboardActionController.MenuOrKeyboardActionHandler
             mTabSwitcherMenuActionHandler;
-    private TabSwitcherCustomViewManager mTabSwitcherCustomViewManager;
+    private final TabSwitcherCustomViewManager mTabSwitcherCustomViewManager =
+            new TabSwitcherCustomViewManager();
 
     /** {@see TabManagementDelegate#createCarouselTabSwitcher} */
     // Suppress to observe SharedPreferences, which is discouraged; use another messaging channel
@@ -183,7 +187,7 @@ public class TabSwitcherCoordinator
                             this::onTabSwitcherShown,
                             layoutStateProviderSupplier);
 
-            mTabSwitcherCustomViewManager = new TabSwitcherCustomViewManager(mMediator);
+            mTabSwitcherCustomViewManager.setDelegate(mMediator);
 
             var currentTabModelFilterSupplier =
                     tabModelSelector.getTabModelFilterProvider().getCurrentTabModelFilterSupplier();
@@ -195,12 +199,19 @@ public class TabSwitcherCoordinator
                             currentTabModelFilterSupplier);
 
             PseudoTab.TitleProvider titleProvider =
-                    (context, tab) -> {
-                        int numRelatedTabs =
-                                PseudoTab.getRelatedTabs(context, tab, tabModelSelector).size();
-                        if (numRelatedTabs == 1) return tab.getTitle();
+                    (context, pseudoTab) -> {
+                        TabGroupModelFilter filter =
+                                (TabGroupModelFilter)
+                                        tabModelSelector
+                                                .getTabModelFilterProvider()
+                                                .getCurrentTabModelFilterSupplier()
+                                                .get();
+                        Tab tab = TabModelUtils.getTabById(filter.getTabModel(), pseudoTab.getId());
+                        assert tab != null;
+                        if (!filter.isTabInTabGroup(tab)) return tab.getTitle();
 
-                        return TabGroupTitleEditor.getDefaultTitle(context, numRelatedTabs);
+                        return TabGroupTitleEditor.getDefaultTitle(
+                                context, filter.getRelatedTabCountForRootId(tab.getRootId()));
                     };
 
             long startTimeMs = SystemClock.uptimeMillis();
@@ -442,6 +453,11 @@ public class TabSwitcherCoordinator
     }
 
     @Override
+    public void refreshTabList() {
+        mMediator.refreshTabList();
+    }
+
+    @Override
     public int getTabListTopOffset() {
         return mTabListCoordinator.getTabListTopOffset();
     }
@@ -601,6 +617,11 @@ public class TabSwitcherCoordinator
     @Override
     public void runAnimationOnNextLayout(Runnable runnable) {
         mTabListCoordinator.runAnimationOnNextLayout(runnable);
+    }
+
+    @Override
+    public void showQuickDeleteAnimation(Runnable onAnimationEnd, List<Tab> tabs) {
+        mTabListCoordinator.showQuickDeleteAnimation(onAnimationEnd, tabs);
     }
 
     private TabSwitcherMessageManager getMessageManager() {

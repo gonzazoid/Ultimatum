@@ -29,25 +29,30 @@ void IdentityDialogController::ShowAccountsDialog(
     const std::optional<std::string>& iframe_for_display,
     const std::vector<content::IdentityProviderData>& identity_provider_data,
     content::IdentityRequestAccount::SignInMode sign_in_mode,
-    bool show_auto_reauthn_checkbox,
+    blink::mojom::RpMode rp_mode,
+    const std::optional<content::IdentityProviderData>& new_account_idp,
     AccountSelectionCallback on_selected,
     LoginToIdPCallback on_add_account,
-    DismissCallback dismiss_callback) {
+    DismissCallback dismiss_callback,
+    AccountsDisplayedCallback accounts_displayed_callback) {
   on_account_selection_ = std::move(on_selected);
   on_login_ = std::move(on_add_account);
   on_dismiss_ = std::move(dismiss_callback);
+  on_accounts_displayed_ = std::move(accounts_displayed_callback);
   if (!account_view_)
     account_view_ = AccountSelectionView::Create(this);
+  // TODO(crbug.com/41490360): Use the `new_account_idp` in the UI.
   account_view_->Show(top_frame_for_display, iframe_for_display,
-                      identity_provider_data, sign_in_mode,
-                      show_auto_reauthn_checkbox);
+                      identity_provider_data, sign_in_mode, rp_mode,
+                      /*show_auto_reauthn_checkbox=*/false);
 }
 
 void IdentityDialogController::ShowFailureDialog(
     const std::string& top_frame_for_display,
     const std::optional<std::string>& iframe_for_display,
     const std::string& idp_for_display,
-    const blink::mojom::RpContext& rp_context,
+    blink::mojom::RpContext rp_context,
+    blink::mojom::RpMode rp_mode,
     const content::IdentityProviderMetadata& idp_metadata,
     DismissCallback dismiss_callback,
     LoginToIdPCallback login_callback) {
@@ -61,14 +66,16 @@ void IdentityDialogController::ShowFailureDialog(
   //   sign-in attempt failed.
 
   account_view_->ShowFailureDialog(top_frame_for_display, iframe_for_display,
-                                   idp_for_display, rp_context, idp_metadata);
+                                   idp_for_display, rp_context, rp_mode,
+                                   idp_metadata);
 }
 
 void IdentityDialogController::ShowErrorDialog(
     const std::string& top_frame_for_display,
     const std::optional<std::string>& iframe_for_display,
     const std::string& idp_for_display,
-    const blink::mojom::RpContext& rp_context,
+    blink::mojom::RpContext rp_context,
+    blink::mojom::RpMode rp_mode,
     const content::IdentityProviderMetadata& idp_metadata,
     const std::optional<TokenError>& error,
     DismissCallback dismiss_callback,
@@ -80,16 +87,21 @@ void IdentityDialogController::ShowErrorDialog(
   }
 
   account_view_->ShowErrorDialog(top_frame_for_display, iframe_for_display,
-                                 idp_for_display, rp_context, idp_metadata,
-                                 error);
+                                 idp_for_display, rp_context, rp_mode,
+                                 idp_metadata, error);
 }
 
-void IdentityDialogController::OnLoginToIdP(const GURL& idp_login_url) {
-  std::move(on_login_).Run(idp_login_url);
+void IdentityDialogController::OnLoginToIdP(const GURL& idp_config_url,
+                                            const GURL& idp_login_url) {
+  std::move(on_login_).Run(idp_config_url, idp_login_url);
 }
 
 void IdentityDialogController::OnMoreDetails() {
   std::move(on_more_details_).Run();
+}
+
+void IdentityDialogController::OnAccountsDisplayed() {
+  std::move(on_accounts_displayed_).Run();
 }
 
 void IdentityDialogController::ShowIdpSigninFailureDialog(
@@ -129,6 +141,13 @@ gfx::NativeView IdentityDialogController::GetNativeView() {
 
 content::WebContents* IdentityDialogController::GetWebContents() {
   return rp_web_contents_;
+}
+
+void IdentityDialogController::ShowUrl(LinkType type, const GURL& url) {
+  if (!account_view_) {
+    return;
+  }
+  account_view_->ShowUrl(type, url);
 }
 
 content::WebContents* IdentityDialogController::ShowModalDialog(

@@ -19,7 +19,7 @@
 
 namespace base {
 class Location;
-class SequencedTaskRunner;
+class SingleThreadTaskRunner;
 }  // namespace base
 
 namespace media {
@@ -48,8 +48,6 @@ class MEDIA_GPU_EXPORT V4L2StatefulVideoDecoder : public VideoDecoderMixin {
       std::unique_ptr<MediaLog> media_log,
       scoped_refptr<base::SequencedTaskRunner> task_runner,
       base::WeakPtr<VideoDecoderMixin::Client> client);
-
-  static absl::optional<SupportedVideoDecoderConfigs> GetSupportedConfigs();
 
   // VideoDecoderMixin implementation, VideoDecoder part.
   void Initialize(const VideoDecoderConfig& config,
@@ -168,7 +166,7 @@ class MEDIA_GPU_EXPORT V4L2StatefulVideoDecoder : public VideoDecoderMixin {
 
   // A sequenced TaskRunner to wait for events coming from |CAPTURE_queue_| or
   // |wake_event_|.
-  scoped_refptr<base::SequencedTaskRunner> event_task_runner_;
+  scoped_refptr<base::SingleThreadTaskRunner> event_task_runner_;
   // Used to (try to) cancel the Tasks sent by RearmCAPTUREQueueMonitoring(),
   // and not serviced yet, when no longer needed.
   base::CancelableTaskTracker cancelable_task_tracker_

@@ -9,6 +9,7 @@
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/threading/thread_restrictions.h"
@@ -343,7 +344,7 @@ class DriveUploadHandlerTest
     drivefs::mojom::SyncingStatusPtr status =
         drivefs::mojom::SyncingStatus::New();
     status->item_events.emplace_back(
-        absl::in_place, 12, 34, observed_relative_drive_path().value(),
+        std::in_place, 12, 34, observed_relative_drive_path().value(),
         drivefs::mojom::ItemEvent::State::kQueued, 123, 456,
         drivefs::mojom::ItemEventReason::kTransfer);
     drivefs_delegate()->OnSyncingStatusUpdate(status.Clone());
@@ -351,7 +352,7 @@ class DriveUploadHandlerTest
 
     status = drivefs::mojom::SyncingStatus::New();
     status->item_events.emplace_back(
-        absl::in_place, 12, 34, observed_relative_drive_path().value(),
+        std::in_place, 12, 34, observed_relative_drive_path().value(),
         drivefs::mojom::ItemEvent::State::kCompleted, 123, 456,
         drivefs::mojom::ItemEventReason::kTransfer);
     drivefs_delegate()->OnSyncingStatusUpdate(status.Clone());
@@ -363,7 +364,7 @@ class DriveUploadHandlerTest
     drivefs::mojom::SyncingStatusPtr status =
         drivefs::mojom::SyncingStatus::New();
     status->item_events.emplace_back(
-        absl::in_place, 12, 34, observed_relative_drive_path().value(),
+        std::in_place, 12, 34, observed_relative_drive_path().value(),
         drivefs::mojom::ItemEvent::State::kQueued, 123, 456,
         drivefs::mojom::ItemEventReason::kTransfer);
     drivefs_delegate()->OnSyncingStatusUpdate(status.Clone());
@@ -372,7 +373,7 @@ class DriveUploadHandlerTest
     drivefs::mojom::SyncingStatusPtr fail_status =
         drivefs::mojom::SyncingStatus::New();
     fail_status->item_events.emplace_back(
-        absl::in_place, 12, 34, observed_relative_drive_path().value(),
+        std::in_place, 12, 34, observed_relative_drive_path().value(),
         drivefs::mojom::ItemEvent::State::kFailed, 123, 456,
         drivefs::mojom::ItemEventReason::kTransfer);
     drivefs_delegate()->OnSyncingStatusUpdate(fail_status->Clone());

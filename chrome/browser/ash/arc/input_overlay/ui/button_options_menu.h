@@ -48,8 +48,9 @@ class DisplayOverlayController;
 // ||           Done button          ||
 // +----------------------------------+
 class ButtonOptionsMenu : public ArrowContainer, public TouchInjectorObserver {
+  METADATA_HEADER(ButtonOptionsMenu, ArrowContainer)
+
  public:
-  METADATA_HEADER(ButtonOptionsMenu);
   ButtonOptionsMenu(DisplayOverlayController* controller, Action* action);
   ButtonOptionsMenu(const ButtonOptionsMenu&) = delete;
   ButtonOptionsMenu& operator=(const ButtonOptionsMenu&) = delete;
@@ -82,7 +83,6 @@ class ButtonOptionsMenu : public ArrowContainer, public TouchInjectorObserver {
   void OnActionRemoved(const Action& action) override;
   void OnActionTypeChanged(Action* action, Action* new_action) override;
   void OnActionInputBindingUpdated(const Action& action) override;
-  void OnActionNameUpdated(const Action& action) override;
   void OnActionNewStateRemoved(const Action& action) override;
 
   // DisplayOverlayController owns this class, no need to deallocate.

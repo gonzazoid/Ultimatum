@@ -25,12 +25,12 @@ class GURL;
 @protocol IncognitoReauthCommands;
 @protocol IncognitoReauthConsumer;
 @class LayoutGuideCenter;
+@class PinnedTabsViewController;
 @protocol PriceCardDataSource;
 @protocol RecentTabsConsumer;
 @class RecentTabsTableViewController;
 @class RegularGridViewController;
 @class TabGridBottomToolbar;
-@protocol TabCollectionCommands;
 @protocol TabCollectionConsumer;
 @protocol TabCollectionDragDropHandler;
 @protocol TabGridActivityObserver;
@@ -74,6 +74,22 @@ enum class TabGridPageConfiguration {
 // Asks the delegate to show the inactive tabs.
 - (void)showInactiveTabs;
 
+// Asks the delegate whether the user is eligible for the swipe-to-incognito
+// in-product help message. This depends on multiple factors, including but not
+// limited to the current tab grid mode and the frequency that the IPH has
+// previously shown.
+- (BOOL)tabGridIsUserEligibleForSwipeToIncognitoIPH;
+
+// Asks the delegate whether the tab grid should present the swipe-to-incognito
+// in-product help message. Once this is invoked, `swipeToIncognitoIPH` must
+// show, and `tabGridDidDismissSwipeToIncognitoIPH` must be invoked on
+// dismissal.
+- (BOOL)tabGridShouldPresentSwipeToIncognitoIPH;
+
+// Notifies the delegate that the tab grid has dismissed the swipe-to-incognito
+// in-product help message.
+- (void)tabGridDidDismissSwipeToIncognitoIPH;
+
 @end
 
 // View controller representing a tab switcher. The tab switcher has an
@@ -109,17 +125,11 @@ enum class TabGridPageConfiguration {
 
 // Consumers send updates from the model layer to the UI layer.
 @property(nonatomic, readonly) id<RecentTabsConsumer> remoteTabsConsumer;
-@property(nonatomic, readonly) id<TabCollectionConsumer> pinnedTabsConsumer;
 
 // Delegates send updates from the UI layer to the model layer.
-@property(nonatomic, weak) id<GridCommands> regularTabsDelegate;
-@property(nonatomic, weak) id<GridCommands> inactiveTabsDelegate;
-@property(nonatomic, weak) id<GridCommands> incognitoTabsDelegate;
-@property(nonatomic, weak) id<TabCollectionCommands> pinnedTabsDelegate;
-
-// Handles drag and drop interactions that require the model layer.
-@property(nonatomic, weak) id<TabCollectionDragDropHandler>
-    pinnedTabsDragDropHandler;
+@property(nonatomic, weak) id<GridCommands> regularGridHandler;
+@property(nonatomic, weak) id<GridCommands> inactiveGridHandler;
+@property(nonatomic, weak) id<GridCommands> incognitoGridHandler;
 
 // Data source for acquiring data which power the PriceCardView
 @property(nonatomic, weak) id<PriceCardDataSource> priceCardDataSource;
@@ -132,6 +142,7 @@ enum class TabGridPageConfiguration {
 // Child view controllers.
 @property(nonatomic, strong)
     RegularGridViewController* regularTabsViewController;
+@property(nonatomic, strong) PinnedTabsViewController* pinnedTabsViewController;
 @property(nonatomic, strong)
     IncognitoGridViewController* incognitoTabsViewController;
 // The view controller for remote tabs.
@@ -140,10 +151,6 @@ enum class TabGridPageConfiguration {
 // model objects used in this view controller should be factored out.
 @property(nonatomic, readonly)
     RecentTabsTableViewController* remoteTabsViewController;
-
-// Provides the context menu for the tabs on the grid.
-@property(nonatomic, weak) id<TabContextMenuProvider>
-    regularTabsContextMenuProvider;
 
 // The layout guide center to use to refer to the bottom toolbar.
 @property(nonatomic, strong) LayoutGuideCenter* layoutGuideCenter;

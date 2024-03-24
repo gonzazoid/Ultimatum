@@ -5,9 +5,10 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_CONSTRAINT_SPACE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_CONSTRAINT_SPACE_H_
 
+#include <optional>
+
 #include "base/check_op.h"
 #include "base/notreached.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/break_appeal.h"
@@ -101,9 +102,6 @@ class CORE_EXPORT ConstraintSpace final {
     kIndefinite,
     kRareDataPercentage
   };
-
-  ConstraintSpace()
-      : ConstraintSpace({WritingMode::kHorizontalTb, TextDirection::kLtr}) {}
 
   ConstraintSpace(const ConstraintSpace& other)
       : available_size_(other.available_size_),
@@ -271,9 +269,9 @@ class CORE_EXPORT ConstraintSpace final {
     return LayoutUnit();
   }
 
-  absl::optional<MinMaxSizes> OverrideMinMaxBlockSizes() const {
+  std::optional<MinMaxSizes> OverrideMinMaxBlockSizes() const {
     return HasRareData() ? rare_data_->OverrideMinMaxBlockSizes()
-                         : absl::nullopt;
+                         : std::nullopt;
   }
 
   // True if we're using the "fallback" available inline-size. This typically
@@ -299,9 +297,8 @@ class CORE_EXPORT ConstraintSpace final {
     LayoutUnit descent;
   };
 
-  absl::optional<MathTargetStretchBlockSizes> TargetStretchBlockSizes() const {
-    return HasRareData() ? rare_data_->TargetStretchBlockSizes()
-                         : absl::nullopt;
+  std::optional<MathTargetStretchBlockSizes> TargetStretchBlockSizes() const {
+    return HasRareData() ? rare_data_->TargetStretchBlockSizes() : std::nullopt;
   }
 
   // Return the borders which should be used for a table-cell.
@@ -315,9 +312,9 @@ class CORE_EXPORT ConstraintSpace final {
 
   // Return the baseline offset which the table-cell children should align
   // their baseline to.
-  absl::optional<LayoutUnit> TableCellAlignmentBaseline() const {
+  std::optional<LayoutUnit> TableCellAlignmentBaseline() const {
     return HasRareData() ? rare_data_->TableCellAlignmentBaseline()
-                         : absl::nullopt;
+                         : std::nullopt;
   }
 
   bool IsTableCellHiddenForPaint() const {
@@ -545,6 +542,17 @@ class CORE_EXPORT ConstraintSpace final {
     return HasRareData() && rare_data_->is_block_fragmentation_forced_off;
   }
 
+  // Return true if monolithic overflow isn't to be propagated when printing.
+  // This is required when there's a tall monolithic abspos inside another
+  // abspos (or relpos) that has clipped overflow. Normally (non-OOF) it's not
+  // necessary to set such a flag, since we check for clipping when propagating
+  // up the tree, but OOF fragmentation breaks the containing block chain, so
+  // that any clipping ancestor won't be seen.
+  bool IsMonolithicOverflowPropagationDisabled() const {
+    return HasRareData() &&
+           rare_data_->is_monolithic_overflow_propagation_disabled;
+  }
+
   // Return true if the document is paginated (for printing).
   bool IsPaginated() const {
     // TODO(layout-dev): This will not work correctly if establishing a nested
@@ -677,16 +685,16 @@ class CORE_EXPORT ConstraintSpace final {
   //
   // This value should be propagated to child layouts if the current layout
   // hasn't resolved its BFC offset yet.
-  absl::optional<LayoutUnit> ForcedBfcBlockOffset() const {
-    return HasRareData() ? rare_data_->ForcedBfcBlockOffset() : absl::nullopt;
+  std::optional<LayoutUnit> ForcedBfcBlockOffset() const {
+    return HasRareData() ? rare_data_->ForcedBfcBlockOffset() : std::nullopt;
   }
 
   // If present, this is a hint as to where place any adjoining objects. This
   // isn't necessarily the final position, just where they ended up in a
   // previous layout pass.
-  absl::optional<LayoutUnit> OptimisticBfcBlockOffset() const {
+  std::optional<LayoutUnit> OptimisticBfcBlockOffset() const {
     return HasRareData() ? rare_data_->OptimisticBfcBlockOffset()
-                         : absl::nullopt;
+                         : std::nullopt;
   }
 
   // The "expected" BFC block-offset is:
@@ -749,8 +757,8 @@ class CORE_EXPORT ConstraintSpace final {
     return HasRareData() && rare_data_->is_line_clamp_context;
   }
 
-  absl::optional<int> LinesUntilClamp() const {
-    return HasRareData() ? rare_data_->LinesUntilClamp() : absl::nullopt;
+  std::optional<int> LinesUntilClamp() const {
+    return HasRareData() ? rare_data_->LinesUntilClamp() : std::nullopt;
   }
 
   const GridLayoutSubtree* GetGridLayoutSubtree() const {
@@ -885,6 +893,7 @@ class CORE_EXPORT ConstraintSpace final {
           block_direction_fragmentation_type(
               static_cast<unsigned>(kFragmentNone)),
           is_block_fragmentation_forced_off(false),
+          is_monolithic_overflow_propagation_disabled(false),
           requires_content_before_breaking(false),
           is_inside_balanced_columns(false),
           should_ignore_forced_breaks(false),
@@ -918,6 +927,8 @@ class CORE_EXPORT ConstraintSpace final {
               other.block_direction_fragmentation_type),
           is_block_fragmentation_forced_off(
               other.is_block_fragmentation_forced_off),
+          is_monolithic_overflow_propagation_disabled(
+              other.is_monolithic_overflow_propagation_disabled),
           requires_content_before_breaking(
               other.requires_content_before_breaking),
           is_inside_balanced_columns(other.is_inside_balanced_columns),
@@ -1005,6 +1016,8 @@ class CORE_EXPORT ConstraintSpace final {
               other.block_direction_fragmentation_type ||
           is_block_fragmentation_forced_off !=
               other.is_block_fragmentation_forced_off ||
+          is_monolithic_overflow_propagation_disabled !=
+              other.is_monolithic_overflow_propagation_disabled ||
           requires_content_before_breaking !=
               other.requires_content_before_breaking ||
           is_inside_balanced_columns != other.is_inside_balanced_columns ||
@@ -1014,8 +1027,9 @@ class CORE_EXPORT ConstraintSpace final {
           min_break_appeal != other.min_break_appeal ||
           propagate_child_break_values != other.propagate_child_break_values ||
           should_repeat != other.should_repeat ||
-          is_inside_repeatable_content != other.is_inside_repeatable_content)
+          is_inside_repeatable_content != other.is_inside_repeatable_content) {
         return false;
+      }
 
       switch (GetDataUnionType()) {
         case DataUnionType::kNone:
@@ -1047,12 +1061,14 @@ class CORE_EXPORT ConstraintSpace final {
           hide_table_cell_if_empty ||
           block_direction_fragmentation_type != kFragmentNone ||
           is_block_fragmentation_forced_off ||
+          is_monolithic_overflow_propagation_disabled ||
           requires_content_before_breaking || is_inside_balanced_columns ||
           should_ignore_forced_breaks || is_in_column_bfc || is_past_break ||
           min_break_appeal != kBreakAppealLastResort ||
           propagate_child_break_values || is_at_fragmentainer_start ||
-          should_repeat || is_inside_repeatable_content)
+          should_repeat || is_inside_repeatable_content) {
         return false;
+      }
 
       switch (GetDataUnionType()) {
         case DataUnionType::kNone:
@@ -1094,10 +1110,10 @@ class CORE_EXPORT ConstraintSpace final {
       EnsureBlockData()->margin_strut = margin_strut;
     }
 
-    absl::optional<LayoutUnit> OptimisticBfcBlockOffset() const {
+    std::optional<LayoutUnit> OptimisticBfcBlockOffset() const {
       return GetDataUnionType() == DataUnionType::kBlockData
                  ? block_data_.optimistic_bfc_block_offset
-                 : absl::nullopt;
+                 : std::nullopt;
     }
 
     void SetOptimisticBfcBlockOffset(LayoutUnit optimistic_bfc_block_offset) {
@@ -1105,10 +1121,10 @@ class CORE_EXPORT ConstraintSpace final {
           optimistic_bfc_block_offset;
     }
 
-    absl::optional<LayoutUnit> ForcedBfcBlockOffset() const {
+    std::optional<LayoutUnit> ForcedBfcBlockOffset() const {
       return GetDataUnionType() == DataUnionType::kBlockData
                  ? block_data_.forced_bfc_block_offset
-                 : absl::nullopt;
+                 : std::nullopt;
     }
 
     void SetForcedBfcBlockOffset(LayoutUnit forced_bfc_block_offset) {
@@ -1121,10 +1137,10 @@ class CORE_EXPORT ConstraintSpace final {
                  : LayoutUnit::Min();
     }
 
-    absl::optional<MinMaxSizes> OverrideMinMaxBlockSizes() const {
+    std::optional<MinMaxSizes> OverrideMinMaxBlockSizes() const {
       if (has_override_min_max_block_sizes)
         return override_min_max_block_sizes;
-      return absl::nullopt;
+      return std::nullopt;
     }
 
     void SetOverrideMinMaxBlockSizes(const MinMaxSizes& min_max_sizes) {
@@ -1141,10 +1157,10 @@ class CORE_EXPORT ConstraintSpace final {
       EnsureBlockData()->clearance_offset = clearance_offset;
     }
 
-    absl::optional<int> LinesUntilClamp() const {
+    std::optional<int> LinesUntilClamp() const {
       return GetDataUnionType() == DataUnionType::kBlockData
                  ? block_data_.lines_until_clamp
-                 : absl::nullopt;
+                 : std::nullopt;
     }
 
     void SetLinesUntilClamp(int value) {
@@ -1173,10 +1189,10 @@ class CORE_EXPORT ConstraintSpace final {
       EnsureTableCellData()->table_cell_column_index = table_cell_column_index;
     }
 
-    absl::optional<LayoutUnit> TableCellAlignmentBaseline() const {
+    std::optional<LayoutUnit> TableCellAlignmentBaseline() const {
       return GetDataUnionType() == DataUnionType::kTableCellData
                  ? table_cell_data_.table_cell_alignment_baseline
-                 : absl::nullopt;
+                 : std::nullopt;
     }
 
     void SetTableCellAlignmentBaseline(
@@ -1270,11 +1286,10 @@ class CORE_EXPORT ConstraintSpace final {
           target_stretch_inline_size;
     }
 
-    absl::optional<MathTargetStretchBlockSizes> TargetStretchBlockSizes()
-        const {
+    std::optional<MathTargetStretchBlockSizes> TargetStretchBlockSizes() const {
       return GetDataUnionType() == DataUnionType::kStretchData
                  ? stretch_data_.target_stretch_block_sizes
-                 : absl::nullopt;
+                 : std::nullopt;
     }
 
     void SetTargetStretchBlockSizes(
@@ -1317,6 +1332,7 @@ class CORE_EXPORT ConstraintSpace final {
 
     unsigned block_direction_fragmentation_type : 2;
     unsigned is_block_fragmentation_forced_off : 1;
+    unsigned is_monolithic_overflow_propagation_disabled : 1;
     unsigned requires_content_before_breaking : 1;
     unsigned is_inside_balanced_columns : 1;
     unsigned should_ignore_forced_breaks : 1;
@@ -1342,10 +1358,10 @@ class CORE_EXPORT ConstraintSpace final {
       }
 
       MarginStrut margin_strut;
-      absl::optional<LayoutUnit> optimistic_bfc_block_offset;
-      absl::optional<LayoutUnit> forced_bfc_block_offset;
+      std::optional<LayoutUnit> optimistic_bfc_block_offset;
+      std::optional<LayoutUnit> forced_bfc_block_offset;
       LayoutUnit clearance_offset = LayoutUnit::Min();
-      absl::optional<int> lines_until_clamp;
+      std::optional<int> lines_until_clamp;
     };
 
     struct TableCellData {
@@ -1366,7 +1382,7 @@ class CORE_EXPORT ConstraintSpace final {
 
       BoxStrut table_cell_borders;
       wtf_size_t table_cell_column_index = kNotFound;
-      absl::optional<LayoutUnit> table_cell_alignment_baseline;
+      std::optional<LayoutUnit> table_cell_alignment_baseline;
       bool is_hidden_for_paint = false;
       bool has_collapsed_borders = false;
     };
@@ -1427,7 +1443,7 @@ class CORE_EXPORT ConstraintSpace final {
       }
 
       LayoutUnit target_stretch_inline_size = kIndefiniteSize;
-      absl::optional<MathTargetStretchBlockSizes> target_stretch_block_sizes;
+      std::optional<MathTargetStretchBlockSizes> target_stretch_block_sizes;
     };
 
     struct SubgridData {
@@ -1645,6 +1661,10 @@ class CORE_EXPORT ConstraintSpace final {
     DCHECK(rare_data_);
     rare_data_->block_direction_fragmentation_type = kFragmentNone;
     rare_data_->is_block_fragmentation_forced_off = true;
+  }
+
+  void DisableMonolithicOverflowPropagation() {
+    EnsureRareData()->is_monolithic_overflow_propagation_disabled = true;
   }
 
   LogicalSize available_size_;

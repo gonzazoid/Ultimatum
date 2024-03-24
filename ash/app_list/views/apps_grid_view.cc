@@ -355,7 +355,7 @@ AppsGridView::AppsGridView(AppListA11yAnnouncer* a11y_announcer,
   items_container_->SetPaintToLayer();
   items_container_->layer()->SetFillsBoundsOpaquely(false);
 
-  GetViewAccessibility().OverrideRole(ax::mojom::Role::kGroup);
+  GetViewAccessibility().SetRole(ax::mojom::Role::kGroup);
 
   // Override the a11y name of top level apps grid.
   if (!folder_delegate) {
@@ -385,6 +385,8 @@ AppsGridView::~AppsGridView() {
   if (item_list_) {
     item_list_->RemoveObserver(this);
   }
+
+  set_context_menu_controller(nullptr);
 
   // Abort reorder animation before `view_model_` is cleared.
   MaybeAbortWholeGridAnimation();
@@ -811,9 +813,9 @@ void AppsGridView::EndDrag(bool cancel) {
 
           // If item drag created a folder, layout the grid to ensure the
           // created folder's bounds are correct. Note that `open_folder_info_`
-          // affects ideal item bounds, so `Layout()` needs to be callsed after
-          // `SetOpenFolderInfo()`.
-          Layout();
+          // affects ideal item bounds, so `DeprecatedLayoutImmediately()` needs
+          // to be called after `SetOpenFolderInfo()`.
+          DeprecatedLayoutImmediately();
         }
       } else if (IsValidIndex(drop_target_)) {
         // Ensure reorder event has already been announced by the end of drag.
@@ -841,10 +843,10 @@ void AppsGridView::EndDrag(bool cancel) {
   UpdatePaging();
 
   if (GetWidget()) {
-    // Normally Layout() cancels any animations. At this point there may be a
-    // pending Layout(), force it now so that one isn't triggered part way
-    // through the animation. Further, ignore this layout so that the position
-    // isn't reset.
+    // Normally layout cancels any animations. At this point there may be a
+    // pending layout, force it now so that one isn't triggered part way through
+    // the animation. Further, ignore this layout so that the position isn't
+    // reset.
     DCHECK(!ignore_layout_);
     base::AutoReset<bool> auto_reset(&ignore_layout_, true);
     GetWidget()->LayoutRootViewIfNecessary();
@@ -2177,9 +2179,10 @@ void AppsGridView::HandleKeyboardFoldering(ui::KeyboardCode key_code) {
     }
 
     // Layout the grid to ensure the created folder's bounds are correct.
-    // Note that `open_folder_info_` affects ideal item bounds, so `Layout()`
-    // needs to be callsed after `SetOpenFolderInfo()`.
-    Layout();
+    // Note that `open_folder_info_` affects ideal item bounds, so
+    // `DeprecatedLayoutImmediately()` needs to be called after
+    // `SetOpenFolderInfo()`.
+    DeprecatedLayoutImmediately();
   }
 }
 
@@ -2333,7 +2336,7 @@ void AppsGridView::EndDragFromReparentItemInRootLevel(
         MaybeCreateFolderDroppingAccessibilityEvent();
         // If move to folder created a folder, layout the grid to ensure the
         // created folder's bounds are correct.
-        Layout();
+        DeprecatedLayoutImmediately();
         if (is_new_folder) {
           folder_to_open_after_drag_icon_animation_ = target_folder_id;
           SetOpenFolderInfo(target_folder_id, drop_target_,
@@ -2366,10 +2369,10 @@ void AppsGridView::EndDragFromReparentItemInRootLevel(
   ClearDragState();
   UpdatePaging();
   if (GetWidget()) {
-    // Normally Layout() cancels any animations. At this point there may be a
-    // pending Layout(), force it now so that one isn't triggered part way
-    // through the animation. Further, ignore this layout so that the position
-    // isn't reset.
+    // Normally layout cancels any animations. At this point there may be a
+    // pending layout, force it now so that one isn't triggered part way through
+    // the animation. Further, ignore this layout so that the position isn't
+    // reset.
     DCHECK(!ignore_layout_);
     base::AutoReset<bool> auto_reset(&ignore_layout_, true);
     GetWidget()->LayoutRootViewIfNecessary();
@@ -2429,7 +2432,7 @@ void AppsGridView::HandleKeyboardReparent(
   // page getting created.
   UpdatePaging();
 
-  Layout();
+  DeprecatedLayoutImmediately();
   EnsureViewVisible(final_grid_index);
   GetViewAtIndex(final_grid_index)->RequestFocus();
   AnnounceReorder(final_grid_index);
@@ -2491,7 +2494,7 @@ views::AnimationBuilder AppsGridView::FadeInVisibleItemsForReorder(
   // range needs the up-to-date layout. Therefore update the layout explicitly
   // before calculating `range`.
   if (needs_layout()) {
-    Layout();
+    DeprecatedLayoutImmediately();
   }
 
   grid_animation_status_ = AppListGridAnimationStatus::kReorderFadeIn;
@@ -2569,7 +2572,7 @@ void AppsGridView::SlideVisibleItemsForHideContinueSection(int base_offset) {
   DCHECK(IsTabletMode());  // This animation is only used in tablet mode.
 
   if (needs_layout()) {
-    Layout();
+    DeprecatedLayoutImmediately();
   }
 
   const std::optional<VisibleItemIndexRange> range = GetVisibleItemIndexRange();
@@ -3090,7 +3093,7 @@ void AppsGridView::OnListItemMoved(size_t from_index,
     // use the asynchronous layout to reduce painting cost.
     InvalidateLayout();
   } else {
-    Layout();
+    DeprecatedLayoutImmediately();
   }
 }
 
@@ -3248,7 +3251,7 @@ AppListItemView* AppsGridView::GetViewDisplayedAtSlotOnCurrentPage(
 
   const auto& entries = view_model_.entries();
   const auto iter = base::ranges::find_if(entries, [&](const auto& entry) {
-    return entry.view->bounds() == tile_rect && entry.view != drag_view_;
+    return entry.view->bounds() == tile_rect && entry.view.get() != drag_view_;
   });
   return iter == entries.end() ? nullptr
                                : static_cast<AppListItemView*>(iter->view);
@@ -3404,7 +3407,7 @@ void AppsGridView::HandleKeyboardMove(ui::KeyboardCode key_code) {
     // |target_page| may change due to a page collapsing.
     target_page = std::min(GetTotalPages() - 1, target_index.page);
   }
-  Layout();
+  DeprecatedLayoutImmediately();
   EnsureViewVisible(GridIndex(target_page, target_index.slot));
   SetSelectedView(original_selected_view);
   AnnounceReorder(target_index);
@@ -3725,7 +3728,7 @@ void AppsGridView::OnIdealBoundsAnimationDone() {
   DestroyLayerItemsIfNotNeeded();
 }
 
-BEGIN_METADATA(AppsGridView, views::View)
+BEGIN_METADATA(AppsGridView)
 END_METADATA
 
 }  // namespace ash

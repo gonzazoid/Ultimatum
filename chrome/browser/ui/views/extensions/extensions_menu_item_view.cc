@@ -203,8 +203,8 @@ ExtensionMenuItemView::ExtensionMenuItemView(
     // By default, the button's accessible description is set to the button's
     // tooltip text. For the pin button, we only want the accessible name to be
     // read on accessibility mode since it includes the tooltip text. Thus we
-    // override the accessible description.
-    pin_button_->GetViewAccessibility().OverrideDescription(
+    // set the accessible description.
+    pin_button_->GetViewAccessibility().SetDescription(
         std::u16string(),
         ax::mojom::DescriptionFrom::kAttributeExplicitlyEmpty);
   }
@@ -485,7 +485,7 @@ void ExtensionMenuItemView::SetupContextMenuButton() {
   // tooltip text. This is the accepted workaround to ensure only accessible
   // name is announced by a screenreader rather than tooltip text and
   // accessible name.
-  context_menu_button_->GetViewAccessibility().OverrideDescription(
+  context_menu_button_->GetViewAccessibility().SetDescription(
       std::u16string(), ax::mojom::DescriptionFrom::kAttributeExplicitlyEmpty);
 }
 
@@ -502,11 +502,11 @@ void ExtensionMenuItemView::OnPinButtonPressed() {
   CHECK(model_);
   base::RecordAction(
       base::UserMetricsAction("Extensions.Toolbar.PinButtonPressed"));
-  // Toggle pin visibility.
-  bool is_action_pinned = model_->IsActionPinned(controller_->GetId());
-  model_->SetActionVisibility(controller_->GetId(), !is_action_pinned);
+  // Toggle action visibility.
+  bool new_action_visibility = !model_->IsActionPinned(controller_->GetId());
+  model_->SetActionVisibility(controller_->GetId(), new_action_visibility);
   GetViewAccessibility().AnnounceText(
-      GetPinButtonPressedAccText(is_action_pinned));
+      GetPinButtonPressedAccText(new_action_visibility));
 }
 
 bool ExtensionMenuItemView::IsContextMenuRunningForTesting() const {

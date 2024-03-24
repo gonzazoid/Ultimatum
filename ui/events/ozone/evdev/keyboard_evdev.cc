@@ -4,6 +4,7 @@
 
 #include "ui/events/ozone/evdev/keyboard_evdev.h"
 
+#include "base/functional/callback_forward.h"
 #include "base/logging.h"
 #include "base/task/single_thread_task_runner.h"
 #include "ui/events/event.h"
@@ -26,10 +27,10 @@ namespace ui {
 
 namespace {
 
-absl::optional<KeyboardCode> RemapButtonsToKeyboardCodes(unsigned int key) {
+std::optional<KeyboardCode> RemapButtonsToKeyboardCodes(unsigned int key) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   if (!ash::features::IsPeripheralCustomizationEnabled()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   if (key >= BTN_0 && key <= BTN_9) {
@@ -45,7 +46,7 @@ absl::optional<KeyboardCode> RemapButtonsToKeyboardCodes(unsigned int key) {
   }
 #endif
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 }  // namespace
@@ -112,10 +113,12 @@ void KeyboardEvdev::GetAutoRepeatRate(base::TimeDelta* delay,
   auto_repeat_handler_.GetAutoRepeatRate(delay, interval);
 }
 
-bool KeyboardEvdev::SetCurrentLayoutByName(const std::string& layout_name) {
-  bool result = keyboard_layout_engine_->SetCurrentLayoutByName(layout_name);
+void KeyboardEvdev::SetCurrentLayoutByName(
+    const std::string& layout_name,
+    base::OnceCallback<void(bool)> callback) {
+  keyboard_layout_engine_->SetCurrentLayoutByName(layout_name,
+                                                  std::move(callback));
   RefreshModifiers();
-  return result;
 }
 
 void KeyboardEvdev::FlushInput(base::OnceClosure closure) {

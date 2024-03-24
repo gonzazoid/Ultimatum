@@ -4,6 +4,8 @@
 
 #include "third_party/blink/renderer/core/timing/soft_navigation_heuristics.h"
 
+#include <utility>
+
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
@@ -15,6 +17,7 @@
 #include "third_party/blink/renderer/core/paint/timing/paint_timing_detector.h"
 #include "third_party/blink/renderer/core/timing/dom_window_performance.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
+#include "third_party/blink/renderer/platform/scheduler/public/task_attribution_info.h"
 #include "third_party/blink/renderer/platform/scheduler/public/task_attribution_tracker.h"
 
 namespace blink {
@@ -94,13 +97,18 @@ SoftNavigationHeuristics::SoftNavigationHeuristics(LocalDOMWindow& window)
 
 SoftNavigationHeuristics* SoftNavigationHeuristics::From(
     LocalDOMWindow& window) {
-  // TODO(yoav): Ensure all callers don't have spurious IsMainFrame checks.
   if (!window.GetFrame()->IsMainFrame()) {
     return nullptr;
   }
   SoftNavigationHeuristics* heuristics =
       Supplement<LocalDOMWindow>::From<SoftNavigationHeuristics>(window);
   if (!heuristics) {
+    if (Document* document = window.document()) {
+      // Don't measure soft navigations in devtools.
+      if (document->Url().ProtocolIs("devtools")) {
+        return nullptr;
+      }
+    }
     heuristics = MakeGarbageCollected<SoftNavigationHeuristics>(window);
     ProvideTo(window, heuristics);
   }
@@ -123,60 +131,17 @@ void SoftNavigationHeuristics::ResetHeuristic() {
   has_potential_soft_navigation_task_ = false;
   potential_soft_navigation_tasks_.clear();
   interaction_task_id_to_interaction_data_.clear();
-  last_interaction_task_id_ = 0;
-  last_soft_navigation_ancestor_task_ = absl::nullopt;
+  soft_navigation_interaction_data_ = nullptr;
+  last_interaction_task_id_ = scheduler::TaskAttributionId();
+  last_soft_navigation_ancestor_task_ = std::nullopt;
   soft_navigation_descendant_cache_.clear();
   SetIsTrackingSoftNavigationHeuristicsOnDocument(false);
   did_reset_paints_ = false;
   did_commit_previous_paints_ = false;
   soft_navigation_conditions_met_ = false;
   pending_interaction_timestamp_ = base::TimeTicks();
+  paint_conditions_met_ = false;
   softnav_painted_area_ = 0;
-}
-
-void SoftNavigationHeuristics::InteractionCallbackCalled(
-    ScriptState* script_state,
-    EventScopeType type,
-    bool is_new_interaction) {
-  // TODO(crbug.com/1503284): return early to avoid check failure crashes.
-  if (is_new_interaction || !last_interaction_task_id_) {
-    if (pending_interaction_timestamp_.is_null()) {
-      return;
-    }
-  }
-
-  // Set task ID to the current one.
-  initial_interaction_encountered_ = true;
-  ThreadScheduler* scheduler = ThreadScheduler::Current();
-  DCHECK(scheduler);
-  auto* tracker = scheduler->GetTaskAttributionTracker();
-  if (!tracker) {
-    return;
-  }
-
-  CHECK(script_state);
-  scheduler::TaskAttributionInfo* task = tracker->RunningTask(script_state);
-  if (!task) {
-    // This can happen in test scenarios that trigger input events outside of
-    // their regular flow.
-    return;
-  }
-
-  if (is_new_interaction || !last_interaction_task_id_) {
-    CHECK(!pending_interaction_timestamp_.is_null());
-    PerInteractionData data;
-    data.user_interaction_timestamp = pending_interaction_timestamp_;
-    interaction_task_id_to_interaction_data_.insert(task->Id().value(), data);
-    last_interaction_task_id_ = task->Id().value();
-  } else {
-    task_id_to_interaction_task_id_.insert(task->Id().value(),
-                                           last_interaction_task_id_);
-  }
-
-  tracker->RegisterObserverIfNeeded(this);
-  SetIsTrackingSoftNavigationHeuristicsOnDocument(true);
-  TRACE_EVENT_INSTANT("scheduler",
-                      "SoftNavigationHeuristics::UserInitiatedInteraction");
 }
 
 void SoftNavigationHeuristics::UserInitiatedInteraction() {
@@ -186,28 +151,28 @@ void SoftNavigationHeuristics::UserInitiatedInteraction() {
   ResetPaintsIfNeeded();
 }
 
-absl::optional<scheduler::TaskAttributionId>
-SoftNavigationHeuristics::GetUserInteractionAncestorTaskIfAny(
-    ScriptState* script_state) {
+std::optional<scheduler::TaskAttributionId>
+SoftNavigationHeuristics::GetUserInteractionAncestorTaskIfAny() {
   using IterationStatus = scheduler::TaskAttributionTracker::IterationStatus;
 
   if (potential_soft_navigation_tasks_.empty()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   ThreadScheduler* scheduler = ThreadScheduler::Current();
   DCHECK(scheduler);
   if (scheduler::TaskAttributionTracker* tracker =
           scheduler->GetTaskAttributionTracker()) {
-    scheduler::TaskAttributionInfo* task = tracker->RunningTask(script_state);
+    scheduler::TaskAttributionInfo* task =
+        tracker->RunningTask(GetExecutionContext()->GetIsolate());
     if (!task) {
-      return absl::nullopt;
+      return std::nullopt;
     }
     auto cached_result =
         soft_navigation_descendant_cache_.find(task->Id().value());
     if (cached_result != soft_navigation_descendant_cache_.end()) {
       return cached_result->value;
     }
-    absl::optional<scheduler::TaskAttributionId> ancestor_task_id;
+    std::optional<scheduler::TaskAttributionId> ancestor_task_id;
     // Check if any of `potential_soft_navigation_tasks_` is an ancestor of
     // `task`.
     tracker->ForEachAncestor(
@@ -222,37 +187,34 @@ SoftNavigationHeuristics::GetUserInteractionAncestorTaskIfAny(
                                              ancestor_task_id);
     return ancestor_task_id;
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
-absl::optional<scheduler::TaskAttributionId>
-SoftNavigationHeuristics::SetFlagIfDescendantAndCheck(ScriptState* script_state,
-                                                      FlagType type) {
-  absl::optional<scheduler::TaskAttributionId> result =
-      GetUserInteractionAncestorTaskIfAny(script_state);
+std::optional<scheduler::TaskAttributionId>
+SoftNavigationHeuristics::SetFlagIfDescendantAndCheck(FlagType type) {
+  std::optional<scheduler::TaskAttributionId> result =
+      GetUserInteractionAncestorTaskIfAny();
   if (!result) {
     // A non-descendent URL change should not set the flag.
-    return absl::nullopt;
+    return std::nullopt;
   }
   PerInteractionData* data = GetCurrentInteractionData(result.value());
   if (!data) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   data->flag_set.Put(type);
   CheckSoftNavigationConditions(*data);
   return result;
 }
 
-void SoftNavigationHeuristics::SameDocumentNavigationStarted(
-    ScriptState* script_state) {
+void SoftNavigationHeuristics::SameDocumentNavigationStarted() {
   last_soft_navigation_ancestor_task_ =
-      SetFlagIfDescendantAndCheck(script_state, FlagType::kURLChange);
+      SetFlagIfDescendantAndCheck(FlagType::kURLChange);
   TRACE_EVENT1("scheduler",
                "SoftNavigationHeuristics::SameDocumentNavigationStarted",
                "descendant", !!last_soft_navigation_ancestor_task_);
 }
 void SoftNavigationHeuristics::SameDocumentNavigationCommitted(
-    ScriptState* script_state,
     const String& url) {
   if (!last_soft_navigation_ancestor_task_) {
     return;
@@ -271,17 +233,16 @@ void SoftNavigationHeuristics::SameDocumentNavigationCommitted(
                "url", url);
 }
 
-bool SoftNavigationHeuristics::ModifiedDOM(ScriptState* script_state) {
+bool SoftNavigationHeuristics::ModifiedDOM() {
   bool descendant =
-      SetFlagIfDescendantAndCheck(script_state, FlagType::kMainModification)
-          .has_value();
+      SetFlagIfDescendantAndCheck(FlagType::kMainModification).has_value();
   TRACE_EVENT1("scheduler", "SoftNavigationHeuristics::ModifiedDOM",
                "descendant", descendant);
   return descendant;
 }
 
 void SoftNavigationHeuristics::CheckSoftNavigationConditions(
-    SoftNavigationHeuristics::PerInteractionData& data) {
+    const SoftNavigationHeuristics::PerInteractionData& data) {
   if (data.flag_set != FlagTypeSet::All()) {
     return;
   }
@@ -293,43 +254,50 @@ void SoftNavigationHeuristics::CheckSoftNavigationConditions(
 
   // Here we consider that we've detected a soft navigation.
   soft_navigation_conditions_met_ = true;
+  soft_navigation_interaction_data_ = &data;
 
-  soft_navigation_interaction_data_ = data;
+  EmitSoftNavigationEntryIfAllConditionsMet(GetLocalFrameIfNotDetached());
 }
 
-void SoftNavigationHeuristics::EmitSoftNavigationEntry(LocalFrame* frame) {
+void SoftNavigationHeuristics::EmitSoftNavigationEntryIfAllConditionsMet(
+    LocalFrame* frame) {
+  // TODO(crbug.com/1510706): See if we need to add `paint_conditions_met_` back
+  // into this condition.
+  if (!soft_navigation_conditions_met_ || !soft_navigation_interaction_data_ ||
+      soft_navigation_interaction_data_->url.IsNull() ||
+      soft_navigation_interaction_data_->user_interaction_timestamp.is_null() ||
+      !frame || !frame->IsOutermostMainFrame()) {
+    return;
+  }
   LocalDOMWindow* window = frame->DomWindow();
   CHECK(window);
   ++soft_navigation_count_;
   window->GenerateNewNavigationId();
   auto* performance = DOMWindowPerformance::performance(*window);
-  DCHECK(!soft_navigation_interaction_data_.url.IsNull());
   performance->AddSoftNavigationEntry(
-      AtomicString(soft_navigation_interaction_data_.url),
-      soft_navigation_interaction_data_.user_interaction_timestamp);
+      AtomicString(soft_navigation_interaction_data_->url),
+      soft_navigation_interaction_data_->user_interaction_timestamp);
 
   CommitPreviousPaints(frame);
-  ResetHeuristic();
 
   LogAndTraceDetectedSoftNavigation(
-      frame, window, soft_navigation_interaction_data_.url,
-      soft_navigation_interaction_data_.user_interaction_timestamp);
+      frame, window, soft_navigation_interaction_data_->url,
+      soft_navigation_interaction_data_->user_interaction_timestamp);
 
   ReportSoftNavigationToMetrics(frame);
+  ResetHeuristic();
 }
 
 SoftNavigationHeuristics::PerInteractionData*
 SoftNavigationHeuristics::GetCurrentInteractionData(
     scheduler::TaskAttributionId task_id) {
   // Get interaction ID from task ID
-  scheduler::TaskAttributionIdType interaction_task_id = task_id.value();
   auto interaction_it = task_id_to_interaction_task_id_.find(task_id.value());
   if (interaction_it != task_id_to_interaction_task_id_.end()) {
-    interaction_task_id = interaction_it->value;
+    task_id = scheduler::TaskAttributionId(interaction_it->value);
   }
   // Get interaction data from interaction id
-  auto data_it =
-      interaction_task_id_to_interaction_data_.find(interaction_task_id);
+  auto data_it = interaction_task_id_to_interaction_data_.find(task_id.value());
   if (data_it == interaction_task_id_to_interaction_data_.end()) {
     // This can happen when events are triggered out of the expected order. e.g.
     // when we get a keyup event without a keydown event that preceded it. That
@@ -337,77 +305,107 @@ SoftNavigationHeuristics::GetCurrentInteractionData(
     return nullptr;
   }
 
-  return &data_it->value;
+  return data_it->value.Get();
 }
 
 // This is called from Text/ImagePaintTimingDetector when a paint is recorded
-// there. If the accumulated paints are large enough, a soft navigation entry is
-// emitted.
+// there.
 void SoftNavigationHeuristics::RecordPaint(
     LocalFrame* frame,
     uint64_t painted_area,
     bool is_modified_by_soft_navigation) {
-  if (is_modified_by_soft_navigation) {
-    softnav_painted_area_ += painted_area;
-    uint64_t considered_area = std::min(initial_painted_area_, viewport_area_);
-    uint64_t paint_threshold =
-        considered_area * SOFT_NAVIGATION_PAINT_AREA_PRECENTAGE;
-
-    float softnav_painted_area_ratio =
-        paint_threshold != 0
-            ? (float)softnav_painted_area_ / (float)paint_threshold
-            : 0;
-
-    bool is_above_threshold =
-        ((softnav_painted_area_ * HUNDRED_PERCENT) > paint_threshold);
-
-    TRACE_EVENT_INSTANT("loading", "SoftNavigationHeuristics_RecordPaint",
-                        "softnav_painted_area", softnav_painted_area_,
-                        "softnav_painted_area_ratio",
-                        softnav_painted_area_ratio, "url",
-                        soft_navigation_interaction_data_.url,
-                        "is_above_threshold", is_above_threshold);
-
-    if (soft_navigation_conditions_met_ &&
-        ((softnav_painted_area_ * HUNDRED_PERCENT) > paint_threshold)) {
-      EmitSoftNavigationEntry(frame);
-    }
-  } else if (!initial_interaction_encountered_) {
+  if (!initial_interaction_encountered_ && is_modified_by_soft_navigation) {
+    // TODO(crbug.com/41496928): Paints can be reported for Nodes which had
+    // is_modified... flag set but a different instance of a
+    // SoftNavigationHeuristics class.  This happens when Nodes are re-parented
+    // into a new document, e.g. into an open() window.
+    // Instead of just ignoring the worst case of this issue as we do here, we
+    // should support this use case.  Either by clearing the flag on nodes, or,
+    // by staring an interaction/navigation id on Node, rathan than boolean.
+    return;
+  }
+  if (!initial_interaction_encountered_) {
+    // We haven't seen an interaction yet, so we are still measuring initial
+    // paint area.
+    CHECK(!is_modified_by_soft_navigation);
+    CHECK(!has_potential_soft_navigation_task_);
     initial_painted_area_ += painted_area;
+    return;
+  }
+
+  if (!has_potential_soft_navigation_task_) {
+    // We aren't measuring a soft-nav so we can just exit.
+    return;
+  }
+
+  if (!is_modified_by_soft_navigation) {
+    return;
+  }
+
+  softnav_painted_area_ += painted_area;
+
+  uint64_t required_paint_area =
+      std::min(initial_painted_area_, viewport_area_);
+
+  if (required_paint_area == 0) {
+    return;
+  }
+
+  float softnav_painted_area_ratio =
+      (float)softnav_painted_area_ / (float)required_paint_area;
+
+  uint64_t required_paint_area_scaled =
+      required_paint_area * SOFT_NAVIGATION_PAINT_AREA_PRECENTAGE;
+  uint64_t softnav_painted_area_scaled =
+      softnav_painted_area_ * HUNDRED_PERCENT;
+  bool is_above_threshold =
+      (softnav_painted_area_scaled > required_paint_area_scaled);
+
+  TRACE_EVENT_INSTANT("loading", "SoftNavigationHeuristics_RecordPaint",
+                      "softnav_painted_area", softnav_painted_area_,
+                      "softnav_painted_area_ratio", softnav_painted_area_ratio,
+                      "url",
+                      (soft_navigation_interaction_data_
+                           ? soft_navigation_interaction_data_->url
+                           : ""),
+                      "is_above_threshold", is_above_threshold);
+
+  if (is_above_threshold) {
+    paint_conditions_met_ = true;
+    EmitSoftNavigationEntryIfAllConditionsMet(frame);
   }
 }
 
-void SoftNavigationHeuristics::SetEventParametersAndQueueNestedOnes(
-    EventScopeType type,
-    bool is_new_interaction,
-    bool is_nested) {
-  if (is_nested) {
-    nested_event_parameters_.push_back(
-        EventParameters(is_new_interaction, type));
-    current_event_parameters_ = &nested_event_parameters_.back();
-  } else {
-    top_event_parameters_ = EventParameters(is_new_interaction, type);
-    current_event_parameters_ = &top_event_parameters_;
-    nested_event_parameters_.clear();
+void SoftNavigationHeuristics::SetCurrentTimeAsStartTime() {
+  // The interaction timestamp for non-"new interactions" will be be set to the
+  // processing-end time of the associated "new interaction" event, either via
+  // `pending_interaction_timestamp_` (if the "new interaction" event didn't
+  // have an event listener) or by resuing the `PerInteractionData` from that
+  // interaction.
+  //
+  // Note: kNavigate `EventScope`s considered new interactions even though they
+  // may be nested within an existing new interaction. This causes the
+  // interaction timestamp to be set to the end of the navigate event
+  // processing, which is intended.
+  if (!CurrentEventParameters().is_new_interaction) {
+    return;
   }
-
-  pending_interaction_timestamp_ =
-      (is_new_interaction || !last_interaction_task_id_)
-          ? base::TimeTicks::Now()
-          : base::TimeTicks();
-}
-
-bool SoftNavigationHeuristics::PopNestedEventParametersIfNeeded() {
-  if (nested_event_parameters_.empty()) {
-    return false;
+  if (!last_interaction_task_id_.value()) {
+    pending_interaction_timestamp_ = base::TimeTicks::Now();
+    return;
   }
-  nested_event_parameters_.pop_back();
-  if (!nested_event_parameters_.empty()) {
-    current_event_parameters_ = &nested_event_parameters_.back();
-    return true;
+  PerInteractionData* data =
+      GetCurrentInteractionData(last_interaction_task_id_);
+  CHECK(data);
+  if (data->user_interaction_timestamp.is_null()) {
+    // Only set the timestamp if it wasn't previously set, otherwise in the case
+    // of nested `EventScope`s (e.g. navigate event within a click event) the
+    // the timestamp set at the end of the navigate event processing would be
+    // overwritten.
+    data->user_interaction_timestamp = base::TimeTicks::Now();
   }
-  current_event_parameters_ = &top_event_parameters_;
-  return true;
+  LocalFrame* frame = GetLocalFrameIfNotDetached();
+  EmitSoftNavigationEntryIfAllConditionsMet(frame);
 }
 
 void SoftNavigationHeuristics::ReportSoftNavigationToMetrics(
@@ -418,14 +416,16 @@ void SoftNavigationHeuristics::ReportSoftNavigationToMetrics(
     return;
   }
 
+  CHECK(
+      !soft_navigation_interaction_data_->user_interaction_timestamp.is_null());
   auto soft_navigation_start_time =
       loader->GetTiming().MonotonicTimeToPseudoWallTime(
-          soft_navigation_interaction_data_.user_interaction_timestamp);
+          soft_navigation_interaction_data_->user_interaction_timestamp);
 
   if (soft_navigation_start_time.is_zero()) {
     internal::
         RecordUmaForPageLoadInternalSoftNavigationFromReferenceInvalidTiming(
-            soft_navigation_interaction_data_.user_interaction_timestamp,
+            soft_navigation_interaction_data_->user_interaction_timestamp,
             loader->GetTiming().ReferenceMonotonicTime());
   }
 
@@ -444,17 +444,14 @@ void SoftNavigationHeuristics::ReportSoftNavigationToMetrics(
 }
 
 void SoftNavigationHeuristics::ResetPaintsIfNeeded() {
-  LocalDOMWindow* window = GetSupplementable();
-  LocalFrame* frame =
-      window->IsCurrentlyDisplayedInFrame() ? window->GetFrame() : nullptr;
+  LocalFrame* frame = GetLocalFrameIfNotDetached();
   if (!frame || !frame->IsOutermostMainFrame()) {
     return;
   }
   if (!did_reset_paints_) {
     LocalFrameView* local_frame_view = frame->View();
-
     CHECK(local_frame_view);
-
+    LocalDOMWindow* window = GetSupplementable();
     if (RuntimeEnabledFeatures::SoftNavigationHeuristicsEnabled(window)) {
       if (Document* document = window->document();
           document &&
@@ -498,6 +495,8 @@ void SoftNavigationHeuristics::CommitPreviousPaints(LocalFrame* frame) {
 void SoftNavigationHeuristics::Trace(Visitor* visitor) const {
   Supplement<LocalDOMWindow>::Trace(visitor);
   visitor->Trace(potential_soft_navigation_tasks_);
+  visitor->Trace(interaction_task_id_to_interaction_data_);
+  visitor->Trace(soft_navigation_interaction_data_);
   // Register a custom weak callback, which runs after processing weakness for
   // the container. This allows us to observe the collection becoming empty
   // without needing to observe individual element disposal.
@@ -507,36 +506,47 @@ void SoftNavigationHeuristics::Trace(Visitor* visitor) const {
 }
 
 void SoftNavigationHeuristics::OnCreateTaskScope(
-    scheduler::TaskAttributionInfo& task,
-    ScriptState* script_state) {
-  CHECK(script_state);
-  ThreadScheduler* scheduler = ThreadScheduler::Current();
-  CHECK(scheduler);
-  auto* tracker = scheduler->GetTaskAttributionTracker();
-  if (!tracker) {
-    return;
-  }
-  // We're inside a click event handler, so need to add this task to the set of
-  // potential soft navigation root tasks.
+    scheduler::TaskAttributionInfo& task) {
   TRACE_EVENT1("scheduler", "SoftNavigationHeuristics::OnCreateTaskScope",
                "task_id", task.Id().value());
+  // This is invoked when executing a callback with an active `EventScope`,
+  // which happens for click and keyboard input events, as well as
+  // user-initiated navigation and popstate events. Any such events should be
+  // considered a potential soft navigation root tasks.
   potential_soft_navigation_tasks_.insert(&task);
   has_potential_soft_navigation_task_ = true;
-  if (!pending_interaction_timestamp_.is_null()) {
-    PerInteractionData data;
-    data.user_interaction_timestamp = pending_interaction_timestamp_;
+
+  const EventParameters& current_event_parameters = CurrentEventParameters();
+  // If `last_interaction_task_id_` isn't set, then no event listeners for any
+  // associated events have run yet -- either in the intital "new interaction"
+  // `EventScope`, a nested `EventScope`, or a subsequent non-"new interaction"
+  // (e.g. keyup) `EventScope`. In that case, no `PerInteractionData` data has
+  // been created for the current interaction, so create one now that the
+  // interaction is a potential soft navigation.
+  //
+  // Note: multiple event listeners might within an `EventScope`, but the
+  // `last_interaction_task_id_` will only be set for the first one, and only if
+  // `last_interaction_task_id_` wasn't already set.
+  if (!last_interaction_task_id_.value()) {
+    PerInteractionData* data = MakeGarbageCollected<PerInteractionData>();
+    if (!current_event_parameters.is_new_interaction) {
+      // The `PerInteractionData` wasn't created for the "new interaction", but
+      // we still want to use the processing-end timestamp from that event.
+      data->user_interaction_timestamp = pending_interaction_timestamp_;
+    }
     interaction_task_id_to_interaction_data_.insert(task.Id().value(), data);
-    last_interaction_task_id_ = task.Id().value();
+    last_interaction_task_id_ = task.Id();
+  } else {
+    task_id_to_interaction_task_id_.insert(task.Id().value(),
+                                           last_interaction_task_id_.value());
   }
+
+  initial_interaction_encountered_ = true;
+  SetIsTrackingSoftNavigationHeuristicsOnDocument(true);
   soft_navigation_descendant_cache_.clear();
 
-  // Create a user initiated interaction
-  CHECK(current_event_parameters_);
-  InteractionCallbackCalled(script_state, current_event_parameters_->type,
-                            current_event_parameters_->is_new_interaction);
-  if (current_event_parameters_->type ==
-      SoftNavigationHeuristics::EventScopeType::kNavigate) {
-    SameDocumentNavigationStarted(script_state);
+  if (current_event_parameters.type == EventScope::Type::kNavigate) {
+    SameDocumentNavigationStarted();
   }
 }
 
@@ -559,37 +569,81 @@ ExecutionContext* SoftNavigationHeuristics::GetExecutionContext() {
   return GetSupplementable();
 }
 
-// SoftNavigationEventScope implementation
+LocalFrame* SoftNavigationHeuristics::GetLocalFrameIfNotDetached() const {
+  LocalDOMWindow* window = GetSupplementable();
+  return window->IsCurrentlyDisplayedInFrame() ? window->GetFrame() : nullptr;
+}
+
+SoftNavigationHeuristics::EventScope SoftNavigationHeuristics::CreateEventScope(
+    EventScope::Type type,
+    bool is_new_interaction) {
+  // Even for nested event scopes, we need to set these parameters, to ensure
+  // that created tasks know they were initiated by the correct event type.
+  all_event_parameters_.push_back(EventParameters(is_new_interaction, type));
+
+  if (all_event_parameters_.size() == 1) {
+    UserInitiatedInteraction();
+    // Clear the state needed to link multiple events together (e.g. keydown and
+    // keyup)  so we don't inadvertently link a new interaction with an old one.
+    // Only doing this for the outermost `EventScope` will cause nested scopes
+    // to be considered part of the same interaction.
+    if (is_new_interaction) {
+      last_interaction_task_id_ = scheduler::TaskAttributionId();
+      pending_interaction_timestamp_ = base::TimeTicks();
+    }
+  }
+
+  return SoftNavigationHeuristics::EventScope(this);
+}
+
+void SoftNavigationHeuristics::OnSoftNavigationEventScopeDestroyed() {
+  // Set the start time to the end of event processing. In case of nested event
+  // scopes, we want this to be the end of the nested `navigate()` event
+  // handler.
+  SetCurrentTimeAsStartTime();
+
+  // `SetCurrentTimeAsStartTime()` depends on `CurrentEventParameters()`, so
+  // clear this last.
+  all_event_parameters_.pop_back();
+
+  // TODO(crbug.com/1502640): We should also reset the heuristic a few seconds
+  // after a click event handler is done, to reduce potential cycles.
+}
+
+// SoftNavigationHeuristics::EventScope implementation
 // ///////////////////////////////////////////
-SoftNavigationEventScope::SoftNavigationEventScope(
-    SoftNavigationHeuristics* heuristics,
-    SoftNavigationHeuristics::EventScopeType type,
-    bool is_new_interaction)
+SoftNavigationHeuristics::EventScope::EventScope(
+    SoftNavigationHeuristics* heuristics)
     : heuristics_(heuristics) {
+  CHECK(heuristics_);
   ThreadScheduler* scheduler = ThreadScheduler::Current();
   DCHECK(scheduler);
   auto* tracker = scheduler->GetTaskAttributionTracker();
   if (!tracker) {
     return;
   }
-  // EventScope can be nested in case a click/keyboard event synchronously
-  // initiates a navigation.
-  bool nested = !tracker->RegisterObserverIfNeeded(heuristics_);
-
-  // Even for nested event scopes, we need to set these parameters, to ensure
-  // that created tasks know they were initiated by the correct event type.
-  heuristics_->SetEventParametersAndQueueNestedOnes(type, is_new_interaction,
-                                                    nested);
-  if (!nested) {
-    heuristics_->UserInitiatedInteraction();
-  }
+  nested_ = !tracker->RegisterObserverIfNeeded(heuristics_);
 }
 
-SoftNavigationEventScope::~SoftNavigationEventScope() {
-  bool nested = heuristics_->PopNestedEventParametersIfNeeded();
+SoftNavigationHeuristics::EventScope::EventScope(EventScope&& other)
+    : heuristics_(std::exchange(other.heuristics_, nullptr)),
+      nested_(other.nested_) {}
+
+SoftNavigationHeuristics::EventScope&
+SoftNavigationHeuristics::EventScope::operator=(EventScope&& other) {
+  heuristics_ = std::exchange(other.heuristics_, nullptr);
+  nested_ = other.nested_;
+  return *this;
+}
+
+SoftNavigationHeuristics::EventScope::~EventScope() {
+  if (!heuristics_) {
+    return;
+  }
+  heuristics_->OnSoftNavigationEventScopeDestroyed();
 
   // Only the top level EventScope should unregister the observer.
-  if (!nested) {
+  if (!nested_) {
     ThreadScheduler* scheduler = ThreadScheduler::Current();
     DCHECK(scheduler);
     auto* tracker = scheduler->GetTaskAttributionTracker();
@@ -598,7 +652,6 @@ SoftNavigationEventScope::~SoftNavigationEventScope() {
     }
     tracker->UnregisterObserver(heuristics_);
   }
-  // TODO(crbug.com/1502640): We should also reset the heuristic a few seconds
-  // after a click event handler is done, to reduce potential cycles.
 }
+
 }  // namespace blink

@@ -92,7 +92,7 @@ void FCMInvalidationListener::InvalidationReceived(
     int64_t version) {
   // Note: |public_topic| is empty for some invalidations (e.g. Drive). Prefer
   // using |*expected_public_topic| over |public_topic|.
-  absl::optional<std::string> expected_public_topic =
+  std::optional<std::string> expected_public_topic =
       per_user_topic_subscription_manager_
           ->LookupSubscribedPublicTopicByPrivateTopic(private_topic);
   if (!expected_public_topic ||
@@ -187,6 +187,11 @@ void FCMInvalidationListener::EmitSavedInvalidationForTest(
   EmitSavedInvalidation(invalidation);
 }
 
+void FCMInvalidationListener::EmitSuccessfullySubscribedForTest(
+    const Topic& topic) {
+  delegate_->OnSuccessfullySubscribed(topic);
+}
+
 void FCMInvalidationListener::Stop() {
   delegate_ = nullptr;
 
@@ -231,8 +236,19 @@ void FCMInvalidationListener::OnSubscriptionChannelStateChanged(
   EmitStateChange();
 }
 
-void FCMInvalidationListener::OnSubscriptionRequestStarted(Topic topic) {}
+void FCMInvalidationListener::OnSubscriptionRequestStarted(
+    Topic topic,
+    PerUserTopicSubscriptionManager::RequestType request_type) {}
 
-void FCMInvalidationListener::OnSubscriptionRequestFinished(Topic topic,
-                                                            Status code) {}
+void FCMInvalidationListener::OnSubscriptionRequestFinished(
+    Topic topic,
+    PerUserTopicSubscriptionManager::RequestType request_type,
+    Status code) {
+  if (request_type ==
+          PerUserTopicSubscriptionManager::RequestType::kSubscribe &&
+      code.IsSuccess()) {
+    delegate_->OnSuccessfullySubscribed(topic);
+  }
+}
+
 }  // namespace invalidation

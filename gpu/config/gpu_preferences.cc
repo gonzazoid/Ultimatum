@@ -65,6 +65,22 @@ size_t GetDefaultGpuDiskCacheSize() {
 #endif  // !BUILDFLAG(IS_ANDROID)
 }
 
+std::string GrContextTypeToString(GrContextType type) {
+  switch (type) {
+    case GrContextType::kNone:
+      return "None";
+    case GrContextType::kGL:
+      return "GaneshGL";
+    case GrContextType::kVulkan:
+      return "GaneshVulkan";
+    case GrContextType::kGraphiteDawn:
+      return "GraphiteDawn";
+    case GrContextType::kGraphiteMetal:
+      return "GraphiteMetal";
+  }
+  NOTREACHED_NORETURN();
+}
+
 GpuPreferences::GpuPreferences() = default;
 
 GpuPreferences::GpuPreferences(const GpuPreferences& other) = default;
@@ -73,13 +89,7 @@ GpuPreferences::~GpuPreferences() = default;
 
 std::string GpuPreferences::ToSwitchValue() {
   std::vector<uint8_t> serialized = gpu::mojom::GpuPreferences::Serialize(this);
-
-  std::string encoded;
-  base::Base64Encode(
-      base::StringPiece(reinterpret_cast<const char*>(serialized.data()),
-                        serialized.size()),
-      &encoded);
-  return encoded;
+  return base::Base64Encode(serialized);
 }
 
 bool GpuPreferences::FromSwitchValue(const std::string& data) {

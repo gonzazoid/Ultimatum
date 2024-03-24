@@ -2,8 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "content/browser/fenced_frame/fenced_frame.h"
+
 #include <memory>
 #include <string>
+#include <tuple>
 
 #include "base/containers/contains.h"
 #include "base/functional/callback.h"
@@ -24,7 +27,6 @@
 #include "content/browser/attribution_reporting/attribution_test_utils.h"
 #include "content/browser/attribution_reporting/test/mock_content_browser_client.h"
 #include "content/browser/back_forward_cache_browsertest.h"
-#include "content/browser/fenced_frame/fenced_frame.h"
 #include "content/browser/fenced_frame/fenced_frame_reporter.h"
 #include "content/browser/private_aggregation/private_aggregation_manager.h"
 #include "content/browser/renderer_host/frame_tree_node.h"
@@ -1517,6 +1519,138 @@ IN_PROC_BROWSER_TEST_P(FencedFrameWithSiteIsolationDisabledBrowserTest,
   ASSERT_EQ(ff_rfh->GetProcess(), primary_main_frame_host()->GetProcess());
 }
 
+class FencedFrameIsolatedSandboxedIframesBrowserTest
+    : public FencedFrameMPArchBrowserTest,
+      public ::testing::WithParamInterface<bool> {
+ public:
+  FencedFrameIsolatedSandboxedIframesBrowserTest() {
+    if (GetParam()) {
+      // Run test with both isolation features enabled.
+      feature_list_.InitWithFeatures({blink::features::kIsolateSandboxedIframes,
+                                      features::kIsolateFencedFrames},
+                                     {});
+    } else {
+      // Run test with only isolated sandboxed iframes enabled.
+      feature_list_.InitWithFeatures(
+          {blink::features::kIsolateSandboxedIframes},
+          {features::kIsolateFencedFrames});
+    }
+  }
+  ~FencedFrameIsolatedSandboxedIframesBrowserTest() override = default;
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+};
+
+// This is a basic test to make sure the kIsolateSandboxedIframes (OOPSIF) load
+// properly with FencedFrames, both when FencedFrames isolation mode is off and
+// on. The OOPSIF frame is sandboxed due to a CSP sandbox header delivered with
+// the page loaded into the FencedFrame. The FencedFrame element doesn't support
+// the 'sandbox' attribute directly, nor can it be loaded inside an OOPSIF since
+// OOPSIFs by definition disallow same-origin, whereas the FencedFrame element
+// will only load inside a sandbox if allow-same-origin is specified on the
+// sandbox. See kFencedFrameMandatoryUnsandboxedFlags.
+IN_PROC_BROWSER_TEST_P(FencedFrameIsolatedSandboxedIframesBrowserTest,
+                       CSP_Mainframe) {
+  bool testing_with_isolate_fenced_frames = GetParam();
+  IsolateAllSitesForTesting(base::CommandLine::ForCurrentProcess());
+  ASSERT_TRUE(AreAllSitesIsolatedForTesting());
+  ASSERT_TRUE(https_server()->Start());
+
+  const GURL main_url = https_server()->GetURL("a.test", "/title1.html");
+  const GURL fenced_frame_url =
+      https_server()->GetURL("a.test", "/fenced_frames/sandbox_flags.html");
+
+  EXPECT_TRUE(NavigateToURL(shell(), main_url));
+  RenderFrameHostImpl* ff_rfh = static_cast<RenderFrameHostImpl*>(
+      fenced_frame_test_helper().CreateFencedFrame(primary_main_frame_host(),
+                                                   fenced_frame_url));
+  EXPECT_TRUE(ff_rfh->IsSandboxed(blink::kFencedFrameForcedSandboxFlags));
+
+  EXPECT_NE(ff_rfh->GetProcess(), primary_main_frame_host()->GetProcess());
+  // This next result may seem weird, but the is_fenced() bit only gets
+  // set if SiteIsolationPolicy::IsProcessIsolationForFencedFramesEnabled()
+  // returns true in SiteInstanceImpl::CreateForFencedFrame().
+  // The bit is picked up from the fenced frame's BrowsingInstance's
+  // IsolationContext when the SiteInfo is created.
+  EXPECT_EQ(testing_with_isolate_fenced_frames,
+            ff_rfh->GetSiteInstance()->GetSiteInfo().is_fenced());
+  EXPECT_TRUE(ff_rfh->GetSiteInstance()->GetSiteInfo().is_sandboxed());
+  EXPECT_NE(
+      primary_main_frame_host()->GetSiteInstance()->GetBrowsingInstanceId(),
+      ff_rfh->GetSiteInstance()->GetBrowsingInstanceId());
+}
+
+// Similar to CSP_Mainframe, but in this test OOPSIF doesn't isolate the fenced
+// frames, while kIsolateFencedFrames does.
+IN_PROC_BROWSER_TEST_P(FencedFrameIsolatedSandboxedIframesBrowserTest,
+                       Non_CSP_Mainframe) {
+  bool testing_with_isolate_fenced_frames = GetParam();
+  IsolateAllSitesForTesting(base::CommandLine::ForCurrentProcess());
+  ASSERT_TRUE(AreAllSitesIsolatedForTesting());
+  ASSERT_TRUE(https_server()->Start());
+
+  const GURL main_url = https_server()->GetURL("a.test", "/title1.html");
+  const GURL fenced_frame_url =
+      https_server()->GetURL("a.test", "/fenced_frames/title1.html");
+
+  EXPECT_TRUE(NavigateToURL(shell(), main_url));
+  RenderFrameHostImpl* ff_rfh = static_cast<RenderFrameHostImpl*>(
+      fenced_frame_test_helper().CreateFencedFrame(primary_main_frame_host(),
+                                                   fenced_frame_url));
+  EXPECT_TRUE(ff_rfh->IsSandboxed(blink::kFencedFrameForcedSandboxFlags));
+
+  EXPECT_EQ(testing_with_isolate_fenced_frames,
+            ff_rfh->GetSiteInstance()->GetSiteInfo().is_fenced());
+  if (testing_with_isolate_fenced_frames) {
+    EXPECT_NE(ff_rfh->GetProcess(), primary_main_frame_host()->GetProcess());
+  } else {
+    EXPECT_EQ(ff_rfh->GetProcess(), primary_main_frame_host()->GetProcess());
+  }
+  EXPECT_FALSE(ff_rfh->GetSiteInstance()->GetSiteInfo().is_sandboxed());
+  EXPECT_NE(
+      primary_main_frame_host()->GetSiteInstance()->GetBrowsingInstanceId(),
+      ff_rfh->GetSiteInstance()->GetBrowsingInstanceId());
+}
+
+// A test to confirm that a FencedFrame fails to create inside a CSP sandbox
+// frame without allow-same-origin. This test should fail regardless of the
+// state of kIsolateSandboxedIframes or kIsolateFencedFrames.
+IN_PROC_BROWSER_TEST_P(FencedFrameIsolatedSandboxedIframesBrowserTest,
+                       NoFencedFramesInIsolatedSandboxedIframes) {
+  IsolateAllSitesForTesting(base::CommandLine::ForCurrentProcess());
+  ASSERT_TRUE(AreAllSitesIsolatedForTesting());
+  ASSERT_TRUE(https_server()->Start());
+
+  // Load CSP sandboxed frame as mainframe.
+  const GURL main_url =
+      https_server()->GetURL("a.test", "/fenced_frames/sandbox_flags.html");
+  EXPECT_TRUE(NavigateToURL(shell(), main_url));
+  EXPECT_TRUE(primary_main_frame_host()
+                  ->GetSiteInstance()
+                  ->GetSiteInfo()
+                  .is_sandboxed());
+
+  // Try to load FencedFrame inside the CSP sandboxed frame.
+  const GURL fenced_frame_url =
+      https_server()->GetURL("a.test", "/fenced_frames/title1.html");
+  // Extracted from CreateFencedFrame, which doesn't expect to fail.
+  constexpr char kAddFencedFrameScript[] = R"({
+    const fenced_frame = document.createElement('fencedframe');
+    document.body.appendChild(fenced_frame);
+  })";
+  size_t previous_fenced_frame_count =
+      primary_main_frame_host()->GetFencedFrames().size();
+  EXPECT_EQ(0U, previous_fenced_frame_count);
+  // The following attempt to create a fenced frame is expected to fail since
+  // it would otherwise be contained in a sandbox that doesn't have the
+  // allow-same-origin attribute. See kFencedFrameMandatoryUnsandboxedFlags.
+  EXPECT_FALSE(ExecJs(primary_main_frame_host(), kAddFencedFrameScript,
+                      EvalJsOptions::EXECUTE_SCRIPT_NO_USER_GESTURE));
+  EXPECT_EQ(previous_fenced_frame_count,
+            primary_main_frame_host()->GetFencedFrames().size());
+}
+
 class FencedFrameProcessIsolationBrowserTest
     : public FencedFrameMPArchBrowserTest {
  public:
@@ -1543,6 +1677,9 @@ IN_PROC_BROWSER_TEST_F(FencedFrameProcessIsolationBrowserTest, BasicTest) {
                                                    fenced_frame_url));
   EXPECT_TRUE(ff_rfh->GetSiteInstance()->GetSiteInfo().is_fenced());
   EXPECT_NE(ff_rfh->GetProcess(), primary_main_frame_host()->GetProcess());
+  EXPECT_NE(
+      primary_main_frame_host()->GetSiteInstance()->GetBrowsingInstanceId(),
+      ff_rfh->GetSiteInstance()->GetBrowsingInstanceId());
 }
 
 // Tests that fenced frames that are same-origin with each other are put in
@@ -2098,6 +2235,8 @@ class FencedFrameParameterizedBrowserTest : public FencedFrameBrowserTestBase {
          {blink::features::kParakeet, {}},
          {blink::features::kFledge, {}},
          {blink::features::kAllowURNsInIframes, {}},
+         {blink::features::kDisplayWarningDeprecateURNIframesUseFencedFrames,
+          {}},
          {blink::features::kBiddingAndScoringDebugReportingAPI, {}},
          {features::kBackForwardCache, {}},
          // This feature allows `runAdAuction()`'s promise to resolve to a
@@ -2332,7 +2471,8 @@ IN_PROC_BROWSER_TEST_F(FencedFrameParameterizedBrowserTest,
         };
     console_observer.SetFilter(base::BindRepeating(filter));
     console_observer.SetPattern(
-        "FLEDGE will deprecate supporting iframes to render the winning ad*");
+        "Protected Audience/selectURL will deprecate supporting iframes to "
+        "render the winning ad*");
     EXPECT_TRUE(ExecJs(root, navigate_urn_script));
     navigation_observer.WaitForCommit();
     // No console warning is emitted for urn::uuid navigation in fenced frames.
@@ -3486,10 +3626,9 @@ IN_PROC_BROWSER_TEST_F(FencedFrameParameterizedBrowserTest,
   // Navigate the fenced frame from the initial empty document toward a URL
   // with a client side redirect.
   //
-  // With MPArch, since this was a navigation toward an opaque URL, in the
-  // 'opaque-ads' mode, initiated from the embedder, the navigation must use
-  // and commit a document with
-  // `is_fenced_frame_root_originating_from_opaque_url` to true.
+  // Since this was a navigation toward an opaque URL initiated from the
+  // embedder, the navigation must use and commit FencedFrameProperties with
+  // an opaque URL.
   GURL fenced_frame_url(
       https_server()->GetURL("a.test", "/fenced_frames/redirect.html"));
   FencedFrameURLMapping& url_mapping =
@@ -3502,20 +3641,28 @@ IN_PROC_BROWSER_TEST_F(FencedFrameParameterizedBrowserTest,
   NavigateFrameInsideFencedFrameTreeAndWaitForFinishedLoad(
       fenced_frame_root_node, navigate_script);
 
-  EXPECT_TRUE(fenced_frame_root_node->current_frame_host()
-                  ->is_fenced_frame_root_originating_from_opaque_url());
+  // The mapped url of the fenced frame properties should be opaque to the
+  // embedder.
+  EXPECT_FALSE(fenced_frame_root_node->GetFencedFrameProperties()
+                   ->mapped_url()
+                   ->GetValueForEntity(FencedFrameEntity::kEmbedder)
+                   .has_value());
 
   // Navigate the fenced frame again, but toward a non-opaque URL. Since this
   // is initiated from the embedder, the new document must commit with
-  // `is_fenced_frame_root_originating_from_opaque_url` to false.
+  // FencedFrameProperties with a transparent URL.
   GURL second_url(
       https_server()->GetURL("a.test", "/fenced_frames/title0.html"));
   std::string second_navigate_script =
       JsReplace("f.config = new FencedFrameConfig($1);", second_url.spec());
   NavigateFrameInsideFencedFrameTreeAndWaitForFinishedLoad(
       fenced_frame_root_node, second_navigate_script);
-  EXPECT_FALSE(fenced_frame_root_node->current_frame_host()
-                   ->is_fenced_frame_root_originating_from_opaque_url());
+  // The mapped url of the fenced frame properties should be visible to the
+  // embedder.
+  EXPECT_TRUE(fenced_frame_root_node->GetFencedFrameProperties()
+                  ->mapped_url()
+                  ->GetValueForEntity(FencedFrameEntity::kEmbedder)
+                  .has_value());
 }
 
 IN_PROC_BROWSER_TEST_F(FencedFrameParameterizedBrowserTest,
@@ -3538,9 +3685,8 @@ IN_PROC_BROWSER_TEST_F(FencedFrameParameterizedBrowserTest,
       GetFencedFrameRootNode(root->child_at(0));
 
   // Navigate the fenced frame from the initial empty document toward an opaque
-  // URL. With MPArch, since this was in the 'opaque-ads' mode, initiated from
-  // the embedder, the navigation must use and commit a document with
-  // `is_fenced_frame_root_originating_from_opaque_url` to true.
+  // URL. The navigation must use and commit FencedFrameProperties with an
+  // opaque URL.
   GURL fenced_frame_url(
       https_server()->GetURL("a.test", "/fenced_frames/title1.html"));
   FencedFrameURLMapping& url_mapping =
@@ -3553,13 +3699,14 @@ IN_PROC_BROWSER_TEST_F(FencedFrameParameterizedBrowserTest,
   NavigateFrameInsideFencedFrameTreeAndWaitForFinishedLoad(
       fenced_frame_root_node, navigate_script);
 
-  EXPECT_TRUE(fenced_frame_root_node->current_frame_host()
-                  ->is_fenced_frame_root_originating_from_opaque_url());
+  EXPECT_FALSE(fenced_frame_root_node->GetFencedFrameProperties()
+                   ->mapped_url()
+                   ->GetValueForEntity(FencedFrameEntity::kEmbedder)
+                   .has_value());
 
   // Navigate the fenced frame again, but toward a non-opaque URL and the
   // navigation is cancelled. The navigation is not committed and therefore
-  // `is_fenced_frame_root_originating_from_opaque_url` of the document doesn't
-  // change.
+  // the FencedFrameProperties do not change.
   GURL second_url(https_server()->GetURL("a.test", "/nocontent"));
   std::string second_navigate_script =
       JsReplace("f.config = new FencedFrameConfig($1);", second_url.spec());
@@ -3571,8 +3718,7 @@ IN_PROC_BROWSER_TEST_F(FencedFrameParameterizedBrowserTest,
 
   // The fenced frame's document initiates a navigation. The previous cancelled
   // navigation from the embedder shouldn't have made any side effects. The next
-  // committed document must continue to have
-  // `is_fenced_frame_root_originating_from_opaque_url` true.
+  // committed document must continue to have the same FencedFrameProperties.
   GURL redirect_url(
       https_server()->GetURL("a.test", "/fenced_frames/title0.html"));
   EXPECT_TRUE(ExecJs(fenced_frame_root_node->current_frame_host(),
@@ -3582,8 +3728,10 @@ IN_PROC_BROWSER_TEST_F(FencedFrameParameterizedBrowserTest,
   EXPECT_EQ(fenced_frame_root_node->current_frame_host()->GetLastCommittedURL(),
             redirect_url);
 
-  EXPECT_TRUE(fenced_frame_root_node->current_frame_host()
-                  ->is_fenced_frame_root_originating_from_opaque_url());
+  EXPECT_FALSE(fenced_frame_root_node->GetFencedFrameProperties()
+                   ->mapped_url()
+                   ->GetValueForEntity(FencedFrameEntity::kEmbedder)
+                   .has_value());
 }
 
 namespace {
@@ -4217,8 +4365,8 @@ IN_PROC_BROWSER_TEST_F(FencedFrameParameterizedBrowserTest,
   std::vector<std::unique_ptr<NavigationEntry>> entries;
   entries.push_back(std::move(restored_entry));
 
-  Shell* new_shell = Shell::CreateNewWindow(
-      controller.GetBrowserContext(), GURL::EmptyGURL(), nullptr, gfx::Size());
+  Shell* new_shell = Shell::CreateNewWindow(controller.GetBrowserContext(),
+                                            GURL(), nullptr, gfx::Size());
   FrameTreeNode* new_root =
       static_cast<WebContentsImpl*>(new_shell->web_contents())
           ->GetPrimaryFrameTree()
@@ -6750,17 +6898,15 @@ IN_PROC_BROWSER_TEST_F(
 }
 
 // Parameterized on whether the feature is enabled or not.
-class UUIDFrameTreeBrowserTest : public FencedFrameBrowserTestBase,
-                                 public ::testing::WithParamInterface<bool> {
+class UUIDFrameTreeBrowserTest
+    : public FencedFrameBrowserTestBase,
+      public ::testing::WithParamInterface<std::tuple<bool, bool>> {
  public:
   UUIDFrameTreeBrowserTest() {
-    if (GetParam()) {
-      scoped_feature_list_.InitAndEnableFeature(
-          blink::features::kAllowURNsInIframes);
-    } else {
-      scoped_feature_list_.InitAndDisableFeature(
-          blink::features::kAllowURNsInIframes);
-    }
+    scoped_feature_list_.InitWithFeatureStates(
+        {{blink::features::kAllowURNsInIframes, IsAllowURNsInIframesEnabled()},
+         {blink::features::kDisplayWarningDeprecateURNIframesUseFencedFrames,
+          DisplayWarningDeprecateURNIframesUseFencedFrames()}});
   }
 
   bool NavigateIframeAndCheckURL(WebContents* web_contents,
@@ -6777,7 +6923,19 @@ class UUIDFrameTreeBrowserTest : public FencedFrameBrowserTestBase,
 
   static std::string DescribeParams(
       const ::testing::TestParamInfo<ParamType>& info) {
-    return info.param ? "AllowURNsInIframes" : "DoNotAllowURNsInIframes";
+    return base::StringPrintf(
+        "%s_%s",
+        std::get<0>(info.param) ? "AllowURNsInIframes"
+                                : "DoNotAllowURNsInIframes",
+        std::get<1>(info.param)
+            ? "DisplayWarningDeprecateURNIframesUseFencedFrames"
+            : "DoNotDisplayWarningDeprecateURNIframesUseFencedFrames");
+  }
+
+  bool IsAllowURNsInIframesEnabled() { return std::get<0>(GetParam()); }
+
+  bool DisplayWarningDeprecateURNIframesUseFencedFrames() {
+    return std::get<1>(GetParam());
   }
 
  private:
@@ -6822,25 +6980,32 @@ IN_PROC_BROWSER_TEST_P(UUIDFrameTreeBrowserTest,
       };
   console_observer.SetFilter(base::BindRepeating(filter));
   console_observer.SetPattern(
-      "FLEDGE will deprecate supporting iframes to render the winning ad*");
+      "Protected Audience/selectURL will deprecate supporting iframes to "
+      "render the winning ad*");
 
-  if (GetParam()) {
+  if (IsAllowURNsInIframesEnabled()) {
     // If the feature is enabled, we should navigate to the mapped page.
     EXPECT_TRUE(NavigateIframeAndCheckURL(web_contents(), "test_iframe",
                                           urn_uuid, frame_url));
     histogram_tester.ExpectBucketCount(
         "Navigation.BrowserMappedUrnUuidInIframeOrFencedFrame", 1, 1);
-    // A console warning is emitted during navigation. This will be removed
-    // once navigation support for urn::uuid in iframes is deprecated.
+    // A console warning is emitted during navigation if feature
+    // `kDisplayWarningDeprecateURNIframesUseFencedFrames` is enabled. This will
+    // be removed once navigation support for urn::uuid in iframes is
+    // deprecated.
     // TODO(crbug.com/1355857)
-    ASSERT_TRUE(console_observer.Wait());
-    EXPECT_FALSE(console_observer.messages().empty());
-    EXPECT_EQ(
-        console_observer.GetMessageAt(0),
-        "FLEDGE will deprecate supporting iframes to render the winning ad. "
-        "Please use fenced frames instead. See "
-        "https://developer.chrome.com/en/docs/privacy-sandbox/fenced-frame/"
-        "#examples");
+
+    if (DisplayWarningDeprecateURNIframesUseFencedFrames()) {
+      ASSERT_TRUE(console_observer.Wait());
+      ASSERT_FALSE(console_observer.messages().empty());
+      EXPECT_EQ(
+          console_observer.GetMessageAt(0),
+          "Protected Audience/selectURL will deprecate supporting iframes to "
+          "render the winning ad/selected URL. "
+          "Please use fenced frames instead. See "
+          "https://developer.chrome.com/en/docs/privacy-sandbox/fenced-frame/"
+          "#examples");
+    }
   } else {
     // If the feature is disabled, navigation should fail.
     EXPECT_FALSE(NavigateIframeAndCheckURL(web_contents(), "test_iframe",
@@ -7478,7 +7643,15 @@ INSTANTIATE_TEST_SUITE_P(
 
 INSTANTIATE_TEST_SUITE_P(All,
                          UUIDFrameTreeBrowserTest,
-                         ::testing::Values(true, false),
+                         ::testing::Combine(testing::Bool(), testing::Bool()),
                          &UUIDFrameTreeBrowserTest::DescribeParams);
+
+INSTANTIATE_TEST_SUITE_P(All,
+                         FencedFrameIsolatedSandboxedIframesBrowserTest,
+                         ::testing::Bool(),
+                         [](const testing::TestParamInfo<bool>& info) {
+                           return info.param ? "kIsolateFencedFramesEnabled"
+                                             : "kIsolateFencedFramesDisabled";
+                         });
 
 }  // namespace content

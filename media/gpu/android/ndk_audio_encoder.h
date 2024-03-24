@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/android/requires_api.h"
 #include "base/thread_annotations.h"
 #include "media/base/audio_bus.h"
 #include "media/base/audio_encoder.h"
@@ -28,8 +29,9 @@ class ConvertingAudioFifo;
 // thread to `task_runner_`.
 // Note: calling flush() forces a lazy re-creation of the underlying
 //       `media_codec_` on the next Encode() call.
-class MEDIA_GPU_EXPORT NdkAudioEncoder : public AudioEncoder,
-                                         public NdkMediaCodecWrapper::Client {
+class REQUIRES_ANDROID_API(NDK_MEDIA_CODEC_MIN_API)
+    MEDIA_GPU_EXPORT NdkAudioEncoder : public AudioEncoder,
+                                       public NdkMediaCodecWrapper::Client {
  public:
   // `runner` - a task runner that will be used for all callbacks and external
   // calls to this instance.
@@ -38,8 +40,6 @@ class MEDIA_GPU_EXPORT NdkAudioEncoder : public AudioEncoder,
   NdkAudioEncoder(const NdkAudioEncoder&) = delete;
   NdkAudioEncoder& operator=(const NdkAudioEncoder&) = delete;
   ~NdkAudioEncoder() override;
-
-  static bool IsSupported();
 
   // AudioEncoder implementation.
   void Initialize(const Options& options,
@@ -102,7 +102,7 @@ class MEDIA_GPU_EXPORT NdkAudioEncoder : public AudioEncoder,
   bool error_occurred_ = false;
 
   // Delayed error status to be reported on the next Encode() or Flush() call.
-  absl::optional<EncoderStatus> pending_error_status_;
+  std::optional<EncoderStatus> pending_error_status_;
 
   // What portion of the flushing process we are in, if any.
   FlushState flush_state_ GUARDED_BY_CONTEXT(sequence_checker_) =

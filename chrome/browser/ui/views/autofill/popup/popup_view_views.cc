@@ -35,8 +35,8 @@
 #include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill/core/browser/metrics/autofill_metrics.h"
 #include "components/autofill/core/browser/ui/autofill_resource_utils.h"
+#include "components/autofill/core/browser/ui/popup_hiding_reasons.h"
 #include "components/autofill/core/browser/ui/popup_item_ids.h"
-#include "components/autofill/core/browser/ui/popup_types.h"
 #include "components/autofill/core/browser/ui/suggestion.h"
 #include "components/autofill/core/common/aliases.h"
 #include "components/autofill/core/common/autofill_features.h"
@@ -53,6 +53,7 @@
 #include "ui/color/color_id.h"
 #include "ui/events/keycodes/keyboard_codes.h"
 #include "ui/events/types/event_type.h"
+#include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/views/accessibility/view_accessibility.h"
@@ -283,13 +284,20 @@ bool PopupViewViews::HandleKeyPressEvent(
   // Selects the content cell of the row with currently open sup-popup if any,
   // which closes the sub-popup and looks like going one menu level back.
   auto select_sub_popup_content_cell = [&]() {
-    if (row_with_open_sub_popup_) {
-      SetSelectedCell(CellIndex{*row_with_open_sub_popup_,
-                                PopupRowView::CellType::kContent},
-                      PopupCellSelectionSource::kKeyboard);
-      return true;
+    if (!row_with_open_sub_popup_) {
+      return false;
     }
-    return false;
+
+    size_t row_index = *row_with_open_sub_popup_;
+    // Closing the sub-popup by setting `std::nullopt` is required as
+    // `suppress_popup=true` is not enough: the sub-popup closing will be
+    // prevented by the "same value" check.
+    SetRowWithOpenSubPopup(std::nullopt);
+    SetSelectedCell(CellIndex{row_index, PopupRowView::CellType::kContent},
+                    PopupCellSelectionSource::kKeyboard,
+                    AutoselectFirstSuggestion(false),
+                    /*suppress_popup=*/true);
+    return true;
   };
 
   switch (event.windows_key_code) {
@@ -603,7 +611,12 @@ void PopupViewViews::OnWidgetVisibilityChanged(views::Widget* widget,
 void PopupViewViews::SetSelectedCell(
     std::optional<CellIndex> cell_index,
     PopupCellSelectionSource source,
-    AutoselectFirstSuggestion autoselect_first_suggestion) {
+    AutoselectFirstSuggestion autoselect_first_suggestion,
+    bool suppress_popup) {
+  if (!controller_) {
+    return;
+  }
+
   std::optional<CellIndex> old_index = GetSelectedCell();
   if (old_index == cell_index) {
     return;
@@ -625,8 +638,12 @@ void PopupViewViews::SetSelectedCell(
     new_selected_row.SetSelectedCell(cell_index->second);
     new_selected_row.ScrollViewToVisible();
 
+    const Suggestion& suggestion =
+        controller_->GetSuggestionAt(cell_index->first);
     bool can_open_sub_popup =
-        cell_index->second == PopupRowView::CellType::kControl;
+        !suppress_popup &&
+        (cell_index->second == PopupRowView::CellType::kControl ||
+         !suggestion.is_acceptable);
 
     CHECK(!can_open_sub_popup ||
           !controller_->GetSuggestionAt(cell_index->first).children.empty());
@@ -673,6 +690,7 @@ void PopupViewViews::CreateChildViews() {
   rows_.clear();
   RemoveAllChildViews();
 
+  const int kInterItemsPadding = GetContentsVerticalPadding();
   const std::vector<Suggestion> kSuggestions = controller_->GetSuggestions();
 
   SetBackground(
@@ -683,8 +701,6 @@ void PopupViewViews::CreateChildViews() {
   raw_ptr<views::BoxLayoutView> content_view =
       AddChildView(views::Builder<views::BoxLayoutView>()
                        .SetOrientation(views::BoxLayout::Orientation::kVertical)
-                       .SetInsideBorderInsets(
-                           gfx::Insets::VH(GetContentsVerticalPadding(), 0))
                        .Build());
 
   rows_.reserve(kSuggestions.size());
@@ -695,6 +711,7 @@ void PopupViewViews::CreateChildViews() {
     std::unique_ptr<views::BoxLayoutView> body_container =
         views::Builder<views::BoxLayoutView>()
             .SetOrientation(views::BoxLayout::Orientation::kVertical)
+            .SetInsideBorderInsets(gfx::Insets::VH(kInterItemsPadding, 0))
             .Build();
 
     for (; current_line_number < kSuggestions.size() &&
@@ -703,7 +720,7 @@ void PopupViewViews::CreateChildViews() {
       switch (kSuggestions[current_line_number].popup_item_id) {
         case PopupItemId::kSeparator:
           rows_.push_back(body_container->AddChildView(
-              std::make_unique<PopupSeparatorView>()));
+              std::make_unique<PopupSeparatorView>(kInterItemsPadding)));
           break;
 
         case PopupItemId::kMixedFormMessage:
@@ -776,7 +793,18 @@ void PopupViewViews::CreateChildViews() {
     footer_container_ =
         body_container_->AddChildView(std::move(footer_container));
   } else {
+    // Add a separator between the main list of suggestions and the footer with
+    // no vertical padding as these elements have their own top/bottom paddings.
+    if (kSuggestions[current_line_number].popup_item_id ==
+        PopupItemId::kSeparator) {
+      rows_.push_back(content_view->AddChildView(
+          std::make_unique<PopupSeparatorView>(/*vertical_padding=*/0)));
+      ++current_line_number;
+    }
+
     footer_container_ = content_view->AddChildView(std::move(footer_container));
+    footer_container_->SetInsideBorderInsets(
+        gfx::Insets::VH(kInterItemsPadding, 0));
     content_view->SetFlexForView(footer_container_, 0);
   }
 
@@ -786,12 +814,18 @@ void PopupViewViews::CreateChildViews() {
     if (kSuggestions[current_line_number].popup_item_id ==
         PopupItemId::kSeparator) {
       rows_.push_back(footer_container_->AddChildView(
-          std::make_unique<PopupSeparatorView>()));
+          std::make_unique<PopupSeparatorView>(kInterItemsPadding)));
     } else {
       rows_.push_back(footer_container_->AddChildView(CreatePopupRowView(
           controller(), /*a11y_selection_delegate=*/*this,
           /*selection_delegate=*/*this, current_line_number)));
     }
+  }
+
+  // Adjust the scrollable area height. Make sure this adjustment always goes
+  // after changes that can affect `body_container_`'s size.
+  if (scroll_view_ && body_container_ && IsFooterScrollable()) {
+    scroll_view_->ClipHeightTo(0, body_container_->GetPreferredSize().height());
   }
 }
 
@@ -908,17 +942,13 @@ bool PopupViewViews::DoUpdateBoundsAndRedrawPopup() {
 
   // If `kUiCompositorScrollWithLayers` is enabled, then a ScrollView performs
   // scrolling by using layers. These layers are not affected by the clip path
-  // of the widget. If the corner radius of the popup is larger than the
-  // vertical padding that separates the widget's top border and the
-  // ScrollView, this will cause pixel artifacts.
-  // To avoid these, set a corner radius for the ScrollView's ViewPort if layer
-  // scrolling is enabled.
-  const int kPaddingCornerDelta =
-      GetCornerRadius() - GetContentsVerticalPadding();
-  if (kPaddingCornerDelta > 0 && scroll_view_ &&
+  // of the widget and their corners remain unrounded, thus going beyond
+  // the popup's rounded corners. To avoid these, set a corner radius for
+  // the ScrollView's ViewPort if layer scrolling is enabled.
+  if (scroll_view_ &&
       base::FeatureList::IsEnabled(::features::kUiCompositorScrollWithLayers)) {
     scroll_view_->SetViewportRoundedCornerRadius(
-        gfx::RoundedCornersF(kPaddingCornerDelta));
+        gfx::RoundedCornersF(GetCornerRadius()));
   }
 
   SchedulePaint();

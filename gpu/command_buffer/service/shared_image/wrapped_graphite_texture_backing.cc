@@ -121,6 +121,7 @@ WrappedGraphiteTextureBacking::WrappedGraphiteTextureBacking(
     GrSurfaceOrigin surface_origin,
     SkAlphaType alpha_type,
     uint32_t usage,
+    std::string debug_label,
     scoped_refptr<SharedContextState> context_state,
     const bool thread_safe)
     : ClearTrackingSharedImageBacking(mailbox,
@@ -130,6 +131,7 @@ WrappedGraphiteTextureBacking::WrappedGraphiteTextureBacking(
                                       surface_origin,
                                       alpha_type,
                                       usage,
+                                      std::move(debug_label),
                                       format.EstimatedSizeInBytes(size),
                                       thread_safe),
       context_state_(std::move(context_state)) {
@@ -155,8 +157,10 @@ bool WrappedGraphiteTextureBacking::Initialize() {
     // textures, not planes of a multi-planar YUV texture.
     constexpr bool is_yuv_plane = false;
     skgpu::graphite::TextureInfo texture_info = gpu::GraphiteBackendTextureInfo(
-        context_state_->gr_context_type(), format(), plane, is_yuv_plane,
-        mipmapped);
+        context_state_->gr_context_type(), format(), /*readonly=*/false, plane,
+        is_yuv_plane, mipmapped, /*scanout_dcomp_surface=*/false,
+        /*supports_multiplanar_rendering=*/false,
+        /*supports_multiplanar_copy=*/false);
     auto sk_size = gfx::SizeToSkISize(format().GetPlaneSize(plane, size()));
     auto texture = recorder()->createBackendTexture(sk_size, texture_info);
     if (!texture.isValid()) {
@@ -191,7 +195,11 @@ bool WrappedGraphiteTextureBacking::InitializeWithData(
 
   auto& texture = graphite_textures_[0];
   skgpu::graphite::TextureInfo texture_info = gpu::GraphiteBackendTextureInfo(
-      context_state_->gr_context_type(), format());
+      context_state_->gr_context_type(), format(), /*readonly=*/false,
+      /*plane_index=*/0, /*is_yuv_plane=*/false,
+      /*mipmapped=*/false, /*scanout_dcomp_surface=*/false,
+      /*supports_multiplanar_rendering=*/false,
+      /*supports_multiplanar_copy=*/false);
   texture = recorder()->createBackendTexture(gfx::SizeToSkISize(size()),
                                              texture_info);
   if (!texture.isValid()) {
@@ -354,7 +362,8 @@ WrappedGraphiteTextureBacking::ProduceDawn(
     MemoryTypeTracker* tracker,
     const wgpu::Device& device,
     wgpu::BackendType backend_type,
-    std::vector<wgpu::TextureFormat> view_formats) {
+    std::vector<wgpu::TextureFormat> view_formats,
+    scoped_refptr<SharedContextState> context_state) {
   CHECK(context_state_->IsGraphiteDawnVulkan());
   if (context_state_->context_lost()) {
     return nullptr;

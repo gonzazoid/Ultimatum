@@ -10,6 +10,7 @@
 #import "base/check_op.h"
 #import "base/debug/dump_without_crashing.h"
 #import "base/notreached.h"
+#import "ios/chrome/browser/shared/ui/elements/extended_touch_target_button.h"
 #import "ios/chrome/browser/shared/ui/symbols/symbols.h"
 #import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/grid/grid_constants.h"
@@ -31,6 +32,7 @@ NSInteger kIconSymbolPointSize = 13;
 const CGFloat kSnapshotViewLeadingOffset = 4;
 const CGFloat kSnapshotViewTrailingOffset = 4;
 const CGFloat kSnapShotViewBottomOffset = 4;
+const CGFloat kGroupColorViewSize = 18;
 
 // The vertical/horizontal spacing to apply between the snapshot views.
 const CGFloat kSpacing = 4;
@@ -50,7 +52,7 @@ const CGFloat kSpacing = 4;
   NSLayoutConstraint* _topBarHeightConstraint;
   // Visual components of the cell.
   UIView* _topBar;
-  UIImageView* _iconView;
+  UIView* _groupColorView;
   UILabel* _titleLabel;
   UIImageView* _closeIconView;
   UIImageView* _selectIconView;
@@ -63,6 +65,14 @@ const CGFloat kSpacing = 4;
   GroupTabView* _topTrailingSnapshotView;
   GroupTabView* _bottomLeadingSnapshotView;
   GroupGridBottomTrailingView* _bottomTrailingSnapshotView;
+
+  // The last used parameters to configure the group cell views, used to update
+  // the cell when the trait collection changes.
+  NSArray<GroupTabInfo*>* _groupTabInfos;
+  NSInteger _totalTabsCount;
+
+  // The current vertical trait is compact.
+  BOOL _isCompact;
 }
 
 // `-dequeueReusableCellWithReuseIdentifier:forIndexPath:` calls this method to
@@ -70,6 +80,8 @@ const CGFloat kSpacing = 4;
 - (instancetype)initWithFrame:(CGRect)frame {
   self = [super initWithFrame:frame];
   if (self) {
+    _isCompact = self.traitCollection.verticalSizeClass ==
+                 UIUserInterfaceSizeClassCompact;
     _state = GridCellStateNotEditing;
 
     // The background color must be set to avoid the corners behind the rounded
@@ -85,7 +97,8 @@ const CGFloat kSpacing = 4;
     contentView.layer.masksToBounds = YES;
     [self setupTopBar];
     _groupSnapshotsView =
-        [[GroupGridConfigurableView alloc] initWithSpacing:kSpacing];
+        [[GroupGridConfigurableView alloc] initWithSpacing:kSpacing
+                                  adaptForCompactSizeClass:YES];
     _topLeadingSnapshotView = [self buildGroupTabView];
     _topTrailingSnapshotView = [self buildGroupTabView];
     _bottomLeadingSnapshotView = [self buildGroupTabView];
@@ -95,7 +108,8 @@ const CGFloat kSpacing = 4;
     _topTrailingSnapshotView.translatesAutoresizingMaskIntoConstraints = NO;
     _bottomLeadingSnapshotView.translatesAutoresizingMaskIntoConstraints = NO;
     _bottomTrailingSnapshotView.translatesAutoresizingMaskIntoConstraints = NO;
-    _closeTapTargetButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    _closeTapTargetButton =
+        [ExtendedTouchTargetButton buttonWithType:UIButtonTypeCustom];
     _closeTapTargetButton.translatesAutoresizingMaskIntoConstraints = NO;
     [_closeTapTargetButton addTarget:self
                               action:@selector(closeButtonTapped:)
@@ -165,6 +179,14 @@ const CGFloat kSpacing = 4;
     ];
     [NSLayoutConstraint activateConstraints:constraints];
   }
+
+  if (@available(iOS 17, *)) {
+    [self
+        registerForTraitChanges:@[ UITraitVerticalSizeClass.self ]
+                     withAction:@selector(updateIsCompactAndReconfigureGroup)];
+    [self registerForTraitChanges:@[ UITraitPreferredContentSizeCategory.self ]
+                       withAction:@selector(updateTopBarSize)];
+  }
   return self;
 }
 
@@ -172,6 +194,11 @@ const CGFloat kSpacing = 4;
 
 - (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
   [super traitCollectionDidChange:previousTraitCollection];
+
+  if (@available(iOS 17, *)) {
+    return;
+  }
+
   BOOL isPreviousAccessibilityCategory =
       UIContentSizeCategoryIsAccessibilityCategory(
           previousTraitCollection.preferredContentSizeCategory);
@@ -180,6 +207,10 @@ const CGFloat kSpacing = 4;
           self.traitCollection.preferredContentSizeCategory);
   if (isPreviousAccessibilityCategory ^ isCurrentAccessibilityCategory) {
     [self updateTopBarSize];
+  }
+  if (self.traitCollection.verticalSizeClass !=
+      previousTraitCollection.verticalSizeClass) {
+    [self updateIsCompactAndReconfigureGroup];
   }
 }
 
@@ -193,7 +224,7 @@ const CGFloat kSpacing = 4;
   [super prepareForReuse];
   self.title = nil;
   self.titleHidden = NO;
-  self.icon = nil;
+  self.groupColorName = nil;
   [self configureWithGroupTabInfos:nil totalTabsCount:0];
   self.selected = NO;
   self.opacity = 1.0;
@@ -237,9 +268,11 @@ const CGFloat kSpacing = 4;
   _theme = theme;
 }
 
-- (void)setIcon:(UIImage*)icon {
-  _iconView.image = icon;
-  _icon = icon;
+- (void)setGroupColorName:(NSString*)groupColorName {
+  if (groupColorName) {
+    _groupColorName = groupColorName;
+    _groupColorView.backgroundColor = [UIColor colorNamed:_groupColorName];
+  }
 }
 
 - (void)configureWithGroupTabInfos:(NSArray<GroupTabInfo*>*)groupTabInfos
@@ -253,44 +286,42 @@ const CGFloat kSpacing = 4;
   [_bottomTrailingSnapshotView configureWithFavicons:nil remainingTabsCount:0];
   [self hideAllSubviews];
 
+  _groupTabInfos = groupTabInfos;
+  _totalTabsCount = totalTabsCount;
+
   int groupTabInfosLength = [groupTabInfos count];
   if (groupTabInfosLength > 0) {
     [_topLeadingSnapshotView configureWithSnapshot:groupTabInfos[0].snapshot
-                                           favicon:groupTabInfos[0].snapshot];
+                                           favicon:groupTabInfos[0].favicon];
     _topLeadingSnapshotView.hidden = NO;
   }
-  if (groupTabInfosLength > 1) {
-    [_topTrailingSnapshotView configureWithSnapshot:groupTabInfos[1].snapshot
-                                            favicon:groupTabInfos[1].snapshot];
-    _topTrailingSnapshotView.hidden = NO;
-  }
-  if (groupTabInfosLength > 2) {
-    [_bottomLeadingSnapshotView
-        configureWithSnapshot:groupTabInfos[2].snapshot
-                      favicon:groupTabInfos[2].snapshot];
-    _bottomLeadingSnapshotView.hidden = NO;
-  }
-  if (groupTabInfosLength == 4) {
-    [_bottomTrailingSnapshotView configureWithGroupTabInfo:groupTabInfos[3]];
-    _bottomTrailingSnapshotView.hidden = NO;
-  } else if (groupTabInfosLength > 4) {
-    NSMutableArray<UIImage*>* favicons = [[NSMutableArray alloc] init];
-    NSRange range;
-    range.location = 3;
-    range.length = groupTabInfosLength - 3;
-    for (GroupTabInfo* snapshotFavicon in
-         [groupTabInfos subarrayWithRange:range]) {
-      if (snapshotFavicon.favicon != nil) {
-        [favicons addObject:snapshotFavicon.favicon];
-      }
+  if (!_isCompact) {
+    if (groupTabInfosLength > 1) {
+      [_topTrailingSnapshotView configureWithSnapshot:groupTabInfos[1].snapshot
+                                              favicon:groupTabInfos[1].favicon];
+      _topTrailingSnapshotView.hidden = NO;
     }
-    // `remainingTabsCount` is used to display the `bottomTrailingFavicon` view
-    // of `bottomTrailingSnapshotView` the remaning tabs count is equal to the
-    // `totalTabsCount` minus the first 3 tabs of the group and the 4 favicons
-    // views of the bottomTrailing view.
-    [_bottomTrailingSnapshotView configureWithFavicons:favicons
-                                    remainingTabsCount:totalTabsCount - 7];
-    _bottomTrailingSnapshotView.hidden = NO;
+    if (groupTabInfosLength > 2) {
+      [_bottomLeadingSnapshotView
+          configureWithSnapshot:groupTabInfos[2].snapshot
+                        favicon:groupTabInfos[2].favicon];
+      _bottomLeadingSnapshotView.hidden = NO;
+    }
+    if (groupTabInfosLength == 4) {
+      [_bottomTrailingSnapshotView configureWithGroupTabInfo:groupTabInfos[3]];
+      _bottomTrailingSnapshotView.hidden = NO;
+    } else if (groupTabInfosLength > 4) {
+      [self configureBottomTrailingViewWithGroupTabInfos:groupTabInfos
+                                          totalTabsCount:totalTabsCount];
+    }
+  } else {
+    if (groupTabInfosLength == 2) {
+      [_bottomTrailingSnapshotView configureWithGroupTabInfo:groupTabInfos[1]];
+      _bottomTrailingSnapshotView.hidden = NO;
+    } else if (groupTabInfosLength > 2) {
+      [self configureBottomTrailingViewWithGroupTabInfos:groupTabInfos
+                                          totalTabsCount:totalTabsCount];
+    }
   }
 }
 
@@ -331,13 +362,9 @@ const CGFloat kSpacing = 4;
   _topBar = [[UIView alloc] init];
   _topBar.translatesAutoresizingMaskIntoConstraints = NO;
 
-  _iconView = [[UIImageView alloc] init];
-  _iconView.translatesAutoresizingMaskIntoConstraints = NO;
-  _iconView.contentMode = UIViewContentModeScaleAspectFill;
-  _iconView.layer.cornerRadius = kGridCellIconCornerRadius;
-  _iconView.layer.masksToBounds = YES;
-  _iconView.backgroundColor = UIColor.clearColor;
-  _iconView.tintColor = [UIColor colorNamed:kGrey400Color];
+  _groupColorView = [[UIView alloc] init];
+  _groupColorView.translatesAutoresizingMaskIntoConstraints = NO;
+  _groupColorView.layer.cornerRadius = kGroupColorViewSize / 2;
 
   _titleLabel = [[UILabel alloc] init];
   _titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -360,7 +387,7 @@ const CGFloat kSpacing = 4;
 
   [_topBar addSubview:_selectIconView];
 
-  [_topBar addSubview:_iconView];
+  [_topBar addSubview:_groupColorView];
   [_topBar addSubview:_titleLabel];
   [_topBar addSubview:_closeIconView];
 
@@ -368,19 +395,21 @@ const CGFloat kSpacing = 4;
     [_titleLabel.leadingAnchor
         constraintEqualToAnchor:_topBar.leadingAnchor
                        constant:kGridCellHeaderLeadingInset],
-    [_iconView.widthAnchor constraintEqualToConstant:0],
-    [_iconView.heightAnchor constraintEqualToConstant:0],
+    [_groupColorView.widthAnchor constraintEqualToConstant:0],
+    [_groupColorView.heightAnchor constraintEqualToConstant:0],
   ];
 
   _nonAccessibilityConstraints = @[
-    [_iconView.leadingAnchor
+    [_groupColorView.heightAnchor
+        constraintEqualToConstant:kGroupColorViewSize],
+    [_groupColorView.widthAnchor constraintEqualToConstant:kGroupColorViewSize],
+    [_groupColorView.leadingAnchor
         constraintEqualToAnchor:_topBar.leadingAnchor
                        constant:kGridCellHeaderLeadingInset],
-    [_iconView.centerYAnchor constraintEqualToAnchor:_topBar.centerYAnchor],
-    [_iconView.widthAnchor constraintEqualToConstant:kGridCellIconDiameter],
-    [_iconView.heightAnchor constraintEqualToConstant:kGridCellIconDiameter],
+    [_groupColorView.centerYAnchor
+        constraintEqualToAnchor:_topBar.centerYAnchor],
     [_titleLabel.leadingAnchor
-        constraintEqualToAnchor:_iconView.trailingAnchor
+        constraintEqualToAnchor:_groupColorView.trailingAnchor
                        constant:kGridCellHeaderLeadingInset],
   ];
 
@@ -563,6 +592,52 @@ const CGFloat kSpacing = 4;
   _topTrailingSnapshotView.hidden = YES;
   _bottomLeadingSnapshotView.hidden = YES;
   _bottomTrailingSnapshotView.hidden = YES;
+}
+
+// Updates `isCompact` and reconfigures the current group views with the stores
+// parameters `_groupTabInfos`and `_totalTabsCount`.
+- (void)updateIsCompactAndReconfigureGroup {
+  _isCompact =
+      self.traitCollection.verticalSizeClass == UIUserInterfaceSizeClassCompact;
+  [self configureWithGroupTabInfos:_groupTabInfos
+                    totalTabsCount:_totalTabsCount];
+}
+
+// Configures the `_bottomTrailingSnapshotView` with the `groupTabInfos` and
+// `totalTabsCount` depending on the current vertical trait.
+- (void)configureBottomTrailingViewWithGroupTabInfos:
+            (NSArray<GroupTabInfo*>*)groupTabInfos
+                                      totalTabsCount:(NSInteger)totalTabsCount {
+  int groupTabInfosLength = [groupTabInfos count];
+  NSMutableArray<UIImage*>* favicons = [[NSMutableArray alloc] init];
+  NSRange range;
+  NSInteger remainingTabsCount;
+  if (!_isCompact) {
+    range.location = 3;
+    range.length = groupTabInfosLength - 3;
+    remainingTabsCount = totalTabsCount - 6;
+  } else {
+    range.location = 1;
+    range.length = groupTabInfosLength - 1;
+    remainingTabsCount = totalTabsCount - 4;
+  }
+
+  for (GroupTabInfo* snapshotFavicon in
+       [groupTabInfos subarrayWithRange:range]) {
+    if (snapshotFavicon.favicon != nil) {
+      [favicons addObject:snapshotFavicon.favicon];
+    }
+  }
+
+  // `remainingTabsCount` is used to display the `bottomTrailingFavicon`
+  // view of `bottomTrailingSnapshotView` the remaning tabs count is equal
+  // to the `totalTabsCount` minus the first 3 tabs of the group and the 4
+  // favicons views of the bottomTrailing view or minus the first tab of the
+  // group and the 4 favicons views of the bottomTrailing view in the case of
+  // compact vertical trait.
+  [_bottomTrailingSnapshotView configureWithFavicons:favicons
+                                  remainingTabsCount:remainingTabsCount];
+  _bottomTrailingSnapshotView.hidden = NO;
 }
 
 @end

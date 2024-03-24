@@ -6,6 +6,7 @@
 
 #import "base/functional/bind.h"
 #import "base/functional/callback_helpers.h"
+#import "base/memory/raw_ptr.h"
 #import "base/run_loop.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/bind.h"
@@ -242,7 +243,7 @@ class AuthenticationServiceTest : public PlatformTest {
   }
 
   IOSChromeScopedTestingLocalState local_state_;
-  ChromeAccountManagerService* account_manager_;
+  raw_ptr<ChromeAccountManagerService> account_manager_;
   web::WebTaskEnvironment task_environment_{
       web::WebTaskEnvironment::Options::DEFAULT,
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
@@ -742,7 +743,7 @@ TEST_F(AuthenticationServiceTest, ShowMDMErrorDialog) {
   EXPECT_EQ(invocation_counter, 1u);
 }
 
-// TODO(crbug.com/1462552): Remove this test after kSync users are migrated in
+// TODO(crbug.com/40066949): Remove this test after kSync users are migrated in
 // phase 3. See ConsentLevel::kSync documentation for details.
 TEST_F(AuthenticationServiceTest, SigninAndSyncDecoupled) {
   // Sign in.

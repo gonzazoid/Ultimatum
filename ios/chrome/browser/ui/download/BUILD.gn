@@ -62,6 +62,8 @@ source_set("download") {
     "//ios/chrome/browser/signin/model:system_identity",
     "//ios/chrome/browser/store_kit/model",
     "//ios/chrome/browser/ui/download/activities",
+    "//ios/chrome/browser/ui/fullscreen",
+    "//ios/chrome/browser/ui/fullscreen:ui",
     "//ios/chrome/browser/ui/presenters",
     "//ios/chrome/browser/web/model:web_internal",
     "//ios/chrome/browser/web_state_list/model",
@@ -149,6 +151,7 @@ source_set("eg2_tests") {
   ]
 
   deps = [
+    ":constants",
     ":features",
     "//components/strings",
     "//ios/chrome/app/strings",
@@ -161,6 +164,7 @@ source_set("eg2_tests") {
     "//ios/chrome/test/earl_grey:eg_test_support+eg2",
     "//ios/testing:embedded_test_server_support",
     "//ios/testing/earl_grey:eg_test_support+eg2",
+    "//ios/testing/earl_grey:launch_configuration",
     "//ios/web/common",
     "//ios/web/public/test:element_selector",
     "//net:test_support",

@@ -63,7 +63,6 @@ import org.chromium.chrome.browser.media.MediaCaptureNotificationServiceImpl;
 import org.chromium.chrome.browser.media.MediaViewerUtils;
 import org.chromium.chrome.browser.metrics.LaunchMetrics;
 import org.chromium.chrome.browser.metrics.PackageMetrics;
-import org.chromium.chrome.browser.metrics.WebApkUninstallUmaTracker;
 import org.chromium.chrome.browser.notifications.channels.ChannelsUpdater;
 import org.chromium.chrome.browser.ntp.FeedPositionUtils;
 import org.chromium.chrome.browser.offlinepages.measurements.OfflineMeasurementsBackgroundTask;
@@ -75,6 +74,7 @@ import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.chrome.browser.price_tracking.PriceTrackingFeatures;
 import org.chromium.chrome.browser.privacy.settings.PrivacyPreferencesManagerImpl;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.profiles.ProfileManagerUtils;
 import org.chromium.chrome.browser.quickactionsearchwidget.QuickActionSearchWidgetProvider;
 import org.chromium.chrome.browser.rlz.RevenueStats;
@@ -88,6 +88,7 @@ import org.chromium.chrome.browser.ui.hats.SurveyClientFactory;
 import org.chromium.chrome.browser.ui.searchactivityutils.SearchActivityPreferencesManager;
 import org.chromium.chrome.browser.usb.UsbNotificationManager;
 import org.chromium.chrome.browser.util.AfterStartupTaskUtils;
+import org.chromium.chrome.browser.webapps.WebApkUninstallTracker;
 import org.chromium.chrome.browser.webapps.WebappRegistry;
 import org.chromium.components.background_task_scheduler.BackgroundTaskSchedulerFactory;
 import org.chromium.components.browser_ui.contacts_picker.ContactsPickerDialog;
@@ -107,6 +108,7 @@ import org.chromium.components.webapps.AppBannerManager;
 import org.chromium.content_public.browser.ChildProcessLauncherHelper;
 import org.chromium.content_public.browser.ContactsPicker;
 import org.chromium.content_public.browser.ContactsPickerListener;
+import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.common.ContentSwitches;
 import org.chromium.ui.accessibility.AccessibilityState;
 import org.chromium.ui.base.Clipboard;
@@ -234,7 +236,7 @@ public class ProcessInitializationHandler {
                 });
 
         ContactsPicker.setContactsPickerDelegate(
-                (WindowAndroid windowAndroid,
+                (WebContents webContents,
                         ContactsPickerListener listener,
                         boolean allowMultiple,
                         boolean includeNames,
@@ -243,10 +245,13 @@ public class ProcessInitializationHandler {
                         boolean includeAddresses,
                         boolean includeIcons,
                         String formattedOrigin) -> {
+                    WindowAndroid windowAndroid = webContents.getTopLevelNativeWindow();
                     ContactsPickerDialog dialog =
                             new ContactsPickerDialog(
                                     windowAndroid,
-                                    new ChromePickerAdapter(windowAndroid.getContext().get()),
+                                    new ChromePickerAdapter(
+                                            windowAndroid.getContext().get(),
+                                            Profile.fromWebContents(webContents)),
                                     listener,
                                     allowMultiple,
                                     includeNames,
@@ -428,9 +433,9 @@ public class ProcessInitializationHandler {
                 new Runnable() {
                     @Override
                     public void run() {
-                        SigninCheckerProvider.get(Profile.getLastUsedRegularProfile())
+                        SigninCheckerProvider.get(ProfileManager.getLastUsedRegularProfile())
                                 .onMainActivityStart();
-                        RevenueStats.getInstance();
+                        RevenueStats.getInstance().retrieveAndApplyTrackingIds();
                     }
                 });
 
@@ -464,7 +469,7 @@ public class ProcessInitializationHandler {
         deferredStartupHandler.addDeferredTask(
                 ChromeApplicationImpl.getComponent().resolveClearDataDialogResultRecorder()
                         ::makeDeferredRecordings);
-        deferredStartupHandler.addDeferredTask(WebApkUninstallUmaTracker::recordDeferredUma);
+        deferredStartupHandler.addDeferredTask(WebApkUninstallTracker::runDeferredTasks);
 
         deferredStartupHandler.addDeferredTask(
                 () -> IncognitoTabLauncher.updateComponentEnabledState());
@@ -485,7 +490,7 @@ public class ProcessInitializationHandler {
                 () -> {
                     // OptimizationTypes which we give a guarantee will be registered when we pass
                     // the onDeferredStartup() signal to OptimizationGuide.
-                    Profile profile = Profile.getLastUsedRegularProfile();
+                    Profile profile = ProfileManager.getLastUsedRegularProfile();
                     List<HintsProto.OptimizationType> registeredTypesAllowList = new ArrayList<>();
                     registeredTypesAllowList.addAll(
                             ShoppingPersistedTabData.getShoppingHintsToRegisterOnDeferredStartup(
@@ -504,7 +509,7 @@ public class ProcessInitializationHandler {
                 () -> {
                     if (ChromeFeatureList.isEnabled(ChromeFeatureList.FEATURE_NOTIFICATION_GUIDE)) {
                         FeatureNotificationGuideServiceFactory.getForProfile(
-                                Profile.getLastUsedRegularProfile());
+                                ProfileManager.getLastUsedRegularProfile());
                     }
                 });
         deferredStartupHandler.addDeferredTask(

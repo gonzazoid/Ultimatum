@@ -499,16 +499,7 @@ views::Label* GetChosenObjectDescriptionLabel(
 
 TEST_F(PageInfoBubbleViewTest, NotificationPermissionRevokeUkm) {
   GURL origin_url = GURL(kUrl).DeprecatedGetOriginAsURL();
-  TestingProfile* profile =
-      static_cast<TestingProfile*>(web_contents_helper_->profile());
   ukm::TestAutoSetUkmRecorder ukm_recorder;
-  auto* history_service = HistoryServiceFactory::GetForProfile(
-      profile, ServiceAccessType::EXPLICIT_ACCESS);
-  history_service->AddPage(origin_url, base::Time::Now(),
-                           history::SOURCE_BROWSED);
-  base::RunLoop origin_queried_waiter;
-  history_service->set_origin_queried_closure_for_testing(
-      origin_queried_waiter.QuitClosure());
 
   PermissionInfoList list(1);
   list.back().type = ContentSettingsType::NOTIFICATIONS;
@@ -518,8 +509,6 @@ TEST_F(PageInfoBubbleViewTest, NotificationPermissionRevokeUkm) {
 
   list.back().setting = CONTENT_SETTING_BLOCK;
   api_->SetPermissionInfo(list);
-
-  origin_queried_waiter.Run();
 
   auto entries = ukm_recorder.GetEntriesByName("Permission");
   EXPECT_EQ(1u, entries.size());
@@ -979,9 +968,7 @@ TEST_F(PageInfoBubbleViewTest, UpdatingSiteDataRetainsLayout) {
   // Create a fake cookies info.
   PageInfoUI::CookiesNewInfo cookies;
   cookies.allowed_sites_count = 10;
-  cookies.allowed_third_party_sites_count = 8;
-  cookies.blocked_third_party_sites_count = 32;
-  cookies.status = CookieControlsStatus::kDisabled;
+  cookies.protections_on = true;
   cookies.enforcement = CookieControlsEnforcement::kNoEnforcement;
   cookies.blocking_status = CookieBlocking3pcdStatus::kNotIn3pcd;
 
@@ -1247,7 +1234,7 @@ INSTANTIATE_TEST_SUITE_P(All,
 class PageInfoBubbleViewTrackingProtectionSubpageTitleTest
     : public PageInfoBubbleViewTest,
       public testing::WithParamInterface<
-          testing::tuple<CookieControlsStatus,
+          testing::tuple</*protections_on*/ bool,
                          CookieBlocking3pcdStatus,
                          /*is_otr*/ bool>> {
  public:
@@ -1265,7 +1252,7 @@ class PageInfoBubbleViewTrackingProtectionSubpageTitleTest
 TEST_P(PageInfoBubbleViewTrackingProtectionSubpageTitleTest,
        DisplaysTrackingProtectionTitle) {
   PageInfoUI::CookiesNewInfo cookie_info;
-  cookie_info.status = testing::get<0>(GetParam());
+  cookie_info.protections_on = testing::get<0>(GetParam());
   cookie_info.blocking_status = testing::get<1>(GetParam());
   api_->SetCookieInfo(cookie_info);
   EXPECT_EQ(api_->GetTrackingProtectionSubpageTitle(),
@@ -1276,8 +1263,7 @@ TEST_P(PageInfoBubbleViewTrackingProtectionSubpageTitleTest,
 INSTANTIATE_TEST_SUITE_P(
     All,
     PageInfoBubbleViewTrackingProtectionSubpageTitleTest,
-    testing::Combine(testing::Values(CookieControlsStatus::kEnabled,
-                                     CookieControlsStatus::kDisabledForSite),
+    testing::Combine(/*protections_on*/ testing::Bool(),
                      testing::Values(CookieBlocking3pcdStatus::kNotIn3pcd,
                                      CookieBlocking3pcdStatus::kAll),
                      /*is_otr*/ testing::Bool()));

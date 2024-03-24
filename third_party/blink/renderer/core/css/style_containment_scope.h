@@ -42,12 +42,14 @@ class StyleContainmentScope final
   void ReparentCountersToStyleScope(StyleContainmentScope&);
   void UpdateCounters() const;
 
+  void InvalidateAnchorNameReferences() const;
+
   bool IsAncestorOf(const Element*, const Element* stay_within = nullptr);
 
   void AppendChild(StyleContainmentScope*);
   void RemoveChild(StyleContainmentScope*);
 
-  const Element* GetElement() { return element_.Get(); }
+  const Element* GetElement() const { return element_.Get(); }
   CountersScopeTree* GetCountersScopeTree() { return counters_tree_.Get(); }
   StyleContainmentScope* Parent() { return parent_.Get(); }
   void SetParent(StyleContainmentScope* parent) { parent_ = parent; }
@@ -73,7 +75,7 @@ class StyleContainmentScope final
   int ComputeInitialQuoteDepth() const;
 
   // Element with style containment which is the root of the scope.
-  Member<const Element> element_;
+  WeakMember<const Element> element_;
   // Parent scope.
   Member<StyleContainmentScope> parent_;
   // Vector of quotes.

@@ -28,9 +28,9 @@ namespace hud_display {
 namespace {
 
 class LegendEntry : public views::View {
- public:
-  METADATA_HEADER(LegendEntry);
+  METADATA_HEADER(LegendEntry, views::View)
 
+ public:
   explicit LegendEntry(const Legend::Entry& data);
 
   LegendEntry(const LegendEntry&) = delete;
@@ -55,7 +55,7 @@ class LegendEntry : public views::View {
   raw_ptr<views::Label> value_ = nullptr;
 };
 
-BEGIN_METADATA(LegendEntry, views::View)
+BEGIN_METADATA(LegendEntry)
 END_METADATA
 
 LegendEntry::LegendEntry(const Legend::Entry& data)
@@ -156,7 +156,7 @@ Legend::Entry::Entry(const Entry&) = default;
 
 Legend::Entry::~Entry() = default;
 
-BEGIN_METADATA(Legend, views::View)
+BEGIN_METADATA(Legend)
 END_METADATA
 
 Legend::Legend(const std::vector<Legend::Entry>& contents) {
@@ -177,8 +177,8 @@ Legend::Legend(const std::vector<Legend::Entry>& contents) {
 
 Legend::~Legend() = default;
 
-void Legend::Layout() {
-  views::View::Layout();
+void Legend::Layout(PassKey) {
+  LayoutSuperclass<views::View>(this);
 
   gfx::Size max_size;
   bool updated = false;
@@ -201,7 +201,7 @@ void Legend::Layout() {
 
       static_cast<LegendEntry*>(view)->value()->SetPreferredSize(max_size);
     }
-    views::View::Layout();
+    LayoutSuperclass<views::View>(this);
   }
 }
 

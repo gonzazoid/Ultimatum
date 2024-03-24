@@ -5,9 +5,13 @@
 #ifndef SERVICES_ON_DEVICE_MODEL_ML_ON_DEVICE_MODEL_EXECUTOR_H_
 #define SERVICES_ON_DEVICE_MODEL_ML_ON_DEVICE_MODEL_EXECUTOR_H_
 
+#include <functional>
+#include <memory>
+
 #include "base/files/file_path.h"
 #include "base/files/memory_mapped_file.h"
 #include "base/memory/raw_ref.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/native_library.h"
 #include "base/types/expected.h"
 #include "base/types/pass_key.h"
@@ -17,9 +21,10 @@
 #include "services/on_device_model/public/cpp/on_device_model.h"
 #include "services/on_device_model/public/mojom/on_device_model.mojom.h"
 #include "services/on_device_model/public/mojom/on_device_model_service.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ml {
+
+class LanguageDetector;
 
 // Uses the ChromeML API to create a model based on the params passed to
 // |Create()|. This is the main interface for interacting with the model.
@@ -37,7 +42,11 @@ class OnDeviceModelExecutor
                    on_device_model::mojom::LoadModelParamsPtr params);
 
   // on_device_model::OnDeviceModel:
-  std::unique_ptr<Session> CreateSession() override;
+  std::unique_ptr<Session> CreateSession(
+      std::optional<uint32_t> adaptation_id) override;
+  base::expected<uint32_t, on_device_model::mojom::LoadModelResult>
+  LoadAdaptation(
+      on_device_model::mojom::LoadAdaptationParamsPtr params) override;
 
  private:
   on_device_model::mojom::LoadModelResult Init(
@@ -45,7 +54,6 @@ class OnDeviceModelExecutor
 
   void DisposeSentencepiece();
   void DisposeModelProto();
-  void DisposeWeights();
 
   static void Schedule(uintptr_t context, std::function<void()>* fn);
 
@@ -53,9 +61,12 @@ class OnDeviceModelExecutor
 
   std::unique_ptr<base::MemoryMappedFile> sentencepiece_model_proto_;
   std::unique_ptr<base::MemoryMappedFile> model_proto_;
-  std::unique_ptr<base::MemoryMappedFile> weights_;
   base::MemoryMappedFile ts_data_;
   base::MemoryMappedFile ts_sp_model_;
+  scoped_refptr<LanguageDetector> language_detector_;
+
+  // TODO(b/323572952): Allow disposing of adaptation weights.
+  std::vector<std::unique_ptr<base::MemoryMappedFile>> adaptation_data_;
 
   ChromeMLModel model_ = 0;
   scoped_refptr<base::SequencedTaskRunner> task_runner_;

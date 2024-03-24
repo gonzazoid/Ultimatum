@@ -9,6 +9,7 @@
 #import <memory>
 #import <tuple>
 
+#import "base/memory/raw_ptr.h"
 #import "base/metrics/histogram_samples.h"
 #import "base/test/metrics/histogram_tester.h"
 #import "base/test/task_environment.h"
@@ -70,9 +71,8 @@ class TabUsageRecorderBrowserAgentTest : public PlatformTest {
     fake_web_state->SetIsEvicted(in_memory == NOT_IN_MEMORY);
     fake_web_state->SetVisibleURL(GURL(url));
 
-    const int insertion_index = browser_->GetWebStateList()->InsertWebState(
-        WebStateList::kInvalidIndex, std::move(fake_web_state),
-        WebStateList::INSERT_NO_FLAGS, WebStateOpener());
+    const int insertion_index =
+        browser_->GetWebStateList()->InsertWebState(std::move(fake_web_state));
 
     return static_cast<web::FakeWebState*>(
         browser_->GetWebStateList()->GetWebStateAt(insertion_index));
@@ -96,7 +96,7 @@ class TabUsageRecorderBrowserAgentTest : public PlatformTest {
   std::unique_ptr<TestChromeBrowserState> browser_state_;
   std::unique_ptr<TestBrowser> browser_;
   base::HistogramTester histogram_tester_;
-  TabUsageRecorderBrowserAgent* tab_usage_recorder_;
+  raw_ptr<TabUsageRecorderBrowserAgent> tab_usage_recorder_;
   id application_;
 };
 

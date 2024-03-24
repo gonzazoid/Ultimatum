@@ -11,6 +11,7 @@
 
 #include "base/containers/flat_map.h"
 #include "base/containers/unique_ptr_adapters.h"
+#import "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "components/safe_browsing/core/browser/db/database_manager.h"
@@ -21,10 +22,6 @@
 #import "ios/web/public/web_state_user_data.h"
 #include "url/gurl.h"
 
-namespace web {
-class NavigationItem;
-}
-
 class SafeBrowsingClient;
 
 // A helper object that manages the Safe Browsing URL queries for a single
@@ -34,9 +31,7 @@ class SafeBrowsingQueryManager
  public:
   // Struct used to trigger URL check queries.
   struct Query {
-    explicit Query(const GURL& url,
-                   const std::string& http_method,
-                   int main_frame_item_id = -1);
+    explicit Query(const GURL& url, const std::string& http_method);
     Query() = delete;
     Query(const Query&);
     virtual ~Query();
@@ -51,9 +46,6 @@ class SafeBrowsingQueryManager
     const GURL url;
     // The HTTP method.
     const std::string http_method;
-    // The ID of the NavigationItem triggering the URL check.  -1 for main-frame
-    // URL checks.
-    const int main_frame_item_id;
     // The unique ID for the query.
     const size_t query_id;
   };
@@ -188,9 +180,9 @@ class SafeBrowsingQueryManager
           performed_check);
 
   // The WebState whose URL queries are being managed.
-  web::WebState* web_state_ = nullptr;
+  raw_ptr<web::WebState> web_state_ = nullptr;
   // The safe browsing client.
-  SafeBrowsingClient* client_ = nullptr;
+  raw_ptr<SafeBrowsingClient> client_ = nullptr;
   // The checker client.  Used to communicate with the database on the IO
   // thread. If kSafeBrowsingOnUIThread is enabled it'll be used on the UI
   // thread.

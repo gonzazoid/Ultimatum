@@ -6,6 +6,7 @@
 
 #import <memory>
 
+#import "base/memory/raw_ptr.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/strings/utf_string_conversions.h"
 #import "components/strings/grit/components_strings.h"
@@ -33,7 +34,7 @@ class TabTitleUtilTest : public PlatformTest {
   }
 
   web::FakeWebState web_state_;
-  web::FakeNavigationManager* navigation_manager_ = nullptr;
+  raw_ptr<web::FakeNavigationManager> navigation_manager_ = nullptr;
 };
 
 // Tests GetTabTitle when there is a download task in the download manager.
@@ -42,7 +43,7 @@ TEST_F(TabTitleUtilTest, GetTabTitleWithDownloadTest) {
       DownloadManagerTabHelper::FromWebState(&web_state_);
   auto task = std::make_unique<web::FakeDownloadTask>(
       GURL("https://test.test/"), /*mime_type=*/std::string());
-  tab_helper->Download(std::move(task));
+  tab_helper->SetCurrentDownload(std::move(task));
   std::u16string download_title =
       l10n_util::GetStringUTF16(IDS_DOWNLOAD_TAB_TITLE);
   NSString* ns_download_title = base::SysUTF16ToNSString(download_title);

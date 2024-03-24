@@ -5,8 +5,7 @@
 #include "third_party/blink/renderer/core/css/parser/css_variable_parser.h"
 
 #include "base/containers/contains.h"
-#include "third_party/blink/renderer/core/css/css_custom_property_declaration.h"
-#include "third_party/blink/renderer/core/css/css_variable_reference_value.h"
+#include "third_party/blink/renderer/core/css/css_unparsed_declaration_value.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser_token_range.h"
 #include "third_party/blink/renderer/core/css/properties/css_parsing_utils.h"
 #include "third_party/blink/renderer/core/css/resolver/style_cascade.h"
@@ -71,6 +70,15 @@ bool IsValidRestrictedDeclarationValue(CSSParserTokenRange range,
       // A block may have both var and env references. They can also be nested
       // and used as fallbacks.
       switch (token.FunctionId()) {
+        case CSSValueID::kInvalid:
+          // Not a built-in function, but it might be a user-defined
+          // CSS function (e.g. --foo()).
+          if (RuntimeEnabledFeatures::CSSFunctionsEnabled() &&
+              token.GetType() == kFunctionToken &&
+              CSSVariableParser::IsValidVariableName(token.Value())) {
+            has_references = true;
+          }
+          break;
         case CSSValueID::kVar:
           if (!IsValidVariableReference(range.ConsumeBlock())) {
             return false;  // Invalid reference.
@@ -212,11 +220,10 @@ bool CSSVariableParser::IsValidVariableName(const CSSParserToken& token) {
     return false;
   }
 
-  StringView value = token.Value();
-  return value.length() >= 3 && value[0] == '-' && value[1] == '-';
+  return IsValidVariableName(token.Value());
 }
 
-bool CSSVariableParser::IsValidVariableName(const String& string) {
+bool CSSVariableParser::IsValidVariableName(StringView string) {
   return string.length() >= 3 && string[0] == '-' && string[1] == '-';
 }
 
@@ -238,7 +245,7 @@ CSSValue* CSSVariableParser::ParseDeclarationIncludingCSSWide(
   return ParseDeclarationValue(tokenized_value, is_animation_tainted, context);
 }
 
-CSSCustomPropertyDeclaration* CSSVariableParser::ParseDeclarationValue(
+CSSUnparsedDeclarationValue* CSSVariableParser::ParseDeclarationValue(
     const CSSTokenizedValue& tokenized_value,
     bool is_animation_tainted,
     const CSSParserContext& context) {
@@ -254,13 +261,13 @@ CSSCustomPropertyDeclaration* CSSVariableParser::ParseDeclarationValue(
   }
 
   StringView text = StripTrailingWhitespaceAndComments(tokenized_value.text);
-  return MakeGarbageCollected<CSSCustomPropertyDeclaration>(
+  return MakeGarbageCollected<CSSUnparsedDeclarationValue>(
       CSSVariableData::Create(CSSTokenizedValue{tokenized_value.range, text},
                               is_animation_tainted, has_references),
       &context);
 }
 
-CSSVariableReferenceValue* CSSVariableParser::ParseUniversalSyntaxValue(
+CSSUnparsedDeclarationValue* CSSVariableParser::ParseUniversalSyntaxValue(
     CSSTokenizedValue value,
     const CSSParserContext& context,
     bool is_animation_tainted) {
@@ -273,9 +280,9 @@ CSSVariableReferenceValue* CSSVariableParser::ParseUniversalSyntaxValue(
   if (ParseCSSWideValue(value.range)) {
     return nullptr;
   }
-  return MakeGarbageCollected<CSSVariableReferenceValue>(
+  return MakeGarbageCollected<CSSUnparsedDeclarationValue>(
       CSSVariableData::Create(value, is_animation_tainted, has_references),
-      context);
+      &context);
 }
 
 StringView CSSVariableParser::StripTrailingWhitespaceAndComments(

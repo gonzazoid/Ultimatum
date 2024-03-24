@@ -6,7 +6,8 @@
 import 'chrome://settings/lazy_load.js';
 
 import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
-import {CardInfo, CardState, ContentSettingsTypes, SafetyHubBrowserProxyImpl, SafetyHubEvent, SettingsSafetyHubPageElement} from 'chrome://settings/lazy_load.js';
+import type {CardInfo, SettingsSafetyHubPageElement} from 'chrome://settings/lazy_load.js';
+import {CardState, ContentSettingsTypes, SafetyHubBrowserProxyImpl, SafetyHubEvent} from 'chrome://settings/lazy_load.js';
 import {LifetimeBrowserProxyImpl, MetricsBrowserProxyImpl, PasswordManagerImpl, PasswordManagerPage, Router, routes, SafetyHubModuleType, SafetyHubSurfaces} from 'chrome://settings/settings.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {isChildVisible} from 'chrome://webui-test/test_util.js';
@@ -365,7 +366,7 @@ suite('SafetyHubPage', function() {
     await safetyHubBrowserProxy.whenCalled('dismissActiveMenuNotification');
   });
 
-  test('Metric Recording', async function() {
+  test('Metric Recording for Dashboard State', async function() {
     const safeCardData: CardInfo = {
       header: 'Dummy header',
       subheader: 'Dummy subheader',
@@ -469,5 +470,38 @@ suite('SafetyHubPage', function() {
     result = await metricsBrowserProxy.whenCalled(
         'recordSafetyHubDashboardAnyWarning');
     assertEquals(true, result);
+  });
+
+  test('Metric Recording for Education module', async function() {
+    assertNoRecommendationState(true);
+
+    const eduModule = testElement.shadowRoot!.querySelector<HTMLElement>(
+        '#userEducationModule');
+    const links =
+        eduModule!.shadowRoot!.querySelectorAll<HTMLAnchorElement>('a');
+    assertEquals(3, links.length);
+
+    // Check clicking the Safety Tools link causes metric recording.
+    assertTrue(!!links[0]);
+    links[0].click();
+    assertEquals(
+        'Settings.SafetyHub.SafetyToolsLinkClicked',
+        await metricsBrowserProxy.whenCalled('recordAction'));
+    metricsBrowserProxy.reset();
+
+    // Check clicking the Incognito link causes metric recording.
+    assertTrue(!!links[1]);
+    links[1].click();
+    assertEquals(
+        'Settings.SafetyHub.IncognitoLinkClicked',
+        await metricsBrowserProxy.whenCalled('recordAction'));
+    metricsBrowserProxy.reset();
+
+    // Check clicking the Safe Browsing link causes metric recording.
+    assertTrue(!!links[2]);
+    links[2].click();
+    assertEquals(
+        'Settings.SafetyHub.SafeBrowsingLinkClicked',
+        await metricsBrowserProxy.whenCalled('recordAction'));
   });
 });

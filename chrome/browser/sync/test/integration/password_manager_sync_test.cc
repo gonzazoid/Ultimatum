@@ -161,11 +161,8 @@ class PasswordManagerSyncTest : public SyncTest {
     // page load. This is important because if a password is autofilled, then
     // all Javascript changes to it are discarded, and thus any tests that cover
     // updating a password become flaky.
-    feature_list_.InitWithFeatures(
-        /*enabled_features=*/{password_manager::features::
-                                  kEnablePasswordsAccountStorage,
-                              password_manager::features::kFillOnAccountSelect},
-        /*disabled_features=*/{switches::kUnoDesktop});
+    feature_list_.InitAndEnableFeature(
+        password_manager::features::kFillOnAccountSelect);
   }
 
   ~PasswordManagerSyncTest() override = default;
@@ -960,14 +957,14 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerSyncTest, Resignin) {
   // some account opted in. No opt-in yet, so no re-signin.
   EXPECT_FALSE(
       password_manager::features_util::ShouldShowAccountStorageReSignin(
-          GetSyncService(0), GURL()));
+          GetProfile(0)->GetPrefs(), GetSyncService(0), GURL()));
 
   SignIn();
 
   // Still no opt-in. Plus, the user is signed-in already.
   EXPECT_FALSE(
       password_manager::features_util::ShouldShowAccountStorageReSignin(
-          GetSyncService(0), GURL()));
+          GetProfile(0)->GetPrefs(), GetSyncService(0), GURL()));
 
   password_manager::features_util::OptInToAccountStorage(
       GetProfile(0)->GetPrefs(), GetSyncService(0));
@@ -975,7 +972,7 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerSyncTest, Resignin) {
   // Now there's an opt-in but the user is signed-in already.
   EXPECT_FALSE(
       password_manager::features_util::ShouldShowAccountStorageReSignin(
-          GetSyncService(0), GURL()));
+          GetProfile(0)->GetPrefs(), GetSyncService(0), GURL()));
 
   SignOut();
 
@@ -983,17 +980,20 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerSyncTest, Resignin) {
   // except the Gaia sign-in page where it's useless. Native UI can offer
   // re-signin too, in that case the GURL is empty.
   EXPECT_TRUE(password_manager::features_util::ShouldShowAccountStorageReSignin(
-      GetSyncService(0), GURL("http://www.example.com")));
+      GetProfile(0)->GetPrefs(), GetSyncService(0),
+      GURL("http://www.example.com")));
   EXPECT_TRUE(password_manager::features_util::ShouldShowAccountStorageReSignin(
-      GetSyncService(0), GURL("https://www.example.com")));
+      GetProfile(0)->GetPrefs(), GetSyncService(0),
+      GURL("https://www.example.com")));
   EXPECT_TRUE(password_manager::features_util::ShouldShowAccountStorageReSignin(
-      GetSyncService(0), GURL()));
+      GetProfile(0)->GetPrefs(), GetSyncService(0), GURL()));
   EXPECT_FALSE(
       password_manager::features_util::ShouldShowAccountStorageReSignin(
-          GetSyncService(0), GaiaUrls::GetInstance()->gaia_url()));
+          GetProfile(0)->GetPrefs(), GetSyncService(0),
+          GaiaUrls::GetInstance()->gaia_url()));
   EXPECT_FALSE(
       password_manager::features_util::ShouldShowAccountStorageReSignin(
-          GetSyncService(0),
+          GetProfile(0)->GetPrefs(), GetSyncService(0),
           GaiaUrls::GetInstance()->gaia_url().Resolve("path")));
 
   SignIn();
@@ -1001,7 +1001,7 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerSyncTest, Resignin) {
   // Once the user signs in, no re-signin offered anymore.
   EXPECT_FALSE(
       password_manager::features_util::ShouldShowAccountStorageReSignin(
-          GetSyncService(0), GURL()));
+          GetProfile(0)->GetPrefs(), GetSyncService(0), GURL()));
 }
 
 IN_PROC_BROWSER_TEST_F(PasswordManagerSyncTest,
@@ -1023,11 +1023,11 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerSyncTest,
 
   SignIn("first@gmail.com");
   EXPECT_TRUE(password_manager::features_util::IsOptedInForAccountStorage(
-      GetSyncService(0)));
+      GetProfile(0)->GetPrefs(), GetSyncService(0)));
   SignOut();
   SignIn("second@gmail.com");
   EXPECT_FALSE(password_manager::features_util::IsOptedInForAccountStorage(
-      GetSyncService(0)));
+      GetProfile(0)->GetPrefs(), GetSyncService(0)));
 }
 #endif  // BUILDFLAG(ENABLE_DICE_SUPPORT)
 
@@ -1047,7 +1047,7 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerSyncTest,
   ASSERT_EQ(fake_server_->GetSyncEntitiesByModelType(syncer::PASSWORDS).size(),
             1u);
   EXPECT_TRUE(password_manager::features_util::IsOptedInForAccountStorage(
-      GetSyncService(0)));
+      GetProfile(0)->GetPrefs(), GetSyncService(0)));
 
   // Clear cookies and account passwords.
   content::BrowsingDataRemover* remover =
@@ -1067,7 +1067,7 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerSyncTest,
 
   // The opt-in should be gone as well.
   EXPECT_FALSE(password_manager::features_util::IsOptedInForAccountStorage(
-      GetSyncService(0)));
+      GetProfile(0)->GetPrefs(), GetSyncService(0)));
 }
 
 IN_PROC_BROWSER_TEST_F(PasswordManagerSyncTest,
@@ -1102,7 +1102,7 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerSyncTest, ClearAccountStoreOnStartup) {
     base::ScopedAllowBlockingForTesting allow_blocking;
     std::string json;
     ASSERT_TRUE(base::ReadFileToString(json_path, &json));
-    absl::optional<base::Value> prefs = base::JSONReader::Read(json);
+    std::optional<base::Value> prefs = base::JSONReader::Read(json);
     ASSERT_TRUE(prefs.has_value());
     ASSERT_TRUE(prefs->is_dict());
     ASSERT_TRUE(prefs->GetDict().RemoveByDottedPath(
@@ -1117,7 +1117,7 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerSyncTest, ClearAccountStoreOnStartup) {
 
   // Since we mangled the prefs file, the opt-in should be gone.
   ASSERT_FALSE(password_manager::features_util::IsOptedInForAccountStorage(
-      GetSyncService(0)));
+      GetProfile(0)->GetPrefs(), GetSyncService(0)));
   ASSERT_FALSE(GetSyncService(0)->GetActiveDataTypes().Has(syncer::PASSWORDS));
 
   // Since there's no opt-in, the account-scoped store should have been cleared
@@ -1147,7 +1147,7 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerSyncTest, SyncUtilApis) {
             SyncTest::kDefaultUserEmail);
   EXPECT_EQ(
       password_manager::sync_util::GetPasswordSyncState(GetSyncService(0)),
-      password_manager::SyncState::kSyncingNormalEncryption);
+      password_manager::sync_util::SyncState::kActiveWithNormalEncryption);
 
   // Enter a persistent auth error state.
   GetClient(0)->EnterSyncPausedStateForPrimaryAccount();
@@ -1159,7 +1159,7 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerSyncTest, SyncUtilApis) {
           GetSyncService(0)));
   EXPECT_EQ(
       password_manager::sync_util::GetPasswordSyncState(GetSyncService(0)),
-      password_manager::SyncState::kNotSyncing);
+      password_manager::sync_util::SyncState::kNotActive);
 
   // In the current implementation, the APIs below treat sync as enabled/active
   // even while paused.

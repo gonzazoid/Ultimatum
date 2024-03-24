@@ -53,7 +53,7 @@
 #include "third_party/blink/renderer/core/css/invalidation/invalidation_set.h"
 #include "third_party/blink/renderer/core/css/media_feature_overrides.h"
 #include "third_party/blink/renderer/core/css/media_values.h"
-#include "third_party/blink/renderer/core/css/position_fallback_data.h"
+#include "third_party/blink/renderer/core/css/out_of_flow_data.h"
 #include "third_party/blink/renderer/core/css/property_registration.h"
 #include "third_party/blink/renderer/core/css/property_registry.h"
 #include "third_party/blink/renderer/core/css/resolver/scoped_style_resolver.h"
@@ -1083,7 +1083,8 @@ void SetNeedsStyleRecalcForViewportUnits(TreeScope& tree_scope,
       SetNeedsStyleRecalcForViewportUnits(*root, dirty_flags);
     }
     const ComputedStyle* style = element->GetComputedStyle();
-    if (style && (style->ViewportUnitFlags() & dirty_flags)) {
+    if (style && ((style->ViewportUnitFlags() & dirty_flags) ||
+                  style->HighlightPseudoElementStylesDependOnViewportUnits())) {
       element->SetNeedsStyleRecalc(kLocalStyleChange,
                                    StyleChangeReasonForTracing::Create(
                                        style_change_reason::kViewportUnits));
@@ -3160,13 +3161,17 @@ scoped_refptr<StyleInitialData> StyleEngine::MaybeCreateAndGetInitialData() {
   return initial_data_;
 }
 
-void StyleEngine::RecalcHighlightStylesForContainer(Element& container) {
+bool StyleEngine::RecalcHighlightStylesForContainer(Element& container) {
   const ComputedStyle& style = container.ComputedStyleRef();
+  // If we depend on container queries we need to update styles, and also
+  // the styles for dependents. Hence we return this value, which is used
+  // in RecalcStyleForContainer to set the flag for child recalc.
+  bool depends_on_container_queries =
+      style.HighlightData().DependsOnSizeContainerQueries() ||
+      style.HighlightsDependOnSizeContainerQueries();
   if (!style.HasAnyHighlightPseudoElementStyles() ||
-      !style.HasNonUaHighlightPseudoStyles() ||
-      !(style.HighlightData().DependsOnSizeContainerQueries() ||
-        style.HighlightsDependOnSizeContainerQueries())) {
-    return;
+      !style.HasNonUaHighlightPseudoStyles() || !depends_on_container_queries) {
+    return false;
   }
 
   // We are recalculating styles for a size container whose highlight pseudo
@@ -3182,6 +3187,8 @@ void StyleEngine::RecalcHighlightStylesForContainer(Element& container) {
     container.GetLayoutObject()->SetStyle(new_style,
                                           LayoutObject::ApplyStyleChanges::kNo);
   }
+
+  return depends_on_container_queries;
 }
 
 #if DCHECK_IS_ON()
@@ -3253,7 +3260,9 @@ void StyleEngine::RecalcStyleForContainer(Element& container,
   container.SetChildNeedsStyleRecalc();
   style_recalc_root_.Update(nullptr, &container);
 
-  RecalcHighlightStylesForContainer(container);
+  if (RecalcHighlightStylesForContainer(container)) {
+    change = change.ForceRecalcDescendantSizeContainers();
+  }
 
   // TODO(crbug.com/1145970): Consider use a caching mechanism for FromAncestors
   // as we typically will call it for all containers on the first style/layout
@@ -3414,6 +3423,7 @@ void StyleEngine::UpdateStyleAndLayoutTreeForContainer(
   // Update quotes only if there are any scopes marked dirty.
   if (StyleContainmentScopeTree* tree = GetStyleContainmentScopeTree()) {
     tree->UpdateQuotes();
+    tree->InvalidateAnchorNameReferences();
   }
   if (container == GetDocument().documentElement()) {
     // If the container is the root element, there may be body styles which have
@@ -3426,19 +3436,16 @@ void StyleEngine::UpdateStyleAndLayoutTreeForContainer(
       container.GetLayoutObject());
 }
 
-void StyleEngine::UpdateStyleForPositionFallback(
-    Element& element,
-    const CSSPropertyValueSet* try_set) {
+void StyleEngine::UpdateStyleForOutOfFlow(Element& element,
+                                          const CSSPropertyValueSet* try_set) {
   // Note that we enter this function for any OOF element, not just those that
   // use position-fallback. Therefore, it's important to return immediately
   // without doing any work when `try_set` and `existing_try_set` both are
   // nullptr.
 
-  PositionFallbackData* position_fallback_data =
-      element.GetPositionFallbackData();
+  OutOfFlowData* out_of_flow_data = element.GetOutOfFlowData();
   const CSSPropertyValueSet* existing_try_set =
-      position_fallback_data ? position_fallback_data->GetTryPropertyValueSet()
-                             : nullptr;
+      out_of_flow_data ? out_of_flow_data->GetTryPropertyValueSet() : nullptr;
   if (existing_try_set == try_set) {
     // No need to update style, the try set is the one we already used.
     return;
@@ -3446,7 +3453,7 @@ void StyleEngine::UpdateStyleForPositionFallback(
 
   // The last seen `try_set` is persisted on Element, such that subsequent
   // regular style recalcs can continue to include this set.
-  element.EnsurePositionFallbackData().SetTryPropertyValueSet(try_set);
+  element.EnsureOutOfFlowData().SetTryPropertyValueSet(try_set);
 
   base::AutoReset<bool> pf_recalc(&in_position_fallback_style_recalc_, true);
 
@@ -3454,7 +3461,7 @@ void StyleEngine::UpdateStyleForPositionFallback(
 
   StyleRecalcContext style_recalc_context =
       StyleRecalcContext::FromAncestors(element);
-  style_recalc_context.is_position_fallback = true;
+  style_recalc_context.is_interleaved_oof = true;
 
   StyleRecalcChange change = StyleRecalcChange().ForceRecalcChildren();
 
@@ -3655,6 +3662,7 @@ void StyleEngine::UpdateStyleAndLayoutTree() {
     // Update quotes only if there are any scopes marked dirty.
     if (StyleContainmentScopeTree* tree = GetStyleContainmentScopeTree()) {
       tree->UpdateQuotes();
+      tree->InvalidateAnchorNameReferences();
     }
   } else {
     style_recalc_root_.Clear();
@@ -3881,11 +3889,11 @@ void StyleEngine::UpdateColorScheme() {
   // overrides?
   if (const MediaFeatureOverrides* overrides =
           GetDocument().GetPage()->GetMediaFeatureOverrides()) {
-    if (absl::optional<ForcedColors> forced_color_override =
+    if (std::optional<ForcedColors> forced_color_override =
             overrides->GetForcedColors()) {
       forced_colors_ = forced_color_override.value();
     }
-    if (absl::optional<mojom::blink::PreferredColorScheme>
+    if (std::optional<mojom::blink::PreferredColorScheme>
             preferred_color_scheme_override =
                 overrides->GetPreferredColorScheme()) {
       preferred_color_scheme_ = preferred_color_scheme_override.value();
@@ -3896,7 +3904,7 @@ void StyleEngine::UpdateColorScheme() {
   const PreferenceOverrides* preference_overrides =
       GetDocument().GetPage()->GetPreferenceOverrides();
   if (preference_overrides && !media_feature_override_color_scheme) {
-    absl::optional<mojom::blink::PreferredColorScheme>
+    std::optional<mojom::blink::PreferredColorScheme>
         preferred_color_scheme_override =
             preference_overrides->GetPreferredColorScheme();
     if (preferred_color_scheme_override.has_value()) {

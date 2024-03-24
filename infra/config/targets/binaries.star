@@ -1106,11 +1106,6 @@ targets.binaries.windowed_test_launcher(
 )
 
 targets.binaries.console_test_launcher(
-    name = "lacros_chrome_unittests",
-    label = "//chrome/test:lacros_chrome_unittests",
-)
-
-targets.binaries.console_test_launcher(
     name = "latency_unittests",
     label = "//ui/latency:latency_unittests",
 )
@@ -1328,6 +1323,11 @@ targets.binaries.console_test_launcher(
 targets.binaries.windowed_test_launcher(
     name = "notification_helper_unittests",
     label = "//chrome/notification_helper:notification_helper_unittests",
+)
+
+targets.binaries.generated_script(
+    name = "ondevice_stability_tests",
+    label = "//components/optimization_guide/internal/testing:ondevice_stability_tests",
 )
 
 targets.binaries.console_test_launcher(
@@ -1692,7 +1692,7 @@ targets.binaries.script(
 
 targets.binaries.script(
     name = "telemetry_gpu_integration_test_fuchsia",
-    label = "//chrome/test:telemetry_gpu_integration_test_fuchsia",
+    label = "//content/test:telemetry_gpu_integration_test_fuchsia",
     script = "//testing/scripts/run_gpu_integration_test_as_googletest.py",
     args = [
         "../../content/test/gpu/run_gpu_integration_test_fuchsia.py",

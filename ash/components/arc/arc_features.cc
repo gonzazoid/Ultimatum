@@ -48,7 +48,10 @@ const base::FeatureParam<bool> kEnableArcIdleManagerIgnoreBatteryForPLT{
     &kEnableArcIdleManager, "ignore_battery_for_test", false};
 
 const base::FeatureParam<int> kEnableArcIdleManagerDelayMs{
-    &kEnableArcIdleManager, "delay_ms", 0};
+    &kEnableArcIdleManager, "delay_ms", 60 * 1000};
+
+const base::FeatureParam<bool> kEnableArcIdleManagerPendingIdleReactivate{
+    &kEnableArcIdleManager, "pending_idle_reactivate", false};
 
 // Controls whether files shared to ARC Nearby Share are shared through the
 // FuseBox filesystem, instead of the default method (through a temporary path
@@ -108,6 +111,11 @@ BASE_FEATURE(kEnableUnmanagedToManagedTransitionFeature,
 // virtio-fs.
 BASE_FEATURE(kEnableVirtioBlkForData,
              "ArcEnableVirtioBlkForData",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Controls whether to enable the multiple-worker feature in virtio-blk disks
+BASE_FEATURE(kEnableVirtioBlkMultipleWorkers,
+             "ArcEnableVirtioBlkMultipleWorkers",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Controls whether to allow Android apps to access external storage devices
@@ -219,7 +227,7 @@ BASE_FEATURE(kOutOfProcessVideoDecoding,
 // Settings page.
 BASE_FEATURE(kPerAppLanguage,
              "PerAppLanguage",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Controls ARC picture-in-picture feature. If this is enabled, then Android
 // will control which apps can enter PIP. If this is disabled, then ARC PIP
@@ -292,7 +300,7 @@ BASE_FEATURE(kTouchscreenEmulation,
 // Controls whether ARC should be enabled on unaffiliated devices on client side
 BASE_FEATURE(kUnaffiliatedDeviceArcRestriction,
              "UnaffiliatedDeviceArcRestriction",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Controls ARC USB Storage UI feature.
 // When enabled, chrome://settings and Files.app will ask if the user wants

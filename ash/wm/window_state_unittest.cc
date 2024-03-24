@@ -82,7 +82,22 @@ class AlwaysMaximizeTestState : public WindowState::State {
   WindowStateType state_type_;
 };
 
-using WindowStateTest = AshTestBase;
+class WindowStateTest : public AshTestBase {
+ public:
+  WindowStateTest() {
+    scoped_feature_list_.InitWithFeatures(
+        /*enabled_features=*/{features::kFasterSplitScreenSetup,
+                              features::kOsSettingsRevampWayfinding},
+        /*disabled_features=*/{});
+  }
+  WindowStateTest(const WindowStateTest&) = delete;
+  WindowStateTest& operator=(const WindowStateTest&) = delete;
+  ~WindowStateTest() override = default;
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
 using Sample = base::HistogramBase::Sample;
 
 // Test that a window gets properly snapped to the display's edges in a
@@ -163,7 +178,7 @@ TEST_F(WindowStateTest, SnapWindowMinimumSizeLandscape) {
       &delegate, -1, gfx::Rect(0, 100, kWorkAreaBounds.width() - 1, 100)));
 
   // It should be possible to snap a window with a minimum size.
-  const int kMinimumWidth = 700;
+  const int kMinimumWidth = 750;
   delegate.set_minimum_size(gfx::Size(kMinimumWidth, 0));
   WindowState* window_state = WindowState::Get(window.get());
   EXPECT_TRUE(window_state->CanSnap());
@@ -529,7 +544,7 @@ TEST_F(WindowStateTest, UpdateSnapWidthRatioTest) {
       gfx::Rect(kWorkAreaBounds.x(), kWorkAreaBounds.y(),
                 kWorkAreaBounds.width() / 2, kWorkAreaBounds.height());
   EXPECT_EQ(expected, window->GetBoundsInScreen());
-  EXPECT_EQ(0.5f, *window_state->snap_ratio());
+  EXPECT_EQ(chromeos::kDefaultSnapRatio, *window_state->snap_ratio());
 
   // Drag to change snapped window width.
   const int kIncreasedWidth = 225;
@@ -553,7 +568,7 @@ TEST_F(WindowStateTest, UpdateSnapWidthRatioTest) {
   // ratio.
   window_state->OnWMEvent(&cycle_snap_primary);
   EXPECT_EQ(WindowStateType::kPrimarySnapped, window_state->GetStateType());
-  EXPECT_EQ(0.5f, *window_state->snap_ratio());
+  EXPECT_EQ(chromeos::kDefaultSnapRatio, *window_state->snap_ratio());
 }
 
 // Tests that dragging and snapping the snapped window update the width ratio
@@ -587,7 +602,7 @@ TEST_F(WindowStateTest, SnapSnappedWindow) {
   window->layer()->GetAnimator()->Step(base::TimeTicks::Now() +
                                        base::Seconds(1));
   EXPECT_EQ(expected, window->GetBoundsInScreen());
-  EXPECT_EQ(0.5f, *window_state->snap_ratio());
+  EXPECT_EQ(chromeos::kDefaultSnapRatio, *window_state->snap_ratio());
 
   // Drag the window to unsnap but do not release.
   ui::test::EventGenerator* generator = GetEventGenerator();
@@ -604,7 +619,7 @@ TEST_F(WindowStateTest, SnapSnappedWindow) {
 
   // The snapped ratio should be correct regardless of whether the animation
   // is finished or not.
-  EXPECT_EQ(0.5f, *window_state->snap_ratio());
+  EXPECT_EQ(chromeos::kDefaultSnapRatio, *window_state->snap_ratio());
 }
 
 // Test that snapping left/right preserves the restore bounds.
@@ -2202,7 +2217,7 @@ TEST_F(WindowStateTest, SnappedWindowsInExternalDisplay) {
   window_state1->OnWMEvent(&snap_left);
   EXPECT_TRUE(window_state1->IsSnapped());
   EXPECT_EQ(secondary_id, screen->GetDisplayNearestWindow(w1.get()).id());
-  EXPECT_EQ(0.5f, *window_state1->snap_ratio());
+  EXPECT_EQ(chromeos::kDefaultSnapRatio, *window_state1->snap_ratio());
 
   // Make `w2` to be right snapped.
   WindowState* window_state2 = WindowState::Get(w2.get());
@@ -2210,7 +2225,7 @@ TEST_F(WindowStateTest, SnappedWindowsInExternalDisplay) {
   window_state2->OnWMEvent(&snap_right);
   EXPECT_TRUE(window_state2->IsSnapped());
   EXPECT_EQ(secondary_id, screen->GetDisplayNearestWindow(w2.get()).id());
-  EXPECT_EQ(0.5f, *window_state2->snap_ratio());
+  EXPECT_EQ(chromeos::kDefaultSnapRatio, *window_state2->snap_ratio());
 
   // Store the two snapped window bounds with a left aligned shelf.
   const gfx::Rect w1_local_bounds = w1->bounds();
@@ -2230,8 +2245,8 @@ TEST_F(WindowStateTest, SnappedWindowsInExternalDisplay) {
   EXPECT_TRUE(window_state2->IsSnapped());
   EXPECT_EQ(secondary_id, screen->GetDisplayNearestWindow(w1.get()).id());
   EXPECT_EQ(secondary_id, screen->GetDisplayNearestWindow(w2.get()).id());
-  EXPECT_EQ(0.5f, *window_state1->snap_ratio());
-  EXPECT_EQ(0.5f, *window_state2->snap_ratio());
+  EXPECT_EQ(chromeos::kDefaultSnapRatio, *window_state1->snap_ratio());
+  EXPECT_EQ(chromeos::kDefaultSnapRatio, *window_state2->snap_ratio());
   EXPECT_EQ(w1_local_bounds, w1->bounds());
   EXPECT_EQ(w2_local_bounds, w2->bounds());
   EXPECT_EQ(ShelfAlignment::kLeft,

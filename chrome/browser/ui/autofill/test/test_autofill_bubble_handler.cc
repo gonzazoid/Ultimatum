@@ -93,6 +93,17 @@ AutofillBubbleBase* TestAutofillBubbleHandler::ShowVirtualCardEnrollBubble(
   return virtual_card_enroll_bubble_view_.get();
 }
 
+AutofillBubbleBase*
+TestAutofillBubbleHandler::ShowVirtualCardEnrollConfirmationBubble(
+    content::WebContents* web_contents,
+    VirtualCardEnrollBubbleController* controller) {
+  if (!virtual_card_enroll_confirmation_bubble_view_) {
+    virtual_card_enroll_confirmation_bubble_view_ =
+        std::make_unique<TestAutofillBubble>();
+  }
+  return virtual_card_enroll_confirmation_bubble_view_.get();
+}
+
 AutofillBubbleBase* TestAutofillBubbleHandler::ShowMandatoryReauthBubble(
     content::WebContents* web_contents,
     MandatoryReauthBubbleController* controller,
@@ -102,6 +113,18 @@ AutofillBubbleBase* TestAutofillBubbleHandler::ShowMandatoryReauthBubble(
     mandatory_reauth_bubble_view_ = std::make_unique<TestAutofillBubble>();
   }
   return mandatory_reauth_bubble_view_.get();
+}
+
+AutofillBubbleBase* TestAutofillBubbleHandler::ShowSaveCardConfirmationBubble(
+    content::WebContents* web_contents,
+    SaveCardBubbleController* controller) {
+  save_card_confirmation_bubble_shown_count_++;
+
+  if (!save_card_confirmation_bubble_view_) {
+    save_card_confirmation_bubble_view_ =
+        std::make_unique<TestAutofillBubble>();
+  }
+  return save_card_confirmation_bubble_view_.get();
 }
 
 }  // namespace autofill

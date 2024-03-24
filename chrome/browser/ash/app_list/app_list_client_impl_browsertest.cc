@@ -16,6 +16,7 @@
 #include "ash/public/cpp/test/shell_test_api.h"
 #include "ash/public/cpp/window_properties.h"
 #include "ash/shell.h"
+#include "ash/test/active_window_waiter.h"
 #include "ash/webui/settings/public/constants/routes.mojom.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
@@ -51,7 +52,6 @@
 #include "chrome/browser/ash/login/login_manager_test.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/ui/user_adding_screen.h"
-#include "chrome/browser/ash/login/users/chrome_user_manager.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/system_web_apps/system_web_app_manager.h"
 #include "chrome/browser/browser_process.h"
@@ -79,6 +79,7 @@
 #include "components/browser_sync/browser_sync_switches.h"
 #include "components/prefs/pref_service.h"
 #include "components/services/app_service/public/cpp/package_id.h"
+#include "components/user_manager/user_manager.h"
 #include "components/user_manager/user_names.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
@@ -91,8 +92,6 @@
 #include "ui/display/screen.h"
 #include "ui/display/test/display_manager_test_api.h"
 #include "ui/wm/core/window_util.h"
-#include "ui/wm/public/activation_change_observer.h"
-#include "ui/wm/public/activation_client.h"
 
 // Browser Test for AppListClientImpl.
 using AppListClientImplBrowserTest = extensions::PlatformAppBrowserTest;
@@ -122,40 +121,6 @@ class TestObserver : public app_list::AppListSyncableService::Observer {
                           app_list::AppListSyncableService::Observer>
       observer_{this};
   size_t add_or_update_count_ = 0;
-};
-
-class ActiveWindowWaiter : public wm::ActivationChangeObserver {
- public:
-  explicit ActiveWindowWaiter(aura::Window* root_window) {
-    observation_.Observe(wm::GetActivationClient(root_window));
-  }
-
-  ActiveWindowWaiter(const ActiveWindowWaiter&) = delete;
-  ActiveWindowWaiter& operator=(const ActiveWindowWaiter&) = delete;
-
-  ~ActiveWindowWaiter() override = default;
-
-  aura::Window* Wait() {
-    run_loop_.Run();
-    return found_window_;
-  }
-
-  void OnWindowActivated(wm::ActivationChangeObserver::ActivationReason reason,
-                         aura::Window* gained_active,
-                         aura::Window* lost_active) override {
-    if (gained_active) {
-      found_window_ = gained_active;
-      observation_.Reset();
-      run_loop_.Quit();
-    }
-  }
-
- private:
-  base::RunLoop run_loop_;
-  raw_ptr<aura::Window> found_window_ = nullptr;
-
-  base::ScopedObservation<wm::ActivationClient, wm::ActivationChangeObserver>
-      observation_{this};
 };
 
 }  // namespace
@@ -695,7 +660,7 @@ IN_PROC_BROWSER_TEST_F(AppListClientImplBrowserTest,
   AppListModelUpdater* model_updater = test::GetModelUpdater(client);
   ASSERT_TRUE(model_updater);
 
-  ActiveWindowWaiter window_waiter(primary_root_window);
+  ash::ActiveWindowWaiter window_waiter(primary_root_window);
 
   client->OpenSearchResult(model_updater->model_id(), app_result_id,
                            ui::EF_NONE,
@@ -766,7 +731,7 @@ IN_PROC_BROWSER_TEST_F(AppListClientImplBrowserTest,
   AppListModelUpdater* model_updater = test::GetModelUpdater(client);
   ASSERT_TRUE(model_updater);
 
-  ActiveWindowWaiter window_waiter(secondary_root_window);
+  ash::ActiveWindowWaiter window_waiter(secondary_root_window);
 
   client->OpenSearchResult(model_updater->model_id(), app_result_id,
                            ui::EF_NONE,
@@ -1062,7 +1027,7 @@ class DurationBetweenSeesionActivationAndFirstLauncherShowingBrowserTest
     // showing the launcher. Therefore we set the current user to be new
     // explicitly.
     LoginUser(new_user_id_);
-    ash::ChromeUserManager::Get()->SetIsCurrentUserNew(true);
+    user_manager::UserManager::Get()->SetIsCurrentUserNew(true);
     AppListClientImpl::GetInstance()->InitializeAsIfNewUserLoginForTest();
   }
 

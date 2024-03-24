@@ -12,11 +12,12 @@ import {loadTimeData} from '//resources/js/load_time_data.js';
 import {MetricsReporterImpl} from '//resources/js/metrics_reporter/metrics_reporter.js';
 import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {AutocompleteMatch, AutocompleteResult, OmniboxPopupSelection, PageHandlerInterface, SelectionLineState, SideType} from './omnibox.mojom-webui.js';
+import type {AutocompleteMatch, AutocompleteResult, OmniboxPopupSelection, PageHandlerInterface} from './omnibox.mojom-webui.js';
+import {RenderType, SelectionLineState, SideType} from './omnibox.mojom-webui.js';
 import {RealboxBrowserProxy} from './realbox_browser_proxy.js';
 import {getTemplate} from './realbox_dropdown.html.js';
-import {RealboxMatchElement} from './realbox_match.js';
-import {decodeString16, sideTypeToClass} from './utils.js';
+import type {RealboxMatchElement} from './realbox_match.js';
+import {decodeString16, renderTypeToClass, sideTypeToClass} from './utils.js';
 
 // The '%' operator in JS returns negative numbers. This workaround avoids that.
 const remainder = (lhs: number, rhs: number) => ((lhs % rhs) + rhs) % rhs;
@@ -196,13 +197,19 @@ export class RealboxDropdownElement extends PolymerElement {
     this.selectedMatchIndex = index;
   }
 
-  updateSelection(selection: OmniboxPopupSelection) {
+  updateSelection(
+      oldSelection: OmniboxPopupSelection, selection: OmniboxPopupSelection) {
     if (selection.state === SelectionLineState.kFocusedButtonHeader) {
       // TODO: Focus group header.
       this.unselect();
       return;
     }
-
+    // If the updated selection is a new match, remove any remaining selection
+    // on the previously selected match.
+    if (oldSelection.line !== selection.line) {
+      this.selectableMatchElements[this.selectedMatchIndex]?.updateSelection(
+          selection);
+    }
     this.selectIndex(selection.line);
     this.selectableMatchElements[this.selectedMatchIndex]?.updateSelection(
         selection);
@@ -295,13 +302,19 @@ export class RealboxDropdownElement extends PolymerElement {
   // Helpers
   //============================================================================
 
-  private classForSide_(side: SideType): string {
+  private sideTypeClass_(side: SideType): string {
     return sideTypeToClass(side);
+  }
+
+  private renderTypeClassForGroup_(groupId: number): string {
+    return renderTypeToClass(
+        this.result?.suggestionGroupsMap[groupId]?.renderType ??
+        RenderType.kDefaultVertical);
   }
 
   private computeHasSecondarySide_(): boolean {
     const hasSecondarySide =
-        !!this.groupIdsForSide_(SideType.kSecondary).length;
+        !!this.groupIdsForSideType_(SideType.kSecondary).length;
     if (!this.hadSecondarySide) {
       this.hadSecondarySide = hasSecondarySide;
     }
@@ -322,7 +335,7 @@ export class RealboxDropdownElement extends PolymerElement {
    * @returns The unique suggestion group IDs that belong to the given side type
    *     while preserving the order in which they appear in the list of matches.
    */
-  private groupIdsForSide_(side: SideType): number[] {
+  private groupIdsForSideType_(side: SideType): number[] {
     return [...new Set<number>(
         this.result?.matches?.map(match => match.suggestionGroupId)
             .filter(groupId => this.sideTypeForGroup_(groupId) === side))];
@@ -436,7 +449,7 @@ export class RealboxDropdownElement extends PolymerElement {
     }
 
     // Only show secondary side if there are primary matches visible.
-    const primaryGroupIds = this.groupIdsForSide_(SideType.kDefaultPrimary);
+    const primaryGroupIds = this.groupIdsForSideType_(SideType.kDefaultPrimary);
     return primaryGroupIds.some((groupId) => {
       return this.matchesForGroup_(groupId).length > 0;
     });

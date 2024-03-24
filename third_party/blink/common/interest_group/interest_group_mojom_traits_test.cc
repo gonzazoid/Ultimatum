@@ -4,10 +4,11 @@
 
 #include "third_party/blink/public/common/interest_group/interest_group_mojom_traits.h"
 
+#include <optional>
+
 #include "base/time/time.h"
 #include "mojo/public/cpp/test_support/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/common_export.h"
 #include "third_party/blink/public/common/interest_group/interest_group.h"
 #include "third_party/blink/public/mojom/interest_group/interest_group_types.mojom.h"
@@ -192,6 +193,13 @@ TEST(InterestGroupMojomTraitsTest,
   SerializeAndDeserializeAndCompare(interest_group);
 }
 
+TEST(InterestGroupMojomTraitsTest,
+     SerializeAndDeserializeMaxTrustedBiddingSignalsURLLength) {
+  InterestGroup interest_group = CreateInterestGroup();
+  interest_group.max_trusted_bidding_signals_url_length = 8000;
+  SerializeAndDeserializeAndCompare(interest_group);
+}
+
 TEST(InterestGroupMojomTraitsTest, SerializeAndDeserializeUserBiddingSignals) {
   InterestGroup interest_group = CreateInterestGroup();
   interest_group.user_bidding_signals = "[]";
@@ -202,7 +210,7 @@ TEST(InterestGroupMojomTraitsTest, SerializeAndDeserializeAds) {
   InterestGroup interest_group = CreateInterestGroup();
   interest_group.ads.emplace();
   interest_group.ads->emplace_back(GURL(kUrl1),
-                                   /*metadata=*/absl::nullopt);
+                                   /*metadata=*/std::nullopt);
   interest_group.ads->emplace_back(GURL(kUrl2),
                                    /*metadata=*/"[]");
   SerializeAndDeserializeAndCompare(interest_group);
@@ -212,13 +220,13 @@ TEST(InterestGroupMojomTraitsTest, SerializeAndDeserializeAdsWithReportingIds) {
   InterestGroup interest_group = CreateInterestGroup();
   interest_group.ads.emplace();
   interest_group.ads->emplace_back(GURL(kUrl1),
-                                   /*metadata=*/absl::nullopt,
-                                   /*size_group=*/absl::nullopt);
+                                   /*metadata=*/std::nullopt,
+                                   /*size_group=*/std::nullopt);
   (*interest_group.ads)[0].buyer_reporting_id = "buyer_id_1";
   (*interest_group.ads)[0].buyer_and_seller_reporting_id = "both_id_1";
   interest_group.ads->emplace_back(GURL(kUrl2),
                                    /*metadata=*/"[]",
-                                   /*size_group=*/absl::nullopt);
+                                   /*size_group=*/std::nullopt);
   (*interest_group.ads)[1].buyer_reporting_id = "buyer_id_2";
   (*interest_group.ads)[1].buyer_and_seller_reporting_id = "both_id_2";
 
@@ -229,18 +237,18 @@ TEST(InterestGroupMojomTraitsTest, AdComponentsWithReportingIdsInvalid) {
   InterestGroup interest_group = CreateInterestGroup();
   interest_group.ad_components.emplace();
   interest_group.ad_components->emplace_back(GURL(kUrl1),
-                                             /*metadata=*/absl::nullopt,
-                                             /*size_group=*/absl::nullopt);
+                                             /*metadata=*/std::nullopt,
+                                             /*size_group=*/std::nullopt);
   (*interest_group.ad_components)[0].buyer_reporting_id = "buyer_id_1";
   (*interest_group.ad_components)[0].buyer_and_seller_reporting_id =
       "both_id_1";
   EXPECT_FALSE(interest_group.IsValid());
 
-  (*interest_group.ad_components)[0].buyer_reporting_id = absl::nullopt;
+  (*interest_group.ad_components)[0].buyer_reporting_id = std::nullopt;
   EXPECT_FALSE(interest_group.IsValid());
 
   (*interest_group.ad_components)[0].buyer_and_seller_reporting_id =
-      absl::nullopt;
+      std::nullopt;
   EXPECT_TRUE(interest_group.IsValid());
 }
 
@@ -254,7 +262,7 @@ TEST(InterestGroupMojomTraitsTest, SerializeAndDeserializeAdsWithSizeGroups) {
   // 3. Size --> blink::AdSize
   interest_group.ads.emplace();
   interest_group.ads->emplace_back(GURL(kUrl1),
-                                   /*metadata=*/absl::nullopt,
+                                   /*metadata=*/std::nullopt,
                                    /*size_group=*/"group_1");
   interest_group.ads->emplace_back(GURL(kUrl2),
                                    /*metadata=*/"[]", /*size_group=*/"group_2");
@@ -277,17 +285,17 @@ TEST(InterestGroupMojomTraitsTest, SerializeAndDeserializeAdsWithAdRenderId) {
   interest_group.ads.emplace();
   interest_group.ads->emplace_back(
       GURL(kUrl1),
-      /*metadata=*/absl::nullopt,
-      /*size_group=*/absl::nullopt,
-      /*buyer_reporting_id=*/absl::nullopt,
-      /*buyer_and_seller_reporting_id=*/absl::nullopt,
+      /*metadata=*/std::nullopt,
+      /*size_group=*/std::nullopt,
+      /*buyer_reporting_id=*/std::nullopt,
+      /*buyer_and_seller_reporting_id=*/std::nullopt,
       /*ad_render_id=*/"foo");
   interest_group.ads->emplace_back(
       GURL(kUrl2),
       /*metadata=*/"[]",
-      /*size_group=*/absl::nullopt,
-      /*buyer_reporting_id=*/absl::nullopt,
-      /*buyer_and_seller_reporting_id=*/absl::nullopt,
+      /*size_group=*/std::nullopt,
+      /*buyer_reporting_id=*/std::nullopt,
+      /*buyer_and_seller_reporting_id=*/std::nullopt,
       /*ad_render_id=*/"bar");
   SerializeAndDeserializeAndCompare(interest_group);
 }
@@ -302,18 +310,18 @@ TEST(InterestGroupMojomTraitsTest,
       url::Origin::Create(GURL(kOrigin2))};
   interest_group.ads->emplace_back(
       GURL(kUrl1),
-      /*metadata=*/absl::nullopt,
-      /*size_group=*/absl::nullopt,
-      /*buyer_reporting_id=*/absl::nullopt,
-      /*buyer_and_seller_reporting_id=*/absl::nullopt,
-      /*ad_render_id=*/absl::nullopt, allowed_reporting_origins_1);
+      /*metadata=*/std::nullopt,
+      /*size_group=*/std::nullopt,
+      /*buyer_reporting_id=*/std::nullopt,
+      /*buyer_and_seller_reporting_id=*/std::nullopt,
+      /*ad_render_id=*/std::nullopt, allowed_reporting_origins_1);
   interest_group.ads->emplace_back(
       GURL(kUrl2),
       /*metadata=*/"[]",
-      /*size_group=*/absl::nullopt,
-      /*buyer_reporting_id=*/absl::nullopt,
-      /*buyer_and_seller_reporting_id=*/absl::nullopt,
-      /*ad_render_id=*/absl::nullopt, allowed_reporting_origins_2);
+      /*size_group=*/std::nullopt,
+      /*buyer_reporting_id=*/std::nullopt,
+      /*buyer_and_seller_reporting_id=*/std::nullopt,
+      /*ad_render_id=*/std::nullopt, allowed_reporting_origins_2);
   SerializeAndDeserializeAndCompare(interest_group);
 }
 
@@ -321,7 +329,7 @@ TEST(InterestGroupMojomTraitsTest, SerializeAndDeserializeAdComponents) {
   InterestGroup interest_group = CreateInterestGroup();
   interest_group.ad_components.emplace();
   interest_group.ad_components->emplace_back(GURL(kUrl1),
-                                             /*metadata=*/absl::nullopt);
+                                             /*metadata=*/std::nullopt);
   interest_group.ad_components->emplace_back(GURL(kUrl2), /*metadata=*/"[]");
   SerializeAndDeserializeAndCompare(interest_group);
 }
@@ -337,7 +345,7 @@ TEST(InterestGroupMojomTraitsTest,
   // 3. Size --> blink::AdSize
   interest_group.ad_components.emplace();
   interest_group.ad_components->emplace_back(GURL(kUrl1),
-                                             /*metadata=*/absl::nullopt,
+                                             /*metadata=*/std::nullopt,
                                              /*size_group=*/"group_1");
   interest_group.ad_components->emplace_back(GURL(kUrl2),
                                              /*metadata=*/"[]",
@@ -362,16 +370,16 @@ TEST(InterestGroupMojomTraitsTest,
   interest_group.ad_components.emplace();
   interest_group.ad_components->emplace_back(
       GURL(kUrl1),
-      /*metadata=*/absl::nullopt,
-      /*size_group=*/absl::nullopt,
-      /*buyer_reporting_id=*/absl::nullopt,
-      /*buyer_and_seller_reporting_id=*/absl::nullopt,
+      /*metadata=*/std::nullopt,
+      /*size_group=*/std::nullopt,
+      /*buyer_reporting_id=*/std::nullopt,
+      /*buyer_and_seller_reporting_id=*/std::nullopt,
       /*ad_render_id=*/"foo");
   interest_group.ad_components->emplace_back(
       GURL(kUrl2), /*metadata=*/"[]",
-      /*size_group=*/absl::nullopt,
-      /*buyer_reporting_id=*/absl::nullopt,
-      /*buyer_and_seller_reporting_id=*/absl::nullopt,
+      /*size_group=*/std::nullopt,
+      /*buyer_reporting_id=*/std::nullopt,
+      /*buyer_and_seller_reporting_id=*/std::nullopt,
       /*ad_render_id=*/"bar");
   SerializeAndDeserializeAndCompare(interest_group);
 }

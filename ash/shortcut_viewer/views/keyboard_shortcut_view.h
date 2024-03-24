@@ -35,8 +35,9 @@ class KSVSearchBoxView;
 
 // The UI container for Ash and Chrome keyboard shortcuts.
 class KeyboardShortcutView : public views::WidgetDelegateView {
+  METADATA_HEADER(KeyboardShortcutView, views::WidgetDelegateView)
+
  public:
-  METADATA_HEADER(KeyboardShortcutView);
   KeyboardShortcutView(const KeyboardShortcutView&) = delete;
   KeyboardShortcutView& operator=(const KeyboardShortcutView&) = delete;
 
@@ -52,7 +53,7 @@ class KeyboardShortcutView : public views::WidgetDelegateView {
   // views::View:
   std::u16string GetAccessibleWindowTitle() const override;
   bool AcceleratorPressed(const ui::Accelerator& accelerator) override;
-  void Layout() override;
+  void Layout(PassKey) override;
   gfx::Size CalculatePreferredSize() const override;
   void OnPaint(gfx::Canvas* canvas) override;
   void OnThemeChanged() override;

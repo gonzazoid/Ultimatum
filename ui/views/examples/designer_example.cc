@@ -169,7 +169,7 @@ class ClassRegistration<Combobox> : public BaseClassRegistration,
   // ui::ComboboxModel
   size_t GetItemCount() const override { return 1; }
   std::u16string GetItemAt(size_t index) const override { return u"<empty>"; }
-  absl::optional<size_t> GetDefaultIndex() const override { return 0; }
+  std::optional<size_t> GetDefaultIndex() const override { return 0; }
 };
 
 template <>
@@ -437,7 +437,7 @@ bool DesignerExample::GrabHandle::IsRight(GrabHandlePosition position) {
   return (position & GrabHandlePosition::kRight);
 }
 
-BEGIN_METADATA(DesignerExample, GrabHandle, View)
+BEGIN_METADATA(DesignerExample, GrabHandle)
 END_METADATA
 
 DesignerExample::GrabHandles::GrabHandles() = default;
@@ -653,7 +653,7 @@ std::u16string DesignerExample::GetItemAt(size_t index) const {
   return class_registrations_[index]->GetViewClassName();
 }
 
-absl::optional<size_t> DesignerExample::GetDefaultIndex() const {
+std::optional<size_t> DesignerExample::GetDefaultIndex() const {
   return 0;
 }
 

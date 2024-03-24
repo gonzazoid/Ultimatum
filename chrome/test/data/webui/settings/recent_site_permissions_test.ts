@@ -4,12 +4,12 @@
 
 // clang-format off
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {ContentSetting, ContentSettingsTypes, SettingsRecentSitePermissionsElement, SiteSettingSource, SiteSettingsPrefsBrowserProxyImpl} from 'chrome://settings/lazy_load.js';
+import type {SettingsRecentSitePermissionsElement} from 'chrome://settings/lazy_load.js';
+import {ContentSetting, ContentSettingsTypes, SiteSettingSource, SiteSettingsPrefsBrowserProxyImpl} from 'chrome://settings/lazy_load.js';
 import {Router, routes} from 'chrome://settings/settings.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {isChildVisible, isVisible} from 'chrome://webui-test/test_util.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 
 import {TestSiteSettingsPrefsBrowserProxy} from './test_site_settings_prefs_browser_proxy.js';
 import {createRawSiteException} from './test_util.js';
@@ -25,9 +25,6 @@ suite('CrSettingsRecentSitePermissionsTest', function() {
   let testElement: SettingsRecentSitePermissionsElement;
 
   setup(function() {
-    loadTimeData.overrideValues({
-      blockMidiByDefault: true,
-    });
     browserProxy = new TestSiteSettingsPrefsBrowserProxy();
     SiteSettingsPrefsBrowserProxyImpl.setInstance(browserProxy);
 
@@ -109,7 +106,7 @@ suite('CrSettingsRecentSitePermissionsTest', function() {
           createRawSiteException(origin1, {
             setting: ContentSetting.BLOCK,
             source: SiteSettingSource.EMBARGO,
-            type: ContentSettingsTypes.MIDI,
+            type: ContentSettingsTypes.MIDI_DEVICES,
           }),
         ],
       },

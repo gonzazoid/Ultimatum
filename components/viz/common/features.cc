@@ -220,7 +220,7 @@ BASE_FEATURE(kEagerSurfaceGarbageCollection,
 // vsync rate (the behavior at the time this feature was created.)
 BASE_FEATURE(kOverrideThrottledFrameRateParams,
              "OverrideThrottledFrameRateParams",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Used to gate calling SetPurgeable on OutputPresenter::Image from
 // SkiaOutputDeviceBufferQueue.
@@ -233,8 +233,7 @@ BASE_FEATURE(kBufferQueueImageSetPurgeable,
 // render pass, instead of SkiaOutputDeviceBufferQueue itself.
 BASE_FEATURE(kRendererAllocatesImages,
              "RendererAllocatesImages",
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_FUCHSIA) || \
-    BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_CHROMEOS)
              base::FEATURE_ENABLED_BY_DEFAULT
 #else
              base::FEATURE_DISABLED_BY_DEFAULT
@@ -269,8 +268,8 @@ BASE_FEATURE(kOnBeginFrameThrottleVideo,
              );
 
 BASE_FEATURE(kSharedBitmapToSharedImage,
-             "SharedBitmapToSharedImage",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+             "SharedBitmapToSharedImage_NotToBeEnabled",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 // Used to enable the HintSession::Mode::BOOST mode. BOOST mode try to force
 // the ADPF(Android Dynamic Performance Framework) to give Chrome more CPU
 // resources during a scroll.
@@ -297,14 +296,6 @@ BASE_FEATURE(kDelegateTransforms,
 // ADPF(Android Dynamic Performance Framework) hint session.
 BASE_FEATURE(kEnableADPFRendererMain,
              "EnableADPFRendererMain",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
-// If enabled, Chrome verifies that Renderer threads do not belong to the
-// Browser process asynchronously via a mojo call to the Browser before
-// including them into the ADPF(Android Dynamic Performance Framework) hint
-// session.
-BASE_FEATURE(kEnableADPFAsyncThreadsVerification,
-             "EnableADPFAsyncThreadsVerification",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 // If enabled, surface activation and draw do not block on dependencies.
@@ -321,7 +312,7 @@ BASE_FEATURE(kDrawImmediatelyWhenInteractive,
 // as the HDR metadata NDWL nits.
 BASE_FEATURE(kUseDisplaySDRMaxLuminanceNits,
              "UseDisplaySDRMaxLuminanceNits",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Invalidate the `viz::LocalSurfaceId` on the browser side when the page is
 // navigated away. This flag serves as the kill-switch for the uncaught edge
@@ -394,9 +385,9 @@ bool ShouldUseSetPresentDuration() {
 }
 #endif  // BUILDFLAG(IS_WIN)
 
-absl::optional<int> ShouldDrawPredictedInkPoints() {
+std::optional<int> ShouldDrawPredictedInkPoints() {
   if (!base::FeatureList::IsEnabled(kDrawPredictedInkPoint))
-    return absl::nullopt;
+    return std::nullopt;
 
   std::string predicted_points = GetFieldTrialParamValueByFeature(
       kDrawPredictedInkPoint, "predicted_points");
@@ -410,7 +401,7 @@ absl::optional<int> ShouldDrawPredictedInkPoints() {
     return viz::PredictionConfig::k2Points3Ms;
 
   NOTREACHED();
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 std::string InkPredictor() {
@@ -442,27 +433,27 @@ bool UseSurfaceLayerForVideo() {
 
 // Used by Viz to determine if viz::DisplayScheduler should dynamically adjust
 // its frame deadline. Returns the percentile of historic draw times to base the
-// deadline on. Or absl::nullopt if the feature is disabled.
-absl::optional<double> IsDynamicSchedulerEnabledForDraw() {
+// deadline on. Or std::nullopt if the feature is disabled.
+std::optional<double> IsDynamicSchedulerEnabledForDraw() {
   if (!base::FeatureList::IsEnabled(kDynamicSchedulerForDraw))
-    return absl::nullopt;
+    return std::nullopt;
   double result = base::GetFieldTrialParamByFeatureAsDouble(
       kDynamicSchedulerForDraw, kDynamicSchedulerPercentile, -1.0);
   if (result < 0.0)
-    return absl::nullopt;
+    return std::nullopt;
   return result;
 }
 
 // Used by Viz to determine if the frame deadlines provided to CC should be
 // dynamically adjusted. Returns the percentile of historic draw times to base
-// the deadline on. Or absl::nullopt if the feature is disabled.
-absl::optional<double> IsDynamicSchedulerEnabledForClients() {
+// the deadline on. Or std::nullopt if the feature is disabled.
+std::optional<double> IsDynamicSchedulerEnabledForClients() {
   if (!base::FeatureList::IsEnabled(kDynamicSchedulerForClients))
-    return absl::nullopt;
+    return std::nullopt;
   double result = base::GetFieldTrialParamByFeatureAsDouble(
       kDynamicSchedulerForClients, kDynamicSchedulerPercentile, -1.0);
   if (result < 0.0)
-    return absl::nullopt;
+    return std::nullopt;
   return result;
 }
 

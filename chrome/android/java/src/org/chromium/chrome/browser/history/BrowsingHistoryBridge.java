@@ -43,13 +43,14 @@ public class BrowsingHistoryBridge implements HistoryProvider {
     }
 
     @Override
-    public void queryHistory(String query) {
+    public void queryHistory(String query, String appId) {
         BrowsingHistoryBridgeJni.get()
                 .queryHistory(
                         mNativeHistoryBridge,
                         BrowsingHistoryBridge.this,
                         new ArrayList<HistoryItem>(),
                         query,
+                        appId,
                         false);
     }
 
@@ -61,6 +62,7 @@ public class BrowsingHistoryBridge implements HistoryProvider {
                         BrowsingHistoryBridge.this,
                         new ArrayList<HistoryItem>(),
                         hostName,
+                        null,
                         true);
     }
 
@@ -88,6 +90,7 @@ public class BrowsingHistoryBridge implements HistoryProvider {
                         mNativeHistoryBridge,
                         BrowsingHistoryBridge.this,
                         item.getUrl(),
+                        item.getAppId(),
                         item.getNativeTimestamps());
     }
 
@@ -117,6 +120,7 @@ public class BrowsingHistoryBridge implements HistoryProvider {
             GURL url,
             String domain,
             String title,
+            String appId,
             long mostRecentJavaTimestamp,
             long[] nativeTimestamps,
             boolean blockedVisit) {
@@ -125,6 +129,7 @@ public class BrowsingHistoryBridge implements HistoryProvider {
                         url,
                         domain,
                         title,
+                        appId,
                         mostRecentJavaTimestamp,
                         nativeTimestamps,
                         blockedVisit));
@@ -171,6 +176,7 @@ public class BrowsingHistoryBridge implements HistoryProvider {
                 BrowsingHistoryBridge caller,
                 List<HistoryItem> historyItems,
                 String query,
+                String appId,
                 boolean hostOnly);
 
         void queryHistoryContinuation(
@@ -188,6 +194,7 @@ public class BrowsingHistoryBridge implements HistoryProvider {
                 long nativeBrowsingHistoryBridge,
                 BrowsingHistoryBridge caller,
                 GURL url,
+                String appId,
                 long[] nativeTimestamps);
 
         void removeItems(long nativeBrowsingHistoryBridge, BrowsingHistoryBridge caller);

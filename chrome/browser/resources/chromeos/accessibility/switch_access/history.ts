@@ -48,7 +48,7 @@ export class FocusHistory {
     }
     const cache = new SACache();
     // Create a list of ancestors.
-    const ancestorStack = [node];
+    const ancestorStack: Array<AutomationNode|SAChildNode|SARootNode> = [node];
     while (node.parent) {
       ancestorStack.push(node.parent);
       node = node.parent;
@@ -69,13 +69,15 @@ export class FocusHistory {
         continue;
       }
 
-      const focus = group.findChild(candidate);
+      // TODO(b/314203187): Not null asserted, check that this is correct.
+      const focus = group.findChild(candidate!);
       if (!focus) {
         continue;
       }
       newDataStack.push(new FocusData(group, focus));
 
-      group = focus.asRootNode();
+      // TODO(b/314203187): Not null asserted, check that this is correct.
+      group = focus.asRootNode()!;
       if (!group) {
         break;
       }

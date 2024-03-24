@@ -172,7 +172,8 @@ class CONTENT_EXPORT DedicatedWorkerHost final
       blink::mojom::FetchClientSettingsObjectPtr
           outside_fetch_client_settings_object,
       mojo::PendingRemote<blink::mojom::BlobURLToken> blob_url_token,
-      mojo::Remote<blink::mojom::DedicatedWorkerHostFactoryClient> client);
+      mojo::Remote<blink::mojom::DedicatedWorkerHostFactoryClient> client,
+      bool has_storage_access);
 
   void ReportNoBinderForInterface(const std::string& error);
 
@@ -228,7 +229,8 @@ class CONTENT_EXPORT DedicatedWorkerHost final
 
   // blink::mojom::BackForwardCacheControllerHost:
   void EvictFromBackForwardCache(
-      blink::mojom::RendererEvictionReason reason) override;
+      blink::mojom::RendererEvictionReason reason,
+      blink::mojom::BlockingDetailsPtr details) override;
   using BackForwardCacheBlockingDetails =
       std::vector<blink::mojom::BlockingDetailsPtr>;
   void DidChangeBackForwardCacheDisablingFeatures(

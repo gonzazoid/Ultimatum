@@ -46,6 +46,8 @@
       # They monitor binary size growth, which may be affected by the tables.
       'linux-chrome': 'official_reclient',
       'linux-chromeos-chrome': 'official_reclient_chromeos_include_unwind_tables',
+      'linux-chromeos-chrome-with-lacros': 'official_reclient_chromeos_include_unwind_tables_with_lacros',
+      'linux-lacros-chrome': 'official_reclient_lacros_include_unwind_tables',
       'mac-chrome': 'official_reclient_mac',
       'win-branded-rel': 'chrome_branded_reclient_minimal_symbols',
       'win-chrome': 'official_reclient_x86',
@@ -72,31 +74,18 @@
       'win64-pgo': 'official_x64_pgo',
     },
 
+    'chromium.chromiumos': {
+      # This builder builds against multiple branches, so it can't use GN args
+      # in starlark because the args.gn file will be deleted on branches where
+      # projects are setup.
+      'linux-ash-chromium-generator-rel': 'chromeos_with_codecs_release_bot_reclient',
+    },
+
     'chromium.clang': {
       'ToTLinuxOfficial': 'clang_tot_official',
       'ToTMacOfficial': 'mac_clang_tot_official',
       'ToTWinOfficial': 'clang_tot_win_official_full_symbols_static_x86',
       'ToTWinOfficial64': 'clang_tot_win_official_full_symbols_static',
-    },
-
-    'chromium.dev': {
-      # This should be the same as 'android-pie-arm64-rel'.
-      'android-pie-arm64-rel-dev':  'android_release_bot_minimal_symbols_arm64_webview_monochrome_reclient',
-
-      # These should be the same as 'Linux Builder'.
-      'linux-local-ssd-rel-dev': 'gpu_tests_release_bot_do_typecheck_reclient',
-      'linux-rel-dev': 'gpu_tests_release_bot_do_typecheck_reclient',
-      'linux-rel-jammy-dev': 'gpu_tests_release_bot_do_typecheck_reclient',
-      'linux-remote-ssd-rel-dev': 'gpu_tests_release_bot_do_typecheck_reclient',
-
-      # This should be the same as 'Mac Builder'.
-      'mac-arm-rel-dev': 'gpu_tests_release_bot_minimal_symbols_no_nacl_reclient',
-      'mac-rel-dev': 'gpu_tests_release_bot_minimal_symbols_no_nacl_reclient',
-
-      # This should be the same as 'Win x64 Builder'.
-      'win-local-ssd-rel-dev': 'gpu_tests_release_bot_minimal_symbols_reclient',
-      'win-rel-dev': 'gpu_tests_release_bot_minimal_symbols_reclient',
-      'win11-rel-dev': 'gpu_tests_release_bot_minimal_symbols_reclient',
     },
 
     'chromium.devtools-frontend': {
@@ -217,8 +206,6 @@
       'linux-finch-smoke-chrome': 'official_reclient',
       'lorenz-graph-dbg': 'android_debug_bot_reclient_external_fastbuild',
       'mac-arm64-finch-smoke-chrome': 'official_reclient_mac_arm',
-      'win-arm64-dbg': 'gpu_tests_arm64_debug_reclient',
-      'win-arm64-rel': 'gpu_tests_arm64_release_minimal_symbol_reclient',
       'win-celab-rel': 'official_celab_release_bot',
       'win-finch-smoke-chrome': 'official_reclient',
     },
@@ -286,8 +273,10 @@
       'lacros-arm64-generic-chrome-skylab': 'chromeos_arm64-generic_lacros_official_skylab',
       'linux-chrome': 'official_reclient',
       'linux-chromeos-chrome': 'official_reclient_chromeos_include_unwind_tables',
+      'linux-chromeos-chrome-with-lacros': 'official_reclient_chromeos_include_unwind_tables_with_lacros',
       'linux-chromeos-compile-chrome': 'official_reclient_chromeos_include_unwind_tables',
       'linux-finch-smoke-chrome': 'official_reclient',
+      'linux-lacros-chrome': 'official_reclient_lacros_include_unwind_tables',
       'mac-arm64-finch-smoke-chrome': 'official_reclient_mac_arm',
       'mac-chrome': 'official_reclient_mac',
       'win-branded-compile-rel': 'chrome_branded_reclient_minimal_symbols',
@@ -389,11 +378,6 @@
 
     'android_debug_bot_reclient_fastbuild': [
       'android', 'debug_bot_reclient', 'android_fastbuild',
-    ],
-
-    'android_release_bot_minimal_symbols_arm64_webview_monochrome_reclient': [
-      'android', 'release_bot_reclient', 'minimal_symbols', 'arm64',
-      'strip_debug_info', 'webview_monochrome',
     ],
 
     'android_release_bot_minimal_symbols_x86_fastbuild_webview_trichrome_reclient': [
@@ -611,6 +595,10 @@
       'also_build_lacros_chrome_for_architecture_amd64',
     ],
 
+    'chromeos_with_codecs_release_bot_reclient': [
+      'chromeos_with_codecs', 'release_bot_reclient', 'use_cups',
+    ],
+
     'clang_tot_official': [
       'clang_tot', 'official',
     ],
@@ -681,32 +669,12 @@
       'gpu_tests', 'android', 'release_trybot_minimal_symbols_reclient', 'arm64', 'static_angle',
     ],
 
-    'gpu_tests_arm64_debug_reclient': [
-      'gpu_tests', 'arm64', 'debug_bot_reclient'
-    ],
-
-    'gpu_tests_arm64_release_minimal_symbol_reclient': [
-      'gpu_tests', 'arm64', 'release_bot_reclient', 'minimal_symbols'
-    ],
-
     'gpu_tests_chromeos_jacuzzi_release_trybot_dcheck_off_no_symbols_reclient_skylab': [
       'gpu_tests', 'chromeos_jacuzzi_reclient', 'release_trybot_dcheck_off_reclient', 'no_symbols', 'is_skylab',
     ],
 
     'gpu_tests_debug_bot_x86_no_symbols_reclient': [
       'gpu_tests', 'debug_bot_reclient', 'x86', 'no_symbols'
-    ],
-
-    'gpu_tests_release_bot_do_typecheck_reclient': [
-      'gpu_tests', 'release_bot_reclient', 'devtools_do_typecheck',
-    ],
-
-    'gpu_tests_release_bot_minimal_symbols_no_nacl_reclient': [
-      'gpu_tests', 'release_bot_reclient', 'minimal_symbols', 'disable_nacl',
-    ],
-
-    'gpu_tests_release_bot_minimal_symbols_reclient': [
-      'gpu_tests', 'release_bot_reclient', 'minimal_symbols',
     ],
 
     'gpu_tests_release_trybot_minimal_symbol_x86_resource_allowlisting_reclient': [
@@ -849,8 +817,17 @@
       'official', 'reclient', 'chromeos', 'minimal_symbols', 'include_unwind_tables',
     ],
 
+    'official_reclient_chromeos_include_unwind_tables_with_lacros': [
+      'official', 'reclient', 'chromeos', 'minimal_symbols', 'include_unwind_tables', 'also_build_lacros_chrome',
+    ],
+
     'official_reclient_fuchsia_arm64_perf': [
       'cast_receiver_size_optimized_internal', 'official', 'reclient', 'minimal_symbols', 'fuchsia', 'fuchsia_include_sd_images', 'arm64', 'ffmpeg_branding_chrome', 'proprietary_codecs', 'test_isolate_no_emulator',
+    ],
+
+    'official_reclient_lacros_include_unwind_tables': [
+      'official', 'reclient', 'lacros', 'minimal_symbols', 'include_unwind_tables',
+      'also_build_ash_chrome',
     ],
 
     'official_reclient_linux_perf_pgo': [
@@ -935,7 +912,7 @@
     ],
 
     'optimization_guide_android_arm64_rel': [
-      'minimal_symbols', 'optimization_guide', 'reclient', 'release', 'android', 'arm64',
+      'minimal_symbols', 'reclient', 'release', 'android', 'arm64',
     ],
 
     'optimization_guide_cros_rel': [
@@ -943,15 +920,15 @@
     ],
 
     'optimization_guide_mac_arm64_rel': [
-      'minimal_symbols', 'ml_internal', 'optimization_guide', 'reclient', 'release', 'arm64',
+      'minimal_symbols', 'ml_internal', 'no_widevine_cdm_host_verification', 'official', 'optimization_guide', 'pgo_phase_0',  'reclient', 'release', 'arm64',
     ],
 
     'optimization_guide_rel': [
-      'minimal_symbols', 'ml_internal', 'optimization_guide', 'reclient', 'release',
+      'minimal_symbols', 'ml_internal', 'no_widevine_cdm_host_verification', 'official', 'optimization_guide', 'pgo_phase_0', 'reclient', 'release',
     ],
 
     'optimization_guide_x86_rel': [
-      'minimal_symbols', 'ml_internal', 'optimization_guide', 'reclient', 'release', 'x86',
+      'minimal_symbols', 'ml_internal', 'official', 'optimization_guide', 'pgo_phase_0', 'reclient', 'release', 'x86',
     ],
 
     'release_bot_blink': [
@@ -990,6 +967,14 @@
   # This is a dict mapping a given 'mixin' name to a dict of settings that
   # mb should use. See //tools/mb/docs/user_guide.md for more information.
   'mixins': {
+    'also_build_ash_chrome': {
+      'gn_args': 'also_build_ash_chrome=true'
+    },
+
+    'also_build_lacros_chrome': {
+      'gn_args': 'also_build_lacros_chrome=true'
+    },
+
     'also_build_lacros_chrome_for_architecture_amd64': {
       'gn_args': 'also_build_lacros_chrome_for_architecture="amd64"',
     },
@@ -1146,6 +1131,10 @@
       'mixins': ['chromeos_device_reclient', 'arm64-generic-crostoolchain', 'ozone_headless']
     },
 
+    'chromeos_codecs': {
+      'mixins': ['ffmpeg_branding_chromeos', 'proprietary_codecs'],
+    },
+
     'chromeos_device': {
       'gn_args': 'is_chromeos_device=true ozone_platform_headless=true',
       'mixins': ['dcheck_off', 'reclient'],
@@ -1162,6 +1151,10 @@
 
     'chromeos_kevin_reclient': {
       'mixins': ['chromeos_device_reclient', 'kevin', 'ozone_headless']
+    },
+
+    'chromeos_with_codecs': {
+      'mixins': ['chromeos', 'chromeos_codecs'],
     },
 
     'clang': {
@@ -1244,10 +1237,6 @@
       'gn_args': 'devtools_skip_typecheck=false',
     },
 
-    'disable_nacl': {
-      'gn_args': 'enable_nacl=false',
-    },
-
     'disable_widevine_signing': {
       'gn_args': 'enable_widevine_cdm_host_verification = false'
     },
@@ -1262,6 +1251,10 @@
 
     'ffmpeg_branding_chrome': {
       'gn_args': 'ffmpeg_branding="Chrome"',
+    },
+
+    'ffmpeg_branding_chromeos': {
+      'gn_args': 'ffmpeg_branding="ChromeOS"',
     },
 
     'fuchsia': {
@@ -1528,11 +1521,6 @@
 
     'volteer': {
       'args_file': '//build/args/chromeos/volteer.gni',
-    },
-
-    # For Android N-P, only userdebug/eng
-    'webview_monochrome': {
-      'gn_args': 'system_webview_package_name="com.google.android.apps.chrome"',
     },
 
     # Mainly used by builders that use android emulator.

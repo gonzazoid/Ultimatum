@@ -9,6 +9,7 @@
 #import "base/debug/crash_logging.h"
 #import "base/debug/dump_without_crashing.h"
 #include "base/functional/bind.h"
+#import "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #import "base/strings/string_number_conversions.h"
@@ -65,7 +66,7 @@ const char kFrameIdKey[] = "frame_id";
 @implementation PasswordFormHelper {
   // The WebState this instance is observing. Will be null after
   // -webStateDestroyed: has been called.
-  web::WebState* _webState;
+  raw_ptr<web::WebState> _webState;
 
   // Bridge to observe WebState from Objective-C.
   std::unique_ptr<web::WebStateObserverBridge> _webStateObserverBridge;
@@ -208,12 +209,12 @@ const char kFrameIdKey[] = "frame_id";
             // Find the maximum extracted value.
             uint32_t maxID = 0;
             for (const auto& form : forms) {
-              if (form.unique_renderer_id) {
-                maxID = std::max(maxID, form.unique_renderer_id.value());
+              if (form.renderer_id) {
+                maxID = std::max(maxID, form.renderer_id.value());
               }
               for (const auto& field : form.fields) {
-                if (field.unique_renderer_id) {
-                  maxID = std::max(maxID, field.unique_renderer_id.value());
+                if (field.renderer_id) {
+                  maxID = std::max(maxID, field.renderer_id.value());
                 }
               }
             }

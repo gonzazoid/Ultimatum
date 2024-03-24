@@ -393,13 +393,13 @@ bool WaylandToplevelWindow::CanSetDecorationInsets() const {
 }
 
 void WaylandToplevelWindow::SetOpaqueRegion(
-    absl::optional<std::vector<gfx::Rect>> region_px) {
+    std::optional<std::vector<gfx::Rect>> region_px) {
   opaque_region_px_ = region_px;
   root_surface()->set_opaque_region(region_px);
 }
 
 void WaylandToplevelWindow::SetInputRegion(
-    absl::optional<gfx::Rect> region_px) {
+    std::optional<std::vector<gfx::Rect>> region_px) {
   input_region_px_ = region_px;
   root_surface()->set_input_region(region_px);
 }
@@ -481,23 +481,10 @@ void WaylandToplevelWindow::UnlockFrame() {
   OnFrameLockingChanged(false);
 }
 
-void WaylandToplevelWindow::OcclusionStateChanged(uint32_t mode) {
-  auto state = PlatformWindowOcclusionState::kUnknown;
-  switch (mode) {
-    case ZAURA_SURFACE_OCCLUSION_STATE_UNKNOWN:
-      state = PlatformWindowOcclusionState::kUnknown;
-      break;
-    case ZAURA_SURFACE_OCCLUSION_STATE_VISIBLE:
-      state = PlatformWindowOcclusionState::kVisible;
-      break;
-    case ZAURA_SURFACE_OCCLUSION_STATE_OCCLUDED:
-      state = PlatformWindowOcclusionState::kOccluded;
-      break;
-    case ZAURA_SURFACE_OCCLUSION_STATE_HIDDEN:
-      state = PlatformWindowOcclusionState::kHidden;
-      break;
-  }
-  OnOcclusionStateChanged(state);
+void WaylandToplevelWindow::OcclusionStateChanged(
+    PlatformWindowOcclusionState occlusion_state) {
+  WaylandWindow::OcclusionStateChanged(occlusion_state);
+  delegate()->OnOcclusionStateChanged(occlusion_state);
 }
 
 void WaylandToplevelWindow::DeskChanged(int state) {
@@ -896,6 +883,10 @@ void WaylandToplevelWindow::SetShadowCornersRadii(
 
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
+void WaylandToplevelWindow::RoundTripQueue() {
+  connection()->RoundTripQueue();
+}
+
 void WaylandToplevelWindow::ShowSnapPreview(
     WaylandWindowSnapDirection snap_direction,
     bool allow_haptic_feedback) {
@@ -1231,7 +1222,17 @@ void WaylandToplevelWindow::SetUpShellIntegration() {
   if (connection()->zaura_shell()) {
     if (auto* zaura_surface = root_surface()->CreateZAuraSurface()) {
       zaura_surface->set_delegate(AsWeakPtr());
-      zaura_surface->SetOcclusionTracking();
+
+      // If native window occlusion tracking is disabled (meaning compositor
+      // visibility is not controlled by occlusion) then enable the old
+      // unsynchronized occlusion pathway. Also, if the server does not support
+      // the synchronized occlusion pathway, enable the unsynchronized occlusion
+      // pathway.
+      if (!delegate()->IsNativeWindowOcclusionTrackingAlwaysEnabled() ||
+          !shell_toplevel_->IsSupportedOnAuraToplevel(
+              ZAURA_TOPLEVEL_CONFIGURE_OCCLUSION_STATE_SINCE_VERSION)) {
+        zaura_surface->SetOcclusionTracking();
+      }
     }
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -1289,11 +1290,6 @@ void WaylandToplevelWindow::OnFrameLockingChanged(bool lock) {
   delegate()->OnSurfaceFrameLockingChanged(lock);
 }
 
-void WaylandToplevelWindow::OnOcclusionStateChanged(
-    PlatformWindowOcclusionState occlusion_state) {
-  delegate()->OnOcclusionStateChanged(occlusion_state);
-}
-
 void WaylandToplevelWindow::OnDeskChanged(int state) {
   DCHECK(delegate());
   workspace_ = state;
@@ -1315,10 +1311,10 @@ void WaylandToplevelWindow::UpdateWindowMask() {
   root_surface()->set_opaque_region(
       opaque_region_px_.has_value()
           ? opaque_region_px_
-          : (IsOpaqueWindow() ? absl::optional<std::vector<gfx::Rect>>(region)
-                              : absl::nullopt));
+          : (IsOpaqueWindow() ? std::optional<std::vector<gfx::Rect>>(region)
+                              : std::nullopt));
   root_surface()->set_input_region(input_region_px_ ? input_region_px_
-                                                    : *region.begin());
+                                                    : region);
 }
 
 bool WaylandToplevelWindow::GetTabletMode() {

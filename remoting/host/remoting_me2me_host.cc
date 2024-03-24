@@ -18,7 +18,9 @@
 #include "base/files/file_util.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/metrics/field_trial.h"
 #include "base/notreached.h"
@@ -49,6 +51,7 @@
 #include "net/socket/client_socket_factory.h"
 #include "remoting/base/auto_thread_task_runner.h"
 #include "remoting/base/constants.h"
+#include "remoting/base/corp_session_authz_service_client_factory.h"
 #include "remoting/base/cpu_utils.h"
 #include "remoting/base/host_settings.h"
 #include "remoting/base/is_google_email.h"
@@ -99,6 +102,7 @@
 #include "remoting/protocol/authenticator.h"
 #include "remoting/protocol/channel_authenticator.h"
 #include "remoting/protocol/chromium_port_allocator_factory.h"
+#include "remoting/protocol/host_authentication_config.h"
 #include "remoting/protocol/jingle_session_manager.h"
 #include "remoting/protocol/me2me_host_authenticator_factory.h"
 #include "remoting/protocol/network_settings.h"
@@ -356,6 +360,8 @@ class HostProcess : public ConfigWatcher::Delegate,
   bool OnAllowRemoteAccessConnections(const base::Value::Dict& policies);
   bool OnMaxSessionDurationPolicyUpdate(const base::Value::Dict& policies);
   bool OnMaxClipboardSizePolicyUpdate(const base::Value::Dict& policies);
+  bool OnUrlForwardingPolicyUpdate(const base::Value::Dict& policies);
+  bool OnAllowPinAuthenticationUpdate(const base::Value::Dict& policies);
 
   void InitializeSignaling();
 
@@ -430,6 +436,7 @@ class HostProcess : public ConfigWatcher::Delegate,
   bool allow_pairing_ = true;
   bool enable_user_interface_ = true;
   bool allow_remote_access_connections_ = true;
+  std::optional<bool> allow_pin_auth_;
 
   DesktopEnvironmentOptions desktop_environment_options_;
   ThirdPartyAuthConfig third_party_auth_config_;
@@ -800,9 +807,15 @@ void HostProcess::CreateAuthenticatorFactory() {
     return;
   }
 
-  std::unique_ptr<protocol::AuthenticatorFactory> factory;
-
-  if (third_party_auth_config_.is_null()) {
+  auto auth_config = std::make_unique<protocol::HostAuthenticationConfig>(
+      local_certificate, key_pair_);
+  if (is_googler_ && (!allow_pin_auth_.value_or(false) || pin_hash_.empty())) {
+    auth_config->AddSessionAuthzAuth(
+        base::MakeRefCounted<CorpSessionAuthzServiceClientFactory>(
+            context_->url_loader_factory(), service_account_email_,
+            oauth_refresh_token_));
+  }
+  if (allow_pin_auth_.value_or(!is_googler_) && !pin_hash_.empty()) {
     scoped_refptr<PairingRegistry> pairing_registry;
     if (allow_pairing_) {
       // On Windows |pairing_registry_| is initialized in
@@ -822,12 +835,11 @@ void HostProcess::CreateAuthenticatorFactory() {
       pairing_registry = pairing_registry_;
     }
 
-    factory = protocol::Me2MeHostAuthenticatorFactory::CreateWithPin(
-        host_owner_, local_certificate, key_pair_, client_domain_list_,
-        pin_hash_, pairing_registry);
-
+    auth_config->AddPairingAuth(pairing_registry);
+    auth_config->AddSharedSecretAuth(pin_hash_);
     host_->set_pairing_registry(pairing_registry);
-  } else {
+  }
+  if (!third_party_auth_config_.is_null()) {
     // ThirdPartyAuthConfig::Parse() leaves the config in a valid state, so
     // these URLs are both valid.
     DCHECK(third_party_auth_config_.token_url.is_valid());
@@ -847,10 +859,16 @@ void HostProcess::CreateAuthenticatorFactory() {
     scoped_refptr<protocol::TokenValidatorFactory> token_validator_factory =
         new TokenValidatorFactoryImpl(third_party_auth_config_, key_pair_,
                                       context_->url_request_context_getter());
-    factory = protocol::Me2MeHostAuthenticatorFactory::CreateWithThirdPartyAuth(
-        host_owner_, local_certificate, key_pair_, client_domain_list_,
-        token_validator_factory);
+    auth_config->AddThirdPartyAuth(token_validator_factory);
   }
+  HOST_LOG << "Host's supported authentication methods: ";
+  for (const auto& method : auth_config->GetSupportedMethods()) {
+    HOST_LOG << "  "
+             << protocol::HostAuthenticationConfig::MethodToString(method);
+  }
+  std::unique_ptr<protocol::AuthenticatorFactory> factory =
+      std::make_unique<protocol::Me2MeHostAuthenticatorFactory>(
+          host_owner_, client_domain_list_, std::move(auth_config));
 
 #if BUILDFLAG(IS_POSIX)
   // On Linux and Mac, perform a PAM authorization step after authentication.
@@ -1233,6 +1251,8 @@ void HostProcess::OnPolicyUpdate(base::Value::Dict policies) {
   restart_required |= OnAllowRemoteAccessConnections(policies);
   restart_required |= OnMaxSessionDurationPolicyUpdate(policies);
   restart_required |= OnMaxClipboardSizePolicyUpdate(policies);
+  restart_required |= OnUrlForwardingPolicyUpdate(policies);
+  restart_required |= OnAllowPinAuthenticationUpdate(policies);
 
   policy_state_ = POLICY_LOADED;
 
@@ -1379,7 +1399,10 @@ void HostProcess::ApplyUsernamePolicy() {
 
     // Shutdown the host if the username does not match.
     if (shutdown) {
-      LOG(ERROR) << "The host username does not match.";
+      LOG(ERROR) << "\n Policy error: username and host owner(ignoring domain) "
+                 << "don't match:\n"
+                 << "   username:   `" << username << "`\n"
+                 << "   host owner: `" << host_owner_ << "`";
       ShutdownHost(kUsernameMismatchExitCode);
     }
   } else {
@@ -1574,6 +1597,62 @@ bool HostProcess::OnFileTransferPolicyUpdate(
     HOST_LOG << "Policy enables file transfer.";
   } else {
     HOST_LOG << "Policy disables file transfer.";
+  }
+
+  // Restart required.
+  return true;
+}
+
+bool HostProcess::OnUrlForwardingPolicyUpdate(
+    const base::Value::Dict& policies) {
+  DCHECK(context_->network_task_runner()->BelongsToCurrentThread());
+
+  std::optional<bool> url_forwarding_enabled =
+      policies.FindBool(policy::key::kRemoteAccessHostAllowUrlForwarding);
+  if (!url_forwarding_enabled.has_value()) {
+    return false;
+  }
+
+  // Always enable remote open URL when the platform supports it and the policy
+  // does not disable it. There is an additional IsRemoteOpenUrlSupported()
+  // check which ensures the capability won't be advertised if the machine is
+  // not properly configured.
+  desktop_environment_options_.set_enable_remote_open_url(
+      url_forwarding_enabled.value());
+
+  if (url_forwarding_enabled.value()) {
+    HOST_LOG << "Policy allows URL forwarding.";
+  } else {
+    HOST_LOG << "Policy disallows URL forwarding.";
+  }
+
+  // Restart required.
+  return true;
+}
+
+bool HostProcess::OnAllowPinAuthenticationUpdate(
+    const base::Value::Dict& policies) {
+  DCHECK(context_->network_task_runner()->BelongsToCurrentThread());
+
+  const base::Value* allow_pin_auth =
+      policies.Find(policy::key::kRemoteAccessHostAllowPinAuthentication);
+  if (!allow_pin_auth) {
+    return false;
+  }
+
+  // Save the value until we have parsed the host config since the default
+  // behavior depends on whether the user is a googler.
+  if (allow_pin_auth->is_none()) {
+    // The policy has been unset.
+    allow_pin_auth_.reset();
+  } else {
+    allow_pin_auth_ = allow_pin_auth->GetIfBool();
+    DCHECK(allow_pin_auth_.has_value());
+    if (*allow_pin_auth_) {
+      HOST_LOG << "Policy allows PIN and pairing authentication methods.";
+    } else {
+      HOST_LOG << "Policy disallows PIN or pairing authentication methods.";
+    }
   }
 
   // Restart required.
@@ -1794,11 +1873,6 @@ void HostProcess::StartHost() {
     desktop_environment_options_.set_enable_user_interface(
         enable_user_interface_);
   }
-
-  // Always enable remote open URL when the platform supports it. There is an
-  // additional IsRemoteOpenUrlSupported() check that makes sure the capability
-  // won't be advertised if it's missing a registry key or something.
-  desktop_environment_options_.set_enable_remote_open_url(true);
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
   desktop_environment_options_.set_enable_remote_webauthn(is_googler_);

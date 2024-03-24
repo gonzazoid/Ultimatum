@@ -474,7 +474,7 @@ void CrostiniManager::CrostiniRestarter::Timeout(mojom::InstallerState state) {
       result = CrostiniResult::CONFIGURE_CONTAINER_TIMED_OUT;
       break;
     case mojom::InstallerState::kStart:
-      NOTREACHED();
+      DUMP_WILL_BE_NOTREACHED_NORETURN();
   }
   // Note: FinishRestart deletes |this|.
   FinishRestart(result);
@@ -1344,9 +1344,6 @@ void CrostiniManager::CheckConciergeAvailable() {
 void CrostiniManager::CheckVmLaunchAllowed(bool service_is_available) {
   if (service_is_available) {
     vm_tools::concierge::GetVmLaunchAllowedRequest request;
-    request.set_run_as_untrusted(false);
-    request.set_is_trusted_image(true);
-    request.set_has_custom_kernel_params(false);
     GetConciergeClient()->GetVmLaunchAllowed(
         std::move(request),
         base::BindOnce(&CrostiniManager::OnCheckVmLaunchAllowed,

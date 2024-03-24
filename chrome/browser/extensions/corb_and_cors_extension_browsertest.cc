@@ -92,7 +92,7 @@ constexpr char kOriginTrialPublicKeyForTesting[] =
 
 std::string CreateFetchScript(
     const GURL& resource,
-    absl::optional<base::Value::Dict> request_init = absl::nullopt) {
+    std::optional<base::Value::Dict> request_init = std::nullopt) {
   const char kFetchScriptTemplate[] = R"(
     fetch($1, $2)
       .then(response => response.text())
@@ -107,7 +107,7 @@ std::string CreateFetchScript(
 std::string PopString(content::DOMMessageQueue* message_queue) {
   std::string json;
   EXPECT_TRUE(message_queue->WaitForMessage(&json));
-  absl::optional<base::Value> value =
+  std::optional<base::Value> value =
       base::JSONReader::Read(json, base::JSON_ALLOW_TRAILING_COMMAS);
   EXPECT_TRUE(value->is_string());
   return value->GetString();
@@ -1664,11 +1664,11 @@ IN_PROC_BROWSER_TEST_F(CorbAndCorsExtensionBrowserTest,
         CreateFetchScript(cross_site_resource2, std::move(request_init)));
     std::string fetch_result = PopString(&queue);
 
-    // Verify that the fetch was blocked by CORB.
+    // Verify that the fetch was blocked by ORB.
     //
     // This is the main verification in the test.  This verifies that the
     // extension background page uses a URLLoaderFactory created with
-    // URLLoaderFactoryParams::is_corb_enabled set to the default, secure value
+    // URLLoaderFactoryParams::is_orb_enabled set to the default, secure value
     // of `true`.
     //
     // ORB ErrorsForAllFetches: Error message, because the fetch failed.

@@ -12,7 +12,7 @@
 import {AppType, Permission, PermissionType, TriState} from 'chrome://resources/cr_components/app_management/app_management.mojom-webui.js';
 import {PermissionTypeIndex} from 'chrome://resources/cr_components/app_management/permission_constants.js';
 import {createBoolPermissionValue, createTriStatePermissionValue, isBoolValue, isPermissionEnabled, isTriStateValue} from 'chrome://resources/cr_components/app_management/permission_util.js';
-import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {I18nMixin} from 'chrome://resources/ash/common/cr_elements/i18n_mixin.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
@@ -93,11 +93,23 @@ export class SettingsPrivacyHubAppPermissionRow extends
         computed: 'computeShouldDisableToggle_(isPermissionManaged_, ' +
             'shouldRedirectToAndroidSettings_)',
       },
+
+      ariaDescription_: {
+        type: String,
+        computed: 'computeAriaDescription_(permissionText_)',
+      },
+
+      androidSettingsLinkAriaDescription_: {
+        type: String,
+        computed: 'computeAndroidSettingsLinkAriaDescription_(permissionText_)',
+      },
     };
   }
 
   app: App;
   permissionType: PermissionTypeIndex;
+  private androidSettingsLinkAriaDescription_: string;
+  private ariaDescription_: string;
   private checked_: boolean;
   private isPermissionManaged_: boolean;
   private mojoInterfaceProvider_: AppPermissionsHandlerInterface;
@@ -114,6 +126,12 @@ export class SettingsPrivacyHubAppPermissionRow extends
 
     this.mojoInterfaceProvider_ = getAppPermissionProvider();
   }
+
+  override ready(): void {
+    super.ready();
+    this.addEventListener('click', this.onPermissionRowClick_.bind(this));
+  }
+
 
   private onPermissionChange_(): void {
     const permission =
@@ -144,40 +162,79 @@ export class SettingsPrivacyHubAppPermissionRow extends
     }
   }
 
-  private onPermissionRowClick_(): void {
-    if (this.isPermissionManaged_) {
-      return;
-    }
-
-    const userActionHistogramName = `ChromeOS.PrivacyHub.${
+  private getUserActionHistogramName(): string {
+    return `ChromeOS.PrivacyHub.${
         this.permissionType.substring(1)}Subpage.UserAction`;
+  }
 
-    if (this.shouldRedirectToAndroidSettings_) {
-      this.mojoInterfaceProvider_.openNativeSettings(this.app.id);
-
-      chrome.metricsPrivate.recordEnumerationValue(
-          userActionHistogramName,
-          PrivacyHubSensorSubpageUserAction.ANDROID_SETTINGS_LINK_CLICKED,
-          Object.keys(PrivacyHubSensorSubpageUserAction).length);
-      return;
-    }
-
+  private togglePermissionState_(): void {
     const permission =
         castExists(this.app.permissions[PermissionType[this.permissionType]]);
+    const permissionEnabled = isPermissionEnabled(permission.value);
 
     if (isBoolValue(permission.value)) {
-      permission.value = createBoolPermissionValue(!this.checked_);
+      permission.value = createBoolPermissionValue(!permissionEnabled);
     } else if (isTriStateValue(permission.value)) {
       permission.value = createTriStatePermissionValue(
-          this.checked_ ? TriState.kBlock : TriState.kAllow);
+          permissionEnabled ? TriState.kBlock : TriState.kAllow);
     }
 
     this.mojoInterfaceProvider_.setPermission(this.app.id, permission);
 
     chrome.metricsPrivate.recordEnumerationValue(
-        userActionHistogramName,
+        this.getUserActionHistogramName(),
         PrivacyHubSensorSubpageUserAction.APP_PERMISSION_CHANGED,
         NUMBER_OF_POSSIBLE_USER_ACTIONS);
+  }
+
+  private onPermissionRowClick_(): void {
+    if (this.isPermissionManaged_) {
+      return;
+    }
+
+    if (this.shouldRedirectToAndroidSettings_) {
+      this.mojoInterfaceProvider_.openNativeSettings(this.app.id);
+
+      chrome.metricsPrivate.recordEnumerationValue(
+          this.getUserActionHistogramName(),
+          PrivacyHubSensorSubpageUserAction.ANDROID_SETTINGS_LINK_CLICKED,
+          Object.keys(PrivacyHubSensorSubpageUserAction).length);
+      return;
+    }
+
+    this.togglePermissionState_();
+  }
+
+  private onToggleClick_(e: Event): void {
+    e.stopImmediatePropagation();
+    e.preventDefault();
+
+    this.togglePermissionState_();
+  }
+
+  private onKeyup_(e: KeyboardEvent): void {
+    if (e.key !== ' ') {
+      return;
+    }
+
+    e.stopImmediatePropagation();
+    e.preventDefault();
+
+    this.togglePermissionState_();
+  }
+
+  private onKeydown_(e: KeyboardEvent): void {
+    if (e.key !== 'Enter') {
+      return;
+    }
+
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    if (e.repeat) {
+      return;
+    }
+
+    this.togglePermissionState_();
   }
 
   private computeShouldRedirectToAndroidSettings_(): boolean {
@@ -188,6 +245,33 @@ export class SettingsPrivacyHubAppPermissionRow extends
 
   private computeShouldDisableToggle_(): boolean {
     return this.isPermissionManaged_ || this.shouldRedirectToAndroidSettings_;
+  }
+
+  private getAriaLabel_(): string {
+    switch (PermissionType[this.permissionType]) {
+      case PermissionType.kCamera:
+        return this.i18n(
+            'privacyHubCameraAppPermissionRowAriaLabel', this.app.name);
+      case PermissionType.kLocation:
+        return this.i18n(
+            'privacyHubLocationAppPermissionRowAriaLabel', this.app.name);
+      case PermissionType.kMicrophone:
+        return this.i18n(
+            'privacyHubMicrophoneAppPermissionRowAriaLabel', this.app.name);
+      default:
+        return '';
+    }
+  }
+
+  private computeAriaDescription_(): string {
+    return this.i18n(
+        'privacyHubAppPermissionRowAriaDescription', this.permissionText_);
+  }
+
+  private computeAndroidSettingsLinkAriaDescription_(): string {
+    return this.i18n(
+        'privacyHubAppPermissionRowAndroidSettingsLinkAriaDescription',
+        this.permissionText_);
   }
 }
 

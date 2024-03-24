@@ -19,6 +19,7 @@
 #include "base/json/json_writer.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
+#include "base/notreached.h"
 #include "base/strings/pattern.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
@@ -42,6 +43,7 @@
 #include "chrome/test/chromedriver/chrome/mobile_emulation_override_manager.h"
 #include "chrome/test/chromedriver/chrome/navigation_tracker.h"
 #include "chrome/test/chromedriver/chrome/network_conditions_override_manager.h"
+#include "chrome/test/chromedriver/chrome/non_blocking_navigation_tracker.h"
 #include "chrome/test/chromedriver/chrome/page_load_strategy.h"
 #include "chrome/test/chromedriver/chrome/status.h"
 #include "chrome/test/chromedriver/chrome/ui_events.h"
@@ -66,9 +68,8 @@ struct ElementId {
   explicit operator bool() const { return IsValid(); }
 };
 
-absl::optional<std::string> GetBackendNodeIdKey(
-    const base::Value::Dict& element,
-    bool w3c_compliant) {
+std::optional<std::string> GetBackendNodeIdKey(const base::Value::Dict& element,
+                                               bool w3c_compliant) {
   if (element.contains(kShadowRootKey)) {
     return kShadowRootKey;
   }
@@ -78,7 +79,7 @@ absl::optional<std::string> GetBackendNodeIdKey(
   if (!w3c_compliant && element.contains(kElementKey)) {
     return kElementKey;
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 ElementId GetElementId(const base::Value::Dict& element, std::string key) {
@@ -108,7 +109,7 @@ ElementId GetElementId(const base::Value::Dict& element, std::string key) {
 }
 
 ElementId GetElementId(const base::Value::Dict& element, bool w3c_compliant) {
-  absl::optional<std::string> key = GetBackendNodeIdKey(element, w3c_compliant);
+  std::optional<std::string> key = GetBackendNodeIdKey(element, w3c_compliant);
   if (!key) {
     return ElementId{};
   }
@@ -313,12 +314,12 @@ Status ResolveWeakReferences(base::Value::List& nodes) {
       continue;
     }
     const base::Value::Dict& node = nodes[k].GetDict();
-    absl::optional<int> weak_node_ref =
+    std::optional<int> weak_node_ref =
         node.FindIntByDottedPath("weakLocalObjectReference");
     if (!weak_node_ref) {
       continue;
     }
-    absl::optional<int> maybe_backend_node_id =
+    std::optional<int> maybe_backend_node_id =
         node.FindIntByDottedPath("value.backendNodeId");
     if (!maybe_backend_node_id) {
       continue;
@@ -331,12 +332,12 @@ Status ResolveWeakReferences(base::Value::List& nodes) {
       continue;
     }
     const base::Value::Dict& node = nodes[k].GetDict();
-    absl::optional<int> weak_node_ref =
+    std::optional<int> weak_node_ref =
         node.FindIntByDottedPath("weakLocalObjectReference");
     if (!weak_node_ref) {
       continue;
     }
-    absl::optional<int> maybe_backend_node_id =
+    std::optional<int> maybe_backend_node_id =
         node.FindIntByDottedPath("value.backendNodeId");
     if (maybe_backend_node_id) {
       continue;
@@ -369,7 +370,7 @@ std::unique_ptr<WebViewImpl> WebViewImpl::CreateTopLevelWebView(
     const bool w3c_compliant,
     const BrowserInfo* browser_info,
     std::unique_ptr<DevToolsClient> client,
-    absl::optional<MobileDevice> mobile_device,
+    std::optional<MobileDevice> mobile_device,
     std::string page_load_strategy) {
   return std::make_unique<WebViewImpl>(
       id, w3c_compliant, nullptr, browser_info, std::move(client),
@@ -403,7 +404,7 @@ WebViewImpl::WebViewImpl(const std::string& id,
                          const WebViewImpl* parent,
                          const BrowserInfo* browser_info,
                          std::unique_ptr<DevToolsClient> client,
-                         absl::optional<MobileDevice> mobile_device,
+                         std::optional<MobileDevice> mobile_device,
                          std::string page_load_strategy)
     : id_(id),
       w3c_compliant_(w3c_compliant),
@@ -435,20 +436,32 @@ WebViewImpl::WebViewImpl(const std::string& id,
   // Child WebViews should not have their own navigation_tracker, but defer
   // all related calls to their parent. All WebViews must have either parent_
   // or navigation_tracker_
-  if (!parent_) {
-    navigation_tracker_ =
-        std::unique_ptr<PageLoadStrategy>(PageLoadStrategy::Create(
-            page_load_strategy, client_.get(), this, dialog_manager_.get()));
+  if (parent_ == nullptr) {
+    navigation_tracker_ = CreatePageLoadStrategy(page_load_strategy);
   }
   client_->SetOwner(this);
 }
 
 WebViewImpl::~WebViewImpl() = default;
 
-WebViewImpl* WebViewImpl::GetTargetForFrame(const std::string& frame) {
-  return frame.empty() ? this
-                       : static_cast<WebViewImpl*>(
-                             GetFrameTracker()->GetTargetForFrame(frame));
+std::unique_ptr<PageLoadStrategy> WebViewImpl::CreatePageLoadStrategy(
+    const std::string& strategy) {
+  if (strategy == PageLoadStrategy::kNone) {
+    return std::make_unique<NonBlockingNavigationTracker>();
+  } else if (strategy == PageLoadStrategy::kNormal) {
+    return std::make_unique<NavigationTracker>(client_.get(), this,
+                                               dialog_manager_.get(), false);
+  } else if (strategy == PageLoadStrategy::kEager) {
+    return std::make_unique<NavigationTracker>(client_.get(), this,
+                                               dialog_manager_.get(), true);
+  } else {
+    NOTREACHED() << "invalid strategy '" << strategy << "'";
+    return nullptr;
+  }
+}
+
+WebView* WebViewImpl::GetTargetForFrame(const std::string& frame) {
+  return frame.empty() ? this : GetFrameTracker()->GetTargetForFrame(frame);
 }
 
 bool WebViewImpl::IsServiceWorker() const {
@@ -466,14 +479,15 @@ std::unique_ptr<WebViewImpl> WebViewImpl::CreateChild(
       std::make_unique<DevToolsClientImpl>(session_id, session_id);
   std::unique_ptr<WebViewImpl> child = std::make_unique<WebViewImpl>(
       target_id, w3c_compliant_, this, browser_info_, std::move(child_client),
-      absl::nullopt, "");
-  if (!IsNonBlocking()) {
+      std::nullopt, "");
+  const WebViewImpl* root_view = this;
+  while (root_view->parent_ != nullptr) {
+    root_view = root_view->parent_;
+  }
+  PageLoadStrategy* navigation_tracker = root_view->navigation_tracker_.get();
+  if (navigation_tracker && !navigation_tracker->IsNonBlocking()) {
     // Find Navigation Tracker for the top of the WebViewImpl hierarchy
-    const WebViewImpl* current_view = this;
-    while (current_view->parent_)
-      current_view = current_view->parent_;
-    PageLoadStrategy* pls = current_view->navigation_tracker_.get();
-    child->client_->AddListener(static_cast<DevToolsEventListener*>(pls));
+    child->client_->AddListener(navigation_tracker);
   }
   return child;
 }
@@ -486,13 +500,16 @@ bool WebViewImpl::WasCrashed() {
   return client_->WasCrashed();
 }
 
-Status WebViewImpl::AttachTo(DevToolsClient* parent) {
-  return static_cast<DevToolsClientImpl*>(client_.get())
-      ->AttachTo(static_cast<DevToolsClientImpl*>(parent));
+Status WebViewImpl::AttachTo(DevToolsClient* root_client) {
+  return client_->AttachTo(root_client);
 }
 
 Status WebViewImpl::AttachChildView(WebViewImpl* child) {
-  return child->AttachTo(client_->GetRootClient());
+  DevToolsClient* root_client = client_.get();
+  while (root_client->GetParentClient() != nullptr) {
+    root_client = root_client->GetParentClient();
+  }
+  return child->AttachTo(root_client);
 }
 
 Status WebViewImpl::HandleEventsUntil(const ConditionalFunc& conditional_func,
@@ -511,7 +528,7 @@ Status WebViewImpl::GetUrl(std::string* url) {
                                                    params, &result);
   if (status.IsError())
     return status;
-  absl::optional<int> current_index = result.FindInt("currentIndex");
+  std::optional<int> current_index = result.FindInt("currentIndex");
   if (!current_index)
     return Status(kUnknownError, "navigation history missing currentIndex");
   base::Value::List* entries = result.FindList("entries");
@@ -609,7 +626,7 @@ Status WebViewImpl::TraverseHistory(int delta, const Timeout* timeout) {
   if (status.IsError())
     return status;
 
-  absl::optional<int> current_index = result.FindInt("currentIndex");
+  std::optional<int> current_index = result.FindInt("currentIndex");
   if (!current_index)
     return Status(kUnknownError, "DevTools didn't return currentIndex");
 
@@ -627,7 +644,7 @@ Status WebViewImpl::TraverseHistory(int delta, const Timeout* timeout) {
   }
 
   base::Value& entry = (*entries)[*current_index + delta];
-  absl::optional<int> entry_id = entry.GetDict().FindInt("id");
+  std::optional<int> entry_id = entry.GetDict().FindInt("id");
   if (!entry_id)
     return Status(kUnknownError, "history entry does not have an id");
   params.Set("entryId", *entry_id);
@@ -836,7 +853,7 @@ Status WebViewImpl::CallFunctionWithTimeoutInternal(
                   "first element in result.deepSerializedValue.value list must "
                   "contain a string");
   }
-  absl::optional<base::Value> maybe_call_result =
+  std::optional<base::Value> maybe_call_result =
       base::JSONReader::Read(*serialized_value, base::JSON_PARSE_RFC);
   if (!maybe_call_result) {
     return Status{kUnknownError,
@@ -851,7 +868,7 @@ Status WebViewImpl::CallFunctionWithTimeoutInternal(
   }
   base::Value::Dict& call_result = maybe_call_result->GetDict();
 
-  absl::optional<int> status_code = call_result.FindInt("status");
+  std::optional<int> status_code = call_result.FindInt("status");
   if (!status_code) {
     return Status(kUnknownError, "call function result missing int 'status'");
   }
@@ -886,7 +903,7 @@ Status WebViewImpl::EvaluateScript(const std::string& frame,
   WebViewImplHolder target_holder(this);
   Status status{kOk};
 
-  WebViewImpl* target = GetTargetForFrame(frame);
+  WebView* target = GetTargetForFrame(frame);
   if (target != nullptr && target != this) {
     if (target->IsDetached())
       return Status(kTargetDetached);
@@ -916,14 +933,13 @@ Status WebViewImpl::CallFunctionWithTimeout(
   WebViewImplHolder target_holder(this);
   Status status{kOk};
 
-  WebViewImpl* target = GetTargetForFrame(frame);
+  WebView* target = GetTargetForFrame(frame);
   if (target != nullptr && target != this) {
     if (target->IsDetached()) {
       return Status(kTargetDetached);
     }
-    WebViewImpl* target_impl = static_cast<WebViewImpl*>(target);
-    return target_impl->CallFunctionWithTimeout(frame, function, args, timeout,
-                                                result);
+    return target->CallFunctionWithTimeout(frame, function, args, timeout,
+                                           result);
   }
 
   return CallFunctionWithTimeoutInternal(frame, std::move(function),
@@ -948,7 +964,7 @@ Status WebViewImpl::CallUserSyncScript(const std::string& frame,
   WebViewImplHolder target_holder(this);
   Status status{kOk};
 
-  WebViewImpl* target = GetTargetForFrame(frame);
+  WebView* target = GetTargetForFrame(frame);
   if (target != nullptr && target != this) {
     if (target->IsDetached()) {
       return Status(kTargetDetached);
@@ -981,7 +997,7 @@ Status WebViewImpl::GetFrameByFunction(const std::string& frame,
   WebViewImplHolder target_holder(this);
   Status status{kOk};
 
-  WebViewImpl* target = GetTargetForFrame(frame);
+  WebView* target = GetTargetForFrame(frame);
   if (target != nullptr && target != this) {
     if (target->IsDetached())
       return Status(kTargetDetached);
@@ -1452,7 +1468,7 @@ Status WebViewImpl::GetBackendNodeIdByElement(const std::string& frame,
   if (!element.is_dict())
     return Status(kUnknownError, "'element' is not a dictionary");
 
-  absl::optional<std::string> maybe_key =
+  std::optional<std::string> maybe_key =
       GetBackendNodeIdKey(element.GetDict(), w3c_compliant_);
   if (!maybe_key) {
     return Status{kNoSuchElement, "invalid element id"};
@@ -1502,7 +1518,7 @@ Status WebViewImpl::SetFileInputFiles(const std::string& frame,
   if (!element.is_dict())
     return Status(kUnknownError, "'element' is not a dictionary");
 
-  WebViewImpl* target = GetTargetForFrame(frame);
+  WebView* target = GetTargetForFrame(frame);
   if (target != nullptr && target != this) {
     if (target->IsDetached())
       return Status(kTargetDetached);
@@ -1538,7 +1554,7 @@ Status WebViewImpl::SetFileInputFiles(const std::string& frame,
     }
 
     // figure out how many files there are
-    absl::optional<int> number_of_files;
+    std::optional<int> number_of_files;
     {
       base::Value::Dict cmd_result;
       base::Value::Dict params;
@@ -1594,16 +1610,16 @@ Status WebViewImpl::SetFileInputFiles(const std::string& frame,
   }
 
   // Now add the new files
-  for (size_t i = 0; i < files.size(); ++i) {
-    if (!files[i].IsAbsolute()) {
+  for (const base::FilePath& file_path : files) {
+    if (!file_path.IsAbsolute()) {
       return Status(kUnknownError,
-                    "path is not absolute: " + files[i].AsUTF8Unsafe());
+                    "path is not absolute: " + file_path.AsUTF8Unsafe());
     }
-    if (files[i].ReferencesParent()) {
+    if (file_path.ReferencesParent()) {
       return Status(kUnknownError,
-                    "path is not canonical: " + files[i].AsUTF8Unsafe());
+                    "path is not canonical: " + file_path.AsUTF8Unsafe());
     }
-    file_list.Append(files[i].AsUTF8Unsafe());
+    file_list.Append(file_path.AsUTF8Unsafe());
   }
 
   base::Value::Dict set_files_params;
@@ -1700,7 +1716,8 @@ Status WebViewImpl::CallAsyncFunctionInternal(
   base::Value::List async_args;
   async_args.Append("return (" + function + ").apply(null, arguments);");
   async_args.Append(args.Clone());
-  async_args.Append(/*is_user_supplied=*/true);
+  /*is_user_supplied=*/
+  async_args.Append(true);
   std::unique_ptr<base::Value> tmp;
   Timeout local_timeout(timeout);
   Status status = CallFunctionWithTimeout(frame, kExecuteAsyncScriptScript,
@@ -1737,7 +1754,7 @@ Status WebViewImpl::CallAsyncFunctionInternal(
     base::Value::Dict* result_info = query_value->GetIfDict();
     if (!result_info)
       return Status(kUnknownError, "async result info is not a dictionary");
-    absl::optional<int> status_code = result_info->FindInt("status");
+    std::optional<int> status_code = result_info->FindInt("status");
     if (!status_code)
       return Status(kUnknownError, "async result info has no int 'status'");
     if (*status_code != kOk) {
@@ -1865,7 +1882,7 @@ Status WebViewImpl::ResolveElementReferencesInPlace(
     base::Value::Dict& arg_dict,
     base::Value::List& nodes) {
   Status status{kOk};
-  absl::optional<std::string> maybe_key =
+  std::optional<std::string> maybe_key =
       GetBackendNodeIdKey(arg_dict, w3c_compliant);
   if (!maybe_key) {
     for (auto it = arg_dict.begin(); status.IsOk() && it != arg_dict.end();
@@ -2018,10 +2035,10 @@ Status WebViewImpl::CreateElementReferences(const std::string& frame_id,
   }
   if (res.is_dict()) {
     base::Value::Dict& dict = res.GetDict();
-    absl::optional<std::string> maybe_key =
+    std::optional<std::string> maybe_key =
         GetBackendNodeIdKey(dict, w3c_compliant_);
     if (maybe_key) {
-      absl::optional<int> maybe_node_idx = dict.FindInt(*maybe_key);
+      std::optional<int> maybe_node_idx = dict.FindInt(*maybe_key);
       if (!maybe_node_idx) {
         return Status{kUnknownError, "node index is missing"};
       }
@@ -2033,7 +2050,7 @@ Status WebViewImpl::CreateElementReferences(const std::string& frame_id,
         return Status{kUnknownError, "serialized node is not a dictionary"};
       }
       const base::Value::Dict& node = nodes[*maybe_node_idx].GetDict();
-      absl::optional<int> maybe_backend_node_id =
+      std::optional<int> maybe_backend_node_id =
           node.FindIntByDottedPath("value.backendNodeId");
       if (!maybe_backend_node_id) {
         return Status{kUnknownError, "backendNodeId is missing in a node"};
@@ -2146,7 +2163,7 @@ Status EvaluateScriptAndGetValue(DevToolsClient* client,
   if (*type == "undefined") {
     *result = std::make_unique<base::Value>();
   } else {
-    absl::optional<base::Value> value = temp_result.Extract("value");
+    std::optional<base::Value> value = temp_result.Extract("value");
     if (!value)
       return Status(kUnknownError, "Runtime.evaluate missing 'value'");
     *result = base::Value::ToUniquePtrValue(std::move(*value));
@@ -2159,7 +2176,7 @@ Status ParseCallFunctionResult(const base::Value& temp_result,
   const base::Value::Dict* dict = temp_result.GetIfDict();
   if (!dict)
     return Status(kUnknownError, "call function result must be a dictionary");
-  absl::optional<int> status_code = dict->FindInt("status");
+  std::optional<int> status_code = dict->FindInt("status");
   if (!status_code) {
     return Status(kUnknownError,
                   "call function result missing int 'status'");

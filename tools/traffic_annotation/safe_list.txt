@@ -177,6 +177,7 @@ missing_new_fields,chromeos/ash/components/fwupd/firmware_update_manager.cc
 missing_new_fields,chromeos/ash/components/login/auth/recovery/cryptohome_recovery_service_client.cc
 missing_new_fields,chromeos/ash/components/timezone/timezone_request.cc
 missing_new_fields,chromeos/components/quick_answers/result_loader.cc
+missing_new_fields,components/affiliations/core/browser/hash_affiliation_fetcher.cc
 missing_new_fields,components/assist_ranker/ranker_url_fetcher.cc
 missing_new_fields,components/autofill/core/browser/payments/payments_network_interface.cc
 missing_new_fields,components/captive_portal/content/captive_portal_service.cc
@@ -210,7 +211,6 @@ missing_new_fields,components/openscreen_platform/udp_socket.cc
 missing_new_fields,components/optimization_guide/core/hints_fetcher.cc
 missing_new_fields,components/optimization_guide/core/prediction_model_download_manager.cc
 missing_new_fields,components/optimization_guide/core/prediction_model_fetcher_impl.cc
-missing_new_fields,components/password_manager/core/browser/affiliation/hash_affiliation_fetcher.cc
 missing_new_fields,components/password_manager/core/browser/generation/password_requirements_spec_fetcher_impl.cc
 missing_new_fields,components/password_manager/core/browser/well_known_change_password_state.cc
 missing_new_fields,components/payments/core/payment_manifest_downloader.cc
@@ -351,8 +351,9 @@ missing_new_fields,chrome/browser/ash/net/network_diagnostics/http_request_manag
 missing_new_fields,chrome/browser/ash/wallpaper/wallpaper_drivefs_delegate_impl.cc
 missing_new_fields,chrome/browser/ui/webui/ash/emoji/gif_tenor_api_fetcher.cc
 missing_new_fields,chromeos/ash/components/trial_group/trial_group_checker.cc
-missing_new_fields,chrome/browser/apps/app_service/app_install/web_app_installer.cc
 missing_new_fields,chrome/browser/ash/net/network_diagnostics/network_diagnostics_util.cc
 missing_new_fields,chrome/browser/ash/net/network_diagnostics/tls_prober.cc
 missing_new_fields,chrome/browser/fast_checkout/fast_checkout_capabilities_fetcher_impl.cc
 missing_new_fields,chrome/browser/ash/file_suggest/item_suggest_cache.cc
+missing_new_fields,extensions/browser/guest_view/web_view/controlled_frame_embedder_url_fetcher.cc
+missing_new_fields,chrome/browser/ash/app_list/search/essential_search/socs_cookie_fetcher.cc

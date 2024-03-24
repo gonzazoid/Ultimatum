@@ -7,6 +7,9 @@ package org.chromium.chrome.browser.readaloud.player.expanded;
 import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.View.AccessibilityDelegate;
+import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -15,11 +18,16 @@ import android.widget.RadioButton;
 import android.widget.TextView;
 
 import androidx.annotation.IntDef;
+import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 import androidx.appcompat.widget.SwitchCompat;
 
 import com.google.android.material.materialswitch.MaterialSwitch;
 
 import org.chromium.base.Callback;
+import org.chromium.base.supplier.ObservableSupplier;
+import org.chromium.base.supplier.ObservableSupplierImpl;
+import org.chromium.base.supplier.OneShotCallback;
 import org.chromium.chrome.browser.readaloud.player.R;
 
 import java.lang.annotation.Retention;
@@ -50,9 +58,11 @@ public class MenuItem extends FrameLayout {
     private final @Action int mActionType;
     private final Menu mMenu;
     private final LinearLayout mLayout;
+    private final ObservableSupplier<LinearLayout> mLayoutSupplier;
     private final ImageView mPlayButton;
     private final ProgressBar mPlayButtonSpinner;
     private Callback<Boolean> mToggleHandler;
+    private final String mLabel;
 
     /**
      * @param context Context.
@@ -68,13 +78,13 @@ public class MenuItem extends FrameLayout {
             int itemId,
             int iconId,
             String label,
-            @Action int action,
-            String contentDescription) {
+            @Nullable String header,
+            @Action int action) {
         super(context);
         mMenu = parentMenu;
         mId = itemId;
         mActionType = action;
-
+        mLabel = label;
         LayoutInflater inflater = LayoutInflater.from(context);
         LinearLayout layout = (LinearLayout) inflater.inflate(R.layout.readaloud_menu_item, null);
         layout.setOnClickListener(
@@ -82,15 +92,23 @@ public class MenuItem extends FrameLayout {
                     onClick();
                 });
         mLayout = layout;
+        mLayoutSupplier = new ObservableSupplierImpl(mLayout);
+        new OneShotCallback<LinearLayout>(mLayoutSupplier, this::onLayoutInflated);
         if (iconId != 0) {
             ImageView icon = layout.findViewById(R.id.icon);
             icon.setImageResource(iconId);
             // Icon is GONE by default.
             icon.setVisibility(View.VISIBLE);
         }
+        TextView localeView = layout.findViewById(R.id.item_header);
+        if (header == null) {
+            localeView.setVisibility(View.GONE);
+        } else {
+            localeView.setVisibility(View.VISIBLE);
+            localeView.setText(header);
+        }
 
         ((TextView) layout.findViewById(R.id.item_label)).setText(label);
-        layout.setContentDescription(contentDescription);
 
         switch (mActionType) {
             case Action.EXPAND:
@@ -129,7 +147,49 @@ public class MenuItem extends FrameLayout {
         addView(layout);
 
         mPlayButton = (ImageView) findViewById(R.id.play_button);
+        mPlayButton.setContentDescription(
+                context.getResources().getString(R.string.readaloud_play) + " " + mLabel);
         mPlayButtonSpinner = (ProgressBar) findViewById(R.id.spinner);
+        mPlayButtonSpinner.setContentDescription(
+                context.getResources().getString(R.string.readaloud_playback_loading)
+                        + " "
+                        + mLabel);
+    }
+
+    private void onLayoutInflated(LinearLayout layout) {
+        // accessibility delegate is only being set for radio and toggle switch item types
+        if (mActionType != Action.RADIO && mActionType != Action.TOGGLE) {
+            return;
+        }
+        // To improve the explore-by-touch experience, the button are hidden from accessibility
+        // and instead, "checked" or "not checked" is read along with the button's label
+        layout.setAccessibilityDelegate(
+                new AccessibilityDelegate() {
+                    @Override
+                    public void onInitializeAccessibilityEvent(
+                            View host, AccessibilityEvent event) {
+                        super.onInitializeAccessibilityEvent(host, event);
+                        if (mActionType == Action.RADIO) {
+                            event.setChecked(getRadioButton().isChecked());
+                        } else if (mActionType == Action.TOGGLE) {
+                            event.setChecked(getToggleSwitch().isChecked());
+                        }
+                    }
+
+                    @Override
+                    public void onInitializeAccessibilityNodeInfo(
+                            View host, AccessibilityNodeInfo info) {
+                        super.onInitializeAccessibilityNodeInfo(host, info);
+                        info.setCheckable(true);
+                        if (mActionType == Action.RADIO) {
+                            info.setChecked(getRadioButton().isChecked());
+                            info.setEnabled(getRadioButton().isEnabled());
+                        } else if (mActionType == Action.TOGGLE) {
+                            info.setChecked(getToggleSwitch().isChecked());
+                            info.setEnabled(getToggleSwitch().isEnabled());
+                        }
+                    }
+                });
     }
 
     void setToggleHandler(Callback<Boolean> handler) {
@@ -145,8 +205,9 @@ public class MenuItem extends FrameLayout {
     }
 
     void setItemEnabled(boolean enabled) {
-        mLayout.setClickable(enabled);
-        mLayout.setFocusable(enabled);
+        if (mActionType == Action.TOGGLE) {
+            getToggleSwitch().setEnabled(enabled);
+        }
     }
 
     void setValue(boolean value) {
@@ -169,10 +230,14 @@ public class MenuItem extends FrameLayout {
 
     void setPlayButtonStopped() {
         mPlayButton.setImageResource(R.drawable.mini_play_button);
+        mPlayButton.setContentDescription(
+                getContext().getResources().getString(R.string.readaloud_play) + " " + mLabel);
     }
 
     void setPlayButtonPlaying() {
         mPlayButton.setImageResource(R.drawable.mini_pause_button);
+        mPlayButton.setContentDescription(
+                getContext().getResources().getString(R.string.readaloud_pause) + " " + mLabel);
     }
 
     void setSecondLine(String text) {
@@ -213,5 +278,10 @@ public class MenuItem extends FrameLayout {
 
     private RadioButton getRadioButton() {
         return (RadioButton) findViewById(R.id.readaloud_radio_button);
+    }
+
+    @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
+    public ObservableSupplierImpl<LinearLayout> getLayoutSupplier() {
+        return (ObservableSupplierImpl) mLayoutSupplier;
     }
 }

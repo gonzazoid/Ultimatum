@@ -44,7 +44,7 @@
 #import "ios/web_view/internal/passwords/web_view_password_manager_client.h"
 #include "ios/web_view/internal/web_view_browser_state.h"
 #import "ios/web_view/public/cwv_autofill_controller_delegate.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
@@ -303,7 +303,7 @@ TEST_F(CWVAutofillControllerTest, FocusCallback) {
     params.frame_id = web::kMainFakeFrameId;
     params.has_user_gesture = true;
     params.type = "focus";
-    auto frame = web::FakeWebFrame::CreateMainWebFrame(GURL::EmptyGURL());
+    auto frame = web::FakeWebFrame::CreateMainWebFrame(GURL());
     form_activity_tab_helper_->FormActivityRegistered(frame.get(), params);
     [delegate verify];
 }
@@ -328,7 +328,7 @@ TEST_F(CWVAutofillControllerTest, InputCallback) {
     params.frame_id = web::kMainFakeFrameId;
     params.type = "input";
     params.has_user_gesture = true;
-    auto frame = web::FakeWebFrame::CreateMainWebFrame(GURL::EmptyGURL());
+    auto frame = web::FakeWebFrame::CreateMainWebFrame(GURL());
     form_activity_tab_helper_->FormActivityRegistered(frame.get(), params);
     [delegate verify];
 }
@@ -354,7 +354,7 @@ TEST_F(CWVAutofillControllerTest, InputCallbackFromKeyup) {
   params.frame_id = web::kMainFakeFrameId;
   params.type = "keyup";
   params.has_user_gesture = true;
-  auto frame = web::FakeWebFrame::CreateMainWebFrame(GURL::EmptyGURL());
+  auto frame = web::FakeWebFrame::CreateMainWebFrame(GURL());
   form_activity_tab_helper_->FormActivityRegistered(frame.get(), params);
   [delegate verify];
 }
@@ -379,7 +379,7 @@ TEST_F(CWVAutofillControllerTest, BlurCallback) {
   params.frame_id = web::kMainFakeFrameId;
   params.type = "blur";
   params.has_user_gesture = true;
-  auto frame = web::FakeWebFrame::CreateMainWebFrame(GURL::EmptyGURL());
+  auto frame = web::FakeWebFrame::CreateMainWebFrame(GURL());
   form_activity_tab_helper_->FormActivityRegistered(frame.get(), params);
 
   [delegate verify];
@@ -394,7 +394,7 @@ TEST_F(CWVAutofillControllerTest, SubmitCallback) {
                   didSubmitFormWithName:kTestFormName
                                 frameID:frame_id_
                           userInitiated:YES];
-  auto frame = web::FakeWebFrame::CreateMainWebFrame(GURL::EmptyGURL());
+  auto frame = web::FakeWebFrame::CreateMainWebFrame(GURL());
   form_activity_tab_helper_->DocumentSubmitted(
       /*sender_frame*/ frame.get(), base::SysNSStringToUTF8(kTestFormName),
       /*form_data=*/"",

@@ -84,8 +84,6 @@ class PLATFORM_EXPORT PropertyTreeStateOrAlias {
   bool ChangedToRoot(PaintPropertyChangeType change) const {
     return Changed(change, Root());
   }
-  bool ChangedExceptScrollAndEffect(PaintPropertyChangeType change,
-                                    const PropertyTreeState& relative_to) const;
 
   String ToString() const;
 #if DCHECK_IS_ON()
@@ -155,7 +153,7 @@ class PLATFORM_EXPORT PropertyTreeState : public PropertyTreeStateOrAlias {
   // state to which both layer will be upcasted.
   using IsCompositedScrollFunction =
       base::FunctionRef<bool(const TransformPaintPropertyNode&)>;
-  absl::optional<PropertyTreeState> CanUpcastWith(
+  std::optional<PropertyTreeState> CanUpcastWith(
       const PropertyTreeState& guest,
       IsCompositedScrollFunction) const;
 

@@ -104,11 +104,10 @@ UnsyncedCredentialsDeletionNotifierImpl::GetWeakPtr() {
 
 scoped_refptr<RefcountedKeyedService> BuildPasswordStore(
     content::BrowserContext* context) {
-  DCHECK(base::FeatureList::IsEnabled(
-      password_manager::features::kEnablePasswordsAccountStorage));
-
   Profile* profile = Profile::FromBrowserContext(context);
 
+  CHECK(password_manager::features_util::CanCreateAccountStore(
+      profile->GetPrefs()));
   DCHECK(!profile->IsOffTheRecord());
 
   scoped_refptr<password_manager::PasswordStore> ps =
@@ -124,7 +123,7 @@ scoped_refptr<RefcountedKeyedService> BuildPasswordStore(
           /*affiliations_prefetcher=*/nullptr));
 #endif
 
-  password_manager::AffiliationService* affiliation_service =
+  affiliations::AffiliationService* affiliation_service =
       AffiliationServiceFactory::GetForProfile(profile);
   std::unique_ptr<AffiliatedMatchHelper> affiliated_match_helper =
       std::make_unique<AffiliatedMatchHelper>(affiliation_service);
@@ -157,29 +156,10 @@ scoped_refptr<RefcountedKeyedService> BuildPasswordStore(
 scoped_refptr<PasswordStoreInterface>
 AccountPasswordStoreFactory::GetForProfile(Profile* profile,
                                            ServiceAccessType access_type) {
-  if (!base::FeatureList::IsEnabled(
-          password_manager::features::kEnablePasswordsAccountStorage)) {
+  if (!password_manager::features_util::CanCreateAccountStore(
+          profile->GetPrefs())) {
     return nullptr;
   }
-
-#if BUILDFLAG(IS_ANDROID)
-  // UsesSplitStoresAndUPMForLocal() doesn't fit here, it returns false for
-  // kOffAndMigrationPending.
-  switch (profile->GetPrefs()->GetInteger(
-      password_manager::prefs::kPasswordsUseUPMLocalAndSeparateStores)) {
-    case static_cast<int>(
-        password_manager::prefs::UseUpmLocalAndSeparateStoresState::kOff):
-      return nullptr;
-    case static_cast<int>(
-        password_manager::prefs::UseUpmLocalAndSeparateStoresState::
-            kOffAndMigrationPending):
-    case static_cast<int>(
-        password_manager::prefs::UseUpmLocalAndSeparateStoresState::kOn):
-      break;
-    default:
-      NOTREACHED_NORETURN();
-  }
-#endif
 
   // |profile| gets always redirected to a non-Incognito profile below, so
   // Incognito & IMPLICIT_ACCESS means that incognito browsing session would

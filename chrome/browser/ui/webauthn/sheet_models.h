@@ -610,7 +610,7 @@ class AuthenticatorPhoneConfirmationSheet : public AuthenticatorSheetModelBase {
   ~AuthenticatorPhoneConfirmationSheet() override;
 
  private:
-  // AuthenticatorSheetModelbase:
+  // AuthenticatorSheetModelBase:
   std::u16string GetStepTitle() const override;
   std::u16string GetStepDescription() const override;
   bool IsAcceptButtonVisible() const override;
@@ -650,7 +650,7 @@ class AuthenticatorMultiSourcePickerSheetModel
   std::u16string& primary_passkeys_label() { return primary_passkeys_label_; }
 
  private:
-  // AuthenticatorSheetModelbase:
+  // AuthenticatorSheetModelBase:
   bool IsManageDevicesButtonVisible() const override;
   void OnManageDevices() override;
   std::u16string GetStepTitle() const override;
@@ -669,13 +669,39 @@ class AuthenticatorPriorityMechanismSheetModel
   ~AuthenticatorPriorityMechanismSheetModel() override;
 
  private:
-  // AuthenticatorSheetModelbase:
+  // AuthenticatorSheetModelBase:
   std::u16string GetStepTitle() const override;
   std::u16string GetStepDescription() const override;
   bool IsAcceptButtonEnabled() const override;
   bool IsAcceptButtonVisible() const override;
   std::u16string GetAcceptButtonLabel() const override;
   void OnAccept() override;
+};
+
+// The sheet shown when the user is creating a GPM pin.
+class AuthenticatorGPMCreatePinSheetModel : public AuthenticatorSheetModelBase {
+ public:
+  explicit AuthenticatorGPMCreatePinSheetModel(
+      AuthenticatorRequestDialogModel* dialog_model,
+      int pin_digits_count);
+  ~AuthenticatorGPMCreatePinSheetModel() override;
+
+  int pin_digits_count() const;
+
+  // Sets currently typed pin in the sheet.
+  void SetPin(std::u16string pin);
+
+ private:
+  // AuthenticatorSheetModelBase:
+  std::u16string GetStepTitle() const override;
+  std::u16string GetStepDescription() const override;
+  bool IsAcceptButtonEnabled() const override;
+  bool IsAcceptButtonVisible() const override;
+  std::u16string GetAcceptButtonLabel() const override;
+  void OnAccept() override;
+
+  std::u16string pin_;
+  const int pin_digits_count_;
 };
 
 #endif  // CHROME_BROWSER_UI_WEBAUTHN_SHEET_MODELS_H_

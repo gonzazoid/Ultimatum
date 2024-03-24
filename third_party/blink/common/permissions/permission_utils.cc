@@ -90,6 +90,8 @@ std::string GetPermissionString(PermissionType permission) {
       return "CapturedSurfaceControl";
     case PermissionType::WEB_PRINTING:
       return "WebPrinting";
+    case PermissionType::SPEAKER_SELECTION:
+      return "SpeakerSelection";
     case PermissionType::NUM:
       NOTREACHED();
       return std::string();
@@ -98,7 +100,7 @@ std::string GetPermissionString(PermissionType permission) {
   return std::string();
 }
 
-absl::optional<mojom::PermissionsPolicyFeature>
+std::optional<mojom::PermissionsPolicyFeature>
 PermissionTypeToPermissionsPolicyFeature(PermissionType permission) {
   switch (permission) {
     case PermissionType::GEOLOCATION:
@@ -141,6 +143,8 @@ PermissionTypeToPermissionsPolicyFeature(PermissionType permission) {
       return mojom::PermissionsPolicyFeature::kDisplayCapture;
     case PermissionType::CAPTURED_SURFACE_CONTROL:
       return mojom::PermissionsPolicyFeature::kCapturedSurfaceControl;
+    case PermissionType::SPEAKER_SELECTION:
+      return mojom::PermissionsPolicyFeature::kSpeakerSelection;
 
     case PermissionType::PERIODIC_BACKGROUND_SYNC:
     case PermissionType::DURABLE_STORAGE:
@@ -155,14 +159,14 @@ PermissionTypeToPermissionsPolicyFeature(PermissionType permission) {
     case PermissionType::NFC:
     case PermissionType::CAMERA_PAN_TILT_ZOOM:
     case PermissionType::NOTIFICATIONS:
-      return absl::nullopt;
+      return std::nullopt;
 
     case PermissionType::NUM:
       NOTREACHED();
-      return absl::nullopt;
+      return std::nullopt;
   }
   NOTREACHED();
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 const std::vector<PermissionType>& GetAllPermissionTypes() {
@@ -185,7 +189,7 @@ const std::vector<PermissionType>& GetAllPermissionTypes() {
   return *kAllPermissionTypes;
 }
 
-absl::optional<PermissionType> PermissionDescriptorToPermissionType(
+std::optional<PermissionType> PermissionDescriptorToPermissionType(
     const PermissionDescriptorPtr& descriptor) {
   return PermissionDescriptorInfoToPermissionType(
       descriptor->name,
@@ -199,7 +203,7 @@ absl::optional<PermissionType> PermissionDescriptorToPermissionType(
           descriptor->extension->get_clipboard()->has_user_gesture);
 }
 
-absl::optional<PermissionType> PermissionDescriptorInfoToPermissionType(
+std::optional<PermissionType> PermissionDescriptorInfoToPermissionType(
     mojom::PermissionName name,
     bool midi_sysex,
     bool camera_ptz,
@@ -221,7 +225,7 @@ absl::optional<PermissionType> PermissionDescriptorInfoToPermissionType(
       return PermissionType::PROTECTED_MEDIA_IDENTIFIER;
 #else
       NOTIMPLEMENTED();
-      return absl::nullopt;
+      return std::nullopt;
 #endif  // defined(ENABLE_PROTECTED_MEDIA_IDENTIFIER_PERMISSION)
     case PermissionName::DURABLE_STORAGE:
       return PermissionType::DURABLE_STORAGE;
@@ -276,9 +280,10 @@ absl::optional<PermissionType> PermissionDescriptorInfoToPermissionType(
       return PermissionType::TOP_LEVEL_STORAGE_ACCESS;
     case PermissionName::CAPTURED_SURFACE_CONTROL:
       return PermissionType::CAPTURED_SURFACE_CONTROL;
-
+    case PermissionName::SPEAKER_SELECTION:
+      return PermissionType::SPEAKER_SELECTION;
       NOTREACHED();
-      return absl::nullopt;
+      return std::nullopt;
   }
 }
 

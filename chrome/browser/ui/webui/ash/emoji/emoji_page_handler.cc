@@ -19,6 +19,7 @@
 #include "chrome/browser/ui/webui/ash/emoji/emoji_ui.h"
 #include "chrome/browser/ui/webui/ash/emoji/seal_utils.h"
 #include "chrome/grit/generated_resources.h"
+#include "chromeos/ash/components/emoji/emoji_search.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/storage_partition.h"
 #include "ui/base/clipboard/scoped_clipboard_writer.h"
@@ -96,8 +97,7 @@ void CopyGifToClipboard(const GURL& gif_to_copy) {
   auto clipboard = std::make_unique<ui::ScopedClipboardWriter>(
       ui::ClipboardBuffer::kCopyPaste);
 
-  clipboard->WriteHTML(base::UTF8ToUTF16(BuildGifHTML(gif_to_copy)), "",
-                       ui::ClipboardContentType::kSanitized);
+  clipboard->WriteHTML(base::UTF8ToUTF16(BuildGifHTML(gif_to_copy)), "");
 
   // Show a toast that says "GIF not supported. Copied to clipboard.".
   ToastManager::Get()->Show(ToastData(
@@ -243,11 +243,13 @@ EmojiPageHandler::EmojiPageHandler(
     content::WebUI* web_ui,
     EmojiUI* webui_controller,
     bool incognito_mode,
-    bool no_text_field)
+    bool no_text_field,
+    emoji_picker::mojom::Category initial_category)
     : receiver_(this, std::move(receiver)),
       webui_controller_(webui_controller),
       incognito_mode_(incognito_mode),
-      no_text_field_(no_text_field) {
+      no_text_field_(no_text_field),
+      initial_category_(initial_category) {
   Profile* profile = Profile::FromWebUI(web_ui);
 
   // There are two conditions to control the GIF support:
@@ -295,6 +297,10 @@ void EmojiPageHandler::GetFeatureList(GetFeatureListCallback callback) {
         emoji_picker::mojom::Feature::EMOJI_PICKER_GIF_SUPPORT);
   }
 
+  if (base::FeatureList::IsEnabled(features::kImeSystemEmojiPickerMojoSearch)) {
+    enabled_features.push_back(
+        emoji_picker::mojom::Feature::EMOJI_PICKER_MOJO_SEARCH);
+  }
   if (SealUtils::ShouldEnable()) {
     enabled_features.push_back(
         emoji_picker::mojom::Feature::EMOJI_PICKER_SEAL_SUPPORT);
@@ -400,6 +406,10 @@ void EmojiPageHandler::InsertGif(const GURL& gif) {
 
 void EmojiPageHandler::OnUiFullyLoaded() {
   LogLoadTime(base::TimeTicks::Now() - shown_time_);
+}
+
+void EmojiPageHandler::GetInitialCategory(GetInitialCategoryCallback callback) {
+  std::move(callback).Run(initial_category_);
 }
 
 }  // namespace ash

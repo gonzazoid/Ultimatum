@@ -113,7 +113,7 @@ class LineBreakStrategy {
 
   void SetupLineBreaker(InlineChildLayoutContext* context,
                         LineBreaker& line_breaker) {
-    if (const absl::optional<LayoutUnit>& balanced_available_width =
+    if (const std::optional<LayoutUnit>& balanced_available_width =
             context->BalancedAvailableWidth();
         UNLIKELY(balanced_available_width)) {
       DCHECK(!score_line_break_context_ ||
@@ -172,7 +172,7 @@ class LineBreakStrategy {
     // Exclusions and negative inline sizes are not supported.
     if (opportunities.size() == 1 &&
         line_opportunity.AvailableInlineSize() > LayoutUnit()) {
-      if (const absl::optional<LayoutUnit> balanced_available_width =
+      if (const std::optional<LayoutUnit> balanced_available_width =
               ParagraphLineBreaker::AttemptParagraphBalancing(
                   node, space, line_opportunity)) {
         context->SetBalancedAvailableWidth(balanced_available_width);
@@ -486,20 +486,21 @@ void InlineLayoutAlgorithm::CreateLine(const LineLayoutOpportunity& opportunity,
       item.GetLayoutObject()->ClearNeedsLayoutWithFullPaintInvalidation();
 
     } else if (item.Type() == InlineItem::kControl) {
-      PlaceControlItem(item, *line_info, &item_result, line_box, box);
+      PlaceControlItem(item, line_info->ItemsData().text_content, &item_result,
+                       line_box, box);
     } else if (item.Type() == InlineItem::kOpenTag) {
       box = HandleOpenTag(item, item_result, line_box, box_states_);
     } else if (item.Type() == InlineItem::kCloseTag) {
       box = HandleCloseTag(item, item_result, line_box, box);
     } else if (item.Type() == InlineItem::kAtomicInline) {
-      box = PlaceAtomicInline(item, *line_info, &item_result, line_box);
+      box = PlaceAtomicInline(item, &item_result, line_box);
       has_relative_positioned_items |=
           item.Style()->GetPosition() == EPosition::kRelative;
     } else if (item.Type() == InlineItem::kBlockInInline) {
       DCHECK(line_info->IsBlockInInline());
-      PlaceBlockInInline(item, *line_info, &item_result, line_box);
+      PlaceBlockInInline(item, &item_result, line_box);
     } else if (item.Type() == InlineItem::kListMarker) {
-      PlaceListMarker(item, &item_result, *line_info);
+      PlaceListMarker(item, &item_result);
     } else if (item.Type() == InlineItem::kOutOfFlowPositioned) {
       // An inline-level OOF child positions itself based on its direction, a
       // block-level OOF child positions itself based on the direction of its
@@ -538,7 +539,7 @@ void InlineLayoutAlgorithm::CreateLine(const LineLayoutOpportunity& opportunity,
       // [1] https://drafts.csswg.org/css-inline/#initial-letter-block-position
       DCHECK(!initial_letter_item_result);
       initial_letter_item_result = &item_result;
-      PlaceInitialLetterBox(item, *line_info, &item_result, line_box);
+      PlaceInitialLetterBox(item, &item_result, line_box);
     }
   }
 
@@ -738,7 +739,7 @@ void InlineLayoutAlgorithm::CreateLine(const LineLayoutOpportunity& opportunity,
 }
 
 void InlineLayoutAlgorithm::PlaceControlItem(const InlineItem& item,
-                                             const LineInfo& line_info,
+                                             const String& text_content,
                                              InlineItemResult* item_result,
                                              LogicalLineItems* line_box,
                                              InlineBoxState* box) {
@@ -747,7 +748,7 @@ void InlineLayoutAlgorithm::PlaceControlItem(const InlineItem& item,
   DCHECK(!item.TextShapeResult());
   DCHECK_NE(item.TextType(), TextItemType::kNormal);
 #if DCHECK_IS_ON()
-  item.CheckTextType(line_info.ItemsData().text_content);
+  item.CheckTextType(text_content);
 #endif
 
   // Don't generate fragments if this is a generated (not in DOM) break
@@ -793,7 +794,6 @@ void InlineLayoutAlgorithm::PlaceHyphen(const InlineItemResult& item_result,
 
 InlineBoxState* InlineLayoutAlgorithm::PlaceAtomicInline(
     const InlineItem& item,
-    const LineInfo& line_info,
     InlineItemResult* item_result,
     LogicalLineItems* line_box) {
   DCHECK(item_result->layout_result);
@@ -853,7 +853,6 @@ void InlineLayoutAlgorithm::PlaceLayoutResult(InlineItemResult* item_result,
 }
 
 void InlineLayoutAlgorithm::PlaceBlockInInline(const InlineItem& item,
-                                               const LineInfo& line_info,
                                                InlineItemResult* item_result,
                                                LogicalLineItems* line_box) {
   DCHECK_EQ(item.Type(), InlineItem::kBlockInInline);
@@ -896,7 +895,6 @@ void InlineLayoutAlgorithm::PlaceBlockInInline(const InlineItem& item,
 }
 
 void InlineLayoutAlgorithm::PlaceInitialLetterBox(const InlineItem& item,
-                                                  const LineInfo& line_info,
                                                   InlineItemResult* item_result,
                                                   LogicalLineItems* line_box) {
   DCHECK(item_result->layout_result);
@@ -1105,8 +1103,7 @@ void InlineLayoutAlgorithm::PlaceRelativePositionedItems(
 
 // Place a list marker.
 void InlineLayoutAlgorithm::PlaceListMarker(const InlineItem& item,
-                                            InlineItemResult* item_result,
-                                            const LineInfo& line_info) {
+                                            InlineItemResult* item_result) {
   if (UNLIKELY(quirks_mode_)) {
     box_states_->LineBoxState().EnsureTextMetrics(
         *item.Style(), item.Style()->GetFont(), baseline_type_);
@@ -1115,23 +1112,23 @@ void InlineLayoutAlgorithm::PlaceListMarker(const InlineItem& item,
 
 // Justify the line. This changes the size of items by adding spacing.
 // Returns false if justification failed and should fall back to start-aligned.
-absl::optional<LayoutUnit> InlineLayoutAlgorithm::ApplyJustify(
+std::optional<LayoutUnit> InlineLayoutAlgorithm::ApplyJustify(
     LayoutUnit space,
     LineInfo* line_info) {
   // Empty lines should align to start.
   if (line_info->IsEmptyLine())
-    return absl::nullopt;
+    return std::nullopt;
 
   // Justify the end of visible text, ignoring preserved trailing spaces.
   unsigned end_offset = line_info->EndOffsetForJustify();
 
   // If this line overflows, fallback to 'text-align: start'.
   if (space <= 0)
-    return absl::nullopt;
+    return std::nullopt;
 
   // Can't justify an empty string.
   if (end_offset == line_info->StartOffset())
-    return absl::nullopt;
+    return std::nullopt;
 
   const UChar kTextCombineItemMarker = 0x3042;  // U+3042 Hiragana Letter A
 
@@ -1189,7 +1186,7 @@ absl::optional<LayoutUnit> InlineLayoutAlgorithm::ApplyJustify(
     // LayoutRubyText.
     if (box && (box->IsRubyText() || box->IsRubyBase()))
       return space / 2;
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   LayoutUnit inset;
@@ -1210,11 +1207,11 @@ absl::optional<LayoutUnit> InlineLayoutAlgorithm::ApplyJustify(
   }
 
   for (InlineItemResult& item_result : *line_info->MutableResults()) {
-    if (item_result.has_only_trailing_spaces)
+    if (item_result.has_only_pre_wrap_trailing_spaces) {
       break;
+    }
     if (item_result.shape_result) {
-      scoped_refptr<ShapeResult> shape_result =
-          item_result.shape_result->CreateShapeResult();
+      ShapeResult* shape_result = item_result.shape_result->CreateShapeResult();
       DCHECK_GE(item_result.StartOffset(), line_text_start_offset);
       DCHECK_EQ(shape_result->NumCharacters(), item_result.Length());
       shape_result->ApplySpacing(spacing, item_result.StartOffset() -
@@ -1223,7 +1220,7 @@ absl::optional<LayoutUnit> InlineLayoutAlgorithm::ApplyJustify(
       item_result.inline_size = shape_result->SnappedWidth();
       if (UNLIKELY(item_result.is_hyphenated))
         item_result.inline_size += item_result.hyphen.InlineSize();
-      item_result.shape_result = ShapeResultView::Create(shape_result.get());
+      item_result.shape_result = ShapeResultView::Create(shape_result);
     } else if (item_result.item->Type() == InlineItem::kAtomicInline) {
       float spacing_before = 0.0f;
       DCHECK_LE(line_text_start_offset, item_result.StartOffset());
@@ -1259,7 +1256,7 @@ LayoutUnit InlineLayoutAlgorithm::ApplyTextAlign(LineInfo* line_info) {
 
   ETextAlign text_align = line_info->TextAlign();
   if (text_align == ETextAlign::kJustify) {
-    absl::optional<LayoutUnit> offset = ApplyJustify(space, line_info);
+    std::optional<LayoutUnit> offset = ApplyJustify(space, line_info);
     if (offset)
       return *offset;
 
@@ -1667,13 +1664,12 @@ const LayoutResult* InlineLayoutAlgorithm::Layout() {
     // Propagate any break tokens for floats that we fragmented before or inside
     // to the block container in 3 steps: 1) in `PositionLeadingFloats`, 2) from
     // `LineInfo` here, 3) then `CreateLine` may propagate more.
-    for (const BreakToken* parallel_token :
+    for (const InlineBreakToken* parallel_token :
          line_info.ParallelFlowBreakTokens()) {
-      DCHECK(parallel_token->IsInlineType());
-      DCHECK(To<InlineBreakToken>(parallel_token)->IsInParallelBlockFlow());
+      DCHECK(parallel_token->IsInParallelBlockFlow());
       context_->PropagateParallelFlowBreakToken(parallel_token);
     }
-    if (absl::optional<LayoutUnit> minimum_space_shortage =
+    if (std::optional<LayoutUnit> minimum_space_shortage =
             line_info.MinimumSpaceShortage()) {
       container_builder_.PropagateSpaceShortage(minimum_space_shortage);
     }
@@ -1842,7 +1838,7 @@ void InlineLayoutAlgorithm::BidiReorder(TextDirection base_direction,
     }
     DCHECK_NE(item.bidi_level, kOpaqueBidiLevel);
     // UAX#9 L1: trailing whitespaces should use paragraph direction.
-    if (item.has_only_trailing_spaces) {
+    if (item.has_only_bidi_trailing_spaces) {
       levels.push_back(base_direction_level);
       continue;
     }

@@ -10,6 +10,8 @@
 #include "chrome/browser/ui/view_ids.h"
 #include "chrome/browser/ui/views/extensions/extensions_toolbar_button.h"
 #include "chrome/browser/ui/views/extensions/extensions_toolbar_container.h"
+#include "chrome/browser/ui/views/extensions/extensions_toolbar_container_view_controller.h"
+#include "chrome/browser/ui/views/extensions/extensions_toolbar_coordinator.h"
 #include "chrome/browser/ui/views/frame/browser_non_client_frame_view.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/page_action/page_action_icon_controller.h"
@@ -155,7 +157,7 @@ gfx::Rect WebAppFrameToolbarView::LayoutInContainer(gfx::Rect available_space) {
 
   DCHECK_LE(GetPreferredSize().height(), available_space.height());
   SetBoundsRect(available_space);
-  Layout();
+  DeprecatedLayoutImmediately();
 
   if (!center_container_->GetVisible()) {
     return gfx::Rect();
@@ -305,8 +307,10 @@ void WebAppFrameToolbarView::OnWindowControlsOverlayEnabledChanged() {
     DestroyLayer();
     views::SetHitTestComponent(this, static_cast<int>(HTNOWHERE));
   }
-  right_container_->extensions_container()->WindowControlsOverlayEnabledChanged(
-      browser_view_->IsWindowControlsOverlayEnabled());
+  right_container_->extensions_toolbar_coordinator()
+      ->GetExtensionsContainerViewController()
+      ->WindowControlsOverlayEnabledChanged(
+          browser_view_->IsWindowControlsOverlayEnabled());
 }
 
 void WebAppFrameToolbarView::UpdateBorderlessModeEnabled() {

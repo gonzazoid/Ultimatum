@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 // clang-format off
-import {AutofillManagerProxy, PaymentsManagerProxy, PersonalDataChangedListener} from 'chrome://settings/lazy_load.js';
+import type {AutofillManagerProxy, PaymentsManagerProxy, PersonalDataChangedListener} from 'chrome://settings/lazy_load.js';
 import {assertEquals} from 'chrome://webui-test/chai_assert.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
@@ -15,6 +15,8 @@ export const STUB_USER_ACCOUNT_INFO: chrome.autofillPrivate.AccountInfo = {
   email: 'stub-user@example.com',
   isSyncEnabledForAutofillProfiles: false,
   isEligibleForAddressAccountStorage: false,
+  isAutofillSyncToggleAvailable: false,
+  isAutofillSyncToggleEnabled: false,
 };
 
 /**
@@ -193,6 +195,7 @@ export class TestAutofillManager extends TestBrowserProxy implements
       'removeAddress',
       'removePersonalDataManagerListener',
       'setPersonalDataManagerListener',
+      'setAutofillSyncToggleEnabled',
     ]);
 
     // Set these to have non-empty data.
@@ -202,6 +205,8 @@ export class TestAutofillManager extends TestBrowserProxy implements
         email: 'stub-user@example.com',
         isSyncEnabledForAutofillProfiles: true,
         isEligibleForAddressAccountStorage: false,
+        isAutofillSyncToggleAvailable: false,
+        isAutofillSyncToggleEnabled: false,
       },
     };
 
@@ -234,6 +239,10 @@ export class TestAutofillManager extends TestBrowserProxy implements
 
   removeAddress(_guid: string) {
     this.methodCalled('removeAddress');
+  }
+
+  setAutofillSyncToggleEnabled(_enabled: boolean) {
+    this.methodCalled('setAutofillSyncToggleEnabled');
   }
 
   /**

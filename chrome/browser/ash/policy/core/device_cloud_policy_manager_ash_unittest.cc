@@ -36,6 +36,7 @@
 #include "chrome/browser/ash/settings/device_settings_test_helper.h"
 #include "chrome/browser/device_identity/device_oauth2_token_service.h"
 #include "chrome/browser/device_identity/device_oauth2_token_service_factory.h"
+#include "chrome/browser/policy/messaging_layer/public/report_client_test_util.h"
 #include "chrome/browser/prefs/browser_prefs.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
@@ -44,9 +45,9 @@
 #include "chromeos/ash/components/attestation/stub_attestation_features.h"
 #include "chromeos/ash/components/cryptohome/system_salt_getter.h"
 #include "chromeos/ash/components/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/dbus/device_management/fake_install_attributes_client.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "chromeos/ash/components/dbus/userdataauth/fake_cryptohome_misc_client.h"
-#include "chromeos/ash/components/dbus/userdataauth/fake_install_attributes_client.h"
 #include "chromeos/ash/components/install_attributes/install_attributes.h"
 #include "chromeos/ash/components/system/fake_statistics_provider.h"
 #include "chromeos/ash/components/system/statistics_provider.h"
@@ -200,6 +201,9 @@ class DeviceCloudPolicyManagerAshTest
     device_management_service_.ScheduleInitialization(0);
     base::RunLoop().RunUntilIdle();
 
+    reporting_test_enviroment_ =
+        reporting::ReportingClient::TestEnvironment::CreateWithStorageModule();
+
     if (set_empty_system_salt_) {
       ash::FakeCryptohomeMiscClient::Get()->set_system_salt(
           std::vector<uint8_t>());
@@ -262,6 +266,8 @@ class DeviceCloudPolicyManagerAshTest
     ash::SystemSaltGetter::Shutdown();
     ash::InstallAttributesClient::Shutdown();
     TestingBrowserProcess::GetGlobal()->SetLocalState(nullptr);
+
+    reporting_test_enviroment_.reset();
 
     DeviceSettingsTestBase::TearDown();
   }
@@ -350,6 +356,9 @@ class DeviceCloudPolicyManagerAshTest
     owner_key_util_->SetPublicKeyFromPrivateKey(
         *device_policy_->GetNewSigningKey());
   }
+
+  std::unique_ptr<reporting::ReportingClient::TestEnvironment>
+      reporting_test_enviroment_;
 
   std::unique_ptr<ash::InstallAttributes> install_attributes_;
 

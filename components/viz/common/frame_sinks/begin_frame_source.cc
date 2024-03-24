@@ -117,9 +117,9 @@ BeginFrameSource::BeginFrameArgsGenerator::GenerateBeginFrameArgs(
       EstimateTickCountsBetween(frame_time, next_expected_frame_time_,
                                 vsync_interval);
   // This is utilized by ExternalBeginFrameSourceAndroid,
-  // GpuVSyncBeginFrameSource, and DelayBasedBeginFrameSource. Which covers the
-  // main Viz use cases. BackToBackBeginFrameSource is not relevant. We also are
-  // not looking to adjust ExternalBeginFrameSourceMojo which is used in
+  // ExternalBeginFrameSourceWin, and DelayBasedBeginFrameSource. Which covers
+  // the main Viz use cases. BackToBackBeginFrameSource is not relevant. We also
+  // are not looking to adjust ExternalBeginFrameSourceMojo which is used in
   // headless.
   if (dynamic_begin_frame_deadline_offset_source_) {
     base::TimeDelta deadline_offset =
@@ -301,7 +301,7 @@ void BackToBackBeginFrameSource::OnUpdateVSyncParameters(
 }
 
 void BackToBackBeginFrameSource::SetMaxVrrInterval(
-    const absl::optional<base::TimeDelta>& max_vrr_interval) {
+    const std::optional<base::TimeDelta>& max_vrr_interval) {
   DCHECK(!max_vrr_interval.has_value() || max_vrr_interval->is_positive());
   max_vrr_interval_ = max_vrr_interval;
 }
@@ -417,7 +417,7 @@ void DelayBasedBeginFrameSource::SetDynamicBeginFrameDeadlineOffsetSource(
 }
 
 void DelayBasedBeginFrameSource::SetMaxVrrInterval(
-    const absl::optional<base::TimeDelta>& max_vrr_interval) {
+    const std::optional<base::TimeDelta>& max_vrr_interval) {
   DCHECK(!max_vrr_interval.has_value() || max_vrr_interval->is_positive());
 
   // If VRR is deactivating, record the number of frames produced.

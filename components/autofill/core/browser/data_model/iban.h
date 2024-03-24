@@ -22,6 +22,9 @@ class Iban : public AutofillDataModel {
   using Guid = base::StrongAlias<class GuidTag, std::string>;
   using InstrumentId = base::StrongAlias<class InstrumentIdTag, int64_t>;
 
+  // A java IntDef@ is generated from this.
+  // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.components.autofill
+  // GENERATED_JAVA_CLASS_NAME_OVERRIDE: IbanRecordType
   enum RecordType {
     // An IBAN extracted from a submitted form, whose record type is currently
     // unknown or irrelevant.
@@ -147,11 +150,6 @@ class Iban : public AutofillDataModel {
   // DE91 1000 0000 0123 4567 89 will be shown as: DE91 **** **** **** **67 89.
   std::u16string GetIdentifierStringForAutofillDisplay(
       bool is_value_masked = true) const;
-
-  // Returns a version of |value_| which does not have any separator characters
-  // (e.g., '-' and ' ').
-  // TODO(crbug.com/1422672): Cleanup and use value().
-  std::u16string GetStrippedValue() const;
 
   // Returns true if the `prefix_`, `suffix_` and `length_` of the given `iban`
   // matches this IBAN.

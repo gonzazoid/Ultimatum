@@ -248,12 +248,12 @@ IbanEntryList GenerateIbanList(
   return list;
 }
 
-absl::optional<api::autofill_private::AccountInfo> GetAccountInfo(
+std::optional<api::autofill_private::AccountInfo> GetAccountInfo(
     const autofill::PersonalDataManager& personal_data) {
-  absl::optional<CoreAccountInfo> account =
+  std::optional<CoreAccountInfo> account =
       personal_data.GetPrimaryAccountInfo();
   if (!account.has_value()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   api::autofill_private::AccountInfo api_account;
@@ -262,6 +262,11 @@ absl::optional<api::autofill_private::AccountInfo> GetAccountInfo(
       personal_data.IsSyncFeatureEnabledForAutofill();
   api_account.is_eligible_for_address_account_storage =
       personal_data.IsEligibleForAddressAccountStorage();
+  api_account.is_autofill_sync_toggle_enabled =
+      personal_data.IsUserSelectableTypeEnabled(
+          syncer::UserSelectableType::kAutofill);
+  api_account.is_autofill_sync_toggle_available =
+      personal_data.IsAutofillSyncToggleAvailable();
   return std::move(api_account);
 }
 
@@ -307,6 +312,11 @@ autofill_private::CreditCardEntry CreditCardToCreditCardEntry(
   card.image_src =
       card_art_image ? webui::GetBitmapDataUrl(card_art_image->AsBitmap())
                      : CardNetworkToIconResourceIdString(credit_card.network());
+  if (base::FeatureList::IsEnabled(
+          autofill::features::kAutofillEnableCardBenefits) &&
+      credit_card.product_terms_url().is_valid()) {
+    card.product_terms_url = credit_card.product_terms_url().spec();
+  }
 
   // Create card metadata and add it to |card|.
   card.metadata.emplace();

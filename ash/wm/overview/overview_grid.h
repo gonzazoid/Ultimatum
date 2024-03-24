@@ -12,6 +12,7 @@
 
 #include "ash/public/cpp/wallpaper/wallpaper_controller_observer.h"
 #include "ash/rotator/screen_rotation_animator_observer.h"
+#include "ash/style/icon_button.h"
 #include "ash/style/rounded_label_widget.h"
 #include "ash/wm/desks/templates/saved_desk_save_desk_button_container.h"
 #include "ash/wm/overview/overview_item.h"
@@ -41,6 +42,7 @@ class PresentationTimeRecorder;
 
 namespace ash {
 
+class FasterSplitView;
 class LegacyDeskBarView;
 class OverviewDropTarget;
 class OverviewGridEventHandler;
@@ -292,6 +294,9 @@ class ASH_EXPORT OverviewGrid : public SplitViewObserver,
   // positioned, taking into account the availability of the Desks bar).
   gfx::Rect GetGridEffectiveBounds() const;
 
+  // Gets the paddings around the effective bounds (excluding the desk bar).
+  gfx::Insets GetGridEffectiveBoundsPaddings() const;
+
   // Gets the insets of the grid. Either |bounds_| or GetGridEffectiveBounds
   // does not exclude the insets from its bounds. But like PositionWindows needs
   // to position the overview windows in the bounds exclude the insets.
@@ -384,6 +389,10 @@ class ASH_EXPORT OverviewGrid : public SplitViewObserver,
   bool IsSaveDeskAsTemplateButtonVisible() const;
   bool IsSaveDeskForLaterButtonVisible() const;
 
+  // Called by `OverviewSession` when tablet mode changes to update necessary UI
+  // if needed.
+  void OnTabletModeChanged();
+
   // This is different from `item_list_.size()` which contains the drop target
   // if it exists, and if two windows are in a snap group, they are a single
   // item.
@@ -398,6 +407,8 @@ class ASH_EXPORT OverviewGrid : public SplitViewObserver,
   // Returns the save button container if available, otherwise null.
   SavedDeskSaveDeskButtonContainer* GetSaveDeskButtonContainer();
   const SavedDeskSaveDeskButtonContainer* GetSaveDeskButtonContainer() const;
+
+  FasterSplitView* GetFasterSplitView();
 
   // SplitViewObserver:
   void OnSplitViewStateChanged(SplitViewController::State previous_state,
@@ -428,6 +439,7 @@ class ASH_EXPORT OverviewGrid : public SplitViewObserver,
 
   // Returns the root window in which the grid displays the windows.
   aura::Window* root_window() { return root_window_; }
+  const aura::Window* root_window() const { return root_window_; }
 
   OverviewSession* overview_session() { return overview_session_; }
 
@@ -466,12 +478,17 @@ class ASH_EXPORT OverviewGrid : public SplitViewObserver,
     return save_desk_button_container_widget_.get();
   }
 
+  views::Widget* faster_splitview_widget() {
+    return faster_splitview_widget_.get();
+  }
+
   int num_incognito_windows() const { return num_incognito_windows_; }
 
   int num_unsupported_windows() const { return num_unsupported_windows_; }
 
   const gfx::Rect bounds_for_testing() const { return bounds_; }
   float scroll_offset_for_testing() const { return scroll_offset_; }
+  views::Widget* pine_widget_for_testing() { return pine_widget_.get(); }
 
  private:
   friend class DesksTemplatesTest;
@@ -582,6 +599,21 @@ class ASH_EXPORT OverviewGrid : public SplitViewObserver,
                          size_t position,
                          bool animate);
 
+  // Called when the faster splitview toast skip button is pressed.
+  void OnSkipButtonPressed();
+
+  // Called when the faster splitview settings button is pressed.
+  void OnSettingsButtonPressed();
+
+  // Updates the visibility of `faster_splitview_widget_`. The widget will
+  // only be shown if faster splitview setup is in session.
+  void UpdateFasterSplitViewWidget();
+
+  // Updates the visibility of `feedback_widget_`. The widget is located in the
+  // bottom left corner of the grid, and contains a `PillButton` that opens up a
+  // feedback page when clicked. The widget will not show in partial overview.
+  void UpdateFeedbackButton();
+
   // The drop target is created when a window or overview item is being dragged,
   // and is destroyed when the drag ends or overview mode is ended. The drop
   // target is hidden when a snap preview area is shown. You can drop a window
@@ -612,6 +644,10 @@ class ASH_EXPORT OverviewGrid : public SplitViewObserver,
 
   // The contents view of the above |desks_widget_| if created.
   raw_ptr<LegacyDeskBarView, DanglingUntriaged> desks_bar_view_ = nullptr;
+
+  // Widget that appears during faster splitview setup. Contains the faster
+  // splitview toast and the overview settings button.
+  std::unique_ptr<views::Widget> faster_splitview_widget_;
 
   // True if the overview grid should animate when exiting overview mode. Note
   // even if it's true, it doesn't mean all window items in the grid should
@@ -656,6 +692,9 @@ class ASH_EXPORT OverviewGrid : public SplitViewObserver,
 
   // The widget that contains the `PineContentsView`.
   std::unique_ptr<views::Widget> pine_widget_;
+
+  // The widget that contains a `PillButton` to open a feedback page.
+  std::unique_ptr<views::Widget> feedback_widget_;
 
   // A widget that contains save desk buttons which save desk as template or for
   // later when pressed.

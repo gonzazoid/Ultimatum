@@ -6,12 +6,12 @@
 #define COMPONENTS_VIZ_SERVICE_DISPLAY_OUTPUT_SURFACE_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/functional/callback_helpers.h"
 #include "base/threading/thread_checker.h"
 #include "components/viz/common/display/update_vsync_parameters_callback.h"
-#include "components/viz/common/gpu/gpu_vsync_callback.h"
 #include "components/viz/common/resources/returned_resource.h"
 #include "components/viz/service/display/pending_swap_params.h"
 #include "components/viz/service/display/render_pass_alpha_type.h"
@@ -21,7 +21,6 @@
 #include "gpu/command_buffer/service/gpu_task_scheduler_helper.h"
 #include "gpu/ipc/common/surface_handle.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkM44.h"
 #include "ui/gfx/buffer_types.h"
 #include "ui/gfx/color_space.h"
@@ -80,8 +79,6 @@ class VIZ_SERVICE_EXPORT OutputSurface {
     // (i.e. viewport) of its contents for display, allowing the DirectRenderer
     // to apply resize optimization by padding to its width/height.
     bool supports_viewporter = false;
-    // Whether this OutputSurface supports gpu vsync callbacks.
-    bool supports_gpu_vsync = false;
     // OutputSurface's orientation mode.
     OrientationMode orientation_mode = OrientationMode::kLogic;
     // Whether this OutputSurface supports direct composition layers.
@@ -142,6 +139,8 @@ class VIZ_SERVICE_EXPORT OutputSurface {
     bool supports_non_backed_solid_color_overlays = false;
     // Whether the platform supports single pixel buffer protocol.
     bool supports_single_pixel_buffer = false;
+    // Whether make current needs to be called for swap buffers.
+    bool present_requires_make_current = true;
 
     // SkColorType for all supported buffer formats.
     SkColorType sk_color_types[static_cast<int>(gfx::BufferFormat::LAST) + 1] =
@@ -240,13 +239,6 @@ class VIZ_SERVICE_EXPORT OutputSurface {
   // supported.
   virtual void SetUpdateVSyncParametersCallback(
       UpdateVSyncParametersCallback callback) = 0;
-
-  // Set a callback for vsync signal from GPU service for begin frames.  The
-  // callbacks must be received on the calling thread.
-  virtual void SetGpuVSyncCallback(GpuVSyncCallback callback);
-
-  // Enable or disable vsync callback based on whether begin frames are needed.
-  virtual void SetGpuVSyncEnabled(bool enabled);
 
   virtual void SetVSyncDisplayID(int64_t display_id) {}
 

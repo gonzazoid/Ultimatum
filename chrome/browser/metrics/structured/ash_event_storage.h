@@ -10,9 +10,10 @@
 #include "base/files/file_path.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
-#include "components/metrics/structured/event_storage.h"
-#include "components/metrics/structured/persistent_proto.h"
+#include "components/metrics/structured/lib/event_storage.h"
+#include "components/metrics/structured/lib/persistent_proto.h"
 #include "components/metrics/structured/proto/event_storage.pb.h"
+#include "third_party/metrics_proto/structured_data.pb.h"
 
 namespace metrics::structured {
 
@@ -22,7 +23,7 @@ namespace metrics::structured {
 // disk on a cadence. Before a user has logged in, these events will be stored
 // in the shared partition. The events after a user has logged in, events will
 // be stored in the user cryptohome.
-class AshEventStorage : public EventStorage {
+class AshEventStorage : public EventStorage<StructuredEventProto> {
  public:
   // The delay period for the PersistentProto.
   constexpr static base::TimeDelta kSaveDelay = base::Seconds(1);
@@ -34,18 +35,18 @@ class AshEventStorage : public EventStorage {
 
   // EventStorage:
   void OnReady() override;
-  void AddEvent(StructuredEventProto&& event) override;
-  void MoveEvents(ChromeUserMetricsExtension& uma_proto) override;
+  void AddEvent(StructuredEventProto event) override;
+  ::google::protobuf::RepeatedPtrField<StructuredEventProto> TakeEvents()
+      override;
   int RecordedEventsCount() const override;
   void Purge() override;
   void OnProfileAdded(const base::FilePath& path) override;
   void AddBatchEvents(
       const google::protobuf::RepeatedPtrField<StructuredEventProto>& events)
       override;
-
   // Populates |proto| with a copy of the events currently recorded across both
   // |pre_user_events_| and |user_events_|.
-  void GetEvents(EventsProto* proto);
+  void CopyEvents(EventsProto* events_proto) const override;
 
  private:
   void OnWrite(const WriteStatus status);
@@ -53,7 +54,10 @@ class AshEventStorage : public EventStorage {
   void OnProfileRead(const ReadStatus status);
 
   EventsProto* pre_user_events() { return pre_user_events_->get(); }
+  const EventsProto* pre_user_events() const { return pre_user_events_->get(); }
+
   EventsProto* user_events() { return user_events_->get(); }
+  const EventsProto* user_events() const { return user_events_->get(); }
 
   // Retrieves the approproiate event store to write the event. Returns nullptr
   // if there is no appropriate place to persist the event.

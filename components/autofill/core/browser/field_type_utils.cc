@@ -23,7 +23,6 @@ const FieldTypeSet& GetDatabaseStoredTypesOfAutofillProfile() {
       NAME_LAST_SECOND,
       NAME_LAST,
       NAME_FULL,
-      NAME_FULL_WITH_HONORIFIC_PREFIX,
       ADDRESS_HOME_STREET_ADDRESS,
       ADDRESS_HOME_STREET_NAME,
       ADDRESS_HOME_STREET_LOCATION,
@@ -47,11 +46,9 @@ const FieldTypeSet& GetDatabaseStoredTypesOfAutofillProfile() {
       ADDRESS_HOME_BETWEEN_STREETS_1,
       ADDRESS_HOME_BETWEEN_STREETS_2,
       ADDRESS_HOME_ADMIN_LEVEL2,
+      ADDRESS_HOME_STREET_LOCATION_AND_LOCALITY,
       EMAIL_ADDRESS,
-      PHONE_HOME_WHOLE_NUMBER,
-      BIRTHDATE_DAY,
-      BIRTHDATE_MONTH,
-      BIRTHDATE_4_DIGIT_YEAR};
+      PHONE_HOME_WHOLE_NUMBER};
   return stored_types;
 }
 
@@ -79,10 +76,6 @@ bool TypeOfFieldIsPossibleType(const AutofillField& field) {
   return field.possible_types().contains(field.Type().GetStorableType());
 }
 
-bool IsStreetNameOrHouseNumberType(const FieldType type) {
-  return type == ADDRESS_HOME_STREET_NAME || type == ADDRESS_HOME_HOUSE_NUMBER;
-}
-
 bool IsAddressType(FieldType type) {
   switch (GroupTypeOfFieldType(type)) {
     case FieldTypeGroup::kName:
@@ -90,7 +83,6 @@ bool IsAddressType(FieldType type) {
     case FieldTypeGroup::kCompany:
     case FieldTypeGroup::kAddress:
     case FieldTypeGroup::kPhone:
-    case FieldTypeGroup::kBirthdateField:
       return true;
     case FieldTypeGroup::kNoGroup:
     case FieldTypeGroup::kUnfillable:

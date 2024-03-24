@@ -12,6 +12,7 @@
 #include "base/functional/bind.h"
 #include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
@@ -24,7 +25,11 @@
 #include "chrome/browser/signin/bound_session_credentials/bound_session_params.pb.h"
 #include "chrome/browser/signin/bound_session_credentials/bound_session_params_storage.h"
 #include "chrome/browser/signin/bound_session_credentials/bound_session_params_util.h"
+#include "chrome/browser/signin/bound_session_credentials/bound_session_registration_fetcher.h"
+#include "chrome/browser/signin/bound_session_credentials/bound_session_registration_fetcher_param.h"
+#include "chrome/browser/signin/bound_session_credentials/fake_bound_session_refresh_cookie_fetcher.h"
 #include "chrome/common/renderer_configuration.mojom.h"
+#include "components/signin/public/base/signin_switches.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "components/unexportable_keys/fake_unexportable_key_service.h"
 #include "content/public/browser/network_service_instance.h"
@@ -39,12 +44,16 @@
 namespace {
 using SessionTerminationTrigger =
     BoundSessionCookieRefreshServiceImpl::SessionTerminationTrigger;
+using chrome::mojom::ResumeBlockedRequestsTrigger;
 
 constexpr char k1PSIDTSCookieName[] = "__Secure-1PSIDTS";
 constexpr char k3PSIDTSCookieName[] = "__Secure-3PSIDTS";
 const char kSessionTerminationHeader[] = "Sec-Session-Google-Termination";
 constexpr char kWrappedKey[] = "wrapped_key";
 constexpr char kTestSessionId[] = "test_session_id";
+constexpr char kDefaultRegistrationPath[] = "/RegisterSession";
+constexpr ResumeBlockedRequestsTrigger kRefreshCompletedTrigger =
+    ResumeBlockedRequestsTrigger::kObservedFreshCookies;
 
 // Matches a cookie name against a `bound_session_credentials::Credential`.
 // `arg` type is std::tuple<std::string, bound_session_credentials::Credential>
@@ -74,20 +83,13 @@ class FakeBoundSessionCookieController : public BoundSessionCookieController {
     wrapped_key_.assign(wrapped_key_str.begin(), wrapped_key_str.end());
   }
 
-  ~FakeBoundSessionCookieController() override {
-    DCHECK(on_destroy_callback_);
-    std::move(on_destroy_callback_).Run();
-  }
-
   const std::vector<uint8_t>& wrapped_key() { return wrapped_key_; }
 
   void HandleRequestBlockedOnCookie(
-      base::OnceClosure resume_blocked_request) override {
+      chrome::mojom::BoundSessionRequestThrottledHandler::
+          HandleRequestBlockedOnCookieCallback resume_blocked_request)
+      override {
     resume_blocked_requests_.push_back(std::move(resume_blocked_request));
-  }
-
-  void set_on_destroy_callback(base::OnceCallback<void()> on_destroy_callback) {
-    on_destroy_callback_ = std::move(on_destroy_callback);
   }
 
   void SimulateOnCookieExpirationDateChanged(
@@ -106,17 +108,57 @@ class FakeBoundSessionCookieController : public BoundSessionCookieController {
 
   void SimulateRefreshBoundSessionCompleted() {
     EXPECT_FALSE(resume_blocked_requests_.empty());
-    std::vector<base::OnceClosure> callbacks;
+    std::vector<chrome::mojom::BoundSessionRequestThrottledHandler::
+                    HandleRequestBlockedOnCookieCallback>
+        callbacks;
     std::swap(resume_blocked_requests_, callbacks);
     for (auto& callback : callbacks) {
-      std::move(callback).Run();
+      std::move(callback).Run(kRefreshCompletedTrigger);
     }
   }
 
+  base::WeakPtr<FakeBoundSessionCookieController> GetWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
  private:
-  base::OnceCallback<void()> on_destroy_callback_;
-  std::vector<base::OnceClosure> resume_blocked_requests_;
+  std::vector<chrome::mojom::BoundSessionRequestThrottledHandler::
+                  HandleRequestBlockedOnCookieCallback>
+      resume_blocked_requests_;
   std::vector<uint8_t> wrapped_key_;
+  base::WeakPtrFactory<FakeBoundSessionCookieController> weak_ptr_factory_{
+      this};
+};
+
+class FakeBoundSessionRegistrationFetcher
+    : public BoundSessionRegistrationFetcher {
+ public:
+  explicit FakeBoundSessionRegistrationFetcher(
+      BoundSessionRegistrationFetcherParam params)
+      : params_(std::move(params)) {}
+
+  void SimulateRegistrationFetchCompleted(
+      bound_session_credentials::BoundSessionParams session_params) {
+    CHECK(callback_);
+    std::move(callback_).Run(std::move(session_params));
+  }
+
+  base::WeakPtr<FakeBoundSessionRegistrationFetcher> GetWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
+  const BoundSessionRegistrationFetcherParam& params() { return params_; }
+
+  // BoundSessionRegistrationFetcher:
+  void Start(RegistrationCompleteCallback callback) override {
+    callback_ = std::move(callback);
+  }
+
+ private:
+  BoundSessionRegistrationFetcherParam params_;
+  RegistrationCompleteCallback callback_;
+  base::WeakPtrFactory<FakeBoundSessionRegistrationFetcher> weak_ptr_factory_{
+      this};
 };
 
 class MockObserver : public BoundSessionCookieRefreshService::Observer {
@@ -145,17 +187,20 @@ class BoundSessionCookieRefreshServiceImplTest : public testing::Test {
   CreateBoundSessionCookieController(
       const bound_session_credentials::BoundSessionParams& bound_session_params,
       BoundSessionCookieController::Delegate* delegate) {
-    std::unique_ptr<FakeBoundSessionCookieController> controller =
-        std::make_unique<FakeBoundSessionCookieController>(bound_session_params,
-                                                           delegate);
-    controller->set_on_destroy_callback(base::BindOnce(
-        &BoundSessionCookieRefreshServiceImplTest::OnCookieControllerDestroy,
-        base::Unretained(this)));
-    cookie_controller_ = controller.get();
+    auto controller = std::make_unique<FakeBoundSessionCookieController>(
+        bound_session_params, delegate);
+    cookie_controller_ = controller->GetWeakPtr();
     return controller;
   }
 
-  void OnCookieControllerDestroy() { cookie_controller_ = nullptr; }
+  std::unique_ptr<BoundSessionRegistrationFetcher>
+  CreateBoundSessionRegistrationFetcher(
+      BoundSessionRegistrationFetcherParam fetcher_params) {
+    auto fetcher = std::make_unique<FakeBoundSessionRegistrationFetcher>(
+        std::move(fetcher_params));
+    registration_fetcher_ = fetcher->GetWeakPtr();
+    return fetcher;
+  }
 
   BoundSessionCookieRefreshServiceImpl* GetCookieRefreshServiceImpl() {
     if (!cookie_refresh_service_) {
@@ -207,8 +252,12 @@ class BoundSessionCookieRefreshServiceImplTest : public testing::Test {
 
   void ResetCookieRefreshService() { cookie_refresh_service_.reset(); }
 
-  FakeBoundSessionCookieController* cookie_controller() {
+  base::WeakPtr<FakeBoundSessionCookieController> cookie_controller() {
     return cookie_controller_;
+  }
+
+  base::WeakPtr<FakeBoundSessionRegistrationFetcher> registration_fetcher() {
+    return registration_fetcher_;
   }
 
   BoundSessionParamsStorage* storage() { return test_storage_.get(); }
@@ -278,6 +327,14 @@ class BoundSessionCookieRefreshServiceImplTest : public testing::Test {
     return params;
   }
 
+  BoundSessionRegistrationFetcherParam CreateTestRegistrationFetcherParams(
+      std::string_view registration_path) {
+    return BoundSessionRegistrationFetcherParam::CreateInstanceForTesting(
+        kTestGoogleURL.Resolve(registration_path),
+        {crypto::SignatureVerifier::SignatureAlgorithm::ECDSA_SHA256},
+        "test_challenge");
+  }
+
   base::HistogramTester& histogram_tester() { return histogram_tester_; }
 
  private:
@@ -287,17 +344,21 @@ class BoundSessionCookieRefreshServiceImplTest : public testing::Test {
         std::make_unique<BoundSessionCookieRefreshServiceImpl>(
             fake_unexportable_key_service_,
             BoundSessionParamsStorage::CreatePrefsStorageForTesting(prefs_),
-            &storage_partition_, content::GetNetworkConnectionTracker());
+            &storage_partition_, content::GetNetworkConnectionTracker(),
+            /*is_off_the_record_profile=*/false);
     cookie_refresh_service->set_controller_factory_for_testing(
         base::BindRepeating(&BoundSessionCookieRefreshServiceImplTest::
                                 CreateBoundSessionCookieController,
+                            base::Unretained(this)));
+    cookie_refresh_service->set_registration_fetcher_factory_for_testing(
+        base::BindRepeating(&BoundSessionCookieRefreshServiceImplTest::
+                                CreateBoundSessionRegistrationFetcher,
                             base::Unretained(this)));
     cookie_refresh_service->AddObserver(&mock_observer_);
     cookie_refresh_service->Initialize();
     return cookie_refresh_service;
   }
 
-  base::test::ScopedFeatureList scoped_feature_list_;
   base::test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   base::HistogramTester histogram_tester_;
@@ -307,7 +368,9 @@ class BoundSessionCookieRefreshServiceImplTest : public testing::Test {
   ::testing::StrictMock<MockObserver> mock_observer_;
   std::unique_ptr<BoundSessionCookieRefreshServiceImpl> cookie_refresh_service_;
   unexportable_keys::FakeUnexportableKeyService fake_unexportable_key_service_;
-  raw_ptr<FakeBoundSessionCookieController> cookie_controller_ = nullptr;
+  base::WeakPtr<FakeBoundSessionCookieController> cookie_controller_ = nullptr;
+  base::WeakPtr<FakeBoundSessionRegistrationFetcher> registration_fetcher_ =
+      nullptr;
 };
 
 TEST_F(BoundSessionCookieRefreshServiceImplTest, VerifyControllerParams) {
@@ -339,12 +402,13 @@ TEST_F(BoundSessionCookieRefreshServiceImplTest,
   SetupPreConditionForBoundSession();
   BoundSessionCookieRefreshServiceImpl* service = GetCookieRefreshServiceImpl();
   EXPECT_TRUE(cookie_controller());
-  base::test::TestFuture<void> future;
+  base::test::TestFuture<ResumeBlockedRequestsTrigger> future;
   service->HandleRequestBlockedOnCookie(future.GetCallback());
 
   EXPECT_FALSE(future.IsReady());
   cookie_controller()->SimulateRefreshBoundSessionCompleted();
   EXPECT_TRUE(future.IsReady());
+  EXPECT_EQ(future.Get(), kRefreshCompletedTrigger);
 }
 
 TEST_F(BoundSessionCookieRefreshServiceImplTest,
@@ -353,9 +417,11 @@ TEST_F(BoundSessionCookieRefreshServiceImplTest,
   EXPECT_FALSE(cookie_controller());
 
   // Unbound session, the callback should be called immediately.
-  base::test::TestFuture<void> future;
+  base::test::TestFuture<ResumeBlockedRequestsTrigger> future;
   service->HandleRequestBlockedOnCookie(future.GetCallback());
   EXPECT_TRUE(future.IsReady());
+  EXPECT_EQ(future.Get(),
+            ResumeBlockedRequestsTrigger::kShutdownOrSessionTermination);
 }
 
 TEST_F(BoundSessionCookieRefreshServiceImplTest,
@@ -537,8 +603,8 @@ TEST_F(BoundSessionCookieRefreshServiceImplTest,
   service->AddBoundSessionRequestThrottledHandlerReceiver(
       listener_2.BindNewPipeAndPassReceiver());
 
-  base::test::TestFuture<void> future_1;
-  base::test::TestFuture<void> future_2;
+  base::test::TestFuture<ResumeBlockedRequestsTrigger> future_1;
+  base::test::TestFuture<ResumeBlockedRequestsTrigger> future_2;
   listener_1->HandleRequestBlockedOnCookie(future_1.GetCallback());
   listener_2->HandleRequestBlockedOnCookie(future_2.GetCallback());
   RunUntilIdle();
@@ -549,6 +615,8 @@ TEST_F(BoundSessionCookieRefreshServiceImplTest,
   cookie_controller()->SimulateRefreshBoundSessionCompleted();
   EXPECT_TRUE(future_1.Wait());
   EXPECT_TRUE(future_2.Wait());
+  EXPECT_EQ(future_1.Get(), kRefreshCompletedTrigger);
+  EXPECT_EQ(future_2.Get(), kRefreshCompletedTrigger);
 }
 
 TEST_F(BoundSessionCookieRefreshServiceImplTest, RegisterNewBoundSession) {
@@ -566,6 +634,22 @@ TEST_F(BoundSessionCookieRefreshServiceImplTest, OverrideExistingBoundSession) {
 
   auto new_params = CreateTestBoundSessionParams();
   new_params.set_session_id("test_session_id_2");
+
+  service->RegisterNewBoundSession(new_params);
+
+  VerifyBoundSession(new_params);
+  VerifySessionTerminationTriggerRecorded(
+      SessionTerminationTrigger::kSessionOverride);
+}
+
+TEST_F(BoundSessionCookieRefreshServiceImplTest,
+       OverrideExistingBoundSessionSameSessionId) {
+  BoundSessionCookieRefreshServiceImpl* service = GetCookieRefreshServiceImpl();
+  service->RegisterNewBoundSession(CreateTestBoundSessionParams());
+
+  auto new_params = CreateTestBoundSessionParams();
+  new_params.clear_credentials();
+  *new_params.add_credentials() = CreateCookieCredential("new_cookie");
 
   service->RegisterNewBoundSession(new_params);
 
@@ -659,4 +743,91 @@ TEST_F(BoundSessionCookieRefreshServiceImplTest,
   VerifyBoundSession(params);
   histogram_tester().ExpectTotalCount(
       "Signin.BoundSessionCredentials.SessionTerminationTrigger", 0);
+}
+
+TEST_F(BoundSessionCookieRefreshServiceImplTest, CreateRegistrationRequest) {
+  BoundSessionCookieRefreshServiceImpl* service = GetCookieRefreshServiceImpl();
+  service->CreateRegistrationRequest(
+      CreateTestRegistrationFetcherParams(kDefaultRegistrationPath));
+  ASSERT_TRUE(registration_fetcher());
+  bound_session_credentials::BoundSessionParams params =
+      CreateTestBoundSessionParams();
+  registration_fetcher()->SimulateRegistrationFetchCompleted(params);
+  EXPECT_FALSE(registration_fetcher());
+  VerifyBoundSession(params);
+}
+
+TEST_F(BoundSessionCookieRefreshServiceImplTest,
+       CreateRegistrationRequestNonDefaultPath) {
+  BoundSessionCookieRefreshServiceImpl* service = GetCookieRefreshServiceImpl();
+  service->CreateRegistrationRequest(
+      CreateTestRegistrationFetcherParams("/NonDefaultPath"));
+  EXPECT_FALSE(registration_fetcher());
+}
+
+TEST_F(BoundSessionCookieRefreshServiceImplTest,
+       CreateRegistrationRequestExclusivePathOff) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeatureWithParameters(
+      switches::kEnableBoundSessionCredentials,
+      {{"exclusive-registration-path", ""}});
+  BoundSessionCookieRefreshServiceImpl* service = GetCookieRefreshServiceImpl();
+  service->CreateRegistrationRequest(
+      CreateTestRegistrationFetcherParams("/NonDefaultPath"));
+  EXPECT_TRUE(registration_fetcher());
+}
+
+TEST_F(BoundSessionCookieRefreshServiceImplTest,
+       CreateRegistrationRequestOverriddenExclusivePathMatchingPath) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  const std::string kCustomPath = "/CustomPath";
+  scoped_feature_list.InitAndEnableFeatureWithParameters(
+      switches::kEnableBoundSessionCredentials,
+      {{"exclusive-registration-path", kCustomPath}});
+  BoundSessionCookieRefreshServiceImpl* service = GetCookieRefreshServiceImpl();
+  service->CreateRegistrationRequest(
+      CreateTestRegistrationFetcherParams(kCustomPath));
+  EXPECT_TRUE(registration_fetcher());
+}
+
+TEST_F(BoundSessionCookieRefreshServiceImplTest,
+       CreateRegistrationRequestOverriddenExclusivePathNonMatchingPath) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeatureWithParameters(
+      switches::kEnableBoundSessionCredentials,
+      {{"exclusive-registration-path", "/CustomPath"}});
+  BoundSessionCookieRefreshServiceImpl* service = GetCookieRefreshServiceImpl();
+  service->CreateRegistrationRequest(
+      CreateTestRegistrationFetcherParams("/AnotherPath"));
+  EXPECT_FALSE(registration_fetcher());
+}
+
+TEST_F(BoundSessionCookieRefreshServiceImplTest,
+       CreateRegistrationRequestMultipleRequests) {
+  // Turn path restrictions off to test with two different paths.
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeatureWithParameters(
+      switches::kEnableBoundSessionCredentials,
+      {{"exclusive-registration-path", ""}});
+
+  BoundSessionCookieRefreshServiceImpl* service = GetCookieRefreshServiceImpl();
+  const std::string kFirstPath = "/First";
+  const std::string kSecondPath = "/Second";
+
+  service->CreateRegistrationRequest(
+      CreateTestRegistrationFetcherParams(kFirstPath));
+  // The second registration request should be ignored.
+  service->CreateRegistrationRequest(
+      CreateTestRegistrationFetcherParams(kSecondPath));
+  ASSERT_TRUE(registration_fetcher());
+  EXPECT_EQ(
+      registration_fetcher()->params().RegistrationEndpoint().path_piece(),
+      kFirstPath);
+
+  // Verify that a request can complete normally.
+  bound_session_credentials::BoundSessionParams params =
+      CreateTestBoundSessionParams();
+  registration_fetcher()->SimulateRegistrationFetchCompleted(params);
+  EXPECT_FALSE(registration_fetcher());
+  VerifyBoundSession(params);
 }

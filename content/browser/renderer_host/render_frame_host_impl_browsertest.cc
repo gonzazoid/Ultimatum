@@ -31,8 +31,10 @@
 #include "base/test/gtest_util.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
+#include "base/test/run_until.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/scoped_run_loop_timeout.h"
+#include "base/test/test_future.h"
 #include "base/test/test_timeouts.h"
 #include "build/build_config.h"
 #include "components/ukm/test_ukm_recorder.h"
@@ -115,7 +117,6 @@
 #include "third_party/blink/public/common/switches.h"
 #include "third_party/blink/public/mojom/browser_interface_broker.mojom-test-utils.h"
 #include "third_party/blink/public/mojom/frame/frame.mojom-test-utils.h"
-#include "ui/snapshot/snapshot.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 #include "url/url_canon.h"
@@ -1747,12 +1748,8 @@ IN_PROC_BROWSER_TEST_F(RenderFrameHostImplBeforeUnloadBrowserTest,
   // callback from the second frame. Wait for that beforeunload completion
   // callback. After it's received, there will be one ACK remaining for the
   // frame that's currently showing the dialog.
-  while (main_frame->beforeunload_pending_replies_.size() > 1) {
-    base::RunLoop run_loop;
-    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
-        FROM_HERE, run_loop.QuitClosure(), TestTimeouts::tiny_timeout());
-    run_loop.Run();
-  }
+  EXPECT_TRUE(base::test::RunUntil(
+      [&]() { return main_frame->beforeunload_pending_replies_.size() <= 1; }));
 
   // Ensure that the beforeunload timer hasn't been restarted, since the first
   // beforeunload dialog is still up at this point.
@@ -6649,7 +6646,8 @@ IN_PROC_BROWSER_TEST_F(RenderFrameHostImplCredentiallessIframeNikBrowserTest,
         ->GetBrowserContext()
         ->GetDefaultStoragePartition()
         ->GetNetworkContext()
-        ->PreconnectSockets(1, fetch_url.DeprecatedGetOriginAsURL(), true,
+        ->PreconnectSockets(1, fetch_url.DeprecatedGetOriginAsURL(),
+                            network::mojom::CredentialsMode::kInclude,
                             main_rfh->GetIsolationInfoForSubresources()
                                 .network_anonymization_key());
 
@@ -7804,17 +7802,6 @@ class RenderFrameHostImplBrowserTestWithBFCacheAndViewTransition
   base::test::ScopedFeatureList scoped_feature_list_;
 };
 
-void AssertBitmapOfColor(const SkBitmap& bitmap, SkColor color) {
-  for (int r = 0; r < bitmap.height(); ++r) {
-    for (int c = 0; c < bitmap.width(); ++c) {
-// TODO(https://crbug.com/1452223): Re-enable the color comparison for Mac.
-#if !BUILDFLAG(IS_MAC)
-      ASSERT_EQ(bitmap.getColor(c, r), color);
-#endif
-    }
-  }
-}
-
 bool IsChildFrame(RenderWidgetHostView* view) {
   CHECK(view);
   return static_cast<RenderWidgetHostViewBase*>(view)
@@ -7868,18 +7855,9 @@ viz::SurfaceId GetFirstSurfaceIdAfterNavigation(RenderWidgetHostView* view) {
 // https://crbug.com/1415340: For a page with ViewTransition being restored from
 // BFCache, we explicitly set its fallback surface to the current View to avoid
 // visual glitches.
-//
-// TODO(https://crbug.com/1472026): Investigate and re-enable.
-#if BUILDFLAG(IS_WIN)
-#define MAYBE_NewContentTimeoutIsSetWhenLeavingBFCacheWithViewTransition \
-  DISABLED_NewContentTimeoutIsSetWhenLeavingBFCacheWithViewTransition
-#else
-#define MAYBE_NewContentTimeoutIsSetWhenLeavingBFCacheWithViewTransition \
-  NewContentTimeoutIsSetWhenLeavingBFCacheWithViewTransition
-#endif
 IN_PROC_BROWSER_TEST_F(
     RenderFrameHostImplBrowserTestWithBFCacheAndViewTransition,
-    MAYBE_NewContentTimeoutIsSetWhenLeavingBFCacheWithViewTransition) {
+    NewContentTimeoutIsSetWhenLeavingBFCacheWithViewTransition) {
   // "red_jank_second_pageshow.html" janks the renderer on the second pageshow
   // event.
   const GURL url_red(embedded_test_server()->GetURL(
@@ -7902,6 +7880,11 @@ IN_PROC_BROWSER_TEST_F(
       RenderWidgetHostImpl::From(rfh_red->GetView()->GetRenderWidgetHost());
   // The BFCached `RenderWidgetHostImpl` must have a stopped timer.
   ASSERT_FALSE(rwhi_red->IsContentRenderingTimeoutRunning());
+  // Set the timeout to a max value, such that we can guarantee to manually
+  // force the timer to fire via
+  // `RenderWidgetHostImpl::ForceFirstFrameAfterNavigationTimeout()`. Deflake
+  // the tests.
+  rwhi_red->SetNewContentRenderingTimeoutForTesting(base::TimeDelta::Max());
 
   // Navigate back to Red.
   ASSERT_TRUE(HistoryGoBack(web_contents()));
@@ -7922,27 +7905,18 @@ IN_PROC_BROWSER_TEST_F(
       GetCurrentSurfaceIdOnDelegatedFrameHost(rfh_red->GetView())
           .IsSameOrNewerThan(first_surface_id_after_nav_after_bfcache_restore));
 
-  {
-    gfx::Image screenshot;
-    ui::GrabViewSnapshot(web_contents()->GetView()->GetNativeView(),
-                         gfx::Rect(web_contents()->GetSize()), &screenshot);
-    AssertBitmapOfColor(screenshot.AsBitmap(), SK_ColorGREEN);
-  }
-
+  // Manually force the timer to fire, since the timeout is infinity.
   ASSERT_TRUE(rwhi_red->IsContentRenderingTimeoutRunning());
   rwhi_red->ForceFirstFrameAfterNavigationTimeout();
+  ASSERT_FALSE(rwhi_red->IsContentRenderingTimeoutRunning());
+  ASSERT_EQ(first_surface_id_after_nav_after_bfcache_restore,
+            GetDelegatedFrameHost(rfh_red->GetView())
+                ->GetFallbackSurfaceIdForTesting());
 
-  WaitForBrowserCompositorFramePresented(web_contents());
-
-  // `ForceFirstFrameAfterNavigationTimeout` resets the fallback surface id to
-  // `first_surface_id_after_nav_` of the `DelegatedFrameHost{Android}`. This
-  // should have no effects on the screen.
-  {
-    gfx::Image screenshot;
-    ui::GrabViewSnapshot(web_contents()->GetView()->GetNativeView(),
-                         gfx::Rect(web_contents()->GetSize()), &screenshot);
-    AssertBitmapOfColor(screenshot.AsBitmap(), SK_ColorGREEN);
-  }
+  // TODO(https://crbug.com/1472026): If the red page's renderer still hasn't
+  // submitted a new frame after the ContentRenderingTimeout is up, we should
+  // abort the transition. Expand this test to cover that behavior when we have
+  // a way to abort the transition.
 }
 
 // Tests that when a RenderFrameHost is stored in BFCache, that the visibility

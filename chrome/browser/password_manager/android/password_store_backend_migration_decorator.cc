@@ -5,10 +5,12 @@
 #include "chrome/browser/password_manager/android/password_store_backend_migration_decorator.h"
 
 #include "base/functional/bind.h"
+#include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/password_manager/android/built_in_backend_to_android_backend_migrator.h"
 #include "chrome/browser/password_manager/android/password_store_proxy_backend.h"
 #include "components/password_manager/core/browser/password_store/password_store.h"
+#include "components/password_manager/core/browser/password_store/split_stores_and_local_upm.h"
 #include "components/password_manager/core/browser/password_sync_util.h"
 #include "components/password_manager/core/common/password_manager_features.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
@@ -20,7 +22,7 @@ namespace password_manager {
 
 namespace {
 
-// TODO(crbug.com/1466445): Migrate away from `ConsentLevel::kSync` on Android.
+// TODO(crbug.com/40067770): Migrate away from `ConsentLevel::kSync` on Android.
 using sync_util::IsSyncFeatureEnabledIncludingPasswords;
 
 // Time in seconds by which the passwords migration from the built-in backend to
@@ -41,14 +43,14 @@ PasswordStoreBackendMigrationDecorator::PasswordStoreBackendMigrationDecorator(
     std::unique_ptr<PasswordStoreBackend> android_backend,
     PrefService* prefs,
     IsAccountStore is_account_store)
-    : built_in_backend_(std::move(built_in_backend)),
-      android_backend_(std::move(android_backend)),
+    : built_in_backend_(built_in_backend.get()),
+      android_backend_(android_backend.get()),
       prefs_(prefs),
       sync_settings_helper_(prefs) {
   DCHECK(built_in_backend_);
   DCHECK(android_backend_);
   active_backend_ = std::make_unique<PasswordStoreProxyBackend>(
-      built_in_backend_.get(), android_backend_.get(), prefs_,
+      std::move(built_in_backend), std::move(android_backend), prefs_,
       is_account_store);
 }
 
@@ -62,7 +64,7 @@ PasswordStoreBackendMigrationDecorator::PasswordSyncSettingsHelper::
 void PasswordStoreBackendMigrationDecorator::PasswordSyncSettingsHelper::
     CachePasswordSyncSettingOnStartup(syncer::SyncService* sync) {
   sync_service_ = sync;
-  // TODO(crbug.com/1466445): Migrate away from `ConsentLevel::kSync` on
+  // TODO(crbug.com/40067770): Migrate away from `ConsentLevel::kSync` on
   // Android.
   password_sync_configured_setting_ =
       sync_util::IsSyncFeatureEnabledIncludingPasswords(sync);
@@ -72,7 +74,7 @@ void PasswordStoreBackendMigrationDecorator::PasswordSyncSettingsHelper::
 void PasswordStoreBackendMigrationDecorator::PasswordSyncSettingsHelper::
     SyncStatusChangeApplied() {
   DCHECK(sync_service_);
-  // TODO(crbug.com/1466445): Migrate away from `ConsentLevel::kSync` on
+  // TODO(crbug.com/40067770): Migrate away from `ConsentLevel::kSync` on
   // Android.
   password_sync_applied_setting_ =
       sync_util::IsSyncFeatureEnabledIncludingPasswords(sync_service_);
@@ -83,18 +85,23 @@ void PasswordStoreBackendMigrationDecorator::PasswordSyncSettingsHelper::
   DCHECK(sync_service_ == sync);
 
   // Return early if the setting didn't change.
-  // TODO(crbug.com/1466445): Migrate away from `ConsentLevel::kSync` on
+  // TODO(crbug.com/40067770): Migrate away from `ConsentLevel::kSync` on
   // Android.
   if (sync_util::IsSyncFeatureEnabledIncludingPasswords(sync) ==
       password_sync_configured_setting_) {
     return;
   }
-  // TODO(crbug.com/1466445): Migrate away from `ConsentLevel::kSync` on
+  // TODO(crbug.com/40067770): Migrate away from `ConsentLevel::kSync` on
   // Android.
   password_sync_configured_setting_ =
       sync_util::IsSyncFeatureEnabledIncludingPasswords(sync);
 
-  if (password_sync_configured_setting_ != password_sync_applied_setting_) {
+  // TODO(crbug.com/1445497): Re-evaluate migration code for local passwords.
+  bool upm_for_local_active =
+      password_manager::UsesSplitStoresAndUPMForLocal(prefs_);
+
+  if (password_sync_configured_setting_ != password_sync_applied_setting_ &&
+      !upm_for_local_active) {
     prefs_->SetBoolean(prefs::kRequiresMigrationAfterSyncStatusChange, true);
   } else {
     // The setting was changed back and forth, the migration is not needed.
@@ -106,7 +113,7 @@ void PasswordStoreBackendMigrationDecorator::PasswordSyncSettingsHelper::
     OnSyncCycleCompleted(syncer::SyncService* sync) {
   // Reenrollment check is made on the first sync cycle when password sync is
   // active.
-  // TODO(crbug.com/1466445): Migrate away from `ConsentLevel::kSync` on
+  // TODO(crbug.com/40067770): Migrate away from `ConsentLevel::kSync` on
   // Android.
   if (!sync_util::IsSyncFeatureActiveIncludingPasswords(sync) ||
       !is_waiting_for_the_first_sync_cycle_) {
@@ -123,7 +130,7 @@ void PasswordStoreBackendMigrationDecorator::PasswordSyncSettingsHelper::
     return;
   }
 
-  // TODO(crbug.com/1466445): Migrate away from `ConsentLevel::kSync` on
+  // TODO(crbug.com/40067770): Migrate away from `ConsentLevel::kSync` on
   // Android.
   if (sync_util::IsSyncFeatureActiveIncludingPasswords(sync)) {
     int reenrollment_attempts = prefs_->GetInteger(
@@ -185,23 +192,32 @@ void PasswordStoreBackendMigrationDecorator::InitBackend(
 
 void PasswordStoreBackendMigrationDecorator::Shutdown(
     base::OnceClosure shutdown_completed) {
+  migrator_.reset();
+  built_in_backend_ = nullptr;
+  android_backend_ = nullptr;
   // Calling Shutdown() on active_backend_ will take care of calling
   // Shutdown() on relevant backends.
   active_backend_->Shutdown(
       base::BindOnce(
-          [](std::unique_ptr<PasswordStoreBackend> built_in_backend,
-             std::unique_ptr<PasswordStoreBackend> android_backend,
-             std::unique_ptr<PasswordStoreBackend> combined_backend) {
-            // All the backends must be destroyed only after |active_backend_|
-            // signals that Shutdown is over. It can be done asynchronously and
-            // after PasswordStoreBackendMigrationDecorator destruction.
-            built_in_backend.reset();
-            android_backend.reset();
+          [](std::unique_ptr<PasswordStoreBackend> combined_backend) {
+            // All the backends must be destroyed only after
+            // |active_backend_| signals that Shutdown is over. It can be
+            // done asynchronously and after
+            // PasswordStoreBackendMigrationDecorator destruction.
             combined_backend.reset();
           },
-          std::move(built_in_backend_), std::move(android_backend_),
           std::move(active_backend_))
           .Then(std::move(shutdown_completed)));
+}
+
+bool PasswordStoreBackendMigrationDecorator::IsAbleToSavePasswords() {
+  // Suppress saving while the migration of local passwords is ongoing, to avoid
+  // the migration "forgetting" any new passwords. In fact the same concern
+  // applies to all migration types, but it's scary to change behavior now.
+  return active_backend_->IsAbleToSavePasswords() &&
+         !(migrator_ && migrator_->migration_in_progress_type() ==
+                            BuiltInBackendToAndroidBackendMigrator::
+                                MigrationType::kForLocalUsers);
 }
 
 void PasswordStoreBackendMigrationDecorator::GetAllLoginsAsync(
@@ -312,6 +328,16 @@ void PasswordStoreBackendMigrationDecorator::OnSyncServiceInitialized(
     migrator_->OnSyncServiceInitialized(sync_service);
 }
 
+void PasswordStoreBackendMigrationDecorator::
+    RecordAddLoginAsyncCalledFromTheStore() {
+  active_backend_->RecordAddLoginAsyncCalledFromTheStore();
+}
+
+void PasswordStoreBackendMigrationDecorator::
+    RecordUpdateLoginAsyncCalledFromTheStore() {
+  active_backend_->RecordUpdateLoginAsyncCalledFromTheStore();
+}
+
 base::WeakPtr<PasswordStoreBackend>
 PasswordStoreBackendMigrationDecorator::AsWeakPtr() {
   return weak_ptr_factory_.GetWeakPtr();
@@ -322,7 +348,7 @@ void PasswordStoreBackendMigrationDecorator::StartMigrationAfterInit() {
   if (!ShouldAttemptMigration(prefs_))
     return;
 
-  // TODO(crbug.com/1466445): Migrate away from `ConsentLevel::kSync` on
+  // TODO(crbug.com/40067770): Migrate away from `ConsentLevel::kSync` on
   // Android.
   if (prefs_->GetBoolean(prefs::kRequiresMigrationAfterSyncStatusChange) &&
       !IsSyncFeatureEnabledIncludingPasswords(sync_service_)) {

@@ -15,6 +15,8 @@
 
 namespace blink {
 
+class DOMException;
+
 class MockMediaStreamTrack : public blink::MediaStreamTrack {
  public:
   String kind() const override { return kind_; }
@@ -95,13 +97,14 @@ class MockMediaStreamTrack : public blink::MediaStreamTrack {
   bool HasPendingActivity() const override { return false; }
 
   std::unique_ptr<AudioSourceProvider> CreateWebAudioSource(
-      int context_sample_rate) override {
+      int context_sample_rate,
+      uint32_t context_buffer_size) override {
     return nullptr;
   }
 
   ImageCapture* GetImageCapture() override { return nullptr; }
 
-  absl::optional<const MediaStreamDevice> device() const override {
+  std::optional<const MediaStreamDevice> device() const override {
     return device_;
   }
   void SetDevice(const MediaStreamDevice& device) { device_ = device; }
@@ -123,15 +126,15 @@ class MockMediaStreamTrack : public blink::MediaStreamTrack {
   MOCK_CONST_METHOD1(TransferAllowed, bool(String&));
 
 #if !BUILDFLAG(IS_ANDROID)
-  MOCK_METHOD2(SendWheel,
-               void(CapturedWheelAction*,
-                    base::OnceCallback<void(bool, const String&)>));
+  MOCK_METHOD5(
+      SendWheel,
+      void(double, double, int, int, base::OnceCallback<void(DOMException*)>));
   MOCK_METHOD1(
       GetZoomLevel,
-      void(base::OnceCallback<void(absl::optional<int>, const String&)>));
+      void(base::OnceCallback<void(std::optional<int>, const String&)>));
   MOCK_METHOD0(CloseFocusWindowOfOpportunity, void());
   MOCK_METHOD2(SetZoomLevel,
-               void(int, base::OnceCallback<void(bool, const String&)>));
+               void(int, base::OnceCallback<void(DOMException*)>));
 #endif
 
   MOCK_METHOD1(AddObserver, void(Observer*));
@@ -161,7 +164,7 @@ class MockMediaStreamTrack : public blink::MediaStreamTrack {
   MediaStreamSource::ReadyState ready_state_enum_;
   Member<MediaStreamComponent> component_;
   bool ended_;
-  absl::optional<MediaStreamDevice> device_;
+  std::optional<MediaStreamDevice> device_;
   WeakMember<ExecutionContext> context_;
 };
 

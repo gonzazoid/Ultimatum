@@ -103,7 +103,7 @@ struct UnsafeResource {
   RenderProcessId render_process_id = kNoRenderProcessId;
   RenderFrameToken render_frame_token;
   FrameTreeNodeId frame_tree_node_id = kNoFrameTreeNodeId;
-  absl::optional<int64_t> navigation_id;
+  std::optional<int64_t> navigation_id;
 
   base::WeakPtr<web::WebState> weak_web_state;
 
@@ -116,6 +116,14 @@ struct UnsafeResource {
   // If true, this UnsafeResource is created because of the Delayed Warnings
   // experiment.
   bool is_delayed_warning;
+
+  // If false, skip sending Safe Browsing telemetry reports. Default to true.
+  bool should_send_reports;
+
+  // If true, this UnsafeResource is created by a check that doesn't delay
+  // navigation to complete. If false, it can either be the UnsafeResource is
+  // not for navigation or it delays navigation. Default to false.
+  bool is_async_check;
 };
 
 }  // namespace security_interstitials

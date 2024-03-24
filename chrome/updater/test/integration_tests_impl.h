@@ -283,7 +283,8 @@ void ExpectLegacyUpdate3WebSucceeds(
     const std::string& app_id,
     AppBundleWebCreateMode app_bundle_web_create_mode,
     int expected_final_state,
-    int expected_error_code);
+    int expected_error_code,
+    bool cancel_when_downloading);
 void ExpectLegacyProcessLauncherSucceeds(UpdaterScope scope);
 void ExpectLegacyAppCommandWebSucceeds(UpdaterScope scope,
                                        const std::string& app_id,
@@ -308,7 +309,7 @@ int CountDirectoryFiles(const base::FilePath& dir);
 
 void ExpectSelfUpdateSequence(UpdaterScope scope, ScopedServer* test_server);
 
-void ExpectUninstallPing(UpdaterScope scope, ScopedServer* test_server);
+void ExpectPing(UpdaterScope scope, ScopedServer* test_server, int event_type);
 
 void ExpectUpdateCheckRequest(UpdaterScope scope, ScopedServer* test_server);
 

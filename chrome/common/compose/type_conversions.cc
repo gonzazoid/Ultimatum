@@ -35,27 +35,34 @@ optimization_guide::proto::ComposeTone ComposeTone(compose::mojom::Tone tone) {
 }
 
 compose::mojom::ComposeStatus ComposeStatusFromOptimizationGuideResult(
-    optimization_guide::OptimizationGuideModelStreamingExecutionResult result) {
-  if (result.has_value()) {
+    const optimization_guide::OptimizationGuideModelStreamingExecutionResult&
+        result) {
+  if (result.response.has_value()) {
     return compose::mojom::ComposeStatus::kOk;
   }
 
-  switch (result.error().error()) {
+  switch (result.response.error().error()) {
     case ModelExecutionError::kUnknown:
-    case ModelExecutionError::kRequestThrottled:
     case ModelExecutionError::kGenericFailure:
+      return compose::mojom::ComposeStatus::kServerError;
+    case ModelExecutionError::kRequestThrottled:
+      return compose::mojom::ComposeStatus::kRequestThrottled;
     case ModelExecutionError::kRetryableError:
-      return compose::mojom::ComposeStatus::kTryAgainLater;
+      return compose::mojom::ComposeStatus::kRetryableError;
     case ModelExecutionError::kInvalidRequest:
-      return compose::mojom::ComposeStatus::kNotSuccessful;
+      return compose::mojom::ComposeStatus::kInvalidRequest;
     case ModelExecutionError::kPermissionDenied:
       return compose::mojom::ComposeStatus::kPermissionDenied;
     case ModelExecutionError::kNonRetryableError:
+      return compose::mojom::ComposeStatus::kNonRetryableError;
     case ModelExecutionError::kUnsupportedLanguage:
+      return compose::mojom::ComposeStatus::kUnsupportedLanguage;
     case ModelExecutionError::kFiltered:
+      return compose::mojom::ComposeStatus::kFiltered;
     case ModelExecutionError::kDisabled:
+      return compose::mojom::ComposeStatus::kDisabled;
     case ModelExecutionError::kCancelled:
-      return compose::mojom::ComposeStatus::kNotSuccessful;
+      return compose::mojom::ComposeStatus::kCancelled;
   }
 }
 

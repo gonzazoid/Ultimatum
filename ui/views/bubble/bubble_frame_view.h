@@ -61,6 +61,7 @@ class VIEWS_EXPORT BubbleFrameView : public NonClientFrameView {
  public:
   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kMinimizeButtonElementId);
   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kCloseButtonElementId);
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kProgressIndicatorElementId);
 
   enum class PreferredArrowAdjustment { kMirror, kOffset };
 
@@ -107,16 +108,16 @@ class VIEWS_EXPORT BubbleFrameView : public NonClientFrameView {
 
   // Updates the current progress value of |progress_indicator_|. If progress is
   // absent, hides |the progress_indicator|.
-  void SetProgress(absl::optional<double> progress);
+  void SetProgress(std::optional<double> progress);
   // Returns the current progress value of |progress_indicator_| if
   // |progress_indicator_| is visible.
-  absl::optional<double> GetProgress() const;
+  std::optional<double> GetProgress() const;
 
   // View:
   gfx::Size CalculatePreferredSize() const override;
   gfx::Size GetMinimumSize() const override;
   gfx::Size GetMaximumSize() const override;
-  void Layout() override;
+  void Layout(PassKey) override;
   void OnPaint(gfx::Canvas* canvas) override;
   void PaintChildren(const PaintInfo& paint_info) override;
   void OnThemeChanged() override;

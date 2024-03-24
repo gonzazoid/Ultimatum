@@ -17,6 +17,7 @@
 #include "base/observer_list.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/trace_event/base_tracing.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "ui/base/cursor/cursor.h"
@@ -475,9 +476,9 @@ void Widget::Init(InitParams params) {
     non_client_view_->SetFrameView(CreateNonClientFrameView());
     non_client_view_->SetOverlayView(widget_delegate_->CreateOverlayView());
 
-    // Bypass the Layout() that happens in Widget::SetContentsView(). Layout()
-    // will occur after setting the initial bounds below. The RootView's size is
-    // not valid until that happens.
+    // Bypass the layout that happens in Widget::SetContentsView().
+    // LayoutImmediately() will occur after setting the initial bounds below.
+    // The RootView's size is not valid until that happens.
     root_view_->SetContentsView(non_client_view_);
 
     // Initialize the window's icon and title before setting the window's
@@ -493,7 +494,7 @@ void Widget::Init(InitParams params) {
     // Perform the initial layout. This handles the case where the size might
     // not actually change when setting the initial bounds. If it did, child
     // views won't have a dirty Layout state, so won't do any work.
-    root_view_->Layout();
+    root_view_->LayoutImmediately();
 
     if (show_state == ui::SHOW_STATE_MAXIMIZED) {
       Maximize();
@@ -501,6 +502,15 @@ void Widget::Init(InitParams params) {
       Minimize();
       saved_show_state_ = ui::SHOW_STATE_MINIMIZED;
     }
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+    // In ChromeOS, rounding window can involve rounding its client view and the
+    // contents. Therefore, wait till the contents are set.
+    // Since on ChromeOS, window can be square or rounded based on the window
+    // state, wait till window is maximized or minimized.
+    non_client_view_->frame_view()->UpdateWindowRoundedCorners();
+#endif
+
   } else if (delegate) {
     SetContentsView(delegate->TransferOwnershipOfContentsView());
     if (should_set_initial_bounds) {
@@ -650,7 +660,7 @@ void Widget::SetContentsView(View* view) {
   // containing window's bounds. Note that we call Layout directly rather than
   // calling the widget's size changed handler, since the RootView's bounds may
   // not have changed, which will cause the Layout not to be done otherwise.
-  root_view_->Layout();
+  root_view_->LayoutImmediately();
 }
 
 View* Widget::GetContentsView() {
@@ -892,6 +902,10 @@ void Widget::Deactivate() {
 
 bool Widget::IsActive() const {
   return native_widget_ ? native_widget_->IsActive() : false;
+}
+
+bool Widget::ShouldViewsStyleFollowWidgetActivation() const {
+  return CanActivate();
 }
 
 void Widget::SetZOrderLevel(ui::ZOrderLevel order) {
@@ -1972,8 +1986,12 @@ bool Widget::ShouldDescendIntoChildForEventHandling(
 }
 
 void Widget::LayoutRootViewIfNecessary() {
-  if (root_view_ && root_view_->needs_layout())
-    root_view_->Layout();
+  if (root_view_ && root_view_->needs_layout()) {
+    // Widget name is only collected in local traces.
+    TRACE_EVENT1("ui", "Widget::LayoutRootViewIfNecessary", "widget name",
+                 GetName());
+    root_view_->LayoutImmediately();
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2010,7 +2028,7 @@ void Widget::OnNativeThemeUpdated(ui::NativeTheme* observed_theme) {
 }
 
 void Widget::SetColorModeOverride(
-    absl::optional<ui::ColorProviderKey::ColorMode> color_mode) {
+    std::optional<ui::ColorProviderKey::ColorMode> color_mode) {
   color_mode_override_ = color_mode;
 }
 

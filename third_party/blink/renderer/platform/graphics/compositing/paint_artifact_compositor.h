@@ -89,9 +89,6 @@ class SynthesizedClip : private cc::ContentLayerClient {
 
  private:
   // ContentLayerClient implementation.
-  gfx::Rect PaintableRegion() const final {
-    return gfx::Rect(layer_->bounds());
-  }
   scoped_refptr<cc::DisplayItemList> PaintContentsToDisplayList() final;
   bool FillsBoundsCompletely() const final { return false; }
 
@@ -100,7 +97,7 @@ class SynthesizedClip : private cc::ContentLayerClient {
   gfx::Transform projection_;
   bool rrect_is_local_ = false;
   SkRRect rrect_;
-  absl::optional<Path> path_;
+  std::optional<Path> path_;
   CompositorElementId mask_isolation_id_;
   CompositorElementId mask_effect_id_;
 };

@@ -23,6 +23,8 @@
 
 #include "third_party/blink/renderer/core/dom/container_node.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/v8_get_html_options.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_get_inner_html_options.h"
 #include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
 #include "third_party/blink/renderer/core/css/selector_query.h"
 #include "third_party/blink/renderer/core/css/style_change_reason.h"
@@ -49,6 +51,7 @@
 #include "third_party/blink/renderer/core/dom/slot_assignment_recalc_forbidden_scope.h"
 #include "third_party/blink/renderer/core/dom/static_node_list.h"
 #include "third_party/blink/renderer/core/dom/whitespace_attacher.h"
+#include "third_party/blink/renderer/core/editing/serializers/serialization.h"
 #include "third_party/blink/renderer/core/events/mutation_event.h"
 #include "third_party/blink/renderer/core/execution_context/agent.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
@@ -325,8 +328,7 @@ void ContainerNode::InsertNodeVector(
     const NodeVector& targets,
     Node* next,
     const Functor& mutator,
-    NodeVector* post_insertion_notification_targets) {
-  DCHECK(post_insertion_notification_targets);
+    NodeVector& post_insertion_notification_targets) {
   probe::WillInsertDOMNode(this);
   {
     EventDispatchForbiddenScope assert_no_event_dispatch;
@@ -340,7 +342,7 @@ void ContainerNode::InsertNodeVector(
       if (GetDocument().MayContainShadowRoots())
         child.CheckSlotChangeAfterInserted();
       probe::DidInsertDOMNode(&child);
-      NotifyNodeInsertedInternal(child, *post_insertion_notification_targets);
+      NotifyNodeInsertedInternal(child, post_insertion_notification_targets);
     }
   }
 }
@@ -430,7 +432,7 @@ Node* ContainerNode::InsertBefore(Node* new_child,
     SlotAssignmentRecalcForbiddenScope forbid_slot_recalc(GetDocument());
     ChildListMutationScope mutation(*this);
     InsertNodeVector(targets, ref_child, AdoptAndInsertBefore(),
-                     &post_insertion_notification_targets);
+                     post_insertion_notification_targets);
   }
   DidInsertNodeVector(targets, ref_child, post_insertion_notification_targets);
   return new_child;
@@ -616,10 +618,10 @@ Node* ContainerNode::ReplaceChild(Node* new_child,
     // observers flag set.
     if (next) {
       InsertNodeVector(targets, next, AdoptAndInsertBefore(),
-                       &post_insertion_notification_targets);
+                       post_insertion_notification_targets);
     } else {
       InsertNodeVector(targets, nullptr, AdoptAndAppendChild(),
-                       &post_insertion_notification_targets);
+                       post_insertion_notification_targets);
     }
   }
   DidInsertNodeVector(targets, next, post_insertion_notification_targets);
@@ -931,7 +933,7 @@ Node* ContainerNode::AppendChild(Node* new_child,
     SlotAssignmentRecalcForbiddenScope forbid_slot_recalc(GetDocument());
     ChildListMutationScope mutation(*this);
     InsertNodeVector(targets, nullptr, AdoptAndAppendChild(),
-                     &post_insertion_notification_targets);
+                     post_insertion_notification_targets);
   }
   DidInsertNodeVector(targets, nullptr, post_insertion_notification_targets);
   return new_child;
@@ -1576,11 +1578,12 @@ RadioNodeList* ContainerNode::GetRadioNodeList(const AtomicString& name,
 }
 
 String ContainerNode::FindTextInElementWith(
-    const AtomicString& substring) const {
+    const AtomicString& substring,
+    base::FunctionRef<bool(const String&)> validity_checker) const {
   for (Element& element : ElementTraversal::DescendantsOf(*this)) {
     if (element.HasOnlyText()) {
       const String& text = element.TextFromChildren();
-      if (text.Find(substring) != WTF::kNotFound) {
+      if (text.Find(substring) != WTF::kNotFound && validity_checker(text)) {
         return text;
       }
     }
@@ -1688,21 +1691,64 @@ void ContainerNode::CheckSoftNavigationHeuristicsTracking(
   if (!frame || !frame->IsMainFrame()) {
     return;
   }
-  ScriptState* script_state = ToScriptStateForMainWorld(frame);
-  if (!script_state) {
-    return;
-  }
 
-  SoftNavigationHeuristics* heuristics =
-      SoftNavigationHeuristics::From(*window);
-  DCHECK(heuristics);
-  if (heuristics->ModifiedDOM(script_state)) {
-    if (inserted_node.IsHTMLElement()) {
-      inserted_node.SetIsModifiedBySoftNavigation();
-    } else {
-      SetIsModifiedBySoftNavigation();
+  if (SoftNavigationHeuristics* heuristics =
+          SoftNavigationHeuristics::From(*window)) {
+    // TODO(crbug.com/1521100): This does not filter out updates from isolated
+    // worlds. Should it?
+    if (heuristics->ModifiedDOM()) {
+      if (inserted_node.IsHTMLElement()) {
+        inserted_node.SetIsModifiedBySoftNavigation();
+      } else {
+        SetIsModifiedBySoftNavigation();
+      }
     }
   }
+}
+
+String ContainerNode::getInnerHTML(const GetInnerHTMLOptions* options) const {
+  CHECK(RuntimeEnabledFeatures::ElementGetInnerHTMLEnabled());
+  DCHECK(IsShadowRoot() || IsElementNode());
+  // This is the deprecated behavior: if includeShadowRoots is true, then
+  // include *all* open shadow roots (even if they aren't marked serializable).
+  // If includeShadowRoots is true and closedRoots is provided, also serialize
+  // the provided shadow roots, even if they're closed.
+  ShadowRootInclusion shadow_root_inclusion{
+      options->includeShadowRoots()
+          ? ShadowRootInclusion::Behavior::kIncludeAllOpenShadowRoots
+          : ShadowRootInclusion::Behavior::kOnlyProvidedShadowRoots};
+  if (options->includeShadowRoots() && options->hasClosedRoots()) {
+    for (auto& shadow_root : options->closedRoots()) {
+      shadow_root_inclusion.include_shadow_roots.insert(shadow_root);
+    }
+  }
+
+  return CreateMarkup(this, kChildrenOnly, kDoNotResolveURLs,
+                      shadow_root_inclusion);
+}
+
+String ContainerNode::getHTML(const GetHTMLOptions* options,
+                              ExceptionState& exception_state) const {
+  CHECK(RuntimeEnabledFeatures::ElementGetHTMLEnabled());
+  DCHECK(IsShadowRoot() || IsElementNode());
+  if (options->hasIncludeShadowRoots() && !options->includeShadowRoots() &&
+      options->hasShadowRoots() && !options->shadowRoots().empty()) {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kNotSupportedError,
+        "If includeShadowRoots is false, then shadowRoots must be empty.");
+    return "";
+  }
+  ShadowRootInclusion shadow_root_inclusion{
+      options->hasIncludeShadowRoots() && options->includeShadowRoots()
+          ? ShadowRootInclusion::Behavior::kIncludeAllSerializableShadowRoots
+          : ShadowRootInclusion::Behavior::kOnlyProvidedShadowRoots};
+  if (options->hasShadowRoots()) {
+    for (auto& shadow_root : options->shadowRoots()) {
+      shadow_root_inclusion.include_shadow_roots.insert(shadow_root);
+    }
+  }
+  return CreateMarkup(this, kChildrenOnly, kDoNotResolveURLs,
+                      shadow_root_inclusion);
 }
 
 }  // namespace blink

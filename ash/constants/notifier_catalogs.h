@@ -186,7 +186,7 @@ enum class NotificationCatalogName {
   kMultiCaptureOnLogin = 171,
   kFloatingWorkspace = 172,
   kScalableIphNotification = 173,
-  kUpdateNotification = 174,
+  // [Deprecated] kUpdateNotification = 174,
   kSubAppsUninstall = 175,
   kNetworkCarrierUnlock = 176,
   kCoralFeature = 177,
@@ -230,7 +230,8 @@ enum class NudgeCatalogName {
   kGameDashboardControlsNudge = 25,
   // [Deprecated] kWebsiteTelemetryReportingNudge = 26,
   kStandaloneWindowMigrationUx = 27,
-  kMaxValue = kStandaloneWindowMigrationUx
+  kFocusModeEndingMomentNudge = 28,
+  kMaxValue = kFocusModeEndingMomentNudge
 };
 
 // A living catalog that registers toasts.
@@ -255,10 +256,10 @@ enum class ToastCatalogName {
   kAssistantLoading = 14,
   kTestCatalogName = 15,
   kMaximumDeskLaunchTemplate = 16,
-  kEnterOverviewGesture = 17,
-  kExitOverviewGesture = 18,
-  kNextDeskGesture = 19,
-  kPreviousDeskGesture = 20,
+  // [Deprecated] kEnterOverviewGesture = 17,
+  // [Deprecated] kExitOverviewGesture = 18,
+  // [Deprecated] kNextDeskGesture = 19,
+  // [Deprecated] kPreviousDeskGesture = 20,
   kMoveVisibleOnAllDesksWindow = 21,
   kAppCannotSnap = 22,
   kCrostiniUnsupportedVirtualKeyboard = 23,

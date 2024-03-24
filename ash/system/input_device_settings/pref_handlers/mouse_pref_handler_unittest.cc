@@ -47,7 +47,7 @@ const bool kTestScrollAcceleration = false;
 const mojom::ButtonRemapping button_remapping1(
     /*name=*/"test1",
     /*button=*/
-    mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kBack),
+    mojom::Button::NewCustomizableButton(mojom::CustomizableButton::kMiddle),
     /*remapping_action=*/
     mojom::RemappingAction::NewAcceleratorAction(
         ash::AcceleratorAction::kBrightnessDown));
@@ -64,8 +64,8 @@ const mojom::MouseSettings kMouseSettingsDefault(
     /*sensitivity=*/kDefaultSensitivity,
     /*reverse_scrolling=*/kDefaultReverseScrolling,
     /*acceleration_enabled=*/kDefaultAccelerationEnabled,
-    /*scroll_sensitivity=*/kDefaultSensitivity,
-    /*scroll_acceleration=*/kDefaultScrollAcceleration,
+    /*scroll_sensitivity=*/kDefaultScrollSensitivity,
+    /*scroll_acceleration=*/kDefaultScrollAccelerationEnabled,
     /*button_remappings=*/std::vector<mojom::ButtonRemappingPtr>());
 
 const mojom::MouseSettings kMouseSettingsNotDefault(
@@ -74,7 +74,7 @@ const mojom::MouseSettings kMouseSettingsNotDefault(
     /*reverse_scrolling=*/!kDefaultReverseScrolling,
     /*acceleration_enabled=*/!kDefaultAccelerationEnabled,
     /*scroll_sensitivity=*/1,
-    /*scroll_acceleration=*/!kDefaultScrollAcceleration,
+    /*scroll_acceleration=*/!kDefaultScrollAccelerationEnabled,
     /*button_remappings=*/std::vector<mojom::ButtonRemappingPtr>());
 
 const mojom::MouseSettings kMouseSettings1(
@@ -141,9 +141,9 @@ class MousePrefHandlerTest : public AshTestBase {
     pref_service_->registry()->RegisterBooleanPref(prefs::kMouseAcceleration,
                                                    kDefaultAccelerationEnabled);
     pref_service_->registry()->RegisterIntegerPref(
-        prefs::kMouseScrollSensitivity, kDefaultSensitivity);
+        prefs::kMouseScrollSensitivity, kDefaultScrollSensitivity);
     pref_service_->registry()->RegisterBooleanPref(
-        prefs::kMouseScrollAcceleration, kDefaultScrollAcceleration);
+        prefs::kMouseScrollAcceleration, kDefaultScrollAccelerationEnabled);
 
     pref_service_->SetUserPref(prefs::kPrimaryMouseButtonRight,
                                base::Value(kTestSwapRight));
@@ -199,7 +199,7 @@ class MousePrefHandlerTest : public AshTestBase {
     if (scroll_sensitivity.has_value()) {
       EXPECT_EQ(settings.scroll_sensitivity, scroll_sensitivity);
     } else {
-      EXPECT_EQ(settings.scroll_sensitivity, kDefaultSensitivity);
+      EXPECT_EQ(settings.scroll_sensitivity, kDefaultScrollSensitivity);
     }
 
     const auto scroll_acceleration =
@@ -207,7 +207,8 @@ class MousePrefHandlerTest : public AshTestBase {
     if (scroll_acceleration.has_value()) {
       EXPECT_EQ(settings.scroll_acceleration, scroll_acceleration);
     } else {
-      EXPECT_EQ(settings.scroll_acceleration, kDefaultScrollAcceleration);
+      EXPECT_EQ(settings.scroll_acceleration,
+                kDefaultScrollAccelerationEnabled);
     }
   }
 
@@ -264,10 +265,13 @@ class MousePrefHandlerTest : public AshTestBase {
   mojom::MouseSettingsPtr CallInitializeMouseSettings(
       const std::string& device_key,
       mojom::CustomizationRestriction customization_restriction =
-          mojom::CustomizationRestriction::kAllowCustomizations) {
+          mojom::CustomizationRestriction::kAllowCustomizations,
+      mojom::MouseButtonConfig mouse_button_config =
+          mojom::MouseButtonConfig::kNoConfig) {
     mojom::MousePtr mouse = mojom::Mouse::New();
     mouse->device_key = device_key;
     mouse->customization_restriction = customization_restriction;
+    mouse->mouse_button_config = mouse_button_config;
 
     pref_handler_->InitializeMouseSettings(pref_service_.get(),
                                            /*mouse_policies=*/{}, mouse.get());
@@ -328,6 +332,31 @@ class MousePrefHandlerTest : public AshTestBase {
   std::unique_ptr<MousePrefHandlerImpl> pref_handler_;
   std::unique_ptr<TestingPrefServiceSimple> pref_service_;
 };
+
+TEST_F(MousePrefHandlerTest, UpdateButtonRemappingsWithCompleteList) {
+  mojom::Mouse mouse;
+  mouse.device_key = kMouseKey1;
+  mouse.is_external = false;
+
+  // Update the button remappings pref dict to mock adding a new
+  // button remapping in the future.
+  std::vector<mojom::ButtonRemappingPtr> button_remappings;
+  button_remappings.push_back(button_remapping1.Clone());
+  base::Value::Dict updated_button_remappings_dict;
+  updated_button_remappings_dict.Set(
+      kMouseKey1, ConvertButtonRemappingArrayToList(
+                      button_remappings,
+                      mojom::CustomizationRestriction::kAllowCustomizations));
+
+  pref_service_->SetDict(prefs::kMouseButtonRemappingsDictPref,
+                         updated_button_remappings_dict.Clone());
+
+  mojom::MouseSettingsPtr updated_settings = CallInitializeMouseSettings(
+      kMouseKey1, mojom::CustomizationRestriction::kAllowCustomizations,
+      mojom::MouseButtonConfig::kFiveKey);
+  EXPECT_NE(button_remappings, updated_settings->button_remappings);
+  EXPECT_EQ(3u, updated_settings->button_remappings.size());
+}
 
 TEST_F(MousePrefHandlerTest, InitializeLoginScreenMouseSettings) {
   mojom::Mouse mouse;
@@ -434,7 +463,7 @@ TEST_F(MousePrefHandlerTest, UpdateLoginScreenButtonRemappingList) {
   ASSERT_NE(nullptr, updated_button_remapping_list);
   ASSERT_EQ(1u, updated_button_remapping_list->size());
   const auto& button_remapping = (*updated_button_remapping_list)[0].GetDict();
-  EXPECT_EQ(button_remapping1.name,
+  EXPECT_EQ("REDACTED",
             *button_remapping.FindString(prefs::kButtonRemappingName));
   EXPECT_EQ(
       static_cast<int>(button_remapping1.button->get_customizable_button()),
@@ -616,8 +645,8 @@ TEST_F(MousePrefHandlerTest, LastUpdated) {
       /*sensitivity=*/kDefaultSensitivity,
       /*reverse_scrolling=*/kDefaultReverseScrolling,
       /*acceleration_enabled=*/kDefaultAccelerationEnabled,
-      /*scroll_sensitivity=*/kDefaultSensitivity,
-      /*scroll_acceleration=*/kDefaultScrollAcceleration,
+      /*scroll_sensitivity=*/kDefaultScrollSensitivity,
+      /*scroll_acceleration=*/kDefaultScrollAccelerationEnabled,
       /*button_remappings=*/mojo::Clone(button_remappings));
 
   CallUpdateMouseSettings(kMouseKey1, kUpdatedMouseSettingsWithButtonRemapping);
@@ -746,9 +775,9 @@ TEST_F(MousePrefHandlerTest, TransitionPeriodSettingsPersistedWhenUserChosen) {
   pref_service_->SetUserPref(prefs::kMouseAcceleration,
                              base::Value(kDefaultAccelerationEnabled));
   pref_service_->SetUserPref(prefs::kMouseScrollSensitivity,
-                             base::Value(kDefaultSensitivity));
+                             base::Value(kDefaultScrollSensitivity));
   pref_service_->SetUserPref(prefs::kMouseScrollAcceleration,
-                             base::Value(kDefaultScrollAcceleration));
+                             base::Value(kDefaultScrollAccelerationEnabled));
   mojom::MouseSettingsPtr settings =
       CallInitializeMouseSettings(mouse.device_key);
   EXPECT_EQ(kMouseSettingsDefault, *settings);
@@ -913,8 +942,8 @@ TEST_F(MousePrefHandlerTest, UpdateButtonRemapping) {
       /*sensitivity=*/kDefaultSensitivity,
       /*reverse_scrolling=*/kDefaultReverseScrolling,
       /*acceleration_enabled=*/kDefaultAccelerationEnabled,
-      /*scroll_sensitivity=*/kDefaultSensitivity,
-      /*scroll_acceleration=*/kDefaultScrollAcceleration,
+      /*scroll_sensitivity=*/kDefaultScrollSensitivity,
+      /*scroll_acceleration=*/kDefaultScrollAccelerationEnabled,
       /*button_remappings=*/mojo::Clone(button_remappings));
 
   CallUpdateMouseSettings(kMouseKey1, kUpdatedMouseSettings);

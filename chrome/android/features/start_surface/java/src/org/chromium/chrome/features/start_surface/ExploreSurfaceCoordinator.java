@@ -40,6 +40,7 @@ import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
 import org.chromium.chrome.browser.util.BrowserUiUtils;
 import org.chromium.chrome.browser.xsurface.feed.FeedLaunchReliabilityLogger.SurfaceType;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
+import org.chromium.components.browser_ui.widget.displaystyle.UiConfig;
 import org.chromium.ui.base.WindowAndroid;
 
 /**
@@ -122,7 +123,8 @@ public class ExploreSurfaceCoordinator {
                         new ExploreSurfaceActionDelegate(
                                 snackbarManager,
                                 BookmarkModel.getForProfile(profile),
-                                tabModelSelector),
+                                tabModelSelector,
+                                bottomSheetController),
                         HelpAndFeedbackLauncherImpl.getForProfile(profile),
                         tabStripHeightSupplier);
 
@@ -178,11 +180,17 @@ public class ExploreSurfaceCoordinator {
         return mFeedSurfaceCoordinator.getReliabilityLogger();
     }
 
+    /** Returns an instance of {@link UiConfig}. */
+    public UiConfig getUiConfig() {
+        return mFeedSurfaceCoordinator.getUiConfig();
+    }
+
     private class ExploreSurfaceActionDelegate extends FeedActionDelegateImpl {
         ExploreSurfaceActionDelegate(
                 SnackbarManager snackbarManager,
                 BookmarkModel bookmarkModel,
-                TabModelSelector tabModelSelector) {
+                TabModelSelector tabModelSelector,
+                BottomSheetController bottomSheetController) {
             super(
                     mActivity,
                     snackbarManager,
@@ -190,7 +198,8 @@ public class ExploreSurfaceCoordinator {
                     bookmarkModel,
                     BrowserUiUtils.HostSurface.START_SURFACE,
                     tabModelSelector,
-                    mProfile);
+                    mProfile,
+                    bottomSheetController);
         }
 
         @Override

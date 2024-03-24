@@ -17,7 +17,7 @@
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "crypto/sha2.h"
-#include "extensions/browser/content_verifier.h"
+#include "extensions/browser/content_verifier/content_verifier.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_system.h"
@@ -25,6 +25,7 @@
 #include "extensions/browser/install/crx_install_error.h"
 #include "extensions/browser/updater/manifest_fetch_data.h"
 #include "extensions/common/extension.h"
+#include "extensions/common/extension_id.h"
 #include "extensions/common/extension_urls.h"
 #include "extensions/common/verifier_formats.h"
 
@@ -130,7 +131,7 @@ void UpdateDataProvider::GetData(
 }
 
 void UpdateDataProvider::RunInstallCallback(
-    const std::string& extension_id,
+    const ExtensionId& extension_id,
     const std::string& public_key,
     const base::FilePath& unpacked_dir,
     bool install_immediately,
@@ -151,7 +152,7 @@ void UpdateDataProvider::RunInstallCallback(
 }
 
 void UpdateDataProvider::InstallUpdateCallback(
-    const std::string& extension_id,
+    const ExtensionId& extension_id,
     const std::string& public_key,
     const base::FilePath& unpacked_dir,
     bool install_immediately,

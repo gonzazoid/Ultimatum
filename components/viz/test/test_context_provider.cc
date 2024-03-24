@@ -165,11 +165,16 @@ TestSharedImageInterface::CreateSharedImage(SharedImageFormat format,
                                             uint32_t usage,
                                             base::StringPiece debug_label,
                                             gpu::SurfaceHandle surface_handle) {
+  gpu::SyncToken sync_token = GenUnverifiedSyncToken();
   base::AutoLock locked(lock_);
   auto mailbox = gpu::Mailbox::GenerateForSharedImage();
   shared_images_.insert(mailbox);
   most_recent_size_ = size;
-  return base::MakeRefCounted<gpu::ClientSharedImage>(mailbox);
+  return base::MakeRefCounted<gpu::ClientSharedImage>(
+      mailbox,
+      gpu::ClientSharedImage::Metadata(format, size, color_space,
+                                       surface_origin, alpha_type, usage),
+      sync_token, holder_);
 }
 
 scoped_refptr<gpu::ClientSharedImage>
@@ -182,10 +187,15 @@ TestSharedImageInterface::CreateSharedImage(
     uint32_t usage,
     base::StringPiece debug_label,
     base::span<const uint8_t> pixel_data) {
+  gpu::SyncToken sync_token = GenUnverifiedSyncToken();
   base::AutoLock locked(lock_);
   auto mailbox = gpu::Mailbox::GenerateForSharedImage();
   shared_images_.insert(mailbox);
-  return base::MakeRefCounted<gpu::ClientSharedImage>(mailbox);
+  return base::MakeRefCounted<gpu::ClientSharedImage>(
+      mailbox,
+      gpu::ClientSharedImage::Metadata(format, size, color_space,
+                                       surface_origin, alpha_type, usage),
+      sync_token, holder_);
 }
 
 scoped_refptr<gpu::ClientSharedImage>
@@ -201,6 +211,7 @@ TestSharedImageInterface::CreateSharedImage(SharedImageFormat format,
   if (fail_shared_image_creation_with_buffer_usage_) {
     return nullptr;
   }
+  gpu::SyncToken sync_token = GenUnverifiedSyncToken();
 
   // Create a ClientSharedImage with a GMB.
   auto client_shared_image =
@@ -214,14 +225,22 @@ TestSharedImageInterface::CreateSharedImage(SharedImageFormat format,
         size, SinglePlaneSharedImageFormatToBufferFormat(format), buffer_usage,
         surface_handle, nullptr);
     return gpu::ClientSharedImage::CreateForTesting(
-        mailbox, std::move(gpu_memory_buffer));
+        mailbox,
+        gpu::ClientSharedImage::Metadata(format, size, color_space,
+                                         surface_origin, alpha_type, usage),
+        sync_token, std::move(gpu_memory_buffer), holder_);
   }
 
   auto gmb_handle = CreateGMBHandle(format, size, buffer_usage);
 
   return base::MakeRefCounted<gpu::ClientSharedImage>(
-      mailbox, gpu::GpuMemoryBufferHandleInfo(std::move(gmb_handle), format,
-                                              size, buffer_usage));
+      mailbox,
+      gpu::ClientSharedImage::Metadata(format, size, color_space,
+                                       surface_origin, alpha_type, usage),
+      sync_token,
+      gpu::GpuMemoryBufferHandleInfo(std::move(gmb_handle), format, size,
+                                     buffer_usage),
+      holder_);
 }
 
 scoped_refptr<gpu::ClientSharedImage>
@@ -236,6 +255,7 @@ TestSharedImageInterface::CreateSharedImage(
     gpu::SurfaceHandle surface_handle,
     gfx::BufferUsage buffer_usage,
     gfx::GpuMemoryBufferHandle buffer_handle) {
+  gpu::SyncToken sync_token = GenUnverifiedSyncToken();
   auto client_buffer_handle = buffer_handle.Clone();
   auto mailbox =
       CreateSharedImage(format, size, color_space, surface_origin, alpha_type,
@@ -243,8 +263,13 @@ TestSharedImageInterface::CreateSharedImage(
           ->mailbox();
 
   return base::MakeRefCounted<gpu::ClientSharedImage>(
-      mailbox, gpu::GpuMemoryBufferHandleInfo(std::move(client_buffer_handle),
-                                              format, size, buffer_usage));
+      mailbox,
+      gpu::ClientSharedImage::Metadata(format, size, color_space,
+                                       surface_origin, alpha_type, usage),
+      sync_token,
+      gpu::GpuMemoryBufferHandleInfo(std::move(client_buffer_handle), format,
+                                     size, buffer_usage),
+      holder_);
 }
 
 scoped_refptr<gpu::ClientSharedImage>
@@ -257,14 +282,19 @@ TestSharedImageInterface::CreateSharedImage(
     uint32_t usage,
     base::StringPiece debug_label,
     gfx::GpuMemoryBufferHandle buffer_handle) {
+  gpu::SyncToken sync_token = GenUnverifiedSyncToken();
   base::AutoLock locked(lock_);
   auto mailbox = gpu::Mailbox::GenerateForSharedImage();
   shared_images_.insert(mailbox);
   most_recent_size_ = size;
-  return base::MakeRefCounted<gpu::ClientSharedImage>(mailbox);
+  return base::MakeRefCounted<gpu::ClientSharedImage>(
+      mailbox,
+      gpu::ClientSharedImage::Metadata(format, size, color_space,
+                                       surface_origin, alpha_type, usage),
+      sync_token, holder_);
 }
 
-scoped_refptr<gpu::ClientSharedImage>
+gpu::SharedImageInterface::SharedImageMapping
 TestSharedImageInterface::CreateSharedImage(SharedImageFormat format,
                                             const gfx::Size& size,
                                             const gfx::ColorSpace& color_space,
@@ -272,11 +302,17 @@ TestSharedImageInterface::CreateSharedImage(SharedImageFormat format,
                                             SkAlphaType alpha_type,
                                             uint32_t usage,
                                             base::StringPiece debug_label) {
+  gpu::SyncToken sync_token = GenUnverifiedSyncToken();
   base::AutoLock locked(lock_);
   auto mailbox = gpu::Mailbox::GenerateForSharedImage();
   shared_images_.insert(mailbox);
   most_recent_size_ = size;
-  return base::MakeRefCounted<gpu::ClientSharedImage>(mailbox);
+  return {base::MakeRefCounted<gpu::ClientSharedImage>(
+              mailbox,
+              gpu::ClientSharedImage::Metadata(
+                  format, size, color_space, surface_origin, alpha_type, usage),
+              sync_token, holder_),
+          base::WritableSharedMemoryMapping()};
 }
 
 scoped_refptr<gpu::ClientSharedImage>
@@ -289,11 +325,17 @@ TestSharedImageInterface::CreateSharedImage(
     SkAlphaType alpha_type,
     uint32_t usage,
     base::StringPiece debug_label) {
+  gpu::SyncToken sync_token = GenUnverifiedSyncToken();
   base::AutoLock locked(lock_);
   auto mailbox = gpu::Mailbox::GenerateForSharedImage();
   shared_images_.insert(mailbox);
   most_recent_size_ = gpu_memory_buffer->GetSize();
-  return base::MakeRefCounted<gpu::ClientSharedImage>(mailbox);
+  return base::MakeRefCounted<gpu::ClientSharedImage>(
+      mailbox,
+      gpu::ClientSharedImage::Metadata(
+          GetSinglePlaneSharedImageFormat(gpu_memory_buffer->GetFormat()),
+          most_recent_size_, color_space, surface_origin, alpha_type, usage),
+      sync_token, holder_);
 }
 
 void TestSharedImageInterface::UpdateSharedImage(
@@ -315,9 +357,18 @@ scoped_refptr<gpu::ClientSharedImage>
 TestSharedImageInterface::AddReferenceToSharedImage(
     const gpu::SyncToken& sync_token,
     const gpu::Mailbox& mailbox,
+    SharedImageFormat format,
+    const gfx::Size& size,
+    const gfx::ColorSpace& color_space,
+    GrSurfaceOrigin surface_origin,
+    SkAlphaType alpha_type,
     uint32_t usage) {
   shared_images_.insert(mailbox);
-  return base::MakeRefCounted<gpu::ClientSharedImage>(mailbox);
+  return base::MakeRefCounted<gpu::ClientSharedImage>(
+      mailbox,
+      gpu::ClientSharedImage::Metadata(format, size, color_space,
+                                       surface_origin, alpha_type, usage),
+      sync_token, holder_);
 }
 
 void TestSharedImageInterface::DestroySharedImage(
@@ -344,10 +395,19 @@ TestSharedImageInterface::CreateSwapChain(SharedImageFormat format,
                                           uint32_t usage) {
   auto front_buffer = gpu::Mailbox::GenerateForSharedImage();
   auto back_buffer = gpu::Mailbox::GenerateForSharedImage();
+  gpu::SyncToken sync_token = GenUnverifiedSyncToken();
   shared_images_.insert(front_buffer);
   shared_images_.insert(back_buffer);
-  return {base::MakeRefCounted<gpu::ClientSharedImage>(front_buffer),
-          base::MakeRefCounted<gpu::ClientSharedImage>(back_buffer)};
+  return {base::MakeRefCounted<gpu::ClientSharedImage>(
+              front_buffer,
+              gpu::ClientSharedImage::Metadata(
+                  format, size, color_space, surface_origin, alpha_type, usage),
+              sync_token, holder_),
+          base::MakeRefCounted<gpu::ClientSharedImage>(
+              back_buffer,
+              gpu::ClientSharedImage::Metadata(
+                  format, size, color_space, surface_origin, alpha_type, usage),
+              sync_token, holder_)};
 }
 
 void TestSharedImageInterface::PresentSwapChain(
@@ -370,7 +430,7 @@ gpu::SyncToken TestSharedImageInterface::GenVerifiedSyncToken() {
   most_recent_generated_token_ =
       gpu::SyncToken(gpu::CommandBufferNamespace::GPU_IO,
                      gpu::CommandBufferId(), ++release_id_);
-  most_recent_generated_token_.SetVerifyFlush();
+  VerifySyncToken(most_recent_generated_token_);
   return most_recent_generated_token_;
 }
 
@@ -380,6 +440,10 @@ gpu::SyncToken TestSharedImageInterface::GenUnverifiedSyncToken() {
       gpu::SyncToken(gpu::CommandBufferNamespace::GPU_IO,
                      gpu::CommandBufferId(), ++release_id_);
   return most_recent_generated_token_;
+}
+
+void TestSharedImageInterface::VerifySyncToken(gpu::SyncToken& sync_token) {
+  sync_token.SetVerifyFlush();
 }
 
 void TestSharedImageInterface::WaitSyncToken(const gpu::SyncToken& sync_token) {
@@ -479,7 +543,7 @@ scoped_refptr<TestContextProvider> TestContextProvider::Create(
 
 // static
 scoped_refptr<TestContextProvider> TestContextProvider::Create(
-    std::unique_ptr<TestSharedImageInterface> sii) {
+    scoped_refptr<TestSharedImageInterface> sii) {
   DCHECK(sii);
   constexpr bool support_locking = false;
   return new TestContextProvider(
@@ -505,7 +569,7 @@ TestContextProvider::TestContextProvider(
     bool support_locking)
     : support_(std::move(support)),
       raster_context_(std::move(raster)),
-      shared_image_interface_(std::make_unique<TestSharedImageInterface>()),
+      shared_image_interface_(base::MakeRefCounted<TestSharedImageInterface>()),
       support_locking_(support_locking) {
   DCHECK(main_thread_checker_.CalledOnValidThread());
   DCHECK(raster_context_);
@@ -524,7 +588,7 @@ TestContextProvider::TestContextProvider(
     std::unique_ptr<TestContextSupport> support,
     std::unique_ptr<TestGLES2Interface> gl,
     std::unique_ptr<gpu::raster::RasterInterface> raster,
-    std::unique_ptr<TestSharedImageInterface> sii,
+    scoped_refptr<TestSharedImageInterface> sii,
     bool support_locking)
     : support_(std::move(support)),
       context_gl_(std::move(gl)),
@@ -549,7 +613,7 @@ TestContextProvider::TestContextProvider(
   if (sii) {
     shared_image_interface_ = std::move(sii);
   } else {
-    shared_image_interface_ = std::make_unique<TestSharedImageInterface>();
+    shared_image_interface_ = base::MakeRefCounted<TestSharedImageInterface>();
 
     // By default, luminance textures are supported in GLES2.
     gpu::SharedImageCapabilities shared_image_caps;

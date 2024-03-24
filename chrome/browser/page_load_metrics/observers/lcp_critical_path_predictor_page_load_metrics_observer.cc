@@ -4,7 +4,6 @@
 
 #include "chrome/browser/page_load_metrics/observers/lcp_critical_path_predictor_page_load_metrics_observer.h"
 
-#include "base/containers/cxx20_erase_map.h"
 #include "base/trace_event/base_tracing.h"
 #include "chrome/browser/predictors/loading_predictor.h"
 #include "chrome/browser/predictors/loading_predictor_factory.h"
@@ -82,7 +81,8 @@ LcpCriticalPathPredictorPageLoadMetricsObserver::OnCommit(
   const blink::mojom::LCPCriticalPathPredictorNavigationTimeHintPtr& hint =
       navigation_handle->GetLCPPNavigationHint();
   if (hint && (!hint->lcp_element_locators.empty() ||
-               !hint->lcp_influencer_scripts.empty())) {
+               !hint->lcp_influencer_scripts.empty() ||
+               !hint->preconnect_origins.empty())) {
     is_lcpp_hinted_navigation_ = true;
   }
 
@@ -157,8 +157,8 @@ void LcpCriticalPathPredictorPageLoadMetricsObserver::FinalizeLCP() {
   }
   // Take the learned LCPP here so that we can report it after overwriting it
   // with the new data below.
-  absl::optional<predictors::LcppData> lcpp_data_prelearn =
-      predictor ? predictor->GetLcppData(*commit_url_) : absl::nullopt;
+  std::optional<predictors::LcppData> lcpp_data_prelearn =
+      predictor ? predictor->GetLcppData(*commit_url_) : std::nullopt;
 
   // TODO(crbug.com/715525): kSpeculativePreconnectFeature flag can also affect
   // this. Unflag the feature.
@@ -202,7 +202,7 @@ void LcpCriticalPathPredictorPageLoadMetricsObserver::
 
 void LcpCriticalPathPredictorPageLoadMetricsObserver::SetLcpElementLocator(
     const std::string& lcp_element_locator,
-    absl::optional<uint32_t> predicted_lcp_index) {
+    std::optional<uint32_t> predicted_lcp_index) {
   if (!lcpp_data_inputs_) {
     lcpp_data_inputs_.emplace();
   }
@@ -259,15 +259,23 @@ void LcpCriticalPathPredictorPageLoadMetricsObserver::
   lcpp_data_inputs_->lcp_influencer_scripts = lcp_influencer_scripts;
 }
 
+void LcpCriticalPathPredictorPageLoadMetricsObserver::SetPreconnectOrigins(
+    const std::vector<GURL>& origins) {
+  if (!lcpp_data_inputs_) {
+    lcpp_data_inputs_.emplace();
+  }
+  lcpp_data_inputs_->preconnect_origins = origins;
+}
+
 void LcpCriticalPathPredictorPageLoadMetricsObserver::
     ReportUMAForTimingPredictor(
-        absl::optional<predictors::LcppData> lcpp_data_prelearn) {
+        std::optional<predictors::LcppData> lcpp_data_prelearn) {
   if (!lcpp_data_inputs_.has_value() || !commit_url_ || !lcpp_data_prelearn ||
       !IsValidLcppStat(lcpp_data_prelearn->lcpp_stat())) {
     return;
   }
-  absl::optional<blink::mojom::LCPCriticalPathPredictorNavigationTimeHint>
-      hint = ConvertLcppDataToLCPCriticalPathPredictorNavigationTimeHint(
+  std::optional<blink::mojom::LCPCriticalPathPredictorNavigationTimeHint> hint =
+      ConvertLcppDataToLCPCriticalPathPredictorNavigationTimeHint(
           *lcpp_data_prelearn);
   if (!hint || !hint->lcp_element_locators.size()) {
     return;
@@ -281,16 +289,15 @@ void LcpCriticalPathPredictorPageLoadMetricsObserver::
 
   // This value existence indicates failure because predicted LCP should be the
   // last.
-  absl::optional<uint32_t> first_valid_index_except_last = absl::nullopt;
+  std::optional<uint32_t> first_valid_index_except_last = std::nullopt;
   for (size_t i = 0; i < predicted_lcp_indexes_.size() - 1; i++) {
-    const absl::optional<uint32_t>& maybe_index = predicted_lcp_indexes_[i];
+    const std::optional<uint32_t>& maybe_index = predicted_lcp_indexes_[i];
     if (maybe_index) {
       first_valid_index_except_last = *maybe_index;
       break;
     }
   }
-  const absl::optional<uint32_t>& last_lcp_index =
-      predicted_lcp_indexes_.back();
+  const std::optional<uint32_t>& last_lcp_index = predicted_lcp_indexes_.back();
 
   internal::LCPPPredictResult result;
   const int max_lcpp_histogram_buckets =

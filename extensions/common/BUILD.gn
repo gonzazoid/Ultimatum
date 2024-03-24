@@ -284,11 +284,6 @@ static_library("common") {
     "extension_id.h",
     "extension_l10n_util.cc",
     "extension_l10n_util.h",
-    "extension_message_generator.cc",
-    "extension_message_generator.h",
-    "extension_messages.h",
-    "extension_param_traits.cc",
-    "extension_param_traits.h",
     "extension_paths.cc",
     "extension_paths.h",
     "extension_resource.cc",
@@ -638,6 +633,7 @@ source_set("unit_tests") {
     "url_pattern_set_unittest.cc",
     "url_pattern_unittest.cc",
     "user_script_unittest.cc",
+    "utils/extension_types_utils_unittest.cc",
     "value_counter_unittest.cc",
   ]
 

@@ -4,13 +4,19 @@
 
 package org.chromium.components.webauthn;
 
+import static org.chromium.components.webauthn.AuthenticatorImpl.isChrome;
+
 import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.Parcel;
+import android.os.ResultReceiver;
 import android.util.Pair;
 
 import androidx.annotation.Nullable;
@@ -24,7 +30,6 @@ import org.jni_zero.NativeMethods;
 
 import org.chromium.base.Callback;
 import org.chromium.base.Log;
-import org.chromium.base.PackageUtils;
 import org.chromium.blink.mojom.AuthenticatorStatus;
 import org.chromium.blink.mojom.AuthenticatorTransport;
 import org.chromium.blink.mojom.GetAssertionAuthenticatorResponse;
@@ -40,8 +45,6 @@ import org.chromium.components.webauthn.cred_man.CredManSupportProvider;
 import org.chromium.content_public.browser.ClientDataJson;
 import org.chromium.content_public.browser.ClientDataRequestType;
 import org.chromium.content_public.browser.RenderFrameHost;
-import org.chromium.device.DeviceFeatureList;
-import org.chromium.device.DeviceFeatureMap;
 import org.chromium.net.GURLUtils;
 import org.chromium.url.Origin;
 
@@ -55,7 +58,7 @@ import java.util.List;
 /** Uses the Google Play Services Fido2 APIs. Holds the logic of each request. */
 @JNINamespace("webauthn")
 public class Fido2CredentialRequest
-        implements Callback<Pair<Integer, Intent>>, CredManHelper.BridgeProvider {
+        implements Callback<Pair<Integer, Intent>>, WebauthnBrowserBridge.Provider {
     private static final String TAG = "Fido2Request";
     static final String NON_EMPTY_ALLOWLIST_ERROR_MSG =
             "Authentication request must have non-empty allowList";
@@ -65,7 +68,6 @@ public class Fido2CredentialRequest
     static final String CREDENTIAL_EXISTS_ERROR_MSG =
             "One of the excluded credentials exists on the local device";
     static final String LOW_LEVEL_ERROR_MSG = "Low level error 0x6a80";
-    public static final int GMSCORE_MIN_VERSION_HYBRID_API = 231206000;
 
     private final FidoIntentSender mIntentSender;
     // mPlayServicesAvailable caches whether the Play Services FIDO API is
@@ -130,19 +132,14 @@ public class Fido2CredentialRequest
 
     private Barrier.Mode getBarrierMode() {
         @CredManSupport int support = CredManSupportProvider.getCredManSupport();
-        if (support != CredManSupport.DISABLED
-                && mIsHybridRequest
-                && DeviceFeatureMap.isEnabled(
-                        DeviceFeatureList.WEBAUTHN_ANDROID_CRED_MAN_FOR_HYBRID)) {
+        if (support != CredManSupport.DISABLED && mIsHybridRequest) {
             return Barrier.Mode.ONLY_CRED_MAN;
         }
         switch (support) {
             case CredManSupport.DISABLED:
                 return Barrier.Mode.ONLY_FIDO_2_API;
             case CredManSupport.IF_REQUIRED:
-                if (mIsHybridRequest
-                        && DeviceFeatureMap.isEnabled(
-                                DeviceFeatureList.WEBAUTHN_ANDROID_CRED_MAN_FOR_HYBRID)) {
+                if (mIsHybridRequest) {
                     return Barrier.Mode.ONLY_CRED_MAN;
                 }
                 return Barrier.Mode.ONLY_FIDO_2_API;
@@ -271,6 +268,7 @@ public class Fido2CredentialRequest
                             options,
                             Uri.parse(convertOriginToString(origin)),
                             maybeClientDataHash,
+                            getMaybeResultReceiver(),
                             this::onGotPendingIntent,
                             this::onBinderCallException);
         } catch (NoSuchAlgorithmException e) {
@@ -539,7 +537,7 @@ public class Fido2CredentialRequest
                 mBarrier.onFido2ApiCancelled();
                 break;
             case WAITING_FOR_SELECTION:
-                mBrowserBridge.cleanupRequest(frameHost);
+                getBridge().cleanupRequest(frameHost);
                 mConditionalUiState = ConditionalUiState.NONE;
                 mBarrier.onFido2ApiCancelled();
                 break;
@@ -556,7 +554,8 @@ public class Fido2CredentialRequest
 
     public void handleIsUserVerifyingPlatformAuthenticatorAvailableRequest(
             Context context, IsUvpaaResponseCallback callback) {
-        if (getBarrierMode() == Barrier.Mode.ONLY_CRED_MAN) {
+        // Barrier Mode is only relevant for Chrome.
+        if (isChrome() && getBarrierMode() == Barrier.Mode.ONLY_CRED_MAN) {
             callback.onIsUserVerifyingPlatformAuthenticatorAvailableResponse(true);
             return;
         }
@@ -577,7 +576,9 @@ public class Fido2CredentialRequest
 
         Task<Boolean> task =
                 call.run(
-                        Fido2ApiCall.METHOD_BROWSER_ISUVPAA,
+                        WebauthnModeProvider.getInstance()
+                                .getFido2ApiCallParams()
+                                .mIsUserVerifyingPlatformAuthenticatorAvailableMethodId,
                         Fido2ApiCall.TRANSACTION_ISUVPAA,
                         args,
                         result);
@@ -706,12 +707,8 @@ public class Fido2CredentialRequest
             return;
         }
 
-        if (mBrowserBridge == null) {
-            mBrowserBridge = new WebauthnBrowserBridge();
-        }
-
         Runnable hybridCallback = null;
-        if (isHybridClientApiAvailable()) {
+        if (GmsCoreUtils.isHybridClientApiSupported()) {
             hybridCallback =
                     () ->
                             dispatchHybridGetAssertionRequest(
@@ -719,14 +716,18 @@ public class Fido2CredentialRequest
         }
 
         mConditionalUiState = ConditionalUiState.WAITING_FOR_SELECTION;
-        mBrowserBridge.onCredentialsDetailsListReceived(
-                mFrameHost,
-                discoverableCredentials,
-                isConditionalRequest,
-                (selectedCredentialId) ->
-                        maybeDispatchGetAssertionRequest(
-                                options, callerOriginString, clientDataHash, selectedCredentialId),
-                hybridCallback);
+        getBridge()
+                .onCredentialsDetailsListReceived(
+                        mFrameHost,
+                        discoverableCredentials,
+                        isConditionalRequest,
+                        (selectedCredentialId) ->
+                                maybeDispatchGetAssertionRequest(
+                                        options,
+                                        callerOriginString,
+                                        clientDataHash,
+                                        selectedCredentialId),
+                        hybridCallback);
     }
 
     /**
@@ -865,7 +866,7 @@ public class Fido2CredentialRequest
                     // An empty credential ID means an error from native code, which can happen if
                     // the embedder does not support Conditional UI.
                     Log.e(TAG, "Empty credential ID from account selection.");
-                    mBrowserBridge.cleanupRequest(mFrameHost);
+                    getBridge().cleanupRequest(mFrameHost);
                     returnErrorAndResetCallback(AuthenticatorStatus.UNKNOWN_ERROR);
                     return;
                 }
@@ -890,6 +891,7 @@ public class Fido2CredentialRequest
                         options,
                         Uri.parse(callerOriginString),
                         clientDataHash,
+                        getMaybeResultReceiver(),
                         this::onGotPendingIntent,
                         this::onBinderCallException);
     }
@@ -914,7 +916,12 @@ public class Fido2CredentialRequest
         args.writeStrongBinder(result);
         args.writeInt(1); // This indicates that the following options are present.
         Fido2Api.appendBrowserGetAssertionOptionsToParcel(
-                options, Uri.parse(callerOriginString), clientDataHash, /* tunnelId= */ null, args);
+                options,
+                Uri.parse(callerOriginString),
+                clientDataHash,
+                /* tunnelId= */ null,
+                /* resultReceiver= */ null,
+                args);
         Task<PendingIntent> task =
                 call.run(
                         Fido2ApiCall.METHOD_BROWSER_HYBRID_SIGN,
@@ -938,6 +945,43 @@ public class Fido2CredentialRequest
             returnErrorAndResetCallback(AuthenticatorStatus.UNKNOWN_ERROR);
             return;
         }
+    }
+
+    @Nullable
+    private ResultReceiver getMaybeResultReceiver() {
+        // The FIDO API traditionally returned a PendingIntent, which the calling app was expected
+        // to invoke and then receive the result from the Activity it launched.
+        //
+        // However in a WebView context this is problematic because the WebView does not control the
+        // app's activity to get the result. Thus support for using a ResultReceiver was added to
+        // the API. Since we don't want to immediately increase the minimum GMS Core version needed
+        // to run Chromium on Android, this code supports both methods.
+        //
+        // In time, once the GMS Core update has propagated sufficiently, we could consider removing
+        // support for anything except the ResultReceiver.
+        if (isChrome()) return null;
+        return new ResultReceiver(new Handler(Looper.getMainLooper())) {
+            @Override
+            protected void onReceiveResult(int resultCode, Bundle resultData) {
+                onResultReceiverResult(resultData);
+            }
+        };
+    }
+
+    private void onResultReceiverResult(Bundle resultData) {
+        int errorCode = AuthenticatorStatus.UNKNOWN_ERROR;
+        Object response = null;
+        byte[] responseBytes = resultData.getByteArray(Fido2Api.CREDENTIAL_EXTRA);
+        if (responseBytes != null) {
+            try {
+                response = Fido2Api.parseResponse(responseBytes, mAttestationAcceptable);
+            } catch (IllegalArgumentException e) {
+                Log.e(TAG, "Failed to parse FIDO2 API response from ResultReceiver", e);
+                response = null;
+            }
+        }
+
+        handleFido2Response(errorCode, response);
     }
 
     // Handles the result.
@@ -974,6 +1018,10 @@ public class Fido2CredentialRequest
                 break;
         }
 
+        handleFido2Response(errorCode, response);
+    }
+
+    private void handleFido2Response(int errorCode, Object response) {
         if (mConditionalUiState != ConditionalUiState.NONE) {
             if (response == null || response instanceof Pair) {
                 if (response != null) {
@@ -989,7 +1037,7 @@ public class Fido2CredentialRequest
 
                 if (mConditionalUiState == ConditionalUiState.CANCEL_PENDING) {
                     mConditionalUiState = ConditionalUiState.NONE;
-                    mBrowserBridge.cleanupRequest(mFrameHost);
+                    getBridge().cleanupRequest(mFrameHost);
                     mBarrier.onFido2ApiCancelled();
                 } else {
                     // The user can try again by selecting another conditional UI credential.
@@ -998,7 +1046,7 @@ public class Fido2CredentialRequest
                 return;
             }
             mConditionalUiState = ConditionalUiState.NONE;
-            mBrowserBridge.cleanupRequest(mFrameHost);
+            getBridge().cleanupRequest(mFrameHost);
         }
 
         if (response == null) {
@@ -1056,8 +1104,6 @@ public class Fido2CredentialRequest
         final int errorCode = error.first;
         @Nullable final String errorMsg = error.second;
 
-        // TODO(b/113347251): Use specific error codes instead of strings when GmsCore Fido2
-        // provides them.
         switch (errorCode) {
             case Fido2Api.SECURITY_ERR:
                 // AppId or rpID fails validation.
@@ -1141,18 +1187,11 @@ public class Fido2CredentialRequest
         return messageDigest.digest();
     }
 
-    private boolean isHybridClientApiAvailable() {
-        return PackageUtils.getPackageVersion("com.google.android.gms")
-                        >= GMSCORE_MIN_VERSION_HYBRID_API;
-    }
-
-    private boolean isChrome() {
-        return WebauthnModeProvider.getInstance().getWebauthnMode()
-                == WebauthnModeProvider.WebauthnMode.CHROME;
-    }
-
     @Override
     public WebauthnBrowserBridge getBridge() {
+        if (!isChrome()) {
+            return null;
+        }
         if (mBrowserBridge == null) {
             mBrowserBridge = new WebauthnBrowserBridge();
         }

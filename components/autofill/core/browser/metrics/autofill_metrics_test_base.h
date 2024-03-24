@@ -24,6 +24,7 @@
 namespace autofill::autofill_metrics {
 
 constexpr char kTestProfileId[] = "00000000-0000-0000-0000-000000000001";
+constexpr char kTestProfile2Id[] = "00000000-0000-0000-0000-000000000002";
 constexpr char kTestLocalCardId[] = "10000000-0000-0000-0000-000000000001";
 constexpr char kTestMaskedCardId[] = "10000000-0000-0000-0000-000000000002";
 constexpr char kTestFullServerCardId[] = "10000000-0000-0000-0000-000000000003";
@@ -180,9 +181,14 @@ class AutofillMetricsBaseTest {
   }
 
   void FillTestProfile(const FormData& form) {
+    FillProfileByGUID(form, kTestProfileId);
+  }
+
+  void FillProfileByGUID(const FormData& form,
+                         const std::string& profile_guid) {
     autofill_manager().FillOrPreviewProfileForm(
         mojom::ActionPersistence::kFill, form, form.fields.front(),
-        *personal_data().GetProfileByGUID(kTestProfileId),
+        *personal_data().GetProfileByGUID(profile_guid),
         {.trigger_source = AutofillTriggerSource::kPopup});
   }
 
@@ -194,7 +200,7 @@ class AutofillMetricsBaseTest {
   [[nodiscard]] FormData CreateEmptyForm() {
     FormData form;
     form.host_frame = test::MakeLocalFrameToken();
-    form.unique_renderer_id = test::MakeFormRendererId();
+    form.renderer_id = test::MakeFormRendererId();
     form.name = u"TestForm";
     form.url = GURL("https://example.com/form.html");
     form.action = GURL("https://example.com/submit.html");

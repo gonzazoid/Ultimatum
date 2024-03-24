@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "base/compiler_specific.h"
+#include "base/containers/flat_set.h"
 #include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "media/base/media_export.h"
@@ -33,9 +34,10 @@ class BoxReader;
 
 class MEDIA_EXPORT MP4StreamParser : public StreamParser {
  public:
-  MP4StreamParser(const std::set<int>& audio_object_types,
+  MP4StreamParser(std::optional<base::flat_set<int>> strict_audio_object_types,
                   bool has_sbr,
                   bool has_flac,
+                  bool has_iamf,
                   bool has_dv);
 
   MP4StreamParser(const MP4StreamParser&) = delete;
@@ -99,6 +101,11 @@ class MEDIA_EXPORT MP4StreamParser : public StreamParser {
                         std::vector<uint8_t>* frame_buf,
                         std::vector<SubsampleEntry>* subsamples) const;
 #endif
+#if BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
+  bool PrependIADescriptors(const IamfSpecificBox& iamf_box,
+                            std::vector<uint8_t>* frame_buf,
+                            std::vector<SubsampleEntry>* subsamples) const;
+#endif  // BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
   ParseResult EnqueueSample(BufferQueueMap* buffers);
   bool SendAndFlushSamples(BufferQueueMap* buffers);
 
@@ -159,11 +166,14 @@ class MEDIA_EXPORT MP4StreamParser : public StreamParser {
   bool has_video_;
   std::set<uint32_t> audio_track_ids_;
   std::set<uint32_t> video_track_ids_;
+
   // The object types allowed for audio tracks. For FLAC indication, use
-  // |has_flac_|;
-  const std::set<int> audio_object_types_;
+  // |has_flac_|. If this is a nullopt, then strict object type assertion will
+  // not happen.
+  const std::optional<base::flat_set<int>> strict_audio_object_types_;
   const bool has_sbr_;
   const bool has_flac_;
+  const bool has_iamf_;
   // Indicate if source buffer has been set as Dolby Vision. If true,
   // always treat the source buffer as Dolby Vision, if false and if
   // the source buffer is cross-compatible, use its compatible codec

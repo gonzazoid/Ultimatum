@@ -40,6 +40,7 @@
 #include "third_party/blink/renderer/core/html/forms/html_form_control_element.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
 #include "third_party/blink/renderer/core/html/html_frame_owner_element.h"
+#include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
@@ -137,11 +138,17 @@ HTMLDialogElement::HTMLDialogElement(Document& document)
   UseCounter::Count(document, WebFeature::kDialogElement);
 }
 
-void HTMLDialogElement::close(const String& return_value) {
+void HTMLDialogElement::close(const String& return_value,
+                              bool ignore_open_attribute) {
   // https://html.spec.whatwg.org/C/#close-the-dialog
-
-  if (!FastHasAttribute(html_names::kOpenAttr))
+  if (is_closing_) {
     return;
+  }
+  base::AutoReset<bool> reset_close(&is_closing_, true);
+
+  if (!ignore_open_attribute && !FastHasAttribute(html_names::kOpenAttr)) {
+    return;
+  }
 
   Document& document = GetDocument();
   HTMLDialogElement* old_modal_dialog = document.ActiveModalDialog();
@@ -217,10 +224,15 @@ void HTMLDialogElement::show(ExceptionState& exception_state) {
   // Element::isFocusable, which requires an up-to-date layout.
   GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kJavaScript);
 
-  // Showing a <dialog> should hide all open popovers.
-  auto& document = GetDocument();
+  // Proposed new behavior: top layer elements like dialogs and fullscreen
+  // elements can be nested inside popovers.
+  // Old/existing behavior: showing a modal dialog or fullscreen
+  // element should hide all open popovers.
+  auto* hide_until = HTMLElement::TopLayerElementPopoverAncestor(
+      *this, TopLayerElementType::kDialog);
+  DCHECK(RuntimeEnabledFeatures::NestedTopLayerSupportEnabled() || !hide_until);
   HTMLElement::HideAllPopoversUntil(
-      nullptr, document, HidePopoverFocusBehavior::kNone,
+      hide_until, GetDocument(), HidePopoverFocusBehavior::kNone,
       HidePopoverTransitionBehavior::kFireEventsAndWaitForTransitions);
 
   if (RuntimeEnabledFeatures::DialogNewFocusBehaviorEnabled()) {
@@ -316,9 +328,15 @@ void HTMLDialogElement::showModal(ExceptionState& exception_state) {
     }
   }
 
-  // Showing a <dialog> should hide all open popovers.
+  // Proposed new behavior: top layer elements like dialogs and fullscreen
+  // elements can be nested inside popovers.
+  // Old/existing behavior: showing a modal dialog or fullscreen
+  // element should hide all open popovers.
+  auto* hide_until = HTMLElement::TopLayerElementPopoverAncestor(
+      *this, TopLayerElementType::kDialog);
+  DCHECK(RuntimeEnabledFeatures::NestedTopLayerSupportEnabled() || !hide_until);
   HTMLElement::HideAllPopoversUntil(
-      nullptr, document, HidePopoverFocusBehavior::kNone,
+      hide_until, document, HidePopoverFocusBehavior::kNone,
       HidePopoverTransitionBehavior::kFireEventsAndWaitForTransitions);
 
   if (RuntimeEnabledFeatures::DialogNewFocusBehaviorEnabled()) {
@@ -400,6 +418,25 @@ void HTMLDialogElement::Trace(Visitor* visitor) const {
   visitor->Trace(previously_focused_element_);
   visitor->Trace(close_watcher_);
   HTMLElement::Trace(visitor);
+}
+
+void HTMLDialogElement::ParseAttribute(
+    const AttributeModificationParams& params) {
+  if (RuntimeEnabledFeatures::DialogCloseWhenOpenRemovedEnabled() &&
+      params.name == html_names::kOpenAttr && params.new_value.IsNull() &&
+      !is_closing_) {
+    auto* console_message = MakeGarbageCollected<ConsoleMessage>(
+        mojom::blink::ConsoleMessageSource::kOther,
+        mojom::blink::ConsoleMessageLevel::kWarning,
+        "The open attribute was removed from a dialog element while it was "
+        "open. This is not recommended. Please close it using the "
+        "dialog.close() method instead.");
+    console_message->SetNodes(GetDocument().GetFrame(), {GetDomNodeId()});
+    GetDocument().AddConsoleMessage(console_message);
+    close(/*return_value=*/String(), /*ignore_open_attribute=*/true);
+  }
+
+  HTMLElement::ParseAttribute(params);
 }
 
 }  // namespace blink

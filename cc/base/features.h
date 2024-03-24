@@ -93,6 +93,12 @@ CC_BASE_EXPORT BASE_DECLARE_FEATURE(kUseDMSAAForTiles);
 // Use DMSAA instead of MSAA for rastering tiles on Android GL backend. Note
 // that the above flag kUseDMSAAForTiles is used for Android Vulkan backend.
 CC_BASE_EXPORT BASE_DECLARE_FEATURE(kUseDMSAAForTilesAndroidGL);
+
+// Break synchronization of scrolling website content and browser controls in
+// android to see performance gains for moving browser controls to viz.
+// WARNING: Don't enable this feature! It should only be used to measure
+// performance on prestable channels.
+CC_BASE_EXPORT BASE_DECLARE_FEATURE(kAndroidNoSurfaceSyncForBrowserControls);
 #endif
 
 // Updating browser controls state will IPC directly from browser main to the
@@ -150,9 +156,18 @@ CC_BASE_EXPORT BASE_DECLARE_FEATURE(kUseMapRectForPixelMovement);
 // viz::Surface.
 CC_BASE_EXPORT BASE_DECLARE_FEATURE(kEvictionThrottlesDraw);
 
-// Kill switch for trigger late deadline timer immediately in scheduler when
-// there's no active tree likely.
-CC_BASE_EXPORT BASE_DECLARE_FEATURE(kResetTimerWhenNoActiveTreeLikely);
+// Whether to use the recorded bounds (i.e. `DisplayItemList::bounds()`) to
+// determine the area of tiling. See crbug.com/1517714.
+CC_BASE_EXPORT BASE_DECLARE_FEATURE(kUseRecordedBoundsForTiling);
+
+// Permits adjusting the threshold we use for determining if main thread updates
+// are fast. Specifically, via a scalar on the range [0,1] that we multiply with
+// the existing threshold. I.e., |new_threshold| = |scalar| * |old_threshold|.
+CC_BASE_EXPORT BASE_DECLARE_FEATURE(kAdjustFastMainThreadThreshold);
+
+// When a LayerTreeHostImpl is not visible, clear its transferable resources
+// that haven't been imported into viz.
+CC_BASE_EXPORT BASE_DECLARE_FEATURE(kClearCanvasResourcesInBackground);
 
 }  // namespace features
 

@@ -7,14 +7,15 @@
 
 #include <optional>
 
-#include "base/memory/raw_ptr.h"
+#import "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
-#include "components/password_manager/core/browser/affiliation/affiliation_service.h"
+#include "components/affiliations/core/browser/affiliation_service.h"
+#include "components/password_manager/core/browser/leak_detection/leak_detection_request_utils.h"
 #include "components/password_manager/core/browser/ui/bulk_leak_check_service_adapter.h"
 #include "components/password_manager/core/browser/ui/credential_utils.h"
 #include "components/password_manager/core/browser/ui/insecure_credentials_manager.h"
@@ -55,7 +56,7 @@ class IOSChromePasswordCheckManager
   };
 
   // Requests to start a check for insecure passwords.
-  void StartPasswordCheck();
+  void StartPasswordCheck(password_manager::LeakDetectionInitiator initiator);
 
   // Stops checking for insecure passwords.
   void StopPasswordCheck();
@@ -92,7 +93,7 @@ class IOSChromePasswordCheckManager
   explicit IOSChromePasswordCheckManager(
       scoped_refptr<password_manager::PasswordStoreInterface> profile_store,
       scoped_refptr<password_manager::PasswordStoreInterface> account_store,
-      password_manager::AffiliationService* affiliation_service,
+      affiliations::AffiliationService* affiliation_service,
       password_manager::BulkLeakCheckServiceInterface* bulk_leak_check_service,
       PrefService* user_prefs);
 
@@ -155,6 +156,10 @@ class IOSChromePasswordCheckManager
 
   // Pref service.
   const raw_ptr<PrefService> user_prefs_;
+
+  // This indicate what was the reason to start the password check.
+  password_manager::LeakDetectionInitiator password_check_initiator_ =
+      password_manager::LeakDetectionInitiator::kClientUseCaseUnspecified;
 
   // A scoped observer for `saved_passwords_presenter_`.
   base::ScopedObservation<password_manager::SavedPasswordsPresenter,

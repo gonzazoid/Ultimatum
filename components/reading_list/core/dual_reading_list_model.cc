@@ -568,10 +568,9 @@ void DualReadingListModel::ReadingListWillRemoveEntry(
     return;
   }
 
-  if (model == account_model_.get() &&
-      local_or_syncable_model_->GetEntryByURL(url)) {
-    // The entry was removed via sync from `account_model_`, but the fact that
-    // the entry also exists in `local_or_syncable_model_` means the result is
+  if (local_or_syncable_model_->GetEntryByURL(url) &&
+      account_model_->GetEntryByURL(url)) {
+    // The fact that the entry exists in one of the models means the result is
     // not an actual deletion but, at most, an update.
     NotifyObserversWithWillUpdateEntry(url);
   } else {
@@ -588,10 +587,10 @@ void DualReadingListModel::ReadingListDidRemoveEntry(
     return;
   }
 
-  if (local_or_syncable_model_->GetEntryByURL(url)) {
-    // The entry is still present in `local_or_syncable_model_`, so this is an
+  if (local_or_syncable_model_->GetEntryByURL(url) ||
+      account_model_->GetEntryByURL(url)) {
+    // The entry is still present in one of the models, so this is an
     // update rather than a deletion.
-    DCHECK(model == account_model_.get());
     UpdateEntryStateCountersOnEntryInsertion(*GetEntryByURL(url));
     NotifyObserversWithDidUpdateEntry(url);
     return;
@@ -629,11 +628,10 @@ void DualReadingListModel::ReadingListWillAddEntry(
     return;
   }
 
-  if (local_or_syncable_model_->GetEntryByURL(entry.URL())) {
-    // The presence of the entry in `local_or_syncable_model_` indicates that
-    // this is an update, not an insertion.
-    DCHECK_EQ(model, account_model_.get());
-    DCHECK(account_model_->IsTrackingSyncMetadata());
+  if (local_or_syncable_model_->GetEntryByURL(entry.URL()) ||
+      account_model_->GetEntryByURL(entry.URL())) {
+    // The presence of the entry in one of the models indicates that this is an
+    // update, not an insertion.
     NotifyObserversWithWillUpdateEntry(entry.URL());
     UpdateEntryStateCountersOnEntryRemoval(*GetEntryByURL(entry.URL()));
     return;
@@ -654,12 +652,10 @@ void DualReadingListModel::ReadingListDidAddEntry(
 
   UpdateEntryStateCountersOnEntryInsertion(*GetEntryByURL(url));
 
-  if (model == account_model_.get() &&
-      local_or_syncable_model_->GetEntryByURL(url)) {
-    // The entry was added to `account_model_`, but since it was already present
-    // in `local_or_syncable_model_`, then this is an update instead of
-    // insertion.
-    DCHECK(account_model_->IsTrackingSyncMetadata());
+  if (local_or_syncable_model_->GetEntryByURL(url) &&
+      account_model_->GetEntryByURL(url)) {
+    // The entry was added to one of the models, but since it was already
+    // present in the other one, then this is an update instead of insertion.
     NotifyObserversWithDidUpdateEntry(url);
     return;
   }
@@ -672,21 +668,19 @@ void DualReadingListModel::ReadingListDidAddEntry(
 void DualReadingListModel::ReadingListWillUpdateEntry(
     const ReadingListModel* model,
     const GURL& url) {
-  if (!suppress_observer_notifications_) {
-    // TODO(crbug.com/1424750): This should be reached via sync after merging
-    // ReadingList(Will|Did)MoveEntry() with ReadingList(Will|Did)UpdateEntry().
-    NOTREACHED();
+  if (!loaded() || suppress_observer_notifications_) {
+    return;
   }
+  NotifyObserversWithWillUpdateEntry(url);
 }
 
 void DualReadingListModel::ReadingListDidUpdateEntry(
     const ReadingListModel* model,
     const GURL& url) {
-  if (!suppress_observer_notifications_) {
-    // TODO(crbug.com/1424750): This should be reached via sync after merging
-    // ReadingList(Will|Did)MoveEntry() with ReadingList(Will|Did)UpdateEntry().
-    NOTREACHED();
+  if (!loaded() || suppress_observer_notifications_) {
+    return;
   }
+  NotifyObserversWithDidUpdateEntry(url);
 }
 
 void DualReadingListModel::ReadingListDidApplyChanges(ReadingListModel* model) {

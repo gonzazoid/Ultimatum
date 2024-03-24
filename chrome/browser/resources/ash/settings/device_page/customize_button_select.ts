@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/md_select.css.js';
+import 'chrome://resources/ash/common/cr_elements/md_select.css.js';
 import 'chrome://resources/polymer/v3_0/iron-dropdown/iron-dropdown.js';
 import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 import 'chrome://resources/ash/common/shortcut_input_ui/shortcut_input_key.js';
@@ -12,20 +12,23 @@ import './input_device_settings_shared.css.js';
 import './customize_button_dropdown_item.js';
 import '../settings_shared.css.js';
 
-import {DropdownMenuOptionList} from '/shared/settings/controls/settings_dropdown_menu.js';
-import {LWIN_KEY, META_KEY} from 'chrome://resources/ash/common/shortcut_input_ui/shortcut_input_key.js';
+import {I18nMixin} from 'chrome://resources/ash/common/cr_elements/i18n_mixin.js';
+import {LWIN_KEY, META_KEY, ShortcutInputKeyElement} from 'chrome://resources/ash/common/shortcut_input_ui/shortcut_input_key.js';
 import {KeyToIconNameMap} from 'chrome://resources/ash/common/shortcut_input_ui/shortcut_utils.js';
-import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
 import {PolymerElementProperties} from 'chrome://resources/polymer/v3_0/polymer/interfaces.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {DropdownItemSelectEvent, DropdownMenuOption} from './customize_button_dropdown_item.js';
+import {DropdownMenuOptionList} from '../controls/settings_dropdown_menu.js';
+
+import {CustomizeButtonDropdownItemElement, DropdownItemSelectEvent, DropdownMenuOption} from './customize_button_dropdown_item.js';
 import {getTemplate} from './customize_button_select.html.js';
 import {ActionChoice, ButtonRemapping, KeyEvent, RemappingAction, StaticShortcutAction} from './input_device_settings_types.js';
 
 export interface CustomizeButtonSelectElement {
   $: {
-    selectDropdown: HTMLDivElement,
+    selectDropdown: HTMLButtonElement,
+    menuContainer: HTMLDivElement,
   };
 }
 
@@ -159,6 +162,20 @@ export class CustomizeButtonSelectElement extends
         type: Boolean,
         value: false,
       },
+
+      highlightedValue_: {
+        type: String,
+        value: '',
+      },
+
+      focusTarget_: {
+        type: Object,
+        value: undefined,
+      },
+
+      hasLauncherButton: {
+        type: Boolean,
+      },
     };
   }
 
@@ -175,12 +192,15 @@ export class CustomizeButtonSelectElement extends
   remappingIndex: number;
   actionList: ActionChoice[];
   selectedValue: string;
+  hasLauncherButton: boolean;
   private isInitialized_: boolean;
   private shouldShowDropdownMenu_: boolean;
   private label_: string;
   private buttonRemapping_: ButtonRemapping;
   private inputKeys_: string[];
   private remappedToKeyCombination_: boolean;
+  private highlightedValue_: string;
+  private focusTarget_: CustomizeButtonDropdownItemElement;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -216,11 +236,37 @@ export class CustomizeButtonSelectElement extends
   }
 
   private showDropdownMenu_(): void {
+    if (!this.menu) {
+      this.shouldShowDropdownMenu_ = true;
+      return;
+    }
+
+    // Focus the selected Row.
+    assert(!!this.selectedValue, 'There should be a selected item already.');
+    this.highlightedValue_ =
+        this.selectedValue === KEY_COMBINATION_OPTION_VALUE ?
+        OPEN_DIALOG_OPTION_VALUE :
+        this.selectedValue;
+    const indexOfCurrentRow = this.menu.findIndex(
+        (action: DropdownMenuOption) =>
+            action.value === this.highlightedValue_);
+    const dropdownMenuOptions =
+        this.$.menuContainer.querySelectorAll('customize-button-dropdown-item');
+    assert(!!dropdownMenuOptions[indexOfCurrentRow]);
+
+    this.set('focusTarget_', dropdownMenuOptions[indexOfCurrentRow]);
     this.shouldShowDropdownMenu_ = true;
   }
 
   private onBlur_(): void {
+    this.highlightedValue_ = '';
     this.shouldShowDropdownMenu_ = false;
+  }
+
+  private hideDropdownMenu_(): void {
+    this.highlightedValue_ = '';
+    this.shouldShowDropdownMenu_ = false;
+    this.focus();
   }
 
   private onDropdownItemSelected_(e: DropdownItemSelectEvent): void {
@@ -236,7 +282,7 @@ export class CustomizeButtonSelectElement extends
     }
 
     // Close dropdown menu after selected.
-    this.shouldShowDropdownMenu_ = false;
+    this.hideDropdownMenu_();
   }
 
   private getSelectedLabel_(): string {
@@ -419,6 +465,13 @@ export class CustomizeButtonSelectElement extends
     return iconName ? `shortcut-input-keys:${iconName}` : null;
   }
 
+  private getAriaLabelForIcon(key: string): string {
+    const ariaLabelStringId = ShortcutInputKeyElement.getAriaLabelStringId(
+        key, this.hasLauncherButton);
+
+    return this.i18n(ariaLabelStringId);
+  }
+
   /**
    * Return true if the item in the dropdown menu is selected.
    */
@@ -432,11 +485,72 @@ export class CustomizeButtonSelectElement extends
 
   private onKeyDown_(e: KeyboardEvent): void {
     if (e.key === 'Enter') {
-      this.shouldShowDropdownMenu_ = !this.shouldShowDropdownMenu_;
+      if (this.shouldShowDropdownMenu_) {
+        this.updateDropdownSelection_();
+      } else {
+        this.showDropdownMenu_();
+      }
       return;
     }
 
-    // TODO(yyhyyh@): Add case for ArrowUp and ArrowDown.
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      this.selectRowViaKeys(e.key);
+      return;
+    }
+
+    if (e.key === 'Escape') {
+      this.hideDropdownMenu_();
+    }
+  }
+
+  private selectRowViaKeys(key: string): void {
+    assert(key === 'ArrowDown' || key === 'ArrowUp', 'Only arrow keys.');
+
+    // Display the dropdown menu if it's not popped out.
+    if (!this.shouldShowDropdownMenu_) {
+      this.showDropdownMenu_();
+      return;
+    }
+
+    assert(
+        !!this.highlightedValue_,
+        'There should be a highlighted item already.');
+    // Select the new item.
+    const indexOfCurrentRow = this.menu.findIndex(
+        (action: DropdownMenuOption) =>
+            action.value === this.highlightedValue_);
+    // Skipping the hidden option for key combination label display.
+    const numRows = this.menu.length - 1;
+    const delta = key === 'ArrowUp' ? -1 : 1;
+    const indexOfNewRow = (numRows + indexOfCurrentRow + delta) % numRows;
+
+    const dropdownMenuOptions =
+        this.$.menuContainer.querySelectorAll('customize-button-dropdown-item');
+
+    assert(!!dropdownMenuOptions[indexOfNewRow]);
+    dropdownMenuOptions[indexOfNewRow]?.focus();
+    dropdownMenuOptions[indexOfNewRow]?.scrollIntoViewIfNeeded();
+
+    // Update the highlighted value.
+    this.highlightedValue_ = this.menu[indexOfNewRow]!.value as string;
+  }
+
+  private updateDropdownSelection_(): void {
+    if (!!this.highlightedValue_ && this.highlightedValue_ !== '' &&
+        this.menu?.findIndex(
+            (action: DropdownMenuOption) =>
+                action.value === this.highlightedValue_) >= 0) {
+      this.dispatchEvent(new CustomEvent('customize-button-dropdown-selected', {
+        bubbles: true,
+        composed: true,
+        detail: {
+          value: this.highlightedValue_,
+        },
+      }));
+    }
+
+    this.hideDropdownMenu_();
   }
 }
 

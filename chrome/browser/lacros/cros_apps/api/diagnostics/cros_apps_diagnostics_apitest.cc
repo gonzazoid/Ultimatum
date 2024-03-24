@@ -17,6 +17,7 @@
 #include "content/public/browser/network_service_instance.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "services/network/public/mojom/network_service.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -284,11 +285,11 @@ IN_PROC_BROWSER_TEST_F(CrosAppsDiagnosticsApiTest,
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
 
-  base::test::TestFuture<const absl::optional<net::NetworkInterfaceList>&>
+  base::test::TestFuture<const std::optional<net::NetworkInterfaceList>&>
       future;
   content::GetNetworkService()->GetNetworkList(
       net::INCLUDE_HOST_SCOPE_VIRTUAL_INTERFACES, future.GetCallback());
-  absl::optional<net::NetworkInterfaceList> interface_list = future.Get();
+  std::optional<net::NetworkInterfaceList> interface_list = future.Get();
 
   if (!interface_list.has_value()) {
     EXPECT_EQ(

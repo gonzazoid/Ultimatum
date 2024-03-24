@@ -55,7 +55,6 @@
 #include "third_party/blink/renderer/core/layout/layout_box.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/bindings/to_v8.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 
 namespace blink {
@@ -93,6 +92,11 @@ bool WebNode::LessThan(const WebNode& n) const {
 
 WebNode WebNode::ParentNode() const {
   return WebNode(const_cast<ContainerNode*>(private_->parentNode()));
+}
+
+WebNode WebNode::ParentOrShadowHostNode() const {
+  return WebNode(
+      const_cast<ContainerNode*>(private_->ParentOrShadowHostNode()));
 }
 
 WebString WebNode::NodeValue() const {
@@ -163,13 +167,8 @@ bool WebNode::IsInsideFocusableElementOrARIAWidget() const {
 v8::Local<v8::Value> WebNode::ToV8Value(v8::Isolate* isolate) {
   if (!private_.Get())
     return v8::Local<v8::Value>();
-  v8::Local<v8::Value> value;
-  if (!ToV8Traits<Node>::ToV8(ScriptState::From(isolate->GetCurrentContext()),
-                              private_.Get())
-           .ToLocal(&value)) {
-    return v8::Local<v8::Value>();
-  }
-  return value;
+  return ToV8Traits<Node>::ToV8(ScriptState::From(isolate->GetCurrentContext()),
+                                private_.Get());
 }
 
 bool WebNode::IsElementNode() const {
@@ -226,13 +225,16 @@ WebVector<WebElement> WebNode::QuerySelectorAll(
   return WebVector<WebElement>();
 }
 
-WebString WebNode::FindTextInElementWith(const WebString& substring) const {
+WebString WebNode::FindTextInElementWith(
+    const WebString& substring,
+    base::FunctionRef<bool(const WebString&)> validity_checker) const {
   ContainerNode* container_node =
       blink::DynamicTo<ContainerNode>(private_.Get());
   if (!container_node) {
     return WebString();
   }
-  return WebString(container_node->FindTextInElementWith(substring));
+  return WebString(container_node->FindTextInElementWith(
+      substring, [&](const String& text) { return validity_checker(text); }));
 }
 
 bool WebNode::Focused() const {

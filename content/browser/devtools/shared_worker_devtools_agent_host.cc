@@ -112,7 +112,8 @@ void SharedWorkerDevToolsAgentHost::DetachSession(DevToolsSession* session) {
 bool SharedWorkerDevToolsAgentHost::Matches(SharedWorkerHost* worker_host) {
   return instance_.Matches(worker_host->instance().url(),
                            worker_host->instance().name(),
-                           worker_host->instance().storage_key());
+                           worker_host->instance().storage_key(),
+                           worker_host->instance().same_site_cookies());
 }
 
 void SharedWorkerDevToolsAgentHost::WorkerReadyForInspection(
@@ -151,7 +152,10 @@ void SharedWorkerDevToolsAgentHost::WorkerDestroyed() {
 DevToolsAgentHostImpl::NetworkLoaderFactoryParamsAndInfo
 SharedWorkerDevToolsAgentHost::CreateNetworkFactoryParamsForDevTools() {
   DCHECK(worker_host_);
-  return {GetStorageKey().origin(), net::SiteForCookies::FromUrl(GetURL()),
+  return {GetStorageKey().origin(),
+          instance_.DoesRequireCrossSiteRequestForCookies()
+              ? net::SiteForCookies()
+              : net::SiteForCookies::FromUrl(GetURL()),
           worker_host_->CreateNetworkFactoryParamsForSubresources()};
 }
 

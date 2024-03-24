@@ -22,7 +22,7 @@
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
-#include "components/password_manager/core/browser/affiliation/affiliation_utils.h"
+#include "components/affiliations/core/browser/affiliation_utils.h"
 #include "components/password_manager/core/browser/leak_detection_dialog_utils.h"
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_manager_client.h"
@@ -49,6 +49,8 @@
 
 #if !BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/user_education/show_promo_in_page.h"
+#include "chrome/browser/ui/webui/password_manager/password_manager_ui.h"
 #endif
 
 namespace {
@@ -226,6 +228,8 @@ GURL GetGooglePasswordManagerURL(ManagePasswordsReferrer referrer) {
         return "passwords_google";
       case ManagePasswordsReferrer::kAddUsernameBubble:
         return "add_username_bubble";
+      case ManagePasswordsReferrer::kDefaultStoreChangedBubble:
+        return "default_store_changed_bubble";
       case ManagePasswordsReferrer::kPasswordsAccessorySheet:
       case ManagePasswordsReferrer::kTouchToFill:
       case ManagePasswordsReferrer::kPasswordBreachDialog:
@@ -251,6 +255,17 @@ void NavigateToManagePasswordsPage(Browser* browser,
   UMA_HISTOGRAM_ENUMERATION("PasswordManager.ManagePasswordsReferrer",
                             referrer);
   chrome::ShowPasswordManager(browser);
+}
+
+void NavigateToManagePasswordsSettingsAccountStoreToggle(Browser* browser) {
+  ShowPromoInPage::Params params;
+  params.target_url = GURL(chrome::kChromeUIPasswordManagerSettingsURL);
+  params.bubble_anchor_id = PasswordManagerUI::kAccountStoreToggleElementId;
+  params.bubble_arrow = user_education::HelpBubbleArrow::kTopRight;
+  params.bubble_text = l10n_util::GetStringUTF16(
+      IDS_PASSWORD_MANAGER_IPH_ACCOUNT_STORAGE_TOGGLE);
+
+  ShowPromoInPage::Start(browser, std::move(params));
 }
 
 void NavigateToPasswordCheckupPage(Profile* profile) {

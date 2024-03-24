@@ -5,6 +5,7 @@
 #include "ash/wallpaper/wallpaper_controller_impl.h"
 
 #include <string>
+#include <string_view>
 
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
@@ -62,13 +63,13 @@
 #include "base/no_destructor.h"
 #include "base/rand_util.h"
 #include "base/ranges/algorithm.h"
-#include "base/strings/string_piece.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/types/cxx23_to_underlying.h"
 #include "chromeos/constants/chromeos_features.h"
 #include "components/account_id/account_id.h"
 #include "components/prefs/pref_service.h"
+#include "services/data_decoder/public/cpp/data_decoder.h"
 #include "services/data_decoder/public/mojom/image_decoder.mojom-shared.h"
 #include "ui/compositor/compositor.h"
 #include "ui/compositor/layer.h"
@@ -204,7 +205,7 @@ bool IsInKioskMode() {
       Shell::Get()->session_controller()->GetUserType();
   // |active_user_type| is empty when there's no active user.
   return active_user_type &&
-         *active_user_type == user_manager::USER_TYPE_KIOSK_APP;
+         *active_user_type == user_manager::UserType::kKioskApp;
 }
 
 // Returns the currently active user session (at index 0).
@@ -224,7 +225,7 @@ bool IsActiveUser(const AccountId& account_id) {
   return session && session->user_info.account_id == account_id;
 }
 
-// Returns the type of the user with the specified |id| or USER_TYPE_REGULAR.
+// Returns the type of the user with the specified |id| or kRegular.
 user_manager::UserType GetUserType(const AccountId& id) {
   const UserSession* user_session =
       Shell::Get()->session_controller()->GetUserSessionByAccountId(id);
@@ -235,7 +236,7 @@ user_manager::UserType GetUserType(const AccountId& id) {
     // a CHECK.
     LOG(ERROR) << "Cannot resolve user. Assuming regular. This should only "
                   "happen in tests";
-    return user_manager::USER_TYPE_REGULAR;
+    return user_manager::UserType::kRegular;
   }
 
   return user_session->user_info.type;
@@ -957,22 +958,22 @@ base::FilePath WallpaperControllerImpl::GetDefaultWallpaperPath(
   // The wallpaper is determined in the following order:
   // Guest wallpaper, child wallpaper, customized default wallpaper, and regular
   // default wallpaper.
-  if (user_type == user_manager::USER_TYPE_GUEST) {
-    const base::StringPiece switch_string =
-        use_small ? switches::kGuestWallpaperSmall
-                  : switches::kGuestWallpaperLarge;
+  if (user_type == user_manager::UserType::kGuest) {
+    const std::string_view switch_string = use_small
+                                               ? switches::kGuestWallpaperSmall
+                                               : switches::kGuestWallpaperLarge;
     return command_line->GetSwitchValuePath(switch_string);
-  } else if (user_type == user_manager::USER_TYPE_CHILD) {
-    const base::StringPiece switch_string =
-        use_small ? switches::kChildWallpaperSmall
-                  : switches::kChildWallpaperLarge;
+  } else if (user_type == user_manager::UserType::kChild) {
+    const std::string_view switch_string = use_small
+                                               ? switches::kChildWallpaperSmall
+                                               : switches::kChildWallpaperLarge;
     return command_line->GetSwitchValuePath(switch_string);
   } else if (!customized_default_small_path_.empty()) {
     DCHECK(!customized_default_large_path_.empty());
     return use_small ? customized_default_small_path_
                      : customized_default_large_path_;
   } else {
-    const base::StringPiece switch_string =
+    const std::string_view switch_string =
         use_small ? switches::kDefaultWallpaperSmall
                   : switches::kDefaultWallpaperLarge;
     return command_line->GetSwitchValuePath(switch_string);
@@ -997,7 +998,7 @@ void WallpaperControllerImpl::SetCustomizedDefaultWallpaperPaths(
   auto* active_user_session = GetActiveUserSession();
   // Login does not have an active session and the expected behavior is that of
   // a regular user.
-  user_manager::UserType user_type = user_manager::USER_TYPE_REGULAR;
+  user_manager::UserType user_type = user_manager::UserType::kRegular;
   if (active_user_session) {
     // We expect that this finishes before the user has logged in.
     LOG(WARNING) << "Set customized default wallpaper after login";
@@ -1015,8 +1016,8 @@ void WallpaperControllerImpl::SetPolicyWallpaper(
   if (IsInKioskMode())
     return;
 
-  DCHECK(user_type == user_manager::USER_TYPE_REGULAR ||
-         user_type == user_manager::USER_TYPE_PUBLIC_ACCOUNT);
+  DCHECK(user_type == user_manager::UserType::kRegular ||
+         user_type == user_manager::UserType::kPublicAccount);
 
   // Updates the screen only when the user with this account_id has logged in.
   const bool show_wallpaper = IsActiveUser(account_id);
@@ -1049,7 +1050,7 @@ void WallpaperControllerImpl::OnPolicyWallpaperDecoded(
   wallpaper_metrics_manager_->LogWallpaperResult(WallpaperType::kPolicy,
                                                  SetWallpaperResult::kSuccess);
   SaveAndSetWallpaper(
-      account_id, user_type == user_manager::USER_TYPE_PUBLIC_ACCOUNT,
+      account_id, user_type == user_manager::UserType::kPublicAccount,
       kPolicyWallpaperFile, /*file_path=*/"", WallpaperType::kPolicy,
       WALLPAPER_LAYOUT_CENTER_CROPPED, show_wallpaper, image);
 }
@@ -1106,7 +1107,7 @@ bool WallpaperControllerImpl::SetThirdPartyWallpaper(
 void WallpaperControllerImpl::SetSeaPenWallpaper(
     const AccountId& account_id,
     const SeaPenImage& sea_pen_image,
-    const std::string& query_info,
+    const personalization_app::mojom::SeaPenQueryPtr& query,
     SetWallpaperCallback callback) {
   CHECK(features::IsSeaPenEnabled());
   DCHECK(callback);
@@ -1125,7 +1126,7 @@ void WallpaperControllerImpl::SetSeaPenWallpaper(
       GetUserSeaPenWallpaperDir(account_id).Append(sea_pen_file_name);
 
   sea_pen_wallpaper_manager_.DecodeAndSaveSeaPenImage(
-      sea_pen_image, GetUserSeaPenWallpaperDir(account_id), query_info,
+      sea_pen_image, GetUserSeaPenWallpaperDir(account_id), query,
       base::BindOnce(&WallpaperControllerImpl::OnSeaPenWallpaperDecoded,
                      set_wallpaper_weak_factory_.GetWeakPtr(), account_id,
                      sea_pen_wallpaper_path, std::move(callback)));
@@ -1151,6 +1152,20 @@ void WallpaperControllerImpl::SetSeaPenWallpaperFromFile(
       base::BindOnce(&WallpaperControllerImpl::OnSeaPenWallpaperDecoded,
                      set_wallpaper_weak_factory_.GetWeakPtr(), account_id,
                      file_path, std::move(callback)));
+}
+
+void WallpaperControllerImpl::GetSeaPenMetadata(
+    const AccountId& account_id,
+    const base::FilePath& file_path,
+    GetSeaPenMetadataCallback callback) {
+  if (!GetUserSeaPenWallpaperDir(account_id).IsParent(file_path)) {
+    LOG(WARNING) << "Called " << __func__
+                 << " on invalid file path: " << file_path;
+    std::move(callback).Run(std::nullopt);
+    return;
+  }
+
+  wallpaper_file_manager_->GetSeaPenMetadata(file_path, std::move(callback));
 }
 
 void WallpaperControllerImpl::DeleteRecentSeaPenImage(
@@ -1226,8 +1241,8 @@ void WallpaperControllerImpl::ShowUserWallpaper(
     const AccountId& account_id,
     const user_manager::UserType user_type) {
   current_user_ = account_id;
-  if (user_type == user_manager::USER_TYPE_KIOSK_APP ||
-      user_type == user_manager::USER_TYPE_ARC_KIOSK_APP) {
+  if (user_type == user_manager::UserType::kKioskApp ||
+      user_type == user_manager::UserType::kArcKioskApp) {
     return;
   }
 
@@ -1321,7 +1336,7 @@ void WallpaperControllerImpl::ShowSigninWallpaper() {
   }
 
   // If we don't have a user, use the regular default.
-  SetDefaultWallpaperImpl(user_manager::USER_TYPE_REGULAR,
+  SetDefaultWallpaperImpl(user_manager::UserType::kRegular,
                           /*show_wallpaper=*/true, base::DoNothing());
 }
 
@@ -1501,8 +1516,8 @@ bool WallpaperControllerImpl::ShouldShowWallpaperSetting() {
   // personalization settings) to avoid unnecessary confusion and surprise when
   // everything resets.
   user_manager::UserType active_user_type = active_user_session->user_info.type;
-  return active_user_type == user_manager::USER_TYPE_REGULAR ||
-         active_user_type == user_manager::USER_TYPE_CHILD;
+  return active_user_type == user_manager::UserType::kRegular ||
+         active_user_type == user_manager::UserType::kChild;
 }
 
 void WallpaperControllerImpl::OnDisplayConfigurationChanged() {
@@ -1774,7 +1789,7 @@ void WallpaperControllerImpl::OnActiveUserPrefServiceChanged(
 }
 
 void WallpaperControllerImpl::ShowDefaultWallpaperForTesting() {
-  SetDefaultWallpaperImpl(user_manager::USER_TYPE_REGULAR,
+  SetDefaultWallpaperImpl(user_manager::UserType::kRegular,
                           /*show_wallpaper=*/true, base::DoNothing());
 }
 
@@ -2130,14 +2145,17 @@ void WallpaperControllerImpl::OnGooglePhotosPhotoFetched(
 
   if (photo.is_null()) {
     // The photo doesn't exist, or has been deleted. If this photo is the
-    // current wallpaper, we need to reset to the default.
-    if (current_wallpaper_->wallpaper_info().location == params.id) {
+    // wallpaper for `params.account_id`, we need to reset to the default.
+    WallpaperInfo wallpaper_info;
+    if (GetUserWallpaperInfo(params.account_id, &wallpaper_info) &&
+        wallpaper_info.location == params.id) {
       sequenced_task_runner_->PostTask(
           FROM_HERE,
           base::BindOnce(&DeleteGooglePhotosCache, params.account_id));
       wallpaper_cache_map_.erase(params.account_id);
-      SetDefaultWallpaperImpl(GetUserType(params.account_id),
-                              /*show_wallpaper=*/true, base::DoNothing());
+      SetDefaultWallpaper(params.account_id,
+                          /*show_wallpaper=*/IsActiveUser(params.account_id),
+                          base::DoNothing());
       return;
     }
     wallpaper_metrics_manager_->LogWallpaperResult(
@@ -2175,7 +2193,8 @@ void WallpaperControllerImpl::OnDailyGooglePhotosPhotoFetched(
             SetWallpaperResult::kFileNotFound);
         // If the request succeeded, but no photos came back, then the album is
         // empty or deleted. Reset to default as a fallback.
-        SetDefaultWallpaper(params.account_id, /*show_wallpaper=*/true,
+        SetDefaultWallpaper(params.account_id,
+                            /*show_wallpaper=*/IsActiveUser(params.account_id),
                             base::DoNothing());
       } else {
         wallpaper_metrics_manager_->LogWallpaperResult(
@@ -2678,7 +2697,7 @@ void WallpaperControllerImpl::OnDevicePolicyWallpaperDecoded(
     // wallpaper.
     // TODO(crbug.com/1329567): Decide if the regular default is correct.  But
     // this is the current behavior for EmptyAccountId.
-    SetDefaultWallpaperImpl(user_manager::USER_TYPE_REGULAR,
+    SetDefaultWallpaperImpl(user_manager::UserType::kRegular,
                             /*show_wallpaper=*/true, base::DoNothing());
   } else {
     wallpaper_metrics_manager_->LogWallpaperResult(

@@ -87,7 +87,7 @@ class TestNavigationLoaderInterceptor : public NavigationLoaderInterceptor {
 
     url_loader_context_.mutable_factory_params().process_id =
         network::mojom::kBrowserProcessId;
-    url_loader_context_.mutable_factory_params().is_corb_enabled = false;
+    url_loader_context_.mutable_factory_params().is_orb_enabled = false;
   }
 
   ~TestNavigationLoaderInterceptor() override {
@@ -100,10 +100,11 @@ class TestNavigationLoaderInterceptor : public NavigationLoaderInterceptor {
                          BrowserContext* browser_context,
                          LoaderCallback callback,
                          FallbackCallback fallback_callback) override {
-    std::move(callback).Run(
+    std::move(callback).Run(NavigationLoaderInterceptor::Result(
         base::MakeRefCounted<network::SingleRequestURLLoaderFactory>(
             base::BindOnce(&TestNavigationLoaderInterceptor::StartLoader,
-                           base::Unretained(this))));
+                           base::Unretained(this))),
+        /*subresource_loader_params=*/{}));
   }
 
   void StartLoader(

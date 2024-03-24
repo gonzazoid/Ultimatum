@@ -603,12 +603,16 @@
 	path = chrome/browser/nearby_sharing/internal
 	url = https://chrome-internal.googlesource.com/chrome/browser/nearby_sharing/internal
 	gclient-condition = checkout_src_internal
+[submodule "chrome/browser/platform_experience/win"]
+	path = chrome/browser/platform_experience/win
+	url = https://chrome-internal.googlesource.com/chrome/browser/platform_experience/win
+	gclient-condition = checkout_src_internal
 [submodule "chrome/browser/resources/chromeos/quickoffice"]
 	path = chrome/browser/resources/chromeos/quickoffice
 	url = https://chrome-internal.googlesource.com/quickoffice/crx
 	gclient-condition = (checkout_chromeos or checkout_linux) and checkout_src_internal
-[submodule "chrome/browser/resources/settings_internal"]
-	path = chrome/browser/resources/settings_internal
+[submodule "chrome/browser/resources/settings/internal"]
+	path = chrome/browser/resources/settings/internal
 	url = https://chrome-internal.googlesource.com/chrome/browser/resources/settings_internal
 	gclient-condition = checkout_src_internal
 [submodule "chrome/browser/spellchecker/internal"]
@@ -759,10 +763,6 @@
 	path = third_party/gles2_conform
 	url = https://chrome-internal.googlesource.com/chrome/deps/gles2_conform
 	gclient-condition = checkout_src_internal
-[submodule "third_party/googlemac"]
-	path = third_party/googlemac
-	url = https://chrome-internal.googlesource.com/chrome/deps/googlemac
-	gclient-condition = checkout_mac and checkout_src_internal
 [submodule "third_party/khronos_glcts"]
 	path = third_party/khronos_glcts
 	url = https://chrome-internal.googlesource.com/chrome/deps/khronos_glcts

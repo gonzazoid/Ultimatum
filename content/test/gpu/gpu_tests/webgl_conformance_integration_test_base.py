@@ -7,7 +7,6 @@ import collections
 import logging
 import json
 import os
-import re
 import sys
 import time
 from typing import Any, List, Optional, Set, Tuple
@@ -227,9 +226,17 @@ class WebGLConformanceIntegrationTestBase(
     super()._RestoreBrowserEnvironment()
 
   def _ShouldForceRetryOnFailureFirstTest(self) -> bool:
+    retry_from_super = super()._ShouldForceRetryOnFailureFirstTest()
     # Force RetryOnFailure of the first test on a shard on ChromeOS VMs.
     # See crbug.com/1079244.
-    return 'chromeos-board-amd64-generic' in self.GetPlatformTags(self.browser)
+    try:
+      retry_on_amd64_generic = ('chromeos-board-amd64-generic'
+                                in self.GetPlatformTags(self.browser))
+    except Exception:  # pylint: disable=broad-except
+      logging.warning(
+          'Failed to determine if running on a ChromeOS VM, assuming no')
+      retry_on_amd64_generic = False
+    return retry_from_super or retry_on_amd64_generic
 
   def _TestWasSlow(self) -> bool:
     # Consider the test slow if it had a relatively long time between
@@ -627,33 +634,6 @@ class WebGLConformanceIntegrationTestBase(
       gpu_info = system_info.gpu
       cls.is_asan = gpu_info.aux_attributes.get('is_asan', False)
 
-    if gpu_helper.EXPECTATIONS_DRIVER_TAGS and gpu_info:
-      driver_vendor = gpu_helper.GetGpuDriverVendor(gpu_info)
-      driver_version = gpu_helper.GetGpuDriverVersion(gpu_info)
-      if driver_vendor and driver_version:
-        driver_vendor = driver_vendor.lower()
-        driver_version = driver_version.lower()
-
-        # Extract the string of vendor from 'angle (vendor)'
-        matcher = re.compile(r'^angle \(([a-z]+)\)$')
-        match = matcher.match(driver_vendor)
-        if match:
-          driver_vendor = match.group(1)
-
-        # Extract the substring before first space/dash/underscore
-        matcher = re.compile(r'^([a-z\d]+)([\s\-_]+[a-z\d]+)+$')
-        match = matcher.match(driver_vendor)
-        if match:
-          driver_vendor = match.group(1)
-
-        for tag in gpu_helper.EXPECTATIONS_DRIVER_TAGS:
-          match = gpu_helper.MatchDriverTag(tag)
-          assert match
-          if (driver_vendor == match.group(1)
-              and gpu_helper.EvaluateVersionComparison(
-                  driver_version, match.group(2), match.group(3),
-                  browser.platform.GetOSName(), driver_vendor)):
-            tags.append(tag)
     return tags
 
   @classmethod

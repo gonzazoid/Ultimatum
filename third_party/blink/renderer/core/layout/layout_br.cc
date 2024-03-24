@@ -38,16 +38,17 @@ LayoutBR::LayoutBR(HTMLBRElement& node) : LayoutText(&node, NewlineString()) {}
 
 LayoutBR::~LayoutBR() = default;
 
-String LayoutBR::OriginalText() const {
-  return NewlineString();
-}
-
 int LayoutBR::CaretMinOffset() const {
   NOT_DESTROYED();
   return 0;
 }
 
 int LayoutBR::CaretMaxOffset() const {
+  NOT_DESTROYED();
+  return 1;
+}
+
+unsigned LayoutBR::NonCollapsedCaretMaxOffset() const {
   NOT_DESTROYED();
   return 1;
 }
@@ -70,11 +71,11 @@ Position LayoutBR::PositionForCaretOffset(unsigned offset) const {
                 : Position::BeforeNode(*GetNode());
 }
 
-absl::optional<unsigned> LayoutBR::CaretOffsetForPosition(
+std::optional<unsigned> LayoutBR::CaretOffsetForPosition(
     const Position& position) const {
   NOT_DESTROYED();
   if (position.IsNull() || position.AnchorNode() != GetNode())
-    return absl::nullopt;
+    return std::nullopt;
   DCHECK(position.IsBeforeAnchor() || position.IsAfterAnchor()) << position;
   return position.IsBeforeAnchor() ? 0 : 1;
 }

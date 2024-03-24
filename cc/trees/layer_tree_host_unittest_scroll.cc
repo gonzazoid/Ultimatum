@@ -607,6 +607,11 @@ class LayerTreeHostScrollTestCaseWithChild : public LayerTreeHostScrollTest {
 
   void BeginTest() override { PostSetNeedsCommitToMainThread(); }
 
+  void CleanupBeforeDestroy() override {
+    expected_scroll_layer_ = nullptr;
+    expected_no_scroll_layer_ = nullptr;
+  }
+
   void WillCommit(const CommitState& commit_state) override {
     // Keep the test committing (otherwise the early out for no update
     // will stall the test).
@@ -752,44 +757,93 @@ class LayerTreeHostScrollTestCaseWithChild : public LayerTreeHostScrollTest {
   gfx::PointF final_scroll_offset_;
 
   scoped_refptr<Layer> child_layer_;
-  raw_ptr<Layer, DanglingUntriaged> expected_scroll_layer_;
-  raw_ptr<Layer, DanglingUntriaged> expected_no_scroll_layer_;
+  raw_ptr<Layer> expected_scroll_layer_;
+  raw_ptr<Layer> expected_no_scroll_layer_;
 };
 
-TEST_F(LayerTreeHostScrollTestCaseWithChild, DeviceScaleFactor1_ScrollChild) {
+// TODO(crbug.com/1517753): Test is flaky on asan on multiple platforms.
+#if defined(ADDRESS_SANITIZER)
+#define MAYBE_DeviceScaleFactor1_ScrollChild \
+  DISABLED_DeviceScaleFactor1_ScrollChild
+#else
+#define MAYBE_DeviceScaleFactor1_ScrollChild DeviceScaleFactor1_ScrollChild
+#endif
+TEST_F(LayerTreeHostScrollTestCaseWithChild,
+       MAYBE_DeviceScaleFactor1_ScrollChild) {
   device_scale_factor_ = 1.f;
   scroll_child_layer_ = true;
   RunTest(CompositorMode::THREADED);
 }
 
-TEST_F(LayerTreeHostScrollTestCaseWithChild, DeviceScaleFactor15_ScrollChild) {
+// TODO(crbug.com/1517753): Test is flaky on (at least) Mac and Linux asan.
+#if defined(ADDRESS_SANITIZER)
+#define MAYBE_DeviceScaleFactor15_ScrollChild \
+  DISABLED_DeviceScaleFactor15_ScrollChild
+#else
+#define MAYBE_DeviceScaleFactor15_ScrollChild DeviceScaleFactor15_ScrollChild
+#endif
+TEST_F(LayerTreeHostScrollTestCaseWithChild,
+       MAYBE_DeviceScaleFactor15_ScrollChild) {
   device_scale_factor_ = 1.5f;
   scroll_child_layer_ = true;
   RunTest(CompositorMode::THREADED);
 }
 
-TEST_F(LayerTreeHostScrollTestCaseWithChild, DeviceScaleFactor2_ScrollChild) {
+// TODO(crbug.com/1521921): Test is flaky on Mac asan.
+#if BUILDFLAG(IS_MAC) && defined(ADDRESS_SANITIZER)
+#define MAYBE_DeviceScaleFactor2_ScrollChild \
+  DISABLED_DeviceScaleFactor2_ScrollChild
+#else
+#define MAYBE_DeviceScaleFactor2_ScrollChild DeviceScaleFactor2_ScrollChild
+#endif
+TEST_F(LayerTreeHostScrollTestCaseWithChild,
+       MAYBE_DeviceScaleFactor2_ScrollChild) {
   device_scale_factor_ = 2.f;
   scroll_child_layer_ = true;
   RunTest(CompositorMode::THREADED);
 }
 
+// TODO(crbug.com/1521395): Test is flaky on Linux and Mac.
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC)
+#define MAYBE_DeviceScaleFactor1_ScrollRootScrollLayer \
+  DISABLED_DeviceScaleFactor1_ScrollRootScrollLayer
+#else
+#define MAYBE_DeviceScaleFactor1_ScrollRootScrollLayer \
+  DeviceScaleFactor1_ScrollRootScrollLayer
+#endif
 TEST_F(LayerTreeHostScrollTestCaseWithChild,
-       DeviceScaleFactor1_ScrollRootScrollLayer) {
+       MAYBE_DeviceScaleFactor1_ScrollRootScrollLayer) {
   device_scale_factor_ = 1.f;
   scroll_child_layer_ = false;
   RunTest(CompositorMode::THREADED);
 }
 
+// TODO(crbug.com/1521926): Test is flaky on Win asan.
+// TODO(crbug.com/1517753): Test is flaky on Mac asan.
+#if (BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)) && defined(ADDRESS_SANITIZER)
+#define MAYBE_DeviceScaleFactor15_ScrollRootScrollLayer \
+  DISABLED_DeviceScaleFactor15_ScrollRootScrollLayer
+#else
+#define MAYBE_DeviceScaleFactor15_ScrollRootScrollLayer \
+  DeviceScaleFactor15_ScrollRootScrollLayer
+#endif
 TEST_F(LayerTreeHostScrollTestCaseWithChild,
-       DeviceScaleFactor15_ScrollRootScrollLayer) {
+       MAYBE_DeviceScaleFactor15_ScrollRootScrollLayer) {
   device_scale_factor_ = 1.5f;
   scroll_child_layer_ = false;
   RunTest(CompositorMode::THREADED);
 }
 
+#if BUILDFLAG(IS_MAC) && defined(ADDRESS_SANITIZER)
+// TODO(https://crbug.com/1521778): Fix the flakiness on Mac ASan and re-enable.
+#define MAYBE_DeviceScaleFactor2_ScrollRootScrollLayer \
+  DISABLED_DeviceScaleFactor2_ScrollRootScrollLayer
+#else
+#define MAYBE_DeviceScaleFactor2_ScrollRootScrollLayer \
+  DeviceScaleFactor2_ScrollRootScrollLayer
+#endif
 TEST_F(LayerTreeHostScrollTestCaseWithChild,
-       DeviceScaleFactor2_ScrollRootScrollLayer) {
+       MAYBE_DeviceScaleFactor2_ScrollRootScrollLayer) {
   device_scale_factor_ = 2.f;
   scroll_child_layer_ = false;
   RunTest(CompositorMode::THREADED);
@@ -1226,7 +1280,7 @@ class LayerTreeHostScrollTestImplOnlyScrollSnap
     CopyProperties(scroller_.get(), snap_area_.get());
     scroller_->AddChild(snap_area_);
     SnapAreaData snap_area_data(ScrollSnapAlign(SnapAlignment::kStart),
-                                gfx::RectF(500, 500, 100, 100), false,
+                                gfx::RectF(500, 500, 100, 100), false, false,
                                 snap_area_id_);
 
     // Set up snap container data.
@@ -1310,7 +1364,9 @@ class LayerTreeHostScrollTestImplOnlyScrollSnap
 };
 
 // TODO(crbug.com/1201662): Flaky on Fuchsia, ChromeOS, and Linux.
-#if !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_CHROMEOS) && !BUILDFLAG(IS_LINUX)
+// TODO(crbug.com/1522172): Flaky on Windows ASAN.
+#if !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_CHROMEOS) && \
+    !BUILDFLAG(IS_LINUX) && !(BUILDFLAG(IS_WIN) && defined(ADDRESS_SANITIZER))
 MULTI_THREAD_TEST_F(LayerTreeHostScrollTestImplOnlyScrollSnap);
 #endif
 
@@ -1359,7 +1415,7 @@ class LayerTreeHostScrollTestImplOnlyMultipleScrollSnap
     CopyProperties(scroller_a_.get(), snap_area_a_.get());
     scroller_a_->AddChild(snap_area_a_);
     SnapAreaData snap_area_data_a(ScrollSnapAlign(SnapAlignment::kStart),
-                                  gfx::RectF(500, 500, 100, 100), false,
+                                  gfx::RectF(500, 500, 100, 100), false, false,
                                   snap_area_a_id_);
 
     snap_area_b_ = Layer::Create();
@@ -1368,7 +1424,7 @@ class LayerTreeHostScrollTestImplOnlyMultipleScrollSnap
     CopyProperties(scroller_b_.get(), snap_area_b_.get());
     scroller_b_->AddChild(snap_area_b_);
     SnapAreaData snap_area_data_b(ScrollSnapAlign(SnapAlignment::kStart),
-                                  gfx::RectF(500, 500, 100, 100), false,
+                                  gfx::RectF(500, 500, 100, 100), false, false,
                                   snap_area_b_id_);
 
     // Set up snap container data.
@@ -2518,7 +2574,7 @@ class LayerTreeHostScrollTestImplSideInvalidation
     invalidated_on_impl_thread_ = false;
   }
 
-  void DidSendBeginMainFrameOnThread(LayerTreeHostImpl* host_impl) override {
+  void WillSendBeginMainFrameOnThread(LayerTreeHostImpl* host_impl) override {
     switch (++num_of_main_frames_) {
       case 1:
         // Do nothing for the first BeginMainFrame.

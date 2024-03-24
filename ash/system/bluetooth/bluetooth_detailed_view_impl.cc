@@ -147,7 +147,7 @@ views::View* BluetoothDetailedViewImpl::AddDeviceListSubHeader(
 
 void BluetoothDetailedViewImpl::NotifyDeviceListChanged() {
   device_list_->InvalidateLayout();
-  Layout();
+  DeprecatedLayoutImmediately();
 }
 
 views::View* BluetoothDetailedViewImpl::device_list() {
@@ -281,7 +281,7 @@ void BluetoothDetailedViewImpl::ToggleBluetoothState(bool new_state) {
   UpdateBluetoothEnabledState(new_system_state);
 }
 
-BEGIN_METADATA(BluetoothDetailedViewImpl, TrayDetailedView)
+BEGIN_METADATA(BluetoothDetailedViewImpl)
 END_METADATA
 
 }  // namespace ash

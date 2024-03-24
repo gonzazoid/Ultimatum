@@ -134,7 +134,8 @@ class FakePlatformWindow : public ui::PlatformWindow, public ui::WmDragHandler {
     ui::WmDropHandler* drop_handler = ui::GetWmDropHandler(*this);
     if (!drop_handler)
       return;
-    drop_handler->OnDragEnter(point, std::move(data), operation, modifiers_);
+    drop_handler->OnDragEnter(point, operation, modifiers_);
+    drop_handler->OnDragDataAvailable(std::move(data));
   }
 
   int OnDragMotion(const gfx::PointF& point, int operation) {
@@ -482,7 +483,7 @@ class MockDataTransferPolicyController
   MOCK_METHOD3(IsClipboardReadAllowed,
                bool(base::optional_ref<const ui::DataTransferEndpoint> data_src,
                     base::optional_ref<const ui::DataTransferEndpoint> data_dst,
-                    const absl::optional<size_t> size));
+                    const std::optional<size_t> size));
   MOCK_METHOD5(
       PasteIfAllowed,
       void(base::optional_ref<const ui::DataTransferEndpoint> data_src,

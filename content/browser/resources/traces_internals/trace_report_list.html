@@ -133,14 +133,15 @@
 
 <template is="dom-if" if="[[!isLoading]]">
   <div class="utility-bar">
-    <cr-button class="floating-button" disabled$="[[hasTraces_(traces)]]"
+    <cr-button class="floating-button" disabled$="[[!hasTraces_(traces)]]"
         on-click="onDeleteAllTracesClick_">
       <iron-icon icon="cr:delete" aria-hidden="true"></iron-icon>
       Delete All Traces
     </cr-button>
   </div>
   <template is="dom-repeat" items="[[traces]]">
-    <trace-report trace="[[item]]" on-show-toast="showToastHandler_">
+    <trace-report trace="[[item]]" on-show-toast="showToastHandler_"
+        on-refresh-traces-request="initializeList">
     </trace-report>
   </template>
   <div class="empty-message" hidden$="[[hasTraces_(traces)]]">

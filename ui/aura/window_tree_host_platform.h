@@ -91,11 +91,12 @@ class AURA_EXPORT WindowTreeHostPlatform : public WindowTreeHost,
   int64_t OnStateUpdate(const PlatformWindowDelegate::State& old,
                         const PlatformWindowDelegate::State& latest) override;
   void SetFrameRateThrottleEnabled(bool enabled) override;
+  bool IsNativeWindowOcclusionTrackingAlwaysEnabled() override;
 
   // Overridden from aura::WindowTreeHost:
   gfx::Point GetLocationOnScreenInPixels() const override;
   bool CaptureSystemKeyEventsImpl(
-      absl::optional<base::flat_set<ui::DomCode>> dom_codes) override;
+      std::optional<base::flat_set<ui::DomCode>> dom_codes) override;
   void ReleaseSystemKeyEventCapture() override;
   bool IsKeyLocked(ui::DomCode dom_code) override;
   base::flat_map<std::string, std::string> GetKeyboardLayoutMap() override;

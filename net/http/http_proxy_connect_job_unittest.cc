@@ -24,6 +24,7 @@
 #include "net/base/network_anonymization_key.h"
 #include "net/base/proxy_chain.h"
 #include "net/base/proxy_string_util.h"
+#include "net/base/session_usage.h"
 #include "net/base/test_proxy_delegate.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/dns/public/secure_dns_policy.h"
@@ -1224,17 +1225,19 @@ TEST_P(HttpProxyConnectJobTest, SpdySessionKeyDisableSecureDns) {
   EXPECT_TRUE(
       common_connect_job_params_->spdy_session_pool->FindAvailableSession(
           SpdySessionKey(kHttpsProxyServer.host_port_pair(),
-                         ProxyChain::Direct(), PRIVACY_MODE_DISABLED,
-                         SpdySessionKey::IsProxySession::kTrue, SocketTag(),
-                         NetworkAnonymizationKey(), SecureDnsPolicy::kDisable),
+                         PRIVACY_MODE_DISABLED, ProxyChain::Direct(),
+                         SessionUsage::kProxy, SocketTag(),
+                         NetworkAnonymizationKey(), SecureDnsPolicy::kDisable,
+                         /*disable_cert_verification_network_fetches=*/true),
           /* enable_ip_based_pooling = */ false,
           /* is_websocket = */ false, NetLogWithSource()));
   EXPECT_FALSE(
       common_connect_job_params_->spdy_session_pool->FindAvailableSession(
           SpdySessionKey(kHttpsProxyServer.host_port_pair(),
-                         ProxyChain::Direct(), PRIVACY_MODE_DISABLED,
-                         SpdySessionKey::IsProxySession::kTrue, SocketTag(),
-                         NetworkAnonymizationKey(), SecureDnsPolicy::kAllow),
+                         PRIVACY_MODE_DISABLED, ProxyChain::Direct(),
+                         SessionUsage::kProxy, SocketTag(),
+                         NetworkAnonymizationKey(), SecureDnsPolicy::kAllow,
+                         /*disable_cert_verification_network_fetches=*/true),
           /* enable_ip_based_pooling = */ false,
           /* is_websocket = */ false, NetLogWithSource()));
 }

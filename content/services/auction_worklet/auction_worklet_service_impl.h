@@ -25,8 +25,10 @@ class Origin;
 
 namespace auction_worklet {
 
+namespace mojom {
 class BidderWorklet;
 class SellerWorklet;
+}  // namespace mojom
 
 // mojom::AuctionWorkletService implementation. This is intended to run in a
 // sandboxed utility process.
@@ -70,8 +72,7 @@ class CONTENT_EXPORT AuctionWorkletServiceImpl
       const std::string& trusted_bidding_signals_slot_size_param,
       const url::Origin& top_window_origin,
       mojom::AuctionWorkletPermissionsPolicyStatePtr permissions_policy_state,
-      bool has_experiment_group_id,
-      uint16_t experiment_group_id) override;
+      std::optional<uint16_t> experiment_group_id) override;
   void LoadSellerWorklet(
       mojo::PendingReceiver<mojom::SellerWorklet> seller_worklet_receiver,
       mojo::PendingRemote<mojom::AuctionSharedStorageHost>
@@ -85,8 +86,7 @@ class CONTENT_EXPORT AuctionWorkletServiceImpl
       const std::optional<GURL>& trusted_scoring_signals_url,
       const url::Origin& top_window_origin,
       mojom::AuctionWorkletPermissionsPolicyStatePtr permissions_policy_state,
-      bool has_experiment_group_id,
-      uint16_t experiment_group_id) override;
+      std::optional<uint16_t> experiment_group_id) override;
 
  private:
   class V8HelperHolder;

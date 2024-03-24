@@ -5,6 +5,7 @@
 #include "components/content_settings/browser/page_specific_content_settings.h"
 
 #include <list>
+#include <optional>
 #include <vector>
 
 #include "base/command_line.h"
@@ -16,14 +17,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "components/browsing_data/content/cache_storage_helper.h"
 #include "components/browsing_data/content/cookie_helper.h"
-#include "components/browsing_data/content/database_helper.h"
-#include "components/browsing_data/content/file_system_helper.h"
-#include "components/browsing_data/content/indexed_db_helper.h"
-#include "components/browsing_data/content/local_storage_helper.h"
-#include "components/browsing_data/content/service_worker_helper.h"
-#include "components/browsing_data/content/shared_worker_helper.h"
 #include "components/browsing_data/core/features.h"
 #include "components/content_settings/common/content_settings_agent.mojom.h"
 #include "components/content_settings/core/browser/content_settings_info.h"
@@ -50,10 +44,8 @@
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_contents_user_data.h"
 #include "content/public/common/content_constants.h"
-#include "content/public/common/content_features.h"
 #include "net/base/schemeful_site.h"
 #include "services/network/public/mojom/shared_dictionary_access_observer.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "third_party/blink/public/common/navigation/navigation_params.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
@@ -589,12 +581,10 @@ PageSpecificContentSettings::PageSpecificContentSettings(content::Page& page,
 #else
           /*ignore_empty_localstorage=*/true,
 #endif
-          delegate_->GetAdditionalFileSystemTypes(),
           delegate_->GetIsDeletionDisabledCallback()),
       blocked_local_shared_objects_(
           GetWebContents()->GetPrimaryMainFrame()->GetStoragePartition(),
           /*ignore_empty_localstorage=*/false,
-          delegate_->GetAdditionalFileSystemTypes(),
           delegate_->GetIsDeletionDisabledCallback()),
       allowed_browsing_data_model_(BrowsingDataModel::BuildEmpty(
           GetWebContents()->GetPrimaryMainFrame()->GetStoragePartition(),
@@ -689,42 +679,36 @@ void PageSpecificContentSettings::StorageAccessed(
   }
   PageSpecificContentSettings* settings = GetForFrame(rfh);
   if (settings) {
-    if (base::FeatureList::IsEnabled(
-            browsing_data::features::kMigrateStorageToBDM)) {
-      auto bdm_storage_type = ([storage_type]() {
-        switch (storage_type) {
-          case StorageType::LOCAL_STORAGE:
-            return BrowsingDataModel::StorageType::kLocalStorage;
-          case StorageType::SESSION_STORAGE:
-            return BrowsingDataModel::StorageType::kSessionStorage;
-          case StorageType::FILE_SYSTEM:
-          case StorageType::INDEXED_DB:
-          case StorageType::DATABASE:
-          case StorageType::CACHE:
-          case StorageType::WEB_LOCKS:
-            return BrowsingDataModel::StorageType::kQuotaStorage;
-        }
-      })();
-
-      if (storage_type == StorageType::SESSION_STORAGE) {
-        auto* web_contents = content::WebContents::FromRenderFrameHost(rfh);
-        const auto& session_storage_namespace_map =
-            web_contents->GetController().GetSessionStorageNamespaceMap();
-        const auto& storage_partition_config =
-            web_contents->GetSiteInstance()->GetStoragePartitionConfig();
-        const auto& namespace_id =
-            session_storage_namespace_map.at(storage_partition_config);
-
-        content::SessionStorageUsageInfo session_storage_usage_info{
-            storage_key, namespace_id->id()};
-        settings->OnBrowsingDataAccessed(session_storage_usage_info,
-                                         bdm_storage_type, blocked_by_policy);
-      } else {
-        settings->OnBrowsingDataAccessed(storage_key, bdm_storage_type,
-                                         blocked_by_policy);
+    auto bdm_storage_type = ([storage_type]() {
+      switch (storage_type) {
+        case StorageType::LOCAL_STORAGE:
+          return BrowsingDataModel::StorageType::kLocalStorage;
+        case StorageType::SESSION_STORAGE:
+          return BrowsingDataModel::StorageType::kSessionStorage;
+        case StorageType::FILE_SYSTEM:
+        case StorageType::INDEXED_DB:
+        case StorageType::DATABASE:
+        case StorageType::CACHE:
+        case StorageType::WEB_LOCKS:
+          return BrowsingDataModel::StorageType::kQuotaStorage;
       }
+    })();
+    if (storage_type == StorageType::SESSION_STORAGE) {
+      auto* web_contents = content::WebContents::FromRenderFrameHost(rfh);
+      const auto& session_storage_namespace_map =
+          web_contents->GetController().GetSessionStorageNamespaceMap();
+      const auto& storage_partition_config =
+          web_contents->GetSiteInstance()->GetStoragePartitionConfig();
+      const auto& namespace_id =
+          session_storage_namespace_map.at(storage_partition_config);
+
+      content::SessionStorageUsageInfo session_storage_usage_info{
+          storage_key, namespace_id->id()};
+      settings->OnBrowsingDataAccessed(session_storage_usage_info,
+                                       bdm_storage_type, blocked_by_policy);
     } else {
-      settings->OnStorageAccessed(storage_type, storage_key, blocked_by_policy);
+      settings->OnBrowsingDataAccessed(storage_key, bdm_storage_type,
+                                       blocked_by_policy);
     }
   }
 }
@@ -766,20 +750,16 @@ void PageSpecificContentSettings::SharedWorkerAccessed(
     const GURL& worker_url,
     const std::string& name,
     const blink::StorageKey& storage_key,
+    const blink::mojom::SharedWorkerSameSiteCookies same_site_cookies,
     bool blocked_by_policy) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   PageSpecificContentSettings* settings = GetForFrame(
       content::RenderFrameHost::FromID(render_process_id, render_frame_id));
   if (settings) {
-    if (base::FeatureList::IsEnabled(
-            browsing_data::features::kMigrateStorageToBDM)) {
-      settings->OnBrowsingDataAccessed(
-          browsing_data::SharedWorkerInfo{worker_url, name, storage_key},
-          BrowsingDataModel::StorageType::kSharedWorker, blocked_by_policy);
-    } else {
-      settings->OnSharedWorkerAccessed(worker_url, name, storage_key,
-                                       blocked_by_policy);
-    }
+    settings->OnBrowsingDataAccessed(
+        browsing_data::SharedWorkerInfo{worker_url, name, storage_key,
+                                        same_site_cookies},
+        BrowsingDataModel::StorageType::kSharedWorker, blocked_by_policy);
   }
 }
 
@@ -832,8 +812,6 @@ bool PageSpecificContentSettings::IsContentBlocked(
       content_type == ContentSettingsType::MIXEDSCRIPT ||
       content_type == ContentSettingsType::MEDIASTREAM_MIC ||
       content_type == ContentSettingsType::MEDIASTREAM_CAMERA ||
-      (base::FeatureList::IsEnabled(::features::kBlockMidiByDefault) &&
-       content_type == ContentSettingsType::MIDI) ||
       content_type == ContentSettingsType::MIDI_SYSEX ||
       content_type == ContentSettingsType::ADS ||
       content_type == ContentSettingsType::SOUND ||
@@ -861,8 +839,6 @@ bool PageSpecificContentSettings::IsContentAllowed(
   if (content_type != ContentSettingsType::COOKIES &&
       content_type != ContentSettingsType::MEDIASTREAM_MIC &&
       content_type != ContentSettingsType::MEDIASTREAM_CAMERA &&
-      (!base::FeatureList::IsEnabled(::features::kBlockMidiByDefault) ||
-       content_type != ContentSettingsType::MIDI) &&
       content_type != ContentSettingsType::MIDI_SYSEX &&
       content_type != ContentSettingsType::CLIPBOARD_READ_WRITE &&
       content_type != ContentSettingsType::SENSORS &&
@@ -887,6 +863,11 @@ void PageSpecificContentSettings::OnContentBlocked(ContentSettingsType type) {
   DCHECK(type != ContentSettingsType::MEDIASTREAM_MIC &&
          type != ContentSettingsType::MEDIASTREAM_CAMERA)
       << "Media stream settings handled by OnMediaStreamPermissionSet";
+
+  if (freeze_indicators_) {
+    return;
+  }
+
   if (!content_settings::ContentSettingsRegistry::GetInstance()->Get(type)) {
     return;
   }
@@ -999,84 +980,33 @@ void PageSpecificContentSettings::OnTwoSitePermissionChanged(
   }
 }
 
-namespace {
-void AddToContainer(browsing_data::LocalSharedObjectsContainer& container,
-                    StorageType storage_type,
-                    const GURL& url) {
-  url::Origin origin = url::Origin::Create(url);
-  switch (storage_type) {
-    case StorageType::DATABASE:
-      container.databases()->Add(origin);
-      return;
-    case StorageType::LOCAL_STORAGE:
-      // TODO(https://crbug.com/1199077): Pass the real StorageKey into this
-      // function directly.
-      container.local_storages()->Add(
-          blink::StorageKey::CreateFirstParty(origin));
-      return;
-    case StorageType::SESSION_STORAGE:
-      // TODO(https://crbug.com/1199077): Pass the real StorageKey into this
-      // function directly.
-      container.session_storages()->Add(
-          blink::StorageKey::CreateFirstParty(origin));
-      return;
-    case StorageType::INDEXED_DB:
-      // TODO(https://crbug.com/1199077): Pass the real StorageKey into this
-      // function directly.
-      container.indexed_dbs()->Add(blink::StorageKey::CreateFirstParty(origin));
-      return;
-    case StorageType::CACHE:
-      container.cache_storages()->Add(
-          blink::StorageKey::CreateFirstParty(origin));
-      return;
-    case StorageType::FILE_SYSTEM:
-      container.file_systems()->Add(origin);
-      return;
-    case StorageType::WEB_LOCKS:
-      NOTREACHED();
-      return;
-  }
-}
-}  // namespace
-
-void PageSpecificContentSettings::OnStorageAccessed(
-    StorageType storage_type,
-    const blink::StorageKey& storage_key,
-    bool blocked_by_policy,
-    content::Page* originating_page) {
-  GURL url = storage_key.origin().GetURL();
-  originating_page = originating_page ? originating_page : &page();
-  if (blocked_by_policy) {
-    AddToContainer(blocked_local_shared_objects_, storage_type, url);
-    OnContentBlocked(ContentSettingsType::COOKIES);
-  } else {
-    AddToContainer(allowed_local_shared_objects_, storage_type, url);
-    OnContentAllowed(ContentSettingsType::COOKIES);
-  }
-
-  MaybeUpdateParent(&PageSpecificContentSettings::OnStorageAccessed,
-                    storage_type, storage_key, blocked_by_policy,
-                    originating_page);
-
-  // TODO(crbug/1454806): Consider exposing `blink::StorageKey` details here.
-  AccessDetails access_details{SiteDataType::kStorage, AccessType::kUnknown,
-                               url, blocked_by_policy,
-                               originating_page->IsPrimary()};
-
-  MaybeNotifySiteDataObservers(access_details);
-}
-
 void PageSpecificContentSettings::OnCookiesAccessed(
     const content::CookieAccessDetails& details,
     content::Page* originating_page) {
   originating_page = originating_page ? originating_page : &page();
   if (details.cookie_list.empty())
     return;
+
+  if (base::FeatureList::IsEnabled(
+          browsing_data::features::kDeprecateCookiesTreeModel)) {
+    auto& model = details.blocked_by_policy ? blocked_browsing_data_model_
+                                            : allowed_browsing_data_model_;
+    for (const auto& cookie : details.cookie_list) {
+      // The size isn't relevant here and won't be displayed in the UI.
+      model->AddBrowsingData(cookie, BrowsingDataModel::StorageType::kCookie,
+                             /*storage_size=*/0,
+                             /*cookie_count=*/1);
+    }
+  } else {
+    auto& local_shared_objects = details.blocked_by_policy
+                                     ? blocked_local_shared_objects_
+                                     : allowed_local_shared_objects_;
+    local_shared_objects.cookies()->AddCookies(details);
+  }
+
   if (details.blocked_by_policy) {
-    blocked_local_shared_objects_.cookies()->AddCookies(details);
     OnContentBlocked(ContentSettingsType::COOKIES);
   } else {
-    allowed_local_shared_objects_.cookies()->AddCookies(details);
     OnContentAllowed(ContentSettingsType::COOKIES);
   }
 
@@ -1100,19 +1030,12 @@ void PageSpecificContentSettings::OnServiceWorkerAccessed(
     content::Page* originating_page) {
   DCHECK(scope.is_valid());
   originating_page = originating_page ? originating_page : &page();
-  if (base::FeatureList::IsEnabled(
-          browsing_data::features::kMigrateStorageToBDM)) {
-    auto& model = allowed_result ? allowed_browsing_data_model_
-                                 : blocked_browsing_data_model_;
-    // The size isn't relevant here and won't be displayed in the UI.
-    model->AddBrowsingData(storage_key,
-                           BrowsingDataModel::StorageType::kQuotaStorage,
-                           /*storage_size=*/0);
-  } else {
-    auto& local_shared_objects = allowed_result ? allowed_local_shared_objects_
-                                                : blocked_local_shared_objects_;
-    local_shared_objects.service_workers()->Add(url::Origin::Create(scope));
-  }
+  auto& model = allowed_result ? allowed_browsing_data_model_
+                               : blocked_browsing_data_model_;
+  // The size isn't relevant here and won't be displayed in the UI.
+  model->AddBrowsingData(storage_key,
+                         BrowsingDataModel::StorageType::kQuotaStorage,
+                         /*storage_size=*/0);
 
   if (allowed_result.javascript_blocked_by_policy()) {
     OnContentBlocked(ContentSettingsType::JAVASCRIPT);
@@ -1127,25 +1050,6 @@ void PageSpecificContentSettings::OnServiceWorkerAccessed(
 
   MaybeUpdateParent(&PageSpecificContentSettings::OnServiceWorkerAccessed,
                     scope, storage_key, allowed_result, originating_page);
-}
-
-void PageSpecificContentSettings::OnSharedWorkerAccessed(
-    const GURL& worker_url,
-    const std::string& name,
-    const blink::StorageKey& storage_key,
-    bool blocked_by_policy) {
-  DCHECK(worker_url.is_valid());
-  if (blocked_by_policy) {
-    blocked_local_shared_objects_.shared_workers()->AddSharedWorker(
-        worker_url, name, storage_key);
-    OnContentBlocked(ContentSettingsType::COOKIES);
-  } else {
-    allowed_local_shared_objects_.shared_workers()->AddSharedWorker(
-        worker_url, name, storage_key);
-    OnContentAllowed(ContentSettingsType::COOKIES);
-  }
-  MaybeUpdateParent(&PageSpecificContentSettings::OnSharedWorkerAccessed,
-                    worker_url, name, storage_key, blocked_by_policy);
 }
 
 void PageSpecificContentSettings::OnInterestGroupJoined(
@@ -1204,10 +1108,7 @@ void PageSpecificContentSettings::OnBrowsingDataAccessed(
     // related to cookies, as that is the icon that is displayed.
     // TODO(crbug.com/1456641): When the COOKIES content setting Omnibox entry
     // correctly reflects site data, reconsider limiting the types.
-    // This logic will not show a site being blocked for partitioned storage,
-    // reconsider the usage of this method in this context.
-    if (blocked_browsing_data_model_->IsBlockedByThirdPartyCookieBlocking(
-            data_key, storage_type)) {
+    if (model->IsStorageTypeCookieLike(storage_type)) {
       OnContentBlocked(ContentSettingsType::COOKIES);
     }
   } else {
@@ -1275,6 +1176,16 @@ void PageSpecificContentSettings::OnMediaStreamPermissionSet(
     const GURL& request_origin,
     MicrophoneCameraState new_microphone_camera_state) {
   DCHECK(!IsEmbeddedPage());
+
+  // Camera and/or Mic permission request could auto-ignore in case of a page
+  // refresh. In this case `OnMediaStreamPermissionSet` should not store media
+  // stream state and it should not update activity indicators.
+  if (freeze_indicators_ &&
+      (new_microphone_camera_state.Has(kMicrophoneBlocked) ||
+       new_microphone_camera_state.Has(kCameraBlocked))) {
+    return;
+  }
+
   media_stream_access_origin_ = request_origin;
 
   if (new_microphone_camera_state.Has(kMicrophoneAccessed)) {
@@ -1408,7 +1319,6 @@ void PageSpecificContentSettings::OnContentSettingChanged(
     case ContentSettingsType::COOKIES:
     case ContentSettingsType::POPUPS:
     case ContentSettingsType::MIXEDSCRIPT:
-    case ContentSettingsType::MIDI:
     case ContentSettingsType::MIDI_SYSEX:
     case ContentSettingsType::ADS:
     case ContentSettingsType::SOUND:

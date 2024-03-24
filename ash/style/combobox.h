@@ -29,9 +29,9 @@ namespace ash {
 class ASH_EXPORT Combobox : public views::Button,
                             public ui::ComboboxModelObserver,
                             public views::WidgetObserver {
- public:
-  METADATA_HEADER(Combobox);
+  METADATA_HEADER(Combobox, views::Button)
 
+ public:
   // `model` is owned by the combobox when using this constructor.
   explicit Combobox(std::unique_ptr<ui::ComboboxModel> model);
   // `model` is not owned by the combobox when using this constructor.
@@ -66,7 +66,7 @@ class ASH_EXPORT Combobox : public views::Button,
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   void AddedToWidget() override;
   void RemovedFromWidget() override;
-  void Layout() override;
+  void Layout(PassKey) override;
 
   // WidgetObserver:
   void OnWidgetBoundsChanged(views::Widget* widget,

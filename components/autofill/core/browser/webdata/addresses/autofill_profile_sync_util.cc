@@ -110,8 +110,6 @@ std::unique_ptr<EntityData> CreateEntityDataFromAutofillProfile(
       TruncateUTF8(entry.language_code()));
 
   // Set name-related values.
-  specifics->add_name_honorific(
-      TruncateUTF8(UTF16ToUTF8(entry.GetRawInfo(NAME_HONORIFIC_PREFIX))));
   specifics->add_name_first(
       TruncateUTF8(UTF16ToUTF8(entry.GetRawInfo(NAME_FIRST))));
   specifics->add_name_middle(
@@ -126,13 +124,7 @@ std::unique_ptr<EntityData> CreateEntityDataFromAutofillProfile(
       TruncateUTF8(UTF16ToUTF8(entry.GetRawInfo(NAME_LAST_CONJUNCTION))));
   specifics->add_name_full(
       TruncateUTF8(UTF16ToUTF8(entry.GetRawInfo(NAME_FULL))));
-  specifics->add_name_full_with_honorific(TruncateUTF8(
-      UTF16ToUTF8(entry.GetRawInfo(NAME_FULL_WITH_HONORIFIC_PREFIX))));
-
   // Set address-related statuses.
-  specifics->add_name_honorific_status(
-      ConvertProfileToSpecificsVerificationStatus(
-          entry.GetVerificationStatus(NAME_HONORIFIC_PREFIX)));
   specifics->add_name_first_status(ConvertProfileToSpecificsVerificationStatus(
       entry.GetVerificationStatus(NAME_FIRST)));
   specifics->add_name_middle_status(ConvertProfileToSpecificsVerificationStatus(
@@ -150,9 +142,6 @@ std::unique_ptr<EntityData> CreateEntityDataFromAutofillProfile(
           entry.GetVerificationStatus(NAME_LAST_SECOND)));
   specifics->add_name_full_status(ConvertProfileToSpecificsVerificationStatus(
       entry.GetVerificationStatus(NAME_FULL)));
-  specifics->add_name_full_with_honorific_status(
-      ConvertProfileToSpecificsVerificationStatus(
-          entry.GetVerificationStatus(NAME_FULL_WITH_HONORIFIC_PREFIX)));
 
   // Set email, phone and company values.
   specifics->add_email_address(
@@ -235,6 +224,10 @@ std::unique_ptr<EntityData> CreateEntityDataFromAutofillProfile(
   }
   specifics->set_address_home_floor(
       UTF16ToUTF8(entry.GetRawInfo(ADDRESS_HOME_FLOOR)));
+  if (base::FeatureList::IsEnabled(features::kAutofillUseINAddressModel)) {
+    specifics->set_address_home_street_location_and_locality(UTF16ToUTF8(
+        entry.GetRawInfo(ADDRESS_HOME_STREET_LOCATION_AND_LOCALITY)));
+  }
 
   // Set address-related statuses.
   specifics->set_address_home_city_status(
@@ -327,11 +320,11 @@ std::unique_ptr<EntityData> CreateEntityDataFromAutofillProfile(
   specifics->set_address_home_floor_status(
       ConvertProfileToSpecificsVerificationStatus(
           entry.GetVerificationStatus(ADDRESS_HOME_FLOOR)));
-
-  // Set birthdate-related values.
-  specifics->set_birthdate_day(entry.GetRawInfoAsInt(BIRTHDATE_DAY));
-  specifics->set_birthdate_month(entry.GetRawInfoAsInt(BIRTHDATE_MONTH));
-  specifics->set_birthdate_year(entry.GetRawInfoAsInt(BIRTHDATE_4_DIGIT_YEAR));
+  if (base::FeatureList::IsEnabled(features::kAutofillUseINAddressModel)) {
+    specifics->set_address_home_street_location_and_locality_status(
+        ConvertProfileToSpecificsVerificationStatus(entry.GetVerificationStatus(
+            ADDRESS_HOME_STREET_LOCATION_AND_LOCALITY)));
+  }
 
   return entity_data;
 }
@@ -362,28 +355,6 @@ std::unique_ptr<AutofillProfile> CreateAutofillProfileFromSpecifics(
   // Set the profile label if it exists.
   if (specifics.has_profile_label())
     profile->set_profile_label(specifics.profile_label());
-
-  // Set repeated fields.
-  profile->SetRawInfoWithVerificationStatus(
-      NAME_HONORIFIC_PREFIX,
-      UTF8ToUTF16(specifics.name_honorific_size() ? specifics.name_honorific(0)
-                                                  : std::string()),
-      ConvertSpecificsToProfileVerificationStatus(
-          specifics.name_honorific_status_size()
-              ? specifics.name_honorific_status(0)
-              : AutofillProfileSpecifics::VerificationStatus::
-                    AutofillProfileSpecifics_VerificationStatus_VERIFICATION_STATUS_UNSPECIFIED));
-
-  profile->SetRawInfoWithVerificationStatus(
-      NAME_FULL_WITH_HONORIFIC_PREFIX,
-      UTF8ToUTF16(specifics.name_full_with_honorific_size()
-                      ? specifics.name_full_with_honorific(0)
-                      : std::string()),
-      ConvertSpecificsToProfileVerificationStatus(
-          specifics.name_full_with_honorific_status_size()
-              ? specifics.name_full_with_honorific_status(0)
-              : AutofillProfileSpecifics::VerificationStatus::
-                    AutofillProfileSpecifics_VerificationStatus_VERIFICATION_STATUS_UNSPECIFIED));
 
   profile->SetRawInfoWithVerificationStatus(
       NAME_FIRST,
@@ -628,10 +599,13 @@ std::unique_ptr<AutofillProfile> CreateAutofillProfileFromSpecifics(
       ConvertSpecificsToProfileVerificationStatus(
           specifics.address_home_floor_status()));
 
-  // Set birthdate-related fields.
-  profile->SetRawInfoAsInt(BIRTHDATE_DAY, specifics.birthdate_day());
-  profile->SetRawInfoAsInt(BIRTHDATE_MONTH, specifics.birthdate_month());
-  profile->SetRawInfoAsInt(BIRTHDATE_4_DIGIT_YEAR, specifics.birthdate_year());
+  if (base::FeatureList::IsEnabled(features::kAutofillUseINAddressModel)) {
+    profile->SetRawInfoWithVerificationStatus(
+        ADDRESS_HOME_STREET_LOCATION_AND_LOCALITY,
+        UTF8ToUTF16(specifics.address_home_street_location_and_locality()),
+        ConvertSpecificsToProfileVerificationStatus(
+            specifics.address_home_street_location_and_locality_status()));
+  }
 
   // When adding field types, ensure that they don't need to be added here and
   // update the last checked value.

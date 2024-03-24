@@ -12,6 +12,7 @@
 #include <string>
 
 #include "base/functional/callback.h"
+#import "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/threading/thread_checker.h"
@@ -35,6 +36,10 @@ class MetricsService;
 class MetricsStateManager;
 }  // namespace metrics
 
+namespace variations {
+class SyntheticTrialRegistry;
+}
+
 namespace ukm {
 class UkmService;
 }
@@ -55,7 +60,8 @@ class IOSChromeMetricsServiceClient : public IncognitoWebStateObserver,
 
   // Factory function.
   static std::unique_ptr<IOSChromeMetricsServiceClient> Create(
-      metrics::MetricsStateManager* state_manager);
+      metrics::MetricsStateManager* state_manager,
+      variations::SyntheticTrialRegistry* synthetic_trial_registry);
 
   // Registers local state prefs used by this class.
   static void RegisterPrefs(PrefRegistrySimple* registry);
@@ -107,7 +113,8 @@ class IOSChromeMetricsServiceClient : public IncognitoWebStateObserver,
 
  private:
   explicit IOSChromeMetricsServiceClient(
-      metrics::MetricsStateManager* state_manager);
+      metrics::MetricsStateManager* state_manager,
+      variations::SyntheticTrialRegistry* synthetic_trial_registry);
 
   // Completes the two-phase initialization of IOSChromeMetricsServiceClient.
   void Initialize();
@@ -144,10 +151,10 @@ class IOSChromeMetricsServiceClient : public IncognitoWebStateObserver,
   base::ThreadChecker thread_checker_;
 
   // Weak pointer to the MetricsStateManager.
-  metrics::MetricsStateManager* metrics_state_manager_;
+  raw_ptr<metrics::MetricsStateManager> metrics_state_manager_;
 
   // The synthetic trial registry shared by metrics_service_ and ukm_service_.
-  std::unique_ptr<variations::SyntheticTrialRegistry> synthetic_trial_registry_;
+  raw_ptr<variations::SyntheticTrialRegistry> synthetic_trial_registry_;
 
   // Metrics service observer for synthetic trials.
   metrics::PersistentSyntheticTrialObserver synthetic_trial_observer_;
@@ -166,7 +173,7 @@ class IOSChromeMetricsServiceClient : public IncognitoWebStateObserver,
 
   // The IOSChromeStabilityMetricsProvider instance that was registered with
   // MetricsService. Has the same lifetime as `metrics_service_`.
-  IOSChromeStabilityMetricsProvider* stability_metrics_provider_;
+  raw_ptr<IOSChromeStabilityMetricsProvider> stability_metrics_provider_;
 
   // Saved callback received from CollectFinalMetricsForLog().
   base::OnceClosure collect_final_metrics_done_callback_;

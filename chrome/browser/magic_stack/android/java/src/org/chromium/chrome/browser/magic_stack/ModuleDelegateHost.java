@@ -27,9 +27,7 @@ public interface ModuleDelegateHost {
 
     /** Gets the instance of {@link UiConfig} of the host surface. */
     @Nullable
-    default UiConfig getUiConfig() {
-        return null;
-    }
+    UiConfig getUiConfig();
 
     /**
      * Called when the user clicks a module to open a URL.
@@ -67,4 +65,12 @@ public interface ModuleDelegateHost {
     default Tab getTrackingTab() {
         return null;
     }
+
+    /**
+     * Returns whether the host is Start surface or NTP home surface which are shown at startup. The
+     * concept of the home surface is effectively the UI approach originally taken by Start surface,
+     * that tries to show a local tab resumption module. This value returned here is allowed to
+     * change at runtime for NTP.
+     */
+    boolean isHomeSurface();
 }

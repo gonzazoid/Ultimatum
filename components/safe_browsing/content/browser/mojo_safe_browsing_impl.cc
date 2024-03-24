@@ -184,16 +184,16 @@ void MojoSafeBrowsingImpl::CreateCheckerAndCheck(
                           frame_token),
       /*weak_web_state=*/nullptr, render_process_id_, sb_frame_token,
       content::RenderFrameHost::kNoFrameTreeNodeId,
-      /*navigation_id=*/absl::nullopt,
+      /*navigation_id=*/std::nullopt,
       /*url_real_time_lookup_enabled=*/false,
-      /*can_urt_check_subresource_url=*/false,
       /*can_check_db=*/true, /*can_check_high_confidence_allowlist=*/true,
       /*url_lookup_service_metric_suffix=*/".None",
-      /*last_committed_url=*/GURL(), content::GetUIThreadTaskRunner({}),
+      content::GetUIThreadTaskRunner({}),
       /*url_lookup_service=*/nullptr,
       /*hash_realtime_service_on_ui=*/nullptr,
       /*hash_realtime_selection=*/
-      hash_realtime_utils::HashRealTimeSelection::kNone);
+      hash_realtime_utils::HashRealTimeSelection::kNone,
+      /*is_async_check=*/false);
   auto weak_impl = checker_impl->WeakPtr();
 
   checker_impl->CheckUrl(

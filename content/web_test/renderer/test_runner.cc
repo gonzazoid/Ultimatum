@@ -39,6 +39,7 @@
 #include "content/web_test/renderer/web_frame_test_proxy.h"
 #include "gin/arguments.h"
 #include "gin/array_buffer.h"
+#include "gin/dictionary.h"
 #include "gin/handle.h"
 #include "gin/object_template_builder.h"
 #include "gin/wrappable.h"
@@ -345,6 +346,7 @@ class TestRunnerBindings : public gin::Wrappable<TestRunnerBindings> {
   void SetMockScreenOrientation(const std::string& orientation);
   void SetPOSIXLocale(const std::string& locale);
   void SetMainWindowHidden(bool hidden);
+  void SetWindowRect(const gin::Dictionary& rect);
   void SetPermission(const std::string& name,
                      const std::string& value,
                      const std::string& origin,
@@ -368,6 +370,7 @@ class TestRunnerBindings : public gin::Wrappable<TestRunnerBindings> {
                                    v8::Local<v8::Function> callback);
   void SetWillSendRequestClearHeader(const std::string& header);
   void SetWillSendRequestClearReferrer();
+  void SetRphRegistrationMode(gin::Arguments* args);
   void SimulateBrowserWindowFocus(bool value);
   void NavigateSecondaryWindow(const std::string& url);
   void InspectSecondaryWindow();
@@ -758,6 +761,7 @@ gin::ObjectTemplateBuilder TestRunnerBindings::GetObjectTemplateBuilder(
       // to change in order to wait for the side effects of calling this.
       .SetMethod("setMainWindowHidden",
                  &TestRunnerBindings::SetMainWindowHidden)
+      .SetMethod("setWindowRect", &TestRunnerBindings::SetWindowRect)
       // Sets the permission's |name| to |value| for a given {origin, embedder}
       // tuple. Sends a message to the WebTestPermissionManager in order for it
       // to update its database.
@@ -770,6 +774,8 @@ gin::ObjectTemplateBuilder TestRunnerBindings::GetObjectTemplateBuilder(
       .SetMethod("setPrintingForFrame",
                  &TestRunnerBindings::SetPrintingForFrame)
       .SetMethod("setPrintingSize", &TestRunnerBindings::SetPrintingSize)
+      .SetMethod("setRphRegistrationMode",
+                 &TestRunnerBindings::SetRphRegistrationMode)
       .SetMethod("setScrollbarPolicy", &TestRunnerBindings::NotImplemented)
       .SetMethod("setShouldGeneratePixelResults",
                  &TestRunnerBindings::SetShouldGeneratePixelResults)
@@ -1327,6 +1333,27 @@ void TestRunnerBindings::SetMainWindowHidden(bool hidden) {
     return;
   }
   frame_->GetWebTestControlHostRemote()->SetMainWindowHidden(hidden);
+}
+
+void TestRunnerBindings::SetWindowRect(const gin::Dictionary& bounds) {
+  if (!frame_) {
+    return;
+  }
+
+  gfx::Rect rect = frame_->GetLocalRootWebFrameWidget()->WindowRect();
+
+  // https://www.w3.org/TR/webdriver2/#set-window-rect
+  int x, y, width, height;
+  if (const_cast<gin::Dictionary&>(bounds).Get("x", &x) &&
+      const_cast<gin::Dictionary&>(bounds).Get("y", &y)) {
+    rect.set_origin({x, y});
+  }
+  if (const_cast<gin::Dictionary&>(bounds).Get("width", &width) &&
+      const_cast<gin::Dictionary&>(bounds).Get("height", &height)) {
+    rect.set_size({width, height});
+  }
+
+  GetWebFrame()->View()->SetWindowRectSynchronouslyForTesting(rect);
 }
 
 void TestRunnerBindings::SetTextDirection(const std::string& direction_name) {
@@ -2382,6 +2409,36 @@ void TestRunnerBindings::GoToOffset(int offset) {
     return;
   }
   frame_->GetWebTestControlHostRemote()->GoToOffset(offset);
+}
+
+void TestRunnerBindings::SetRphRegistrationMode(gin::Arguments* args) {
+  if (!frame_) {
+    return;
+  }
+
+  if (args->Length() != 1) {
+    args->ThrowTypeError("setRphRegistrationMode expects 1 argument");
+    return;
+  }
+
+  std::string arg;
+  if (!args->GetNext(&arg)) {
+    args->ThrowError();
+    return;
+  }
+
+  auto mode = mojom::WebTestControlHost::AutoResponseMode::kNone;
+  if (arg == "autoAccept") {
+    mode = mojom::WebTestControlHost::AutoResponseMode::kAutoAccept;
+  } else if (arg == "autoReject") {
+    mode = mojom::WebTestControlHost::AutoResponseMode::kAutoReject;
+  } else if (arg != "none") {
+    args->ThrowTypeError(
+        "setRphRegistrationMode called with an invalid 'mode' argument");
+    return;
+  }
+
+  frame_->GetWebTestControlHostRemote()->SetRegisterProtocolHandlerMode(mode);
 }
 
 void TestRunnerBindings::NotImplemented(const gin::Arguments& args) {}
@@ -3685,7 +3742,9 @@ void TestRunner::FinishTest(WebFrameTestProxy& source) {
         DCHECK_GT(actual.info().height(), 0);
 
         base::MD5Digest digest;
-        base::MD5Sum(actual.getPixels(), actual.computeByteSize(), &digest);
+        auto bytes = base::span(static_cast<const uint8_t*>(actual.getPixels()),
+                                actual.computeByteSize());
+        base::MD5Sum(bytes, &digest);
         dump_result->actual_pixel_hash = base::MD5DigestToBase16(digest);
 
         if (dump_result->actual_pixel_hash != test_config_.expected_pixel_hash)

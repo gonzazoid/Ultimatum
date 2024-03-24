@@ -11,11 +11,16 @@ import static org.chromium.chrome.browser.tasks.tab_management.TabListModel.Card
 import static org.chromium.chrome.browser.tasks.tab_management.TabProperties.CLOSE_BUTTON_DESCRIPTION_STRING;
 import static org.chromium.chrome.browser.tasks.tab_management.TabProperties.TAB_ID;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ObjectAnimator;
 import android.content.ComponentCallbacks;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
+import android.graphics.Rect;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.text.TextUtils;
@@ -51,6 +56,7 @@ import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.chrome.browser.price_tracking.PriceTrackingFeatures;
 import org.chromium.chrome.browser.price_tracking.PriceTrackingUtilities;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.quick_delete.QuickDeleteAnimationGradientDrawable;
 import org.chromium.chrome.browser.tab.EmptyTabObserver;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabCreationState;
@@ -65,8 +71,8 @@ import org.chromium.chrome.browser.tabmodel.TabModelObserver;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.tabmodel.TabModelUtils;
 import org.chromium.chrome.browser.tasks.pseudotab.PseudoTab;
-import org.chromium.chrome.browser.tasks.tab_groups.EmptyTabGroupModelFilterObserver;
 import org.chromium.chrome.browser.tasks.tab_groups.TabGroupModelFilter;
+import org.chromium.chrome.browser.tasks.tab_groups.TabGroupModelFilterObserver;
 import org.chromium.chrome.browser.tasks.tab_groups.TabGroupTitleUtils;
 import org.chromium.chrome.browser.tasks.tab_groups.TabGroupUtils;
 import org.chromium.chrome.browser.tasks.tab_management.PriceMessageService.PriceTabData;
@@ -90,11 +96,14 @@ import org.chromium.url.GURL;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 /**
  * Mediator for business logic for the tab grid. This class should be initialized with a list of
@@ -108,6 +117,7 @@ class TabListMediator {
     // screen.
     private boolean mVisible;
     private boolean mShownIPH;
+    private boolean mIsClosingGroup;
     private Tab mTabToAddDelayed;
 
     /** An interface to handle requests about updating TabGridDialog. */
@@ -529,8 +539,8 @@ class TabListMediator {
 
     private int mLastSelectedTabListModelIndex = TabList.INVALID_TAB_INDEX;
 
-    private final TabGroupModelFilter.Observer mTabGroupObserver =
-            new EmptyTabGroupModelFilterObserver() {
+    private final TabGroupModelFilterObserver mTabGroupObserver =
+            new TabGroupModelFilterObserver() {
                 @Override
                 public void didMoveWithinGroup(
                         Tab movedTab, int tabModelOldIndex, int tabModelNewIndex) {
@@ -728,13 +738,6 @@ class TabListMediator {
 
                     mModel.move(curPosition, newPosition);
                 }
-
-                @Override
-                public void didCreateGroup(
-                        List<Tab> tabs,
-                        List<Integer> tabOriginalIndex,
-                        List<Integer> tabOriginalRootId,
-                        String destinationGroupTitle) {}
             };
 
     /** Interface for implementing a {@link Runnable} that takes a tabId for a generic action. */
@@ -927,6 +930,32 @@ class TabListMediator {
 
                     @Override
                     public void willCloseTab(Tab tab, boolean animate, boolean didCloseAlone) {
+                        // If the tab closed was part of a tab group and the closure was triggered
+                        // from the tab switcher, update the group to reflect the closure instead of
+                        // closing the tab.
+                        // TODO(crbug/325917738): This causes the tab group to visibly flicker
+                        // to single tab state before removal when closing a group. For now skip
+                        // this behavior when closing a whole group.
+                        if (!mIsClosingGroup
+                                && mActionsOnAllRelatedTabs
+                                && (mCurrentTabModelFilterSupplier.get()
+                                        instanceof TabGroupModelFilter groupFilter)
+                                && groupFilter.tabGroupExistsForRootId(tab.getRootId())) {
+                            int groupIndex = groupFilter.indexOf(tab);
+                            Tab groupTab = groupFilter.getTabAt(groupIndex);
+                            final int currentSelectedTabId =
+                                    TabModelUtils.getCurrentTabId(groupFilter.getTabModel());
+                            boolean isSelected = currentSelectedTabId == groupTab.getId();
+                            updateTab(
+                                    groupIndex,
+                                    PseudoTab.fromTab(groupTab),
+                                    isSelected,
+                                    true,
+                                    false);
+
+                            return;
+                        }
+
                         if (mModel.indexFromId(tab.getId()) == TabModel.INVALID_TAB_INDEX) return;
                         tab.removeObserver(mTabObserver);
                         mModel.removeAt(mModel.indexFromId(tab.getId()));
@@ -958,8 +987,10 @@ class TabListMediator {
                         if (mActionsOnAllRelatedTabs) {
                             List<Tab> related = getRelatedTabsForId(tabId);
                             if (related.size() > 1) {
+                                mIsClosingGroup = true;
                                 onGroupClosedFrom(tabId);
                                 tabModel.closeMultipleTabs(related, true);
+                                mIsClosingGroup = false;
                                 return;
                             }
                         }
@@ -1186,6 +1217,11 @@ class TabListMediator {
         var oldValue = mActionsOnAllRelatedTabs;
         mActionsOnAllRelatedTabs = actionOnAllRelatedTabs;
         ResettersForTesting.register(() -> mActionsOnAllRelatedTabs = oldValue);
+    }
+
+    void setIsClosingGroupForTesting(boolean isClosingGroup) {
+        mIsClosingGroup = isClosingGroup;
+        ResettersForTesting.register(() -> mIsClosingGroup = false);
     }
 
     private List<Tab> getRelatedTabsForId(int id) {
@@ -1697,6 +1733,9 @@ class TabListMediator {
                         .with(TabProperties.ACCESSIBILITY_DELEGATE, mAccessibilityDelegate)
                         .with(TabProperties.SHOULD_SHOW_PRICE_DROP_TOOLTIP, false)
                         .with(CARD_TYPE, TAB)
+                        .with(
+                                TabProperties.QUICK_DELETE_ANIMATION_STATUS,
+                                ClosableTabGridView.QuickDeleteAnimationStatus.TAB_RESTORE)
                         .build();
 
         tabInfo.set(
@@ -1975,14 +2014,13 @@ class TabListMediator {
     }
 
     /**
-     * Removes a special {@link @link org.chromium.ui.modelutil.MVCListAdapter.ListItem} that
-     * has the given {@code uiType} and/or its {@link PropertyModel} has the given
-     * {@code itemIdentifier} from the current {@link TabListModel}.
+     * Removes a special {@link org.chromium.ui.modelutil.MVCListAdapter.ListItem} that has the
+     * given {@code uiType} and/or its {@link PropertyModel} has the given {@code itemIdentifier}
+     * from the current {@link TabListModel}.
      *
      * @param uiType The uiType to match.
-     * @param itemIdentifier The itemIdentifier to match. This can be obsoleted if the {@link @link
-     *         org.chromium.ui.modelutil.MVCListAdapter.ListItem} does not need additional
-     *         identifier.
+     * @param itemIdentifier The itemIdentifier to match. This can be obsoleted if the {@link
+     *     org.chromium.ui.modelutil.MVCListAdapter.ListItem} does not need additional identifier.
      */
     void removeSpecialItemFromModel(
             @UiType int uiType, @MessageService.MessageType int itemIdentifier) {
@@ -2104,7 +2142,7 @@ class TabListMediator {
      * @param tab the {@link Tab} to find the group index of.
      * @return the index for the tab group within {@link mModel}
      */
-    private int getIndexForTabWithRelatedTabs(Tab tab) {
+    int getIndexForTabWithRelatedTabs(Tab tab) {
         List<Integer> relatedTabIds = getRelatedTabsIds(tab.getId());
         if (!relatedTabIds.isEmpty()) {
             for (int i = 0; i < mModel.size(); i++) {
@@ -2155,6 +2193,159 @@ class TabListMediator {
         filter.removeObserver(mTabModelObserver);
         if (filter instanceof TabGroupModelFilter groupFilter) {
             groupFilter.removeTabGroupObserver(mTabGroupObserver);
+        }
+    }
+
+    /**
+     * @param itemIdentifier The itemIdentifier to match.
+     * @return whether a special {@link org.chromium.ui.modelutil.MVCListAdapter.ListItem} with the
+     *     given {@code itemIdentifier} for its {@link PropertyModel} exists in the current {@link
+     *     TabListModel}.
+     */
+    boolean specialItemExistsInModel(@MessageService.MessageType int itemIdentifier) {
+        if (itemIdentifier == MessageService.MessageType.ALL) {
+            return mModel.lastIndexForMessageItem() != TabModel.INVALID_TAB_INDEX;
+        }
+        return mModel.lastIndexForMessageItemFromType(itemIdentifier) != TabModel.INVALID_TAB_INDEX;
+    }
+
+    /**
+     * Prepare and run the Quick Delete animation on the tab list.
+     *
+     * @param onAnimationEnd Runnable that is invoked when the animation is completed.
+     * @param tabs The tabs to fade with the animation. These tabs will get closed after the
+     *     animation is complete.
+     * @param recyclerView The {@link TabListRecyclerView} that is showing the tab list UI.
+     */
+    public void showQuickDeleteAnimation(
+            @NonNull Runnable onAnimationEnd,
+            @NonNull List<Tab> tabs,
+            @NonNull TabListRecyclerView recyclerView) {
+        recyclerView.setBlockTouchInput(true);
+        Drawable originalForeground = recyclerView.getForeground();
+
+        // Prepare the tabs that will be hidden by the animation.
+        TreeMap<Integer, List<Integer>> bottomValuesToTabIndexes = new TreeMap<>();
+        getOrderOfTabsForQuickDeleteAnimation(recyclerView, tabs, bottomValuesToTabIndexes);
+
+        setQuickDeleteAnimationStatusForTabIndexes(
+                bottomValuesToTabIndexes.values().stream()
+                        .flatMap(Collection::stream)
+                        .collect(Collectors.toList()),
+                ClosableTabGridView.QuickDeleteAnimationStatus.TAB_PREPARE);
+
+        // Create the gradient drawable and prepare the animator.
+        int tabGridHeight = recyclerView.getHeight();
+        int intersectionHeight =
+                QuickDeleteAnimationGradientDrawable.getAnimationsIntersectionHeight(tabGridHeight);
+        QuickDeleteAnimationGradientDrawable gradientDrawable =
+                QuickDeleteAnimationGradientDrawable.createQuickDeleteWipeAnimationDrawable(
+                        mContext, tabGridHeight);
+
+        ObjectAnimator wipeAnimation = gradientDrawable.createWipeAnimator(tabGridHeight);
+
+        wipeAnimation.addUpdateListener(
+                valueAnimator -> {
+                    if (bottomValuesToTabIndexes.isEmpty()) return;
+
+                    float value = (float) valueAnimator.getAnimatedValue();
+                    int bottomVal = bottomValuesToTabIndexes.lastKey();
+                    if (bottomVal >= Math.round(value) + intersectionHeight) {
+                        setQuickDeleteAnimationStatusForTabIndexes(
+                                bottomValuesToTabIndexes.get(bottomVal),
+                                ClosableTabGridView.QuickDeleteAnimationStatus.TAB_HIDE);
+                        bottomValuesToTabIndexes.remove(bottomVal);
+                    }
+                });
+
+        wipeAnimation.addListener(
+                new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        recyclerView.setBlockTouchInput(false);
+                        recyclerView.setForeground(originalForeground);
+                        onAnimationEnd.run();
+                    }
+                });
+
+        recyclerView.setForeground(gradientDrawable);
+        wipeAnimation.start();
+    }
+
+    /**
+     * Gets the order of tabs to be hidden with the animation starting from the bottom up.
+     *
+     * @param recyclerView to get the position of tabs within the {@link TabListRecyclerView}.
+     * @param tabs The tabs to fade with the animation.
+     * @param bottomValuesToTabIndexes the {@link TreeMap} to map a list of sorted bottom values to
+     *     tabs that have these bottom values.
+     */
+    @VisibleForTesting
+    void getOrderOfTabsForQuickDeleteAnimation(
+            TabListRecyclerView recyclerView,
+            List<Tab> tabs,
+            TreeMap<Integer, List<Integer>> bottomValuesToTabIndexes) {
+        Set<Tab> filteredTabs = filterQuickDeleteTabsForAnimation(tabs);
+
+        for (Tab tab : filteredTabs) {
+            int id = tab.getId();
+            int index = mModel.indexFromId(id);
+            Rect tabRect = recyclerView.getRectOfCurrentThumbnail(index, id);
+
+            // Ignore tabs that are outside the screen view.
+            if (tabRect == null) continue;
+
+            int bottom = tabRect.bottom;
+
+            if (bottomValuesToTabIndexes.containsKey(bottom)) {
+                bottomValuesToTabIndexes.get(bottom).add(index);
+            } else {
+                bottomValuesToTabIndexes.put(bottom, new ArrayList<>(List.of(index)));
+            }
+        }
+    }
+
+    /**
+     * @param tabs The full list of tabs that will be closed with Quick Delete.
+     * @return a filtered list of unique tabs that the animation should run on. This will ignore
+     *     tabs with other related tabs unless all of it's related tabs are included in the list of
+     *     tabs to be closed.
+     */
+    private Set<Tab> filterQuickDeleteTabsForAnimation(List<Tab> tabs) {
+        TabModelFilter filter = mCurrentTabModelFilterSupplier.get();
+        assert filter != null;
+
+        Set<Tab> unfilteredTabs = new HashSet<>(tabs);
+        Set<Tab> filteredTabs = new HashSet<>();
+        Set<Integer> checkedRootIds = new HashSet<>();
+
+        for (Tab tab : unfilteredTabs) {
+            if (!filter.hasOtherRelatedTabs(tab)) {
+                filteredTabs.add(tab);
+                continue;
+            }
+
+            if (checkedRootIds.contains(tab.getRootId())) continue;
+            checkedRootIds.add(tab.getRootId());
+
+            List<Tab> relatedTabs = filter.getRelatedTabList(tab.getId());
+            if (unfilteredTabs.containsAll(relatedTabs)) {
+                int groupIndex = filter.indexOf(tab);
+                Tab groupTab = filter.getTabAt(groupIndex);
+                filteredTabs.add(groupTab);
+            }
+        }
+
+        return filteredTabs;
+    }
+
+    private void setQuickDeleteAnimationStatusForTabIndexes(
+            List<Integer> indexes,
+            @ClosableTabGridView.QuickDeleteAnimationStatus int animationStatus) {
+        for (int index : indexes) {
+            mModel.get(index)
+                    .model
+                    .set(TabProperties.QUICK_DELETE_ANIMATION_STATUS, animationStatus);
         }
     }
 }

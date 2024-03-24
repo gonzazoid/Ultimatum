@@ -15,7 +15,6 @@
 #include "base/containers/flat_set.h"
 #include "base/time/time.h"
 #include "base/uuid.h"
-#include "components/attribution_reporting/aggregatable_values.h"
 #include "components/attribution_reporting/filters.h"
 #include "components/attribution_reporting/source_registration.h"
 #include "components/attribution_reporting/source_registration_time_config.mojom.h"
@@ -34,8 +33,9 @@
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace attribution_reporting {
+class AggregatableValues;
 class AggregationKeys;
-class EventReportWindows;
+class TriggerSpecs;
 }  // namespace attribution_reporting
 
 namespace net {
@@ -116,8 +116,7 @@ class SourceBuilder {
 
   SourceBuilder& SetDebugReporting(bool debug_reporting);
 
-  SourceBuilder& SetEventReportWindows(
-      attribution_reporting::EventReportWindows);
+  SourceBuilder& SetTriggerSpecs(attribution_reporting::TriggerSpecs);
 
   SourceBuilder& SetMaxEventLevelReports(int max_event_level_reports);
 
@@ -185,7 +184,7 @@ class TriggerBuilder {
       std::vector<attribution_reporting::AggregatableTriggerData>);
 
   TriggerBuilder& SetAggregatableValues(
-      attribution_reporting::AggregatableValues);
+      std::vector<attribution_reporting::AggregatableValues>);
 
   TriggerBuilder& SetAggregatableDedupKey(
       std::optional<uint64_t> aggregatable_dedup_key);
@@ -222,7 +221,7 @@ class TriggerBuilder {
   std::optional<uint64_t> debug_key_;
   std::vector<attribution_reporting::AggregatableTriggerData>
       aggregatable_trigger_data_;
-  attribution_reporting::AggregatableValues aggregatable_values_;
+  std::vector<attribution_reporting::AggregatableValues> aggregatable_values_;
   std::optional<uint64_t> aggregatable_dedup_key_;
   attribution_reporting::FilterPair aggregatable_dedup_key_filter_pair_;
   bool is_within_fenced_frame_ = false;

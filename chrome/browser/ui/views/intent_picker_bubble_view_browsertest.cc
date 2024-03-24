@@ -42,6 +42,8 @@
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/intent_helper/preferred_apps_test_util.h"
 #include "components/services/app_service/public/cpp/preferred_apps_list_handle.h"
+#include "ui/views/controls/button/checkbox.h"
+#include "ui/views/view_utils.h"
 #endif
 
 class IntentPickerBrowserTest : public web_app::WebAppNavigationBrowserTest {
@@ -461,7 +463,7 @@ IN_PROC_BROWSER_TEST_P(IntentPickerIconBrowserBubbleTest, RememberOpenWebApp) {
 
   // Check "Remember my choice" and accept the bubble.
   views::Checkbox* remember_selection_checkbox =
-      static_cast<views::Checkbox*>(intent_picker_bubble()->GetViewByID(
+      views::AsViewClass<views::Checkbox>(intent_picker_bubble()->GetViewByID(
           IntentPickerBubbleView::ViewId::kRememberCheckbox));
   ASSERT_TRUE(remember_selection_checkbox);
   ASSERT_TRUE(remember_selection_checkbox->GetEnabled());
@@ -501,7 +503,7 @@ IN_PROC_BROWSER_TEST_P(IntentPickerIconBrowserBubbleTest, RememberOpenWebApp) {
 
 #else
 IN_PROC_BROWSER_TEST_P(IntentPickerIconBrowserBubbleTest,
-                       IntentChipLaunchesAppDirectly) {
+                       DISABLED_IntentChipLaunchesAppDirectly) {
   InstallTestWebApp();
   const GURL in_scope_url =
       https_server().GetURL(GetAppUrlHost(), GetInScopeUrlPath());

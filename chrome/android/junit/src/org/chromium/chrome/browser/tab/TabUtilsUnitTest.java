@@ -39,6 +39,7 @@ import org.robolectric.annotation.Implementation;
 import org.robolectric.annotation.Implements;
 import org.robolectric.annotation.Resetter;
 
+import org.chromium.base.ContextUtils;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider;
@@ -372,9 +373,6 @@ public class TabUtilsUnitTest {
                             doReturn(mResources).when(spyActivity).getResources();
                             doReturn(mConfiguration).when(mResources).getConfiguration();
                             doReturn(mDisplayMetrics).when(mResources).getDisplayMetrics();
-                            doReturn(false)
-                                    .when(mResources)
-                                    .getBoolean(R.bool.use_vertical_automotive_back_button_toolbar);
                             doReturn(0).when(mBrowserControlsStateProvider).getTopControlsHeight();
                             mConfiguration.orientation = Configuration.ORIENTATION_LANDSCAPE;
                             mConfiguration.screenWidthDp = TEST_SCREEN_WIDTH;
@@ -410,9 +408,6 @@ public class TabUtilsUnitTest {
                             doReturn(mResources).when(spyActivity).getResources();
                             doReturn(mConfiguration).when(mResources).getConfiguration();
                             doReturn(mDisplayMetrics).when(mResources).getDisplayMetrics();
-                            doReturn(true)
-                                    .when(mResources)
-                                    .getBoolean(R.bool.use_vertical_automotive_back_button_toolbar);
                             doReturn(0).when(mBrowserControlsStateProvider).getTopControlsHeight();
                             mConfiguration.orientation = Configuration.ORIENTATION_LANDSCAPE;
                             mConfiguration.screenWidthDp = TEST_SCREEN_WIDTH;
@@ -461,6 +456,8 @@ public class TabUtilsUnitTest {
         int mockTargetSize = 50;
 
         TabThumbnailView thumbnailView = Mockito.mock(TabThumbnailView.class);
+        doReturn(ContextUtils.getApplicationContext()).when(thumbnailView).getContext();
+
         Bitmap bitmap = Bitmap.createBitmap(mockImageSize, mockImageSize, Bitmap.Config.ARGB_8888);
         bitmap.setDensity(DisplayMetrics.DENSITY_DEFAULT);
         TabUtils.setBitmapAndUpdateImageMatrix(
@@ -469,7 +466,8 @@ public class TabUtilsUnitTest {
         assertNotEquals("The bitmap image density should not be zero.", 0, bitmap.getDensity());
         assertEquals(
                 "The bitmap image's density should be scaled up on automotive.",
-                DisplayUtil.getUiDensityForAutomotive(DisplayMetrics.DENSITY_DEFAULT),
+                DisplayUtil.getUiDensityForAutomotive(
+                        ContextUtils.getApplicationContext(), DisplayMetrics.DENSITY_DEFAULT),
                 bitmap.getDensity());
     }
 }

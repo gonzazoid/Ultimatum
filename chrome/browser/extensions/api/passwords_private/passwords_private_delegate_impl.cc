@@ -5,6 +5,7 @@
 #include "chrome/browser/extensions/api/passwords_private/passwords_private_delegate_impl.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "base/check.h"
@@ -49,10 +50,11 @@
 #include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/constants/chromeos_features.h"
+#include "components/affiliations/core/browser/affiliation_utils.h"
 #include "components/keyed_service/core/service_access_type.h"
-#include "components/password_manager/core/browser/affiliation/affiliation_utils.h"
 #include "components/password_manager/core/browser/features/password_features.h"
 #include "components/password_manager/core/browser/features/password_manager_features_util.h"
+#include "components/password_manager/core/browser/leak_detection/leak_detection_request_utils.h"
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_manager_util.h"
 #include "components/password_manager/core/browser/password_sync_util.h"
@@ -60,6 +62,7 @@
 #include "components/password_manager/core/browser/sharing/recipients_fetcher_impl.h"
 #include "components/password_manager/core/browser/ui/credential_ui_entry.h"
 #include "components/password_manager/core/browser/ui/credential_utils.h"
+#include "components/password_manager/core/common/password_manager_constants.h"
 #include "components/password_manager/core/common/password_manager_features.h"
 #include "components/prefs/pref_service.h"
 #include "components/signin/public/base/signin_metrics.h"
@@ -68,7 +71,6 @@
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/browser/web_contents.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/clipboard/scoped_clipboard_writer.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "url/gurl.h"
@@ -88,6 +90,7 @@ namespace {
 using password_manager::CredentialFacet;
 using password_manager::CredentialUIEntry;
 using password_manager::FetchFamilyMembersRequestStatus;
+using password_manager::constants::kPasswordManagerAuthValidity;
 
 // The error message returned to the UI when Chrome refuses to start multiple
 // exports.
@@ -392,13 +395,13 @@ void PasswordsPrivateDelegateImpl::GetPasswordExceptionsList(
   }
 }
 
-absl::optional<api::passwords_private::UrlCollection>
+std::optional<api::passwords_private::UrlCollection>
 PasswordsPrivateDelegateImpl::GetUrlCollection(const std::string& url) {
   GURL url_with_scheme = password_manager_util::ConstructGURLWithScheme(url);
   if (!password_manager::IsValidPasswordURL(url_with_scheme)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
-  return absl::optional<api::passwords_private::UrlCollection>(
+  return std::optional<api::passwords_private::UrlCollection>(
       CreateUrlCollectionFromGURL(
           password_manager_util::StripAuthAndParams(url_with_scheme)));
 }
@@ -441,7 +444,9 @@ bool PasswordsPrivateDelegateImpl::AddPassword(
   DCHECK(client);
   // Update the default store to the last used one.
   if (success &&
-      client->GetPasswordFeatureManager()->IsOptedInForAccountStorage()) {
+      client->GetPasswordFeatureManager()->IsOptedInForAccountStorage() &&
+      !base::FeatureList::IsEnabled(
+          password_manager::features::kButterOnDesktopFollowup)) {
     client->GetPasswordFeatureManager()->SetDefaultPasswordStore(store_to_use);
   }
   return success;
@@ -536,8 +541,7 @@ void PasswordsPrivateDelegateImpl::RequestPlaintextPassword(
     PlaintextPasswordCallback callback,
     content::WebContents* web_contents) {
   AuthenticateUser(
-      web_contents, PasswordAccessAuthTimeoutHandler::GetAuthValidityPeriod(),
-      GetReauthPurpose(reason),
+      web_contents, kPasswordManagerAuthValidity, GetReauthPurpose(reason),
       base::BindOnce(
           &PasswordsPrivateDelegateImpl::OnRequestPlaintextPasswordAuthResult,
           weak_ptr_factory_.GetWeakPtr(), id, reason, std::move(callback)));
@@ -548,7 +552,7 @@ void PasswordsPrivateDelegateImpl::RequestCredentialsDetails(
     UiEntriesCallback callback,
     content::WebContents* web_contents) {
   AuthenticateUser(
-      web_contents, PasswordAccessAuthTimeoutHandler::GetAuthValidityPeriod(),
+      web_contents, kPasswordManagerAuthValidity,
       GetReauthPurpose(api::passwords_private::PlaintextReason::kView),
       base::BindOnce(
           &PasswordsPrivateDelegateImpl::OnRequestCredentialDetailsAuthResult,
@@ -683,11 +687,14 @@ void PasswordsPrivateDelegateImpl::MovePasswordsToAccount(
     credentials_to_move.push_back(*entry);
   }
 
-  // Desktop settings only offer bulk move, not invidual moves.
   saved_passwords_presenter_.MoveCredentialsToAccount(
       credentials_to_move,
-      password_manager::metrics_util::MoveToAccountStoreTrigger::
-          kExplicitlyTriggeredForMultiplePasswordsInSettings);
+      base::FeatureList::IsEnabled(
+          password_manager::features::kButterOnDesktopFollowup)
+          ? password_manager::metrics_util::MoveToAccountStoreTrigger::
+                kExplicitlyTriggeredInSettings
+          : password_manager::metrics_util::MoveToAccountStoreTrigger::
+                kExplicitlyTriggeredForMultiplePasswordsInSettings);
 }
 
 void PasswordsPrivateDelegateImpl::FetchFamilyMembers(
@@ -748,7 +755,9 @@ void PasswordsPrivateDelegateImpl::ImportPasswords(
   auto* client = ChromePasswordManagerClient::FromWebContents(web_contents);
   DCHECK(client);
   // Update the default store to the last used one.
-  if (client->GetPasswordFeatureManager()->IsOptedInForAccountStorage()) {
+  if (client->GetPasswordFeatureManager()->IsOptedInForAccountStorage() &&
+      !base::FeatureList::IsEnabled(
+          password_manager::features::kButterOnDesktopFollowup)) {
     client->GetPasswordFeatureManager()->SetDefaultPasswordStore(store_to_use);
   }
 }
@@ -810,7 +819,7 @@ PasswordsPrivateDelegateImpl::GetExportProgressStatus() {
 
 bool PasswordsPrivateDelegateImpl::IsOptedInForAccountStorage() {
   return password_manager::features_util::IsOptedInForAccountStorage(
-      SyncServiceFactory::GetForProfile(profile_));
+      profile_->GetPrefs(), SyncServiceFactory::GetForProfile(profile_));
 }
 
 void PasswordsPrivateDelegateImpl::SetAccountStorageOptIn(
@@ -823,8 +832,13 @@ void PasswordsPrivateDelegateImpl::SetAccountStorageOptIn(
     return;
   }
   if (!opt_in) {
-    client->GetPasswordFeatureManager()
-        ->OptOutOfAccountStorageAndClearSettings();
+    if (base::FeatureList::IsEnabled(
+            password_manager::features::kButterOnDesktopFollowup)) {
+      client->GetPasswordFeatureManager()->OptOutOfAccountStorage();
+    } else {
+      client->GetPasswordFeatureManager()
+          ->OptOutOfAccountStorageAndClearSettings();
+    }
     return;
   }
   // The opt in pref is automatically set upon successful reauth.
@@ -854,7 +868,9 @@ bool PasswordsPrivateDelegateImpl::UnmuteInsecureCredential(
 
 void PasswordsPrivateDelegateImpl::StartPasswordCheck(
     StartPasswordCheckCallback callback) {
-  password_check_delegate_.StartPasswordCheck(std::move(callback));
+  password_check_delegate_.StartPasswordCheck(
+      password_manager::LeakDetectionInitiator::kBulkSyncedPasswordsCheck,
+      std::move(callback));
   auto* sentiment_service =
       TrustSafetySentimentServiceFactory::GetForProfile(profile_);
   if (!sentiment_service) {
@@ -951,13 +967,13 @@ void PasswordsPrivateDelegateImpl::OnRequestPlaintextPasswordAuthResult(
     PlaintextPasswordCallback callback,
     bool authenticated) {
   if (!authenticated) {
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
     return;
   }
 
   const CredentialUIEntry* entry = credential_id_generator_.TryGetKey(id);
   if (!entry) {
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
     return;
   }
 
@@ -1196,7 +1212,7 @@ PasswordsPrivateDelegateImpl::CreatePasswordUiEntryFromCredentialUiEntry(
 
     entry.federation_text = base::UTF16ToUTF8(formatted_origin);
   }
-  absl::optional<GURL> change_password_url = credential.GetChangePasswordURL();
+  std::optional<GURL> change_password_url = credential.GetChangePasswordURL();
   if (change_password_url.has_value()) {
     entry.change_password_url = change_password_url->spec();
   }

@@ -15,7 +15,6 @@ import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.Log;
-import org.chromium.net.impl.CronetManifest;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -68,11 +67,6 @@ public final class HttpFlagsLoader {
      */
     @Nullable
     public static Flags load(Context context) {
-        if (!CronetManifest.shouldReadHttpFlags(context)) {
-            Log.d(TAG, "Not loading HTTP flags because they are disabled in the manifest");
-            return null;
-        }
-
         try {
             ApplicationInfo providerApplicationInfo = getProviderApplicationInfo(context);
             if (providerApplicationInfo == null) return null;
@@ -90,7 +84,7 @@ public final class HttpFlagsLoader {
 
             return flags;
         } catch (RuntimeException exception) {
-            Log.e(TAG, "Unable to load HTTP flags file", exception);
+            Log.i(TAG, "Unable to load HTTP flags file", exception);
             return null;
         }
     }
@@ -107,7 +101,7 @@ public final class HttpFlagsLoader {
                                 // a security risk.
                                 PackageManager.MATCH_SYSTEM_ONLY);
         if (resolveInfo == null) {
-            Log.w(
+            Log.i(
                     TAG,
                     "Unable to resolve the HTTP flags file provider package. This is expected if "
                             + "the host system is not set up to provide HTTP flags.");
@@ -134,7 +128,7 @@ public final class HttpFlagsLoader {
         try (FileInputStream fileInputStream = new FileInputStream(file)) {
             return Flags.parseDelimitedFrom(fileInputStream);
         } catch (FileNotFoundException exception) {
-            Log.w(
+            Log.i(
                     TAG,
                     "HTTP flags file `%s` is missing. This is expected if HTTP flags functionality "
                             + "is currently disabled in the host system.",

@@ -10,7 +10,7 @@ import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {FeaturePromoDemoPageInfo} from './user_education_internals.mojom-webui.js';
+import type {FeaturePromoDemoPageInfo} from './user_education_internals.mojom-webui.js';
 import {getTemplate} from './user_education_internals_card.html.js';
 
 const PROMO_LAUNCH_EVENT = 'promo-launch';
@@ -59,9 +59,9 @@ class UserEducationInternalsCardElement extends PolymerElement {
 
   private clearData_() {
     if (confirm(
-            'Clear Feature Promo data?\n' +
-            'Note: this will not clear Feature Engagement data, ' +
-            'so this promo may still not be able to show normally.')) {
+            'Clear Feature Promo data and Feature Enagement events?\n' +
+            'Note: because of session tracking and event constraints, ' +
+            'Feature Engagement may still disallow this promo.')) {
       this.dispatchEvent(new CustomEvent(
           CLEAR_PROMO_DATA_EVENT,
           {bubbles: true, composed: true, detail: this.promo.internalName}));

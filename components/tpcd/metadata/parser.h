@@ -5,6 +5,7 @@
 #ifndef COMPONENTS_TPCD_METADATA_PARSER_H_
 #define COMPONENTS_TPCD_METADATA_PARSER_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -12,12 +13,13 @@
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
 #include "base/thread_annotations.h"
+#include "components/content_settings/core/common/content_settings_enums.mojom.h"
 #include "components/tpcd/metadata/metadata.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace tpcd::metadata {
 
 using MetadataEntries = std::vector<MetadataEntry>;
+using TpcdMetadataRuleSource = content_settings::mojom::TpcdMetadataRuleSource;
 
 class Parser {
  public:
@@ -51,6 +53,18 @@ class Parser {
   MetadataEntries GetMetadata();
 
   static constexpr char const* kMetadataFeatureParamName = "Metadata";
+  static constexpr char const* kSourceUnspecified = "SOURCE_UNSPECIFIED";
+  static constexpr char const* kSourceTest = "SOURCE_TEST";
+  static constexpr char const* kSource1pDt = "SOURCE_1P_DT";
+  static constexpr char const* kSource3pDt = "SOURCE_3P_DT";
+  static constexpr char const* kSourceDogFood = "SOURCE_DOGFOOD";
+  static constexpr char const* kSourceCriticalSector = "SOURCE_CRITICAL_SECTOR";
+  static constexpr char const* kSourceCuj = "SOURCE_CUJ";
+  static constexpr char const* kSourceGovEduTld = "SOURCE_GOV_EDU_TLD";
+
+  // Converts the TPCD `MetadataEntry` `Source` field to its corresponding
+  // `content_settings::RuleSource` enum value.
+  static TpcdMetadataRuleSource ToRuleSource(const std::string& source);
 
   // Start Parser testing methods:
   MetadataEntries GetInstalledMetadataForTesting();
@@ -61,8 +75,8 @@ class Parser {
 
  private:
   base::ObserverList<Observer>::Unchecked observers_;
-  absl::optional<MetadataEntries> metadata_
-      GUARDED_BY_CONTEXT(sequence_checker_) = absl::nullopt;
+  std::optional<MetadataEntries> metadata_
+      GUARDED_BY_CONTEXT(sequence_checker_) = std::nullopt;
 
   SEQUENCE_CHECKER(sequence_checker_);
 };

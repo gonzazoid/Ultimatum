@@ -20,6 +20,7 @@
 #include "media/gpu/chromeos/chromeos_compressed_gpu_memory_buffer_video_frame_utils.h"
 #include "media/gpu/chromeos/fake_chromeos_intel_compressed_gpu_memory_buffer.h"
 #include "media/gpu/chromeos/fourcc.h"
+#include "media/gpu/chromeos/platform_video_frame_utils.h"
 #include "media/video/fake_gpu_memory_buffer.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -35,8 +36,9 @@ CroStatus::Or<scoped_refptr<VideoFrame>> CreateGpuMemoryBufferVideoFrame(
     const gfx::Size& natural_size,
     bool use_protected,
     bool use_linear_buffers,
+    bool needs_detiling,
     base::TimeDelta timestamp) {
-  absl::optional<gfx::BufferFormat> gfx_format =
+  std::optional<gfx::BufferFormat> gfx_format =
       VideoPixelFormatToGfxBufferFormat(format);
   DCHECK(gfx_format);
   const gpu::MailboxHolder mailbox_holders[VideoFrame::kMaxPlanes] = {};
@@ -54,8 +56,9 @@ CreateChromeOSCompressedGpuMemoryBufferVideoFrame(uint64_t modifier,
                                                   const gfx::Size& natural_size,
                                                   bool use_protected,
                                                   bool use_linear_buffers,
+                                                  bool needs_detiling,
                                                   base::TimeDelta timestamp) {
-  absl::optional<gfx::BufferFormat> gfx_format =
+  std::optional<gfx::BufferFormat> gfx_format =
       VideoPixelFormatToGfxBufferFormat(format);
   DCHECK(gfx_format);
   return WrapChromeOSCompressedGpuMemoryBufferAsVideoFrame(
@@ -127,7 +130,7 @@ class PlatformVideoFramePoolTestBase : public ::testing::Test {
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<PlatformVideoFramePool> pool_;
 
-  absl::optional<GpuBufferLayout> layout_;
+  std::optional<GpuBufferLayout> layout_;
   gfx::Rect visible_rect_;
   gfx::Size natural_size_;
 };
@@ -151,8 +154,7 @@ TEST_P(PlatformVideoFramePoolTest, SingleFrameReuse) {
   ASSERT_TRUE(fourcc.has_value());
   ASSERT_TRUE(Initialize(fourcc.value()));
   scoped_refptr<VideoFrame> frame = GetFrame(10);
-  gfx::GpuMemoryBufferId id =
-      PlatformVideoFramePool::GetGpuMemoryBufferId(*frame);
+  gfx::GenericSharedMemoryId id = GetSharedMemoryId(*frame);
 
   // Clear frame reference to return the frame to the pool.
   frame = nullptr;
@@ -160,7 +162,7 @@ TEST_P(PlatformVideoFramePoolTest, SingleFrameReuse) {
 
   // Verify that the next frame from the pool uses the same memory.
   scoped_refptr<VideoFrame> new_frame = GetFrame(20);
-  EXPECT_EQ(id, PlatformVideoFramePool::GetGpuMemoryBufferId(*new_frame));
+  EXPECT_EQ(id, GetSharedMemoryId(*new_frame));
 }
 
 TEST_P(PlatformVideoFramePoolTest, MultipleFrameReuse) {
@@ -169,20 +171,18 @@ TEST_P(PlatformVideoFramePoolTest, MultipleFrameReuse) {
   ASSERT_TRUE(Initialize(fourcc.value()));
   scoped_refptr<VideoFrame> frame1 = GetFrame(10);
   scoped_refptr<VideoFrame> frame2 = GetFrame(20);
-  gfx::GpuMemoryBufferId id1 =
-      PlatformVideoFramePool::GetGpuMemoryBufferId(*frame1);
-  gfx::GpuMemoryBufferId id2 =
-      PlatformVideoFramePool::GetGpuMemoryBufferId(*frame2);
+  gfx::GenericSharedMemoryId id1 = GetSharedMemoryId(*frame1);
+  gfx::GenericSharedMemoryId id2 = GetSharedMemoryId(*frame2);
 
   frame1 = nullptr;
   task_environment_.RunUntilIdle();
   frame1 = GetFrame(30);
-  EXPECT_EQ(id1, PlatformVideoFramePool::GetGpuMemoryBufferId(*frame1));
+  EXPECT_EQ(id1, GetSharedMemoryId(*frame1));
 
   frame2 = nullptr;
   task_environment_.RunUntilIdle();
   frame2 = GetFrame(40);
-  EXPECT_EQ(id2, PlatformVideoFramePool::GetGpuMemoryBufferId(*frame2));
+  EXPECT_EQ(id2, GetSharedMemoryId(*frame2));
 
   frame1 = nullptr;
   frame2 = nullptr;
@@ -280,11 +280,13 @@ TEST_P(PlatformVideoFramePoolTest, UnwrapVideoFrame) {
   scoped_refptr<VideoFrame> frame_2 = VideoFrame::WrapVideoFrame(
       frame_1, frame_1->format(), frame_1->visible_rect(),
       frame_1->natural_size());
-  EXPECT_EQ(pool_->UnwrapFrame(*frame_1), pool_->UnwrapFrame(*frame_2));
+  EXPECT_EQ(pool_->GetOriginalFrame(GetSharedMemoryId(*frame_1)),
+            pool_->GetOriginalFrame(GetSharedMemoryId(*frame_2)));
   EXPECT_EQ(frame_1->GetGpuMemoryBuffer(), frame_2->GetGpuMemoryBuffer());
 
   scoped_refptr<VideoFrame> frame_3 = GetFrame(20);
-  EXPECT_NE(pool_->UnwrapFrame(*frame_1), pool_->UnwrapFrame(*frame_3));
+  EXPECT_NE(pool_->GetOriginalFrame(GetSharedMemoryId(*frame_1)),
+            pool_->GetOriginalFrame(GetSharedMemoryId(*frame_3)));
   EXPECT_NE(frame_1->GetGpuMemoryBuffer(), frame_3->GetGpuMemoryBuffer());
 }
 
@@ -297,8 +299,7 @@ TEST_P(PlatformVideoFramePoolTest,
   constexpr gfx::Rect kInitialVisibleRect(kCodedSize);
   ASSERT_TRUE(Initialize(kCodedSize, kInitialVisibleRect, fourcc.value()));
   scoped_refptr<VideoFrame> frame1 = GetFrame(10);
-  gfx::GpuMemoryBufferId id1 =
-      PlatformVideoFramePool::GetGpuMemoryBufferId(*frame1);
+  gfx::GenericSharedMemoryId id1 = GetSharedMemoryId(*frame1);
 
   // Clear frame references to return the frames to the pool.
   frame1 = nullptr;
@@ -317,8 +318,7 @@ TEST_P(PlatformVideoFramePoolTest,
   ASSERT_TRUE(Initialize(kCodedSize, kDifferentVisibleRect, fourcc.value()));
 
   scoped_refptr<VideoFrame> frame2 = GetFrame(20);
-  gfx::GpuMemoryBufferId id2 =
-      PlatformVideoFramePool::GetGpuMemoryBufferId(*frame2);
+  gfx::GenericSharedMemoryId id2 = GetSharedMemoryId(*frame2);
   EXPECT_EQ(id1, id2);
 }
 
@@ -328,7 +328,7 @@ TEST_P(PlatformVideoFramePoolTest, InitializeFail) {
   SetCreateFrameCB(base::BindRepeating(
       [](VideoPixelFormat format, const gfx::Size& coded_size,
          const gfx::Rect& visible_rect, const gfx::Size& natural_size,
-         bool use_protected, bool use_linear_buffers,
+         bool use_protected, bool use_linear_buffers, bool needs_detiling,
          base::TimeDelta timestamp) {
         return CroStatus::Or<scoped_refptr<VideoFrame>>(
             CroStatus::Codes::kFailedToCreateVideoFrame);

@@ -62,9 +62,10 @@ bool PlatformWindow::CanSetDecorationInsets() const {
 void PlatformWindow::SetDecorationInsets(const gfx::Insets* insets_px) {}
 
 void PlatformWindow::SetOpaqueRegion(
-    absl::optional<std::vector<gfx::Rect>> region_px) {}
+    std::optional<std::vector<gfx::Rect>> region_px) {}
 
-void PlatformWindow::SetInputRegion(absl::optional<gfx::Rect> region_px) {}
+void PlatformWindow::SetInputRegion(
+    std::optional<std::vector<gfx::Rect>> region_px) {}
 
 bool PlatformWindow::IsClientControlledWindowMovementSupported() const {
   return true;

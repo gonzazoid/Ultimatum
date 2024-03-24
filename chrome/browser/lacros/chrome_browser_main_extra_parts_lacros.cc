@@ -24,6 +24,7 @@
 #include "chrome/browser/lacros/automation_manager_lacros.h"
 #include "chrome/browser/lacros/browser_service_lacros.h"
 #include "chrome/browser/lacros/clipboard_history_lacros.h"
+#include "chrome/browser/lacros/debug_interface_lacros.h"
 #include "chrome/browser/lacros/desk_profiles_lacros.h"
 #include "chrome/browser/lacros/desk_template_client_lacros.h"
 #include "chrome/browser/lacros/download_controller_client_lacros.h"
@@ -54,7 +55,7 @@
 #include "chrome/browser/lacros/web_page_info_lacros.h"
 #include "chrome/browser/lacros/webauthn_request_registrar_lacros.h"
 #include "chrome/browser/memory/oom_kills_monitor.h"
-#include "chrome/browser/metrics/structured/chrome_structured_metrics_recorder.h"
+#include "chrome/browser/metrics/structured/chrome_structured_metrics_delegate.h"
 #include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/ui/quick_answers/read_write_cards_manager_impl.h"
 #include "chromeos/components/kiosk/kiosk_utils.h"
@@ -65,6 +66,7 @@
 #include "chromeos/ui/clipboard_history/clipboard_history_util.h"
 #include "components/arc/common/intent_helper/arc_icon_cache_delegate.h"
 #include "components/nacl/common/buildflags.h"
+#include "components/policy/core/common/policy_pref_names.h"
 #include "extensions/common/features/feature_session_type.h"
 #include "services/device/public/cpp/geolocation/geolocation_manager.h"
 #include "ui/views/controls/views_text_services_context_menu_chromeos.h"
@@ -97,9 +99,24 @@ CreateClipboardHistoryLacros() {
   return nullptr;
 }
 
-std::unique_ptr<crosapi::DeskProfilesLacros> CreateDeskProfilesLacros() {
-  CHECK(chromeos::features::IsDeskProfilesEnabled());
+bool IsFloatingWorkspaceV2Enabled() {
+  PrefService* pref_service =
+      ProfileManager::GetPrimaryUserProfile()->GetPrefs();
+  if (!pref_service) {
+    return false;
+  }
+  const PrefService::Preference* floating_workspace_pref =
+      pref_service->FindPreference(
+          policy::policy_prefs::kFloatingWorkspaceEnabled);
 
+  return (floating_workspace_pref && floating_workspace_pref->IsManaged() &&
+          pref_service->GetBoolean(
+              policy::policy_prefs::kFloatingWorkspaceEnabled));
+}
+
+std::unique_ptr<crosapi::DeskProfilesLacros> CreateDeskProfilesLacros() {
+  CHECK(chromeos::features::IsDeskProfilesEnabled() ||
+        IsFloatingWorkspaceV2Enabled());
   if (chromeos::LacrosService* const service = chromeos::LacrosService::Get();
       service->IsAvailable<crosapi::mojom::DeskProfileObserver>() &&
       g_browser_process) {
@@ -180,8 +197,10 @@ void ChromeBrowserMainExtraPartsLacros::PreProfileInit() {
 void ChromeBrowserMainExtraPartsLacros::PostBrowserStart() {
   automation_manager_ = std::make_unique<AutomationManagerLacros>();
   browser_service_ = std::make_unique<BrowserServiceLacros>();
+  debug_interface_ = std::make_unique<crosapi::DebugInterfaceLacros>();
   desk_template_client_ = std::make_unique<DeskTemplateClientLacros>();
-  if (chromeos::features::IsDeskProfilesEnabled()) {
+  if (chromeos::features::IsDeskProfilesEnabled() ||
+      IsFloatingWorkspaceV2Enabled()) {
     desk_profiles_lacros_ = CreateDeskProfilesLacros();
   }
   drivefs_native_message_host_bridge_ =
@@ -260,7 +279,7 @@ void ChromeBrowserMainExtraPartsLacros::PostBrowserStart() {
   webauthn_request_registrar_lacros_ =
       std::make_unique<WebAuthnRequestRegistrarLacros>();
 
-  metrics::structured::ChromeStructuredMetricsRecorder::Get()->Initialize();
+  metrics::structured::ChromeStructuredMetricsDelegate::Get()->Initialize();
 
   if (g_browser_process != nullptr &&
       g_browser_process->local_state() != nullptr) {

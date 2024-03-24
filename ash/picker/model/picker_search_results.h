@@ -6,24 +6,13 @@
 #define ASH_PICKER_MODEL_PICKER_SEARCH_RESULTS_H_
 
 #include <string>
-#include <string_view>
 #include <vector>
 
 #include "ash/ash_export.h"
+#include "ash/public/cpp/picker/picker_search_result.h"
 #include "base/containers/span.h"
 
 namespace ash {
-
-// TODO(b/310088338): Support result types beyond just literal text.
-class ASH_EXPORT PickerSearchResult {
- public:
-  explicit PickerSearchResult(const std::u16string& text);
-
-  const std::u16string& text() const;
-
- private:
-  std::u16string text_;
-};
 
 // The search results for a particular Picker query.
 class ASH_EXPORT PickerSearchResults {

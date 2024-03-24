@@ -9,6 +9,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/containers/contains.h"
@@ -17,7 +18,7 @@
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/pickle.h"
-#include "base/strings/string_piece.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/time/time.h"
 #include "crypto/openssl_util.h"
@@ -60,14 +61,14 @@ const char kPKCS7Header[] = "PKCS7";
 // Utility to split |src| on the first occurrence of |c|, if any. |right| will
 // either be empty if |c| was not found, or will contain the remainder of the
 // string including the split character itself.
-void SplitOnChar(base::StringPiece src,
+void SplitOnChar(std::string_view src,
                  char c,
-                 base::StringPiece* left,
-                 base::StringPiece* right) {
+                 std::string_view* left,
+                 std::string_view* right) {
   size_t pos = src.find(c);
-  if (pos == base::StringPiece::npos) {
+  if (pos == std::string_view::npos) {
     *left = src;
-    *right = base::StringPiece();
+    *right = std::string_view();
   } else {
     *left = src.substr(0, pos);
     *right = src.substr(pos);
@@ -79,7 +80,7 @@ void SplitOnChar(base::StringPiece src,
 [[nodiscard]] bool ParseSequenceValue(const bssl::der::Input& tlv,
                                       bssl::der::Input* value) {
   bssl::der::Parser parser(tlv);
-  return parser.ReadTag(bssl::der::kSequence, value) && !parser.HasMore();
+  return parser.ReadTag(CBS_ASN1_SEQUENCE, value) && !parser.HasMore();
 }
 
 // Normalize |cert|'s Issuer and store it in |out_normalized_issuer|, returning
@@ -150,14 +151,14 @@ scoped_refptr<X509Certificate> X509Certificate::CreateFromBufferUnsafeOptions(
 
 // static
 scoped_refptr<X509Certificate> X509Certificate::CreateFromDERCertChain(
-    const std::vector<base::StringPiece>& der_certs) {
+    const std::vector<std::string_view>& der_certs) {
   return CreateFromDERCertChainUnsafeOptions(der_certs, {});
 }
 
 // static
 scoped_refptr<X509Certificate>
 X509Certificate::CreateFromDERCertChainUnsafeOptions(
-    const std::vector<base::StringPiece>& der_certs,
+    const std::vector<std::string_view>& der_certs,
     UnsafeCreateOptions options) {
   TRACE_EVENT0("io", "X509Certificate::CreateFromDERCertChain");
   if (der_certs.empty())
@@ -204,7 +205,7 @@ scoped_refptr<X509Certificate> X509Certificate::CreateFromPickleUnsafeOptions(
   if (!pickle_iter->ReadLength(&chain_length))
     return nullptr;
 
-  std::vector<base::StringPiece> cert_chain;
+  std::vector<std::string_view> cert_chain;
   const char* data = nullptr;
   size_t data_length = 0;
   for (size_t i = 0; i < chain_length; ++i) {
@@ -224,8 +225,8 @@ CertificateList X509Certificate::CreateCertificateListFromBytes(
   // Check to see if it is in a PEM-encoded form. This check is performed
   // first, as both OS X and NSS will both try to convert if they detect
   // PEM encoding, except they don't do it consistently between the two.
-  base::StringPiece data_string(reinterpret_cast<const char*>(data.data()),
-                                data.size());
+  std::string_view data_string(reinterpret_cast<const char*>(data.data()),
+                               data.size());
   std::vector<std::string> pem_headers;
 
   // To maintain compatibility with NSS/Firefox, CERTIFICATE is a universally
@@ -435,7 +436,7 @@ bool X509Certificate::IsIssuedByEncoded(
 
 // static
 bool X509Certificate::VerifyHostname(
-    const std::string& hostname,
+    std::string_view hostname,
     const std::vector<std::string>& cert_san_dns_names,
     const std::vector<std::string>& cert_san_ip_addrs) {
   DCHECK(!hostname.empty());
@@ -453,8 +454,9 @@ bool X509Certificate::VerifyHostname(
   // Presented identifier(s) == name(s) the server knows itself as, in its cert.
 
   // CanonicalizeHost requires surrounding brackets to parse an IPv6 address.
-  const std::string host_or_ip = hostname.find(':') != std::string::npos ?
-      "[" + hostname + "]" : hostname;
+  const std::string host_or_ip = hostname.find(':') != std::string::npos
+                                     ? base::StrCat({"[", hostname, "]"})
+                                     : std::string(hostname);
   url::CanonHostInfo host_info;
   std::string reference_name = CanonicalizeHost(host_or_ip, &host_info);
 
@@ -464,7 +466,7 @@ bool X509Certificate::VerifyHostname(
 
   // Fully handle all cases where |hostname| contains an IP address.
   if (host_info.IsIPAddress()) {
-    base::StringPiece ip_addr_string(
+    std::string_view ip_addr_string(
         reinterpret_cast<const char*>(host_info.address),
         host_info.AddressLength());
     return base::Contains(cert_san_ip_addrs, ip_addr_string);
@@ -490,7 +492,7 @@ bool X509Certificate::VerifyHostname(
   // "www.f.com" -> ".f.com".
   // If there is no meaningful domain part to |host| (e.g. it contains no dots)
   // then |reference_domain| will be empty.
-  base::StringPiece reference_host, reference_domain;
+  std::string_view reference_host, reference_domain;
   SplitOnChar(reference_name, '.', &reference_host, &reference_domain);
   bool allow_wildcards = false;
   if (!reference_domain.empty()) {
@@ -546,7 +548,7 @@ bool X509Certificate::VerifyHostname(
     if (presented_name.length() > reference_name.length())
       continue;
 
-    base::StringPiece presented_host, presented_domain;
+    std::string_view presented_host, presented_domain;
     SplitOnChar(presented_name, '.', &presented_host, &presented_domain);
 
     if (presented_domain != reference_domain)
@@ -566,14 +568,14 @@ bool X509Certificate::VerifyHostname(
   return false;
 }
 
-bool X509Certificate::VerifyNameMatch(const std::string& hostname) const {
+bool X509Certificate::VerifyNameMatch(std::string_view hostname) const {
   std::vector<std::string> dns_names, ip_addrs;
   GetSubjectAltName(&dns_names, &ip_addrs);
   return VerifyHostname(hostname, dns_names, ip_addrs);
 }
 
 // static
-bool X509Certificate::GetPEMEncodedFromDER(base::StringPiece der_encoded,
+bool X509Certificate::GetPEMEncodedFromDER(std::string_view der_encoded,
                                            std::string* pem_encoded) {
   if (der_encoded.empty())
     return false;
@@ -612,9 +614,9 @@ void X509Certificate::GetPublicKeyInfo(const CRYPTO_BUFFER* cert_buffer,
   *type = kPublicKeyTypeUnknown;
   *size_bits = 0;
 
-  base::StringPiece spki;
+  std::string_view spki;
   if (!asn1::ExtractSPKIFromDERCert(
-          base::StringPiece(
+          std::string_view(
               reinterpret_cast<const char*>(CRYPTO_BUFFER_data(cert_buffer)),
               CRYPTO_BUFFER_len(cert_buffer)),
           &spki)) {

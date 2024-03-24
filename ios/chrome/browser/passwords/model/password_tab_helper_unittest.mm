@@ -6,6 +6,7 @@
 
 #import <Foundation/Foundation.h>
 
+#import "base/memory/raw_ptr.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/bind.h"
 #import "base/test/metrics/histogram_tester.h"
@@ -13,8 +14,8 @@
 #import "components/password_manager/core/browser/manage_passwords_referrer.h"
 #import "components/password_manager/core/browser/password_manager_constants.h"
 #import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
-#import "ios/chrome/browser/shared/public/commands/application_commands.h"
 #import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/settings_commands.h"
 #import "ios/web/public/navigation/navigation_manager.h"
 #import "ios/web/public/test/fakes/fake_web_client.h"
 #import "ios/web/public/test/fakes/fake_web_state_delegate.h"
@@ -52,12 +53,11 @@ class PasswordTabHelperTest : public PlatformTest {
     PlatformTest::SetUp();
 
     id dispatcher = [[CommandDispatcher alloc] init];
-    id mockApplicationSettingsCommandHandler =
-        OCMProtocolMock(@protocol(ApplicationSettingsCommands));
-    dispatcher_ = mockApplicationSettingsCommandHandler;
-    [dispatcher
-        startDispatchingToTarget:mockApplicationSettingsCommandHandler
-                     forProtocol:@protocol(ApplicationSettingsCommands)];
+    id mockSettingsCommandHandler =
+        OCMProtocolMock(@protocol(SettingsCommands));
+    dispatcher_ = mockSettingsCommandHandler;
+    [dispatcher startDispatchingToTarget:mockSettingsCommandHandler
+                             forProtocol:@protocol(SettingsCommands)];
 
     helper_ = PasswordTabHelper::FromWebState(web_state_.get());
     ASSERT_TRUE(helper_);
@@ -70,7 +70,7 @@ class PasswordTabHelperTest : public PlatformTest {
   web::WebTaskEnvironment task_environment_;
   std::unique_ptr<TestChromeBrowserState> browser_state_;
   std::unique_ptr<web::WebState> web_state_;
-  PasswordTabHelper* helper_ = nullptr;
+  raw_ptr<PasswordTabHelper> helper_ = nullptr;
   id dispatcher_;
 };
 
@@ -83,7 +83,8 @@ TEST_F(PasswordTabHelperTest, RedirectsToPasswordsAndCancelsRequest) {
   const web::WebStatePolicyDecider::RequestInfo request_info(
       ui::PageTransition::PAGE_TRANSITION_LINK, /*target_frame_is_main=*/true,
       /*target_frame_is_cross_origin=*/false,
-      /*has_user_gesture=*/false);
+      /*target_window_is_cross_origin=*/false,
+      /*is_user_initiated=*/false, /*user_tapped_recently=*/false);
   __block bool callback_called = false;
   __block web::WebStatePolicyDecider::PolicyDecision request_policy =
       web::WebStatePolicyDecider::PolicyDecision::Allow();
@@ -113,7 +114,8 @@ TEST_F(PasswordTabHelperTest, NoRedirectWhenWrongLink) {
   const web::WebStatePolicyDecider::RequestInfo request_info(
       ui::PageTransition::PAGE_TRANSITION_LINK, /*target_frame_is_main=*/true,
       /*target_frame_is_cross_origin=*/false,
-      /*has_user_gesture=*/false);
+      /*target_window_is_cross_origin=*/false,
+      /*is_user_initiated=*/false, /*user_tapped_recently=*/false);
   __block bool callback_called = false;
   __block web::WebStatePolicyDecider::PolicyDecision request_policy =
       web::WebStatePolicyDecider::PolicyDecision::Allow();
@@ -141,7 +143,8 @@ TEST_F(PasswordTabHelperTest, NoRedirectWhenWrongTransition) {
   const web::WebStatePolicyDecider::RequestInfo request_info(
       ui::PageTransition::PAGE_TRANSITION_TYPED, /*target_frame_is_main=*/true,
       /*target_frame_is_cross_origin=*/false,
-      /*has_user_gesture=*/false);
+      /*target_window_is_cross_origin=*/false,
+      /*is_user_initiated=*/false, /*user_tapped_recently=*/false);
   __block bool callback_called = false;
   __block web::WebStatePolicyDecider::PolicyDecision request_policy =
       web::WebStatePolicyDecider::PolicyDecision::Allow();

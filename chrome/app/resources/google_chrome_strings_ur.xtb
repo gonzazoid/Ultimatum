@@ -58,6 +58,7 @@
 <translation id="1877026089748256423">‏Chrome پرانا ہے</translation>
 <translation id="1919130412786645364">‏Chrome میں سائن ان کی اجازت دیں</translation>
 <translation id="1953553007165777902">ڈاؤن لوڈ ہو رہی ہے… <ph name="MINUTE" /> منٹ(منٹس) باقی ہے</translation>
+<translation id="2001586581944147178">‏آپ کے انٹرنیٹ ٹریفک تک رسائی والے لوگوں کے لیے یہ دیکھنا مشکل بنائیں کہ آپ کون سی سائٹس ملاحظہ کرتے ہیں۔ Chrome ‏DNS (ڈومین ناموں کے نظام) میں سائٹ کا IP پتہ تلاش کرنے کے لیے ایک محفوظ کنکشن کا استعمال کرتا ہے۔</translation>
 <translation id="2018528049276128029">‏ہر پروفائل میں بُک مارکس، سرگزشت اور پاس ورڈز وغیرہ جیسی Chrome کی اپنی ذاتی معلومات ہوتی ہے</translation>
 <translation id="2018879682492276940">انسٹالیشن ناکام ہو گئی۔ دوبارہ کوشش کریں۔</translation>
 <translation id="2071318482926839249">‏دوسرا اکاؤنٹ پہلے سے ہی سائن ان ہے۔ اپنی براؤزنگ کو الگ رکھنے کیلئے، Chrome آپ کیلئے آپ کی ذاتی پروفائل تخلیق کر سکتا ہے۔</translation>
@@ -73,10 +74,10 @@
 <translation id="2130870084309816036">انٹرنیٹ سے منسلک ہونے سے قاصر ہے۔ اگر آپ فائر وال استعمال کرتے ہیں تو براہ کرم اجازت یافتہ کی فہرست میں <ph name="PRODUCT_EXE_NAME" /> کو شامل کریں۔</translation>
 <translation id="2131230230468101642">‏آپ کی رازداری کے تحفظ کے لئے، ہم 4 ہفتے سے زیادہ پرانی آپ کی دلچسپیوں کو خودکار طور پر حذف کر دیتے ہیں۔ جب تک آپ براؤزنگ جاری رکھتے ہیں، فہرست پر دلچسپی دوبارہ ظاہر ہو سکتی ہے۔ یا آپ ان دلچسپیوں کو ہٹا سکتے ہیں جنہیں آپ چاہتے ہیں کہ Chrome نہ دکھائے۔</translation>
 <translation id="2139300032719313227">‏ChromeOS کو ری اسٹارٹ کریں</translation>
-<translation id="2146761408396054429">‏یہ فائل خطرناک ہو سکتی ہے<ph name="LINE_BREAK" />اگر آپ پاس ورڈ فراہم کرتے ہیں تو Chrome آپ کے لیے اس ڈاؤن لوڈ کو چیک کر سکتا ہے — آپ کا پاس ورڈ آپ کے آلے پر رہتا ہے</translation>
 <translation id="2151406531797534936">‏براہ کرم ابھی Chrome دوبارہ شروع کریں</translation>
 <translation id="2174917724755363426">انسٹالیشن مکمل نہیں ہے۔ کیا آپ واقعی منسوخ کرنا چاہتے ہیں؟</translation>
 <translation id="2190166659037789668">اپ ڈیٹ چیک کرنے میں خرابی: <ph name="UPDATE_CHECK_ERROR" />۔</translation>
+<translation id="2199691482078155239">‏Chrome آپ کو نظر آنے والے اشتہارات پر مزید کنٹرول فراہم کرتا ہے اور یہ محدود کرتا ہے کہ سائٹس کے آپ کو ذاتی نوعیت کے اشتہارات دکھانے پر وہ آپ کے بارے میں کیا جان سکتی ہیں</translation>
 <translation id="223889379102603431">‏اس بارے میں معلومات کہ کس طرح Chrome اپنے روٹ سرٹیفیکیٹس کا نظم کرتا ہے</translation>
 <translation id="2258103955319320201">‏اپنے تمام آلات پر اپنے Chrome براؤزر کی چیزوں تک رسائی حاصل کرنے کیلئے، سائن ان کریں اور پھر مطابقت پذیری کو آن کریں</translation>
 <translation id="2290014774651636340">‏Google API کلیدیں چھوٹی ہوئی ہیں۔ Google Chrome کی کچھ فعالیت غیر فعال ہو جائے گی۔</translation>
@@ -139,7 +140,6 @@
 <translation id="2969728957078202736">‏<ph name="PAGE_TITLE" /> - نیٹ ورک سائن ان - Chrome</translation>
 <translation id="3018957014024118866">‏Chrome (<ph name="URL" />) سے ڈیٹا بھی حذف کریں</translation>
 <translation id="3019382870990049182">‏ChromeOS Flex&amp; کو اپ ڈیٹ کرنے کیلئے بند کر کے دوبارہ چلائیں</translation>
-<translation id="303514781271618814">‏Chrome نئی خصوصیات کو دریافت کر رہا ہے جو سائٹس کو آپ کے کم ڈیٹا کا استعمال کر کے وہی براؤزنگ تجربہ فراہم کرنے کی اجازت دیتا ہے</translation>
 <translation id="3037838751736561277">‏Google Chrome پس منظر وضع میں ہے۔</translation>
 <translation id="3038232873781883849">انسٹال ہونے کا انتظار ہے...</translation>
 <translation id="3059710691562604940">‏محفوظ براؤزنگ آف ہے۔ Chrome اسے آن کرنے کی تجویز کرتا ہے۔</translation>
@@ -162,9 +162,9 @@
 <translation id="3360895254066713204">‏Chrome مدد کنندہ</translation>
 <translation id="3379938682270551431">{0,plural, =0{‏ابھی Chrome دوبارہ لانچ ہوگا}=1{‏1 سیکنڈ میں Chrome دوبارہ لانچ ہوگا}other{‏# سیکنڈ میں Chrome دوبارہ لانچ ہوگا}}</translation>
 <translation id="3396977131400919238">‏انسٹالیشن کے دوران آپریٹنگ سسٹم کی ایک خرابی پیش آ گئی۔ براہ کرم Google Chrome دوبارہ ڈاؤن لوڈ کریں۔</translation>
-<translation id="3426646014273736870">‏میموری سیور نے Chrome کو تیز تر بنا دیا</translation>
 <translation id="3428747202529429621">‏آپ کے سائن ان ہونے پر آپ کو Chrome پر محفوظ رکھتا ہے اور دیگر Google ایپس میں آپ کی سیکیورٹی کو بہتر بنانے کے لیے استعمال کیا جا سکتا ہے</translation>
 <translation id="3434246496373299699">‏جب آپ اپنے Google اکاؤنٹ سے سائن ان ہوتے ہیں تو Chrome آپ کے پاس ورڈز کو چیک کر سکتا ہے</translation>
+<translation id="3450887623636316740">‏یہ فائل خطرناک ہو سکتی ہے<ph name="LINE_BREAK" />اگر آپ پاس ورڈ فراہم کرتے ہیں تو Chrome آپ کے لیے اس ڈاؤن لوڈ کو چیک کر سکتا ہے۔ فائل کے بارے میں معلومات Google محفوظ براؤزنگ کو بھیجی جاتی ہے، لیکن فائل کا مواد اور پاس ورڈ آپ کے آلے پر رہتا ہے۔</translation>
 <translation id="3451115285585441894">‏Chrome میں شامل کیا جا رہا ہے…</translation>
 <translation id="345171907106878721">‏خود کو Chrome میں شامل کریں</translation>
 <translation id="3453763134178591239">‏ChromeOS کی شرائط</translation>
@@ -178,6 +178,7 @@
 <translation id="3635073343384702370">‏جب آپ پاس ورڈز کو محفوظ کرتے ہیں تو Chrome انہیں چیک کر سکتا ہے</translation>
 <translation id="3667616615096815454">انسٹال کرنے سے قاصر، ایپلیکیشن سرور کے لیے نامعلوم ہے۔</translation>
 <translation id="3673813398384385993">‏Chrome کو پتا چلا ہے کہ "<ph name="EXTENSION_NAME" />" میلوئیر پر مشتمل ہے</translation>
+<translation id="3697952514309507634">‏دیگر Chrome پروفائلز</translation>
 <translation id="3703994572283698466">‏ChromeOS کو اضافی <ph name="BEGIN_LINK_CROS_OSS" />اوپن سورس سافٹ ویئر<ph name="END_LINK_CROS_OSS" /> کے ذریعے ممکن بنایا گیا ہے، جیسے کہ <ph name="BEGIN_LINK_LINUX_OSS" />Linux ڈیولپمنٹ انوائرنمنٹ<ph name="END_LINK_LINUX_OSS" />۔</translation>
 <translation id="3716540481907974026">‏ChromeOS Flex ورژن</translation>
 <translation id="3718181793972440140">‏یہ اس آلہ سے 1 آئٹم کو حذف کر دے گا۔ بعد میں اپنا ڈیٹا بازیافت کرنے کیلئے Chrome میں <ph name="USER_EMAIL" /> کے بطور سائن ان کریں۔</translation>
@@ -198,6 +199,7 @@
 <translation id="4053720452172726777">‏Google Chrome کو حسب ضرورت بنائیں اور کنٹرول کریں</translation>
 <translation id="4106587138345390261">‏Chrome نئی خصوصیات کو دریافت کر رہا ہے جو سائٹس کو آپ کی کم معلومات کا استعمال کر کے وہی براؤزنگ تجربہ فراہم کرنے کی اجازت دیتی ہیں</translation>
 <translation id="4110895483821904099">‏اپنی نئی Chrome پروفائل سیٹ اپ کریں</translation>
+<translation id="4128488089242627000">‏Chrome تیزی سے چلتا ہے اور JavaScript استعمال کرنے والی خصوصیات کو ڈیزائن کے مطابق کام کرنا چاہیے (تجویز کردہ)</translation>
 <translation id="4147555960264124640">‏آپ ایک زیر انتظام اکاؤنٹ کے ساتھ سائن ان کر رہے ہیں اور اس کے منتظم کو اپنے Google Chrome پروفائل پر کنٹرول دے رہے ہیں۔ آپ کا Chrome کا ڈیٹا جیسے آپ کی ایپس، بُک مارکس، سرگزشت، پاس ورڈز اور دیگر ترتیبات <ph name="USER_NAME" /> سے مستقل طور پر جڑ جائیں گی۔ آپ Google اکاؤنٹس ڈیش بورڈ کے ذریعہ یہ ڈیٹا حذف کر سکیں گے، لیکن آپ یہ ڈیٹا دوسرے اکاؤنٹ کے ساتھ وابستہ نہیں کر سکیں گے۔ <ph name="LEARN_MORE" /></translation>
 <translation id="4148957013307229264">انسٹال جاری…</translation>
 <translation id="4149882025268051530">‏انسٹالر آرکائیو کا کمپریشن ختم کرنے میں ناکام ہوگیا۔ براہ کرم Google Chrome کو دوبارہ ڈاؤن لوڈ کریں۔</translation>
@@ -220,7 +222,6 @@
 <translation id="4343195214584226067">‏<ph name="EXTENSION_NAME" /> کو Chrome میں شامل کر دیا گیا ہے</translation>
 <translation id="4384570495110188418">‏Chrome آپ کے پاس ورڈز چیک نہیں کر سکتا کیونکہ آپ سائن ان نہیں ہیں</translation>
 <translation id="4389991535395284064">‏پوشیدگی وضع میں براؤز کرتے وقت، غیر محفوظ کنکشن کا استعمال کرتے ہوئے کسی سائٹ کو لوڈ کرنے سے پہلے Chrome آپ کو متنبہ کرے گا</translation>
-<translation id="4393248995085527349">‏مستقبل میں Google Chrome اپ ڈیٹس حاصل کرنے کے لیے آپ کو macOS 10.15 یا اس کے بعد کے ورژن کی ضرورت ہوگی۔ یہ کمپیوٹر macOS 10.13 کا استعمال کر رہا ہے۔</translation>
 <translation id="4427306783828095590">فریب دہی اور میلوئیر کو مسدود کرنے کیلئے بہتر کردہ حفاظت مزید کام کرتی ہے</translation>
 <translation id="4450664632294415862">‏Chrome - نیٹ ورک سائن ان - <ph name="PAGE_TITLE" /></translation>
 <translation id="4458462641685292929">‏Google Chrome پر ایک اور کارروائی کی جا رہی ہے۔ براہ کرم بعد میں دوبارہ کوشش کریں۔</translation>
@@ -245,6 +246,7 @@
 <translation id="4793679854893018356">‏جانیں کہ Chrome آپ کو کیسے محفوظ رکھتا ہے</translation>
 <translation id="4828579605166583682">‏Google Chrome موجودہ پاس ورڈز کو تبدیل کرنے کی کوشش کر رہا ہے۔ اس کی اجازت دینے کے لیے اپنا Windows پاس ورڈ ٹائپ کریں۔</translation>
 <translation id="4842397268809523050">‏ChromeOS Flex آپ کے ڈیٹا کی مطابقت پذیری نہیں کر سکا کیونکہ مطابقت پذیری آپ کے ڈومین کیلئے دستیاب نہیں ہے۔</translation>
+<translation id="4873692836499071887">‏مستقبل میں Google Chrome اپ ڈیٹس حاصل کرنے کے لیے، آپ کو macOS 11 یا اس کے بعد کے ورژن کی ضرورت ہوگی۔ یہ کمپیوٹر macOS 10.15 کا استعمال کر رہا ہے۔</translation>
 <translation id="4873783916118289636">‏Chrome میں کلیدی رازداری اور سیکیورٹی کنٹرولز کا جائزہ لیں</translation>
 <translation id="4891791193823137474">‏Google Chrome کو پس منظر میں چلنے دیں</translation>
 <translation id="4895437082222824641">‏لنک کو نئے Chrome &amp;ٹیب میں کھولیں</translation>
@@ -308,7 +310,6 @@ Google Chrome آپ کی ترتیبات کو بازیافت کرنے سے قاص�
 <translation id="5941711191222866238">چھوٹا کریں</translation>
 <translation id="5941830788786076944">‏Google Chrome کو ڈیفالٹ براؤزر بنائیں</translation>
 <translation id="6003112304606738118">ڈاؤن لوڈ ہو رہی ہے… <ph name="HOURS" /> گھنٹہ(گھنٹے) باقی ہے</translation>
-<translation id="6010556343189461180">‏مستقبل میں Google Chrome اپ ڈیٹس حاصل کرنے کے لیے آپ کو macOS 10.15 یا اس کے بعد کے ورژن کی ضرورت ہوگی۔ یہ کمپیوٹر macOS 10.14 کا استعمال کر رہا ہے۔</translation>
 <translation id="6014316319780893079">‏<ph name="BEGIN_LINK" />Chrome کے ٹولز<ph name="END_LINK" /> کے ذریعے آپ محفوظ طریقے سے براؤز کر سکتے ہیں اور چیزوں پر کنٹرول رکھ سکتے ہیں</translation>
 <translation id="6022659036123304283">‏Chrome کو اپنا ڈیفالٹ براؤزر بنائيں</translation>
 <translation id="6025087594896450715">‏<ph name="REMAINING_TIME" /> میں Google Chrome ری سٹارٹ ہو جائے گا</translation>
@@ -317,7 +318,6 @@ Google Chrome آپ کی ترتیبات کو بازیافت کرنے سے قاص�
 <translation id="608006075545470555">اس براؤزر میں دفتری پروفائل شامل کریں</translation>
 <translation id="6113794647360055231">‏Chrome اور بھی بہتر ہوگیا ہے</translation>
 <translation id="6145313976051292476">‏Chrome میں PDFs کھولیں</translation>
-<translation id="6155960517327665396">‏میموری سیور نے Chrome کو تیز تر بنا دیا</translation>
 <translation id="6157638032135951407">‏آپ کی تنظیم Chrome ڈیٹا کو حذف کر دیتی ہے جب اسے <ph name="TIMEOUT_DURATION" /> کے لیے استعمال نہیں کیا جاتا ہے۔ اس میں سرگزشت، آٹو فل اور ڈاؤن لوڈز شامل ہو سکتے ہیں۔</translation>
 <translation id="6169866489629082767"><ph name="PAGE_TITLE" /> - Google Chrome</translation>
 <translation id="6173637689840186878">‏<ph name="PAGE_TITLE" /> - Google Chrome بی ٹا</translation>
@@ -354,6 +354,7 @@ Google Chrome آپ کی ترتیبات کو بازیافت کرنے سے قاص�
 <translation id="677276454032249905">‏بہر حال Chrome کو بند کریں؟</translation>
 <translation id="6794858689789885890">‏جب آپ Chrome کو بند کرتے ہیں تو ہمیشہ اپنے آلے سے سائٹ کا ڈیٹا حذف کریں</translation>
 <translation id="683440813066116847">‏mDNS ٹریفک کی اجازت دینے کیلئے Google Chrome Canary کیلئے ان باؤنڈ اصول۔</translation>
+<translation id="6851981911629679515">‏Chrome کے JavaScript اور WebAssembly انجن میں اضافی تحفظ کو آن کریں</translation>
 <translation id="6881299373831449287">‏Chrome اپ ڈیٹ کیا جا رہا ہے</translation>
 <translation id="6885412569789873916">‏Chrome بی ٹا ایپس</translation>
 <translation id="6933858244219479645">‏ChromeOS سسٹم</translation>
@@ -432,6 +433,7 @@ Google Chrome آپ کی ترتیبات کو بازیافت کرنے سے قاص�
 <translation id="8019103195866286235">‏اس ایکسٹینشن کی اشاعت اس کے ڈویلپر نے ختم کی تھی اور یہ غیر محفوظ ہو سکتا ہے۔ اسے Chrome سے ہٹا دیں تاکہ یہ آپ کی ذاتی معلومات سمیت آپ کی ملاحظہ کردہ سائٹس پر آپ کا ڈیٹا مزید دیکھ اور تبدیل نہ کر سکے۔</translation>
 <translation id="80471789339884597">انسٹال کرنے کا شکریہ۔ آپ کو <ph name="BUNDLE_NAME" /> استعمال کرنے سے پہلے اپنے تمام براؤزرز لازمی طور سے ری اسٹارٹ کرنا چاہیے۔</translation>
 <translation id="8064015586118426197">ChromeOS Flex</translation>
+<translation id="8077579734294125741">‏دیگر Chrome پروفائلز</translation>
 <translation id="8086881907087796310">انسٹالیشن ناکام ہو گئی کیونکہ آپ کا کمپیوٹر ہارڈ ویئر کے کم از کم تقاضوں کو پورا نہیں کرتا ہے۔</translation>
 <translation id="8129812357326543296">‏‎&amp;Google Chrome کے بارے میں</translation>
 <translation id="813913629614996137">آغاز کیا جا رہا ہے…</translation>
@@ -475,6 +477,7 @@ Google Chrome آپ کی ترتیبات کو بازیافت کرنے سے قاص�
 <translation id="873133009373065397">‏Google Chrome ڈیفالٹ براؤزر کا تعین یا اس کو سیٹ نہیں کر سکتا ہے</translation>
 <translation id="8765470054473112089">‏جب آپ ایڈریس بار یا تلاش کے خانے میں ٹائپ کرتے ہیں تو بہتر تجاویز حاصل کرنے کے لیے Chrome آپ جو ٹائپ کرتے ہیں اسے آپ کے ڈیفالٹ سرچ انجن کو بھیجتا ہے۔ یہ پوشیدگی میں آف ہے۔</translation>
 <translation id="878572486461146056">انسٹال سے متعلق خرابی: آپ کے نیٹ ورک کے منتظم نے ایک گروپ پالیسی کا اطلاق کیا ہے جو انسٹالیشن کو روکتی ہے: <ph name="INSTALL_ERROR" /></translation>
+<translation id="8801657293260363985">‏V8‏ Chrome کا JavaScript اور WebAssembly انجن ہے جو سائٹ کی کارکردگی کو بہتر بنانے کے لیے استعمال ہوتا ہے</translation>
 <translation id="8821043148920470810">‏مستقبل کے Google Chrome اپ ڈیٹس حاصل کرنے کے لیے، آپ کو Windows 10 یا اس کے بعد کے ورژن کی ضرورت ہوگی۔ یہ کمپیوٹر Windows 7 استعمال کر رہا ہے۔</translation>
 <translation id="8823341990149967727">‏Chrome پرانا ہے</translation>
 <translation id="8825634023950448068">‏آپ کی رازداری کے تحفظ کے لئے، ہم 4 ہفتے سے زیادہ پرانی آپ کی دلچسپیوں کو خودکار طور پر حذف کر دیتے ہیں۔ جب تک آپ براؤزنگ جاری رکھتے ہیں، فہرست پر دلچسپی دوبارہ ظاہر ہو سکتی ہے۔ اور اگر Chrome کو یہ غلط لگتا ہے یا آپ کچھ اشتہارات کو نہیں دیکھنا چاہتے ہیں تو آپ دلچسپی کو ہٹا سکتے ہیں۔</translation>

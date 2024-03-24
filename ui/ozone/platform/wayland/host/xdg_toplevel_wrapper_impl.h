@@ -119,9 +119,14 @@ class XDGToplevelWrapperImpl : public ShellToplevelWrapper {
                              zaura_toplevel* aura_toplevel,
                              int32_t x,
                              int32_t y);
+
   static void OnConfigureRasterScale(void* data,
-                                     zaura_toplevel* aura_toplevel,
+                                     struct zaura_toplevel* zaura_toplevel,
                                      uint32_t scale_as_uint);
+
+  static void OnConfigureOcclusionState(void* data,
+                                        struct zaura_toplevel* zaura_toplevel,
+                                        uint32_t mode);
   static void OnRotateFocus(void* data,
                             zaura_toplevel* aura_toplevel,
                             uint32_t serial,
@@ -136,9 +141,6 @@ class XDGToplevelWrapperImpl : public ShellToplevelWrapper {
 
   // Initializes the xdg-decoration protocol extension, if available.
   void InitializeXdgDecoration();
-
-  // Called when raster scale is changed.
-  void OnConfigureRasterScale(double scale);
 
   // Creates a wl_region from `shape_rects`.
   wl::Object<wl_region> CreateAndAddRegion(const ShapeRects& shape_rects);

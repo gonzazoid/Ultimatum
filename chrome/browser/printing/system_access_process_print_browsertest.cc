@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include <memory>
+#include <optional>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -40,7 +41,6 @@
 #include "printing/printing_utils.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/rect_f.h"
 #include "ui/gfx/geometry/size_f.h"
 
@@ -165,7 +165,15 @@ const char* GetPrintBackendString(PrintBackendFeatureVariation variation) {
 
 enum class PlatformPrintApiVariation {
 #if BUILDFLAG(IS_WIN)
-  kGdi,
+  // Windows print drivers can have a language type which alters how the print
+  // data is processed.  While much of the GDI printing pipeline is not
+  // concerned with the language type differences, certain portions of the
+  // printing pipeline are impacted by it.  Most tests only need test against
+  // one GDI language type.
+  kGdiEmf,
+  kGdiPostScriptLevel2,
+  kGdiPostScriptLevel3,
+  kGdiTextOnly,
   kXps,
 #else
   kCups,
@@ -175,8 +183,14 @@ enum class PlatformPrintApiVariation {
 const char* GetPlatformPrintApiString(PlatformPrintApiVariation variation) {
   switch (variation) {
 #if BUILDFLAG(IS_WIN)
-    case PlatformPrintApiVariation::kGdi:
-      return "Gdi";
+    case PlatformPrintApiVariation::kGdiEmf:
+      return "GdiEmf";
+    case PlatformPrintApiVariation::kGdiPostScriptLevel2:
+      return "GdiPostScriptLevel2";
+    case PlatformPrintApiVariation::kGdiPostScriptLevel3:
+      return "GdiPostScriptLevel3";
+    case PlatformPrintApiVariation::kGdiTextOnly:
+      return "GdiTextOnly";
     case PlatformPrintApiVariation::kXps:
       return "Xps";
 #else
@@ -191,11 +205,28 @@ const char* GetPlatformPrintApiTestSuffix(
   return GetPlatformPrintApiString(info.param);
 }
 
-const PlatformPrintApiVariation kSandboxedServicePlatformPrintApiVariations[] =
-    {
+// Tests using these variations are not concerned with the different language
+// types, where one Windows GDI type is sufficient.
+constexpr PlatformPrintApiVariation
+    kSandboxedServicePlatformPrintApiVariations[] = {
 #if BUILDFLAG(IS_WIN)
         // TODO(crbug.com/1008222):  Include XPS variation.
-        PlatformPrintApiVariation::kGdi,
+        PlatformPrintApiVariation::kGdiEmf,
+#else
+        PlatformPrintApiVariation::kCups,
+#endif
+};
+
+// Tests using these variations are concerned with all the different language
+// types on Windows.
+constexpr PlatformPrintApiVariation
+    kSandboxedServicePlatformPrintLanguageApiVariations[] = {
+#if BUILDFLAG(IS_WIN)
+        // TODO(crbug.com/1008222):  Include XPS variation.
+        PlatformPrintApiVariation::kGdiEmf,
+        PlatformPrintApiVariation::kGdiPostScriptLevel2,
+        PlatformPrintApiVariation::kGdiPostScriptLevel3,
+        PlatformPrintApiVariation::kGdiTextOnly,
 #else
         PlatformPrintApiVariation::kCups,
 #endif
@@ -232,10 +263,11 @@ GeneratePrintBackendAndPlatformPrintApiVariations(
   for (PrintBackendFeatureVariation print_backend_variation :
        print_backend_variations) {
 #if BUILDFLAG(IS_WIN)
+    // Only need one GDI variation, not interested in different language types.
     // TODO(crbug.com/1008222):  Include XPS variation, only when the
     // `print_backend_variation` is not `kInBrowserProcess`.
     variations.emplace_back(print_backend_variation,
-                            PlatformPrintApiVariation::kGdi);
+                            PlatformPrintApiVariation::kGdiEmf);
 #else
     variations.emplace_back(print_backend_variation,
                             PlatformPrintApiVariation::kCups);
@@ -263,6 +295,7 @@ using OnDidAskUserForSettingsCallback =
 #endif
 using OnDidUpdatePrintSettingsCallback =
     base::RepeatingCallback<void(mojom::ResultCode result)>;
+using OnFinishDocumentDoneCallback = base::RepeatingCallback<void(int job_id)>;
 using OnDidStartPrintingCallback =
     base::RepeatingCallback<void(mojom::ResultCode result)>;
 #if BUILDFLAG(IS_WIN)
@@ -273,7 +306,7 @@ using OnDidRenderPrintedPageCallback =
 using OnDidRenderPrintedDocumentCallback =
     base::RepeatingCallback<void(mojom::ResultCode result)>;
 using OnDidDocumentDoneCallback =
-    base::RepeatingCallback<void(mojom::ResultCode result)>;
+    base::RepeatingCallback<void(int job_id, mojom::ResultCode result)>;
 using OnDidCancelCallback = base::RepeatingClosure;
 using OnDidShowErrorDialog = base::RepeatingClosure;
 
@@ -285,6 +318,7 @@ class TestPrintJobWorker : public PrintJobWorker {
     OnUseDefaultSettingsCallback did_use_default_settings_callback;
     OnGetSettingsWithUICallback did_get_settings_with_ui_callback;
     OnDidUpdatePrintSettingsCallback did_update_print_settings_callback;
+    OnFinishDocumentDoneCallback did_finish_document_done_callback;
   };
 
   TestPrintJobWorker(
@@ -307,6 +341,10 @@ class TestPrintJobWorker : public PrintJobWorker {
 
  private:
   // `PrintJobWorker` overrides:
+  void FinishDocumentDone(int job_id) override {
+    callbacks_->did_finish_document_done_callback.Run(job_id);
+    PrintJobWorker::FinishDocumentDone(job_id);
+  }
   void OnCancel() override {
     callbacks_->error_check_callback.Run(mojom::ResultCode::kCanceled);
     PrintJobWorker::OnCancel();
@@ -403,8 +441,8 @@ class TestPrintJobWorkerOop : public PrintJobWorkerOop {
   TestPrintJobWorkerOop(
       std::unique_ptr<PrintingContext::Delegate> printing_context_delegate,
       std::unique_ptr<PrintingContext> printing_context,
-      absl::optional<PrintBackendServiceManager::ClientId> client_id,
-      absl::optional<PrintBackendServiceManager::ContextId> context_id,
+      std::optional<PrintBackendServiceManager::ClientId> client_id,
+      std::optional<PrintBackendServiceManager::ContextId> context_id,
       PrintJob* print_job,
       bool print_from_system_dialog,
       bool simulate_spooling_memory_errors,
@@ -422,10 +460,10 @@ class TestPrintJobWorkerOop : public PrintJobWorkerOop {
   ~TestPrintJobWorkerOop() override = default;
 
  private:
-  void OnDidStartPrinting(mojom::ResultCode result) override {
+  void OnDidStartPrinting(mojom::ResultCode result, int job_id) override {
     DVLOG(1) << "Observed: start printing of document";
     callbacks_->error_check_callback.Run(result);
-    PrintJobWorkerOop::OnDidStartPrinting(result);
+    PrintJobWorkerOop::OnDidStartPrinting(result, job_id);
     callbacks_->did_start_printing_callback.Run(result);
   }
 
@@ -450,7 +488,7 @@ class TestPrintJobWorkerOop : public PrintJobWorkerOop {
     DVLOG(1) << "Observed: document done";
     callbacks_->error_check_callback.Run(result);
     PrintJobWorkerOop::OnDidDocumentDone(job_id, result);
-    callbacks_->did_document_done_callback.Run(result);
+    callbacks_->did_document_done_callback.Run(job_id, result);
   }
 
   void OnDidCancel(scoped_refptr<PrintJob> job,
@@ -673,6 +711,10 @@ class SystemAccessProcessPrintBrowserTestBase
           .did_update_print_settings_callback = base::BindRepeating(
           &SystemAccessProcessPrintBrowserTestBase::OnDidUpdatePrintSettings,
           base::Unretained(this));
+      test_print_job_worker_callbacks_.did_finish_document_done_callback =
+          base::BindRepeating(
+              &SystemAccessProcessPrintBrowserTestBase::OnFinishDocumentDone,
+              base::Unretained(this));
     }
     test_create_printer_query_callback_ = base::BindRepeating(
         &SystemAccessProcessPrintBrowserTestBase::CreatePrinterQuery,
@@ -1004,7 +1046,7 @@ class SystemAccessProcessPrintBrowserTestBase
   }
 #endif
 
-  const absl::optional<bool> system_print_registration_succeeded() const {
+  const std::optional<bool> system_print_registration_succeeded() const {
     return system_print_registration_succeeded_;
   }
 
@@ -1050,8 +1092,12 @@ class SystemAccessProcessPrintBrowserTestBase
     return document_done_result_;
   }
 
+  std::optional<int> document_done_job_id() const {
+    return document_done_job_id_;
+  }
+
   int cancel_count() const { return cancel_count_; }
-  absl::optional<mojom::ResultCode> in_process_last_error_result_code() const {
+  std::optional<mojom::ResultCode> in_process_last_error_result_code() const {
     return in_process_last_error_result_code_;
   }
 
@@ -1158,10 +1204,13 @@ class SystemAccessProcessPrintBrowserTestBase
     CheckForQuit();
   }
 
-  void OnDidDocumentDone(mojom::ResultCode result) {
+  void OnDidDocumentDone(int job_id, mojom::ResultCode result) {
+    document_done_job_id_ = job_id;
     document_done_result_ = result;
     CheckForQuit();
   }
+
+  void OnFinishDocumentDone(int job_id) { document_done_job_id_ = job_id; }
 
   void OnDidCancel() {
     ++cancel_count_;
@@ -1200,18 +1249,18 @@ class SystemAccessProcessPrintBrowserTestBase
   TestPrintJobWorker::PrintCallbacks test_print_job_worker_callbacks_;
   TestPrintJobWorkerOop::PrintCallbacks test_print_job_worker_oop_callbacks_;
   CreatePrinterQueryCallback test_create_printer_query_callback_;
-  absl::optional<bool> system_print_registration_succeeded_;
+  std::optional<bool> system_print_registration_succeeded_;
   bool did_use_default_settings_ = false;
   bool did_get_settings_with_ui_ = false;
   bool print_backend_service_use_detected_ = false;
   bool simulate_spooling_memory_errors_ = false;
 #if BUILDFLAG(IS_WIN)
-  absl::optional<uint32_t> simulate_pdf_conversion_error_on_page_index_;
+  std::optional<uint32_t> simulate_pdf_conversion_error_on_page_index_;
 #endif
   mojo::Remote<mojom::PrintBackendService> test_remote_;
   std::unique_ptr<PrintBackendServiceTestImpl> print_backend_service_;
 #endif  // BUILDFLAG(ENABLE_OOP_PRINTING)
-  absl::optional<mojom::ResultCode> in_process_last_error_result_code_;
+  std::optional<mojom::ResultCode> in_process_last_error_result_code_;
   bool reset_errors_after_check_ = true;
   int did_print_document_count_ = 0;
   mojom::ResultCode use_default_settings_result_ = mojom::ResultCode::kFailed;
@@ -1227,6 +1276,7 @@ class SystemAccessProcessPrintBrowserTestBase
   mojom::ResultCode render_printed_document_result_ =
       mojom::ResultCode::kFailed;
   mojom::ResultCode document_done_result_ = mojom::ResultCode::kFailed;
+  std::optional<int> document_done_job_id_;
   int cancel_count_ = 0;
   int print_job_construction_count_ = 0;
   int print_job_destruction_count_ = 0;
@@ -1257,6 +1307,37 @@ INSTANTIATE_TEST_SUITE_P(
     All,
     SystemAccessProcessSandboxedServicePrintBrowserTest,
     testing::ValuesIn(kSandboxedServicePlatformPrintApiVariations),
+    GetPlatformPrintApiTestSuffix);
+
+class SystemAccessProcessSandboxedServiceLanguagePrintBrowserTest
+    : public SystemAccessProcessSandboxedServicePrintBrowserTest {
+ public:
+  SystemAccessProcessSandboxedServiceLanguagePrintBrowserTest() = default;
+  ~SystemAccessProcessSandboxedServiceLanguagePrintBrowserTest() override =
+      default;
+
+#if BUILDFLAG(IS_WIN)
+  mojom::PrinterLanguageType UseLanguageType() {
+    switch (GetParam()) {
+      case PlatformPrintApiVariation::kGdiEmf:
+        return mojom::PrinterLanguageType::kNone;
+      case PlatformPrintApiVariation::kGdiPostScriptLevel2:
+        return mojom::PrinterLanguageType::kPostscriptLevel2;
+      case PlatformPrintApiVariation::kGdiPostScriptLevel3:
+        return mojom::PrinterLanguageType::kPostscriptLevel3;
+      case PlatformPrintApiVariation::kGdiTextOnly:
+        return mojom::PrinterLanguageType::kTextOnly;
+      case PlatformPrintApiVariation::kXps:
+        return mojom::PrinterLanguageType::kXps;
+    }
+  }
+#endif
+};
+
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    SystemAccessProcessSandboxedServiceLanguagePrintBrowserTest,
+    testing::ValuesIn(kSandboxedServicePlatformPrintLanguageApiVariations),
     GetPlatformPrintApiTestSuffix);
 
 class SystemAccessProcessServicePrintBrowserTest
@@ -1461,10 +1542,16 @@ IN_PROC_BROWSER_TEST_P(SystemAccessProcessPrintBrowserTest,
   EXPECT_EQ(error_dialog_shown_count(), 0u);
 }
 
-IN_PROC_BROWSER_TEST_P(SystemAccessProcessSandboxedServicePrintBrowserTest,
-                       StartPrinting) {
+IN_PROC_BROWSER_TEST_P(
+    SystemAccessProcessSandboxedServiceLanguagePrintBrowserTest,
+    StartPrinting) {
   AddPrinter("printer1");
   SetPrinterNameForSubsequentContexts("printer1");
+#if BUILDFLAG(IS_WIN)
+  SetPrinterLanguageTypeForSubsequentContexts(UseLanguageType());
+#endif
+  constexpr int kJobId = 1;
+  SetNewDocumentJobId(kJobId);
 
   ASSERT_TRUE(embedded_test_server()->Started());
   GURL url(embedded_test_server()->GetURL("/printing/test3.html"));
@@ -1495,11 +1582,12 @@ IN_PROC_BROWSER_TEST_P(SystemAccessProcessSandboxedServicePrintBrowserTest,
   EXPECT_EQ(render_printed_document_result(), mojom::ResultCode::kSuccess);
 #endif
   EXPECT_EQ(document_done_result(), mojom::ResultCode::kSuccess);
+  EXPECT_THAT(document_done_job_id(), testing::Optional(kJobId));
   EXPECT_EQ(error_dialog_shown_count(), 0u);
   EXPECT_EQ(print_job_destruction_count(), 1);
 
 #if BUILDFLAG(IS_LINUX) && BUILDFLAG(USE_CUPS)
-  absl::optional<PrintSettings> settings = document_print_settings();
+  std::optional<PrintSettings> settings = document_print_settings();
   ASSERT_TRUE(settings);
   // Collect just the keys to compare the info options vs. advanced settings.
   std::vector<std::string> advanced_setting_keys;
@@ -1521,6 +1609,8 @@ IN_PROC_BROWSER_TEST_P(SystemAccessProcessSandboxedServicePrintBrowserTest,
                        StartPrintingMultipage) {
   AddPrinter("printer1");
   SetPrinterNameForSubsequentContexts("printer1");
+  constexpr int kJobId = 1;
+  SetNewDocumentJobId(kJobId);
 
   ASSERT_TRUE(embedded_test_server()->Started());
   GURL url(embedded_test_server()->GetURL("/printing/3_pages.html"));
@@ -1567,6 +1657,7 @@ IN_PROC_BROWSER_TEST_P(SystemAccessProcessSandboxedServicePrintBrowserTest,
   EXPECT_EQ(render_printed_document_result(), mojom::ResultCode::kSuccess);
 #endif
   EXPECT_EQ(document_done_result(), mojom::ResultCode::kSuccess);
+  EXPECT_THAT(document_done_job_id(), testing::Optional(kJobId));
   EXPECT_EQ(error_dialog_shown_count(), 0u);
   EXPECT_EQ(print_job_destruction_count(), 1);
 }
@@ -1754,6 +1845,8 @@ IN_PROC_BROWSER_TEST_P(SystemAccessProcessSandboxedServicePrintBrowserTest,
                        StartPrintingAccessDenied) {
   AddPrinter("printer1");
   SetPrinterNameForSubsequentContexts("printer1");
+  constexpr int kJobId = 1;
+  SetNewDocumentJobId(kJobId);
   PrimeForAccessDeniedErrorsInNewDocument();
 
   ASSERT_TRUE(embedded_test_server()->Started());
@@ -1787,6 +1880,7 @@ IN_PROC_BROWSER_TEST_P(SystemAccessProcessSandboxedServicePrintBrowserTest,
   EXPECT_EQ(render_printed_document_result(), mojom::ResultCode::kSuccess);
 #endif
   EXPECT_EQ(document_done_result(), mojom::ResultCode::kSuccess);
+  EXPECT_THAT(document_done_job_id(), testing::Optional(kJobId));
   EXPECT_EQ(error_dialog_shown_count(), 0u);
   EXPECT_EQ(print_job_destruction_count(), 1);
 }
@@ -2004,6 +2098,8 @@ IN_PROC_BROWSER_TEST_P(SystemAccessProcessPrintBrowserTest,
                        SystemPrintFromPrintPreview) {
   AddPrinter("printer1");
   SetPrinterNameForSubsequentContexts("printer1");
+  constexpr int kJobId = 1;
+  SetNewDocumentJobId(kJobId);
 
   ASSERT_TRUE(embedded_test_server()->Started());
   GURL url(embedded_test_server()->GetURL("/printing/test3.html"));
@@ -2087,6 +2183,7 @@ IN_PROC_BROWSER_TEST_P(SystemAccessProcessPrintBrowserTest,
     EXPECT_EQ(*test::MakeUserModifiedPrintSettings("printer1"),
               *document_print_settings());
   }
+  EXPECT_THAT(document_done_job_id(), testing::Optional(kJobId));
   EXPECT_EQ(error_dialog_shown_count(), 0u);
   EXPECT_EQ(print_job_destruction_count(), 1);
 }
@@ -2323,6 +2420,8 @@ IN_PROC_BROWSER_TEST_P(SystemAccessProcessSandboxedServicePrintBrowserTest,
                        StartBasicPrint) {
   AddPrinter("printer1");
   SetPrinterNameForSubsequentContexts("printer1");
+  constexpr int kJobId = 1;
+  SetNewDocumentJobId(kJobId);
 
   ASSERT_TRUE(embedded_test_server()->Started());
   GURL url(embedded_test_server()->GetURL("/printing/test3.html"));
@@ -2370,6 +2469,7 @@ IN_PROC_BROWSER_TEST_P(SystemAccessProcessSandboxedServicePrintBrowserTest,
   EXPECT_EQ(render_printed_document_result(), mojom::ResultCode::kSuccess);
 #endif
   EXPECT_EQ(document_done_result(), mojom::ResultCode::kSuccess);
+  EXPECT_THAT(document_done_job_id(), testing::Optional(kJobId));
   EXPECT_EQ(error_dialog_shown_count(), 0u);
   EXPECT_EQ(did_print_document_count(), 1);
   EXPECT_EQ(print_job_destruction_count(), 1);
@@ -2560,7 +2660,7 @@ IN_PROC_BROWSER_TEST_P(SystemAccessProcessSandboxedServicePrintBrowserTest,
       SetUpAndReturnPrintViewManager(web_contents);
 
   // Pretend that a window has started a system print.
-  absl::optional<PrintBackendServiceManager::ClientId> client_id =
+  std::optional<PrintBackendServiceManager::ClientId> client_id =
       PrintBackendServiceManager::GetInstance().RegisterQueryWithUiClient();
   ASSERT_TRUE(client_id.has_value());
 
@@ -2606,7 +2706,7 @@ IN_PROC_BROWSER_TEST_P(SystemAccessProcessSandboxedServicePrintBrowserTest,
   // Pretend that another tab has started a system print.
   // TODO(crbug.com/809738)  Improve on this test by using a persistent fake
   // system print dialog.
-  absl::optional<PrintBackendServiceManager::ClientId> client_id =
+  std::optional<PrintBackendServiceManager::ClientId> client_id =
       PrintBackendServiceManager::GetInstance().RegisterQueryWithUiClient();
   ASSERT_TRUE(client_id.has_value());
 
@@ -2649,7 +2749,7 @@ IN_PROC_BROWSER_TEST_P(SystemAccessProcessSandboxedServicePrintBrowserTest,
       SetUpAndReturnPrintViewManager(web_contents);
 
   // Pretend that a window has started a system print.
-  absl::optional<PrintBackendServiceManager::ClientId> client_id =
+  std::optional<PrintBackendServiceManager::ClientId> client_id =
       PrintBackendServiceManager::GetInstance().RegisterQueryWithUiClient();
   ASSERT_TRUE(client_id.has_value());
 
@@ -2683,7 +2783,7 @@ IN_PROC_BROWSER_TEST_P(SystemAccessProcessSandboxedServicePrintBrowserTest,
   // Pretend that another tab has started a system print.
   // TODO(crbug.com/809738)  Improve on this test by using a persistent fake
   // system print dialog.
-  absl::optional<PrintBackendServiceManager::ClientId> client_id =
+  std::optional<PrintBackendServiceManager::ClientId> client_id =
       PrintBackendServiceManager::GetInstance().RegisterQueryWithUiClient();
   ASSERT_TRUE(client_id.has_value());
 
@@ -2742,6 +2842,8 @@ IN_PROC_BROWSER_TEST_P(SystemAccessProcessServicePrintBrowserTest,
 IN_PROC_BROWSER_TEST_P(SystemAccessProcessPrintBrowserTest, OpenPdfInPreview) {
   AddPrinter("printer1");
   SetPrinterNameForSubsequentContexts("printer1");
+  constexpr int kJobId = 1;
+  SetNewDocumentJobId(kJobId);
 
   ASSERT_TRUE(embedded_test_server()->Started());
   GURL url(embedded_test_server()->GetURL("/printing/test3.html"));
@@ -2777,6 +2879,7 @@ IN_PROC_BROWSER_TEST_P(SystemAccessProcessPrintBrowserTest, OpenPdfInPreview) {
   } else {
     EXPECT_FALSE(in_process_last_error_result_code().has_value());
   }
+  EXPECT_THAT(document_done_job_id(), testing::Optional(kJobId));
   EXPECT_TRUE(destination_is_preview());
   EXPECT_EQ(error_dialog_shown_count(), 0u);
   EXPECT_EQ(print_job_destruction_count(), 1);
@@ -2844,7 +2947,7 @@ class TestPrintViewManagerForContentAnalysis : public TestPrintViewManager {
     return observer_.scripted_print_called();
   }
 
-  const absl::optional<bool>& preview_allowed() const {
+  const std::optional<bool>& preview_allowed() const {
     return preview_allowed_;
   }
 
@@ -2940,8 +3043,8 @@ class TestPrintViewManagerForContentAnalysis : public TestPrintViewManager {
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
   // Indicates whether the preview was allowed after checking against content
-  // analysis and DLP (if on CrOS). This is `absl::nullopt` until then.
-  absl::optional<bool> preview_allowed_;
+  // analysis and DLP (if on CrOS). This is `std::nullopt` until then.
+  std::optional<bool> preview_allowed_;
 
   // Used to validate the corresponding `ContentAnalysisDelegate::Data` passed
   // in various content analysis-related functions.

@@ -25,6 +25,7 @@ import org.chromium.base.Callback;
 import org.chromium.base.IntentUtils;
 import org.chromium.base.ResettersForTesting;
 import org.chromium.base.TraceEvent;
+import org.chromium.base.cached_flags.IntCachedFieldTrialParameter;
 import org.chromium.base.library_loader.LibraryLoader;
 import org.chromium.base.lifetime.Destroyable;
 import org.chromium.base.metrics.RecordHistogram;
@@ -40,7 +41,6 @@ import org.chromium.chrome.browser.app.ChromeActivity;
 import org.chromium.chrome.browser.back_press.BackPressManager;
 import org.chromium.chrome.browser.feed.FeedFeatures;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
-import org.chromium.chrome.browser.flags.IntCachedFieldTrialParameter;
 import org.chromium.chrome.browser.homepage.HomepageManager;
 import org.chromium.chrome.browser.homepage.HomepagePolicyManager;
 import org.chromium.chrome.browser.layouts.LayoutManager;
@@ -55,6 +55,7 @@ import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.chrome.browser.preferences.Pref;
 import org.chromium.chrome.browser.preferences.PrefChangeRegistrar;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.segmentation_platform.SegmentationPlatformServiceFactory;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabLaunchType;
@@ -292,22 +293,23 @@ public final class ReturnToChromeUtil {
     }
 
     /**
-     * Determine if we should show the tab switcher on returning to Chrome.
-     *   Returns true if enough time has elapsed since the app was last backgrounded or foreground,
-     *   depending on which time is the max.
-     *   The threshold time in milliseconds is set by experiment "enable-start-surface-return-time"
-     *   or from segmentation platform result if {@link ChromeFeatureList.START_SURFACE_RETURN_TIME}
-     *   is enabled.
+     * Determine if we should show the tab switcher on returning to Chrome. Returns true if enough
+     * time has elapsed since the app was last backgrounded or foreground, depending on which time
+     * is the max. The threshold time in milliseconds is set by experiment
+     * "enable-start-surface-return-time" or from segmentation platform result if {@link
+     * ChromeFeatureList.START_SURFACE_RETURN_TIME} is enabled.
      *
      * @param lastTimeMillis The last time the application was backgrounded or foreground, depends
-     *                       on which time is the max. Set in ChromeTabbedActivity::onStopWithNative
-     * @param isTablet Whether the activity is running in tablet mode.
+     *     on which time is the max. Set in ChromeTabbedActivity::onStopWithNative
+     * @param useNewReturnTime Whether to use a new return time feature flag. The new flag is
+     *     equivalent to the existing one, but allows a different default value other than 8 hours.
      * @return true if past threshold, false if not past threshold or experiment cannot be loaded.
      */
-    public static boolean shouldShowTabSwitcher(final long lastTimeMillis, boolean isTablet) {
+    public static boolean shouldShowTabSwitcher(
+            final long lastTimeMillis, boolean useNewReturnTime) {
         long tabSwitcherAfterMillis =
                 getReturnTime(
-                        isTablet
+                        useNewReturnTime
                                 ? StartSurfaceConfiguration
                                         .START_SURFACE_RETURN_TIME_ON_TABLET_SECONDS
                                 : StartSurfaceConfiguration.START_SURFACE_RETURN_TIME_SECONDS);
@@ -621,11 +623,11 @@ public final class ReturnToChromeUtil {
         if (!ReturnToChromeUtil.isStartSurfaceEnabled(context)) return false;
 
         return shouldShowHomeSurfaceAtStartupImpl(
-                /* isTablet= */ false, intent, tabModelSelector, inactivityTracker);
+                /* useNewReturnTime= */ false, intent, tabModelSelector, inactivityTracker);
     }
 
     private static boolean shouldShowHomeSurfaceAtStartupImpl(
-            boolean isTablet,
+            boolean useNewReturnTime,
             Intent intent,
             TabModelSelector tabModelSelector,
             ChromeInactivityTracker inactivityTracker) {
@@ -654,7 +656,7 @@ public final class ReturnToChromeUtil {
         long lastBackgroundTimeMs = inactivityTracker.getLastBackgroundedTimeMs();
         return IntentUtils.isMainIntentFromLauncher(intent)
                 && ReturnToChromeUtil.shouldShowTabSwitcher(
-                        Math.max(lastBackgroundTimeMs, lastVisibleTimeMs), isTablet);
+                        Math.max(lastBackgroundTimeMs, lastVisibleTimeMs), useNewReturnTime);
     }
 
     /**
@@ -677,7 +679,7 @@ public final class ReturnToChromeUtil {
         if (shouldResumeHomeSurfaceOnFoldConfigurationChange(bundle)) return true;
 
         return shouldShowHomeSurfaceAtStartupImpl(
-                /* isTablet= */ true, intent, tabModelSelector, inactivityTracker);
+                /* useNewReturnTime= */ true, intent, tabModelSelector, inactivityTracker);
     }
 
     /**
@@ -778,26 +780,28 @@ public final class ReturnToChromeUtil {
     /**
      * Shows a NTP on warm startup on tablets if return time arrives. Only create a new NTP if there
      * isn't any existing NTP to reuse.
+     *
      * @param isIncognito Whether the incognito mode is selected.
      * @param shouldShowNtpHomeSurfaceOnStartup Whether to show a NTP as home surface on startup.
-     * @param currentTabModel The object of the current {@link  TabModel}.
+     * @param currentTabModel The object of the current {@link TabModel}.
      * @param tabCreator The {@link TabCreator} object.
      * @param homeSurfaceTracker The {@link HomeSurfaceTracker} object.
+     * @return whether an NTP was shown.
      */
-    public static void setInitialOverviewStateOnResumeWithNtp(
+    public static boolean setInitialOverviewStateOnResumeWithNtp(
             boolean isIncognito,
             boolean shouldShowNtpHomeSurfaceOnStartup,
             TabModel currentTabModel,
             TabCreator tabCreator,
             HomeSurfaceTracker homeSurfaceTracker) {
         if (isIncognito || !shouldShowNtpHomeSurfaceOnStartup) {
-            return;
+            return false;
         }
 
         int index = currentTabModel.index();
         Tab lastActiveTab = TabModelUtils.getCurrentTab(currentTabModel);
         // Early exits if there isn't any Tab, i.e., don't create a home surface.
-        if (lastActiveTab == null) return;
+        if (lastActiveTab == null) return false;
 
         // If the last active Tab is a NTP, we continue to show this NTP as it is now.
         if (UrlUtilities.isNtpUrl(lastActiveTab.getUrl())) {
@@ -816,7 +820,7 @@ public final class ReturnToChromeUtil {
                 if (!isNtpUrl) {
                     recordFailToShowHomeSurfaceReasonUma(
                             FailToShowHomeSurfaceReason.FAIL_TO_FIND_NTP_TAB);
-                    return;
+                    return false;
                 }
 
                 // Sets the found NTP as home surface.
@@ -831,6 +835,7 @@ public final class ReturnToChromeUtil {
 
         recordHomeSurfaceShownAtStartup();
         recordHomeSurfaceShown();
+        return true;
     }
 
     /*
@@ -839,7 +844,7 @@ public final class ReturnToChromeUtil {
     public static void cacheReturnTimeFromSegmentation() {
         SegmentationPlatformService segmentationPlatformService =
                 SegmentationPlatformServiceFactory.getForProfile(
-                        Profile.getLastUsedRegularProfile());
+                        ProfileManager.getLastUsedRegularProfile());
         PredictionOptions predictionOptions = new PredictionOptions(false);
         segmentationPlatformService.getClassificationResult(
                 START_V2_SEGMENTATION_PLATFORM_KEY,
@@ -857,8 +862,10 @@ public final class ReturnToChromeUtil {
             // Model execution failed or no label selected.
             returnTimeMs = -1;
         } else {
-            // Converts to milliseconds.
-            returnTimeMs = Long.parseLong(result.orderedLabels.get(0)) * DateUtils.SECOND_IN_MILLIS;
+            String label = result.orderedLabels.get(0);
+            // When label is non-integer return -1, else convert label to microseconds.
+            returnTimeMs =
+                    isValidLong(label) ? (Long.parseLong(label) * DateUtils.SECOND_IN_MILLIS) : -1;
         }
         ChromeSharedPreferences.getInstance()
                 .writeLong(
@@ -896,12 +903,12 @@ public final class ReturnToChromeUtil {
     }
 
     private static void updateFeedVisibility() {
+        Profile profile = ProfileManager.getLastUsedRegularProfile();
         ChromeSharedPreferences.getInstance()
                 .writeBoolean(
                         ChromePreferenceKeys.FEED_ARTICLES_LIST_VISIBLE,
-                        FeedFeatures.isFeedEnabled()
-                                && UserPrefs.get(Profile.getLastUsedRegularProfile())
-                                        .getBoolean(Pref.ARTICLES_LIST_VISIBLE));
+                        FeedFeatures.isFeedEnabled(profile)
+                                && UserPrefs.get(profile).getBoolean(Pref.ARTICLES_LIST_VISIBLE));
     }
 
     /** Returns whether the Feed articles are visible. */
@@ -1039,7 +1046,7 @@ public final class ReturnToChromeUtil {
         NewTabPage newTabPage = (NewTabPage) nativePage;
         homeSurfaceTracker.updateHomeSurfaceAndTrackingTabs(ntpTab, lastActiveTab);
         if (StartSurfaceConfiguration.useMagicStack()) {
-            newTabPage.showMagicStackWithHomeSurfaceUi(lastActiveTab);
+            newTabPage.showMagicStack(lastActiveTab);
         } else {
             newTabPage.showHomeSurfaceUi(lastActiveTab);
         }
@@ -1051,5 +1058,14 @@ public final class ReturnToChromeUtil {
             @FailToShowHomeSurfaceReason int reason) {
         RecordHistogram.recordEnumeratedHistogram(
                 FAIL_TO_SHOW_HOME_SURFACE_UI_UMA, reason, FailToShowHomeSurfaceReason.NUM_ENTRIES);
+    }
+
+    private static boolean isValidLong(String str) {
+        try {
+            Long.parseLong(str);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 }

@@ -176,7 +176,7 @@ BASE_FEATURE(kZeroSuggestPrefetching,
 // Enables prefetching of the zero prefix suggestions for eligible users on SRP.
 BASE_FEATURE(kZeroSuggestPrefetchingOnSRP,
              "ZeroSuggestPrefetchingOnSRP",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             enabled_by_default_desktop_only);
 
 // Enables prefetching of the zero prefix suggestions for eligible users on the
 // Web (i.e. non-NTP and non-SRP URLs).
@@ -244,7 +244,7 @@ BASE_FEATURE(kDomainSuggestions,
 // consent helper instead of a history sync based one.
 BASE_FEATURE(kPrefBasedDataCollectionConsentHelper,
              "PrefBasedDataCollectionConsentHelper",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             enabled_by_default_desktop_only);
 
 // Allows Omnibox to dynamically adjust number of offered suggestions to fill in
 // the space between Omnibox and the soft keyboard. The number of suggestions
@@ -262,7 +262,7 @@ BASE_FEATURE(kClipboardSuggestionContentHidden,
 // If enabled, company entity icons may be replaced by a search loupe.
 BASE_FEATURE(kCompanyEntityIconAdjustment,
              "CompanyEntityIconAdjustment",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // If enabled, uses the Chrome Refresh 2023 design's shape for action chips in
 // the omnibox suggestion popup.
@@ -308,7 +308,7 @@ BASE_FEATURE(kNtpRealboxPedals,
 // Feature used to enable the simplified actions UI design.
 BASE_FEATURE(kOmniboxActionsUISimplification,
              "OmniboxActionsUISimplification",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             enabled_by_default_desktop_only);
 
 // Feature used to enable the new keyword mode behavior.
 BASE_FEATURE(kOmniboxKeywordModeRefresh,
@@ -463,12 +463,19 @@ BASE_FEATURE(kLogUrlScoringSignals,
 
 // If enabled, runs the ML scoring model to assign new relevance scores to the
 // URL suggestions and reranks them.
-BASE_FEATURE(kMlUrlScoring, "MlUrlScoring", base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kMlUrlScoring, "MlUrlScoring", enabled_by_default_desktop_only);
 
-// If enabled, creates Omnibox autocompete URL scoring model.
+// If enabled, specifies how URL model scores integrate with search traditional
+// scores.
+BASE_FEATURE(kMlUrlSearchBlending,
+             "MlUrlSearchBlending",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// If enabled, creates Omnibox autocomplete URL scoring model. Prerequisite for
+// `kMlUrlScoring` & `kMlUrlSearchBlending`.
 BASE_FEATURE(kUrlScoringModel,
              "UrlScoringModel",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             enabled_by_default_desktop_only);
 
 // If enabled, appends additional Trending and Recent Search Related Queries to
 // the suggestion list on the NTP and SRP.
@@ -528,6 +535,11 @@ BASE_FEATURE(kPolicyIndicationForManagedDefaultSearch,
              "PolicyIndicationForManagedDefaultSearch",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
+// Enables additional site search providers for the Site search Starter Pack.
+BASE_FEATURE(kStarterPackExpansion,
+             "StarterPackExpansion",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
 // When enabled, prefer to use the new recovery module to recover the
 // `ShortcutsDatabase` database. See https://crbug.com/1385500 for details.
 // This is a kill switch and is not intended to be used in a field trial.
@@ -538,6 +550,11 @@ BASE_FEATURE(kShortcutsDatabaseUseBuiltInRecoveryIfSupported,
 // If enabled, |SearchProvider| will not function in Zero Suggest.
 BASE_FEATURE(kAblateSearchProviderWarmup,
              "AblateSearchProviderWarmup",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Enables storing successful query/match in the shortcut database On Android.
+BASE_FEATURE(kOmniboxShortcutsAndroid,
+             "OmniboxShortcutsAndroid",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 }  // namespace omnibox

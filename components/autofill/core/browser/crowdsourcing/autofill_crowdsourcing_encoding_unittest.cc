@@ -20,7 +20,7 @@
 #include "components/autofill/core/browser/autofill_form_test_utils.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/field_types.h"
-#include "components/autofill/core/browser/form_parsing/form_field.h"
+#include "components/autofill/core/browser/form_parsing/form_field_parser.h"
 #include "components/autofill/core/browser/proto/api_v1.pb.h"
 #include "components/autofill/core/browser/randomized_encoder.h"
 #include "components/autofill/core/common/autofill_features.h"
@@ -30,6 +30,7 @@
 #include "components/autofill/core/common/form_field_data.h"
 #include "components/autofill/core/common/html_field_types.h"
 #include "components/autofill/core/common/signatures.h"
+#include "components/autofill/core/common/unique_ids.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/testing_pref_service.h"
@@ -116,9 +117,7 @@ std::string SerializeAndEncode(const AutofillQueryResponse& response) {
     LOG(ERROR) << "Cannot serialize the response proto";
     return "";
   }
-  std::string response_string;
-  base::Base64Encode(unencoded_response_string, &response_string);
-  return response_string;
+  return base::Base64Encode(unencoded_response_string);
 }
 
 void AddFieldOverrideToForm(
@@ -203,73 +202,54 @@ TEST_F(AutofillCrowdsourcingEncoding,
   ////////////////
   // Setup
   ////////////////
-  std::unique_ptr<FormStructure> form_structure;
+  FormData form = test::GetFormData(
+      {.fields = {
+           {.label = u"First Name",
+            .name = u"firstname",
+            .form_control_type = FormControlType::kInputText},
+           {.label = u"Last Name",
+            .name = u"lastname",
+            .form_control_type = FormControlType::kInputText},
+           {.label = u"Email",
+            .name = u"email",
+            .form_control_type = FormControlType::kInputEmail},
+           {.label = u"Phone",
+            .name = u"phone",
+            .form_control_type = FormControlType::kInputNumber},
+           {.label = u"Country",
+            .name = u"country",
+            .form_control_type = FormControlType::kSelectOne},
+           // Add checkable field.
+           {.label = u"Checkable1",
+            .name = u"Checkable1",
+            .check_status = FormFieldData::CheckStatus::kCheckableButUnchecked},
+       }});
+
   std::vector<FieldTypeSet> possible_field_types;
   std::vector<FieldTypeValidityStatesMap> possible_field_types_validities;
-  FormData form;
-  form.url = GURL("http://www.foo.com/");
-  form.is_form_tag = true;
-
-  FormFieldData field;
-  field.form_control_type = FormControlType::kInputText;
-
-  field.label = u"First Name";
-  field.name = u"firstname";
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {NAME_FIRST},
       {AutofillProfile::ValidityState::kUnvalidated});
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Last Name";
-  field.name = u"lastname";
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {NAME_LAST},
       {AutofillProfile::ValidityState::kUnvalidated});
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Email";
-  field.name = u"email";
-  field.form_control_type = FormControlType::kInputEmail;
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {EMAIL_ADDRESS},
       {AutofillProfile::ValidityState::kInvalid});
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Phone";
-  field.name = u"phone";
-  field.form_control_type = FormControlType::kInputNumber;
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities,
       {PHONE_HOME_WHOLE_NUMBER}, {AutofillProfile::ValidityState::kEmpty});
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Country";
-  field.name = u"country";
-  field.form_control_type = FormControlType::kSelectOne;
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities,
       {ADDRESS_HOME_COUNTRY}, {AutofillProfile::ValidityState::kValid});
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  // Add checkable field.
-  FormFieldData checkable_field;
-  checkable_field.check_status =
-      FormFieldData::CheckStatus::kCheckableButUnchecked;
-  checkable_field.label = u"Checkable1";
-  checkable_field.name = u"Checkable1";
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities,
       {ADDRESS_HOME_COUNTRY}, {AutofillProfile::ValidityState::kValid});
-  checkable_field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(checkable_field);
 
-  form_structure = std::make_unique<FormStructure>(form);
-  for (auto& fs_field : *form_structure) {
+  std::unique_ptr<FormStructure> form_structure =
+      std::make_unique<FormStructure>(form);
+  for (const std::unique_ptr<autofill::AutofillField>& fs_field :
+       *form_structure) {
     fs_field->host_form_signature = form_structure->form_signature();
   }
 
@@ -313,13 +293,9 @@ TEST_F(AutofillCrowdsourcingEncoding,
   // Verification
   ////////////////
   std::string expected_upload_string;
-  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types, false,
-                                  std::string(), true),
-              ElementsSerializeSameAs(upload));
-
-  upload.set_autofill_used(true);
-  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types, true,
-                                  std::string(), true),
+  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types,
+                                  /*login_form_signature=*/"",
+                                  /*observed_submission=*/true),
               ElementsSerializeSameAs(upload));
 
   ////////////////
@@ -327,10 +303,11 @@ TEST_F(AutofillCrowdsourcingEncoding,
   ////////////////
   // Add 2 address fields - this should be still a valid form.
   for (size_t i = 0; i < 2; ++i) {
+    FormFieldData field;
     field.label = u"Address";
     field.name = u"address";
     field.form_control_type = FormControlType::kInputText;
-    field.unique_renderer_id = test::MakeFieldRendererId();
+    field.renderer_id = test::MakeFieldRendererId();
     form.fields.push_back(field);
     test::InitializePossibleTypesAndValidities(
         possible_field_types, possible_field_types_validities,
@@ -340,7 +317,8 @@ TEST_F(AutofillCrowdsourcingEncoding,
   }
 
   form_structure = std::make_unique<FormStructure>(form);
-  for (auto& fs_field : *form_structure) {
+  for (const std::unique_ptr<autofill::AutofillField>& fs_field :
+       *form_structure) {
     fs_field->host_form_signature = form_structure->form_signature();
   }
 
@@ -361,8 +339,9 @@ TEST_F(AutofillCrowdsourcingEncoding,
   test::FillUploadField(upload.add_field(), 509334676U, {30U, 31U}, {2, 2});
   test::FillUploadField(upload.add_field(), 509334676U, {30U, 31U}, {2, 2});
 
-  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types, false,
-                                  std::string(), true),
+  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types,
+                                  /*login_form_signature=*/"",
+                                  /*observed_submission=*/true),
               ElementsSerializeSameAs(upload));
 }
 
@@ -371,72 +350,54 @@ TEST_F(AutofillCrowdsourcingEncoding,
   ////////////////
   // Setup
   ////////////////
-  std::unique_ptr<FormStructure> form_structure;
+  FormData form = test::GetFormData(
+      {.fields = {
+           {.label = u"First Name",
+            .name = u"firstname",
+            .form_control_type = FormControlType::kInputText},
+           {.label = u"Last Name",
+            .name = u"lastname",
+            .form_control_type = FormControlType::kInputText},
+           {.label = u"Email",
+            .name = u"email",
+            .form_control_type = FormControlType::kInputEmail},
+           {.label = u"Phone",
+            .name = u"phone",
+            .form_control_type = FormControlType::kInputNumber},
+           {.label = u"Country",
+            .name = u"country",
+            .form_control_type = FormControlType::kSelectOne},
+           // Add checkable field.
+           {.label = u"Checkable1",
+            .name = u"Checkable1",
+            .check_status = FormFieldData::CheckStatus::kCheckableButUnchecked},
+       }});
+
   std::vector<FieldTypeSet> possible_field_types;
   std::vector<FieldTypeValidityStatesMap> possible_field_types_validities;
-  FormData form;
-  form.url = GURL("http://www.foo.com/");
-
-  FormFieldData field;
-  field.form_control_type = FormControlType::kInputText;
-
-  field.label = u"First Name";
-  field.name = u"firstname";
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {NAME_FIRST},
       {AutofillProfile::ValidityState::kUnvalidated});
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Last Name";
-  field.name = u"lastname";
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {NAME_LAST},
       {AutofillProfile::ValidityState::kUnvalidated});
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Email";
-  field.name = u"email";
-  field.form_control_type = FormControlType::kInputEmail;
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {EMAIL_ADDRESS},
       {AutofillProfile::ValidityState::kInvalid});
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Phone";
-  field.name = u"phone";
-  field.form_control_type = FormControlType::kInputNumber;
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities,
       {PHONE_HOME_WHOLE_NUMBER}, {AutofillProfile::ValidityState::kEmpty});
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Country";
-  field.name = u"country";
-  field.form_control_type = FormControlType::kSelectOne;
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities,
       {ADDRESS_HOME_COUNTRY}, {AutofillProfile::ValidityState::kValid});
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  // Add checkable field.
-  FormFieldData checkable_field;
-  checkable_field.check_status =
-      FormFieldData::CheckStatus::kCheckableButUnchecked;
-  checkable_field.label = u"Checkable1";
-  checkable_field.name = u"Checkable1";
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities,
       {ADDRESS_HOME_COUNTRY}, {AutofillProfile::ValidityState::kValid});
-  checkable_field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(checkable_field);
 
-  form_structure = std::make_unique<FormStructure>(form);
-  for (auto& fs_field : *form_structure) {
+  std::unique_ptr<FormStructure> form_structure =
+      std::make_unique<FormStructure>(form);
+  for (const std::unique_ptr<autofill::AutofillField>& fs_field :
+       *form_structure) {
     fs_field->host_form_signature = form_structure->form_signature();
   }
 
@@ -474,8 +435,9 @@ TEST_F(AutofillCrowdsourcingEncoding,
   test::FillUploadField(upload.add_field(), 2799270304U, 36U,
                         1);  // Non-matching validities
 
-  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types, false,
-                                  std::string(), true),
+  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types,
+                                  /*login_form_signature=*/"",
+                                  /*observed_submission=*/true),
               ElementsAre(Not(SerializesSameAs(upload))));
 }
 
@@ -484,82 +446,62 @@ TEST_F(AutofillCrowdsourcingEncoding,
   ////////////////
   // Setup
   ////////////////
-  std::unique_ptr<FormStructure> form_structure;
+  FormData form = test::GetFormData(
+      {.fields = {
+           {.label = u"First Name",
+            .name = u"firstname",
+            .form_control_type = FormControlType::kInputText},
+           {.label = u"Last Name",
+            .name = u"lastname",
+            .form_control_type = FormControlType::kInputText},
+           {.label = u"Email",
+            .name = u"email",
+            .form_control_type = FormControlType::kInputEmail},
+           {.label = u"Phone",
+            .name = u"phone",
+            .form_control_type = FormControlType::kInputNumber},
+           {.label = u"Country",
+            .name = u"country",
+            .form_control_type = FormControlType::kSelectOne},
+           // Add checkable field.
+           {.label = u"Checkable1",
+            .name = u"Checkable1",
+            .check_status = FormFieldData::CheckStatus::kCheckableButUnchecked},
+       }});
+
   std::vector<FieldTypeSet> possible_field_types;
   std::vector<FieldTypeValidityStatesMap> possible_field_types_validities;
-  FormData form;
-  form.url = GURL("http://www.foo.com/");
-  form.is_form_tag = true;
-
-  FormFieldData field;
-  field.form_control_type = FormControlType::kInputText;
-
-  field.label = u"First Name";
-  field.name = u"firstname";
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {NAME_FIRST},
       {AutofillProfile::ValidityState::kUnvalidated,
        AutofillProfile::ValidityState::kValid});
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Last Name";
-  field.name = u"lastname";
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {NAME_LAST},
       {AutofillProfile::ValidityState::kUnvalidated,
        AutofillProfile::ValidityState::kValid});
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Email";
-  field.name = u"email";
-  field.form_control_type = FormControlType::kInputEmail;
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {EMAIL_ADDRESS},
       {AutofillProfile::ValidityState::kInvalid,
        AutofillProfile::ValidityState::kValid});
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Phone";
-  field.name = u"phone";
-  field.form_control_type = FormControlType::kInputNumber;
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities,
       {PHONE_HOME_WHOLE_NUMBER},
       {AutofillProfile::ValidityState::kEmpty,
        AutofillProfile::ValidityState::kValid});
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Country";
-  field.name = u"country";
-  field.form_control_type = FormControlType::kSelectOne;
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities,
       {ADDRESS_HOME_COUNTRY},
       {AutofillProfile::ValidityState::kValid,
        AutofillProfile::ValidityState::kValid});
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  // Add checkable field.
-  FormFieldData checkable_field;
-  checkable_field.check_status =
-      FormFieldData::CheckStatus::kCheckableButUnchecked;
-  checkable_field.label = u"Checkable1";
-  checkable_field.name = u"Checkable1";
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities,
       {ADDRESS_HOME_COUNTRY},
       {AutofillProfile::ValidityState::kValid,
        AutofillProfile::ValidityState::kValid});
-  checkable_field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(checkable_field);
-
-  form_structure = std::make_unique<FormStructure>(form);
-  for (auto& fs_field : *form_structure) {
+  std::unique_ptr<FormStructure> form_structure =
+      std::make_unique<FormStructure>(form);
+  for (const std::unique_ptr<autofill::AutofillField>& fs_field :
+       *form_structure) {
     fs_field->host_form_signature = form_structure->form_signature();
   }
 
@@ -599,78 +541,60 @@ TEST_F(AutofillCrowdsourcingEncoding,
   test::FillUploadField(upload.add_field(), 466116101U, 14U, {1, 2});
   test::FillUploadField(upload.add_field(), 2799270304U, 36U, {2, 2});
 
-  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types, false,
-                                  std::string(), true),
+  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types,
+                                  /*login_form_signature=*/"",
+                                  /*observed_submission=*/true),
               ElementsSerializeSameAs(upload));
 }
 
 TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequest) {
-  std::unique_ptr<FormStructure> form_structure;
+  FormData form = test::GetFormData(
+      {.fields = {
+           {.label = u"First Name",
+            .name = u"firstname",
+            .form_control_type = FormControlType::kInputText},
+           {.label = u"Last Name",
+            .name = u"lastname",
+            .form_control_type = FormControlType::kInputText},
+           {.label = u"Email",
+            .name = u"email",
+            .form_control_type = FormControlType::kInputEmail},
+           {.label = u"Phone",
+            .name = u"phone",
+            .form_control_type = FormControlType::kInputNumber},
+           {.label = u"Country",
+            .name = u"country",
+            .form_control_type = FormControlType::kSelectOne},
+           // Add checkable field.
+           {.label = u"Checkable1",
+            .name = u"Checkable1",
+            .check_status = FormFieldData::CheckStatus::kCheckableButUnchecked},
+       }});
+
   std::vector<FieldTypeSet> possible_field_types;
   std::vector<FieldTypeValidityStatesMap> possible_field_types_validities;
-  FormData form;
-  form.url = GURL("http://www.foo.com/");
-  form.is_form_tag = true;
-
-  FormFieldData field;
-  field.form_control_type = FormControlType::kInputText;
-
-  field.label = u"First Name";
-  field.name = u"firstname";
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {NAME_FIRST});
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Last Name";
-  field.name = u"lastname";
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {NAME_LAST});
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Email";
-  field.name = u"email";
-  field.form_control_type = FormControlType::kInputEmail;
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {EMAIL_ADDRESS});
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Phone";
-  field.name = u"phone";
-  field.form_control_type = FormControlType::kInputNumber;
   test::InitializePossibleTypesAndValidities(possible_field_types,
                                              possible_field_types_validities,
                                              {PHONE_HOME_WHOLE_NUMBER});
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Country";
-  field.name = u"country";
-  field.form_control_type = FormControlType::kSelectOne;
   test::InitializePossibleTypesAndValidities(possible_field_types,
                                              possible_field_types_validities,
                                              {ADDRESS_HOME_COUNTRY});
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  // Add checkable field.
-  FormFieldData checkable_field;
-  checkable_field.check_status =
-      FormFieldData::CheckStatus::kCheckableButUnchecked;
-  checkable_field.label = u"Checkable1";
-  checkable_field.name = u"Checkable1";
   test::InitializePossibleTypesAndValidities(possible_field_types,
                                              possible_field_types_validities,
                                              {ADDRESS_HOME_COUNTRY});
-  checkable_field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(checkable_field);
 
-  form_structure = std::make_unique<FormStructure>(form);
+  std::unique_ptr<FormStructure> form_structure =
+      std::make_unique<FormStructure>(form);
   form_structure->set_submission_event(
       SubmissionIndicatorEvent::HTML_FORM_SUBMISSION);
-  for (auto& fs_field : *form_structure) {
+  for (const std::unique_ptr<autofill::AutofillField>& fs_field :
+       *form_structure) {
     fs_field->host_form_signature = form_structure->form_signature();
   }
 
@@ -709,22 +633,15 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequest) {
   test::FillUploadField(upload.add_field(), 466116101U, 14U);
   test::FillUploadField(upload.add_field(), 2799270304U, 36U);
 
-  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types, false,
-                                  std::string(), true),
-              ElementsSerializeSameAs(upload));
-
-  upload.set_autofill_used(true);
-  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types, true,
-                                  std::string(), true),
+  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types,
+                                  /*login_form_signature=*/"",
+                                  /*observed_submission=*/true),
               ElementsSerializeSameAs(upload));
 
   // Add 2 address fields - this should be still a valid form.
   for (size_t i = 0; i < 2; ++i) {
-    field.label = u"Address";
-    field.name = u"address";
-    field.form_control_type = FormControlType::kInputText;
-    field.unique_renderer_id = test::MakeFieldRendererId();
-    form.fields.push_back(field);
+    form.fields.push_back(
+        test::GetFormFieldData({.label = u"Address", .name = u"address"}));
     test::InitializePossibleTypesAndValidities(
         possible_field_types, possible_field_types_validities,
         {ADDRESS_HOME_LINE1, ADDRESS_HOME_LINE2});
@@ -758,18 +675,16 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequest) {
   test::FillUploadField(upload.mutable_field(5), 509334676U, 31U);
   test::FillUploadField(upload.mutable_field(6), 509334676U, 31U);
 
-  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types, false,
-                                  std::string(), true),
+  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types,
+                                  /*login_form_signature=*/"",
+                                  /*observed_submission=*/true),
               ElementsSerializeSameAs(upload));
 
   // Add 300 address fields - now the form is invalid, as it has too many
   // fields.
   for (size_t i = 0; i < 300; ++i) {
-    field.label = u"Address";
-    field.name = u"address";
-    field.form_control_type = FormControlType::kInputText;
-    field.unique_renderer_id = test::MakeFieldRendererId();
-    form.fields.push_back(field);
+    form.fields.push_back(
+        test::GetFormFieldData({.label = u"Address", .name = u"address"}));
     test::InitializePossibleTypesAndValidities(
         possible_field_types, possible_field_types_validities,
         {ADDRESS_HOME_LINE1, ADDRESS_HOME_LINE2});
@@ -784,8 +699,9 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequest) {
         possible_field_types_validities[i]);
   }
 
-  EXPECT_TRUE(EncodeUploadRequest(*form_structure, available_field_types, false,
-                                  std::string(), true)
+  EXPECT_TRUE(EncodeUploadRequest(*form_structure, available_field_types,
+                                  /*login_form_signature=*/"",
+                                  /*observed_submission=*/true)
                   .empty());
 }
 
@@ -796,7 +712,7 @@ TEST_F(AutofillCrowdsourcingEncoding,
   std::vector<FieldTypeValidityStatesMap> possible_field_types_validities;
   FormData form;
   form.url = GURL("http://www.foo.com/");
-  form.is_form_tag = true;
+  form.renderer_id = test::MakeFormRendererId();
   form.fields = {
       CreateTestFormField("First Name", "firstname", "",
                           FormControlType::kInputText, "given-name"),
@@ -859,7 +775,7 @@ TEST_F(AutofillCrowdsourcingEncoding,
   upload.set_client_version(
       std::string(GetProductNameAndVersionForUserAgent()));
   upload.set_form_signature(form_structure->form_signature().value());
-  upload.set_autofill_used(true);
+  upload.set_autofill_used(false);
   upload.set_data_present("1440000000000000000802");
   upload.set_login_form_signature(42);
   upload.set_submission_event(
@@ -892,9 +808,9 @@ TEST_F(AutofillCrowdsourcingEncoding,
           MANUALLY_TRIGGERED_GENERATION_ON_SIGN_UP_FORM);
   upload_password_field->set_generated_password_changed(true);
 
-  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types, true,
-                                  "42", true),
-              ElementsSerializeSameAs(upload));
+  EXPECT_THAT(
+      EncodeUploadRequest(*form_structure, available_field_types, "42", true),
+      ElementsSerializeSameAs(upload));
 }
 
 TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequestWithPropertiesMask) {
@@ -903,7 +819,7 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequestWithPropertiesMask) {
   std::vector<FieldTypeValidityStatesMap> possible_field_types_validities;
   FormData form;
   form.url = GURL("http://www.foo.com/");
-  form.is_form_tag = true;
+  form.renderer_id = test::MakeFormRendererId();
 
   form.fields.push_back(CreateTestFormField("First Name", "firstname", "",
                                             FormControlType::kInputText,
@@ -961,7 +877,7 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequestWithPropertiesMask) {
   upload.set_client_version(
       std::string(GetProductNameAndVersionForUserAgent()));
   upload.set_form_signature(form_structure->form_signature().value());
-  upload.set_autofill_used(true);
+  upload.set_autofill_used(false);
   upload.set_data_present("1440");
   upload.set_submission_event(
       AutofillUploadContents_SubmissionIndicatorEvent_NONE);
@@ -976,50 +892,39 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequestWithPropertiesMask) {
   upload.mutable_field(2)->set_properties_mask(
       FieldPropertiesFlags::kHadFocus | FieldPropertiesFlags::kUserTyped);
 
-  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types, true,
+  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types,
                                   std::string(), true),
               ElementsSerializeSameAs(upload));
 }
 
 TEST_F(AutofillCrowdsourcingEncoding,
        EncodeUploadRequest_ObservedSubmissionFalse) {
-  std::unique_ptr<FormStructure> form_structure;
+  FormData form = test::GetFormData(
+      {.fields = {
+           {.label = u"First Name",
+            .name = u"firstname",
+            .form_control_type = FormControlType::kInputText},
+           {.label = u"Last Name",
+            .name = u"lastname",
+            .form_control_type = FormControlType::kInputText},
+           {.label = u"Email",
+            .name = u"email",
+            .form_control_type = FormControlType::kInputEmail},
+       }});
+
   std::vector<FieldTypeSet> possible_field_types;
   std::vector<FieldTypeValidityStatesMap> possible_field_types_validities;
-  FormData form;
-  form.url = GURL("http://www.foo.com/");
-  form.is_form_tag = true;
-
-  FormFieldData field;
-  field.form_control_type = FormControlType::kInputText;
-
-  field.label = u"First Name";
-  field.name = u"firstname";
-  field.name_attribute = field.name;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {NAME_FIRST});
-
-  field.label = u"Last Name";
-  field.name = u"lastname";
-  field.name_attribute = field.name;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {NAME_LAST});
-
-  field.label = u"Email";
-  field.name = u"email";
-  field.name_attribute = field.name;
-  field.form_control_type = FormControlType::kInputEmail;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {EMAIL_ADDRESS});
 
-  form_structure = std::make_unique<FormStructure>(form);
-  for (auto& fs_field : *form_structure) {
+  std::unique_ptr<FormStructure> form_structure =
+      std::make_unique<FormStructure>(form);
+  for (const std::unique_ptr<autofill::AutofillField>& fs_field :
+       *form_structure) {
     fs_field->host_form_signature = form_structure->form_signature();
   }
 
@@ -1044,7 +949,7 @@ TEST_F(AutofillCrowdsourcingEncoding,
   upload.set_client_version(
       std::string(GetProductNameAndVersionForUserAgent()));
   upload.set_form_signature(form_structure->form_signature().value());
-  upload.set_autofill_used(true);
+  upload.set_autofill_used(false);
   upload.set_data_present("1440");
   upload.set_submission_event(
       AutofillUploadContents_SubmissionIndicatorEvent_NONE);
@@ -1054,43 +959,36 @@ TEST_F(AutofillCrowdsourcingEncoding,
   test::FillUploadField(upload.add_field(), 3494530716U, 5U);
   test::FillUploadField(upload.add_field(), 1029417091U, 9U);
 
-  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types, true,
-                                  std::string(),
-                                  /* observed_submission= */ false),
+  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types,
+                                  /*login_form_signature=*/"",
+                                  /* observed_submission=*/false),
               ElementsSerializeSameAs(upload));
 }
 
 TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequest_WithLabels) {
-  std::unique_ptr<FormStructure> form_structure;
+  FormData form =
+      test::GetFormData({.fields = {
+                             // No label for the first field.
+                             {.form_control_type = FormControlType::kInputText},
+                             {.label = u"Last Name",
+                              .form_control_type = FormControlType::kInputText},
+                             {.label = u"Email",
+                              .form_control_type = FormControlType::kInputText},
+                         }});
+
   std::vector<FieldTypeSet> possible_field_types;
   std::vector<FieldTypeValidityStatesMap> possible_field_types_validities;
-  FormData form;
-  form.url = GURL("http://www.foo.com/");
-  form.is_form_tag = true;
-
-  FormFieldData field;
-  field.form_control_type = FormControlType::kInputText;
-
-  // No label for the first field.
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {NAME_FIRST});
-
-  field.label = u"Last Name";
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {NAME_LAST});
-
-  field.label = u"Email";
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {EMAIL_ADDRESS});
 
-  form_structure = std::make_unique<FormStructure>(form);
-  for (auto& fs_field : *form_structure) {
+  std::unique_ptr<FormStructure> form_structure =
+      std::make_unique<FormStructure>(form);
+  for (const std::unique_ptr<autofill::AutofillField>& fs_field :
+       *form_structure) {
     fs_field->host_form_signature = form_structure->form_signature();
   }
 
@@ -1115,7 +1013,7 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequest_WithLabels) {
   upload.set_client_version(
       std::string(GetProductNameAndVersionForUserAgent()));
   upload.set_form_signature(form_structure->form_signature().value());
-  upload.set_autofill_used(true);
+  upload.set_autofill_used(false);
   upload.set_data_present("1440");
   upload.set_submission_event(
       AutofillUploadContents_SubmissionIndicatorEvent_NONE);
@@ -1125,8 +1023,73 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequest_WithLabels) {
   test::FillUploadField(upload.add_field(), 1318412689U, 5U);
   test::FillUploadField(upload.add_field(), 1318412689U, 9U);
 
-  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types, true,
-                                  std::string(), true),
+  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types,
+                                  /*login_form_signature=*/"",
+                                  /*observed_submission=*/true),
+              ElementsSerializeSameAs(upload));
+}
+// Tests the EMAIL_ADDRESS exception on `FirstNonCapturedType`, where email is
+// not required as part of the `contained_types`.
+TEST_F(AutofillCrowdsourcingEncoding,
+       EncodeUploadRequest_EmailFieldContentMatched) {
+  base::test::ScopedFeatureList feature{
+      features::kAutofillUploadVotesForFieldsWithEmail};
+  FormData form = test::GetFormData(
+      {.fields =
+           {{.label = u"First Name", .name = u"firstname"},
+            {.label = u"Last Name"},
+            // No label or name for the email field, only a valid email value.
+            {.value = u"foo@email.com"}},
+       .url = "http://www.foo.com/"});
+
+  std::vector<FieldTypeSet> possible_field_types;
+  std::vector<FieldTypeValidityStatesMap> possible_field_types_validities;
+  test::InitializePossibleTypesAndValidities(
+      possible_field_types, possible_field_types_validities, {NAME_FIRST});
+  test::InitializePossibleTypesAndValidities(
+      possible_field_types, possible_field_types_validities, {NAME_LAST});
+  test::InitializePossibleTypesAndValidities(
+      possible_field_types, possible_field_types_validities, {EMAIL_ADDRESS});
+
+  std::unique_ptr<FormStructure> form_structure =
+      std::make_unique<FormStructure>(form);
+  for (const std::unique_ptr<autofill::AutofillField>& fs_field :
+       *form_structure) {
+    fs_field->host_form_signature = form_structure->form_signature();
+  }
+
+  ASSERT_EQ(form_structure->field_count(), possible_field_types.size());
+  ASSERT_EQ(form_structure->field_count(),
+            possible_field_types_validities.size());
+
+  for (size_t i = 0; i < form_structure->field_count(); ++i) {
+    form_structure->field(i)->set_possible_types(possible_field_types[i]);
+    form_structure->field(i)->set_possible_types_validities(
+        possible_field_types_validities[i]);
+  }
+
+  // No available EMAIL_ADRESS on field_types.
+  FieldTypeSet available_field_types = {NAME_FIRST, NAME_LAST};
+
+  // Prepare the expected proto string.
+  AutofillUploadContents upload;
+  upload.set_submission(true);
+  upload.set_client_version(
+      std::string(GetProductNameAndVersionForUserAgent()));
+  upload.set_form_signature(form_structure->form_signature().value());
+  upload.set_autofill_used(false);
+  upload.set_data_present("14");
+  upload.set_submission_event(
+      AutofillUploadContents_SubmissionIndicatorEvent_NONE);
+  upload.set_has_form_tag(true);
+
+  test::FillUploadField(upload.add_field(), 3763331450U, 3U);
+  test::FillUploadField(upload.add_field(), 1318412689U, 5U);
+  test::FillUploadField(upload.add_field(), 1318412689U, 9U);
+
+  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types,
+                                  /*login_form_signature=*/"",
+                                  /*observed_submission=*/true),
               ElementsSerializeSameAs(upload));
 }
 
@@ -1134,63 +1097,44 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequest_WithLabels) {
 // EncodeUploadRequest() returns multiple uploads: one for the entire form and
 // one for each of the original forms.
 TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequest_WithSubForms) {
-  std::unique_ptr<FormStructure> form_structure;
+  FormData form =
+      test::GetFormData({.fields = {{.host_form_signature = FormSignature(123),
+                                     .label = u"Cardholder name",
+                                     .name = u"cc-name"},
+                                    {.host_frame = test::MakeLocalFrameToken(),
+                                     .host_form_signature = FormSignature(456),
+                                     .label = u"Credit card number",
+                                     .name = u"cc-number"},
+                                    {.host_form_signature = FormSignature(123),
+                                     .label = u"Expiration date",
+                                     .name = u"cc-exp"},
+                                    {.host_frame = test::MakeLocalFrameToken(),
+                                     .host_form_signature = FormSignature(456),
+                                     .label = u"CVC",
+                                     .name = u"cc-cvc"}}});
+
   std::vector<FieldTypeSet> possible_field_types;
   std::vector<FieldTypeValidityStatesMap> possible_field_types_validities;
-  FormData form;
-  form.host_frame = test::MakeLocalFrameToken();
-  form.url = GURL("http://www.foo.com/");
-  form.is_form_tag = true;
-
-  FormFieldData field;
-  field.form_control_type = FormControlType::kInputText;
-
-  field.label = u"Cardholder name";
-  field.name = u"cc-name";
   test::InitializePossibleTypesAndValidities(possible_field_types,
                                              possible_field_types_validities,
                                              {CREDIT_CARD_NAME_FULL});
-  field.host_frame = form.host_frame;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  field.host_form_signature = FormSignature(123);
-  form.fields.push_back(field);
-
-  field.label = u"Credit card number";
-  field.name = u"cc-number";
   test::InitializePossibleTypesAndValidities(possible_field_types,
                                              possible_field_types_validities,
                                              {CREDIT_CARD_NUMBER});
-  field.host_frame = test::MakeLocalFrameToken();
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  field.host_form_signature = FormSignature(456);
-  form.fields.push_back(field);
-
-  field.label = u"Expiration date";
-  field.name = u"cc-exp";
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities,
       {CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR});
-  field.host_frame = form.host_frame;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  field.host_form_signature = FormSignature(123);
-  form.fields.push_back(field);
-
-  field.label = u"CVC";
-  field.name = u"cc-cvc";
   test::InitializePossibleTypesAndValidities(possible_field_types,
                                              possible_field_types_validities,
                                              {CREDIT_CARD_VERIFICATION_CODE});
-  field.host_frame = test::MakeLocalFrameToken();
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  field.host_form_signature = FormSignature(456);
-  form.fields.push_back(field);
 
   ASSERT_EQ(form.global_id(), form.fields[0].renderer_form_id());
   ASSERT_NE(form.global_id(), form.fields[1].renderer_form_id());
   ASSERT_EQ(form.global_id(), form.fields[2].renderer_form_id());
   ASSERT_NE(form.global_id(), form.fields[3].renderer_form_id());
 
-  form_structure = std::make_unique<FormStructure>(form);
+  std::unique_ptr<FormStructure> form_structure =
+      std::make_unique<FormStructure>(form);
 
   ASSERT_EQ(form_structure->field_count(), possible_field_types.size());
   ASSERT_EQ(form_structure->field_count(),
@@ -1260,7 +1204,7 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequest_WithSubForms) {
     return upload;
   }();
 
-  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types, false,
+  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types,
                                   std::string(), true),
               UnorderedElementsSerializeSameAs(upload_main, upload_name_exp,
                                                upload_number, upload_cvc));
@@ -1269,31 +1213,12 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequest_WithSubForms) {
 // Check that we compute the "datapresent" string correctly for the given
 // |available_types|.
 TEST_F(AutofillCrowdsourcingEncoding, CheckDataPresence) {
-  FormData form;
-  form.url = GURL("http://www.foo.com/");
-  form.is_form_tag = true;
-
-  FormFieldData field;
-  field.form_control_type = FormControlType::kInputText;
-
-  field.label = u"First Name";
-  field.name = u"first";
-  field.name_attribute = field.name;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Last Name";
-  field.name = u"last";
-  field.name_attribute = field.name;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Email";
-  field.name = u"email";
-  field.name_attribute = field.name;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
+  FormData form =
+      test::GetFormData({.fields = {
+                             {.label = u"First Name", .name = u"first"},
+                             {.label = u"Last Name", .name = u"last"},
+                             {.label = u"Email", .name = u"email"},
+                         }});
   FormStructure form_structure(form);
   form_structure.set_submission_source(SubmissionSource::FORM_SUBMISSION);
   for (auto& fs_field : form_structure) {
@@ -1332,7 +1257,7 @@ TEST_F(AutofillCrowdsourcingEncoding, CheckDataPresence) {
   test::FillUploadField(upload.add_field(), 2404144663U, 1U);
   test::FillUploadField(upload.add_field(), 420638584U, 1U);
 
-  EXPECT_THAT(EncodeUploadRequest(form_structure, available_field_types, false,
+  EXPECT_THAT(EncodeUploadRequest(form_structure, available_field_types,
                                   std::string(), true),
               ElementsSerializeSameAs(upload));
 
@@ -1356,7 +1281,7 @@ TEST_F(AutofillCrowdsourcingEncoding, CheckDataPresence) {
 
   // Adjust the expected proto string.
   upload.set_data_present("1540000240");
-  EXPECT_THAT(EncodeUploadRequest(form_structure, available_field_types, false,
+  EXPECT_THAT(EncodeUploadRequest(form_structure, available_field_types,
                                   std::string(), true),
               ElementsSerializeSameAs(upload));
 
@@ -1404,7 +1329,7 @@ TEST_F(AutofillCrowdsourcingEncoding, CheckDataPresence) {
 
   // Adjust the expected proto string.
   upload.set_data_present("1f7e000378000008");
-  EXPECT_THAT(EncodeUploadRequest(form_structure, available_field_types, false,
+  EXPECT_THAT(EncodeUploadRequest(form_structure, available_field_types,
                                   std::string(), true),
               ElementsSerializeSameAs(upload));
 
@@ -1430,7 +1355,7 @@ TEST_F(AutofillCrowdsourcingEncoding, CheckDataPresence) {
 
   // Adjust the expected proto string.
   upload.set_data_present("0000000000001fc0");
-  EXPECT_THAT(EncodeUploadRequest(form_structure, available_field_types, false,
+  EXPECT_THAT(EncodeUploadRequest(form_structure, available_field_types,
                                   std::string(), true),
               ElementsSerializeSameAs(upload));
 
@@ -1492,7 +1417,7 @@ TEST_F(AutofillCrowdsourcingEncoding, CheckDataPresence) {
 
   // Adjust the expected proto string.
   upload.set_data_present("1f7e000378001fc8");
-  EXPECT_THAT(EncodeUploadRequest(form_structure, available_field_types, false,
+  EXPECT_THAT(EncodeUploadRequest(form_structure, available_field_types,
                                   std::string(), true),
               ElementsSerializeSameAs(upload));
 }
@@ -1523,42 +1448,19 @@ TEST_F(AutofillCrowdsourcingEncoding, CheckMultipleTypes) {
   // Check that multiple types for the field are processed correctly.
   std::vector<FieldTypeSet> possible_field_types;
   std::vector<FieldTypeValidityStatesMap> possible_field_types_validities;
-  FormData form;
-  form.url = GURL("http://www.foo.com/");
-  form.is_form_tag = false;
 
-  FormFieldData field;
-  field.form_control_type = FormControlType::kInputText;
-
-  field.label = u"email";
-  field.name = u"email";
-  field.name_attribute = field.name;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
+  FormData form =
+      test::GetFormData({.fields = {{.label = u"email", .name = u"email"},
+                                    {.label = u"First Name", .name = u"first"},
+                                    {.label = u"Last Name", .name = u"last"},
+                                    {.label = u"Address", .name = u"address"}},
+                         .renderer_id = FormRendererId()});
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {EMAIL_ADDRESS});
-
-  field.label = u"First Name";
-  field.name = u"first";
-  field.name_attribute = field.name;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {NAME_FIRST});
-
-  field.label = u"Last Name";
-  field.name = u"last";
-  field.name_attribute = field.name;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
   test::InitializePossibleTypesAndValidities(
       possible_field_types, possible_field_types_validities, {NAME_LAST});
-
-  field.label = u"Address";
-  field.name = u"address";
-  field.name_attribute = field.name;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
   test::InitializePossibleTypesAndValidities(possible_field_types,
                                              possible_field_types_validities,
                                              {ADDRESS_HOME_LINE1});
@@ -1590,7 +1492,7 @@ TEST_F(AutofillCrowdsourcingEncoding, CheckMultipleTypes) {
   test::FillUploadField(upload.add_field(), 2404144663U, 5U);
   test::FillUploadField(upload.add_field(), 509334676U, 30U);
 
-  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types, false,
+  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types,
                                   std::string(), true),
               ElementsSerializeSameAs(upload));
 
@@ -1606,7 +1508,7 @@ TEST_F(AutofillCrowdsourcingEncoding, CheckMultipleTypes) {
   upload.mutable_field(2)->mutable_autofill_type_validities()->SwapElements(0,
                                                                             1);
 
-  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types, false,
+  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types,
                                   std::string(), true),
               ElementsSerializeSameAs(upload));
 
@@ -1619,7 +1521,7 @@ TEST_F(AutofillCrowdsourcingEncoding, CheckMultipleTypes) {
   // Adjust the expected upload proto.
   test::FillUploadField(upload.mutable_field(3), 509334676U, 31U);
 
-  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types, false,
+  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types,
                                   std::string(), true),
               ElementsSerializeSameAs(upload));
 
@@ -1639,31 +1541,18 @@ TEST_F(AutofillCrowdsourcingEncoding, CheckMultipleTypes) {
   upload.mutable_field(3)->mutable_autofill_type_validities(1)->set_type(60);
   upload.mutable_field(3)->set_autofill_type(1, 60);
 
-  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types, false,
+  EXPECT_THAT(EncodeUploadRequest(*form_structure, available_field_types,
                                   std::string(), true),
               ElementsSerializeSameAs(upload));
 }
 
 TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequest_PasswordsRevealed) {
-  FormData form;
-  form.url = GURL("http://www.foo.com/");
-
   // Add 3 fields, to make the form uploadable.
-  FormFieldData field;
-  field.name = u"email";
-  field.name_attribute = field.name;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.name = u"first";
-  field.name_attribute = field.name;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.name = u"last";
-  field.name_attribute = field.name;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
+  FormData form = test::GetFormData({.fields = {
+                                         {.name = u"email"},
+                                         {.name = u"first"},
+                                         {.name = u"last"},
+                                     }});
 
   FormStructure form_structure(form);
   for (auto& fs_field : form_structure) {
@@ -1672,23 +1561,16 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequest_PasswordsRevealed) {
 
   std::vector<AutofillUploadContents> uploads = EncodeUploadRequest(
       form_structure, {{}} /* available_field_types */,
-      false /* form_was_autofilled */, std::string() /* login_form_signature */,
-      true /* observed_submission */);
+      std::string() /* login_form_signature */, true /* observed_submission */);
   ASSERT_EQ(1u, uploads.size());
 }
 
 TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequest_IsFormTag) {
   for (bool is_form_tag : {false, true}) {
-    SCOPED_TRACE(testing::Message() << "is_form_tag=" << is_form_tag);
-
-    FormData form;
-    form.url = GURL("http://www.foo.com/");
-    FormFieldData field;
-    field.name = u"email";
-    field.unique_renderer_id = test::MakeFieldRendererId();
-    form.fields.push_back(field);
-
-    form.is_form_tag = is_form_tag;
+    FormData form = test::GetFormData(
+        {.fields = {{.name = u"email"}},
+         .renderer_id =
+             is_form_tag ? test::MakeFormRendererId() : FormRendererId()});
 
     FormStructure form_structure(form);
     for (auto& fs_field : form_structure) {
@@ -1696,7 +1578,6 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequest_IsFormTag) {
     }
     std::vector<AutofillUploadContents> uploads =
         EncodeUploadRequest(form_structure, {{}} /* available_field_types */,
-                            false /* form_was_autofilled */,
                             std::string() /* login_form_signature */,
                             true /* observed_submission */);
     ASSERT_EQ(1u, uploads.size());
@@ -1742,7 +1623,7 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequest_RichMetadata) {
     field.css_classes = ASCIIToUTF16(f.css_classes);
     field.autocomplete_attribute = f.autocomplete;
     field.parsed_autocomplete = ParseAutocompleteAttribute(f.autocomplete);
-    field.unique_renderer_id = test::MakeFieldRendererId();
+    field.renderer_id = test::MakeFieldRendererId();
     form.fields.push_back(field);
   }
   RandomizedEncoder encoder("seed for testing",
@@ -1758,8 +1639,7 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequest_RichMetadata) {
 
   std::vector<AutofillUploadContents> uploads = EncodeUploadRequest(
       form_structure, {{}} /* available_field_types */,
-      false /* form_was_autofilled */, std::string() /* login_form_signature */,
-      true /* observed_submission */);
+      std::string() /* login_form_signature */, true /* observed_submission */);
   ASSERT_EQ(1u, uploads.size());
   AutofillUploadContents& upload = uploads.front();
 
@@ -1891,7 +1771,7 @@ TEST_F(AutofillCrowdsourcingEncoding, Metadata_OnlySendFullUrlWithUserConsent) {
     field.form_control_type = FormControlType::kInputText;
     field.label = u"email";
     field.name = u"email";
-    field.unique_renderer_id = test::MakeFieldRendererId();
+    field.renderer_id = test::MakeFieldRendererId();
     form.fields.push_back(field);
 
     TestingPrefServiceSimple prefs;
@@ -1907,7 +1787,7 @@ TEST_F(AutofillCrowdsourcingEncoding, Metadata_OnlySendFullUrlWithUserConsent) {
     FormStructure form_structure(form);
     form_structure.set_randomized_encoder(RandomizedEncoder::Create(&prefs));
     std::vector<AutofillUploadContents> uploads =
-        EncodeUploadRequest(form_structure, {}, true, "", true);
+        EncodeUploadRequest(form_structure, {}, "", true);
 
     EXPECT_EQ(has_consent,
               uploads.front().randomized_form_metadata().has_url());
@@ -1920,7 +1800,7 @@ TEST_F(AutofillCrowdsourcingEncoding,
   form.url = GURL("http://www.foo.com/");
   FormFieldData field;
   field.name = u"text field";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   form.fields.push_back(field);
 
   FormStructure form_structure(form);
@@ -1934,8 +1814,7 @@ TEST_F(AutofillCrowdsourcingEncoding,
 
   std::vector<AutofillUploadContents> uploads = EncodeUploadRequest(
       form_structure, {{}} /* available_field_types */,
-      false /* form_was_autofilled */, std::string() /* login_form_signature */,
-      true /* observed_submission */);
+      std::string() /* login_form_signature */, true /* observed_submission */);
   ASSERT_EQ(1u, uploads.size());
   EXPECT_EQ(form_structure.field(0)->single_username_vote_type(),
             uploads.front().field(0).single_username_vote_type());
@@ -1949,7 +1828,7 @@ TEST_F(AutofillCrowdsourcingEncoding,
   form.url = GURL("http://www.foo.com/");
   FormFieldData field_data;
   field_data.name = u"text field";
-  field_data.unique_renderer_id = test::MakeFieldRendererId();
+  field_data.renderer_id = test::MakeFieldRendererId();
   form.fields.push_back(field_data);
 
   FormStructure form_structure(form);
@@ -1966,8 +1845,7 @@ TEST_F(AutofillCrowdsourcingEncoding,
 
   std::vector<AutofillUploadContents> uploads = EncodeUploadRequest(
       form_structure, {{}} /* available_field_types */,
-      false /* form_was_autofilled */, std::string() /* login_form_signature */,
-      true /* observed_submission */);
+      std::string() /* login_form_signature */, true /* observed_submission */);
   ASSERT_EQ(1u, uploads.size());
   ASSERT_EQ(1, uploads.front().single_username_data().size());
   const AutofillUploadContents::SingleUsernameData& uploaded_data =
@@ -1994,8 +1872,8 @@ TEST_F(AutofillCrowdsourcingEncoding, CreateForPasswordManagerUpload) {
   ASSERT_EQ(3u, form->field_count());
   ASSERT_EQ(FieldSignature(100u), form->field(2)->GetFieldSignature());
   std::vector<AutofillUploadContents> uploads = EncodeUploadRequest(
-      *form, {} /* available_field_types */, false /* form_was_autofilled */,
-      "" /*login_form_signature*/, true /*observed_submission*/);
+      *form, {} /* available_field_types */, "" /*login_form_signature*/,
+      true /*observed_submission*/);
   ASSERT_EQ(1u, uploads.size());
 }
 
@@ -2012,8 +1890,8 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeUploadRequest_MilestoneSet) {
     field->host_form_signature = form->form_signature();
   }
   std::vector<AutofillUploadContents> uploads = EncodeUploadRequest(
-      *form, {} /* available_field_types */, false /* form_was_autofilled */,
-      "" /*login_form_signature*/, true /*observed_submission*/);
+      *form, {} /* available_field_types */, "" /*login_form_signature*/,
+      true /*observed_submission*/);
   ASSERT_EQ(1u, uploads.size());
   static constexpr char kChromeVersionRegex[] =
       "\\w+/([0-9]+)\\.[0-9]+\\.[0-9]+\\.[0-9]+";
@@ -2061,7 +1939,7 @@ TEST_F(AutofillCrowdsourcingEncoding,
 
   const std::vector<AutofillUploadContents> uploads = EncodeUploadRequest(
       form_structure,
-      /*available_field_types=*/{}, /*form_was_autofilled=*/false,
+      /*available_field_types=*/{},
       /*login_form_signature=*/"", /*observed_submission=*/true);
   ASSERT_EQ(uploads.size(), 1UL);
   const AutofillUploadContents& upload = uploads[0];
@@ -2088,7 +1966,7 @@ TEST_F(AutofillCrowdsourcingEncoding,
 
   std::vector<AutofillUploadContents> uploads = EncodeUploadRequest(
       form_structure,
-      /*available_field_types=*/{}, /*form_was_autofilled=*/false,
+      /*available_field_types=*/{},
       /*login_form_signature=*/"", /*observed_submission=*/true);
   ASSERT_GE(uploads.size(), 1u);
   AutofillUploadContents upload = uploads[0];
@@ -2098,10 +1976,10 @@ TEST_F(AutofillCrowdsourcingEncoding,
   // classified type, representing that the field was filled using this type as
   // fallback.
   form_structure.field(0)->set_autofilled_type(NAME_FULL);
-  uploads = EncodeUploadRequest(
-      form_structure,
-      /*available_field_types=*/{}, /*form_was_autofilled=*/false,
-      /*login_form_signature=*/"", /*observed_submission=*/true);
+  uploads = EncodeUploadRequest(form_structure,
+                                /*available_field_types=*/{},
+                                /*login_form_signature=*/"",
+                                /*observed_submission=*/true);
   ASSERT_GE(uploads.size(), 1u);
   upload = uploads[0];
   EXPECT_EQ(upload.field_size(), 0);
@@ -2118,31 +1996,31 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeAutofillPageQueryRequest) {
 
   field.label = u"Name on Card";
   field.name = u"name_on_card";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   field.host_form_signature = form_signature;
   form.fields.push_back(field);
 
   field.label = u"Address";
   field.name = u"billing_address";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   field.host_form_signature = FormSignature(12345UL);
   form.fields.push_back(field);
 
   field.label = u"Card Number";
   field.name = u"card_number";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   field.host_form_signature = FormSignature(67890UL);
   form.fields.push_back(field);
 
   field.label = u"Expiration Date";
   field.name = u"expiration_month";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   field.host_form_signature = FormSignature(12345UL);
   form.fields.push_back(field);
 
   field.label = u"Expiration Year";
   field.name = u"expiration_year";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   field.host_form_signature = FormSignature(12345UL);
   form.fields.push_back(field);
 
@@ -2152,7 +2030,7 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeAutofillPageQueryRequest) {
       FormFieldData::CheckStatus::kCheckableButUnchecked;
   checkable_field.label = u"Checkable1";
   checkable_field.name = u"Checkable1";
-  checkable_field.unique_renderer_id = test::MakeFieldRendererId();
+  checkable_field.renderer_id = test::MakeFieldRendererId();
   checkable_field.host_form_signature = form_signature;
   form.fields.push_back(checkable_field);
 
@@ -2221,7 +2099,7 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeAutofillPageQueryRequest) {
   for (size_t i = 0; i < 5; ++i) {
     field.label = u"Address";
     field.name = u"address";
-    field.unique_renderer_id = test::MakeFieldRendererId();
+    field.renderer_id = test::MakeFieldRendererId();
     field.host_form_signature = form_signature3;
     form.fields.push_back(field);
   }
@@ -2272,7 +2150,7 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeAutofillPageQueryRequest) {
   for (size_t i = 0; i < 300; ++i) {
     field.label = u"Address";
     field.name = u"address";
-    field.unique_renderer_id = test::MakeFieldRendererId();
+    field.renderer_id = test::MakeFieldRendererId();
     malformed_form.fields.push_back(field);
   }
 
@@ -2295,31 +2173,18 @@ TEST_F(AutofillCrowdsourcingEncoding, EncodeAutofillPageQueryRequest) {
 }
 
 TEST_F(AutofillCrowdsourcingEncoding, SkipFieldTest) {
-  FormData form;
-  form.name = u"the-name";
-  form.url = GURL("http://cool.com");
-  form.action = form.url.Resolve("/login");
-
-  FormFieldData field;
-  field.label = u"username";
-  field.name = u"username";
-  field.form_control_type = FormControlType::kInputText;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"select";
-  field.name = u"select";
-  field.form_control_type = FormControlType::kInputCheckbox;
-  field.check_status = FormFieldData::CheckStatus::kCheckableButUnchecked;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = std::u16string();
-  field.name = u"email";
-  field.form_control_type = FormControlType::kInputText;
-  field.check_status = FormFieldData::CheckStatus::kNotCheckable;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
+  FormData form = test::GetFormData({
+      .fields = {{.role = USERNAME},
+                 {.label = u"select",
+                  .name = u"select",
+                  .form_control_type = FormControlType::kInputCheckbox,
+                  .check_status =
+                      FormFieldData::CheckStatus::kCheckableButUnchecked},
+                 {.role = EMAIL_ADDRESS}},
+      .name = u"the-name",
+      .url = "http://cool.com",
+      .action = "http://cool.com/login",
+  });
 
   FormStructure form_structure(form);
   std::vector<raw_ptr<FormStructure, VectorExperimental>> forms;
@@ -2347,29 +2212,18 @@ TEST_F(AutofillCrowdsourcingEncoding, SkipFieldTest) {
 
 TEST_F(AutofillCrowdsourcingEncoding,
        EncodeAutofillPageQueryRequest_WithLabels) {
-  FormData form;
-  form.name = u"the-name";
-  form.url = GURL("http://cool.com");
-  form.action = form.url.Resolve("/login");
-
-  FormFieldData field;
-  // No label on the first field.
-  field.name = u"username";
-  field.form_control_type = FormControlType::kInputText;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Enter your Email address";
-  field.name = u"email";
-  field.form_control_type = FormControlType::kInputText;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Enter your Password";
-  field.name = u"password";
-  field.form_control_type = FormControlType::kInputPassword;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
+  FormData form = test::GetFormData({
+      .fields =
+          {// No label on the first field.
+           {.name = u"username"},
+           {.label = u"Enter your Email address", .name = u"email"},
+           {.label = u"Enter your Password",
+            .name = u"password",
+            .form_control_type = FormControlType::kInputPassword}},
+      .name = u"the-name",
+      .url = "http://cool.com",
+      .action = "http://cool.com/login",
+  });
 
   std::vector<raw_ptr<FormStructure, VectorExperimental>> forms;
   FormStructure form_structure(form);
@@ -2395,34 +2249,26 @@ TEST_F(AutofillCrowdsourcingEncoding,
 
 TEST_F(AutofillCrowdsourcingEncoding,
        EncodeAutofillPageQueryRequest_WithLongLabels) {
-  FormData form;
-  form.name = u"the-name";
-  form.url = GURL("http://cool.com");
-  form.action = form.url.Resolve("/login");
-
-  FormFieldData field;
-  // No label on the first field.
-  field.name = u"username";
-  field.form_control_type = FormControlType::kInputText;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  // This label will be truncated in the XML request.
-  field.label =
-      u"Enter Your Really Really Really (Really!) Long Email Address Which We "
-      u"Hope To Get In Order To Send You Unwanted Publicity Because That's "
-      u"What Marketers Do! We Know That Your Email Address Has The Possibility "
-      u"Of Exceeding A Certain Number Of Characters...";
-  field.name = u"email";
-  field.form_control_type = FormControlType::kInputText;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = u"Enter your Password";
-  field.name = u"password";
-  field.form_control_type = FormControlType::kInputPassword;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
+  FormData form = test::GetFormData({
+      .fields =
+          {// No label on the first field.
+           {.name = u"username"},
+           // This label will be truncated in the XML request.
+           {.label = u"Enter Your Really Really Really (Really!) Long Email "
+                     u"Address Which We "
+                     u"Hope To Get In Order To Send You Unwanted Publicity "
+                     u"Because That's "
+                     u"What Marketers Do! We Know That Your Email Address Has "
+                     u"The Possibility "
+                     u"Of Exceeding A Certain Number Of Characters...",
+            .name = u"email"},
+           {.label = u"Enter your Password",
+            .name = u"password",
+            .form_control_type = FormControlType::kInputPassword}},
+      .name = u"the-name",
+      .url = "http://cool.com",
+      .action = "http://cool.com/login",
+  });
 
   FormStructure form_structure(form);
   std::vector<raw_ptr<FormStructure, VectorExperimental>> forms;
@@ -2449,25 +2295,18 @@ TEST_F(AutofillCrowdsourcingEncoding,
 // One name is missing from one field.
 TEST_F(AutofillCrowdsourcingEncoding,
        EncodeAutofillPageQueryRequest_MissingNames) {
-  FormData form;
-  // No name set for the form.
-  form.url = GURL("http://cool.com");
-  form.action = form.url.Resolve("/login");
-
-  FormFieldData field;
-  field.label = u"username";
-  field.name = u"username";
-  field.form_control_type = FormControlType::kInputText;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
-
-  field.label = std::u16string();
-  // No name set for this field.
-  field.name = u"";
-  field.form_control_type = FormControlType::kInputText;
-  field.check_status = FormFieldData::CheckStatus::kNotCheckable;
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form.fields.push_back(field);
+  FormData form = test::GetFormData({
+      .fields = {{.role = USERNAME},
+                 // No name set for this field.
+                 {.label = u"",
+                  .name = u"",
+                  .form_control_type = FormControlType::kInputText,
+                  .check_status = FormFieldData::CheckStatus::kNotCheckable}},
+      // No name set for the form.
+      .name = u"",
+      .url = "http://cool.com",
+      .action = "http://cool.com/login",
+  });
 
   FormStructure form_structure(form);
   for (auto& fs_field : form_structure) {
@@ -2504,7 +2343,7 @@ TEST_F(AutofillCrowdsourcingEncoding, AllowBigForms) {
   for (size_t i = 0; i < 250; ++i) {
     field.form_control_type = FormControlType::kInputText;
     field.name = u"text" + base::NumberToString16(i);
-    field.unique_renderer_id = test::MakeFieldRendererId();
+    field.renderer_id = test::MakeFieldRendererId();
     form.fields.push_back(field);
   }
 
@@ -2577,30 +2416,17 @@ TEST_F(AutofillCrowdsourcingEncoding,
 // predictions.
 TEST_F(AutofillCrowdsourcingEncoding,
        ParseQueryResponse_HeuristicsOverrideSpanishLastNameTypes) {
-  FormData form_data;
-  FormFieldData field;
-  form_data.url = GURL("http://foo.com");
-  field.form_control_type = FormControlType::kInputText;
-
-  // First name field.
-  field.label = u"Nombre";
-  field.name = u"Nombre";
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form_data.fields.push_back(field);
-
-  // First last name field.
-  // Should be identified by local heuristics.
-  field.label = u"Apellido Paterno";
-  field.name = u"apellido_paterno";
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form_data.fields.push_back(field);
-
-  // Second last name field.
-  // Should be identified by local heuristics.
-  field.label = u"Apellido Materno";
-  field.name = u"apellido materno";
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form_data.fields.push_back(field);
+  FormData form_data = test::GetFormData(
+      {.fields =
+           {// First name field.
+            {.label = u"Nombre", .name = u"Nombre"},
+            // First last name field.
+            // Should be identified by local heuristics.
+            {.label = u"Apellido Paterno", .name = u"apellido_paterno"},
+            // Second last name field.
+            // Should be identified by local heuristics.
+            {.label = u"Apellido Materno", .name = u"apellido materno"}},
+       .url = "http://foo.com"});
 
   FormStructure form(form_data);
   form.DetermineHeuristicTypes(GeoIpCountryCode(""), nullptr, nullptr);
@@ -2638,34 +2464,17 @@ TEST_F(AutofillCrowdsourcingEncoding,
 // ADDRESS_HOME_HOUSE_NUMBER overrides server predictions.
 TEST_F(AutofillCrowdsourcingEncoding,
        ParseQueryResponse_HeuristicsOverrideStreetNameAndHouseNumberTypes) {
-  FormData form_data;
-  FormFieldData field;
-  form_data.url = GURL("http://foo.com");
-  field.form_control_type = FormControlType::kInputText;
-
-  // Field for the name.
-  field.label = u"Name";
-  field.name = u"Name";
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form_data.fields.push_back(field);
-
-  // Field for the street name.
-  field.label = u"Street Name";
-  field.name = u"street_name";
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form_data.fields.push_back(field);
-
-  // Field for the house number.
-  field.label = u"House Number";
-  field.name = u"house_number";
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form_data.fields.push_back(field);
-
-  // Field for the postal code.
-  field.label = u"ZIP";
-  field.name = u"ZIP";
-  field.unique_renderer_id = test::MakeFieldRendererId();
-  form_data.fields.push_back(field);
+  FormData form_data = test::GetFormData(
+      {.fields =
+           {// Field for the name.
+            {.label = u"Name", .name = u"Name"},
+            // Field for the street name.
+            {.label = u"Street Name", .name = u"street_name"},
+            // Field for the house number.
+            {.label = u"House Number", .name = u"house_number"},
+            // Field for the postal code.
+            {.label = u"ZIP", .name = u"ZIP"}},
+       .url = "http://foo.com"});
 
   FormStructure form(form_data);
   form.DetermineHeuristicTypes(GeoIpCountryCode(""), nullptr, nullptr);
@@ -2859,7 +2668,7 @@ TEST_F(
     FormFieldData field;
     field.form_control_type = FormControlType::kInputText;
     field.name = u"name";
-    field.unique_renderer_id = test::MakeFieldRendererId();
+    field.renderer_id = test::MakeFieldRendererId();
     field.host_form_signature = FormSignature(host_form_signature);
     fields.push_back(field);
 
@@ -2889,10 +2698,8 @@ TEST_F(
 
     // Serialize API response.
     std::string response_string;
-    std::string encoded_response_string;
     ASSERT_TRUE(api_response.SerializeToString(&response_string));
-    base::Base64Encode(response_string, &encoded_response_string);
-    ParseServerPredictionsQueryResponse(std::move(encoded_response_string),
+    ParseServerPredictionsQueryResponse(base::Base64Encode(response_string),
                                         forms, encoded_signatures, nullptr,
                                         nullptr);
 
@@ -2910,7 +2717,7 @@ TEST_F(AutofillCrowdsourcingEncoding,
   FormFieldData field;
   field.form_control_type = FormControlType::kInputText;
   field.name = u"name";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   field.host_form_signature = FormSignature(12345);
   form_data.fields = {field};
 
@@ -2959,43 +2766,43 @@ TEST_F(AutofillCrowdsourcingEncoding,
   field.form_control_type = FormControlType::kInputText;
 
   field.name = u"name";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   field.host_form_signature = FormSignature(12345);
   fields.push_back(field);
   expected_types.push_back(CREDIT_CARD_NAME_FIRST);
 
   field.name = u"name";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   field.host_form_signature = FormSignature(12345);
   fields.push_back(field);
   expected_types.push_back(CREDIT_CARD_NAME_LAST);
 
   field.name = u"number";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   field.host_form_signature = FormSignature(12345);
   fields.push_back(field);
   expected_types.push_back(CREDIT_CARD_NUMBER);
 
   field.name = u"exp_month";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   field.host_form_signature = FormSignature(67890);
   fields.push_back(field);
   expected_types.push_back(CREDIT_CARD_EXP_MONTH);
 
   field.name = u"exp_year";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   field.host_form_signature = FormSignature(67890);
   fields.push_back(field);
   expected_types.push_back(CREDIT_CARD_EXP_2_DIGIT_YEAR);
 
   field.name = u"cvc";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   field.host_form_signature = FormSignature(67890);
   fields.push_back(field);
   expected_types.push_back(CREDIT_CARD_VERIFICATION_CODE);
 
   field.name = u"";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   field.host_form_signature = FormSignature(67890);
   fields.push_back(field);
   expected_types.push_back(NO_SERVER_DATA);
@@ -3047,12 +2854,11 @@ TEST_F(AutofillCrowdsourcingEncoding,
 
   // Serialize API response.
   std::string response_string;
-  std::string encoded_response_string;
   ASSERT_TRUE(api_response.SerializeToString(&response_string));
-  base::Base64Encode(response_string, &encoded_response_string);
 
-  ParseServerPredictionsQueryResponse(std::move(encoded_response_string), forms,
-                                      encoded_signatures, nullptr, nullptr);
+  ParseServerPredictionsQueryResponse(base::Base64Encode(response_string),
+                                      forms, encoded_signatures, nullptr,
+                                      nullptr);
 
   // Check expected field types.
   ASSERT_GE(forms[0]->field_count(), 6U);
@@ -3076,12 +2882,12 @@ TEST_F(AutofillCrowdsourcingEncoding, ParseServerPredictionsQueryResponse) {
 
   field.label = u"fullname";
   field.name = u"fullname";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   form.fields.push_back(field);
 
   field.label = u"address";
   field.name = u"address";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   form.fields.push_back(field);
 
   // Checkable fields should be ignored in parsing
@@ -3090,7 +2896,7 @@ TEST_F(AutofillCrowdsourcingEncoding, ParseServerPredictionsQueryResponse) {
   checkable_field.form_control_type = FormControlType::kInputRadio;
   checkable_field.check_status =
       FormFieldData::CheckStatus::kCheckableButUnchecked;
-  checkable_field.unique_renderer_id = test::MakeFieldRendererId();
+  checkable_field.renderer_id = test::MakeFieldRendererId();
   form.fields.push_back(checkable_field);
 
   FormStructure form_structure(form);
@@ -3101,13 +2907,13 @@ TEST_F(AutofillCrowdsourcingEncoding, ParseServerPredictionsQueryResponse) {
   FormData form2;
   field.label = u"email";
   field.name = u"email";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   form2.fields.push_back(field);
 
   field.label = u"password";
   field.name = u"password";
   field.form_control_type = FormControlType::kInputPassword;
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   form2.fields.push_back(field);
 
   FormStructure form_structure2(form2);
@@ -3128,12 +2934,10 @@ TEST_F(AutofillCrowdsourcingEncoding, ParseServerPredictionsQueryResponse) {
   AddFieldPredictionToForm(form2.fields[1], NO_SERVER_DATA, form_suggestion);
   // Serialize API response.
   std::string response_string;
-  std::string encoded_response_string;
   ASSERT_TRUE(api_response.SerializeToString(&response_string));
-  base::Base64Encode(response_string, &encoded_response_string);
 
-  ParseServerPredictionsQueryResponse(std::move(encoded_response_string), forms,
-                                      test::GetEncodedSignatures(forms),
+  ParseServerPredictionsQueryResponse(base::Base64Encode(response_string),
+                                      forms, test::GetEncodedSignatures(forms),
                                       nullptr, nullptr);
 
   // Verify that the form fields are properly filled with data retrieved from
@@ -3733,26 +3537,26 @@ TEST_F(AutofillCrowdsourcingEncoding,
   // Autocomplete Off, with server data.
   field.label = u"First Name";
   field.name = u"firstName";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   form.fields.push_back(field);
 
   // Autocomplete Off, without server data.
   field.label = u"Last Name";
   field.name = u"lastName";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   form.fields.push_back(field);
 
   // Autocomplete On, with server data.
   field.should_autocomplete = true;
   field.label = u"Address";
   field.name = u"address";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   form.fields.push_back(field);
 
   // Autocomplete On, without server data.
   field.label = u"Country";
   field.name = u"country";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   form.fields.push_back(field);
 
   AutofillQueryResponse response;
@@ -3801,22 +3605,22 @@ TEST_F(AutofillCrowdsourcingEncoding, NoServerDataCCFields_CVC_NoOverwrite) {
   // All fields with autocomplete off and no server data.
   field.label = u"Cardholder Name";
   field.name = u"fullName";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   form.fields.push_back(field);
 
   field.label = u"Credit Card Number";
   field.name = u"cc-number";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   form.fields.push_back(field);
 
   field.label = u"Expiration Date";
   field.name = u"exp-date";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   form.fields.push_back(field);
 
   field.label = u"CVC";
   field.name = u"cvc";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   form.fields.push_back(field);
 
   AutofillQueryResponse response;
@@ -3869,22 +3673,22 @@ TEST_F(AutofillCrowdsourcingEncoding, WithServerDataCCFields_CVC_NoOverwrite) {
   // All fields with autocomplete off and no server data.
   field.label = u"Cardholder Name";
   field.name = u"fullName";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   form.fields.push_back(field);
 
   field.label = u"Credit Card Number";
   field.name = u"cc-number";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   form.fields.push_back(field);
 
   field.label = u"Expiration Date";
   field.name = u"exp-date";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   form.fields.push_back(field);
 
   field.label = u"CVC";
   field.name = u"cvc";
-  field.unique_renderer_id = test::MakeFieldRendererId();
+  field.renderer_id = test::MakeFieldRendererId();
   form.fields.push_back(field);
 
   AutofillQueryResponse response;
@@ -4019,7 +3823,7 @@ TEST_F(AutofillCrowdsourcingEncoding,
     FormFieldData field;
     field.form_control_type = FormControlType::kInputText;
     field.label = field.name = base::NumberToString16(i);
-    field.unique_renderer_id = test::MakeFieldRendererId();
+    field.renderer_id = test::MakeFieldRendererId();
     form_data.fields.push_back(field);
   }
 

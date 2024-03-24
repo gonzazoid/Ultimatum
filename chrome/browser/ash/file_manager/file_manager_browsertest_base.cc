@@ -3,13 +3,12 @@
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/file_manager/file_manager_browsertest_base.h"
-#include "base/base_paths.h"
-#include "base/memory/raw_ptr.h"
 
 #include <stddef.h>
 
 #include <memory>
 #include <optional>
+#include <string_view>
 #include <utility>
 
 #include "ash/components/arc/arc_features.h"
@@ -27,6 +26,7 @@
 #include "ash/style/dark_light_mode_controller_impl.h"
 #include "ash/webui/file_manager/url_constants.h"
 #include "ash/webui/system_apps/public/system_web_app_type.h"
+#include "base/base_paths.h"
 #include "base/containers/circular_deque.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
@@ -37,6 +37,7 @@
 #include "base/json/json_value_converter.h"
 #include "base/json/json_writer.h"
 #include "base/json/values_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/path_service.h"
@@ -46,7 +47,6 @@
 #include "base/strings/escape.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -75,6 +75,7 @@
 #include "chrome/browser/ash/extensions/file_manager/event_router.h"
 #include "chrome/browser/ash/extensions/file_manager/event_router_factory.h"
 #include "chrome/browser/ash/file_manager/app_id.h"
+#include "chrome/browser/ash/file_manager/copy_or_move_io_task_impl.h"
 #include "chrome/browser/ash/file_manager/file_manager_test_util.h"
 #include "chrome/browser/ash/file_manager/file_tasks.h"
 #include "chrome/browser/ash/file_manager/file_tasks_notifier.h"
@@ -353,7 +354,7 @@ struct AddEntriesMessage {
   }
 
   // Maps |value| to TargetVolume. Returns true on success.
-  static bool MapStringToTargetVolume(base::StringPiece value,
+  static bool MapStringToTargetVolume(std::string_view value,
                                       TargetVolume* volume) {
     if (value == "local") {
       *volume = LOCAL_VOLUME;
@@ -598,7 +599,7 @@ struct AddEntriesMessage {
     }
 
     // Maps |value| to an EntryType. Returns true on success.
-    static bool MapStringToEntryType(base::StringPiece value, EntryType* type) {
+    static bool MapStringToEntryType(std::string_view value, EntryType* type) {
       if (value == "file") {
         *type = FILE;
       } else if (value == "directory") {
@@ -616,7 +617,7 @@ struct AddEntriesMessage {
     }
 
     // Maps |value| to SharedOption. Returns true on success.
-    static bool MapStringToSharedOption(base::StringPiece value,
+    static bool MapStringToSharedOption(std::string_view value,
                                         SharedOption* option) {
       if (value == "shared") {
         *option = SHARED;
@@ -633,7 +634,7 @@ struct AddEntriesMessage {
     }
 
     // Maps |value| to base::Time. Returns true on success.
-    static bool MapStringToTime(base::StringPiece value, base::Time* time) {
+    static bool MapStringToTime(std::string_view value, base::Time* time) {
       return base::Time::FromString(std::string(value).c_str(), time);
     }
   };
@@ -798,7 +799,7 @@ struct ExpectFileTasksMessage {
   }
 
   static bool MapStringToOpenType(
-      base::StringPiece value,
+      std::string_view value,
       file_tasks::FileTasksObserver::OpenType* open_type) {
     using OpenType = file_tasks::FileTasksObserver::OpenType;
     if (value == "launch") {
@@ -2646,6 +2647,8 @@ void FileManagerBrowserTestBase::TearDownOnMainThread() {
   if (error_url_.is_valid()) {
     storage::CopyOrMoveOperationDelegate::SetErrorUrlForTest(nullptr);
   }
+  file_manager::io_task::CopyOrMoveIOTaskImpl::SetDestinationNoSpaceForTesting(
+      false);
 }
 
 void FileManagerBrowserTestBase::TearDown() {
@@ -3330,16 +3333,16 @@ void FileManagerBrowserTestBase::OnCommand(const std::string& name,
 
     media_view_images_ = std::make_unique<MediaViewTestVolume>(
         arc_file_system_instance_.get(),
-        "com.android.providers.media.documents", arc::kImagesRootDocumentId);
+        "com.android.providers.media.documents", arc::kImagesRootId);
     media_view_videos_ = std::make_unique<MediaViewTestVolume>(
         arc_file_system_instance_.get(),
-        "com.android.providers.media.documents", arc::kVideosRootDocumentId);
+        "com.android.providers.media.documents", arc::kVideosRootId);
     media_view_audio_ = std::make_unique<MediaViewTestVolume>(
         arc_file_system_instance_.get(),
-        "com.android.providers.media.documents", arc::kAudioRootDocumentId);
+        "com.android.providers.media.documents", arc::kAudioRootId);
     media_view_documents_ = std::make_unique<MediaViewTestVolume>(
         arc_file_system_instance_.get(),
-        "com.android.providers.media.documents", arc::kDocumentsRootDocumentId);
+        "com.android.providers.media.documents", arc::kDocumentsRootId);
 
     ASSERT_TRUE(media_view_images_->Mount(profile()));
     ASSERT_TRUE(media_view_videos_->Mount(profile()));
@@ -4015,6 +4018,12 @@ void FileManagerBrowserTestBase::OnCommand(const std::string& name,
         /*filesystem_id*/ "v2",
         /*mount_option*/ {});
     storage::CopyOrMoveOperationDelegate::SetErrorUrlForTest(&error_url_);
+    return;
+  }
+
+  if (name == "mockIOTaskDestinationNoSpace") {
+    file_manager::io_task::CopyOrMoveIOTaskImpl::
+        SetDestinationNoSpaceForTesting(true);
     return;
   }
 

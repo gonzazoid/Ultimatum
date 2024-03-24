@@ -273,8 +273,9 @@ std::u16string GetAccessibleNameForAppMenuItem(ButtonMenuItemModel* model,
 
 // A button that lives inside a menu item.
 class InMenuButton : public LabelButton {
+  METADATA_HEADER(InMenuButton, LabelButton)
+
  public:
-  METADATA_HEADER(InMenuButton);
   using LabelButton::LabelButton;
   InMenuButton(const InMenuButton&) = delete;
   InMenuButton& operator=(const InMenuButton&) = delete;
@@ -314,13 +315,14 @@ class InMenuButton : public LabelButton {
   }
 };
 
-BEGIN_METADATA(InMenuButton, LabelButton)
+BEGIN_METADATA(InMenuButton)
 END_METADATA
 
 // A button with an image inside a menu item.
 class InMenuImageButton : public ImageButton {
+  METADATA_HEADER(InMenuImageButton, ImageButton)
+
  public:
-  METADATA_HEADER(InMenuImageButton);
   using ImageButton::ImageButton;
 
   void Init(InMenuButtonBackground::ButtonType type,
@@ -341,7 +343,7 @@ class InMenuImageButton : public ImageButton {
   }
 };
 
-BEGIN_METADATA(InMenuImageButton, ImageButton)
+BEGIN_METADATA(InMenuImageButton)
 END_METADATA
 
 // Helper method that adds a bespoke chip to the profile related menu items.
@@ -391,10 +393,9 @@ void AddSignedInChipToProfileMenuItem(
                              .left()))))
           .Build();
 
-  // MenuItemView has specific layout logic for child views in
-  // MenuItemView::Layout() which does not work very well with more
-  // custom menu items. We use this view to add the correct spacing
-  // between the profile chip and the edge of the menu.
+  // MenuItemView has specific layout logic for child views which does not work
+  // very well with more custom menu items. We use this view to add the correct
+  // spacing between the profile chip and the edge of the menu.
   auto profile_chip_edge_spacing_view =
       views::Builder<views::View>()
           .SetPreferredSize(gfx::Size(horizontal_padding, 0))
@@ -417,8 +418,9 @@ void AddSignedInChipToProfileMenuItem(
 
 // AppMenuView is a view that can contain label buttons.
 class AppMenuView : public views::View {
+  METADATA_HEADER(AppMenuView, views::View)
+
  public:
-  METADATA_HEADER(AppMenuView);
   AppMenuView(AppMenu* menu, ButtonMenuItemModel* menu_model)
       : menu_(menu->AsWeakPtr()), menu_model_(menu_model) {}
   AppMenuView(const AppMenuView&) = delete;
@@ -495,13 +497,14 @@ class AppMenuView : public views::View {
   raw_ptr<ButtonMenuItemModel> menu_model_;
 };
 
-BEGIN_METADATA(AppMenuView, views::View)
+BEGIN_METADATA(AppMenuView)
 END_METADATA
 
 // Subclass of ImageButton whose preferred size includes the size of the border.
 class FullscreenButton : public ImageButton {
+  METADATA_HEADER(FullscreenButton, ImageButton)
+
  public:
-  METADATA_HEADER(FullscreenButton);
   explicit FullscreenButton(PressedCallback callback,
                             ButtonMenuItemModel* menu_model,
                             size_t fullscreen_index,
@@ -552,7 +555,7 @@ class FullscreenButton : public ImageButton {
   }
 };
 
-BEGIN_METADATA(FullscreenButton, ImageButton)
+BEGIN_METADATA(FullscreenButton)
 END_METADATA
 
 }  // namespace
@@ -561,8 +564,9 @@ END_METADATA
 
 // CutCopyPasteView is the view containing the cut/copy/paste buttons.
 class AppMenu::CutCopyPasteView : public AppMenuView {
+  METADATA_HEADER(CutCopyPasteView, AppMenuView)
+
  public:
-  METADATA_HEADER(CutCopyPasteView);
   CutCopyPasteView(AppMenu* menu,
                    ButtonMenuItemModel* menu_model,
                    size_t cut_index,
@@ -600,7 +604,7 @@ class AppMenu::CutCopyPasteView : public AppMenuView {
         0};
   }
 
-  void Layout() override {
+  void Layout(PassKey) override {
     // All buttons are given the same width.
     int width = GetMaxChildViewPreferredWidth();
     int x = 0;
@@ -621,7 +625,7 @@ class AppMenu::CutCopyPasteView : public AppMenuView {
   }
 };
 
-BEGIN_METADATA(AppMenu, CutCopyPasteView, AppMenuView)
+BEGIN_METADATA(AppMenu, CutCopyPasteView)
 ADD_READONLY_PROPERTY_METADATA(int, MaxChildViewPreferredWidth)
 END_METADATA
 
@@ -631,8 +635,9 @@ END_METADATA
 // the zoom, a label showing the current zoom percent, and a button to go
 // full-screen.
 class AppMenu::ZoomView : public AppMenuView {
+  METADATA_HEADER(ZoomView, AppMenuView)
+
  public:
-  METADATA_HEADER(ZoomView);
   ZoomView(AppMenu* menu,
            ButtonMenuItemModel* menu_model,
            size_t decrement_index,
@@ -674,7 +679,7 @@ class AppMenu::ZoomView : public AppMenuView {
 
     // An accessibility role of kAlert will ensure that any updates to the zoom
     // level can be picked up by screen readers.
-    zoom_label->GetViewAccessibility().OverrideRole(ax::mojom::Role::kAlert);
+    zoom_label->GetViewAccessibility().SetRole(ax::mojom::Role::kAlert);
 
     zoom_label_ = AddChildView(std::move(zoom_label));
 
@@ -739,7 +744,7 @@ class AppMenu::ZoomView : public AppMenuView {
         0);
   }
 
-  void Layout() override {
+  void Layout(PassKey) override {
     int x = 0;
     int button_width = std::max(increment_button_->GetPreferredSize().width(),
                                 decrement_button_->GetPreferredSize().width());
@@ -854,7 +859,7 @@ class AppMenu::ZoomView : public AppMenuView {
   mutable std::optional<int> zoom_label_max_width_;
 };
 
-BEGIN_METADATA(AppMenu, ZoomView, AppMenuView)
+BEGIN_METADATA(AppMenu, ZoomView)
 ADD_READONLY_PROPERTY_METADATA(int, ZoomLabelMaxWidth)
 END_METADATA
 

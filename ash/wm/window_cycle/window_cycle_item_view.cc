@@ -94,8 +94,8 @@ gfx::Size WindowCycleItemView::GetPreviewViewSize() const {
   return preview_pref_size;
 }
 
-void WindowCycleItemView::Layout() {
-  WindowMiniView::Layout();
+void WindowCycleItemView::Layout(PassKey) {
+  LayoutSuperclass<WindowMiniView>(this);
 
   if (!preview_view())
     return;
@@ -151,7 +151,7 @@ void WindowCycleItemView::RefreshItemVisuals() {
   RefreshFocusRingVisuals();
 }
 
-BEGIN_METADATA(WindowCycleItemView, WindowMiniView)
+BEGIN_METADATA(WindowCycleItemView)
 END_METADATA
 
 GroupContainerCycleView::GroupContainerCycleView(SnapGroup* snap_group) {
@@ -300,7 +300,7 @@ void GroupContainerCycleView::ClearFocusSelection() {
   }
 }
 
-BEGIN_METADATA(GroupContainerCycleView, WindowMiniViewBase)
+BEGIN_METADATA(GroupContainerCycleView)
 END_METADATA
 
 }  // namespace ash

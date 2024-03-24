@@ -50,7 +50,13 @@ bool ShouldShowAutofillContextMenu(const content::ContextMenuParams& params) {
   if (!params.form_control_type) {
     return false;
   }
-  // Return true on text fields.
+  // Return true (only) on text fields.
+  //
+  // Note that this switch is over `blink::mojom::FormControlType`, not
+  // `autofill::FormControlType`. Therefore, it does not handle
+  // `autofill::FormControlType::kContentEditable`, which is covered by the
+  // above if-condition `!params.form_control_type`.
+  //
   // TODO(crbug.com/1492339): Unify with functions from form_autofill_util.cc.
   switch (*params.form_control_type) {
     case blink::mojom::FormControlType::kInputEmail:
@@ -63,9 +69,33 @@ bool ShouldShowAutofillContextMenu(const content::ContextMenuParams& params) {
     case blink::mojom::FormControlType::kInputUrl:
     case blink::mojom::FormControlType::kTextArea:
       return true;
-    default:
+    case blink::mojom::FormControlType::kButtonButton:
+    case blink::mojom::FormControlType::kButtonSubmit:
+    case blink::mojom::FormControlType::kButtonReset:
+    case blink::mojom::FormControlType::kButtonPopover:
+    case blink::mojom::FormControlType::kButtonSelectList:
+    case blink::mojom::FormControlType::kFieldset:
+    case blink::mojom::FormControlType::kInputButton:
+    case blink::mojom::FormControlType::kInputCheckbox:
+    case blink::mojom::FormControlType::kInputColor:
+    case blink::mojom::FormControlType::kInputDate:
+    case blink::mojom::FormControlType::kInputDatetimeLocal:
+    case blink::mojom::FormControlType::kInputFile:
+    case blink::mojom::FormControlType::kInputHidden:
+    case blink::mojom::FormControlType::kInputImage:
+    case blink::mojom::FormControlType::kInputRadio:
+    case blink::mojom::FormControlType::kInputRange:
+    case blink::mojom::FormControlType::kInputReset:
+    case blink::mojom::FormControlType::kInputSubmit:
+    case blink::mojom::FormControlType::kInputTime:
+    case blink::mojom::FormControlType::kInputWeek:
+    case blink::mojom::FormControlType::kOutput:
+    case blink::mojom::FormControlType::kSelectOne:
+    case blink::mojom::FormControlType::kSelectMultiple:
+    case blink::mojom::FormControlType::kSelectList:
       return false;
   }
+  NOTREACHED_NORETURN();
 }
 
 base::Value::Dict LoadTriggerFormAndFieldLogs(
@@ -239,15 +269,8 @@ void AutofillContextMenuManager::ExecuteFallbackForAddressesCommand(
       /*field_id=*/{driver.GetFrameToken(),
                     FieldRendererId(params_.field_renderer_id)},
       AutofillSuggestionTriggerSource::kManualFallbackAddress);
-  const bool is_address_field =
-      field && IsAddressType(field->Type().GetStorableType());
-  if (is_address_field) {
-    static_cast<BrowserAutofillManager&>(manager)
-        .GetAutocompleteUnrecognizedFallbackEventLogger()
-        .ContextMenuEntryAccepted(
-            /*address_field_has_ac_unrecognized=*/field
-                ->ShouldSuppressSuggestionsAndFillingByDefault());
-  }
+  LogManualFallbackContextMenuEntryAccepted(
+      static_cast<BrowserAutofillManager&>(manager), FillingProduct::kAddress);
 }
 
 void AutofillContextMenuManager::ExecuteFallbackForPaymentsCommand(
@@ -257,6 +280,9 @@ void AutofillContextMenuManager::ExecuteFallbackForPaymentsCommand(
       FieldGlobalId(driver.GetFrameToken(),
                     FieldRendererId(params_.field_renderer_id)),
       AutofillSuggestionTriggerSource::kManualFallbackPayments);
+  LogManualFallbackContextMenuEntryAccepted(
+      static_cast<BrowserAutofillManager&>(manager),
+      FillingProduct::kCreditCard);
 }
 
 void AutofillContextMenuManager::MaybeAddAutofillManualFallbackItems(
@@ -281,13 +307,14 @@ void AutofillContextMenuManager::MaybeAddAutofillManualFallbackItems(
     menu_model_->AddItemWithStringId(
         IDC_CONTENT_CONTEXT_AUTOFILL_FALLBACK_ADDRESS,
         IDS_CONTENT_CONTEXT_AUTOFILL_FALLBACK_ADDRESS);
-    LogManualFallbackContextMenuEntryShown(driver);
   }
   if (add_payments_fallback) {
     menu_model_->AddItemWithStringId(
         IDC_CONTENT_CONTEXT_AUTOFILL_FALLBACK_PAYMENTS,
         IDS_CONTENT_CONTEXT_AUTOFILL_FALLBACK_PAYMENTS);
   }
+  LogManualFallbackContextMenuEntryShown(driver, add_address_fallback,
+                                         add_payments_fallback);
   menu_model_->AddSeparator(ui::NORMAL_SEPARATOR);
 }
 
@@ -322,21 +349,65 @@ bool AutofillContextMenuManager::
       });
 }
 
+void AutofillContextMenuManager::LogManualFallbackContextMenuEntryAccepted(
+    BrowserAutofillManager& manager,
+    const FillingProduct filling_product) {
+  if (filling_product == FillingProduct::kAddress) {
+    auto& driver = static_cast<ContentAutofillDriver&>(manager.driver());
+    AutofillField* field = GetAutofillField(manager, driver.GetFrameToken());
+    const bool is_address_field =
+        field && IsAddressType(field->Type().GetStorableType());
+    if (is_address_field) {
+      // Address manual fallback was triggered from a classified address field.
+      manager.GetAutocompleteUnrecognizedFallbackEventLogger()
+          .ContextMenuEntryAccepted(
+              /*address_field_has_ac_unrecognized=*/field
+                  ->ShouldSuppressSuggestionsAndFillingByDefault());
+    } else {
+      manager.GetManualFallbackEventLogger().ContextMenuEntryAccepted(
+          FillingProduct::kAddress);
+    }
+  } else if (filling_product == FillingProduct::kCreditCard) {
+    // Only log payments manual fallback when triggered from a field that is
+    // not classified as payments.
+    manager.GetManualFallbackEventLogger().ContextMenuEntryAccepted(
+        FillingProduct::kCreditCard);
+  }
+}
+
 void AutofillContextMenuManager::LogManualFallbackContextMenuEntryShown(
-    ContentAutofillDriver& driver) {
+    ContentAutofillDriver& driver,
+    bool address_option_shown,
+    bool payments_option_shown) {
+  if (!address_option_shown && !payments_option_shown) {
+    return;
+  }
   AutofillField* field =
       GetAutofillField(driver.GetAutofillManager(), driver.GetFrameToken());
-  if (!field) {
-    // `field` can be null when the user clicks on the correct input form field,
-    // which is not extracted by the BrowserAutofillManager.
-    return;
+  const bool address_option_shown_for_field_not_classified_as_address =
+      address_option_shown &&
+      !IsAddressType(field ? field->Type().GetStorableType() : UNKNOWN_TYPE);
+  const bool payments_option_shown_for_field_not_classified_as_payments =
+      payments_option_shown &&
+      (!field ||
+       (field && field->Type().group() != FieldTypeGroup::kCreditCard));
+
+  if (address_option_shown &&
+      !address_option_shown_for_field_not_classified_as_address) {
+    // Only use AutocompleteUnrecognizedFallbackEventLogger if the address
+    // option was shown on a field that WAS classified as an address.
+    static_cast<BrowserAutofillManager&>(driver.GetAutofillManager())
+        .GetAutocompleteUnrecognizedFallbackEventLogger()
+        .ContextMenuEntryShown(
+            /*address_field_has_ac_unrecognized=*/field
+                ->ShouldSuppressSuggestionsAndFillingByDefault());
   }
 
   static_cast<BrowserAutofillManager&>(driver.GetAutofillManager())
-      .GetAutocompleteUnrecognizedFallbackEventLogger()
+      .GetManualFallbackEventLogger()
       .ContextMenuEntryShown(
-          /*address_field_has_ac_unrecognized=*/field
-              ->ShouldSuppressSuggestionsAndFillingByDefault());
+          address_option_shown_for_field_not_classified_as_address,
+          payments_option_shown_for_field_not_classified_as_payments);
 }
 
 AutofillField* AutofillContextMenuManager::GetAutofillField(

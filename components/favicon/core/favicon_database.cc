@@ -28,7 +28,6 @@
 #include "sql/recovery.h"
 #include "sql/statement.h"
 #include "sql/transaction.h"
-#include "third_party/sqlite/sqlite3.h"
 #include "url/origin.h"
 
 #if BUILDFLAG(IS_APPLE)
@@ -736,11 +735,11 @@ bool FaviconDatabase::GetIconMappingsForPageURL(
   return result;
 }
 
-absl::optional<GURL> FaviconDatabase::FindFirstPageURLForHost(
+std::optional<GURL> FaviconDatabase::FindFirstPageURLForHost(
     const GURL& url,
     const favicon_base::IconTypeSet& required_icon_types) {
   if (url.host().empty())
-    return absl::nullopt;
+    return std::nullopt;
 
   sql::Statement statement(
       db_.GetCachedStatement(SQL_FROM_HERE,
@@ -769,9 +768,9 @@ absl::optional<GURL> FaviconDatabase::FindFirstPageURLForHost(
         FaviconDatabase::FromPersistedIconType(statement.ColumnInt(1));
 
     if (required_icon_types.count(icon_type) != 0)
-      return absl::make_optional(GURL(statement.ColumnString(0)));
+      return std::make_optional(GURL(statement.ColumnString(0)));
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 IconMappingID FaviconDatabase::AddIconMapping(const GURL& page_url,

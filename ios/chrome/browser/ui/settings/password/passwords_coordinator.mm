@@ -10,8 +10,8 @@
 #import "components/keyed_service/core/service_access_type.h"
 #import "components/password_manager/core/browser/ui/credential_ui_entry.h"
 #import "components/strings/grit/components_strings.h"
-#import "ios/chrome/browser/favicon/favicon_loader.h"
-#import "ios/chrome/browser/favicon/ios_chrome_favicon_loader_factory.h"
+#import "ios/chrome/browser/favicon/model/favicon_loader.h"
+#import "ios/chrome/browser/favicon/model/ios_chrome_favicon_loader_factory.h"
 #import "ios/chrome/browser/feature_engagement/model/tracker_factory.h"
 #import "ios/chrome/browser/passwords/model/ios_chrome_password_check_manager.h"
 #import "ios/chrome/browser/passwords/model/ios_chrome_password_check_manager_factory.h"
@@ -27,6 +27,7 @@
 #import "ios/chrome/browser/shared/public/commands/browsing_data_commands.h"
 #import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
 #import "ios/chrome/browser/shared/public/commands/open_new_tab_command.h"
+#import "ios/chrome/browser/shared/public/commands/settings_commands.h"
 #import "ios/chrome/browser/shared/public/commands/snackbar_commands.h"
 #import "ios/chrome/browser/signin/model/chrome_account_manager_service_factory.h"
 #import "ios/chrome/browser/signin/model/identity_manager_factory.h"
@@ -156,7 +157,8 @@ using password_manager::WarningType;
                                        GetForBrowserState(browserState)
                      faviconLoader:faviconLoader
                        syncService:SyncServiceFactory::GetForBrowserState(
-                                       browserState)];
+                                       browserState)
+                       prefService:browserState->GetPrefs()];
   self.mediator.tracker =
       feature_engagement::TrackerFactory::GetForBrowserState(browserState);
 
@@ -181,7 +183,7 @@ using password_manager::WarningType;
   passwordsViewController.browsingDataHandler =
       HandlerForProtocol(dispatcher, BrowsingDataCommands);
   passwordsViewController.settingsHandler =
-      HandlerForProtocol(dispatcher, ApplicationSettingsCommands);
+      HandlerForProtocol(dispatcher, SettingsCommands);
   passwordsViewController.snackbarHandler =
       HandlerForProtocol(dispatcher, SnackbarCommands);
 

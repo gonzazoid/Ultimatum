@@ -52,6 +52,10 @@ void OnLogResults(Profile* profile,
   if (!session->request() || !session->request()->response() ||
       session->request()->response()->organizations.size() == 0 ||
       session->tab_organizations().size() == 0) {
+    if (model_quality_log_entry) {
+      optimization_guide_keyed_service->UploadModelQualityLogs(
+          std::move(model_quality_log_entry));
+    }
     return;
   }
 
@@ -71,15 +75,32 @@ void OnTabOrganizationModelExecutionResult(
     TabOrganizationRequest::BackendFailureCallback on_failure,
     optimization_guide::OptimizationGuideModelExecutionResult result,
     std::unique_ptr<optimization_guide::ModelQualityLogEntry> log_entry) {
+  OptimizationGuideKeyedService* optimization_guide_keyed_service =
+      OptimizationGuideKeyedServiceFactory::GetForProfile(profile);
+
+  if (!optimization_guide_keyed_service) {
+    std::move(on_failure).Run();
+    return;
+  }
+
   if (!result.has_value()) {
-    LOG(ERROR) << "TabOrganizationResponse model execution failed ";
+    // TODO(b/322206302): remove this when this is fixed in the ModelQualityLogEntry API
+    if (log_entry) {
+      optimization_guide_keyed_service->UploadModelQualityLogs(
+          std::move(log_entry));
+    }
     std::move(on_failure).Run();
     return;
   }
 
   auto response = optimization_guide::ParsedAnyMetadata<
       optimization_guide::proto::TabOrganizationResponse>(result.value());
+
   if (!response) {
+    if (log_entry) {
+      optimization_guide_keyed_service->UploadModelQualityLogs(
+          std::move(log_entry));
+    }
     std::move(on_failure).Run();
     return;
   }
@@ -94,13 +115,12 @@ void OnTabOrganizationModelExecutionResult(
                                std::move(response_tab_ids));
   }
 
-  const std::string server_execution_id = log_entry->log_ai_data_request()
-                                              ->mutable_model_execution_info()
-                                              ->server_execution_id();
+  const std::string execution_id =
+      log_entry->log_ai_data_request()->model_execution_info().execution_id();
 
   std::unique_ptr<TabOrganizationResponse> local_response =
       std::make_unique<TabOrganizationResponse>(
-          std::move(organizations), base::UTF8ToUTF16(server_execution_id),
+          std::move(organizations), base::UTF8ToUTF16(execution_id),
           base::BindOnce(OnLogResults, profile, std::move(log_entry)));
 
   std::move(on_completion).Run(std::move(local_response));

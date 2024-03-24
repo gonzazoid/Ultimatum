@@ -2,9 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "chrome/browser/extensions/api/passwords_private/passwords_private_delegate_impl.h"
+
 #include <stddef.h>
 
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -25,7 +28,6 @@
 #include "base/types/cxx23_to_underlying.h"
 #include "base/values.h"
 #include "chrome/browser/extensions/api/passwords_private/passwords_private_delegate.h"
-#include "chrome/browser/extensions/api/passwords_private/passwords_private_delegate_impl.h"
 #include "chrome/browser/extensions/api/passwords_private/passwords_private_event_router.h"
 #include "chrome/browser/extensions/api/passwords_private/passwords_private_event_router_factory.h"
 #include "chrome/browser/password_manager/account_password_store_factory.h"
@@ -45,16 +47,16 @@
 #include "chrome/browser/web_applications/web_app_command_manager.h"
 #include "chrome/browser/web_applications/web_app_id_constants.h"
 #include "chrome/browser/web_applications/web_contents/web_contents_manager.h"
-#include "chrome/browser/webapps/chrome_webapps_client.h"
+#include "chrome/browser/webapps/webapps_client_desktop.h"
 #include "chrome/browser/webauthn/passkey_model_factory.h"
 #include "chrome/common/extensions/api/passwords_private.h"
 #include "chrome/test/base/test_browser_window.h"
 #include "chrome/test/base/testing_profile.h"
+#include "components/affiliations/core/browser/fake_affiliation_service.h"
 #include "components/device_reauth/device_reauth_metrics_util.h"
 #include "components/device_reauth/mock_device_authenticator.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/password_manager/content/browser/password_manager_log_router_factory.h"
-#include "components/password_manager/core/browser/affiliation/fake_affiliation_service.h"
 #include "components/password_manager/core/browser/features/password_features.h"
 #include "components/password_manager/core/browser/import/import_results.h"
 #include "components/password_manager/core/browser/mock_password_feature_manager.h"
@@ -78,7 +80,6 @@
 #include "content/public/test/web_contents_tester.h"
 #include "extensions/browser/test_event_router.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/clipboard/test/test_clipboard.h"
 
 #if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
@@ -425,7 +426,7 @@ void PasswordsPrivateDelegateImplTest::SetUp() {
   test_clipboard_ = ui::TestClipboard::CreateForCurrentThread();
   AffiliationServiceFactory::GetInstance()->SetTestingSubclassFactoryAndUse(
       profile(), base::BindRepeating([](content::BrowserContext*) {
-        return std::make_unique<password_manager::FakeAffiliationService>();
+        return std::make_unique<affiliations::FakeAffiliationService>();
       }));
   SetUpRouters();
   SetUpSyncInTransportMode(profile());
@@ -639,6 +640,26 @@ TEST_F(PasswordsPrivateDelegateImplTest, AddPasswordUpdatesDefaultStore) {
 }
 
 TEST_F(PasswordsPrivateDelegateImplTest,
+       AddPasswordDoesNotUpdateDefaultStoreIsFeatureFlagEnabled) {
+  base::test::ScopedFeatureList scoped_feature_list(
+      password_manager::features::kButterOnDesktopFollowup);
+  std::unique_ptr<content::WebContents> web_contents = CreateWebContents();
+  auto* client =
+      MockPasswordManagerClient::CreateForWebContentsAndGet(web_contents.get());
+  auto delegate = CreateDelegate();
+
+  // Don't update the default store if kButterOnDesktopFollowup feature is
+  // enabled.
+  ON_CALL(*(client->GetPasswordFeatureManager()), IsOptedInForAccountStorage)
+      .WillByDefault(Return(true));
+  EXPECT_CALL(*(client->GetPasswordFeatureManager()), SetDefaultPasswordStore)
+      .Times(0);
+  EXPECT_TRUE(
+      delegate->AddPassword("example2.com", u"username2", u"password2", u"",
+                            /*use_account_store=*/true, web_contents.get()));
+}
+
+TEST_F(PasswordsPrivateDelegateImplTest,
        ImportPasswordsDoesNotUpdateDefaultStore) {
   std::unique_ptr<content::WebContents> web_contents = CreateWebContents();
   auto* client =
@@ -653,6 +674,31 @@ TEST_F(PasswordsPrivateDelegateImplTest,
   // NOT update default store if not opted-in for account storage.
   ON_CALL(*(client->GetPasswordFeatureManager()), IsOptedInForAccountStorage)
       .WillByDefault(Return(false));
+  EXPECT_CALL(*(client->GetPasswordFeatureManager()), SetDefaultPasswordStore)
+      .Times(0);
+  EXPECT_CALL(*mock_porter_ptr, Import).Times(1);
+  delegate->ImportPasswords(api::passwords_private::PasswordStoreSet::kDevice,
+                            base::DoNothing(), web_contents.get());
+}
+
+TEST_F(PasswordsPrivateDelegateImplTest,
+       ImportPasswordsDoesNotUpdateDefaultStoreIfFeatureFlagEnabled) {
+  base::test::ScopedFeatureList scoped_feature_list(
+      password_manager::features::kButterOnDesktopFollowup);
+  std::unique_ptr<content::WebContents> web_contents = CreateWebContents();
+  auto* client =
+      MockPasswordManagerClient::CreateForWebContentsAndGet(web_contents.get());
+  auto delegate = CreateDelegate();
+
+  auto mock_porter = std::make_unique<MockPasswordManagerPorter>();
+  auto* mock_porter_ptr = mock_porter.get();
+
+  delegate->SetPorterForTesting(std::move(mock_porter));
+
+  // Don't update the default store if kButterOnDesktopFollowup feature is
+  // enabled.
+  ON_CALL(*(client->GetPasswordFeatureManager()), IsOptedInForAccountStorage)
+      .WillByDefault(Return(true));
   EXPECT_CALL(*(client->GetPasswordFeatureManager()), SetDefaultPasswordStore)
       .Times(0);
   EXPECT_CALL(*mock_porter_ptr, Import).Times(1);
@@ -816,7 +862,7 @@ TEST_F(PasswordsPrivateDelegateImplTest, ChangeCredential_Password) {
   EXPECT_EQ(credentials.size(), 1u);
   const PasswordUiEntry& refreshed_credential = credentials.at(0);
   EXPECT_EQ(refreshed_credential.username, "new_user");
-  EXPECT_EQ(refreshed_credential.note, absl::nullopt);
+  EXPECT_EQ(refreshed_credential.note, std::nullopt);
 }
 
 TEST_F(PasswordsPrivateDelegateImplTest,
@@ -1001,7 +1047,11 @@ TEST_F(PasswordsPrivateDelegateImplTest, TestShouldReauthForOptIn) {
 }
 
 TEST_F(PasswordsPrivateDelegateImplTest,
-       TestShouldNotReauthForOptOutAndShouldSetPref) {
+       TestShouldNotReauthForOptOutAndShouldResetPref) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndDisableFeature(
+      password_manager::features::kButterOnDesktopFollowup);
+
   std::unique_ptr<content::WebContents> web_contents = CreateWebContents();
   auto* client =
       MockPasswordManagerClient::CreateForWebContentsAndGet(web_contents.get());
@@ -1015,6 +1065,28 @@ TEST_F(PasswordsPrivateDelegateImplTest,
                   signin_metrics::ReauthAccessPoint::kPasswordSettings, _))
       .Times(0);
   EXPECT_CALL(*feature_manager, OptOutOfAccountStorageAndClearSettings);
+
+  auto delegate = CreateDelegate();
+  delegate->SetAccountStorageOptIn(false, web_contents.get());
+}
+
+TEST_F(PasswordsPrivateDelegateImplTest,
+       TestShouldNotReauthForOptOutAndShouldSetPref) {
+  base::test::ScopedFeatureList scoped_feature_list(
+      password_manager::features::kButterOnDesktopFollowup);
+  std::unique_ptr<content::WebContents> web_contents = CreateWebContents();
+  auto* client =
+      MockPasswordManagerClient::CreateForWebContentsAndGet(web_contents.get());
+  password_manager::MockPasswordFeatureManager* feature_manager =
+      client->GetPasswordFeatureManager();
+  ON_CALL(*feature_manager, IsOptedInForAccountStorage)
+      .WillByDefault(Return(true));
+
+  EXPECT_CALL(*client,
+              TriggerReauthForPrimaryAccount(
+                  signin_metrics::ReauthAccessPoint::kPasswordSettings, _))
+      .Times(0);
+  EXPECT_CALL(*feature_manager, OptOutOfAccountStorage);
 
   auto delegate = CreateDelegate();
   delegate->SetAccountStorageOptIn(false, web_contents.get());
@@ -1034,7 +1106,7 @@ TEST_F(PasswordsPrivateDelegateImplTest, TestCopyPasswordCallbackResultFail) {
   base::Time before_call = test_clipboard_->GetLastModifiedTime();
 
   MockPlaintextPasswordCallback password_callback;
-  EXPECT_CALL(password_callback, Run(Eq(absl::nullopt)));
+  EXPECT_CALL(password_callback, Run(Eq(std::nullopt)));
   delegate->RequestPlaintextPassword(
       0, api::passwords_private::PlaintextReason::kCopy,
       password_callback.Get(), web_contents.get());
@@ -1120,7 +1192,7 @@ TEST_F(PasswordsPrivateDelegateImplTest, TestFailedReauthOnView) {
   ExpectAuthentication(delegate, /*successful=*/false);
 
   MockPlaintextPasswordCallback password_callback;
-  EXPECT_CALL(password_callback, Run(Eq(absl::nullopt)));
+  EXPECT_CALL(password_callback, Run(Eq(std::nullopt)));
   delegate->RequestPlaintextPassword(
       0, api::passwords_private::PlaintextReason::kView,
       password_callback.Get(), web_contents.get());
@@ -1173,7 +1245,7 @@ TEST_F(PasswordsPrivateDelegateImplTest, TestReauthFailedOnExport) {
 TEST_F(PasswordsPrivateDelegateImplTest,
        GetUrlCollectionValueWithSchemeWhenIpAddress) {
   auto delegate = CreateDelegate();
-  const absl::optional<UrlCollection> urls =
+  const std::optional<UrlCollection> urls =
       delegate->GetUrlCollection("127.0.0.1");
   EXPECT_TRUE(urls.has_value());
   EXPECT_EQ("127.0.0.1", urls.value().shown);
@@ -1184,7 +1256,7 @@ TEST_F(PasswordsPrivateDelegateImplTest,
 TEST_F(PasswordsPrivateDelegateImplTest,
        GetUrlCollectionValueWithSchemeWhenWebAddress) {
   auto delegate = CreateDelegate();
-  const absl::optional<UrlCollection> urls =
+  const std::optional<UrlCollection> urls =
       delegate->GetUrlCollection("example.com/login");
   EXPECT_TRUE(urls.has_value());
   EXPECT_EQ("example.com", urls.value().shown);
@@ -1195,7 +1267,7 @@ TEST_F(PasswordsPrivateDelegateImplTest,
 TEST_F(PasswordsPrivateDelegateImplTest,
        GetUrlCollectionStrippedValueWhenFullUrl) {
   auto delegate = CreateDelegate();
-  const absl::optional<UrlCollection> urls = delegate->GetUrlCollection(
+  const std::optional<UrlCollection> urls = delegate->GetUrlCollection(
       "http://username:password@example.com/login?param=value#ref");
   EXPECT_TRUE(urls.has_value());
   EXPECT_EQ("example.com", urls.value().shown);
@@ -1206,7 +1278,7 @@ TEST_F(PasswordsPrivateDelegateImplTest,
 TEST_F(PasswordsPrivateDelegateImplTest,
        GetUrlCollectionNoValueWhenUnsupportedScheme) {
   auto delegate = CreateDelegate();
-  const absl::optional<UrlCollection> urls =
+  const std::optional<UrlCollection> urls =
       delegate->GetUrlCollection("scheme://unsupported");
   EXPECT_FALSE(urls.has_value());
 }
@@ -1214,7 +1286,7 @@ TEST_F(PasswordsPrivateDelegateImplTest,
 TEST_F(PasswordsPrivateDelegateImplTest,
        GetUrlCollectionNoValueWhenInvalidUrl) {
   auto delegate = CreateDelegate();
-  const absl::optional<UrlCollection> urls =
+  const std::optional<UrlCollection> urls =
       delegate->GetUrlCollection("https://^/invalid");
   EXPECT_FALSE(urls.has_value());
 }
@@ -1263,6 +1335,36 @@ TEST_F(PasswordsPrivateDelegateImplTest, TestMovePasswordsToAccountStore) {
       "PasswordManager.AccountStorage.MoveToAccountStoreFlowAccepted2",
       password_manager::metrics_util::MoveToAccountStoreTrigger::
           kExplicitlyTriggeredForMultiplePasswordsInSettings,
+      1);
+}
+
+TEST_F(PasswordsPrivateDelegateImplTest,
+       TestMovePasswordsToAccountStoreWithButterFollowupEnabled) {
+  base::test::ScopedFeatureList scoped_feature_list(
+      password_manager::features::kButterOnDesktopFollowup);
+
+
+  std::unique_ptr<content::WebContents> web_contents = CreateWebContents();
+  auto* client =
+      MockPasswordManagerClient::CreateForWebContentsAndGet(web_contents.get());
+  ON_CALL(*(client->GetPasswordFeatureManager()), IsOptedInForAccountStorage)
+      .WillByDefault(Return(true));
+
+  auto delegate = CreateDelegate();
+  PasswordForm form1 = CreateSampleForm(PasswordForm::Store::kProfileStore);
+
+  SetUpPasswordStores({form1});
+
+  int first_id =
+      delegate->GetIdForCredential(password_manager::CredentialUIEntry(form1));
+
+  delegate->MovePasswordsToAccount({first_id}, web_contents.get());
+  base::RunLoop().RunUntilIdle();
+
+  histogram_tester().ExpectUniqueSample(
+      "PasswordManager.AccountStorage.MoveToAccountStoreFlowAccepted2",
+      password_manager::metrics_util::MoveToAccountStoreTrigger::
+          kExplicitlyTriggeredInSettings,
       1);
 }
 
@@ -1409,7 +1511,7 @@ TEST_F(PasswordsPrivateDelegateImplTest, DISABLED_ShowAddShortcutDialog) {
   content::RenderFrameHostTester::CommitPendingLoad(
       &nav_params.navigated_or_inserted_contents->GetController());
 
-  webapps::ChromeWebappsClient::GetInstance();
+  webapps::WebappsClientDesktop::CreateSingleton();
   auto* provider = web_app::FakeWebAppProvider::Get(profile());
   // This test harness is handling web contents loading, so use the real web
   // contents manager.
@@ -1930,7 +2032,7 @@ TEST_F(PasswordsPrivateDelegateImplFetchFamilyMembersTest,
                           Field(&RecipientInfo::display_name, kTestUserName),
                           Field(&RecipientInfo::email, kTestEmail),
                           Field(&RecipientInfo::is_eligible, false),
-                          Field(&RecipientInfo::public_key, Eq(absl::nullopt)),
+                          Field(&RecipientInfo::public_key, Eq(std::nullopt)),
                           Field(&RecipientInfo::profile_image_url,
                                 kTestProfileImageUrl)))))));
 

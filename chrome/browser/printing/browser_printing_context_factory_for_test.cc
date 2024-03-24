@@ -15,22 +15,6 @@
 
 namespace printing {
 
-namespace {
-
-std::unique_ptr<TestPrintingContext> MakeDefaultTestPrintingContext(
-    PrintingContext::Delegate* delegate,
-    PrintingContext::ProcessBehavior process_behavior,
-    const std::string& printer_name) {
-  auto context =
-      std::make_unique<TestPrintingContext>(delegate, process_behavior);
-
-  context->SetDeviceSettings(printer_name,
-                             test::MakeDefaultPrintSettings(printer_name));
-  return context;
-}
-
-}  // namespace
-
 BrowserPrintingContextFactoryForTest::BrowserPrintingContextFactoryForTest() =
     default;
 
@@ -43,6 +27,10 @@ BrowserPrintingContextFactoryForTest::CreatePrintingContext(
     PrintingContext::ProcessBehavior process_behavior) {
   auto context =
       MakeDefaultTestPrintingContext(delegate, process_behavior, printer_name_);
+
+  if (new_document_job_id_.has_value()) {
+    context->SetNewDocumentJobId(new_document_job_id_.value());
+  }
 
   if (failed_error_for_update_printer_settings_) {
     context->SetUpdatePrinterSettingsFails();
@@ -92,6 +80,14 @@ void BrowserPrintingContextFactoryForTest::SetPrinterNameForSubsequentContexts(
   printer_name_ = printer_name;
 }
 
+#if BUILDFLAG(IS_WIN)
+void BrowserPrintingContextFactoryForTest::
+    SetPrinterLanguageTypeForSubsequentContexts(
+        mojom::PrinterLanguageType printer_language_type) {
+  printer_language_type_ = printer_language_type;
+}
+#endif
+
 void BrowserPrintingContextFactoryForTest::
     SetFailedErrorOnUpdatePrinterSettings() {
   failed_error_for_update_printer_settings_ = true;
@@ -105,6 +101,10 @@ void BrowserPrintingContextFactoryForTest::SetCancelErrorOnNewDocument(
 void BrowserPrintingContextFactoryForTest::SetFailedErrorOnNewDocument(
     bool cause_errors) {
   failed_error_for_new_document_ = cause_errors;
+}
+
+void BrowserPrintingContextFactoryForTest::SetJobIdOnNewDocument(int job_id) {
+  new_document_job_id_ = job_id;
 }
 
 void BrowserPrintingContextFactoryForTest::SetAccessDeniedErrorOnNewDocument(
@@ -148,6 +148,27 @@ void BrowserPrintingContextFactoryForTest::
 void BrowserPrintingContextFactoryForTest::SetOnNewDocumentCallback(
     TestPrintingContext::OnNewDocumentCallback callback) {
   on_new_document_callback_ = std::move(callback);
+}
+
+std::unique_ptr<TestPrintingContext>
+BrowserPrintingContextFactoryForTest::MakeDefaultTestPrintingContext(
+    PrintingContext::Delegate* delegate,
+    PrintingContext::ProcessBehavior process_behavior,
+    const std::string& printer_name) {
+  auto context =
+      std::make_unique<TestPrintingContext>(delegate, process_behavior);
+
+  std::unique_ptr<PrintSettings> settings =
+      test::MakeDefaultPrintSettings(printer_name);
+
+#if BUILDFLAG(IS_WIN)
+  if (printer_language_type_.has_value()) {
+    settings->set_printer_language_type(printer_language_type_.value());
+  }
+#endif
+
+  context->SetDeviceSettings(printer_name, std::move(settings));
+  return context;
 }
 
 }  // namespace printing

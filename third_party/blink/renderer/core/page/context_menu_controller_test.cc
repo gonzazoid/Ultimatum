@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <optional>
 #include <utility>
 
 #include "base/run_loop.h"
@@ -14,7 +15,6 @@
 #include "build/build_config.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/context_menu_data/context_menu_data.h"
 #include "third_party/blink/public/common/context_menu_data/edit_flags.h"
 #include "third_party/blink/public/common/features.h"
@@ -47,6 +47,7 @@
 #include "third_party/blink/renderer/platform/mediastream/media_stream_descriptor.h"
 #include "third_party/blink/renderer/platform/testing/empty_web_media_player.h"
 #include "third_party/blink/renderer/platform/testing/scoped_mocked_url.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 #include "third_party/blink/renderer/platform/testing/url_loader_mock.h"
 #include "third_party/blink/renderer/platform/testing/url_loader_mock_factory_impl.h"
@@ -105,7 +106,7 @@ class TestWebFrameClientImpl : public frame_test_helpers::TestWebFrameClient {
 
   void UpdateContextMenuDataForTesting(
       const ContextMenuData& data,
-      const absl::optional<gfx::Point>& host_context_menu_location) override {
+      const std::optional<gfx::Point>& host_context_menu_location) override {
     context_menu_data_ = data;
     host_context_menu_location_ = host_context_menu_location;
   }
@@ -126,13 +127,13 @@ class TestWebFrameClientImpl : public frame_test_helpers::TestWebFrameClient {
     return context_menu_data_;
   }
 
-  const absl::optional<gfx::Point>& host_context_menu_location() const {
+  const std::optional<gfx::Point>& host_context_menu_location() const {
     return host_context_menu_location_;
   }
 
  private:
   ContextMenuData context_menu_data_;
-  absl::optional<gfx::Point> host_context_menu_location_;
+  std::optional<gfx::Point> host_context_menu_location_;
 };
 
 void RegisterMockedImageURLLoad(const String& url) {
@@ -209,6 +210,7 @@ class ContextMenuControllerTest : public testing::Test {
   }
 
  protected:
+  test::TaskEnvironment task_environment_;
   base::test::ScopedFeatureList feature_list_;
   TestWebFrameClientImpl web_frame_client_;
   frame_test_helpers::WebViewHelper web_view_helper_;
@@ -2043,6 +2045,7 @@ class ContextMenuControllerRemoteParentFrameTest : public testing::Test {
   }
 
  protected:
+  test::TaskEnvironment task_environment_;
   base::test::ScopedFeatureList feature_list_;
   TestWebFrameClientImpl child_web_frame_client_;
   frame_test_helpers::WebViewHelper web_view_helper_;
@@ -2053,7 +2056,7 @@ TEST_F(ContextMenuControllerRemoteParentFrameTest, ShowContextMenuInChild) {
   const gfx::Point kPoint(123, 234);
   ShowContextMenu(kPoint);
 
-  const absl::optional<gfx::Point>& host_context_menu_location =
+  const std::optional<gfx::Point>& host_context_menu_location =
       child_web_frame_client().host_context_menu_location();
   ASSERT_TRUE(host_context_menu_location.has_value());
   EXPECT_EQ(kPoint, host_context_menu_location.value());

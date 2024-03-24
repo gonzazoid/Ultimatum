@@ -7,15 +7,15 @@
  * 'settings-stylus' is the settings subpage with stylus-specific settings.
  */
 
-import 'chrome://resources/cr_elements/cr_link_row/cr_link_row.js';
-import 'chrome://resources/cr_elements/cr_toggle/cr_toggle.js';
-import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
+import 'chrome://resources/ash/common/cr_elements/cr_link_row/cr_link_row.js';
+import 'chrome://resources/ash/common/cr_elements/cr_toggle/cr_toggle.js';
+import 'chrome://resources/ash/common/cr_elements/cr_shared_vars.css.js';
 import 'chrome://resources/js/action_link.js';
 import 'chrome://resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
-import '/shared/settings/controls/settings_toggle_button.js';
+import '../controls/settings_toggle_button.js';
 import '../settings_shared.css.js';
 
-import {CrPolicyIndicatorType} from 'chrome://resources/cr_elements/policy/cr_policy_indicator_mixin.js';
+import {CrPolicyIndicatorType} from 'chrome://resources/ash/common/cr_elements/policy/cr_policy_indicator_mixin.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {microTask, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
@@ -201,10 +201,12 @@ export class SettingsStylusElement extends SettingsStylusElementBase {
       return;
     }
 
+    const isSupported = this.selectedApp_.lockScreenSupport ===
+        NoteAppLockScreenSupport.SUPPORTED;
     this.browserProxy_.setPreferredNoteTakingAppEnabledOnLockScreen(
-        this.selectedApp_.lockScreenSupport ===
-        NoteAppLockScreenSupport.SUPPORTED);
-    recordSettingChange();
+        isSupported);
+    recordSettingChange(
+        Setting.kStylusNoteTakingFromLockScreen, {boolValue: isSupported});
   }
 
   private onSelectedAppChanged_(): void {
@@ -213,7 +215,7 @@ export class SettingsStylusElement extends SettingsStylusElementBase {
 
     if (app && !app.preferred) {
       this.browserProxy_.setPreferredNoteTakingApp(app.value);
-      recordSettingChange();
+      recordSettingChange(Setting.kStylusNoteTakingApp);
     }
   }
 

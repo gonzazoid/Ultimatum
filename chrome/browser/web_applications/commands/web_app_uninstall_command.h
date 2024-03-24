@@ -31,19 +31,21 @@ class WebAppUninstallCommand
   static std::unique_ptr<WebAppUninstallCommand> CreateForRemoveInstallUrl(
       webapps::WebappUninstallSource uninstall_source,
       Profile& profile,
-      absl::optional<webapps::AppId> app_id,
+      std::optional<webapps::AppId> app_id,
       WebAppManagement::Type install_source,
       GURL install_url,
       UninstallJob::Callback callback);
 
-  static std::unique_ptr<WebAppUninstallCommand> CreateForRemoveInstallSource(
+  static std::unique_ptr<WebAppUninstallCommand>
+  CreateForRemoveInstallManagements(
       webapps::WebappUninstallSource uninstall_source,
       Profile& profile,
       webapps::AppId app_id,
-      WebAppManagement::Type install_source,
+      WebAppManagementTypes install_sources,
       UninstallJob::Callback callback);
 
-  static std::unique_ptr<WebAppUninstallCommand> CreateForRemoveWebApp(
+  static std::unique_ptr<WebAppUninstallCommand>
+  CreateForRemoveUserUninstallableManagement(
       webapps::WebappUninstallSource uninstall_source,
       Profile& profile,
       webapps::AppId app_id,
@@ -62,7 +64,7 @@ class WebAppUninstallCommand
   // Constructor for RemoveInstallUrlJob.
   WebAppUninstallCommand(webapps::WebappUninstallSource uninstall_source,
                          Profile& profile,
-                         absl::optional<webapps::AppId> app_id,
+                         std::optional<webapps::AppId> app_id,
                          WebAppManagement::Type install_source,
                          GURL install_url,
                          UninstallJob::Callback callback);
@@ -70,9 +72,9 @@ class WebAppUninstallCommand
   WebAppUninstallCommand(webapps::WebappUninstallSource uninstall_source,
                          Profile& profile,
                          webapps::AppId app_id,
-                         WebAppManagement::Type install_source,
+                         WebAppManagementTypes install_managements,
                          UninstallJob::Callback callback);
-  // Constructor for RemoveWebAppJob.
+  // Constructor for RemoveInstallSourceJob with user uninstallable sources.
   WebAppUninstallCommand(webapps::WebappUninstallSource uninstall_source,
                          Profile& profile,
                          webapps::AppId app_id,

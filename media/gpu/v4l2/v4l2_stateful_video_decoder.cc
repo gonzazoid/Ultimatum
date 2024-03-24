@@ -51,7 +51,7 @@ void* Mmap(int fd,
 // POLLPRI (meaning a resolution change event) and from |device_fd|, this
 // function calls |dequeue_callback| or |resolution_change_callback|,
 // respectively. Since it blocks, it needs to work on its own
-// SequencedTaskRunner, in this case |event_task_runner_|.
+// SingleThreadTaskRunner, in this case |event_task_runner_|.
 // TODO(mcasas): Add an error callback too.
 void WaitOnceForEvents(int device_fd,
                        int wake_event,
@@ -226,11 +226,11 @@ class H264FrameReassembler {
     // Size in bytes of the NALU under analysis.
     off_t nalu_size;
   };
-  // Parses |data| and returns either absl::nullopt, if parsing |data| fails, or
+  // Parses |data| and returns either std::nullopt, if parsing |data| fails, or
   // a FrameBoundaryInfo describing the first |nalu_size| bytes of |data|.
   //
   // It is assumed that |data| contains an integer number of NALUs.
-  absl::optional<struct FrameBoundaryInfo> FindH264FrameBoundary(
+  std::optional<struct FrameBoundaryInfo> FindH264FrameBoundary(
       const uint8_t* const data,
       size_t size);
 
@@ -255,63 +255,6 @@ std::unique_ptr<VideoDecoderMixin> V4L2StatefulVideoDecoder::Create(
       std::move(media_log), std::move(task_runner), std::move(client)));
 }
 
-// static
-absl::optional<SupportedVideoDecoderConfigs>
-V4L2StatefulVideoDecoder::GetSupportedConfigs() {
-  SupportedVideoDecoderConfigs supported_media_configs;
-
-  constexpr char kVideoDeviceDriverPath[] = "/dev/video-dec0";
-  base::ScopedFD device_fd(HANDLE_EINTR(
-      open(kVideoDeviceDriverPath, O_RDWR | O_NONBLOCK | O_CLOEXEC)));
-  if (!device_fd.is_valid()) {
-    return absl::nullopt;
-  }
-
-  std::vector<uint32_t> v4l2_codecs = EnumerateSupportedPixFmts(
-      base::BindRepeating(&HandledIoctl, device_fd.get()),
-      V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE);
-
-  // V4L2 stateful formats (don't end up with _SLICE or _FRAME) supported.
-  constexpr std::array<uint32_t, 4> kSupportedInputCodecs = {
-    V4L2_PIX_FMT_H264,
-#if BUILDFLAG(ENABLE_HEVC_PARSER_AND_HW_DECODER)
-    V4L2_PIX_FMT_HEVC,
-#endif  // BUILDFLAG(ENABLE_HEVC_PARSER_AND_HW_DECODER)
-    V4L2_PIX_FMT_VP8,
-    V4L2_PIX_FMT_VP9,
-  };
-  std::erase_if(v4l2_codecs, [kSupportedInputCodecs](uint32_t v4l2_codec) {
-    return !base::Contains(kSupportedInputCodecs, v4l2_codec);
-  });
-
-  for (const uint32_t v4l2_codec : v4l2_codecs) {
-    const std::vector<VideoCodecProfile> media_codec_profiles =
-        EnumerateSupportedProfilesForV4L2Codec(
-            base::BindRepeating(&HandledIoctl, device_fd.get()), v4l2_codec);
-
-    gfx::Size min_coded_size;
-    gfx::Size max_coded_size;
-    GetSupportedResolution(base::BindRepeating(&HandledIoctl, device_fd.get()),
-                           v4l2_codec, &min_coded_size, &max_coded_size);
-
-    for (const auto& profile : media_codec_profiles) {
-      supported_media_configs.emplace_back(SupportedVideoDecoderConfig(
-          profile, profile, min_coded_size, max_coded_size,
-          /*allow_encrypted=*/false, /*require_encrypted=*/false));
-    }
-  }
-
-#if DCHECK_IS_ON()
-  for (const auto& config : supported_media_configs) {
-    DVLOGF(3) << "Enumerated " << GetProfileName(config.profile_min) << " ("
-              << config.coded_size_min.ToString() << "-"
-              << config.coded_size_max.ToString() << ")";
-  }
-#endif
-
-  return supported_media_configs;
-}
-
 void V4L2StatefulVideoDecoder::Initialize(const VideoDecoderConfig& config,
                                           bool /*low_delay*/,
                                           CdmContext* cdm_context,
@@ -329,7 +272,7 @@ void V4L2StatefulVideoDecoder::Initialize(const VideoDecoderConfig& config,
 
   // Make sure that the |config| requested is supported by the driver,
   // which must provide such information.
-  const auto supported_configs = GetSupportedConfigs();
+  const auto supported_configs = GetSupportedV4L2DecoderConfigs();
   if (!IsVideoDecoderConfigSupported(supported_configs.has_value()
                                          ? supported_configs.value()
                                          : SupportedVideoDecoderConfigs{},
@@ -369,17 +312,18 @@ void V4L2StatefulVideoDecoder::Initialize(const VideoDecoderConfig& config,
     DVLOGF_IF(1, is_mtk8173_) << "This is an MTK8173 device (Hana, Oak)";
   }
 
-  // If we've been Initialize()d before, destroy state members.
   if (IsInitialized()) {
-    // Invalidate pointers from and cancel all hypothetical in-flight requests
-    // to the WaitOnceForEvents() routine.
-    weak_ptr_factory_for_events_.InvalidateWeakPtrs();
-    weak_ptr_factory_for_CAPTURE_availability_.InvalidateWeakPtrs();
-    cancelable_task_tracker_.TryCancelAll();
-
-    // This will also Deallocate() all buffers and issue a VIDIOC_STREAMOFF.
-    OUTPUT_queue_.reset();
-    CAPTURE_queue_.reset();
+    // Almost always we'll be here when the MSE feeding the HTML <video> changes
+    // tracks; this is implemented via a flush (a Decode() call with an
+    // end_of_stream() DecoderBuffer) and then this very Initialize() call.
+    // Technically, a V4L2 Memory-to-Memory stateful decoder can start decoding
+    // after a flush ("Drain" in the V4L2 documentation) via either a START
+    // command or sending a VIDIOC_STREAMOFF - VIDIOC_STREAMON to either queue
+    // [1]. The START command is what we issue when seeing the LAST dequeued
+    // CAPTURE buffer, but this is not enough for Hana MTK8173, so we do a full
+    // Reset() (see crbug.com/270039 for historical context). [1]
+    // https://www.kernel.org/doc/html/v5.15/userspace-api/media/v4l/dev-decoder.html#drain
+    Reset(base::DoNothing());
   }
 
   framerate_control_ = std::make_unique<V4L2FrameRateControl>(
@@ -530,8 +474,12 @@ void V4L2StatefulVideoDecoder::Decode(scoped_refptr<DecoderBuffer> buffer,
 
   if (!event_task_runner_) {
     CHECK(!CAPTURE_queue_);  // It's the first configuration event.
-    event_task_runner_ = base::ThreadPool::CreateSequencedTaskRunner(
-        {base::MayBlock(), base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN});
+    // |event_task_runner_| will block on OS resources, so it has to be a full
+    // ThreadRunner ISO a SequencedTaskRunner, to avoid interfering with other
+    // runners of the pool.
+    event_task_runner_ = base::ThreadPool::CreateSingleThreadTaskRunner(
+        {base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
+        base::SingleThreadTaskRunnerThreadMode::DEDICATED);
     CHECK(event_task_runner_);
   }
   RearmCAPTUREQueueMonitoring();
@@ -715,7 +663,7 @@ bool V4L2StatefulVideoDecoder::InitializeCAPTUREQueue() {
   // size of the video, e.g. a 1080p sequence could have 1920x1080 "natural" or
   // |visible_rect|, but |coded_size| of 1920x1088 because of codec block
   // alignment of 16 samples.
-  absl::optional<gfx::Rect> visible_rect = CAPTURE_queue_->GetVisibleRect();
+  std::optional<gfx::Rect> visible_rect = CAPTURE_queue_->GetVisibleRect();
   if (!visible_rect) {
     return false;
   }
@@ -730,9 +678,9 @@ bool V4L2StatefulVideoDecoder::InitializeCAPTUREQueue() {
       client_->PickDecoderOutputFormat(
           candidates, *visible_rect,
           aspect_ratio_.GetNaturalSize(*visible_rect),
-          /*output_size=*/absl::nullopt, num_codec_reference_frames,
+          /*output_size=*/std::nullopt, num_codec_reference_frames,
           /*use_protected=*/false, /*need_aux_frame_pool=*/false,
-          /*allocator=*/absl::nullopt);
+          /*allocator=*/std::nullopt);
   if (!status_or_output_format.has_value()) {
     return false;
   }
@@ -758,7 +706,7 @@ bool V4L2StatefulVideoDecoder::InitializeCAPTUREQueue() {
                                       : VIDEO_MAX_FRAME;
 
   if (!use_v4l2_allocated_buffers) {
-    absl::optional<GpuBufferLayout> layout =
+    std::optional<GpuBufferLayout> layout =
         client_->GetVideoFramePool()->GetGpuBufferLayout();
     if (!layout.has_value()) {
       return false;
@@ -884,7 +832,7 @@ void V4L2StatefulVideoDecoder::RearmCAPTUREQueueMonitoring() {
   //   thread that is blocked on a poll() upon the closing of an FD from a
   //   different thread, concretely the "result is unspecified").
   // - Both |device_fd_| and |wake_event_| are posted for destruction on said
-  //   background SequencedTaskRunner so that the FDs monitored by poll() are
+  //   background SingleThreadTaskRunner so that the FDs monitored by poll() are
   //   guaranteed to stay alive until poll() returns, thus avoiding unspecified
   //   behavior.
   cancelable_task_tracker_.PostTask(
@@ -944,6 +892,7 @@ void V4L2StatefulVideoDecoder::TryAndDequeueCAPTUREQueueBuffers() {
       if (flush_cb_) {
         std::move(flush_cb_).Run(DecoderStatus::Codes::kOk);
       }
+      return;
     } else if (!dequeued_buffer->IsError()) {
       // IsError() doesn't flag a fatal error, but more a discard-this-buffer
       // marker. This is seen -seldom- from venus driver (QC) when entering a
@@ -1094,7 +1043,7 @@ bool V4L2StatefulVideoDecoder::TryAndEnqueueOUTPUTQueueBuffers() {
     return false;
   }
 
-  for (absl::optional<V4L2WritableBufferRef> v4l2_buffer =
+  for (std::optional<V4L2WritableBufferRef> v4l2_buffer =
            OUTPUT_queue_->GetFreeBuffer();
        v4l2_buffer && !decoder_buffer_and_callbacks_.empty();
        v4l2_buffer = OUTPUT_queue_->GetFreeBuffer()) {
@@ -1225,21 +1174,24 @@ H264FrameReassembler::Process(scoped_refptr<DecoderBuffer> buffer,
   return whole_frames;
 }
 
-absl::optional<struct H264FrameReassembler::FrameBoundaryInfo>
+std::optional<struct H264FrameReassembler::FrameBoundaryInfo>
 H264FrameReassembler::FindH264FrameBoundary(const uint8_t* const data,
                                             size_t data_size) {
   h264_parser_.SetStream(data, data_size);
   while (true) {
-    H264NALU nalu;
+    H264NALU nalu = {};
     H264Parser::Result result = h264_parser_.AdvanceToNextNALU(&nalu);
     if (result == H264Parser::kInvalidStream ||
         result == H264Parser::kUnsupportedStream) {
       LOG(ERROR) << "Could not parse bitstream.";
-      return absl::nullopt;
+      return std::nullopt;
     }
     if (result == H264Parser::kEOStream) {
-      NOTREACHED_NORETURN()
-          << "|data| did not contain a whole NALU while parsing";
+      // Not an error per se, but strange to run out of data without having
+      // found a new NALU boundary. Pretend it's a frame boundary and move on.
+      return FrameBoundaryInfo{.is_whole_frame = true,
+                               .is_start_of_new_frame = true,
+                               .nalu_size = nalu.size};
     }
     DCHECK_EQ(result, H264Parser::kOk);
 
@@ -1267,7 +1219,7 @@ H264FrameReassembler::FindH264FrameBoundary(const uint8_t* const data,
         result = h264_parser_.ParseSPS(&sps_id_);
         if (result != H264Parser::kOk) {
           LOG(ERROR) << "Could not parse SPS header.";
-          return absl::nullopt;
+          return std::nullopt;
         }
         previous_slice_header_.reset();
         return FrameBoundaryInfo{.is_whole_frame = true,
@@ -1277,7 +1229,7 @@ H264FrameReassembler::FindH264FrameBoundary(const uint8_t* const data,
         result = h264_parser_.ParsePPS(&pps_id_);
         if (result != H264Parser::kOk) {
           LOG(ERROR) << "Could not parse PPS header.";
-          return absl::nullopt;
+          return std::nullopt;
         }
         previous_slice_header_.reset();
         return FrameBoundaryInfo{.is_whole_frame = true,

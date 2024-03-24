@@ -31,6 +31,7 @@
 
 #include "third_party/blink/renderer/core/html/forms/text_field_input_type.h"
 
+#include "third_party/blink/renderer/core/css_value_keywords.h"
 #include "third_party/blink/renderer/core/dom/events/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/core/dom/focus_params.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
@@ -336,6 +337,8 @@ void TextFieldInputType::CreateShadowSubtree() {
 
   Document& document = GetElement().GetDocument();
   auto* container = MakeGarbageCollected<HTMLDivElement>(document);
+  container->SetInlineStyleProperty(CSSPropertyID::kUnicodeBidi,
+                                    CSSValueID::kNormal);
   container->SetIdAttribute(shadow_element_names::kIdTextFieldContainer);
   container->SetShadowPseudoId(
       shadow_element_names::kPseudoTextFieldDecorationContainer);
@@ -539,15 +542,17 @@ bool TextFieldInputType::ShouldRespectListAttribute() {
   return true;
 }
 
-void TextFieldInputType::UpdatePlaceholderText(bool is_suggested_value) {
-  if (!SupportsPlaceholder())
-    return;
+HTMLElement* TextFieldInputType::UpdatePlaceholderText(
+    bool is_suggested_value) {
+  if (!SupportsPlaceholder()) {
+    return nullptr;
+  }
   HTMLElement* placeholder = GetElement().PlaceholderElement();
   if (!is_suggested_value &&
       !GetElement().FastHasAttribute(html_names::kPlaceholderAttr)) {
     if (placeholder)
       placeholder->remove(ASSERT_NO_EXCEPTION);
-    return;
+    return nullptr;
   }
   if (!placeholder) {
     GetElement().EnsureShadowSubtree();
@@ -575,6 +580,7 @@ void TextFieldInputType::UpdatePlaceholderText(bool is_suggested_value) {
     placeholder->RemoveInlineStyleProperty(CSSPropertyID::kUserSelect);
   }
   placeholder->setTextContent(GetElement().GetPlaceholderValue());
+  return placeholder;
 }
 
 String TextFieldInputType::ConvertFromVisibleValue(

@@ -4,6 +4,7 @@
 
 package org.chromium.chrome.browser.site_settings;
 
+import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
 import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
 import static androidx.test.espresso.matcher.ViewMatchers.withText;
@@ -32,7 +33,7 @@ import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.permissions.PermissionTestRule;
 import org.chromium.chrome.browser.privacy_sandbox.FakeTrackingProtectionBridge;
 import org.chromium.chrome.browser.privacy_sandbox.TrackingProtectionBridgeJni;
-import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.settings.SettingsActivity;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.batch.BlankCTATabInitialStateRule;
@@ -71,7 +72,7 @@ public class AllSiteSettingsTest {
     private FakeTrackingProtectionBridge mFakeTrackingProtectionBridge;
 
     private static BrowserContextHandle getBrowserContextHandle() {
-        return Profile.getLastUsedRegularProfile();
+        return ProfileManager.getLastUsedRegularProfile();
     }
 
     @Before
@@ -127,6 +128,35 @@ public class AllSiteSettingsTest {
                         });
         ChromeRenderTestRule.sanitize(view);
         mRenderTestRule.render(view, "site_settings_all_sites_single_domain");
+        settingsActivity.finish();
+    }
+
+    @Test
+    @SmallTest
+    @Feature({"Preferences"})
+    public void testAllSitesUsePublicSuffixList() throws Exception {
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    WebsitePreferenceBridge.setContentSettingCustomScope(
+                            getBrowserContextHandle(),
+                            ContentSettingsType.COOKIES,
+                            "a.github.io",
+                            "*",
+                            ContentSettingValues.ALLOW);
+                    WebsitePreferenceBridge.setContentSettingCustomScope(
+                            getBrowserContextHandle(),
+                            ContentSettingsType.COOKIES,
+                            "b.github.io",
+                            "*",
+                            ContentSettingValues.ALLOW);
+                });
+
+        SettingsActivity settingsActivity =
+                SiteSettingsTestUtils.startAllSitesSettings(SiteSettingsCategory.Type.ALL_SITES);
+        onViewWaiting(withText(containsString("Clear browsing"))).check(matches(isDisplayed()));
+        onView(withText("a.github.io")).check(matches(isDisplayed()));
+        onView(withText("b.github.io")).check(matches(isDisplayed()));
+
         settingsActivity.finish();
     }
 }

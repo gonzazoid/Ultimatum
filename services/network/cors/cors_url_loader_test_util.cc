@@ -75,7 +75,7 @@ void TestURLLoaderFactory::NotifyClientOnReceiveResponse(
     response->headers->SetHeader(header.first, header.second);
 
   client_remote_->OnReceiveResponse(std::move(response), std::move(body),
-                                    absl::nullopt);
+                                    std::nullopt);
 }
 
 void TestURLLoaderFactory::NotifyClientOnComplete(int error_code) {
@@ -269,7 +269,7 @@ void CorsURLLoaderTestBase::AddBlockListEntryForOrigin(
       mojom::CorsOriginAccessMatchPriority::kHighPriority);
 }
 
-void CorsURLLoaderTestBase::ResetFactory(absl::optional<url::Origin> initiator,
+void CorsURLLoaderTestBase::ResetFactory(std::optional<url::Origin> initiator,
                                          uint32_t process_id,
                                          const ResetFactoryParams& params) {
   if (process_id != mojom::kBrowserProcessId)
@@ -286,7 +286,7 @@ void CorsURLLoaderTestBase::ResetFactory(absl::optional<url::Origin> initiator,
   }
   factory_params->is_trusted = params.is_trusted;
   factory_params->process_id = process_id;
-  factory_params->is_corb_enabled = (process_id != mojom::kBrowserProcessId);
+  factory_params->is_orb_enabled = (process_id != mojom::kBrowserProcessId);
   factory_params->ignore_isolated_world_origin =
       params.ignore_isolated_world_origin;
   factory_params->factory_override = mojom::URLLoaderFactoryOverride::New();

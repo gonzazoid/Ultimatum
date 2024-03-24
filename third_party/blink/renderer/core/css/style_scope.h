@@ -5,7 +5,8 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_CSS_STYLE_SCOPE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_CSS_STYLE_SCOPE_H_
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/css_selector_list.h"
 #include "third_party/blink/renderer/core/css/parser/css_nesting_type.h"
@@ -61,7 +62,7 @@ class CORE_EXPORT StyleScope final : public GarbageCollected<StyleScope> {
   StyleRule* RuleForNesting() const { return from_.Get(); }
 
   // https://drafts.csswg.org/css-cascade-6/#implicit-scope
-  bool IsImplicit() const { return contents_ != nullptr; }
+  bool IsImplicit() const { return contents_.Get() != nullptr; }
 
  private:
   // If `contents_` is not nullptr, then this is a prelude-less @scope rule
@@ -70,7 +71,7 @@ class CORE_EXPORT StyleScope final : public GarbageCollected<StyleScope> {
   Member<StyleRule> from_;        // May be nullptr.
   Member<CSSSelectorList> to_;    // May be nullptr.
   Member<const StyleScope> parent_;
-  mutable absl::optional<unsigned> specificity_;
+  mutable std::optional<unsigned> specificity_;
 };
 
 }  // namespace blink

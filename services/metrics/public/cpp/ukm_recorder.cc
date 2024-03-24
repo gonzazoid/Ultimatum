@@ -46,14 +46,6 @@ ukm::SourceId UkmRecorder::GetSourceIdForPaymentAppFromScope(
 }
 
 // static
-ukm::SourceId UkmRecorder::GetSourceIdForWebApkManifestUrl(
-    base::PassKey<WebApkUkmRecorder>,
-    const GURL& manifest_url) {
-  return UkmRecorder::GetSourceIdFromScopeImpl(manifest_url,
-                                               SourceIdType::WEBAPK_ID);
-}
-
-// static
 ukm::SourceId UkmRecorder::GetSourceIdForWebIdentityFromScope(
     base::PassKey<content::FedCmMetrics>,
     const GURL& provider_url) {
@@ -95,6 +87,22 @@ ukm::SourceId UkmRecorder::GetSourceIdForExtensionUrl(
     const GURL& extension_url) {
   return UkmRecorder::GetSourceIdFromScopeImpl(extension_url,
                                                SourceIdType::EXTENSION_ID);
+}
+
+// static
+ukm::SourceId UkmRecorder::GetSourceIdForNotificationPermission(
+    base::PassKey<ChromePermissionsClient>,
+    const GURL& origin) {
+  return UkmRecorder::GetSourceIdFromScopeImpl(origin,
+                                               SourceIdType::NOTIFICATION_ID);
+}
+
+// static
+ukm::SourceId UkmRecorder::GetSourceIdForNotificationEvent(
+    base::PassKey<PlatformNotificationServiceImpl>,
+    const GURL& origin) {
+  return UkmRecorder::GetSourceIdFromScopeImpl(origin,
+                                               SourceIdType::NOTIFICATION_ID);
 }
 
 void UkmRecorder::RecordOtherURL(ukm::SourceIdObj source_id, const GURL& url) {

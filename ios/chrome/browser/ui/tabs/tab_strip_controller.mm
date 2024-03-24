@@ -12,6 +12,7 @@
 #import "base/apple/foundation_util.h"
 #import "base/i18n/rtl.h"
 #import "base/ios/ios_util.h"
+#import "base/memory/raw_ptr.h"
 #import "base/metrics/histogram_functions.h"
 #import "base/metrics/user_metrics.h"
 #import "base/metrics/user_metrics_action.h"
@@ -60,7 +61,6 @@
 #import "ios/chrome/browser/url_loading/model/url_loading_browser_agent.h"
 #import "ios/chrome/browser/url_loading/model/url_loading_params.h"
 #import "ios/chrome/browser/web_state_list/model/web_state_list_favicon_driver_observer.h"
-#import "ios/chrome/common/button_configuration_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/ui_util.h"
 #import "ios/chrome/grit/ios_strings.h"
@@ -180,8 +180,8 @@ const CGFloat kSymbolSize = 18;
                                   UIGestureRecognizerDelegate,
                                   UIScrollViewDelegate,
                                   URLDropDelegate> {
-  Browser* _browser;
-  WebStateList* _webStateList;
+  raw_ptr<Browser> _browser;
+  raw_ptr<WebStateList> _webStateList;
   TabStripContainerView* _view;
   TabStripView* _tabStripView;
   UIButton* _buttonNewTab;
@@ -1180,9 +1180,13 @@ const CGFloat kSymbolSize = 18;
       // The activation is handled after this switch statement.
       break;
     case WebStateListChange::Type::kDetach: {
+      const WebStateListChangeDetach& detachChange =
+          change.As<WebStateListChangeDetach>();
+
       // Keep the actual view around while it is animating out.  Once the
       // animation is done, remove the view.
-      NSUInteger index = [self indexForWebStateListIndex:status.index];
+      NSUInteger index =
+          [self indexForWebStateListIndex:detachChange.detached_from_index()];
       TabView* view = [_tabArray objectAtIndex:index];
       [_closingTabs addObject:view];
       _targetFrames.RemoveFrame(view);
@@ -1224,7 +1228,7 @@ const CGFloat kSymbolSize = 18;
           [self indexForWebStateListIndex:moveChange.moved_from_index()];
       TabView* view = [_tabArray objectAtIndex:arrayIndex];
       [_tabArray removeObject:view];
-      [_tabArray insertObject:view atIndex:status.index];
+      [_tabArray insertObject:view atIndex:moveChange.moved_to_index()];
       [self setNeedsLayoutWithAnimation];
       break;
     }
@@ -1242,13 +1246,15 @@ const CGFloat kSymbolSize = 18;
       TabView* view =
           [self createTabViewForWebState:insertChange.inserted_web_state()
                               isSelected:status.active_web_state_change()];
-      [_tabArray insertObject:view
-                      atIndex:[self indexForWebStateListIndex:status.index]];
+      [_tabArray
+          insertObject:view
+               atIndex:[self indexForWebStateListIndex:insertChange.index()]];
       [[self tabStripView] addSubview:view];
 
       [self updateContentSizeAndRepositionViews];
       [self setNeedsLayoutWithAnimation];
-      [self updateContentOffsetForWebStateIndex:status.index isNewWebState:YES];
+      [self updateContentOffsetForWebStateIndex:insertChange.index()
+                                  isNewWebState:YES];
       break;
     }
   }

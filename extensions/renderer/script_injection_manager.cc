@@ -20,7 +20,7 @@
 #include "content/public/renderer/render_thread.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_features.h"
-#include "extensions/common/extension_messages.h"
+#include "extensions/common/extension_id.h"
 #include "extensions/common/extension_set.h"
 #include "extensions/common/mojom/host_id.mojom.h"
 #include "extensions/renderer/extension_frame_helper.h"
@@ -264,7 +264,7 @@ void ScriptInjectionManager::OnRenderFrameCreated(
 }
 
 void ScriptInjectionManager::OnExtensionUnloaded(
-    const std::string& extension_id) {
+    const ExtensionId& extension_id) {
   for (auto iter = pending_injections_.begin();
       iter != pending_injections_.end();) {
     if ((*iter)->host_id().id == extension_id) {
@@ -436,15 +436,18 @@ void ScriptInjectionManager::HandleExecuteCode(
     mojom::LocalFrame::ExecuteCodeCallback callback,
     content::RenderFrame* render_frame) {
   std::unique_ptr<const InjectionHost> injection_host;
-  if (params->host_id->type == mojom::HostID::HostType::kExtensions) {
-    injection_host = ExtensionInjectionHost::Create(params->host_id->id);
-    if (!injection_host) {
-      std::move(callback).Run(base::EmptyString(), GURL::EmptyGURL(),
-                              std::nullopt);
-      return;
-    }
-  } else if (params->host_id->type == mojom::HostID::HostType::kWebUi) {
-    injection_host = std::make_unique<WebUIInjectionHost>(*params->host_id);
+  switch (params->host_id->type) {
+    case mojom::HostID::HostType::kExtensions:
+      injection_host = ExtensionInjectionHost::Create(params->host_id->id);
+      if (!injection_host) {
+        std::move(callback).Run(std::string(), GURL(), std::nullopt);
+        return;
+      }
+      break;
+    case mojom::HostID::HostType::kControlledFrameEmbedder:
+    case mojom::HostID::HostType::kWebUi:
+      injection_host = std::make_unique<WebUIInjectionHost>(*params->host_id);
+      break;
   }
 
   mojom::RunLocation run_at = params->run_at;

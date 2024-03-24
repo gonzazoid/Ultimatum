@@ -74,7 +74,7 @@ DeviceAccountInfo GetGaiaDeviceAccountInfo() {
           "primary@example.com" /*email*/,
           "primary" /*fullName*/,
           "" /*organization*/,
-          user_manager::USER_TYPE_REGULAR /*user_type*/,
+          user_manager::UserType::kRegular /*user_type*/,
           account_manager::AccountType::kGaia /*account_type*/,
           "device-account-token" /*token*/};
 }
@@ -84,7 +84,7 @@ DeviceAccountInfo GetChildDeviceAccountInfo() {
           "child@example.com" /*email*/,
           "child" /*fullName*/,
           "Family Link" /*organization*/,
-          user_manager::USER_TYPE_CHILD /*user_type*/,
+          user_manager::UserType::kChild /*user_type*/,
           account_manager::AccountType::kGaia /*account_type*/,
           "device-account-token" /*token*/};
 }
@@ -172,16 +172,14 @@ class AccountManagerUIHandlerTest
     TestingProfile::Builder profile_builder;
     profile_builder.SetPath(temp_dir_.GetPath().AppendASCII("TestProfile"));
     profile_builder.SetProfileName(GetDeviceAccountInfo().email);
-    if (GetDeviceAccountInfo().user_type ==
-        user_manager::UserType::USER_TYPE_CHILD) {
+    if (GetDeviceAccountInfo().user_type == user_manager::UserType::kChild) {
       profile_builder.SetIsSupervisedProfile();
     }
     profile_ = profile_builder.Build();
 
     auto user_manager = std::make_unique<FakeChromeUserManager>();
     const user_manager::User* user;
-    if (GetDeviceAccountInfo().user_type ==
-        user_manager::UserType::USER_TYPE_CHILD) {
+    if (GetDeviceAccountInfo().user_type == user_manager::UserType::kChild) {
       user = user_manager->AddChildUser(AccountId::FromUserEmailGaiaId(
           GetDeviceAccountInfo().email, GetDeviceAccountInfo().id));
     } else {
@@ -197,8 +195,6 @@ class AccountManagerUIHandlerTest
     user_manager_enabler_ = std::make_unique<user_manager::ScopedUserManager>(
         std::move(user_manager));
 
-    identity_manager_ = IdentityManagerFactory::GetForProfile(profile_.get());
-
     auto* factory =
         g_browser_process->platform_part()->GetAccountManagerFactory();
     account_manager_ = factory->GetAccountManager(profile_->GetPath().value());
@@ -207,6 +203,9 @@ class AccountManagerUIHandlerTest
         ::account_manager::AccountKey{GetDeviceAccountInfo().id,
                                       GetDeviceAccountInfo().account_type},
         GetDeviceAccountInfo().email, GetDeviceAccountInfo().token);
+
+    identity_manager_ = IdentityManagerFactory::GetForProfile(profile_.get());
+    signin::WaitForRefreshTokensLoaded(identity_manager_);
   }
 
   FakeChromeUserManager* GetFakeUserManager() const {
@@ -255,8 +254,7 @@ class AccountManagerUIHandlerTest
 };
 
 IN_PROC_BROWSER_TEST_P(AccountManagerUIHandlerTest,
-                       // TODO(crbug.com/1474301): Re-enable this test
-                       DISABLED_OnGetAccountsNoSecondaryAccounts) {
+                       OnGetAccountsNoSecondaryAccounts) {
   const std::vector<::account_manager::Account> account_manager_accounts =
       GetAccountsFromAccountManager();
   // Only Primary account.
@@ -287,8 +285,7 @@ IN_PROC_BROWSER_TEST_P(AccountManagerUIHandlerTest,
             ValueOrEmpty(device_account.FindString("email")));
   EXPECT_EQ(GetDeviceAccountInfo().id,
             ValueOrEmpty(device_account.FindString("id")));
-  if (GetDeviceAccountInfo().user_type ==
-      user_manager::UserType::USER_TYPE_CHILD) {
+  if (GetDeviceAccountInfo().user_type == user_manager::UserType::kChild) {
     std::string organization = GetDeviceAccountInfo().organization;
     base::ReplaceSubstringsAfterOffset(&organization, 0, " ", "&nbsp;");
     EXPECT_EQ(organization,
@@ -335,8 +332,7 @@ IN_PROC_BROWSER_TEST_P(AccountManagerUIHandlerTest,
             ValueOrEmpty(device_account.FindString("email")));
   EXPECT_EQ(GetDeviceAccountInfo().id,
             ValueOrEmpty(device_account.FindString("id")));
-  if (GetDeviceAccountInfo().user_type ==
-      user_manager::UserType::USER_TYPE_CHILD) {
+  if (GetDeviceAccountInfo().user_type == user_manager::UserType::kChild) {
     std::string organization = GetDeviceAccountInfo().organization;
     base::ReplaceSubstringsAfterOffset(&organization, 0, " ", "&nbsp;");
     EXPECT_EQ(organization,
@@ -359,8 +355,7 @@ IN_PROC_BROWSER_TEST_P(AccountManagerUIHandlerTest,
                         {ValueOrEmpty(account.FindString("id")),
                          account_manager::AccountType::kGaia})
             .value();
-    if (GetDeviceAccountInfo().user_type ==
-        user_manager::UserType::USER_TYPE_CHILD) {
+    if (GetDeviceAccountInfo().user_type == user_manager::UserType::kChild) {
       EXPECT_FALSE(account.FindBool("unmigrated").value());
     } else {
       EXPECT_EQ(HasDummyGaiaToken(expected_account.key),
@@ -395,7 +390,7 @@ class AccountManagerUIHandlerTestWithArcAccountRestrictions
   AccountManagerUIHandlerTestWithArcAccountRestrictions() {
     std::vector<base::test::FeatureRef> lacros =
         ash::standalone_browser::GetFeatureRefs();
-    if (GetDeviceAccountInfo().user_type == user_manager::USER_TYPE_CHILD) {
+    if (GetDeviceAccountInfo().user_type == user_manager::UserType::kChild) {
       lacros.push_back(
           ash::standalone_browser::features::kLacrosForSupervisedUsers);
     }

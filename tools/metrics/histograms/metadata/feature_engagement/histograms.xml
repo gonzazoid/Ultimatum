@@ -138,8 +138,6 @@ chromium-metrics-reviews@google.com.
   <variant name="IPH_DesktopPwaInstall" summary="desktop PWA install icon"/>
   <variant name="IPH_DesktopPWAsLinkCapturingLaunch"
       summary="PWA launch due to link capturing being enabled"/>
-  <variant name="IPH_DesktopTabGroupsNewGroup"
-      summary="creating a new tab group"/>
   <variant name="IPH_DownloadEsbPromo" summary="download ESB promo"/>
   <variant name="IPH_DownloadHome" summary="download home"/>
   <variant name="IPH_DownloadInfobarDownloadContinuing"
@@ -204,8 +202,6 @@ chromium-metrics-reviews@google.com.
   <variant name="IPH_IncognitoWindow" summary="incognito window"/>
   <variant name="IPH_InstanceSwitcher" summary="instance switcher"/>
   <variant name="IPH_IntentChip" summary="opening a webpage in an app"/>
-  <variant name="IPH_iOSBlueDotPromoEnhancedSafeBrowsing"
-      summary="showing the Enhanced Safe Browsing Blue-dot Promo on iOS"/>
   <variant name="IPH_iOSChoiceScreenFeature"
       summary="showing the Choice screen on iOS"/>
   <variant name="IPH_iOSDefaultBrowserBadgeEligibility"
@@ -215,16 +211,14 @@ chromium-metrics-reviews@google.com.
   <variant name="IPH_iOSDefaultBrowserSettingsBadge"
       summary="default browser badge promo on the settings menu row"/>
   <variant name="IPH_iOSDefaultBrowserVideoPromoTrigger"
-      summary="notifying that the conditions to show the default browser
-               video promo have been met."/>
+      summary="(obsolete) notifying that the conditions to show the default
+               browser video promo have been met."/>
   <variant name="IPH_iOSDockingPromoFeature"
       summary="Showing the Docking Promo on iOS"/>
   <variant name="IPH_iOSDockingPromoRemindMeLaterFeature"
       summary="Showing the Docking Promo (Remind Me Later version) on iOS"/>
   <variant name="IPH_iOSHistoryOnOverflowMenuFeature"
       summary="history item on the overflow menu on iOS"/>
-  <variant name="IPH_iOSInlinePromoEnhancedSafeBrowsing"
-      summary="showing the Enhanced Safe Browsing Inline Promo on iOS"/>
   <variant name="IPH_iOSNewTabToolbarItemFeature"
       summary="the new tab tool bar item (bottom on iPhone, top on iPad)"/>
   <variant name="IPH_iOSOmniboxPositionFeature"
@@ -233,6 +227,10 @@ chromium-metrics-reviews@google.com.
       summary="showing the Parcel Tracking IPH on the Magic Stack"/>
   <variant name="IPH_iOSPasswordPromoDesktop"
       summary="showing the iOS password promo on desktop"/>
+  <variant name="IPH_iOSPostDefaultAbandonmentPromo"
+      summary="showing the iOS post-default browser abandonment promo on iOS"/>
+  <variant name="IPH_iOSPromoAllTabs"
+      summary="showing All Tabs default browser promo"/>
   <variant name="IPH_iOSPromoAppStore"
       summary="showing the App Store Promo on iOS"/>
   <variant name="IPH_iOSPromoCredentialProviderExtension"
@@ -241,12 +239,16 @@ chromium-metrics-reviews@google.com.
       summary="showing the Default Browser Promo on iOS"/>
   <variant name="IPH_iOSPromoDefaultBrowserReminder"
       summary="showing the Default Browser Promo after remind me later on iOS"/>
+  <variant name="IPH_iOSPromoMadeForIOS"
+      summary="showing Made for iOS default browser promo"/>
   <variant name="IPH_iOSPromoPasswordManagerWidget"
       summary="showing the Password Manager widget promo on iOS"/>
   <variant name="IPH_iOSPromoPostRestore"
       summary="showing the Post Restore Promo on iOS"/>
   <variant name="IPH_iOSPromoPostRestoreDefaultBrowser"
       summary="showing the Post Restore Default Browser Promo on iOS"/>
+  <variant name="IPH_iOSPromoStaySafe"
+      summary="showing Stay Safe default browser promo"/>
   <variant name="IPH_iOSPromoWhatsNew"
       summary="showing the Whats New Promo on iOS"/>
   <variant name="IPH_iOSPullToRefreshFeature"
@@ -255,7 +257,13 @@ chromium-metrics-reviews@google.com.
       summary="account row in settings page"/>
   <variant name="IPH_iOSShareToolbarItemFeature"
       summary="the share tool bar item (bottom on iPhone, top on iPad)"/>
-  <variant name="IPH_iOSTabGridSwipeLeftForIncognito"
+  <variant name="IPH_iOSSwipeBackForward"
+      summary="the full screen IPH for edge swipe on page to go backward or
+               forward"/>
+  <variant name="IPH_iOSSwipeToolbarToChangeTab"
+      summary="the full screen IPH for swipe on the toolbar to go to the
+               previous or next tab in the tab list"/>
+  <variant name="IPH_iOSTabGridSwipeRightForIncognito"
       summary="the full screen IPH for left swipe on regular tab grid to
                browse in incognito"/>
   <variant name="IPH_iOSTabGridToolbarItemFeature"
@@ -327,6 +335,8 @@ chromium-metrics-reviews@google.com.
       summary="surfacing the Android PWA install option"/>
   <variant name="IPH_QuietNotificationPrompts"
       summary="the quiet notification prompts feature"/>
+  <variant name="IPH_ReadAloudAppMenuFeature"
+      summary="the Read Aloud button in the overflow menu"/>
   <variant name="IPH_ReadingListDiscovery"
       summary="first time a tab is added to reading list"/>
   <variant name="IPH_ReadingListEntryPoint"
@@ -355,8 +365,8 @@ chromium-metrics-reviews@google.com.
       summary="educating tablet users about using the desktop site per-site
                settings in general"/>
   <variant name="IPH_RequestDesktopSiteOptIn"
-      summary="the in product help message to let users turn on the desktop
-               site global settings"/>
+      summary="(obsolete) the in product help message to let users turn on
+               the desktop site global settings"/>
   <variant name="IPH_RequestDesktopSiteWindowSetting"
       summary="educating users about using the desktop site window setting"/>
   <variant name="IPH_RestoreTabsOnFRE"
@@ -500,13 +510,15 @@ chromium-metrics-reviews@google.com.
       summary="the tutorial for the customize chrome side panel"/>
   <variant name=".PasswordManager"
       summary="the tutorial for the password manager"/>
+  <variant name=".SavedTabGroup"
+      summary="the tutorial for the saved tab group"/>
   <variant name=".SidePanelReadingList"
       summary="the tutorial for the side panel reading list"/>
   <variant name=".TabGroup" summary="the tutorial for tab groups"/>
 </variants>
 
 <histogram name="InProductHelp.Config.ParsingEvent" enum="ConfigParsingEvent"
-    expires_after="2024-05-12">
+    expires_after="2024-07-14">
   <owner>nyquist@chromium.org</owner>
   <summary>
     Records if in-product help configuration is parsed correctly, and the
@@ -553,7 +565,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="InProductHelp.DismissalReason.iOS"
-    enum="InProductHelpDismissalReason" expires_after="2024-06-02">
+    enum="InProductHelpDismissalReason" expires_after="2024-08-04">
   <owner>lpromero@google.com</owner>
   <owner>gambard@chromium.org</owner>
   <summary>
@@ -597,7 +609,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="InProductHelp.SnoozeAction" enum="InProductHelpSnoozeAction"
-    expires_after="2024-06-02">
+    expires_after="2024-08-04">
   <owner>haileywang@chromium.org</owner>
   <owner>shaktisahu@chromium.org</owner>
   <summary>
@@ -636,7 +648,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Tutorial{TutorialID}.AbortStep" units="int"
-    expires_after="2024-05-19">
+    expires_after="2024-07-28">
   <owner>dpenning@chromium.org</owner>
   <owner>dfried@chromium.org</owner>
   <summary>

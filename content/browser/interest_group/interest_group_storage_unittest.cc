@@ -9,6 +9,7 @@
 #include <functional>
 #include <memory>
 
+#include "base/base64.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/functional/bind.h"
@@ -23,6 +24,7 @@
 #include "base/test/simple_test_clock.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
+#include "content/browser/interest_group/bidding_and_auction_server_key_fetcher.h"
 #include "content/browser/interest_group/interest_group_update.h"
 #include "content/browser/interest_group/storage_interest_group.h"
 #include "content/services/auction_worklet/public/mojom/bidder_worklet.mojom.h"
@@ -149,6 +151,7 @@ class InterestGroupStorageTest : public testing::Test {
             .SetTrustedBiddingSignalsSlotSizeMode(
                 blink::InterestGroup::TrustedBiddingSignalsSlotSizeMode::
                     kAllSlotsRequestedSizes)
+            .SetMaxTrustedBiddingSignalsURLLength(8000)
             .SetUserBiddingSignals("foo")
             .SetAds(std::vector<InterestGroup::Ad>{
                 blink::InterestGroup::Ad(
@@ -285,8 +288,8 @@ TEST_F(InterestGroupStorageTest, DatabaseInitialized_CreateDatabase) {
 
     // [interest_groups], [join_history], [bid_history], [win_history],
     // [k_anon], [meta], [lockout_debugging_only_report],
-    // [cooldown_debugging_only_report].
-    EXPECT_EQ(8u, sql::test::CountSQLTables(&raw_db)) << raw_db.GetSchema();
+    // [cooldown_debugging_only_report], [bidding_and_auction_server_keys].
+    EXPECT_EQ(9u, sql::test::CountSQLTables(&raw_db)) << raw_db.GetSchema();
   }
 }
 
@@ -322,8 +325,8 @@ TEST_F(InterestGroupStorageTest, DatabaseRazesOldVersion) {
 
     // [interest_groups], [join_history], [bid_history], [win_history],
     // [k_anon], [meta], [lockout_debugging_only_report],
-    // [cooldown_debugging_only_report].
-    EXPECT_EQ(8u, sql::test::CountSQLTables(&raw_db)) << raw_db.GetSchema();
+    // [cooldown_debugging_only_report], [bidding_and_auction_server_keys].
+    EXPECT_EQ(9u, sql::test::CountSQLTables(&raw_db)) << raw_db.GetSchema();
   }
 }
 
@@ -359,8 +362,8 @@ TEST_F(InterestGroupStorageTest, DatabaseRazesNewVersion) {
 
     // [interest_groups], [join_history], [bid_history], [win_history],
     // [k_anon], [meta], [lockout_debugging_only_report],
-    // [cooldown_debugging_only_report].
-    EXPECT_EQ(8u, sql::test::CountSQLTables(&raw_db)) << raw_db.GetSchema();
+    // [cooldown_debugging_only_report], [bidding_and_auction_server_keys].
+    EXPECT_EQ(9u, sql::test::CountSQLTables(&raw_db)) << raw_db.GetSchema();
   }
 }
 
@@ -875,12 +878,9 @@ TEST_F(InterestGroupStorageTest, UpdatesAdKAnonymity) {
 
   groups = storage->GetInterestGroupsForOwner(test_origin);
 
-  std::vector<StorageInterestGroup::KAnonymityData> expected_bidding = {
-  };
-  std::vector<StorageInterestGroup::KAnonymityData> expected_component_ad = {
-  };
-  std::vector<StorageInterestGroup::KAnonymityData> expected_reporting = {
-  };
+  std::vector<StorageInterestGroup::KAnonymityData> expected_bidding = {};
+  std::vector<StorageInterestGroup::KAnonymityData> expected_component_ad = {};
+  std::vector<StorageInterestGroup::KAnonymityData> expected_reporting = {};
 
   ASSERT_EQ(1u, groups.size());
   EXPECT_THAT(groups[0].bidding_ads_kanon,
@@ -1953,6 +1953,9 @@ TEST_F(InterestGroupStorageTest, UpgradeFromV6) {
                       "trusted_bidding_signals_slot_size_mode",
                       &InterestGroup::trusted_bidding_signals_slot_size_mode,
                       InterestGroup::TrustedBiddingSignalsSlotSizeMode::kNone),
+                  Field("max_trusted_bidding_signals_url_length",
+                        &InterestGroup::max_trusted_bidding_signals_url_length,
+                        0),
                   Field("user_bidding_signals",
                         &InterestGroup::user_bidding_signals, std::nullopt),
                   Field("ads", &InterestGroup::ads,
@@ -2036,6 +2039,9 @@ TEST_F(InterestGroupStorageTest, UpgradeFromV6) {
                       "trusted_bidding_signals_slot_size_mode",
                       &InterestGroup::trusted_bidding_signals_slot_size_mode,
                       InterestGroup::TrustedBiddingSignalsSlotSizeMode::kNone),
+                  Field("max_trusted_bidding_signals_url_length",
+                        &InterestGroup::max_trusted_bidding_signals_url_length,
+                        0),
                   Field("user_bidding_signals",
                         &InterestGroup::user_bidding_signals,
                         "[[\"1\",\"2\"]]"),
@@ -2120,6 +2126,9 @@ TEST_F(InterestGroupStorageTest, UpgradeFromV6) {
                       "trusted_bidding_signals_slot_size_mode",
                       &InterestGroup::trusted_bidding_signals_slot_size_mode,
                       InterestGroup::TrustedBiddingSignalsSlotSizeMode::kNone),
+                  Field("max_trusted_bidding_signals_url_length",
+                        &InterestGroup::max_trusted_bidding_signals_url_length,
+                        0),
                   Field("user_bidding_signals",
                         &InterestGroup::user_bidding_signals,
                         "[[\"1\",\"3\"]]"),
@@ -2204,6 +2213,9 @@ TEST_F(InterestGroupStorageTest, UpgradeFromV6) {
                       "trusted_bidding_signals_slot_size_mode",
                       &InterestGroup::trusted_bidding_signals_slot_size_mode,
                       InterestGroup::TrustedBiddingSignalsSlotSizeMode::kNone),
+                  Field("max_trusted_bidding_signals_url_length",
+                        &InterestGroup::max_trusted_bidding_signals_url_length,
+                        0),
                   Field("user_bidding_signals",
                         &InterestGroup::user_bidding_signals,
                         "[[\"3\",\"2\"]]"),
@@ -2896,6 +2908,120 @@ TEST_F(InterestGroupStorageTest, OnlyDeletesExpiredKAnon) {
             storage->GetLastKAnonymityReported(k_anon_key_1));
   EXPECT_EQ(base::Time::Min(),
             storage->GetLastKAnonymityReported(k_anon_key_2));
+}
+
+TEST_F(InterestGroupStorageTest, SetGetBiddingAndAuctionKeys) {
+  const url::Origin origin_a =
+      url::Origin::Create(GURL("https://a.example.com"));
+  const url::Origin origin_b =
+      url::Origin::Create(GURL("https://b.example.com"));
+  std::unique_ptr<InterestGroupStorage> storage = CreateStorage();
+  // No keys should be returned before any values are set.
+  std::vector<BiddingAndAuctionServerKey> a_loaded_keys, b_loaded_keys;
+  base::Time a_expiration, b_expiration;
+  std::tie(a_expiration, a_loaded_keys) =
+      storage->GetBiddingAndAuctionServerKeys(origin_a);
+  std::tie(b_expiration, b_loaded_keys) =
+      storage->GetBiddingAndAuctionServerKeys(origin_b);
+  EXPECT_TRUE(a_loaded_keys.empty());
+  EXPECT_TRUE(b_loaded_keys.empty());
+
+  // The set values should be returned.
+  std::vector<BiddingAndAuctionServerKey> a_keys{{"1", 1}, {"2", 2}};
+  base::Time expiration = base::Time::Now() + base::Seconds(5);
+  storage->SetBiddingAndAuctionServerKeys(origin_a, a_keys, expiration);
+  std::tie(a_expiration, a_loaded_keys) =
+      storage->GetBiddingAndAuctionServerKeys(origin_a);
+  std::tie(b_expiration, b_loaded_keys) =
+      storage->GetBiddingAndAuctionServerKeys(origin_b);
+  EXPECT_EQ(a_loaded_keys.size(), 2u);
+  EXPECT_NE(a_loaded_keys[0].id, a_loaded_keys[1].id);
+  for (const BiddingAndAuctionServerKey& key : a_loaded_keys) {
+    EXPECT_TRUE((key.id == 1 && key.key == "1") ||
+                (key.id == 2 && key.key == "2"));
+  }
+  EXPECT_TRUE(b_loaded_keys.empty());
+  EXPECT_EQ(expiration, a_expiration);
+
+  // Setting values for a different origin shouldn't affect the previously
+  // set values.
+  std::vector<BiddingAndAuctionServerKey> b_keys{{"3", 3}};
+  storage->SetBiddingAndAuctionServerKeys(origin_b, b_keys, expiration);
+  std::tie(a_expiration, a_loaded_keys) =
+      storage->GetBiddingAndAuctionServerKeys(origin_a);
+  std::tie(b_expiration, b_loaded_keys) =
+      storage->GetBiddingAndAuctionServerKeys(origin_b);
+  EXPECT_EQ(a_loaded_keys.size(), 2u);
+  EXPECT_NE(a_loaded_keys[0].id, a_loaded_keys[1].id);
+  for (const BiddingAndAuctionServerKey& key : a_loaded_keys) {
+    EXPECT_TRUE((key.id == 1 && key.key == "1") ||
+                (key.id == 2 && key.key == "2"));
+  }
+  EXPECT_EQ(b_loaded_keys.size(), 1u);
+  EXPECT_EQ("3", b_loaded_keys[0].key);
+  EXPECT_EQ(3, b_loaded_keys[0].id);
+  EXPECT_EQ(expiration, a_expiration);
+  EXPECT_EQ(expiration, b_expiration);
+
+  // Resetting the keys should overwrite the previous keys.
+  a_keys = {{"1", 1}};
+  task_environment().FastForwardBy(base::Seconds(2));
+  expiration = base::Time::Now() + base::Days(7);
+  storage->SetBiddingAndAuctionServerKeys(origin_a, a_keys, expiration);
+  std::tie(a_expiration, a_loaded_keys) =
+      storage->GetBiddingAndAuctionServerKeys(origin_a);
+  std::tie(b_expiration, b_loaded_keys) =
+      storage->GetBiddingAndAuctionServerKeys(origin_b);
+  EXPECT_EQ(a_loaded_keys.size(), 1u);
+  EXPECT_EQ("1", a_loaded_keys[0].key);
+  EXPECT_EQ(1, a_loaded_keys[0].id);
+  EXPECT_EQ(b_loaded_keys.size(), 1u);
+  EXPECT_EQ("3", b_loaded_keys[0].key);
+  EXPECT_EQ(3, b_loaded_keys[0].id);
+  EXPECT_EQ(expiration, a_expiration);
+  EXPECT_NE(expiration, b_expiration);
+
+  // Only get unexpired values.
+  task_environment().FastForwardBy(base::Seconds(3));
+  std::tie(a_expiration, a_loaded_keys) =
+      storage->GetBiddingAndAuctionServerKeys(origin_a);
+  std::tie(b_expiration, b_loaded_keys) =
+      storage->GetBiddingAndAuctionServerKeys(origin_b);
+  EXPECT_EQ(a_loaded_keys.size(), 1u);
+  EXPECT_EQ("1", a_loaded_keys[0].key);
+  EXPECT_EQ(1, a_loaded_keys[0].id);
+  EXPECT_TRUE(b_loaded_keys.empty());
+  EXPECT_EQ(expiration, a_expiration);
+
+  // DB maintenance should not delete unexpired values.
+  EXPECT_EQ(base::Time::Min(), storage->GetLastMaintenanceTimeForTesting());
+  task_environment().FastForwardBy(InterestGroupStorage::kIdlePeriod);
+  EXPECT_NE(base::Time::Min(), storage->GetLastMaintenanceTimeForTesting());
+  std::tie(a_expiration, a_loaded_keys) =
+      storage->GetBiddingAndAuctionServerKeys(origin_a);
+  std::tie(b_expiration, b_loaded_keys) =
+      storage->GetBiddingAndAuctionServerKeys(origin_b);
+  EXPECT_EQ(a_loaded_keys.size(), 1u);
+  EXPECT_EQ("1", a_loaded_keys[0].key);
+  EXPECT_EQ(1, a_loaded_keys[0].id);
+  EXPECT_EQ(expiration, a_expiration);
+  EXPECT_TRUE(b_loaded_keys.empty());
+}
+
+TEST_F(InterestGroupStorageTest, SetGetBiddingAndAuctionKeysNonUtf8) {
+  const url::Origin origin = url::Origin::Create(GURL("https://b.example.com"));
+  std::unique_ptr<InterestGroupStorage> storage = CreateStorage();
+  std::string key(32, 0x00);
+  std::vector<BiddingAndAuctionServerKey> keys{{key, 2}};
+  storage->SetBiddingAndAuctionServerKeys(origin, keys,
+                                          base::Time::Now() + base::Days(1));
+  std::vector<BiddingAndAuctionServerKey> loaded_keys;
+  base::Time expiration;
+  std::tie(expiration, loaded_keys) =
+      storage->GetBiddingAndAuctionServerKeys(origin);
+  EXPECT_EQ(loaded_keys.size(), 1u);
+  EXPECT_EQ(loaded_keys[0].key, key);
+  EXPECT_EQ(loaded_keys[0].id, 2);
 }
 
 }  // namespace

@@ -4,6 +4,7 @@
 
 #include "components/attribution_reporting/trigger_registration.h"
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -30,7 +31,6 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/numeric/int128.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -77,15 +77,14 @@ TEST(TriggerRegistrationTest, Parse) {
           R"json({})json",
           ValueIs(AllOf(
               Field(&TriggerRegistration::filters, FilterPair()),
-              Field(&TriggerRegistration::debug_key, absl::nullopt),
+              Field(&TriggerRegistration::debug_key, std::nullopt),
               Field(&TriggerRegistration::aggregatable_dedup_keys, IsEmpty()),
               Field(&TriggerRegistration::event_triggers, IsEmpty()),
               Field(&TriggerRegistration::aggregatable_trigger_data, IsEmpty()),
-              Field(&TriggerRegistration::aggregatable_values,
-                    AggregatableValues()),
+              Field(&TriggerRegistration::aggregatable_values, IsEmpty()),
               Field(&TriggerRegistration::debug_reporting, false),
               Field(&TriggerRegistration::aggregation_coordinator_origin,
-                    absl::nullopt),
+                    std::nullopt),
               Field(&TriggerRegistration::aggregatable_trigger_config,
                     AggregatableTriggerConfig()))),
       },
@@ -126,22 +125,21 @@ TEST(TriggerRegistrationTest, Parse) {
       {
           "debug_key_invalid",
           R"json({"debug_key":"-5"})json",
-          ValueIs(Field(&TriggerRegistration::debug_key, absl::nullopt)),
+          ValueIs(Field(&TriggerRegistration::debug_key, std::nullopt)),
       },
       {
           "debug_key_wrong_type",
           R"json({"debug_key":5})json",
-          ValueIs(Field(&TriggerRegistration::debug_key, absl::nullopt)),
+          ValueIs(Field(&TriggerRegistration::debug_key, std::nullopt)),
       },
       {
           "event_triggers_valid",
           R"json({"event_trigger_data":[{}, {"trigger_data":"5"}]})json",
-          ValueIs(
-              Field(&TriggerRegistration::event_triggers,
-                    ElementsAre(EventTriggerData(),
-                                EventTriggerData(/*data=*/5, /*priority=*/0,
-                                                 /*dedup_key=*/absl::nullopt,
-                                                 FilterPair())))),
+          ValueIs(Field(&TriggerRegistration::event_triggers,
+                        ElementsAre(EventTriggerData(),
+                                    EventTriggerData(/*data=*/5, /*priority=*/0,
+                                                     /*dedup_key=*/std::nullopt,
+                                                     FilterPair())))),
       },
       {
           "event_triggers_wrong_type",
@@ -213,7 +211,8 @@ TEST(TriggerRegistrationTest, Parse) {
           "aggregatable_values_valid",
           R"json({"aggregatable_values":{"a":1}})json",
           ValueIs(Field(&TriggerRegistration::aggregatable_values,
-                        *AggregatableValues::Create({{"a", 1}}))),
+                        ElementsAre(*AggregatableValues::Create(
+                            {{"a", 1}}, FilterPair())))),
       },
       {
           "aggregatable_values_wrong_type",
@@ -318,7 +317,9 @@ TEST(TriggerRegistrationTest, ToJson) {
             r.aggregatable_dedup_keys = {
                 AggregatableDedupKey(/*dedup_key=*/1, FilterPair())};
             r.aggregatable_trigger_data = {AggregatableTriggerData()};
-            r.aggregatable_values = *AggregatableValues::Create({{"a", 2}});
+            r.aggregatable_values = {
+                *AggregatableValues::Create({{"a", 2}}, FilterPair()),
+                *AggregatableValues::Create({{"b", 3}}, FilterPair())};
             r.debug_key = 3;
             r.debug_reporting = true;
             r.event_triggers = {EventTriggerData()};
@@ -333,7 +334,7 @@ TEST(TriggerRegistrationTest, ToJson) {
             "aggregatable_source_registration_time": "exclude",
             "aggregatable_deduplication_keys": [{"deduplication_key":"1"}],
             "aggregatable_trigger_data": [{"key_piece":"0x0"}],
-            "aggregatable_values": {"a": 2},
+            "aggregatable_values": [{"values":{"a":2}},{"values":{"b":3}}],
             "debug_key": "3",
             "debug_reporting": true,
             "event_trigger_data": [{"priority":"0","trigger_data":"0"}],

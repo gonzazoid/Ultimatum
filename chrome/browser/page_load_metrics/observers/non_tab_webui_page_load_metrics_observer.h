@@ -11,13 +11,15 @@ namespace chrome {
 
 // Records Page Load Metrics for non-tab chrome:// pages such as side-panel
 // content and webUI based bubbles. This covers any webUI that goes through
-// `BubbleContentsWrapperT`
+// `WebUIContentsWrapperT`
 class NonTabPageLoadMetricsObserver
     : public page_load_metrics::PageLoadMetricsObserver {
  public:
   explicit NonTabPageLoadMetricsObserver(const std::string& webui_name);
 
   // page_load_metrics::PageLoadMetricsObserver:
+  void OnFirstContentfulPaintInPage(
+      const page_load_metrics::mojom::PageLoadTiming& timing) override;
   void OnComplete(
       const page_load_metrics::mojom::PageLoadTiming& timing) override;
 

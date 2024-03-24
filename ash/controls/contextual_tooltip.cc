@@ -64,6 +64,8 @@ std::string TooltipTypeToString(TooltipType type) {
       return "time_of_day_feature_banner";
     case TooltipType::kTimeOfDayWallpaperDialog:
       return "time_of_day_wallpaper_dialog";
+    case TooltipType::kSeaPenWallpaperTermsDialog:
+      return "sea_pen_wallpaper_terms_dialog";
   }
   return "invalid";
 }
@@ -102,8 +104,9 @@ const std::optional<base::TimeDelta>& GetMinIntervalOverride() {
 }  // namespace
 
 void RegisterProfilePrefs(PrefRegistrySimple* registry) {
-  if (features::AreContextualNudgesEnabled())
+  if (features::IsHideShelfControlsInTabletModeEnabled()) {
     registry->RegisterDictionaryPref(prefs::kContextualTooltips);
+  }
 }
 
 bool ShouldShowNudge(PrefService* prefs,
@@ -114,7 +117,7 @@ bool ShouldShowNudge(PrefService* prefs,
       *recheck_delay = delay;
   };
 
-  if (!features::AreContextualNudgesEnabled()) {
+  if (!features::IsHideShelfControlsInTabletModeEnabled()) {
     set_recheck_delay(base::TimeDelta());
     return false;
   }
@@ -137,7 +140,9 @@ bool ShouldShowNudge(PrefService* prefs,
       (type == TooltipType::kTimeOfDayFeatureBanner &&
        success_count >= kSuccessLimitTimeOfDayFeatureBanner) ||
       (type == TooltipType::kTimeOfDayWallpaperDialog &&
-       success_count >= kSuccessLimitTimeOfDayWallpaperDialog)) {
+       success_count >= kSuccessLimitTimeOfDayWallpaperDialog) ||
+      (type == TooltipType::kSeaPenWallpaperTermsDialog &&
+       success_count >= kSuccessLimitSeaPenWallpaperTermsDialog)) {
     set_recheck_delay(base::TimeDelta());
     return false;
   }

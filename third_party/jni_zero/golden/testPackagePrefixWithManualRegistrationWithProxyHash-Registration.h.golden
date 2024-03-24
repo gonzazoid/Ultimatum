@@ -15,8 +15,8 @@
 #include <iterator>
 
 #include "third_party/jni_zero/jni_export.h"
-#include "third_party/jni_zero/jni_int_wrapper.h"
 #include "third_party/jni_zero/jni_zero_helper.h"
+#include "third_party/jni_zero/jni_zero.h"
 
 
 // Step 1: Forward declarations (classes).
@@ -158,7 +158,7 @@ JNI_ZERO_COMPONENT_BUILD_EXPORT bool RegisterNative_this_is_a_package_prefix_J_N
   const int number_of_methods = std::size(kMethods_this_is_a_package_prefix_J_N);
 
   jni_zero::ScopedJavaLocalRef<jclass> native_clazz =
-      base::android::GetClass(env, "this/is/a/package/prefix/J/N");
+      jni_zero::GetClass(env, "this/is/a/package/prefix/J/N");
   if (env->RegisterNatives(
       native_clazz.obj(),
       kMethods_this_is_a_package_prefix_J_N,

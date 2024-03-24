@@ -76,6 +76,10 @@ mojom::ResourceType RequestContextToResourceType(
     case mojom::blink::RequestContextType::IMAGE_SET:
       return mojom::ResourceType::kImage;
 
+    // Json
+    case mojom::blink::RequestContextType::JSON:
+      return mojom::ResourceType::kJson;
+
     // Media
     case mojom::blink::RequestContextType::AUDIO:
     case mojom::blink::RequestContextType::VIDEO:
@@ -325,7 +329,7 @@ void PopulateResourceRequest(const ResourceRequestHead& src,
   dest->fetch_integrity = src.GetFetchIntegrity().Utf8();
   if (src.GetWebBundleTokenParams().has_value()) {
     dest->web_bundle_token_params =
-        absl::make_optional(network::ResourceRequest::WebBundleTokenParams(
+        std::make_optional(network::ResourceRequest::WebBundleTokenParams(
             GURL(src.GetWebBundleTokenParams()->bundle_url),
             src.GetWebBundleTokenParams()->token,
             ToCrossVariantMojoType(
@@ -358,7 +362,7 @@ void PopulateResourceRequest(const ResourceRequestHead& src,
   dest->required_ip_address_space = src.GetTargetAddressSpace();
 
   if (base::UnguessableToken window_id = src.GetFetchWindowId())
-    dest->fetch_window_id = absl::make_optional(window_id);
+    dest->fetch_window_id = std::make_optional(window_id);
 
   if (!src.GetDevToolsId().IsNull()) {
     dest->devtools_request_id = src.GetDevToolsId().Ascii();
@@ -385,9 +389,6 @@ void PopulateResourceRequest(const ResourceRequestHead& src,
   network_utils::SetAcceptHeader(dest->headers, request_destination);
 
   dest->original_destination = src.GetOriginalDestination();
-
-  if (dest->load_flags & net::LOAD_PREFETCH)
-    dest->corb_detachable = true;
 
   if (src.GetURLRequestExtraData()) {
     src.GetURLRequestExtraData()->CopyToResourceRequest(dest);

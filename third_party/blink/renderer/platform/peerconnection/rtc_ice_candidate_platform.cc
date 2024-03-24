@@ -23,26 +23,12 @@ String CandidateComponentToString(int component) {
   return String();
 }
 
-// Maps |type| to constants defined in
-// https://w3c.github.io/webrtc-pc/#rtcicecandidatetype-enum
-String CandidateTypeToString(const std::string& type) {
-  if (type == cricket::LOCAL_PORT_TYPE)
-    return String("host");
-  if (type == cricket::STUN_PORT_TYPE)
-    return String("srflx");
-  if (type == cricket::PRFLX_PORT_TYPE)
-    return String("prflx");
-  if (type == cricket::RELAY_PORT_TYPE)
-    return String("relay");
-  return String();
-}
-
 }  // namespace
 
 RTCIceCandidatePlatform::RTCIceCandidatePlatform(
     String candidate,
     String sdp_mid,
-    absl::optional<uint16_t> sdp_m_line_index,
+    std::optional<uint16_t> sdp_m_line_index,
     String username_fragment)
     : candidate_(std::move(candidate)),
       sdp_mid_(std::move(sdp_mid)),
@@ -54,7 +40,7 @@ RTCIceCandidatePlatform::RTCIceCandidatePlatform(
 RTCIceCandidatePlatform::RTCIceCandidatePlatform(
     String candidate,
     String sdp_mid,
-    absl::optional<uint16_t> sdp_m_line_index)
+    std::optional<uint16_t> sdp_m_line_index)
     : candidate_(std::move(candidate)),
       sdp_mid_(std::move(sdp_mid)),
       sdp_m_line_index_(std::move(sdp_m_line_index)) {
@@ -74,7 +60,14 @@ void RTCIceCandidatePlatform::PopulateFields(bool use_username_from_candidate) {
     address_ = String::FromUTF8(c.address().HostAsURIString().data());
     port_ = c.address().port();
   }
-  type_ = CandidateTypeToString(c.type());
+  // The `type_name()` property returns a name as specified in:
+  // https://datatracker.ietf.org/doc/html/rfc5245#section-15.1
+  // which is identical to:
+  // https://w3c.github.io/webrtc-pc/#rtcicecandidatetype-enum
+  auto type = c.type_name();
+  DCHECK(type == "host" || type == "srflx" || type == "prflx" ||
+         type == "relay");
+  type_ = String(type.data(), type.size());
   if (!c.tcptype().empty()) {
     tcp_type_ = String::FromUTF8(c.tcptype().data());
   }

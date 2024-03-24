@@ -616,7 +616,7 @@ void HTMLInputElement::SubtreeHasChanged() {
   input_type_view_->SubtreeHasChanged();
   // When typing in an input field, childrenChanged is not called, so we need to
   // force the directionality check.
-  CalculateAndAdjustAutoDirectionality(this);
+  CalculateAndAdjustAutoDirectionality();
 }
 
 FormControlType HTMLInputElement::FormControlType() const {
@@ -648,17 +648,17 @@ bool HTMLInputElement::CanStartSelection() const {
   return TextControlElement::CanStartSelection();
 }
 
-absl::optional<uint32_t> HTMLInputElement::selectionStartForBinding(
+std::optional<uint32_t> HTMLInputElement::selectionStartForBinding(
     ExceptionState& exception_state) const {
   if (!input_type_->SupportsSelectionAPI())
-    return absl::nullopt;
+    return std::nullopt;
   return TextControlElement::selectionStart();
 }
 
-absl::optional<uint32_t> HTMLInputElement::selectionEndForBinding(
+std::optional<uint32_t> HTMLInputElement::selectionEndForBinding(
     ExceptionState& exception_state) const {
   if (!input_type_->SupportsSelectionAPI())
-    return absl::nullopt;
+    return std::nullopt;
   return TextControlElement::selectionEnd();
 }
 
@@ -671,7 +671,7 @@ String HTMLInputElement::selectionDirectionForBinding(
 }
 
 void HTMLInputElement::setSelectionStartForBinding(
-    absl::optional<uint32_t> start,
+    std::optional<uint32_t> start,
     ExceptionState& exception_state) {
   if (!input_type_->SupportsSelectionAPI()) {
     exception_state.ThrowDOMException(
@@ -684,7 +684,7 @@ void HTMLInputElement::setSelectionStartForBinding(
 }
 
 void HTMLInputElement::setSelectionEndForBinding(
-    absl::optional<uint32_t> end,
+    std::optional<uint32_t> end,
     ExceptionState& exception_state) {
   if (!input_type_->SupportsSelectionAPI()) {
     exception_state.ThrowDOMException(
@@ -807,6 +807,11 @@ void HTMLInputElement::CollectStyleForPresentationAttribute(
     TextControlElement::CollectStyleForPresentationAttribute(name, value,
                                                              style);
   }
+}
+
+void HTMLInputElement::DidRecalcStyle(const StyleRecalcChange change) {
+  HTMLElement::DidRecalcStyle(change);
+  input_type_->DidRecalcStyle(change);
 }
 
 void HTMLInputElement::ParseAttribute(
@@ -1307,9 +1312,9 @@ void HTMLInputElement::SetValue(const String& value,
 
   // We set the Autofilled state again because setting the autofill value
   // triggers JavaScript events and the site may override the autofilled value,
-  // which resets the autofill state. Even if the website modifies the from
+  // which resets the autofill state. Even if the website modifies the form
   // control element's content during the autofill operation, we want the state
-  // to show as as autofilled.
+  // to show as autofilled.
   SetAutofillState(autofill_state);
 }
 
@@ -1345,7 +1350,7 @@ void HTMLInputElement::UpdateView() {
 ScriptValue HTMLInputElement::valueAsDate(ScriptState* script_state) const {
   UseCounter::Count(GetDocument(), WebFeature::kInputElementValueAsDateGetter);
   // TODO(crbug.com/988343): InputType::ValueAsDate() should return
-  // absl::optional<base::Time>.
+  // std::optional<base::Time>.
   double date = input_type_->ValueAsDate();
   v8::Isolate* isolate = script_state->GetIsolate();
   if (!std::isfinite(date))
@@ -1353,15 +1358,14 @@ ScriptValue HTMLInputElement::valueAsDate(ScriptState* script_state) const {
   return ScriptValue(
       isolate,
       ToV8Traits<IDLNullable<IDLDate>>::ToV8(
-          script_state, base::Time::FromMillisecondsSinceUnixEpoch(date))
-          .ToLocalChecked());
+          script_state, base::Time::FromMillisecondsSinceUnixEpoch(date)));
 }
 
 void HTMLInputElement::setValueAsDate(ScriptState* script_state,
                                       const ScriptValue& value,
                                       ExceptionState& exception_state) {
   UseCounter::Count(GetDocument(), WebFeature::kInputElementValueAsDateSetter);
-  absl::optional<base::Time> date =
+  std::optional<base::Time> date =
       NativeValueTraits<IDLNullable<IDLDate>>::NativeValue(
           script_state->GetIsolate(), value.V8Value(), exception_state);
   if (exception_state.HadException())
@@ -2004,12 +2008,11 @@ bool HTMLInputElement::SupportsPlaceholder() const {
   return input_type_->SupportsPlaceholder();
 }
 
-TextControlInnerEditorElement* HTMLInputElement::EnsureInnerEditorElement()
-    const {
-  return input_type_view_->EnsureInnerEditorElement();
+void HTMLInputElement::CreateInnerEditorElementIfNecessary() const {
+  input_type_view_->CreateShadowSubtreeIfNeeded();
 }
 
-void HTMLInputElement::UpdatePlaceholderText() {
+HTMLElement* HTMLInputElement::UpdatePlaceholderText() {
   return input_type_view_->UpdatePlaceholderText(!SuggestedValue().empty());
 }
 

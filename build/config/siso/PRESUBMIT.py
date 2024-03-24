@@ -15,13 +15,10 @@ def CheckTryjobFooters(input_api, output_api):
   message = (
       "Missing 'Cq-Include-Trybots:' field required for Siso config changes"
       "\nPlease add the following fields to run Siso tryjobs.\n\n"
-      "Cq-Include-Trybots: luci.chromium.try:chromeos-amd64-generic-siso-rel\n"
       "Cq-Include-Trybots: luci.chromium.try:fuchsia-binary-size-siso\n"
       "Cq-Include-Trybots: luci.chromium.try:ios-simulator-siso\n"
-      "Cq-Include-Trybots: luci.chromium.try:linux-chromeos-compile-siso-dbg\n"
       "Cq-Include-Trybots: luci.chromium.try:linux_chromium_asan_siso_rel_ng\n"
       "Cq-Include-Trybots: luci.chromium.try:linux_chromium_compile_siso_dbg_ng\n"
       "Cq-Include-Trybots: luci.chromium.try:mac-siso-rel\n"
-      "Cq-Include-Trybots: luci.chromium.try:win_chromium_compile_siso_dbg_ng\n"
   )
   return [output_api.PresubmitPromptWarning(message)]

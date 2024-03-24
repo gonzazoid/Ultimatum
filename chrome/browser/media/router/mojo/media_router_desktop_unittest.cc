@@ -121,8 +121,7 @@ std::string RouteMessageToString(const RouteMessagePtr& message) {
     const base::StringPiece src(
         reinterpret_cast<const char*>(message->data.value().data()),
         message->data.value().size());
-    base::Base64Encode(src, &result);
-    result = "binary=" + result;
+    result = "binary=" + base::Base64Encode(src);
   }
   return result;
 }
@@ -261,7 +260,7 @@ TEST_F(MediaRouterDesktopTest, CreateRouteFails) {
                                   kInvalidFrameNodeId, _, _))
       .WillOnce(WithArg<6>(
           Invoke([](mojom::MediaRouteProvider::CreateRouteCallback& cb) {
-            std::move(cb).Run(absl::nullopt, nullptr, std::string(kError),
+            std::move(cb).Run(std::nullopt, nullptr, std::string(kError),
                               mojom::RouteRequestResultCode::TIMED_OUT);
           })));
 
@@ -316,7 +315,7 @@ TEST_F(MediaRouterDesktopTest, JoinRouteTimedOutFails) {
                   kInvalidFrameNodeId, base::Milliseconds(kTimeoutMillis), _))
       .WillOnce(WithArg<5>(
           Invoke([](mojom::MediaRouteProvider::JoinRouteCallback& cb) {
-            std::move(cb).Run(absl::nullopt, nullptr, std::string(kError),
+            std::move(cb).Run(std::nullopt, nullptr, std::string(kError),
                               mojom::RouteRequestResultCode::TIMED_OUT);
           })));
 

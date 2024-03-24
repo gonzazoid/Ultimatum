@@ -19,27 +19,46 @@ BankAccount::BankAccount(int64_t instrument_id,
                          std::u16string_view bank_name,
                          std::u16string_view account_number_suffix,
                          AccountType account_type)
-    : PaymentInstrument(instrument_id, nickname, display_icon_url),
-      bank_name_(bank_name),
+    : bank_name_(bank_name),
       account_number_suffix_(account_number_suffix),
-      account_type_(account_type) {}
+      account_type_(account_type),
+      payment_instrument_(instrument_id,
+                          nickname,
+                          display_icon_url,
+                          DenseSet<PaymentInstrument::PaymentRail>(
+                              {PaymentInstrument::PaymentRail::kPix})) {}
 
 BankAccount::~BankAccount() = default;
 
-PaymentInstrument::InstrumentType BankAccount::GetInstrumentType() const {
-  return PaymentInstrument::InstrumentType::kBankAccount;
-}
+int BankAccount::Compare(const BankAccount& other) const {
+  int comparison = payment_instrument_.Compare(other.payment_instrument());
+  if (comparison != 0) {
+    return comparison;
+  }
 
-bool BankAccount::AddToDatabase(PaymentsAutofillTable* database) const {
-  return database->AddBankAccount(*this);
-}
+  comparison = bank_name_.compare(other.bank_name());
+  if (comparison < 0) {
+    return -1;
+  } else if (comparison > 0) {
+    return 1;
+  }
 
-bool BankAccount::UpdateInDatabase(PaymentsAutofillTable* database) const {
-  return database->UpdateBankAccount(*this);
-}
+  comparison = account_number_suffix_.compare(other.account_number_suffix());
+  if (comparison < 0) {
+    return -1;
+  } else if (comparison > 0) {
+    return 1;
+  }
 
-bool BankAccount::DeleteFromDatabase(PaymentsAutofillTable* database) const {
-  return database->RemoveBankAccount(*this);
+  if (account_type_ < other.account_type()) {
+    return -1;
+  }
+
+  if (account_type_ > other.account_type()) {
+    return 1;
+  }
+
+  return 0;
 }
 
 }  // namespace autofill

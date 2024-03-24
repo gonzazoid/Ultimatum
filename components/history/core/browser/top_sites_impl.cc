@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "base/check.h"
@@ -42,7 +43,6 @@
 #include "components/search_engines/search_terms_data.h"
 #include "components/search_engines/template_url.h"
 #include "components/search_engines/template_url_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace history {
@@ -113,8 +113,8 @@ struct SitesAndQueriesRequest
     return sites.has_value() && queries.has_value();
   }
 
-  absl::optional<MostVisitedURLList> sites;
-  absl::optional<KeywordSearchTermVisitList> queries;
+  std::optional<MostVisitedURLList> sites;
+  std::optional<KeywordSearchTermVisitList> queries;
   base::TimeTicks begin_time{base::TimeTicks::Now()};
 
  private:
@@ -506,23 +506,23 @@ void TopSitesImpl::SetTopSitesFromHistory(
     }
   }
 
-  auto most_visited_sites = std::move(*request->sites);
+  // Generate the final list of the most visited sites arranged in descending
+  // order of their scores. Exclude any site that is the search results page.
+  MostVisitedURLList most_visited_sites = std::move(*request->sites);
+  base::EraseIf(most_visited_sites, [&](const auto& site) {
+    return (template_url_service_ &&
+            template_url_service_->IsSearchResultsPageFromDefaultSearchProvider(
+                site.url)) ||
+           IsBlocked(site.url);
+  });
+  if (most_visited_sites.size() > kTopSitesNumber) {
+    most_visited_sites.resize(kTopSitesNumber);
+  }
 
   // If there are no more queries left, there is nothing left to do.
   if (most_repeated_queries.empty()) {
     SetTopSites(std::move(most_visited_sites), CALL_LOCATION_FROM_OTHER_PLACES);
     return;
-  }
-
-  // Generate the final list of the most visited sites arranged in descending
-  // order of their scores. Exclude any site that is the search results page.
-  base::EraseIf(most_visited_sites, [&](const auto& site) {
-    return template_url_service_->IsSearchResultsPageFromDefaultSearchProvider(
-               site.url) ||
-           IsBlocked(site.url);
-  });
-  if (most_visited_sites.size() > kTopSitesNumber) {
-    most_visited_sites.resize(kTopSitesNumber);
   }
 
   // If there are no more sites left, there is nothing left to do.

@@ -32,6 +32,7 @@
 #define THIRD_PARTY_BLINK_PUBLIC_PLATFORM_PLATFORM_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -49,7 +50,6 @@
 #include "media/base/audio_capturer_source.h"
 #include "media/base/audio_latency.h"
 #include "media/base/audio_renderer_sink.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/security/protocol_handler_security_level.h"
 #include "third_party/blink/public/common/user_agent/user_agent_metadata.h"
 #include "third_party/blink/public/platform/audio/web_audio_device_source_type.h"
@@ -120,7 +120,6 @@ class BrowserInterfaceBrokerProxy;
 class MediaInspectorContext;
 class MainThread;
 class ThreadSafeBrowserInterfaceBrokerProxy;
-class Thread;
 class URLLoaderThrottle;
 class UserMetricsAction;
 class WebAudioBus;
@@ -208,10 +207,14 @@ class BLINK_PLATFORM_EXPORT Platform {
   virtual base::TimeDelta GetHungRendererDelay() { return base::TimeDelta(); }
 
   // Creates an audio output device platform interface for Web Audio API.
+  // If `sample_rate` is not provided, the default sample rate of the sink will
+  // be used. If the provided `sample_rate` is not supported, the method will
+  // return nullptr.
   virtual std::unique_ptr<WebAudioDevice> CreateAudioDevice(
       const WebAudioSinkDescriptor& sink_descriptor,
       unsigned number_of_output_channels,
       const WebAudioLatencyHint& latency_hint,
+      std::optional<float> sample_rate,
       media::AudioRendererSink::RenderCallback*) {
     return nullptr;
   }
@@ -575,8 +578,8 @@ class BLINK_PLATFORM_EXPORT Platform {
 
   // WebRTC ----------------------------------------------------------
 
-  virtual absl::optional<double> GetWebRtcMaxCaptureFrameRate() {
-    return absl::nullopt;
+  virtual std::optional<double> GetWebRtcMaxCaptureFrameRate() {
+    return std::nullopt;
   }
 
   virtual scoped_refptr<media::AudioRendererSink> NewAudioRendererSink(

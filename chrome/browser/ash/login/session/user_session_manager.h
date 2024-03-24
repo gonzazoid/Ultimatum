@@ -31,7 +31,6 @@
 #include "chrome/browser/ash/login/signin/token_handle_util.h"
 #include "chrome/browser/ash/net/secure_dns_manager.h"
 #include "chrome/browser/ash/net/xdr_manager.h"
-#include "chrome/browser/ash/notifications/update_notification.h"
 #include "chrome/browser/ash/release_notes/release_notes_notification.h"
 #include "chrome/browser/ash/system_web_apps/apps/help_app/help_app_notification_controller.h"
 #include "chrome/browser/profiles/profile.h"
@@ -64,7 +63,6 @@ class TokenHandleFetcher;
 class EolNotification;
 class InputEventsBlocker;
 class U2FNotification;
-class UpdateNotificationShowingController;
 
 namespace test {
 class UserSessionManagerTestApi;
@@ -336,9 +334,6 @@ class UserSessionManager
   // Shows U2F notification if necessary.
   void MaybeShowU2FNotification();
 
-  // Shows update notification if necessary.
-  void MaybeShowUpdateNotification(Profile* profile);
-
   // Shows Help App release notes notification, if a notification for the help
   // app has not yet been shown in the current milestone.
   void MaybeShowHelpAppReleaseNotesNotification(Profile* profile);
@@ -365,7 +360,6 @@ class UserSessionManager
   // Observes the Device Account's LST and informs UserSessionManager about it.
   class DeviceAccountGaiaTokenObserver;
   friend class test::UserSessionManagerTestApi;
-  friend class UpdateNotificationTest;
   friend struct base::DefaultSingletonTraits<UserSessionManager>;
 
   using SigninSessionRestoreStateSet = std::set<AccountId>;
@@ -445,8 +439,10 @@ class UserSessionManager
   // profile is ready.
   void InitializeBrowser(Profile* profile);
 
-  // Launches the Help App depending on flags / prefs / user.
-  void MaybeLaunchHelpApp(Profile* profile) const;
+  // Launches the Help App depending on flags / prefs / user. This should only
+  // be used for the first run experience, i.e. after the user completed the
+  // OOBE setup.
+  void MaybeLaunchHelpAppForFirstRun(Profile* profile) const;
 
   // Start user onboarding if the user is new.
   bool MaybeStartNewUserOnboarding(Profile* profile);
@@ -544,11 +540,6 @@ class UserSessionManager
   // Get a reference the help app notification controller, creating it if it
   // doesn't exist.
   HelpAppNotificationController* GetHelpAppNotificationController(
-      Profile* profile);
-
-  // Get a reference of the `UpdateNotificationController`, creating it if it
-  // doesn't exist.
-  UpdateNotificationShowingController* GetUpdateNotificationShowingController(
       Profile* profile);
 
   base::WeakPtr<UserSessionManagerDelegate> delegate_;
@@ -650,13 +641,8 @@ class UserSessionManager
 
   std::unique_ptr<U2FNotification> u2f_notification_;
 
-  std::unique_ptr<UpdateNotification> update_notification_;
-
   std::unique_ptr<HelpAppNotificationController>
       help_app_notification_controller_;
-
-  std::unique_ptr<UpdateNotificationShowingController>
-      update_notification_showing_controller_;
 
   bool token_handle_backfill_tried_for_testing_ = false;
 

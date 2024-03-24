@@ -38,6 +38,7 @@ import android.widget.RelativeLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import androidx.test.espresso.action.ViewActions;
 import androidx.test.filters.MediumTest;
 
 import org.hamcrest.Description;
@@ -60,6 +61,7 @@ import org.chromium.base.test.util.Feature;
 import org.chromium.components.browser_ui.modaldialog.test.R;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.ui.modaldialog.ModalDialogProperties;
+import org.chromium.ui.modaldialog.ModalDialogProperties.ModalDialogButtonSpec;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.test.util.BlankUiTestActivity;
 import org.chromium.ui.test.util.DisableAnimationsTestRule;
@@ -146,10 +148,10 @@ public class ModalDialogViewTest {
         createModel(mModelBuilder);
         onView(withId(R.id.title_container)).check(matches(not(isDisplayed())));
         onView(withId(R.id.scrollable_title_container)).check(matches(not(isDisplayed())));
-        onView(withId(R.id.modal_dialog_scroll_view)).check(matches(not(isDisplayed())));
+        onView(withId(R.id.modal_dialog_title_scroll_view)).check(matches(not(isDisplayed())));
         onView(withId(R.id.message_paragraph_1)).check(matches(not(isDisplayed())));
         onView(withId(R.id.message_paragraph_2)).check(matches(not(isDisplayed())));
-        onView(withId(R.id.custom)).check(matches(not(isDisplayed())));
+        onView(withId(R.id.custom_view_not_in_scrollable)).check(matches(not(isDisplayed())));
         onView(withId(R.id.button_bar)).check(matches(not(isDisplayed())));
         onView(withId(R.id.positive_button)).check(matches(allOf(not(isDisplayed()), isEnabled())));
         onView(withId(R.id.negative_button)).check(matches(allOf(not(isDisplayed()), isEnabled())));
@@ -169,14 +171,14 @@ public class ModalDialogViewTest {
         onView(allOf(withId(R.id.title), withParent(withId(R.id.title_container))))
                 .check(matches(allOf(isDisplayed(), withText(R.string.title))));
         onView(withId(R.id.title_container)).check(matches(isDisplayed()));
-        onView(withId(R.id.modal_dialog_scroll_view)).check(matches(not(isDisplayed())));
+        onView(withId(R.id.modal_dialog_title_scroll_view)).check(matches(not(isDisplayed())));
 
         // Set an empty title and verify that title is not shown.
         TestThreadUtils.runOnUiThreadBlocking(() -> model.set(ModalDialogProperties.TITLE, ""));
         onView(allOf(withId(R.id.title), withParent(withId(R.id.title_container))))
                 .check(matches(not(isDisplayed())));
         onView(withId(R.id.title_container)).check(matches(not(isDisplayed())));
-        onView(withId(R.id.modal_dialog_scroll_view)).check(matches(not(isDisplayed())));
+        onView(withId(R.id.modal_dialog_title_scroll_view)).check(matches(not(isDisplayed())));
 
         // Set a String title and verify that title is displayed.
         TestThreadUtils.runOnUiThreadBlocking(
@@ -184,7 +186,7 @@ public class ModalDialogViewTest {
         onView(allOf(withId(R.id.title), withParent(withId(R.id.title_container))))
                 .check(matches(allOf(isDisplayed(), withText("My Test Title"))));
         onView(withId(R.id.title_container)).check(matches(isDisplayed()));
-        onView(withId(R.id.modal_dialog_scroll_view)).check(matches(not(isDisplayed())));
+        onView(withId(R.id.modal_dialog_title_scroll_view)).check(matches(not(isDisplayed())));
     }
 
     @Test
@@ -201,7 +203,7 @@ public class ModalDialogViewTest {
                 .check(matches(allOf(isDisplayed(), withText(R.string.title))));
         onView(withId(R.id.title_container)).check(matches(not(isDisplayed())));
         onView(withId(R.id.scrollable_title_container)).check(matches(isDisplayed()));
-        onView(withId(R.id.modal_dialog_scroll_view)).check(matches(isDisplayed()));
+        onView(withId(R.id.modal_dialog_title_scroll_view)).check(matches(isDisplayed()));
         onView(withId(R.id.message_paragraph_1)).check(matches(not(isDisplayed())));
 
         // Set title to not scrollable and verify that non-scrollable title is displayed.
@@ -211,7 +213,7 @@ public class ModalDialogViewTest {
                 .check(matches(allOf(isDisplayed(), withText(R.string.title))));
         onView(withId(R.id.title_container)).check(matches(isDisplayed()));
         onView(withId(R.id.scrollable_title_container)).check(matches(not(isDisplayed())));
-        onView(withId(R.id.modal_dialog_scroll_view)).check(matches(not(isDisplayed())));
+        onView(withId(R.id.modal_dialog_title_scroll_view)).check(matches(not(isDisplayed())));
         onView(withId(R.id.message_paragraph_1)).check(matches(not(isDisplayed())));
     }
 
@@ -254,7 +256,7 @@ public class ModalDialogViewTest {
                 createModel(mModelBuilder.with(ModalDialogProperties.MESSAGE_PARAGRAPH_1, msg));
         onView(withId(R.id.title_container)).check(matches(not(isDisplayed())));
         onView(withId(R.id.scrollable_title_container)).check(matches(not(isDisplayed())));
-        onView(withId(R.id.modal_dialog_scroll_view)).check(matches(isDisplayed()));
+        onView(withId(R.id.modal_dialog_title_scroll_view)).check(matches(isDisplayed()));
         onView(withId(R.id.message_paragraph_1))
                 .check(matches(allOf(isDisplayed(), withText(R.string.more))));
 
@@ -263,7 +265,7 @@ public class ModalDialogViewTest {
                 () -> model.set(ModalDialogProperties.MESSAGE_PARAGRAPH_1, ""));
         onView(withId(R.id.title_container)).check(matches(not(isDisplayed())));
         onView(withId(R.id.scrollable_title_container)).check(matches(not(isDisplayed())));
-        onView(withId(R.id.modal_dialog_scroll_view)).check(matches(not(isDisplayed())));
+        onView(withId(R.id.modal_dialog_title_scroll_view)).check(matches(not(isDisplayed())));
         onView(withId(R.id.message_paragraph_1)).check(matches(not(isDisplayed())));
 
         // Use CharSequence for the message_paragraph_1.
@@ -273,7 +275,7 @@ public class ModalDialogViewTest {
                 () -> model.set(ModalDialogProperties.MESSAGE_PARAGRAPH_1, sb));
         onView(withId(R.id.title_container)).check(matches(not(isDisplayed())));
         onView(withId(R.id.scrollable_title_container)).check(matches(not(isDisplayed())));
-        onView(withId(R.id.modal_dialog_scroll_view)).check(matches(isDisplayed()));
+        onView(withId(R.id.modal_dialog_title_scroll_view)).check(matches(isDisplayed()));
         onView(withId(R.id.message_paragraph_1))
                 .check(matches(allOf(isDisplayed(), withText(R.string.more))));
     }
@@ -288,7 +290,7 @@ public class ModalDialogViewTest {
                 createModel(mModelBuilder.with(ModalDialogProperties.MESSAGE_PARAGRAPH_2, msg));
         onView(withId(R.id.title_container)).check(matches(not(isDisplayed())));
         onView(withId(R.id.scrollable_title_container)).check(matches(not(isDisplayed())));
-        onView(withId(R.id.modal_dialog_scroll_view)).check(matches(isDisplayed()));
+        onView(withId(R.id.modal_dialog_title_scroll_view)).check(matches(isDisplayed()));
         onView(withId(R.id.message_paragraph_1)).check(matches(not(isDisplayed())));
         onView(withId(R.id.message_paragraph_2))
                 .check(matches(allOf(isDisplayed(), withText(msg))));
@@ -298,7 +300,7 @@ public class ModalDialogViewTest {
                 () -> model.set(ModalDialogProperties.MESSAGE_PARAGRAPH_2, ""));
         onView(withId(R.id.title_container)).check(matches(not(isDisplayed())));
         onView(withId(R.id.scrollable_title_container)).check(matches(not(isDisplayed())));
-        onView(withId(R.id.modal_dialog_scroll_view)).check(matches(not(isDisplayed())));
+        onView(withId(R.id.modal_dialog_title_scroll_view)).check(matches(not(isDisplayed())));
         onView(withId(R.id.message_paragraph_2)).check(matches(not(isDisplayed())));
     }
 
@@ -310,13 +312,13 @@ public class ModalDialogViewTest {
         PropertyModel model =
                 createModel(
                         mModelBuilder.with(ModalDialogProperties.CUSTOM_VIEW, mCustomTextView1));
-        onView(withId(R.id.custom))
+        onView(withId(R.id.custom_view_not_in_scrollable))
                 .check(matches(allOf(isDisplayed(), withChild(withId(R.id.test_view_one)))));
 
         // Change custom view.
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> model.set(ModalDialogProperties.CUSTOM_VIEW, mCustomTextView2));
-        onView(withId(R.id.custom))
+        onView(withId(R.id.custom_view_not_in_scrollable))
                 .check(
                         matches(
                                 allOf(
@@ -327,7 +329,7 @@ public class ModalDialogViewTest {
         // Set custom view to null.
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> model.set(ModalDialogProperties.CUSTOM_VIEW, null));
-        onView(withId(R.id.custom))
+        onView(withId(R.id.custom_view_not_in_scrollable))
                 .check(
                         matches(
                                 allOf(
@@ -350,7 +352,7 @@ public class ModalDialogViewTest {
                 () -> {
                     for (int i = 0; i < 100; i++) {
                         var textView = new TextView(activityTestRule.getActivity());
-                        textView.setText("" + i);
+                        textView.setText(String.valueOf(i));
                         linearLayout.addView(textView);
                     }
                     scrollView.addView(linearLayout);
@@ -491,6 +493,51 @@ public class ModalDialogViewTest {
     @Test
     @MediumTest
     @Feature({"ModalDialog"})
+    public void testButtonGroupIsScrollable() throws InterruptedException {
+        ModalDialogProperties.ModalDialogButtonSpec[] button_spec_list =
+                new ModalDialogButtonSpec[20];
+        for (int i = 0; i < button_spec_list.length; i++) {
+            button_spec_list[i] =
+                    new ModalDialogProperties.ModalDialogButtonSpec(
+                            1000 + i, // ModalDialogProperties.ButtonType defines a button enum.
+                            // Choose values outside the defined range.
+                            sResources.getString(R.string.ok));
+        }
+
+        createModel(
+                mModelBuilder.with(
+                        ModalDialogProperties.BUTTON_GROUP_BUTTON_SPEC_LIST, button_spec_list));
+
+        // Check that the first button is visible.
+        onView(
+                        (withTagValue(
+                                is(
+                                        ModalDialogView.getTagForButtonType(
+                                                button_spec_list[0].getButtonType())))))
+                .check(matches(isDisplayed()));
+
+        // Swipe up a few times.
+        for (int i = 0; i < 3; i++) {
+            onView(
+                            withTagValue(
+                                    is(
+                                            ModalDialogView.getTagForButtonType(
+                                                    button_spec_list[3].getButtonType()))))
+                    .perform(ViewActions.swipeUp());
+        }
+
+        // Check that the first button is no longer visible.
+        onView(
+                        (withTagValue(
+                                is(
+                                        ModalDialogView.getTagForButtonType(
+                                                button_spec_list[0].getButtonType())))))
+                .check(matches(not(isDisplayed())));
+    }
+
+    @Test
+    @MediumTest
+    @Feature({"ModalDialog"})
     public void testTouchFilter() {
         createModel(
                 mModelBuilder
@@ -527,12 +574,29 @@ public class ModalDialogViewTest {
         onView(
                         allOf(
                                 withTagValue(
-                                        is(ModalDialogProperties.ButtonType.POSITIVE_EPHEMERAL)),
+                                        is(
+                                                ModalDialogView.getTagForButtonType(
+                                                        ModalDialogProperties.ButtonType
+                                                                .POSITIVE_EPHEMERAL))),
                                 isDisplayed()))
                 .check(matches(touchFilterEnabled()));
-        onView(allOf(withTagValue(is(ModalDialogProperties.ButtonType.POSITIVE)), isDisplayed()))
+        onView(
+                        allOf(
+                                withTagValue(
+                                        is(
+                                                ModalDialogView.getTagForButtonType(
+                                                        ModalDialogProperties.ButtonType
+                                                                .POSITIVE))),
+                                isDisplayed()))
                 .check(matches(touchFilterEnabled()));
-        onView(allOf(withTagValue(is(ModalDialogProperties.ButtonType.NEGATIVE)), isDisplayed()))
+        onView(
+                        allOf(
+                                withTagValue(
+                                        is(
+                                                ModalDialogView.getTagForButtonType(
+                                                        ModalDialogProperties.ButtonType
+                                                                .NEGATIVE))),
+                                isDisplayed()))
                 .check(matches(touchFilterEnabled()));
     }
 
@@ -575,12 +639,29 @@ public class ModalDialogViewTest {
         onView(
                         allOf(
                                 withTagValue(
-                                        is(ModalDialogProperties.ButtonType.POSITIVE_EPHEMERAL)),
+                                        is(
+                                                ModalDialogView.getTagForButtonType(
+                                                        ModalDialogProperties.ButtonType
+                                                                .POSITIVE_EPHEMERAL))),
                                 isDisplayed()))
                 .check(matches(not(touchFilterEnabled())));
-        onView(allOf(withTagValue(is(ModalDialogProperties.ButtonType.POSITIVE)), isDisplayed()))
+        onView(
+                        allOf(
+                                withTagValue(
+                                        is(
+                                                ModalDialogView.getTagForButtonType(
+                                                        ModalDialogProperties.ButtonType
+                                                                .POSITIVE))),
+                                isDisplayed()))
                 .check(matches(not(touchFilterEnabled())));
-        onView(allOf(withTagValue(is(ModalDialogProperties.ButtonType.NEGATIVE)), isDisplayed()))
+        onView(
+                        allOf(
+                                withTagValue(
+                                        is(
+                                                ModalDialogView.getTagForButtonType(
+                                                        ModalDialogProperties.ButtonType
+                                                                .NEGATIVE))),
+                                isDisplayed()))
                 .check(matches(not(touchFilterEnabled())));
     }
 

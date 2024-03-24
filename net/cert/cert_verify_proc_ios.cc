@@ -6,6 +6,8 @@
 
 #include <CommonCrypto/CommonDigest.h>
 
+#include <string_view>
+
 #include "base/apple/foundation_util.h"
 #include "base/apple/osstatus_logging.h"
 #include "base/apple/scoped_cftyperef.h"
@@ -249,9 +251,9 @@ void GetCertChainInfo(CFArrayRef cert_chain, CertVerifyResult* verify_result) {
       return;
     }
 
-    base::StringPiece spki_bytes;
+    std::string_view spki_bytes;
     if (!asn1::ExtractSPKIFromDERCert(
-            base::StringPiece(
+            std::string_view(
                 reinterpret_cast<const char*>(CFDataGetBytePtr(der_data.get())),
                 CFDataGetLength(der_data.get())),
             &spki_bytes)) {
@@ -388,14 +390,14 @@ CertStatus CertVerifyProcIOS::GetCertFailureStatusFromTrust(SecTrustRef trust) {
 
 CertVerifyProcIOS::~CertVerifyProcIOS() = default;
 
-int CertVerifyProcIOS::VerifyInternal(
-    X509Certificate* cert,
-    const std::string& hostname,
-    const std::string& ocsp_response,
-    const std::string& sct_list,
-    int flags,
-    CertVerifyResult* verify_result,
-    const NetLogWithSource& net_log) {
+int CertVerifyProcIOS::VerifyInternal(X509Certificate* cert,
+                                      const std::string& hostname,
+                                      const std::string& ocsp_response,
+                                      const std::string& sct_list,
+                                      int flags,
+                                      CertVerifyResult* verify_result,
+                                      const NetLogWithSource& net_log,
+                                      std::optional<base::Time> time_now) {
   ScopedCFTypeRef<CFArrayRef> trust_policies;
   OSStatus status = CreateTrustPolicies(&trust_policies);
   if (status)
@@ -422,7 +424,7 @@ int CertVerifyProcIOS::VerifyInternal(
   ScopedCFTypeRef<CFMutableArrayRef> sct_array_ref;
   if (!sct_list.empty()) {
     if (__builtin_available(iOS 12.1.1, *)) {
-      std::vector<base::StringPiece> decoded_sct_list;
+      std::vector<std::string_view> decoded_sct_list;
       if (ct::DecodeSCTList(sct_list, &decoded_sct_list)) {
         sct_array_ref.reset(CFArrayCreateMutable(kCFAllocatorDefault,
                                                  decoded_sct_list.size(),

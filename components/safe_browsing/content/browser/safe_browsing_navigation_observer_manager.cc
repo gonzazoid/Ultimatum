@@ -98,11 +98,9 @@ std::string ShortOriginForReporting(const std::string& url) {
   GURL gurl(url);
   if (gurl.SchemeIsLocal()) {
     std::string sha_url = crypto::SHA256HashString(url);
-    return gurl.scheme() + "://" +
-           base::HexEncode(sha_url.data(), sha_url.size());
-  } else {
-    return gurl.DeprecatedGetOriginAsURL().spec();
+    return gurl.scheme() + "://" + base::HexEncode(sha_url);
   }
+  return gurl.DeprecatedGetOriginAsURL().spec();
 }
 
 base::TimeDelta GetNavigationFootprintTTL() {
@@ -151,7 +149,7 @@ NavigationEventList::NavigationEventList(std::size_t size_limit)
 
 NavigationEventList::~NavigationEventList() = default;
 
-absl::optional<size_t> NavigationEventList::FindNavigationEvent(
+std::optional<size_t> NavigationEventList::FindNavigationEvent(
     const base::Time& last_event_timestamp,
     const GURL& target_url,
     const GURL& target_main_frame_url,
@@ -159,10 +157,10 @@ absl::optional<size_t> NavigationEventList::FindNavigationEvent(
     const content::GlobalRenderFrameHostId& outermost_main_frame_id,
     size_t start_index) {
   if (target_url.is_empty() && target_main_frame_url.is_empty())
-    return absl::nullopt;
+    return std::nullopt;
 
   if (navigation_events_.size() == 0)
-    return absl::nullopt;
+    return std::nullopt;
 
   // If target_url is empty, we should back trace navigation based on its
   // main frame URL instead.
@@ -238,7 +236,7 @@ absl::optional<size_t> NavigationEventList::FindNavigationEvent(
       return result_index;
     }
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 NavigationEvent* NavigationEventList::FindPendingNavigationEvent(
@@ -282,7 +280,7 @@ size_t NavigationEventList::FindRetargetingNavigationEvent(
 
 void NavigationEventList::RecordNavigationEvent(
     std::unique_ptr<NavigationEvent> nav_event,
-    absl::optional<CopyPasteEntry> last_copy_paste_entry) {
+    std::optional<CopyPasteEntry> last_copy_paste_entry) {
   // Skip page refresh and in-page navigation.
   if (nav_event->source_url == nav_event->GetDestinationUrl() &&
       nav_event->source_tab_id == nav_event->target_tab_id)
@@ -833,7 +831,7 @@ void SafeBrowsingNavigationObserverManager::CleanUpCopyData() {
   if (last_copy_paste_entry_.has_value()) {
     if (IsEventExpired(last_copy_paste_entry_.value().recorded_time_,
                        GetNavigationFootprintTTL())) {
-      last_copy_paste_entry_ = absl::nullopt;
+      last_copy_paste_entry_ = std::nullopt;
     }
   }
 }

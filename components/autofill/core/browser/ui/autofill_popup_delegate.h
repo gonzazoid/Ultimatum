@@ -5,11 +5,8 @@
 #ifndef COMPONENTS_AUTOFILL_CORE_BROWSER_UI_AUTOFILL_POPUP_DELEGATE_H_
 #define COMPONENTS_AUTOFILL_CORE_BROWSER_UI_AUTOFILL_POPUP_DELEGATE_H_
 
-#include <string>
-
 #include "base/functional/callback_forward.h"
 #include "components/autofill/core/browser/filling_product.h"
-#include "components/autofill/core/browser/ui/popup_types.h"
 #include "components/autofill/core/browser/ui/suggestion.h"
 #include "components/autofill/core/common/aliases.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
@@ -57,16 +54,10 @@ class AutofillPopupDelegate {
 
   // Delete the described suggestion. Returns true if something was deleted,
   // or false if deletion is not allowed.
-  virtual bool RemoveSuggestion(const std::u16string& value,
-                                PopupItemId popup_item_id,
-                                Suggestion::BackendId backend_id) = 0;
+  virtual bool RemoveSuggestion(const Suggestion& suggestion) = 0;
 
   // Informs the delegate that the Autofill previewed form should be cleared.
   virtual void ClearPreviewedForm() = 0;
-
-  // Returns the type of the popup being shown.
-  // TODO(b/316859406): Replace with `GetMainFillingProduct`.
-  virtual PopupType GetPopupType() const = 0;
 
   // Returns the main filling product the popup being shown, which is a function
   // of the list of suggestions being shown.

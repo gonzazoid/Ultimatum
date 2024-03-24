@@ -5,8 +5,10 @@
 #include "chrome/browser/web_applications/os_integration/os_integration_manager.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
+#include "base/atomic_ref_count.h"
 #include "base/auto_reset.h"
 #include "base/barrier_callback.h"
 #include "base/barrier_closure.h"
@@ -45,15 +47,10 @@
 #include "chrome/common/chrome_features.h"
 #include "components/webapps/common/web_app_id.h"
 #include "content/public/browser/browser_thread.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_MAC)
 #include "chrome/browser/web_applications/app_shim_registry_mac.h"
 #endif
-
-namespace {
-bool g_suppress_os_hooks_for_testing_ = false;
-}  // namespace
 
 namespace web_app {
 
@@ -65,6 +62,15 @@ OsHooksErrors GetFinalErrorBitsetFromCollection(
     final_errors = final_errors | error;
   }
   return final_errors;
+}
+
+base::AtomicRefCount& GetSuppressCount() {
+  static base::AtomicRefCount g_ref_count;
+  return g_ref_count;
+}
+
+bool AreOsHooksSuppressedForTesting() {
+  return !GetSuppressCount().IsZero();
 }
 }  // namespace
 
@@ -79,20 +85,20 @@ bool AreSubManagersExecuteEnabled() {
           features::OsIntegrationSubManagersStage::kExecuteAndWriteConfig);
 }
 
-OsIntegrationManager::ScopedSuppressForTesting::ScopedSuppressForTesting()
-    :
+OsIntegrationManager::ScopedSuppressForTesting::ScopedSuppressForTesting() {
 // Creating OS hooks on ChromeOS doesn't write files to disk, so it's
 // unnecessary to suppress and it provides better crash coverage.
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
-      scope_(&g_suppress_os_hooks_for_testing_, true)
-#else
-      scope_(&g_suppress_os_hooks_for_testing_, false)
+#if !BUILDFLAG(IS_CHROMEOS)
+  GetSuppressCount().Increment();
 #endif
-{
 }
 
-OsIntegrationManager::ScopedSuppressForTesting::~ScopedSuppressForTesting() =
-    default;
+OsIntegrationManager::ScopedSuppressForTesting::~ScopedSuppressForTesting() {
+#if !BUILDFLAG(IS_CHROMEOS)
+  CHECK(!GetSuppressCount().IsZero());
+  GetSuppressCount().Decrement();
+#endif
+}
 
 // This barrier is designed to accumulate errors from calls to OS hook
 // operations, and call the completion callback when all OS hook operations
@@ -213,7 +219,7 @@ void OsIntegrationManager::Start() {
 void OsIntegrationManager::Synchronize(
     const webapps::AppId& app_id,
     base::OnceClosure callback,
-    absl::optional<SynchronizeOsOptions> options) {
+    std::optional<SynchronizeOsOptions> options) {
   first_synchronize_called_ = true;
 
   // This is usually called to clean up OS integration states on the OS,
@@ -277,7 +283,7 @@ void OsIntegrationManager::InstallOsHooks(
   // If the "Execute" step is enabled for sub-managers, then the 'old' os
   // integration path needs to be turned off so that os integration doesn't get
   // done twice.
-  if (g_suppress_os_hooks_for_testing_ || AreSubManagersExecuteEnabled()) {
+  if (AreOsHooksSuppressedForTesting() || AreSubManagersExecuteEnabled()) {
     OsHooksErrors os_hooks_errors;
     base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), os_hooks_errors));
@@ -333,7 +339,7 @@ void OsIntegrationManager::UninstallOsHooks(const webapps::AppId& app_id,
   // If the "Execute" step is enabled for sub-managers, then the 'old' os
   // integration path needs to be turned off so that os integration doesn't get
   // done twice.
-  if (g_suppress_os_hooks_for_testing_ || AreSubManagersExecuteEnabled()) {
+  if (AreOsHooksSuppressedForTesting() || AreSubManagersExecuteEnabled()) {
     OsHooksErrors os_hooks_errors;
     base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), os_hooks_errors));
@@ -396,7 +402,7 @@ void OsIntegrationManager::UpdateOsHooks(
   // If the "Execute" step is enabled for sub-managers, then the 'old' os
   // integration path needs to be turned off so that os integration doesn't get
   // done twice.
-  if (g_suppress_os_hooks_for_testing_ || AreSubManagersExecuteEnabled()) {
+  if (AreOsHooksSuppressedForTesting() || AreSubManagersExecuteEnabled()) {
     OsHooksErrors os_hooks_errors;
     base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), os_hooks_errors));
@@ -455,11 +461,11 @@ const apps::FileHandlers* OsIntegrationManager::GetEnabledFileHandlers(
   return file_handler_manager_->GetEnabledFileHandlers(app_id);
 }
 
-absl::optional<GURL> OsIntegrationManager::TranslateProtocolUrl(
+std::optional<GURL> OsIntegrationManager::TranslateProtocolUrl(
     const webapps::AppId& app_id,
     const GURL& protocol_url) {
   if (!protocol_handler_manager_)
-    return absl::optional<GURL>();
+    return std::optional<GURL>();
 
   return protocol_handler_manager_->TranslateProtocolUrl(app_id, protocol_url);
 }
@@ -965,7 +971,7 @@ std::unique_ptr<ShortcutInfo> OsIntegrationManager::BuildShortcutInfo(
 
 void OsIntegrationManager::StartSubManagerExecutionIfRequired(
     const webapps::AppId& app_id,
-    absl::optional<SynchronizeOsOptions> options,
+    std::optional<SynchronizeOsOptions> options,
     std::unique_ptr<proto::WebAppOsIntegrationState> desired_states,
     base::OnceClosure on_all_execution_done) {
   // This can never be a use-case where we execute OS integration registration/
@@ -991,7 +997,7 @@ void OsIntegrationManager::StartSubManagerExecutionIfRequired(
       &OsIntegrationManager::WriteStateToDB, weak_ptr_factory_.GetWeakPtr(),
       app_id, std::move(desired_states), std::move(on_all_execution_done));
 
-  if (g_suppress_os_hooks_for_testing_ || !AreSubManagersExecuteEnabled()) {
+  if (AreOsHooksSuppressedForTesting() || !AreSubManagersExecuteEnabled()) {
     base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, std::move(write_state_to_db));
     return;
@@ -1004,7 +1010,7 @@ void OsIntegrationManager::StartSubManagerExecutionIfRequired(
 
 void OsIntegrationManager::ExecuteNextSubmanager(
     const webapps::AppId& app_id,
-    absl::optional<SynchronizeOsOptions> options,
+    std::optional<SynchronizeOsOptions> options,
     proto::WebAppOsIntegrationState* desired_state,
     const proto::WebAppOsIntegrationState current_state,
     size_t index,

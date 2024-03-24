@@ -13,6 +13,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -70,6 +71,7 @@
 #include "chrome/browser/ash/policy/dlp/dlp_files_controller_ash.h"
 #include "chrome/browser/ash/policy/dlp/files_policy_notification_manager.h"
 #include "chrome/browser/ash/policy/dlp/files_policy_notification_manager_factory.h"
+#include "chrome/browser/ash/policy/local_user_files/policy_utils.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/chromeos/policy/dlp/dlp_file_destination.h"
 #include "chrome/browser/chromeos/policy/dlp/dlp_rules_manager.h"
@@ -129,7 +131,7 @@ namespace {
 using file_manager::Volume;
 using file_manager::VolumeManager;
 
-std::string Redact(const base::StringPiece s) {
+std::string Redact(const std::string_view s) {
   return LOG_IS_ON(INFO) ? base::StrCat({"'", s, "'"}) : "(redacted)";
 }
 
@@ -215,28 +217,28 @@ ash::disks::FormatFileSystemType ApiFormatFileSystemToChromeEnum(
   return ash::disks::FormatFileSystemType::kUnknown;
 }
 
-std::optional<file_manager::io_task::OperationType> IOTaskTypeToChromeEnum(
-    api::file_manager_private::IOTaskType type) {
+std::optional<file_manager::io_task::OperationType> IoTaskTypeToChromeEnum(
+    api::file_manager_private::IoTaskType type) {
   switch (type) {
-    case api::file_manager_private::IOTaskType::kCopy:
+    case api::file_manager_private::IoTaskType::kCopy:
       return file_manager::io_task::OperationType::kCopy;
-    case api::file_manager_private::IOTaskType::kDelete:
+    case api::file_manager_private::IoTaskType::kDelete:
       return file_manager::io_task::OperationType::kDelete;
-    case api::file_manager_private::IOTaskType::kEmptyTrash:
+    case api::file_manager_private::IoTaskType::kEmptyTrash:
       return file_manager::io_task::OperationType::kEmptyTrash;
-    case api::file_manager_private::IOTaskType::kExtract:
+    case api::file_manager_private::IoTaskType::kExtract:
       return file_manager::io_task::OperationType::kExtract;
-    case api::file_manager_private::IOTaskType::kMove:
+    case api::file_manager_private::IoTaskType::kMove:
       return file_manager::io_task::OperationType::kMove;
-    case api::file_manager_private::IOTaskType::kRestore:
+    case api::file_manager_private::IoTaskType::kRestore:
       return file_manager::io_task::OperationType::kRestore;
-    case api::file_manager_private::IOTaskType::kRestoreToDestination:
+    case api::file_manager_private::IoTaskType::kRestoreToDestination:
       return file_manager::io_task::OperationType::kRestoreToDestination;
-    case api::file_manager_private::IOTaskType::kTrash:
+    case api::file_manager_private::IoTaskType::kTrash:
       return file_manager::io_task::OperationType::kTrash;
-    case api::file_manager_private::IOTaskType::kZip:
+    case api::file_manager_private::IoTaskType::kZip:
       return file_manager::io_task::OperationType::kZip;
-    case api::file_manager_private::IOTaskType::kNone:
+    case api::file_manager_private::IoTaskType::kNone:
       return {};
   }
   NOTREACHED() << "Unknown I/O task type " << base::to_underlying(type);
@@ -592,7 +594,7 @@ FileManagerPrivateGetSizeStatsFunction::Run() {
   }
 
   // For fusebox volumes, get the underlying (aka regular) volume.
-  const auto fusebox = base::StringPiece(file_manager::util::kFuseBox);
+  const auto fusebox = std::string_view(file_manager::util::kFuseBox);
   if (base::StartsWith(volume->file_system_type(), fusebox)) {
     std::string volume_id = params->volume_id;
 
@@ -630,9 +632,9 @@ FileManagerPrivateGetSizeStatsFunction::Run() {
             this));
   } else if (volume->type() == file_manager::VOLUME_TYPE_DOCUMENTS_PROVIDER) {
     std::string authority;
-    std::string root_document_id;
+    std::string root_id;
     if (!arc::ParseDocumentsProviderPath(volume->mount_path(), &authority,
-                                         &root_document_id)) {
+                                         &root_id)) {
       return RespondNow(Error("File path was invalid"));
     }
 
@@ -642,7 +644,7 @@ FileManagerPrivateGetSizeStatsFunction::Run() {
     if (!root_map) {
       return RespondNow(Error("File not found"));
     }
-    auto* root = root_map->Lookup(authority, root_document_id);
+    auto* root = root_map->Lookup(authority, root_id);
     if (!root) {
       return RespondNow(Error("File not found"));
     }
@@ -1514,10 +1516,11 @@ void FileManagerPrivateInternalSearchFilesFunction::RunFileSearchByName(
     ash::RecentSource::FileType file_type,
     size_t max_results,
     OnResultsReadyCallback callback) {
-  // If trash is enabled for the given profile, generate all trash paths that
-  // are to be excluded when searching for matching files.
+  // If trash is enabled for the given profile and by local user files policy,
+  // generate all trash paths that are to be excluded when searching for
+  // matching files.
   std::vector<base::FilePath> excluded_paths;
-  if (file_manager::trash::IsTrashEnabledForProfile((profile))) {
+  if (file_manager::trash::IsTrashEnabledForProfile(profile)) {
     auto enabled_trash_locations =
         file_manager::trash::GenerateEnabledTrashLocationsForProfile(
             profile, /*base_path=*/base::FilePath());
@@ -1689,7 +1692,7 @@ FileManagerPrivateInternalStartIOTaskFunction::Run() {
     source_urls.push_back(std::move(cracked_url));
   }
 
-  auto type = IOTaskTypeToChromeEnum(params->type);
+  auto type = IoTaskTypeToChromeEnum(params->type);
   if (!type) {
     return RespondNow(Error("Invalid I/O task type given."));
   }

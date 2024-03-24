@@ -28,7 +28,6 @@
 #include "base/threading/thread.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "content/public/test/no_renderer_crashes_assertion.h"
 #include "content/public/test/test_host_resolver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/dns/public/dns_over_https_config.h"
@@ -45,10 +44,6 @@ class FilePath;
 class TimeDelta;
 }  // namespace base
 
-namespace chromeos {
-class ScopedDisableCrosapiForTesting;
-}
-
 namespace ui {
 class ScopedAnimationDurationScaleMode;
 }
@@ -56,6 +51,7 @@ class ScopedAnimationDurationScaleMode;
 namespace content {
 class BrowserMainParts;
 class ContentMainDelegate;
+class NoRendererCrashesAssertion;
 class WebContents;
 
 class BrowserTestBase : public ::testing::Test {
@@ -293,10 +289,6 @@ class BrowserTestBase : public ::testing::Test {
   // class to ensure that SetUp was called. If it's not called, the test will
   // not run and report a false positive result.
   bool set_up_called_ = false;
-
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  std::unique_ptr<chromeos::ScopedDisableCrosapiForTesting> disable_crosapi_;
-#endif
 
   std::unique_ptr<storage::QuotaSettings> quota_settings_;
 

@@ -66,7 +66,7 @@ ResourceRecordPtr CreateResource(int64_t resource_id,
   EXPECT_TRUE(url.is_valid());
   return mojom::ServiceWorkerResourceRecord::New(
       resource_id, url, size_bytes,
-      /*sha256_checksum=*/absl::nullopt);
+      /*sha256_checksum=*/std::nullopt);
 }
 
 ServiceWorkerDatabase* CreateDatabase(const base::FilePath& path) {
@@ -3620,7 +3620,7 @@ TEST(ServiceWorkerDatabaseTest, RouterRulesStoreRestore) {
         blink::ServiceWorkerRouterCondition::WithUrlPattern(url_pattern);
 
     blink::ServiceWorkerRouterSource source;
-    source.type = blink::ServiceWorkerRouterSource::Type::kNetwork;
+    source.type = network::mojom::ServiceWorkerRouterSourceType::kNetwork;
     source.network_source = blink::ServiceWorkerRouterNetworkSource{};
     rule.sources.emplace_back(source);
     router_rules.rules.emplace_back(rule);
@@ -3641,7 +3641,7 @@ TEST(ServiceWorkerDatabaseTest, RouterRulesStoreRestore) {
         blink::ServiceWorkerRouterCondition::WithOrCondition(or_condition);
 
     blink::ServiceWorkerRouterSource source;
-    source.type = blink::ServiceWorkerRouterSource::Type::kNetwork;
+    source.type = network::mojom::ServiceWorkerRouterSourceType::kNetwork;
     source.network_source = blink::ServiceWorkerRouterNetworkSource{};
     rule.sources.emplace_back(source);
     router_rules.rules.emplace_back(rule);
@@ -3659,7 +3659,7 @@ TEST(ServiceWorkerDatabaseTest, RouterRulesStoreRestore) {
     }
 
     blink::ServiceWorkerRouterSource source;
-    source.type = blink::ServiceWorkerRouterSource::Type::kNetwork;
+    source.type = network::mojom::ServiceWorkerRouterSourceType::kNetwork;
     source.network_source = blink::ServiceWorkerRouterNetworkSource{};
     rule.sources.emplace_back(source);
     router_rules.rules.emplace_back(rule);
@@ -3711,11 +3711,11 @@ TEST(ServiceWorkerDatabaseTest, RouterRulesStoreRestore) {
             blink::ServiceWorkerRouterRunningStatusCondition::
                 RunningStatusEnum::kRunning;
       }
-      rule.condition = {url_pattern, request, running_status, absl::nullopt};
+      rule.condition = {url_pattern, request, running_status, std::nullopt};
     }
 
     blink::ServiceWorkerRouterSource source;
-    source.type = blink::ServiceWorkerRouterSource::Type::kNetwork;
+    source.type = network::mojom::ServiceWorkerRouterSourceType::kNetwork;
     source.network_source = blink::ServiceWorkerRouterNetworkSource{};
     rule.sources.emplace_back(source);
     router_rules.rules.emplace_back(rule);
@@ -3744,7 +3744,7 @@ TEST(ServiceWorkerDatabaseTest, RouterRulesStoreRestore) {
         blink::ServiceWorkerRouterCondition::WithUrlPattern(url_pattern);
 
     blink::ServiceWorkerRouterSource source;
-    source.type = blink::ServiceWorkerRouterSource::Type::kNetwork;
+    source.type = network::mojom::ServiceWorkerRouterSourceType::kNetwork;
     source.network_source = blink::ServiceWorkerRouterNetworkSource{};
     rule.sources.emplace_back(source);
     router_rules.rules.emplace_back(rule);
@@ -3773,7 +3773,7 @@ TEST(ServiceWorkerDatabaseTest, RouterRulesStoreRestore) {
         blink::ServiceWorkerRouterCondition::WithUrlPattern(url_pattern);
 
     blink::ServiceWorkerRouterSource source;
-    source.type = blink::ServiceWorkerRouterSource::Type::kNetwork;
+    source.type = network::mojom::ServiceWorkerRouterSourceType::kNetwork;
     source.network_source = blink::ServiceWorkerRouterNetworkSource{};
     rule.sources.emplace_back(source);
     router_rules.rules.emplace_back(rule);
@@ -3797,31 +3797,31 @@ TEST(ServiceWorkerDatabaseTest, RouterRulesStoreRestore) {
 
     {
       blink::ServiceWorkerRouterSource source;
-      source.type = blink::ServiceWorkerRouterSource::Type::kNetwork;
+      source.type = network::mojom::ServiceWorkerRouterSourceType::kNetwork;
       source.network_source.emplace();
       rule.sources.push_back(source);
     }
     {
       blink::ServiceWorkerRouterSource source;
-      source.type = blink::ServiceWorkerRouterSource::Type::kRace;
+      source.type = network::mojom::ServiceWorkerRouterSourceType::kRace;
       source.race_source.emplace();
       rule.sources.push_back(source);
     }
     {
       blink::ServiceWorkerRouterSource source;
-      source.type = blink::ServiceWorkerRouterSource::Type::kFetchEvent;
+      source.type = network::mojom::ServiceWorkerRouterSourceType::kFetchEvent;
       source.fetch_event_source.emplace();
       rule.sources.push_back(source);
     }
     {  // cache source without cache_name.
       blink::ServiceWorkerRouterSource source;
-      source.type = blink::ServiceWorkerRouterSource::Type::kCache;
+      source.type = network::mojom::ServiceWorkerRouterSourceType::kCache;
       source.cache_source.emplace();
       rule.sources.push_back(source);
     }
     {  // cache source with cache_name.
       blink::ServiceWorkerRouterSource source;
-      source.type = blink::ServiceWorkerRouterSource::Type::kCache;
+      source.type = network::mojom::ServiceWorkerRouterSourceType::kCache;
       blink::ServiceWorkerRouterCacheSource cache_source;
       cache_source.cache_name = "example_cache_name";
       source.cache_source = cache_source;
@@ -3844,7 +3844,7 @@ TEST(ServiceWorkerDatabaseTest, RouterRulesStoreRestore) {
         blink::ServiceWorkerRouterCondition::WithUrlPattern(url_pattern);
 
     blink::ServiceWorkerRouterSource source;
-    source.type = blink::ServiceWorkerRouterSource::Type::kNetwork;
+    source.type = network::mojom::ServiceWorkerRouterSourceType::kNetwork;
     source.network_source = blink::ServiceWorkerRouterNetworkSource{};
     rule.sources.emplace_back(source);
     router_rules.rules.push_back(rule);
@@ -3923,7 +3923,7 @@ TEST(ServiceWorkerDatabaseTest, RouterRulesLegacyPathname) {
     }
 
     const auto& registered_url_pattern =
-        std::get<absl::optional<blink::SafeUrlPattern>&>(
+        std::get<std::optional<blink::SafeUrlPattern>&>(
             registration->router_rules->rules[0].condition.get());
     EXPECT_EQ(url_pattern, registered_url_pattern);
   }

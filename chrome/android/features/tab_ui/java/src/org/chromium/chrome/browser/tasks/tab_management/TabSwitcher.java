@@ -20,6 +20,8 @@ import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tasks.tab_management.TabManagementDelegate.TabSwitcherType;
 import org.chromium.components.browser_ui.widget.gesture.BackPressHandler;
 
+import java.util.List;
+
 /** Interface for the Tab Switcher. */
 public interface TabSwitcher {
     /** Defines an interface to pass out tab selecting event. */
@@ -43,8 +45,9 @@ public interface TabSwitcher {
     /** Called when native initialization is completed. */
     void initWithNative();
 
-    // TODO(crbug/1322733): Remove the following interfaces when we find a better way to notify the
-    // layout that the GTS animation is finished.
+    // TODO(crbug/1505772): Post AndroidHub launch this will only be used by
+    // SingleTabSwitcherCoordinator. Consider deprecating this interface and migrating
+    // SingleTabSwitcherCoordinator's usage to be internal to start_surface/.
     /** An observer that is notified when the TabSwitcher view state changes. */
     interface TabSwitcherViewObserver {
         /** Called when tab switcher starts showing. */
@@ -60,6 +63,9 @@ public interface TabSwitcher {
         void finishedHiding();
     }
 
+    // TODO(crbug/1505772): Post AndroidHub launch this will only be used by
+    // SingleTabSwitcherCoordinator. Consider deprecating this interface and migrating
+    // SingleTabSwitcherCoordinator's usage to be internal to start_surface/.
     /** Interface to control the TabSwitcher. */
     interface Controller extends BackPressHandler {
         /**
@@ -142,6 +148,9 @@ public interface TabSwitcher {
      */
     Controller getController();
 
+    // TODO(crbug/1505772): Post AndroidHub launch this will only be used by
+    // SingleTabSwitcherCoordinator. Consider deprecating this interface and migrating
+    // SingleTabSwitcherCoordinator's usage to be internal to start_surface/.
     /** Interface to access the Tab List. */
     interface TabListDelegate {
         /** Returns the dynamic resource ID of the TabSwitcher RecyclerView. */
@@ -233,4 +242,16 @@ public interface TabSwitcher {
 
     /** Set the tab switcher's current RecyclerViewPosition. */
     void setTabSwitcherRecyclerViewPosition(RecyclerViewPosition recyclerViewPosition);
+
+    /**
+     * Show the Quick Delete animation on the tab list.
+     *
+     * @param onAnimationEnd Runnable that is invoked when the animation is completed.
+     * @param tabs The tabs to fade with the animation. These tabs will get closed after the
+     *     animation is complete.
+     */
+    void showQuickDeleteAnimation(Runnable onAnimationEnd, List<Tab> tabs);
+
+    /** Refresh the tab switcher's tab list to display any out-of-band updates properly. */
+    void refreshTabList();
 }

@@ -44,9 +44,9 @@ class ASH_EXPORT LockScreenMediaControlsView
       public media_session::mojom::MediaControllerImageObserver,
       public base::PowerSuspendObserver,
       public ui::ImplicitAnimationObserver {
- public:
-  METADATA_HEADER(LockScreenMediaControlsView);
+  METADATA_HEADER(LockScreenMediaControlsView, views::View)
 
+ public:
   using MediaControlsEnabled = base::RepeatingCallback<bool()>;
 
   // The reason why the media controls were hidden. This is recorded in
@@ -99,7 +99,7 @@ class ASH_EXPORT LockScreenMediaControlsView
 
   // views::View:
   gfx::Size CalculatePreferredSize() const override;
-  void Layout() override;
+  void Layout(PassKey) override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   void OnMouseEntered(const ui::MouseEvent& event) override;
   void OnMouseExited(const ui::MouseEvent& event) override;

@@ -79,6 +79,8 @@ EmeCodec ToAudioEmeCodec(AudioCodec codec) {
       return EME_CODEC_AC3;
     case AudioCodec::kAC4:
       return EME_CODEC_AC4;
+    case AudioCodec::kIAMF:
+      return EME_CODEC_IAMF;
     case AudioCodec::kMpegHAudio:
       return EME_CODEC_MPEG_H_AUDIO;
     case AudioCodec::kDTS:
@@ -728,7 +730,7 @@ bool IsSupportedKeySystemWithInitDataType(const std::string& key_system,
 }
 
 std::string GetKeySystemNameForUMA(const std::string& key_system,
-                                   absl::optional<bool> use_hw_secure_codecs) {
+                                   std::optional<bool> use_hw_secure_codecs) {
   // Here we maintain a short list of known key systems to facilitate UMA
   // reporting. Mentioned key systems are not necessarily supported by
   // the current platform.

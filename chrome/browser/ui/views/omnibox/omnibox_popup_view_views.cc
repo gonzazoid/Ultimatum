@@ -314,16 +314,17 @@ void OmniboxPopupViewViews::UpdatePopupAppearance() {
         static_cast<OmniboxRowView*>(children()[i]);
     row_view->SetVisible(true);
 
-    // Show the header if it's distinct from the previous match's header.
     const AutocompleteMatch& match = GetMatchAtIndex(i);
     std::u16string current_row_header =
         match.suggestion_group_id.has_value()
             ? autocomplete_controller->result().GetHeaderForSuggestionGroup(
                   match.suggestion_group_id.value())
             : u"";
+    bool row_hidden = controller()->IsSuggestionHidden(match);
     bool group_hidden = match.suggestion_group_id.has_value() &&
                         controller()->IsSuggestionGroupHidden(
                             match.suggestion_group_id.value());
+    // Show the header if it's distinct from the previous match's header.
     if (!current_row_header.empty() &&
         current_row_header != previous_row_header) {
       // Set toggle state of the header based on whether the group is hidden.
@@ -336,7 +337,7 @@ void OmniboxPopupViewViews::UpdatePopupAppearance() {
     OmniboxResultView* const result_view = row_view->result_view();
     result_view->SetMatch(match);
     // Set visibility of the result view based on whether the group is hidden.
-    result_view->SetVisible(!group_hidden);
+    result_view->SetVisible(!group_hidden && !row_hidden);
 
     const SkBitmap* bitmap = model()->GetPopupRichSuggestionBitmap(i);
     if (bitmap) {

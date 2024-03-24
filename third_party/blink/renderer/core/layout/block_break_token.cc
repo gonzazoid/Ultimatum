@@ -104,6 +104,16 @@ const InlineBreakToken* BlockBreakToken::InlineBreakTokenFor(
   return nullptr;
 }
 
+void BlockBreakToken::MutableForOofFragmentation::Merge(
+    const BlockBreakToken& new_break_token) {
+  if (LayoutUnit monolithic_overflow = new_break_token.MonolithicOverflow()) {
+    DCHECK_GT(monolithic_overflow, LayoutUnit());
+    DCHECK(break_token_.data_);
+    break_token_.data_->monolithic_overflow =
+        std::max(break_token_.data_->monolithic_overflow, monolithic_overflow);
+  }
+}
+
 #if DCHECK_IS_ON()
 
 String BlockBreakToken::ToString() const {
@@ -154,8 +164,9 @@ void BlockBreakToken::TraceAfterDispatch(Visitor* visitor) const {
   visitor->Trace(data_);
   // Looking up |ChildBreakTokensInternal()| in Trace() here is safe because
   // |const_num_children_| is const.
-  for (auto& child : ChildBreakTokensInternal())
-    visitor->Trace(child);
+  for (wtf_size_t i = 0; i < const_num_children_; ++i) {
+    visitor->Trace(child_break_tokens_[i]);
+  }
   BreakToken::TraceAfterDispatch(visitor);
 }
 

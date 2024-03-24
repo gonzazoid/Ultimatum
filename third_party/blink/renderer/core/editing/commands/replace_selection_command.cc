@@ -895,8 +895,9 @@ static bool FollowBlockElementStyle(const Node* node) {
 
 // Remove style spans before insertion if they are unnecessary.  It's faster
 // because we'll avoid doing a layout.
-static void HandleStyleSpansBeforeInsertion(ReplacementFragment& fragment,
-                                            const Position& insertion_pos) {
+void ReplaceSelectionCommand::HandleStyleSpansBeforeInsertion(
+    ReplacementFragment& fragment,
+    const Position& insertion_pos) {
   Node* top_node = fragment.FirstChild();
   if (!IsA<HTMLSpanElement>(top_node))
     return;
@@ -923,7 +924,8 @@ static void HandleStyleSpansBeforeInsertion(ReplacementFragment& fragment,
       return;
   }
 
-  if (FollowBlockElementStyle(node)) {
+  if (GetInputType() != InputEvent::InputType::kInsertFromPaste &&
+      FollowBlockElementStyle(node)) {
     fragment.RemoveNodePreservingChildren(wrapping_style_span);
     return;
   }
@@ -1092,7 +1094,8 @@ void ReplaceSelectionCommand::InsertParagraphSeparatorIfNeeds(
 
   const bool start_is_inside_mail_blockquote = EnclosingNodeOfType(
       selection.Start(), IsMailHTMLBlockquoteElement, kCanCrossEditingBoundary);
-  const bool selection_is_plain_text = !IsRichlyEditablePosition(selection.Base());
+  const bool selection_is_plain_text =
+      !IsRichlyEditablePosition(selection.Anchor());
   Element* const current_root = selection.RootEditableElement();
 
   if ((selection_start_was_start_of_paragraph &&
@@ -1217,7 +1220,7 @@ void ReplaceSelectionCommand::DoApply(EditingState* editing_state) {
   const bool start_is_inside_mail_blockquote = EnclosingNodeOfType(
       selection.Start(), IsMailHTMLBlockquoteElement, kCanCrossEditingBoundary);
   const bool selection_is_plain_text =
-      !IsRichlyEditablePosition(selection.Base());
+      !IsRichlyEditablePosition(selection.Anchor());
   const bool selection_end_was_end_of_paragraph =
       IsEndOfParagraph(selection.VisibleEnd());
   const bool selection_start_was_start_of_paragraph =

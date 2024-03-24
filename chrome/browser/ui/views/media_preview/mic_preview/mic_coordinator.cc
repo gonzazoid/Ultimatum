@@ -4,24 +4,45 @@
 
 #include "chrome/browser/ui/views/media_preview/mic_preview/mic_coordinator.h"
 
+#include <algorithm>
 #include <memory>
 #include <utility>
 
 #include "base/functional/bind.h"
 #include "base/ranges/algorithm.h"
+#include "chrome/browser/media/prefs/capture_device_ranking.h"
 #include "chrome/browser/ui/views/media_preview/media_view.h"
 #include "media/audio/audio_device_description.h"
 #include "media/base/audio_parameters.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 
+namespace {
+
+std::optional<std::string> GetRealDefaultDeviceId(
+    const std::vector<media::AudioDeviceDescription>& infos) {
+  auto real_default_device =
+      std::find_if(infos.begin(), infos.end(), [](const auto& info) {
+        return !media::AudioDeviceDescription::IsDefaultDevice(
+                   info.unique_id) &&
+               info.is_system_default;
+      });
+  return real_default_device == infos.end()
+             ? std::nullopt
+             : std::make_optional(real_default_device->unique_id);
+}
+}  // namespace
+
 MicCoordinator::MicCoordinator(views::View& parent_view,
                                bool needs_borders,
-                               const std::vector<std::string>& eligible_mic_ids)
+                               const std::vector<std::string>& eligible_mic_ids,
+                               PrefService& prefs)
     : mic_mediator_(
+          prefs,
           base::BindRepeating(&MicCoordinator::OnAudioSourceInfosReceived,
                               base::Unretained(this))),
       combobox_model_({}),
-      eligible_mic_ids_(eligible_mic_ids) {
+      eligible_mic_ids_(eligible_mic_ids),
+      prefs_(&prefs) {
   auto* mic_view = parent_view.AddChildView(std::make_unique<MediaView>());
   mic_view_tracker_.SetView(mic_view);
   // Safe to use base::Unretained() because `this` owns / outlives
@@ -48,15 +69,22 @@ void MicCoordinator::OnAudioSourceInfosReceived(
     return;
   }
 
-  eligible_device_infos_.clear();
+  auto real_default_device_id = GetRealDefaultDeviceId(device_infos);
+  auto eligible_mic_ids = eligible_mic_ids_;
+  if (real_default_device_id &&
+      eligible_mic_ids.contains(
+          media::AudioDeviceDescription::kDefaultDeviceId)) {
+    eligible_mic_ids.insert(*real_default_device_id);
+  }
 
+  eligible_device_infos_.clear();
   for (const auto& device_info : device_infos) {
-    if (device_info.unique_id ==
-        media::AudioDeviceDescription::kDefaultDeviceId) {
+    if (real_default_device_id &&
+        media::AudioDeviceDescription::IsDefaultDevice(device_info.unique_id)) {
       continue;
     }
-    if (!eligible_mic_ids_.empty() &&
-        !eligible_mic_ids_.contains(device_info.unique_id)) {
+    if (!eligible_mic_ids.empty() &&
+        !eligible_mic_ids.contains(device_info.unique_id)) {
       continue;
     }
     eligible_device_infos_.emplace_back(device_info);
@@ -98,6 +126,25 @@ void MicCoordinator::ConnectAudioStream(
                                                device_id,
                                                device_params->sample_rate());
   }
+}
+
+void MicCoordinator::UpdateDevicePreferenceRanking() {
+  if (active_device_id_.empty()) {
+    return;
+  }
+
+  auto active_device_iter =
+      std::find_if(eligible_device_infos_.begin(), eligible_device_infos_.end(),
+                   [&active_device_id = std::as_const(active_device_id_)](
+                       const media::AudioDeviceDescription info) {
+                     return info.unique_id == active_device_id;
+                   });
+  // The machinery that sets `active_device_id_` and `eligible_device_infos_`
+  // ensures that this condition is true.
+  CHECK(active_device_iter != eligible_device_infos_.end());
+
+  media_prefs::UpdateAudioDevicePreferenceRanking(*prefs_, active_device_iter,
+                                                  eligible_device_infos_);
 }
 
 void MicCoordinator::ResetViewController() {

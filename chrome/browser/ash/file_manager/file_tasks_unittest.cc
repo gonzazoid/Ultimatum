@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <memory>
 #include <set>
+#include <string_view>
 #include <utility>
 
 #include "ash/constants/ash_features.h"
@@ -36,7 +37,6 @@
 #include "chrome/browser/ash/file_manager/virtual_tasks/fake_virtual_task.h"
 #include "chrome/browser/ash/guest_os/guest_os_mime_types_service.h"
 #include "chrome/browser/ash/guest_os/guest_os_mime_types_service_factory.h"
-#include "chrome/browser/ash/login/users/scoped_test_user_manager.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
 #include "chrome/browser/chromeos/policy/dlp/dlp_rules_manager_factory.h"
 #include "chrome/browser/chromeos/policy/dlp/test/mock_dlp_rules_manager.h"
@@ -275,7 +275,7 @@ class FileManagerFileTaskPolicyDefaultHandlersTest
   ResultingTasks* resulting_tasks() { return resulting_tasks_.get(); }
   std::vector<extensions::EntryInfo>& entries() { return entries_; }
 
-  void CheckCorrectPolicyAssignment(base::StringPiece default_app_id) {
+  void CheckCorrectPolicyAssignment(std::string_view default_app_id) {
     ASSERT_EQ(resulting_tasks()->policy_default_handler_status,
               PolicyDefaultHandlerStatus::kDefaultHandlerAssignedByPolicy);
     ASSERT_EQ(base::ranges::count_if(resulting_tasks()->tasks, &IsDefaultTask),
@@ -286,7 +286,7 @@ class FileManagerFileTaskPolicyDefaultHandlersTest
   }
 
   void CheckCorrectPolicyAssignmentForVirtualTask(
-      base::StringPiece virtual_task_id) {
+      std::string_view virtual_task_id) {
     ASSERT_EQ(resulting_tasks()->policy_default_handler_status,
               PolicyDefaultHandlerStatus::kDefaultHandlerAssignedByPolicy);
     ASSERT_EQ(base::ranges::count_if(resulting_tasks()->tasks, &IsDefaultTask),

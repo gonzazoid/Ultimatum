@@ -56,6 +56,7 @@ import org.chromium.base.ThreadUtils;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.supplier.OneshotSupplierImpl;
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.base.test.util.Features;
 import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.ActivityTabProvider;
@@ -91,7 +92,6 @@ import org.chromium.chrome.browser.webapps.WebappRegistry;
 import org.chromium.chrome.features.start_surface.StartSurface;
 import org.chromium.chrome.features.start_surface.StartSurfaceCoordinator;
 import org.chromium.chrome.features.start_surface.StartSurfaceState;
-import org.chromium.chrome.test.util.browser.Features;
 import org.chromium.components.bookmarks.BookmarkId;
 import org.chromium.components.browser_ui.accessibility.PageZoomCoordinator;
 import org.chromium.components.browser_ui.site_settings.WebsitePreferenceBridge;
@@ -187,6 +187,7 @@ public class AppMenuPropertiesDelegateUnitTest {
         when(mTab.getProfile()).thenReturn(mProfile);
         when(mWebContents.getNavigationController()).thenReturn(mNavigationController);
         when(mNavigationController.getUseDesktopUserAgent()).thenReturn(false);
+        when(mTabModelSelector.isTabStateInitialized()).thenReturn(true);
         when(mTabModelSelector.getCurrentModel()).thenReturn(mTabModel);
         when(mTabModelSelector.getModel(false)).thenReturn((mTabModel));
         when(mTabModelSelector.getModel(true)).thenReturn((mIncognitoTabModel));
@@ -249,6 +250,9 @@ public class AppMenuPropertiesDelegateUnitTest {
     private void setupFeatureDefaults() {
         setShoppingListEligible(false);
         setShoppingListEligible(false);
+        mTestValues.addFeatureFlagOverride(ChromeFeatureList.PWA_UNIVERSAL_INSTALL_UI, false);
+        mTestValues.addFeatureFlagOverride(
+                ChromeFeatureList.SYNC_SHOW_IDENTITY_ERRORS_FOR_SIGNED_IN_USERS, false);
         FeatureList.setTestValues(mTestValues);
     }
 
@@ -338,6 +342,8 @@ public class AppMenuPropertiesDelegateUnitTest {
             R.id.new_incognito_tab_menu_id,
             R.id.divider_line_id,
             R.id.open_history_menu_id,
+            R.id.quick_delete_menu_id,
+            R.id.quick_delete_divider_line_id,
             R.id.downloads_menu_id,
             R.id.all_bookmarks_menu_id,
             R.id.recent_tabs_menu_id,
@@ -368,6 +374,8 @@ public class AppMenuPropertiesDelegateUnitTest {
             R.id.new_incognito_tab_menu_id,
             R.id.divider_line_id,
             R.id.open_history_menu_id,
+            R.id.quick_delete_menu_id,
+            R.id.quick_delete_divider_line_id,
             R.id.downloads_menu_id,
             R.id.all_bookmarks_menu_id,
             R.id.recent_tabs_menu_id,
@@ -388,6 +396,8 @@ public class AppMenuPropertiesDelegateUnitTest {
             R.string.menu_new_incognito_tab,
             0,
             R.string.menu_history,
+            R.string.menu_quick_delete,
+            0,
             R.string.menu_downloads,
             R.string.menu_bookmarks,
             R.string.menu_recent_tabs,
@@ -439,6 +449,8 @@ public class AppMenuPropertiesDelegateUnitTest {
             R.id.new_incognito_tab_menu_id,
             R.id.divider_line_id,
             R.id.open_history_menu_id,
+            R.id.quick_delete_menu_id,
+            R.id.quick_delete_divider_line_id,
             R.id.downloads_menu_id,
             R.id.all_bookmarks_menu_id,
             R.id.recent_tabs_menu_id,
@@ -459,6 +471,8 @@ public class AppMenuPropertiesDelegateUnitTest {
             R.string.menu_new_incognito_tab,
             0,
             R.string.menu_history,
+            R.string.menu_quick_delete,
+            0,
             R.string.menu_downloads,
             R.string.menu_bookmarks,
             R.string.menu_recent_tabs,
@@ -506,6 +520,8 @@ public class AppMenuPropertiesDelegateUnitTest {
             R.id.new_incognito_tab_menu_id,
             R.id.divider_line_id,
             R.id.open_history_menu_id,
+            R.id.quick_delete_menu_id,
+            R.id.quick_delete_divider_line_id,
             R.id.downloads_menu_id,
             R.id.all_bookmarks_menu_id,
             R.id.recent_tabs_menu_id,
@@ -560,6 +576,7 @@ public class AppMenuPropertiesDelegateUnitTest {
             R.id.new_tab_menu_id,
             R.id.new_incognito_tab_menu_id,
             R.id.open_history_menu_id,
+            R.id.quick_delete_menu_id,
             R.id.downloads_menu_id,
             R.id.all_bookmarks_menu_id,
             R.id.recent_tabs_menu_id,
@@ -588,6 +605,7 @@ public class AppMenuPropertiesDelegateUnitTest {
             R.id.new_incognito_tab_menu_id,
             R.id.close_all_tabs_menu_id,
             tabSelectionEditorMenuItemId,
+            R.id.quick_delete_menu_id,
             R.id.preferences_id
         };
         assertMenuItemsAreEqual(menu, expectedItems);
@@ -653,6 +671,8 @@ public class AppMenuPropertiesDelegateUnitTest {
             R.id.new_incognito_tab_menu_id,
             R.id.divider_line_id,
             R.id.open_history_menu_id,
+            R.id.quick_delete_menu_id,
+            R.id.quick_delete_divider_line_id,
             R.id.downloads_menu_id,
             R.id.all_bookmarks_menu_id,
             R.id.recent_tabs_menu_id,
@@ -1013,6 +1033,24 @@ public class AppMenuPropertiesDelegateUnitTest {
 
     @Test
     @SmallTest
+    public void testSelectTabsOption_IsDisabled_InRegularMode_TabStateNotInitialized() {
+        setUpMocksForOverviewMenu(LayoutType.TAB_SWITCHER);
+        when(mTabModelSelector.getCurrentModel()).thenReturn(mTabModel);
+        prepareMocksForGroupTabsOnTabModel(mTabModel);
+
+        when(mTabModelSelector.isTabStateInitialized()).thenReturn(false);
+
+        Menu menu = createTestMenu();
+        mAppMenuPropertiesDelegate.prepareMenu(menu, null);
+        // Check group tabs enabled decision in regular mode doesn't depend on re-auth.
+        verify(mIncognitoReauthControllerMock, times(0)).isReauthPageShowing();
+
+        MenuItem item = menu.findItem(R.id.menu_select_tabs);
+        assertFalse(item.isEnabled());
+    }
+
+    @Test
+    @SmallTest
     public void testSelectTabsOption_IsEnabledOneTab_InRegularMode_IndependentOfIncognitoReauth() {
         setUpMocksForOverviewMenu(LayoutType.TAB_SWITCHER);
         when(mTabModelSelector.getCurrentModel()).thenReturn(mTabModel);
@@ -1071,6 +1109,8 @@ public class AppMenuPropertiesDelegateUnitTest {
             R.id.new_incognito_tab_menu_id,
             R.id.divider_line_id,
             R.id.open_history_menu_id,
+            R.id.quick_delete_menu_id,
+            R.id.quick_delete_divider_line_id,
             R.id.downloads_menu_id,
             R.id.all_bookmarks_menu_id,
             R.id.recent_tabs_menu_id,

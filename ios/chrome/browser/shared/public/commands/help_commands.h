@@ -11,21 +11,47 @@
 // Dismisses all bubbles.
 - (void)hideAllHelpBubbles;
 
+// Invoked when a gestural in-product help view is visible but the user has
+// tapped outside of it. Do nothing if invoked when there is no IPH view.
+- (void)handleTapOutsideOfVisibleGestureInProductHelp;
+
 // Shows a help bubble for the share button, if eligible.
 // The eligibility can depend on the UI hierarchy at the moment, the
 // configuration and the display history of the bubble, etc.
 - (void)presentShareButtonHelpBubbleIfEligible;
 
-// Logs the event in feature engagement tracker and, if eligible, shows a
-// gesture-based in-product help for the pull-to-refresh feature once the active
-// tab has finished loading a URL.
-//
-// Should be invoked when the user performs a multi-gesture page refresh. The
-// eligibility can depend on the UI hierarchy at the moment, the configuration
-// and the display history of the IPH, etc.
-// TODO(crbug.com/1467873): Refactor out of this protocol; commands in here are
-// not supposed to behave asynchronously.
-- (void)notifyMultiGestureRefreshAndShowHelpBubbleIfEligible;
+// Optionally presents a bubble associated with the tab grid iph. If the feature
+// engagement tracker determines it is valid to show the new tab tip, then it
+// initializes `tabGridIPHBubblePresenter` and presents the bubble. If it is
+// not valid to show the new tab tip, `tabGridIPHBubblePresenter` is set to
+// `nil` and no bubble is shown. This method requires that `self.browserState`
+// is not NULL.
+- (void)presentTabGridToolbarItemBubble;
+
+// Optionally presents a bubble associated with the new tab iph. If the feature
+// engagement tracker determines it is valid to show the new tab tip, then it
+// initializes `openNewTabIPHBubblePresenter` and presents the bubble. If it is
+// not valid to show the new tab tip, `openNewTabIPHBubblePresenter` is set to
+// `nil` and no bubble is shown. This method requires that `self.browserState`
+// is not NULL.
+- (void)presentNewTabToolbarItemBubble;
+
+// Optionally presents a gesture IPH associated with
+// the pull-to-refresh feature. If the feature engagement tracker determines the
+// pull-to-refresh tip should be shown, then it initializes
+// `pullToRefreshGestureIPH` and presents a GestureInProductHelpView,
+// otherwise it sets `pullToRefreshGestureIPH` to `nil` and no gestural tip
+// is shown.
+- (void)presentPullToRefreshGestureInProductHelp;
+
+// Optionally presents a full screen IPH associated with the swipe to navigate
+// back/forward feature. If the feature engagement tracker determines this tip
+// should be shown, then it initializes `backForwardSwipeGestureIPH` and
+// presents a GestureInProductHelpView, otherwise it sets
+// `backForwardSwipeGestureIPH` to `nil` and no gestural tip is shown.
+// TODO(crbug.com/1467873): Rewrite comment; the displayed IPH might NOT be a
+// GestureInProductHelpView.
+- (void)presentBackForwardSwipeGestureInProductHelp;
 
 @end
 

@@ -7,15 +7,13 @@
 #include <stddef.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 
+#include "base/base64url.h"
 #include "base/command_line.h"
 #include "base/functional/bind.h"
 #include "base/location.h"
-#include "base/task/single_thread_task_runner.h"
-#include "base/test/scoped_feature_list.h"
-
-#include "base/base64url.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
@@ -23,6 +21,7 @@
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/test/values_test_util.h"
 #include "components/omnibox/browser/autocomplete_controller.h"
@@ -32,6 +31,7 @@
 #include "components/omnibox/browser/autocomplete_provider_listener.h"
 #include "components/omnibox/browser/keyword_provider.h"
 #include "components/omnibox/browser/mock_autocomplete_provider_client.h"
+#include "components/omnibox/browser/omnibox_feature_configs.h"
 #include "components/omnibox/browser/omnibox_prefs.h"
 #include "components/omnibox/browser/omnibox_triggered_feature_service.h"
 #include "components/omnibox/browser/search_provider.h"
@@ -45,7 +45,6 @@
 #include "components/search_engines/template_url_service.h"
 #include "components/search_engines/template_url_service_client.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/metrics_proto/omnibox_event.pb.h"
 #include "third_party/metrics_proto/omnibox_focus_type.pb.h"
 #include "third_party/omnibox_proto/types.pb.h"
@@ -346,12 +345,12 @@ class AutocompleteProviderTest : public testing::Test {
 
   struct SuggestionGroupsTestData {
     omnibox::GroupConfigMap suggestion_groups_map;
-    std::vector<absl::optional<omnibox::GroupId>> suggestion_group_ids;
+    std::vector<std::optional<omnibox::GroupId>> suggestion_group_ids;
   };
 
   struct SearchboxStatsTestData {
     const AutocompleteMatch::Type match_type;
-    absl::optional<omnibox::GroupId> group_id;
+    std::optional<omnibox::GroupId> group_id;
     const omnibox::metrics::ChromeSearchboxStats expected_searchbox_stats;
     omnibox::SuggestType type;
     base::flat_set<omnibox::SuggestSubtype> subtypes;
@@ -385,7 +384,8 @@ class AutocompleteProviderTest : public testing::Test {
       const SuggestionGroupsTestData& test_data);
 
   void RunSearchboxStatsTest(const SearchboxStatsTestData* sbs_test_data,
-                             size_t size);
+                             size_t size,
+                             bool input_is_zero_suggest);
 
   void RunQuery(const std::string& query, bool allow_exact_keyword_match);
 
@@ -631,7 +631,7 @@ void AutocompleteProviderTest::UpdateResultsWithSuggestionGroupsTestData(
     }
     matches.push_back(match);
   }
-  result_.Reset();
+  result_.ClearMatches();
   result_.AppendMatches(matches);
 
   // Update the result with the suggestion groups information.
@@ -642,8 +642,17 @@ void AutocompleteProviderTest::UpdateResultsWithSuggestionGroupsTestData(
 
 void AutocompleteProviderTest::RunSearchboxStatsTest(
     const SearchboxStatsTestData* sbs_test_data,
-    size_t size) {
-  // Prepare input.
+    size_t size,
+    bool input_is_zero_suggest) {
+  if (input_is_zero_suggest) {
+    // Prepare the input.
+    AutocompleteInput input(u"", metrics::OmniboxEventProto::OTHER,
+                            TestingSchemeClassifier());
+    input.set_focus_type(metrics::OmniboxFocusType::INTERACTION_CLOBBER);
+    controller_->input_ = input;
+  }
+
+  // Prepare the results.
   const size_t kMaxRelevance = 1000;
   ACMatches matches;
   for (size_t i = 0; i < size; ++i) {
@@ -661,6 +670,7 @@ void AutocompleteProviderTest::RunSearchboxStatsTest(
   result_.Reset();
   result_.AppendMatches(matches);
   result_.MergeSuggestionGroupsMap(omnibox::BuildDefaultGroups());
+  result_.set_zero_prefix_enabled_in_session(input_is_zero_suggest);
 
   // Update Searchbox stats.
   controller_->UpdateSearchboxStats(&result_);
@@ -688,7 +698,7 @@ void AutocompleteProviderTest::RunSearchboxStatsTest(
 
 void AutocompleteProviderTest::RunQuery(const std::string& query,
                                         bool allow_exact_keyword_match) {
-  result_.Reset();
+  result_.ClearMatches();
   AutocompleteInput input(base::ASCIIToUTF16(query),
                           metrics::OmniboxEventProto::OTHER,
                           TestingSchemeClassifier());
@@ -726,7 +736,7 @@ void AutocompleteProviderTest::RunExactKeymatchTest(
 }
 
 void AutocompleteProviderTest::CopyResults() {
-  result_.CopyFrom(controller_->result());
+  result_.CopyMatchesFrom(controller_->result());
 }
 
 GURL AutocompleteProviderTest::GetDestinationURL(
@@ -806,11 +816,40 @@ TEST_F(AutocompleteProviderTest, ExtraQueryParams) {
       switches::kExtraSearchQueryParams, "a=b");
   RunExactKeymatchTest(true);
   CopyResults();
-  ASSERT_EQ(2U, result_.size());
+
+  // When LimitKeywordModeSuggestions is enabled, DSE suggestions are curbed in
+  // keyword mode, so this test is only relevant when disabled.
+  if (!omnibox_feature_configs::LimitKeywordModeSuggestions::Get().enabled) {
+    ASSERT_EQ(2U, result_.size());
+    EXPECT_EQ("http://keyword/test",
+              result_.match_at(0)->destination_url.possibly_invalid_spec());
+    EXPECT_EQ("http://defaultturl/k%20test?a=b",
+              result_.match_at(1)->destination_url.possibly_invalid_spec());
+  }
+}
+
+// Ensures matches from (only) the default search provider are curbed when in
+// keyword mode and LimitKeywordModeSuggestions is enabled.
+TEST_F(AutocompleteProviderTest, CurbDefaultSuggestions) {
+  // Enable LimitKeywordModeSuggestions flag.
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeatureState(
+      omnibox_feature_configs::LimitKeywordModeSuggestions::
+          kLimitKeywordModeSuggestions,
+      true);
+  omnibox_feature_configs::ScopedConfigForTesting<
+      omnibox_feature_configs::LimitKeywordModeSuggestions>
+      scoped_config;
+
+  ResetControllerWithKeywordAndSearchProviders();
+  RunExactKeymatchTest(true);
+  CopyResults();
+
+  // When LimitKeywordModeSuggestions is enabled, DSE suggestions are curbed, so
+  // the default turl suggestion should not be present in the results.
+  ASSERT_EQ(1U, result_.size());
   EXPECT_EQ("http://keyword/test",
             result_.match_at(0)->destination_url.possibly_invalid_spec());
-  EXPECT_EQ("http://defaultturl/k%20test?a=b",
-            result_.match_at(1)->destination_url.possibly_invalid_spec());
 }
 
 // Test that redundant associated keywords are removed.
@@ -1033,7 +1072,7 @@ TEST_F(AutocompleteProviderTest, UpdateSearchboxStats) {
          omnibox::TYPE_NATIVE_CHROME}};
     SCOPED_TRACE("No matches");
     // Note: We pass 0 here to ignore the dummy data above.
-    RunSearchboxStatsTest(test_data, 0);
+    RunSearchboxStatsTest(test_data, 0, /*input_is_zero_suggest=*/false);
   }
 
   // Note: See suggest.proto for the types and subtypes referenced below.
@@ -1054,7 +1093,8 @@ TEST_F(AutocompleteProviderTest, UpdateSearchboxStats) {
          searchbox_stats,
          omnibox::TYPE_NATIVE_CHROME}};
     SCOPED_TRACE("One match");
-    RunSearchboxStatsTest(test_data, std::size(test_data));
+    RunSearchboxStatsTest(test_data, std::size(test_data),
+                          /*input_is_zero_suggest=*/false);
   }
 
   {
@@ -1076,7 +1116,8 @@ TEST_F(AutocompleteProviderTest, UpdateSearchboxStats) {
          omnibox::TYPE_ENTITY,
          {omnibox::SUBTYPE_PERSONAL}}};
     SCOPED_TRACE("One match with provider populated subtypes");
-    RunSearchboxStatsTest(test_data, std::size(test_data));
+    RunSearchboxStatsTest(test_data, std::size(test_data),
+                          /*input_is_zero_suggest=*/false);
   }
 
   {
@@ -1115,7 +1156,8 @@ TEST_F(AutocompleteProviderTest, UpdateSearchboxStats) {
          {omnibox::SUBTYPE_ZERO_PREFIX_LOCAL_FREQUENT_QUERIES}},
     };
     SCOPED_TRACE("Multiple matches in horizontal render group");
-    RunSearchboxStatsTest(test_data, std::size(test_data));
+    RunSearchboxStatsTest(test_data, std::size(test_data),
+                          /*input_is_zero_suggest=*/true);
   }
 
   {
@@ -1188,7 +1230,8 @@ TEST_F(AutocompleteProviderTest, UpdateSearchboxStats) {
          {omnibox::SUBTYPE_ZERO_PREFIX}},
     };
     SCOPED_TRACE("Multiple matches with horizontal render group");
-    RunSearchboxStatsTest(test_data, std::size(test_data));
+    RunSearchboxStatsTest(test_data, std::size(test_data),
+                          /*input_is_zero_suggest=*/true);
   }
 
   {
@@ -1288,7 +1331,8 @@ TEST_F(AutocompleteProviderTest, UpdateSearchboxStats) {
          {omnibox::SUBTYPE_PERSONAL, omnibox::SUBTYPE_TRENDS}},
     };
     SCOPED_TRACE("Complex set of matches with repetitive subtypes");
-    RunSearchboxStatsTest(test_data, std::size(test_data));
+    RunSearchboxStatsTest(test_data, std::size(test_data),
+                          /*input_is_zero_suggest=*/true);
   }
 
   // This test confirms that selection of trivial suggestions does not get
@@ -1412,7 +1456,8 @@ TEST_F(AutocompleteProviderTest, UpdateSearchboxStats) {
          omnibox::TYPE_NATIVE_CHROME},
     };
     SCOPED_TRACE("Trivial and zero-prefix matches");
-    RunSearchboxStatsTest(test_data, std::size(test_data));
+    RunSearchboxStatsTest(test_data, std::size(test_data),
+                          /*input_is_zero_suggest=*/true);
   }
 }
 

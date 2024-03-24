@@ -6,6 +6,7 @@
 
 #include <limits>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "ash/constants/ash_features.h"
@@ -63,6 +64,7 @@
 #include "chromeos/ash/components/system/statistics_provider.h"
 #include "chromeos/ash/components/timezone/timezone_resolver.h"
 #include "chromeos/components/disks/disks_prefs.h"
+#include "chromeos/constants/pref_names.h"
 #include "components/feedback/content/content_tracing_manager.h"
 #include "components/language/core/browser/pref_names.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
@@ -75,7 +77,6 @@
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
 #include "content/public/browser/browser_thread.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/speech/speech_synthesis.mojom.h"
 #include "third_party/cros_system_api/dbus/update_engine/dbus-constants.h"
 #include "third_party/icu/source/i18n/unicode/timezone.h"
@@ -171,6 +172,7 @@ void Preferences::RegisterPrefs(PrefRegistrySimple* registry) {
                                 false);
   registry->RegisterBooleanPref(prefs::kDeviceSwitchFunctionKeysBehaviorEnabled,
                                 false);
+  registry->RegisterBooleanPref(::prefs::kLocalUserFilesAllowed, true);
 
   RegisterLocalStatePrefs(registry);
   ash::hid_detection_revamp_field_trial::RegisterLocalStatePrefs(registry);
@@ -346,9 +348,6 @@ void Preferences::RegisterProfilePrefs(
   // depending on whether an external keyboard is attached to a particular
   // device.
   registry->RegisterBooleanPref(prefs::kSendFunctionKeys, false);
-  registry->RegisterIntegerPref(
-      prefs::kExtendedFkeysModifier,
-      static_cast<int>(ui::mojom::ExtendedFkeysModifier::kDisabled));
 
   registry->RegisterIntegerPref(prefs::kAltEventRemappedToRightClick, 0);
   registry->RegisterIntegerPref(prefs::kSearchEventRemappedToRightClick, 0);
@@ -377,6 +376,8 @@ void Preferences::RegisterProfilePrefs(
   registry->RegisterStringPref(::prefs::kTermsOfServiceURL, "");
 
   registry->RegisterBooleanPref(::prefs::kTouchVirtualKeyboardEnabled, false);
+  registry->RegisterBooleanPref(::prefs::kVirtualKeyboardSmartVisibilityEnabled,
+                                true);
 
   std::string current_timezone_id;
   if (CrosSettings::IsInitialized()) {
@@ -413,7 +414,7 @@ void Preferences::RegisterProfilePrefs(
       user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
 
   registry->RegisterBooleanPref(
-      ::prefs::kCaptivePortalAuthenticationIgnoresProxy, true);
+      chromeos::prefs::kCaptivePortalAuthenticationIgnoresProxy, true);
 
   registry->RegisterBooleanPref(::prefs::kLanguageImeMenuActivated, false);
 
@@ -554,11 +555,6 @@ void Preferences::RegisterProfilePrefs(
   registry->RegisterBooleanPref(::prefs::kStartupBrowserWindowLaunchSuppressed,
                                 false);
 
-  // This pref is a per-session pref and must not be synced.
-  registry->RegisterBooleanPref(
-      ::prefs::kLoginExtensionApiCanLockManagedGuestSession, false,
-      PrefRegistry::NO_REGISTRATION_FLAGS);
-
   registry->RegisterBooleanPref(prefs::kLoginDisplayPasswordButtonEnabled,
                                 true);
 
@@ -617,6 +613,9 @@ void Preferences::RegisterProfilePrefs(
   registry->RegisterDictionaryPref(prefs::kAshAppIconLightVibrantColorCache);
   registry->RegisterDictionaryPref(prefs::kAshAppIconSortableColorGroupCache);
   registry->RegisterDictionaryPref(prefs::kAshAppIconSortableColorHueCache);
+
+  registry->RegisterBooleanPref(::prefs::kStandaloneWindowMigrationNudgeShown,
+                                false);
 }
 
 void Preferences::InitUserPrefs(sync_preferences::PrefServiceSyncable* prefs) {
@@ -1276,8 +1275,9 @@ void Preferences::SetLanguageConfigStringListAsCSV(const char* section,
   }
 
   // Transfers the xkb id to extension-xkb id.
-  if (input_method_manager_->MigrateInputMethods(&split_values))
+  if (input_method_manager_->GetMigratedInputMethodIDs(&split_values)) {
     preload_engines_.SetValue(base::JoinString(split_values, ","));
+  }
 
   if (section == std::string(language_prefs::kGeneralSectionName) &&
       name == std::string(language_prefs::kPreloadEnginesConfigName)) {
@@ -1358,7 +1358,7 @@ void Preferences::UpdateStatusChanged(
   }
 }
 
-void Preferences::OnIsConsumerAutoUpdateEnabled(absl::optional<bool> enabled) {
+void Preferences::OnIsConsumerAutoUpdateEnabled(std::optional<bool> enabled) {
   DVLOG(1) << "OnIsConsumerAutoUpdateEnabled";
   if (!enabled.has_value()) {
     VLOG(1) << "Failed to retrieve consumer auto update feature value.";

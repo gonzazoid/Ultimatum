@@ -58,8 +58,7 @@ class IbanManagerTest : public testing::Test {
     ON_CALL(mock_resource_delegate_, GetImageNamed(IDR_AUTOFILL_IBAN))
         .WillByDefault(testing::Return(gfx::test::CreateImage(100, 50)));
 
-    ON_CALL(*static_cast<MockAutofillOptimizationGuide*>(
-                autofill_client_.GetAutofillOptimizationGuide()),
+    ON_CALL(*autofill_client_.GetAutofillOptimizationGuide(),
             ShouldBlockSingleFieldSuggestions)
         .WillByDefault(testing::Return(false));
   }
@@ -493,8 +492,7 @@ TEST_F(IbanManagerTest, DoesNotShowIbansForBlockedWebsite) {
   // the website is blocked.
   MockSuggestionsReturnedCallback mock_callback;
   EXPECT_CALL(mock_callback, Run).Times(0);
-  ON_CALL(*static_cast<MockAutofillOptimizationGuide*>(
-              autofill_client_.GetAutofillOptimizationGuide()),
+  ON_CALL(*autofill_client_.GetAutofillOptimizationGuide(),
           ShouldBlockSingleFieldSuggestions)
       .WillByDefault(testing::Return(true));
 
@@ -534,7 +532,7 @@ TEST_F(IbanManagerTest, NotIbanFieldFocused_NoSuggestionsShown) {
   SetUpLocalIban(test::kIbanValue, kNickname_0);
 
   AutofillField test_field;
-  test_field.value = base::UTF8ToUTF16(std::string(test::kIbanValue));
+  test_field.value = std::u16string(test::kIbanValue16);
   // Set the field type to any type than "IBAN_VALUE".
   SuggestionsContext context = GetIbanFocusedSuggestionsContext(
       test_field, CREDIT_CARD_VERIFICATION_CODE);
@@ -556,7 +554,7 @@ TEST_F(IbanManagerTest, Metrics_Suggestions_Allowed) {
   SetUpLocalIban(test::kIbanValue, kNickname_0);
 
   AutofillField test_field;
-  test_field.unique_renderer_id = test::MakeFieldRendererId();
+  test_field.renderer_id = test::MakeFieldRendererId();
   SuggestionsContext context = GetIbanFocusedSuggestionsContext(test_field);
   // Simulate request for suggestions.
   // TODO: handle return value.
@@ -580,8 +578,7 @@ TEST_F(IbanManagerTest, Metrics_Suggestions_Blocked) {
   // the website is blocked.
   MockSuggestionsReturnedCallback mock_callback;
   EXPECT_CALL(mock_callback, Run).Times(0);
-  ON_CALL(*static_cast<MockAutofillOptimizationGuide*>(
-              autofill_client_.GetAutofillOptimizationGuide()),
+  ON_CALL(*autofill_client_.GetAutofillOptimizationGuide(),
           ShouldBlockSingleFieldSuggestions)
       .WillByDefault(testing::Return(true));
   // Simulate request for suggestions.
@@ -624,7 +621,7 @@ TEST_F(IbanManagerTest, Metrics_SuggestionsShown) {
   SetUpLocalIban(test::kIbanValue, kNickname_0);
 
   AutofillField test_field;
-  test_field.unique_renderer_id = test::MakeFieldRendererId();
+  test_field.renderer_id = test::MakeFieldRendererId();
   SuggestionsContext context = GetIbanFocusedSuggestionsContext(test_field);
 
   // Simulate request for suggestions.
@@ -654,7 +651,7 @@ TEST_F(IbanManagerTest, Metrics_SuggestionSelected) {
   SetUpLocalIban(test::kIbanValue_2, "");
 
   AutofillField test_field;
-  test_field.unique_renderer_id = test::MakeFieldRendererId();
+  test_field.renderer_id = test::MakeFieldRendererId();
   SuggestionsContext context = GetIbanFocusedSuggestionsContext(test_field);
 
   // Simulate request for suggestions and select one suggested IBAN.

@@ -8,9 +8,7 @@
 
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/values.h"
 #include "components/app_restore/app_launch_info.h"
-#include "components/app_restore/window_info.h"
 #include "components/services/app_service/public/cpp/intent_util.h"
 
 namespace app_restore {
@@ -154,12 +152,10 @@ std::vector<GURL> GetUrlsFromDict(const base::Value::Dict& dict) {
   }
 
   for (const auto& item : *urls_path_value) {
-    if (item.GetString().empty())
-      continue;
     GURL url(item.GetString());
-    if (!url.is_valid())
-      continue;
-    url_paths.push_back(url);
+    if (url.is_valid()) {
+      url_paths.push_back(url);
+    }
   }
 
   return url_paths;
@@ -193,11 +189,7 @@ std::optional<gfx::Size> GetSizeFromDict(const base::Value::Dict& dict,
     return std::nullopt;
   }
 
-  std::vector<int> size;
-  for (const auto& item : *size_value)
-    size.push_back(item.GetInt());
-
-  return gfx::Size(size[0], size[1]);
+  return gfx::Size((*size_value)[0].GetInt(), (*size_value)[1].GetInt());
 }
 
 // Gets gfx::Rect from base::Value, e.g. { 0, 100, 200, 300 } returns
@@ -205,17 +197,12 @@ std::optional<gfx::Size> GetSizeFromDict(const base::Value::Dict& dict,
 std::optional<gfx::Rect> GetBoundsRectFromDict(const base::Value::Dict& dict,
                                                base::StringPiece key_name) {
   const base::Value::List* rect_value = dict.FindList(key_name);
-  if (!rect_value || rect_value->empty())
+  if (!rect_value || rect_value->size() != 4) {
     return std::nullopt;
+  }
 
-  std::vector<int> rect;
-  for (const auto& item : *rect_value)
-    rect.push_back(item.GetInt());
-
-  if (rect.size() != 4)
-    return std::nullopt;
-
-  return gfx::Rect(rect[0], rect[1], rect[2], rect[3]);
+  return gfx::Rect((*rect_value)[0].GetInt(), (*rect_value)[1].GetInt(),
+                   (*rect_value)[2].GetInt(), (*rect_value)[3].GetInt());
 }
 
 // Gets WindowStateType from base::Value::Dict, e.g. { "window_state_type":
@@ -244,6 +231,15 @@ base::Uuid GetGuidValueFromDict(const base::Value::Dict& dict,
   return base::Uuid();
 }
 
+template <typename T>
+void SetValueIntoDict(std::optional<T> value,
+                      std::string_view key,
+                      base::Value::Dict& dict) {
+  if (value) {
+    dict.Set(key, *value);
+  }
+}
+
 }  // namespace
 
 AppRestoreData::AppRestoreData() = default;
@@ -255,32 +251,43 @@ AppRestoreData::AppRestoreData(base::Value::Dict&& data) {
   override_url = GetUrlValueFromDict(data, kOverrideUrlKey);
   display_id = GetDisplayIdFromDict(data);
   handler_id = GetStringValueFromDict(data, kHandlerIdKey);
-  urls = GetUrlsFromDict(data);
-  active_tab_index = GetIntValueFromDict(data, kActiveTabIndexKey);
   file_paths = GetFilePathsFromDict(data);
-  app_type_browser = GetBoolValueFromDict(data, kAppTypeBrowserKey);
-  app_name = GetStringValueFromDict(data, kAppNameKey);
-  activation_index = GetIntValueFromDict(data, kActivationIndexKey);
-  first_non_pinned_tab_index =
-      GetIntValueFromDict(data, kFirstNonPinnedTabIndexKey);
-  desk_id = GetIntValueFromDict(data, kDeskIdKey);
-  desk_guid = GetGuidValueFromDict(data, kDeskUuidKey);
-  current_bounds = GetBoundsRectFromDict(data, kCurrentBoundsKey);
-  window_state_type = GetWindowStateTypeFromDict(data);
-  pre_minimized_show_state_type = GetPreMinimizedShowStateTypeFromDict(data);
-  snap_percentage = GetUIntValueFromDict(data, kSnapPercentageKey);
-  maximum_size = GetSizeFromDict(data, kMaximumSizeKey);
-  minimum_size = GetSizeFromDict(data, kMinimumSizeKey);
-  title = GetU16StringValueFromDict(data, kTitleKey);
-  bounds_in_root = GetBoundsRectFromDict(data, kBoundsInRoot);
-  primary_color = GetUIntValueFromDict(data, kPrimaryColorKey);
-  status_bar_color = GetUIntValueFromDict(data, kStatusBarColorKey);
-  lacros_profile_id = GetUInt64ValueFromDict(data, kLacrosProfileIdKey);
-
-  const base::Value::Dict* intent_value = data.FindDict(kIntentKey);
-  if (intent_value) {
+  if (const base::Value::Dict* intent_value = data.FindDict(kIntentKey)) {
     intent = apps_util::ConvertDictToIntent(*intent_value);
   }
+
+  browser_extra_info.urls = GetUrlsFromDict(data);
+  browser_extra_info.active_tab_index =
+      GetIntValueFromDict(data, kActiveTabIndexKey);
+  browser_extra_info.first_non_pinned_tab_index =
+      GetIntValueFromDict(data, kFirstNonPinnedTabIndexKey);
+  browser_extra_info.app_type_browser =
+      GetBoolValueFromDict(data, kAppTypeBrowserKey);
+  browser_extra_info.app_name = GetStringValueFromDict(data, kAppNameKey);
+  browser_extra_info.lacros_profile_id =
+      GetUInt64ValueFromDict(data, kLacrosProfileIdKey);
+
+  window_info.activation_index = GetIntValueFromDict(data, kActivationIndexKey);
+  window_info.desk_id = GetIntValueFromDict(data, kDeskIdKey);
+  window_info.desk_guid = GetGuidValueFromDict(data, kDeskUuidKey);
+  window_info.current_bounds = GetBoundsRectFromDict(data, kCurrentBoundsKey);
+  window_info.window_state_type = GetWindowStateTypeFromDict(data);
+  window_info.pre_minimized_show_state_type =
+      GetPreMinimizedShowStateTypeFromDict(data);
+  window_info.snap_percentage = GetUIntValueFromDict(data, kSnapPercentageKey);
+  window_info.app_title = GetU16StringValueFromDict(data, kTitleKey);
+
+  std::optional<gfx::Size> max_size = GetSizeFromDict(data, kMaximumSizeKey);
+  std::optional<gfx::Size> min_size = GetSizeFromDict(data, kMinimumSizeKey);
+  std::optional<gfx::Rect> bounds_in_root =
+      GetBoundsRectFromDict(data, kBoundsInRoot);
+  if (max_size || min_size || bounds_in_root) {
+    window_info.arc_extra_info = {.maximum_size = max_size,
+                                  .minimum_size = min_size,
+                                  .bounds_in_root = bounds_in_root};
+  }
+  primary_color = GetUIntValueFromDict(data, kPrimaryColorKey);
+  status_bar_color = GetUIntValueFromDict(data, kStatusBarColorKey);
 }
 
 AppRestoreData::AppRestoreData(std::unique_ptr<AppLaunchInfo> app_launch_info) {
@@ -293,106 +300,33 @@ AppRestoreData::AppRestoreData(std::unique_ptr<AppLaunchInfo> app_launch_info) {
   override_url = std::move(app_launch_info->override_url);
   display_id = std::move(app_launch_info->display_id);
   handler_id = std::move(app_launch_info->handler_id);
-  urls = std::move(app_launch_info->urls);
-  active_tab_index = std::move(app_launch_info->active_tab_index);
-  first_non_pinned_tab_index =
-      std::move(app_launch_info->first_non_pinned_tab_index);
   file_paths = std::move(app_launch_info->file_paths);
   intent = std::move(app_launch_info->intent);
-  app_type_browser = std::move(app_launch_info->app_type_browser);
-  app_name = std::move(app_launch_info->app_name);
-  tab_group_infos = std::move(app_launch_info->tab_group_infos);
-  lacros_profile_id = app_launch_info->lacros_profile_id;
+
+  browser_extra_info = std::move(app_launch_info->browser_extra_info);
 }
 
 AppRestoreData::~AppRestoreData() = default;
 
 std::unique_ptr<AppRestoreData> AppRestoreData::Clone() const {
-  std::unique_ptr<AppRestoreData> data = std::make_unique<AppRestoreData>();
+  auto data = std::make_unique<AppRestoreData>();
 
-  if (event_flag.has_value())
-    data->event_flag = event_flag.value();
-
-  if (container.has_value())
-    data->container = container.value();
-
-  if (disposition.has_value())
-    data->disposition = disposition.value();
-
-  if (override_url.has_value())
-    data->override_url = override_url.value();
-
-  if (display_id.has_value())
-    data->display_id = display_id.value();
-
-  if (handler_id.has_value())
-    data->handler_id = handler_id.value();
-
-  if (!urls.empty())
-    data->urls = urls;
-
-  if (active_tab_index.has_value())
-    data->active_tab_index = active_tab_index.value();
-
-  if (first_non_pinned_tab_index.has_value())
-    data->first_non_pinned_tab_index = first_non_pinned_tab_index.value();
-
-  if (intent)
+  data->event_flag = event_flag;
+  data->container = container;
+  data->disposition = disposition;
+  data->override_url = override_url;
+  data->display_id = display_id;
+  data->handler_id = handler_id;
+  data->file_paths = file_paths;
+  if (intent) {
     data->intent = intent->Clone();
-
-  if (!file_paths.empty())
-    data->file_paths = file_paths;
-
-  if (app_type_browser.has_value())
-    data->app_type_browser = app_type_browser.value();
-
-  if (app_name.has_value())
-    data->app_name = app_name.value();
-
-  if (title.has_value())
-    data->title = title.value();
-
-  if (activation_index.has_value())
-    data->activation_index = activation_index.value();
-
-  if (desk_id.has_value())
-    data->desk_id = desk_id.value();
-
-  if (desk_guid.is_valid()) {
-    data->desk_guid = desk_guid;
   }
 
-  if (current_bounds.has_value())
-    data->current_bounds = current_bounds.value();
+  data->browser_extra_info = browser_extra_info;
 
-  if (window_state_type.has_value())
-    data->window_state_type = window_state_type.value();
-
-  if (pre_minimized_show_state_type.has_value())
-    data->pre_minimized_show_state_type = pre_minimized_show_state_type.value();
-
-  if (snap_percentage.has_value())
-    data->snap_percentage = snap_percentage.value();
-
-  if (maximum_size.has_value())
-    data->maximum_size = maximum_size.value();
-
-  if (minimum_size.has_value())
-    data->minimum_size = minimum_size.value();
-
-  if (bounds_in_root.has_value())
-    data->bounds_in_root = bounds_in_root.value();
-
-  if (primary_color.has_value())
-    data->primary_color = primary_color.value();
-
-  if (status_bar_color.has_value())
-    data->status_bar_color = status_bar_color.value();
-
-  if (!tab_group_infos.empty())
-    data->tab_group_infos = tab_group_infos;
-
-  data->lacros_profile_id = lacros_profile_id;
+  data->window_info = window_info;
+  data->primary_color = primary_color;
+  data->status_bar_color = status_bar_color;
 
   return data;
 }
@@ -400,107 +334,105 @@ std::unique_ptr<AppRestoreData> AppRestoreData::Clone() const {
 base::Value AppRestoreData::ConvertToValue() const {
   base::Value::Dict launch_info_dict;
 
-  if (event_flag.has_value())
-    launch_info_dict.Set(kEventFlagKey, event_flag.value());
+  SetValueIntoDict(event_flag, kEventFlagKey, launch_info_dict);
+  SetValueIntoDict(container, kContainerKey, launch_info_dict);
+  SetValueIntoDict(disposition, kDispositionKey, launch_info_dict);
 
-  if (container.has_value())
-    launch_info_dict.Set(kContainerKey, container.value());
-
-  if (disposition.has_value())
-    launch_info_dict.Set(kDispositionKey, disposition.value());
-
-  if (override_url.has_value())
+  if (override_url.has_value()) {
     launch_info_dict.Set(kOverrideUrlKey, override_url.value().spec());
+  }
 
   if (display_id.has_value()) {
     launch_info_dict.Set(kDisplayIdKey,
                          base::NumberToString(display_id.value()));
   }
 
-  if (handler_id.has_value())
-    launch_info_dict.Set(kHandlerIdKey, handler_id.value());
+  SetValueIntoDict(handler_id, kHandlerIdKey, launch_info_dict);
 
-  if (!urls.empty()) {
-    base::Value::List urls_list;
-    for (auto& url : urls) {
-      urls_list.Append(url.spec());
+  if (!file_paths.empty()) {
+    base::Value::List file_paths_list;
+    for (const base::FilePath& file_path : file_paths) {
+      file_paths_list.Append(file_path.value());
     }
-    launch_info_dict.Set(kUrlsKey, std::move(urls_list));
-  }
-
-  if (active_tab_index.has_value())
-    launch_info_dict.Set(kActiveTabIndexKey, active_tab_index.value());
-
-  if (first_non_pinned_tab_index.has_value()) {
-    launch_info_dict.Set(kFirstNonPinnedTabIndexKey,
-                         first_non_pinned_tab_index.value());
+    launch_info_dict.Set(kFilePathsKey, std::move(file_paths_list));
   }
 
   if (intent) {
     launch_info_dict.Set(kIntentKey, apps_util::ConvertIntentToValue(intent));
   }
 
-  if (!file_paths.empty()) {
-    base::Value::List file_paths_list;
-    for (auto& file_path : file_paths) {
-      file_paths_list.Append(file_path.value());
+  if (!browser_extra_info.urls.empty()) {
+    base::Value::List urls_list;
+    for (const GURL& url : browser_extra_info.urls) {
+      urls_list.Append(url.spec());
     }
-    launch_info_dict.Set(kFilePathsKey, std::move(file_paths_list));
+    launch_info_dict.Set(kUrlsKey, std::move(urls_list));
   }
 
-  if (app_type_browser.has_value())
-    launch_info_dict.Set(kAppTypeBrowserKey, app_type_browser.value());
+  SetValueIntoDict(browser_extra_info.active_tab_index, kActiveTabIndexKey,
+                   launch_info_dict);
+  SetValueIntoDict(browser_extra_info.first_non_pinned_tab_index,
+                   kFirstNonPinnedTabIndexKey, launch_info_dict);
+  SetValueIntoDict(browser_extra_info.app_name, kAppNameKey, launch_info_dict);
+  SetValueIntoDict(browser_extra_info.app_type_browser, kAppTypeBrowserKey,
+                   launch_info_dict);
 
-  if (app_name.has_value())
-    launch_info_dict.Set(kAppNameKey, app_name.value());
-
-  if (title.has_value())
-    launch_info_dict.Set(kTitleKey, base::UTF16ToUTF8(title.value()));
-
-  if (activation_index.has_value())
-    launch_info_dict.Set(kActivationIndexKey, activation_index.value());
-
-  if (desk_id.has_value())
-    launch_info_dict.Set(kDeskIdKey, desk_id.value());
-
-  if (desk_guid.is_valid()) {
-    launch_info_dict.Set(kDeskUuidKey, desk_guid.AsLowercaseString());
+  if (browser_extra_info.lacros_profile_id.has_value()) {
+    launch_info_dict.Set(
+        kLacrosProfileIdKey,
+        ConvertUint64ToValue(browser_extra_info.lacros_profile_id.value()));
   }
 
-  if (current_bounds.has_value()) {
+  SetValueIntoDict(window_info.activation_index, kActivationIndexKey,
+                   launch_info_dict);
+  SetValueIntoDict(window_info.desk_id, kDeskIdKey, launch_info_dict);
+
+  if (window_info.desk_guid.is_valid()) {
+    launch_info_dict.Set(kDeskUuidKey,
+                         window_info.desk_guid.AsLowercaseString());
+  }
+
+  if (window_info.current_bounds.has_value()) {
     launch_info_dict.Set(kCurrentBoundsKey,
-                         ConvertRectToList(current_bounds.value()));
+                         ConvertRectToList(window_info.current_bounds.value()));
   }
 
-  if (window_state_type.has_value()) {
-    launch_info_dict.Set(kWindowStateTypeKey,
-                         static_cast<int>(window_state_type.value()));
+  if (window_info.window_state_type.has_value()) {
+    launch_info_dict.Set(
+        kWindowStateTypeKey,
+        static_cast<int>(window_info.window_state_type.value()));
   }
 
-  if (pre_minimized_show_state_type.has_value()) {
+  if (window_info.pre_minimized_show_state_type.has_value()) {
     launch_info_dict.Set(
         kPreMinimizedShowStateTypeKey,
-        static_cast<int>(pre_minimized_show_state_type.value()));
+        static_cast<int>(window_info.pre_minimized_show_state_type.value()));
   }
 
-  if (snap_percentage.has_value()) {
-    launch_info_dict.Set(kSnapPercentageKey,
-                         ConvertUintToValue(snap_percentage.value()));
+  if (window_info.snap_percentage.has_value()) {
+    launch_info_dict.Set(
+        kSnapPercentageKey,
+        ConvertUintToValue(window_info.snap_percentage.value()));
   }
 
-  if (maximum_size.has_value()) {
-    launch_info_dict.Set(kMaximumSizeKey,
-                         ConvertSizeToList(maximum_size.value()));
-  }
+  SetValueIntoDict(window_info.app_title, kTitleKey, launch_info_dict);
 
-  if (minimum_size.has_value()) {
-    launch_info_dict.Set(kMinimumSizeKey,
-                         ConvertSizeToList(minimum_size.value()));
-  }
+  if (window_info.arc_extra_info) {
+    WindowInfo::ArcExtraInfo arc_info = *window_info.arc_extra_info;
+    if (arc_info.maximum_size.has_value()) {
+      launch_info_dict.Set(kMaximumSizeKey,
+                           ConvertSizeToList(arc_info.maximum_size.value()));
+    }
 
-  if (bounds_in_root.has_value()) {
-    launch_info_dict.Set(kBoundsInRoot,
-                         ConvertRectToList(bounds_in_root.value()));
+    if (arc_info.minimum_size.has_value()) {
+      launch_info_dict.Set(kMinimumSizeKey,
+                           ConvertSizeToList(arc_info.minimum_size.value()));
+    }
+
+    if (arc_info.bounds_in_root.has_value()) {
+      launch_info_dict.Set(kBoundsInRoot,
+                           ConvertRectToList(arc_info.bounds_in_root.value()));
+    }
   }
 
   if (primary_color.has_value()) {
@@ -513,49 +445,14 @@ base::Value AppRestoreData::ConvertToValue() const {
                          ConvertUintToValue(status_bar_color.value()));
   }
 
-  if (lacros_profile_id.has_value()) {
-    launch_info_dict.Set(kLacrosProfileIdKey,
-                         ConvertUint64ToValue(lacros_profile_id.value()));
-  }
-
   return base::Value(std::move(launch_info_dict));
 }
 
-void AppRestoreData::ModifyWindowInfo(const WindowInfo& window_info) {
-  if (window_info.activation_index.has_value())
-    activation_index = window_info.activation_index.value();
+void AppRestoreData::ModifyWindowInfo(const WindowInfo& info) {
+  window_info = info;
 
-  if (window_info.desk_id.has_value())
-    desk_id = window_info.desk_id.value();
-
-  if (window_info.desk_guid.is_valid()) {
-    desk_guid = window_info.desk_guid;
-  }
-
-  if (window_info.current_bounds.has_value())
-    current_bounds = window_info.current_bounds.value();
-
-  if (window_info.window_state_type.has_value())
-    window_state_type = window_info.window_state_type.value();
-
-  if (window_info.pre_minimized_show_state_type.has_value()) {
-    pre_minimized_show_state_type =
-        window_info.pre_minimized_show_state_type.value();
-  }
-
-  if (window_info.snap_percentage.has_value())
-    snap_percentage = window_info.snap_percentage.value();
-
-  if (window_info.display_id.has_value())
-    display_id = window_info.display_id.value();
-
-  if (window_info.app_title.has_value())
-    title = window_info.app_title;
-
-  if (window_info.arc_extra_info.has_value()) {
-    minimum_size = window_info.arc_extra_info->minimum_size;
-    maximum_size = window_info.arc_extra_info->maximum_size;
-    bounds_in_root = window_info.arc_extra_info->bounds_in_root;
+  if (info.display_id) {
+    display_id = info.display_id;
   }
 }
 
@@ -566,17 +463,7 @@ void AppRestoreData::ModifyThemeColor(uint32_t window_primary_color,
 }
 
 void AppRestoreData::ClearWindowInfo() {
-  activation_index.reset();
-  desk_id.reset();
-  desk_guid = base::Uuid();
-  current_bounds.reset();
-  window_state_type.reset();
-  pre_minimized_show_state_type.reset();
-  snap_percentage.reset();
-  minimum_size.reset();
-  maximum_size.reset();
-  title.reset();
-  bounds_in_root.reset();
+  window_info = WindowInfo();
   primary_color.reset();
   status_bar_color.reset();
 }
@@ -589,85 +476,52 @@ std::unique_ptr<AppLaunchInfo> AppRestoreData::GetAppLaunchInfo(
   app_launch_info->event_flag = event_flag;
   app_launch_info->container = container;
   app_launch_info->disposition = disposition;
+  app_launch_info->override_url = override_url;
   app_launch_info->display_id = display_id;
-  app_launch_info->active_tab_index = active_tab_index;
   app_launch_info->handler_id = handler_id;
-  app_launch_info->urls = urls;
-  app_launch_info->first_non_pinned_tab_index = first_non_pinned_tab_index;
   app_launch_info->file_paths = file_paths;
   if (intent)
     app_launch_info->intent = intent->Clone();
-  app_launch_info->app_type_browser = app_type_browser;
-  app_launch_info->app_name = app_name;
-  app_launch_info->tab_group_infos = tab_group_infos;
-  app_launch_info->override_url = override_url;
-  app_launch_info->lacros_profile_id = lacros_profile_id;
+
+  app_launch_info->browser_extra_info = browser_extra_info;
   return app_launch_info;
 }
 
 std::unique_ptr<WindowInfo> AppRestoreData::GetWindowInfo() const {
-  auto window_info = std::make_unique<WindowInfo>();
-
-  if (activation_index.has_value())
-    window_info->activation_index = activation_index;
-
-  if (desk_id.has_value())
-    window_info->desk_id = desk_id.value();
-
-  if (desk_guid.is_valid()) {
-    window_info->desk_guid = desk_guid;
-  }
-
-  if (current_bounds.has_value())
-    window_info->current_bounds = current_bounds.value();
-
-  if (window_state_type.has_value())
-    window_info->window_state_type = window_state_type.value();
-
-  if (pre_minimized_show_state_type.has_value()) {
-    window_info->pre_minimized_show_state_type =
-        pre_minimized_show_state_type.value();
-  }
-
-  if (snap_percentage.has_value())
-    window_info->snap_percentage = snap_percentage;
-
-  if (title.has_value())
-    window_info->app_title = title;
-
-  if (maximum_size.has_value() || minimum_size.has_value() ||
-      title.has_value() || bounds_in_root.has_value()) {
-    window_info->arc_extra_info = WindowInfo::ArcExtraInfo();
-    window_info->arc_extra_info->maximum_size = maximum_size;
-    window_info->arc_extra_info->minimum_size = minimum_size;
-    window_info->arc_extra_info->bounds_in_root = bounds_in_root;
-  }
+  auto ret_window_info = std::make_unique<WindowInfo>();
+  *ret_window_info = window_info;
 
   // Display id is set as the app launch parameter, so we don't need to return
   // the display id to restore the display id.
-  return window_info;
+  ret_window_info->display_id.reset();
+  return ret_window_info;
 }
 
 apps::WindowInfoPtr AppRestoreData::GetAppWindowInfo() const {
-  apps::WindowInfoPtr window_info = std::make_unique<apps::WindowInfo>();
+  auto apps_window_info = std::make_unique<apps::WindowInfo>();
 
-  if (display_id.has_value())
-    window_info->display_id = display_id.value();
-
-  if (bounds_in_root.has_value()) {
-    window_info->bounds = gfx::Rect{
-        bounds_in_root.value().x(), bounds_in_root.value().y(),
-        bounds_in_root.value().width(), bounds_in_root.value().height()};
-  } else if (current_bounds.has_value()) {
-    window_info->bounds = gfx::Rect{
-        current_bounds.value().x(), current_bounds.value().y(),
-        current_bounds.value().width(), current_bounds.value().height()};
+  if (display_id.has_value()) {
+    apps_window_info->display_id = display_id.value();
   }
 
-  if (window_state_type.has_value())
-    window_info->state = static_cast<int32_t>(window_state_type.value());
+  if (window_info.arc_extra_info.has_value() &&
+      window_info.arc_extra_info->bounds_in_root.has_value()) {
+    apps_window_info->bounds =
+        window_info.arc_extra_info->bounds_in_root.value();
+  } else if (window_info.current_bounds.has_value()) {
+    apps_window_info->bounds = window_info.current_bounds.value();
+  }
 
-  return window_info;
+  if (window_info.window_state_type.has_value()) {
+    apps_window_info->state =
+        static_cast<int32_t>(window_info.window_state_type.value());
+  }
+
+  return apps_window_info;
+}
+
+std::string AppRestoreData::ToString() const {
+  return ConvertToValue().DebugString();
 }
 
 bool AppRestoreData::operator==(const AppRestoreData& other) const {
@@ -684,25 +538,11 @@ bool AppRestoreData::operator==(const AppRestoreData& other) const {
   return event_flag == other.event_flag && container == other.container &&
          disposition == other.disposition &&
          override_url == other.override_url && display_id == other.display_id &&
-         handler_id == other.handler_id && urls == other.urls &&
-         active_tab_index == other.active_tab_index &&
-         first_non_pinned_tab_index == other.first_non_pinned_tab_index &&
-         file_paths == other.file_paths &&
-         app_type_browser == other.app_type_browser &&
-         app_name == other.app_name && title == other.title &&
-         activation_index == other.activation_index &&
-         desk_id == other.desk_id && desk_guid == other.desk_guid &&
-         current_bounds == other.current_bounds &&
-         window_state_type == other.window_state_type &&
-         pre_minimized_show_state_type == other.pre_minimized_show_state_type &&
-         snap_percentage == other.snap_percentage &&
-         tab_group_infos == other.tab_group_infos &&
-         minimum_size == other.minimum_size &&
-         maximum_size == other.maximum_size &&
-         bounds_in_root == other.bounds_in_root &&
+         handler_id == other.handler_id && file_paths == other.file_paths &&
+         browser_extra_info == other.browser_extra_info &&
+         window_info == other.window_info &&
          primary_color == other.primary_color &&
-         status_bar_color == other.status_bar_color &&
-         lacros_profile_id == other.lacros_profile_id;
+         status_bar_color == other.status_bar_color;
 }
 
 bool AppRestoreData::operator!=(const AppRestoreData& other) const {

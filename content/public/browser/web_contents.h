@@ -96,6 +96,7 @@ class ColorProviderSource;
 
 namespace content {
 
+class BackForwardTransitionAnimationManager;
 class BrowserContext;
 class BrowserPluginGuestDelegate;
 class RenderFrameHost;
@@ -256,12 +257,6 @@ class WebContents : public PageNavigator,
     // and GetLastActiveTime() will return the WebContents' creation time.
     base::TimeTicks last_active_time;
 
-    // Normal WebContents initialization is split between construction and the
-    // first time it is shown. Some WebContents are never shown though.
-    // Setting this to true will invoke the WebContents delayed initialization
-    // that doesn't require visibility.
-    bool is_never_visible = false;
-
     // Code location responsible for creating the CreateParams.  This is used
     // mostly for debugging (e.g. to help attribute specific scenarios or
     // invariant violations to a particular flavor of WebContents).
@@ -282,13 +277,9 @@ class WebContents : public PageNavigator,
     std::optional<blink::mojom::PictureInPictureWindowOptions>
         picture_in_picture_options;
 
-    // WebContentsDelegate given for the case early initialization code depends
-    // on the delegate callbacks.
-    // For instance, WebContentsDelegate::IsInPreviewMode() will be called in
-    // RenderFrameHostImpl::ctor for the initial instance that is constructed
-    // in WebContents::Create() call, and callers have no chance to set their
-    // delegates.
-    raw_ptr<WebContentsDelegate> delegate = nullptr;
+    // Enable preview mode that shows a page with a capability restriction
+    // for previewing the page.
+    bool preview_mode = false;
   };
 
   // Token that causes input to be blocked on this WebContents for at least as
@@ -593,10 +584,6 @@ class WebContents : public PageNavigator,
   virtual void SetAlwaysSendSubresourceNotifications() = 0;
   virtual bool GetSendSubresourceNotification() = 0;
 
-  // Adds accessibility mode. If accessibility is already enabled, it will be
-  // reset, i.e., the full accessibility tree will be sent to the observers.
-  virtual void EnableAccessibilityMode(ui::AXMode mode) = 0;
-
   // Returns true only if the WebContentsObserver accessibility mode is
   // enabled.
   virtual bool IsWebContentsOnlyAccessibilityModeForTesting() = 0;
@@ -607,7 +594,9 @@ class WebContents : public PageNavigator,
 
   virtual ui::AXMode GetAccessibilityMode() = 0;
 
-  virtual void SetAccessibilityMode(ui::AXMode mode) = 0;
+  // Forces a reset of accessibility state in the instance's renderers.
+  // Observers will receive a new accessibility tree.
+  virtual void ResetAccessibility() = 0;
 
   virtual std::string DumpAccessibilityTree(
       bool internal,
@@ -990,7 +979,7 @@ class WebContents : public PageNavigator,
   // the tab in the screen coordinate system.
   virtual gfx::Rect GetContainerBounds() = 0;
 
-  // Get the bounds of the View, relative to the parent.
+  // Get the bounds of the View in the global screen position.
   virtual gfx::Rect GetViewBounds() = 0;
 
   // Resize a WebContents to |new_bounds|.
@@ -1105,19 +1094,19 @@ class WebContents : public PageNavigator,
   // Gets the preferred size of the contents.
   virtual gfx::Size GetPreferredSize() = 0;
 
-  // Called when the response to a pending mouse lock request has arrived.
+  // Called when the response to a pending pointer lock request has arrived.
   // Returns true if |allowed| is true and the mouse has been successfully
   // locked.
-  virtual bool GotResponseToLockMouseRequest(
+  virtual bool GotResponseToPointerLockRequest(
       blink::mojom::PointerLockResult result) = 0;
 
-  // Wrapper around GotResponseToLockMouseRequest to fit into
+  // Wrapper around GotResponseToPointerLockRequest to fit into
   // ChromeWebViewPermissionHelperDelegate's structure.
-  virtual void GotLockMousePermissionResponse(bool allowed) = 0;
+  virtual void GotPointerLockPermissionResponse(bool allowed) = 0;
 
   // Drop the mouse lock if it is currently locked, or reject an
   // outstanding request if it is pending.
-  virtual void DropMouseLockForTesting() = 0;
+  virtual void DropPointerLockForTesting() = 0;
 
   // Called when the response to a keyboard mouse lock request has arrived.
   // Returns false if the request is no longer valid, otherwise true.
@@ -1433,13 +1422,22 @@ class WebContents : public PageNavigator,
   virtual void SetTabSwitchStartTime(base::TimeTicks start_time,
                                      bool destination_is_loaded) = 0;
 
+  // Checks if the WebContents host pages in preview mode.
+  virtual bool IsInPreviewMode() const = 0;
+
+  // Called before ActivatePreviewPage() to prepare the activation. This will
+  // end the preview mode and IsInPreviewMode() will start returning false after
+  // the call. This allows embedders to run preparation steps on the activating
+  // WebContents (e.g. attach TabHelpers) before activating the page shown by
+  // the WebContents through ActivatePreviewPage().
+  virtual void WillActivatePreviewPage() = 0;
+
   // Activates the primary page that is shown in preview mode. This will relax
   // capability restriction in the browser process, and notify the renderer to
   // process the prerendering activation algorithm.
   // This all processes happens asynchronously, and
   // `WebContentsDelegate::DidActivatePreviewedPage` will be called once it's
   // done.
-  // Should be called while WebContentsDelegate::IsInPreviewMode returns true.
   virtual void ActivatePreviewPage() = 0;
 
   // Starts an embedder triggered (browser-initiated) prerendering page and
@@ -1501,6 +1499,12 @@ class WebContents : public PageNavigator,
   virtual void GetMediaCaptureRawDeviceIdsOpened(
       blink::mojom::MediaStreamType type,
       base::OnceCallback<void(std::vector<std::string>)> callback) = 0;
+
+  // Returns an animation manager that displays a preview of the history page
+  // during a session history navigation gesture. Only non-null if
+  // `features::kBackForwardTransitions` is enabled for the supported platform.
+  virtual BackForwardTransitionAnimationManager*
+  GetBackForwardTransitionAnimationManager() = 0;
 
  private:
   // This interface should only be implemented inside content.

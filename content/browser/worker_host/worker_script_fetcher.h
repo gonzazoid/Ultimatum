@@ -132,6 +132,8 @@ class WorkerScriptFetcher : public network::mojom::URLLoaderClient {
       ukm::SourceId worker_source_id,
       DevToolsAgentHostImpl* devtools_agent_host,
       const base::UnguessableToken& devtools_worker_token,
+      bool require_cross_site_request_for_cookies,
+      bool has_storage_access,
       CompletionCallback callback);
 
   // Creates a loader factory bundle. Must be called on the UI thread. For
@@ -171,7 +173,7 @@ class WorkerScriptFetcher : public network::mojom::URLLoaderClient {
   // - `completion_status` is not nullptr.
   using CreateAndStartCallback = base::OnceCallback<void(
       blink::mojom::WorkerMainScriptLoadParamsPtr main_script_load_params,
-      std::optional<SubresourceLoaderParams> subresource_loader_params,
+      SubresourceLoaderParams subresource_loader_params,
       const network::URLLoaderCompletionStatus* completion_status)>;
 
   WorkerScriptFetcher(
@@ -203,6 +205,7 @@ class WorkerScriptFetcher : public network::mojom::URLLoaderClient {
       ukm::SourceId worker_source_id,
       DevToolsAgentHostImpl* devtools_agent_host,
       const base::UnguessableToken& devtools_worker_token,
+      bool require_cross_site_request_for_cookies,
       WorkerScriptFetcher::CompletionCallback callback);
 
   void Start(std::vector<std::unique_ptr<blink::URLLoaderThrottle>> throttles);
@@ -235,7 +238,7 @@ class WorkerScriptFetcher : public network::mojom::URLLoaderClient {
   std::unique_ptr<blink::ThrottlingURLLoader> url_loader_;
 
   blink::mojom::WorkerMainScriptLoadParamsPtr main_script_load_params_;
-  std::optional<SubresourceLoaderParams> subresource_loader_params_;
+  SubresourceLoaderParams subresource_loader_params_;
 
   std::vector<net::RedirectInfo> redirect_infos_;
   std::vector<network::mojom::URLResponseHeadPtr> redirect_response_heads_;

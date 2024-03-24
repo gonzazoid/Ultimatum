@@ -51,11 +51,13 @@ class AbstractInlineTextBox;
 class AriaNotificationOptions;
 class AXObject;
 class AccessibleNode;
+class ComputedAccessibleNode;
 class HTMLCanvasElement;
 class HTMLOptionElement;
 class HTMLFrameOwnerElement;
 class HTMLSelectElement;
 struct PhysicalRect;
+class WebPluginContainer;
 
 class CORE_EXPORT AXObjectCache : public GarbageCollected<AXObjectCache> {
  public:
@@ -211,6 +213,8 @@ class CORE_EXPORT AXObjectCache : public GarbageCollected<AXObjectCache> {
                                    const String,
                                    const AriaNotificationOptions*) = 0;
 
+  virtual ComputedAccessibleNode* GetOrCreateComputedAccessibleNode(AXID) = 0;
+
   typedef AXObjectCache* (*AXObjectCacheCreateFunction)(Document&,
                                                         const ui::AXMode&);
   static void Init(AXObjectCacheCreateFunction);
@@ -222,8 +226,6 @@ class CORE_EXPORT AXObjectCache : public GarbageCollected<AXObjectCache> {
   virtual bool IsDirty() = 0;
 
   virtual void SerializeLocationChanges(uint32_t reset_token) = 0;
-
-  virtual AXObject* GetPluginRoot() = 0;
 
   // Serialize entire tree, returning true if successful.
   virtual bool SerializeEntireTree(
@@ -257,18 +259,18 @@ class CORE_EXPORT AXObjectCache : public GarbageCollected<AXObjectCache> {
   // or an event from a focus action.
   virtual void AddDirtyObjectToSerializationQueue(
       AXObject* obj,
-      bool subtree,
       ax::mojom::blink::EventFrom event_from,
       ax::mojom::blink::Action event_from_action,
       const std::vector<ui::AXEventIntent>& event_intents) = 0;
 
   virtual void SerializeDirtyObjectsAndEvents(
-      bool has_plugin_tree_source,
+      WebPluginContainer* plugin_container,
       std::vector<ui::AXTreeUpdate>& updates,
       std::vector<ui::AXEvent>& events,
       bool& had_end_of_test_event,
       bool& had_load_complete_messages,
-      bool& need_to_send_location_changes) = 0;
+      bool& need_to_send_location_changes,
+      bool& mark_plugin_subtree_dirty) = 0;
 
   // Returns a vector of the images found in |updates|.
   virtual void GetImagesToAnnotate(ui::AXTreeUpdate& updates,
@@ -277,12 +279,6 @@ class CORE_EXPORT AXObjectCache : public GarbageCollected<AXObjectCache> {
   // Note that any pending event also causes its corresponding object to
   // become dirty.
   virtual bool HasDirtyObjects() const = 0;
-
-  // Adds the event to a list of pending events that is cleared out by
-  // a subsequent call to  duplicates are not represented.. Returns false if
-  // the event is already pending; duplicates are not represented.
-  virtual bool AddPendingEvent(const ui::AXEvent& event,
-                               bool insert_at_beginning) = 0;
 
   // Ensure that a call to ProcessDeferredAccessibilityEvents() will occur soon.
   virtual void ScheduleAXUpdate() const = 0;

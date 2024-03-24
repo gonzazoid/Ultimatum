@@ -146,7 +146,7 @@ const Vector<String>& ContactsManager::GetProperties(
   return properties_;
 }
 
-ScriptPromise ContactsManager::select(
+ScriptPromiseTyped<IDLSequence<ContactInfo>> ContactsManager::select(
     ScriptState* script_state,
     const Vector<V8ContactProperty>& properties,
     ContactsSelectOptions* options,
@@ -159,24 +159,24 @@ ScriptPromise ContactsManager::select(
     exception_state.ThrowDOMException(
         DOMExceptionCode::kInvalidStateError,
         "The contacts API can only be used in the top frame");
-    return ScriptPromise();
+    return ScriptPromiseTyped<IDLSequence<ContactInfo>>();
   }
 
   if (!LocalFrame::HasTransientUserActivation(frame)) {
     exception_state.ThrowSecurityError(
         "A user gesture is required to call this method");
-    return ScriptPromise();
+    return ScriptPromiseTyped<IDLSequence<ContactInfo>>();
   }
 
   if (properties.empty()) {
     exception_state.ThrowTypeError("At least one property must be provided");
-    return ScriptPromise();
+    return ScriptPromiseTyped<IDLSequence<ContactInfo>>();
   }
 
   if (contact_picker_in_use_) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                       "Contacts Picker is already in use.");
-    return ScriptPromise();
+    return ScriptPromiseTyped<IDLSequence<ContactInfo>>();
   }
 
   bool include_names = false;
@@ -194,7 +194,7 @@ ScriptPromise ContactsManager::select(
       exception_state.ThrowTypeError(
           "The provided value '" + property.AsString() +
           "' is not a valid enum value of type ContactProperty");
-      return ScriptPromise();
+      return ScriptPromiseTyped<IDLSequence<ContactInfo>>();
     }
 
     switch (property.AsEnum()) {
@@ -216,9 +216,10 @@ ScriptPromise ContactsManager::select(
     }
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+  auto* resolver = MakeGarbageCollected<
+      ScriptPromiseResolverTyped<IDLSequence<ContactInfo>>>(
       script_state, exception_state.GetContext());
-  ScriptPromise promise = resolver->Promise();
+  auto promise = resolver->Promise();
 
   contact_picker_in_use_ = true;
   GetContactsManager(script_state)
@@ -231,8 +232,8 @@ ScriptPromise ContactsManager::select(
 }
 
 void ContactsManager::OnContactsSelected(
-    ScriptPromiseResolver* resolver,
-    absl::optional<Vector<mojom::blink::ContactInfoPtr>> contacts) {
+    ScriptPromiseResolverTyped<IDLSequence<ContactInfo>>* resolver,
+    std::optional<Vector<mojom::blink::ContactInfoPtr>> contacts) {
   ScriptState* script_state = resolver->GetScriptState();
 
   if (!script_state->ContextIsValid()) {
@@ -261,8 +262,7 @@ void ContactsManager::OnContactsSelected(
 ScriptPromise ContactsManager::getProperties(ScriptState* script_state) {
   return ScriptPromise::Cast(script_state,
                              ToV8Traits<IDLSequence<IDLString>>::ToV8(
-                                 script_state, GetProperties(script_state))
-                                 .ToLocalChecked());
+                                 script_state, GetProperties(script_state)));
 }
 
 void ContactsManager::Trace(Visitor* visitor) const {

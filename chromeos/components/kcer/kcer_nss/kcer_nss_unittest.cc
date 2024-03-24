@@ -9,12 +9,10 @@
 #include <vector>
 
 #include "base/base64.h"
-#include "base/files/file_path.h"
-#include "base/files/file_util.h"
 #include "base/memory/raw_ref.h"
-#include "base/strings/stringprintf.h"
 #include "base/task/bind_post_task.h"
 #include "base/test/test_future.h"
+#include "chromeos/components/kcer/chaps/mock_high_level_chaps_client.h"
 #include "chromeos/components/kcer/kcer.h"
 #include "chromeos/components/kcer/kcer_impl.h"
 #include "chromeos/components/kcer/kcer_nss/kcer_token_impl_nss.h"
@@ -108,15 +106,6 @@ std::string ToString(const std::vector<SigningScheme>& vec) {
   return res.str();
 }
 
-std::string ToString(const std::optional<chaps::KeyPermissions>& val) {
-  if (!val.has_value()) {
-    return "<empty>";
-  }
-  // Should be updated if `KeyPermissions` struct is changed.
-  return base::StringPrintf("[arc:%d corp:%d]", val->key_usages().arc(),
-                            val->key_usages().corporate());
-}
-
 std::unique_ptr<kcer::Kcer> CreateKcer(
     scoped_refptr<base::TaskRunner> token_task_runner,
     base::WeakPtr<kcer::internal::KcerToken> user_token,
@@ -151,38 +140,7 @@ bool KeyInfoEquals(const KeyInfo& expected, const KeyInfo& actual) {
                << ", actual: " << actual.nickname.value_or("<empty>");
     return false;
   }
-  if (!KeyPermissionsEqual(expected.key_permissions, actual.key_permissions)) {
-    LOG(ERROR) << "ERROR: key_permissions: expected: "
-               << ToString(expected.key_permissions)
-               << ", actual: " << ToString(actual.key_permissions);
-    return false;
-  }
-  if (expected.cert_provisioning_profile_id !=
-      actual.cert_provisioning_profile_id) {
-    LOG(ERROR) << "ERROR: cert_provisioning_profile_id: expected: "
-               << expected.cert_provisioning_profile_id.value_or("<empty>")
-               << ", actual: "
-               << actual.cert_provisioning_profile_id.value_or("<empty>");
-    return false;
-  }
   return true;
-}
-
-// Reads a file in the PEM format, decodes it, returns the content of the first
-// PEM block in the DER format. Currently supports CERTIFICATE and PRIVATE KEY
-// block types.
-std::optional<std::vector<uint8_t>> ReadPemFileReturnDer(
-    const base::FilePath& path) {
-  std::string pem_data;
-  if (!base::ReadFileToString(path, &pem_data)) {
-    return std::nullopt;
-  }
-
-  bssl::PEMTokenizer tokenizer(pem_data, {"CERTIFICATE", "PRIVATE KEY"});
-  if (!tokenizer.GetNext()) {
-    return std::nullopt;
-  }
-  return StrToBytes(tokenizer.data());
 }
 
 // A helper class for receiving notifications from Kcer.
@@ -273,13 +231,13 @@ class KcerNssTest : public testing::Test {
     for (Token token_type : tokens) {
       if (token_type == Token::kUser) {
         CHECK(!user_token_ptr.MaybeValid());
-        user_token_ =
-            std::make_unique<TokenHolder>(token_type, /*initialize=*/true);
+        user_token_ = std::make_unique<TokenHolder>(token_type, &chaps_client_,
+                                                    /*initialize=*/true);
         user_token_ptr = user_token_->GetWeakPtr();
       } else if (token_type == Token::kDevice) {
         CHECK(!device_token_ptr.MaybeValid());
-        device_token_ =
-            std::make_unique<TokenHolder>(token_type, /*initialize=*/true);
+        device_token_ = std::make_unique<TokenHolder>(
+            token_type, &chaps_client_, /*initialize=*/true);
         device_token_ptr = device_token_->GetWeakPtr();
       }
     }
@@ -294,6 +252,7 @@ class KcerNssTest : public testing::Test {
       content::BrowserTaskEnvironment::REAL_IO_THREAD};
   NotificationsObserver observer_;
   base::CallbackListSubscription observers_subscription_;
+  MockHighLevelChapsClient chaps_client_;
   std::unique_ptr<TokenHolder> user_token_;
   std::unique_ptr<TokenHolder> device_token_;
   std::unique_ptr<Kcer> kcer_;
@@ -319,7 +278,7 @@ TEST_F(KcerNssTest, UseUnavailableTokenThenGetError) {
 // initialization completes (in this case - completes with a failure).
 TEST_F(KcerNssTest, QueueTasksThenFailInitializationThenGetErrors) {
   // Do not initialize yet to simulate slow initialization.
-  TokenHolder user_token(Token::kUser, /*initialize=*/false);
+  TokenHolder user_token(Token::kUser, &chaps_client_, /*initialize=*/false);
 
   std::unique_ptr<net::CertBuilder> issuer = MakeCertIssuer();
   std::unique_ptr<net::CertBuilder> cert_builder = MakeCertBuilder(
@@ -480,7 +439,7 @@ TEST_F(KcerNssTest, QueueTasksThenFailInitializationThenGetErrors) {
 // Test that Kcer forwards notifications from external sources. (Notifications
 // created by Kcer are tested together with the methods that create them.)
 TEST_F(KcerNssTest, ObserveExternalNotification) {
-  TokenHolder user_token(Token::kUser, /*initialize=*/true);
+  TokenHolder user_token(Token::kUser, &chaps_client_, /*initialize=*/true);
 
   std::unique_ptr<Kcer> kcer =
       CreateKcer(IOTaskRunner(), user_token.GetWeakPtr(),
@@ -888,9 +847,9 @@ TEST_F(KcerNssTest, GetKeyInfoForEccKey) {
   EXPECT_TRUE(observer_.WaitUntil(/*notifications=*/0));
 }
 
-// Test generic fields from GetKeyInfo's result and they get updated after
-// related Set* methods.
-TEST_F(KcerNssTest, GetKeyInfoGeneric) {
+// Test generic fields from GetKeyInfo's result and that they get updated after
+// related Set* methods. Test getters for custom attributes.
+TEST_F(KcerNssTest, GetKeyInfoGenericAndCustomAttributes) {
   InitializeKcer({Token::kUser});
 
   // Generate new key.
@@ -909,8 +868,8 @@ TEST_F(KcerNssTest, GetKeyInfoGeneric) {
   expected_key_info.nickname = "";
   // Custom attributes are stored differently in tests and have empty values by
   // default.
-  expected_key_info.key_permissions = chaps::KeyPermissions();
-  expected_key_info.cert_provisioning_profile_id = "";
+  chaps::KeyPermissions expected_key_permissions = chaps::KeyPermissions();
+  std::string expected_cert_provisioning_profile_id = "";
 
   {
     base::test::TestFuture<base::expected<KeyInfo, Error>> key_info_waiter;
@@ -948,37 +907,63 @@ TEST_F(KcerNssTest, GetKeyInfoGeneric) {
   }
 
   {
-    expected_key_info.key_permissions->mutable_key_usages()->set_corporate(
-        true);
-    expected_key_info.key_permissions->mutable_key_usages()->set_arc(true);
+    base::test::TestFuture<
+        base::expected<std::optional<chaps::KeyPermissions>, Error>>
+        key_permissions_waiter;
+    kcer_->GetKeyPermissions(PrivateKeyHandle(public_key),
+                             key_permissions_waiter.GetCallback());
+    ASSERT_TRUE(key_permissions_waiter.Get().has_value());
+    const std::optional<chaps::KeyPermissions>& key_permissions =
+        key_permissions_waiter.Get().value();
+    EXPECT_TRUE(
+        ExpectKeyPermissionsEqual(expected_key_permissions, key_permissions));
+  }
+
+  {
+    expected_key_permissions.mutable_key_usages()->set_corporate(true);
+    expected_key_permissions.mutable_key_usages()->set_arc(true);
 
     base::test::TestFuture<base::expected<void, Error>> set_permissions_waiter;
     kcer_->SetKeyPermissions(PrivateKeyHandle(public_key),
-                             expected_key_info.key_permissions.value(),
+                             expected_key_permissions,
                              set_permissions_waiter.GetCallback());
     ASSERT_TRUE(set_permissions_waiter.Get().has_value());
   }
 
   {
-    base::test::TestFuture<base::expected<KeyInfo, Error>> key_info_waiter;
-    kcer_->GetKeyInfo(PrivateKeyHandle(public_key),
-                      key_info_waiter.GetCallback());
-    ASSERT_TRUE(key_info_waiter.Get().has_value());
+    base::test::TestFuture<
+        base::expected<std::optional<chaps::KeyPermissions>, Error>>
+        key_permissions_waiter;
+    kcer_->GetKeyPermissions(PrivateKeyHandle(public_key),
+                             key_permissions_waiter.GetCallback());
+    ASSERT_TRUE(key_permissions_waiter.Get().has_value());
+    const std::optional<chaps::KeyPermissions>& key_permissions =
+        key_permissions_waiter.Get().value();
     EXPECT_TRUE(
-        KeyInfoEquals(expected_key_info, key_info_waiter.Get().value()));
+        ExpectKeyPermissionsEqual(expected_key_permissions, key_permissions));
   }
 
   {
-    expected_key_info.cert_provisioning_profile_id = "cert_prov_id_123";
+    expected_cert_provisioning_profile_id = "cert_prov_id_123";
 
     base::test::TestFuture<base::expected<void, Error>> set_cert_prov_id_waiter;
-    kcer_->SetCertProvisioningProfileId(
-        PrivateKeyHandle(public_key),
-        expected_key_info.cert_provisioning_profile_id.value(),
-        set_cert_prov_id_waiter.GetCallback());
+    kcer_->SetCertProvisioningProfileId(PrivateKeyHandle(public_key),
+                                        expected_cert_provisioning_profile_id,
+                                        set_cert_prov_id_waiter.GetCallback());
     ASSERT_TRUE(set_cert_prov_id_waiter.Get().has_value());
   }
 
+  {
+    base::test::TestFuture<base::expected<std::optional<std::string>, Error>>
+        cert_prov_waiter;
+    kcer_->GetCertProvisioningProfileId(PrivateKeyHandle(public_key),
+                                        cert_prov_waiter.GetCallback());
+    ASSERT_TRUE(cert_prov_waiter.Get().has_value());
+    EXPECT_EQ(expected_cert_provisioning_profile_id,
+              cert_prov_waiter.Get().value());
+  }
+
+  // Check that the setters above didn't modify unrelated attributes.
   {
     base::test::TestFuture<base::expected<KeyInfo, Error>> key_info_waiter;
     kcer_->GetKeyInfo(PrivateKeyHandle(public_key),
@@ -997,6 +982,7 @@ TEST_F(KcerNssTest, ImportCertForImportedKey) {
   std::optional<std::vector<uint8_t>> key = ReadPemFileReturnDer(
       net::GetTestCertsDirectory().AppendASCII("client_1.key"));
   ASSERT_TRUE(key.has_value() && (key->size() > 0));
+
   std::optional<std::vector<uint8_t>> cert = ReadPemFileReturnDer(
       net::GetTestCertsDirectory().AppendASCII("client_1.pem"));
   ASSERT_TRUE(cert.has_value() && (cert->size() > 0));
@@ -1225,6 +1211,7 @@ class KcerNssAllKeyTypesTest : public KcerNssTest,
         std::optional<std::vector<uint8_t>> key_to_import =
             ReadPemFileReturnDer(
                 net::GetTestCertsDirectory().AppendASCII("key_usage_p256.key"));
+
         kcer_->ImportKey(token, Pkcs8PrivateKeyInfoDer(key_to_import.value()),
                          key_waiter.GetCallback());
         key_can_be_listed_ = false;

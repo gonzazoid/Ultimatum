@@ -93,11 +93,13 @@ void PrePaintTreeWalk::WalkTree(LocalFrameView& root_frame_view) {
     if (auto* client = root_frame_view.GetChromeClient()) {
       client->InvalidateContainer();
     }
-    // TODO(wangxianzhu): For now we call this whenever there has been any
-    // paint property change or paint invalidation. If this shows up as a
-    // performance issue, we should exclude scroll, effect and non-layout
-    // paint invalidations for v1 intersection observations.
-    root_frame_view.InvalidateIntersectionObservations();
+    // If any change needs a more significant intersection update in a frame
+    // view, we should have set the state on that frame view during the tree
+    // walk or earlier.
+    if (RuntimeEnabledFeatures::IntersectionOptimizationEnabled()) {
+      root_frame_view.SetIntersectionObservationState(
+          LocalFrameView::kScrollAndVisibilityOnly);
+    }
   }
 }
 
@@ -548,7 +550,7 @@ void PrePaintTreeWalk::WalkInternal(const LayoutObject& object,
     return;
   }
 
-  absl::optional<PaintPropertyTreeBuilder> property_tree_builder;
+  std::optional<PaintPropertyTreeBuilder> property_tree_builder;
   if (context.tree_builder_context) {
     property_tree_builder.emplace(object, pre_paint_info,
                                   *context.tree_builder_context);
@@ -800,7 +802,7 @@ void PrePaintTreeWalk::WalkFragmentationContextRootChildren(
 
   DCHECK(fragment.IsFragmentationContextRoot());
 
-  absl::optional<wtf_size_t> inner_fragmentainer_idx;
+  std::optional<wtf_size_t> inner_fragmentainer_idx;
 
   for (PhysicalFragmentLink child : fragment.Children()) {
     const auto* box_fragment = To<PhysicalBoxFragment>(child.fragment.Get());
@@ -902,7 +904,7 @@ void PrePaintTreeWalk::WalkLayoutObjectChildren(
     const LayoutObject& parent_object,
     const PhysicalBoxFragment* parent_fragment,
     const PrePaintTreeWalkContext& context) {
-  absl::optional<InlineCursor> inline_cursor;
+  std::optional<InlineCursor> inline_cursor;
   for (const LayoutObject* child = parent_object.SlowFirstChild(); child;
        // Stay on the |child| while iterating fragments of |child|.
        child = inline_cursor ? child : child->NextSibling()) {

@@ -96,7 +96,7 @@ void HoverHighlightView::SetRightViewVisible(bool visible) {
 
   tri_view_->SetContainerVisible(TriView::Container::END, visible);
   right_view_->SetVisible(visible);
-  Layout();
+  DeprecatedLayoutImmediately();
 }
 
 void HoverHighlightView::SetSubText(const std::u16string& sub_text) {
@@ -325,7 +325,7 @@ void HoverHighlightView::OnEnabledChanged() {
   }
 }
 
-BEGIN_METADATA(HoverHighlightView, views::Button)
+BEGIN_METADATA(HoverHighlightView)
 END_METADATA
 
 }  // namespace ash

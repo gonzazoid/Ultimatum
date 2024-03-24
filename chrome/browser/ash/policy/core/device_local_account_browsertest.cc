@@ -65,7 +65,6 @@
 #include "chrome/browser/ash/login/test/webview_content_extractor.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/login/users/avatar/user_image_manager_test_util.h"
-#include "chrome/browser/ash/login/users/chrome_user_manager.h"
 #include "chrome/browser/ash/login/users/chrome_user_manager_impl.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
@@ -601,7 +600,7 @@ class DeviceLocalAccountTest : public DevicePolicyCrosBrowserTest,
     ASSERT_TRUE(user) << " account " << account_id.GetUserEmail()
                       << " not found";
     EXPECT_EQ(account_id, user->GetAccountId());
-    EXPECT_EQ(user_manager::USER_TYPE_PUBLIC_ACCOUNT, user->GetType());
+    EXPECT_EQ(user_manager::UserType::kPublicAccount, user->GetType());
   }
 
   void SetSystemTimezoneAutomaticDetectionPolicy(
@@ -623,8 +622,7 @@ class DeviceLocalAccountTest : public DevicePolicyCrosBrowserTest,
                                 &extension_cache_root_dir)) {
       ADD_FAILURE();
     }
-    return extension_cache_root_dir.Append(
-        base::HexEncode(account_id.c_str(), account_id.size()));
+    return extension_cache_root_dir.Append(base::HexEncode(account_id));
   }
 
   base::FilePath GetCacheCRXFilePath(const std::string& id,
@@ -689,7 +687,7 @@ class DeviceLocalAccountTest : public DevicePolicyCrosBrowserTest,
     auto* controller = ash::ExistingUserController::current_controller();
     ASSERT_TRUE(controller);
 
-    ash::UserContext user_context(user_manager::USER_TYPE_PUBLIC_ACCOUNT,
+    ash::UserContext user_context(user_manager::UserType::kPublicAccount,
                                   account_id_1_);
     user_context.SetPublicSessionLocale(locale);
     user_context.SetPublicSessionInputMethod(input_method);
@@ -1767,7 +1765,7 @@ IN_PROC_BROWSER_TEST_F(DeviceLocalAccountTest, ManagedSessionTimezoneChange) {
   const user_manager::User* user =
       user_manager::UserManager::Get()->FindUser(account_id_1_);
   ASSERT_TRUE(user);
-  ASSERT_EQ(user->GetType(), user_manager::USER_TYPE_PUBLIC_ACCOUNT);
+  ASSERT_EQ(user->GetType(), user_manager::UserType::kPublicAccount);
 
   std::u16string timezone_id1(u"America/Los_Angeles");
   std::string timezone_id2("Europe/Berlin");

@@ -100,6 +100,8 @@ class CalendarEmptyEventListView : public PillButton {
   void OpenCalendarDefault() {
     controller_->OnCalendarEventWillLaunch();
 
+    calendar_metrics::RecordCalendarLaunchedFromEmptyEventList();
+
     GURL finalized_url;
     bool opened_pwa = false;
     DCHECK(controller_->selected_date().has_value());
@@ -186,8 +188,8 @@ void CalendarEventListView::OnThemeChanged() {
       GetColorProvider()->GetColor(cros_tokens::kCrosSysSystemOnBaseOpaque)));
 }
 
-void CalendarEventListView::Layout() {
-  views::View::Layout();
+void CalendarEventListView::Layout(PassKey) {
+  LayoutSuperclass<views::View>(this);
 
   if (gradient_helper_) {
     gradient_helper_->UpdateGradientMask();
@@ -370,7 +372,7 @@ void CalendarEventListView::UpdateListItems() {
   empty_list_view->InvalidateLayout();
 }
 
-BEGIN_METADATA(CalendarEventListView, views::View);
+BEGIN_METADATA(CalendarEventListView);
 END_METADATA
 
 }  // namespace ash

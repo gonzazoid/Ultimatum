@@ -68,6 +68,7 @@
 #include "third_party/blink/renderer/core/scroll/scroll_alignment.h"
 #include "third_party/blink/renderer/core/scroll/scroll_into_view_util.h"
 #include "third_party/blink/renderer/core/typed_arrays/array_buffer/array_buffer_contents.h"
+#include "third_party/blink/renderer/modules/canvas/canvas2d/base_rendering_context_2d.h"
 #include "third_party/blink/renderer/modules/canvas/canvas2d/canvas_style.h"
 #include "third_party/blink/renderer/modules/canvas/canvas2d/path_2d.h"
 #include "third_party/blink/renderer/modules/formatted_text/formatted_text.h"
@@ -219,12 +220,13 @@ void CanvasRenderingContext2D::TryRestoreContextEvent(TimerBase* timer) {
   // If lost mode is |kSyntheticLostContext| and |context_restorable_| is set to
   // true, it means context is forced to be lost for testing purpose. Restore
   // the context.
-  if (context_lost_mode_ == kSyntheticLostContext &&
-      canvas()->GetOrCreateCanvas2DLayerBridge() &&
-      canvas()->GetCanvas2DLayerBridge()->GetPaintCanvas()) {
-    try_restore_context_event_timer_.Stop();
-    DispatchContextRestoredEvent(nullptr);
-    return;
+  if (context_lost_mode_ == kSyntheticLostContext) {
+    Canvas2DLayerBridge* bridge = canvas()->GetOrCreateCanvas2DLayerBridge();
+    if (bridge && bridge->GetOrCreateResourceProvider()) {
+      try_restore_context_event_timer_.Stop();
+      DispatchContextRestoredEvent(nullptr);
+      return;
+    }
   }
 
   // If RealLostContext, it means the context was not lost due to surface
@@ -261,20 +263,6 @@ bool CanvasRenderingContext2D::WritePixels(const SkImageInfo& orig_info,
   DCHECK(IsPaintable());
   return canvas()->GetCanvas2DLayerBridge()->WritePixels(orig_info, pixels,
                                                          row_bytes, x, y);
-}
-
-void CanvasRenderingContext2D::SkipQueuedDrawCommands() {
-  if (CanvasResourceProvider* provider = ResourceProvider();
-      LIKELY(provider != nullptr)) {
-    provider->SkipQueuedDrawCommands();
-  }
-}
-
-void CanvasRenderingContext2D::RestartRecording() {
-  if (CanvasResourceProvider* provider = ResourceProvider();
-      LIKELY(provider != nullptr)) {
-    provider->RestartRecording();
-  }
 }
 
 void CanvasRenderingContext2D::Reset() {
@@ -390,18 +378,41 @@ cc::PaintCanvas* CanvasRenderingContext2D::GetOrCreatePaintCanvas() {
   }
 
   CanvasResourceProvider* provider = ResourceProvider();
-  if (LIKELY(provider != nullptr) && LIKELY(layer_count_ == 0)) {
-    // TODO(crbug.com/1246486): Make auto-flushing layer friendly.
-    provider->FlushIfRecordingLimitExceeded();
+  if (LIKELY(provider != nullptr)) {
+    // If we already had a provider, we can check whether it recorded ops passed
+    // the autoflush limit.
+    if (LIKELY(layer_count_ == 0)) {
+      // TODO(crbug.com/1246486): Make auto-flushing layer friendly.
+      provider->FlushIfRecordingLimitExceeded();
+    }
+  } else {
+    // If we have no provider, try creating one.
+    provider = bridge->GetOrCreateResourceProvider();
+    if (UNLIKELY(provider == nullptr)) {
+      return nullptr;
+    }
   }
-  return bridge->GetPaintCanvas();
+
+  return &provider->Recorder().getRecordingCanvas();
 }
 
-cc::PaintCanvas* CanvasRenderingContext2D::GetPaintCanvas() {
-  if (UNLIKELY(isContextLost() || !ResourceProvider())) {
+const cc::PaintCanvas* CanvasRenderingContext2D::GetPaintCanvas() const {
+  if (UNLIKELY(isContextLost())) {
     return nullptr;
   }
-  return canvas()->GetCanvas2DLayerBridge()->GetPaintCanvas();
+  const CanvasResourceProvider* provider = ResourceProvider();
+  if (UNLIKELY(!provider)) {
+    return nullptr;
+  }
+  return &provider->Recorder().getRecordingCanvas();
+}
+
+const MemoryManagedPaintRecorder* CanvasRenderingContext2D::Recorder() const {
+  const CanvasResourceProvider* provider = ResourceProvider();
+  if (UNLIKELY(provider == nullptr)) {
+    return nullptr;
+  }
+  return &provider->Recorder();
 }
 
 void CanvasRenderingContext2D::WillDraw(
@@ -416,11 +427,11 @@ void CanvasRenderingContext2D::WillDraw(
   }
 }
 
-absl::optional<cc::PaintRecord> CanvasRenderingContext2D::FlushCanvas(
+std::optional<cc::PaintRecord> CanvasRenderingContext2D::FlushCanvas(
     FlushReason reason) {
   CanvasResourceProvider* provider = ResourceProvider();
   if (UNLIKELY(provider == nullptr)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return provider->FlushCanvas(reason);
 }
@@ -852,6 +863,10 @@ HTMLCanvasElement* CanvasRenderingContext2D::HostAsHTMLCanvasElement() const {
 
 FontSelector* CanvasRenderingContext2D::GetFontSelector() const {
   return canvas()->GetFontSelector();
+}
+
+int CanvasRenderingContext2D::LayerCount() const {
+  return BaseRenderingContext2D::LayerCount();
 }
 
 }  // namespace blink

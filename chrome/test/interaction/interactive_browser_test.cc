@@ -24,6 +24,7 @@
 #include "chrome/test/interaction/interactive_browser_test_internal.h"
 #include "chrome/test/interaction/tracked_element_webcontents.h"
 #include "chrome/test/interaction/webcontents_interaction_test_util.h"
+#include "content/public/test/browser_test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 #include "third_party/blink/public/mojom/frame/user_activation_notification_type.mojom-shared.h"
@@ -110,7 +111,7 @@ ui::InteractionSequence::StepBuilder InteractiveBrowserTestApi::Screenshot(
 
 InteractiveBrowserTestApi::MultiStep InteractiveBrowserTestApi::InstrumentTab(
     ui::ElementIdentifier id,
-    absl::optional<int> tab_index,
+    std::optional<int> tab_index,
     BrowserSpecifier in_browser,
     bool wait_for_ready) {
   const auto desc =
@@ -159,7 +160,7 @@ InteractiveBrowserTestApi::InstrumentNextTab(ui::ElementIdentifier id,
 InteractiveBrowserTestApi::MultiStep
 InteractiveBrowserTestApi::AddInstrumentedTab(ui::ElementIdentifier id,
                                               GURL url,
-                                              absl::optional<int> at_index,
+                                              std::optional<int> at_index,
                                               BrowserSpecifier in_browser) {
   const auto desc = base::StringPrintf("AddInstrumentedTab( %s, %s, %d, )",
                                        id.GetName().c_str(), url.spec().c_str(),
@@ -227,7 +228,7 @@ InteractiveBrowserTestApi::InstrumentNonTabWebView(
 ui::InteractionSequence::StepBuilder
 InteractiveBrowserTestApi::WaitForWebContentsReady(
     ui::ElementIdentifier webcontents_id,
-    absl::optional<GURL> expected_url) {
+    std::optional<GURL> expected_url) {
   StepBuilder builder;
   builder.SetDescription(
       base::StringPrintf("WaitForWebContentsReady( %s )",
@@ -255,7 +256,7 @@ InteractiveBrowserTestApi::WaitForWebContentsReady(
 ui::InteractionSequence::StepBuilder
 InteractiveBrowserTestApi::WaitForWebContentsNavigation(
     ui::ElementIdentifier webcontents_id,
-    absl::optional<GURL> expected_url) {
+    std::optional<GURL> expected_url) {
   StepBuilder builder;
   builder.SetDescription(
       base::StringPrintf("WaitForWebContentsNavigation( %s )",

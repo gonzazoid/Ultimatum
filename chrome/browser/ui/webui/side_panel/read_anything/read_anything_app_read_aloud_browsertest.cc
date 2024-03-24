@@ -15,6 +15,7 @@
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "ui/accessibility/accessibility_features.h"
 
 class ReadAnythingAppReadAloudTest : public InProcessBrowserTest {
@@ -78,10 +79,6 @@ class ReadAnythingAppReadAloudTest : public InProcessBrowserTest {
   base::test::ScopedFeatureList scoped_feature_list_;
 };
 
-IN_PROC_BROWSER_TEST_F(ReadAnythingAppReadAloudTest, ReadAloud_Visible) {
-  ASSERT_TRUE(RunTest("read_aloud_visible_with_flag.js"));
-}
-
 IN_PROC_BROWSER_TEST_F(ReadAnythingAppReadAloudTest,
                        ReadAloud_HighlightWhileReading) {
   ASSERT_TRUE(RunTest("read_aloud_highlight_while_reading.js"));
@@ -113,14 +110,15 @@ IN_PROC_BROWSER_TEST_F(ReadAnythingAppReadAloudTest,
 }
 
 IN_PROC_BROWSER_TEST_F(ReadAnythingAppReadAloudTest,
+                       ReadAloud_PreviousGranularityChangesUpdatesHighlight) {
+  ASSERT_TRUE(
+      RunTest("read_aloud_previous_highlight_with_granularity_changes.js"));
+}
+
+IN_PROC_BROWSER_TEST_F(ReadAnythingAppReadAloudTest,
                        HighlightCallback_TogglesHighlight) {
   ASSERT_TRUE(RunTest("highlight_callback_toggles_highlight.js"));
 }
-
-IN_PROC_BROWSER_TEST_F(ReadAnythingAppReadAloudTest, ReadAloud_FontSizeMenu) {
-  ASSERT_TRUE(RunTest("font_size_menu_with_read_aloud.js"));
-}
-
 IN_PROC_BROWSER_TEST_F(ReadAnythingAppReadAloudTest, ReadAloud_FontMenu) {
   ASSERT_TRUE(RunTest("font_menu_with_read_aloud.js"));
 }
@@ -128,4 +126,14 @@ IN_PROC_BROWSER_TEST_F(ReadAnythingAppReadAloudTest, ReadAloud_FontMenu) {
 IN_PROC_BROWSER_TEST_F(ReadAnythingAppReadAloudTest,
                        ReadAloud_KeyboardForPlayPause) {
   ASSERT_TRUE(RunTest("k_plays_and_pauses.js"));
+}
+
+IN_PROC_BROWSER_TEST_F(ReadAnythingAppReadAloudTest,
+                       ReadAloud_LinksToggleButtonOnToolbar) {
+  ASSERT_TRUE(RunTest("read_aloud_links_toggle_button.js"));
+                       }
+
+IN_PROC_BROWSER_TEST_F(ReadAnythingAppReadAloudTest,
+                       ReadAloud_SpeechUsesMaximumTextLength) {
+  ASSERT_TRUE(RunTest("speech_uses_maximum_text_length.js"));
 }

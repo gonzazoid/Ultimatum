@@ -6,25 +6,56 @@
 
 #include <memory>
 
+#include "base/containers/contains.h"
 #include "base/dcheck_is_on.h"
 #include "base/ranges/algorithm.h"
 #include "build/build_config.h"
-#include "device/vr/openxr/openxr_anchor_manager.h"
-#include "device/vr/openxr/openxr_hand_tracker.h"
-#include "device/vr/openxr/openxr_hand_tracker_meta.h"
-#include "device/vr/openxr/openxr_scene_understanding_manager.h"
-#include "device/vr/openxr/openxr_stage_bounds_provider_basic.h"
+#include "device/vr/openxr/openxr_extension_handler_factories.h"
+#include "device/vr/openxr/openxr_extension_handler_factory.h"
 #include "device/vr/public/mojom/xr_session.mojom.h"
-// Included on all platforms so that we can check the extension names, even
-// if they may not be supported there.
-#include "third_party/openxr/dev/xr_android.h"
-
-#if BUILDFLAG(IS_ANDROID)
-#include "device/vr/openxr/android/openxr_hand_tracker_android.h"
-#include "device/vr/openxr/android/openxr_stage_bounds_provider_android.h"
-#endif
 
 namespace device {
+
+namespace {
+// A helper macro to avoid the repetitive boilerplate required to load a
+// function from OpenXR. Note that these are typically extension functions and
+// that the name of the method is repeated several times throughout the
+// declaration. For a function named "xrCreateHandTrackerEXT" this will exapnd
+// to the following:
+// std::ignore = xrGetInstanceProcAddr(
+//     instance, "xrCreateHandTrackerEXT",
+//     reinterpret_cast<PFN_xrVoidFunction*>(
+//         const_cast<PFN_xrCreateHandTrackerEXT*>(
+//             &extension_methods_.xrCreateHandTrackerEXT)));
+#define OPENXR_LOAD_FN(name)                 \
+  std::ignore = xrGetInstanceProcAddr(       \
+      instance, #name,                       \
+      reinterpret_cast<PFN_xrVoidFunction*>( \
+          const_cast<PFN_##name*>(&extension_methods_.name)))
+
+// The ExtensionHandlers are all created/checked in very similar ways, with the
+// only difference really being what method they need called on the
+// OpenXrExtensionHandler factory to be created (and thus the arguments that
+// they need to have supplied). This helper abstracts the boilerplate so that
+// we can simply use a factory lambda which has that knowledge, and this helper
+// then takes care of the rest of the boilerplate.
+template <typename T, typename FunctionType>
+std::unique_ptr<T> CreateExtensionHandler(
+    const OpenXrExtensionEnumeration* extension_enum,
+    FunctionType fn) {
+  for (const auto* factory : GetExtensionHandlerFactories()) {
+    CHECK(factory);
+    if (factory->IsEnabled(extension_enum)) {
+      auto ret = fn(*factory);
+      if (ret != nullptr) {
+        return ret;
+      }
+    }
+  }
+
+  return nullptr;
+}
+}  // namespace
 
 OpenXrExtensionMethods::OpenXrExtensionMethods() = default;
 OpenXrExtensionMethods::~OpenXrExtensionMethods() = default;
@@ -70,124 +101,58 @@ OpenXrExtensionHelper::OpenXrExtensionHelper(
   // Failure to query a method results in a nullptr
 
   // Hand tracking methods
-  std::ignore = xrGetInstanceProcAddr(
-      instance, "xrCreateHandTrackerEXT",
-      reinterpret_cast<PFN_xrVoidFunction*>(
-          const_cast<PFN_xrCreateHandTrackerEXT*>(
-              &extension_methods_.xrCreateHandTrackerEXT)));
-  std::ignore = xrGetInstanceProcAddr(
-      instance, "xrDestroyHandTrackerEXT",
-      reinterpret_cast<PFN_xrVoidFunction*>(
-          const_cast<PFN_xrDestroyHandTrackerEXT*>(
-              &extension_methods_.xrDestroyHandTrackerEXT)));
-  std::ignore = xrGetInstanceProcAddr(
-      instance, "xrLocateHandJointsEXT",
-      reinterpret_cast<PFN_xrVoidFunction*>(
-          const_cast<PFN_xrLocateHandJointsEXT*>(
-              &extension_methods_.xrLocateHandJointsEXT)));
+  OPENXR_LOAD_FN(xrCreateHandTrackerEXT);
+  OPENXR_LOAD_FN(xrDestroyHandTrackerEXT);
+  OPENXR_LOAD_FN(xrLocateHandJointsEXT);
 
   // Anchors methods
-  std::ignore = xrGetInstanceProcAddr(
-      instance, "xrCreateSpatialAnchorMSFT",
-      reinterpret_cast<PFN_xrVoidFunction*>(
-          const_cast<PFN_xrCreateSpatialAnchorMSFT*>(
-              &extension_methods_.xrCreateSpatialAnchorMSFT)));
-  std::ignore = xrGetInstanceProcAddr(
-      instance, "xrDestroySpatialAnchorMSFT",
-      reinterpret_cast<PFN_xrVoidFunction*>(
-          const_cast<PFN_xrDestroySpatialAnchorMSFT*>(
-              &extension_methods_.xrDestroySpatialAnchorMSFT)));
-  std::ignore = xrGetInstanceProcAddr(
-      instance, "xrCreateSpatialAnchorSpaceMSFT",
-      reinterpret_cast<PFN_xrVoidFunction*>(
-          const_cast<PFN_xrCreateSpatialAnchorSpaceMSFT*>(
-              &extension_methods_.xrCreateSpatialAnchorSpaceMSFT)));
+  OPENXR_LOAD_FN(xrCreateSpatialAnchorMSFT);
+  OPENXR_LOAD_FN(xrDestroySpatialAnchorMSFT);
+  OPENXR_LOAD_FN(xrCreateSpatialAnchorSpaceMSFT);
 
-  std::ignore = xrGetInstanceProcAddr(
-      instance, "xrEnumerateSceneComputeFeaturesMSFT",
-      reinterpret_cast<PFN_xrVoidFunction*>(
-          const_cast<PFN_xrEnumerateSceneComputeFeaturesMSFT*>(
-              &extension_methods_.xrEnumerateSceneComputeFeaturesMSFT)));
-  std::ignore = xrGetInstanceProcAddr(
-      instance, "xrCreateSceneObserverMSFT",
-      reinterpret_cast<PFN_xrVoidFunction*>(
-          const_cast<PFN_xrCreateSceneObserverMSFT*>(
-              &extension_methods_.xrCreateSceneObserverMSFT)));
-  std::ignore = xrGetInstanceProcAddr(
-      instance, "xrDestroySceneObserverMSFT",
-      reinterpret_cast<PFN_xrVoidFunction*>(
-          const_cast<PFN_xrDestroySceneObserverMSFT*>(
-              &extension_methods_.xrDestroySceneObserverMSFT)));
-  std::ignore = xrGetInstanceProcAddr(
-      instance, "xrCreateSceneMSFT",
-      reinterpret_cast<PFN_xrVoidFunction*>(const_cast<PFN_xrCreateSceneMSFT*>(
-          &extension_methods_.xrCreateSceneMSFT)));
-  std::ignore = xrGetInstanceProcAddr(
-      instance, "xrDestroySceneMSFT",
-      reinterpret_cast<PFN_xrVoidFunction*>(const_cast<PFN_xrDestroySceneMSFT*>(
-          &extension_methods_.xrDestroySceneMSFT)));
-  std::ignore = xrGetInstanceProcAddr(
-      instance, "xrComputeNewSceneMSFT",
-      reinterpret_cast<PFN_xrVoidFunction*>(
-          const_cast<PFN_xrComputeNewSceneMSFT*>(
-              &extension_methods_.xrComputeNewSceneMSFT)));
-  std::ignore = xrGetInstanceProcAddr(
-      instance, "xrGetSceneComputeStateMSFT",
-      reinterpret_cast<PFN_xrVoidFunction*>(
-          const_cast<PFN_xrGetSceneComputeStateMSFT*>(
-              &extension_methods_.xrGetSceneComputeStateMSFT)));
-  std::ignore = xrGetInstanceProcAddr(
-      instance, "xrGetSceneComponentsMSFT",
-      reinterpret_cast<PFN_xrVoidFunction*>(
-          const_cast<PFN_xrGetSceneComponentsMSFT*>(
-              &extension_methods_.xrGetSceneComponentsMSFT)));
-  std::ignore = xrGetInstanceProcAddr(
-      instance, "xrLocateSceneComponentsMSFT",
-      reinterpret_cast<PFN_xrVoidFunction*>(
-          const_cast<PFN_xrLocateSceneComponentsMSFT*>(
-              &extension_methods_.xrLocateSceneComponentsMSFT)));
-  std::ignore = xrGetInstanceProcAddr(
-      instance, "xrGetSceneMeshBuffersMSFT",
-      reinterpret_cast<PFN_xrVoidFunction*>(
-          const_cast<PFN_xrGetSceneMeshBuffersMSFT*>(
-              &extension_methods_.xrGetSceneMeshBuffersMSFT)));
+  // MSFT Scene Understanding Methods
+  OPENXR_LOAD_FN(xrEnumerateSceneComputeFeaturesMSFT);
+  OPENXR_LOAD_FN(xrCreateSceneObserverMSFT);
+  OPENXR_LOAD_FN(xrDestroySceneObserverMSFT);
+  OPENXR_LOAD_FN(xrCreateSceneMSFT);
+  OPENXR_LOAD_FN(xrDestroySceneMSFT);
+  OPENXR_LOAD_FN(xrComputeNewSceneMSFT);
+  OPENXR_LOAD_FN(xrGetSceneComputeStateMSFT);
+  OPENXR_LOAD_FN(xrGetSceneComponentsMSFT);
+  OPENXR_LOAD_FN(xrLocateSceneComponentsMSFT);
+  OPENXR_LOAD_FN(xrGetSceneMeshBuffersMSFT);
 
 #if BUILDFLAG(IS_WIN)
-  std::ignore = xrGetInstanceProcAddr(
-      instance, "xrConvertWin32PerformanceCounterToTimeKHR",
-      reinterpret_cast<PFN_xrVoidFunction*>(
-          const_cast<PFN_xrConvertWin32PerformanceCounterToTimeKHR*>(
-              &extension_methods_.xrConvertWin32PerformanceCounterToTimeKHR)));
+  OPENXR_LOAD_FN(xrConvertWin32PerformanceCounterToTimeKHR);
 #endif
 
 #if BUILDFLAG(IS_ANDROID)
-  std::ignore = xrGetInstanceProcAddr(
-      instance, "xrGetReferenceSpaceBoundsPolygonANDROID",
-      reinterpret_cast<PFN_xrVoidFunction*>(
-          const_cast<PFN_xrGetReferenceSpaceBoundsPolygonANDROID*>(
-              &extension_methods_.xrGetReferenceSpaceBoundsPolygonANDROID)));
+  OPENXR_LOAD_FN(xrGetReferenceSpaceBoundsPolygonANDROID);
+
+  OPENXR_LOAD_FN(xrCreateTrackableTrackerANDROID);
+  OPENXR_LOAD_FN(xrDestroyTrackableTrackerANDROID);
+
+  OPENXR_LOAD_FN(xrRaycastANDROID);
+
+  OPENXR_LOAD_FN(xrCreateAnchorSpaceANDROID);
 #endif
 }
 
 bool OpenXrExtensionHelper::IsFeatureSupported(
     device::mojom::XRSessionFeature feature) const {
+  const auto* extension_enum = ExtensionEnumeration();
   switch (feature) {
     case device::mojom::XRSessionFeature::ANCHORS:
-      return IsExtensionSupported(XR_MSFT_SPATIAL_ANCHOR_EXTENSION_NAME);
     case device::mojom::XRSessionFeature::HAND_INPUT:
-      // We need the XR_EXT_HAND_TRACKING extension in order to supply the hand
-      // mesh required by the spec for the hand input feature. However, the hand
-      // mesh must be tied to an XrInputSource. In order to generate an
-      // XrInputSource we need to be able to send up a "primary action" event
-      // (i.e. a click), so we need to also check that we have an extension
-      // enabled that we can use to generate that.
-      return IsExtensionSupported(XR_EXT_HAND_TRACKING_EXTENSION_NAME) &&
-             (IsExtensionSupported(XR_EXT_HAND_INTERACTION_EXTENSION_NAME) ||
-              IsExtensionSupported(XR_MSFT_HAND_INTERACTION_EXTENSION_NAME) ||
-              IsExtensionSupported(XR_FB_HAND_TRACKING_AIM_EXTENSION_NAME) ||
-              IsExtensionSupported(XR_ANDROID_HAND_GESTURE_EXTENSION_NAME));
     case device::mojom::XRSessionFeature::HIT_TEST:
-      return IsExtensionSupported(XR_MSFT_SCENE_UNDERSTANDING_EXTENSION_NAME);
+    case device::mojom::XRSessionFeature::REF_SPACE_UNBOUNDED:
+      return base::ranges::any_of(
+          GetExtensionHandlerFactories(),
+          [feature, &extension_enum](const auto* extension_handler_factory) {
+            return base::Contains(
+                extension_handler_factory->GetSupportedFeatures(extension_enum),
+                feature);
+          });
     case device::mojom::XRSessionFeature::SECONDARY_VIEWS:
       return IsExtensionSupported(
           XR_MSFT_SECONDARY_VIEW_CONFIGURATION_EXTENSION_NAME);
@@ -206,53 +171,54 @@ bool OpenXrExtensionHelper::IsExtensionSupported(
 std::unique_ptr<OpenXrAnchorManager> OpenXrExtensionHelper::CreateAnchorManager(
     XrSession session,
     XrSpace base_space) const {
-  return std::make_unique<OpenXrAnchorManager>(*this, session, base_space);
+  return CreateExtensionHandler<OpenXrAnchorManager>(
+      ExtensionEnumeration(),
+      [this, session,
+       base_space](const OpenXrExtensionHandlerFactory& factory) {
+        return factory.CreateAnchorManager(*this, session, base_space);
+      });
 }
 
 std::unique_ptr<OpenXrHandTracker> OpenXrExtensionHelper::CreateHandTracker(
     XrSession session,
     OpenXrHandednessType handedness) const {
-  // While not explicitly always required, many extensions implicitly rely upon
-  // this being required by virtue of extending it's core structs.
-  bool ext_hand_tracking_supported =
-      IsExtensionSupported(XR_EXT_HAND_TRACKING_EXTENSION_NAME);
-#if BUILDFLAG(IS_ANDROID)
-  if (ext_hand_tracking_supported &&
-      IsExtensionSupported(XR_ANDROID_HAND_GESTURE_EXTENSION_NAME)) {
-    return std::make_unique<OpenXrHandTrackerAndroid>(*this, session,
-                                                      handedness);
-  }
-#endif
-
-  if (ext_hand_tracking_supported &&
-      IsExtensionSupported(XR_FB_HAND_TRACKING_AIM_EXTENSION_NAME)) {
-    return std::make_unique<OpenXrHandTrackerMeta>(*this, session, handedness);
-  }
-
-  if (ext_hand_tracking_supported) {
-    return std::make_unique<OpenXrHandTracker>(*this, session, handedness);
-  }
-
-  return nullptr;
+  return CreateExtensionHandler<OpenXrHandTracker>(
+      ExtensionEnumeration(),
+      [this, session,
+       handedness](const OpenXrExtensionHandlerFactory& factory) {
+        return factory.CreateHandTracker(*this, session, handedness);
+      });
 }
 
 std::unique_ptr<OpenXRSceneUnderstandingManager>
 OpenXrExtensionHelper::CreateSceneUnderstandingManager(
     XrSession session,
     XrSpace base_space) const {
-  return std::make_unique<OpenXRSceneUnderstandingManager>(*this, session,
-                                                           base_space);
+  return CreateExtensionHandler<OpenXRSceneUnderstandingManager>(
+      ExtensionEnumeration(),
+      [this, session,
+       base_space](const OpenXrExtensionHandlerFactory& factory) {
+        return factory.CreateSceneUnderstandingManager(*this, session,
+                                                       base_space);
+      });
 }
 
 std::unique_ptr<OpenXrStageBoundsProvider>
 OpenXrExtensionHelper::CreateStageBoundsProvider(XrSession session) const {
-#if BUILDFLAG(IS_ANDROID)
-  if (IsExtensionSupported(
-          XR_ANDROID_REFERENCE_SPACE_BOUNDS_POLYGON_EXTENSION_NAME)) {
-    return std::make_unique<OpenXrStageBoundsProviderAndroid>(*this, session);
-  }
-#endif
-  return std::make_unique<OpenXrStageBoundsProviderBasic>(session);
+  return CreateExtensionHandler<OpenXrStageBoundsProvider>(
+      ExtensionEnumeration(),
+      [this, session](const OpenXrExtensionHandlerFactory& factory) {
+        return factory.CreateStageBoundsProvider(*this, session);
+      });
+}
+
+std::unique_ptr<OpenXrUnboundedSpaceProvider>
+OpenXrExtensionHelper::CreateUnboundedSpaceProvider() const {
+  return CreateExtensionHandler<OpenXrUnboundedSpaceProvider>(
+      ExtensionEnumeration(),
+      [this](const OpenXrExtensionHandlerFactory& factory) {
+        return factory.CreateUnboundedSpaceProvider(*this);
+      });
 }
 
 }  // namespace device

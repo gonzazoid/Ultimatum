@@ -31,6 +31,8 @@ const char* JobTypeToRequestType(
       return dm_protocol::kValueRequestAutoEnrollment;
     case DeviceManagementService::JobConfiguration::TYPE_REGISTRATION:
       return dm_protocol::kValueRequestRegister;
+    case DeviceManagementService::JobConfiguration::TYPE_OIDC_REGISTRATION:
+      return dm_protocol::kValueRequestOidcRegister;
     case DeviceManagementService::JobConfiguration::TYPE_POLICY_FETCH:
       return dm_protocol::kValueRequestPolicy;
     case DeviceManagementService::JobConfiguration::TYPE_API_AUTH_CODE_FETCH:
@@ -149,7 +151,7 @@ DMServerJobConfiguration::CreateParams::WithParams(
     const std::string& client_id,
     bool critical,
     DMAuth auth_data,
-    absl::optional<std::string> oauth_token,
+    std::optional<std::string> oauth_token,
     scoped_refptr<network::SharedURLLoaderFactory> factory,
     Callback callback) {
   DMServerJobConfiguration::CreateParams params;
@@ -198,7 +200,7 @@ DMServerJobConfiguration::DMServerJobConfiguration(
     const std::string& client_id,
     bool critical,
     DMAuth auth_data,
-    absl::optional<std::string>&& oauth_token,
+    std::optional<std::string>&& oauth_token,
     scoped_refptr<network::SharedURLLoaderFactory> factory,
     Callback callback)
     : DMServerJobConfiguration(CreateParams::WithParams(service,
@@ -215,7 +217,7 @@ DMServerJobConfiguration::DMServerJobConfiguration(
     CloudPolicyClient* client,
     bool critical,
     DMAuth auth_data,
-    absl::optional<std::string>&& oauth_token,
+    std::optional<std::string>&& oauth_token,
     Callback callback)
     : DMServerJobConfiguration(
           CreateParams::WithParams(client->service(),

@@ -46,6 +46,10 @@
 #include "content/browser/media/session/media_session_android.h"
 #endif  // BUILDFLAG(IS_ANDROID)
 
+#if BUILDFLAG(IS_WIN)
+#include "content/public/common/content_features.h"
+#endif  // BUILDFLAG(IS_WIN)
+
 namespace content {
 
 using blink::mojom::MediaSessionPlaybackState;
@@ -1038,6 +1042,23 @@ MediaSessionImpl::GetMediaSessionInfoSync() {
   // If we have Pepper players then we should force ducking.
   info->force_duck = HasPepper();
 
+#if BUILDFLAG(IS_WIN)
+  // If this is a webapp, and instanced media controls are on, mark this session
+  // as a pwa session so that the browser sessions can stay isolated. This is
+  // used to differentiate webapp sessions for different handling.
+  auto* web_contents_delegate = web_contents()->GetDelegate();
+  info->ignore_for_active_session =
+      base::FeatureList::IsEnabled(features::kWebAppSystemMediaControlsWin) &&
+      web_contents_delegate &&
+      web_contents_delegate->ShouldUseInstancedSystemMediaControls();
+#else
+  info->ignore_for_active_session = false;
+#endif
+
+  if (always_ignore_for_active_session_for_testing_) {
+    info->ignore_for_active_session = true;
+  }
+
   // The playback state should use |IsActive| to determine whether we are
   // playing or not. However, if there is a |routed_service_| which is playing
   // then we should force the playback state to be playing.
@@ -1305,7 +1326,7 @@ void MediaSessionImpl::GetMediaImageBitmap(
   }
 #endif
 
-  // We should make sure |image| is in |images_|.
+  // We should make sure `image` is in `images_`.
   bool found = false;
   bool source_icon = false;
   for (auto& image_type : images_) {
@@ -1315,6 +1336,17 @@ void MediaSessionImpl::GetMediaImageBitmap(
       if (image_type.first ==
           media_session::mojom::MediaSessionImageType::kSourceIcon) {
         source_icon = true;
+      }
+      break;
+    }
+  }
+
+  // Or the `image` is in chapters.
+  if (!found) {
+    for (auto& chapter : metadata_.chapters) {
+      if (base::Contains(chapter.artwork(), image)) {
+        found = true;
+        break;
       }
     }
   }
@@ -1804,6 +1836,7 @@ void MediaSessionImpl::BuildMetadata(
     metadata.title = routed_service_->metadata()->title;
     metadata.artist = routed_service_->metadata()->artist;
     metadata.album = routed_service_->metadata()->album;
+    metadata.chapters = routed_service_->metadata()->chapterInfo;
     artwork = routed_service_->metadata()->artwork;
   }
 

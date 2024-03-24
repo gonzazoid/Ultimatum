@@ -33,7 +33,7 @@ void LegacyTechService::ReportEvent(
     uint64_t column,
     std::optional<content::LegacyTechCookieIssueDetails> cookie_issue_details)
     const {
-  absl::optional<std::string> matched_url = url_matcher_.GetMatchedURL(url);
+  std::optional<std::string> matched_url = url_matcher_.GetMatchedURL(url);
   VLOG(2) << "Get report for URL " << url
           << (matched_url ? " that matches a policy."
                           : " without matching any policies.");
@@ -51,7 +51,6 @@ void LegacyTechService::ReportEvent(
 
   LegacyTechReportGenerator::LegacyTechData data = {
       type,
-      /*timestamp=*/base::Time::Now(),
       url,
       frame_url,
       *matched_url,

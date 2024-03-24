@@ -4,14 +4,16 @@
 
 module compose.mojom;
 
-// Interface for setting up connection to allow calls between the compose dialog
-// web page and native code.
-interface ComposeSessionPageHandlerFactory {
-  // Called from dialog compose JS to set up native handler.
-  CreateComposeSessionPageHandler(
-      pending_receiver<ComposeClientPageHandler> client_handler,
-      pending_receiver<ComposeSessionPageHandler> handler,
-      pending_remote<ComposeDialog> dialog);
+import "components/compose/core/browser/compose_enums.mojom";
+
+// Interface for setting up connection to allow calls between the untrusted
+// compose dialog web page and native code.
+interface ComposeSessionUntrustedPageHandlerFactory {
+  // Called from untrusted dialog compose JS to set up native handler.
+  CreateComposeSessionUntrustedPageHandler(
+      pending_receiver<ComposeClientUntrustedPageHandler> client_handler,
+      pending_receiver<ComposeSessionUntrustedPageHandler> handler,
+      pending_remote<ComposeUntrustedDialog> dialog);
 };
 
 // Configuration parameter used in compose requests.
@@ -26,26 +28,6 @@ enum Length {
   kUnset,
   kShorter,
   kLonger,
-};
-
-// Status code used in compose responses.
-// These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused. Keep in sync with
-// ComposeResponseStatus in src/tools/metrics/histograms/enums.xml.
-enum ComposeStatus {
-  kOk = 0,
-  // Generic error, not specified.
-  kError = 1,
-  // Request was unable to be processed.
-  kNotSuccessful = 2,
-  // Server may have not responded.
-  kTryAgain = 3,
-  // Server is likely overloaded, cannot handle a response right now.
-  kTryAgainLater = 4,
-  // If the feature is somehow disabled.
-  kMisconfiguration = 5,
-  // If permission is denied (e.g. user is not logged in.)
-  kPermissionDenied = 6,
 };
 
 // Configuration parameters used in rewrite requests, specifying how the
@@ -124,6 +106,8 @@ enum CloseReason {
   kInsertButton,
   // The MSBB dialog was shown and dismissed.
   kMSBBCloseButton,
+  // The main app dialog lost focus.
+  kLostFocus,
 };
 
 //TODO(b/311697865) move this to a common location.
@@ -136,8 +120,12 @@ enum UserFeedback {
   kUserFeedbackNegative,
 };
 
-// Interface for calls from Compose dialog JS into the Browser process.
-interface ComposeSessionPageHandler {
+// Interface for calls from the untrusted Compose dialog JS into the Browser
+// process.
+interface ComposeSessionUntrustedPageHandler {
+  // Asks the browser to track a cancel edit action for logging purposes.
+  LogCancelEdit();
+
   // Asks the Browser to compose `input`, informing the Browser if the compose
   // call was based on the user input being 'edited' in the dialog after the
   // initial compose response.
@@ -147,6 +135,9 @@ interface ComposeSessionPageHandler {
   // response should be changed. A null `style` requests a rewrite without
   // changes to the tone or length.
   Rewrite(StyleModifiers? style);
+
+  // Asks the browser to track an edit input action for logging purposes.
+  LogEditInput();
 
   // Asks the native handler to store `webui_state` for the last field the user
   // selected compose on.
@@ -186,16 +177,16 @@ interface ComposeSessionPageHandler {
   // survey.
   OpenFeedbackSurveyLink();
 
-  // Asks the Browser to open a new tab navigated to the Compose-related Chrome
-  // settings page.
-  OpenComposeSettings();
+  // Asks the Browser to open a new tab navigated to the sign in page.
+  OpenSignInPage();
 
   // Asks the native handler to store the user feedback supplied by the user.
   SetUserFeedback(UserFeedback feedback);
 };
 
-// Interface for calls from Compose dialog JS into the Browser process.
-interface ComposeClientPageHandler {
+// Interface for calls from the untrusted Compose dialog JS into the Browser
+// process.
+interface ComposeClientUntrustedPageHandler {
   // Asks the receiver to show the compose dialog.
   ShowUI();
   // Asks the receiver to close the compose dialog. `reason` describes
@@ -203,10 +194,14 @@ interface ComposeClientPageHandler {
   CloseUI(CloseReason reason);
   // Notifies the browser that the FRE was completed.
   CompleteFirstRun();
+  // Asks the Browser to open a new tab navigated to the Compose-related Chrome
+  // settings page.
+  OpenComposeSettings();
 };
 
-// Interface for calls from the Browser process into Compose dialog JS.
-interface ComposeDialog {
+// Interface for calls from the Browser process into the untrusted Compose
+// dialog JS.
+interface ComposeUntrustedDialog {
   // Called when a compose request is fulfilled, either by the model execution
   // service or due to an error. Because compose requests can outlive this
   // WebUI, this is an event rather than a callback on the original `Compose`

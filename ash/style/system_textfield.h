@@ -18,9 +18,9 @@ namespace ash {
 // SystemTextfield is an extension of `Views::Textfield` used for system UIs. It
 // has specific small, medium, and large types and applies dynamic colors.
 class ASH_EXPORT SystemTextfield : public views::Textfield {
- public:
-  METADATA_HEADER(SystemTextfield);
+  METADATA_HEADER(SystemTextfield, views::Textfield)
 
+ public:
   enum class Type {
     kSmall,
     kMedium,
@@ -55,6 +55,8 @@ class ASH_EXPORT SystemTextfield : public views::Textfield {
   // Enables/disables background color.
   // With disabled state the background will be transparent.
   void SetBackgroundColorEnabled(bool enabled);
+  // Creates themed or transparent background according to the textfield states.
+  void UpdateBackground();
 
   // views::Textfield:
   gfx::Size CalculatePreferredSize() const override;
@@ -77,8 +79,6 @@ class ASH_EXPORT SystemTextfield : public views::Textfield {
                      bool is_background_color);
   // Updates text and selection text colors.
   void UpdateTextColor();
-  // Creates themed or transparent background according to the textfield states.
-  void UpdateBackground();
 
   Type type_;
   std::unique_ptr<EventHandler> event_handler_;

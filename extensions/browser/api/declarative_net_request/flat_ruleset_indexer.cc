@@ -15,8 +15,7 @@
 #include "extensions/browser/api/declarative_net_request/indexed_rule.h"
 #include "extensions/browser/api/declarative_net_request/utils.h"
 
-namespace extensions {
-namespace declarative_net_request {
+namespace extensions::declarative_net_request {
 
 namespace {
 
@@ -250,9 +249,9 @@ FlatOffset<flatbuffers::Vector<uint8_t>> BuildEmbedderConditionsOffset(
     FlatVectorOffset<flat::HeaderCondition> response_headers_offset =
         BuildHeaderConditionsOffset(&nested_builder,
                                     indexed_rule.response_headers);
-    FlatStringListOffset excluded_response_headers_offset =
-        BuildVectorOfSharedStrings(&nested_builder,
-                                   indexed_rule.excluded_response_headers);
+    FlatVectorOffset<flat::HeaderCondition> excluded_response_headers_offset =
+        BuildHeaderConditionsOffset(&nested_builder,
+                                    indexed_rule.excluded_response_headers);
 
     auto nested_flatbuffer_root_offset = flat::CreateEmbedderConditions(
         nested_builder, tab_ids_included_offset, tab_ids_excluded_offset,
@@ -429,5 +428,4 @@ FlatRulesetIndexer::GetBuilders(const IndexedRule& indexed_rule) {
   return {};
 }
 
-}  // namespace declarative_net_request
-}  // namespace extensions
+}  // namespace extensions::declarative_net_request

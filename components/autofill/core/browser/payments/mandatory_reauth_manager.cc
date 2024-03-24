@@ -18,12 +18,44 @@ using autofill_metrics::LogMandatoryReauthOfferOptInDecision;
 using autofill_metrics::MandatoryReauthOfferOptInDecision;
 
 MandatoryReauthManager::MandatoryReauthManager(AutofillClient* client)
-    : client_(client) {}
+    : client_(client) {
+  if (client_) {
+    device_authenticator_ = client_->GetDeviceAuthenticator();
+  }
+}
+
 MandatoryReauthManager::~MandatoryReauthManager() = default;
+
+// static
+NonInteractivePaymentMethodType
+MandatoryReauthManager::GetNonInteractivePaymentMethodType(
+    absl::variant<CreditCard::RecordType, Iban::RecordType> record_type) {
+  if (CreditCard::RecordType* type =
+          absl::get_if<CreditCard::RecordType>(&record_type)) {
+    switch (*type) {
+      case CreditCard::RecordType::kLocalCard:
+        return NonInteractivePaymentMethodType::kLocalCard;
+      case CreditCard::RecordType::kFullServerCard:
+        return NonInteractivePaymentMethodType::kFullServerCard;
+      case CreditCard::RecordType::kVirtualCard:
+        return NonInteractivePaymentMethodType::kVirtualCard;
+      case CreditCard::RecordType::kMaskedServerCard:
+        return NonInteractivePaymentMethodType::kMaskedServerCard;
+    }
+  } else {
+    if (absl::get<Iban::RecordType>(record_type) ==
+        Iban::RecordType::kLocalIban) {
+      return NonInteractivePaymentMethodType::kLocalIban;
+    } else {
+      CHECK_NE(absl::get<Iban::RecordType>(record_type),
+               Iban::RecordType::kUnknown);
+      return NonInteractivePaymentMethodType::kServerIban;
+    }
+  }
+}
 
 void MandatoryReauthManager::Authenticate(
     device_reauth::DeviceAuthenticator::AuthenticateCallback callback) {
-  device_authenticator_ = client_->GetDeviceAuthenticator();
   CHECK(device_authenticator_);
   device_authenticator_->AuthenticateWithMessage(
       u"", base::BindOnce(&MandatoryReauthManager::OnAuthenticationCompleted,
@@ -33,7 +65,6 @@ void MandatoryReauthManager::Authenticate(
 void MandatoryReauthManager::AuthenticateWithMessage(
     const std::u16string& message,
     device_reauth::DeviceAuthenticator::AuthenticateCallback callback) {
-  device_authenticator_ = client_->GetDeviceAuthenticator();
   CHECK(device_authenticator_);
   device_authenticator_->AuthenticateWithMessage(
       message,
@@ -41,16 +72,55 @@ void MandatoryReauthManager::AuthenticateWithMessage(
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
 
+void MandatoryReauthManager::StartDeviceAuthentication(
+    NonInteractivePaymentMethodType non_interactive_payment_method_type,
+    base::OnceCallback<void(bool)> authentication_complete_callback) {
+  MandatoryReauthAuthenticationMethod authentication_method =
+      GetAuthenticationMethod();
+
+  // If there is no supported auth method on the device, we should skip re-auth
+  // and fill the form. Otherwise the user removing authentication on the
+  // device will prevent them from using payments autofill. In the settings
+  // page, we signal to the user through various means that they need to turn
+  // the device's authentication on in order to use re-auth.
+  if (authentication_method ==
+          payments::MandatoryReauthAuthenticationMethod::kUnknown ||
+      authentication_method ==
+          payments::MandatoryReauthAuthenticationMethod::kUnsupportedMethod) {
+    LogMandatoryReauthCheckoutFlowUsageEvent(
+        non_interactive_payment_method_type, authentication_method,
+        autofill_metrics::MandatoryReauthAuthenticationFlowEvent::kFlowSkipped);
+    std::move(authentication_complete_callback).Run(true);
+    return;
+  }
+
+  LogMandatoryReauthCheckoutFlowUsageEvent(
+      non_interactive_payment_method_type, authentication_method,
+      autofill_metrics::MandatoryReauthAuthenticationFlowEvent::kFlowStarted);
+
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
+  AuthenticateWithMessage(
+      l10n_util::GetStringUTF16(IDS_PAYMENTS_AUTOFILL_FILLING_MANDATORY_REAUTH),
+      std::move(authentication_complete_callback));
+#elif BUILDFLAG(IS_ANDROID)
+  // TODO(crbug.com/1427216): Convert this to
+  // DeviceAuthenticator::AuthenticateWithMessage() with the correct message
+  // once it is supported. Currently, the message is "Verify it's you".
+  Authenticate(std::move(authentication_complete_callback));
+#else
+  NOTREACHED_NORETURN();
+#endif
+}
+
 void MandatoryReauthManager::OnAuthenticationCompleted(
     device_reauth::DeviceAuthenticator::AuthenticateCallback callback,
     bool success) {
-  device_authenticator_.reset();
   std::move(callback).Run(success);
 }
 
 bool MandatoryReauthManager::ShouldOfferOptin(
-    std::optional<CreditCard::RecordType>
-        card_record_type_if_non_interactive_authentication_flow_completed) {
+    std::optional<NonInteractivePaymentMethodType>
+        payment_method_type_if_non_interactive_authentication_flow_completed) {
   opt_in_source_ = autofill_metrics::MandatoryReauthOptInOrOutSource::kUnknown;
   // We should not offer to update a user pref in off the record mode.
   if (client_->IsOffTheRecord()) {
@@ -70,24 +140,23 @@ bool MandatoryReauthManager::ShouldOfferOptin(
   // If the device authenticator is not present or we can not authenticate with
   // biometric or screen lock, there will be no way to re-auth if the user
   // enrolls, so return that we should not offer mandatory re-auth opt-in.
-  if (std::unique_ptr<device_reauth::DeviceAuthenticator> device_authenticator =
-          client_->GetDeviceAuthenticator();
-      !device_authenticator ||
-      !device_authenticator->CanAuthenticateWithBiometricOrScreenLock()) {
+  if (!device_authenticator_ ||
+      !device_authenticator_->CanAuthenticateWithBiometricOrScreenLock()) {
     LogMandatoryReauthOfferOptInDecision(
         MandatoryReauthOfferOptInDecision::kNoSupportedReauthMethod);
     return false;
   }
 
-  // If `card_record_type_if_non_interactive_authentication_flow_completed` is
-  // not present, this can mean one of two things: 1) No card was autofilled 2)
-  // All autofilled cards went through an interactive authentication flow. In
-  // the first case it makes no sense to show a reauth proposal because this is
-  // not an autofill moment. In the second case, we don't want to show an opt-in
-  // prompt because the user never experienced non-interactive authentication,
-  // and actually just went through an interactive authentication. Displaying a
-  // prompt to enable re-authentication could be confusing.
-  if (!card_record_type_if_non_interactive_authentication_flow_completed
+  // If `payment_method_type_if_non_interactive_authentication_flow_completed`
+  // is not present, this can mean one of two things: 1) No payment method was
+  // autofilled 2) All autofilled payment methods went through an interactive
+  // authentication flow. In the first case it makes no sense to show a reauth
+  // proposal because this is not an autofill moment. In the second case, we
+  // don't want to show an opt-in prompt because the user never experienced
+  // non-interactive authentication, and actually just went through an
+  // interactive authentication. Displaying a prompt to enable re-authentication
+  // could be confusing.
+  if (!payment_method_type_if_non_interactive_authentication_flow_completed
            .has_value()) {
     LogMandatoryReauthOfferOptInDecision(
         MandatoryReauthOfferOptInDecision::
@@ -99,23 +168,31 @@ bool MandatoryReauthManager::ShouldOfferOptin(
   // non-interactive authentication. Set `opt_in_source_` based on the record
   // type of the last non-interactive authentication, and return that we should
   // offer re-auth opt-in.
-  switch (card_record_type_if_non_interactive_authentication_flow_completed
+  switch (payment_method_type_if_non_interactive_authentication_flow_completed
               .value()) {
-    case CreditCard::RecordType::kLocalCard:
+    case NonInteractivePaymentMethodType::kLocalCard:
       opt_in_source_ =
           autofill_metrics::MandatoryReauthOptInOrOutSource::kCheckoutLocalCard;
       break;
-    case CreditCard::RecordType::kFullServerCard:
+    case NonInteractivePaymentMethodType::kFullServerCard:
       opt_in_source_ = autofill_metrics::MandatoryReauthOptInOrOutSource::
           kCheckoutFullServerCard;
       break;
-    case CreditCard::RecordType::kVirtualCard:
+    case NonInteractivePaymentMethodType::kVirtualCard:
       opt_in_source_ = autofill_metrics::MandatoryReauthOptInOrOutSource::
           kCheckoutVirtualCard;
       break;
-    case CreditCard::RecordType::kMaskedServerCard:
+    case NonInteractivePaymentMethodType::kMaskedServerCard:
       opt_in_source_ = autofill_metrics::MandatoryReauthOptInOrOutSource::
           kCheckoutMaskedServerCard;
+      break;
+    case NonInteractivePaymentMethodType::kLocalIban:
+      opt_in_source_ =
+          autofill_metrics::MandatoryReauthOptInOrOutSource::kCheckoutLocalIban;
+      break;
+    case NonInteractivePaymentMethodType::kServerIban:
+      opt_in_source_ = autofill_metrics::MandatoryReauthOptInOrOutSource::
+          kCheckoutServerIban;
       break;
   }
   LogMandatoryReauthOfferOptInDecision(
@@ -186,16 +263,14 @@ void MandatoryReauthManager::OnUserClosedOptInPrompt() {
 
 MandatoryReauthAuthenticationMethod
 MandatoryReauthManager::GetAuthenticationMethod() {
-  std::unique_ptr<device_reauth::DeviceAuthenticator> device_authenticator =
-      client_->GetDeviceAuthenticator();
-  if (!device_authenticator) {
+  if (!device_authenticator_) {
     return MandatoryReauthAuthenticationMethod::kUnknown;
   }
   // Order matters here.
-  if (device_authenticator->CanAuthenticateWithBiometrics()) {
+  if (device_authenticator_->CanAuthenticateWithBiometrics()) {
     return MandatoryReauthAuthenticationMethod::kBiometric;
   }
-  if (device_authenticator->CanAuthenticateWithBiometricOrScreenLock()) {
+  if (device_authenticator_->CanAuthenticateWithBiometricOrScreenLock()) {
     return MandatoryReauthAuthenticationMethod::kScreenLock;
   }
   return MandatoryReauthAuthenticationMethod::kUnsupportedMethod;

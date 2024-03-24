@@ -30,7 +30,6 @@ build_webui("build") {
     "nearby_http_browser_proxy.ts",
     "cross_device_logs_browser_proxy.ts",
     "nearby_presence_browser_proxy.ts",
-    "push_notification_browser_proxy.ts",
     "nearby_prefs_browser_proxy.ts",
     "nearby_ui_trigger_browser_proxy.ts",
     "types.ts",
@@ -41,9 +40,9 @@ build_webui("build") {
   ts_definitions = [ "//tools/typescript/definitions/chrome_send.d.ts" ]
 
   ts_deps = [
+    "//ash/webui/common/resources/cr_elements:build_ts",
     "//third_party/polymer/v3_0:library",
     "//ui/webui/resources/cr_components/color_change_listener:build_ts",
-    "//ui/webui/resources/cr_elements:build_ts",
     "//ui/webui/resources/js:build_ts",
   ]
 }

@@ -16,7 +16,7 @@
 #include "content/public/browser/storage_partition.h"
 #include "content/public/browser/storage_partition_config.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "services/network/public/mojom/cert_verifier_service.mojom.h"
+#include "services/network/public/mojom/cert_verifier_service_updater.mojom.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 
 namespace blink {
@@ -26,6 +26,12 @@ class StorageKey;
 namespace leveldb_proto {
 class ProtoDatabaseProvider;
 }  // namespace leveldb_proto
+
+namespace network {
+namespace mojom {
+class NetworkContext;
+}  // namespace mojom
+}  // namespace network
 
 namespace content {
 
@@ -38,10 +44,6 @@ class HostZoomMap;
 class PlatformNotificationContext;
 class ServiceWorkerContext;
 class ZoomLevelDelegate;
-
-namespace mojom {
-class NetworkContext;
-}  // namespace mojom
 
 // Fake implementation of StoragePartition.
 class TestStoragePartition : public StoragePartition {

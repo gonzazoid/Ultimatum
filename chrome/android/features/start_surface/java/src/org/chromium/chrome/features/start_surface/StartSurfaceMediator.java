@@ -62,7 +62,6 @@ import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider
 import org.chromium.chrome.browser.feed.FeedActionDelegate;
 import org.chromium.chrome.browser.feed.FeedReliabilityLogger;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
-import org.chromium.chrome.browser.homepage.HomepageManager;
 import org.chromium.chrome.browser.lens.LensEntryPoint;
 import org.chromium.chrome.browser.lens.LensMetrics;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
@@ -70,6 +69,7 @@ import org.chromium.chrome.browser.lifecycle.PauseResumeWithNativeObserver;
 import org.chromium.chrome.browser.logo.LogoCoordinator;
 import org.chromium.chrome.browser.logo.LogoUtils;
 import org.chromium.chrome.browser.logo.LogoView;
+import org.chromium.chrome.browser.magic_stack.HomeModulesConfigManager;
 import org.chromium.chrome.browser.magic_stack.HomeModulesCoordinator;
 import org.chromium.chrome.browser.magic_stack.ModuleDelegate;
 import org.chromium.chrome.browser.magic_stack.ModuleDelegateHost;
@@ -83,6 +83,7 @@ import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.chrome.browser.preferences.Pref;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.search_engines.TemplateUrlServiceFactory;
+import org.chromium.chrome.browser.settings.SettingsLauncherImpl;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabLaunchType;
 import org.chromium.chrome.browser.tab.TabSelectionType;
@@ -101,6 +102,7 @@ import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
 import org.chromium.chrome.browser.util.BrowserUiUtils.HostSurface;
 import org.chromium.chrome.features.start_surface.StartSurface.TabSwitcherViewObserver;
 import org.chromium.components.browser_ui.styles.ChromeColors;
+import org.chromium.components.browser_ui.widget.displaystyle.UiConfig;
 import org.chromium.components.browser_ui.widget.gesture.BackPressHandler;
 import org.chromium.components.embedder_support.util.UrlUtilities;
 import org.chromium.components.prefs.PrefService;
@@ -193,6 +195,7 @@ class StartSurfaceMediator
     @NewTabPageLaunchOrigin private int mLaunchOrigin;
     @Nullable private TabModel mNormalTabModel;
     @Nullable private TabModelObserver mNormalTabModelObserver;
+    @Nullable private UiConfig mUiConfig;
     private final int mStartMargin;
 
     @Nullable
@@ -696,7 +699,7 @@ class StartSurfaceMediator
             mLogoCoordinator = null;
         }
         if (mHomeModulesCoordinator != null) {
-            mHomeModulesCoordinator.hide();
+            mHomeModulesCoordinator.destroy();
         }
         if (mCallbackController != null) {
             mCallbackController.destroy();
@@ -770,8 +773,6 @@ class StartSurfaceMediator
         // Only pad single pane home page since tabs grid has already been padding for the
         // bottom bar.
         setBottomMargin(mBrowserControlsStateProvider.getBottomControlsHeight());
-        setIncognitoModeDescriptionVisibility(
-                mIsIncognito && (mTabModelSelector.getModel(true).getCount() <= 0));
 
         // Make sure ExploreSurfaceCoordinator is built before the explore surface is showing
         // by default.
@@ -1374,6 +1375,7 @@ class StartSurfaceMediator
                 mPropertyModel.get(EXPLORE_SURFACE_COORDINATOR);
         if (exploreSurfaceCoordinator != null) {
             exploreSurfaceCoordinator.enableSwipeRefresh(isVisible);
+            mUiConfig = exploreSurfaceCoordinator.getUiConfig();
         }
     }
 
@@ -1847,6 +1849,12 @@ class StartSurfaceMediator
         return mContextMenuStartPosotion;
     }
 
+    @Nullable
+    @Override
+    public UiConfig getUiConfig() {
+        return mUiConfig;
+    }
+
     @Override
     public void onUrlClicked(GURL gurl) {
         ReturnToChromeUtil.handleLoadUrlFromStartSurface(new LoadUrlParams(gurl), false, null);
@@ -1859,7 +1867,7 @@ class StartSurfaceMediator
 
     @Override
     public void customizeSettings() {
-        HomepageManager.getInstance().onMenuClick(mContext);
+        HomeModulesConfigManager.getInstance().onMenuClick(mContext, new SettingsLauncherImpl());
     }
 
     @Override
@@ -1870,6 +1878,11 @@ class StartSurfaceMediator
     @Override
     public int getStartMargin() {
         return mStartMargin;
+    }
+
+    @Override
+    public boolean isHomeSurface() {
+        return true;
     }
 
     public FeedActionDelegate getFeedActionDelegateForTesting() {

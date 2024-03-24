@@ -4,14 +4,12 @@
 
 #include "ash/picker/model/picker_search_results.h"
 
+#include <string>
+
+#include "ash/public/cpp/picker/picker_search_result.h"
+#include "base/containers/span.h"
+
 namespace ash {
-
-PickerSearchResult::PickerSearchResult(const std::u16string& text)
-    : text_(text) {}
-
-const std::u16string& PickerSearchResult::text() const {
-  return text_;
-}
 
 PickerSearchResults::Section::Section(
     const std::u16string& heading,

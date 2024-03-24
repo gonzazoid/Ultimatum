@@ -106,6 +106,12 @@ class PageInfoUI {
     // The status of whether third-party cookies are blocked.
     CookieControlsStatus status = CookieControlsStatus::kUninitialized;
 
+    // Whether protections are enabled for the given site.
+    bool protections_on = true;
+
+    // Whether tracking protection controls should be shown.
+    bool controls_visible = true;
+
     // The type of third-party cookie blocking in 3PCD.
     CookieBlocking3pcdStatus blocking_status =
         CookieBlocking3pcdStatus::kNotIn3pcd;
@@ -113,7 +119,7 @@ class PageInfoUI {
     // The status of enforcement of blocking third-party cookies.
     CookieControlsEnforcement enforcement;
 
-    absl::optional<CookiesFpsInfo> fps_info;
+    std::optional<CookiesFpsInfo> fps_info;
 
     // The expiration of the active third-party cookie exception.
     base::Time expiration;
@@ -222,7 +228,7 @@ class PageInfoUI {
   // Returns a tooltip for permission |type|.
   static std::u16string PermissionTooltipUiString(
       ContentSettingsType type,
-      const absl::optional<url::Origin>& requesting_origin);
+      const std::optional<url::Origin>& requesting_origin);
 
   static base::span<const PermissionUIInfo>
   GetContentSettingsUIInfoForTesting();

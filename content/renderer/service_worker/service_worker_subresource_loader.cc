@@ -373,15 +373,19 @@ void ServiceWorkerSubresourceLoader::DispatchFetchEvent() {
     kSkipped
   } race_network_request_mode = kDefault;
   if (eval_result) {  // matched the rule.
-    auto router_info = network::mojom::ServiceWorkerRouterInfo::New();
-    router_info->rule_id_matched = eval_result->id;
-    response_head_->service_worker_router_info = std::move(router_info);
-
     const auto& sources = eval_result->sources;
     // TODO(crbug.com/1371756): support other sources in the full form.
     // https://github.com/yoshisatoyanagisawa/service-worker-static-routing-api/blob/main/final-form.md
-    switch (sources[0].type) {
-      case blink::ServiceWorkerRouterSource::Type::kNetwork:
+    auto source_type = sources[0].type;
+    set_used_router_source_type(source_type);
+
+    auto router_info = network::mojom::ServiceWorkerRouterInfo::New();
+    router_info->rule_id_matched = eval_result->id;
+    router_info->matched_source_type = source_type;
+    response_head_->service_worker_router_info = std::move(router_info);
+
+    switch (source_type) {
+      case network::mojom::ServiceWorkerRouterSourceType::kNetwork:
         // Network fallback is requested.
         {
           auto timing = blink::mojom::ServiceWorkerFetchEventTiming::New();
@@ -390,13 +394,13 @@ void ServiceWorkerSubresourceLoader::DispatchFetchEvent() {
           OnFallback(std::nullopt, std::move(timing));
         }
         return;
-      case blink::ServiceWorkerRouterSource::Type::kRace:
+      case network::mojom::ServiceWorkerRouterSourceType::kRace:
         race_network_request_mode = kForced;
         break;
-      case blink::ServiceWorkerRouterSource::Type::kFetchEvent:
+      case network::mojom::ServiceWorkerRouterSourceType::kFetchEvent:
         race_network_request_mode = kSkipped;
         break;
-      case blink::ServiceWorkerRouterSource::Type::kCache:
+      case network::mojom::ServiceWorkerRouterSourceType::kCache:
         controller_connector_->CallCacheStorageMatch(
             sources[0].cache_source->cache_name,
             blink::mojom::FetchAPIRequest::From(resource_request_),
@@ -753,15 +757,17 @@ void ServiceWorkerSubresourceLoader::OnFallback(
 
 void ServiceWorkerSubresourceLoader::UpdateResponseTiming(
     blink::mojom::ServiceWorkerFetchEventTimingPtr timing) {
-  // |service_worker_ready_time| becomes web-exposed
-  // PerformanceResourceTiming#fetchStart, which is the time just before
-  // dispatching the fetch event, so set it to |dispatch_event_time|.
-  response_head_->load_timing.service_worker_ready_time =
-      timing->dispatch_event_time;
-  response_head_->load_timing.service_worker_fetch_start =
-      timing->dispatch_event_time;
-  response_head_->load_timing.service_worker_respond_with_settled =
-      timing->respond_with_settled_time;
+  if (!ShouldAvoidRecordingServiceWorkerTimingInfo()) {
+    // |service_worker_ready_time| becomes web-exposed
+    // PerformanceResourceTiming#fetchStart, which is the time just before
+    // dispatching the fetch event, so set it to |dispatch_event_time|.
+    response_head_->load_timing.service_worker_ready_time =
+        timing->dispatch_event_time;
+    response_head_->load_timing.service_worker_fetch_start =
+        timing->dispatch_event_time;
+    response_head_->load_timing.service_worker_respond_with_settled =
+        timing->respond_with_settled_time;
+  }
   fetch_event_timing_ = std::move(timing);
 }
 
@@ -1048,6 +1054,10 @@ bool ServiceWorkerSubresourceLoader::InitRecordTimingMetricsIfEligible(
   TRACE_EVENT_NESTABLE_ASYNC_END_WITH_TIMESTAMP0(
       "ServiceWorker", "ServiceWorker.LoadTiming.Subresource", this,
       completion_time_);
+
+  if (ShouldAvoidRecordingServiceWorkerTimingInfo()) {
+    return false;
+  }
 
   return true;
 }

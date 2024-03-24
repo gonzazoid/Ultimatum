@@ -38,8 +38,8 @@ class ASH_EXPORT SnapGroupController : public OverviewObserver,
     // Called to notify with the creation of snap group.
     virtual void OnSnapGroupCreated() = 0;
 
-    // Called to notify the removal of snap group.
-    virtual void OnSnapGroupRemoved() = 0;
+    // Called to notify the removal of `snap_group`.
+    virtual void OnSnapGroupRemoved(SnapGroup* snap_group) = 0;
   };
 
   using SnapGroups = std::vector<std::unique_ptr<SnapGroup>>;
@@ -53,12 +53,6 @@ class ASH_EXPORT SnapGroupController : public OverviewObserver,
   // Convenience function to get the snap group controller instance, which is
   // created and owned by Shell.
   static SnapGroupController* Get();
-
-  // Called by `WindowState::OnWMEvent()` after a window snap event. This will
-  // decide whether to start `SplitViewOverviewSession` or snap `window` to
-  // complete the window layout.
-  void OnWindowSnapped(aura::Window* window,
-                       WindowSnapActionSource snap_action_source);
 
   // Returns true if `window1` and `window2` are in the same snap group.
   bool AreWindowsInSnapGroup(aura::Window* window1,

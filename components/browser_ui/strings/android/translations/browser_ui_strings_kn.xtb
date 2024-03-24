@@ -5,6 +5,7 @@
 <translation id="1036348656032585052">ಆಫ್ ಮಾಡಿ</translation>
 <translation id="1044891598689252897">ಸೈಟ್‌ಗಳು ಸಾಮಾನ್ಯವಾಗಿ ಕೆಲಸ ಮಾಡುತ್ತವೆ</translation>
 <translation id="1073417869336441572">ನೀವು ಥರ್ಡ್-ಪಾರ್ಟಿ ಕುಕೀಗಳನ್ನು ಏಕೆ ಅನುಮತಿಸುತ್ತೀರಿ ಎಂದು ಹೇಳುವ ಮೂಲಕ Chrome ಅನ್ನು ಸುಧಾರಿಸಲು ನಮಗೆ ಸಹಾಯ ಮಾಡಿ. <ph name="BEGIN_LINK" />ಪ್ರತಿಕ್ರಿಯೆಯನ್ನು ಕಳುಹಿಸಿ<ph name="END_LINK" /></translation>
+<translation id="1113435009358629918">ಬೆಲೆ ಇಳಿಕೆಯ ಕಾರ್ಡ್ ಅನ್ನು ಮರೆಮಾಡಿ</translation>
 <translation id="1178581264944972037">ವಿರಾಮ</translation>
 <translation id="1181037720776840403">ತೆಗೆದುಹಾಕು</translation>
 <translation id="1192844206376121885">ಇದು <ph name="ORIGIN" /> ಮೂಲಕ ಸಂಗ್ರಹಣೆ ಮಾಡಲಾದ ಎಲ್ಲಾ ಡೇಟಾ ಮತ್ತು ಕುಕೀಗಳನ್ನು ಅಳಿಸುತ್ತದೆ.</translation>
@@ -21,7 +22,6 @@
 <translation id="1383876407941801731">ಹುಡುಕಿ</translation>
 <translation id="1384959399684842514">ಡೌನ್‌ಲೋಡ್ ವಿರಾಮಗೊಳಿಸಲಾಗಿದೆ</translation>
 <translation id="1415402041810619267">URL ಕಿರಿದುಗೊಳಿಸಲಾಗಿದೆ</translation>
-<translation id="1426410128494586442">ಹೌದು</translation>
 <translation id="1448064542941920355">ಝೂಮ್ ಅನ್ನು ಕಡಿಮೆ ಮಾಡಿ</translation>
 <translation id="146867109637325312">{COUNT,plural, =1{<ph name="SITE_COUNT" /> ಸೈಟ್}one{<ph name="SITE_COUNT" /> ಸೈಟ್‌ಗಳು}other{<ph name="SITE_COUNT" /> ಸೈಟ್‌ಗಳು}}</translation>
 <translation id="1510341833810331442">ನಿಮ್ಮ ಸಾಧನದಲ್ಲಿ ಡೇಟಾವನ್ನು ಉಳಿಸಲು ಸೈಟ್‌ಗಳಿಗೆ ಅನುಮತಿಸಲಾಗುವುದಿಲ್ಲ</translation>
@@ -66,6 +66,7 @@
 <translation id="2228071138934252756"><ph name="APP_NAME" /> ನಿಮ್ಮ ಕ್ಯಾಮರಾವನ್ನು ಪ್ರವೇಶಿಸುವುದಕ್ಕೆ ಅನುಮತಿಸಲು, <ph name="BEGIN_LINK" />Android ಸೆಟ್ಟಿಂಗ್‌ಗಳಲ್ಲಿ<ph name="END_LINK" /> ಕ್ಯಾಮರಾವನ್ನು ಸಹ ಆನ್ ಮಾಡಬೇಕಾಗುತ್ತದೆ.</translation>
 <translation id="2235344399760031203">ಥರ್ಡ್-ಪಾರ್ಟಿ ಕುಕೀಗಳನ್ನು ನಿರ್ಬಂಧಿಸಲಾಗಿದೆ</translation>
 <translation id="2238944249568001759">ನಿಮ್ಮ ಹಿಂದಿನ ಟ್ಯಾಬ್ ಅನ್ನು ಆಧರಿಸಿ ಸೂಚಿಸಲಾದ ಹುಡುಕಾಟಗಳು</translation>
+<translation id="2241587408274973373">ಹೊಸ ಟ್ಯಾಬ್ ಪುಟದ ಕಾರ್ಡ್‌ಗಳು</translation>
 <translation id="2241634353105152135">ಕೇವಲ ಒಂದು ಬಾರಿ</translation>
 <translation id="2253414712144136228"><ph name="NAME_OF_LIST_ITEM" /> ಅನ್ನು ತೆಗೆದುಹಾಕಿ</translation>
 <translation id="2253989982043948086">{NUM_SELECTED,plural, =1{1 ಸೈಟ್ ಅನ್ನು ನಿರ್ಬಂಧಿಸಲಾಗಿದೆ}one{# ಸೈಟ್‌ಗಳನ್ನು ನಿರ್ಬಂಧಿಸಲಾಗಿದೆ}other{# ಸೈಟ್‌ಗಳನ್ನು ನಿರ್ಬಂಧಿಸಲಾಗಿದೆ}}</translation>
@@ -92,6 +93,7 @@
 <translation id="2498359688066513246">ಸಹಾಯ ಮತ್ತು ಪ್ರತಿಕ್ರಿಯೆ</translation>
 <translation id="2501278716633472235">ಹಿಂದಿರುಗಿ</translation>
 <translation id="2546283357679194313">ಕುಕೀಗಳು ಮತ್ತು ಸೈಟ್ ಡೇಟಾ</translation>
+<translation id="2550801787432930915">ಬೆಲೆ ಇಳಿಕೆಯ ಕಾರ್ಡ್</translation>
 <translation id="2569468611847789653">{COOKIE_COUNT,plural, =1{1 ಕುಕೀಯನ್ನು ನಿರ್ಬಂಧಿಸಲಾಗಿದೆ}one{# ಕುಕೀಗಳನ್ನು ನಿರ್ಬಂಧಿಸಲಾಗಿದೆ}other{# ಕುಕೀಗಳನ್ನು ನಿರ್ಬಂಧಿಸಲಾಗಿದೆ}}</translation>
 <translation id="2570922361219980984">ಈ ಸಾಧನದ ಸ್ಥಳ ಆ್ಯಕ್ಸೆಸ್ ಸಹ ಆಫ್ ಆಗಿದೆ. ಅದನ್ನು <ph name="BEGIN_LINK" />Android ಸೆಟ್ಟಿಂಗ್‌ಗಳಲ್ಲಿ<ph name="END_LINK" /> ಆನ್ ಮಾಡಿ.</translation>
 <translation id="257931822824936280">ವಿಸ್ತರಿಸಲಾಗಿದೆ - ಕುಗ್ಗಿಸಲು ಕ್ಲಿಕ್ ಮಾಡಿ</translation>
@@ -119,8 +121,8 @@
 <translation id="2968755619301702150">ಪ್ರಮಾಣಪತ್ರ ವೀಕ್ಷಕ</translation>
 <translation id="2979365474350987274">ಥರ್ಡ್-ಪಾರ್ಟಿ ಕುಕೀಗಳು ಸೀಮಿತವಾಗಿವೆ</translation>
 <translation id="3008272652534848354">ಅನುಮತಿಗಳನ್ನು ಮರುಹೊಂದಿಸಿ</translation>
-<translation id="3013291976881901233">MIDI ಸಾಧನಗಳು</translation>
 <translation id="301521992641321250">ಸ್ವಯಂಚಾಲಿತವಾಗಿ ನಿರ್ಬಂಧಿಸಲಾಗಿದೆ</translation>
+<translation id="3025010840409371499"><ph name="RECENCY" /> <ph name="SEPARATOR" /> <ph name="HOST_NAME" /></translation>
 <translation id="3069226013421428034">ನಿರ್ದಿಷ್ಟ ಸೈಟ್‌ಗಾಗಿ ಥರ್ಡ್-ಪಾರ್ಟಿ ಸೈನ್ ಇನ್ ಅನ್ನು ಅನುಮತಿಸಿ.</translation>
 <translation id="3082992102194421695">{COUNT,plural, =1{ನಾಳೆ ಅವಧಿ ಮುಕ್ತಾಯಗೊಳ್ಳುತ್ತದೆ}one{# ದಿನಗಳಲ್ಲಿ ಅವಧಿ ಮುಕ್ತಾಯಗೊಳ್ಳುತ್ತದೆ}other{# ದಿನಗಳಲ್ಲಿ ಅವಧಿ ಮುಕ್ತಾಯಗೊಳ್ಳುತ್ತದೆ}}</translation>
 <translation id="310297983047869047">ಹಿಂದಿನ ಸ್ಲೈಡ್</translation>
@@ -190,7 +192,7 @@
 <translation id="4169549551965910670">USB ಸಾಧನವೊಂದಕ್ಕೆ ಕನೆಕ್ಟ್ ಮಾಡಲಾಗಿದೆ</translation>
 <translation id="4194328954146351878">NFC ಸಾಧನಗಳಲ್ಲಿ ಮಾಹಿತಿಯನ್ನು ನೋಡಲು ಮತ್ತು ಬದಲಾಯಿಸಲು ಸೈಟ್‌ಗಳಿಗೆ ಅನುಮತಿಸುವ ಮೊದಲು ಕೇಳಿ (ಶಿಫಾರಸು ಮಾಡಲಾಗಿದೆ)</translation>
 <translation id="4200726100658658164">ಸ್ಥಳ ಸೆಟ್ಟಿಂಗ್‌ಗಳನ್ನು ತೆರೆಯಿರಿ</translation>
-<translation id="4212246570487010370">ಬ್ರೌಸಿಂಗ್ ಮುಂದುವರಿಸಿ</translation>
+<translation id="4206661981211220935"><ph name="FROM_DEVICE" /> ನಿಂದ <ph name="SEPARATOR" /> <ph name="RECENCY" /></translation>
 <translation id="4226663524361240545">ಪ್ರಕಟಣೆಗಳು ಸಾಧನವನ್ನು ವೈಬ್ರೇಟ್ ಮಾಡಬಹುದು</translation>
 <translation id="4259722352634471385">ನ್ಯಾವಿಗೇಶನ್‌ ನಿರ್ಬಂಧಿಸಲಾಗಿದೆ: <ph name="URL" /></translation>
 <translation id="4278390842282768270">ಅನುಮತಿಸಲಾಗಿದೆ</translation>
@@ -211,6 +213,7 @@
 <translation id="4566417217121906555">ಮೈಕ್ರೋಫೋನ್‌ ಮ್ಯೂಟ್ ಮಾಡಿ</translation>
 <translation id="4570913071927164677">ವಿವರಗಳು</translation>
 <translation id="4598549027014564149">ಅಜ್ಞಾತ ಮೋಡ್‌ನಲ್ಲಿರುವಾಗ, ಸಂಬಂಧಿತ ಸೈಟ್‌ಗಳೂ ಸೇರಿದಂತೆ, ಸೈಟ್‌ಗಳಾದ್ಯಂತ ನಿಮ್ಮ ಬ್ರೌಸಿಂಗ್ ಚಟುವಟಿಕೆಯನ್ನು ನೋಡುವುದಕ್ಕಾಗಿ ನಿಮ್ಮ ಕುಕೀಗಳನ್ನು ಬಳಸಲು ಸೈಟ್‌ಗಳಿಗೆ ಸಾಧ್ಯವಾಗುವುದಿಲ್ಲ. ಜಾಹೀರಾತುಗಳನ್ನು ವೈಯಕ್ತಿಕಗೊಳಿಸುವಂತಹ ವಿಷಯಗಳಿಗೆ ನಿಮ್ಮ ಬ್ರೌಸಿಂಗ್ ಚಟುವಟಿಕೆಯನ್ನು ಬಳಸಲಾಗುವುದಿಲ್ಲ. ಫೀಚರ್‌ಗಳು ಕೆಲವು ಸೈಟ್‌ಗಳಲ್ಲಿ ಕಾರ್ಯನಿರ್ವಹಿಸದೇ ಇರಬಹುದು.</translation>
+<translation id="4619615317237390068">ಇತರ ಸಾಧನಗಳಿಂದ ಟ್ಯಾಬ್‌ಗಳು</translation>
 <translation id="4644713492825682049">ಅಳಿಸಿ ಮತ್ತು ರೀಸೆಟ್ ಮಾಡಿ</translation>
 <translation id="4645575059429386691">ನಿಮ್ಮ ಪೋಷಕರು ನಿರ್ವಹಿಸುತ್ತಿದ್ದಾರೆ</translation>
 <translation id="4670064810192446073">ವರ್ಚುವಲ್ ರಿಯಾಲಿಟಿ</translation>
@@ -252,7 +255,7 @@
 <translation id="5295729974480418933">ಆನ್ ಆಗಿರುವಾಗ, ಸೈಟ್‌ಗಳು ನಿಮ್ಮ ಬಗ್ಗೆ ಅವುಗಳು ಸೇವ್ ಮಾಡಿದ ಮಾಹಿತಿಯನ್ನು ಬಳಸಲು ಕೇಳಬಹುದು. ಆಫ್ ಆಗಿರುವಾಗ, ಸೈಟ್‌ಗಳಿಗೆ ನಿಮ್ಮ ಬಗ್ಗೆ ಅವುಗಳು ಸೇವ್ ಮಾಡಿದ ಮಾಹಿತಿಯನ್ನು ಬಳಸಲು ನಿಮ್ಮನ್ನು ಕೇಳಲು ಸಾಧ್ಯವಾಗುವುದಿಲ್ಲ.</translation>
 <translation id="5300589172476337783">ತೋರಿಸಿ</translation>
 <translation id="5301954838959518834">ಸರಿ, ಅರ್ಥವಾಯಿತು</translation>
-<translation id="5317780077021120954">ಉಳಿಸು</translation>
+<translation id="5317780077021120954">ಸೇವ್ ಮಾಡಿ</translation>
 <translation id="5335288049665977812">JavaScript ರನ್ ಮಾಡಲು ಸೈಟ್‌ಗಳಿಗೆ ಅನುಮತಿಸಿ (ಶಿಫಾರಸು ಮಾಡಲಾಗಿದೆ)</translation>
 <translation id="534295439873310000">NFC ಸಾಧನಗಳು</translation>
 <translation id="5344522958567249764">ಜಾಹೀರಾತು ಗೌಪ್ಯತೆಯನ್ನು ನಿರ್ವಹಿಸಿ</translation>
@@ -328,6 +331,7 @@
 <translation id="6405650995156823521"><ph name="FIRST_PART" /> • <ph name="SECOND_PART" /></translation>
 <translation id="6439114592976064011">ನಿಮ್ಮ ವರ್ಚುವಲ್ ರಿಯಾಲಿಟಿ ಸಾಧನ ಮತ್ತು ಡೇಟಾವನ್ನು ಬಳಸದ ಹಾಗೆ ಸೈಟ್‌ಗಳನ್ನು ನಿರ್ಬಂಧಿಸಿ</translation>
 <translation id="6447842834002726250">ಕುಕೀಸ್</translation>
+<translation id="6452138246455930388">ನಿಮ್ಮ ತೆರೆದ ಟ್ಯಾಬ್‌ನಲ್ಲಿ ಬೆಲೆ ಇಳಿಕೆ, <ph name="OLD_PRICE" /> ರಿಂದ <ph name="NEW_PRICE" />, <ph name="PRODUCT_NAME" />, <ph name="DOMAIN_NAME" /></translation>
 <translation id="6500423977866688905">ವಿಂಡೋ ಚಿಕ್ಕದಾಗಿದ್ದರೆ, ಮೊಬೈಲ್ ವೀಕ್ಷಣೆಯನ್ನು ವಿನಂತಿಸಿ</translation>
 <translation id="6527303717912515753">ಹಂಚಿಕೊಳ್ಳು</translation>
 <translation id="652937045869844725">ಥರ್ಡ್-ಪಾರ್ಟಿ ಕುಕೀಗಳನ್ನು ಅನುಮತಿಸಲು ಪ್ರಯತ್ನಿಸಿ, ಇದು ನಿಮ್ಮ ಸೈಟ್‌ನ ಸುರಕ್ಷತೆಯು ರಾಜಿ ಮಾಡಿಕೊಂಡರೂ ಸಹ ಸೈಟ್‌ನ ಫೀಚರ್‌ಗಳು ಉತ್ತಮವಾಗಿ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತವೆ</translation>
@@ -351,6 +355,7 @@
 <translation id="6790428901817661496">ಪ್ಲೇ ಮಾಡು</translation>
 <translation id="6818926723028410516">ಐಟಂಗಳನ್ನು ಆಯ್ಕೆಮಾಡಿ</translation>
 <translation id="6864395892908308021">ಈ ಸಾಧನವು NFC ಯನ್ನು ಓದಲು ಸಾಧ್ಯವಿಲ್ಲ</translation>
+<translation id="6867014948848323204"><ph name="FROM_DEVICE" /> ನಿಂದ</translation>
 <translation id="6912998170423641340">ಕ್ಲಿಪ್‌ಬೋರ್ಡ್‌ಗೆ ನಕಲಿಸಿರುವ ಪಠ್ಯ ಮತ್ತು ಚಿತ್ರಗಳನ್ನು ಓದದಂತೆ ಸೈಟ್ ಅನ್ನು ನಿರ್ಬಂಧಿಸಿ</translation>
 <translation id="6945221475159498467">ಆಯ್ಕೆಮಾಡಿ</translation>
 <translation id="6950072572526089586">ನೀವು ಭೇಟಿ ನೀಡುವ ಸೈಟ್, ಸೈಟ್‌ನಲ್ಲಿನ ನಿಮ್ಮ ಚಟುವಟಿಕೆಯನ್ನು ಸೇವ್ ಮಾಡಬಹುದು, ಇದರಿಂದ ಅದು ನಿರೀಕ್ಷಿಸಿದಂತೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ — ಉದಾಹರಣೆಗೆ, ಸೈಟ್‌ಗೆ ನಿಮ್ಮನ್ನು ಸೈನ್ ಇನ್ ಆಗಿರಿಸಲು ಅಥವಾ ನಿಮ್ಮ ಶಾಪಿಂಗ್ ಕಾರ್ಟ್‌ನಲ್ಲಿರುವ ಐಟಂಗಳನ್ನು ಸೇವ್ ಮಾಡಲು. ಸಾಮಾನ್ಯವಾಗಿ ಈ ಮಾಹಿತಿಯನ್ನು ಸೈಟ್‌ಗಳು ನಿಮ್ಮ ಸಾಧನದಲ್ಲಿ ತಾತ್ಕಾಲಿಕವಾಗಿ ಉಳಿಸುತ್ತವೆ.</translation>
@@ -363,7 +368,6 @@
 <translation id="7053983685419859001">ನಿರ್ಬಂಧಿಸು</translation>
 <translation id="7066151586745993502">{NUM_SELECTED,plural, =1{1 ಆಯ್ಕೆ ಮಾಡಲಾಗಿದೆ}one{# ಆಯ್ಕೆ ಮಾಡಲಾಗಿದೆ}other{# ಆಯ್ಕೆ ಮಾಡಲಾಗಿದೆ}}</translation>
 <translation id="7087918508125750058"><ph name="ITEM_COUNT" /> ಅನ್ನು ಆಯ್ಕೆ ಮಾಡಲಾಗಿದೆ. ಪರದೆಯ ಮೇಲ್ಭಾಗದಲ್ಲಿ ಲಭ್ಯವಿರುವ ಆಯ್ಕೆಗಳು</translation>
-<translation id="7137403271056944713">MIDI ಸಾಧನ ನಿಯಂತ್ರಣ / ರಿಪ್ರೋಗ್ರಾಂ</translation>
 <translation id="7141896414559753902">ಪಾಪ್-ಅಪ್‍ಗಳು ಮತ್ತು ಮರುನಿರ್ದೇಶನಗಳನ್ನು ತೋರಿಸದಂತೆ ಸೈಟ್‌ಗಳನ್ನು ನಿರ್ಬಂಧಿಸಿ (ಶಿಫಾರಸು ಮಾಡಲಾಗಿದೆ)</translation>
 <translation id="7176368934862295254"><ph name="KILOBYTES" /> KB</translation>
 <translation id="7180611975245234373">ರಿಫ್ರೆಶ್ ಮಾಡಿ</translation>
@@ -399,9 +403,11 @@
 <translation id="7667547420449112975">ದಿ ವಂಡರ್ಫುಲ್ ವಿಜಾರ್ಡ್ ಆಫ್ ಓಝ್</translation>
 <translation id="7684642910516280563">ಥರ್ಡ್-ಪಾರ್ಟಿ ಕುಕೀಗಳನ್ನು ಬಳಸಲು ಸೈಟ್‌ಗೆ ಅನುಮತಿಸಬೇಡಿ</translation>
 <translation id="7719367874908701697">ಪುಟ ಝೂಮ್</translation>
+<translation id="7759147511335618829">MIDI ಸಾಧನ ನಿಯಂತ್ರಣ &amp; ರಿಪ್ರೋಗ್ರಾಂ</translation>
 <translation id="7781829728241885113">ನಿನ್ನೆ</translation>
 <translation id="7791543448312431591">ಸೇರಿಸು</translation>
-<translation id="780301667611848630">ಬೇಡ, ಧನ್ಯವಾದಗಳು</translation>
+<translation id="7801888679188438140">{TILE_COUNT,plural, =1{ಈ ಟ್ಯಾಬ್‌ನೊಂದಿಗೆ ಮುಂದುವರಿಯಿರಿ}one{ಈ ಟ್ಯಾಬ್‌ಗಳೊಂದಿಗೆ ಮುಂದುವರಿಯಿರಿ}other{ಈ ಟ್ಯಾಬ್‌ಗಳೊಂದಿಗೆ ಮುಂದುವರಿಯಿರಿ}}</translation>
+<translation id="780301667611848630">ಬೇಡ</translation>
 <translation id="7804248752222191302">ಒಂದು ಸೈಟ್ ನಿಮ್ಮ ಕ್ಯಾಮರಾವನ್ನು ಬಳಸುತ್ತಿದೆ</translation>
 <translation id="7807060072011926525">Google ಮೂಲಕ ಒದಗಿಸಲಾಗಿದೆ</translation>
 <translation id="7822573154188733812">ನೀವು ಬ್ರೌಸ್ ಮಾಡುವಾಗ ನಿಮ್ಮನ್ನು ಟ್ರ್ಯಾಕ್ ಮಾಡುವುದಕ್ಕೆ ಥರ್ಡ್-ಪಾರ್ಟಿ ಕುಕೀಗಳನ್ನು ಬಳಸದಂತೆ Chrome ಸೈಟ್‌ಗಳನ್ನು ನಿರ್ಬಂಧಿಸುತ್ತದೆ. <ph name="BEGIN_LINK" />ನಿಮ್ಮ ಟ್ರ್ಯಾಕಿಂಗ್ ರಕ್ಷಣೆಗಳನ್ನು ನಿರ್ವಹಿಸಲು<ph name="END_LINK" /> ಸೆಟ್ಟಿಂಗ್‌ಗಳಿಗೆ ಭೇಟಿ ನೀಡಿ.</translation>
@@ -477,6 +483,7 @@
 <translation id="8803526663383843427">ಆನ್ ಆಗಿರುವಾಗ</translation>
 <translation id="8805385115381080995">ಬ್ರೌಸಿಂಗ್ ವೇಗವಾಗಿರುತ್ತದೆ ಏಕೆಂದರೆ ನೀವು ನಿಜವಾದ ವ್ಯಕ್ತಿ ಎಂದು ಪರಿಶೀಲಿಸಲು ಸೈಟ್ ನಿಮ್ಮನ್ನು ಕೇಳುವ ಸಾಧ್ಯತೆ ಕಡಿಮೆ ಇರುತ್ತದೆ</translation>
 <translation id="8816026460808729765">ಸೆನ್ಸರ್‌ಗಳನ್ನು ಪ್ರವೇಶಿಸದಂತೆ ಸೈಟ್‌ಗಳನ್ನು ನಿರ್ಬಂಧಿಸಿ</translation>
+<translation id="8843699287283948910">ಬೇರೆ ಸಾಧನಗಳ ಟ್ಯಾಬ್‌ಗಳನ್ನು ಮರೆಮಾಡಿ</translation>
 <translation id="8847988622838149491">USB</translation>
 <translation id="8874790741333031443">ಥರ್ಡ್-ಪಾರ್ಟಿ ಕುಕೀಗಳನ್ನು ತಾತ್ಕಾಲಿಕವಾಗಿ ಅನುಮತಿಸಲು ಪ್ರಯತ್ನಿಸಿ, ಅಂದರೆ ಬ್ರೌಸಿಂಗ್ ಕಡಿಮೆ ಸಂರಕ್ಷಿತವಾಗಿದೆ, ಆದರೆ ಸೈಟ್‌ನ ಫೀಚರ್‌ಗಳು ಉತ್ತಮವಾಗಿ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತವೆ.</translation>
 <translation id="8889294078294184559">ನೀವು ಬ್ರೌಸ್ ಮಾಡುವುದನ್ನು ಮುಂದುವರಿಸಿದಾಗ, ನೀವು ನಿಜವಾದ ವ್ಯಕ್ತಿಯೇ ಎಂಬುದನ್ನು ಪರಿಶೀಲಿಸಲು, ಸೈಟ್‌ಗಳು Chrome ನ ಸಹಾಯ ಪಡೆಯಬಹುದು ಹಾಗೂ ನೀವು ಈ ಹಿಂದೆ ಭೇಟಿ ನೀಡಿದ ಸೈಟ್‌ನೊಂದಿಗೆ ದೃಢೀಕರಿಸಿಕೊಳ್ಳಬಹುದು</translation>

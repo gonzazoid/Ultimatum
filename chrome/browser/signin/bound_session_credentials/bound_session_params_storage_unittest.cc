@@ -4,6 +4,8 @@
 
 #include "chrome/browser/signin/bound_session_credentials/bound_session_params_storage.h"
 
+#include <optional>
+
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/protobuf_matchers.h"
@@ -13,7 +15,6 @@
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/protobuf/src/google/protobuf/message_lite.h"
 
 namespace {
@@ -21,13 +22,13 @@ namespace {
 bound_session_credentials::BoundSessionParams CreateValidBoundSessionParams() {
   bound_session_credentials::BoundSessionParams params;
   params.set_session_id("123");
-  params.set_site("https://example.org");
+  params.set_site("https://google.com");
   params.set_wrapped_key("456");
 
   bound_session_credentials::CookieCredential* cookie =
       params.add_credentials()->mutable_cookie_credential();
   cookie->set_name("auth_cookie");
-  cookie->set_domain(".example.org");
+  cookie->set_domain(".google.com");
   cookie->set_path("/");
   return params;
 }
@@ -126,7 +127,7 @@ TEST_P(BoundSessionParamsStorageTest, SaveMultipleParamsDifferentSites) {
     bound_session_credentials::BoundSessionParams params =
         CreateValidBoundSessionParams();
     params.set_site(base::StrCat(
-        {"https://domain", base::NumberToString(i), ".example.org"}));
+        {"https://domain", base::NumberToString(i), ".google.com"}));
     EXPECT_TRUE(storage().SaveParams(params));
     all_params.push_back(std::move(params));
   }
@@ -135,7 +136,7 @@ TEST_P(BoundSessionParamsStorageTest, SaveMultipleParamsDifferentSites) {
 }
 
 TEST_P(BoundSessionParamsStorageTest, Clear) {
-  const std::string kSite = "https://mydomain.example.org";
+  const std::string kSite = "https://mydomain.google.com";
   const std::string kSessionId = "my_session";
   bound_session_credentials::BoundSessionParams params_to_be_removed =
       CreateValidBoundSessionParams();
@@ -158,7 +159,7 @@ TEST_P(BoundSessionParamsStorageTest, Clear) {
         CreateValidBoundSessionParams();
     same_session_id_params.set_session_id(kSessionId);
     same_session_id_params.set_site(base::StrCat(
-        {"https://domain", base::NumberToString(i), ".example.org"}));
+        {"https://domain", base::NumberToString(i), ".google.com"}));
     EXPECT_TRUE(storage().SaveParams(same_session_id_params));
     expected_params.push_back(std::move(same_session_id_params));
   }

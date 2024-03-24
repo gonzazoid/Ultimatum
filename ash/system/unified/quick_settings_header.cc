@@ -92,9 +92,9 @@ void ShowAccountSettings() {
 }  // namespace
 
 class QuickSettingsHeader::ManagedStateView : public views::Button {
- public:
-  METADATA_HEADER(ManagedStateView);
+  METADATA_HEADER(ManagedStateView, views::Button)
 
+ public:
   ManagedStateView(PressedCallback callback,
                    int label_id,
                    const gfx::VectorIcon& icon)
@@ -176,16 +176,16 @@ class QuickSettingsHeader::ManagedStateView : public views::Button {
   const raw_ref<const gfx::VectorIcon> icon_;
 };
 
-BEGIN_METADATA(QuickSettingsHeader, ManagedStateView, views::Button)
+BEGIN_METADATA(QuickSettingsHeader, ManagedStateView)
 END_METADATA
 
 class QuickSettingsHeader::EnterpriseManagedView
     : public ManagedStateView,
       public EnterpriseDomainObserver,
       public SessionObserver {
- public:
-  METADATA_HEADER(EnterpriseManagedView);
+  METADATA_HEADER(EnterpriseManagedView, ManagedStateView)
 
+ public:
   explicit EnterpriseManagedView(UnifiedSystemTrayController* controller)
       : ManagedStateView(base::BindRepeating(&ShowEnterpriseInfo,
                                              base::Unretained(controller)),
@@ -277,7 +277,7 @@ class QuickSettingsHeader::EnterpriseManagedView
   bool narrow_layout_ = false;
 };
 
-BEGIN_METADATA(QuickSettingsHeader, EnterpriseManagedView, ManagedStateView)
+BEGIN_METADATA(QuickSettingsHeader, EnterpriseManagedView)
 END_METADATA
 
 QuickSettingsHeader::QuickSettingsHeader(
@@ -384,7 +384,7 @@ void QuickSettingsHeader::UpdateVisibilityAndLayout() {
   }
 }
 
-BEGIN_METADATA(QuickSettingsHeader, views::View)
+BEGIN_METADATA(QuickSettingsHeader)
 END_METADATA
 
 }  // namespace ash

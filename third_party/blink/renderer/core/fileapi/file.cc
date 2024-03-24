@@ -40,7 +40,6 @@
 #include "third_party/blink/renderer/core/html/forms/form_controller.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
-#include "third_party/blink/renderer/platform/bindings/to_v8.h"
 #include "third_party/blink/renderer/platform/blob/blob_data.h"
 #include "third_party/blink/renderer/platform/file_metadata.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -75,7 +74,7 @@ static scoped_refptr<BlobDataHandle> CreateBlobDataHandleForFileWithType(
   return BlobDataHandle::CreateForFile(
       FileBackedBlobFactoryDispatcher::GetFileBackedBlobFactory(context), path,
       /*offset=*/0, BlobData::kToEndOfFile,
-      /*expected_modification_time=*/absl::nullopt, content_type);
+      /*expected_modification_time=*/std::nullopt, content_type);
 }
 
 static scoped_refptr<BlobDataHandle> CreateBlobDataHandleForFile(
@@ -232,7 +231,7 @@ File::File(const String& path,
            UserVisibility user_visibility,
            bool has_snapshot_data,
            uint64_t size,
-           const absl::optional<base::Time>& last_modified,
+           const std::optional<base::Time>& last_modified,
            scoped_refptr<BlobDataHandle> blob_data_handle)
     : Blob(std::move(blob_data_handle)),
       has_backing_file_(!path.empty() || !relative_path.empty()),
@@ -246,7 +245,7 @@ File::File(const String& path,
 }
 
 File::File(const String& name,
-           const absl::optional<base::Time>& modification_time,
+           const std::optional<base::Time>& modification_time,
            scoped_refptr<BlobDataHandle> blob_data_handle)
     : Blob(std::move(blob_data_handle)),
       has_backing_file_(false),
@@ -329,11 +328,10 @@ ScriptValue File::lastModifiedDate(ScriptState* script_state) const {
   return ScriptValue(
       script_state->GetIsolate(),
       ToV8Traits<IDLNullable<IDLDate>>::ToV8(
-          script_state, absl::optional<base::Time>(LastModifiedTime()))
-          .ToLocalChecked());
+          script_state, std::optional<base::Time>(LastModifiedTime())));
 }
 
-absl::optional<base::Time> File::LastModifiedTimeForSerialization() const {
+std::optional<base::Time> File::LastModifiedTimeForSerialization() const {
   CaptureSnapshotIfNeeded();
 
   return snapshot_modification_time_;

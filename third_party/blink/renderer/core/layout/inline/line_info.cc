@@ -275,7 +275,7 @@ LayoutUnit LineInfo::ComputeTrailingSpaceWidth(unsigned* end_offset_out) const {
            item.Type() != InlineItem::kBidiControl);
 
     if (item.Type() == InlineItem::kControl ||
-        item_result.has_only_trailing_spaces) {
+        item_result.has_only_pre_wrap_trailing_spaces) {
       trailing_spaces_width += item_result.inline_size;
       continue;
     }
@@ -305,10 +305,9 @@ LayoutUnit LineInfo::ComputeTrailingSpaceWidth(unsigned* end_offset_out) const {
         // not safe-to-break. We avoid reshaping in this case because the cost
         // is high and the difference is subtle for the purpose of this
         // function.
-        // TODO(kojii): This does not compute correctly for RTL. Need to re-work
-        // when we support UAX#9 L1.
         // TODO(kojii): Compute this without |CreateShapeResult|.
-        scoped_refptr<ShapeResult> shape_result =
+        DCHECK_EQ(item.Direction(), BaseDirection());
+        ShapeResult* shape_result =
             item_result.shape_result->CreateShapeResult();
         float end_position = shape_result->PositionForOffset(
             end_offset - shape_result->StartIndex());
@@ -456,6 +455,27 @@ LayoutUnit LineInfo::ComputeTotalBlockSize(
       line_height + annotation_block_start_adjustment_ +
       annotation_overflow_block_end;
   return std::max(initial_letter_box_block_size_, line_height_with_annotation);
+}
+
+void LineInfo::RemoveParallelFlowBreakToken(unsigned item_index) {
+#if EXPENSIVE_DCHECKS_ARE_ON()
+  DCHECK(std::is_sorted(parallel_flow_break_tokens_.begin(),
+                        parallel_flow_break_tokens_.end(),
+                        [](const auto& a, const auto& b) {
+                          return a->StartItemIndex() < b->StartItemIndex();
+                        }));
+#endif  //  EXPENSIVE_DCHECKS_ARE_ON()
+  for (auto* iter = parallel_flow_break_tokens_.begin();
+       iter != parallel_flow_break_tokens_.end(); ++iter) {
+    const InlineBreakToken* break_token = *iter;
+    DCHECK(break_token->IsInParallelBlockFlow());
+    if (break_token->StartItemIndex() >= item_index) {
+      const wtf_size_t index =
+          static_cast<wtf_size_t>(iter - parallel_flow_break_tokens_.begin());
+      parallel_flow_break_tokens_.Shrink(index);
+      break;
+    }
+  }
 }
 
 std::ostream& operator<<(std::ostream& ostream, const LineInfo& line_info) {

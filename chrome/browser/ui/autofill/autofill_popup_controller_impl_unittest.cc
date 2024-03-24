@@ -38,8 +38,8 @@
 #include "components/autofill/core/browser/browser_autofill_manager_test_api.h"
 #include "components/autofill/core/browser/test_personal_data_manager.h"
 #include "components/autofill/core/browser/ui/autofill_popup_delegate.h"
+#include "components/autofill/core/browser/ui/popup_hiding_reasons.h"
 #include "components/autofill/core/browser/ui/popup_item_ids.h"
-#include "components/autofill/core/browser/ui/popup_types.h"
 #include "components/autofill/core/browser/ui/suggestion.h"
 #include "components/autofill/core/common/aliases.h"
 #include "components/autofill/core/common/unique_ids.h"
@@ -72,11 +72,11 @@
 #endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_ANDROID)
-#include "chrome/browser/autofill/manual_filling_controller_impl.h"
-#include "chrome/browser/autofill/mock_address_accessory_controller.h"
-#include "chrome/browser/autofill/mock_credit_card_accessory_controller.h"
 #include "chrome/browser/autofill/mock_manual_filling_view.h"
-#include "chrome/browser/autofill/mock_password_accessory_controller.h"
+#include "chrome/browser/keyboard_accessory/android/manual_filling_controller_impl.h"
+#include "chrome/browser/keyboard_accessory/test_utils/android/mock_address_accessory_controller.h"
+#include "chrome/browser/keyboard_accessory/test_utils/android/mock_credit_card_accessory_controller.h"
+#include "chrome/browser/keyboard_accessory/test_utils/android/mock_password_accessory_controller.h"
 #endif  // BUILDFLAG(IS_ANDROID)
 
 namespace autofill {
@@ -140,10 +140,7 @@ class MockAutofillExternalDelegate : public AutofillExternalDelegate {
               DidPerformButtonActionForSuggestion,
               (const Suggestion&),
               (override));
-  MOCK_METHOD(bool,
-              RemoveSuggestion,
-              (const std::u16string&, PopupItemId, Suggestion::BackendId),
-              (override));
+  MOCK_METHOD(bool, RemoveSuggestion, (const Suggestion&), (override));
 };
 
 class MockAutofillPopupView : public AutofillPopupView {
@@ -402,6 +399,15 @@ class AutofillPopupControllerImplTest : public ChromeRenderViewHostTestHarness {
 #endif  // BUILDFLAG(IS_ANDROID)
   }
 
+  void TearDown() override {
+    // Wait for the pending deletion of the controllers. Otherwise, the
+    // controllers are destroyed after the WebContents, and each of them
+    // receives a final Hide() call for which we'd need to add explicit
+    // expectations.
+    task_environment()->RunUntilIdle();
+    ChromeRenderViewHostTestHarness::TearDown();
+  }
+
   content::RenderFrameHost* main_frame() {
     return web_contents()->GetPrimaryMainFrame();
   }
@@ -412,8 +418,7 @@ class AutofillPopupControllerImplTest : public ChromeRenderViewHostTestHarness {
 
   NiceMock<MockAutofillDriver>& driver(
       content::RenderFrameHost* rfh = nullptr) {
-    return *autofill_driver_injector_
-        [rfh ? rfh : web_contents()->GetPrimaryMainFrame()];
+    return *autofill_driver_injector_[rfh ? rfh : main_frame()];
   }
 
   BrowserAutofillManagerWithMockDelegate& manager(
@@ -490,7 +495,8 @@ TEST_F(AutofillPopupControllerImplTest, RemoveSuggestion) {
   // testing the popup here.
   test::GenerateTestAutofillPopup(&manager().external_delegate());
   EXPECT_CALL(manager().external_delegate(),
-              RemoveSuggestion(_, PopupItemId::kAddressEntry, _))
+              RemoveSuggestion(Field(&Suggestion::popup_item_id,
+                                     PopupItemId::kAddressEntry)))
       .WillRepeatedly(Return(true));
 
   // Remove the first entry. The popup should be redrawn since its size has
@@ -510,6 +516,15 @@ TEST_F(AutofillPopupControllerImplTest, RemoveSuggestion) {
       AutofillMetrics::SingleEntryRemovalMethod::kKeyboardShiftDeletePressed));
 }
 
+// Regression test for (crbug.com/1513574): Showing an Autofill Compose
+// suggestion twice does not crash.
+TEST_F(AutofillPopupControllerImplTest, ShowTwice) {
+  ShowSuggestions(manager(),
+                  {Suggestion(u"Help me write", PopupItemId::kCompose)});
+  ShowSuggestions(manager(),
+                  {Suggestion(u"Help me write", PopupItemId::kCompose)});
+}
+
 TEST_F(AutofillPopupControllerImplTest,
        RemoveAutocompleteSuggestion_AnnounceText) {
   ShowSuggestions(manager(),
@@ -517,7 +532,8 @@ TEST_F(AutofillPopupControllerImplTest,
   test::GenerateTestAutofillPopup(&manager().external_delegate());
 
   EXPECT_CALL(manager().external_delegate(),
-              RemoveSuggestion(_, PopupItemId::kAutocompleteEntry, _))
+              RemoveSuggestion(Field(&Suggestion::popup_item_id,
+                                     PopupItemId::kAutocompleteEntry)))
       .WillOnce(Return(true));
   EXPECT_CALL(client().popup_view(),
               AxAnnounce(Eq(u"Entry main text has been deleted")));
@@ -537,7 +553,8 @@ TEST_F(AutofillPopupControllerImplTest,
   test::GenerateTestAutofillPopup(&manager().external_delegate());
 
   EXPECT_CALL(manager().external_delegate(),
-              RemoveSuggestion(_, PopupItemId::kAutocompleteEntry, _))
+              RemoveSuggestion(Field(&Suggestion::popup_item_id,
+                                     PopupItemId::kAutocompleteEntry)))
       .WillOnce(Return(true));
   // Remove the first entry. The popup should be redrawn since its size has
   // changed.
@@ -558,7 +575,8 @@ TEST_F(AutofillPopupControllerImplTest,
   ShowSuggestions(manager(), {PopupItemId::kAutocompleteEntry});
   test::GenerateTestAutofillPopup(&manager().external_delegate());
   EXPECT_CALL(manager().external_delegate(),
-              RemoveSuggestion(_, PopupItemId::kAutocompleteEntry, _))
+              RemoveSuggestion(Field(&Suggestion::popup_item_id,
+                                     PopupItemId::kAutocompleteEntry)))
       .WillOnce(Return(false));
 
   EXPECT_FALSE(client().popup_controller(manager()).RemoveSuggestion(
@@ -579,7 +597,8 @@ TEST_F(AutofillPopupControllerImplTest,
   ShowSuggestions(manager(), {PopupItemId::kAutocompleteEntry});
   test::GenerateTestAutofillPopup(&manager().external_delegate());
   EXPECT_CALL(manager().external_delegate(),
-              RemoveSuggestion(_, PopupItemId::kAutocompleteEntry, _))
+              RemoveSuggestion(Field(&Suggestion::popup_item_id,
+                                     PopupItemId::kAutocompleteEntry)))
       .WillOnce(Return(true));
 
   EXPECT_TRUE(client().popup_controller(manager()).RemoveSuggestion(
@@ -605,7 +624,8 @@ TEST_F(AutofillPopupControllerImplTest,
   ShowSuggestions(manager(), {PopupItemId::kAddressEntry});
   test::GenerateTestAutofillPopup(&manager().external_delegate());
   EXPECT_CALL(manager().external_delegate(),
-              RemoveSuggestion(_, PopupItemId::kAddressEntry, _))
+              RemoveSuggestion(Field(&Suggestion::popup_item_id,
+                                     PopupItemId::kAddressEntry)))
       .WillOnce(Return(false));
 
   EXPECT_FALSE(client().popup_controller(manager()).RemoveSuggestion(
@@ -623,7 +643,8 @@ TEST_F(AutofillPopupControllerImplTest,
   ShowSuggestions(manager(), {PopupItemId::kAddressEntry});
   test::GenerateTestAutofillPopup(&manager().external_delegate());
   EXPECT_CALL(manager().external_delegate(),
-              RemoveSuggestion(_, PopupItemId::kAddressEntry, _))
+              RemoveSuggestion(Field(&Suggestion::popup_item_id,
+                                     PopupItemId::kAddressEntry)))
       .WillOnce(Return(true));
 
   EXPECT_TRUE(client().popup_controller(manager()).RemoveSuggestion(
@@ -649,7 +670,8 @@ TEST_F(AutofillPopupControllerImplTest,
   ShowSuggestions(manager(), {PopupItemId::kAddressEntry});
   test::GenerateTestAutofillPopup(&manager().external_delegate());
   EXPECT_CALL(manager().external_delegate(),
-              RemoveSuggestion(_, PopupItemId::kAddressEntry, _))
+              RemoveSuggestion(Field(&Suggestion::popup_item_id,
+                                     PopupItemId::kAddressEntry)))
       .WillOnce(Return(false));
 
   EXPECT_FALSE(client().popup_controller(manager()).RemoveSuggestion(
@@ -666,7 +688,8 @@ TEST_F(AutofillPopupControllerImplTest,
   ShowSuggestions(manager(), {PopupItemId::kAddressEntry});
   test::GenerateTestAutofillPopup(&manager().external_delegate());
   EXPECT_CALL(manager().external_delegate(),
-              RemoveSuggestion(_, PopupItemId::kAddressEntry, _))
+              RemoveSuggestion(Field(&Suggestion::popup_item_id,
+                                     PopupItemId::kAddressEntry)))
       .WillOnce(Return(true));
 
   EXPECT_TRUE(client().popup_controller(manager()).RemoveSuggestion(
@@ -691,7 +714,8 @@ TEST_F(AutofillPopupControllerImplTest,
   ShowSuggestions(manager(), {PopupItemId::kCreditCardEntry});
   test::GenerateTestAutofillPopup(&manager().external_delegate());
   EXPECT_CALL(manager().external_delegate(),
-              RemoveSuggestion(_, PopupItemId::kCreditCardEntry, _))
+              RemoveSuggestion(Field(&Suggestion::popup_item_id,
+                                     PopupItemId::kCreditCardEntry)))
       .WillOnce(Return(true));
 
   EXPECT_TRUE(client().popup_controller(manager()).RemoveSuggestion(
@@ -1029,9 +1053,8 @@ TEST_F(AutofillPopupControllerImplTest,
 // picture-in-picture window.
 TEST_F(AutofillPopupControllerImplTest,
        CheckBoundsOverlapWithPictureInPicture) {
-  client().popup_controller(manager());  // Creates the controller.
-  EXPECT_CALL(client().popup_view(), OverlapsWithPictureInPictureWindow)
-      .Times(1);
+  ShowSuggestions(manager(), {PopupItemId::kAddressEntry});
+  EXPECT_CALL(client().popup_view(), OverlapsWithPictureInPictureWindow);
   PictureInPictureWindowManager* picture_in_picture_window_manager =
       PictureInPictureWindowManager::GetInstance();
   picture_in_picture_window_manager->EnterVideoPictureInPicture(web_contents());
@@ -1176,7 +1199,7 @@ TEST_F(AutofillPopupControllerImplTest,
   base::test::ScopedFeatureList scoped_feature_list(
       password_manager::features::
           kUnifiedPasswordManagerLocalPasswordsMigrationWarning);
-  ShowSuggestions(manager(), {PopupItemId::kUsernameEntry});
+  ShowSuggestions(manager(), {PopupItemId::kPasswordEntry});
 
   // Calls are accepted immediately.
   EXPECT_CALL(manager().external_delegate(), DidAcceptSuggestion).Times(1);
@@ -1459,6 +1482,8 @@ class AutofillPopupControllerImplTestHidingLogic
  public:
   void SetUp() override {
     AutofillPopupControllerImplTest::SetUp();
+#if !BUILDFLAG(IS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
     sub_frame_ = CreateAndNavigateChildFrame(
                      main_frame(), GURL("https://bar.com"), "sub_frame")
                      ->GetWeakDocumentPtr();
@@ -1504,6 +1529,18 @@ TEST_F(AutofillPopupControllerImplTestHidingLogic,
   Mock::VerifyAndClearExpectations(&client().popup_controller(manager()));
 }
 
+// Tests that if the popup is shown, destruction of the WebContents hides the
+// popup.
+TEST_F(AutofillPopupControllerImplTestHidingLogic, HideOnWebContentsDestroyed) {
+  ShowSuggestions(manager(), {PopupItemId::kAddressEntry});
+  test::GenerateTestAutofillPopup(&manager().external_delegate());
+  EXPECT_CALL(client().popup_controller(manager()),
+              Hide(PopupHidingReason::kRendererEvent));
+  EXPECT_CALL(client().popup_controller(manager()),
+              Hide(PopupHidingReason::kTabGone));
+  DeleteContents();
+}
+
 // Tests that if the popup is shown in the *main frame*, destruction of the
 // *main frame* hides the popup.
 TEST_F(AutofillPopupControllerImplTestHidingLogic,
@@ -1512,6 +1549,11 @@ TEST_F(AutofillPopupControllerImplTestHidingLogic,
   test::GenerateTestAutofillPopup(&manager().external_delegate());
   EXPECT_CALL(client().popup_controller(manager()),
               Hide(PopupHidingReason::kRendererEvent));
+  // There seems to be no way to destroy only the main frame in a test. We
+  // therefore let the test fixture's TearDown() destroy the main frame. As a
+  // side-effect, the WebContents will also be destroyed and call Hide().
+  EXPECT_CALL(client().popup_controller(manager()),
+              Hide(PopupHidingReason::kTabGone));
 }
 
 // Tests that if the popup is shown in the *sub frame*, destruction of the
@@ -1522,6 +1564,9 @@ TEST_F(AutofillPopupControllerImplTestHidingLogic,
   test::GenerateTestAutofillPopup(&sub_manager().external_delegate());
   EXPECT_CALL(client().popup_controller(sub_manager()),
               Hide(PopupHidingReason::kRendererEvent));
+  content::RenderFrameHostTester::For(sub_frame())->Detach();
+  // Verify and clear before TearDown() closes the popup.
+  Mock::VerifyAndClearExpectations(&client().popup_controller(sub_manager()));
 }
 
 // Tests that if the popup is shown in the *main frame*, a navigation in the
@@ -1533,6 +1578,8 @@ TEST_F(AutofillPopupControllerImplTestHidingLogic,
   EXPECT_CALL(client().popup_controller(manager()),
               Hide(PopupHidingReason::kNavigation));
   NavigateAndCommitFrame(main_frame(), GURL("https://bar.com/"));
+  // Verify and clear before TearDown() closes the popup.
+  Mock::VerifyAndClearExpectations(&client().popup_controller(manager()));
 }
 
 // Tests that if the popup is shown in the *sub frame*, a navigation in the
@@ -1550,10 +1597,17 @@ TEST_F(AutofillPopupControllerImplTestHidingLogic,
                 Hide(PopupHidingReason::kRendererEvent));
   }
   NavigateAndCommitFrame(sub_frame(), GURL("https://bar.com/"));
+  // Verify and clear before TearDown() closes the popup.
+  Mock::VerifyAndClearExpectations(&client().popup_controller(sub_manager()));
 }
 
 // Tests that if the popup is shown in the *sub frame*, a navigation in the
 // *main frame* hides the popup.
+//
+// TODO(crbug.com/1519872): This test only makes little sense: with BFcache, the
+// navigation doesn't destroy the `sub_frame()` and thus we wouldn't hide the
+// popup. What hides the popup in reality is
+// AutofillExternalDelegate::DidEndTextFieldEditing().
 TEST_F(AutofillPopupControllerImplTestHidingLogic,
        HideInSubFrameOnMainFrameNavigation) {
   ShowSuggestions(sub_manager(), {PopupItemId::kAddressEntry});
@@ -1561,6 +1615,32 @@ TEST_F(AutofillPopupControllerImplTestHidingLogic,
   EXPECT_CALL(client().popup_controller(sub_manager()),
               Hide(PopupHidingReason::kRendererEvent));
   NavigateAndCommitFrame(main_frame(), GURL("https://bar.com/"));
+  // The WebContents will also be destroyed and call Hide().
+  EXPECT_CALL(client().popup_controller(sub_manager()),
+              Hide(PopupHidingReason::kTabGone));
 }
+
+#if !BUILDFLAG(IS_ANDROID)
+// Tests that if the popup is shown in the *main frame*, changing the zoom hides
+// the popup.
+TEST_F(AutofillPopupControllerImplTestHidingLogic,
+       HideInMainFrameOnZoomChange) {
+  zoom::ZoomController::CreateForWebContents(web_contents());
+  ShowSuggestions(manager(), {PopupItemId::kAddressEntry});
+  test::GenerateTestAutofillPopup(&manager().external_delegate());
+  // Triggered by OnZoomChanged().
+  EXPECT_CALL(client().popup_controller(manager()),
+              Hide(PopupHidingReason::kContentAreaMoved));
+  // Override the default ON_CALL behavior to do nothing to avoid destroying the
+  // hide helper. We want to test ZoomObserver events explicitly.
+  EXPECT_CALL(client().popup_controller(manager()),
+              Hide(PopupHidingReason::kWidgetChanged))
+      .WillOnce(Return());
+  auto* zoom_controller = zoom::ZoomController::FromWebContents(web_contents());
+  zoom_controller->SetZoomLevel(zoom_controller->GetZoomLevel() + 1.0);
+  // Verify and clear before TearDown() closes the popup.
+  Mock::VerifyAndClearExpectations(&client().popup_controller(manager()));
+}
+#endif  // BUILDFLAG(IS_ANDROID)
 
 }  // namespace autofill

@@ -8,6 +8,7 @@
 
 #include "base/check_op.h"
 #include "base/containers/contains.h"
+#include "base/trace_event/named_trigger.h"
 #include "components/performance_manager/graph/frame_node_impl.h"
 #include "components/performance_manager/graph/graph_impl.h"
 #include "components/performance_manager/graph/graph_impl_util.h"
@@ -35,7 +36,7 @@ content::ProcessType ValidateBrowserChildProcessType(
 void FireBackgroundTracingTriggerOnUI(const std::string& trigger_name) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  content::BackgroundTracingManager::EmitNamedTrigger(
+  base::trace_event::EmitNamedTrigger(
       content::BackgroundTracingManager::kContentTriggerConfig);
 }
 
@@ -216,7 +217,7 @@ base::TimeTicks ProcessNodeImpl::GetLaunchTime() const {
   return launch_time_;
 }
 
-absl::optional<int32_t> ProcessNodeImpl::GetExitStatus() const {
+std::optional<int32_t> ProcessNodeImpl::GetExitStatus() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return exit_status_;
 }
@@ -438,15 +439,8 @@ void ProcessNodeImpl::OnJoiningGraph() {
 
   // Make sure all weak pointers, even `weak_this_` that was created on the UI
   // thread in the constructor, can only be dereferenced on the graph sequence.
-  //
-  // If this is the first pointer dereferenced, it will bind all pointers from
-  // `weak_factory_` to the current sequence. If not, get() will DCHECK.
-  // DCHECK'ing the return value of get() prevents the compiler from optimizing
-  // it away.
-  //
-  // TODO(crbug.com/1134162): Use WeakPtrFactory::BindToCurrentSequence for this
-  // (it's clearer but currently not exposed publicly).
-  DCHECK(GetWeakPtr().get());
+  weak_factory_.BindToCurrentSequence(
+      base::subtle::BindWeakPtrFactoryPassKey());
 }
 
 void ProcessNodeImpl::OnBeforeLeavingGraph() {

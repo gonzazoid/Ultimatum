@@ -49,6 +49,10 @@ void BrowserStateInfoCache::AddBrowserState(
   ScopedDictPrefUpdate update(prefs_, prefs::kBrowserStateInfoCache);
   base::Value::Dict& cache = update.Get();
 
+  const int browser_states_count =
+      prefs_->GetInteger(prefs::kBrowserStatesNumCreated);
+  prefs_->SetInteger(prefs::kBrowserStatesNumCreated, browser_states_count + 1);
+
   base::Value::Dict info;
   info.Set(kGAIAIdKey, gaia_id);
   info.Set(kUserNameKey, user_name);
@@ -58,16 +62,6 @@ void BrowserStateInfoCache::AddBrowserState(
   for (auto& observer : observer_list_) {
     observer.OnBrowserStateAdded(browser_state_path);
   }
-}
-
-void BrowserStateInfoCache::AddObserver(
-    BrowserStateInfoCacheObserver* observer) {
-  observer_list_.AddObserver(observer);
-}
-
-void BrowserStateInfoCache::RemoveObserver(
-    BrowserStateInfoCacheObserver* observer) {
-  observer_list_.RemoveObserver(observer);
 }
 
 void BrowserStateInfoCache::RemoveBrowserState(
@@ -80,6 +74,12 @@ void BrowserStateInfoCache::RemoveBrowserState(
   }
   ScopedDictPrefUpdate update(prefs_, prefs::kBrowserStateInfoCache);
   base::Value::Dict& cache = update.Get();
+
+  const int browser_states_count =
+      prefs_->GetInteger(prefs::kBrowserStatesNumCreated);
+  DCHECK_GE(browser_states_count, 1);
+  prefs_->SetInteger(prefs::kBrowserStatesNumCreated, browser_states_count - 1);
+
   std::string key = CacheKeyFromBrowserStatePath(browser_state_path);
   cache.Remove(key);
   sorted_keys_.erase(base::ranges::find(sorted_keys_, key));
@@ -91,6 +91,16 @@ void BrowserStateInfoCache::RemoveBrowserState(
 
 size_t BrowserStateInfoCache::GetNumberOfBrowserStates() const {
   return sorted_keys_.size();
+}
+
+void BrowserStateInfoCache::AddObserver(
+    BrowserStateInfoCacheObserver* observer) {
+  observer_list_.AddObserver(observer);
+}
+
+void BrowserStateInfoCache::RemoveObserver(
+    BrowserStateInfoCacheObserver* observer) {
+  observer_list_.RemoveObserver(observer);
 }
 
 size_t BrowserStateInfoCache::GetIndexOfBrowserStateWithPath(

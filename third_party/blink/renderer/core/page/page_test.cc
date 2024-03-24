@@ -12,16 +12,19 @@
 #include "third_party/blink/renderer/core/loader/empty_clients.h"
 #include "third_party/blink/renderer/core/page/scoped_browsing_context_group_pauser.h"
 #include "third_party/blink/renderer/platform/scheduler/public/dummy_schedulers.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
 TEST(PageTest, CreateOrdinaryBrowsingContextGroup) {
+  test::TaskEnvironment task_environment;
   EmptyChromeClient client;
   auto* scheduler = scheduler::CreateDummyAgentGroupScheduler();
   auto bcg_info = BrowsingContextGroupInfo::CreateUnique();
 
   Page* page =
-      Page::CreateOrdinary(client, /*opener=*/nullptr, *scheduler, bcg_info);
+      Page::CreateOrdinary(client, /*opener=*/nullptr, *scheduler, bcg_info,
+                           /*color_provider_colors=*/nullptr);
 
   EXPECT_EQ(page->BrowsingContextGroupToken(),
             bcg_info.browsing_context_group_token);
@@ -29,6 +32,7 @@ TEST(PageTest, CreateOrdinaryBrowsingContextGroup) {
 }
 
 TEST(PageTest, CreateNonOrdinaryBrowsingContextGroup) {
+  test::TaskEnvironment task_environment;
   EmptyChromeClient client;
   auto* scheduler = scheduler::CreateDummyAgentGroupScheduler();
 
@@ -41,12 +45,14 @@ TEST(PageTest, CreateNonOrdinaryBrowsingContextGroup) {
 }
 
 TEST(PageTest, BrowsingContextGroupUpdate) {
+  test::TaskEnvironment task_environment;
   EmptyChromeClient client;
   auto* scheduler = scheduler::CreateDummyAgentGroupScheduler();
   auto initial_bcg_info = BrowsingContextGroupInfo::CreateUnique();
 
   Page* page = Page::CreateOrdinary(client, /*opener=*/nullptr, *scheduler,
-                                    initial_bcg_info);
+                                    initial_bcg_info,
+                                    /*color_provider_colors=*/nullptr);
 
   EXPECT_EQ(page->BrowsingContextGroupToken(),
             initial_bcg_info.browsing_context_group_token);
@@ -63,6 +69,7 @@ TEST(PageTest, BrowsingContextGroupUpdate) {
 }
 
 TEST(PageTest, BrowsingContextGroupUpdateWithPauser) {
+  test::TaskEnvironment task_environment;
   base::test::ScopedFeatureList scoped_feature_list;
   scoped_feature_list.InitAndEnableFeature(
       features::kPausePagesPerBrowsingContextGroup);
@@ -73,7 +80,8 @@ TEST(PageTest, BrowsingContextGroupUpdateWithPauser) {
   auto group_a = BrowsingContextGroupInfo::CreateUnique();
 
   Page* page1 =
-      Page::CreateOrdinary(client, /*opener=*/nullptr, *scheduler, group_a);
+      Page::CreateOrdinary(client, /*opener=*/nullptr, *scheduler, group_a,
+                           /*color_provider_colors=*/nullptr);
 
   auto pauser_for_group_a =
       std::make_unique<ScopedBrowsingContextGroupPauser>(*page1);
@@ -84,7 +92,8 @@ TEST(PageTest, BrowsingContextGroupUpdateWithPauser) {
   ASSERT_FALSE(page1->Paused());
 
   Page* page2 =
-      Page::CreateOrdinary(client, /*opener=*/nullptr, *scheduler, group_b);
+      Page::CreateOrdinary(client, /*opener=*/nullptr, *scheduler, group_b,
+                           /*color_provider_colors=*/nullptr);
   ASSERT_FALSE(page2->Paused());
 
   page2->UpdateBrowsingContextGroup(group_a);

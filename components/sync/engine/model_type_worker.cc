@@ -6,11 +6,11 @@
 
 #include <stdint.h>
 
+#include <map>
 #include <set>
 #include <utility>
 
 #include "base/containers/contains.h"
-#include "base/containers/cxx20_erase.h"
 #include "base/containers/span.h"
 #include "base/feature_list.h"
 #include "base/format_macros.h"
@@ -239,9 +239,6 @@ bool DecryptPasswordSpecifics(const Cryptographer& cryptographer,
     LogPasswordNotesState(PasswordNotesStateForUMA::kUnset);
     return true;
   }
-  if (!base::FeatureList::IsEnabled(syncer::kPasswordNotesWithBackup)) {
-    return true;
-  }
   // It is guaranteed that if `encrypted()` is decryptable, then
   // `encrypted_notes_backup()` must be decryptable too. Failure to decrypt
   // `encrypted_notes_backup()` indicates a data corruption.
@@ -271,7 +268,7 @@ bool DecryptIncomingPasswordSharingInvitationSpecifics(
     return false;
   }
 
-  absl::optional<std::vector<uint8_t>> decrypted =
+  std::optional<std::vector<uint8_t>> decrypted =
       cryptographer.AuthDecryptForCrossUserSharing(
           base::as_bytes(base::make_span(
               invitation.encrypted_password_sharing_invitation_data())),
@@ -341,9 +338,9 @@ ModelTypeWorker::ModelTypeWorker(ModelType type,
             std::make_unique<SyncInvalidationAdapter>(
                 model_type_state_.invalidations(i).hint(),
                 model_type_state_.invalidations(i).has_version()
-                    ? absl::optional<int64_t>(
+                    ? std::optional<int64_t>(
                           model_type_state_.invalidations(i).version())
-                    : absl::nullopt),
+                    : std::nullopt),
             false);
       }
 
@@ -890,7 +887,7 @@ std::unique_ptr<CommitContribution> ModelTypeWorker::GetContribution(
                      weak_ptr_factory_.GetWeakPtr()),
       base::BindOnce(&ModelTypeWorker::OnFullCommitFailure,
                      weak_ptr_factory_.GetWeakPtr()),
-      passphrase_type_, CommitOnlyTypes().Has(type_));
+      passphrase_type_);
 }
 
 bool ModelTypeWorker::HasLocalChanges() const {
@@ -1142,7 +1139,7 @@ void ModelTypeWorker::MaybeDropPendingUpdatesEncryptedWith(
   }
 
   size_t updates_before_dropping = entries_pending_decryption_.size();
-  base::EraseIf(entries_pending_decryption_, [&](const auto& id_and_update) {
+  std::erase_if(entries_pending_decryption_, [&](const auto& id_and_update) {
     return key_name == GetEncryptionKeyName(id_and_update.second);
   });
 
@@ -1169,7 +1166,7 @@ ModelTypeWorker::RemoveKeysNoLongerUnknown() {
   }
 
   std::vector<ModelTypeWorker::UnknownEncryptionKeyInfo> removed_keys;
-  base::EraseIf(
+  std::erase_if(
       unknown_encryption_keys_by_name_, [&](const auto& key_and_info) {
         if (base::Contains(keys_blocking_updates, key_and_info.first)) {
           return false;
@@ -1385,19 +1382,19 @@ void ModelTypeWorker::EncryptPasswordSpecificsData(
         password_data,
         encrypted_password.mutable_password()->mutable_encrypted());
     LogEncryptionResult(type_, result);
-    if (base::FeatureList::IsEnabled(syncer::kPasswordNotesWithBackup)) {
-      // `encrypted_notes_backup` field needs to be populated regardless of
-      // whether or not there are any notes.
-      result = cryptographer_->Encrypt(password_data.notes(),
-                                       encrypted_password.mutable_password()
-                                           ->mutable_encrypted_notes_backup());
-      DCHECK(result);
-      // When encrypting both blobs succeeds, both encrypted blobs must use the
-      // key name.
-      DCHECK_EQ(
-          encrypted_password.password().encrypted().key_name(),
-          encrypted_password.password().encrypted_notes_backup().key_name());
-    }
+
+    // `encrypted_notes_backup` field needs to be populated regardless of
+    // whether or not there are any notes.
+    result = cryptographer_->Encrypt(password_data.notes(),
+                                     encrypted_password.mutable_password()
+                                         ->mutable_encrypted_notes_backup());
+    CHECK(result);
+
+    // When encrypting both blobs succeeds, both encrypted blobs must use the
+    // key name.
+    CHECK_EQ(encrypted_password.password().encrypted().key_name(),
+             encrypted_password.password().encrypted_notes_backup().key_name());
+
     // Replace the entire specifics, among other things to ensure that any
     // client-only fields are cleared.
     entity_data->specifics = std::move(encrypted_password);
@@ -1422,7 +1419,7 @@ void ModelTypeWorker::EncryptOutgoingPasswordSharingInvitations(
     specifics->clear_client_only_unencrypted_data();
     CHECK(success);
 
-    absl::optional<std::vector<uint8_t>> encrypted_data =
+    std::optional<std::vector<uint8_t>> encrypted_data =
         cryptographer_->AuthEncryptForCrossUserSharing(
             base::as_bytes(base::make_span(serialized_password_data)),
             base::as_bytes(base::make_span(

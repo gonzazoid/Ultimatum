@@ -11,7 +11,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "components/page_load_metrics/browser/page_load_metrics_observer.h"
-#include "components/page_load_metrics/common/page_load_metrics.mojom.h"
+#include "components/page_load_metrics/common/page_load_metrics.mojom-forward.h"
 #include "components/page_load_metrics/common/test/weak_mock_timer.h"
 #include "components/ukm/test_ukm_recorder.h"
 #include "content/public/browser/cookie_access_details.h"
@@ -19,7 +19,6 @@
 #include "ui/base/page_transition_types.h"
 
 namespace base {
-class GURL;
 class HistogramTester;
 }  // namespace base
 
@@ -35,11 +34,7 @@ struct GlobalRequestID;
 class NavigationHandle;
 }  // namespace content
 
-namespace mojom {
-class FrameRenderDataUpdate;
-class FrameMetadata;
-class PageLoadTiming;
-}  // namespace mojom
+class GURL;
 
 namespace ukm {
 class TestAutoSetUkmRecorder;
@@ -180,7 +175,7 @@ class PageLoadMetricsObserverTester : public test::WeakMockTimerProvider {
       const mojom::FrameRenderDataUpdate& render_data,
       const mojom::CpuTiming& cpu_timing,
       const mojom::InputTiming& input_timing,
-      const absl::optional<blink::SubresourceLoadMetrics>&
+      const std::optional<blink::SubresourceLoadMetrics>&
           subresource_load_metrics,
       content::RenderFrameHost* rfh,
       const mojom::SoftNavigationMetrics& soft_navigation_metrics);

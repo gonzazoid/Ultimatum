@@ -5,6 +5,7 @@
 #include "ash/wm/window_state.h"
 
 #include <absl/cleanup/cleanup.h>
+#include <optional>
 #include <utility>
 
 #include "ash/accessibility/accessibility_controller.h"
@@ -27,6 +28,7 @@
 #include "ash/wm/snap_group/snap_group_controller.h"
 #include "ash/wm/splitview/split_view_constants.h"
 #include "ash/wm/splitview/split_view_controller.h"
+#include "ash/wm/splitview/split_view_divider.h"
 #include "ash/wm/splitview/split_view_utils.h"
 #include "ash/wm/window_animations.h"
 #include "ash/wm/window_positioning_utils.h"
@@ -215,11 +217,38 @@ bool ShouldConsiderDivider(aura::Window* window) {
   SplitViewController* split_view_controller =
       SplitViewController::Get(window->GetRootWindow());
   return split_view_controller->InSplitViewMode() &&
-         split_view_controller->split_view_divider();
+         split_view_controller->split_view_divider()->divider_widget();
 }
 
-float GetCurrentSnapRatio(aura::Window* window,
-                          const gfx::Rect& target_bounds) {
+// Returns the snap ratio for the given `window` and `snap_event`.
+// - In tablet mode, window will snap to the prefixed snap ratios and some
+// adjustments will be made to account for window minimum size if needed. See
+// `SplitViewController::FindClosestPositionRatio()` for more details;
+// - In clamshell mode, window can be snapped with an arbitrary snap ratio and
+// we need to consider the window minimum size and adjust the window snap ratio
+// before committing the snap event if needed.
+float GetTargetSnapRatio(aura::Window* window,
+                         const WindowSnapWMEvent* snap_event) {
+  if (Shell::Get()->IsInTabletMode()) {
+    return snap_event->snap_ratio();
+  }
+
+  const gfx::Rect work_area(
+      screen_util::GetDisplayWorkAreaBoundsInScreenForActiveDeskContainer(
+          window->GetRootWindow()));
+  const bool is_horizontal = IsLayoutHorizontal(window);
+  const float window_minimum_length =
+      GetMinimumWindowLength(window, is_horizontal);
+  const float snap_ratio = snap_event->snap_ratio();
+  return std::max(window_minimum_length /
+                      (is_horizontal ? work_area.width() : work_area.height()),
+                  snap_ratio);
+}
+
+// This applies after the wm event has been applied and window bounds have been
+// modified.
+float AdjustCurrentSnapRatio(aura::Window* window,
+                             const gfx::Rect& target_bounds) {
   gfx::Rect maximized_bounds =
       screen_util::GetMaximizedWindowBoundsInParent(window);
   const int divider_delta =
@@ -530,12 +559,11 @@ void WindowState::OnWMEvent(const WMEvent* event) {
     return;
   }
 
-  const WindowSnapWMEvent* snap_event = event->AsSnapEvent();
-
-  if (snap_event) {
+  if (const WindowSnapWMEvent* snap_event = event->AsSnapEvent()) {
     // Save `event` requested snap ratio.
-    const float target_snap_ratio = snap_event->snap_ratio();
+    const float target_snap_ratio = GetTargetSnapRatio(window_, snap_event);
     snap_ratio_ = std::make_optional(target_snap_ratio);
+    snap_action_source_ = std::make_optional(snap_event->snap_action_source());
     if (IsPartial(target_snap_ratio)) {
       partial_start_time_ = base::TimeTicks::Now();
     } else {
@@ -558,23 +586,6 @@ void WindowState::OnWMEvent(const WMEvent* event) {
   // the window has a minimum size requirement.
   if (event->IsBoundsEvent()) {
     UpdateSnapRatio();
-  }
-
-  if (snap_event && IsSnapped()) {
-    const WindowSnapActionSource snap_action_source =
-        snap_event->snap_action_source();
-    if (features::IsFasterSplitScreenSetupEnabled() &&
-        !Shell::Get()->IsInTabletMode()) {
-      // SplitViewController will start the partial overview session, no need
-      // for SplitViewOverviewSession.
-      // TODO(sophiewen): See if checking tablet mode is necessary.
-      window_util::MaybeStartSplitViewOverview(window_, snap_action_source);
-      return;
-    }
-
-    if (IsSnapGroupEnabledInClamshellMode()) {
-      SnapGroupController::Get()->OnWindowSnapped(window_, snap_action_source);
-    }
   }
 }
 
@@ -677,7 +688,8 @@ void WindowState::UpdateSnapRatio() {
 }
 
 void WindowState::ForceUpdateSnapRatio(const gfx::Rect& target_bounds) {
-  snap_ratio_ = std::make_optional(GetCurrentSnapRatio(window_, target_bounds));
+  snap_ratio_ =
+      std::make_optional(AdjustCurrentSnapRatio(window_, target_bounds));
   // If the snap ratio was adjusted, partial may have ended.
   MaybeRecordPartialDuration();
 }

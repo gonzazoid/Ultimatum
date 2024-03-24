@@ -175,13 +175,16 @@ int ImmersiveModeControllerChromeos::GetExtraInfobarOffset() const {
   return 0;
 }
 
+void ImmersiveModeControllerChromeos::OnContentFullscreenChanged(
+    bool is_content_fullscreen) {}
+
 void ImmersiveModeControllerChromeos::LayoutBrowserRootView() {
   views::Widget* widget = browser_view_->frame();
   // Update the window caption buttons.
   widget->non_client_view()->frame_view()->ResetWindowControls();
   widget->non_client_view()->frame_view()->InvalidateLayout();
   browser_view_->InvalidateLayout();
-  widget->GetRootView()->Layout();
+  widget->GetRootView()->DeprecatedLayoutImmediately();
 }
 
 void ImmersiveModeControllerChromeos::OnImmersiveRevealStarted() {
@@ -197,7 +200,11 @@ void ImmersiveModeControllerChromeos::OnImmersiveRevealEnded() {
     observer.OnImmersiveRevealEnded();
 }
 
-void ImmersiveModeControllerChromeos::OnImmersiveFullscreenEntered() {}
+void ImmersiveModeControllerChromeos::OnImmersiveFullscreenEntered() {
+  for (Observer& observer : observers_) {
+    observer.OnImmersiveFullscreenEntered();
+  }
+}
 
 void ImmersiveModeControllerChromeos::OnImmersiveFullscreenExited() {
   browser_view_->contents_web_view()->holder()->SetHitTestTopInset(0);
@@ -224,7 +231,7 @@ void ImmersiveModeControllerChromeos::SetVisibleFraction(
   }
   visible_fraction_ = visible_fraction;
   browser_view_->top_container()->OnImmersiveRevealUpdated();
-  browser_view_->Layout();
+  browser_view_->DeprecatedLayoutImmediately();
 }
 
 std::vector<gfx::Rect>

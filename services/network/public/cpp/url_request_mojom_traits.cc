@@ -187,7 +187,7 @@ bool StructTraits<
   // help debug crbug.com/1062637.
   if (!data.ReadTrustTokenParams(&out->trust_token_params.as_ptr())) {
     // We don't return false here to avoid duplicate reports.
-    out->trust_token_params = absl::nullopt;
+    out->trust_token_params = std::nullopt;
     base::debug::DumpWithoutCrashing();
   }
 
@@ -198,7 +198,6 @@ bool StructTraits<
   out->priority_incremental = data.priority_incremental();
   out->originated_from_service_worker = data.originated_from_service_worker();
   out->skip_service_worker = data.skip_service_worker();
-  out->corb_detachable = data.corb_detachable();
   out->destination = data.destination();
   out->keepalive = data.keepalive();
   out->browsing_topics = data.browsing_topics();

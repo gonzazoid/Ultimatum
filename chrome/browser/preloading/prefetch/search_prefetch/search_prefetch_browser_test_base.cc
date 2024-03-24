@@ -7,6 +7,7 @@
 #include "base/containers/adapters.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/devtools/devtools_window.h"
 #include "chrome/browser/devtools/devtools_window_testing.h"
@@ -22,6 +23,7 @@
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/browsing_data_filter_builder.h"
+#include "content/public/test/browser_test_utils.h"
 #include "content/public/test/browsing_data_remover_test_util.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/http/http_status_code.h"
@@ -158,7 +160,7 @@ SearchPrefetchBaseBrowserTest::GetSearchPrefetchAndNonPrefetch(
 
 void SearchPrefetchBaseBrowserTest::WaitUntilStatusChangesTo(
     const GURL& canonical_search_url,
-    absl::optional<SearchPrefetchStatus> status) {
+    std::optional<SearchPrefetchStatus> status) {
   auto* search_prefetch_service =
       SearchPrefetchServiceFactory::GetForProfile(browser()->profile());
   while (search_prefetch_service->GetSearchPrefetchStatusForTesting(
@@ -185,7 +187,7 @@ void SearchPrefetchBaseBrowserTest::WaitForDuration(base::TimeDelta duration) {
 }
 
 void SearchPrefetchBaseBrowserTest::ClearBrowsingCacheData(
-    absl::optional<GURL> url_origin) {
+    std::optional<GURL> url_origin) {
   auto filter = content::BrowsingDataFilterBuilder::Create(
       url_origin ? content::BrowsingDataFilterBuilder::Mode::kDelete
                  : content::BrowsingDataFilterBuilder::Mode::kPreserve);

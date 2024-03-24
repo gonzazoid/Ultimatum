@@ -4,6 +4,8 @@
 
 #include "ash/user_education/welcome_tour/welcome_tour_controller.h"
 
+#include <string_view>
+
 #include "ash/accessibility/accessibility_controller.h"
 #include "ash/app_list/app_list_controller_impl.h"
 #include "ash/ash_element_identifiers.h"
@@ -102,7 +104,7 @@ NameMatchingElementInPrimaryRootWindowCallback(ui::ElementIdentifier element_id,
       [](ui::ElementIdentifier element_id, const char* element_name,
          ui::InteractionSequence* sequence, ui::TrackedElement*) {
         if (auto* element = GetMatchingElementInPrimaryRootWindow(element_id)) {
-          sequence->NameElement(element, base::StringPiece(element_name));
+          sequence->NameElement(element, std::string_view(element_name));
           return true;
         }
         return false;
@@ -347,7 +349,7 @@ void WelcomeTourController::MaybeStartWelcomeTour() {
     // Welcome Tour is supported for regular users only.
     const auto* const session_controller = Shell::Get()->session_controller();
     if (const auto user_type = session_controller->GetUserType();
-        user_type != user_manager::UserType::USER_TYPE_REGULAR) {
+        user_type != user_manager::UserType::kRegular) {
       welcome_tour_metrics::RecordTourPrevented(
           welcome_tour_metrics::PreventedReason::kUserTypeNotRegular);
       return;

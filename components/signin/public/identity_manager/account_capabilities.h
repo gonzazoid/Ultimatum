@@ -5,6 +5,7 @@
 #ifndef COMPONENTS_SIGNIN_PUBLIC_IDENTITY_MANAGER_ACCOUNT_CAPABILITIES_H_
 #define COMPONENTS_SIGNIN_PUBLIC_IDENTITY_MANAGER_ACCOUNT_CAPABILITIES_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -12,7 +13,6 @@
 #include "base/values.h"
 #include "build/build_config.h"
 #include "components/signin/public/identity_manager/tribool.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/scoped_java_ref.h"
@@ -51,9 +51,10 @@ class AccountCapabilities {
   // Chrome can display the email address for accounts with this capability.
   signin::Tribool can_have_email_address_displayed() const;
 
-  // Chrome can offer extended promos for turning on Sync to accounts with this
-  // capability.
-  signin::Tribool can_offer_extended_chrome_sync_promos() const;
+  // Chrome can show history sync opt in screens without minor mode
+  // restrictions with this capability.
+  signin::Tribool
+  can_show_history_sync_opt_ins_without_minor_mode_restrictions() const;
 
   // Chrome can run privacy sandbox trials for accounts with this capability.
   signin::Tribool can_run_chrome_privacy_sandbox_trials() const;
@@ -102,7 +103,7 @@ class AccountCapabilities {
   bool operator!=(const AccountCapabilities& other) const;
 
  private:
-  friend absl::optional<AccountCapabilities> AccountCapabilitiesFromValue(
+  friend std::optional<AccountCapabilities> AccountCapabilitiesFromValue(
       const base::Value::Dict& account_capabilities);
   friend class AccountCapabilitiesFetcherGaia;
 #if BUILDFLAG(IS_IOS)

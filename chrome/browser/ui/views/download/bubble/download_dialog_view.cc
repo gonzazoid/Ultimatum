@@ -75,9 +75,7 @@ class ShowAllDownloadsButton : public RichHoverButton {
     // Override the table layout from RichHoverButton, in order to control the
     // spacing/padding. Code below is copied from rich_hover_button.cc but with
     // padding columns rearranged.
-    views::TableLayout* table_layout =
-        SetLayoutManager(std::make_unique<views::TableLayout>());
-    table_layout
+    SetLayoutManager(std::make_unique<views::TableLayout>())
         // Column for |main_image_icon|.
         ->AddColumn(views::LayoutAlignment::kCenter,
                     views::LayoutAlignment::kCenter,
@@ -110,11 +108,11 @@ class ShowAllDownloadsButton : public RichHoverButton {
                      views::style::STYLE_PRIMARY));
 
     // TODO(pkasting): This class should subclass Button, not HoverButton.
-    table_layout->SetChildViewIgnoredByLayout(image(), true);
-    table_layout->SetChildViewIgnoredByLayout(label(), true);
-    table_layout->SetChildViewIgnoredByLayout(ink_drop_container(), true);
+    image_container_view()->SetProperty(views::kViewIgnoredByLayoutKey, true);
+    label()->SetProperty(views::kViewIgnoredByLayoutKey, true);
+    ink_drop_container()->SetProperty(views::kViewIgnoredByLayoutKey, true);
 
-    Layout();
+    DeprecatedLayoutImmediately();
   }
 };
 
@@ -204,6 +202,10 @@ DownloadDialogView::~DownloadDialogView() {
 
 base::StringPiece DownloadDialogView::GetVisibleTimeHistogramName() const {
   return kFullBubbleVisibleHistogramName;
+}
+
+bool DownloadDialogView::IsPartialView() const {
+  return false;
 }
 
 BEGIN_METADATA(DownloadDialogView)

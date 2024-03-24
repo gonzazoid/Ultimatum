@@ -20,6 +20,8 @@
 #include "base/time/time.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/about_flags.h"
+#include "chrome/browser/nearby_sharing/common/nearby_share_features.h"
+#include "chrome/browser/nearby_sharing/common/nearby_share_resource_getter.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sharesheet/sharesheet_metrics.h"
 #include "chrome/browser/sharesheet/sharesheet_service_delegator.h"
@@ -288,10 +290,14 @@ void SharesheetBubbleView::ShowNearbyShareBubbleForArc(
   // and use that instead for a more consistent UI experience.
   height_ = 1;
 
-  delegator_->OnTargetSelected(
-      l10n_util::GetStringUTF16(IDS_NEARBY_SHARE_FEATURE_NAME),
-      ::sharesheet::TargetType::kAction, std::move(intent_),
-      share_action_view_);
+  const std::u16string target_name =
+      features::IsNameEnabled()
+          ? NearbyShareResourceGetter::GetInstance()->GetStringWithFeatureName(
+                IDS_NEARBY_SHARE_FEATURE_NAME_PH)
+          : l10n_util::GetStringUTF16(IDS_NEARBY_SHARE_FEATURE_NAME);
+
+  delegator_->OnTargetSelected(target_name, ::sharesheet::TargetType::kAction,
+                               std::move(intent_), share_action_view_);
 }
 
 std::unique_ptr<views::View> SharesheetBubbleView::MakeScrollableTargetView(
@@ -633,7 +639,7 @@ void SharesheetBubbleView::InitBubble() {
 void SharesheetBubbleView::SetUpAndShowBubble() {
   main_view_->SetFocusBehavior(View::FocusBehavior::NEVER);
   views::BubbleDialogDelegateView::CreateBubble(base::WrapUnique(this));
-  GetWidget()->GetRootView()->Layout();
+  GetWidget()->GetRootView()->DeprecatedLayoutImmediately();
   RecordMimeTypeMetric(intent_);
   ShowWidgetWithAnimateFadeIn();
 
@@ -793,7 +799,7 @@ void SharesheetBubbleView::CloseWidgetWithReason(
   delegator_->OnBubbleClosed(active_target_);
 }
 
-BEGIN_METADATA(SharesheetBubbleView, views::BubbleDialogDelegateView)
+BEGIN_METADATA(SharesheetBubbleView)
 END_METADATA
 
 }  // namespace sharesheet

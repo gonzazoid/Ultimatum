@@ -267,7 +267,7 @@ void ExecutionContext::AddConsoleMessageImpl(
     mojom::blink::ConsoleMessageLevel level,
     const String& message,
     bool discard_duplicates,
-    absl::optional<mojom::ConsoleMessageCategory> category) {
+    std::optional<mojom::ConsoleMessageCategory> category) {
   auto* console_message =
       MakeGarbageCollected<ConsoleMessage>(source, level, message);
   if (category)
@@ -674,7 +674,7 @@ WorldType GetWorldType(const ExecutionContext& execution_context) {
       return WorldType::WORLD_REG_EXP;
     case DOMWrapperWorld::WorldType::kForV8ContextSnapshotNonMain:
       return WorldType::WORLD_FOR_V8_CONTEXT_SNAPSHOT_NON_MAIN;
-    case DOMWrapperWorld::WorldType::kWorker:
+    case DOMWrapperWorld::WorldType::kWorkerOrWorklet:
       return WorldType::WORLD_WORKER;
     case DOMWrapperWorld::WorldType::kShadowRealm:
       return WorldType::WORLD_SHADOW_REALM;

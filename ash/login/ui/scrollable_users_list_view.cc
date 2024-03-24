@@ -72,7 +72,7 @@ class EnsureMinHeightView : public NonAccessibleView {
   ~EnsureMinHeightView() override = default;
 
   // NonAccessibleView:
-  void Layout() override {
+  void Layout(PassKey) override {
     // Make sure our height is at least as tall as the parent, so the layout
     // manager will center us properly.
     int min_height = parent()->height();
@@ -81,7 +81,7 @@ class EnsureMinHeightView : public NonAccessibleView {
       new_size.set_height(min_height);
       SetSize(new_size);
     }
-    NonAccessibleView::Layout();
+    LayoutSuperclass<NonAccessibleView>(this);
   }
 };
 
@@ -223,10 +223,12 @@ ScrollableUsersListView::ScrollableUsersListView(
   SetBackgroundColor(std::nullopt);
   SetDrawOverflowIndicator(false);
 
-  auto vertical_scroll = std::make_unique<RoundedScrollBar>(false);
+  auto vertical_scroll = std::make_unique<RoundedScrollBar>(
+      views::ScrollBar::Orientation::kVertical);
   vertical_scroll->SetInsets(kVerticalScrollInsets);
   SetVerticalScrollBar(std::move(vertical_scroll));
-  SetHorizontalScrollBar(std::make_unique<RoundedScrollBar>(true));
+  SetHorizontalScrollBar(std::make_unique<RoundedScrollBar>(
+      views::ScrollBar::Orientation::kHorizontal));
 
   observation_.Observe(Shell::Get()->wallpaper_controller());
 }
@@ -253,7 +255,7 @@ void ScrollableUsersListView::UpdateUserViewHostLayoutInsets() {
                             : layout_params.insets_portrait);
 }
 
-void ScrollableUsersListView::Layout() {
+void ScrollableUsersListView::Layout(PassKey) {
   DCHECK(user_view_host_layout_);
 
   // Update clipping height.
@@ -268,7 +270,7 @@ void ScrollableUsersListView::Layout() {
   UpdateUserViewHostLayoutInsets();
 
   // Layout everything.
-  ScrollView::Layout();
+  LayoutSuperclass<ScrollView>(this);
 }
 
 void ScrollableUsersListView::OnPaintBackground(gfx::Canvas* canvas) {

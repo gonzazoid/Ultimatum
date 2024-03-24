@@ -987,9 +987,6 @@ void AddDeviceAudioStrings(content::WebUIDataSource* html_source) {
   };
 
   html_source->AddLocalizedStrings(kAudioStrings);
-
-  html_source->AddBoolean("areSystemSoundsEnabled",
-                          ash::features::AreSystemSoundsEnabled());
 }
 
 // Mirrors enum of the same name in enums.xml.
@@ -1052,11 +1049,7 @@ DeviceSection::DeviceSection(Profile* profile,
     updater.AddSearchTags(GetKeyboardSearchConcepts());
   }
 
-  // Only when the feature is enabled, the toggle buttons for charging sounds
-  // and the low battery sound will be shown up.
-  if (ash::features::AreSystemSoundsEnabled()) {
-    updater.AddSearchTags(GetAudioPowerSoundsSearchConcepts());
-  }
+  updater.AddSearchTags(GetAudioPowerSoundsSearchConcepts());
 
   // Keyboard/mouse search tags are added/removed dynamically.
   pointer_device_observer_.Init();
@@ -1770,16 +1763,30 @@ void DeviceSection::AddCustomizeButtonsPageStrings(
        IDS_SETTINGS_CUSTOMIZE_BUTTONS_RENAMING_DIALOG_INPUT_CHARACTER_COUNT},
       {"buttonRenamingDialogTitle",
        IDS_SETTINGS_CUSTOMIZE_BUTTONS_RENAMING_DIALOG_TITLE},
+      {"buttonReorderingAriaLabel",
+       IDS_SETTINGS_CUSTOMIZE_BUTTONS_REORDER_ARIA_LABEL},
+      {"buttonReorderingAriaAnnouncement",
+       IDS_SETTINGS_CUSTOMIZE_BUTTONS_REORDER_ARIA_ANNOUNCEMENT},
       {"customizeButtonSubpageDescription",
        IDS_SETTINGS_CUSTOMIZE_BUTTONS_SUBPAGE_DESCRIPTION},
+      {"customizeTabletButtonSubpageDescription",
+       IDS_SETTINGS_CUSTOMIZE_TABLET_BUTTONS_SUBPAGE_DESCRIPTION},
       {"customizeMouseButtonsNudgeHeader",
        IDS_SETTINGS_CUSTOMIZE_MOUSE_BUTTONS_NUDGE_HEADER},
+      {"customizeTabletButtonsNudgeHeader",
+       IDS_SETTINGS_CUSTOMIZE_TABLET_BUTTONS_NUDGE_HEADER},
+      {"customizePenButtonsNudgeHeader",
+       IDS_SETTINGS_CUSTOMIZE_PEN_BUTTONS_NUDGE_HEADER},
       {"customizeMouseButtonsTitle",
        IDS_SETTINGS_CUSTOMIZE_MOUSE_BUTTONS_TITLE},
       {"disbableOptionLabel", IDS_SETTINGS_DISABLE_OPTION_LABEL},
       {"keyCombinationDialogTitle", IDS_SETTINGS_KEY_COMBINATION_DIALOG_TITLE},
       {"keyCombinationOptionLabel", IDS_SETTINGS_KEY_COMBINATION_OPTION_LABEL},
       {"noRemappingOptionLabel", IDS_SETTINGS_NO_REMAPPING_OPTION_LABEL},
+      {"renameIconLabel", IDS_SETTINGS_CUSTOMIZATION_RENAME_ICON_LABEL},
+      {"buttonRemappingRenamingDialogInputDescription",
+       IDS_SETTINGS_RENAMING_DIALOG_INPUT_DESCRIPTION},
+
   };
   html_source->AddLocalizedStrings(kCustomizeButtonsPageStrings);
   ash::common::AddShortcutInputKeyStrings(html_source);

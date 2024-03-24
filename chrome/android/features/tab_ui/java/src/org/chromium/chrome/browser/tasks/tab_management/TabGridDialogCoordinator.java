@@ -6,6 +6,7 @@ package org.chromium.chrome.browser.tasks.tab_management;
 
 import android.app.Activity;
 import android.graphics.Rect;
+import android.util.Size;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
 
@@ -52,7 +53,7 @@ public class TabGridDialogCoordinator implements TabGridDialogMediator.DialogCon
     private TabContentManager mTabContentManager;
     private TabListEditorCoordinator mTabListEditorCoordinator;
     private TabGridDialogView mDialogView;
-    private SnackbarManager mSnackbarManager;
+    private @Nullable SnackbarManager mSnackbarManager;
 
     TabGridDialogCoordinator(
             Activity activity,
@@ -94,8 +95,12 @@ public class TabGridDialogCoordinator implements TabGridDialogMediator.DialogCon
                 mDialogView = containerView.findViewById(R.id.dialog_parent_view);
                 mDialogView.setupScrimCoordinator(scrimCoordinator);
             }
-            mSnackbarManager =
-                    new SnackbarManager(activity, mDialogView.getSnackBarContainer(), null);
+            if (!activity.isDestroyed() && !activity.isFinishing()) {
+                mSnackbarManager =
+                        new SnackbarManager(activity, mDialogView.getSnackBarContainer(), null);
+            } else {
+                mSnackbarManager = null;
+            }
 
             mMediator =
                     new TabGridDialogMediator(
@@ -114,7 +119,7 @@ public class TabGridDialogCoordinator implements TabGridDialogMediator.DialogCon
             // take in a mode parameter instead.
             mTabListCoordinator =
                     new TabListCoordinator(
-                            TabUiFeatureUtilities.shouldUseListMode(mActivity)
+                            TabUiFeatureUtilities.shouldUseListMode()
                                     ? TabListCoordinator.TabListMode.LIST
                                     : TabListCoordinator.TabListMode.GRID,
                             activity,
@@ -174,9 +179,13 @@ public class TabGridDialogCoordinator implements TabGridDialogMediator.DialogCon
 
     private @Nullable TabListEditorController getTabListEditorController() {
         if (mTabListEditorCoordinator == null) {
+            assert mSnackbarManager != null
+                    : "SnackbarManager should have been created or the activity was already"
+                            + " finishing.";
+
             @TabListCoordinator.TabListMode
             int mode =
-                    TabUiFeatureUtilities.shouldUseListMode(mActivity)
+                    TabUiFeatureUtilities.shouldUseListMode()
                             ? TabListCoordinator.TabListMode.LIST
                             : TabListCoordinator.TabListMode.GRID;
             mTabListEditorCoordinator =
@@ -211,6 +220,25 @@ public class TabGridDialogCoordinator implements TabGridDialogMediator.DialogCon
     @Override
     public boolean isVisible() {
         return mMediator.isVisible();
+    }
+
+    /**
+     * @param tabId The tab ID to get a rect for.
+     * @return a {@link Rect} for the tab's thumbnail (may be an empty rect if the tab is not
+     *     found).
+     */
+    @NonNull
+    Rect getTabThumbnailRect(int tabId) {
+        return mTabListCoordinator.getTabThumbnailRect(tabId);
+    }
+
+    @NonNull
+    Size getThumbnailSize() {
+        return mTabListCoordinator.getThumbnailSize();
+    }
+
+    void waitForLayoutWithTab(int tabId, Runnable r) {
+        mTabListCoordinator.waitForLayoutWithTab(tabId, r);
     }
 
     @NonNull

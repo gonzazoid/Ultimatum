@@ -5,6 +5,7 @@
 #ifndef COMPONENTS_PERMISSIONS_PERMISSION_DECISION_AUTO_BLOCKER_H_
 #define COMPONENTS_PERMISSIONS_PERMISSION_DECISION_AUTO_BLOCKER_H_
 
+#include <optional>
 #include <set>
 
 #include "base/functional/callback.h"
@@ -16,23 +17,9 @@
 #include "components/content_settings/core/common/content_settings_types.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "content/public/browser/permission_result.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 class GURL;
-
-namespace settings {
-FORWARD_DECLARE_TEST(SiteSettingsHandlerTest, GetAllSites);
-FORWARD_DECLARE_TEST(SiteSettingsHandlerTest, GetRecentSitePermissions);
-FORWARD_DECLARE_TEST(SiteSettingsHandlerTest,
-                     StorageAccessExceptions_Description_Embargoed);
-FORWARD_DECLARE_TEST(SiteSettingsHandlerTest,
-                     StorageAccessExceptions_Description_EmbargoedTwoProfiles);
-}  // namespace settings
-
-namespace site_settings {
-FORWARD_DECLARE_TEST(RecentSiteSettingsHelperTest, CheckRecentSitePermissions);
-}  // namespace site_settings
 
 namespace permissions {
 
@@ -116,7 +103,7 @@ class PermissionDecisionAutoBlocker : public PermissionDecisionAutoBlockerBase,
   // Prefer to use PermissionManager::GetPermissionStatus when possible. This
   // method is only exposed to facilitate permission checks from threads other
   // than the UI thread. See https://crbug.com/658020.
-  static absl::optional<content::PermissionResult> GetEmbargoResult(
+  static std::optional<content::PermissionResult> GetEmbargoResult(
       HostContentSettingsMap* settings_map,
       const GURL& request_origin,
       ContentSettingsType permission,
@@ -127,7 +114,7 @@ class PermissionDecisionAutoBlocker : public PermissionDecisionAutoBlockerBase,
 
   // Checks the status of the content setting to determine if |request_origin|
   // is under embargo for |permission|. This checks all types of embargo.
-  absl::optional<content::PermissionResult> GetEmbargoResult(
+  std::optional<content::PermissionResult> GetEmbargoResult(
       const GURL& request_origin,
       ContentSettingsType permission);
 
@@ -178,27 +165,15 @@ class PermissionDecisionAutoBlocker : public PermissionDecisionAutoBlockerBase,
 
   static const char* GetPromptDismissCountKeyForTesting();
 
- private:
-  friend class PermissionDecisionAutoBlockerUnitTest;
-  FRIEND_TEST_ALL_PREFIXES(site_settings::RecentSiteSettingsHelperTest,
-                           CheckRecentSitePermissions);
-  FRIEND_TEST_ALL_PREFIXES(settings::SiteSettingsHandlerTest, GetAllSites);
-  FRIEND_TEST_ALL_PREFIXES(settings::SiteSettingsHandlerTest,
-                           GetRecentSitePermissions);
-  FRIEND_TEST_ALL_PREFIXES(settings::SiteSettingsHandlerTest,
-                           StorageAccessExceptions_Description_Embargoed);
-  FRIEND_TEST_ALL_PREFIXES(
-      settings::SiteSettingsHandlerTest,
-      StorageAccessExceptions_Description_EmbargoedTwoProfiles);
+  void SetClockForTesting(base::Clock* clock);
 
+ private:
   void PlaceUnderEmbargo(const GURL& request_origin,
                          ContentSettingsType permission,
                          const char* key);
 
   void NotifyEmbargoStarted(const GURL& origin,
                             ContentSettingsType content_setting);
-
-  void SetClockForTesting(base::Clock* clock);
 
   // Keys used for storing count data in a website setting.
   static const char kPromptDismissCountKey[];

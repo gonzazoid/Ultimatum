@@ -38,10 +38,6 @@ std::unique_ptr<BookmarkModel> TestBookmarkClient::CreateModelWithClient(
   return bookmark_model;
 }
 
-void TestBookmarkClient::AllowFoldersForAccountStorage() {
-  are_folders_for_account_storage_allowed_ = true;
-}
-
 BookmarkPermanentNode* TestBookmarkClient::EnableManagedNode() {
   managed_node_ = BookmarkPermanentNode::CreateManagedBookmarks(/*id=*/100);
   // Keep a copy of the node in |unowned_managed_node_| for the accessor
@@ -89,13 +85,9 @@ bool TestBookmarkClient::HasFaviconLoadTasks() const {
   return !requests_per_page_url_.empty();
 }
 
-void TestBookmarkClient::SetStorageStateForUma(
-    metrics::StorageStateForUma storage_state) {
-  storage_state_for_uma_ = storage_state;
-}
-
-bool TestBookmarkClient::AreFoldersForAccountStorageAllowed() {
-  return are_folders_for_account_storage_allowed_;
+void TestBookmarkClient::SetIsSyncFeatureEnabledIncludingBookmarksForUma(
+    bool value) {
+  is_sync_feature_enabled_including_bookmarks_for_uma = value;
 }
 
 LoadManagedNodeCallback TestBookmarkClient::GetLoadManagedNodeCallback() {
@@ -103,8 +95,8 @@ LoadManagedNodeCallback TestBookmarkClient::GetLoadManagedNodeCallback() {
                         std::move(managed_node_));
 }
 
-metrics::StorageStateForUma TestBookmarkClient::GetStorageStateForUma() {
-  return storage_state_for_uma_;
+bool TestBookmarkClient::IsSyncFeatureEnabledIncludingBookmarksForUma() {
+  return is_sync_feature_enabled_including_bookmarks_for_uma;
 }
 
 bool TestBookmarkClient::CanSetPermanentNodeTitle(
@@ -116,11 +108,19 @@ bool TestBookmarkClient::IsNodeManaged(const BookmarkNode* node) {
   return node && node->HasAncestor(unowned_managed_node_.get());
 }
 
-std::string TestBookmarkClient::EncodeBookmarkSyncMetadata() {
+std::string TestBookmarkClient::EncodeLocalOrSyncableBookmarkSyncMetadata() {
   return std::string();
 }
 
-void TestBookmarkClient::DecodeBookmarkSyncMetadata(
+std::string TestBookmarkClient::EncodeAccountBookmarkSyncMetadata() {
+  return std::string();
+}
+
+void TestBookmarkClient::DecodeLocalOrSyncableBookmarkSyncMetadata(
+    const std::string& metadata_str,
+    const base::RepeatingClosure& schedule_save_closure) {}
+
+void TestBookmarkClient::DecodeAccountBookmarkSyncMetadata(
     const std::string& metadata_str,
     const base::RepeatingClosure& schedule_save_closure) {}
 

@@ -9,15 +9,16 @@
 #include <vector>
 
 #include "ash/capture_mode/capture_mode_controller.h"
+#include "ash/constants/ash_pref_names.h"
 #include "ash/game_dashboard/game_dashboard_context.h"
 #include "ash/game_dashboard/game_dashboard_utils.h"
-#include "ash/game_dashboard/game_dashboard_widget.h"
 #include "ash/public/cpp/app_types_util.h"
 #include "ash/public/cpp/window_properties.h"
 #include "ash/shell.h"
 #include "ash/wm/overview/overview_controller.h"
 #include "base/functional/bind.h"
 #include "chromeos/ui/base/window_properties.h"
+#include "components/prefs/pref_registry_simple.h"
 #include "extensions/common/constants.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tracker.h"
@@ -44,6 +45,12 @@ bool GameDashboardController::IsGameWindow(aura::Window* window) {
 bool GameDashboardController::ReadyForAccelerator(aura::Window* window) {
   return IsGameWindow(window) &&
              game_dashboard_utils::ShouldEnableGameDashboardButton(window);
+}
+
+// static
+void GameDashboardController::RegisterProfilePrefs(
+    PrefRegistrySimple* registry) {
+  registry->RegisterBooleanPref(prefs::kGameDashboardShowWelcomeDialog, true);
 }
 
 GameDashboardController::GameDashboardController(
@@ -84,7 +91,7 @@ void GameDashboardController::StartCaptureSession(
   auto* game_window = game_context->game_window();
   CHECK(game_window_contexts_.contains(game_window));
   auto* capture_mode_controller = CaptureModeController::Get();
-  CHECK(!capture_mode_controller->is_recording_in_progress());
+  CHECK(capture_mode_controller->can_start_new_recording());
 
   active_recording_context_ = game_context;
   if (record_instantly) {
@@ -153,7 +160,11 @@ void GameDashboardController::OnRecordingEnded() {
 
 void GameDashboardController::OnVideoFileFinalized(
     bool user_deleted_video_file,
-    const gfx::ImageSkia& thumbnail) {}
+    const gfx::ImageSkia& thumbnail) {
+  for (auto const& [game_window, context] : game_window_contexts_) {
+    context->OnVideoFileFinalized();
+  }
+}
 
 void GameDashboardController::OnRecordedWindowChangingRoot(
     aura::Window* new_root) {

@@ -36,8 +36,9 @@ class MESSAGE_CENTER_EXPORT NotificationInputDelegate {
 class MESSAGE_CENTER_EXPORT NotificationInputContainer
     : public views::View,
       public views::TextfieldController {
+  METADATA_HEADER(NotificationInputContainer, views::View)
+
  public:
-  METADATA_HEADER(NotificationInputContainer);
   explicit NotificationInputContainer(
       NotificationInputDelegate* delegate = nullptr);
   NotificationInputContainer(const NotificationInputContainer&) = delete;
@@ -56,7 +57,7 @@ class MESSAGE_CENTER_EXPORT NotificationInputContainer
 
   // Sets `textfield_`'s placeholder string to `placeholder` or the default if
   // not supplied.
-  void SetPlaceholderText(const absl::optional<std::u16string>& placeholder);
+  void SetPlaceholderText(const std::optional<std::u16string>& placeholder);
 
   // Animates the background, if one exists.
   void AnimateBackground(const ui::Event& event);
@@ -65,7 +66,7 @@ class MESSAGE_CENTER_EXPORT NotificationInputContainer
   void AddLayerToRegion(ui::Layer* layer, views::LayerRegion region) override;
   void RemoveLayerFromRegions(ui::Layer* layer) override;
   void OnThemeChanged() override;
-  void Layout() override;
+  void Layout(PassKey) override;
 
   // views::TextfieldController:
   bool HandleKeyEvent(views::Textfield* sender,

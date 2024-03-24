@@ -405,7 +405,7 @@ inline constexpr bool AnalyzerAssumeTrue(bool arg) {
 
 // Marks a member function as reinitializing a moved-from variable.
 // See also
-// https://clang.llvm.org/extra/clang-tidy/checks/bugprone-use-after-move.html#reinitialization
+// https://clang.llvm.org/extra/clang-tidy/checks/bugprone/use-after-move.html#reinitialization
 #if defined(__clang__) && HAS_ATTRIBUTE(reinitializes)
 #define REINITIALIZES_AFTER_MOVE [[clang::reinitializes]]
 #else
@@ -443,15 +443,87 @@ inline constexpr bool AnalyzerAssumeTrue(bool arg) {
 // Additionally, the initial implementation in clang <= 16 overwrote the return
 // register(s) in the epilogue of a preserve_most function, so we only use
 // preserve_most in clang >= 17 (see https://reviews.llvm.org/D143425).
+// Clang only supports preserve_most on X86-64 and AArch64 for now.
 // See https://clang.llvm.org/docs/AttributeReference.html#preserve-most for
 // more details.
-#if defined(ARCH_CPU_64_BITS) &&                       \
-    !(BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64)) && \
-    !defined(COMPONENT_BUILD) && defined(__clang__) && \
+#if (defined(ARCH_CPU_ARM64) || defined(ARCH_CPU_X86_64)) && \
+    !(BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64)) &&       \
+    !defined(COMPONENT_BUILD) && defined(__clang__) &&       \
     __clang_major__ >= 17 && HAS_ATTRIBUTE(preserve_most)
 #define PRESERVE_MOST __attribute__((preserve_most))
 #else
 #define PRESERVE_MOST
+#endif
+
+// Functions should be marked with UNSAFE_BUFFER_USAGE when they lead to
+// out-of-bounds bugs when called with incorrect inputs.
+//
+// Ideally such functions should be paired with a safer version that works with
+// safe primitives like `base::span`. Otherwise, another safer coding pattern
+// should be documented along side the use of `UNSAFE_BUFFER_USAGE`.
+//
+// All functions marked with UNSAFE_BUFFER_USAGE should come with a safety
+// comment that explains the requirements of the function to prevent any chance
+// of an out-of-bounds bug. For example:
+// ```
+// // Function to do things between `input` and `end`.
+// //
+// // # Safety
+// // The `input` must point to an array with size at least 5. The `end` must
+// // point within the same allocation of `input` and not come before `input`.
+// ```
+#if defined(__clang__) && HAS_ATTRIBUTE(unsafe_buffer_usage)
+#define UNSAFE_BUFFER_USAGE [[clang::unsafe_buffer_usage]]
+#else
+#define UNSAFE_BUFFER_USAGE
+#endif
+
+// UNSAFE_BUFFERS() wraps code that violates the -Wunsafe-buffer-usage warning,
+// such as:
+// - pointer arithmetic,
+// - pointer subscripting, and
+// - calls to functions annotated with UNSAFE_BUFFER_USAGE.
+//
+// ** USE OF THIS MACRO SHOULD BE VERY RARE.** Reviewers should push back when
+// it is not strictly necessary. Prefer to use `base::span` instead of pointers,
+// or other safer coding patterns (like std containers) that avoid the
+// opportunity for out-of-bounds bugs to creep into the code. Any use of
+// UNSAFE_BUFFERS() can lead to a critical security bug if any assumptions are
+// wrong, or ever become wrong in the future.
+//
+// The macro should be used to wrap the minimum necessary code, to make it clear
+// what is unsafe, and prevent accidentally opting extra things out of the
+// warning.
+//
+// All usage of UNSAFE_BUFFERS() should come with a `// SAFETY: ...` comment
+// that explains how we have guaranteed (ideally directly above, with conditions
+// or CHECKs) that the pointer usage can never go out-of-bounds, or that the
+// requirements of the UNSAFE_BUFFER_USAGE function are met. If the safety
+// explanation requires cooperation of code that is not fully encapsulated close
+// to the UNSAFE_BUFFERS() usage, it should be rejected and replaced with safer
+// coding patterns or stronger guarantees.
+//
+// UNSAFE_BUFFERS_INCLUDE_BEGIN / UNSAFE_BUFFERS_INCLUDE_END can be used to
+// wrap an `#include` statement for a header which has not been made clean for
+// the -Wunsafe-buffer-usage warning. As these disable warnings for the entire
+// header, and its transitive dependencies, it's clear these should be temporary
+// and the header converted to use safe operations via `span` (or use
+// UNSAFE_BUFFERS() explicitly in rare cases).
+#if defined(__clang__)
+// clang-format off
+// Formatting is off so that we can put each _Pragma on its own line, as
+// recommended by the gcc docs.
+#define UNSAFE_BUFFERS(...)                  \
+  _Pragma("clang unsafe_buffer_usage begin") \
+  __VA_ARGS__                                \
+  _Pragma("clang unsafe_buffer_usage end")
+// clang-format on
+#define UNSAFE_BUFFERS_INCLUDE_BEGIN _Pragma("clang unsafe_buffer_usage begin")
+#define UNSAFE_BUFFERS_INCLUDE_END _Pragma("clang unsafe_buffer_usage end")
+#else
+#define UNSAFE_BUFFERS(...) __VA_ARGS__
+#define UNSAFE_BUFFERS_INCLUDE_BEGIN
+#define UNSAFE_BUFFERS_INCLUDE_END
 #endif
 
 #endif  // BASE_COMPILER_SPECIFIC_H_

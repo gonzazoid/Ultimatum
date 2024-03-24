@@ -40,9 +40,9 @@ class DeskTemplate;
 // displayed within the given width, we draw as many and a label at the end that
 // says +N, up to +99.
 class SavedDeskIconContainer : public views::BoxLayoutView {
- public:
-  METADATA_HEADER(SavedDeskIconContainer);
+  METADATA_HEADER(SavedDeskIconContainer, views::BoxLayoutView)
 
+ public:
   // A struct for storing the various information used to determine which app
   // icons/favicons to display.
   struct IconInfo {
@@ -52,7 +52,8 @@ class SavedDeskIconContainer : public views::BoxLayoutView {
     int count;
   };
 
-  using IconIdentifierAndIconInfo = std::pair<std::string, IconInfo>;
+  using IconIdentifierAndIconInfo =
+      std::pair<SavedDeskIconIdentifier, IconInfo>;
 
   SavedDeskIconContainer();
   SavedDeskIconContainer(const SavedDeskIconContainer&) = delete;
@@ -63,7 +64,7 @@ class SavedDeskIconContainer : public views::BoxLayoutView {
   static constexpr int kMaxIcons = 4;
 
   // views::BoxLayoutView:
-  void Layout() override;
+  void Layout(PassKey) override;
 
   // Given a saved desk, determine which icons to show in this and create
   // the according SavedDeskIconView's.

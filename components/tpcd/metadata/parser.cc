@@ -11,6 +11,7 @@
 #include "base/check.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/no_destructor.h"
+#include "base/notreached.h"
 #include "base/sequence_checker.h"
 #include "base/strings/strcat.h"
 #include "components/content_settings/core/common/features.h"
@@ -24,6 +25,30 @@ namespace tpcd::metadata {
 Parser* Parser::GetInstance() {
   static base::NoDestructor<Parser> instance;
   return instance.get();
+}
+
+// static
+TpcdMetadataRuleSource Parser::ToRuleSource(const std::string& source) {
+  if (source == kSourceTest) {
+    return TpcdMetadataRuleSource::SOURCE_TEST;
+  } else if (source == kSource1pDt) {
+    return TpcdMetadataRuleSource::SOURCE_1P_DT;
+  } else if (source == kSource3pDt) {
+    return TpcdMetadataRuleSource::SOURCE_3P_DT;
+  } else if (source == kSourceDogFood) {
+    return TpcdMetadataRuleSource::SOURCE_DOGFOOD;
+  } else if (source == kSourceCriticalSector) {
+    return TpcdMetadataRuleSource::SOURCE_CRITICAL_SECTOR;
+  } else if (source == kSourceCuj) {
+    return TpcdMetadataRuleSource::SOURCE_CUJ;
+  } else if (source == kSourceGovEduTld) {
+    return TpcdMetadataRuleSource::SOURCE_GOV_EDU_TLD;
+  }
+
+  // `SOURCE_UNSPECIFIED` is never send by the server. It is considered
+  // invalid by the sanitizer. Thus, used here as a translation for any new,
+  // uncategorized server source type.
+  return TpcdMetadataRuleSource::SOURCE_UNSPECIFIED;
 }
 
 Parser::Parser() = default;
@@ -95,6 +120,7 @@ MetadataEntries GenerateLargeMetadataEntries() {
     entry.set_primary_pattern_spec(
         base::StrCat({"http://", hostname, ".test"}));
     entry.set_secondary_pattern_spec("*");
+    entry.set_source(Parser::kSourceTest);
     entries.emplace_back(entry);
   }
   return entries;

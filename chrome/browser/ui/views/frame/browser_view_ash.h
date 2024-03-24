@@ -27,10 +27,10 @@ class BrowserViewAsh : public BrowserView {
   ~BrowserViewAsh() override = default;
 
   // views::View:
-  void Layout() override;
+  void Layout(PassKey) override;
 
   // views::ClientView:
-  void UpdateWindowRoundedCorners() override;
+  void UpdateWindowRoundedCorners(int corner_radius) override;
 
  private:
   gfx::RoundedCornersF contents_webview_radii_;

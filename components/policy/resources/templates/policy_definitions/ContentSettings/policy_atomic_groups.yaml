@@ -81,9 +81,9 @@ WindowManagementSettings:
   - DefaultWindowPlacementSetting
   - WindowPlacementAllowedForUrls
   - WindowPlacementBlockedForUrls
-MidiSettings:
-  caption: MIDI settings
+WebPrintingSettings:
+  caption: Web Printing settings
   policies:
-  - DefaultMidiSetting
-  - MidiAllowedForUrls
-  - MidiBlockedForUrls
+  - DefaultWebPrintingSetting
+  - WebPrintingAllowedForUrls
+  - WebPrintingBlockedForUrls

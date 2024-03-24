@@ -128,7 +128,7 @@ void AbstractInlineTextBox::Detach() {
 
   layout_text_ = nullptr;
 
-  fragment_item_index_ = absl::nullopt;
+  fragment_item_index_ = std::nullopt;
   root_box_fragment_ = nullptr;
 
   if (cache) {
@@ -286,8 +286,7 @@ void AbstractInlineTextBox::CharacterWidths(Vector<float>& widths) const {
   }
   // TODO(layout-dev): Add support for IndividualCharacterRanges to
   // ShapeResultView to avoid the copy below.
-  scoped_refptr<ShapeResult> shape_result =
-      shape_result_view->CreateShapeResult();
+  ShapeResult* shape_result = shape_result_view->CreateShapeResult();
   Vector<CharacterRange> ranges;
   shape_result->IndividualCharacterRanges(&ranges);
   widths.reserve(ranges.size());
@@ -400,7 +399,7 @@ void AbstractInlineTextBox::GetWordBoundariesForText(
   if (!it) {
     return;
   }
-  absl::optional<int> word_start;
+  std::optional<int> word_start;
   for (int offset = 0;
        offset != kTextBreakDone && offset < static_cast<int>(text.length());
        offset = it->following(offset)) {
@@ -465,7 +464,7 @@ void AbstractInlineTextBox::GetWordBoundariesForText(
           U16_IS_SURROGATE(prev_character)) {
         if (word_start) {
           words.emplace_back(*word_start, offset);
-          word_start = absl::nullopt;
+          word_start = std::nullopt;
         }
       }
     }
@@ -476,7 +475,7 @@ void AbstractInlineTextBox::GetWordBoundariesForText(
   // boundary which should be at `text`'s length.
   if (word_start) {
     words.emplace_back(*word_start, text.length());
-    word_start = absl::nullopt;
+    word_start = std::nullopt;
   }
 }
 

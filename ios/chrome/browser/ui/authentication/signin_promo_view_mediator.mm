@@ -7,6 +7,7 @@
 #import <memory>
 
 #import "base/feature_list.h"
+#import "base/memory/raw_ptr.h"
 #import "base/metrics/histogram_functions.h"
 #import "base/metrics/histogram_macros.h"
 #import "base/metrics/user_metrics.h"
@@ -76,7 +77,6 @@ bool IsSupportedAccessPoint(signin_metrics::AccessPoint access_point) {
     case signin_metrics::AccessPoint::ACCESS_POINT_AVATAR_BUBBLE_SIGN_IN:
     case signin_metrics::AccessPoint::ACCESS_POINT_USER_MANAGER:
     case signin_metrics::AccessPoint::ACCESS_POINT_DEVICES_PAGE:
-    case signin_metrics::AccessPoint::ACCESS_POINT_CLOUD_PRINT:
     case signin_metrics::AccessPoint::ACCESS_POINT_SIGNIN_PROMO:
     case signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN:
     case signin_metrics::AccessPoint::ACCESS_POINT_PASSWORD_BUBBLE:
@@ -116,6 +116,9 @@ bool IsSupportedAccessPoint(signin_metrics::AccessPoint access_point) {
     case signin_metrics::AccessPoint::
         ACCESS_POINT_RESTORE_PRIMARY_ACCOUNT_ON_PROFILE_LOAD:
     case signin_metrics::AccessPoint::ACCESS_POINT_TAB_ORGANIZATION:
+    case signin_metrics::AccessPoint::ACCESS_POINT_TIPS_NOTIFICATION:
+    case signin_metrics::AccessPoint::
+        ACCESS_POINT_NOTIFICATIONS_OPT_IN_SCREEN_CONTENT_TOGGLE:
     case signin_metrics::AccessPoint::ACCESS_POINT_MAX:
       return false;
   }
@@ -157,7 +160,6 @@ void RecordImpressionsTilSigninButtonsHistogramForAccessPoint(
     case signin_metrics::AccessPoint::ACCESS_POINT_AVATAR_BUBBLE_SIGN_IN:
     case signin_metrics::AccessPoint::ACCESS_POINT_USER_MANAGER:
     case signin_metrics::AccessPoint::ACCESS_POINT_DEVICES_PAGE:
-    case signin_metrics::AccessPoint::ACCESS_POINT_CLOUD_PRINT:
     case signin_metrics::AccessPoint::ACCESS_POINT_SIGNIN_PROMO:
     case signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN:
     case signin_metrics::AccessPoint::ACCESS_POINT_PASSWORD_BUBBLE:
@@ -199,6 +201,9 @@ void RecordImpressionsTilSigninButtonsHistogramForAccessPoint(
     case signin_metrics::AccessPoint::
         ACCESS_POINT_RESTORE_PRIMARY_ACCOUNT_ON_PROFILE_LOAD:
     case signin_metrics::AccessPoint::ACCESS_POINT_TAB_ORGANIZATION:
+    case signin_metrics::AccessPoint::ACCESS_POINT_TIPS_NOTIFICATION:
+    case signin_metrics::AccessPoint::
+        ACCESS_POINT_NOTIFICATIONS_OPT_IN_SCREEN_CONTENT_TOGGLE:
     case signin_metrics::AccessPoint::ACCESS_POINT_MAX:
       NOTREACHED() << "Unexpected value for access point "
                    << static_cast<int>(access_point);
@@ -242,7 +247,6 @@ void RecordImpressionsTilDismissHistogramForAccessPoint(
     case signin_metrics::AccessPoint::ACCESS_POINT_AVATAR_BUBBLE_SIGN_IN:
     case signin_metrics::AccessPoint::ACCESS_POINT_USER_MANAGER:
     case signin_metrics::AccessPoint::ACCESS_POINT_DEVICES_PAGE:
-    case signin_metrics::AccessPoint::ACCESS_POINT_CLOUD_PRINT:
     case signin_metrics::AccessPoint::ACCESS_POINT_SIGNIN_PROMO:
     case signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN:
     case signin_metrics::AccessPoint::ACCESS_POINT_PASSWORD_BUBBLE:
@@ -284,6 +288,9 @@ void RecordImpressionsTilDismissHistogramForAccessPoint(
     case signin_metrics::AccessPoint::
         ACCESS_POINT_RESTORE_PRIMARY_ACCOUNT_ON_PROFILE_LOAD:
     case signin_metrics::AccessPoint::ACCESS_POINT_TAB_ORGANIZATION:
+    case signin_metrics::AccessPoint::ACCESS_POINT_TIPS_NOTIFICATION:
+    case signin_metrics::AccessPoint::
+        ACCESS_POINT_NOTIFICATIONS_OPT_IN_SCREEN_CONTENT_TOGGLE:
     case signin_metrics::AccessPoint::ACCESS_POINT_MAX:
       NOTREACHED() << "Unexpected value for access point "
                    << static_cast<int>(access_point);
@@ -327,7 +334,6 @@ void RecordImpressionsTilXButtonHistogramForAccessPoint(
     case signin_metrics::AccessPoint::ACCESS_POINT_AVATAR_BUBBLE_SIGN_IN:
     case signin_metrics::AccessPoint::ACCESS_POINT_USER_MANAGER:
     case signin_metrics::AccessPoint::ACCESS_POINT_DEVICES_PAGE:
-    case signin_metrics::AccessPoint::ACCESS_POINT_CLOUD_PRINT:
     case signin_metrics::AccessPoint::ACCESS_POINT_SIGNIN_PROMO:
     case signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN:
     case signin_metrics::AccessPoint::ACCESS_POINT_PASSWORD_BUBBLE:
@@ -369,6 +375,9 @@ void RecordImpressionsTilXButtonHistogramForAccessPoint(
     case signin_metrics::AccessPoint::
         ACCESS_POINT_RESTORE_PRIMARY_ACCOUNT_ON_PROFILE_LOAD:
     case signin_metrics::AccessPoint::ACCESS_POINT_TAB_ORGANIZATION:
+    case signin_metrics::AccessPoint::ACCESS_POINT_TIPS_NOTIFICATION:
+    case signin_metrics::AccessPoint::
+        ACCESS_POINT_NOTIFICATIONS_OPT_IN_SCREEN_CONTENT_TOGGLE:
     case signin_metrics::AccessPoint::ACCESS_POINT_MAX:
       NOTREACHED() << "Unexpected value for access point "
                    << static_cast<int>(access_point);
@@ -399,7 +408,6 @@ const char* DisplayedCountPreferenceKey(
     case signin_metrics::AccessPoint::ACCESS_POINT_AVATAR_BUBBLE_SIGN_IN:
     case signin_metrics::AccessPoint::ACCESS_POINT_USER_MANAGER:
     case signin_metrics::AccessPoint::ACCESS_POINT_DEVICES_PAGE:
-    case signin_metrics::AccessPoint::ACCESS_POINT_CLOUD_PRINT:
     case signin_metrics::AccessPoint::ACCESS_POINT_SIGNIN_PROMO:
     case signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN:
     case signin_metrics::AccessPoint::ACCESS_POINT_PASSWORD_BUBBLE:
@@ -443,6 +451,9 @@ const char* DisplayedCountPreferenceKey(
     case signin_metrics::AccessPoint::
         ACCESS_POINT_RESTORE_PRIMARY_ACCOUNT_ON_PROFILE_LOAD:
     case signin_metrics::AccessPoint::ACCESS_POINT_TAB_ORGANIZATION:
+    case signin_metrics::AccessPoint::ACCESS_POINT_TIPS_NOTIFICATION:
+    case signin_metrics::AccessPoint::
+        ACCESS_POINT_NOTIFICATIONS_OPT_IN_SCREEN_CONTENT_TOGGLE:
     case signin_metrics::AccessPoint::ACCESS_POINT_MAX:
       return nullptr;
   }
@@ -471,7 +482,6 @@ const char* AlreadySeenSigninViewPreferenceKey(
     case signin_metrics::AccessPoint::ACCESS_POINT_AVATAR_BUBBLE_SIGN_IN:
     case signin_metrics::AccessPoint::ACCESS_POINT_USER_MANAGER:
     case signin_metrics::AccessPoint::ACCESS_POINT_DEVICES_PAGE:
-    case signin_metrics::AccessPoint::ACCESS_POINT_CLOUD_PRINT:
     case signin_metrics::AccessPoint::ACCESS_POINT_SIGNIN_PROMO:
     case signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN:
     case signin_metrics::AccessPoint::ACCESS_POINT_PASSWORD_BUBBLE:
@@ -515,6 +525,9 @@ const char* AlreadySeenSigninViewPreferenceKey(
     case signin_metrics::AccessPoint::
         ACCESS_POINT_RESTORE_PRIMARY_ACCOUNT_ON_PROFILE_LOAD:
     case signin_metrics::AccessPoint::ACCESS_POINT_TAB_ORGANIZATION:
+    case signin_metrics::AccessPoint::ACCESS_POINT_TIPS_NOTIFICATION:
+    case signin_metrics::AccessPoint::
+        ACCESS_POINT_NOTIFICATIONS_OPT_IN_SCREEN_CONTENT_TOGGLE:
     case signin_metrics::AccessPoint::ACCESS_POINT_MAX:
       return nullptr;
   }
@@ -608,7 +621,7 @@ id<SystemIdentity> GetDisplayedIdentity(
   std::unique_ptr<ChromeAccountManagerServiceObserverBridge>
       _accountManagerServiceObserver;
   // Sync service.
-  syncer::SyncService* _syncService;
+  raw_ptr<syncer::SyncService> _syncService;
   // Observer for changes to the sync state.
   std::unique_ptr<SyncObserverBridge> _syncObserverBridge;
 }
@@ -1072,7 +1085,7 @@ id<SystemIdentity> GetDisplayedIdentity(
   // If the sign-in view is removed when the user is authenticated, then the
   // sign-in for sync has been done by another view, and this mediator cannot be
   // counted as being dismissed.
-  // TODO(crbug.com/1462858): Once new sync opt-ins are deprecated this usage
+  // TODO(crbug.com/40067025): Once new sync opt-ins are deprecated this usage
   // of kSync will become obsolete. Delete this code after phase 2.
   if (self.authService->HasPrimaryIdentity(signin::ConsentLevel::kSync))
     return;

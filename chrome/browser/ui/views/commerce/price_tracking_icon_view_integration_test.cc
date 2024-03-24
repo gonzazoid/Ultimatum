@@ -30,6 +30,7 @@
 #include "ui/base/interaction/element_identifier.h"
 #include "ui/base/interaction/element_tracker.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/views/interaction/element_tracker_views.h"
 
@@ -118,6 +119,7 @@ class PriceTrackingIconViewIntegrationTest : public TestWithBrowserView {
       GetTabHelper()->GetPriceTrackingControllerForTesting()->OnUnsubscribe(
           commerce::BuildUserSubscriptionForClusterId(0L), true);
     }
+    base::RunLoop().RunUntilIdle();
   }
 
   void VerifyIconState(PriceTrackingIconView* icon_view,
@@ -127,14 +129,18 @@ class PriceTrackingIconViewIntegrationTest : public TestWithBrowserView {
       EXPECT_EQ(icon_view->GetIconLabelForTesting(),
                 l10n_util::GetStringUTF16(IDS_OMNIBOX_TRACKING_PRICE));
       EXPECT_STREQ(icon_view->GetVectorIcon().name,
-                   omnibox::kPriceTrackingEnabledFilledIcon.name);
+                   features::IsChromeRefresh2023()
+                       ? omnibox::kPriceTrackingEnabledRefreshIcon.name
+                       : omnibox::kPriceTrackingEnabledFilledIcon.name);
       EXPECT_EQ(icon_view->GetTextForTooltipAndAccessibleName(),
                 l10n_util::GetStringUTF16(IDS_OMNIBOX_TRACKING_PRICE));
     } else {
       EXPECT_EQ(icon_view->GetIconLabelForTesting(),
                 l10n_util::GetStringUTF16(IDS_OMNIBOX_TRACK_PRICE));
       EXPECT_STREQ(icon_view->GetVectorIcon().name,
-                   omnibox::kPriceTrackingDisabledIcon.name);
+                   features::IsChromeRefresh2023()
+                       ? omnibox::kPriceTrackingDisabledRefreshIcon.name
+                       : omnibox::kPriceTrackingDisabledIcon.name);
       EXPECT_EQ(icon_view->GetTextForTooltipAndAccessibleName(),
                 l10n_util::GetStringUTF16(IDS_OMNIBOX_TRACK_PRICE));
     }

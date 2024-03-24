@@ -48,8 +48,10 @@ namespace {
 
 class RoundedCornerBubbleDialogDelegateView
     : public views::BubbleDialogDelegateView {
+  METADATA_HEADER(RoundedCornerBubbleDialogDelegateView,
+                  views::BubbleDialogDelegateView)
+
  public:
-  METADATA_HEADER(RoundedCornerBubbleDialogDelegateView);
   explicit RoundedCornerBubbleDialogDelegateView(int corner_radius)
       : corner_radius_(corner_radius) {}
 
@@ -70,8 +72,7 @@ class RoundedCornerBubbleDialogDelegateView
       this};
 };
 
-BEGIN_METADATA(RoundedCornerBubbleDialogDelegateView,
-               views::BubbleDialogDelegateView)
+BEGIN_METADATA(RoundedCornerBubbleDialogDelegateView)
 END_METADATA
 
 }  // namespace
@@ -111,7 +112,7 @@ ResizeToggleMenu::MenuButtonView::MenuButtonView(PressedCallback callback,
   }
 
   SetAccessibleName(l10n_util::GetStringUTF16(title_string_id));
-  GetViewAccessibility().OverrideRole(ax::mojom::Role::kMenuItem);
+  GetViewAccessibility().SetRole(ax::mojom::Role::kMenuItem);
 
   constexpr int kBorderThicknessDp = 1;
   const auto button_radius =
@@ -213,7 +214,7 @@ void ResizeToggleMenu::MenuButtonView::UpdateColors() {
   GetBorder()->set_color(border_color);
 }
 
-BEGIN_METADATA(ResizeToggleMenu, MenuButtonView, views::Button)
+BEGIN_METADATA(ResizeToggleMenu, MenuButtonView)
 END_METADATA
 
 ResizeToggleMenu::ResizeToggleMenu(

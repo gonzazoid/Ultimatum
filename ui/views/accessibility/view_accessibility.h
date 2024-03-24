@@ -6,6 +6,7 @@
 #define UI_VIEWS_ACCESSIBILITY_VIEW_ACCESSIBILITY_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -13,12 +14,12 @@
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/accessibility/ax_enums.mojom-forward.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/accessibility/platform/ax_unique_id.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/views/accessibility/ax_virtual_view.h"
+#include "ui/views/accessibility/view_accessibility_utils.h"
 #include "ui/views/views_export.h"
 
 namespace ui {
@@ -104,6 +105,38 @@ class VIEWS_EXPORT ViewAccessibility {
   // Call when a menu closes, to restore focus to where it was previously.
   virtual void FireFocusAfterMenuClose();
 
+  void SetRole(const ax::mojom::Role role);
+  // This function cannot follow the established pattern and be named GetRole()
+  // because of a function of the same name in AXPlatformNodeDelegate.
+  // ViewAXPlatformNodeDelegate extends both ViewAccessibility and
+  // AXPlatformNodeDelegate, which would lead to conflicts and confusion.
+  // TODO(accessibility): Rename to GetRole once the ViewsAX project is
+  // completed and we don't have ViewAXPlatformNodeDelegate anymore.
+  ax::mojom::Role GetViewAccessibilityRole() const;
+
+  void SetBounds(const gfx::RectF& bounds);
+
+  // Note that `pos_in_set` starts from 1 not 0.
+  void SetPosInSet(int pos_in_set);
+  void SetSetSize(int set_size);
+  void ClearPosInSet();
+  void ClearSetSize();
+
+  // Sets/gets whether or not this view should be marked as "enabled" for the
+  // purpose exposing this state in the accessibility tree. As a general rule,
+  // it is not advisable to mark a View as enabled in the accessibility tree,
+  // while the real View is actually disabled, because such a View will not
+  // respond to user actions.
+  void SetIsEnabled(bool is_enabled);
+  bool GetIsEnabled() const;
+
+  void SetDescription(const std::string& description,
+                      const ax::mojom::DescriptionFrom description_from =
+                          ax::mojom::DescriptionFrom::kAriaDescription);
+  void SetDescription(const std::u16string& description,
+                      const ax::mojom::DescriptionFrom description_from =
+                          ax::mojom::DescriptionFrom::kAriaDescription);
+
   void OverrideRole(const ax::mojom::Role role);
 
   // Sets the accessible name to the specified string value.
@@ -148,9 +181,14 @@ class VIEWS_EXPORT ViewAccessibility {
   // description should instead be kAttributeExplicitlyEmpty. If a View never
   // had an accessible description, there is no need to override it with an
   // empty string.
+  //
+  // Deprecated. Use ViewAccessibility::SetDescription instead.
+  // See https://crbug.com/324485311.
   void OverrideDescription(const std::string& description,
                            const ax::mojom::DescriptionFrom description_from =
                                ax::mojom::DescriptionFrom::kAriaDescription);
+  // Deprecated. Use ViewAccessibility::SetDescription instead.
+  // See https://crbug.com/324485311.
   void OverrideDescription(const std::u16string& description,
                            const ax::mojom::DescriptionFrom description_from =
                                ax::mojom::DescriptionFrom::kAriaDescription);
@@ -186,6 +224,7 @@ class VIEWS_EXPORT ViewAccessibility {
   void OverrideIsIgnored(bool value);
   virtual bool IsIgnored() const;
 
+  // TODO(javiercon): Remove once views are migrated to use the new setter.
   // Marks this View either as enabled or disabled (grayed out) in the
   // accessibility tree and ignores the View's real enabled state. Does not
   // affect the View's focusable state (see "IsAccessibilityFocusable()").
@@ -197,7 +236,6 @@ class VIEWS_EXPORT ViewAccessibility {
   void OverrideIsEnabled(bool enabled);
   virtual bool IsAccessibilityEnabled() const;
 
-  void OverrideBounds(const gfx::RectF& bounds);
   void OverrideHasPopup(const ax::mojom::HasPopup has_popup);
 
   // Override information provided to users by screen readers when describing
@@ -207,7 +245,13 @@ class VIEWS_EXPORT ViewAccessibility {
   // |set_size| respectively.
   //
   // Note that |pos_in_set| is one-based, i.e. it starts from 1 not 0.
+  //
+  // Deprecated. Use ViewAccessibility::SetPosInSet and
+  // ViewAccessibility::SetSetSize instead. See https://crbug.com/324485311.
   void OverridePosInSet(int pos_in_set, int set_size);
+
+  // Deprecated. Use ViewAccessibility::ClearPosInSet and
+  // ViewAccessibility::ClearSetSize instead. See https://crbug.com/324485311.
   void ClearPosInSetOverride();
 
   // Overrides the `ax::mojom::BoolAttribute::kSelected` attribute.
@@ -288,7 +332,7 @@ class VIEWS_EXPORT ViewAccessibility {
 
   // Returns the index of |virtual_view|, or nullopt if |virtual_view| is not a
   // child of this View.
-  absl::optional<size_t> GetIndexOf(const AXVirtualView* virtual_view) const;
+  std::optional<size_t> GetIndexOf(const AXVirtualView* virtual_view) const;
 
   // Returns the native accessibility object associated with the AXVirtualView
   // descendant that is currently focused. If no virtual descendants are
@@ -340,7 +384,17 @@ class VIEWS_EXPORT ViewAccessibility {
 
   // Contains data set explicitly via OverrideRole, OverrideName, etc. that
   // overrides anything provided by GetAccessibleNodeData().
-  ui::AXNodeData custom_data_;
+  ui::AXNodeData override_data_;
+
+  // Contains data that is populated by the setters in this class.
+  // This member is tied to the ViewsAX project. Which is introducing a new
+  // system to set accessible properties in a "push" fashion (instead of pull).
+  // Authors are encouraged to start using it today, and it will eventually
+  // replace the old system. For now, while the migration to the new system
+  // happens, we allow the old system to coexist with he new one by just
+  // unioning the data from both systems. This is done in
+  // GetAccessibleNodeData().
+  ui::AXNodeData data_;
 
   // If set to true, anything that is a descendant of this view will be hidden
   // from accessibility.
@@ -356,9 +410,10 @@ class VIEWS_EXPORT ViewAccessibility {
   // "presentational".
   bool is_ignored_ = false;
 
+  // TODO(javiercon): Remove once views are migrated to use the new setter.
   // Used to override the View's enabled state in case we need to mark the View
   // as enabled or disabled only in the accessibility tree.
-  absl::optional<bool> is_enabled_ = absl::nullopt;
+  std::optional<bool> overriden_is_enabled_ = std::nullopt;
 
   // Used by the Views system to help some assistive technologies, such as
   // screen readers, transition focus from one widget to another.
@@ -366,7 +421,7 @@ class VIEWS_EXPORT ViewAccessibility {
   base::WeakPtr<Widget> previous_focus_ = nullptr;
 
   // This view's child tree id.
-  absl::optional<ui::AXTreeID> child_tree_id_;
+  std::optional<ui::AXTreeID> child_tree_id_;
 
   // Whether to move accessibility focus to an ancestor.
   bool propagate_focus_to_ancestor_ = false;

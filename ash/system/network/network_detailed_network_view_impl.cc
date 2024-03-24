@@ -91,15 +91,13 @@ NetworkDetailedNetworkViewImpl::NetworkDetailedNetworkViewImpl(
     : NetworkDetailedView(detailed_view_delegate,
                           delegate,
                           NetworkDetailedViewListType::LIST_TYPE_NETWORK),
-      NetworkDetailedNetworkView(delegate) {
-  RecordDetailedViewSection(DetailedViewSection::kDetailedSection);
-}
+      NetworkDetailedNetworkView(delegate) {}
 
 NetworkDetailedNetworkViewImpl::~NetworkDetailedNetworkViewImpl() = default;
 
 void NetworkDetailedNetworkViewImpl::NotifyNetworkListChanged() {
   scroll_content()->InvalidateLayout();
-  Layout();
+  DeprecatedLayoutImmediately();
 
   if (!settings_button()) {
     return;
@@ -355,7 +353,7 @@ void NetworkDetailedNetworkViewImpl::UpdateScanningBarVisibility(bool visible) {
   ShowProgress(-1, visible);
 }
 
-BEGIN_METADATA(NetworkDetailedNetworkViewImpl, NetworkDetailedView)
+BEGIN_METADATA(NetworkDetailedNetworkViewImpl)
 END_METADATA
 
 }  // namespace ash

@@ -4,6 +4,7 @@
 
 dictionary StorageAccessTypes {
     boolean all = false;
+    boolean cookies = false;
     boolean sessionStorage = false;
     boolean localStorage = false;
     boolean indexedDB = false;
@@ -14,4 +15,5 @@ dictionary StorageAccessTypes {
     boolean createObjectURL = false;
     boolean revokeObjectURL = false;
     boolean BroadcastChannel = false;
+    boolean SharedWorker = false;
 };

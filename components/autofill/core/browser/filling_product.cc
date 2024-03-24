@@ -10,6 +10,30 @@
 
 namespace autofill {
 
+std::string FillingProductToString(FillingProduct filling_product) {
+  switch (filling_product) {
+    case FillingProduct::kNone:
+      return "None";
+    case FillingProduct::kAddress:
+      return "Address";
+    case FillingProduct::kCreditCard:
+      return "CreditCard";
+    case FillingProduct::kMerchantPromoCode:
+      return "MerchantPromoCode";
+    case FillingProduct::kIban:
+      return "Iban";
+    case FillingProduct::kAutocomplete:
+      return "Autocomplete";
+    case FillingProduct::kPassword:
+      return "Password";
+    case FillingProduct::kCompose:
+      return "Compose";
+    case FillingProduct::kPlusAddresses:
+      return "PlusAddresses";
+  };
+  NOTREACHED_NORETURN();
+}
+
 FillingProduct GetFillingProductFromPopupItemId(PopupItemId popup_item_id) {
   switch (popup_item_id) {
     case PopupItemId::kAddressEntry:
@@ -25,9 +49,10 @@ FillingProduct GetFillingProductFromPopupItemId(PopupItemId popup_item_id) {
     case PopupItemId::kDevtoolsTestAddressEntry:
       return FillingProduct::kAddress;
     case PopupItemId::kCreditCardEntry:
-    case PopupItemId::kScanCreditCard:
-    case PopupItemId::kVirtualCreditCardEntry:
     case PopupItemId::kCreditCardFieldByFieldFilling:
+    case PopupItemId::kVirtualCreditCardEntry:
+    case PopupItemId::kScanCreditCard:
+    case PopupItemId::kShowAccountCards:
       return FillingProduct::kCreditCard;
     case PopupItemId::kMerchantPromoCodeEntry:
       return FillingProduct::kMerchantPromoCode;
@@ -36,18 +61,18 @@ FillingProduct GetFillingProductFromPopupItemId(PopupItemId popup_item_id) {
     case PopupItemId::kAutocompleteEntry:
       return FillingProduct::kAutocomplete;
     case PopupItemId::kPasswordEntry:
-    case PopupItemId::kUsernameEntry:
     case PopupItemId::kAllSavedPasswordsEntry:
     case PopupItemId::kGeneratePasswordEntry:
-    case PopupItemId::kShowAccountCards:
     case PopupItemId::kPasswordAccountStorageOptIn:
     case PopupItemId::kPasswordAccountStorageOptInAndGenerate:
     case PopupItemId::kAccountStoragePasswordEntry:
-    case PopupItemId::kAccountStorageUsernameEntry:
     case PopupItemId::kPasswordAccountStorageReSignin:
     case PopupItemId::kPasswordAccountStorageEmpty:
     case PopupItemId::kWebauthnCredential:
     case PopupItemId::kWebauthnSignInWithAnotherDevice:
+    case PopupItemId::kPasswordFieldByFieldFilling:
+    case PopupItemId::kFillPassword:
+    case PopupItemId::kViewPasswordDetails:
       return FillingProduct::kPassword;
     case PopupItemId::kCompose:
       return FillingProduct::kCompose;
@@ -77,7 +102,6 @@ FillingProduct GetFillingProductFromFieldTypeGroup(
     case FieldTypeGroup::kCompany:
     case FieldTypeGroup::kAddress:
     case FieldTypeGroup::kPhone:
-    case FieldTypeGroup::kBirthdateField:
       return FillingProduct::kAddress;
     case FieldTypeGroup::kCreditCard:
       return FillingProduct::kCreditCard;

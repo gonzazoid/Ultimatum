@@ -43,13 +43,13 @@ mojom::SessionType EnvironmentProvider::GetSessionType() {
   if (chromeos::IsManagedGuestSession()) {
     return mojom::SessionType::kPublicSession;
   }
-  if (user->GetType() == user_manager::USER_TYPE_WEB_KIOSK_APP) {
+  if (user->GetType() == user_manager::UserType::kWebKioskApp) {
     return mojom::SessionType::kWebKioskSession;
   }
-  if (user->GetType() == user_manager::USER_TYPE_KIOSK_APP) {
+  if (user->GetType() == user_manager::UserType::kKioskApp) {
     return mojom::SessionType::kAppKioskSession;
   }
-  if (user->GetType() == user_manager::USER_TYPE_CHILD) {
+  if (user->GetType() == user_manager::UserType::kChild) {
     return mojom::SessionType::kChildSession;
   }
   return mojom::SessionType::kRegularSession;
@@ -162,25 +162,6 @@ EnvironmentProvider::GetDeviceAccount() {
     case AccountType::UNKNOWN:
       return std::nullopt;
   }
-}
-
-void EnvironmentProvider::SetDeviceAccountPolicy(
-    const std::string& policy_blob) {
-  device_account_policy_blob_ = policy_blob;
-}
-
-std::string EnvironmentProvider::GetDeviceAccountPolicy() {
-  return device_account_policy_blob_;
-}
-
-const policy::ComponentPolicyMap&
-EnvironmentProvider::GetDeviceAccountComponentPolicy() {
-  return component_policy_;
-}
-
-void EnvironmentProvider::SetDeviceAccountComponentPolicy(
-    policy::ComponentPolicyMap component_policy) {
-  component_policy_ = std::move(component_policy);
 }
 
 base::Time EnvironmentProvider::GetLastPolicyFetchAttemptTimestamp() {

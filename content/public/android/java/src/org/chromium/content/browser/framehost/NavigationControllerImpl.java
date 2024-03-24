@@ -188,7 +188,8 @@ import org.chromium.url.Origin;
     }
 
     @Override
-    public void loadUrl(LoadUrlParams params) {
+    public NavigationHandle loadUrl(LoadUrlParams params) {
+        NavigationHandle navigationHandle = null;
         if (mNativeNavigationControllerAndroid != 0) {
             String headers =
                     params.getExtraHeaders() == null
@@ -201,7 +202,7 @@ import org.chromium.url.Origin;
             RecordHistogram.recordTimesHistogram(
                     "Android.Omnibox.InputToNavigationControllerStart",
                     SystemClock.uptimeMillis() - inputStart);
-            NavigationHandle navigationHandle =
+            navigationHandle =
                     NavigationControllerImplJni.get()
                             .loadUrl(
                                     mNativeNavigationControllerAndroid,
@@ -231,12 +232,14 @@ import org.chromium.url.Origin;
                                     inputStart,
                                     params.getNavigationUIDataSupplier() == null
                                             ? 0
-                                            : params.getNavigationUIDataSupplier().get());
+                                            : params.getNavigationUIDataSupplier().get(),
+                                    params.getIsPdf());
             // Use the navigation handle object to store user data passed in.
             if (navigationHandle != null) {
                 navigationHandle.setUserDataHost(params.takeNavigationHandleUserData());
             }
         }
+        return navigationHandle;
     }
 
     @Override
@@ -506,7 +509,8 @@ import org.chromium.url.Origin;
                 boolean shouldClearHistoryList,
                 AdditionalNavigationParams additionalNavigationParams,
                 long inputStart,
-                long navigationUIDataPtr);
+                long navigationUIDataPtr,
+                boolean isPdf);
 
         void clearHistory(long nativeNavigationControllerAndroid, NavigationControllerImpl caller);
 

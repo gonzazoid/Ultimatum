@@ -21,6 +21,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
+import org.chromium.base.Log;
 import org.chromium.base.StrictModeContext;
 import org.chromium.base.SysUtils;
 import org.chromium.base.TraceEvent;
@@ -36,10 +37,11 @@ import org.chromium.chrome.browser.LaunchIntentDispatcher;
 import org.chromium.chrome.browser.WarmupManager;
 import org.chromium.chrome.browser.firstrun.FirstRunFlowSequencer;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
+import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcherProvider;
 import org.chromium.chrome.browser.metrics.SimpleStartupForegroundSessionDetector;
 import org.chromium.chrome.browser.multiwindow.MultiWindowModeStateDispatcher;
 import org.chromium.chrome.browser.multiwindow.MultiWindowModeStateDispatcherImpl;
-import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.profiles.ProfileProvider;
 import org.chromium.chrome.browser.tasks.tab_management.TabUiFeatureUtilities;
 import org.chromium.chrome.features.start_surface.StartSurfaceConfiguration;
@@ -56,9 +58,11 @@ import org.chromium.ui.display.DisplayUtil;
  * An activity that talks with application and activity level delegates for async initialization.
  */
 public abstract class AsyncInitializationActivity extends ChromeBaseAppCompatActivity
-        implements ChromeActivityNativeDelegate, BrowserParts {
+        implements ChromeActivityNativeDelegate, BrowserParts, ActivityLifecycleDispatcherProvider {
     @VisibleForTesting
     public static final String FIRST_DRAW_COMPLETED_TIME_MS_UMA = "FirstDrawCompletedTime";
+
+    public static final String TAG_MULTI_INSTANCE = "MultiInstance";
 
     protected final Handler mHandler;
 
@@ -265,7 +269,7 @@ public abstract class AsyncInitializationActivity extends ChromeBaseAppCompatAct
             if (!IntentHandler.hasAnyIncognitoExtra(intent.getExtras())) {
                 WarmupManager.getInstance()
                         .maybePreconnectUrlAndSubResources(
-                                Profile.getLastUsedRegularProfile(), url);
+                                ProfileManager.getLastUsedRegularProfile(), url);
             }
         } finally {
             TraceEvent.end("maybePreconnect");
@@ -620,6 +624,13 @@ public abstract class AsyncInitializationActivity extends ChromeBaseAppCompatAct
         mLifecycleDispatcher.dispatchOnStopWithNative();
     }
 
+    @CallSuper
+    @Override
+    protected void onUserLeaveHint() {
+        super.onUserLeaveHint();
+        mLifecycleDispatcher.dispatchOnUserLeaveHint();
+    }
+
     @Override
     public boolean isActivityFinishingOrDestroyed() {
         return mDestroyed || isFinishing();
@@ -760,6 +771,8 @@ public abstract class AsyncInitializationActivity extends ChromeBaseAppCompatAct
 
         // TODO(https://crbug.com/1252526): Remove stack trace logging once root cause of bug is
         // identified & fixed.
+        // Piggybacking for multi-instance bug crbug.com/1484026.
+        Log.i(TAG_MULTI_INSTANCE, "Tracing recreate().");
         Thread.dumpStack();
     }
 
@@ -854,6 +867,7 @@ public abstract class AsyncInitializationActivity extends ChromeBaseAppCompatAct
     /**
      * @return {@link ActivityLifecycleDispatcher} associated with this activity.
      */
+    @Override
     public ActivityLifecycleDispatcher getLifecycleDispatcher() {
         return mLifecycleDispatcher;
     }

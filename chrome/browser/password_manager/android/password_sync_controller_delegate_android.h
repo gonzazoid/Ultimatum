@@ -31,9 +31,11 @@ class PasswordSyncControllerDelegateAndroid
       public syncer::SyncServiceObserver,
       public PasswordSyncControllerDelegateBridge::Consumer {
  public:
+  using IsPwdSyncEnabled = base::StrongAlias<struct IsPwdSyncEnabledTag, bool>;
+
   explicit PasswordSyncControllerDelegateAndroid(
-      std::unique_ptr<PasswordSyncControllerDelegateBridge> bridge,
-      base::OnceClosure on_sync_shutdown);
+      std::unique_ptr<PasswordSyncControllerDelegateBridge> bridge);
+
   PasswordSyncControllerDelegateAndroid(
       const PasswordSyncControllerDelegateAndroid&) = delete;
   PasswordSyncControllerDelegateAndroid(
@@ -43,6 +45,15 @@ class PasswordSyncControllerDelegateAndroid
   PasswordSyncControllerDelegateAndroid& operator=(
       PasswordSyncControllerDelegateAndroid&&) = delete;
   ~PasswordSyncControllerDelegateAndroid() override;
+
+  // Sets callbacks to be called when the passwords sync state changes or the
+  // service is being shut down.
+  void SetSyncObserverCallbacks(
+      base::RepeatingClosure on_pwd_sync_state_changed,
+      base::OnceClosure on_sync_shutdown);
+
+  // Sets a callback to be called when the sync service is being shut down.
+  void SetSyncShutdownCallback(base::OnceClosure(on_sync_shutdown));
 
   // syncer::ModelTypeControllerDelegate implementation
   void OnSyncStarting(const syncer::DataTypeActivationRequest& request,
@@ -72,8 +83,6 @@ class PasswordSyncControllerDelegateAndroid
   void OnSyncServiceInitialized(syncer::SyncService* sync_service);
 
  private:
-  using IsSyncEnabled = base::StrongAlias<struct IsSyncEnabledTag, bool>;
-
   // Notify credential manager about current account on startup or if
   // password sync setting has changed.
   void UpdateCredentialManagerSyncStatus(syncer::SyncService* sync_service);
@@ -85,10 +94,13 @@ class PasswordSyncControllerDelegateAndroid
   // Current sync status, std::nullopt until OnSyncServiceInitialized() is
   // called. This value is used to distinguish between sync setup on startup and
   // when user turns on sync manually.
-  std::optional<IsSyncEnabled> is_sync_enabled_;
+  std::optional<IsPwdSyncEnabled> is_sync_enabled_;
 
   // Last sync status set in CredentialManager.
-  std::optional<IsSyncEnabled> credential_manager_sync_setting_;
+  std::optional<IsPwdSyncEnabled> credential_manager_sync_setting_;
+
+  // Callback to be invoked every time the password sync status changes.
+  base::RepeatingClosure on_pwd_sync_state_changed_;
 
   base::OnceClosure on_sync_shutdown_;
 

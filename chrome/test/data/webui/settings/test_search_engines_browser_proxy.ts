@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 // clang-format off
-import {SearchEngine, SearchEnginesBrowserProxy, SearchEnginesInfo, SearchEnginesInteractions, ChoiceMadeLocation} from 'chrome://settings/settings.js';
+import type {SearchEngine, SearchEnginesBrowserProxy, SearchEnginesInfo, SearchEnginesInteractions, ChoiceMadeLocation} from 'chrome://settings/settings.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
 // clang-format on
@@ -101,6 +101,8 @@ export function createSampleSearchEngine(override?: Partial<SearchEngine>):
         id: 0,
         isManaged: false,
         isOmniboxExtension: false,
+        isPrepopulated: false,
+        isStarterPack: false,
         keyword: 'google.com',
         modelIndex: 0,
         name: 'Google',
@@ -128,8 +130,10 @@ export function createSampleOmniboxExtension(): SearchEngine {
       canBeDisabled: false,
     },
     id: 0,
-    isOmniboxExtension: true,
     isManaged: false,
+    isOmniboxExtension: true,
+    isPrepopulated: false,
+    isStarterPack: false,
     keyword: 'oe',
     modelIndex: 6,
     name: 'Omnibox extension',

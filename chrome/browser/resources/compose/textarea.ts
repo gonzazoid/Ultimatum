@@ -11,7 +11,7 @@ import {loadTimeData} from '//resources/js/load_time_data.js';
 import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {ComposeTextareaAnimator} from './animations/textarea_animator.js';
-import {ConfigurableParams} from './compose.mojom-webui.js';
+import type {ConfigurableParams} from './compose.mojom-webui.js';
 import {getTemplate} from './textarea.html.js';
 
 export interface ComposeTextareaElement {
@@ -74,12 +74,18 @@ export class ComposeTextareaElement extends PolymerElement {
   private invalidInput_: boolean;
   private tooLong_: boolean;
   private tooShort_: boolean;
+  private placeholderText_: string;
   value: string;
 
   constructor() {
     super();
     this.animator_ = new ComposeTextareaAnimator(
         this, loadTimeData.getBoolean('enableAnimations'));
+  }
+
+  override ready() {
+    super.ready();
+    this.placeholderText_ = this.$.input.placeholder;
   }
 
   focusInput() {
@@ -103,8 +109,28 @@ export class ComposeTextareaElement extends PolymerElement {
     return this.allowExitingReadonlyMode && this.readonly;
   }
 
-  transitionToReadonly() {
-    this.animator_.transitionToReadonly();
+  private onChangeTextArea_() {
+    if (this.$.input.value === '') {
+      this.$.input.placeholder = this.placeholderText_;
+    } else {
+      this.$.input.placeholder = '';
+    }
+  }
+
+  transitionToEditable() {
+    this.animator_.transitionToEditable();
+  }
+
+  transitionToReadonly(fromHeight?: number) {
+    this.animator_.transitionToReadonly(fromHeight);
+  }
+
+  transitionToEditing(bodyHeight: number) {
+    this.animator_.transitionToEditing(bodyHeight);
+  }
+
+  transitionToResult(bodyHeight: number) {
+    this.animator_.transitionToResult(bodyHeight);
   }
 
   validate() {

@@ -122,6 +122,7 @@ class EnterpriseReportingPrivateGetDeviceIdTest : public ExtensionApiUnittest {
 
   void SetClientId(const std::string& client_id) {
     storage_.SetClientId(client_id);
+    storage_.ResetForTesting();
   }
 
  private:
@@ -132,7 +133,7 @@ TEST_F(EnterpriseReportingPrivateGetDeviceIdTest, GetDeviceId) {
   auto function =
       base::MakeRefCounted<EnterpriseReportingPrivateGetDeviceIdFunction>();
   SetClientId(kFakeClientId);
-  absl::optional<base::Value> id =
+  std::optional<base::Value> id =
       RunFunctionAndReturnValue(function.get(), "[]");
   ASSERT_TRUE(id);
   ASSERT_TRUE(id->is_string());
@@ -315,7 +316,7 @@ class EnterpriseReportingPrivateGetPersistentSecretFunctionTest
 TEST_F(EnterpriseReportingPrivateGetPersistentSecretFunctionTest, GetSecret) {
   auto function = base::MakeRefCounted<
       EnterpriseReportingPrivateGetPersistentSecretFunction>();
-  absl::optional<base::Value> result1 =
+  std::optional<base::Value> result1 =
       RunFunctionAndReturnValue(function.get(), "[]");
   ASSERT_TRUE(result1);
   ASSERT_TRUE(result1->is_blob());
@@ -324,7 +325,7 @@ TEST_F(EnterpriseReportingPrivateGetPersistentSecretFunctionTest, GetSecret) {
   // Re-running should not change the secret.
   auto function2 = base::MakeRefCounted<
       EnterpriseReportingPrivateGetPersistentSecretFunction>();
-  absl::optional<base::Value> result2 =
+  std::optional<base::Value> result2 =
       RunFunctionAndReturnValue(function2.get(), "[]");
   ASSERT_TRUE(result2);
   ASSERT_TRUE(result2->is_blob());
@@ -333,7 +334,7 @@ TEST_F(EnterpriseReportingPrivateGetPersistentSecretFunctionTest, GetSecret) {
   // Re-running should not change the secret even when force recreate is set.
   auto function3 = base::MakeRefCounted<
       EnterpriseReportingPrivateGetPersistentSecretFunction>();
-  absl::optional<base::Value> result3 =
+  std::optional<base::Value> result3 =
       RunFunctionAndReturnValue(function3.get(), "[true]");
   ASSERT_TRUE(result3);
   ASSERT_TRUE(result3->is_blob());
@@ -358,7 +359,7 @@ TEST_F(EnterpriseReportingPrivateGetPersistentSecretFunctionTest, GetSecret) {
   // Re=running should not change the secret even when force recreate is set.
   auto function5 = base::MakeRefCounted<
       EnterpriseReportingPrivateGetPersistentSecretFunction>();
-  absl::optional<base::Value> result5 =
+  std::optional<base::Value> result5 =
       RunFunctionAndReturnValue(function5.get(), "[true]");
   ASSERT_TRUE(result5);
   ASSERT_TRUE(result5->is_blob());
@@ -372,7 +373,7 @@ using EnterpriseReportingPrivateGetDeviceInfoTest = ExtensionApiUnittest;
 TEST_F(EnterpriseReportingPrivateGetDeviceInfoTest, GetDeviceInfo) {
   auto function =
       base::MakeRefCounted<EnterpriseReportingPrivateGetDeviceInfoFunction>();
-  absl::optional<base::Value> device_info_value =
+  std::optional<base::Value> device_info_value =
       RunFunctionAndReturnValue(function.get(), "[]");
   ASSERT_TRUE(device_info_value);
   ASSERT_TRUE(device_info_value->is_dict());
@@ -452,7 +453,7 @@ class EnterpriseReportingPrivateGetContextInfoTest
   enterprise_reporting_private::ContextInfo GetContextInfo() {
     auto function = base::MakeRefCounted<
         EnterpriseReportingPrivateGetContextInfoFunction>();
-    absl::optional<base::Value> context_info_value =
+    std::optional<base::Value> context_info_value =
         RunFunctionAndReturnValue(function.get(), "[]");
     EXPECT_TRUE(context_info_value);
     EXPECT_TRUE(context_info_value->is_dict());

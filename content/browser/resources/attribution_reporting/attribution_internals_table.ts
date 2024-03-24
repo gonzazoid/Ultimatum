@@ -2,16 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert.js';
 import {CustomElement} from 'chrome://resources/js/custom_element.js';
 
 import {getTemplate} from './attribution_internals_table.html.js';
-import {TableModel} from './table_model.js';
+import type {TableModel} from './table_model.js';
 
-/**
- * Helper function for setting sort attributes on |th|.
- */
-function setSortAttrs(th: HTMLElement, sortDesc: boolean|null) {
+function setSortAttrs(th: HTMLElement, sortDesc: boolean|null): void {
   let nextDir;
   if (sortDesc === null) {
     th.ariaSort = 'none';
@@ -24,115 +20,128 @@ function setSortAttrs(th: HTMLElement, sortDesc: boolean|null) {
     nextDir = 'descending';
   }
 
-  th.title = `Sort by ${th.innerText} ${nextDir}`;
-  th.ariaLabel = th.title;
+  const button = th.querySelector('button')!;
+  button.title = `Sort by ${button.innerText} ${nextDir}`;
+}
+
+export type RenderFunc<T> = (e: HTMLElement, data: T) => void;
+
+export interface Column<T> {
+  compare?(a: T, b: T): number;
+
+  render(td: HTMLElement, row: T): void;
+
+  renderHeader(th: HTMLElement): void;
 }
 
 /**
  * Table abstracts the logic for rendering and sorting a table. The table's
- * columns are supplied by a TableModel supplied to the decorate function. Each
- * Column knows how to render the underlying value of the row type T, and
- * optionally sort rows of type T by that value.
+ * columns are supplied by a TableModel. Each Column knows how to render the
+ * underlying value of the row type T, and optionally sort rows of type T by
+ * that value.
  */
 export class AttributionInternalsTableElement<T> extends CustomElement {
   static override get template() {
     return getTemplate();
   }
 
-  private model_: TableModel<T>|null = null;
+  private model_?: TableModel<T>;
+  private cols_?: ReadonlyArray<Column<T>>;
+  private sortIdx_: number = -1;
   private sortDesc_: boolean = false;
+  private styleRow_: RenderFunc<T> = () => {};
 
-  setModel(model: TableModel<T>) {
+  init(
+      model: TableModel<T>,
+      cols: ReadonlyArray<Column<T>&{defaultSort?: boolean}>,
+      styleRow: RenderFunc<T> = () => {}): void {
     this.model_ = model;
+    this.cols_ = cols;
+    this.sortIdx_ = -1;
     this.sortDesc_ = false;
+    this.styleRow_ = styleRow;
 
-    const tr = this.$<HTMLElement>('tr');
-    assert(tr);
-    model.cols.forEach((col, idx) => {
+    const tr = this.$<HTMLElement>('thead > tr')!;
+    cols.forEach((col, idx) => {
       const th = document.createElement('th');
       th.scope = 'col';
-      col.renderHeader(th);
 
       if (col.compare) {
-        th.setAttribute('role', 'button');
-        setSortAttrs(th, /*sortDesc=*/ null);
-        th.addEventListener('click', () => this.changeSortHeader_(idx));
+        const button = document.createElement('button');
+        col.renderHeader(button);
+        th.append(button);
+        setSortAttrs(th, col.defaultSort ? this.sortDesc_ : null);
+        button.addEventListener('click', () => this.changeSortHeader_(idx));
+        if (col.defaultSort) {
+          this.sortIdx_ = idx;
+        }
+      } else {
+        col.renderHeader(th);
       }
 
-      tr.appendChild(th);
+      tr.append(th);
     });
 
-    this.addSpanningText_();
-    this.model_.rowsChangedListeners.add(() => this.updateTbody());
+    this.updateRowCount_();
+
+    this.model_.rowsChangedListeners.add(() => {
+      this.updateRowCount_();
+      this.updateTbody_();
+    });
   }
 
-  private addSpanningText_() {
-    const td = document.createElement('td');
-    assert(this.model_);
-    td.textContent = this.model_.emptyRowText;
-    td.colSpan = this.model_.cols.length;
-    const tr = document.createElement('tr');
-    tr.appendChild(td);
-    const tbody = this.$<HTMLElement>('tbody');
-    assert(tbody);
-    tbody.appendChild(tr);
+  private updateRowCount_(): void {
+    const td = this.$<HTMLTableCellElement>('tfoot td')!;
+    td.colSpan = this.cols_!.length;
+    td.innerText = `Rows: ${this.model_!.rowCount()}`;
   }
 
-  private changeSortHeader_(idx: number) {
-    const ths = this.$all<HTMLElement>('thead th');
+  private changeSortHeader_(idx: number): void {
+    const ths = this.$all<HTMLElement>('thead > tr > th');
 
-    assert(this.model_);
-    if (idx === this.model_.sortIdx) {
+    if (idx === this.sortIdx_) {
       this.sortDesc_ = !this.sortDesc_;
     } else {
       this.sortDesc_ = false;
-      if (this.model_.sortIdx >= 0) {
-        setSortAttrs(ths[this.model_.sortIdx]!, /*descending=*/ null);
+      if (this.sortIdx_ >= 0) {
+        setSortAttrs(ths[this.sortIdx_]!, /*descending=*/ null);
       }
     }
 
-    this.model_.sortIdx = idx;
-    setSortAttrs(ths[this.model_.sortIdx]!, this.sortDesc_);
-    this.updateTbody();
+    this.sortIdx_ = idx;
+    setSortAttrs(ths[this.sortIdx_]!, this.sortDesc_);
+    this.updateTbody_();
   }
 
-  private sort_(rows: T[]) {
-    assert(this.model_);
-    if (this.model_.sortIdx < 0) {
+  private sort_(rows: T[]): void {
+    if (this.sortIdx_ < 0) {
       return;
     }
 
     const multiplier = this.sortDesc_ ? -1 : 1;
-    rows.sort(
-        (a, b) => this.model_!.cols[this.model_!.sortIdx]!.compare!(a, b) *
-            multiplier);
+    const sortCol = this.cols_![this.sortIdx_]!;
+    rows.sort((a, b) => multiplier * sortCol.compare!(a, b));
   }
 
-  updateTbody() {
-    const tbody = this.$<HTMLElement>('tbody');
-    assert(tbody);
+  private updateTbody_(): void {
+    const tbody = this.$<HTMLElement>('tbody')!;
     tbody.innerText = '';
 
-    assert(this.model_);
-    const rows = this.model_.getRows();
+    const rows = this.model_!.getRows();
     if (rows.length === 0) {
-      this.addSpanningText_();
       return;
     }
 
     this.sort_(rows);
 
-    rows.forEach((row) => {
+    for (const row of rows) {
       const tr = document.createElement('tr');
-      assert(this.model_);
-      this.model_.cols.forEach((col) => {
-        const td = document.createElement('td');
-        col.render(td, row);
-        tr.appendChild(td);
-      });
-      this.model_.styleRow(tr, row);
-      tbody.appendChild(tr);
-    });
+      for (const col of this.cols_!) {
+        col.render(tr.insertCell(), row);
+      }
+      this.styleRow_(tr, row);
+      tbody.append(tr);
+    }
   }
 }
 

@@ -29,7 +29,6 @@
 #include "third_party/blink/renderer/core/css/media_query_set_owner.h"
 #include "third_party/blink/renderer/core/css/resolver/media_query_result.h"
 #include "third_party/blink/renderer/core/css/style_sheet.h"
-#include "third_party/blink/renderer/core/css/style_sheet_contents.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -53,6 +52,7 @@ class ExceptionState;
 class MediaQuerySet;
 class ScriptPromise;
 class ScriptState;
+class StyleSheetContents;
 class TreeScope;
 
 enum class CSSImportRules {
@@ -126,7 +126,13 @@ class CORE_EXPORT CSSStyleSheet final : public StyleSheet,
 
   // For CSSRuleList.
   unsigned length() const;
-  CSSRule* item(unsigned index);
+  CSSRule* item(unsigned index, bool trigger_use_counters = true);
+
+  // Get an item, but signal that it's been requested internally from the
+  // engine, and not directly from a script.
+  CSSRule* ItemInternal(unsigned index) {
+    return item(index, /*trigger_use_counters=*/false);
+  }
 
   void ClearOwnerNode() override;
 

@@ -216,7 +216,7 @@ scoped_refptr<OmniboxAction> BaseSearchProvider::CreateActionInSuggest(
     const TemplateURLRef& search_url,
     const TemplateURLRef::SearchTermsArgs& original_search_terms_args,
     const SearchTermsData& search_terms_data) {
-  absl::optional<TemplateURLRef::SearchTermsArgs> action_search_terms_args;
+  std::optional<TemplateURLRef::SearchTermsArgs> action_search_terms_args;
   // If the Action's URL is empty, but the Action supplies additional search
   // parameters, compute new URL based on the base URL (that is specific to
   // the entire suggestion).
@@ -330,12 +330,13 @@ void BaseSearchProvider::AppendSuggestClientToAdditionalQueryParams(
 }
 
 // static
-bool BaseSearchProvider::CanSendPageURLInRequest(const GURL& page_url) {
+bool BaseSearchProvider::PageURLIsEligibleForSuggestRequest(
+    const GURL& page_url) {
   return page_url.is_valid() && page_url.SchemeIsHTTPOrHTTPS();
 }
 
 // static
-bool BaseSearchProvider::CanSendZeroSuggestRequest(
+bool BaseSearchProvider::CanSendSuggestRequestWithoutPageURL(
     const TemplateURL* template_url,
     const SearchTermsData& search_terms_data,
     const AutocompleteProviderClient* client) {
@@ -370,12 +371,13 @@ bool BaseSearchProvider::CanSendZeroSuggestRequest(
 }
 
 // static
-bool BaseSearchProvider::CanSendSuggestRequestWithURL(
+bool BaseSearchProvider::CanSendSuggestRequestWithPageURL(
     const GURL& current_page_url,
     const TemplateURL* template_url,
     const SearchTermsData& search_terms_data,
     const AutocompleteProviderClient* client) {
-  if (!CanSendZeroSuggestRequest(template_url, search_terms_data, client)) {
+  if (!CanSendSuggestRequestWithoutPageURL(template_url, search_terms_data,
+                                           client)) {
     return false;
   }
 

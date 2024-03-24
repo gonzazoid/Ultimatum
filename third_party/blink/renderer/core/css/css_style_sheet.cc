@@ -68,8 +68,8 @@ class StyleSheetCSSRuleList final : public CSSRuleList {
 
  private:
   unsigned length() const override { return style_sheet_->length(); }
-  CSSRule* item(unsigned index) const override {
-    return style_sheet_->item(index);
+  CSSRule* Item(unsigned index, bool trigger_use_counters) const override {
+    return style_sheet_->item(index, trigger_use_counters);
   }
 
   CSSStyleSheet* GetStyleSheet() const override { return style_sheet_.Get(); }
@@ -338,7 +338,7 @@ unsigned CSSStyleSheet::length() const {
   return contents_->RuleCount();
 }
 
-CSSRule* CSSStyleSheet::item(unsigned index) {
+CSSRule* CSSStyleSheet::item(unsigned index, bool trigger_use_counters) {
   unsigned rule_count = length();
   if (index >= rule_count) {
     return nullptr;
@@ -351,7 +351,8 @@ CSSRule* CSSStyleSheet::item(unsigned index) {
 
   Member<CSSRule>& css_rule = child_rule_cssom_wrappers_[index];
   if (!css_rule) {
-    css_rule = contents_->RuleAt(index)->CreateCSSOMWrapper(index, this);
+    css_rule = contents_->RuleAt(index)->CreateCSSOMWrapper(
+        index, this, trigger_use_counters);
   }
   return css_rule.Get();
 }
@@ -513,8 +514,7 @@ ScriptPromise CSSStyleSheet::replace(ScriptState* script_state,
   // nothing else happens asynchronously. This API is left as-is, so that future
   // async parsing can still be supported here.
   return ScriptPromise::Cast(
-      script_state,
-      ToV8Traits<CSSStyleSheet>::ToV8(script_state, this).ToLocalChecked());
+      script_state, ToV8Traits<CSSStyleSheet>::ToV8(script_state, this));
 }
 
 void CSSStyleSheet::replaceSync(const String& text,

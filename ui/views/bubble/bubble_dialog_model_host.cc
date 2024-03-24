@@ -149,9 +149,9 @@ class CheckboxControl : public Checkbox {
     AddChildView(std::move(label));
   }
 
-  void Layout() override {
+  void Layout(PassKey) override {
     // Skip LabelButton to use LayoutManager.
-    View::Layout();
+    LayoutSuperclass<View>(this);
   }
 
   gfx::Size CalculatePreferredSize() const override {
@@ -168,9 +168,11 @@ class CheckboxControl : public Checkbox {
     Checkbox::OnThemeChanged();
     // This offsets the image to align with the first line of text. See
     // LabelButton::Layout().
-    image()->SetBorder(CreateEmptyBorder(gfx::Insets::TLBR(
-        (label_line_height_ - image()->GetPreferredSize().height()) / 2, 0, 0,
-        0)));
+    image_container_view()->SetBorder(CreateEmptyBorder(gfx::Insets::TLBR(
+        (label_line_height_ -
+         image_container_view()->GetPreferredSize().height()) /
+            2,
+        0, 0, 0)));
   }
 
   const int label_line_height_;
@@ -183,13 +185,13 @@ struct DialogModelHostField {
   raw_ptr<ui::DialogModelField> dialog_model_field = nullptr;
 
   // View representing the entire field.
-  raw_ptr<View> field_view = nullptr;
+  raw_ptr<View, DanglingUntriaged> field_view = nullptr;
 
   // Child view to |field_view|, if any, that's used for focus. For instance,
   // a textfield row would be a container that contains both a
   // views::Textfield and a descriptive label. In this case |focusable_view|
   // would refer to the views::Textfield which is also what would gain focus.
-  raw_ptr<View> focusable_view = nullptr;
+  raw_ptr<View, DanglingUntriaged> focusable_view = nullptr;
 };
 
 View* GetTargetView(const DialogModelHostField& field_view_info) {
@@ -277,7 +279,7 @@ class LayoutConsensusView : public View {
   const raw_ptr<LayoutConsensusGroup> group_;
 };
 
-BEGIN_METADATA(LayoutConsensusView, View)
+BEGIN_METADATA(LayoutConsensusView)
 END_METADATA
 
 }  // namespace
@@ -705,7 +707,7 @@ class BubbleDialogModelHostContentsView final : public DialogModelSectionHost {
   LayoutConsensusGroup textfield_second_column_group_;
 };
 
-BEGIN_METADATA(BubbleDialogModelHostContentsView, DialogModelSectionHost)
+BEGIN_METADATA(BubbleDialogModelHostContentsView)
 END_METADATA
 
 std::unique_ptr<DialogModelSectionHost> DialogModelSectionHost::Create(
@@ -715,7 +717,7 @@ std::unique_ptr<DialogModelSectionHost> DialogModelSectionHost::Create(
       section, initially_focused_field_id);
 }
 
-BEGIN_METADATA(DialogModelSectionHost, BoxLayoutView)
+BEGIN_METADATA(DialogModelSectionHost)
 END_METADATA
 
 BubbleDialogModelHost::ThemeChangedObserver::ThemeChangedObserver(
@@ -843,6 +845,10 @@ BubbleDialogModelHost::BubbleDialogModelHost(
   }
 
   SetSubtitle(model_->subtitle(DialogModelHost::GetPassKey()));
+  // This is added due to crbug.com/1518993 which adds a subtitle that needs
+  // line wrapping. If any future dialogs need the subtitle to not line wrap,
+  // this behavior will need to be configurable via the builder.
+  SetSubtitleAllowCharacterBreak(true);
 
   if (!model_->main_image(DialogModelHost::GetPassKey()).IsEmpty()) {
     SetMainImage(model_->main_image(DialogModelHost::GetPassKey()));
@@ -1061,15 +1067,6 @@ void BubbleDialogModelHost::UpdateSpacingAndMargins() {
       layout_provider->GetInsetsMetric(InsetsMetric::INSETS_DIALOG);
   dialog_side_insets.set_top(0);
   dialog_side_insets.set_bottom(0);
-
-  // If there is a Main Image, the left dialog inset value is no longer the
-  // correct metric. Use the related control metric instead.
-  // TODO(kylixrd): Investigate whether this should be a unique distance metric
-  // or if the related control metric is valid.
-  if (!GetMainImage().IsEmpty()) {
-    dialog_side_insets.set_left(layout_provider->GetDistanceMetric(
-        DISTANCE_RELATED_CONTROL_HORIZONTAL));
-  }
 
   ui::DialogModelField* first_field = nullptr;
   ui::DialogModelField* last_field = nullptr;

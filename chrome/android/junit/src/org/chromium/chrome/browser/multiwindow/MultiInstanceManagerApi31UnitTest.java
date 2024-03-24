@@ -9,6 +9,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -50,6 +51,9 @@ import org.chromium.base.supplier.OneshotSupplier;
 import org.chromium.base.supplier.OneshotSupplierImpl;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.UiThreadTest;
+import org.chromium.base.test.util.Features;
+import org.chromium.base.test.util.Features.DisableFeatures;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.chrome.browser.ChromeTabbedActivity;
 import org.chromium.chrome.browser.app.tabmodel.TabModelOrchestrator;
 import org.chromium.chrome.browser.app.tabmodel.TabWindowManagerSingleton;
@@ -61,6 +65,7 @@ import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.profiles.ProfileProvider;
 import org.chromium.chrome.browser.tab.Tab;
+import org.chromium.chrome.browser.tabmodel.MismatchedIndicesHandler;
 import org.chromium.chrome.browser.tabmodel.NextTabPolicy.NextTabPolicySupplier;
 import org.chromium.chrome.browser.tabmodel.TabCreatorManager;
 import org.chromium.chrome.browser.tabmodel.TabModel;
@@ -68,9 +73,6 @@ import org.chromium.chrome.browser.tabmodel.TabModelObserver;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.tabmodel.TabModelSelectorBase;
 import org.chromium.chrome.browser.tabmodel.TabModelSelectorFactory;
-import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.chrome.test.util.browser.tabmodel.MockTabModelSelector;
 import org.chromium.components.browser_ui.widget.MenuOrKeyboardActionController;
 import org.chromium.ui.modaldialog.ModalDialogManager;
@@ -184,6 +186,9 @@ public class MultiInstanceManagerApi31UnitTest {
 
     private OneshotSupplierImpl<ProfileProvider> mProfileProviderSupplier =
             new OneshotSupplierImpl<>();
+
+    private final MismatchedIndicesHandler mMismatchedIndicesHandler =
+            (activityAtRequestedIndex, isActivityInAppTasks, isActivityInSameTask) -> false;
 
     private static class TestMultiInstanceManagerApi31 extends MultiInstanceManagerApi31 {
         // Running tasks containing Chrome activity ~ ActivityManager.getAppTasks()
@@ -466,7 +471,12 @@ public class MultiInstanceManagerApi31UnitTest {
         Pair<Integer, TabModelSelector> pair =
                 TabWindowManagerSingleton.getInstance()
                         .requestSelector(
-                                mActivityTask57, mProfileProviderSupplier, null, null, index);
+                                mActivityTask57,
+                                mProfileProviderSupplier,
+                                null,
+                                null,
+                                mMismatchedIndicesHandler,
+                                index);
         int instanceId = pair.first;
         assertEquals(0, instanceId);
     }
@@ -492,7 +502,12 @@ public class MultiInstanceManagerApi31UnitTest {
         Pair<Integer, TabModelSelector> pair =
                 TabWindowManagerSingleton.getInstance()
                         .requestSelector(
-                                mActivityTask57, mProfileProviderSupplier, null, null, index);
+                                mActivityTask57,
+                                mProfileProviderSupplier,
+                                null,
+                                null,
+                                mMismatchedIndicesHandler,
+                                index);
         int instanceId = pair.first;
 
         // This is the "wrong" id, exercising code path where flag is disabled.
@@ -931,7 +946,13 @@ public class MultiInstanceManagerApi31UnitTest {
         // Does what TabModelOrchestrator.createTabModels() would do to simulate production code.
         Pair<Integer, TabModelSelector> pair =
                 TabWindowManagerSingleton.getInstance()
-                        .requestSelector(activity, mProfileProviderSupplier, null, null, index);
+                        .requestSelector(
+                                activity,
+                                mProfileProviderSupplier,
+                                null,
+                                null,
+                                mMismatchedIndicesHandler,
+                                index);
         if (pair == null) return INVALID_INSTANCE_ID;
 
         int instanceId = pair.first;
@@ -1209,5 +1230,44 @@ public class MultiInstanceManagerApi31UnitTest {
                         eq(mTab1), eq(NON_EXISTANT_INSTANCE_ID), eq(false), eq(true), eq(false));
         verify(mMultiInstanceManager, times(0))
                 .reparentTabToRunningActivity(any(), eq(mTab1), eq(0));
+    }
+
+    @Test
+    @UiThreadTest
+    @EnableFeatures(ChromeFeatureList.TAB_DRAG_DROP_ANDROID)
+    @Config(sdk = 31)
+    public void testTabMove_CloseChromeWindowIfEmpty_closed() {
+        mMultiInstanceManager.mTestBuildInstancesList = true;
+        MultiWindowTestUtils.enableMultiInstance();
+        // Create an empty instance before asking it to close. The flag that provides permission to
+        // close is enabled.
+        assertEquals(INSTANCE_ID_1, allocInstanceIndex(INSTANCE_ID_1, mTabbedActivityTask62, true));
+        assertEquals(1, mMultiInstanceManager.getInstanceInfo().size());
+
+        // Action
+        mMultiInstanceManager.closeChromeWindowIfEmpty(INSTANCE_ID_1);
+
+        // Verify moveTabAction and getCurrentInstanceInfo are each called once.
+        verify(mMultiInstanceManager, times(1))
+                .closeInstance(anyInt(), eq(MultiWindowUtils.INVALID_TASK_ID));
+    }
+
+    @Test
+    @UiThreadTest
+    @DisableFeatures(ChromeFeatureList.TAB_DRAG_DROP_ANDROID)
+    @Config(sdk = 31)
+    public void testTabMove_CloseChromeWindowIfEmpty_notClosed() {
+        mMultiInstanceManager.mTestBuildInstancesList = true;
+        MultiWindowTestUtils.enableMultiInstance();
+        // Create an empty instance before asking it to close. The flag that provides permission to
+        // close is disabled.
+        assertEquals(INSTANCE_ID_1, allocInstanceIndex(INSTANCE_ID_1, mTabbedActivityTask62, true));
+        assertEquals(1, mMultiInstanceManager.getInstanceInfo().size());
+
+        // Action
+        mMultiInstanceManager.closeChromeWindowIfEmpty(INSTANCE_ID_1);
+
+        // Verify moveTabAction and getCurrentInstanceInfo are each called once.
+        verify(mMultiInstanceManager, times(0)).closeInstance(anyInt(), anyInt());
     }
 }

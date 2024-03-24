@@ -6,6 +6,7 @@
 #define COMPONENTS_SIGNIN_PUBLIC_IDENTITY_MANAGER_IDENTITY_TEST_ENVIRONMENT_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -20,7 +21,6 @@
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/identity_test_utils.h"
 #include "components/signin/public/identity_manager/scope_set.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class FakeProfileOAuth2TokenService;
 class IdentityTestEnvironmentBrowserStateAdaptor;
@@ -58,13 +58,13 @@ class TestIdentityManagerObserver;
 struct SimpleAccountAvailabilityOptions {
   // The requested consent level for the account. If present, the account
   // will be set as primary at `primary_account_consent_level`.
-  absl::optional<ConsentLevel> primary_account_consent_level = absl::nullopt;
+  std::optional<ConsentLevel> primary_account_consent_level = std::nullopt;
 
   // Whether to add the account to the Gaia cookies.
   bool set_cookie = false;
 
   // If non-empty, the Gaia ID to use when adding the account.
-  base::StringPiece gaia_id{base::EmptyString()};
+  base::StringPiece gaia_id;
 };
 
 // Class that creates an IdentityManager for use in testing contexts and
@@ -363,6 +363,10 @@ class IdentityTestEnvironment : public IdentityManager::DiagnosticsObserver,
   void SetTestURLLoaderFactory(
       network::TestURLLoaderFactory* test_url_loader_factory);
 
+  // Gets the number of calls to PrepareForFetchingAccountCapabilities() in the
+  // account capabilities fetcher factory.
+  int GetNumCallsToPrepareForFetchingAccountCapabilities();
+
  private:
   friend class ::IdentityTestEnvironmentProfileAdaptor;
   friend class ::IdentityTestEnvironmentBrowserStateAdaptor;
@@ -377,7 +381,7 @@ class IdentityTestEnvironment : public IdentityManager::DiagnosticsObserver,
       kPending,
       kAvailable,
     } state;
-    absl::optional<CoreAccountId> account_id;
+    std::optional<CoreAccountId> account_id;
     base::OnceClosure on_available;
   };
 
@@ -447,7 +451,7 @@ class IdentityTestEnvironment : public IdentityManager::DiagnosticsObserver,
   // Otherwise and runs a nested runloop until a matching access token request
   // is observed.
   void WaitForAccessTokenRequestIfNecessary(
-      absl::optional<CoreAccountId> account_id);
+      std::optional<CoreAccountId> account_id);
 
   // Returns the FakeProfileOAuth2TokenService owned by IdentityManager.
   FakeProfileOAuth2TokenService* fake_token_service();

@@ -7,6 +7,7 @@
 
 #include <array>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -26,7 +27,6 @@
 #include "device/fido/fido_authenticator.h"
 #include "device/fido/fido_types.h"
 #include "services/network/public/mojom/network_context.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace device::enclave {
@@ -46,15 +46,22 @@ class COMPONENT_EXPORT(DEVICE_FIDO) EnclaveAuthenticator
   EnclaveAuthenticator(const EnclaveAuthenticator&) = delete;
   EnclaveAuthenticator& operator=(const EnclaveAuthenticator&) = delete;
 
-  // TODO(kenrb): Make these private when no longer embedded in test app.
+  void SetOauthToken(std::optional<std::string_view> token);
+
+  // FidoAuthenticator:
   void GetAssertion(CtapGetAssertionRequest request,
                     CtapGetAssertionOptions options,
                     GetAssertionCallback callback) override;
   void MakeCredential(CtapMakeCredentialRequest request,
                       MakeCredentialOptions options,
                       MakeCredentialCallback callback) override;
-
-  void SetOauthToken(absl::optional<std::string_view> token);
+  void InitializeAuthenticator(base::OnceClosure callback) override;
+  void Cancel() override;
+  AuthenticatorType GetType() const override;
+  std::string GetId() const override;
+  const AuthenticatorSupportedOptions& Options() const override;
+  std::optional<FidoTransportProtocol> AuthenticatorTransport() const override;
+  base::WeakPtr<FidoAuthenticator> GetWeakPtr() override;
 
  private:
   struct PendingGetAssertionRequest {
@@ -85,21 +92,12 @@ class COMPONENT_EXPORT(DEVICE_FIDO) EnclaveAuthenticator
     MakeCredentialCallback callback;
   };
 
-  // FidoAuthenticator:
-  void InitializeAuthenticator(base::OnceClosure callback) override;
-  void Cancel() override;
-  AuthenticatorType GetType() const override;
-  std::string GetId() const override;
-  const AuthenticatorSupportedOptions& Options() const override;
-  absl::optional<FidoTransportProtocol> AuthenticatorTransport() const override;
-  base::WeakPtr<FidoAuthenticator> GetWeakPtr() override;
-
-  void ProcessMakeCredentialResponse(absl::optional<cbor::Value> response);
-  void ProcessGetAssertionResponse(absl::optional<cbor::Value> response);
+  void ProcessMakeCredentialResponse(std::optional<cbor::Value> response);
+  void ProcessGetAssertionResponse(std::optional<cbor::Value> response);
   void CompleteRequestWithError(CtapDeviceResponseCode error);
   void CompleteMakeCredentialRequest(
       CtapDeviceResponseCode status,
-      absl::optional<AuthenticatorMakeCredentialResponse> response);
+      std::optional<AuthenticatorMakeCredentialResponse> response);
   void CompleteGetAssertionRequest(
       CtapDeviceResponseCode status,
       std::vector<AuthenticatorGetAssertionResponse> responses);

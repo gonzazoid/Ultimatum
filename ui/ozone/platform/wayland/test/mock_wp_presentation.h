@@ -7,6 +7,8 @@
 
 #include <presentation-time-server-protocol.h>
 
+#include <optional>
+
 #include "base/check.h"
 #include "base/memory/raw_ptr.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -68,7 +70,7 @@ class MockWpPresentation : public GlobalObject {
   // value.
   void SendPresentationFeedbackToClient(
       bool last,
-      absl::optional<PresentationFeedbackParams> params);
+      std::optional<PresentationFeedbackParams> params);
 
  private:
   // Sends either discarded or succeeded, which is based on |discarded|,

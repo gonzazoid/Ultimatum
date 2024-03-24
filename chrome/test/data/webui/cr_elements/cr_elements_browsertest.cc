@@ -21,6 +21,10 @@ IN_PROC_BROWSER_TEST_F(CrElementsTest, CrContainerShadowMixin) {
   RunTest("cr_elements/cr_container_shadow_mixin_test.js", "mocha.run()");
 }
 
+IN_PROC_BROWSER_TEST_F(CrElementsTest, CrContainerShadowMixinLit) {
+  RunTest("cr_elements/cr_container_shadow_mixin_lit_test.js", "mocha.run()");
+}
+
 IN_PROC_BROWSER_TEST_F(CrElementsTest, CrDialog) {
   RunTest("cr_elements/cr_dialog_test.js", "mocha.run()");
 }
@@ -107,6 +111,10 @@ IN_PROC_BROWSER_TEST_F(CrElementsTest, CrToastManager) {
 
 IN_PROC_BROWSER_TEST_F(CrElementsTest, CrViewManager) {
   RunTest("cr_elements/cr_view_manager_test.js", "mocha.run()");
+}
+
+IN_PROC_BROWSER_TEST_F(CrElementsTest, CrPaperRippleMixin) {
+  RunTest("cr_elements/cr_paper_ripple_mixin_test.js", "mocha.run()");
 }
 
 IN_PROC_BROWSER_TEST_F(CrElementsTest, CrPolicyIndicator) {

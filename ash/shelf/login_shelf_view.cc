@@ -207,25 +207,21 @@ void LoginShelfView::RequestShutdown() {
     return;
   }
   base::RecordAction(base::UserMetricsAction("Shelf_ShutDown"));
-  if (base::FeatureList::IsEnabled(features::kShutdownConfirmationBubble)) {
-    Shelf* shelf = Shelf::ForWindow(GetWidget()->GetNativeWindow());
-    // When the created ShelfShutdownConfirmationBubble is destroyed, it would
-    // call LoginShelfView::OnRequestShutdownCancelled() in the destructor to
-    // ensure that the pointer test_shutdown_confirmation_bubble_ here is
-    // cleaned up.
-    // And ShelfShutdownConfirmationBubble would be destroyed when it's
-    // dismissed or its buttons were presses.
-    shutdown_confirmation_button_->SetIsActive(true);
+  Shelf* shelf = Shelf::ForWindow(GetWidget()->GetNativeWindow());
+  // When the created ShelfShutdownConfirmationBubble is destroyed, it would
+  // call LoginShelfView::OnRequestShutdownCancelled() in the destructor to
+  // ensure that the pointer test_shutdown_confirmation_bubble_ here is
+  // cleaned up.
+  // And ShelfShutdownConfirmationBubble would be destroyed when it's
+  // dismissed or its buttons were presses.
+  shutdown_confirmation_button_->SetIsActive(true);
 
-    test_shutdown_confirmation_bubble_ = new ShelfShutdownConfirmationBubble(
-        shutdown_confirmation_button_, shelf->alignment(),
-        base::BindOnce(&LoginShelfView::OnRequestShutdownConfirmed,
-                       weak_ptr_factory_.GetWeakPtr()),
-        base::BindOnce(&LoginShelfView::OnRequestShutdownCancelled,
-                       weak_ptr_factory_.GetWeakPtr()));
-  } else {
-    OnRequestShutdownConfirmed();
-  }
+  test_shutdown_confirmation_bubble_ = new ShelfShutdownConfirmationBubble(
+      shutdown_confirmation_button_, shelf->alignment(),
+      base::BindOnce(&LoginShelfView::OnRequestShutdownConfirmed,
+                     weak_ptr_factory_.GetWeakPtr()),
+      base::BindOnce(&LoginShelfView::OnRequestShutdownCancelled,
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
 LoginShelfView::LoginShelfView(
@@ -374,10 +370,6 @@ void LoginShelfView::AddedToWidget() {
   UpdateUi();
 }
 
-const char* LoginShelfView::GetClassName() const {
-  return "LoginShelfView";
-}
-
 void LoginShelfView::OnFocus() {
   LOG(WARNING) << "LoginShelfView was focused, but this should never happen. "
                   "Forwarded focus to shelf widget with an unknown direction.";
@@ -415,8 +407,8 @@ void LoginShelfView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
   node_data->SetName(l10n_util::GetStringUTF8(IDS_ASH_SHELF_ACCESSIBLE_NAME));
 }
 
-void LoginShelfView::Layout() {
-  views::View::Layout();
+void LoginShelfView::Layout(PassKey) {
+  LayoutSuperclass<views::View>(this);
   UpdateButtonUnionBounds();
 }
 
@@ -723,14 +715,13 @@ void LoginShelfView::UpdateUi() {
   SetFocusBehavior(is_anything_focusable ? views::View::FocusBehavior::ALWAYS
                                          : views::View::FocusBehavior::NEVER);
 
-  // When the login shelf view is moved to its own widget, the login shelf
+  // The login shelf view lives in its own widget, therefore the login shelf
   // widget needs to change the size according to the login shelf view's
   // preferred size.
-  if (old_preferred_size != GetPreferredSize() &&
-      features::IsUseLoginShelfWidgetEnabled()) {
+  if (old_preferred_size != GetPreferredSize()) {
     PreferredSizeChanged();
   } else {
-    Layout();
+    DeprecatedLayoutImmediately();
   }
 }
 

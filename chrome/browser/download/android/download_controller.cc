@@ -22,6 +22,7 @@
 #include "chrome/browser/android/android_theme_resources.h"
 #include "chrome/browser/android/profile_key_startup_accessor.h"
 #include "chrome/browser/android/profile_key_util.h"
+#include "chrome/browser/android/tab_android.h"
 #include "chrome/browser/download/android/dangerous_download_infobar_delegate.h"
 #include "chrome/browser/download/android/download_manager_service.h"
 #include "chrome/browser/download/android/download_utils.h"
@@ -36,10 +37,10 @@
 #include "chrome/browser/ui/android/tab_model/tab_model_list.h"
 #include "chrome/grit/branded_strings.h"
 #include "components/download/content/public/context_menu_download.h"
-#include "components/download/public/common/auto_resumption_handler.h"
-#include "components/download/public/common/download_features.h"
+#include "components/download/public/common/android/auto_resumption_handler.h"
 #include "components/infobars/content/content_infobar_manager.h"
 #include "components/messages/android/messages_feature.h"
+#include "components/pdf/common/constants.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -48,6 +49,7 @@
 #include "content/public/browser/download_manager.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_view_host.h"
+#include "content/public/common/content_features.h"
 #include "net/base/filename_util.h"
 #include "ui/android/view_android.h"
 #include "ui/android/window_android.h"
@@ -221,7 +223,18 @@ void DownloadController::CloseTabIfEmpty(content::WebContents* web_contents,
   if (!tab_model || tab_model->GetTabCount() == 1)
     return;
 
-  if (download && download->IsFromExternalApp()) {
+  if (!download) {
+    web_contents->Close();
+    return;
+  }
+
+  if (base::FeatureList::IsEnabled(features::kAndroidOpenPdfInline) &&
+      base::EqualsCaseInsensitiveASCII(download->GetMimeType(),
+                                       pdf::kPDFMimeType)) {
+    return;
+  }
+
+  if (download->IsFromExternalApp()) {
     DownloadManagerService::GetInstance()->OpenDownloadsPage(
         Profile::FromBrowserContext(web_contents->GetBrowserContext()),
         DownloadOpenSource::kExternalApp);
@@ -332,9 +345,22 @@ void DownloadController::StartAndroidDownloadInternal(
 void DownloadController::OnDownloadStarted(DownloadItem* download_item) {
   // For dangerous downloads, we need to show the dangerous infobar before the
   // download can start.
-  JNIEnv* env = base::android::AttachCurrentThread();
-  if (!download_item->IsDangerous())
-    Java_DownloadController_onDownloadStarted(env);
+  if (!download_item->IsDangerous() &&
+      download_item->GetMimeType() == pdf::kPDFMimeType &&
+      base::FeatureList::IsEnabled(features::kAndroidOpenPdfInline)) {
+    content::WebContents* web_contents =
+        content::DownloadItemUtils::GetWebContents(download_item);
+    if (web_contents) {
+      TabAndroid* tab = TabAndroid::FromWebContents(web_contents);
+      if (tab) {
+        JNIEnv* env = base::android::AttachCurrentThread();
+        ScopedJavaLocalRef<jobject> j_item =
+            DownloadManagerService::CreateJavaDownloadInfo(env, download_item);
+        Java_DownloadController_onPdfDownloadStarted(env, tab->GetJavaObject(),
+                                                     j_item);
+      }
+    }
+  }
 
   // Register for updates to the DownloadItem.
   download_item->RemoveObserver(this);

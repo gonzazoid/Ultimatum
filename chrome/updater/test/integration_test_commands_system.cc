@@ -136,8 +136,8 @@ class IntegrationTestCommandsSystem : public IntegrationTestCommands {
     updater::test::ExpectSelfUpdateSequence(updater_scope_, test_server);
   }
 
-  void ExpectUninstallPing(ScopedServer* test_server) const override {
-    updater::test::ExpectUninstallPing(updater_scope_, test_server);
+  void ExpectPing(ScopedServer* test_server, int event_type) const override {
+    updater::test::ExpectPing(updater_scope_, test_server, event_type);
   }
 
   void ExpectUpdateCheckRequest(ScopedServer* test_server) const override {
@@ -330,7 +330,8 @@ class IntegrationTestCommandsSystem : public IntegrationTestCommands {
       const std::string& app_id,
       AppBundleWebCreateMode app_bundle_web_create_mode,
       int expected_final_state,
-      int expected_error_code) const override {
+      int expected_error_code,
+      bool cancel_when_downloading) const override {
     RunCommand("expect_legacy_update3web_succeeds",
                {Param("app_id", app_id),
                 Param("app_bundle_web_create_mode",
@@ -339,7 +340,9 @@ class IntegrationTestCommandsSystem : public IntegrationTestCommands {
                 Param("expected_final_state",
                       base::NumberToString(expected_final_state)),
                 Param("expected_error_code",
-                      base::NumberToString(expected_error_code))});
+                      base::NumberToString(expected_error_code)),
+                Param("cancel_when_downloading",
+                      BoolToString(cancel_when_downloading))});
   }
 
   void ExpectLegacyProcessLauncherSucceeds() const override {

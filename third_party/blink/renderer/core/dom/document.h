@@ -31,6 +31,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_DOM_DOCUMENT_H_
 
 #include <memory>
+#include <optional>
 
 #include "base/check_op.h"
 #include "base/containers/enum_set.h"
@@ -43,7 +44,6 @@
 #include "services/network/public/mojom/referrer_policy.mojom-blink-forward.h"
 #include "services/network/public/mojom/restricted_cookie_manager.mojom-blink-forward.h"
 #include "services/network/public/mojom/web_sandbox_flags.mojom-blink-forward.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/metrics/document_update_reason.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/mojom/css/preferred_color_scheme.mojom-blink-forward.h"
@@ -69,6 +69,7 @@
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/events/event_path.h"
 #include "third_party/blink/renderer/core/dom/live_node_list_registry.h"
+#include "third_party/blink/renderer/core/dom/node_list_invalidation_type.h"
 #include "third_party/blink/renderer/core/dom/qualified_name.h"
 #include "third_party/blink/renderer/core/dom/synchronous_mutation_observer.h"
 #include "third_party/blink/renderer/core/dom/text_link_colors.h"
@@ -138,6 +139,7 @@ class AnimationClock;
 class AriaNotificationOptions;
 class Attr;
 class BeforeUnloadEventListener;
+class CaretPosition;
 class CDATASection;
 class CSSStyleSheet;
 class CanvasFontCache;
@@ -264,22 +266,10 @@ struct AnnotatedRegionValue;
 struct FocusParams;
 struct IconURL;
 struct PhysicalOffset;
+struct TextDiffRange;
 struct WebPrintPageDescription;
 
 using MouseEventWithHitTestResults = EventWithHitTestResults<WebMouseEvent>;
-
-enum NodeListInvalidationType : int {
-  kDoNotInvalidateOnAttributeChanges = 0,
-  kInvalidateOnClassAttrChange,
-  kInvalidateOnIdNameAttrChange,
-  kInvalidateOnNameAttrChange,
-  kInvalidateOnForAttrChange,
-  kInvalidateForFormControls,
-  kInvalidateOnHRefAttrChange,
-  kInvalidateOnAnyAttrChange,
-  kInvalidateOnPopoverInvokerAttrChange,
-};
-const int kNumNodeListInvalidationTypes = kInvalidateOnAnyAttrChange + 1;
 
 // Specifies a class of document. Values are not mutually exclusive, and can be
 // combined using `DocumentClassFlags`.
@@ -317,6 +307,13 @@ using DocumentClassFlags = base::
 using ExplicitlySetAttrElementsMap =
     HeapHashMap<QualifiedName, Member<HeapLinkedHashSet<WeakMember<Element>>>>;
 
+// A map of IDL attribute name to Element FrozenArray value, for one particular
+// element.
+// This represents 'cached attr-associated elements' in the HTML specification.
+// https://html.spec.whatwg.org/multipage/common-dom-interfaces.html#cached-attr-associated-elements
+using CachedAttrAssociatedElementsMap =
+    HeapHashMap<QualifiedName, Member<FrozenArray<Element>>>;
+
 // Represents the start and end time of the unload event.
 struct UnloadEventTiming {
   bool can_request;
@@ -334,7 +331,7 @@ struct UnloadEventTimingInfo {
   // The unload timing of the old document. This is only set from
   // Document::DispatchUnloadEvents() of the old document. This might not be set
   // if no old document gets unloaded.
-  absl::optional<UnloadEventTiming> unload_timing;
+  std::optional<UnloadEventTiming> unload_timing;
 };
 
 // A document (https://dom.spec.whatwg.org/#concept-document) is the root node
@@ -379,6 +376,10 @@ class CORE_EXPORT Document : public ContainerNode,
 
   static Range* CreateRangeAdjustedToTreeScope(const TreeScope&,
                                                const Position&);
+  static CaretPosition* CreateCaretPosition(const Position& position);
+
+  static const Position PositionAdjustedToTreeScope(const TreeScope&,
+                                                    const Position&);
 
   // Support JS introspection of frame policy (e.g. permissions policy).
   DOMFeaturePolicy* featurePolicy();
@@ -478,6 +479,7 @@ class CORE_EXPORT Document : public ContainerNode,
                             const CreateElementFlags = CreateElementFlags());
 
   Range* caretRangeFromPoint(int x, int y);
+  CaretPosition* caretPositionFromPoint(float x, float y);
   Element* scrollingElement();
 
   // When calling from C++ code, use this method. scrollingElement() is
@@ -562,9 +564,18 @@ class CORE_EXPORT Document : public ContainerNode,
   HTMLCollection* DocumentAllNamedItems(const AtomicString& name);
 
   // The unassociated listed elements are listed elements that are not
-  // associated to a <form> element.
+  // associated to a <form> element. Note that if
+  // `features::kAutofillIncludeShadowDomInUnassociatedListedElements` is
+  // enabled, this includes elements inside Shadow DOM.
   const ListedElement::List& UnassociatedListedElements() const;
   void MarkUnassociatedListedElementsDirty();
+
+  // Returns all `HTMLFormElement`s that have no shadow-including
+  // `HTMLFormElement` ancestor. Note that the form elements are returned in BFS
+  // order.
+  const HeapVector<Member<HTMLFormElement>>& GetTopLevelForms();
+  // Invalidates the cache for top level form elements.
+  void MarkTopLevelFormsDirty();
 
   // "defaultView" attribute defined in HTML spec.
   DOMWindow* defaultView() const;
@@ -607,6 +618,8 @@ class CORE_EXPORT Document : public ContainerNode,
   void SetIsViewSource(bool is_view_source) {
     is_view_source_ = is_view_source;
   }
+
+  virtual bool IsJSONDocument() const { return false; }
 
   // WebXR DOM Overlay support, cf https://immersive-web.github.io/dom-overlays/
   // True if there's an ongoing "immersive-ar" WebXR session with a DOM Overlay
@@ -875,7 +888,12 @@ class CORE_EXPORT Document : public ContainerNode,
 
   bool WellFormed() const { return well_formed_; }
 
-  const DocumentToken& Token() const { return token_; }
+  const DocumentToken& Token() const {
+    if (!token_.has_value()) {
+      token_.emplace();
+    }
+    return token_.value();
+  }
 
   // Return the document URL, or an empty URL if it's unavailable.
   // This is not an implementation of web-exposed Document.prototype.URL.
@@ -1017,6 +1035,11 @@ class CORE_EXPORT Document : public ContainerNode,
       Element*,
       Document& new_document);
 
+  CachedAttrAssociatedElementsMap* GetCachedAttrAssociatedElementsMap(Element*);
+  void MoveElementCachedAttrAssociatedElementsMapToNewDocument(
+      Element*,
+      Document& new_document);
+
   // Returns false if the function fails.  e.g. |pseudo| is not supported.
   bool SetPseudoStateForTesting(Element& element,
                                 const String& pseudo,
@@ -1134,11 +1157,7 @@ class CORE_EXPORT Document : public ContainerNode,
         kDOMCharacterDataModifiedListener,
   };
 
-  bool HasListenerType(ListenerType listener_type) const {
-    DCHECK(RuntimeEnabledFeatures::MutationEventsEnabled() ||
-           !(listener_types_ & kDOMMutationEventListener));
-    return (listener_types_ & listener_type);
-  }
+  bool HasListenerType(ListenerType listener_type) const;
   void AddListenerTypeIfNeeded(const AtomicString& event_type, EventTarget&);
 
   bool HasMutationObserversOfType(MutationType type) const {
@@ -1198,7 +1217,7 @@ class CORE_EXPORT Document : public ContainerNode,
   void OverrideLastModified(const AtomicString& modified) {
     override_last_modified_ = modified;
   }
-  absl::optional<base::Time> lastModifiedTime() const;
+  std::optional<base::Time> lastModifiedTime() const;
   String lastModified() const;
 
   // The cookieURL is used to query the cookie database for this document's
@@ -1358,7 +1377,7 @@ class CORE_EXPORT Document : public ContainerNode,
   Vector<IconURL> IconURLs(int icon_types_mask);
 
   void UpdateThemeColorCache();
-  absl::optional<Color> ThemeColor();
+  std::optional<Color> ThemeColor();
 
   // Returns the HTMLLinkElement currently in use for the Web Manifest.
   // Returns null if there is no such element.
@@ -1477,6 +1496,7 @@ class CORE_EXPORT Document : public ContainerNode,
   void EnqueueMediaQueryChangeListeners(
       HeapVector<Member<MediaQueryListListener>>&);
   void EnqueueVisualViewportScrollEvent();
+  void EnqueueVisualViewportScrollEndEvent();
   void EnqueueVisualViewportResizeEvent();
   void EnqueueSnapChangedEvent(Node* target, HeapVector<Member<Node>>& targets);
   void EnqueueSnapChangingEvent(Node* target,
@@ -1574,10 +1594,10 @@ class CORE_EXPORT Document : public ContainerNode,
   }
   void ScheduleForTopLayerRemoval(Element*, TopLayerReason);
   void RemoveFinishedTopLayerElements();
-  // Returns absl::nullopt if the provided element is not scheduled for top
+  // Returns std::nullopt if the provided element is not scheduled for top
   // layer removal. If it is scheduled for removal, then this returns the reason
   // for the element being in the top layer.
-  absl::optional<TopLayerReason> IsScheduledForTopLayerRemoval(Element*) const;
+  std::optional<TopLayerReason> IsScheduledForTopLayerRemoval(Element*) const;
 
   HTMLDialogElement* ActiveModalDialog() const;
 
@@ -1631,7 +1651,7 @@ class CORE_EXPORT Document : public ContainerNode,
   bool IsStopped() const {
     return lifecycle_.GetState() == DocumentLifecycle::kStopped;
   }
-  bool InPostLifecycleSteps() const;
+  bool InvalidationDisallowed() const;
 
   enum HttpRefreshType { kHttpRefreshFromHeader, kHttpRefreshFromMetaTag };
   void MaybeHandleHttpRefresh(const String&, HttpRefreshType);
@@ -1737,7 +1757,8 @@ class CORE_EXPORT Document : public ContainerNode,
   ukm::SourceId UkmSourceID() const;
 
   // Tracks and reports UKM metrics of the number of attempted font family match
-  // attempts (both successful and not successful) by the page.
+  // attempts (both successful and not successful) by the page. This will return
+  // null if the document is stopped.
   FontMatchingMetrics* GetFontMatchingMetrics();
 
   scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunner(TaskType);
@@ -1900,9 +1921,7 @@ class CORE_EXPORT Document : public ContainerNode,
   }
 
   void NotifyUpdateCharacterData(CharacterData* character_data,
-                                 unsigned offset,
-                                 unsigned old_length,
-                                 unsigned new_length);
+                                 const TextDiffRange&);
   void NotifyChangeChildren(const ContainerNode& container,
                             const ContainerNode::ChildrenChange& change);
   void NotifyAttributeChanged(const Element& element,
@@ -2072,6 +2091,7 @@ class CORE_EXPORT Document : public ContainerNode,
   friend class MobileFriendlinessCheckerTest;
   friend class OffscreenCanvasRenderingAPIUkmMetricsTest;
   friend class TapFriendlinessCheckerTest;
+  friend class DocumentStorageAccess;
   FRIEND_TEST_ALL_PREFIXES(LazyLoadAutomaticImagesTest,
                            LoadAllImagesIfPrinting);
   FRIEND_TEST_ALL_PREFIXES(FrameFetchContextSubresourceFilterTest,
@@ -2097,6 +2117,20 @@ class CORE_EXPORT Document : public ContainerNode,
    private:
     ListedElement::List list_;
     // Set this flag if the stored unassociated listed elements were changed.
+    bool dirty_ = false;
+  };
+
+  // Helper class to cache the top level <form> elements of a document.
+  class TopLevelFormsList {
+    DISALLOW_NEW();
+
+   public:
+    void MarkDirty();
+    const HeapVector<Member<HTMLFormElement>>& Get(Document& owner);
+    void Trace(Visitor*) const;
+
+   private:
+    HeapVector<Member<HTMLFormElement>> list_;
     bool dirty_ = false;
   };
 
@@ -2245,10 +2279,19 @@ class CORE_EXPORT Document : public ContainerNode,
 
   void RunPostPrerenderingActivationSteps();
 
+  // Attempt permission checks for unpartitioned storage access and enable
+  // unpartitioned cookie access based on success if
+  // `request_unpartitioned_cookie_access` is true.
+  ScriptPromise RequestStorageAccessImpl(
+      ScriptState* script_state,
+      bool request_unpartitioned_cookie_access);
+
   // Resolves the promise if the `status` can approve; rejects the promise
-  // otherwise, and consumes user activation.
+  // otherwise, and consumes user activation. Enables unpartitioned cookie
+  // access if `request_unpartitioned_cookie_access` is true.
   void ProcessStorageAccessPermissionState(
       ScriptPromiseResolver* resolver,
+      bool request_unpartitioned_cookie_access,
       mojom::blink::PermissionStatus status);
 
   // Similar to `ProcessStorageAccessPermissionState`, but for the top-level
@@ -2265,7 +2308,9 @@ class CORE_EXPORT Document : public ContainerNode,
 
   ResizeObserver& GetLazyLoadedAutoSizedImgObserver();
 
-  const DocumentToken token_;
+  // Mutable because the token is lazily-generated on demand if no token is
+  // explicitly set.
+  mutable std::optional<DocumentToken> token_;
 
   // Bitfield used for tracking UKM sampling of media features such that each
   // media feature is sampled only once per document.
@@ -2626,6 +2671,8 @@ class CORE_EXPORT Document : public ContainerNode,
 
   UnassociatedListedElementsList unassociated_listed_elements_;
 
+  TopLevelFormsList top_level_forms_;
+
   // |ukm_recorder_| and |source_id_| will allow objects that are part of
   // the document to record UKM.
   std::unique_ptr<ukm::UkmRecorder> ukm_recorder_;
@@ -2672,10 +2719,6 @@ class CORE_EXPORT Document : public ContainerNode,
 
   AtomicString override_last_modified_;
 
-  // Used to keep track of which ComputedAccessibleNodes have already been
-  // instantiated in this document to avoid constructing duplicates.
-  HeapHashMap<AXID, Member<ComputedAccessibleNode>> computed_node_mapping_;
-
   // When the document contains MimeHandlerView, this variable might hold a
   // beforeunload handler. This will be set by the blink embedder when
   // necessary.
@@ -2697,6 +2740,8 @@ class CORE_EXPORT Document : public ContainerNode,
 
   HeapHashMap<WeakMember<Element>, Member<ExplicitlySetAttrElementsMap>>
       element_explicitly_set_attr_elements_map_;
+  HeapHashMap<WeakMember<Element>, Member<CachedAttrAssociatedElementsMap>>
+      element_cached_attr_associated_elements_map_;
 
   HeapObserverSet<SynchronousMutationObserver>
       synchronous_mutation_observer_set_;
@@ -2760,7 +2805,7 @@ class CORE_EXPORT Document : public ContainerNode,
   unsigned data_list_count_ = 0;
 
   // If legacy DOM Mutation event listeners are supported by the embedder.
-  absl::optional<bool> legacy_dom_mutations_supported_;
+  std::optional<bool> legacy_dom_mutations_supported_;
 
   // For rendering media URLs in a top-level context that use the
   // Content-Security-Policy header to sandbox their content. This causes

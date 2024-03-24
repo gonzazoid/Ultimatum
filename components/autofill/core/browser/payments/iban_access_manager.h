@@ -12,6 +12,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "components/autofill/core/browser/autofill_client.h"
+#include "components/autofill/core/browser/payments/mandatory_reauth_manager.h"
 
 namespace autofill {
 
@@ -33,14 +34,25 @@ class IbanAccessManager {
   explicit IbanAccessManager(AutofillClient* client);
   IbanAccessManager(const IbanAccessManager&) = delete;
   IbanAccessManager& operator=(const IbanAccessManager&) = delete;
-  ~IbanAccessManager();
+  virtual ~IbanAccessManager();
 
   // Returns the full IBAN value corresponding to the input `suggestion`.
   // As this may require a network round-trip for server IBANs,
   //`on_iban_fetched` is run once the value is fetched. For local IBANs, value
   // will be filled immediately.
-  void FetchValue(const Suggestion& suggestion,
-                  OnIbanFetchedCallback on_iban_fetched);
+  virtual void FetchValue(const Suggestion& suggestion,
+                          OnIbanFetchedCallback on_iban_fetched);
+
+  void OnDeviceAuthenticationResponseForFillingForTesting(
+      OnIbanFetchedCallback on_iban_fetched,
+      const std::u16string& value,
+      NonInteractivePaymentMethodType non_interactive_payment_method_type,
+      bool successful_auth) {
+    OnDeviceAuthenticationResponseForFilling(
+        std::move(on_iban_fetched), value, non_interactive_payment_method_type,
+        payments::MandatoryReauthAuthenticationMethod::kBiometric,
+        successful_auth);
+  }
 
  private:
   // Called when an UnmaskIban call is completed. The full IBAN value will be
@@ -51,6 +63,31 @@ class IbanAccessManager {
                                 const std::u16string& value);
 
   void OnServerIbanUnmaskCancelled();
+
+  // Starts the device authentication flow during a payments autofill form fill.
+  // `OnDeviceAuthenticationResponseForFilling()` will be invoked when the
+  // response is received from the device authentication.
+  // `value` is the full IBAN value that needs to be filled. This function
+  // should only be called on platforms where DeviceAuthenticator is present.
+  // `non_interactive_payment_method_type` is passed in for logging purposes.
+  void StartDeviceAuthenticationForFilling(
+      OnIbanFetchedCallback on_iban_fetched,
+      const std::u16string& value,
+      NonInteractivePaymentMethodType non_interactive_payment_method_type);
+
+  // Callback function invoked when we receive a response from a mandatory
+  // re-auth authentication in a flow where we might fill the full IBAN value
+  // after the response. If it is successful, we will fill `value` into the
+  // form, otherwise we will handle the error.
+  // `non_interactive_payment_method_type` and `authentication_method` are
+  // passed in for logging purposes. `successful_auth` is true if the
+  // authentication was successful, false otherwise.
+  void OnDeviceAuthenticationResponseForFilling(
+      OnIbanFetchedCallback on_iban_fetched,
+      const std::u16string& value,
+      NonInteractivePaymentMethodType non_interactive_payment_method_type,
+      payments::MandatoryReauthAuthenticationMethod authentication_method,
+      bool successful_auth);
 
   // The associated autofill client.
   const raw_ptr<AutofillClient> client_;

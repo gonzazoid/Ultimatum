@@ -9,6 +9,10 @@
 
 namespace ash {
 
+// View IDs
+inline constexpr int kNotificationInlineSettingsCancelButton = 1101;
+inline constexpr int kNotificationTurnOffNotificationsButton = 1102;
+
 inline constexpr int kGroupedCollapsedSummaryLabelSpacing = 6;
 inline constexpr int kGroupedCollapsedSummaryTitleLength = 150;
 inline constexpr int kGroupedCollapsedSummaryMessageLength = 250;
@@ -38,6 +42,20 @@ inline constexpr auto kNotificationBarPadding = gfx::Insets::TLBR(8, 0, 0, 0);
 inline constexpr int kNotificationPillButtonHorizontalSpacing = 12;
 
 inline constexpr auto kNotificationSwipeControlPadding = gfx::Insets::VH(0, 20);
+
+// Constants for notification views.
+inline constexpr int kNotificationAppIconViewSize = 24;
+inline constexpr int kNotificationAppIconImageSize = 16;
+inline constexpr int kNotificationTitleLabelSize = 13;
+inline constexpr int kNotificationMessageLabelSize = 12;
+inline constexpr int kNotificationSecondaryLabelSize = 12;
+inline constexpr int kNotificationControlButtonsHorizontalSpacing = 6;
+
+// Bullet character. The divider symbol between the title and the timestamp.
+inline constexpr char16_t kNotificationTitleRowDivider[] = u"\u2022";
+
+// Target contrast ratio to reach when adjusting colors in dark mode.
+inline constexpr float kDarkModeMinContrastRatio = 6.0;
 
 // Constants for `ash_notification_view`.
 

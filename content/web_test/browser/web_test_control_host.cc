@@ -37,6 +37,8 @@
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "cc/paint/skia_paint_canvas.h"
+#include "components/custom_handlers/protocol_handler_registry.h"
+#include "components/custom_handlers/simple_protocol_handler_registry_factory.h"
 #include "content/browser/aggregation_service/aggregation_service.h"
 #include "content/browser/attribution_reporting/attribution_manager.h"
 #include "content/browser/renderer_host/frame_tree.h"
@@ -443,10 +445,8 @@ void WebTestResultPrinter::PrintEncodedBinaryData(
     const std::vector<unsigned char>& data) {
   *output_ << "Content-Transfer-Encoding: base64\n";
 
-  std::string data_base64;
-  base::Base64Encode(
-      base::StringPiece(reinterpret_cast<const char*>(&data[0]), data.size()),
-      &data_base64);
+  std::string data_base64 = base::Base64Encode(
+      base::StringPiece(reinterpret_cast<const char*>(&data[0]), data.size()));
 
   *output_ << "Content-Length: " << data_base64.length() << "\n";
   output_->write(data_base64.c_str(), data_base64.length());
@@ -708,6 +708,7 @@ void WebTestControlHost::ResetBrowserAfterWebTest() {
   WebTestContentBrowserClient::Get()->SetPopupBlockingEnabled(true);
   WebTestContentBrowserClient::Get()->ResetMockClipboardHosts();
   WebTestContentBrowserClient::Get()->ResetFakeBluetoothDelegate();
+  WebTestContentBrowserClient::Get()->ResetWebSensorProviderAutomation();
   WebTestContentBrowserClient::Get()
       ->GetWebTestBrowserContext()
       ->GetWebTestPermissionManager()
@@ -1018,11 +1019,11 @@ std::unique_ptr<BluetoothChooser> WebTestControlHost::RunBluetoothChooser(
   return std::make_unique<WebTestFirstDeviceBluetoothChooser>(event_handler);
 }
 
-void WebTestControlHost::RequestToLockMouse(WebContents* web_contents) {
+void WebTestControlHost::RequestPointerLock(WebContents* web_contents) {
   if (next_pointer_lock_action_ == NextPointerLockAction::kTestWillRespond)
     return;
 
-  web_contents->GotResponseToLockMouseRequest(
+  web_contents->GotResponseToPointerLockRequest(
       next_pointer_lock_action_ == NextPointerLockAction::kWillSucceed
           ? blink::mojom::PointerLockResult::kSuccess
           : blink::mojom::PointerLockResult::kPermissionDenied);
@@ -1364,8 +1365,10 @@ void WebTestControlHost::ReportResults() {
     // pixels are in fact initialized.
     MSAN_UNPOISON(pixel_dump_->getPixels(), pixel_dump_->computeByteSize());
     base::MD5Digest digest;
-    base::MD5Sum(pixel_dump_->getPixels(), pixel_dump_->computeByteSize(),
-                 &digest);
+    auto bytes =
+        base::span(static_cast<const uint8_t*>(pixel_dump_->getPixels()),
+                   pixel_dump_->computeByteSize());
+    base::MD5Sum(bytes, &digest);
     actual_pixel_hash_ = base::MD5DigestToBase16(digest);
 
     OnImageDump(actual_pixel_hash_, *pixel_dump_);
@@ -1757,7 +1760,7 @@ void WebTestControlHost::RegisterIsolatedFileSystem(
 }
 
 void WebTestControlHost::DropPointerLock() {
-  main_window_->web_contents()->DropMouseLockForTesting();
+  main_window_->web_contents()->DropPointerLockForTesting();
 }
 
 void WebTestControlHost::SetPointerLockWillFail() {
@@ -1770,7 +1773,7 @@ void WebTestControlHost::SetPointerLockWillRespondAsynchronously() {
 
 void WebTestControlHost::AllowPointerLock() {
   DCHECK_EQ(next_pointer_lock_action_, NextPointerLockAction::kTestWillRespond);
-  main_window_->web_contents()->GotResponseToLockMouseRequest(
+  main_window_->web_contents()->GotResponseToPointerLockRequest(
       blink::mojom::PointerLockResult::kSuccess);
   next_pointer_lock_action_ = NextPointerLockAction::kWillSucceed;
 }
@@ -1826,6 +1829,30 @@ void WebTestControlHost::DisableAutoResize(const gfx::Size& new_size) {
 void WebTestControlHost::SetLCPPNavigationHint(
     blink::mojom::LCPCriticalPathPredictorNavigationTimeHintPtr hint) {
   lcpp_hint_ = *hint.get();
+}
+
+void WebTestControlHost::SetRegisterProtocolHandlerMode(
+    mojom::WebTestControlHost::AutoResponseMode mode) {
+  custom_handlers::ProtocolHandlerRegistry* registry =
+      custom_handlers::SimpleProtocolHandlerRegistryFactory::
+          GetForBrowserContext(web_contents()->GetBrowserContext(), true);
+  CHECK(registry);
+
+  switch (mode) {
+    case WebTestControlHost::AutoResponseMode::kNone:
+      registry->SetRphRegistrationMode(
+          custom_handlers::RphRegistrationMode::kNone);
+      return;
+    case WebTestControlHost::AutoResponseMode::kAutoAccept:
+      registry->SetRphRegistrationMode(
+          custom_handlers::RphRegistrationMode::kAutoAccept);
+      return;
+    case WebTestControlHost::AutoResponseMode::kAutoReject:
+      registry->SetRphRegistrationMode(
+          custom_handlers::RphRegistrationMode::kAutoReject);
+      return;
+  }
+  NOTREACHED_NORETURN();
 }
 
 void WebTestControlHost::GoToOffset(int offset) {

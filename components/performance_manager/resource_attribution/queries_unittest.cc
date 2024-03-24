@@ -5,6 +5,7 @@
 #include "components/performance_manager/public/resource_attribution/queries.h"
 
 #include <map>
+#include <optional>
 #include <set>
 #include <utility>
 
@@ -26,6 +27,8 @@
 #include "components/performance_manager/public/resource_attribution/query_results.h"
 #include "components/performance_manager/public/resource_attribution/resource_contexts.h"
 #include "components/performance_manager/public/resource_attribution/resource_types.h"
+#include "components/performance_manager/resource_attribution/context_collection.h"
+#include "components/performance_manager/resource_attribution/performance_manager_aliases.h"
 #include "components/performance_manager/resource_attribution/query_params.h"
 #include "components/performance_manager/resource_attribution/query_scheduler.h"
 #include "components/performance_manager/test_support/graph_test_harness.h"
@@ -40,10 +43,9 @@
 #include "content/public/test/navigation_simulator.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
-namespace performance_manager::resource_attribution {
+namespace resource_attribution {
 
 namespace {
 
@@ -73,13 +75,14 @@ class LenientMockQueryResultObserver : public QueryResultObserver {
 using MockQueryResultObserver =
     ::testing::StrictMock<LenientMockQueryResultObserver>;
 
-using ResourceAttrQueriesTest = GraphTestHarness;
+using ResourceAttrQueriesTest = performance_manager::GraphTestHarness;
 
 // Tests that interact with the QueryScheduler use PerformanceManagerTestHarness
 // to test its interactions on the PM sequence.
-class ResourceAttrQueriesPMTest : public PerformanceManagerTestHarness {
+class ResourceAttrQueriesPMTest
+    : public performance_manager::PerformanceManagerTestHarness {
  protected:
-  using Super = PerformanceManagerTestHarness;
+  using Super = performance_manager::PerformanceManagerTestHarness;
 
   ResourceAttrQueriesPMTest()
       : Super(base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
@@ -88,7 +91,7 @@ class ResourceAttrQueriesPMTest : public PerformanceManagerTestHarness {
     GetGraphFeatures().EnableResourceAttributionScheduler();
     Super::SetUp();
 
-    RunInGraph([&](Graph* graph) {
+    performance_manager::RunInGraph([&](Graph* graph) {
       graph_ = graph;
       CPUMeasurementDelegate::SetDelegateFactoryForTesting(
           graph, &cpu_delegate_factory_);
@@ -141,7 +144,7 @@ class ResourceAttrQueriesPMTest : public PerformanceManagerTestHarness {
  private:
   raw_ptr<Graph> graph_ = nullptr;
 
-  absl::optional<FrameContext> main_frame_context_;
+  std::optional<FrameContext> main_frame_context_;
 
   // These must be deleted after TearDown() so that they outlive the
   // CPUMeasurementMonitor and MemoryMeasurementProvider.
@@ -155,7 +158,7 @@ QueryParams CreateQueryParams(
     std::set<ResourceContextTypeId> all_context_types = {}) {
   QueryParams params;
   params.resource_types = std::move(resource_types);
-  params.contexts = internal::ContextCollection::CreateForTesting(
+  params.contexts = ContextCollection::CreateForTesting(
       std::move(resource_contexts), std::move(all_context_types));
   return params;
 }
@@ -171,8 +174,7 @@ MemorySummaryResult FakeMemorySummaryResult(
     MeasurementAlgorithm expected_algorithm,
     base::TimeTicks expected_measurement_time = base::TimeTicks::Now()) {
   return {
-      .metadata = {.measurement_time = expected_measurement_time,
-                   .algorithm = expected_algorithm},
+      .metadata = ResultMetadata(expected_measurement_time, expected_algorithm),
       .resident_set_size_kb = kFakeResidentSetSize,
       .private_footprint_kb = kFakePrivateFootprint,
   };
@@ -181,7 +183,7 @@ MemorySummaryResult FakeMemorySummaryResult(
 }  // namespace
 
 TEST_F(ResourceAttrQueriesTest, QueryBuilder_Params) {
-  MockSinglePageInSingleProcessGraph mock_graph(graph());
+  performance_manager::MockSinglePageInSingleProcessGraph mock_graph(graph());
 
   QueryBuilder builder;
   ASSERT_TRUE(builder.GetParamsForTesting());
@@ -210,7 +212,7 @@ TEST_F(ResourceAttrQueriesTest, QueryBuilder_Params) {
 }
 
 TEST_F(ResourceAttrQueriesTest, QueryBuilder_Clone) {
-  MockSinglePageInSingleProcessGraph mock_graph(graph());
+  performance_manager::MockSinglePageInSingleProcessGraph mock_graph(graph());
   QueryBuilder builder;
   builder.AddResourceContext(mock_graph.page->GetResourceContext())
       .AddAllContextsOfType<FrameContext>()
@@ -312,7 +314,7 @@ TEST_F(ResourceAttrQueriesPMTest, QueryBuilder_QueryOnceWithTaskRunner) {
 
   // Create the query on the graph sequence, but tell it to run the result
   // callback on the main thread.
-  RunInGraph([&] {
+  performance_manager::RunInGraph([&] {
     QueryBuilder()
         .AddResourceContext(main_frame_context())
         .AddResourceType(ResourceType::kMemorySummary)
@@ -326,7 +328,7 @@ TEST_F(ResourceAttrQueriesPMTest, QueryBuilder_QueryOnceWithTaskRunner) {
 
 TEST_F(ResourceAttrQueriesPMTest, AddRemoveScopedQuery) {
   QueryScheduler* scheduler = nullptr;
-  RunInGraph([&](Graph* graph) {
+  performance_manager::RunInGraph([&](Graph* graph) {
     scheduler = QueryScheduler::GetFromGraph(graph);
     ASSERT_TRUE(scheduler);
     EXPECT_EQ(scheduler->GetQueryCountForTesting(ResourceType::kCPUTime), 0U);
@@ -336,51 +338,51 @@ TEST_F(ResourceAttrQueriesPMTest, AddRemoveScopedQuery) {
   // Abort the whole test if the scheduler wasn't found.
   ASSERT_TRUE(scheduler);
 
-  absl::optional<ScopedResourceUsageQuery> scoped_memory_query =
+  std::optional<ScopedResourceUsageQuery> scoped_memory_query =
       QueryBuilder()
           .AddResourceContext(main_frame_context())
           .AddResourceType(ResourceType::kMemorySummary)
           .CreateScopedQuery();
-  RunInGraph([&] {
+  performance_manager::RunInGraph([&] {
     EXPECT_EQ(scheduler->GetQueryCountForTesting(ResourceType::kCPUTime), 0U);
     EXPECT_EQ(scheduler->GetQueryCountForTesting(ResourceType::kMemorySummary),
               1U);
   });
-  absl::optional<ScopedResourceUsageQuery> scoped_cpu_query =
+  std::optional<ScopedResourceUsageQuery> scoped_cpu_query =
       QueryBuilder()
           .AddResourceContext(main_frame_context())
           .AddResourceType(ResourceType::kCPUTime)
           .CreateScopedQuery();
-  RunInGraph([&] {
+  performance_manager::RunInGraph([&] {
     EXPECT_EQ(scheduler->GetQueryCountForTesting(ResourceType::kCPUTime), 1U);
     EXPECT_EQ(scheduler->GetQueryCountForTesting(ResourceType::kMemorySummary),
               1U);
   });
   scoped_memory_query.reset();
-  RunInGraph([&] {
+  performance_manager::RunInGraph([&] {
     EXPECT_EQ(scheduler->GetQueryCountForTesting(ResourceType::kCPUTime), 1U);
     EXPECT_EQ(scheduler->GetQueryCountForTesting(ResourceType::kMemorySummary),
               0U);
   });
-  absl::optional<ScopedResourceUsageQuery> scoped_cpu_memory_query =
+  std::optional<ScopedResourceUsageQuery> scoped_cpu_memory_query =
       QueryBuilder()
           .AddResourceContext(main_frame_context())
           .AddResourceType(ResourceType::kCPUTime)
           .AddResourceType(ResourceType::kMemorySummary)
           .CreateScopedQuery();
-  RunInGraph([&] {
+  performance_manager::RunInGraph([&] {
     EXPECT_EQ(scheduler->GetQueryCountForTesting(ResourceType::kCPUTime), 2U);
     EXPECT_EQ(scheduler->GetQueryCountForTesting(ResourceType::kMemorySummary),
               1U);
   });
   scoped_cpu_query.reset();
-  RunInGraph([&] {
+  performance_manager::RunInGraph([&] {
     EXPECT_EQ(scheduler->GetQueryCountForTesting(ResourceType::kCPUTime), 1U);
     EXPECT_EQ(scheduler->GetQueryCountForTesting(ResourceType::kMemorySummary),
               1U);
   });
   scoped_cpu_memory_query.reset();
-  RunInGraph([&] {
+  performance_manager::RunInGraph([&] {
     EXPECT_EQ(scheduler->GetQueryCountForTesting(ResourceType::kCPUTime), 0U);
     EXPECT_EQ(scheduler->GetQueryCountForTesting(ResourceType::kMemorySummary),
               0U);
@@ -389,7 +391,7 @@ TEST_F(ResourceAttrQueriesPMTest, AddRemoveScopedQuery) {
 
 TEST_F(ResourceAttrQueriesPMTest, ScopedQueryIsMovable) {
   QueryScheduler* scheduler = nullptr;
-  RunInGraph([&](Graph* graph) {
+  performance_manager::RunInGraph([&](Graph* graph) {
     scheduler = QueryScheduler::GetFromGraph(graph);
     ASSERT_TRUE(scheduler);
     EXPECT_EQ(scheduler->GetQueryCountForTesting(ResourceType::kCPUTime), 0U);
@@ -397,14 +399,14 @@ TEST_F(ResourceAttrQueriesPMTest, ScopedQueryIsMovable) {
   // Abort the whole test if the scheduler wasn't found.
   ASSERT_TRUE(scheduler);
 
-  absl::optional<ScopedResourceUsageQuery> outer_query;
+  std::optional<ScopedResourceUsageQuery> outer_query;
   {
     ScopedResourceUsageQuery inner_query =
         QueryBuilder()
             .AddResourceContext(main_frame_context())
             .AddResourceType(ResourceType::kCPUTime)
             .CreateScopedQuery();
-    RunInGraph([&] {
+    performance_manager::RunInGraph([&] {
       EXPECT_EQ(scheduler->GetQueryCountForTesting(ResourceType::kCPUTime), 1U);
     });
 
@@ -426,16 +428,18 @@ TEST_F(ResourceAttrQueriesPMTest, ScopedQueryIsMovable) {
   }
 
   // `inner_query` should not notify the scheduler when it goes out of scope.
-  RunInGraph([&] {
+  performance_manager::RunInGraph([&] {
     EXPECT_EQ(scheduler->GetQueryCountForTesting(ResourceType::kCPUTime), 1U);
   });
   outer_query.reset();
-  RunInGraph([&] {
+  performance_manager::RunInGraph([&] {
     EXPECT_EQ(scheduler->GetQueryCountForTesting(ResourceType::kCPUTime), 0U);
   });
 }
 
 TEST_F(ResourceAttrQueriesPMTest, Observers) {
+  ScopedResourceUsageQuery::ScopedDisableMemoryQueryDelayForTesting disable;
+
   ScopedResourceUsageQuery scoped_query =
       QueryBuilder()
           .AddResourceContext(main_frame_context())
@@ -451,7 +455,7 @@ TEST_F(ResourceAttrQueriesPMTest, Observers) {
 
   // Post an empty task to the graph sequence to give time for the query to run
   // there. Nothing should happen.
-  RunInGraph([] {});
+  performance_manager::RunInGraph([] {});
 
   // Observer can be notified from the graph sequence when installed on any
   // thread.
@@ -461,7 +465,7 @@ TEST_F(ResourceAttrQueriesPMTest, Observers) {
 
   MockQueryResultObserver graph_sequence_observer;
   scoped_refptr<base::SequencedTaskRunner> graph_sequence_task_runner;
-  RunInGraph([&] {
+  performance_manager::RunInGraph([&] {
     scoped_query.AddObserver(&graph_sequence_observer);
     graph_sequence_task_runner = base::SequencedTaskRunner::GetCurrentDefault();
   });
@@ -498,7 +502,7 @@ TEST_F(ResourceAttrQueriesPMTest, GraphTeardown) {
   // ScopedResourceUsageQuery registers with the QueryScheduler on creation and
   // unregisters on destruction. Make sure it's safe for it to outlive the
   // scheduler, which is deleted during graph teardown.
-  absl::optional<ScopedResourceUsageQuery> scoped_query =
+  std::optional<ScopedResourceUsageQuery> scoped_query =
       QueryBuilder()
           .AddResourceContext(main_frame_context())
           .AddResourceType(ResourceType::kCPUTime)
@@ -547,7 +551,9 @@ TEST_F(ResourceAttrQueriesPMTest, RepeatingQueries) {
   constexpr auto kDelay = base::Minutes(1);
   constexpr int kRepetitions = 3;
 
-  absl::optional<ScopedResourceUsageQuery> scoped_query =
+  ScopedResourceUsageQuery::ScopedDisableMemoryQueryDelayForTesting disable;
+
+  std::optional<ScopedResourceUsageQuery> scoped_query =
       QueryBuilder()
           .AddResourceContext(main_frame_context())
           .AddResourceType(ResourceType::kMemorySummary)
@@ -629,4 +635,155 @@ TEST_F(ResourceAttrQueriesPMTest, RepeatingQueries) {
   task_environment()->FastForwardBy(kDelay);
 }
 
-}  // namespace performance_manager::resource_attribution
+TEST_F(ResourceAttrQueriesPMTest, ThrottleQueryOnce) {
+  const base::TimeDelta min_query_once_delay =
+      ScopedResourceUsageQuery::GetMinMemoryQueryDelayForTesting();
+  const base::TimeDelta repeating_query_delay = min_query_once_delay * 5;
+
+  // CPU-only query should not be throttled.
+  auto cpu_query = QueryBuilder()
+                       .AddResourceContext(main_frame_context())
+                       .AddResourceType(ResourceType::kCPUTime)
+                       .CreateScopedQuery();
+  MockQueryResultObserver cpu_observer;
+  cpu_query.AddObserver(&cpu_observer);
+
+  // Memory-only query should be throttled.
+  auto memory_query = QueryBuilder()
+                          .AddResourceContext(main_frame_context())
+                          .AddResourceType(ResourceType::kMemorySummary)
+                          .CreateScopedQuery();
+  MockQueryResultObserver memory_observer;
+  memory_query.AddObserver(&memory_observer);
+
+  // Memory+CPU query should be throttled.
+  auto memory_cpu_query = QueryBuilder()
+                              .AddResourceContext(main_frame_context())
+                              .AddResourceType(ResourceType::kMemorySummary)
+                              .AddResourceType(ResourceType::kCPUTime)
+                              .CreateScopedQuery();
+  MockQueryResultObserver memory_cpu_observer;
+  memory_cpu_query.AddObserver(&memory_cpu_observer);
+
+  // Helper to fast forward to a fixed delta from the start of the test.
+  auto fast_forward_to = [this, start_time = base::TimeTicks::Now()](
+                             base::TimeDelta delta_from_start) {
+    task_environment()->FastForwardBy(start_time + delta_from_start -
+                                      base::TimeTicks::Now());
+  };
+
+  // Each observer has its own sequence, since at each tick they could fire in
+  // any order.
+  ::testing::Sequence cpu_sequence, memory_sequence, memory_cpu_sequence;
+
+  cpu_query.Start(repeating_query_delay);
+  memory_query.Start(repeating_query_delay);
+  memory_cpu_query.Start(repeating_query_delay);
+
+  // QueryOnce just before the timer fires the first time.
+  EXPECT_CALL(cpu_observer, OnResourceUsageUpdated(_)).InSequence(cpu_sequence);
+  fast_forward_to(repeating_query_delay - min_query_once_delay +
+                  base::Milliseconds(1));
+  cpu_query.QueryOnce();
+  memory_query.QueryOnce();
+  memory_cpu_query.QueryOnce();
+
+  // Timer fires.
+  EXPECT_CALL(cpu_observer, OnResourceUsageUpdated(_)).InSequence(cpu_sequence);
+  EXPECT_CALL(memory_observer, OnResourceUsageUpdated(_))
+      .InSequence(memory_sequence);
+  EXPECT_CALL(memory_cpu_observer, OnResourceUsageUpdated(_))
+      .InSequence(memory_cpu_sequence);
+  fast_forward_to(repeating_query_delay);
+
+  // QueryOnce just after timer fires - should be throttled until
+  // `min_query_once_delay` passes.
+  EXPECT_CALL(cpu_observer, OnResourceUsageUpdated(_))
+      .Times(3)
+      .InSequence(cpu_sequence);
+  EXPECT_CALL(memory_observer, OnResourceUsageUpdated(_))
+      .InSequence(memory_sequence);
+  EXPECT_CALL(memory_cpu_observer, OnResourceUsageUpdated(_))
+      .InSequence(memory_cpu_sequence);
+  // Throttled.
+  cpu_query.QueryOnce();
+  memory_query.QueryOnce();
+  memory_cpu_query.QueryOnce();
+  // Throttled.
+  fast_forward_to(repeating_query_delay + min_query_once_delay -
+                  base::Milliseconds(1));
+  cpu_query.QueryOnce();
+  memory_query.QueryOnce();
+  memory_cpu_query.QueryOnce();
+  // Not throttled.
+  fast_forward_to(repeating_query_delay + min_query_once_delay);
+  cpu_query.QueryOnce();
+  memory_query.QueryOnce();
+  memory_cpu_query.QueryOnce();
+
+  // QueryOnce again just after a query - should be throttled until
+  // `min_query_once_delay` passes again.
+  EXPECT_CALL(cpu_observer, OnResourceUsageUpdated(_))
+      .Times(3)
+      .InSequence(cpu_sequence);
+  EXPECT_CALL(memory_observer, OnResourceUsageUpdated(_))
+      .InSequence(memory_sequence);
+  EXPECT_CALL(memory_cpu_observer, OnResourceUsageUpdated(_))
+      .InSequence(memory_cpu_sequence);
+  // Throttled.
+  cpu_query.QueryOnce();
+  memory_query.QueryOnce();
+  memory_cpu_query.QueryOnce();
+  // Throttled.
+  fast_forward_to(repeating_query_delay + 2 * min_query_once_delay -
+                  base::Milliseconds(1));
+  cpu_query.QueryOnce();
+  memory_query.QueryOnce();
+  memory_cpu_query.QueryOnce();
+  // Not throttled.
+  fast_forward_to(repeating_query_delay + 2 * min_query_once_delay);
+  cpu_query.QueryOnce();
+  memory_query.QueryOnce();
+  memory_cpu_query.QueryOnce();
+
+  // QueryOnce just before the timer fires again - should not start throttling
+  // until inside `min_query_once_delay`.
+  EXPECT_CALL(cpu_observer, OnResourceUsageUpdated(_))
+      .Times(2)
+      .InSequence(cpu_sequence);
+  EXPECT_CALL(memory_observer, OnResourceUsageUpdated(_))
+      .InSequence(memory_sequence);
+  EXPECT_CALL(memory_cpu_observer, OnResourceUsageUpdated(_))
+      .InSequence(memory_cpu_sequence);
+  // Not throttled.
+  fast_forward_to(2 * repeating_query_delay - min_query_once_delay);
+  cpu_query.QueryOnce();
+  memory_query.QueryOnce();
+  memory_cpu_query.QueryOnce();
+  // Throttled.
+  fast_forward_to(2 * repeating_query_delay - min_query_once_delay +
+                  base::Milliseconds(1));
+  cpu_query.QueryOnce();
+  memory_query.QueryOnce();
+  memory_cpu_query.QueryOnce();
+
+  // Timer fires (not throttled).
+  EXPECT_CALL(cpu_observer, OnResourceUsageUpdated(_)).InSequence(cpu_sequence);
+  EXPECT_CALL(memory_observer, OnResourceUsageUpdated(_))
+      .InSequence(memory_sequence);
+  EXPECT_CALL(memory_cpu_observer, OnResourceUsageUpdated(_))
+      .InSequence(memory_cpu_sequence);
+  fast_forward_to(2 * repeating_query_delay);
+
+  // From the PM sequence (after all queued queries), post a task back to the
+  // main thread (arrives after all query results). Wait for the task to be sure
+  // all notifications are delivered.
+  performance_manager::RunInGraph(
+      [task_runner = base::SequencedTaskRunner::GetCurrentDefault(),
+       quit_closure = task_environment()->QuitClosure()] {
+        task_runner->PostTask(FROM_HERE, std::move(quit_closure));
+      });
+  task_environment()->RunUntilQuit();
+}
+
+}  // namespace resource_attribution

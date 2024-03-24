@@ -99,6 +99,17 @@ gpu_android_builder(
 )
 
 gpu_android_builder(
+    name = "gpu-fyi-try-android-pixel-6-64-exp",
+    description_html = "Runs standard GPU tests on experimental Pixel 6 configs",
+    mirrors = [
+        "ci/GPU FYI Android arm64 Builder",
+        "ci/Android FYI Experimental Release (Pixel 6)",
+    ],
+    gn_args = "ci/GPU FYI Android arm64 Builder",
+    pool = "luci.chromium.gpu.android.pixel6.try",
+)
+
+gpu_android_builder(
     name = "gpu-try-android-m-nexus-5x-64",
     mirrors = [
         "ci/Android Release (Nexus 5X)",
@@ -547,6 +558,17 @@ gpu_win_builder(
     ],
     gn_args = "ci/GPU FYI Win x64 Builder",
     pool = "luci.chromium.gpu.win10.nvidia.try",
+)
+
+gpu_win_builder(
+    name = "gpu-fyi-try-win11-qualcomm-rel-64",
+    description_html = "Triggers GPU tests on Windows arm64 devices",
+    mirrors = [
+        "ci/GPU FYI Win arm64 Builder",
+        "ci/Win11 FYI arm64 Release (Qualcomm Adreno 690)",
+    ],
+    gn_args = "ci/GPU FYI Win arm64 Builder",
+    pool = "luci.chromium.gpu.win11.qualcomm.try",
 )
 
 gpu_win_builder(

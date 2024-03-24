@@ -4,8 +4,12 @@
 
 #include "components/password_manager/core/browser/features/password_manager_features_util.h"
 
+#include "base/notreached.h"
 #include "build/build_config.h"
 #include "components/password_manager/core/browser/features/password_features.h"
+#include "components/password_manager/core/common/password_manager_pref_names.h"
+#include "components/prefs/pref_service.h"
+#include "components/sync/base/features.h"
 #include "components/sync/service/sync_service.h"
 #include "components/sync/service/sync_user_settings.h"
 
@@ -16,8 +20,11 @@ namespace internal {
 // Returns whether the account-scoped password storage can be enabled in
 // principle for the current profile. This is constant for a given profile
 // (until browser restart).
-bool CanAccountStorageBeEnabled(const syncer::SyncService* sync_service) {
-  if (!base::FeatureList::IsEnabled(features::kEnablePasswordsAccountStorage)) {
+bool CanAccountStorageBeEnabled(const PrefService* pref_service,
+                                const syncer::SyncService* sync_service) {
+  CHECK(pref_service);
+
+  if (!CanCreateAccountStore(pref_service)) {
     return false;
   }
 
@@ -45,16 +52,29 @@ bool CanAccountStorageBeEnabled(const syncer::SyncService* sync_service) {
 //   disabled by policy, etc).
 // - Desktop-only: There is no custom passphrase (because Sync transport offers
 //   no way to enter the passphrase yet).
-bool IsUserEligibleForAccountStorage(const syncer::SyncService* sync_service) {
-  if (!CanAccountStorageBeEnabled(sync_service)) {
+bool IsUserEligibleForAccountStorage(const PrefService* pref_service,
+                                     const syncer::SyncService* sync_service) {
+  if (!sync_service) {
     return false;
   }
-  DCHECK(sync_service);
-  // TODO(crbug.com/1462978): Delete this when ConsentLevel::kSync is deleted.
+
+  // TODO(crbug.com/40067058): Delete this when ConsentLevel::kSync is deleted.
   // See ConsentLevel::kSync documentation for details.
+  // Eligibility for account storage is controlled by separate flags for syncing
+  // and non-syncing users. Enabling the flag is a necessary condition but not
+  // sufficient, other checks follow below.
   if (sync_service->IsSyncFeatureEnabled()) {
-    return false;
+    if (!base::FeatureList::IsEnabled(
+            syncer::kEnablePasswordsAccountStorageForSyncingUsers)) {
+      return false;
+    }
+  } else {
+    if (!base::FeatureList::IsEnabled(
+            syncer::kEnablePasswordsAccountStorageForNonSyncingUsers)) {
+      return false;
+    }
   }
+
   switch (sync_service->GetTransportState()) {
     case syncer::SyncService::TransportState::DISABLED:
     case syncer::SyncService::TransportState::PAUSED:
@@ -66,18 +86,48 @@ bool IsUserEligibleForAccountStorage(const syncer::SyncService* sync_service) {
     case syncer::SyncService::TransportState::ACTIVE:
       break;
   }
+
 #if !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
   if (sync_service->GetUserSettings()->IsUsingExplicitPassphrase()) {
     return false;
   }
 #endif  // !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
-  return true;
+
+  // Check last to avoid tests for signed-out users unnecessarily having to
+  // register some prefs to avoid a crash.
+  return CanAccountStorageBeEnabled(pref_service, sync_service);
 }
 
 }  // namespace internal
 
-bool IsOptedInForAccountStorage(const syncer::SyncService* sync_service) {
-  if (!internal::IsUserEligibleForAccountStorage(sync_service)) {
+bool CanCreateAccountStore(const PrefService* pref_service) {
+#if BUILDFLAG(IS_ANDROID)
+  using password_manager::prefs::UseUpmLocalAndSeparateStoresState;
+  switch (
+      static_cast<UseUpmLocalAndSeparateStoresState>(pref_service->GetInteger(
+          password_manager::prefs::kPasswordsUseUPMLocalAndSeparateStores))) {
+    case UseUpmLocalAndSeparateStoresState::kOff:
+      return false;
+    // The decision regarding the presence/absence of the account store happens
+    // before the outcome of the migration is known. The decision shouldn't
+    // change, many layers cache a pointer to the store and never update it.
+    // The solution is to optimistically return true in the "migration pending"
+    // state. If the migration later fails, the store will continue to exist
+    // until the next restart, but won't actually be used (this is enforced by
+    // other predicates).
+    case UseUpmLocalAndSeparateStoresState::kOffAndMigrationPending:
+    case UseUpmLocalAndSeparateStoresState::kOn:
+      return true;
+  }
+  NOTREACHED_NORETURN();
+#else
+  return true;
+#endif
+}
+
+bool IsOptedInForAccountStorage(const PrefService* pref_service,
+                                const syncer::SyncService* sync_service) {
+  if (!internal::IsUserEligibleForAccountStorage(pref_service, sync_service)) {
     return false;
   }
 
@@ -112,7 +162,7 @@ bool IsOptedInForAccountStorage(const syncer::SyncService* sync_service) {
 bool ShouldShowAccountStorageBubbleUi(const PrefService* pref_service,
                                       const syncer::SyncService* sync_service) {
   // Opted in implies eligible, so that case is covered here too.
-  return internal::IsUserEligibleForAccountStorage(sync_service);
+  return internal::IsUserEligibleForAccountStorage(pref_service, sync_service);
 }
 
 PasswordAccountStorageUserState ComputePasswordAccountStorageUserState(
@@ -125,7 +175,7 @@ PasswordAccountStorageUserState ComputePasswordAccountStorageUserState(
     return PasswordAccountStorageUserState::kSignedOutUser;
   }
 
-  // TODO(crbug.com/1462978): Delete this when ConsentLevel::kSync is deleted.
+  // TODO(crbug.com/40067058): Delete this when ConsentLevel::kSync is deleted.
   // See ConsentLevel::kSync documentation for details.
   if (sync_service->IsSyncFeatureEnabled()) {
     return PasswordAccountStorageUserState::kSyncUser;
@@ -134,7 +184,7 @@ PasswordAccountStorageUserState ComputePasswordAccountStorageUserState(
   if (sync_service->HasDisableReason(
           syncer::SyncService::DisableReason::DISABLE_REASON_NOT_SIGNED_IN)) {
     // Signed out. Check if any account storage opt-in exists.
-    return ShouldShowAccountStorageReSignin(sync_service, GURL())
+    return ShouldShowAccountStorageReSignin(pref_service, sync_service, GURL())
                ? PasswordAccountStorageUserState::kSignedOutAccountStoreUser
                : PasswordAccountStorageUserState::kSignedOutUser;
   }
@@ -144,7 +194,7 @@ PasswordAccountStorageUserState ComputePasswordAccountStorageUserState(
                             PasswordForm::Store::kProfileStore;
 
   // Signed in. Check for account storage opt-in.
-  if (IsOptedInForAccountStorage(sync_service)) {
+  if (IsOptedInForAccountStorage(pref_service, sync_service)) {
     // Signed in and opted in. Check default storage location.
     return saving_locally
                ? PasswordAccountStorageUserState::

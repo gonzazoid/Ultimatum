@@ -146,8 +146,8 @@ class TestHandshakeClient final : public mojom::WebTransportHandshakeClient {
   void OnConnectionEstablished(
       mojo::PendingRemote<mojom::WebTransport> transport,
       mojo::PendingReceiver<mojom::WebTransportClient> client_receiver,
-      const scoped_refptr<net::HttpResponseHeaders>& response_headers)
-      override {
+      const scoped_refptr<net::HttpResponseHeaders>& response_headers,
+      mojom::WebTransportStatsPtr initial_stats) override {
     transport_ = std::move(transport);
     client_receiver_ = std::move(client_receiver);
     has_seen_connection_establishment_ = true;
@@ -156,7 +156,7 @@ class TestHandshakeClient final : public mojom::WebTransportHandshakeClient {
   }
 
   void OnHandshakeFailed(
-      const absl::optional<net::WebTransportError>& error) override {
+      const std::optional<net::WebTransportError>& error) override {
     has_seen_handshake_failure_ = true;
     handshake_error_ = error;
     receiver_.reset();
@@ -183,7 +183,7 @@ class TestHandshakeClient final : public mojom::WebTransportHandshakeClient {
   bool has_seen_mojo_connection_error() const {
     return has_seen_mojo_connection_error_;
   }
-  absl::optional<net::WebTransportError> handshake_error() const {
+  std::optional<net::WebTransportError> handshake_error() const {
     return handshake_error_;
   }
 
@@ -196,7 +196,7 @@ class TestHandshakeClient final : public mojom::WebTransportHandshakeClient {
   bool has_seen_connection_establishment_ = false;
   bool has_seen_handshake_failure_ = false;
   bool has_seen_mojo_connection_error_ = false;
-  absl::optional<net::WebTransportError> handshake_error_;
+  std::optional<net::WebTransportError> handshake_error_;
 };
 
 class TestClient final : public mojom::WebTransportClient {
@@ -226,7 +226,8 @@ class TestClient final : public mojom::WebTransportClient {
   }
   void OnReceivedResetStream(uint32_t stream_id, uint32_t) override {}
   void OnReceivedStopSending(uint32_t stream_id, uint32_t) override {}
-  void OnClosed(mojom::WebTransportCloseInfoPtr close_info) override {}
+  void OnClosed(mojom::WebTransportCloseInfoPtr close_info,
+                mojom::WebTransportStatsPtr final_stats) override {}
 
   void WaitUntilMojoConnectionError() {
     base::RunLoop run_loop;

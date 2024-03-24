@@ -63,10 +63,12 @@
 #include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "third_party/blink/public/common/features.h"
 #include "ui/aura/env.h"
 #include "ui/base/test/ui_controls.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/compositor/layer.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
@@ -113,7 +115,11 @@
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "base/threading/platform_thread.h"
+#include "base/time/time.h"
 #include "chrome/browser/ui/views/frame/desktop_browser_frame_lacros.h"
+#include "ui/aura/window_tree_host_platform.h"
+#include "ui/platform_window/extensions/wayland_extension.h"
 #define DESKTOP_BROWSER_FRAME_AURA DesktopBrowserFrameLacros
 #elif BUILDFLAG(IS_LINUX)
 #include "chrome/browser/ui/views/frame/desktop_browser_frame_aura_linux.h"
@@ -1818,11 +1824,18 @@ class MaximizedBrowserWindowWaiter {
 }  // namespace
 
 // Drags from browser to separate window and releases mouse.
+// TODO(crbug.com/40934892): Flaky on LaCros.
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#define MAYBE_DetachToOwnWindow DISABLED_DetachToOwnWindow
+#else
+#define MAYBE_DetachToOwnWindow DetachToOwnWindow
+#endif
 IN_PROC_BROWSER_TEST_P(DetachToBrowserTabDragControllerTest,
-                       DetachToOwnWindow) {
+                       MAYBE_DetachToOwnWindow) {
   const gfx::Rect initial_bounds(browser()->window()->GetBounds());
   AddTabsAndResetBrowser(browser(), 1);
   TabStrip* tab_strip = GetTabStripForBrowser(browser());
+  tabs::TabHandle dragged_tab = browser()->tab_strip_model()->GetTabHandleAt(0);
 
   // Move to the first tab and drag it enough so that it detaches.
   int tab_0_width = tab_strip->tab_at(0)->width();
@@ -1845,6 +1858,8 @@ IN_PROC_BROWSER_TEST_P(DetachToBrowserTabDragControllerTest,
 
   EXPECT_EQ("0", IDString(new_browser->tab_strip_model()));
   EXPECT_EQ("1", IDString(browser()->tab_strip_model()));
+  EXPECT_EQ(0, new_browser->tab_strip_model()->GetIndexOfTab(dragged_tab));
+  EXPECT_EQ(new_browser->tab_strip_model(), dragged_tab.Get()->owning_model());
 
   // The bounds of the initial window should not have changed.
   EXPECT_EQ(initial_bounds.ToString(),
@@ -1874,7 +1889,7 @@ class TestDialog : public views::DialogDelegateView {
     SetModalType(ui::MODAL_TYPE_CHILD);
     // Dialogs that take focus must have a name and role to pass accessibility
     // checks.
-    GetViewAccessibility().OverrideRole(ax::mojom::Role::kDialog);
+    GetViewAccessibility().SetRole(ax::mojom::Role::kDialog);
     GetViewAccessibility().OverrideName("Test dialog");
   }
 
@@ -1888,8 +1903,15 @@ class TestDialog : public views::DialogDelegateView {
 
 // Drags from browser that has a web dialog to separate window.
 // The dialog should follow the new browser window.
+// TODO(crbug.com/40934892): Expectations are sometimes off by one pixel on
+// Windows. Reenable once deflaked.
+#if BUILDFLAG(IS_WIN)
+#define MAYBE_DetachToOwnWindowWithDialog DISABLED_DetachToOwnWindowWithDialog
+#else
+#define MAYBE_DetachToOwnWindowWithDialog DetachToOwnWindowWithDialog
+#endif
 IN_PROC_BROWSER_TEST_P(DetachToBrowserTabDragControllerTest,
-                       DetachToOwnWindowWithDialog) {
+                       MAYBE_DetachToOwnWindowWithDialog) {
   const gfx::Rect initial_bounds(browser()->window()->GetBounds());
   AddTabsAndResetBrowser(browser(), 1);
   TabStrip* tab_strip = GetTabStripForBrowser(browser());
@@ -1992,7 +2014,7 @@ IN_PROC_BROWSER_TEST_P(DetachToBrowserTabDragControllerTest,
   ASSERT_FALSE(new_window->GetProperty(aura::client::kWindowWorkspaceKey) ==
                aura::client::kWindowWorkspaceVisibleOnAllWorkspaces);
 }
-#endif  // BUILDFLAG(IS_CHROME_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 // Tests that a tab can be dragged from a browser window that is resized to full
 // screen.
@@ -2349,6 +2371,7 @@ IN_PROC_BROWSER_TEST_P(DetachToBrowserTabDragControllerTest,
                        RevertDragWhileDetached) {
   AddTabsAndResetBrowser(browser(), 1);
   TabStrip* tab_strip = GetTabStripForBrowser(browser());
+  tabs::TabHandle dragged_tab = browser()->tab_strip_model()->GetTabHandleAt(0);
 
   // Move to the first tab and drag it enough so that it detaches.
   DragTabAndNotify(
@@ -2362,6 +2385,9 @@ IN_PROC_BROWSER_TEST_P(DetachToBrowserTabDragControllerTest,
   EXPECT_EQ(1u, browser_list->size());
 
   EXPECT_EQ("0 1", IDString(browser()->tab_strip_model()));
+  EXPECT_NE(nullptr, dragged_tab.Get());
+  EXPECT_EQ(0, browser()->tab_strip_model()->GetIndexOfTab(dragged_tab));
+  EXPECT_EQ(browser()->tab_strip_model(), dragged_tab.Get()->owning_model());
 
   // Remaining browser window should not be maximized
   EXPECT_FALSE(browser()->window()->IsMaximized());
@@ -2468,6 +2494,15 @@ void DragAllStep2(DetachToBrowserTabDragControllerTest* test,
                   const BrowserList* browser_list) {
   // Should only be one window.
   ASSERT_EQ(1u, browser_list->size());
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // TODO(https://crbug.com/324562919) This is a short-term workaround for
+  // Lacros to ensure that there is a sufficient delay between touch move and
+  // touch release events in Ash to guarantee that the events are not
+  // interpreted as a fling gesture. See linked bug for long-term fix.
+  base::PlatformThread::Sleep(base::Milliseconds(100));
+#endif
+
   // Windows hangs if you use a sync mouse event here.
   ASSERT_TRUE(test->ReleaseInput(0, true));
 }
@@ -2475,7 +2510,14 @@ void DragAllStep2(DetachToBrowserTabDragControllerTest* test,
 }  // namespace
 
 // Selects multiple tabs and starts dragging the window.
-IN_PROC_BROWSER_TEST_P(DetachToBrowserTabDragControllerTest, DragAll) {
+// TODO(crbug.com/40934892): Expectations are sometimes off by one pixel on
+// Windows. Reenable once deflaked.
+#if BUILDFLAG(IS_WIN)
+#define MAYBE_DragAll DISABLED_DragAll
+#else
+#define MAYBE_DragAll DragAll
+#endif
+IN_PROC_BROWSER_TEST_P(DetachToBrowserTabDragControllerTest, MAYBE_DragAll) {
   AddTabsAndResetBrowser(browser(), 1);
   TabStrip* tab_strip = GetTabStripForBrowser(browser());
   browser()->tab_strip_model()->ToggleSelectionAt(0);
@@ -2501,11 +2543,16 @@ IN_PROC_BROWSER_TEST_P(DetachToBrowserTabDragControllerTest, DragAll) {
   EXPECT_FALSE(browser()->window()->IsMaximized());
 
   const gfx::Rect final_bounds = browser()->window()->GetBounds();
-  // Size unchanged, but it should have moved down.
-  EXPECT_EQ(initial_bounds.size(), final_bounds.size());
-  EXPECT_EQ(initial_bounds.origin().x(), final_bounds.origin().x());
-  EXPECT_EQ(initial_bounds.origin().y() + GetDetachY(tab_strip),
-            final_bounds.origin().y());
+
+  // The following expectations might not hold on platforms where we can't
+  // control the browser's bounds.
+  if (test::CanUseSetBounds()) {
+    // Size unchanged, but it should have moved down.
+    EXPECT_EQ(initial_bounds.size(), final_bounds.size());
+    EXPECT_EQ(initial_bounds.origin().x(), final_bounds.origin().x());
+    EXPECT_EQ(initial_bounds.origin().y() + GetDetachY(tab_strip),
+              final_bounds.origin().y());
+  }
 }
 
 namespace {
@@ -2569,6 +2616,68 @@ IN_PROC_BROWSER_TEST_P(DetachToBrowserTabDragControllerTest,
 
   // Remaining browser window should not be maximized
   EXPECT_FALSE(browser2->window()->IsMaximized());
+}
+
+namespace {
+
+// Invoked from the nested run loop.
+void DoubleNestedRunLoopStep2(DetachToBrowserTabDragControllerTest* test,
+                              TabStrip* attached_tab_strip,
+                              TabStrip* target_tab_strip) {
+  ASSERT_TRUE(attached_tab_strip->GetDragContext()->IsDragSessionActive());
+  ASSERT_FALSE(target_tab_strip->GetDragContext()->IsDragSessionActive());
+  ASSERT_TRUE(TabDragController::IsActive());
+  ASSERT_TRUE(
+      TabDragController::IsAttachedTo(attached_tab_strip->GetDragContext()));
+  ASSERT_EQ(2u, test->browser_list->size());
+
+  TabDragController* const drag_controller =
+      attached_tab_strip->GetDragContext()->GetDragController();
+  const gfx::Point target_center =
+      GetCenterInScreenCoordinates(target_tab_strip);
+
+  // Drag to target_tab_strip. This should cause TabDragController to ask to end
+  // the nested run loop. Normally, we'd return from here to allow the nested
+  // loop to exit, but to reproduce the conditions for the crash, we won't.
+  drag_controller->Drag(target_center);
+
+  // Call Drag directly - still on the nested run loop! - in a way that would
+  // spawn a nested run loop if processed.
+  drag_controller->Drag(target_center +
+                        gfx::Vector2d(0, GetDetachY(target_tab_strip)));
+
+  // Release input to ensure the nested run loop does actually exit.
+  test->ReleaseInput(0, /*async=*/true);
+}
+
+}  // namespace
+
+IN_PROC_BROWSER_TEST_P(DetachToBrowserTabDragControllerTest,
+                       DragToSeparateWindowAttemptToSpawnDoubleNestedRunLoop) {
+  TabStrip* tab_strip = GetTabStripForBrowser(browser());
+
+  // Wayland doesn't necessarily support window move loops; this test doesn't
+  // make sense in that case.
+  if (!tab_strip->GetWidget()->IsMoveLoopSupported()) {
+    return;
+  }
+
+  AddTabsAndResetBrowser(browser(), 1);
+
+  // Create another browser.
+  Browser* browser2 = CreateAnotherBrowserAndResize();
+  TabStrip* tab_strip2 = GetTabStripForBrowser(browser2);
+
+  browser()->tab_strip_model()->ToggleSelectionAt(0);
+
+  // Move to the first tab and drag it enough so that it detaches, but not
+  // enough that it attaches to browser2.
+  DragTabAndNotify(tab_strip, base::BindOnce(&DoubleNestedRunLoopStep2, this,
+                                             tab_strip, tab_strip2));
+
+  // The drag should have ended.
+  ASSERT_FALSE(tab_strip2->GetDragContext()->IsDragSessionActive());
+  ASSERT_FALSE(TabDragController::IsActive());
 }
 
 #if BUILDFLAG(IS_MAC) && defined(ARCH_CPU_ARM64)
@@ -3985,6 +4094,10 @@ IN_PROC_BROWSER_TEST_P(DetachToBrowserTabDragControllerTestWithTabbedSystemApp,
 // Move tab from TYPE_APP Browser to another TYPE_APP Browser.
 IN_PROC_BROWSER_TEST_P(DetachToBrowserTabDragControllerTestWithTabbedSystemApp,
                        DragAppToAppWindow) {
+  // TODO (crbug/1521327): Test fails under ChromeRefresh2023. Skip for now.
+  if (features::IsChromeRefresh2023()) {
+    GTEST_SKIP();
+  }
   // Install and get 2 browsers with tabbed system app.
   webapps::AppId tabbed_app_id = InstallMockApp();
   Browser* app_browser1 = LaunchWebAppBrowser(tabbed_app_id);
@@ -4024,6 +4137,9 @@ IN_PROC_BROWSER_TEST_P(DetachToBrowserTabDragControllerTestWithTabbedSystemApp,
   EXPECT_EQ("1", IDString(app_browser1->tab_strip_model()));
 }
 
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+#if BUILDFLAG(IS_CHROMEOS)
 // Subclass of DetachToBrowserTabDragControllerTest that
 // creates multiple displays.
 class DetachToBrowserInSeparateDisplayTabDragControllerTest
@@ -4036,11 +4152,19 @@ class DetachToBrowserInSeparateDisplayTabDragControllerTest
       const DetachToBrowserInSeparateDisplayTabDragControllerTest&) = delete;
   virtual ~DetachToBrowserInSeparateDisplayTabDragControllerTest() {}
 
-  void SetUpCommandLine(base::CommandLine* command_line) override {
-    DetachToBrowserTabDragControllerTest::SetUpCommandLine(command_line);
+  void SetUpOnMainThread() override {
+    DetachToBrowserTabDragControllerTest::SetUpOnMainThread();
     // Make screens sufficiently wide to host 2 browsers side by side.
-    command_line->AppendSwitchASCII("ash-host-window-bounds",
-                                    "0+0-800x600,800+0-800x600");
+    // 1280x800 is the default resolution for the main display in tests.
+    // We stick to it, as opposed to a smaller one, to avoid the browser
+    // window being shrunk and maximized when calling UpdateDisplay.
+    const std::string display_specs = "1280x800,1280x800";
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+    ui_controls::UpdateDisplaySync(display_specs);
+#else
+    display::test::DisplayManagerTestApi(ash::Shell::Get()->display_manager())
+        .UpdateDisplay(display_specs);
+#endif
   }
 };
 
@@ -4061,6 +4185,10 @@ void DragSingleTabToSeparateWindowInSecondDisplayStep2(
 }
 
 }  // namespace
+
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
 
 // Drags from browser to a second display and releases input.
 // TODO(crbug.com/1499240): Test is flaky on multiple bots.
@@ -4117,7 +4245,24 @@ IN_PROC_BROWSER_TEST_P(DetachToBrowserInSeparateDisplayTabDragControllerTest,
   EXPECT_FALSE(new_browser->window()->IsMaximized());
 }
 
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+#if BUILDFLAG(IS_CHROMEOS)
+
 namespace {
+
+void SetBoundsSync(BrowserWindow* window, const gfx::Rect& bounds) {
+  window->SetBounds(bounds);
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // Wait for a Wayland roundtrip to ensure all side effects have been
+  // processed.
+  auto* host = static_cast<aura::WindowTreeHostPlatform*>(
+      window->GetNativeWindow()->GetHost());
+  auto* wayland_extension = ui::GetWaylandExtension(*host->platform_window());
+  wayland_extension->RoundTripQueue();
+#endif
+}
 
 // Invoked from the nested run loop.
 void DragTabToWindowInSeparateDisplayStep2(
@@ -4154,7 +4299,7 @@ IN_PROC_BROWSER_TEST_P(DetachToBrowserInSeparateDisplayTabDragControllerTest,
   // Move the second browser to the second display.
   display::Screen* screen = display::Screen::GetScreen();
   Display second_display = ui_test_utils::GetSecondaryDisplay(screen);
-  browser2->window()->SetBounds(second_display.work_area());
+  SetBoundsSync(browser2->window(), second_display.work_area());
   EXPECT_EQ(
       second_display.id(),
       screen->GetDisplayNearestWindow(browser2->window()->GetNativeWindow())
@@ -4185,16 +4330,9 @@ IN_PROC_BROWSER_TEST_P(DetachToBrowserInSeparateDisplayTabDragControllerTest,
 }
 
 // Crashes on ChromeOS. crbug.com/1003288
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#define MAYBE_DragBrowserWindowWhenMajorityOfBoundsInSecondDisplay \
-  DISABLED_CDragBrowserWindowWhenMajorityOfBoundsInSecondDisplay
-#else
-#define MAYBE_DragBrowserWindowWhenMajorityOfBoundsInSecondDisplay \
-  DragBrowserWindowWhenMajorityOfBoundsInSecondDisplay
-#endif
 IN_PROC_BROWSER_TEST_P(
     DetachToBrowserInSeparateDisplayTabDragControllerTest,
-    MAYBE_DragBrowserWindowWhenMajorityOfBoundsInSecondDisplay) {
+    DISABLED_DragBrowserWindowWhenMajorityOfBoundsInSecondDisplay) {
   // Set the browser's window bounds such that the majority of its bounds
   // resides in the second display.
   const std::pair<Display, Display> displays =
@@ -4258,9 +4396,17 @@ IN_PROC_BROWSER_TEST_P(
             browser()->window()->GetNativeWindow()->GetHost()->GetDisplayId());
 }
 
+// TODO(b/325166110): Flaky in Lacros.
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#define MAYBE_DragTabToWindowOnSecondDisplay \
+  DISABLED_DragTabToWindowOnSecondDisplay
+#else
+#define MAYBE_DragTabToWindowOnSecondDisplay DragTabToWindowOnSecondDisplay
+#endif
+
 // Drags from browser to another browser on a second display and releases input.
 IN_PROC_BROWSER_TEST_P(DetachToBrowserInSeparateDisplayTabDragControllerTest,
-                       DragTabToWindowOnSecondDisplay) {
+                       MAYBE_DragTabToWindowOnSecondDisplay) {
   AddTabsAndResetBrowser(browser(), 1);
   TabStrip* tab_strip = GetTabStripForBrowser(browser());
 
@@ -4274,13 +4420,13 @@ IN_PROC_BROWSER_TEST_P(DetachToBrowserInSeparateDisplayTabDragControllerTest,
   Display second_display = ui_test_utils::GetSecondaryDisplay(screen);
   gfx::Rect work_area = second_display.work_area();
   work_area.set_width(work_area.width() / 2);
-  browser()->window()->SetBounds(work_area);
+  SetBoundsSync(browser()->window(), work_area);
   // It's possible the window will not fit in half the screen, in which case we
   // will position the windows as well as we can.
   work_area.set_x(browser()->window()->GetBounds().right());
   // Sanity check: second browser should still be on the second display.
   ASSERT_LT(work_area.x(), second_display.work_area().right());
-  browser2->window()->SetBounds(work_area);
+  SetBoundsSync(browser2->window(), work_area);
   EXPECT_EQ(
       second_display.id(),
       screen->GetDisplayNearestWindow(browser()->window()->GetNativeWindow())
@@ -4382,6 +4528,10 @@ IN_PROC_BROWSER_TEST_P(DetachToBrowserInSeparateDisplayTabDragControllerTest,
   EXPECT_FALSE(browser2->window()->IsMaximized());
 }
 
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+
 // Drags from a restored browser to an immersive fullscreen browser on a
 // second display and releases input.
 // TODO(pkasting) https://crbug.com/910782 Hangs.
@@ -4398,7 +4548,7 @@ IN_PROC_BROWSER_TEST_P(DetachToBrowserInSeparateDisplayTabDragControllerTest,
   // Move the second browser to the second display.
   display::Screen* screen = display::Screen::GetScreen();
   const std::pair<Display, Display> displays = GetDisplays(screen);
-  browser2->window()->SetBounds(displays.second.work_area());
+  SetBoundsSync(browser2->window(), displays.second.work_area());
   EXPECT_EQ(
       displays.second.id(),
       screen->GetDisplayNearestWindow(browser2->window()->GetNativeWindow())
@@ -4470,10 +4620,10 @@ class DifferentDeviceScaleFactorDisplayTabDragControllerTest
       const DifferentDeviceScaleFactorDisplayTabDragControllerTest&) = delete;
   virtual ~DifferentDeviceScaleFactorDisplayTabDragControllerTest() {}
 
-  void SetUpCommandLine(base::CommandLine* command_line) override {
-    DetachToBrowserTabDragControllerTest::SetUpCommandLine(command_line);
-    command_line->AppendSwitchASCII("ash-host-window-bounds",
-                                    "800x600,800+0-800x600*2");
+  void SetUpOnMainThread() override {
+    DetachToBrowserTabDragControllerTest::SetUpOnMainThread();
+    display::test::DisplayManagerTestApi(ash::Shell::Get()->display_manager())
+        .UpdateDisplay("1280x800,1280x800*2");
   }
 
   float GetCursorDeviceScaleFactor() const {
@@ -4564,10 +4714,10 @@ class DetachToBrowserInSeparateDisplayAndCancelTabDragControllerTest
       const DetachToBrowserInSeparateDisplayAndCancelTabDragControllerTest&) =
       delete;
 
-  void SetUpCommandLine(base::CommandLine* command_line) override {
-    DetachToBrowserTabDragControllerTest::SetUpCommandLine(command_line);
-    command_line->AppendSwitchASCII("ash-host-window-bounds",
-                                    "0+0-800x600,800+0-800x600");
+  void SetUpOnMainThread() override {
+    DetachToBrowserTabDragControllerTest::SetUpOnMainThread();
+    display::test::DisplayManagerTestApi(ash::Shell::Get()->display_manager())
+        .UpdateDisplay("1280x800,1280x800");
   }
 };
 
@@ -4934,8 +5084,7 @@ INSTANTIATE_TEST_SUITE_P(
                        ::testing::Values("mouse")));
 #endif
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-// TODO(crbug.com/1488094): Enable Multi Display Test on lacros
+#if BUILDFLAG(IS_CHROMEOS)
 INSTANTIATE_TEST_SUITE_P(
     TabDragging,
     DetachToBrowserInSeparateDisplayTabDragControllerTest,
@@ -4943,6 +5092,9 @@ INSTANTIATE_TEST_SUITE_P(
         ::testing::Bool(),
         /*kTearOffWebAppTabOpensWebAppWindow=*/::testing::Values(false),
         ::testing::Values("mouse")));
+#endif  // BUILDFLAG(IS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+// TODO(crbug.com/1488094): Enable Multi Display Test on lacros
 INSTANTIATE_TEST_SUITE_P(
     TabDragging,
     DifferentDeviceScaleFactorDisplayTabDragControllerTest,
@@ -4970,7 +5122,7 @@ INSTANTIATE_TEST_SUITE_P(
         ::testing::Bool(),
         /*kTearOffWebAppTabOpensWebAppWindow=*/::testing::Values(false),
         ::testing::Values("mouse", "touch")));
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_CHROMEOS)
 INSTANTIATE_TEST_SUITE_P(

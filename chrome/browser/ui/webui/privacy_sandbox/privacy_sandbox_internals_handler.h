@@ -31,6 +31,9 @@ class PrivacySandboxInternalsHandler
 
   void ReadPref(const std::string& pref_name,
                 ReadPrefCallback callback) override;
+  void ReadContentSettings(const ContentSettingsType type,
+                           ReadContentSettingsCallback callback) override;
+
   void ContentSettingsPatternToString(
       const ContentSettingsPattern& pattern,
       ContentSettingsPatternToStringCallback callback) override;
@@ -39,13 +42,10 @@ class PrivacySandboxInternalsHandler
       const std::string& s,
       StringToContentSettingsPatternCallback callback) override;
 
-  void GetCookieSettings(GetCookieSettingsCallback callback) override;
   void GetTpcdMetadataGrants(GetTpcdMetadataGrantsCallback callback) override;
-  void GetTpcdHeuristicsGrants(GetTpcdMetadataGrantsCallback callback) override;
-  void GetTpcdSupport(GetTpcdMetadataGrantsCallback callback) override;
 
  private:
-  raw_ptr<Profile> profile_;
+  raw_ptr<Profile, DanglingUntriaged> profile_;
   // It seems like the handler is supposed to retain ownership even though we
   // don't need to reference the mojo::Receiver.
   mojo::Receiver<privacy_sandbox_internals::mojom::PageHandler> receiver_{this};

@@ -22,6 +22,7 @@
 #include "chrome/browser/platform_util.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
+#include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
@@ -111,8 +112,10 @@ class DocumentPictureInPictureWindowControllerBrowserTest
   }
 
   void SetUp() override {
-    scoped_feature_list_.InitAndEnableFeature(
-        blink::features::kDocumentPictureInPictureAPI);
+    scoped_feature_list_.InitWithFeatures(
+        {blink::features::kDocumentPictureInPictureAPI,
+         blink::features::kCSSDisplayModePictureInPicture},
+        /*disabled_features=*/{});
     InProcessBrowserTest::SetUp();
   }
 
@@ -774,4 +777,35 @@ IN_PROC_BROWSER_TEST_F(DocumentPictureInPictureWindowControllerBrowserTest,
             opener_web_contents);
 
   ASSERT_EQ(true, EvalJs(opener_web_contents, "loadAndPlayVideo();"));
+}
+
+IN_PROC_BROWSER_TEST_F(DocumentPictureInPictureWindowControllerBrowserTest,
+                       MatchMediaQuery) {
+  LoadTabAndEnterPictureInPicture(browser());
+  auto* opener_web_contents = window_controller()->GetWebContents();
+  auto* web_contents = window_controller()->GetChildWebContents();
+  ASSERT_TRUE(opener_web_contents);
+  ASSERT_TRUE(web_contents);
+
+  std::string match_media_picture_in_picture =
+      "window.matchMedia('(display-mode: picture-in-picture)').matches;";
+  ASSERT_FALSE(EvalJs(opener_web_contents, match_media_picture_in_picture)
+                   .ExtractBool());
+  ASSERT_TRUE(
+      EvalJs(web_contents, match_media_picture_in_picture).ExtractBool());
+}
+
+// Make sure that inner bounds of document PiP windows match the requested size.
+IN_PROC_BROWSER_TEST_F(DocumentPictureInPictureWindowControllerBrowserTest,
+                       InnerBoundsMatchRequest) {
+  constexpr auto size = gfx::Size(400, 450);
+  LoadTabAndEnterPictureInPicture(browser(), size);
+
+  auto* pip_web_contents = window_controller()->GetChildWebContents();
+  ASSERT_NE(nullptr, pip_web_contents);
+  WaitForPageLoad(pip_web_contents);
+
+  auto* pip_browser = chrome::FindBrowserWithTab(pip_web_contents);
+  auto* browser_view = BrowserView::GetBrowserViewForBrowser(pip_browser);
+  EXPECT_EQ(size, browser_view->GetContentsSize());
 }

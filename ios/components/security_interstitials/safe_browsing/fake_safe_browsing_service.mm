@@ -37,15 +37,14 @@ class FakeSafeBrowsingUrlCheckerImpl
             security_interstitials::UnsafeResource::kNoFrameTreeNodeId,
             /*navigation_id=*/std::nullopt,
             /*url_real_time_lookup_enabled=*/false,
-            /*can_urt_check_subresource_url=*/false,
             /*can_check_db=*/true,
             /*can_check_high_confidence_allowlist=*/true,
             /*url_lookup_service_metric_suffix=*/"",
-            /*last_committed_url=*/GURL::EmptyGURL(),
             web::GetUIThreadTaskRunner({}),
             /*url_lookup_service_on_ui=*/nullptr,
             /*hash_realtime_service_on_ui=*/nullptr,
-            safe_browsing::hash_realtime_utils::HashRealTimeSelection::kNone) {}
+            safe_browsing::hash_realtime_utils::HashRealTimeSelection::kNone,
+            /*is_async_check=*/false) {}
   ~FakeSafeBrowsingUrlCheckerImpl() override = default;
 
   // SafeBrowsingUrlCheckerImpl:

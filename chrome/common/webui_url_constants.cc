@@ -7,7 +7,6 @@
 #include "base/strings/string_piece.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "build/config/chromebox_for_meetings/buildflags.h"
 #include "components/commerce/core/commerce_constants.h"
 #include "components/history_clusters/history_clusters_internals/webui/url_constants.h"
 #include "components/lens/buildflags.h"
@@ -54,7 +53,6 @@ const char kChromeUIChromeURLsHost[] = "chrome-urls";
 const char kChromeUIChromeURLsURL[] = "chrome://chrome-urls/";
 const char kChromeUIComponentsHost[] = "components";
 const char kChromeUIComponentsUrl[] = "chrome://components";
-const char kChromeUIComposeHost[] = "compose";
 const char kChromeUIConflictsHost[] = "conflicts";
 const char kChromeUIConstrainedHTMLTestURL[] = "chrome://constrained-test/";
 const char kChromeUICookieSettingsURL[] = "chrome://settings/cookies";
@@ -238,6 +236,8 @@ const char kChromeUIThemeHost[] = "theme";
 const char kChromeUIThemeURL[] = "chrome://theme/";
 const char kChromeUITranslateInternalsHost[] = "translate-internals";
 const char kChromeUITopChromeDomain[] = "top-chrome";
+const char kChromeUIUntrustedComposeHost[] = "compose";
+const char kChromeUIUntrustedComposeUrl[] = "chrome-untrusted://compose/";
 #if !BUILDFLAG(IS_ANDROID)
 const char kChromeUIUntrustedHatsHost[] = "hats";
 const char kChromeUIUntrustedHatsURL[] = "chrome-untrusted://hats/";
@@ -312,11 +312,6 @@ const char kChromeUIWebUITestHost[] = "webui-test";
 const char kChromeUIUntrustedWebUITestURL[] = "chrome-untrusted://webui-test/";
 #endif
 
-#if BUILDFLAG(PLATFORM_CFM)
-const char kCfmNetworkSettingsHost[] = "cfm-network-settings";
-const char kCfmNetworkSettingsURL[] = "chrome://cfm-network-settings";
-#endif  // BUILDFLAG(PLATFORM_CFM)
-
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 // Keep alphabetized.
 const char kChromeUIAccountManagerErrorHost[] = "account-manager-error";
@@ -363,6 +358,9 @@ const char kChromeUIEmojiPickerURL[] = "chrome://emoji-picker/";
 const char kChromeUIEmojiPickerHost[] = "emoji-picker";
 const char kChromeUIEnterpriseReportingHost[] = "enterprise-reporting";
 const char kChromeUIEnterpriseReportingURL[] = "chrome://enterprise-reporting";
+const char kChromeUIExtendedUpdatesDialogHost[] = "extended-updates-dialog";
+const char kChromeUIExtendedUpdatesDialogURL[] =
+    "chrome://extended-updates-dialog";
 const char kChromeUIFirmwareUpdaterAppURL[] = "chrome://accessory-update";
 const char kChromeUIHealthdInternalsHost[] = "healthd-internals";
 const char kChromeUIHealthdInternalsURL[] = "chrome://healthd-internals";
@@ -456,6 +454,7 @@ bool IsSystemWebUIHost(base::StringPiece host) {
       kChromeUICryptohomeHost,
       kChromeUIDeviceEmulatorHost,
       kChromeUIEmojiPickerHost,
+      kChromeUIExtendedUpdatesDialogHost,
       kChromeUIInternetConfigDialogHost,
       kChromeUIInternetDetailDialogHost,
       kChromeUILockScreenNetworkHost,
@@ -473,9 +472,6 @@ bool IsSystemWebUIHost(base::StringPiece host) {
       kChromeUISmbCredentialsHost,
       kChromeUISmbShareHost,
       kChromeUIVcTrayTesterHost,
-#if BUILDFLAG(PLATFORM_CFM)
-      kCfmNetworkSettingsHost,
-#endif  // BUILDFLAG(PLATFORM_CFM)
   };
   for (const char* h : kHosts) {
     if (host == h) {
@@ -584,8 +580,6 @@ const char kChromeUITabStripURL[] = "chrome://tab-strip.top-chrome";
 #endif
 
 #if !BUILDFLAG(IS_ANDROID)
-const char kChromeUICommanderHost[] = "commander";
-const char kChromeUICommanderURL[] = "chrome://commander";
 const char kChromeUITabSearchHost[] = "tab-search.top-chrome";
 const char kChromeUITabSearchURL[] = "chrome://tab-search.top-chrome/";
 #endif
@@ -831,9 +825,6 @@ const char* const kChromeHostURLs[] = {
     kChromeUIPrintHost,
 #endif
     kChromeUIWebRtcLogsHost,
-#if BUILDFLAG(PLATFORM_CFM)
-    kCfmNetworkSettingsHost,
-#endif  // BUILDFLAG(PLATFORM_CFM)
 #if BUILDFLAG(IS_CHROMEOS)
     kChromeUIDlpInternalsHost,
 #endif  // BUILDFLAG(IS_CHROMEOS)

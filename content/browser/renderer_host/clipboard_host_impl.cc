@@ -61,20 +61,40 @@ namespace {
 
 // Used to skip content analysis checks when the source and destination of the
 // clipboard data are the same.
-struct LastWriterInfo {
-  // A pointer to the last ClipboardHostImpl that committed data to the
-  // clipboard.
-  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
-  // #global-scope
-  RAW_PTR_EXCLUSION ClipboardHostImpl* writer = nullptr;
+struct LastClipboardWriterInfo {
+  // RFH ID of the last RFH to have committed data to the clipboard.
+  GlobalRenderFrameHostId rfh_id;
 
-  // The sequence number of the last commit made by `writer`.
+  // The sequence number of the last commit made to the clipboard by the
+  // browser.
   ui::ClipboardSequenceNumberToken seqno;
 };
 
-LastWriterInfo& GetLastWriterInfo() {
-  static LastWriterInfo info;
+LastClipboardWriterInfo& LastClipboardWriterInfoStorage() {
+  static LastClipboardWriterInfo info;
   return info;
+}
+
+// Helper to check if an `rfh`/`seqno` pair was the last browser tab to write
+// to the clipboard.
+bool IsLastClipboardWrite(const RenderFrameHost& rfh,
+                          ui::ClipboardSequenceNumberToken seqno) {
+  const auto& info = LastClipboardWriterInfoStorage();
+  return info.rfh_id == rfh.GetGlobalId() && info.seqno == seqno;
+}
+
+// Helpers to set/clear the last RFH to write to the clipboard.
+void SetLastClipboardWrite(const RenderFrameHost& rfh,
+                           ui::ClipboardSequenceNumberToken seqno) {
+  LastClipboardWriterInfoStorage() = {
+      .rfh_id = rfh.GetGlobalId(),
+      .seqno = std::move(seqno),
+  };
+}
+void ClearIfLastClipboardWriterIs(const RenderFrameHost& rfh) {
+  if (LastClipboardWriterInfoStorage().rfh_id == rfh.GetGlobalId()) {
+    LastClipboardWriterInfoStorage() = {};
+  }
 }
 
 std::u16string ExtractText(ui::ClipboardBuffer clipboard_buffer,
@@ -105,6 +125,47 @@ std::u16string ExtractText(ui::ClipboardBuffer clipboard_buffer,
 // correctly.
 constexpr base::TimeDelta ClipboardHostImpl::kIsPasteAllowedRequestTooOld =
     base::Milliseconds(5000);
+
+ClipboardEndpoint GetSourceClipboardEndpoint(
+    ui::ClipboardSequenceNumberToken seqno,
+    ui::ClipboardBuffer clipboard_buffer) {
+  const auto& info = LastClipboardWriterInfoStorage();
+  auto* rfh = RenderFrameHost::FromID(info.rfh_id);
+
+  if (info.seqno != seqno || !rfh) {
+    // Fall back to the clipboard source if there is no `seqno` match or RFH, as
+    // `ui::DataTransferEndpoint` can be populated differently based on
+    // platform.
+    return ClipboardEndpoint(
+        ui::Clipboard::GetForCurrentThread()->GetSource(clipboard_buffer));
+  }
+
+  std::optional<ui::DataTransferEndpoint> source_dte;
+  auto clipboard_source_dte =
+      ui::Clipboard::GetForCurrentThread()->GetSource(clipboard_buffer);
+  if (clipboard_source_dte) {
+    if (clipboard_source_dte->IsUrlType()) {
+      source_dte = std::make_optional<ui::DataTransferEndpoint>(
+          *clipboard_source_dte->GetURL(),
+          rfh->GetBrowserContext()->IsOffTheRecord());
+    } else {
+      source_dte = std::move(clipboard_source_dte);
+    }
+  }
+
+  return ClipboardEndpoint(
+      std::move(source_dte),
+      base::BindRepeating(
+          [](GlobalRenderFrameHostId rfh_id) -> BrowserContext* {
+            auto* rfh = RenderFrameHost::FromID(rfh_id);
+            if (!rfh) {
+              return nullptr;
+            }
+            return rfh->GetBrowserContext();
+          },
+          info.rfh_id),
+      *rfh);
+}
 
 ClipboardHostImpl::IsPasteAllowedRequest::IsPasteAllowedRequest() = default;
 ClipboardHostImpl::IsPasteAllowedRequest::~IsPasteAllowedRequest() = default;
@@ -156,10 +217,9 @@ ClipboardHostImpl::ClipboardHostImpl(
     : DocumentService(render_frame_host, std::move(receiver)) {
   clipboard_writer_ = std::make_unique<ui::ScopedClipboardWriter>(
       ui::ClipboardBuffer::kCopyPaste,
-      render_frame_host.GetBrowserContext()->IsOffTheRecord()
-          ? nullptr
-          : std::make_unique<ui::DataTransferEndpoint>(
-                render_frame_host.GetMainFrame()->GetLastCommittedURL()));
+      std::make_unique<ui::DataTransferEndpoint>(
+          render_frame_host.GetMainFrame()->GetLastCommittedURL(),
+          render_frame_host.GetBrowserContext()->IsOffTheRecord()));
 }
 
 void ClipboardHostImpl::Create(
@@ -172,7 +232,7 @@ void ClipboardHostImpl::Create(
 }
 
 ClipboardHostImpl::~ClipboardHostImpl() {
-  GetLastWriterInfo() = {};
+  ClearIfLastClipboardWriterIs(render_frame_host());
   clipboard_writer_->Reset();
 }
 
@@ -266,8 +326,11 @@ void ClipboardHostImpl::ReadText(ui::ClipboardBuffer clipboard_buffer,
   }
 
   std::u16string text = ExtractText(clipboard_buffer, CreateDataEndpoint());
-  ClipboardPasteData clipboard_paste_data =
-      ClipboardPasteData(base::UTF16ToUTF8(text), std::string(), {});
+  ClipboardPasteData clipboard_paste_data;
+  clipboard_paste_data.text = text;
+
+  // TODO(b/294844565): Remove `result` from the lambda and use the
+  // corresponding field in `clipboard_paste_data` instead.
   PasteIfPolicyAllowed(
       clipboard_buffer, ui::ClipboardFormatType::PlainTextType(),
       std::move(clipboard_paste_data),
@@ -297,8 +360,11 @@ void ClipboardHostImpl::ReadHtml(ui::ClipboardBuffer clipboard_buffer,
   clipboard->ReadHTML(clipboard_buffer, data_dst.get(), &markup, &src_url_str,
                       &fragment_start, &fragment_end);
 
-  ClipboardPasteData clipboard_paste_data =
-      ClipboardPasteData(base::UTF16ToUTF8(markup), std::string(), {});
+  ClipboardPasteData clipboard_paste_data;
+  clipboard_paste_data.html = markup;
+
+  // TODO(b/294844565): Remove `markup` from the lambda and use the
+  // corresponding field in `clipboard_paste_data` instead.
   PasteIfPolicyAllowed(
       clipboard_buffer, ui::ClipboardFormatType::HtmlType(),
       std::move(clipboard_paste_data),
@@ -327,8 +393,11 @@ void ClipboardHostImpl::ReadSvg(ui::ClipboardBuffer clipboard_buffer,
   ui::Clipboard::GetForCurrentThread()->ReadSvg(clipboard_buffer,
                                                 /*data_dst=*/nullptr, &markup);
 
-  ClipboardPasteData clipboard_paste_data =
-      ClipboardPasteData(base::UTF16ToUTF8(markup), std::string(), {});
+  ClipboardPasteData clipboard_paste_data;
+  clipboard_paste_data.svg = markup;
+
+  // TODO(b/294844565): Remove `markup` from the lambda and use the
+  // corresponding field in `clipboard_paste_data` instead.
   PasteIfPolicyAllowed(
       clipboard_buffer, ui::ClipboardFormatType::SvgType(),
       std::move(clipboard_paste_data),
@@ -354,8 +423,11 @@ void ClipboardHostImpl::ReadRtf(ui::ClipboardBuffer clipboard_buffer,
   ui::Clipboard::GetForCurrentThread()->ReadRTF(clipboard_buffer,
                                                 data_dst.get(), &result);
 
-  ClipboardPasteData clipboard_paste_data =
-      ClipboardPasteData(result, std::string(), {});
+  ClipboardPasteData clipboard_paste_data;
+  clipboard_paste_data.rtf = result;
+
+  // TODO(b/294844565): Remove `result` from the lambda and use the
+  // corresponding field in `clipboard_paste_data` instead.
   PasteIfPolicyAllowed(
       clipboard_buffer, ui::ClipboardFormatType::RtfType(),
       std::move(clipboard_paste_data),
@@ -388,9 +460,13 @@ void ClipboardHostImpl::OnReadPng(ui::ClipboardBuffer clipboard_buffer,
                                   ReadPngCallback callback,
                                   const std::vector<uint8_t>& data) {
   // Pass both image and associated text for content analysis.
-  ClipboardPasteData clipboard_paste_data = ClipboardPasteData(
-      base::UTF16ToUTF8(ExtractText(clipboard_buffer, CreateDataEndpoint())),
-      std::string(data.begin(), data.end()), {});
+  ClipboardPasteData clipboard_paste_data;
+  clipboard_paste_data.text =
+      ExtractText(clipboard_buffer, CreateDataEndpoint());
+  clipboard_paste_data.png = data;
+
+  // TODO(b/294844565): Remove `data` from the lambda and use the
+  // corresponding field in `clipboard_paste_data` instead.
   PasteIfPolicyAllowed(
       clipboard_buffer, ui::ClipboardFormatType::PngType(),
       std::move(clipboard_paste_data),
@@ -428,8 +504,8 @@ void ClipboardHostImpl::ReadFiles(ui::ClipboardBuffer clipboard_buffer,
   paths.reserve(filenames.size());
   base::ranges::transform(filenames, std::back_inserter(paths),
                           [](const ui::FileInfo& info) { return info.path; });
-  ClipboardPasteData clipboard_paste_data =
-      ClipboardPasteData(std::string(), std::string(), std::move(paths));
+  ClipboardPasteData clipboard_paste_data;
+  clipboard_paste_data.file_paths = std::move(paths);
 
   // This code matches the drag-and-drop DataTransfer code in
   // RenderWidgetHostImpl::DragTargetDrop().
@@ -494,8 +570,11 @@ void ClipboardHostImpl::ReadCustomData(ui::ClipboardBuffer clipboard_buffer,
   ui::Clipboard::GetForCurrentThread()->ReadCustomData(clipboard_buffer, type,
                                                        data_dst.get(), &result);
 
-  ClipboardPasteData clipboard_paste_data =
-      ClipboardPasteData(base::UTF16ToUTF8(result), std::string(), {});
+  ClipboardPasteData clipboard_paste_data;
+  clipboard_paste_data.custom_data[type] = result;
+
+  // TODO(b/294844565): Remove `result` from the lambda and use the
+  // corresponding field in `clipboard_paste_data` instead.
   PasteIfPolicyAllowed(
       clipboard_buffer, ui::ClipboardFormatType::WebCustomDataType(),
       std::move(clipboard_paste_data),
@@ -511,19 +590,28 @@ void ClipboardHostImpl::ReadCustomData(ui::ClipboardBuffer clipboard_buffer,
 }
 
 void ClipboardHostImpl::WriteText(const std::u16string& text) {
-  CopyIfAllowed(
-      text.size() * sizeof(std::u16string::value_type),
-      base::BindOnce(&ui::ScopedClipboardWriter::WriteText,
-                     base::Unretained(clipboard_writer_.get()), text));
+  GetContentClient()->browser()->IsClipboardCopyAllowedByPolicy(
+      CreateClipboardEndpoint(),
+      {
+          .size = text.size() * sizeof(std::u16string::value_type),
+          .format_type = ui::ClipboardFormatType::PlainTextType(),
+      },
+      text,
+      base::BindOnce(&ClipboardHostImpl::OnCopyTextAllowedResult,
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
 void ClipboardHostImpl::WriteHtml(const std::u16string& markup,
                                   const GURL& url) {
-  CopyIfAllowed(
-      markup.size() * sizeof(std::u16string::value_type),
-      base::BindOnce(&ui::ScopedClipboardWriter::WriteHTML,
-                     base::Unretained(clipboard_writer_.get()), markup,
-                     url.spec(), ui::ClipboardContentType::kSanitized));
+  GetContentClient()->browser()->IsClipboardCopyAllowedByPolicy(
+      CreateClipboardEndpoint(),
+      {
+          .size = markup.size() * sizeof(std::u16string::value_type),
+          .format_type = ui::ClipboardFormatType::HtmlType(),
+      },
+      markup,
+      base::BindOnce(&ClipboardHostImpl::OnCopyHtmlAllowedResult,
+                     weak_ptr_factory_.GetWeakPtr(), url));
 }
 
 void ClipboardHostImpl::WriteSvg(const std::u16string& markup) {
@@ -555,12 +643,11 @@ void ClipboardHostImpl::CommitWrite() {
   clipboard_writer_ = std::make_unique<ui::ScopedClipboardWriter>(
       ui::ClipboardBuffer::kCopyPaste, CreateDataEndpoint());
 
-  // Remember the ClipboardHostImpl and associated seqno of the last write
-  // made to the clipboard by any ClipboardHostImpl.
-  GetLastWriterInfo() = {
-      .writer = this,
-      .seqno = ui::Clipboard::GetForCurrentThread()->GetSequenceNumber(
-          ui::ClipboardBuffer::kCopyPaste)};
+  // Remember the RFH and associated seqno of the last write made to the
+  // clipboard by any ClipboardHostImpl.
+  SetLastClipboardWrite(render_frame_host(),
+                        ui::Clipboard::GetForCurrentThread()->GetSequenceNumber(
+                            ui::ClipboardBuffer::kCopyPaste));
 }
 
 bool ClipboardHostImpl::IsRendererPasteAllowed(
@@ -649,8 +736,7 @@ void ClipboardHostImpl::PasteIfPolicyAllowed(
       ui::Clipboard::GetForCurrentThread()->GetSequenceNumber(clipboard_buffer);
 
   // Always allow if the source of the last clipboard commit was this host.
-  const LastWriterInfo& info = GetLastWriterInfo();
-  if (info.writer == this && info.seqno == seqno) {
+  if (IsLastClipboardWrite(render_frame_host(), seqno)) {
     std::move(callback).Run(std::move(clipboard_paste_data));
     return;
   }
@@ -671,26 +757,13 @@ void ClipboardHostImpl::StartIsPasteAllowedRequest(
     ClipboardPasteData clipboard_paste_data) {
   std::optional<size_t> data_size;
   if (clipboard_paste_data.file_paths.empty()) {
-    data_size =
-        clipboard_paste_data.text.size() + clipboard_paste_data.image.size();
+    data_size = clipboard_paste_data.size();
   }
 
   static_cast<RenderFrameHostImpl&>(render_frame_host())
       .IsClipboardPasteAllowedByPolicy(
-          ClipboardEndpoint(ui::Clipboard::GetForCurrentThread()->GetSource(
-              clipboard_buffer)),
-          ClipboardEndpoint(
-              CreateDataEndpoint().get(),
-              base::BindRepeating(
-                  [](GlobalRenderFrameHostId rfh_id) -> BrowserContext* {
-                    auto* rfh = RenderFrameHost::FromID(rfh_id);
-                    if (!rfh) {
-                      return nullptr;
-                    }
-                    return rfh->GetBrowserContext();
-                  },
-                  render_frame_host().GetGlobalId()),
-              render_frame_host()),
+          GetSourceClipboardEndpoint(seqno, clipboard_buffer),
+          CreateClipboardEndpoint(),
           {
               .size = data_size,
               .format_type = data_type,
@@ -711,20 +784,30 @@ void ClipboardHostImpl::FinishPasteIfAllowed(
   request.Complete(std::move(clipboard_paste_data));
 }
 
-void ClipboardHostImpl::CopyIfAllowed(size_t data_size_in_bytes,
-                                      CopyAllowedCallback callback) {
-  std::u16string replacement_data;
-  if (GetContentClient()->browser()->IsClipboardCopyAllowed(
-          render_frame_host().GetBrowserContext(),
-          render_frame_host().GetLastCommittedURL(), data_size_in_bytes,
-          replacement_data)) {
-    // Set the source of the clipboard text/html
+void ClipboardHostImpl::OnCopyTextAllowedResult(
+    const std::u16string& text,
+    std::optional<std::u16string> replacement_data) {
+  if (replacement_data) {
+    clipboard_writer_->WriteText(std::move(*replacement_data));
+  } else {
     clipboard_writer_->SetDataSourceURL(
         render_frame_host().GetMainFrame()->GetLastCommittedURL(),
         render_frame_host().GetLastCommittedURL());
-    std::move(callback).Run();
+    clipboard_writer_->WriteText(text);
+  }
+}
+
+void ClipboardHostImpl::OnCopyHtmlAllowedResult(
+    const GURL& source_url,
+    const std::u16string& markup,
+    std::optional<std::u16string> replacement_data) {
+  if (replacement_data) {
+    clipboard_writer_->WriteText(std::move(*replacement_data));
   } else {
-    clipboard_writer_->WriteText(replacement_data);
+    clipboard_writer_->SetDataSourceURL(
+        render_frame_host().GetMainFrame()->GetLastCommittedURL(),
+        render_frame_host().GetLastCommittedURL());
+    clipboard_writer_->WriteHTML(markup, source_url.spec());
   }
 }
 
@@ -739,11 +822,25 @@ void ClipboardHostImpl::CleanupObsoleteRequests() {
 
 std::unique_ptr<ui::DataTransferEndpoint>
 ClipboardHostImpl::CreateDataEndpoint() {
-  if (render_frame_host().GetBrowserContext()->IsOffTheRecord()) {
-    return nullptr;
-  }
   return std::make_unique<ui::DataTransferEndpoint>(
       render_frame_host().GetMainFrame()->GetLastCommittedURL(),
+      render_frame_host().GetBrowserContext()->IsOffTheRecord(),
       render_frame_host().HasTransientUserActivation());
 }
+
+ClipboardEndpoint ClipboardHostImpl::CreateClipboardEndpoint() {
+  return ClipboardEndpoint(
+      CreateDataEndpoint().get(),
+      base::BindRepeating(
+          [](GlobalRenderFrameHostId rfh_id) -> BrowserContext* {
+            auto* rfh = RenderFrameHost::FromID(rfh_id);
+            if (!rfh) {
+              return nullptr;
+            }
+            return rfh->GetBrowserContext();
+          },
+          render_frame_host().GetGlobalId()),
+      render_frame_host());
+}
+
 }  // namespace content

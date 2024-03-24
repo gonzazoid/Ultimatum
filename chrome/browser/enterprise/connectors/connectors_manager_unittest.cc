@@ -2,14 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "chrome/browser/enterprise/connectors/connectors_manager.h"
+
+#include <optional>
 #include <set>
 #include <utility>
 
-#include "base/notreached.h"
-#include "chrome/browser/enterprise/connectors/connectors_manager.h"
-
 #include "base/json/json_reader.h"
 #include "base/memory/raw_ptr.h"
+#include "base/notreached.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
@@ -30,7 +31,6 @@
 #include "content/public/test/browser_task_environment.h"
 #include "storage/browser/file_system/file_system_url.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/enterprise/connectors/analysis/source_destination_test_util.h"
@@ -181,21 +181,13 @@ class ConnectorsManagerTest : public testing::Test {
 // Platform policies should only act as a kill switch.
 class ConnectorsManagerLocalAnalysisPolicyTest
     : public ConnectorsManagerTest,
-      public testing::WithParamInterface<
-          std::tuple<AnalysisConnector, bool, bool>> {
+      public testing::WithParamInterface<std::tuple<AnalysisConnector, bool>> {
  protected:
   AnalysisConnector connector() const { return std::get<0>(GetParam()); }
-  bool enable_feature() const { return std::get<1>(GetParam()); }
-  bool set_policy() const { return std::get<2>(GetParam()); }
+  bool set_policy() const { return std::get<1>(GetParam()); }
 };
 
 TEST_P(ConnectorsManagerLocalAnalysisPolicyTest, Test) {
-  if (enable_feature()) {
-    scoped_feature_list_.InitWithFeatures({kLocalContentAnalysisEnabled}, {});
-  } else {
-    scoped_feature_list_.InitWithFeatures({}, {kLocalContentAnalysisEnabled});
-  }
-
   std::unique_ptr<ScopedConnectorPref> scoped_pref =
       set_policy() ? std::make_unique<ScopedConnectorPref>(
                          pref_service(), ConnectorPref(connector()),
@@ -206,15 +198,13 @@ TEST_P(ConnectorsManagerLocalAnalysisPolicyTest, Test) {
       std::make_unique<BrowserCrashEventRouter>(profile_),
       std::make_unique<ExtensionInstallEventRouter>(profile_), pref_service(),
       GetServiceProviderConfig());
-  EXPECT_EQ(enable_feature() && set_policy(),
-            manager.IsConnectorEnabled(connector()));
+  EXPECT_EQ(set_policy(), manager.IsConnectorEnabled(connector()));
 }
 
 INSTANTIATE_TEST_SUITE_P(
     ConnectorsManagerLocalAnalysisPolicyTest,
     ConnectorsManagerLocalAnalysisPolicyTest,
     testing::Combine(testing::ValuesIn(kAllAnalysisConnectors),
-                     testing::Bool(),
                      testing::Bool()));
 
 class ConnectorsManagerConnectorPoliciesTest
@@ -246,10 +236,10 @@ class ConnectorsManagerConnectorPoliciesTest
   }
 
  protected:
-  absl::optional<AnalysisSettings> ExpectedAnalysisSettings(const char* pref,
-                                                            const char* url) {
+  std::optional<AnalysisSettings> ExpectedAnalysisSettings(const char* pref,
+                                                           const char* url) {
     if (pref == kEmptySettingsPref || url == kNoTagsUrl)
-      return absl::nullopt;
+      return std::nullopt;
 
     AnalysisSettings settings;
 
@@ -269,7 +259,7 @@ class ConnectorsManagerConnectorPoliciesTest
     if (pref == kNormalLocalAnalysisSettingsPref)
       settings.tags.erase("malware");
     if (settings.tags.empty())
-      return absl::nullopt;
+      return std::nullopt;
 
     return settings;
   }
@@ -474,14 +464,14 @@ constexpr char kNormalLocalSourceDestinationSettingsPref[] = R"([{
 }])";
 
 constexpr VolumeInfo kRemovableVolumeInfo{
-    file_manager::VOLUME_TYPE_REMOVABLE_DISK_PARTITION, absl::nullopt,
+    file_manager::VOLUME_TYPE_REMOVABLE_DISK_PARTITION, std::nullopt,
     "REMOVABLE"};
 constexpr VolumeInfo kProvidedVolumeInfo{file_manager::VOLUME_TYPE_PROVIDED,
-                                         absl::nullopt, "PROVIDED"};
+                                         std::nullopt, "PROVIDED"};
 constexpr VolumeInfo kMyFilesVolumeInfo{
-    file_manager::VOLUME_TYPE_DOWNLOADS_DIRECTORY, absl::nullopt, "MY_FILES"};
+    file_manager::VOLUME_TYPE_DOWNLOADS_DIRECTORY, std::nullopt, "MY_FILES"};
 constexpr VolumeInfo kDriveVolumeInfo{file_manager::VOLUME_TYPE_GOOGLE_DRIVE,
-                                      absl::nullopt, "GOOGLE_DRIVE"};
+                                      std::nullopt, "GOOGLE_DRIVE"};
 
 constexpr std::initializer_list<VolumeInfo> kVolumeInfos{
     kRemovableVolumeInfo, kProvidedVolumeInfo, kMyFilesVolumeInfo,
@@ -574,13 +564,13 @@ class ConnectorsManagerConnectorPoliciesSourceDestinationTest
   }
 
  protected:
-  absl::optional<AnalysisSettings> ExpectedAnalysisSettings(
+  std::optional<AnalysisSettings> ExpectedAnalysisSettings(
       const char* pref,
       const std::pair<VolumeInfo, VolumeInfo>* volume_pair) {
     if (pref == kEmptySettingsPref ||
         volume_pair == &kNoDlpNoMalwareVolumePair1 ||
         volume_pair == &kNoDlpNoMalwareVolumePair2)
-      return absl::nullopt;
+      return std::nullopt;
 
     AnalysisSettings settings;
 
@@ -606,7 +596,7 @@ class ConnectorsManagerConnectorPoliciesSourceDestinationTest
     if (pref == kNormalLocalSourceDestinationSettingsPref)
       settings.tags.erase("malware");
     if (settings.tags.empty())
-      return absl::nullopt;
+      return std::nullopt;
 
     return settings;
   }

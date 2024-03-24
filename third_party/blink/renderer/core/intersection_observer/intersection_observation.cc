@@ -17,8 +17,6 @@
 #include "third_party/blink/renderer/core/layout/layout_view.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 
-#define CHECK_SKIPPED_UPDATE_ON_SCROLL DCHECK_IS_ON()
-
 namespace blink {
 
 namespace {
@@ -40,8 +38,8 @@ IntersectionObservation::IntersectionObservation(IntersectionObserver& observer,
 int64_t IntersectionObservation::ComputeIntersection(
     unsigned compute_flags,
     gfx::Vector2dF accumulated_scroll_delta_since_last_update,
-    absl::optional<base::TimeTicks>& monotonic_time,
-    absl::optional<IntersectionGeometry::RootGeometry>& root_geometry) {
+    std::optional<base::TimeTicks>& monotonic_time,
+    std::optional<IntersectionGeometry::RootGeometry>& root_geometry) {
   DCHECK(Observer());
   cached_rects_.min_scroll_delta_to_update -=
       accumulated_scroll_delta_since_last_update;
@@ -58,13 +56,13 @@ int64_t IntersectionObservation::ComputeIntersection(
   if (MaybeDelayAndReschedule(compute_flags, timestamp))
     return 0;
 
-#if CHECK_SKIPPED_UPDATE_ON_SCROLL
+#if CHECK_SKIPPED_UPDATE_ON_SCROLL()
   std::optional<IntersectionGeometry::CachedRects> cached_rects_backup;
 #endif
   if (RuntimeEnabledFeatures::IntersectionOptimizationEnabled() &&
       cached_rects_.valid && cached_rects_.min_scroll_delta_to_update.x() > 0 &&
       cached_rects_.min_scroll_delta_to_update.y() > 0) {
-#if CHECK_SKIPPED_UPDATE_ON_SCROLL
+#if CHECK_SKIPPED_UPDATE_ON_SCROLL()
     cached_rects_backup.emplace(cached_rects_);
 #else
     return 0;
@@ -72,17 +70,27 @@ int64_t IntersectionObservation::ComputeIntersection(
   }
 
   unsigned geometry_flags = GetIntersectionGeometryFlags(compute_flags);
+  // The policy for honoring margins is the same as that for reporting root
+  // bounds, so this flag can be used for both.
+  bool honor_margins =
+      geometry_flags & IntersectionGeometry::kShouldReportRootBounds;
+  Vector<Length> empty_margin;
   IntersectionGeometry geometry(
-      observer_->root(), *Target(), observer_->RootMargin(),
-      observer_->thresholds(), observer_->TargetMargin(),
-      observer_->ScrollMargin(), geometry_flags, root_geometry, &cached_rects_);
+      observer_->root(), *Target(),
+      honor_margins ? observer_->RootMargin() : empty_margin,
+      observer_->thresholds(),
+      honor_margins ? observer_->TargetMargin() : empty_margin,
+      honor_margins ? observer_->ScrollMargin() : empty_margin, geometry_flags,
+      root_geometry, &cached_rects_);
 
-#if CHECK_SKIPPED_UPDATE_ON_SCROLL
+#if CHECK_SKIPPED_UPDATE_ON_SCROLL()
   if (cached_rects_backup) {
     // A skipped update on scroll should generate the same result.
-    cached_rects_ = cached_rects_backup.value();
-    CHECK_EQ(last_threshold_index_, geometry.ThresholdIndex());
+    CHECK_EQ(last_threshold_index_, geometry.ThresholdIndex())
+        << "Previous: " << cached_rects_backup->ToString()
+        << "\nNew: " << cached_rects_.ToString();
     CHECK_EQ(last_is_visible_, geometry.IsVisible());
+    cached_rects_ = cached_rects_backup.value();
     return 0;
   }
 #endif
@@ -124,49 +132,6 @@ void IntersectionObservation::Disconnect() {
   observer_.Clear();
 }
 
-void IntersectionObservation::InvalidateCachedRectsIfPaintPropertiesChanged() {
-  DCHECK(RuntimeEnabledFeatures::IntersectionOptimizationEnabled());
-  if (cached_rects_.valid && PaintPropertiesChanged()) {
-    InvalidateCachedRects();
-  }
-}
-
-bool IntersectionObservation::PaintPropertiesChanged() const {
-  DCHECK(cached_rects_.valid);
-  if (observer_->trackVisibility()) {
-    return true;
-  }
-  const LayoutObject* target_object =
-      IntersectionGeometry::GetTargetLayoutObject(*target_);
-  if (!target_object ||
-      !IntersectionGeometry::CanUseGeometryMapper(*target_object)) {
-    return true;
-  }
-  const LayoutObject* root_object = nullptr;
-  PropertyTreeStateOrAlias root_state = PropertyTreeState::Root();
-  if (!observer_->RootIsImplicit()) {
-    root_object =
-        IntersectionGeometry::GetExplicitRootLayoutObject(*observer_->root());
-    if (!root_object || root_object == target_object) {
-      return true;
-    }
-    const auto* root_property_container =
-        root_object->GetPropertyContainer(nullptr);
-    if (!root_property_container) {
-      return true;
-    }
-    root_state = root_property_container->FirstFragment().ContentsProperties();
-  }
-  PropertyTreeStateOrAlias target_state = PropertyTreeState::Uninitialized();
-  LayoutObject::AncestorSkipInfo skip_info(root_object);
-  if (!target_object->GetPropertyContainer(&skip_info, &target_state)) {
-    return true;
-  }
-  return target_state.ChangedExceptScrollAndEffect(
-      PaintPropertyChangeType::kChangedOnlyCompositedValues,
-      root_state.Unalias());
-}
-
 void IntersectionObservation::Trace(Visitor* visitor) const {
   visitor->Trace(observer_);
   visitor->Trace(entries_);
@@ -177,7 +142,7 @@ bool IntersectionObservation::CanUseCachedRectsForTesting() const {
   // This is to avoid the side effects of IntersectionGeometry.
   IntersectionGeometry::CachedRects cached_rects_copy = cached_rects_;
 
-  absl::optional<IntersectionGeometry::RootGeometry> root_geometry;
+  std::optional<IntersectionGeometry::RootGeometry> root_geometry;
   IntersectionGeometry geometry(observer_->root(), *target_,
                                 /* root_margin */ {},
                                 /* thresholds */ {0},

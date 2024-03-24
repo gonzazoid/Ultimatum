@@ -213,6 +213,9 @@ content::WebUIDataSource* CreateAndAddNewTabPageUiHtmlSource(Profile* profile) {
   source->AddInteger(
       "prerenderStartTimeThreshold",
       features::kNewTabPagePrerenderStartDelayOnMouseHoverByMiliSeconds.Get());
+  source->AddInteger(
+      "preconnectStartTimeThreshold",
+      features::kNewTabPagePreconnectStartDelayOnMouseHoverByMiliSeconds.Get());
 
   source->AddBoolean(
       "oneGoogleBarEnabled",
@@ -321,6 +324,11 @@ content::WebUIDataSource* CreateAndAddNewTabPageUiHtmlSource(Profile* profile) {
       {"thirdPartyThemeDescription", IDS_NTP_CUSTOMIZE_3PT_THEME_DESC},
       {"uninstallThirdPartyThemeButton", IDS_NTP_CUSTOMIZE_3PT_THEME_UNINSTALL},
       {"uploadFromDevice", IDS_NTP_CUSTOMIZE_UPLOAD_FROM_DEVICE_LABEL},
+
+      // Wallpaper search.
+      {"customizeThisPageWallpaperSearch",
+       IDS_NTP_CUSTOM_BG_CUSTOMIZE_NTP_WALLPAPER_SEARCH_LABEL},
+      {"wallpaperSearchButton", IDS_NTP_WALLPAPER_SEARCH_PAGE_HEADER},
 
       // Voice search.
       {"audioError", IDS_NEW_TAB_VOICE_AUDIO_ERROR},
@@ -545,8 +553,13 @@ content::WebUIDataSource* CreateAndAddNewTabPageUiHtmlSource(Profile* profile) {
       {"modulesJourneysCartTileLabelDefault",
        IDS_NTP_MODULES_QUEST_CART_TILE_LABEL_DEFAULT},
       {"modulesMoreActions", IDS_NTP_MODULES_MORE_ACTIONS},
+      {"modulesTabResumptionDismissButton",
+       IDS_NTP_MODULES_TAB_RESUMPTION_DISMISS_BUTTON},
       {"modulesTabResumptionTitle", IDS_NTP_TAB_RESUMPTION_TITLE},
       {"modulesTabResumptionInfo", IDS_NTP_MODULES_TAB_RESUMPTION_INFO},
+      {"modulesTabResumptionSentence", IDS_NTP_MODULES_TAB_RESUMPTION_SENTENCE},
+      {"modulesTabResumptionDevicePrefix",
+       IDS_NTP_MODULES_TAB_RESUMPTION_DEVICE_PREFIX},
 
       // Middle slot promo.
       {"undoDismissPromoButtonToast", IDS_NTP_UNDO_DISMISS_PROMO_BUTTON_TOAST},
@@ -665,9 +678,17 @@ NewTabPageUI::NewTabPageUI(content::WebUI* web_ui)
   source->AddBoolean(
       "modulesVisibleManagedByPolicy",
       profile_->GetPrefs()->IsManagedPreference(prefs::kNtpModulesVisible));
-
   source->AddBoolean("customizeChromeEnabled",
                      customize_chrome::IsSidePanelEnabled());
+  bool wallpaper_search_button_enabled =
+      base::FeatureList::IsEnabled(ntp_features::kNtpWallpaperSearchButton) &&
+      customize_chrome::IsWallpaperSearchEnabledForProfile(profile_);
+  source->AddBoolean("wallpaperSearchButtonEnabled",
+                     wallpaper_search_button_enabled);
+  source->AddBoolean("wallpaperSearchButtonAnimationEnabled",
+                     wallpaper_search_button_enabled &&
+                         base::FeatureList::IsEnabled(
+                             ntp_features::kNtpWallpaperSearchButtonAnimation));
 
   content::URLDataSource::Add(profile_,
                               std::make_unique<SanitizedImageSource>(profile_));

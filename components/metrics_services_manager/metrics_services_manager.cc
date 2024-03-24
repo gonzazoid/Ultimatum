@@ -4,6 +4,7 @@
 
 #include "components/metrics_services_manager/metrics_services_manager.h"
 
+#include <memory>
 #include <utility>
 
 #include "base/check.h"
@@ -18,6 +19,7 @@
 #include "components/metrics_services_manager/metrics_services_manager_client.h"
 #include "components/ukm/ukm_service.h"
 #include "components/variations/service/variations_service.h"
+#include "components/variations/synthetic_trial_registry.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
 namespace metrics_services_manager {
@@ -37,6 +39,16 @@ void MetricsServicesManager::InstantiateFieldTrialList() const {
   client_->GetMetricsStateManager()->InstantiateFieldTrialList();
 }
 
+variations::SyntheticTrialRegistry*
+MetricsServicesManager::GetSyntheticTrialRegistry() {
+  DCHECK(thread_checker_.CalledOnValidThread());
+  if (!synthetic_trial_registry_) {
+    synthetic_trial_registry_ =
+        std::make_unique<variations::SyntheticTrialRegistry>();
+  }
+  return synthetic_trial_registry_.get();
+}
+
 metrics::MetricsService* MetricsServicesManager::GetMetricsService() {
   DCHECK(thread_checker_.CalledOnValidThread());
   return GetMetricsServiceClient()->GetMetricsService();
@@ -47,6 +59,12 @@ ukm::UkmService* MetricsServicesManager::GetUkmService() {
   return GetMetricsServiceClient()->GetUkmService();
 }
 
+IdentifiabilityStudyState*
+MetricsServicesManager::GetIdentifiabilityStudyState() {
+  DCHECK(thread_checker_.CalledOnValidThread());
+  return GetMetricsServiceClient()->GetIdentifiabilityStudyState();
+}
+
 metrics::structured::StructuredMetricsService*
 MetricsServicesManager::GetStructuredMetricsService() {
   DCHECK(thread_checker_.CalledOnValidThread());
@@ -55,8 +73,10 @@ MetricsServicesManager::GetStructuredMetricsService() {
 
 variations::VariationsService* MetricsServicesManager::GetVariationsService() {
   DCHECK(thread_checker_.CalledOnValidThread());
-  if (!variations_service_)
-    variations_service_ = client_->CreateVariationsService();
+  if (!variations_service_) {
+    variations_service_ =
+        client_->CreateVariationsService(GetSyntheticTrialRegistry());
+  }
   return variations_service_.get();
 }
 
@@ -82,14 +102,17 @@ MetricsServicesManager::GetOnRendererUnresponsiveCb() {
 
 std::unique_ptr<const variations::EntropyProviders>
 MetricsServicesManager::CreateEntropyProvidersForTesting() {
-  return client_->GetMetricsStateManager()->CreateEntropyProviders();
+  // Setting enable_limited_entropy_mode=true to maximize code coverage.
+  return client_->GetMetricsStateManager()->CreateEntropyProviders(
+      /*enable_limited_entropy_mode=*/true);
 }
 
 metrics::MetricsServiceClient*
 MetricsServicesManager::GetMetricsServiceClient() {
   DCHECK(thread_checker_.CalledOnValidThread());
   if (!metrics_service_client_) {
-    metrics_service_client_ = client_->CreateMetricsServiceClient();
+    metrics_service_client_ =
+        client_->CreateMetricsServiceClient(GetSyntheticTrialRegistry());
     // base::Unretained is safe since |this| owns the metrics_service_client_.
     metrics_service_client_->SetUpdateRunningServicesCallback(
         base::BindRepeating(&MetricsServicesManager::UpdateRunningServices,

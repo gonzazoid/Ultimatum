@@ -30,6 +30,7 @@
 #include "third_party/blink/renderer/core/html/forms/html_input_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_text_area_element.h"
 #include "third_party/blink/renderer/core/html/html_div_element.h"
+#include "third_party/blink/renderer/core/input/event_handler.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
 #include "third_party/blink/renderer/core/testing/sim/sim_request.h"
 #include "third_party/blink/renderer/core/testing/sim/sim_test.h"
@@ -234,7 +235,7 @@ class MockHandledEventCallback {
                  void(mojom::InputEventResultState,
                       const ui::LatencyInfo&,
                       InputHandlerProxy::DidOverscrollParams*,
-                      absl::optional<cc::TouchAction>));
+                      std::optional<cc::TouchAction>));
 
   WidgetBaseInputHandler::HandledEventCallback GetCallback() {
     return WTF::BindOnce(&MockHandledEventCallback::HandleCallback,
@@ -246,7 +247,7 @@ class MockHandledEventCallback {
       mojom::InputEventResultState ack_state,
       const ui::LatencyInfo& latency_info,
       std::unique_ptr<InputHandlerProxy::DidOverscrollParams> overscroll,
-      absl::optional<cc::TouchAction> touch_action) {
+      std::optional<cc::TouchAction> touch_action) {
     Run(ack_state, latency_info, overscroll.get(), touch_action);
   }
 };
@@ -297,6 +298,10 @@ class WebFrameWidgetImplSimTest : public SimTest {
 
   MockWebFrameWidgetImpl* MockMainFrameWidget() {
     return static_cast<MockWebFrameWidgetImpl*>(MainFrame().FrameWidget());
+  }
+
+  EventHandler& GetEventHandler() {
+    return GetDocument().GetFrame()->GetEventHandler();
   }
 
   void SendInputEvent(const WebInputEvent& event,
@@ -483,6 +488,94 @@ TEST_F(WebFrameWidgetImplSimTest, SendElasticOverscrollForTouchscreen) {
       .Times(testing::AnyNumber());
 
   SendInputEvent(scroll, base::DoNothing());
+}
+
+TEST_F(WebFrameWidgetImplSimTest, TestStartStylusWritingForInputElement) {
+  WebView().MainFrameViewWidget()->Resize(gfx::Size(400, 400));
+  SimRequest request("https://example.com/test.html", "text/html");
+  LoadURL("https://example.com/test.html");
+  request.Complete(
+      R"HTML(
+      <!doctype html>
+      <body style='padding: 0px; width: 400px; height: 400px;'>
+      <input type='text' id='first' style='width: 100px; height: 100px;'>
+      </body>
+      )HTML");
+  Compositor().BeginFrame();
+  Element* first =
+      DynamicTo<Element>(GetDocument().getElementById(AtomicString("first")));
+  WebPointerEvent event(
+      WebInputEvent::Type::kPointerDown,
+      WebPointerProperties(1, WebPointerProperties::PointerType::kPen,
+                           WebPointerProperties::Button::kLeft,
+                           gfx::PointF(100, 100), gfx::PointF(100, 100)),
+      1, 1);
+  GetEventHandler().HandlePointerEvent(event, Vector<WebPointerEvent>(),
+                                       Vector<WebPointerEvent>());
+  EXPECT_EQ(nullptr, GetDocument().FocusedElement());
+  MockMainFrameWidget()->OnStartStylusWriting(base::DoNothing());
+  EXPECT_EQ(first, GetDocument().FocusedElement());
+}
+
+TEST_F(WebFrameWidgetImplSimTest,
+       TestStartStylusWritingForContentEditableElement) {
+  WebView().MainFrameViewWidget()->Resize(gfx::Size(400, 400));
+  SimRequest request("https://example.com/test.html", "text/html");
+  LoadURL("https://example.com/test.html");
+  request.Complete(
+      R"HTML(
+      <!doctype html>
+      <body style='padding: 0px; width: 400px; height: 400px;'>
+      <div contenteditable='true' id='first' style='width: 100px; height: 100px;'></div>
+      </body>
+      )HTML");
+  Compositor().BeginFrame();
+  Element* first =
+      DynamicTo<Element>(GetDocument().getElementById(AtomicString("first")));
+  WebPointerEvent event(
+      WebInputEvent::Type::kPointerDown,
+      WebPointerProperties(1, WebPointerProperties::PointerType::kPen,
+                           WebPointerProperties::Button::kLeft,
+                           gfx::PointF(100, 100), gfx::PointF(100, 100)),
+      1, 1);
+  GetEventHandler().HandlePointerEvent(event, Vector<WebPointerEvent>(),
+                                       Vector<WebPointerEvent>());
+  EXPECT_EQ(nullptr, GetDocument().FocusedElement());
+  MockMainFrameWidget()->OnStartStylusWriting(base::DoNothing());
+  EXPECT_EQ(first, GetDocument().FocusedElement());
+}
+
+TEST_F(WebFrameWidgetImplSimTest,
+       TestStartStylusWritingForContentEditableChildElement) {
+  WebView().MainFrameViewWidget()->Resize(gfx::Size(400, 400));
+  SimRequest request("https://example.com/test.html", "text/html");
+  LoadURL("https://example.com/test.html");
+  request.Complete(
+      R"HTML(
+      <!doctype html>
+      <body style='padding: 0px; width: 400px; height: 400px;'>
+      <div contenteditable='true' id='first'>
+      <div id='second' style='width: 100px; height: 100px;'>Hello</div>
+      </div>
+      </body>
+      )HTML");
+  Compositor().BeginFrame();
+  Element* first =
+      DynamicTo<Element>(GetDocument().getElementById(AtomicString("first")));
+  Element* second =
+      DynamicTo<Element>(GetDocument().getElementById(AtomicString("second")));
+  WebPointerEvent event(
+      WebInputEvent::Type::kPointerDown,
+      WebPointerProperties(1, WebPointerProperties::PointerType::kPen,
+                           WebPointerProperties::Button::kLeft,
+                           gfx::PointF(100, 100), gfx::PointF(100, 100)),
+      1, 1);
+  GetEventHandler().HandlePointerEvent(event, Vector<WebPointerEvent>(),
+                                       Vector<WebPointerEvent>());
+  EXPECT_EQ(second, GetEventHandler().CurrentTouchDownElement());
+  EXPECT_EQ(nullptr, GetDocument().FocusedElement());
+  MockMainFrameWidget()->OnStartStylusWriting(base::DoNothing());
+  EXPECT_EQ(first, GetDocument().FocusedElement());
 }
 
 class NotifySwapTimesWebFrameWidgetTest : public SimTest {
@@ -869,8 +962,8 @@ TEST_F(WebFrameWidgetSimTest, PropagateScaleToRemoteFrames) {
 }
 
 TEST_F(WebFrameWidgetSimTest, TestLineBoundsAreEmptyBeforeFocus) {
-  base::test::ScopedFeatureList feature_list(
-      features::kReportVisibleLineBounds);
+  std::unique_ptr<ScopedReportVisibleLineBoundsForTest> enabled =
+      std::make_unique<ScopedReportVisibleLineBoundsForTest>(true);
   WebView().ResizeVisualViewport(gfx::Size(1000, 1000));
   auto* widget = WebView().MainFrameViewWidget();
   SimRequest request("https://example.com/test.html", "text/html");
@@ -911,8 +1004,8 @@ TEST_F(WebFrameWidgetSimTest, TestLineBoundsAreEmptyBeforeFocus) {
 }
 
 TEST_F(WebFrameWidgetSimTest, TestLineBoundsAreCorrectAfterFocusChange) {
-  base::test::ScopedFeatureList feature_list(
-      features::kReportVisibleLineBounds);
+  std::unique_ptr<ScopedReportVisibleLineBoundsForTest> enabled =
+      std::make_unique<ScopedReportVisibleLineBoundsForTest>(true);
   WebView().ResizeVisualViewport(gfx::Size(1000, 1000));
   auto* widget = WebView().MainFrameViewWidget();
   SimRequest request("https://example.com/test.html", "text/html");
@@ -1090,8 +1183,8 @@ TEST_F(WebFrameWidgetSimTest, ResizableMatchesCanResize) {
 }
 
 TEST_F(WebFrameWidgetSimTest, TestLineBoundsAreCorrectAfterLayoutChange) {
-  base::test::ScopedFeatureList feature_list(
-      features::kReportVisibleLineBounds);
+  std::unique_ptr<ScopedReportVisibleLineBoundsForTest> enabled =
+      std::make_unique<ScopedReportVisibleLineBoundsForTest>(true);
   WebView().ResizeVisualViewport(gfx::Size(1000, 1000));
   auto* widget = WebView().MainFrameViewWidget();
   SimRequest request("https://example.com/test.html", "text/html");
@@ -1150,8 +1243,8 @@ TEST_F(WebFrameWidgetSimTest, TestLineBoundsAreCorrectAfterLayoutChange) {
 }
 
 TEST_F(WebFrameWidgetSimTest, TestLineBoundsAreCorrectAfterPageScroll) {
-  base::test::ScopedFeatureList feature_list(
-      features::kReportVisibleLineBounds);
+  std::unique_ptr<ScopedReportVisibleLineBoundsForTest> enabled =
+      std::make_unique<ScopedReportVisibleLineBoundsForTest>(true);
   WebView().ResizeVisualViewport(gfx::Size(1000, 1000));
   auto* widget = WebView().MainFrameViewWidget();
   SimRequest request("https://example.com/test.html", "text/html");
@@ -1219,8 +1312,8 @@ TEST_F(WebFrameWidgetSimTest, TestLineBoundsAreCorrectAfterPageScroll) {
 }
 
 TEST_F(WebFrameWidgetSimTest, TestLineBoundsAreCorrectAfterElementScroll) {
-  base::test::ScopedFeatureList feature_list(
-      features::kReportVisibleLineBounds);
+  std::unique_ptr<ScopedReportVisibleLineBoundsForTest> enabled =
+      std::make_unique<ScopedReportVisibleLineBoundsForTest>(true);
   WebView().ResizeVisualViewport(gfx::Size(1000, 1000));
   auto* widget = WebView().MainFrameViewWidget();
   SimRequest request("https://example.com/test.html", "text/html");
@@ -1291,8 +1384,8 @@ TEST_F(WebFrameWidgetSimTest, TestLineBoundsAreCorrectAfterElementScroll) {
 }
 
 TEST_F(WebFrameWidgetSimTest, TestLineBoundsAreCorrectAfterCommit) {
-  base::test::ScopedFeatureList feature_list(
-      features::kReportVisibleLineBounds);
+  std::unique_ptr<ScopedReportVisibleLineBoundsForTest> enabled =
+      std::make_unique<ScopedReportVisibleLineBoundsForTest>(true);
   WebView().ResizeVisualViewport(gfx::Size(1000, 1000));
   auto* widget = WebView().MainFrameViewWidget();
   SimRequest request("https://example.com/test.html", "text/html");
@@ -1356,8 +1449,8 @@ TEST_F(WebFrameWidgetSimTest, TestLineBoundsAreCorrectAfterCommit) {
 }
 
 TEST_F(WebFrameWidgetSimTest, TestLineBoundsAreCorrectAfterDelete) {
-  base::test::ScopedFeatureList feature_list(
-      features::kReportVisibleLineBounds);
+  std::unique_ptr<ScopedReportVisibleLineBoundsForTest> enabled =
+      std::make_unique<ScopedReportVisibleLineBoundsForTest>(true);
   WebView().ResizeVisualViewport(gfx::Size(1000, 1000));
   auto* widget = WebView().MainFrameViewWidget();
   SimRequest request("https://example.com/test.html", "text/html");
@@ -1440,8 +1533,8 @@ TEST_F(WebFrameWidgetSimTest, TestLineBoundsAreCorrectAfterDelete) {
 }
 
 TEST_F(WebFrameWidgetSimTest, TestLineBoundsInFrame) {
-  base::test::ScopedFeatureList feature_list(
-      features::kReportVisibleLineBounds);
+  std::unique_ptr<ScopedReportVisibleLineBoundsForTest> enabled =
+      std::make_unique<ScopedReportVisibleLineBoundsForTest>(true);
   WebView().ResizeVisualViewport(gfx::Size(1000, 1000));
   auto* widget = WebView().MainFrameViewWidget();
   SimRequest main_resource("https://example.com/test.html", "text/html");
@@ -1507,8 +1600,8 @@ TEST_F(WebFrameWidgetSimTest, TestLineBoundsInFrame) {
 }
 
 TEST_F(WebFrameWidgetSimTest, TestLineBoundsWithDifferentZoom) {
-  base::test::ScopedFeatureList feature_list(
-      features::kReportVisibleLineBounds);
+  std::unique_ptr<ScopedReportVisibleLineBoundsForTest> enabled =
+      std::make_unique<ScopedReportVisibleLineBoundsForTest>(true);
   WebView().ResizeVisualViewport(gfx::Size(1000, 1000));
   auto* widget = WebView().MainFrameViewWidget();
   SimRequest main_resource("https://example.com/test.html", "text/html");
@@ -1581,8 +1674,8 @@ TEST_F(WebFrameWidgetSimTest, TestLineBoundsWithDifferentZoom) {
 }
 
 TEST_F(WebFrameWidgetSimTest, TestLineBoundsAreClippedInSubframe) {
-  base::test::ScopedFeatureList feature_list(
-      features::kReportVisibleLineBounds);
+  std::unique_ptr<ScopedReportVisibleLineBoundsForTest> enabled =
+      std::make_unique<ScopedReportVisibleLineBoundsForTest>(true);
   WebView().ResizeVisualViewport(gfx::Size(200, 200));
   auto* widget = WebView().MainFrameViewWidget();
   SimRequest main_resource("https://example.com/test.html", "text/html");

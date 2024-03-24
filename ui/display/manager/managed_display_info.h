@@ -178,6 +178,14 @@ class DISPLAY_MANAGER_EXPORT ManagedDisplayInfo {
   }
   Display::TouchSupport touch_support() const { return touch_support_; }
 
+  void set_connection_type(DisplayConnectionType type) {
+    connection_type_ = type;
+  }
+  DisplayConnectionType connection_type() const { return connection_type_; }
+
+  void set_physical_size(const gfx::Size& size) { physical_size_ = size; }
+  const gfx::Size& physical_size() const { return physical_size_; }
+
   // Gets/Sets the device scale factor of the display.
   // TODO(oshima): Rename this to |default_device_scale_factor|.
   float device_scale_factor() const { return device_scale_factor_; }
@@ -345,10 +353,8 @@ class DISPLAY_MANAGER_EXPORT ManagedDisplayInfo {
     variable_refresh_rate_state_ = variable_refresh_rate_state;
   }
 
-  const absl::optional<float>& vsync_rate_min() const {
-    return vsync_rate_min_;
-  }
-  void set_vsync_rate_min(const absl::optional<float>& vsync_rate_min) {
+  const std::optional<float>& vsync_rate_min() const { return vsync_rate_min_; }
+  void set_vsync_rate_min(const std::optional<float>& vsync_rate_min) {
     vsync_rate_min_ = vsync_rate_min;
   }
 
@@ -396,6 +402,8 @@ class DISPLAY_MANAGER_EXPORT ManagedDisplayInfo {
   std::map<Display::RotationSource, Display::Rotation> rotations_;
   Display::RotationSource active_rotation_source_;
   Display::TouchSupport touch_support_;
+  DisplayConnectionType connection_type_ = DISPLAY_CONNECTION_TYPE_UNKNOWN;
+  gfx::Size physical_size_;
 
   // This specifies the device's pixel density. (For example, a display whose
   // DPI is higher than the threshold is considered to have device_scale_factor
@@ -477,7 +485,7 @@ class DISPLAY_MANAGER_EXPORT ManagedDisplayInfo {
   DrmFormatsAndModifiers drm_formats_and_modifiers_;
 
   VariableRefreshRateState variable_refresh_rate_state_;
-  absl::optional<float> vsync_rate_min_;
+  std::optional<float> vsync_rate_min_;
 
   // If you add a new member, you need to update Copy().
 };

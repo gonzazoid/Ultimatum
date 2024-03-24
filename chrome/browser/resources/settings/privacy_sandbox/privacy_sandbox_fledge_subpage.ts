@@ -8,27 +8,32 @@ import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
 import 'chrome://resources/cr_elements/cr_expand_button/cr_expand_button.js';
 import 'chrome://resources/cr_elements/cr_shared_style.css.js';
 import 'chrome://resources/polymer/v3_0/iron-collapse/iron-collapse.js';
-import '/shared/settings/controls/settings_toggle_button.js';
+import '../controls/settings_toggle_button.js';
 import './privacy_sandbox_interest_item.js';
 
-import {SettingsToggleButtonElement} from '/shared/settings/controls/settings_toggle_button.js';
 import {PrefsMixin} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 import {assert} from 'chrome://resources/js/assert.js';
 import {afterNextRender, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
+import type {SettingsToggleButtonElement} from '../controls/settings_toggle_button.js';
 import {HatsBrowserProxyImpl, TrustSafetyInteraction} from '../hats_browser_proxy.js';
-import {MetricsBrowserProxy, MetricsBrowserProxyImpl} from '../metrics_browser_proxy.js';
+import {loadTimeData} from '../i18n_setup.js';
+import type {MetricsBrowserProxy} from '../metrics_browser_proxy.js';
+import {MetricsBrowserProxyImpl} from '../metrics_browser_proxy.js';
 import {routes} from '../route.js';
-import {Route, RouteObserverMixin} from '../router.js';
+import type {Route} from '../router.js';
+import {RouteObserverMixin} from '../router.js';
 
-import {FledgeState, PrivacySandboxBrowserProxy, PrivacySandboxBrowserProxyImpl, PrivacySandboxInterest} from './privacy_sandbox_browser_proxy.js';
+import type {FledgeState, PrivacySandboxBrowserProxy, PrivacySandboxInterest} from './privacy_sandbox_browser_proxy.js';
+import {PrivacySandboxBrowserProxyImpl} from './privacy_sandbox_browser_proxy.js';
 import {getTemplate} from './privacy_sandbox_fledge_subpage.html.js';
 
 export interface SettingsPrivacySandboxFledgeSubpageElement {
   $: {
     fledgeToggle: SettingsToggleButtonElement,
     footer: HTMLElement,
+    footerV2: HTMLElement,
   };
 }
 
@@ -122,6 +127,12 @@ export class SettingsPrivacySandboxFledgeSubpageElement extends
         value: false,
         observer: 'onBlockedSitesExpanded_',
       },
+
+      shouldShowV2_: {
+        type: Boolean,
+        value: () =>
+            loadTimeData.getBoolean('isProactiveTopicsBlockingEnabled'),
+      },
     };
   }
 
@@ -141,6 +152,7 @@ export class SettingsPrivacySandboxFledgeSubpageElement extends
       PrivacySandboxBrowserProxyImpl.getInstance();
   private metricsBrowserProxy_: MetricsBrowserProxy =
       MetricsBrowserProxyImpl.getInstance();
+  private shouldShowV2_: boolean;
 
   override ready() {
     super.ready();
@@ -149,6 +161,10 @@ export class SettingsPrivacySandboxFledgeSubpageElement extends
         state => this.onFledgeStateChanged_(state));
 
     this.$.footer.querySelectorAll('a').forEach(
+        link =>
+            link.setAttribute('aria-description', this.i18n('opensInNewTab')));
+
+    this.$.footerV2.querySelectorAll('a').forEach(
         link =>
             link.setAttribute('aria-description', this.i18n('opensInNewTab')));
   }
@@ -184,7 +200,6 @@ export class SettingsPrivacySandboxFledgeSubpageElement extends
     this.mainSitesList_ = this.sitesList_.slice(0, maxFledgeSitesCount);
     this.remainingSitesList_ = this.sitesList_.slice(maxFledgeSitesCount);
   }
-
 
   private isFledgeEnabledAndLoaded_(): boolean {
     return this.getPref('privacy_sandbox.m1.fledge_enabled').value &&

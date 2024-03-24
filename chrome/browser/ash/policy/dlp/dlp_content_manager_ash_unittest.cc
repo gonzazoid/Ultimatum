@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <optional>
+#include <string_view>
 
 #include "ash/public/cpp/privacy_screen_dlp_helper.h"
 #include "base/functional/bind.h"
@@ -162,10 +163,6 @@ class DlpContentManagerAshTest : public testing::Test {
   void SetUp() override {
     testing::Test::SetUp();
 
-    test_reporting_ =
-        ::reporting::ReportingClient::TestEnvironment::CreateWithStorageModule(
-            base::MakeRefCounted<::reporting::test::TestStorageModule>());
-
     ASSERT_TRUE(profile_manager_.SetUp());
     LoginFakeUser();
 
@@ -187,7 +184,7 @@ class DlpContentManagerAshTest : public testing::Test {
             base::ThreadPool::CreateSequencedTaskRunner({})));
     EXPECT_CALL(*report_queue.get(), AddRecord)
         .WillRepeatedly(
-            [this](base::StringPiece record, ::reporting::Priority priority,
+            [this](std::string_view record, ::reporting::Priority priority,
                    ::reporting::ReportQueue::EnqueueCallback callback) {
               DlpPolicyEvent event;
               event.ParseFromString(std::string(record));
@@ -216,7 +213,9 @@ class DlpContentManagerAshTest : public testing::Test {
   content::BrowserTaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   std::unique_ptr<::reporting::ReportingClient::TestEnvironment>
-      test_reporting_;
+      test_reporting_ = ::reporting::ReportingClient::TestEnvironment::
+          CreateWithStorageModule(
+              base::MakeRefCounted<::reporting::test::TestStorageModule>());
   DlpContentManagerTestHelper helper_;
   base::HistogramTester histogram_tester_;
   std::vector<DlpPolicyEvent> events_;
@@ -231,7 +230,7 @@ class DlpContentManagerAshTest : public testing::Test {
     profile_->SetIsNewProfile(true);
 
     user_manager_->AddUserWithAffiliationAndTypeAndProfile(
-        account_id, false /*is_affiliated*/, user_manager::USER_TYPE_REGULAR,
+        account_id, false /*is_affiliated*/, user_manager::UserType::kRegular,
         profile_);
     user_manager_->LoginUser(account_id, true /*set_profile_created_flag*/);
 
@@ -578,13 +577,15 @@ TEST_F(DlpContentManagerAshTest, VideoCaptureReportDuringRecording) {
   EXPECT_THAT(
       events_[0],
       data_controls::IsDlpPolicyEvent(data_controls::CreateDlpPolicyEvent(
-          kSrcPattern, DlpRulesManager::Restriction::kScreenshot, kRuleName,
-          kRuleId, DlpRulesManager::Level::kReport)));
+          web_contents1->GetLastCommittedURL().spec(),
+          DlpRulesManager::Restriction::kScreenshot, kRuleName, kRuleId,
+          DlpRulesManager::Level::kReport)));
 
   // WebContents 2 becomes confidential. Expect report event from WebContents 2.
+  helper_.ChangeConfidentiality(web_contents1.get(), kEmptyRestrictionSet);
   helper_.ChangeConfidentiality(web_contents2.get(), kScreenshotReported);
   EXPECT_EQ(GetManager()->GetConfidentialRestrictions(web_contents1.get()),
-            kScreenshotReported);
+            kEmptyRestrictionSet);
   EXPECT_EQ(GetManager()->GetConfidentialRestrictions(web_contents2.get()),
             kScreenshotReported);
   EXPECT_EQ(GetManager()->GetOnScreenPresentRestrictions(),
@@ -593,11 +594,11 @@ TEST_F(DlpContentManagerAshTest, VideoCaptureReportDuringRecording) {
   EXPECT_THAT(
       events_[1],
       data_controls::IsDlpPolicyEvent(data_controls::CreateDlpPolicyEvent(
-          kSrcPattern, DlpRulesManager::Restriction::kScreenshot, kRuleName,
-          kRuleId, DlpRulesManager::Level::kReport)));
+          web_contents2->GetLastCommittedURL().spec(),
+          DlpRulesManager::Restriction::kScreenshot, kRuleName, kRuleId,
+          DlpRulesManager::Level::kReport)));
 
   // Remove confidentiality for both web contents.
-  helper_.ChangeConfidentiality(web_contents1.get(), kEmptyRestrictionSet);
   helper_.ChangeConfidentiality(web_contents2.get(), kEmptyRestrictionSet);
   EXPECT_EQ(GetManager()->GetConfidentialRestrictions(web_contents1.get()),
             kEmptyRestrictionSet);

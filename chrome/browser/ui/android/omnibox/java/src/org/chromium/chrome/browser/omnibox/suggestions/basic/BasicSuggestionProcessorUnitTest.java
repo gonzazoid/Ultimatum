@@ -33,6 +33,7 @@ import org.robolectric.annotation.Config;
 import org.chromium.base.Callback;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.base.test.util.Features;
 import org.chromium.chrome.browser.omnibox.ShadowUrlBarData;
 import org.chromium.chrome.browser.omnibox.UrlBarEditingTextStateProvider;
 import org.chromium.chrome.browser.omnibox.styles.OmniboxDrawableState;
@@ -41,7 +42,6 @@ import org.chromium.chrome.browser.omnibox.styles.OmniboxResourceProvider;
 import org.chromium.chrome.browser.omnibox.suggestions.SuggestionHost;
 import org.chromium.chrome.browser.omnibox.suggestions.base.BaseSuggestionViewProperties;
 import org.chromium.chrome.browser.omnibox.test.R;
-import org.chromium.chrome.test.util.browser.Features;
 import org.chromium.components.omnibox.AutocompleteMatch;
 import org.chromium.components.omnibox.AutocompleteMatchBuilder;
 import org.chromium.components.omnibox.OmniboxSuggestionType;
@@ -349,6 +349,15 @@ public class BasicSuggestionProcessorUnitTest {
         Assert.assertEquals(
                 R.drawable.btn_suggestion_refine,
                 shadowOf(iconState.drawable).getCreatedFromResId());
+    }
+
+    @Test
+    @SmallTest
+    public void refineIcon_notShownForQueryTiles() {
+        createSearchSuggestion(OmniboxSuggestionType.TILE_SUGGESTION, "Music");
+        PropertyModel model = mProcessor.createModel();
+        mProcessor.populateModel(mSuggestion, model, 0);
+        Assert.assertNull(mModel.get(BaseSuggestionViewProperties.ACTION_BUTTONS));
     }
 
     @Test

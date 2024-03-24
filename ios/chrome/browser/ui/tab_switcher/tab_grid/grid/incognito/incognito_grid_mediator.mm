@@ -24,21 +24,11 @@
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/tab_grid_metrics.h"
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/tab_grid_paging.h"
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/toolbars/tab_grid_toolbars_configuration.h"
+#import "ios/web/public/web_state_id.h"
 
 // TODO(crbug.com/1457146): Needed for `TabPresentationDelegate`, should be
 // refactored.
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/tab_grid_view_controller.h"
-
-namespace {
-
-// Returns whether the feature kFilterWebsitesForSupervisedUsersOnDesktopAndIOS
-// is enabled or not.
-bool ShouldFilterWebSitesForSupervisedUsers() {
-  return base::FeatureList::IsEnabled(
-      supervised_user::kFilterWebsitesForSupervisedUsersOnDesktopAndIOS);
-}
-
-}  // namespace
 
 @interface IncognitoGridMediator () <IncognitoReauthObserver,
                                      PrefObserverDelegate>
@@ -64,7 +54,7 @@ bool ShouldFilterWebSitesForSupervisedUsers() {
   base::RecordAction(
       base::UserMetricsAction("MobileTabGridCloseAllIncognitoTabs"));
   // This is a no-op if `webStateList` is already empty.
-  self.webStateList->CloseAllWebStates(WebStateList::CLOSE_USER_ACTION);
+  CloseAllWebStates(*self.webStateList, WebStateList::CLOSE_USER_ACTION);
   SnapshotBrowserAgent::FromBrowser(self.browser)->RemoveAllSnapshots();
 }
 
@@ -78,6 +68,10 @@ bool ShouldFilterWebSitesForSupervisedUsers() {
 
 - (void)discardSavedClosedItems {
   NOTREACHED_NORETURN() << "Incognito tabs cannot be saved.";
+}
+
+- (void)setPinState:(BOOL)pinState forItemWithID:(web::WebStateID)itemID {
+  NOTREACHED_NORETURN() << "Should not be called in incognito.";
 }
 
 #pragma mark - TabGridPageMutator
@@ -192,18 +186,16 @@ bool ShouldFilterWebSitesForSupervisedUsers() {
   [super setBrowser:browser];
 
   if (browser) {
-    if (ShouldFilterWebSitesForSupervisedUsers()) {
-      PrefService* prefService = browser->GetBrowserState()->GetPrefs();
-      DCHECK(prefService);
+    PrefService* prefService = browser->GetBrowserState()->GetPrefs();
+    DCHECK(prefService);
 
-      _prefChangeRegistrar = std::make_unique<PrefChangeRegistrar>();
-      _prefChangeRegistrar->Init(prefService);
+    _prefChangeRegistrar = std::make_unique<PrefChangeRegistrar>();
+    _prefChangeRegistrar->Init(prefService);
 
-      // Register to observe any changes on supervised_user status.
-      _prefObserverBridge = std::make_unique<PrefObserverBridge>(self);
-      _prefObserverBridge->ObserveChangesForPreference(
-          prefs::kSupervisedUserId, _prefChangeRegistrar.get());
-    }
+    // Register to observe any changes on supervised_user status.
+    _prefObserverBridge = std::make_unique<PrefObserverBridge>(self);
+    _prefObserverBridge->ObserveChangesForPreference(
+        prefs::kSupervisedUserId, _prefChangeRegistrar.get());
 
     _incognitoDisabled = [self isIncognitoModeDisabled];
   }
@@ -248,8 +240,7 @@ bool ShouldFilterWebSitesForSupervisedUsers() {
     return YES;
   }
 
-  return ShouldFilterWebSitesForSupervisedUsers() &&
-         supervised_user::IsSubjectToParentalControls(*prefService);
+  return supervised_user::IsSubjectToParentalControls(*prefService);
 }
 
 @end

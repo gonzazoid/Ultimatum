@@ -24,7 +24,7 @@ struct DriveFolderResult {
 };
 
 using DriveFolderCompletionCallback =
-    base::OnceCallback<void(DriveFolderResult)>;
+    base::OnceCallback<void(const DriveFolderResult&)>;
 
 // Progress returned asynchronously by the progress callback of a query to
 // upload a file.
@@ -36,7 +36,7 @@ struct DriveFileUploadProgress {
 };
 
 using DriveFileUploadProgressCallback =
-    base::RepeatingCallback<void(DriveFileUploadProgress)>;
+    base::RepeatingCallback<void(const DriveFileUploadProgress&)>;
 
 // Result returned asynchronously by the completion callback of a query to
 // upload a file.
@@ -48,7 +48,26 @@ struct DriveFileUploadResult {
 };
 
 using DriveFileUploadCompletionCallback =
-    base::OnceCallback<void(DriveFileUploadResult)>;
+    base::OnceCallback<void(const DriveFileUploadResult&)>;
+
+// Result reported by the completion block of a query to fetch the user's Drive
+// storage quota.
+struct DriveStorageQuotaResult {
+  // The usage limit, if applicable. Set to -1 if the user has unlimited
+  // storage.
+  int64_t limit;
+  // The usage by all files in Drive.
+  int64_t usage_in_drive;
+  // The usage by trashed files in Drive.
+  int64_t usage_in_drive_trash;
+  // The total usage across all services.
+  int64_t usage;
+  // Error object, if fetching storage quota failed.
+  NSError* error = nil;
+};
+
+using DriveStorageQuotaCompletionCallback =
+    base::OnceCallback<void(const DriveStorageQuotaResult&)>;
 
 // This interface is used to perform queries in a user's Drive account.
 class DriveFileUploader {
@@ -97,6 +116,11 @@ class DriveFileUploader {
       NSString* folder_identifier,
       DriveFileUploadProgressCallback progress_callback,
       DriveFileUploadCompletionCallback completion_callback) = 0;
+
+  // Fetches the Drive storage quota, to check if there is enough storage for
+  // uploads.
+  virtual void FetchStorageQuota(
+      DriveStorageQuotaCompletionCallback completion_callback) = 0;
 };
 
 #endif  // IOS_CHROME_BROWSER_DRIVE_MODEL_DRIVE_FILE_UPLOADER_H_

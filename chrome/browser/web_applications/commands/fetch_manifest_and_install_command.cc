@@ -22,6 +22,7 @@
 #include "chrome/browser/web_applications/web_app_command_manager.h"
 #include "chrome/browser/web_applications/web_app_command_scheduler.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
+#include "chrome/browser/web_applications/web_app_icon_operations.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/browser/web_applications/web_app_install_utils.h"
 #include "chrome/browser/web_applications/web_app_utils.h"
@@ -84,7 +85,7 @@ struct PlayStoreIntent {
 // Find the first Chrome OS app in related_applications of |manifest| and return
 // the details necessary to redirect the user to the app's listing in the Play
 // Store.
-absl::optional<PlayStoreIntent> GetPlayStoreIntentFromManifest(
+std::optional<PlayStoreIntent> GetPlayStoreIntentFromManifest(
     const blink::mojom::Manifest& manifest) {
   for (const auto& app : manifest.related_applications) {
     std::string id = base::UTF16ToUTF8(app.id.value_or(std::u16string()));
@@ -109,7 +110,7 @@ absl::optional<PlayStoreIntent> GetPlayStoreIntentFromManifest(
     std::string intent = kPlayIntentPrefix + id + referrer;
     return PlayStoreIntent{id, intent};
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
@@ -358,7 +359,7 @@ void FetchManifestAndInstallCommand::OnDidPerformInstallableCheck(
         *web_app_info_);
   }
 
-  base::flat_set<GURL> icon_urls = GetValidIconUrlsToDownload(*web_app_info_);
+  IconUrlSizeSet icon_urls = GetValidIconUrlsToDownload(*web_app_info_);
 
   opt_manifest_ = std::move(opt_manifest);
 
@@ -376,7 +377,7 @@ void FetchManifestAndInstallCommand::OnDidPerformInstallableCheck(
 }
 
 void FetchManifestAndInstallCommand::CheckForPlayStoreIntentOrGetIcons(
-    base::flat_set<GURL> icon_urls,
+    IconUrlSizeSet icon_urls,
     bool skip_page_favicons,
     std::unique_ptr<AppLock> app_lock) {
   app_lock_ = std::move(app_lock);
@@ -389,7 +390,7 @@ void FetchManifestAndInstallCommand::CheckForPlayStoreIntentOrGetIcons(
 
   if (!skip_store) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-    absl::optional<PlayStoreIntent> intent =
+    std::optional<PlayStoreIntent> intent =
         GetPlayStoreIntentFromManifest(*opt_manifest_);
     if (intent) {
       auto* arc_service_manager = arc::ArcServiceManager::Get();
@@ -412,7 +413,7 @@ void FetchManifestAndInstallCommand::CheckForPlayStoreIntentOrGetIcons(
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
     if (ShouldInteractWithArc()) {
-      absl::optional<PlayStoreIntent> intent =
+      std::optional<PlayStoreIntent> intent =
           GetPlayStoreIntentFromManifest(*opt_manifest_);
       mojo::Remote<crosapi::mojom::Arc>* opt_arc = GetArcRemoteWithMinVersion(
           crosapi::mojom::Arc::MethodMinVersions::kIsInstallableMinVersion);
@@ -435,7 +436,7 @@ void FetchManifestAndInstallCommand::CheckForPlayStoreIntentOrGetIcons(
 }
 
 void FetchManifestAndInstallCommand::OnDidCheckForIntentToPlayStore(
-    base::flat_set<GURL> icon_urls,
+    IconUrlSizeSet icon_urls,
     bool skip_page_favicons,
     const std::string& intent,
     bool should_intent_to_store) {
@@ -482,7 +483,7 @@ void FetchManifestAndInstallCommand::OnDidCheckForIntentToPlayStore(
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
 void FetchManifestAndInstallCommand::OnDidCheckForIntentToPlayStoreLacros(
-    base::flat_set<GURL> icon_urls,
+    IconUrlSizeSet icon_urls,
     bool skip_page_favicons,
     const std::string& intent,
     crosapi::mojom::IsInstallableResult result) {

@@ -11,6 +11,7 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/run_loop.h"
+#include "base/task/thread_pool.h"
 #include "base/test/test_timeouts.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
@@ -26,6 +27,9 @@
 #include "url/gurl.h"
 
 namespace {
+
+// A dir on DUT to host wayland socket and arc-bridge sockets.
+inline constexpr char kRunChrome[] = "/run/chrome";
 
 // Simulates a failure for a Gaia URL request.
 std::unique_ptr<net::test_server::HttpResponse> HandleGaiaURL(
@@ -44,14 +48,6 @@ void AshIntegrationTest::SetUpCommandLineForLacros(
   CHECK(command_line);
 
   OverrideGaiaUrlForLacros(command_line);
-
-  // Enable the Wayland server.
-  command_line->AppendSwitch(ash::switches::kAshEnableWaylandServer);
-
-  // Set up XDG_RUNTIME_DIR for Wayland.
-  std::unique_ptr<base::Environment> env(base::Environment::Create());
-  CHECK(scoped_temp_dir_xdg_.CreateUniqueTempDir());
-  env->SetVar("XDG_RUNTIME_DIR", scoped_temp_dir_xdg_.GetPath().AsUTF8Unsafe());
 }
 
 void AshIntegrationTest::SetUpLacrosBrowserManager() {
@@ -67,9 +63,9 @@ void AshIntegrationTest::SetUpLacrosBrowserManager() {
 void AshIntegrationTest::WaitForAshFullyStarted() {
   CHECK(base::CommandLine::ForCurrentProcess()->HasSwitch(
       ash::switches::kAshEnableWaylandServer))
-      << "Did you forget to call SetUpCommandLineForLacros?";
+      << "Wayland server should be enabled.";
   base::ScopedAllowBlockingForTesting allow_blocking;
-  base::FilePath xdg_path = scoped_temp_dir_xdg_.GetPath();
+  base::FilePath xdg_path(kRunChrome);
   base::RepeatingTimer timer;
   base::RunLoop run_loop1;
   timer.Start(FROM_HERE, base::Milliseconds(100),
@@ -95,6 +91,17 @@ void AshIntegrationTest::WaitForAshFullyStarted() {
     run_loop2.Run();
   }
   CHECK(extra_parts->did_post_browser_start());
+}
+
+void AshIntegrationTest::SetUpCommandLine(base::CommandLine* command_line) {
+  InteractiveAshTest::SetUpCommandLine(command_line);
+
+  // Enable the Wayland server.
+  command_line->AppendSwitch(ash::switches::kAshEnableWaylandServer);
+
+  // Set up XDG_RUNTIME_DIR for Wayland.
+  std::unique_ptr<base::Environment> env(base::Environment::Create());
+  env->SetVar("XDG_RUNTIME_DIR", kRunChrome);
 }
 
 void AshIntegrationTest::SetUpOnMainThread() {

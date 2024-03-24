@@ -10,6 +10,7 @@
 #include "base/task/single_thread_task_runner.h"
 #include "components/device_event_log/device_event_log.h"
 #include "ui/base/x/x11_display_util.h"
+#include "ui/display/types/display_config.h"
 #include "ui/gfx/x/atom_cache.h"
 #include "ui/gfx/x/future.h"
 #include "ui/gfx/x/randr.h"
@@ -86,7 +87,7 @@ void XDisplayManager::SetDisplayList(std::vector<display::Display> displays,
 // 1.3.
 void XDisplayManager::FetchDisplayList() {
   std::vector<display::Display> displays;
-  DisplayConfig empty_display_config{
+  display::DisplayConfig empty_display_config{
       display::Display::HasForceDeviceScaleFactor()
           ? display::Display::GetForcedDeviceScaleFactor()
           : 1.0f};
@@ -131,13 +132,6 @@ void XDisplayManager::DispatchDelayedDisplayListUpdate() {
                                     base::Unretained(this)));
   base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, update_task_.callback());
-}
-
-gfx::Point XDisplayManager::GetCursorLocation() const {
-  if (auto response = connection_->QueryPointer({x_root_window_}).Sync()) {
-    return {response->root_x, response->root_y};
-  }
-  return {};
 }
 
 std::string XDisplayManager::GetCurrentWorkspace() {

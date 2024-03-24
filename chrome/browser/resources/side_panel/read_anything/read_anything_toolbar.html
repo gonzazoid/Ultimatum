@@ -14,13 +14,21 @@
   cr-icon-button.active {
     background-color: var(--cr-active-background-color);
   }
-  /* TODO(b/1465029): Investigate why chrome refresh colors don't always
-     work on first launch. */
   #play-pause {
     --cr-icon-button-icon-size: 20px;
     --cr-icon-button-size: 28px;
     color: var(--color-side-panel-entry-icon);
     --cr-icon-button-fill-color: var(--color-sys-primary);
+  }
+  .audio-background-when-paused-true {
+    --audio-controls-background: transparent;
+    --audio-controls-right-padding: 0px;
+    --audio-controls-right-margin: 2px;
+  }
+  .audio-background-when-paused-false {
+    --audio-controls-background: var(--color-sys-tonal-container);
+    --audio-controls-right-padding: 4px;
+    --audio-controls-right-margin: 6px;
   }
   #audio-controls {
     border-radius: 18px;
@@ -39,31 +47,6 @@
     min-width: 180px;
     font-size: 13px;
   }
-  #voiceSelectionMenu::part(dialog) {
-    min-width: 304px;
-    width: 304px;
-    margin-left: var(--sp-body-padding);
-    max-height: 95%;
-  }
-  .dropdown-voice-selection {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .dropdown-voice-selection cr-icon-button {
-    margin: 0;
-  }
-  .voice-name {
-    max-width: 220px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .item-invisible-true {
-    visibility: hidden;
-  }
-  .display-false {
-    display: none;
-  }
   #font-size-decrease {
     margin-left: 12px;
   }
@@ -78,11 +61,12 @@
     visibility: hidden;
     margin: 0;
   }
-  #toolbar-container {
+  .toolbar-container {
     padding: 6px 8px;
     overflow: visible;
     white-space: nowrap;
     max-height: 48px;
+    display: inline-block;
   }
   #more {
     display: none;
@@ -116,22 +100,24 @@
      role="toolbar" aria-label="$i18n{readingModeToolbarLabel}"
      on-keydown="onToolbarKeyDown_">
   <template id="read-aloud-container" is="dom-if" if="[[isReadAloudEnabled_]]">
-    <span id="audio-controls">
+    <span id="audio-controls" class$="audio-background-when-paused-[[paused]]">
       <cr-icon-button
         class="toolbar-button audio-controls"
         id="play-pause"
-        aria-label="$i18n{playLabel}"
+        title$="[[playPauseButtonAriaLabel_(paused)]]"
+        aria-label$="[[playPauseButtonAriaLabel_(paused)]]"
         aria-keyshortcuts="k"
         aria-description="$i18n{playDescription}"
-        iron-icon="read-anything-20:play"
+        iron-icon$="[[playPauseButtonIronIcon_(paused)]]"
         tabindex="0"
         on-click="onPlayPauseClick">
       </cr-icon-button>
-      <span id="granularity-container" hidden="[[isPaused_]]">
+      <span id="granularity-container" hidden="[[paused]]">
         <cr-icon-button
           id="previousGranularity"
           class="toolbar-button audio-controls"
           aria-label="$i18n{previousSentenceLabel}"
+          title="$i18n{previousSentenceLabel}"
           iron-icon="cr:chevron-left"
           tabindex="-1"
           on-click="onPreviousGranularityClick_">
@@ -140,6 +126,7 @@
         id="nextGranularity"
         class="toolbar-button audio-controls"
         aria-label="$i18n{nextSentenceLabel}"
+        title="$i18n{nextSentenceLabel}"
         iron-icon="cr:chevron-right"
         tabindex="-1"
         on-click="onNextGranularityClick_">
@@ -151,19 +138,18 @@
       id="rate"
       tabindex="-1"
       aria-label="$i18n{voiceSpeedLabel}"
+      title="$i18n{voiceSpeedLabel}"
       aria-haspopup="menu"
       iron-icon="voice-rate:1"
       on-click="onShowRateMenuClick_">
     </cr-icon-button>
-    <cr-icon-button
-      id="voice-selection"
-      on-click="onVoiceSelectionMenuClick_"
-      class="toolbar-button"
-      tabindex="-1"
-      aria-label="$i18n{voiceSelectionLabel}"
-      aria-haspopup="menu"
-      iron-icon="read-anything:voice-selection">
-    </cr-icon-button>
+    <voice-selection-menu
+      id="voiceSelectionMenu"
+      selected-voice="[[selectedVoice]]"
+      available-voices="[[availableVoices]]"
+      paused="[[paused]]"
+      preview-voice-playing="[[previewVoicePlaying]]">
+    </voice-selection-menu>
     <cr-icon-button
       class="toolbar-button"
       id="highlight"
@@ -178,7 +164,8 @@
     <select id="font-select" class="md-select" tabindex="0"
             on-change="onFontSelectValueChange_"
             on-keydown="onFontSelectKeyDown_"
-            aria-label="$i18n{fontNameTitle}">
+            aria-label="$i18n{fontNameTitle}"
+            title="$i18n{fontNameTitle}">
       <template id="fontTemplate" is="dom-repeat" items="[[fontOptions_]]">
         <option value="[[item]]">[[item]]</option>
       </template>
@@ -189,6 +176,7 @@
         tabindex="-1"
         class="toolbar-button"
         aria-label="$i18n{decreaseFontSizeLabel}"
+        title="$i18n{decreaseFontSizeLabel}"
         iron-icon="read-anything:font-size-decrease-old"
         on-click="onFontSizeDecreaseClick_">
     </cr-icon-button>
@@ -197,6 +185,7 @@
         tabindex="-1"
         class="toolbar-button"
         aria-label="$i18n{increaseFontSizeLabel}"
+        title="$i18n{increaseFontSizeLabel}"
         iron-icon="read-anything:font-size-increase-old"
         on-click="onFontSizeIncreaseClick_">
     </cr-icon-button>
@@ -204,12 +193,26 @@
 
   <hr class="separator" aria-hidden="true">
 
+  <template is="dom-repeat" items="[[textStyleToggles_]]">
+    <cr-icon-button
+    tabindex="-1"
+    class="toolbar-button"
+    disabled="[[!paused]]"
+    id="[[item.id]]"
+      aria-label="[[item.ariaLabel]]"
+      title="[[item.ariaLabel]]"
+      iron-icon="[[item.icon]]"
+      on-click="onToggleButtonClick_">
+    </cr-icon-button>
+  </template>
+
   <template is="dom-repeat" items="[[textStyleOptions_]]">
     <cr-icon-button
       class="toolbar-button"
       id="[[item.id]]"
       tabindex="-1"
       aria-label="[[item.ariaLabel]]"
+      title="[[item.ariaLabel]]"
       aria-haspopup="menu"
       iron-icon="[[item.icon]]"
       on-click="onTextStyleMenuButtonClick_">
@@ -219,6 +222,7 @@
       id="more"
       tabindex="-1"
       aria-label="$i18n{moreOptionsLabel}"
+      title="$i18n{moreOptionsLabel}"
       aria-haspopup="menu"
       iron-icon="cr:more-vert"
       on-click="onMoreOptionsClick_">
@@ -230,6 +234,7 @@
         id="[[item.id]]"
         class="more-options-icon"
         aria-label="[[item.ariaLabel]]"
+        title="[[item.ariaLabel]]"
         aria-haspopup="menu"
         iron-icon="[[item.icon]]"
         on-click="onTextStyleMenuButtonClick_">
@@ -245,34 +250,12 @@
       </button>
     </template>
   </cr-action-menu>
-  <cr-action-menu id="voiceSelectionMenu">
-    <template is="dom-repeat" items="[[voiceSelectionOptions_]]">
-      <!--  TODO(crbug.com/1474951): show a header for each locale group before
-            listing the languages of the locale -->
-      <button class="dropdown-item dropdown-voice-selection"
-        on-click="onVoiceSelectClick_">
-        <span class="voice-name">
-          <iron-icon
-          class$="button-image item-invisible-[[!item.data.selected]]"
-            icon="read-anything-20:check-mark"></iron-icon>
-          [[item.title]]
-        </span>
-        <cr-icon-button on-click="onVoicePreviewClick_"
-          class$="button-image display-[[!item.data.previewPlaying]]"
-          iron-icon="read-anything-20:play-circle"></cr-icon-button>
-        <!-- TODO(crbug.com/1474951) Pause the preview when pause button is
-                   pressed -->
-        <cr-icon-button on-click="onVoicePreviewClick_"
-          class$="button-image display-[[item.data.previewPlaying]]"
-          iron-icon="read-anything-20:pause-circle"></cr-icon-button>
-      </button>
-    </template>
-  </cr-action-menu>
   <cr-action-menu id="fontSizeMenu" on-keydown="onFontSizeMenuKeyDown_">
     <cr-icon-button
         class="font-size"
         id="font-size-decrease"
         aria-label="$i18n{decreaseFontSizeLabel}"
+        title="$i18n{decreaseFontSizeLabel}"
         iron-icon="read-anything:font-size-decrease"
         on-click="onFontSizeDecreaseClick_">
     </cr-icon-button>
@@ -280,6 +263,7 @@
         class="font-size"
         id="font-size-increase"
         aria-label="$i18n{increaseFontSizeLabel}"
+        title="$i18n{increaseFontSizeLabel}"
         iron-icon="cr:add"
         on-click="onFontSizeIncreaseClick_">
     </cr-icon-button>

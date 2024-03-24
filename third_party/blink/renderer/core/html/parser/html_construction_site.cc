@@ -125,7 +125,7 @@ static unsigned NextTextBreakPositionForContainer(
     const ContainerNode& node,
     unsigned current_position,
     unsigned string_length,
-    absl::optional<unsigned>& length_limit) {
+    std::optional<unsigned>& length_limit) {
   if (string_length < Text::kDefaultLengthLimit)
     return string_length;
   if (!length_limit) {
@@ -211,7 +211,7 @@ static inline void Insert(HTMLConstructionSiteTask& task) {
   // instead be inside the template element's template contents, after its last
   // child (if any).
   if (auto* template_element = DynamicTo<HTMLTemplateElement>(*task.parent)) {
-    task.parent = template_element->TemplateContentForHTMLConstructionSite();
+    task.parent = template_element->TemplateContentOrDeclarativeShadowRoot();
     // If the Document was detached in the middle of parsing, The template
     // element won't be able to initialize its contents, so bail out.
     if (!task.parent)
@@ -374,7 +374,7 @@ void HTMLConstructionSite::FlushPendingText() {
   // Lazily determine the line limit as it's non-trivial, and in the typical
   // case not necessary. Note that this is faster than using a ternary operator
   // to determine limit.
-  absl::optional<unsigned> length_limit;
+  std::optional<unsigned> length_limit;
 
   unsigned current_position = 0;
   const StringBuilder& string = pending_text_.string_builder;
@@ -395,10 +395,8 @@ void HTMLConstructionSite::FlushPendingText() {
             ? string
             : string.SubstringView(current_position,
                                    break_index - current_position);
-    String substring = canonicalize_whitespace_strings_
-                           ? TryCanonicalizeString(
-                                 substring_view, pending_text_.whitespace_mode)
-                           : substring_view.ToString();
+    String substring =
+        TryCanonicalizeString(substring_view, pending_text_.whitespace_mode);
 
     DCHECK_GT(break_index, current_position);
     DCHECK_EQ(break_index - current_position, substring.length());
@@ -498,9 +496,7 @@ HTMLConstructionSite::HTMLConstructionSite(
           ScriptingContentIsAllowed(parser_content_policy)),
       is_parsing_fragment_(fragment),
       redirect_attach_to_foster_parent_(false),
-      in_quirks_mode_(document.InQuirksMode()),
-      canonicalize_whitespace_strings_(
-          RuntimeEnabledFeatures::CanonicalizeWhitespaceStringsEnabled()) {
+      in_quirks_mode_(document.InQuirksMode()) {
   DCHECK(document_->IsHTMLDocument() || document_->IsXHTMLDocument() ||
          is_parsing_fragment_);
 
@@ -917,22 +913,20 @@ void HTMLConstructionSite::InsertHTMLFormElement(AtomicHTMLToken* token,
 void HTMLConstructionSite::InsertHTMLTemplateElement(
     AtomicHTMLToken* token,
     DeclarativeShadowRootType declarative_shadow_root_type) {
-  // Regardless of the state of the StreamingDeclarativeShadowDOM feature, the
-  // template element is always created. If the feature is enabled, and if the
-  // template is a valid declarative Shadow Root (has a valid attribute value
-  // and parent element), then the template is only added to the stack of open
-  // elements, but is not attached to the DOM tree.
+  // Regardless of whether a declarative shadow root is being attached, the
+  // template element is always created. If the template is a valid declarative
+  // Shadow Root (has a valid attribute value and parent element), then the
+  // template is only added to the stack of open elements, but is not attached
+  // to the DOM tree.
   auto* template_element = To<HTMLTemplateElement>(
       CreateElement(token, html_names::xhtmlNamespaceURI));
-  template_element->SetDeclarativeShadowRootType(declarative_shadow_root_type);
   HTMLStackItem* template_stack_item =
       HTMLStackItem::Create(template_element, token);
   bool should_attach_template = true;
-  if ((declarative_shadow_root_type ==
-           DeclarativeShadowRootType::kStreamingOpen ||
-       declarative_shadow_root_type ==
-           DeclarativeShadowRootType::kStreamingClosed) &&
+  if (declarative_shadow_root_type != DeclarativeShadowRootType::kNone &&
       IsA<Element>(open_elements_.TopStackItem()->GetNode())) {
+    CHECK(declarative_shadow_root_type == DeclarativeShadowRootType::kOpen ||
+          declarative_shadow_root_type == DeclarativeShadowRootType::kClosed);
     // Attach the shadow root now
     auto focus_delegation = template_stack_item->GetAttributeItem(
                                 html_names::kShadowrootdelegatesfocusAttr)
@@ -941,44 +935,43 @@ void HTMLConstructionSite::InsertHTMLTemplateElement(
     // TODO(crbug.com/1063157): Add an attribute for imperative slot
     // assignment.
     auto slot_assignment_mode = SlotAssignmentMode::kNamed;
+    bool serializable =
+        RuntimeEnabledFeatures::DeclarativeShadowDOMSerializableEnabled() &&
+        template_stack_item->GetAttributeItem(html_names::kSerializableAttr);
+    bool clonable;
+    if (RuntimeEnabledFeatures::ShadowRootClonableEnabled()) {
+      clonable = template_stack_item->GetAttributeItem(
+          html_names::kShadowrootclonableAttr);
+    } else {
+      // Legacy behavior - if the shadow root is within a template, it is
+      // clonable.
+      clonable = OpenElements()->HasTemplateInHTMLScope();
+    }
     HTMLStackItem* shadow_host_stack_item = open_elements_.TopStackItem();
     Element* host = shadow_host_stack_item->GetElement();
 
-    ShadowRootType type = declarative_shadow_root_type ==
-                                  DeclarativeShadowRootType::kStreamingOpen
-                              ? ShadowRootType::kOpen
-                              : ShadowRootType::kClosed;
-    bool success = host->AttachStreamingDeclarativeShadowRoot(
-        *template_element, type, focus_delegation, slot_assignment_mode);
+    ShadowRootType type =
+        declarative_shadow_root_type == DeclarativeShadowRootType::kOpen
+            ? ShadowRootType::kOpen
+            : ShadowRootType::kClosed;
+    bool success = host->AttachDeclarativeShadowRoot(
+        *template_element, type, focus_delegation, slot_assignment_mode,
+        serializable, clonable);
+    // If the shadow root attachment fails, e.g. if the host element isn't a
+    // valid shadow host, then we leave should_attach_template true, so that
+    // a "normal" template element gets attached to the DOM tree.
     if (success) {
       DCHECK(host->AuthorShadowRoot());
       UseCounter::Count(host->GetDocument(),
                         WebFeature::kStreamingDeclarativeShadowDOM);
       should_attach_template = false;
       template_element->SetDeclarativeShadowRoot(*host->AuthorShadowRoot());
-    } else {
-      // If the shadow root attachment fails, e.g. if the host element isn't a
-      // valid shadow host, then we leave should_attach_template true, so that
-      // a "normal" template element gets attached to the DOM tree.
-      template_element->SetDeclarativeShadowRootType(
-          DeclarativeShadowRootType::kNone);
     }
   }
   if (should_attach_template) {
-    // Attach a normal template element, or the opening tag of a non-streaming
-    // declarative shadow root.
+    // Attach a normal template element.
     AttachLater(CurrentNode(), template_element, token->GetDOMPartsNeeded());
-    // cant_attach_shadow can happen if we are being asked to attach a
-    // declarative shadowroot to another declarative shadowroot or another
-    // existing shadowroot.
-    bool cant_attach_shadow =
-        !IsA<Element>(open_elements_.TopStackItem()->GetNode());
-    DocumentFragment* template_content =
-        cant_attach_shadow ||
-                template_element->GetDeclarativeShadowRootType() ==
-                    DeclarativeShadowRootType::kNone
-            ? template_element->content()
-            : template_element->DeclarativeShadowContent();
+    DocumentFragment* template_content = template_element->content();
     if (pending_dom_parts_ && template_content) {
       pending_dom_parts_->PushPartRoot(&template_content->getPartRoot());
     }
@@ -1073,7 +1066,7 @@ void HTMLConstructionSite::InsertTextNode(const StringView& string,
     // If the Document was detached in the middle of parsing, the template
     // element won't be able to initialize its contents.
     if (auto* content =
-            template_element->TemplateContentForHTMLConstructionSite()) {
+            template_element->TemplateContentOrDeclarativeShadowRoot()) {
       dummy_task.parent = content;
     }
   }
@@ -1136,7 +1129,7 @@ Document& HTMLConstructionSite::OwnerDocumentForCurrentNode() {
     // element won't be able to initialize its contents. Fallback to the
     // current node's document in that case..
     if (auto* content =
-            template_element->TemplateContentForHTMLConstructionSite()) {
+            template_element->TemplateContentOrDeclarativeShadowRoot()) {
       return content->GetDocument();
     }
   }
@@ -1186,7 +1179,7 @@ Element* HTMLConstructionSite::CreateElement(
       ((token->IsValidHTMLTag() &&
         namespace_uri == html_names::xhtmlNamespaceURI)
            ? static_cast<const QualifiedName&>(
-                 html_names::TagToQualifedName(token->GetHTMLTag()))
+                 html_names::TagToQualifiedName(token->GetHTMLTag()))
            : QualifiedName(g_null_atom, token->GetName(), namespace_uri));
   // "3. Let is be the value of the "is" attribute in the given token ..." etc.
   const Attribute* is_attribute = token->GetAttributeItem(html_names::kIsAttr);

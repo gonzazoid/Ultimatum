@@ -27,21 +27,6 @@ BASE_FEATURE(kApplyNativeOccludedRegionToWindowTracker,
              "ApplyNativeOccludedRegionToWindowTracker",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
-// Once enabled, the exact behavior is dictated by the field trial param
-// name `kApplyNativeOcclusionToCompositorType`.
-BASE_FEATURE(kApplyNativeOcclusionToCompositor,
-             "ApplyNativeOcclusionToCompositor",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
-// Field trial param name for `kApplyNativeOcclusionToCompositor`.
-const char kApplyNativeOcclusionToCompositorType[] = "type";
-// When the WindowTreeHost is occluded or hidden, resources are released and
-// the compositor is hidden. See WindowTreeHost for specifics on what this
-// does.
-const char kApplyNativeOcclusionToCompositorTypeRelease[] = "release";
-// When the WindowTreeHost is occluded the frame rate is throttled.
-const char kApplyNativeOcclusionToCompositorTypeThrottle[] = "throttle";
-
 // If enabled, calculate native window occlusion - Windows-only.
 BASE_FEATURE(kCalculateNativeWinOcclusion,
              "CalculateNativeWinOcclusion",
@@ -54,6 +39,27 @@ BASE_FEATURE(kScreenPowerListenerForNativeWinOcclusion,
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 #endif  // BUILDFLAG(IS_WIN)
+
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS_LACROS)
+// Once enabled, the exact behavior is dictated by the field trial param
+// name `kApplyNativeOcclusionToCompositorType`.
+BASE_FEATURE(kApplyNativeOcclusionToCompositor,
+             "ApplyNativeOcclusionToCompositor",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Field trial param name for `kApplyNativeOcclusionToCompositor`.
+const base::FeatureParam<std::string> kApplyNativeOcclusionToCompositorType{
+    &kApplyNativeOcclusionToCompositor, "type", /*default=*/""};
+// When the WindowTreeHost is occluded or hidden, resources are released and
+// the compositor is hidden. See WindowTreeHost for specifics on what this
+// does.
+const char kApplyNativeOcclusionToCompositorTypeRelease[] = "release";
+// When the WindowTreeHost is occluded the frame rate is throttled.
+const char kApplyNativeOcclusionToCompositorTypeThrottle[] = "throttle";
+// Release when hidden, throttle when occluded.
+const char kApplyNativeOcclusionToCompositorTypeThrottleAndRelease[] =
+    "throttle_and_release";
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS_LACROS)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 // Integrate input method specific settings to Chrome OS settings page.
@@ -88,7 +94,7 @@ bool IsShortcutCustomizationAppEnabled() {
 
 BASE_FEATURE(kShortcutCustomization,
              "ShortcutCustomization",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 bool IsShortcutCustomizationEnabled() {
   return base::FeatureList::IsEnabled(kShortcutCustomization);
@@ -253,8 +259,6 @@ BASE_FEATURE(kInputPaneOnScreenKeyboard,
 BASE_FEATURE(kPointerEventsForTouch,
              "PointerEventsForTouch",
              base::FEATURE_ENABLED_BY_DEFAULT);
-// Enables using TSF (over IMM32) for IME.
-BASE_FEATURE(kTSFImeSupport, "TSFImeSupport", base::FEATURE_ENABLED_BY_DEFAULT);
 
 bool IsUsingWMPointerForTouch() {
   return base::FeatureList::IsEnabled(kPointerEventsForTouch);
@@ -483,15 +487,27 @@ bool CustomizeChromeSupportsChromeRefresh2023() {
 
 BASE_FEATURE(kChromeRefresh2023,
              "ChromeRefresh2023",
+#if !BUILDFLAG(IS_CHROMEOS)
+             base::FEATURE_ENABLED_BY_DEFAULT);
+#else
              base::FEATURE_DISABLED_BY_DEFAULT);
+#endif
 
 BASE_FEATURE(kChromeRefreshSecondary2023,
              "ChromeRefreshSecondary2023",
+#if !BUILDFLAG(IS_CHROMEOS)
+             base::FEATURE_ENABLED_BY_DEFAULT);
+#else
              base::FEATURE_DISABLED_BY_DEFAULT);
+#endif
 
 BASE_FEATURE(kChromeRefresh2023NTB,
              "ChromeRefresh2023NTB",
+#if !BUILDFLAG(IS_CHROMEOS)
+             base::FEATURE_ENABLED_BY_DEFAULT);
+#else
              base::FEATURE_DISABLED_BY_DEFAULT);
+#endif
 
 const char kChromeRefresh2023NTBVariationKey[] = "Variation";
 
@@ -543,7 +559,7 @@ bool IsChromeRefresh2023() {
 
 BASE_FEATURE(kChromeWebuiRefresh2023,
              "ChromeWebuiRefresh2023",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 bool IsChromeWebuiRefresh2023() {
   if (!CustomizeChromeSupportsChromeRefresh2023()) {

@@ -333,11 +333,17 @@ PrefetchService::PrefetchService(BrowserContext* browser_context)
 
 PrefetchService::~PrefetchService() = default;
 
+void PrefetchService::SetPrefetchServiceDelegateForTesting(
+    std::unique_ptr<PrefetchServiceDelegate> delegate) {
+  DCHECK(!delegate_);
+  delegate_ = std::move(delegate);
+}
+
 PrefetchOriginProber* PrefetchService::GetPrefetchOriginProber() const {
   return origin_prober_.get();
 }
 
-void PrefetchService::AddPrefetchContainer(
+void PrefetchService::AddPrefetchContainerWithoutStartingPrefetch(
     std::unique_ptr<PrefetchContainer> owned_prefetch_container) {
   base::WeakPtr<PrefetchContainer> prefetch_container =
       owned_prefetch_container->GetWeakPtr();
@@ -362,7 +368,14 @@ void PrefetchService::AddPrefetchContainer(
 
   owned_prefetches_[prefetch_container_key] =
       std::move(owned_prefetch_container);
+}
 
+void PrefetchService::AddPrefetchContainer(
+    std::unique_ptr<PrefetchContainer> owned_prefetch_container) {
+  base::WeakPtr<PrefetchContainer> prefetch_container =
+      owned_prefetch_container->GetWeakPtr();
+  AddPrefetchContainerWithoutStartingPrefetch(
+      std::move(owned_prefetch_container));
   PrefetchUrl(std::move(prefetch_container));
 }
 
@@ -605,6 +618,7 @@ void PrefetchService::OnGotServiceWorkerResult(
         .Run(std::move(prefetch_container), PreloadingEligibility::kEligible);
     return;
   }
+
   StoragePartition* default_storage_partition =
       browser_context_->GetDefaultStoragePartition();
   CHECK(default_storage_partition);
@@ -633,6 +647,21 @@ void PrefetchService::OnGotCookiesForEligibilityCheck(
     std::move(result_callback)
         .Run(prefetch_container, PreloadingEligibility::kUserHasCookies);
     return;
+  }
+
+  if (base::FeatureList::IsEnabled(
+          features::kPrefetchStateContaminationMitigation)) {
+    // The cookie eligibility check just happened, and we might proceed anyway.
+    // We might therefore need to delay further processing to the extent
+    // required to obscure the outcome of this check from the current site.
+    auto* initiator_rfh = RenderFrameHost::FromID(
+        prefetch_container->GetReferringRenderFrameHostId());
+    const bool is_contamination_exempt =
+        delegate_ && initiator_rfh &&
+        delegate_->IsContaminationExempt(initiator_rfh->GetLastCommittedURL());
+    if (!is_contamination_exempt) {
+      prefetch_container->MarkCrossSiteContaminated();
+    }
   }
 
   // Cookies are tricky because cookies for different paths or a higher level
@@ -1204,6 +1233,10 @@ PrefetchService::OnPrefetchResponseStarted(
     return PrefetchErrorOnResponseReceived::kFailedInvalidHead;
   }
 
+  if (prefetch_container && prefetch_container->IsCrossSiteContaminated()) {
+    head->is_prefetch_with_cross_site_contamination = true;
+  }
+
   const auto& devtools_observer = prefetch_container->GetDevToolsObserver();
   if (devtools_observer) {
     devtools_observer->OnPrefetchResponseReceived(
@@ -1412,6 +1445,28 @@ std::vector<PrefetchContainer*> PrefetchService::FindPrefetchContainerToServe(
       case PrefetchContainer::ServableState::kServable:
       case PrefetchContainer::ServableState::kShouldBlockUntilHeadReceived:
         break;
+    }
+
+    if (prefetch_container->IsDecoy()) {
+      DVLOG(1)
+          << "PrefetchService::FindPrefetchContainerToServe: skipped because "
+             "prefetch is a decoy: "
+          << *prefetch_container;
+      return true;
+    }
+
+    // Note: This codepath is only be reached in practice if we create a
+    // second NavigationRequest to this prefetch's URL. The first
+    // NavigationRequest would call GetPrefetch, which might set this
+    // PrefetchContainer's status to kPrefetchNotUsedCookiesChanged.
+    CHECK(prefetch_container->HasPrefetchStatus());
+    if (prefetch_container->GetPrefetchStatus() ==
+        PrefetchStatus::kPrefetchNotUsedCookiesChanged) {
+      DVLOG(1)
+          << "PrefetchService::FindPrefetchContainerToServe: skipped because "
+             "cookies for url have changed since prefetch completed: "
+          << *prefetch_container;
+      return true;
     }
 
     DVLOG(1) << "PrefetchService::FindPrefetchContainerToServe: matched: "
@@ -1731,8 +1786,8 @@ void PrefetchService::RecordExistingPrefetchWithMatchingURL(
           break;
       }
 
-      if (prefetch_iter.second->GetReferrer().url ==
-          prefetch_container->GetReferrer().url) {
+      if (prefetch_iter.second->HasSameReferringURLForMetrics(
+              *prefetch_container)) {
         num_matching_prefetch_same_referrer++;
       }
 

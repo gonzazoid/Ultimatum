@@ -449,7 +449,7 @@ CalendarMonthView::CalendarMonthView(
                   current_date_exploded);
     ++safe_index;
     if (safe_index == calendar_utils::kDateInOneWeek) {
-      NOTREACHED()
+      DUMP_WILL_BE_NOTREACHED_NORETURN()
           << "Should not render more than 7 days as the grayed out cells.";
       break;
     }
@@ -622,7 +622,7 @@ void CalendarMonthView::FetchEvents(const base::Time& month) {
   calendar_model_->FetchEvents(month);
 }
 
-BEGIN_METADATA(CalendarDateCellView, views::View)
+BEGIN_METADATA(CalendarDateCellView)
 END_METADATA
 
 }  // namespace ash

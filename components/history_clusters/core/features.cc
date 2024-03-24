@@ -80,9 +80,11 @@ BASE_FEATURE(kHistoryClustersVisitDeduping,
              "HistoryClustersVisitDeduping",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
+// TODO(manukh): Enabled by default in m122; clean up feature code in 2/21/24
+//   when m122 reaches stable.
 BASE_FEATURE(kJourneysIncludeSyncedVisits,
              "JourneysIncludeSyncedVisits",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 BASE_FEATURE(kJourneysPersistCachesToPrefs,
              "JourneysPersistCachesToPrefs",
@@ -113,6 +115,12 @@ const base::FeatureParam<bool> kSidePanelJourneysOpensFromOmnibox{
 
 BASE_FEATURE(kRenameJourneys,
              "RenameJourneys",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// Intended to be Enabled by default on Desktop and the flag left here as a
+// killswitch.
+BASE_FEATURE(kSearchesFindUngroupedVisits,
+             "GroupedHistorySearchesFindUngroupedVisits",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 }  // namespace history_clusters

@@ -12,12 +12,14 @@ import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 import androidx.appcompat.content.res.AppCompatResources;
 
+import org.chromium.base.BuildInfo;
 import org.chromium.base.Callback;
 import org.chromium.base.ObserverList;
 import org.chromium.base.metrics.RecordUserAction;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.feature_engagement.TrackerFactory;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.layouts.LayoutType;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
 import org.chromium.chrome.browser.lifecycle.NativeInitObserver;
@@ -25,6 +27,7 @@ import org.chromium.chrome.browser.ntp.NewTabPage;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.settings.MainSettings;
 import org.chromium.chrome.browser.settings.SettingsLauncherImpl;
+import org.chromium.chrome.browser.signin.SigninAndHistoryOptInActivityLauncherImpl;
 import org.chromium.chrome.browser.signin.SyncConsentActivityLauncherImpl;
 import org.chromium.chrome.browser.signin.services.DisplayableProfileData;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
@@ -37,6 +40,7 @@ import org.chromium.chrome.browser.toolbar.ButtonData.ButtonSpec;
 import org.chromium.chrome.browser.toolbar.ButtonDataImpl;
 import org.chromium.chrome.browser.toolbar.ButtonDataProvider;
 import org.chromium.chrome.browser.toolbar.adaptive.AdaptiveToolbarButtonVariant;
+import org.chromium.chrome.browser.ui.signin.SigninAndHistoryOptInCoordinator;
 import org.chromium.chrome.browser.user_education.IPHCommandBuilder;
 import org.chromium.chrome.browser.util.BrowserUiUtils;
 import org.chromium.chrome.features.start_surface.StartSurfaceState;
@@ -371,8 +375,21 @@ public class IdentityDiscController
                 IdentityServicesProvider.get()
                         .getSigninManager(mProfileSupplier.get().getOriginalProfile());
         if (getSignedInAccountInfo() == null && !signinManager.isSigninDisabledByPolicy()) {
-            SyncConsentActivityLauncherImpl.get()
-                    .launchActivityIfAllowed(mContext, SigninAccessPoint.NTP_SIGNED_OUT_ICON);
+            // TODO(crbug.com/1523958): Implement the new sign-in flow for automotive.
+            if (ChromeFeatureList.isEnabled(
+                            ChromeFeatureList.REPLACE_SYNC_PROMOS_WITH_SIGN_IN_PROMOS)
+                    && !BuildInfo.getInstance().isAutomotive) {
+                SigninAndHistoryOptInActivityLauncherImpl.get()
+                        .launchActivityIfAllowed(
+                                mContext,
+                                mProfileSupplier.get().getOriginalProfile(),
+                                SigninAndHistoryOptInCoordinator.NoAccountSigninMode.BOTTOM_SHEET,
+                                SigninAndHistoryOptInCoordinator.HistoryOptInMode.OPTIONAL,
+                                SigninAccessPoint.NTP_SIGNED_OUT_ICON);
+            } else {
+                SyncConsentActivityLauncherImpl.get()
+                        .launchActivityIfAllowed(mContext, SigninAccessPoint.NTP_SIGNED_OUT_ICON);
+            }
         } else {
             SettingsLauncher settingsLauncher = new SettingsLauncherImpl();
             settingsLauncher.launchSettingsActivity(mContext, MainSettings.class);

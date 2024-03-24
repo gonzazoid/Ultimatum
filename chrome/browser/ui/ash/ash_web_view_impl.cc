@@ -20,6 +20,7 @@
 #include "third_party/blink/public/common/renderer_preferences/renderer_preferences.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom.h"
 #include "ui/aura/window.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/views/controls/webview/web_contents_set_background_color.h"
 #include "ui/views/controls/webview/webview.h"
@@ -46,10 +47,6 @@ AshWebViewImpl::~AshWebViewImpl() {
   web_contents_->SetDelegate(nullptr);
 }
 
-const char* AshWebViewImpl::GetClassName() const {
-  return "AshWebViewImpl";
-}
-
 gfx::NativeView AshWebViewImpl::GetNativeView() {
   return web_contents_->GetNativeView();
 }
@@ -59,7 +56,7 @@ void AshWebViewImpl::ChildPreferredSizeChanged(views::View* child) {
   SetPreferredSize(web_view_->GetPreferredSize());
 }
 
-void AshWebViewImpl::Layout() {
+void AshWebViewImpl::Layout(PassKey) {
   web_view_->SetBoundsRect(GetContentsBounds());
 }
 
@@ -94,6 +91,10 @@ bool AshWebViewImpl::IsErrorDocument() {
 
 views::View* AshWebViewImpl::GetInitiallyFocusedView() {
   return web_view_;
+}
+
+void AshWebViewImpl::SetCornerRadii(const gfx::RoundedCornersF& corner_radii) {
+  web_view_->holder()->SetCornerRadii(corner_radii);
 }
 
 void AshWebViewImpl::AddedToWidget() {
@@ -326,3 +327,6 @@ void AshWebViewImpl::UpdateMinimizeOnBackProperty() {
                                            minimize_on_back);
   }
 }
+
+BEGIN_METADATA(AshWebViewImpl)
+END_METADATA

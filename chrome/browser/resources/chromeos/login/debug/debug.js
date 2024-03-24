@@ -59,7 +59,7 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
   if (isNativeIcons) {
     if (type === 'WAA') {
       zippy['nativeIconType'] = AssistantNativeIconType.WAA;
-    } else if (type == 'DA') {
+    } else if (type === 'DA') {
       zippy['nativeIconType'] = AssistantNativeIconType.DA;
     } else {
       console.error('### Uknown zippy type ' + type);
@@ -478,7 +478,7 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
           // Show offline error during signin
           id: 'signin-offline-error',
           trigger: (screen) => {
-            screen.setUIState(2);     // signin
+            screen.setUiState(2);     // signin
             screen.setErrorState(2);  // offline
             screen.allowGuestSignin(true);
             screen.allowOfflineLogin(true);
@@ -554,6 +554,10 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
     },
     {
       id: 'tpm-error-message',
+      kind: ScreenKind.ERROR,
+    },
+    {
+      id: 'install-attributes-error-message',
       kind: ScreenKind.ERROR,
     },
     {
@@ -1170,7 +1174,7 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
             isTosHidden: false,
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
             crosEulaUrl: 'https://www.google.com/intl/en/chrome/terms/',
-            arcTosUrl: 'https://play.google.com/about/play-terms/embedded/',
+            arcTosUrl: 'https://play.google/play-terms/embedded/',
             privacyPolicyUrl: 'https://policies.google.com/privacy/embedded',
             showRecoveryOption: false,
             recoveryOptionDefault: false,
@@ -1188,7 +1192,7 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
             isTosHidden: false,
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
             crosEulaUrl: 'https://www.google.com/intl/en/chrome/terms/',
-            arcTosUrl: 'https://play.google.com/about/play-terms/embedded/',
+            arcTosUrl: 'https://play.google/play-terms/embedded/',
             privacyPolicyUrl: 'https://policies.google.com/privacy/embedded',
             showRecoveryOption: false,
             recoveryOptionDefault: false,
@@ -1206,7 +1210,7 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
             isTosHidden: false,
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
             crosEulaUrl: 'https://www.google.com/intl/en/chrome/terms/',
-            arcTosUrl: 'https://play.google.com/about/play-terms/embedded/',
+            arcTosUrl: 'https://play.google/play-terms/embedded/',
             privacyPolicyUrl: 'https://policies.google.com/privacy/embedded',
             showRecoveryOption: true,
             recoveryOptionDefault: true,
@@ -1224,7 +1228,7 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
             isTosHidden: false,
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
             crosEulaUrl: 'https://www.google.com/intl/en/chrome/terms/',
-            arcTosUrl: 'https://play.google.com/about/play-terms/embedded/',
+            arcTosUrl: 'https://play.google/play-terms/embedded/',
             privacyPolicyUrl: 'https://policies.google.com/privacy/embedded',
             showRecoveryOption: false,
             recoveryOptionDefault: false,
@@ -1242,7 +1246,7 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
             isTosHidden: false,
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
             crosEulaUrl: 'https://www.google.com/intl/en/chrome/terms/',
-            arcTosUrl: 'https://play.google.com/about/play-terms/embedded/',
+            arcTosUrl: 'https://play.google/play-terms/embedded/',
             privacyPolicyUrl: 'https://policies.google.com/privacy/embedded',
             showRecoveryOption: false,
             recoveryOptionDefault: false,
@@ -1257,7 +1261,7 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
             isTosHidden: false,
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
             crosEulaUrl: 'https://www.google.com/intl/en/chrome/terms/',
-            arcTosUrl: 'https://play.google.com/about/play-terms/embedded/',
+            arcTosUrl: 'https://play.google/play-terms/embedded/',
             privacyPolicyUrl: 'https://policies.google.com/privacy/embedded',
             showRecoveryOption: false,
             recoveryOptionDefault: false,
@@ -1275,7 +1279,7 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
             isTosHidden: false,
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
             crosEulaUrl: 'https://www.google.com/intl/en/chrome/terms/',
-            arcTosUrl: 'https://play.google.com/about/play-terms/embedded/',
+            arcTosUrl: 'https://play.google/play-terms/embedded/',
             privacyPolicyUrl: 'https://policies.google.com/privacy/embedded',
             showRecoveryOption: false,
             recoveryOptionDefault: false,
@@ -1293,7 +1297,7 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
             isTosHidden: false,
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
             crosEulaUrl: 'https://www.google.com/intl/en/chrome/terms/',
-            arcTosUrl: 'https://play.google.com/about/play-terms/embedded/',
+            arcTosUrl: 'https://play.google/play-terms/embedded/',
             privacyPolicyUrl: 'https://policies.google.com/privacy/embedded',
             showRecoveryOption: false,
             recoveryOptionDefault: false,
@@ -1313,7 +1317,7 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
             isTosHidden: true,
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
             crosEulaUrl: 'https://www.google.com/intl/en/chrome/terms/',
-            arcTosUrl: 'https://play.google.com/about/play-terms/embedded/',
+            arcTosUrl: 'https://play.google/play-terms/embedded/',
             privacyPolicyUrl: 'https://policies.google.com/privacy/embedded',
             showRecoveryOption: false,
             recoveryOptionDefault: false,
@@ -1331,7 +1335,7 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
             isTosHidden: false,
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
             crosEulaUrl: 'https://www.google.com/intl/en/chrome/terms/',
-            arcTosUrl: 'https://play.google.com/about/play-terms/embedded/',
+            arcTosUrl: 'https://play.google/play-terms/embedded/',
             privacyPolicyUrl: 'https://policies.google.com/privacy/embedded',
             showRecoveryOption: false,
             recoveryOptionDefault: false,
@@ -1484,7 +1488,7 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
             screen.reset();
             screen.loadAppList([
               {
-                title: 'gApp',
+                title: 'gApp1',
                 icon_url: 'https://www.google.com/favicon.ico',
                 category: 'Games',
                 in_app_purchases: true,
@@ -1492,7 +1496,7 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
                 content_rating: '',
               },
               {
-                title: 'anotherGapp',
+                title: 'anotherGapp2',
                 icon_url: 'https://www.google.com/favicon.ico',
                 category: 'Games',
                 in_app_purchases: true,
@@ -1501,7 +1505,68 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
                 description: 'Short description',
               },
               {
-                title: 'anotherGapp',
+                title: 'anotherGapp3',
+                icon_url: 'https://www.google.com/favicon.ico',
+                category: 'Games',
+                in_app_purchases: true,
+                was_installed: false,
+                content_rating: '',
+                // Current limitation is 80 characters.
+                description:
+                    'Lorem ipsum dolor sit amet, consectetur adipiscing elit,' +
+                    ' sed do eiusmod tempor',
+              },
+            ]);
+          },
+        },
+        {
+          id: '5-apps',
+          trigger: (screen) => {
+            screen.reset();
+            screen.loadAppList([
+              {
+                title: 'gApp1',
+                icon_url: 'https://www.google.com/favicon.ico',
+                category: 'Games',
+                in_app_purchases: true,
+                was_installed: false,
+                content_rating: '',
+              },
+              {
+                title: 'anotherGapp2',
+                icon_url: 'https://www.google.com/favicon.ico',
+                category: 'Games',
+                in_app_purchases: true,
+                was_installed: false,
+                content_rating: '',
+                description: 'Short description',
+              },
+              {
+                title: 'anotherGapp3',
+                icon_url: 'https://www.google.com/favicon.ico',
+                category: 'Games',
+                in_app_purchases: true,
+                was_installed: false,
+                content_rating: '',
+                // Current limitation is 80 characters.
+                description:
+                    'Lorem ipsum dolor sit amet, consectetur adipiscing elit,' +
+                    ' sed do eiusmod tempor',
+              },
+              {
+                title: 'anotherGapp4',
+                icon_url: 'https://www.google.com/favicon.ico',
+                category: 'Games',
+                in_app_purchases: true,
+                was_installed: false,
+                content_rating: '',
+                // Current limitation is 80 characters.
+                description:
+                    'Lorem ipsum dolor sit amet, consectetur adipiscing elit,' +
+                    ' sed do eiusmod tempor',
+              },
+              {
+                title: 'anotherGapp5',
                 icon_url: 'https://www.google.com/favicon.ico',
                 category: 'Games',
                 in_app_purchases: true,
@@ -1844,8 +1909,7 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
     {
       id: 'quick-start',
       kind: ScreenKind.NORMAL,
-      handledSteps:
-          'verification,connecting_to_wifi,signing_in,setup_complete',
+      handledSteps: 'verification,connecting_to_wifi,signing_in,setup_complete',
       states: [
         {
           id: 'PinVerification',
@@ -2178,7 +2242,7 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
 
     toggleGameMode() {
       KNOWN_SCREENS.forEach((screen, index) => {
-        if (screen.id == 'marketing-opt-in') {
+        if (screen.id === 'marketing-opt-in') {
           for (const state of screen.states) {
             if (state.data) {
               state.data.cloudGamingDevice = !state.data.cloudGamingDevice;
@@ -2294,7 +2358,7 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
       this.knownScreens = [];
       this.screenButtons = {};
       /** @suppress {visibility} */
-      for (const id of Oobe.getInstance().screens_) {
+      for (const id of Oobe.getInstance().screens) {
         if (id in this.screenMap) {
           const screenDef = this.screenMap[id];
           const screenElement = $(id);
@@ -2389,12 +2453,12 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
             this.statesPanel.content, state.id,
             this.triggerScreenState.bind(
                 this, this.currentScreenId_, state.id));
-        if (state.id == this.lastScreenState_) {
+        if (state.id === this.lastScreenState_) {
           button.element.classList.add('debug-button-selected');
         }
       }
 
-      if (this.currentScreenId_ == 'marketing-opt-in') {
+      if (this.currentScreenId_ === 'marketing-opt-in') {
         document.getElementsByClassName('gametoggle-button')[0].removeAttribute(
             'hidden');
       } else {

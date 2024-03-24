@@ -8,6 +8,7 @@
 #import <Foundation/Foundation.h>
 
 #import "base/files/file_path.h"
+#import "base/memory/raw_ptr.h"
 #import "base/run_loop.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/bind.h"
@@ -124,6 +125,8 @@ class ProfileReportGeneratorIOSTest : public PlatformTest {
     return report;
   }
 
+  // TODO(crbug.com/325256943): Migrate to use TestChromeBrowserStateManager or
+  // a TestChromeBrowserState.
   ChromeBrowserState* GetBrowserState() {
     return GetApplicationContext()
         ->GetChromeBrowserStateManager()
@@ -141,8 +144,8 @@ class ProfileReportGeneratorIOSTest : public PlatformTest {
   policy::PolicyMap policy_map_;
   std::unique_ptr<IOSChromeScopedTestingChromeBrowserStateManager>
       scoped_browser_state_manager_;
-  AuthenticationService* authentication_service_;
-  ChromeAccountManagerService* account_manager_service_;
+  raw_ptr<AuthenticationService> authentication_service_;
+  raw_ptr<ChromeAccountManagerService> account_manager_service_;
 };
 
 TEST_F(ProfileReportGeneratorIOSTest, UnsignedInProfile) {

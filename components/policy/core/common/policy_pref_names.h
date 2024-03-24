@@ -38,7 +38,6 @@ extern const char kDlpReportingEnabled[];
 extern const char kDlpRulesList[];
 #if BUILDFLAG(IS_MAC)
 extern const char kEnterpriseMDMManagementMac[];
-extern const char kScreenTimeEnabled[];
 #endif
 extern const char kFeedbackSurveysEnabled[];
 extern const char kLastPolicyStatisticsUpdate[];
@@ -73,6 +72,7 @@ extern const char kLocalTestPoliciesForNextStartup[];
 extern const char kForcePermissionPolicyUnloadDefaultEnabled[];
 #if BUILDFLAG(IS_CHROMEOS)
 extern const char kAlwaysOnVpnPreConnectUrlAllowlist[];
+extern const char kFloatingWorkspaceEnabled[];
 #endif
 }  // namespace policy_prefs
 }  // namespace policy

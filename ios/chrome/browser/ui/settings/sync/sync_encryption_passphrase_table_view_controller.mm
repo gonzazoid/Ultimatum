@@ -504,6 +504,10 @@ const CGFloat kSpinnerButtonPadding = 18;
     if (settingsNavigationController) {
       [settingsNavigationController
           popViewControllerOrCloseSettingsAnimated:YES];
+    } else if (self.presentModally) {
+      [self.navigationController.presentingViewController
+          dismissViewControllerAnimated:YES
+                             completion:nil];
     } else {
       [self.navigationController popViewControllerAnimated:YES];
     }
@@ -528,8 +532,10 @@ const CGFloat kSpinnerButtonPadding = 18;
           ->HasPrimaryIdentity(signin::ConsentLevel::kSignin)) {
     return;
   }
-  [base::apple::ObjCCastStrict<SettingsNavigationController>(
-      self.navigationController) popViewControllerOrCloseSettingsAnimated:NO];
+  if (!self.presentModally) {
+    [base::apple::ObjCCastStrict<SettingsNavigationController>(
+        self.navigationController) popViewControllerOrCloseSettingsAnimated:NO];
+  }
 }
 
 #pragma mark - SettingsControllerProtocol callbacks
@@ -542,7 +548,7 @@ const CGFloat kSpinnerButtonPadding = 18;
 }
 
 - (void)reportBackUserAction {
-  NOTREACHED();
+  // No-op for this view controller.
 }
 
 - (void)settingsWillBeDismissed {

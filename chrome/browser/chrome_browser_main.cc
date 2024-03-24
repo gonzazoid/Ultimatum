@@ -79,6 +79,7 @@
 #include "chrome/browser/nacl_host/nacl_browser_delegate_impl.h"
 #include "chrome/browser/net/system_network_context_manager.h"
 #include "chrome/browser/policy/chrome_browser_policy_connector.h"
+#include "chrome/browser/policy/messaging_layer/public/report_client.h"
 #include "chrome/browser/prefs/chrome_command_line_pref_store.h"
 #include "chrome/browser/prefs/chrome_pref_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
@@ -228,6 +229,8 @@
 #include "base/process/process.h"
 #include "base/task/task_traits.h"
 #include "components/crash/core/app/breakpad_linux.h"
+#else
+#include "components/enterprise/browser/controller/chrome_browser_cloud_management_controller.h"
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -239,8 +242,6 @@
 #include "chrome/browser/ash/settings/hardware_data_usage_controller.h"
 #include "chrome/browser/ash/settings/stats_reporting_controller.h"
 #include "chromeos/ash/components/settings/cros_settings_names.h"
-#else
-#include "components/enterprise/browser/controller/chrome_browser_cloud_management_controller.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 // TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
@@ -870,6 +871,10 @@ void ChromeBrowserMainParts::PostCreateMainMessageLoop() {
   if (!device_event_log::IsInitialized())
     device_event_log::Initialize(0 /* default max entries */);
 
+  // Set up and register ERP reporting client.
+  reporting_client_ =
+      reporting::ReportingClient::Create(content::GetUIThreadTaskRunner({}));
+
   for (auto& chrome_extra_part : chrome_extra_parts_)
     chrome_extra_part->PostCreateMainMessageLoop();
 }
@@ -1080,14 +1085,6 @@ int ChromeBrowserMainParts::PreCreateThreadsImpl() {
 #endif  // BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   }
 #endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS_ASH)
-
-#if BUILDFLAG(IS_CHROMEOS)
-  // Set the product channel for crash reports.
-  if (!crash_reporter::IsCrashpadEnabled()) {
-    breakpad::SetChannelCrashKey(
-        chrome::GetChannelName(chrome::WithExtendedStable(true)));
-  }
-#endif  // BUILDFLAG(IS_CHROMEOS)
 
 #if BUILDFLAG(IS_MAC)
 #if defined(ARCH_CPU_X86_64)
@@ -1486,6 +1483,14 @@ int ChromeBrowserMainParts::PreMainMessageLoopRunImpl() {
   }
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
 
+#if BUILDFLAG(CHROME_FOR_TESTING)
+  if (!g_browser_process->local_state()->GetBoolean(
+          prefs::kChromeForTestingAllowed)) {
+    LOG(ERROR) << "Chrome for Testing is disallowed by the system admin.";
+    return static_cast<int>(chrome::RESULT_CODE_ACTION_DISALLOWED_BY_POLICY);
+  }
+#endif  // BUILDFLAG(CHROME_FOR_TESTING)
+
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kMakeDefaultBrowser)) {
     bool is_managed = g_browser_process->local_state()->IsManagedPreference(
@@ -1522,7 +1527,7 @@ int ChromeBrowserMainParts::PreMainMessageLoopRunImpl() {
   downgrade_manager_.UpdateLastVersion(user_data_dir_);
 #endif  // !BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_DOWNGRADE_PROCESSING)
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
   // Initialize the chrome browser cloud management controller after
   // the browser process singleton is acquired to remove race conditions where
   // multiple browser processes start simultaneously.  The main
@@ -1536,9 +1541,9 @@ int ChromeBrowserMainParts::PreMainMessageLoopRunImpl() {
       browser_process_->local_state(),
       browser_process_->system_network_context_manager()
           ->GetSharedURLLoaderFactory());
-#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // !BUILDFLAG(IS_CHROMEOS)
 
-#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS)
   // Wait for the chrome browser cloud management enrollment to finish.
   // If enrollment is not mandatory, this function returns immediately.
   // Abort the launch process if required enrollment fails.
@@ -1547,7 +1552,7 @@ int ChromeBrowserMainParts::PreMainMessageLoopRunImpl() {
            ->WaitUntilPolicyEnrollmentFinished()) {
     return chrome::RESULT_CODE_CLOUD_POLICY_ENROLLMENT_FAILED;
   }
-#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS)
 
 #if BUILDFLAG(IS_WIN)
   // Check if there is any machine level Chrome installed on the current

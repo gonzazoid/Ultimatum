@@ -94,7 +94,8 @@ void TextControlInnerEditorElement::DefaultEventHandler(Event& event) {
       shadow_ancestor->DefaultEventHandler(event);
   }
 
-  if (event.type() == event_type_names::kScroll) {
+  if (event.type() == event_type_names::kScroll ||
+      event.type() == event_type_names::kScrollend) {
     // The scroller for a text control is inside of a shadow tree but the
     // scroll event won't bubble past the shadow root and authors cannot add
     // an event listener to it. Fire the scroll event at the shadow host so
@@ -152,10 +153,18 @@ const ComputedStyle* TextControlInnerEditorElement::CustomStyleForLayoutObject(
           : EUserModify::kReadWritePlaintextOnly);
   style_builder.SetDisplay(EDisplay::kBlock);
   style_builder.SetHasLineIfEmpty(true);
+  if (!start_style.ApplyControlFixedSize(host)) {
+    Length caret_width(GetDocument().View()->CaretWidth(), Length::kFixed);
+    if (IsHorizontalWritingMode(style_builder.GetWritingMode())) {
+      style_builder.SetMinWidth(caret_width);
+    } else {
+      style_builder.SetMinHeight(caret_width);
+    }
+  }
   style_builder.SetShouldIgnoreOverflowPropertyForInlineBlockBaseline();
 
   if (!IsA<HTMLTextAreaElement>(host)) {
-    style_builder.SetScrollbarColor(absl::nullopt);
+    style_builder.SetScrollbarColor(std::nullopt);
     style_builder.SetWhiteSpace(EWhiteSpace::kPre);
     style_builder.SetOverflowWrap(EOverflowWrap::kNormal);
     style_builder.SetTextOverflow(ToTextControl(host)->ValueForTextOverflow());

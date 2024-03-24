@@ -17,11 +17,7 @@ class Profile;
 
 namespace borealis {
 
-// Borealis hashes tokens it gets from insert_coin using this salt before
-// storing it in prefs.
-extern const char kSaltForPrefStorage[];
-
-class AsyncAllowChecker;
+class AsyncHardwareChecker;
 
 class BorealisFeatures {
  public:
@@ -51,28 +47,17 @@ class BorealisFeatures {
   // Returns true if borealis has been installed and can be run in the profile.
   bool IsEnabled();
 
-  // Sets the token used to authorize borealis. Since doing this will usually
-  // cause IsAllowed() to change we also invoke |callback| with the new
-  // allowedness status.
-  void SetVmToken(std::string token,
-                  base::OnceCallback<void(AllowStatus)> callback);
-
  private:
   // Allowedness failures should be from most-unable-to-fix to most fixable.
   // Hence we divide the synchronous checks into pre- and post- hardware.
-  AllowStatus PreTokenHardwareChecks();
-  AllowStatus PostTokenHardwareChecks();
+  AllowStatus PreHardwareChecks();
+  AllowStatus PostHardwareChecks();
 
-  void OnTokenHardwareChecked(
-      base::OnceCallback<void(AllowStatus)> callback,
-      base::expected<AllowStatus*, bool> token_hardware_status);
-
-  void OnVmTokenDetermined(base::OnceCallback<void(AllowStatus)> callback,
-                           std::string hashed_token);
+  void OnHardwareChecked(base::OnceCallback<void(AllowStatus)> callback,
+                         base::expected<AllowStatus*, bool> hardware_status);
 
   const raw_ptr<Profile, DanglingUntriaged> profile_;
-  std::unique_ptr<AsyncAllowChecker> async_checker_;
-  // TODO(b/218403711): remove this.
+  std::unique_ptr<AsyncHardwareChecker> async_checker_;
   base::WeakPtrFactory<BorealisFeatures> weak_factory_{this};
 };
 

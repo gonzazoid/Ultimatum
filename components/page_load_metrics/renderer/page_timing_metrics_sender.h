@@ -91,6 +91,7 @@ class PageTimingMetricsSender {
 
   void DidObserveUserInteraction(base::TimeTicks max_event_start,
                                  base::TimeTicks max_event_end,
+                                 base::TimeTicks max_event_queued_main_thread,
                                  blink::UserInteractionType interaction_type,
                                  uint64_t interaction_offset);
   // Updates the timing information. Buffers |timing| to be sent over mojo
@@ -132,7 +133,7 @@ class PageTimingMetricsSender {
   mojom::PageLoadTimingPtr last_timing_;
   mojom::CpuTimingPtr last_cpu_timing_;
   mojom::InputTimingPtr input_timing_delta_;
-  absl::optional<blink::SubresourceLoadMetrics> subresource_load_metrics_;
+  std::optional<blink::SubresourceLoadMetrics> subresource_load_metrics_;
 
   // The the sender keep track of metadata as it comes in, because the sender is
   // scoped to a single committed load.

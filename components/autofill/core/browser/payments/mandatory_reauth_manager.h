@@ -7,13 +7,24 @@
 
 #include "components/autofill/core/browser/autofill_client.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
+#include "components/autofill/core/browser/data_model/iban.h"
 #include "components/autofill/core/browser/form_data_importer.h"
 #include "components/autofill/core/browser/metrics/payments/mandatory_reauth_metrics.h"
 #include "components/device_reauth/device_authenticator.h"
 
 namespace autofill {
 
-class AutofillClient;
+// Non-interactive payment method denotes that the autofill procedure occurs
+// without requiring user interaction for authentication.
+enum class NonInteractivePaymentMethodType {
+  kLocalCard = 0,
+  kFullServerCard = 1,
+  kVirtualCard = 2,
+  kMaskedServerCard = 3,
+  kLocalIban = 4,
+  kServerIban = 5,
+  kMaxValue = kServerIban,
+};
 
 namespace payments {
 
@@ -37,6 +48,22 @@ class MandatoryReauthManager {
   MandatoryReauthManager& operator=(const MandatoryReauthManager&) = delete;
   virtual ~MandatoryReauthManager();
 
+  static NonInteractivePaymentMethodType GetNonInteractivePaymentMethodType(
+      absl::variant<CreditCard::RecordType, Iban::RecordType> record_type);
+
+  // Helper method to get all NonInteractivePaymentMethodType for testing
+  // purpose.
+  static std::vector<NonInteractivePaymentMethodType>
+  GetAllNonInteractivePaymentMethodTypesForTesting() {
+    std::vector<NonInteractivePaymentMethodType> all_types;
+    for (int i = static_cast<int>(NonInteractivePaymentMethodType::kLocalCard);
+         i <= static_cast<int>(NonInteractivePaymentMethodType::kMaxValue);
+         ++i) {
+      all_types.push_back(static_cast<NonInteractivePaymentMethodType>(i));
+    }
+    return all_types;
+  }
+
   // Initiates an authentication flow. This method calls
   // `DeviceAuthenticator::Authenticate`, which is only implemented on Android.
   // It will create a new instance of `device_authenticator_`, which will be
@@ -55,6 +82,13 @@ class MandatoryReauthManager {
       const std::u16string& message,
       device_reauth::DeviceAuthenticator::AuthenticateCallback callback);
 
+  // Once the authentication is complete, triggers
+  // `authentication_complete_callback` with a success or failure response.
+  // `non_interactive_payment_method_type` is used for logging purposes.
+  virtual void StartDeviceAuthentication(
+      NonInteractivePaymentMethodType non_interactive_payment_method_type,
+      base::OnceCallback<void(bool)> authentication_complete_callback);
+
   // This method is triggered once an authentication flow is completed. It will
   // reset `device_authenticator_` before triggering `callback` with `success`.
   void OnAuthenticationCompleted(
@@ -68,8 +102,8 @@ class MandatoryReauthManager {
   // authentication, and will hold the record type of the card that had the most
   // recent non-interactive authentication.
   virtual bool ShouldOfferOptin(
-      std::optional<CreditCard::RecordType>
-          card_record_type_if_non_interactive_authentication_flow_completed);
+      std::optional<NonInteractivePaymentMethodType>
+          payment_method_type_if_non_interactive_authentication_flow_completed);
 
   // Starts the opt-in flow. This flow includes an opt-in bubble, an
   // authentication step, and then a confirmation bubble. This function should
@@ -96,6 +130,12 @@ class MandatoryReauthManager {
   // Return the authentication method to be used on this device. Used for metric
   // logging.
   virtual MandatoryReauthAuthenticationMethod GetAuthenticationMethod();
+
+  void SetDeviceAuthenticatorPtrForTesting(
+      std::unique_ptr<device_reauth::DeviceAuthenticator>
+          device_authenticator) {
+    device_authenticator_ = std::move(device_authenticator);
+  }
 
   device_reauth::DeviceAuthenticator* GetDeviceAuthenticatorPtrForTesting() {
     return device_authenticator_.get();

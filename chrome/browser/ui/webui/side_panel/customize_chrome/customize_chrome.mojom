@@ -90,6 +90,16 @@ enum CustomizeChromeSection {
   kAppearance,
   kShortcuts,
   kModules,
+  kWallpaperSearch,
+};
+
+enum ChromeWebStoreCollection {
+  kWrittingEssentials,
+};
+
+enum ChromeWebStoreCategory {
+  kWorkflowPlanning,
+  kShopping,
 };
 
 // Used by the WebUI page to bootstrap bidirectional communication.
@@ -143,8 +153,17 @@ interface CustomizeChromePageHandler {
   // Open Chrome Web Store's theme page in a new tab.
   OpenChromeWebStore();
 
+  // Open Chrome Web Store's home page in a new tab.
+  OpenChromeWebStoreHomePage();
+
   // Opens link to Chrome Web Store theme in a new tab.
   OpenThirdPartyThemePage(string theme_id);
+
+  // Opens link to Chrome Web Store category page in a new tab.
+  OpenChromeWebStoreCategoryPage(ChromeWebStoreCategory category);
+
+  // Opens link to Chrome Web Store collection page in a new tab.
+  OpenChromeWebStoreCollectionPage(ChromeWebStoreCollection collection);
 
   // If |visible| the modules will be shown.
   SetModulesVisible(bool visible);

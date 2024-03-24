@@ -131,7 +131,7 @@ class MODULES_EXPORT IDBTransaction final
   const String& mode() const;
   const String& durability() const;
   DOMStringList* objectStoreNames() const;
-  IDBDatabase* db() const { return database_.Get(); }
+  IDBDatabase& db() { return *database_; }
   DOMException* error() const { return error_.Get(); }
   IDBObjectStore* objectStore(const String& name, ExceptionState&);
   void abort(ExceptionState&);
@@ -234,7 +234,7 @@ class MODULES_EXPORT IDBTransaction final
   // requests larger than this size will be rejected.
   // Used by unit tests to exercise behavior without allocating huge chunks
   // of memory.
-  absl::optional<size_t> max_put_value_size_override_;
+  std::optional<size_t> max_put_value_size_override_;
 
   // Called when a transaction is aborted.
   void AbortOutstandingRequests(bool queue_tasks);

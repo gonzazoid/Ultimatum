@@ -57,6 +57,7 @@ import {SeaPenStoreAdapter} from './sea_pen_store_adapter.js';
  * necessary so they can be imported in tests.
  */
 export {WallpaperGridItemElement} from 'chrome://resources/ash/common/personalization/wallpaper_grid_item_element.js';
+export {SparklePlaceholderElement} from 'chrome://resources/ash/common/sea_pen/surface_effects/sparkle_placeholder.js';
 export {AlbumListElement} from './ambient/album_list_element.js';
 export {AlbumsSubpageElement} from './ambient/albums_subpage_element.js';
 export {AmbientActionName, AmbientActions, SetAlbumsAction, setAlbumsAction, SetAlbumSelectedAction, setAlbumSelectedAction, SetAmbientModeEnabledAction, setAmbientModeEnabledAction, SetAmbientThemeAction, setAmbientThemeAction, SetGeolocationPermissionEnabledAction as SetGeolocationPermissionEnabledActionForAmbient, SetPreviewsAction, setPreviewsAction, SetScreenSaverDurationAction, setScreenSaverDurationAction, SetShouldShowTimeOfDayBannerAction, SetTemperatureUnitAction, setTemperatureUnitAction, SetTopicSourceAction, setTopicSourceAction} from './ambient/ambient_actions.js';
@@ -120,6 +121,7 @@ export {LocalImagesElement} from './wallpaper/local_images_element.js';
 export {RecentSeaPenData} from 'chrome://resources/ash/common/sea_pen/constants.js';
 export * from 'chrome://resources/ash/common/sea_pen/sea_pen_actions.js';
 export {getRecentSeaPenImages, selectRecentSeaPenImage, searchSeaPenThumbnails} from 'chrome://resources/ash/common/sea_pen/sea_pen_controller.js';
+export {SeaPenImageLoadingElement} from 'chrome://resources/ash/common/sea_pen/sea_pen_image_loading_element.js';
 export {SeaPenImagesElement} from 'chrome://resources/ash/common/sea_pen/sea_pen_images_element.js';
 export {SeaPenInputQueryElement} from 'chrome://resources/ash/common/sea_pen/sea_pen_input_query_element.js';
 export {SeaPenRecentWallpapersElement} from 'chrome://resources/ash/common/sea_pen/sea_pen_recent_wallpapers_element.js';
@@ -129,6 +131,7 @@ export {getSeaPenStore, setSeaPenStore, SeaPenStoreInterface} from 'chrome://res
 export {SeaPenTemplateQueryElement} from 'chrome://resources/ash/common/sea_pen/sea_pen_template_query_element.js';
 export {SeaPenTemplatesElement} from 'chrome://resources/ash/common/sea_pen/sea_pen_templates_element.js';
 export {setSeaPenProviderForTesting} from 'chrome://resources/ash/common/sea_pen/sea_pen_interface_provider.js';
+export {SeaPenTermsOfServiceDialogElement} from 'chrome://resources/ash/common/sea_pen/sea_pen_terms_of_service_dialog_element.js';
 export {isDefaultImage, isGooglePhotosPhoto, isWallpaperImage} from './wallpaper/utils.js';
 export * from './wallpaper/wallpaper_actions.js';
 export {WallpaperCollectionsElement} from './wallpaper/wallpaper_collections_element.js';
@@ -147,7 +150,7 @@ export {TimeOfDayAcceptEvent, TimeOfDayWallpaperDialogElement} from './wallpaper
 PersonalizationStore.getInstance().init(emptyState());
 SeaPenStoreAdapter.initSeaPenStore();
 
-const link = document.querySelector('link[rel=\'icon\']') as HTMLLinkElement;
+const link = document.querySelector<HTMLLinkElement>('link[rel=\'icon\']');
 if (link) {
   // |link| may be null in tests.
   link.href = '/hub_icon_192.png';

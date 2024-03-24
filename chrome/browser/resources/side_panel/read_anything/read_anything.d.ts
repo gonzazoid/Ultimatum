@@ -31,6 +31,7 @@ declare namespace chrome {
     // Items in the ReadAnythingTheme struct, see read_anything.mojom for info.
     let fontName: string;
     let fontSize: number;
+    let linksEnabled: boolean;
     let foregroundColor: number;
     let backgroundColor: number;
     let lineSpacing: number;
@@ -103,6 +104,9 @@ declare namespace chrome {
     // Returns the url of the AXNode for the provided AXNodeID.
     function getUrl(nodeId: number): string;
 
+    // Returns the alt text of the AXNode for the provided AXNodeID.
+    function getAltText(nodeId: number): string;
+
     // Returns true if the text node / element should be bolded.
     function shouldBold(nodeId: number): boolean;
 
@@ -138,6 +142,9 @@ declare namespace chrome {
     // Called when a user makes a font size change via the webui toolbar.
     function onFontSizeChanged(increase: boolean): void;
     function onFontSizeReset(): void;
+
+    // Called when a user toggles links via the webui toolbar.
+    function onLinksEnabledToggled(): void;
 
     // Called when the letter spacing is changed via the webui toolbar.
     function onStandardLetterSpacing(): void;
@@ -204,12 +211,16 @@ declare namespace chrome {
 
     // Set the theme. Used by tests only.
     function setThemeForTesting(
-        fontName: string, fontSize: number, foregroundColor: number,
-        backgroundColor: number, lineSpacing: number,
+        fontName: string, fontSize: number, linksEnabled: boolean,
+        foregroundColor: number, backgroundColor: number, lineSpacing: number,
         letterSpacing: number): void;
 
     // Sets the default language. Used by tests only.
     function setLanguageForTesting(code: string): void;
+
+    // Called when the side panel has finished loading and it's safe to call
+    // SidePanelWebUIView::ShowUI
+    function shouldShowUI(): boolean;
 
     ////////////////////////////////////////////////////////////////
     // Implemented in read_anything/app.ts and called by native c++.
@@ -224,6 +235,13 @@ declare namespace chrome {
     // Ping that an AXTree has been distilled for the active tab's render frame
     // and is available to consume.
     function updateContent(): void;
+
+    // Redraws links when the enabled state changes.
+    function updateLinks(): void;
+
+    // Updates an images src attribute with a data url. The data url must have
+    // been requested first.
+    function updateImage(nodeId: number): void;
 
     // Ping that the selection has been updated.
     function updateSelection(): void;
@@ -242,27 +260,43 @@ declare namespace chrome {
     function initAXPositionWithNode(startingNodeId: number): void;
 
     // Gets the starting text index for the current Read Aloud text segment
-    // for the given node. nodeId should be a node returned by getNextText or
-    // getPreviousText. Returns -1 if the node is invalid.
-    function getNextTextStartIndex(nodeId: number): number;
+    // for the given node. nodeId should be a node returned by getCurrentText.
+    // Returns -1 if the node is invalid.
+    function getCurrentTextStartIndex(nodeId: number): number;
 
     // Gets the ending text index for the current Read Aloud text segment
-    // for the given node. nodeId should be a node returned by getNextText or
+    // for the given node. nodeId should be a node returned by getCurrentText or
     // getPreviousText. Returns -1 if the node is invalid.
-    function getNextTextEndIndex(nodeId: number): number;
+    function getCurrentTextEndIndex(nodeId: number): number;
 
     // Gets the nodes of the  next text that should be spoken and highlighted.
-    // Use getNextTextStartIndex and getNextTextEndIndex to get the bounds
+    // Use getCurrentTextStartIndex and getCurrentTextEndIndex to get the bounds
     // for text associated with these nodes.
-    function getNextText(maxTextLength: number): number[];
+    function getCurrentText(): number[];
 
-    // Gets the nodes for the previous text that should be spoken and
-    // highlighted. Use getNextTextStartIndex and getNextTextEndIndex to get
-    // the bounds for text associated with these nodes.
-    function getPreviousText(maxTextLength: number): number[];
+    // Increments the processed_granularity_index_ in ReadAnythingAppModel,
+    // effectively updating ReadAloud's state of the current granularity to
+    // refer to the next granularity.
+    function movePositionToNextGranularity(): void;
+
+    // Decrements the processed_granularity_index_ in ReadAnythingAppModel,
+    // effectively updating ReadAloud's state of the current granularity to
+    // refer to the previous granularity.
+    function movePositionToPreviousGranularity(): void;
 
     // Signal that the supported fonts should be updated i.e. that the brower's
     // preferred language has changed.
     function updateFonts(): void;
+
+    // Gets the accessible text boundary for the given string
+    function getAccessibleBoundary(text: string, maxSpeechLength: number):
+        number;
+
+    // Requests the image in the form of a data url. The result will then be
+    // stored in the AXNode which can be fetched on content update.
+    function requestImageDataUrl(nodeId: number): void;
+
+    // Gets the stored image data url from the AXNode.
+    function getImageDataUrl(nodeId: number): string;
   }
 }

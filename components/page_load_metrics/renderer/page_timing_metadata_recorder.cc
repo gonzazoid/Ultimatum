@@ -67,8 +67,8 @@ void PageTimingMetadataRecorder::AddProfileMetadata(
 }
 
 void PageTimingMetadataRecorder::UpdateFirstInputDelayMetadata(
-    const absl::optional<base::TimeTicks>& first_input_timestamp,
-    const absl::optional<base::TimeDelta>& first_input_delay) {
+    const std::optional<base::TimeTicks>& first_input_timestamp,
+    const std::optional<base::TimeDelta>& first_input_delay) {
   // Applying metadata to past samples has non-trivial cost so only do so if
   // the relevant values changed.
   const bool should_apply_metadata =
@@ -85,8 +85,8 @@ void PageTimingMetadataRecorder::UpdateFirstInputDelayMetadata(
 }
 
 void PageTimingMetadataRecorder::UpdateFirstContentfulPaintMetadata(
-    const absl::optional<base::TimeTicks>& navigation_start,
-    const absl::optional<base::TimeTicks>& first_contentful_paint) {
+    const std::optional<base::TimeTicks>& navigation_start,
+    const std::optional<base::TimeTicks>& first_contentful_paint) {
   // Applying metadata to past samples has non-trivial cost so only do so if
   // the relevant values changed.
   const bool should_apply_metadata =
@@ -129,10 +129,32 @@ void PageTimingMetadataRecorder::AddInteractionDurationMetadata(
       base::SampleMetadataScope::kProcess);
 }
 
+void PageTimingMetadataRecorder::AddInteractionDurationAfterQueueingMetadata(
+    const base::TimeTicks interaction_start,
+    const base::TimeTicks interaction_queued_main_thread,
+    const base::TimeTicks interaction_end) {
+  // Safe check that start < queued < end.
+  if (!IsTimeTicksRangeSensible(interaction_start,
+                                interaction_queued_main_thread) ||
+      !IsTimeTicksRangeSensible(interaction_queued_main_thread,
+                                interaction_end)) {
+    return;
+  }
+
+  ApplyMetadataToPastSamples(
+      interaction_queued_main_thread, interaction_end,
+      "Blink.Responsiveness.UserInteraction.MaxEventDurationFromQueued",
+      /* key=*/
+      CreateInteractionDurationMetadataKey(instance_id_, interaction_count_),
+      /* value=*/
+      (interaction_end - interaction_queued_main_thread).InMilliseconds(),
+      base::SampleMetadataScope::kProcess);
+}
+
 void PageTimingMetadataRecorder::UpdateLargestContentfulPaintMetadata(
-    const absl::optional<base::TimeTicks>& navigation_start,
-    const absl::optional<base::TimeTicks>& largest_contentful_paint,
-    const absl::optional<blink::DocumentToken>& document_token) {
+    const std::optional<base::TimeTicks>& navigation_start,
+    const std::optional<base::TimeTicks>& largest_contentful_paint,
+    const std::optional<blink::DocumentToken>& document_token) {
   const bool should_apply_global_lcp_metadata =
       navigation_start.has_value() && document_token.has_value() &&
       (timing_.navigation_start != navigation_start ||

@@ -38,6 +38,7 @@
 #import "ios/chrome/browser/follow/model/follow_tab_helper.h"
 #import "ios/chrome/browser/follow/model/follow_util.h"
 #import "ios/chrome/browser/intents/intents_donation_helper.h"
+#import "ios/chrome/browser/iph_for_new_chrome_user/model/tab_based_iph_browser_agent.h"
 #import "ios/chrome/browser/overlays/model/public/overlay_presenter.h"
 #import "ios/chrome/browser/overlays/model/public/overlay_presenter_observer_bridge.h"
 #import "ios/chrome/browser/overlays/model/public/overlay_request.h"
@@ -54,13 +55,13 @@
 #import "ios/chrome/browser/shared/public/commands/bookmarks_commands.h"
 #import "ios/chrome/browser/shared/public/commands/browser_coordinator_commands.h"
 #import "ios/chrome/browser/shared/public/commands/find_in_page_commands.h"
-#import "ios/chrome/browser/shared/public/commands/help_commands.h"
 #import "ios/chrome/browser/shared/public/commands/open_new_tab_command.h"
 #import "ios/chrome/browser/shared/public/commands/overflow_menu_customization_commands.h"
 #import "ios/chrome/browser/shared/public/commands/page_info_commands.h"
 #import "ios/chrome/browser/shared/public/commands/popup_menu_commands.h"
 #import "ios/chrome/browser/shared/public/commands/price_notifications_commands.h"
 #import "ios/chrome/browser/shared/public/commands/reading_list_add_command.h"
+#import "ios/chrome/browser/shared/public/commands/settings_commands.h"
 #import "ios/chrome/browser/shared/public/commands/text_zoom_commands.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/shared/public/features/system_flags.h"
@@ -934,7 +935,7 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
 - (OverflowMenuDestination*)newWhatsNewDestination {
   __weak __typeof(self) weakSelf = self;
   return
-      [self createOverflowMenuDestination:IDS_IOS_CONTENT_SUGGESTIONS_WHATS_NEW
+      [self createOverflowMenuDestination:IDS_IOS_TOOLS_MENU_WHATS_NEW
                               destination:overflow_menu::Destination::WhatsNew
                                symbolName:kCheckmarkSealSymbol
                              systemSymbol:YES
@@ -953,8 +954,7 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
 
 - (OverflowMenuDestination*)newPriceNotificationsDestination {
   __weak __typeof(self) weakSelf = self;
-  return [self createOverflowMenuDestination:
-                   IDS_IOS_PRICE_NOTIFICATIONS_PRICE_TRACK_TITLE
+  return [self createOverflowMenuDestination:IDS_IOS_TOOLS_MENU_PRICE_TRACKING
                                  destination:overflow_menu::Destination::
                                                  PriceNotifications
                                   symbolName:kDownTrendSymbol
@@ -1681,6 +1681,10 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
   self.webContentAreaShowingOverlay = NO;
 }
 
+- (void)overlayPresenterDestroyed:(OverlayPresenter*)presenter {
+  self.webContentAreaOverlayPresenter = nullptr;
+}
+
 #pragma mark - OverflowMenuDestinationProvider
 
 - (OverflowMenuDestination*)destinationForDestinationType:
@@ -1893,7 +1897,7 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
 // Dismisses the menu and reloads the current page.
 - (void)reload {
   RecordAction(UserMetricsAction("MobileMenuReload"));
-  [self.helpHandler notifyMultiGestureRefreshAndShowHelpBubbleIfEligible];
+  self.tabBasedIPHBrowserAgent->NotifyMultiGestureRefreshEvent();
   [self dismissMenu];
   self.navigationAgent->Reload();
 }
@@ -1936,7 +1940,7 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
 - (void)openClearBrowsingData {
   RecordAction(UserMetricsAction("MobileMenuClearBrowsingData"));
   [self dismissMenu];
-  [self.applicationHandler showClearBrowsingDataSettings];
+  [self.settingsHandler showClearBrowsingDataSettings];
 }
 
 // Follows the website corresponding to `webPage` and dismisses the menu.
@@ -2114,7 +2118,7 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
       "PasswordManager.ManagePasswordsReferrer",
       password_manager::ManagePasswordsReferrer::kChromeMenuItem);
   [self dismissMenu];
-  [self.applicationHandler
+  [self.settingsHandler
       showSavedPasswordsSettingsFromViewController:self.baseViewController
                                   showCancelButton:NO];
 }

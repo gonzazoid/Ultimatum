@@ -6,6 +6,7 @@
 
 #import <memory>
 
+#import "base/memory/raw_ptr.h"
 #import "base/test/simple_test_clock.h"
 #import "base/test/task_environment.h"
 #import "components/optimization_guide/core/tab_url_provider.h"
@@ -58,8 +59,8 @@ class TabUrlProviderImplTest : public PlatformTest {
     fake_web_state->SetCurrentURL(url);
     fake_web_state->SetLastActiveTime(timestamp);
     browser->GetWebStateList()->InsertWebState(
-        browser->GetWebStateList()->count(), std::move(fake_web_state),
-        WebStateList::InsertionFlags::INSERT_ACTIVATE, WebStateOpener());
+        std::move(fake_web_state),
+        WebStateList::InsertionParams::Automatic().Activate());
   }
 
   const std::vector<GURL> GetUrlsOfActiveTabs(
@@ -79,7 +80,7 @@ class TabUrlProviderImplTest : public PlatformTest {
   std::unique_ptr<TestBrowser> browser_;
   std::unique_ptr<TestBrowser> other_browser_;
   std::unique_ptr<TestBrowser> incognito_browser_;
-  BrowserList* browser_list_;
+  raw_ptr<BrowserList> browser_list_;
   std::unique_ptr<optimization_guide::TabUrlProvider> tab_url_provider_;
 };
 

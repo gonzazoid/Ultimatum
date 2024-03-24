@@ -284,7 +284,7 @@ bool AutocompleteProviderClientImpl::IsAuthenticated() const {
 bool AutocompleteProviderClientImpl::IsSyncActive() const {
   syncer::SyncService* sync =
       SyncServiceFactory::GetForBrowserState(browser_state_);
-  // TODO(crbug.com/1462552): Remove usage of IsSyncFeatureActive() after kSync
+  // TODO(crbug.com/40066949): Remove usage of IsSyncFeatureActive() after kSync
   // users are migrated to kSignin in phase 3. See ConsentLevel::kSync
   // documentation for details.
   return sync && sync->IsSyncFeatureActive();
@@ -312,4 +312,13 @@ void AutocompleteProviderClientImpl::PrefetchImage(const GURL& url) {}
 
 const TabMatcher& AutocompleteProviderClientImpl::GetTabMatcher() const {
   return tab_matcher_;
+}
+
+bool AutocompleteProviderClientImpl::in_background_state() const {
+  return in_background_state_;
+}
+
+void AutocompleteProviderClientImpl::set_in_background_state(
+    bool in_background_state) {
+  in_background_state_ = in_background_state;
 }

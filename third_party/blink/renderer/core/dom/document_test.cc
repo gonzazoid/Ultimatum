@@ -29,6 +29,7 @@
  */
 
 #include "third_party/blink/renderer/core/dom/document.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/renderer/core/page/page_animator.h"
 
 #include <algorithm>
@@ -70,6 +71,7 @@
 #include "third_party/blink/renderer/core/frame/viewport_data.h"
 #include "third_party/blink/renderer/core/frame/web_local_frame_impl.h"
 #include "third_party/blink/renderer/core/html/custom/custom_element_test_helpers.h"
+#include "third_party/blink/renderer/core/html/forms/html_form_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_input_element.h"
 #include "third_party/blink/renderer/core/html/html_dialog_element.h"
 #include "third_party/blink/renderer/core/html/html_head_element.h"
@@ -100,6 +102,7 @@ namespace blink {
 using network::mojom::ContentSecurityPolicySource;
 using network::mojom::ContentSecurityPolicyType;
 using ::testing::ElementsAre;
+using ::testing::IsEmpty;
 
 class DocumentTest : public PageTestBase {
  public:
@@ -1790,17 +1793,28 @@ TEST_F(UnassociatedListedElementTest, GetUnassociatedListedElements) {
                          expected_elements.begin(), expected_elements.end()));
 }
 
-// We don't extract unassociated listed element in a shadow DOM.
+// We extract unassociated listed element in a shadow DOM iff
+// `kAutofillIncludeShadowDomInUnassociatedListedElements` is enabled.
 TEST_F(UnassociatedListedElementTest,
        GetUnassociatedListedElementsFromShadowTree) {
   ShadowRoot& shadow_root =
-      GetDocument().body()->AttachShadowRootInternal(ShadowRootType::kOpen);
+      GetDocument().body()->AttachShadowRootForTesting(ShadowRootType::kOpen);
   HTMLInputElement* input =
       MakeGarbageCollected<HTMLInputElement>(GetDocument());
+  input->SetIdAttribute(AtomicString("unassociated_input"));
   shadow_root.AppendChild(input);
   ListedElement::List listed_elements =
       GetDocument().UnassociatedListedElements();
-  EXPECT_EQ(0u, listed_elements.size());
+
+  if (base::FeatureList::IsEnabled(
+          blink::features::
+              kAutofillIncludeShadowDomInUnassociatedListedElements)) {
+    EXPECT_THAT(listed_elements,
+                ElementsAre(ListedElement::From(*shadow_root.getElementById(
+                    AtomicString("unassociated_input")))));
+  } else {
+    EXPECT_THAT(listed_elements, IsEmpty());
+  }
 }
 
 // Check if the dynamically added unassociated listed element is properly
@@ -1954,6 +1968,115 @@ TEST_F(UnassociatedListedElementTest,
   div->remove();
   listed_elements = GetDocument().UnassociatedListedElements();
   EXPECT_EQ(0u, listed_elements.size());
+}
+
+class TopLevelFormsListTest : public DocumentTest {
+ public:
+  HTMLFormElement* GetFormElement(const char* id) {
+    return DynamicTo<HTMLFormElement>(GetElementById(id));
+  }
+  HTMLFormElement* GetFormElement(const char* id, ShadowRoot& shadow_root) {
+    return DynamicTo<HTMLFormElement>(
+        shadow_root.getElementById(AtomicString(id)));
+  }
+};
+
+// Tests that `GetTopLevelForms` correctly lists forms in the light DOM.
+TEST_F(TopLevelFormsListTest, FormsInLightDom) {
+  SetHtmlInnerHTML(R"HTML(
+    <form id="f1">
+      <input type="text">
+    </form>
+    <div>
+      <form id="f2">
+        <input type="text">
+      </form>
+    </div>
+  )HTML");
+  EXPECT_THAT(GetDocument().GetTopLevelForms(),
+              ElementsAre(GetFormElement("f1"), GetFormElement("f2")));
+  // A second call has the same result.
+  EXPECT_THAT(GetDocument().GetTopLevelForms(),
+              ElementsAre(GetFormElement("f1"), GetFormElement("f2")));
+}
+
+// Tests that `GetTopLevelForms` functions correctly after dynamic form element
+// insertion and removal.
+TEST_F(TopLevelFormsListTest, FormsInLightDomInsertionAndRemoval) {
+  SetHtmlInnerHTML(R"HTML(
+    <form id="f1">
+      <input type="text">
+    </form>
+    <div>
+      <form id="f2">
+        <input type="text">
+      </form>
+    </div>
+  )HTML");
+  EXPECT_THAT(GetDocument().GetTopLevelForms(),
+              ElementsAre(GetFormElement("f1"), GetFormElement("f2")));
+
+  // Adding a new form element invalidates the cache.
+  Element* new_form = CreateElement(AtomicString("form"));
+  new_form->SetIdAttribute(AtomicString("f3"));
+  EXPECT_THAT(GetDocument().GetTopLevelForms(),
+              ElementsAre(GetFormElement("f1"), GetFormElement("f2")));
+  GetDocument().body()->AppendChild(new_form);
+  EXPECT_THAT(GetDocument().GetTopLevelForms(),
+              ElementsAre(GetFormElement("f1"), GetFormElement("f3"),
+                          GetFormElement("f2")));
+
+  // Removing a form element invalidates the cache.
+  GetFormElement("f2")->remove();
+  EXPECT_THAT(GetDocument().GetTopLevelForms(),
+              ElementsAre(GetFormElement("f1"), GetFormElement("f3")));
+}
+
+// Tests that top level forms inside shadow DOM are listed correctly and
+// insertion and removal updates the cache.
+TEST_F(TopLevelFormsListTest, FormsInShadowDomInsertionAndRemoval) {
+  GetDocument().body()->setHTMLUnsafe(R"HTML(
+    <form id="f1">
+      <input type="text">
+    </form>
+    <div id="d">
+      <template shadowrootmode=open>
+        <form id="f2">
+          <input type="text">
+        </form>
+      </template>
+    </div>
+  )HTML");
+  HTMLFormElement* f2 =
+      GetFormElement("f2", *GetElementById("d")->GetShadowRoot());
+  EXPECT_THAT(GetDocument().GetTopLevelForms(),
+              ElementsAre(GetFormElement("f1"), f2));
+
+  // Removing f1 updates the cache.
+  GetFormElement("f1")->remove();
+  EXPECT_THAT(GetDocument().GetTopLevelForms(), ElementsAre(f2));
+
+  // Removing f2 also updates the cache.
+  f2->remove();
+  EXPECT_THAT(GetDocument().GetTopLevelForms(), IsEmpty());
+}
+
+// Tests that nested forms across shadow DOM are ignored by `GetTopLevelForms`.
+TEST_F(TopLevelFormsListTest, GetTopLevelFormsIgnoresNestedChildren) {
+  GetDocument().body()->setHTMLUnsafe(R"HTML(
+    <form id="f1">
+      <input type="text">
+      <div id="d">
+        <template shadowrootmode=open>
+          <form id="f2">
+            <input type="text">
+          </form>
+        </template>
+      </div>
+    </form>
+  )HTML");
+  EXPECT_THAT(GetDocument().GetTopLevelForms(),
+              ElementsAre(GetFormElement("f1")));
 }
 
 TEST_F(DocumentTest, DocumentDefiningElementWithMultipleBodies) {

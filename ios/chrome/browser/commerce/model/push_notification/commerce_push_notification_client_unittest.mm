@@ -5,6 +5,7 @@
 #import "ios/chrome/browser/commerce/model/push_notification/commerce_push_notification_client.h"
 
 #import "base/base64.h"
+#import "base/memory/raw_ptr.h"
 #import "base/run_loop.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/strings/utf_string_conversions.h"
@@ -86,8 +87,7 @@ NSDictionary* SerializeOptGuideCommercePayload() {
   any.SerializeToString(&serialized_any);
 
   // Base 64 encoding
-  std::string serialized_any_escaped;
-  base::Base64Encode(serialized_any, &serialized_any_escaped);
+  std::string serialized_any_escaped = base::Base64Encode(serialized_any);
 
   NSDictionary* user_info = @{
     kSerializedPayloadKey : base::SysUTF8ToNSString(serialized_any_escaped)
@@ -214,7 +214,7 @@ class CommercePushNotificationClientTest : public PlatformTest {
         action_identifier, user_info, on_complete_for_testing);
   }
 
-  std::vector<const std::string>& GetUrlsDelayedForLoading() {
+  std::vector<GURL>& GetUrlsDelayedForLoading() {
     return commerce_push_notification_client_.urls_delayed_for_loading_;
   }
 
@@ -239,9 +239,9 @@ class CommercePushNotificationClientTest : public PlatformTest {
   std::unique_ptr<Browser> browser_;
   std::unique_ptr<Browser> background_browser_;
   std::unique_ptr<TestChromeBrowserState> chrome_browser_state_;
-  BrowserList* browser_list_;
-  bookmarks::BookmarkModel* bookmark_model_;
-  commerce::MockShoppingService* shopping_service_;
+  raw_ptr<BrowserList> browser_list_;
+  raw_ptr<bookmarks::BookmarkModel> bookmark_model_;
+  raw_ptr<commerce::MockShoppingService> shopping_service_;
   SceneState* scene_state_foreground_;
   SceneState* scene_state_background_;
   AppState* app_state_;
@@ -267,8 +267,7 @@ TEST_F(CommercePushNotificationClientTest, TestParsing) {
 
   std::string serialized_any;
   any.SerializeToString(&serialized_any);
-  std::string serialized_any_escaped;
-  base::Base64Encode(serialized_any, &serialized_any_escaped);
+  std::string serialized_any_escaped = base::Base64Encode(serialized_any);
 
   std::unique_ptr<optimization_guide::proto::HintNotificationPayload> parsed =
       CommercePushNotificationClient::ParseHintNotificationPayload(
@@ -308,8 +307,7 @@ TEST_F(CommercePushNotificationClientTest, TestHintKeyRemovedUponNotification) {
 
   std::string serialized_any;
   any.SerializeToString(&serialized_any);
-  std::string serialized_any_escaped;
-  base::Base64Encode(serialized_any, &serialized_any_escaped);
+  std::string serialized_any_escaped = base::Base64Encode(serialized_any);
 
   NSDictionary* dict = @{
     kSerializedPayloadKey : base::SysUTF8ToNSString(serialized_any_escaped)

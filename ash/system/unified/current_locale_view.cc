@@ -52,11 +52,7 @@ void CurrentLocaleView::OnLocaleListSet() {
       break;
     }
   }
-  Layout();
-}
-
-const char* CurrentLocaleView::GetClassName() const {
-  return "CurrentLocaleView";
+  DeprecatedLayoutImmediately();
 }
 
 void CurrentLocaleView::HandleLocaleChange() {

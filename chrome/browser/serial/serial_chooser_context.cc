@@ -53,11 +53,7 @@ constexpr char kUsbDriverKey[] = "usb_driver";
 std::string EncodeToken(const base::UnguessableToken& token) {
   const uint64_t data[2] = {token.GetHighForSerialization(),
                             token.GetLowForSerialization()};
-  std::string buffer;
-  base::Base64Encode(
-      base::StringPiece(reinterpret_cast<const char*>(&data[0]), sizeof(data)),
-      &buffer);
-  return buffer;
+  return base::Base64Encode(base::as_byte_span(data));
 }
 
 base::UnguessableToken DecodeToken(base::StringPiece input) {
@@ -68,7 +64,7 @@ base::UnguessableToken DecodeToken(base::StringPiece input) {
   }
 
   const uint64_t* data = reinterpret_cast<const uint64_t*>(buffer.data());
-  absl::optional<base::UnguessableToken> token =
+  std::optional<base::UnguessableToken> token =
       base::UnguessableToken::Deserialize(data[0], data[1]);
   if (!token.has_value()) {
     return base::UnguessableToken();
@@ -495,8 +491,8 @@ bool SerialChooserContext::HasPortPermission(
         return true;
       }
 #else
-      const absl::optional<int> vendor_id = device.FindInt(kVendorIdKey);
-      const absl::optional<int> product_id = device.FindInt(kProductIdKey);
+      const std::optional<int> vendor_id = device.FindInt(kVendorIdKey);
+      const std::optional<int> product_id = device.FindInt(kProductIdKey);
       const std::string* serial_number = device.FindString(kSerialNumberKey);
       if (!vendor_id || !product_id || !serial_number) {
         continue;

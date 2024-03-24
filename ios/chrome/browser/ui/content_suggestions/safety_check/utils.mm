@@ -11,7 +11,9 @@
 #import "ios/chrome/browser/passwords/model/password_checkup_utils.h"
 #import "ios/chrome/browser/shared/public/commands/application_commands.h"
 #import "ios/chrome/browser/shared/public/commands/open_new_tab_command.h"
+#import "ios/chrome/browser/shared/public/commands/settings_commands.h"
 #import "ios/chrome/browser/ui/content_suggestions/safety_check/safety_check_state.h"
+#import "ios/chrome/browser/ui/content_suggestions/safety_check/utils.h"
 #import "ios/chrome/common/channel_info.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util.h"
@@ -58,8 +60,13 @@ int UniqueWarningTypeCount(
 
 }  // namespace
 
-void HandleSafetyCheckUpdateChromeTap(const GURL& chrome_upgrade_url,
-                                      id<ApplicationCommands> handler) {
+using password_manager::WarningType;
+using password_manager::PasswordCheckReferrer::kSafetyCheckMagicStack;
+using password_manager::WarningType::kCompromisedPasswordsWarning;
+
+void HandleSafetyCheckUpdateChromeTap(
+    const GURL& chrome_upgrade_url,
+    id<ApplicationCommands> applicationHandler) {
   switch (::GetChannel()) {
     case version_info::Channel::STABLE:
     case version_info::Channel::BETA:
@@ -68,7 +75,7 @@ void HandleSafetyCheckUpdateChromeTap(const GURL& chrome_upgrade_url,
       OpenNewTabCommand* command =
           [OpenNewTabCommand commandWithURLFromChrome:chrome_upgrade_url];
 
-      [handler openURLInNewTab:command];
+      [applicationHandler openURLInNewTab:command];
 
       break;
     }
@@ -79,15 +86,15 @@ void HandleSafetyCheckUpdateChromeTap(const GURL& chrome_upgrade_url,
 
 void HandleSafetyCheckPasswordTap(
     std::vector<password_manager::CredentialUIEntry>& compromised_credentials,
-    id<ApplicationCommands> handler) {
+    id<ApplicationCommands> applicationHandler,
+    id<SettingsCommands> settingsHandler) {
   // If there's only one compromised credential, navigate users to the detail
   // view for that particular credential.
   if (compromised_credentials.size() == 1) {
     password_manager::CredentialUIEntry credential =
         compromised_credentials.front();
-
-    [handler showPasswordDetailsForCredential:credential showCancelButton:YES];
-
+    [settingsHandler showPasswordDetailsForCredential:credential
+                                     showCancelButton:YES];
     return;
   }
 
@@ -98,14 +105,11 @@ void HandleSafetyCheckPasswordTap(
   // navigate users to the Password Checkup overview screen for that particular
   // warning type.
   if (unique_warning_type_count == 1) {
-    password_manager::WarningType type =
+    WarningType type =
         password_manager::GetWarningOfHighestPriority(compromised_credentials);
-
-    [handler showPasswordIssuesWithWarningType:type
-                                      referrer:password_manager::
-                                                   PasswordCheckReferrer::
-                                                       kSafetyCheckMagicStack];
-
+    [applicationHandler
+        showPasswordIssuesWithWarningType:type
+                                 referrer:kSafetyCheckMagicStack];
     return;
   }
 
@@ -115,8 +119,8 @@ void HandleSafetyCheckPasswordTap(
   base::RecordAction(
       base::UserMetricsAction("MobileMagicStackOpenPasswordCheckup"));
 
-  [handler showPasswordCheckupPageForReferrer:
-               password_manager::PasswordCheckReferrer::kSafetyCheckMagicStack];
+  [applicationHandler
+      showPasswordCheckupPageForReferrer:kSafetyCheckMagicStack];
 }
 
 bool InvalidUpdateChromeState(UpdateChromeSafetyCheckState state) {
@@ -131,24 +135,6 @@ bool InvalidPasswordState(PasswordSafetyCheckState state) {
 
 bool InvalidSafeBrowsingState(SafeBrowsingSafetyCheckState state) {
   return state == SafeBrowsingSafetyCheckState::kUnsafe;
-}
-
-int CheckIssuesCount(SafetyCheckState* state) {
-  int invalid_check_count = 0;
-
-  if (InvalidUpdateChromeState(state.updateChromeState)) {
-    invalid_check_count++;
-  }
-
-  if (InvalidPasswordState(state.passwordState)) {
-    invalid_check_count++;
-  }
-
-  if (InvalidSafeBrowsingState(state.safeBrowsingState)) {
-    invalid_check_count++;
-  }
-
-  return invalid_check_count;
 }
 
 bool CanRunSafetyCheck(std::optional<base::Time> last_run_time) {

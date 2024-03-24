@@ -56,9 +56,10 @@ NSString* IdentifierForGroupCellAtIndex(unsigned int index) {
                                           grey_sufficientlyVisible(), nil)]
       performAction:grey_longPress()];
 
-  [[EarlGrey selectElementWithMatcher:
-                 grey_text(l10n_util::GetNSString(
-                     IDS_IOS_CONTENT_CONTEXT_ADDTABTONEWTABGROUP))]
+  // TODO(crbug.com/1501837): Remove this matcher and replace it with "create
+  // new group" option.
+  [[EarlGrey selectElementWithMatcher:grey_text(l10n_util::GetNSString(
+                                          IDS_IOS_CONTENT_CONTEXT_RENAMEGROUP))]
       performAction:grey_tap()];
 
   [[EarlGrey

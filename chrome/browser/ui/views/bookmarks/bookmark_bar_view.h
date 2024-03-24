@@ -83,6 +83,8 @@ class BookmarkBarView : public views::AccessiblePaneView,
   BookmarkBarView& operator=(const BookmarkBarView&) = delete;
   ~BookmarkBarView() override;
 
+  static bool GetAnimationsEnabled();
+
   static void DisableAnimationsForTesting(bool disabled);
 
   // Returns the current browser.
@@ -160,7 +162,7 @@ class BookmarkBarView : public views::AccessiblePaneView,
   // views::View:
   gfx::Size CalculatePreferredSize() const override;
   gfx::Size GetMinimumSize() const override;
-  void Layout() override;
+  void Layout(PassKey) override;
   void ViewHierarchyChanged(
       const views::ViewHierarchyChangedDetails& details) override;
   void PaintChildren(const views::PaintInfo& paint_info) override;
@@ -352,7 +354,7 @@ class BookmarkBarView : public views::AccessiblePaneView,
   void OnShowManagedBookmarksPrefChanged();
 
   void LayoutAndPaint() {
-    Layout();
+    DeprecatedLayoutImmediately();
     SchedulePaint();
   }
 

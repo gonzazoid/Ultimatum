@@ -6,12 +6,16 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "base/strings/strcat.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
+#include "base/types/expected.h"
+#include "base/version_info/channel.h"
 #include "build/branding_buildflags.h"
 #include "chrome/browser/ip_protection/get_proxy_config.pb.h"
+#include "chrome/common/channel_info.h"
 #include "google_apis/google_api_keys.h"
 #include "net/base/features.h"
 #include "services/network/public/cpp/resource_request.h"
@@ -85,13 +89,22 @@ constexpr net::NetworkTrafficAnnotationTag kGetProxyConfigTrafficAnnotation =
       ""
     )");
 
-const char kGoogApiKeyHeader[] = "X-Goog-Api-Key";
+constexpr std::string_view kGoogApiKeyHeader = "X-Goog-Api-Key";
 const char kChromeIpBlinding[] = "chromeipblinding";
 
 // The maximum size of the IP Protection requests - 256 KB (in practice these
 // should be much smaller than this).
 const int kIpProtectionRequestMaxBodySize = 256 * 1024;
 const char kProtobufContentType[] = "application/x-protobuf";
+
+// TODO(https://crbug.com/1299886): Once `google_apis::GetAPIKey()` handles this
+// logic we can remove this helper.
+std::string GetAPIKey() {
+  return chrome::GetChannel() == version_info::Channel::STABLE
+             ? google_apis::GetAPIKey()
+             : google_apis::GetNonStableAPIKey();
+}
+
 }  // namespace
 
 IpProtectionConfigHttp::IpProtectionConfigHttp(
@@ -188,7 +201,7 @@ void IpProtectionConfigHttp::GetProxyConfig(
     bool for_testing) {
 #if !BUILDFLAG(GOOGLE_CHROME_BRANDING)
   if (!for_testing) {
-    std::move(callback).Run(absl::InternalError(
+    std::move(callback).Run(base::unexpected<std::string>(
         "GetProxyConfig is only supported in Chrome builds"));
     return;
   }
@@ -197,8 +210,8 @@ void IpProtectionConfigHttp::GetProxyConfig(
   replacements.SetPathStr(ip_protection_server_get_proxy_config_path_);
   GURL request_url = ip_protection_server_url_.ReplaceComponents(replacements);
   if (!request_url.is_valid()) {
-    std::move(callback).Run(
-        absl::InternalError("Invalid IP Protection GetProxyConfig URL"));
+    std::move(callback).Run(base::unexpected<std::string>(
+        "Invalid IP Protection GetProxyConfig URL"));
     return;
   }
 
@@ -212,14 +225,16 @@ void IpProtectionConfigHttp::GetProxyConfig(
   resource_request->url = std::move(request_url);
   resource_request->method = net::HttpRequestHeaders::kPostMethod;
   resource_request->credentials_mode = network::mojom::CredentialsMode::kOmit;
-  resource_request->headers.SetHeader(kGoogApiKeyHeader,
-                                      google_apis::GetAPIKey());
   resource_request->headers.SetHeader(net::HttpRequestHeaders::kAccept,
                                       kProtobufContentType);
+  // Set the OAuth token if it's available or otherwise fallback to sending the
+  // Google API key.
   if (oauth_token.has_value()) {
     resource_request->headers.SetHeader(
         net::HttpRequestHeaders::kAuthorization,
         base::StrCat({"Bearer ", oauth_token.value()}));
+  } else {
+    resource_request->headers.SetHeader(kGoogApiKeyHeader, GetAPIKey());
   }
 
   std::unique_ptr<network::SimpleURLLoader> url_loader =
@@ -243,14 +258,14 @@ void IpProtectionConfigHttp::OnGetProxyConfigCompleted(
     std::unique_ptr<std::string> response) {
   if (!response) {
     std::move(callback).Run(
-        absl::InternalError("Failed GetProxyConfig request"));
+        base::unexpected<std::string>("Failed GetProxyConfig request"));
     return;
   }
 
   ip_protection::GetProxyConfigResponse response_proto;
   if (!response_proto.ParseFromString(*response)) {
-    std::move(callback).Run(
-        absl::InternalError("Failed to parse GetProxyConfig response"));
+    std::move(callback).Run(base::unexpected<std::string>(
+        "Failed to parse GetProxyConfig response"));
     return;
   }
 

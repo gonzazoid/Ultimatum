@@ -35,7 +35,6 @@
 #include "components/reporting/encryption/primitives.h"
 #include "components/reporting/encryption/testing_primitives.h"
 #include "components/reporting/proto/synced/record_constants.pb.h"
-#include "components/reporting/storage/test_storage_module.h"
 #include "components/reporting/util/encrypted_reporting_json_keys.h"
 #include "components/reporting/util/status.h"
 #include "components/reporting/util/statusor.h"
@@ -78,8 +77,8 @@ class ReportClientTest : public ::testing::TestWithParam<bool> {
 
     // Provide client test environment with local storage.
 #if BUILDFLAG(IS_CHROMEOS)
-    test_reporting_ = ReportingClient::TestEnvironment::CreateWithStorageModule(
-        base::MakeRefCounted<test::TestStorageModule>());
+    test_reporting_ =
+        ReportingClient::TestEnvironment::CreateWithStorageModule();
 #else
     ASSERT_TRUE(location_.CreateUniqueTempDir());
     test_reporting_ = ReportingClient::TestEnvironment::CreateWithLocalStorage(
@@ -196,15 +195,13 @@ class ReportClientTest : public ::testing::TestWithParam<bool> {
 
   base::Value::Dict GetEncryptionKeyResponse() {
     base::Value::Dict encryption_settings;
-    std::string public_key;
-    base::Base64Encode(signed_encryption_key_.public_asymmetric_key(),
-                       &public_key);
+    std::string public_key =
+        base::Base64Encode(signed_encryption_key_.public_asymmetric_key());
     encryption_settings.Set(json_keys::kPublicKey, public_key);
     encryption_settings.Set(json_keys::kPublicKeyId,
                             signed_encryption_key_.public_key_id());
-    std::string public_key_signature;
-    base::Base64Encode(signed_encryption_key_.signature(),
-                       &public_key_signature);
+    std::string public_key_signature =
+        base::Base64Encode(signed_encryption_key_.signature());
     encryption_settings.Set(json_keys::kPublicKeySignature,
                             public_key_signature);
     base::Value::Dict response;
@@ -264,6 +261,12 @@ class ReportClientTest : public ::testing::TestWithParam<bool> {
   content::BrowserTaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
 
+  // Set up this device as a managed device.
+  policy::ScopedManagementServiceOverrideForTesting scoped_management_service_ =
+      policy::ScopedManagementServiceOverrideForTesting(
+          policy::ManagementServiceFactory::GetForPlatform(),
+          policy::EnterpriseManagementAuthority::CLOUD_DOMAIN);
+
   ReportingServerConnector::TestEnvironment test_env_;
   FileUploadJob::TestEnvironment manager_test_env_;
   std::unique_ptr<ReportingClient::TestEnvironment> test_reporting_;
@@ -279,12 +282,6 @@ class ReportClientTest : public ::testing::TestWithParam<bool> {
   const Destination destination_ = Destination::UPLOAD_EVENTS;
   ReportQueueConfiguration::PolicyCheckCallback policy_checker_callback_ =
       base::BindRepeating([]() { return Status::StatusOK(); });
-
-  // Set up this device as a managed device.
-  policy::ScopedManagementServiceOverrideForTesting scoped_management_service_ =
-      policy::ScopedManagementServiceOverrideForTesting(
-          policy::ManagementServiceFactory::GetForPlatform(),
-          policy::EnterpriseManagementAuthority::CLOUD_DOMAIN);
 };
 
 // Tests that a ReportQueue can be created using the ReportingClient with a DM

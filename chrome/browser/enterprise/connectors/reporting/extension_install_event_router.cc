@@ -4,12 +4,13 @@
 
 #include "chrome/browser/enterprise/connectors/reporting/extension_install_event_router.h"
 
+#include <optional>
+
 #include "base/feature_list.h"
 #include "chrome/browser/enterprise/connectors/common.h"
 #include "chrome/browser/enterprise/connectors/reporting/realtime_reporting_client_factory.h"
 #include "chrome/browser/enterprise/connectors/reporting/reporting_service_settings.h"
 #include "extensions/browser/extension_registry.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace enterprise_connectors {
 
@@ -23,12 +24,16 @@ constexpr char kKeyName[] = "name";
 constexpr char kKeyDescription[] = "description";
 constexpr char kKeyAction[] = "extension_action_type";
 constexpr char kKeyVersion[] = "extension_version";
-constexpr char kKeyFromWebstore[] = "from_webstore";
+constexpr char kKeySource[] = "extension_source";
 
 // Extension action types
 constexpr char kInstallAction[] = "INSTALL";
 constexpr char kUpdateAction[] = "UPDATE";
 constexpr char kUninstallAction[] = "UNINSTALL";
+
+// Extension sources
+constexpr char kChromeWebstoreSource[] = "CHROME_WEBSTORE";
+constexpr char kExternalSource[] = "EXTERNAL";
 
 }  // namespace
 
@@ -55,7 +60,7 @@ void ExtensionInstallEventRouter::StartObserving() {
 void ExtensionInstallEventRouter::ReportExtensionInstallEvent(
     const extensions::Extension* extension,
     const char* extension_action) {
-  absl::optional<ReportingSettings> settings =
+  std::optional<ReportingSettings> settings =
       reporting_client_->GetReportingSettings();
   if (!settings.has_value() ||
       settings->enabled_event_names.count(
@@ -69,7 +74,8 @@ void ExtensionInstallEventRouter::ReportExtensionInstallEvent(
   event.Set(kKeyDescription, extension->description());
   event.Set(kKeyAction, extension_action);
   event.Set(kKeyVersion, extension->GetVersionForDisplay());
-  event.Set(kKeyFromWebstore, extension->from_webstore());
+  event.Set(kKeySource, extension->from_webstore() ? kChromeWebstoreSource
+                                                   : kExternalSource);
 
   reporting_client_->ReportRealtimeEvent(
       ReportingServiceSettings::kExtensionInstallEvent,

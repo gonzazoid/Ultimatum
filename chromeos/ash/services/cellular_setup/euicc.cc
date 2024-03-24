@@ -195,6 +195,22 @@ void Euicc::RequestAvailableProfiles(
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
 
+void Euicc::RefreshInstalledProfiles(
+    RefreshInstalledProfilesCallback callback) {
+  DCHECK(ash::features::IsSmdsSupportEnabled());
+  NET_LOG(EVENT) << "Refreshing installed profiles";
+  esim_manager_->cellular_esim_profile_handler()->RefreshProfileList(
+      path_,
+      base::BindOnce(
+          [](RefreshInstalledProfilesCallback callback,
+             std::unique_ptr<CellularInhibitor::InhibitLock> inhibit_lock) {
+            std::move(callback).Run(inhibit_lock
+                                        ? mojom::ESimOperationResult::kSuccess
+                                        : mojom::ESimOperationResult::kFailure);
+          },
+          std::move(callback)));
+}
+
 void Euicc::RequestPendingProfiles(RequestPendingProfilesCallback callback) {
   // Before requesting pending profiles, we also request installed profiles.
   // This ensures that if an error occurs and Chrome's installed profile cache
@@ -212,17 +228,15 @@ void Euicc::GetEidQRCode(GetEidQRCodeCallback callback) {
   // Format EID to string that should be encoded in the QRCode.
   std::string qr_code_string =
       base::StrCat({kEidQrCodePrefix, properties_->eid});
-  qr_code_generator::QRCodeGenerator qr_generator;
-  std::optional<qr_code_generator::QRCodeGenerator::GeneratedCode> qr_data =
-      qr_generator.Generate(base::as_bytes(
-          base::make_span(qr_code_string.data(), qr_code_string.size())));
-  if (!qr_data || qr_data->data.data() == nullptr ||
-      qr_data->data.size() == 0) {
+
+  auto qr_data =
+      qr_code_generator::GenerateCode(base::as_byte_span(qr_code_string));
+  if (!qr_data.has_value()) {
     std::move(callback).Run(nullptr);
     return;
   }
 
-  // Data returned from QRCodeGenerator consist of bytes that represents
+  // Data returned from QR code generator consist of bytes that represents
   // tiles. Least significant bit of each byte is set if the tile should be
   // filled. Other bit positions indicate QR Code structure and are not required
   // for rendering. Convert this data to 0 or 1 values for simpler UI side

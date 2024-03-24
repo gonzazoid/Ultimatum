@@ -6,6 +6,7 @@
 
 #include "base/command_line.h"
 #include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "base/run_loop.h"
 #include "base/task/sequenced_task_runner.h"
@@ -25,6 +26,10 @@
 #include "services/tracing/public/cpp/tracing_features.h"
 #include "services/tracing/public/mojom/tracing_service.mojom.h"
 #include "third_party/perfetto/include/perfetto/tracing/tracing.h"
+
+#if BUILDFLAG(IS_WIN)
+#include "components/tracing/common/etw_system_data_source_win.h"
+#endif
 
 #if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
 // As per 'gn help check':
@@ -312,7 +317,7 @@ void PerfettoTracedProcess::AddDataSource(DataSourceBase* data_source) {
   }
 }
 
-std::set<PerfettoTracedProcess::DataSourceBase*>
+std::set<raw_ptr<PerfettoTracedProcess::DataSourceBase, SetExperimental>>
 PerfettoTracedProcess::data_sources() {
   base::AutoLock lock(data_sources_lock_);
   return data_sources_;
@@ -393,6 +398,12 @@ void PerfettoTracedProcess::SetupClientLibrary(bool enable_consumer) {
 #if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
   base::TrackEvent::Register();
   tracing::TracingSamplerProfiler::RegisterDataSource();
+#if BUILDFLAG(IS_WIN)
+  if (enable_consumer) {
+    // Etw Data Source only needs to be installed in the browser process.
+    tracing::EtwSystemDataSource::Register();
+  }
+#endif
   TrackNameRecorder::GetInstance();
   CustomEventRecorder::GetInstance();
 #endif  // BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
@@ -485,7 +496,7 @@ void PerfettoTracedProcess::SetSystemProducerEnabledForTesting(bool enabled) {
 }
 
 void PerfettoTracedProcess::SetupSystemTracing(
-    absl::optional<const char*> system_socket) {
+    std::optional<const char*> system_socket) {
   // Note: Not checking for a valid sequence here so that we don't inadvertently
   // bind this object on the wrong sequence during early initialization.
   DCHECK(!system_producer_);
@@ -500,7 +511,7 @@ void PerfettoTracedProcess::SetupSystemTracing(
       FROM_HERE, base::BindOnce([]() {
         PerfettoTracedProcess* traced_process = PerfettoTracedProcess::Get();
         base::AutoLock lock(traced_process->data_sources_lock_);
-        for (auto* data_source : traced_process->data_sources_) {
+        for (DataSourceBase* data_source : traced_process->data_sources_) {
           traced_process->system_producer()->NewDataSourceAdded(data_source);
         }
       }));

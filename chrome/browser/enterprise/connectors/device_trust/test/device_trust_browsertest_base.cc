@@ -10,6 +10,7 @@
 #include "chrome/browser/enterprise/connectors/device_trust/test/test_constants.h"
 #include "chrome/browser/enterprise/connectors/test/test_constants.h"
 #include "chrome/browser/ui/browser.h"
+#include "content/public/test/browser_test_utils.h"
 #include "net/dns/mock_host_resolver.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -62,7 +63,7 @@ constexpr char kChallenge[] =
 }  // namespace
 
 DeviceTrustBrowserTestBase::DeviceTrustBrowserTestBase(
-    absl::optional<DeviceTrustConnectorState> connector_state)
+    std::optional<DeviceTrustConnectorState> connector_state)
     : challenge_value_(kChallenge) {
   ResetState();
 
@@ -117,8 +118,7 @@ GURL DeviceTrustBrowserTestBase::GetDisallowedUrl() {
   return embedded_test_server()->GetURL(kOtherHost, "/simple.html");
 }
 
-void DeviceTrustBrowserTestBase::TriggerUrlNavigation(
-    absl::optional<GURL> url) {
+void DeviceTrustBrowserTestBase::TriggerUrlNavigation(std::optional<GURL> url) {
   GURL redirect_url = url ? url.value() : GetRedirectUrl();
   content::TestNavigationManager first_navigation(web_contents(), redirect_url);
 
@@ -168,7 +168,7 @@ std::string DeviceTrustBrowserTestBase::GetChallengeResponseHeader() {
 
 void DeviceTrustBrowserTestBase::VerifyAttestationFlowSuccessful(
     DTAttestationResult success_result,
-    absl::optional<DTAttestationPolicyLevel> policy_level) {
+    std::optional<DTAttestationPolicyLevel> policy_level) {
   std::string challenge_response = GetChallengeResponseHeader();
   // TODO(crbug.com/1241857): Add challenge-response validation.
   EXPECT_TRUE(!challenge_response.empty());

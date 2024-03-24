@@ -222,7 +222,7 @@ void FeedbackCommon::PrepareReport(
   }
   if (!ai_metadata_.empty()) {
     // Add feedback data for each key/value pair.
-    absl::optional<base::Value::Dict> dict =
+    std::optional<base::Value::Dict> dict =
         base::JSONReader::ReadDict(ai_metadata_);
     CHECK(dict);
     for (auto pair : dict.value()) {
@@ -246,6 +246,13 @@ bool FeedbackCommon::IncludeInSystemLogs(const std::string& key,
 int FeedbackCommon::GetChromeBrowserProductId() {
   return kChromeBrowserProductId;
 }
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+// static
+int FeedbackCommon::GetChromeOSProductId() {
+  return kChromeOSProductId;
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 FeedbackCommon::~FeedbackCommon() = default;
 

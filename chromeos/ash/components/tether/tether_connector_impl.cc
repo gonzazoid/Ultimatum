@@ -3,6 +3,8 @@
 // found in the LICENSE file.
 
 #include "chromeos/ash/components/tether/tether_connector_impl.h"
+#include <optional>
+#include <utility>
 
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
@@ -18,6 +20,7 @@
 #include "chromeos/ash/components/tether/host_scan_cache.h"
 #include "chromeos/ash/components/tether/notification_presenter.h"
 #include "chromeos/ash/components/tether/tether_host_fetcher.h"
+#include "chromeos/ash/components/tether/tether_host_response_recorder.h"
 #include "chromeos/ash/components/tether/wifi_hotspot_connector.h"
 #include "chromeos/ash/components/tether/wifi_hotspot_disconnector.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/secure_channel_client.h"
@@ -39,6 +42,43 @@ void OnDisconnectFromWifiFailure(const std::string& device_id,
                   << multidevice::RemoteDeviceRef::TruncateDeviceIdForLogs(
                          device_id)
                   << ". Error: " << error_name;
+}
+
+std::pair<ConnectionToHostResult, std::optional<ConnectionToHostInternalError>>
+GetConnectionToHostResponseAndInternalErrorFromWifiHotspotConnectionError(
+    WifiHotspotConnector::WifiHotspotConnectionError error) {
+  switch (error) {
+    case WifiHotspotConnector::WifiHotspotConnectionError::kTimeout:
+      return std::make_pair(
+          ConnectionToHostResult::INTERNAL_ERROR,
+          ConnectionToHostInternalError::CLIENT_CONNECTION_TIMEOUT);
+    case WifiHotspotConnector::WifiHotspotConnectionError::
+        kCancelledForNewerConnectionAttempt:
+      return std::make_pair(
+          ConnectionToHostResult::CANCELLED_FOR_NEWER_CONNECTION, std::nullopt);
+    case WifiHotspotConnector::WifiHotspotConnectionError::
+        kWifiHotspotConnectorClassDestroyed:
+      // It's currently safe to assume TetherComponent shut down in this
+      // situation, since that's the only way the Connector class could be
+      // destroyed. This may change in the future.
+      return std::make_pair(
+          ConnectionToHostResult::TETHER_SHUTDOWN_DURING_CONNECTION,
+          std::nullopt);
+    case WifiHotspotConnector::WifiHotspotConnectionError::kNetworkStateWasNull:
+      return std::make_pair(ConnectionToHostResult::INTERNAL_ERROR,
+                            ConnectionToHostInternalError::
+                                CLIENT_CONNECTION_NETWORK_STATE_WAS_NULL);
+    case WifiHotspotConnector::WifiHotspotConnectionError::
+        kNetworkConnectionHandlerFailed:
+      return std::make_pair(
+          ConnectionToHostResult::INTERNAL_ERROR,
+          ConnectionToHostInternalError::
+              CLIENT_CONNECTION_NETWORK_CONNECTION_HANDLER_FAILED);
+    case WifiHotspotConnector::WifiHotspotConnectionError::kWifiFailedToEnabled:
+      return std::make_pair(ConnectionToHostResult::INTERNAL_ERROR,
+                            ConnectionToHostInternalError::
+                                CLIENT_CONNECTION_WIFI_FAILED_TO_ENABLE);
+  }
 }
 
 }  // namespace
@@ -183,6 +223,8 @@ void TetherConnectorImpl::OnSuccessfulConnectTetheringResponse(
     multidevice::RemoteDeviceRef remote_device,
     const std::string& ssid,
     const std::string& password) {
+  tether_host_response_recorder_->RecordSuccessfulConnectTetheringResponse(
+      remote_device);
   if (device_id_pending_connection_ != remote_device.GetDeviceId()) {
     // If the success was part of a previous attempt for a different device,
     // ignore it.
@@ -222,8 +264,8 @@ void TetherConnectorImpl::OnConnectTetheringFailure(
     // If the failure was part of a previous attempt for a different device,
     // ignore it.
     PA_LOG(VERBOSE)
-        << "Received failed ConnectTetheringResponse from device with "
-        << "ID " << remote_device.GetTruncatedDeviceIdForLogs()
+        << "Received failed ConnectTetheringResponse from device with " << "ID "
+        << remote_device.GetTruncatedDeviceIdForLogs()
         << ", but a connection to another device has already started.";
     return;
   }
@@ -269,7 +311,6 @@ void TetherConnectorImpl::OnTetherHostToConnectFetched(
           device_id);
   connect_tethering_operation_ = ConnectTetheringOperation::Factory::Create(
       *tether_host_to_connect, device_sync_client_, secure_channel_client_,
-      tether_host_response_recorder_,
       host_scan_cache_->DoesHostRequireSetup(tether_network_guid));
   connect_tethering_operation_->AddObserver(this);
   connect_tethering_operation_->Initialize();
@@ -331,33 +372,34 @@ void TetherConnectorImpl::SetConnectionSucceeded(
 
 void TetherConnectorImpl::OnWifiConnection(
     const std::string& device_id,
-    const std::string& wifi_network_guid) {
+    base::expected<std::string,
+                   WifiHotspotConnector::WifiHotspotConnectionError>
+        wifi_network_guid) {
   if (device_id != device_id_pending_connection_) {
-    if (wifi_network_guid.empty()) {
+    if (!wifi_network_guid.has_value()) {
       PA_LOG(WARNING)
           << "Failed to connect to Wi-Fi hotspot for device with ID "
           << multidevice::RemoteDeviceRef::TruncateDeviceIdForLogs(device_id)
-          << ", "
-          << "but the connection to that device was canceled.";
+          << ", " << "but the connection to that device was canceled.";
       return;
     }
 
     PA_LOG(VERBOSE) << "Connected to Wi-Fi hotspot for device with ID "
                     << multidevice::RemoteDeviceRef::TruncateDeviceIdForLogs(
                            device_id)
-                    << ", but the connection to that device was canceled. "
+                    << ", but the connection to that device failed. "
                     << "Disconnecting.";
 
     // Disconnect from the Wi-Fi hotspot; otherwise, it is possible to be
     // connected to the Wi-Fi hotspot despite there being no active host. See
     // crbug.com/761171.
     wifi_hotspot_disconnector_->DisconnectFromWifiHotspot(
-        wifi_network_guid, base::DoNothing(),
+        wifi_network_guid.value(), base::DoNothing(),
         base::BindOnce(&OnDisconnectFromWifiFailure, device_id));
     return;
   }
 
-  if (wifi_network_guid.empty()) {
+  if (!wifi_network_guid.has_value()) {
     // If the Wi-Fi network ID is empty, then the connection did not succeed.
     PA_LOG(ERROR) << "Failed to connect to the hotspot belonging to the device "
                   << "with ID "
@@ -365,14 +407,18 @@ void TetherConnectorImpl::OnWifiConnection(
                          device_id)
                   << ".";
 
+    auto connection_to_host_result_and_internal_error =
+        GetConnectionToHostResponseAndInternalErrorFromWifiHotspotConnectionError(
+            wifi_network_guid.error());
+
     host_connection_metrics_logger_->RecordConnectionToHostResult(
-        ConnectionToHostResult::INTERNAL_ERROR, device_id,
-        ConnectionToHostInternalError::CLIENT_CONNECTION_TIMEOUT);
+        connection_to_host_result_and_internal_error.first, device_id,
+        connection_to_host_result_and_internal_error.second);
     SetConnectionFailed(NetworkConnectionHandler::kErrorConnectFailed);
     return;
   }
 
-  SetConnectionSucceeded(device_id, wifi_network_guid);
+  SetConnectionSucceeded(device_id, wifi_network_guid.value());
 }
 
 void TetherConnectorImpl::RecordConnectTetheringOperationResult(

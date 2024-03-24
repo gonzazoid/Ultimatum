@@ -326,7 +326,7 @@ void CaptureLabelView::OnBoundsChanged(const gfx::Rect& previous_bounds) {
   shadow_->SetContentBounds(layer()->bounds());
 }
 
-void CaptureLabelView::Layout() {
+void CaptureLabelView::Layout(PassKey) {
   gfx::Rect label_bounds = GetLocalBounds();
   capture_button_container_->SetBoundsRect(label_bounds);
 
@@ -335,7 +335,7 @@ void CaptureLabelView::Layout() {
 
   // This is necessary to update the focus ring, which is a child view of
   // `this`.
-  views::View::Layout();
+  LayoutSuperclass<views::View>(this);
 }
 
 gfx::Size CaptureLabelView::CalculatePreferredSize() const {
@@ -384,7 +384,7 @@ void CaptureLabelView::FadeInAndOutCounter(int counter_value) {
 
   label_->SetVisible(true);
   label_->SetText(base::FormatNumber(counter_value));
-  Layout();
+  DeprecatedLayoutImmediately();
 
   // The counter should be initially fully transparent and scaled down 80%.
   ui::Layer* layer = label_->layer();
@@ -464,7 +464,7 @@ void CaptureLabelView::OnCountDownAnimationFinished() {
   std::move(countdown_finished_callback_).Run();  // `this` is destroyed here.
 }
 
-BEGIN_METADATA(CaptureLabelView, views::View)
+BEGIN_METADATA(CaptureLabelView)
 END_METADATA
 
 }  // namespace ash

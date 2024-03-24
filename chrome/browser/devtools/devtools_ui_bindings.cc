@@ -52,6 +52,7 @@
 #include "chrome/common/url_constants.h"
 #include "components/infobars/content/content_infobar_manager.h"
 #include "components/metrics/structured/structured_events.h"
+#include "components/metrics/structured/structured_metrics_client.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "components/signin/public/identity_manager/account_info.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
@@ -362,7 +363,7 @@ std::string SanitizeFrontendQueryParam(
     if (key == "enableAida" && value == "true") {
       return value;
     }
-    if (key == "aidaApiKey") {
+    if (key == "aidaModelId") {
       return value;
     }
     if (key == "aidaTemperature") {
@@ -495,9 +496,7 @@ class DevToolsUIBindings::NetworkResourceLoader
 
     bool encoded = !base::IsStringUTF8AllowingNoncharacters(chunk);
     if (encoded) {
-      std::string encoded_string;
-      base::Base64Encode(chunk, &encoded_string);
-      chunkValue = base::Value(std::move(encoded_string));
+      chunkValue = base::Value(base::Base64Encode(chunk));
     } else {
       chunkValue = base::Value(chunk);
     }
@@ -688,11 +687,12 @@ DevToolsUIBindings::DevToolsUIBindings(content::WebContents* web_contents)
 DevToolsUIBindings::~DevToolsUIBindings() {
   if (base::FeatureList::IsEnabled(::features::kDevToolsVeLogging) &&
       !session_id_for_logging_.is_empty()) {
-    metrics::structured::events::v2::dev_tools::SessionEnd()
-        .SetTrigger(delegate_->GetClosedByForLogging())
-        .SetTimeSinceSessionStart(GetTimeSinceSessionStart().InMilliseconds())
-        .SetSessionId(session_id_for_logging_.GetLowForSerialization())
-        .Record();
+    metrics::structured::StructuredMetricsClient::Record(std::move(
+        metrics::structured::events::v2::dev_tools::SessionEnd()
+            .SetTrigger(delegate_->GetClosedByForLogging())
+            .SetTimeSinceSessionStart(
+                GetTimeSinceSessionStart().InMilliseconds())
+            .SetSessionId(session_id_for_logging_.GetLowForSerialization())));
   }
 
   ThemeServiceFactory::GetForProfile(profile_->GetOriginalProfile())
@@ -1053,7 +1053,7 @@ void DevToolsUIBindings::IndexPath(
   if (indexing_jobs_.count(index_request_id) != 0)
     return;
   std::vector<std::string> excluded_folders;
-  absl::optional<base::Value> parsed_excluded_folders =
+  std::optional<base::Value> parsed_excluded_folders =
       base::JSONReader::Read(excluded_folders_message);
   if (parsed_excluded_folders && parsed_excluded_folders->is_list()) {
     for (const base::Value& folder_path : parsed_excluded_folders->GetList()) {
@@ -1136,11 +1136,11 @@ void DevToolsUIBindings::SetDevicesDiscoveryConfig(
     const std::string& port_forwarding_config,
     bool network_discovery_enabled,
     const std::string& network_discovery_config) {
-  absl::optional<base::Value> parsed_port_forwarding =
+  std::optional<base::Value> parsed_port_forwarding =
       base::JSONReader::Read(port_forwarding_config);
   if (!parsed_port_forwarding || !parsed_port_forwarding->is_dict())
     return;
-  absl::optional<base::Value> parsed_network =
+  std::optional<base::Value> parsed_network =
       base::JSONReader::Read(network_discovery_config);
   if (!parsed_network || !parsed_network->is_list())
     return;
@@ -1425,11 +1425,11 @@ bool DevToolsUIBindings::MaybeStartLogging() {
   if (session_id_for_logging_.is_empty()) {
     session_id_for_logging_ = base::UnguessableToken::Create();
     session_start_time_ = base::TimeTicks::Now();
-    metrics::structured::events::v2::dev_tools::SessionStart()
-        .SetTrigger(delegate_->GetOpenedByForLogging())
-        .SetDockSide(delegate_->GetDockStateForLogging())
-        .SetSessionId(session_id_for_logging_.GetLowForSerialization())
-        .Record();
+    metrics::structured::StructuredMetricsClient::Record(std::move(
+        metrics::structured::events::v2::dev_tools::SessionStart()
+            .SetTrigger(delegate_->GetOpenedByForLogging())
+            .SetDockSide(delegate_->GetDockStateForLogging())
+            .SetSessionId(session_id_for_logging_.GetLowForSerialization())));
   }
   return true;
 }
@@ -1443,78 +1443,94 @@ void DevToolsUIBindings::RecordImpression(const ImpressionEvent& event) {
     return;
   }
   for (const auto& ve : event.impressions) {
-    metrics::structured::events::v2::dev_tools::Impression()
-        .SetVeId(ve.id)
-        .SetVeType(ve.type)
-        .SetVeParent(ve.parent)
-        .SetVeContext(ve.context)
-        .SetTimeSinceSessionStart(GetTimeSinceSessionStart().InMilliseconds())
-        .SetSessionId(session_id_for_logging_.GetLowForSerialization())
-        .Record();
+    metrics::structured::StructuredMetricsClient::Record(std::move(
+        metrics::structured::events::v2::dev_tools::Impression()
+            .SetVeId(ve.id)
+            .SetVeType(ve.type)
+            .SetVeParent(ve.parent)
+            .SetVeContext(ve.context)
+            .SetWidth(ve.width)
+            .SetHeight(ve.height)
+            .SetTimeSinceSessionStart(
+                GetTimeSinceSessionStart().InMilliseconds())
+            .SetSessionId(session_id_for_logging_.GetLowForSerialization())));
   }
+}
+
+void DevToolsUIBindings::RecordResize(const ResizeEvent& event) {
+  if (!MaybeStartLogging()) {
+    return;
+  }
+  metrics::structured::StructuredMetricsClient::Record(std::move(
+      metrics::structured::events::v2::dev_tools::Impression()
+          .SetVeId(event.veid)
+          .SetWidth(event.width)
+          .SetHeight(event.height)
+          .SetTimeSinceSessionStart(GetTimeSinceSessionStart().InMilliseconds())
+          .SetSessionId(session_id_for_logging_.GetLowForSerialization())));
 }
 
 void DevToolsUIBindings::RecordClick(const ClickEvent& event) {
   if (!MaybeStartLogging()) {
     return;
   }
-  metrics::structured::events::v2::dev_tools::Click()
-      .SetVeId(event.veid)
-      .SetMouseButton(event.mouse_button)
-      .SetContext(event.context)
-      .SetTimeSinceSessionStart(GetTimeSinceSessionStart().InMilliseconds())
-      .SetSessionId(session_id_for_logging_.GetLowForSerialization())
-      .Record();
+  metrics::structured::StructuredMetricsClient::Record(std::move(
+      metrics::structured::events::v2::dev_tools::Click()
+          .SetVeId(event.veid)
+          .SetMouseButton(event.mouse_button)
+          .SetContext(event.context)
+          .SetTimeSinceSessionStart(GetTimeSinceSessionStart().InMilliseconds())
+          .SetSessionId(session_id_for_logging_.GetLowForSerialization())));
 }
 
 void DevToolsUIBindings::RecordHover(const HoverEvent& event) {
   if (!MaybeStartLogging()) {
     return;
   }
-  metrics::structured::events::v2::dev_tools::Hover()
-      .SetVeId(event.veid)
-      .SetTime(event.time)
-      .SetContext(event.context)
-      .SetTimeSinceSessionStart(GetTimeSinceSessionStart().InMilliseconds())
-      .SetSessionId(session_id_for_logging_.GetLowForSerialization())
-      .Record();
+  metrics::structured::StructuredMetricsClient::Record(std::move(
+      metrics::structured::events::v2::dev_tools::Hover()
+          .SetVeId(event.veid)
+          .SetTime(event.time)
+          .SetContext(event.context)
+          .SetTimeSinceSessionStart(GetTimeSinceSessionStart().InMilliseconds())
+          .SetSessionId(session_id_for_logging_.GetLowForSerialization())));
 }
 
 void DevToolsUIBindings::RecordDrag(const DragEvent& event) {
   if (!MaybeStartLogging()) {
     return;
   }
-  metrics::structured::events::v2::dev_tools::Drag()
-      .SetVeId(event.veid)
-      .SetDistance(event.distance)
-      .SetContext(event.context)
-      .SetTimeSinceSessionStart(GetTimeSinceSessionStart().InMilliseconds())
-      .SetSessionId(session_id_for_logging_.GetLowForSerialization())
-      .Record();
+  metrics::structured::StructuredMetricsClient::Record(std::move(
+      metrics::structured::events::v2::dev_tools::Drag()
+          .SetVeId(event.veid)
+          .SetDistance(event.distance)
+          .SetContext(event.context)
+          .SetTimeSinceSessionStart(GetTimeSinceSessionStart().InMilliseconds())
+          .SetSessionId(session_id_for_logging_.GetLowForSerialization())));
 }
 
 void DevToolsUIBindings::RecordChange(const ChangeEvent& event) {
   if (!MaybeStartLogging()) {
     return;
   }
-  metrics::structured::events::v2::dev_tools::Change()
-      .SetVeId(event.veid)
-      .SetContext(event.context)
-      .SetTimeSinceSessionStart(GetTimeSinceSessionStart().InMilliseconds())
-      .SetSessionId(session_id_for_logging_.GetLowForSerialization())
-      .Record();
+  metrics::structured::StructuredMetricsClient::Record(std::move(
+      metrics::structured::events::v2::dev_tools::Change()
+          .SetVeId(event.veid)
+          .SetContext(event.context)
+          .SetTimeSinceSessionStart(GetTimeSinceSessionStart().InMilliseconds())
+          .SetSessionId(session_id_for_logging_.GetLowForSerialization())));
 }
 
 void DevToolsUIBindings::RecordKeyDown(const KeyDownEvent& event) {
   if (!MaybeStartLogging()) {
     return;
   }
-  metrics::structured::events::v2::dev_tools::KeyDown()
-      .SetVeId(event.veid)
-      .SetContext(event.context)
-      .SetTimeSinceSessionStart(GetTimeSinceSessionStart().InMilliseconds())
-      .SetSessionId(session_id_for_logging_.GetLowForSerialization())
-      .Record();
+  metrics::structured::StructuredMetricsClient::Record(std::move(
+      metrics::structured::events::v2::dev_tools::KeyDown()
+          .SetVeId(event.veid)
+          .SetContext(event.context)
+          .SetTimeSinceSessionStart(GetTimeSinceSessionStart().InMilliseconds())
+          .SetSessionId(session_id_for_logging_.GetLowForSerialization())));
 }
 
 void DevToolsUIBindings::SendJsonRequest(DispatchCallback callback,

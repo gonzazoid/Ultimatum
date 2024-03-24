@@ -10,6 +10,7 @@
 #include "base/notreached.h"
 #include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
+#include "base/types/expected.h"
 #include "components/optimization_guide/core/model_execution/model_execution_fetcher.h"
 #include "components/optimization_guide/core/model_execution/model_execution_util.h"
 #include "components/optimization_guide/core/model_execution/on_device_model_execution_config_interpreter.h"
@@ -19,6 +20,7 @@
 #include "components/optimization_guide/core/model_util.h"
 #include "components/optimization_guide/core/optimization_guide_constants.h"
 #include "components/optimization_guide/core/optimization_guide_logger.h"
+#include "components/optimization_guide/core/optimization_guide_model_executor.h"
 #include "components/optimization_guide/core/optimization_guide_model_provider.h"
 #include "components/optimization_guide/core/optimization_guide_util.h"
 #include "components/optimization_guide/core/optimization_metadata.h"
@@ -110,18 +112,35 @@ ModelExecutionManager::ModelExecutionManager(
       model_provider_(model_provider),
       on_device_model_service_controller_(
           std::move(on_device_model_service_controller)) {
-  if (model_provider_ && features::ShouldDownloadTextSafetyClassifierModel()) {
+  if (model_provider_ && on_device_model_service_controller_ &&
+      features::ShouldUseTextSafetyClassifierModel()) {
     model_provider_->AddObserverForOptimizationTargetModel(
         proto::OptimizationTarget::OPTIMIZATION_TARGET_TEXT_SAFETY,
-        /*model_metadata=*/absl::nullopt, this);
+        /*model_metadata=*/std::nullopt, this);
+    model_provider_->AddObserverForOptimizationTargetModel(
+        proto::OptimizationTarget::OPTIMIZATION_TARGET_LANGUAGE_DETECTION,
+        /*model_metadata=*/std::nullopt, this);
   }
 }
 
 ModelExecutionManager::~ModelExecutionManager() {
-  if (model_provider_ && features::ShouldDownloadTextSafetyClassifierModel()) {
+  if (model_provider_ && on_device_model_service_controller_ &&
+      features::ShouldUseTextSafetyClassifierModel()) {
     model_provider_->RemoveObserverForOptimizationTargetModel(
         proto::OptimizationTarget::OPTIMIZATION_TARGET_TEXT_SAFETY, this);
+    model_provider_->RemoveObserverForOptimizationTargetModel(
+        proto::OptimizationTarget::OPTIMIZATION_TARGET_LANGUAGE_DETECTION,
+        this);
   }
+}
+
+void ModelExecutionManager::Shutdown() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  // Invalidate the weak pointers before clearing the active fetchers, which
+  // will cause the drop all the model execution consumer callbacks, and avoid
+  // all processing during destructor.
+  weak_ptr_factory_.InvalidateWeakPtrs();
+  active_model_execution_fetchers_.clear();
 }
 
 void ModelExecutionManager::ExecuteModelWithStreaming(
@@ -135,17 +154,15 @@ void ModelExecutionManager::ExecuteModelWithStreaming(
           [](OptimizationGuideModelExecutionResultStreamingCallback callback,
              OptimizationGuideModelExecutionResult result,
              std::unique_ptr<ModelQualityLogEntry> log_entry) {
+            OptimizationGuideModelStreamingExecutionResult streaming_result;
+            streaming_result.log_entry = std::move(log_entry);
             if (result.has_value()) {
-              callback.Run(
-                  StreamingResponse{
-                      .response = *result,
-                      .is_complete = true,
-                  },
-                  std::move(log_entry));
+              streaming_result.response = base::ok(
+                  StreamingResponse{.response = *result, .is_complete = true});
             } else {
-              callback.Run(base::unexpected(result.error()),
-                           std::move(log_entry));
+              streaming_result.response = base::unexpected(result.error());
             }
+            callback.Run(std::move(streaming_result));
           },
           callback));
 }
@@ -232,9 +249,10 @@ ModelExecutionManager::StartSession(proto::ModelExecutionFeature feature) {
   }
 
   RecordSessionUsedRemoteExecutionHistogram(feature, /*is_remote=*/true);
-  return std::make_unique<SessionImpl>(base::DoNothing(), feature, std::nullopt,
-                                       nullptr, nullptr, std::move(execute_fn),
-                                       optimization_guide_logger_.get());
+  return std::make_unique<SessionImpl>(
+      base::DoNothing(), feature, std::nullopt, nullptr, nullptr,
+      /*safety_config=*/std::nullopt, std::move(execute_fn),
+      optimization_guide_logger_.get());
 }
 
 void ModelExecutionManager::OnModelExecuteResponse(
@@ -348,16 +366,23 @@ void ModelExecutionManager::OnModelExecuteResponse(
 void ModelExecutionManager::OnModelUpdated(
     proto::OptimizationTarget optimization_target,
     base::optional_ref<const ModelInfo> model_info) {
-  if (optimization_target != proto::OPTIMIZATION_TARGET_TEXT_SAFETY) {
-    return;
-  }
+  switch (optimization_target) {
+    case proto::OPTIMIZATION_TARGET_TEXT_SAFETY:
+      if (on_device_model_service_controller_) {
+        on_device_model_service_controller_->MaybeUpdateSafetyModel(model_info);
+      }
+      break;
 
-  if (!on_device_model_service_controller_) {
-    return;
-  }
+    case proto::OPTIMIZATION_TARGET_LANGUAGE_DETECTION:
+      if (on_device_model_service_controller_) {
+        on_device_model_service_controller_->SetLanguageDetectionModel(
+            model_info);
+      }
+      break;
 
-  // Pass model file to on-device service controller.
-  on_device_model_service_controller_->MaybeUpdateSafetyModel(model_info);
+    default:
+      break;
+  }
 }
 
 }  // namespace optimization_guide

@@ -38,13 +38,7 @@ ThreadedMessagingProxyBase::ThreadedMessagingProxyBase(
       parent_agent_group_task_runner_(parent_agent_group_task_runner),
       terminate_sync_load_event_(
           base::WaitableEvent::ResetPolicy::MANUAL,
-          base::WaitableEvent::InitialState::NOT_SIGNALED),
-      feature_handle_for_scheduler_(
-          !execution_context
-              ? FrameOrWorkerScheduler::SchedulingAffectingFeatureHandle()
-              : execution_context->GetScheduler()->RegisterFeature(
-                    SchedulingPolicy::Feature::kDedicatedWorkerOrWorklet,
-                    {SchedulingPolicy::DisableBackForwardCache()})) {
+          base::WaitableEvent::InitialState::NOT_SIGNALED) {
   DCHECK((parent_execution_context_task_runners_ &&
           !parent_agent_group_task_runner_) ||
          (!parent_execution_context_task_runners_ &&
@@ -68,8 +62,8 @@ void ThreadedMessagingProxyBase::Trace(Visitor* visitor) const {
 
 void ThreadedMessagingProxyBase::InitializeWorkerThread(
     std::unique_ptr<GlobalScopeCreationParams> global_scope_creation_params,
-    const absl::optional<WorkerBackingThreadStartupData>& thread_startup_data,
-    const absl::optional<const blink::DedicatedWorkerToken>& token,
+    const std::optional<WorkerBackingThreadStartupData>& thread_startup_data,
+    const std::optional<const blink::DedicatedWorkerToken>& token,
     std::unique_ptr<WorkerDevToolsParams> client_provided_devtools_params) {
   DCHECK(IsParentContextThread());
 
@@ -164,8 +158,6 @@ void ThreadedMessagingProxyBase::TerminateGlobalScope() {
   if (asked_to_terminate_)
     return;
   asked_to_terminate_ = true;
-
-  feature_handle_for_scheduler_.reset();
 
   terminate_sync_load_event_.Signal();
 

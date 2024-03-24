@@ -443,7 +443,8 @@ int HttpNetworkTransaction::Read(IOBuffer* buf,
     // also don't worry about this for an HTTPS Proxy, because the
     // communication with the proxy is secure.
     // See http://crbug.com/8473.
-    DCHECK(proxy_info_.is_http_like());
+    DCHECK(proxy_info_.AnyProxyInChain(
+        [](const ProxyServer& s) { return s.is_http_like(); }));
     DCHECK_EQ(headers->response_code(), HTTP_PROXY_AUTHENTICATION_REQUIRED);
     return ERR_TUNNEL_CONNECTION_FAILED;
   }
@@ -601,6 +602,10 @@ void HttpNetworkTransaction::ResumeAfterConnected(int result) {
 
 void HttpNetworkTransaction::CloseConnectionOnDestruction() {
   close_connection_on_destruction_ = true;
+}
+
+bool HttpNetworkTransaction::IsMdlMatchForMetrics() const {
+  return proxy_info_.is_mdl_match();
 }
 
 void HttpNetworkTransaction::OnStreamReady(const ProxyInfo& used_proxy_info,
@@ -1660,12 +1665,17 @@ int HttpNetworkTransaction::HandleSSLClientAuthError(int error) {
     host_port_pair = HostPortPair::FromURL(request_->url);
   } else {
     CHECK(proxy_info_.proxy_chain().is_single_proxy());
-    host_port_pair = proxy_info_.proxy_chain()
-                         .GetProxyServer(/*chain_index=*/0)
-                         .host_port_pair();
+    host_port_pair = proxy_info_.proxy_chain().First().host_port_pair();
   }
 
-  DCHECK((is_server && IsSecureRequest()) || proxy_info_.is_secure_http_like());
+  // Check that something in the proxy chain or endpoint are using HTTPS.
+  if (DCHECK_IS_ON()) {
+    bool server_using_tls = IsSecureRequest();
+    bool proxy_using_tls = proxy_info_.AnyProxyInChain(
+        [](const ProxyServer& s) { return s.is_secure_http_like(); });
+    DCHECK(server_using_tls || proxy_using_tls);
+  }
+
   if (session_->ssl_client_context()->ClearClientCertificate(host_port_pair)) {
     // The private key handle may have gone stale due to, e.g., the user
     // unplugging their smartcard. Operating systems do not provide reliable
@@ -1691,7 +1701,7 @@ int HttpNetworkTransaction::HandleSSLClientAuthError(int error) {
 }
 
 // static
-absl::optional<HttpNetworkTransaction::RetryReason>
+std::optional<HttpNetworkTransaction::RetryReason>
 HttpNetworkTransaction::GetRetryReasonForIOError(int error) {
   switch (error) {
     case ERR_CONNECTION_RESET:
@@ -1719,7 +1729,7 @@ HttpNetworkTransaction::GetRetryReasonForIOError(int error) {
     case ERR_QUIC_PROTOCOL_ERROR:
       return RetryReason::kQuicProtocolError;
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 // This method determines whether it is safe to resend the request after an
@@ -1736,7 +1746,7 @@ int HttpNetworkTransaction::HandleIOError(int error) {
   GenerateNetworkErrorLoggingReportIfError(error);
 #endif  // BUILDFLAG(ENABLE_REPORTING)
 
-  absl::optional<HttpNetworkTransaction::RetryReason> retry_reason =
+  std::optional<HttpNetworkTransaction::RetryReason> retry_reason =
       GetRetryReasonForIOError(error);
   if (!retry_reason) {
     return error;
@@ -1994,19 +2004,17 @@ GURL HttpNetworkTransaction::AuthURL(HttpAuth::Target target) const {
   switch (target) {
     case HttpAuth::AUTH_PROXY: {
       // TODO(https://crbug.com/1491092): Update to handle multi-proxy chain.
+      CHECK(proxy_info_.proxy_chain().is_single_proxy());
       if (!proxy_info_.proxy_chain().IsValid() ||
-          proxy_info_.proxy_chain().is_direct() ||
-          !proxy_info_.proxy_chain().is_single_proxy()) {
+          proxy_info_.proxy_chain().is_direct()) {
         return GURL();  // There is no proxy chain.
       }
       // TODO(https://crbug.com/1103768): Mapping proxy addresses to
       // URLs is a lossy conversion, shouldn't do this.
+      auto& proxy_server = proxy_info_.proxy_chain().First();
       const char* scheme =
-          proxy_info_.is_secure_http_like() ? "https://" : "http://";
-      return GURL(scheme + proxy_info_.proxy_chain()
-                               .GetProxyServer(/*chain_index=*/0)
-                               .host_port_pair()
-                               .ToString());
+          proxy_server.is_secure_http_like() ? "https://" : "http://";
+      return GURL(scheme + proxy_server.host_port_pair().ToString());
     }
     case HttpAuth::AUTH_SERVER:
       if (ForWebSocketHandshake()) {
@@ -2088,9 +2096,9 @@ void HttpNetworkTransaction::RecordQuicProtocolErrorMetrics(
   if (!stream_) {
     return;
   }
-  absl::optional<quic::QuicErrorCode> connection_error =
+  std::optional<quic::QuicErrorCode> connection_error =
       stream_->GetQuicErrorCode();
-  absl::optional<quic::QuicRstStreamErrorCode> stream_error =
+  std::optional<quic::QuicRstStreamErrorCode> stream_error =
       stream_->GetQuicRstStreamErrorCode();
   if (!connection_error || !stream_error) {
     return;
@@ -2121,7 +2129,6 @@ void HttpNetworkTransaction::SetProxyInfoInResponse(
     const ProxyInfo& proxy_info,
     HttpResponseInfo* response_info) {
   response_info->was_fetched_via_proxy = !proxy_info.is_direct();
-  response_info->was_ip_protected = proxy_info.is_for_ip_protection();
   response_info->was_mdl_match = proxy_info.is_mdl_match();
   if (response_info->was_fetched_via_proxy && !proxy_info.is_empty()) {
     response_info->proxy_chain = proxy_info.proxy_chain();

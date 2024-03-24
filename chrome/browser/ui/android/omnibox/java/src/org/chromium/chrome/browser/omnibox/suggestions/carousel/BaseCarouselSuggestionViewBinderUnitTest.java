@@ -25,19 +25,15 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestRule;
 import org.junit.runner.RunWith;
-import org.robolectric.annotation.Config;
 
 import org.chromium.base.ContextUtils;
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
-import org.chromium.chrome.browser.omnibox.OmniboxFeatures;
+import org.chromium.base.test.util.Features;
 import org.chromium.chrome.browser.omnibox.styles.OmniboxResourceProvider;
 import org.chromium.chrome.browser.omnibox.suggestions.SuggestionCommonProperties;
-import org.chromium.chrome.browser.omnibox.suggestions.SuggestionCommonProperties.FormFactor;
+import org.chromium.chrome.browser.omnibox.suggestions.base.SpacingRecyclerViewItemDecoration;
 import org.chromium.chrome.browser.omnibox.test.R;
 import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
-import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.ui.modelutil.MVCListAdapter.ListItem;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
 import org.chromium.ui.modelutil.PropertyModel;
@@ -96,8 +92,13 @@ public class BaseCarouselSuggestionViewBinderUnitTest {
         Assert.assertEquals(0, mTiles.size());
         mModel.set(BaseCarouselSuggestionViewProperties.TILES, tiles);
         Assert.assertEquals(3, mTiles.size());
+        verify(mView).resetSelection();
+
+        clearInvocations(mView);
+
         mModel.set(BaseCarouselSuggestionViewProperties.TILES, null);
         Assert.assertEquals(0, mTiles.size());
+        verify(mView).resetSelection();
     }
 
     @Test
@@ -196,18 +197,6 @@ public class BaseCarouselSuggestionViewBinderUnitTest {
     }
 
     @Test
-    public void formFactor_itemDecorationsDoNotAggregate() {
-        mModel.set(SuggestionCommonProperties.DEVICE_FORM_FACTOR, FormFactor.TABLET);
-        Assert.assertEquals(1, mView.getItemDecorationCount());
-
-        mModel.set(SuggestionCommonProperties.DEVICE_FORM_FACTOR, FormFactor.PHONE);
-        Assert.assertEquals(1, mView.getItemDecorationCount());
-
-        mModel.set(SuggestionCommonProperties.DEVICE_FORM_FACTOR, FormFactor.TABLET);
-        Assert.assertEquals(1, mView.getItemDecorationCount());
-    }
-
-    @Test
     public void mView_setHorizontalFadingEdgeEnabled() {
         mModel.set(BaseCarouselSuggestionViewProperties.HORIZONTAL_FADE, true);
         Assert.assertTrue(mView.isHorizontalFadingEdgeEnabled());
@@ -217,43 +206,20 @@ public class BaseCarouselSuggestionViewBinderUnitTest {
     }
 
     @Test
-    @Config(qualifiers = "sw600dp-land")
-    public void customVisualAlignment_classicUi() {
-        mModel.set(SuggestionCommonProperties.DEVICE_FORM_FACTOR, FormFactor.TABLET);
-        var decoration = mView.getItemDecoration();
-        Assert.assertEquals(
-                OmniboxResourceProvider.getSideSpacing(mContext), decoration.getLeadInSpace());
-    }
-
-    @Test
-    @EnableFeatures(ChromeFeatureList.OMNIBOX_MODERNIZE_VISUAL_UPDATE)
-    public void customVisualAlignment_modernUi_regular() {
-        runCustomVisualAlignmentTest();
-    }
-
-    @Test
-    @EnableFeatures(ChromeFeatureList.OMNIBOX_MODERNIZE_VISUAL_UPDATE)
-    public void customVisualAlignment_modernUi_smallest() {
-        OmniboxFeatures.MODERNIZE_VISUAL_UPDATE_SMALLEST_MARGINS.setForTesting(true);
-        runCustomVisualAlignmentTest();
-    }
-
-    void runCustomVisualAlignmentTest() {
-        mModel.set(SuggestionCommonProperties.DEVICE_FORM_FACTOR, FormFactor.TABLET);
-        var decoration = mView.getItemDecoration();
-        Assert.assertEquals(
-                OmniboxResourceProvider.getHeaderStartPadding(mContext)
-                        - mContext.getResources().getDimensionPixelSize(R.dimen.tile_view_padding),
-                decoration.getLeadInSpace());
-    }
-
-    @Test
     public void itemDecoration_setItemWidth() {
-        mModel.set(BaseCarouselSuggestionViewProperties.ITEM_WIDTH, 10);
-        Assert.assertEquals(10, mView.getItemDecoration().getItemWidthForTesting());
+        // View was initially created with no decorations.
+        Assert.assertEquals(0, mView.getItemDecorationCount());
 
-        mModel.set(BaseCarouselSuggestionViewProperties.ITEM_WIDTH, 30);
-        Assert.assertEquals(30, mView.getItemDecoration().getItemWidthForTesting());
+        // Create a new model with a decoration attached.
+        var decoration = new SpacingRecyclerViewItemDecoration(10, 5);
+        mModel =
+                new PropertyModel.Builder(BaseCarouselSuggestionViewProperties.ALL_KEYS)
+                        .with(BaseCarouselSuggestionViewProperties.ITEM_DECORATION, decoration)
+                        .build();
+        PropertyModelChangeProcessor.create(mModel, mView, BaseCarouselSuggestionViewBinder::bind);
+
+        Assert.assertEquals(1, mView.getItemDecorationCount());
+        Assert.assertSame(decoration, mView.getItemDecorationAt(0));
     }
 
     @Test

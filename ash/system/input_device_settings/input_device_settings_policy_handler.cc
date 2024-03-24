@@ -42,11 +42,11 @@ mojom::InputDeviceSettingsPolicyPtr GetBooleanPreferencePolicy(
 }
 
 mojom::InputDeviceSettingsFkeyPolicyPtr GetFkeyPreferencePolicy(
-    const PrefService* pref_service) {
+    const PrefService* pref_service,
+    const std::string& pref_name) {
   mojom::InputDeviceSettingsFkeyPolicyPtr policy;
 
-  const auto* pref =
-      pref_service->FindPreference(prefs::kExtendedFkeysModifier);
+  const auto* pref = pref_service->FindPreference(pref_name);
   if (!pref) {
     return policy;
   }
@@ -66,6 +66,44 @@ mojom::InputDeviceSettingsFkeyPolicyPtr GetFkeyPreferencePolicy(
     policy = mojom::InputDeviceSettingsFkeyPolicy::New(
         mojom::PolicyStatus::kRecommended,
         static_cast<ui::mojom::ExtendedFkeysModifier>(value->GetInt()));
+  }
+
+  return policy;
+}
+
+mojom::InputDeviceSettingsSixPackKeyPolicyPtr GetSixPackKeyPreferencePolicy(
+    const PrefService* pref_service,
+    const std::string& pref_name) {
+  mojom::InputDeviceSettingsSixPackKeyPolicyPtr policy;
+
+  const auto* pref = pref_service->FindPreference(pref_name);
+  if (!pref) {
+    return policy;
+  }
+
+  if (pref->IsManaged()) {
+    auto* value = pref->GetValue();
+    CHECK(value && value->is_int());
+    if (pref_name == prefs::kInsertKeyModifier) {
+      CHECK(static_cast<ui::mojom::SixPackShortcutModifier>(value->GetInt()) !=
+            ui::mojom::SixPackShortcutModifier::kAlt);
+    }
+    policy = mojom::InputDeviceSettingsSixPackKeyPolicy::New(
+        mojom::PolicyStatus::kManaged,
+        static_cast<ui::mojom::SixPackShortcutModifier>(value->GetInt()));
+
+    // Prefs with recommended values must use `GetRecommendedValue` instead
+    // of `IsRecommended` as `IsRecommended` may return false even if the pref
+    // has a recommended value.
+  } else if (auto* value = pref->GetRecommendedValue(); value) {
+    CHECK(value->is_int());
+    if (pref_name == prefs::kInsertKeyModifier) {
+      CHECK(static_cast<ui::mojom::SixPackShortcutModifier>(value->GetInt()) !=
+            ui::mojom::SixPackShortcutModifier::kAlt);
+    }
+    policy = mojom::InputDeviceSettingsSixPackKeyPolicy::New(
+        mojom::PolicyStatus::kRecommended,
+        static_cast<ui::mojom::SixPackShortcutModifier>(value->GetInt()));
   }
 
   return policy;
@@ -113,7 +151,32 @@ void InputDeviceSettingsPolicyHandler::Initialize(PrefService* local_state,
             &InputDeviceSettingsPolicyHandler::OnKeyboardPoliciesChanged,
             base::Unretained(this)));
     pref_change_registrar_.Add(
-        prefs::kExtendedFkeysModifier,
+        prefs::kF11KeyModifier,
+        base::BindRepeating(
+            &InputDeviceSettingsPolicyHandler::OnKeyboardPoliciesChanged,
+            base::Unretained(this)));
+    pref_change_registrar_.Add(
+        prefs::kF12KeyModifier,
+        base::BindRepeating(
+            &InputDeviceSettingsPolicyHandler::OnKeyboardPoliciesChanged,
+            base::Unretained(this)));
+    pref_change_registrar_.Add(
+        prefs::kHomeAndEndKeysModifier,
+        base::BindRepeating(
+            &InputDeviceSettingsPolicyHandler::OnKeyboardPoliciesChanged,
+            base::Unretained(this)));
+    pref_change_registrar_.Add(
+        prefs::kPageUpAndPageDownKeysModifier,
+        base::BindRepeating(
+            &InputDeviceSettingsPolicyHandler::OnKeyboardPoliciesChanged,
+            base::Unretained(this)));
+    pref_change_registrar_.Add(
+        prefs::kDeleteKeyModifier,
+        base::BindRepeating(
+            &InputDeviceSettingsPolicyHandler::OnKeyboardPoliciesChanged,
+            base::Unretained(this)));
+    pref_change_registrar_.Add(
+        prefs::kInsertKeyModifier,
         base::BindRepeating(
             &InputDeviceSettingsPolicyHandler::OnKeyboardPoliciesChanged,
             base::Unretained(this)));
@@ -127,9 +190,19 @@ void InputDeviceSettingsPolicyHandler::RefreshKeyboardPolicies(bool notify) {
   if (has_user_prefs_) {
     keyboard_policies_.top_row_are_fkeys_policy = GetBooleanPreferencePolicy(
         pref_change_registrar_.prefs(), prefs::kSendFunctionKeys);
-
-    keyboard_policies_.extended_fkeys_policy =
-        GetFkeyPreferencePolicy(pref_change_registrar_.prefs());
+    keyboard_policies_.f11_key_policy = GetFkeyPreferencePolicy(
+        pref_change_registrar_.prefs(), prefs::kF11KeyModifier);
+    keyboard_policies_.f12_key_policy = GetFkeyPreferencePolicy(
+        pref_change_registrar_.prefs(), prefs::kF12KeyModifier);
+    keyboard_policies_.home_and_end_keys_policy = GetSixPackKeyPreferencePolicy(
+        pref_change_registrar_.prefs(), prefs::kHomeAndEndKeysModifier);
+    keyboard_policies_.page_up_and_page_down_keys_policy =
+        GetSixPackKeyPreferencePolicy(pref_change_registrar_.prefs(),
+                                      prefs::kPageUpAndPageDownKeysModifier);
+    keyboard_policies_.delete_key_policy = GetSixPackKeyPreferencePolicy(
+        pref_change_registrar_.prefs(), prefs::kDeleteKeyModifier);
+    keyboard_policies_.insert_key_policy = GetSixPackKeyPreferencePolicy(
+        pref_change_registrar_.prefs(), prefs::kInsertKeyModifier);
   }
 
   if (pref_change_registrar_local_state_.prefs()) {

@@ -91,8 +91,9 @@ class ASH_EXPORT LockContentsView
       public chromeos::PowerManagerClient::Observer,
       public EnterpriseDomainObserver,
       public views::FocusChangeListener {
+  METADATA_HEADER(LockContentsView, NonAccessibleView)
+
  public:
-  METADATA_HEADER(LockContentsView);
   friend class LockContentsViewTestApi;
 
   enum class DisplayStyle {
@@ -130,7 +131,7 @@ class ASH_EXPORT LockContentsView
   void SetHasKioskApp(bool has_kiosk_apps);
 
   // views::View:
-  void Layout() override;
+  void Layout(PassKey) override;
   void AddedToWidget() override;
   void RemovedFromWidget() override;
   void OnFocus() override;
@@ -210,29 +211,6 @@ class ASH_EXPORT LockContentsView
   // ash::EnterpriseDomainObserver
   void OnDeviceEnterpriseInfoChanged() override;
   void OnEnterpriseAccountDomainChanged() override;
-
-  void ShowAuthErrorMessageForDebug(int unlock_attempt);
-
-  // Called for debugging to make |user| managed and display an icon along with
-  // a note in the menu user view.
-  void ToggleManagementForUserForDebug(const AccountId& user);
-
-  // Called for debugging to make |user| having a multi-user-sign-in policy.
-  void SetMultiUserSignInPolicyForUserForDebug(
-      const AccountId& user,
-      user_manager::MultiUserSignInPolicy policy);
-
-  // Called for debugging to toggle forced online sign-in form |user|.
-  void ToggleForceOnlineSignInForUserForDebug(const AccountId& user);
-
-  // Called for debugging to toggle TPM disabled message for |user|.
-  void ToggleDisableTpmForUserForDebug(const AccountId& user);
-
-  // Called for debugging to remove forced online sign-in form |user|.
-  void UndoForceOnlineSignInForUserForDebug(const AccountId& user);
-
-  // Test API. Set device to have kiosk license.
-  void SetKioskLicenseModeForTesting(bool is_kiosk_license_mode);
 
   // Called by LockScreenMediaControlsView.
   void CreateMediaControlsLayout();

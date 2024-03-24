@@ -5,18 +5,16 @@
 #ifndef COMPONENTS_SYNC_SERVICE_SYNC_PREFS_H_
 #define COMPONENTS_SYNC_SERVICE_SYNC_PREFS_H_
 
-#include <stdint.h>
-
-#include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/compiler_specific.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_member.h"
 #include "components/sync/base/passphrase_enums.h"
 #include "components/sync/base/user_selectable_type.h"
@@ -38,7 +36,11 @@ class SyncPrefObserver {
   virtual void OnFirstSetupCompletePrefChange(
       bool is_initial_sync_feature_setup_complete) = 0;
 #endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
-  virtual void OnPreferredDataTypesPrefChange(
+  // Called when any of the prefs related to the user's selected data types has
+  // changed. `payments_integration_enabled_changed` indicates whether the
+  // setting for "Payments" *may* have changed, but this may contain false
+  // positives!
+  virtual void OnSelectedTypesPrefChange(
       bool payments_integration_enabled_changed) = 0;
 
  protected:
@@ -108,7 +110,7 @@ class SyncPrefs {
   // On Desktop, kPasswords isn't considered "selected" by default in transport
   // mode. This method returns how many accounts selected (enabled) the type.
   int GetNumberOfAccountsWithPasswordsSelected() const;
-#endif
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 
   // Sets the selection state for all |registered_types| and "keep everything
   // synced" flag.
@@ -127,6 +129,7 @@ class SyncPrefs {
   void SetSelectedTypeForAccount(UserSelectableType type,
                                  bool is_type_on,
                                  const signin::GaiaIdHash& gaia_id_hash);
+
   // Used to clear per account prefs for all users *except* the ones in the
   // passed-in |available_gaia_ids|.
   void KeepAccountSettingsPrefsOnlyForUsers(
@@ -172,12 +175,12 @@ class SyncPrefs {
   // correspond to the "managed" (aka policy-controlled) pref store.
   static void SetOsTypeDisabledByPolicy(PrefValueMap* policy_prefs,
                                         UserSelectableOsType type);
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   bool IsAppsSyncEnabledByOs() const;
   void SetAppsSyncEnabledByOs(bool apps_sync_enabled);
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
   // Whether Sync is disabled on the client for all profiles and accounts.
   bool IsSyncClientDisabledByPolicy() const;
@@ -201,15 +204,30 @@ class SyncPrefs {
 
   // The user's passphrase type, determined the first time the engine is
   // successfully initialized.
-  absl::optional<PassphraseType> GetCachedPassphraseType() const;
+  std::optional<PassphraseType> GetCachedPassphraseType() const;
   void SetCachedPassphraseType(PassphraseType passphrase_type);
   void ClearCachedPassphraseType();
 
   // The encryption bootstrap token is used for explicit passphrase users
   // (usually custom passphrase) and represents a user-entered passphrase.
+  // TODO(crbug.com/1471928): Cleanup *EncryptionBootstrapToken when
+  // kSyncRememberCustomPassphraseAfterSignout is fully rolled-out. The Set/Get
+  // methods will not be used, but ClearAllEncryptionBootstrapTokens will still
+  // be needed to clear the gaia-keyed pref on signout for syncing users. It
+  // should be removed only when kMigrateSyncingUserToSignedIn is fully
+  // rolled-out.
   std::string GetEncryptionBootstrapToken() const;
   void SetEncryptionBootstrapToken(const std::string& token);
-  void ClearEncryptionBootstrapToken();
+  void ClearAllEncryptionBootstrapTokens();
+  // The encryption bootstrap token per account. Used for explicit passphrase
+  // users (usually custom passphrase) and represents a user-entered passphrase.
+  std::string GetEncryptionBootstrapTokenForAccount(
+      const signin::GaiaIdHash& gaia_id_hash) const;
+  void SetEncryptionBootstrapTokenForAccount(
+      const std::string& token,
+      const signin::GaiaIdHash& gaia_id_hash);
+  void ClearEncryptionBootstrapTokenForAccount(
+      const signin::GaiaIdHash& gaia_id_hash);
 
   // Muting mechanism for passphrase prompts, used on Android.
   int GetPassphrasePromptMutedProductVersion() const;
@@ -225,7 +243,7 @@ class SyncPrefs {
   void MaybeMigratePasswordsToPerAccountPref(
       SyncAccountState account_state,
       const signin::GaiaIdHash& gaia_id_hash);
-#endif
+#endif  // BUILDFLAG(IS_IOS)
 
   // Migrates any user settings for pre-existing signed-in users, for the
   // feature `kReplaceSyncPromosWithSignInPromos`. For signed-out users or
@@ -246,6 +264,11 @@ class SyncPrefs {
   bool MaybeMigratePrefsForSyncToSigninPart2(
       const signin::GaiaIdHash& gaia_id_hash,
       bool is_using_explicit_passphrase);
+
+  // Migrates kSyncEncryptionBootstrapToken to the gaia-keyed pref, for the
+  // feature `kSyncRememberCustomPassphraseAfterSignout`. This should be called
+  // early during browser startup.
+  void MaybeMigrateCustomPassphrasePref(const signin::GaiaIdHash& gaia_id_hash);
 
   // Should be called when Sync gets disabled / the user signs out. Clears any
   // temporary state from the above migration.
@@ -268,15 +291,21 @@ class SyncPrefs {
   static const char* GetPrefNameForType(UserSelectableType type);
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   static const char* GetPrefNameForOsType(UserSelectableOsType type);
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   static bool IsTypeSupportedInTransportMode(UserSelectableType type);
 
   void OnSyncManagedPrefChanged();
 
+  void OnSelectedTypesPrefChanged(const std::string& pref_name);
+
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
   void OnFirstSetupCompletePrefChange();
 #endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
+
+  void KeepAccountSettingsPrefsOnlyForUsers(
+      const std::vector<signin::GaiaIdHash>& available_gaia_ids,
+      const char* pref_path);
 
   // Never null.
   const raw_ptr<PrefService> pref_service_;
@@ -284,14 +313,20 @@ class SyncPrefs {
   base::ObserverList<SyncPrefObserver>::Unchecked sync_pref_observers_;
 
   // The preference that controls whether sync is under control by
-  // configuration management.
+  // configuration management (aka policy).
   BooleanPrefMember pref_sync_managed_;
+
+  PrefChangeRegistrar pref_change_registrar_;
+
+  bool batch_updating_selected_types_ = false;
 
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
   BooleanPrefMember pref_initial_sync_feature_setup_complete_;
 #endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
-  bool local_sync_enabled_;
+  // Caches the value of the kEnableLocalSyncBackend pref to avoid it flipping
+  // during the lifetime of the service.
+  const bool local_sync_enabled_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 };

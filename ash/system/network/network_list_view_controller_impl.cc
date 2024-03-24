@@ -12,6 +12,7 @@
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
+#include "ash/shell_delegate.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
 #include "ash/style/typography.h"
@@ -27,6 +28,7 @@
 #include "base/timer/timer.h"
 #include "chromeos/ash/components/dbus/hermes/hermes_manager_client.h"
 #include "chromeos/ash/services/bluetooth_config/public/cpp/cros_bluetooth_config_util.h"
+#include "chromeos/ash/services/multidevice_setup/public/mojom/multidevice_setup.mojom.h"
 #include "chromeos/services/network_config/public/cpp/cros_network_config_util.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
 #include "chromeos/services/network_config/public/mojom/network_types.mojom-shared.h"
@@ -151,6 +153,18 @@ NetworkListViewControllerImpl::NetworkListViewControllerImpl(
   remote_cros_bluetooth_config_->ObserveSystemProperties(
       cros_system_properties_observer_receiver_.BindNewPipeAndPassRemote());
 
+  if (features::IsInstantHotspotRebrandEnabled()) {
+    Shell::Get()->shell_delegate()->BindMultiDeviceSetup(
+        multidevice_setup_remote_.BindNewPipeAndPassReceiver());
+
+    multidevice_setup_remote_->AddHostStatusObserver(
+        host_status_observer_receiver_.BindNewPipeAndPassRemote());
+
+    multidevice_setup_remote_->GetHostStatus(
+        base::BindOnce(&NetworkListViewControllerImpl::OnHostStatusChanged,
+                       weak_ptr_factory_.GetWeakPtr()));
+  }
+
   GetNetworkStateList();
 }
 
@@ -194,6 +208,15 @@ void NetworkListViewControllerImpl::GetNetworkStateList() {
                      weak_ptr_factory_.GetWeakPtr()));
 }
 
+void NetworkListViewControllerImpl::OnHostStatusChanged(
+    multidevice_setup::mojom::HostStatus host_status,
+    const std::optional<multidevice::RemoteDevice>& host_device) {
+  has_phone_eligible_for_setup_ =
+      (host_status ==
+       multidevice_setup::mojom::HostStatus::kEligibleHostExistsButNoHostSet);
+  GetNetworkStateList();
+}
+
 void NetworkListViewControllerImpl::OnGetNetworkStateList(
     std::vector<NetworkStatePropertiesPtr> networks) {
   int old_position = network_detailed_network_view()->GetScrollPosition();
@@ -232,7 +255,6 @@ void NetworkListViewControllerImpl::OnGetNetworkStateList(
 
   if (ShouldMobileDataSectionBeShown()) {
     if (!mobile_header_view_) {
-      RecordDetailedViewSection(DetailedViewSection::kMobileSection);
       mobile_header_view_ =
           network_detailed_network_view()->AddMobileSectionHeader();
 
@@ -275,7 +297,6 @@ void NetworkListViewControllerImpl::OnGetNetworkStateList(
   if (features::IsInstantHotspotRebrandEnabled()) {
     if (ShouldTetherHostsSectionBeShown()) {
       if (!tether_hosts_header_view_) {
-        RecordDetailedViewSection(DetailedViewSection::kTetherHostsSection);
         tether_hosts_header_view_ =
             network_detailed_network_view()->AddTetherHostsSectionHeader();
       }
@@ -441,7 +462,6 @@ size_t NetworkListViewControllerImpl::ShowConnectionWarningIfNetworkMonitored(
 
 void NetworkListViewControllerImpl::MaybeShowConnectionWarningManagedIcon(
     bool using_proxy) {
-
   // If the proxy is set, check if it's a managed setting.
   const NetworkStateProperties* default_network = model()->default_network();
   if (using_proxy && default_network) {
@@ -582,7 +602,16 @@ bool NetworkListViewControllerImpl::ShouldMobileDataSectionBeShown() {
 
 bool NetworkListViewControllerImpl::ShouldTetherHostsSectionBeShown() {
   // The section should never be shown if the feature flag is disabled.
-  DCHECK(features::IsInstantHotspotRebrandEnabled());
+  if (!features::IsInstantHotspotRebrandEnabled()) {
+    return false;
+  }
+
+  // The Tether Hosts section should always be shown if there is an eligible
+  // device which has not been set up yet.
+  if (has_phone_eligible_for_setup_) {
+    return true;
+  }
+
   const DeviceStateType tether_state =
       model()->GetDeviceState(NetworkType::kTether);
 
@@ -672,14 +701,14 @@ void NetworkListViewControllerImpl::UpdateTetherHostsSection() {
 
   if (!IsBluetoothEnabledOrEnabling(bluetooth_system_state_)) {
     CreateInfoLabelIfMissingAndUpdate(
-        IDS_ASH_STATUS_TRAY_BLUETOOTH_DISABLED_TOOLTIP,
+        IDS_ASH_STATUS_TRAY_NETWORK_TETHER_NO_BLUETOOTH,
         &tether_hosts_status_message_);
     return;
   }
 
   if (!has_tether_networks_) {
     CreateInfoLabelIfMissingAndUpdate(
-        IDS_ASH_STATUS_TRAY_NO_MOBILE_DEVICES_FOUND,
+        IDS_ASH_STATUS_TRAY_NETWORK_NO_TETHER_DEVICES_FOUND,
         &tether_hosts_status_message_);
     return;
   }
@@ -689,7 +718,6 @@ void NetworkListViewControllerImpl::UpdateTetherHostsSection() {
 
 void NetworkListViewControllerImpl::UpdateWifiSection() {
   if (!wifi_header_view_) {
-    RecordDetailedViewSection(DetailedViewSection::kWifiSection);
     wifi_header_view_ = network_detailed_network_view()->AddWifiSectionHeader();
 
     // WiFi toggle state is set here to avoid toggle animating on/off when
@@ -895,10 +923,6 @@ size_t NetworkListViewControllerImpl::CreateItemViewsIfMissingAndReorder(
   NetworkIdToViewMap id_to_view_map;
   NetworkListNetworkItemView* network_view = nullptr;
 
-  // This value is used to determine whether at least one network of `type`
-  // already existed prior to this method.
-  bool has_reordered_a_network = false;
-
   for (const auto& network : networks) {
     if (!NetworkTypeMatchesType(network->type, type)) {
       continue;
@@ -909,7 +933,6 @@ size_t NetworkListViewControllerImpl::CreateItemViewsIfMissingAndReorder(
     if (it == previous_views->end()) {
       network_view = network_detailed_network_view()->AddNetworkListItem(type);
     } else {
-      has_reordered_a_network = true;
       network_view = it->second;
       previous_views->erase(it);
     }
@@ -919,14 +942,6 @@ size_t NetworkListViewControllerImpl::CreateItemViewsIfMissingAndReorder(
     network_detailed_network_view()->GetNetworkList(type)->ReorderChildView(
         network_view, index);
     network_view->SetEnabled(!IsNetworkDisabled(network));
-
-    // Only emit ethernet metric each time we show Ethernet section
-    // for the first time. We use `has_reordered_a_network` to determine
-    // if Ethernet networks already exist in network detailed list.
-    if (NetworkTypeMatchesType(network->type, NetworkType::kEthernet) &&
-        !has_reordered_a_network) {
-      RecordDetailedViewSection(DetailedViewSection::kEthernetSection);
-    }
 
     // Increment `index` since this position was taken by `network_view`.
     index++;
@@ -1060,7 +1075,7 @@ void NetworkListViewControllerImpl::FocusLastSelectedView() {
   }
 
   parent_view->SizeToPreferredSize();
-  parent_view->Layout();
+  parent_view->DeprecatedLayoutImmediately();
   if (selected_view) {
     parent_view->ScrollRectToVisible(selected_view->bounds());
   }

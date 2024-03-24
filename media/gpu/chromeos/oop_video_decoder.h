@@ -68,9 +68,9 @@ class OOPVideoDecoder : public VideoDecoderMixin,
           void(mojo::PendingRemote<stable::mojom::StableVideoDecoder>)> cb);
 
   // Returns the cached supported configurations of the out-of-process video
-  // decoder if known (absl::nullopt otherwise). This method is thread- and
+  // decoder if known (std::nullopt otherwise). This method is thread- and
   // sequence-safe.
-  static absl::optional<SupportedVideoDecoderConfigs> GetSupportedConfigs();
+  static std::optional<SupportedVideoDecoderConfigs> GetSupportedConfigs();
 
   // VideoDecoderMixin implementation, VideoDecoder part.
   void Initialize(const VideoDecoderConfig& config,
@@ -99,7 +99,7 @@ class OOPVideoDecoder : public VideoDecoderMixin,
   // stable::mojom::MediaLog implementation.
   void AddLogRecord(const MediaLogRecord& event) final;
 
-  VideoFrame* UnwrapFrame(const VideoFrame& wrapped_frame);
+  VideoFrame* GetOriginalFrame(gfx::GenericSharedMemoryId frame_id);
 
  private:
   OOPVideoDecoder(std::unique_ptr<media::MediaLog> media_log,
@@ -225,7 +225,7 @@ class OOPVideoDecoder : public VideoDecoderMixin,
   // least among all clients of media::GetNextGpuMemoryBufferId()).
   base::flat_map<gfx::GpuMemoryBufferId, scoped_refptr<VideoFrame>>
       received_id_to_decoded_frame_map_ GUARDED_BY_CONTEXT(sequence_checker_);
-  base::flat_map<gfx::GpuMemoryBufferId, VideoFrame*>
+  base::flat_map<gfx::GenericSharedMemoryId, VideoFrame*>
       generated_id_to_decoded_frame_map_ GUARDED_BY_CONTEXT(sequence_checker_);
 
   SEQUENCE_CHECKER(sequence_checker_);

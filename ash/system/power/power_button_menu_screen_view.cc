@@ -105,11 +105,6 @@ class PowerButtonMenuScreenView::PowerButtonMenuBackgroundView
     layer()->SetOpacity(show ? kPowerButtonMenuOpacity : 0.f);
   }
 
-  // views::View:
-  const char* GetClassName() const override {
-    return "PowerButtonMenuBackgroundView";
-  }
-
  private:
   // views::View:
   void OnThemeChanged() override {
@@ -122,9 +117,7 @@ class PowerButtonMenuScreenView::PowerButtonMenuBackgroundView
   base::RepeatingClosure show_animation_done_;
 };
 
-BEGIN_METADATA(PowerButtonMenuScreenView,
-               PowerButtonMenuBackgroundView,
-               views::View)
+BEGIN_METADATA(PowerButtonMenuScreenView, PowerButtonMenuBackgroundView)
 END_METADATA
 
 PowerButtonMenuScreenView::PowerButtonMenuScreenView(
@@ -186,7 +179,7 @@ void PowerButtonMenuScreenView::OnWidgetShown(
   if (power_button_position_ != PowerButtonPosition::NONE) {
     UpdateMenuBoundsOrigins();
   }
-  Layout();
+  DeprecatedLayoutImmediately();
 }
 
 PowerButtonMenuCurtainView*
@@ -198,11 +191,7 @@ PowerButtonMenuScreenView::GetOrCreateCurtainView() {
   return power_button_menu_curtain_view_;
 }
 
-const char* PowerButtonMenuScreenView::GetClassName() const {
-  return "PowerButtonMenuScreenView";
-}
-
-void PowerButtonMenuScreenView::Layout() {
+void PowerButtonMenuScreenView::Layout(PassKey) {
   power_button_screen_background_shield_->SetBoundsRect(GetContentsBounds());
   if (IsCurtainModeEnabled()) {
     LayoutMenuCurtainView();

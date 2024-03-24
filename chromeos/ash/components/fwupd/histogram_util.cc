@@ -26,10 +26,11 @@ void EmitUpdateCount(int num_updates,
                      int num_critical_updates,
                      bool is_startup) {
   const auto source_str = GetSourceStr(is_startup);
-  base::UmaHistogramCounts100(source_str + std::string(".CriticalUpdateCount"),
-                              num_critical_updates);
-  base::UmaHistogramCounts100(source_str + std::string(".UpdateCount"),
-                              num_updates);
+  base::UmaHistogramCounts100(
+      base::StrCat({source_str, ".CriticalUpdateCount"}), num_critical_updates);
+  base::UmaHistogramCounts100(
+      base::StrCat({source_str, ".NonCriticalUpdateCount"}),
+      num_updates - num_critical_updates);
 }
 
 void EmitInstallFailedWithStatus(FwupdStatus last_fwupd_status) {

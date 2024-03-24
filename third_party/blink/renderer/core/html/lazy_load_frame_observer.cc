@@ -68,24 +68,24 @@ bool IsFrameProbablyHidden(const gfx::RectF& bounding_client_rect,
   return false;
 }
 
-int GetLazyFrameLoadingViewportDistanceThresholdPx(const Document& document) {
+int GetLazyLoadingFrameMarginPx(const Document& document) {
   const Settings* settings = document.GetSettings();
   if (!settings)
     return 0;
 
   switch (GetNetworkStateNotifier().EffectiveType()) {
     case WebEffectiveConnectionType::kTypeUnknown:
-      return settings->GetLazyFrameLoadingDistanceThresholdPxUnknown();
+      return settings->GetLazyLoadingFrameMarginPxUnknown();
     case WebEffectiveConnectionType::kTypeOffline:
-      return settings->GetLazyFrameLoadingDistanceThresholdPxOffline();
+      return settings->GetLazyLoadingFrameMarginPxOffline();
     case WebEffectiveConnectionType::kTypeSlow2G:
-      return settings->GetLazyFrameLoadingDistanceThresholdPxSlow2G();
+      return settings->GetLazyLoadingFrameMarginPxSlow2G();
     case WebEffectiveConnectionType::kType2G:
-      return settings->GetLazyFrameLoadingDistanceThresholdPx2G();
+      return settings->GetLazyLoadingFrameMarginPx2G();
     case WebEffectiveConnectionType::kType3G:
-      return settings->GetLazyFrameLoadingDistanceThresholdPx3G();
+      return settings->GetLazyLoadingFrameMarginPx3G();
     case WebEffectiveConnectionType::kType4G:
-      return settings->GetLazyFrameLoadingDistanceThresholdPx4G();
+      return settings->GetLazyLoadingFrameMarginPx4G();
   }
   NOTREACHED();
   return 0;
@@ -117,18 +117,29 @@ void LazyLoadFrameObserver::DeferLoadUntilNearViewport(
   lazy_load_request_info_ =
       std::make_unique<LazyLoadRequestInfo>(resource_request, frame_load_type);
 
-  lazy_load_intersection_observer_ = IntersectionObserver::Create(
-      /* (root) margin */ {Length::Fixed(
-          GetLazyFrameLoadingViewportDistanceThresholdPx(
-              element_->GetDocument()))},
-      /* scroll_margin */ Vector<Length>(),
-      /* thresholds */ {std::numeric_limits<float>::min()},
-      /* document */ &element_->GetDocument(),
-      /* callback */
-      WTF::BindRepeating(&LazyLoadFrameObserver::LoadIfHiddenOrNearViewport,
-                         WrapWeakPersistent(this)),
-      /* ukm_metric_id */
-      LocalFrameUkmAggregator::kLazyLoadIntersectionObserver);
+  if (RuntimeEnabledFeatures::LazyLoadScrollMarginIframeEnabled()) {
+    lazy_load_intersection_observer_ = IntersectionObserver::Create(
+        element_->GetDocument(),
+        WTF::BindRepeating(&LazyLoadFrameObserver::LoadIfHiddenOrNearViewport,
+                           WrapWeakPersistent(this)),
+        LocalFrameUkmAggregator::kLazyLoadIntersectionObserver,
+        IntersectionObserver::Params{
+            .scroll_margin = {Length::Fixed(
+                GetLazyLoadingFrameMarginPx(element_->GetDocument()))},
+            .thresholds = {std::numeric_limits<float>::min()},
+        });
+  } else {
+    lazy_load_intersection_observer_ = IntersectionObserver::Create(
+        element_->GetDocument(),
+        WTF::BindRepeating(&LazyLoadFrameObserver::LoadIfHiddenOrNearViewport,
+                           WrapWeakPersistent(this)),
+        LocalFrameUkmAggregator::kLazyLoadIntersectionObserver,
+        IntersectionObserver::Params{
+            .margin = {Length::Fixed(
+                GetLazyLoadingFrameMarginPx(element_->GetDocument()))},
+            .thresholds = {std::numeric_limits<float>::min()},
+        });
+  }
 
   lazy_load_intersection_observer_->observe(element_);
 }

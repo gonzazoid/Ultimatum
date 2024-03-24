@@ -245,6 +245,8 @@
   E_CPONLY(kColorNewTabPageText) \
   E_CPONLY(kColorNewTabPageTextUnthemed) \
   E_CPONLY(kColorNewTabPageTextLight) \
+  E_CPONLY(kColorNewTabPageWallpaperSearchButtonBackground) \
+  E_CPONLY(kColorNewTabPageWallpaperSearchButtonForeground) \
   /* Omnibox colors. */ \
   E_CPONLY(kColorOmniboxAnswerIconBackground) \
   E_CPONLY(kColorOmniboxAnswerIconForeground) \
@@ -252,15 +254,19 @@
   E_CPONLY(kColorOmniboxAnswerIconGM3Foreground) \
   E_CPONLY(kColorOmniboxBubbleOutline) \
   E_CPONLY(kColorOmniboxBubbleOutlineExperimentalKeywordMode) \
+  E_CPONLY(kColorOmniboxChipInUseActivityIndicatorBackground) \
+  E_CPONLY(kColorOmniboxChipInUseActivityIndicatorForeground) \
   E_CPONLY(kColorOmniboxChipBackground) \
+  E_CPONLY(kColorOmniboxChipBlockedActivityIndicatorBackground) \
+  E_CPONLY(kColorOmniboxChipBlockedActivityIndicatorForeground) \
   E_CPONLY(kColorOmniboxChipForegroundLowVisibility) \
   E_CPONLY(kColorOmniboxChipForegroundNormalVisibility) \
   E_CPONLY(kColorOmniboxChipInkDropHover) \
   E_CPONLY(kColorOmniboxChipInkDropRipple) \
-  E_CPONLY(kColorOmniboxKeywordSelected) \
-  E_CPONLY(kColorOmniboxKeywordSeparator) \
   E_CPONLY(kColorOmniboxIntentChipBackground) \
   E_CPONLY(kColorOmniboxIntentChipIcon) \
+  E_CPONLY(kColorOmniboxKeywordSelected) \
+  E_CPONLY(kColorOmniboxKeywordSeparator) \
   E_CPONLY(kColorOmniboxResultsBackground) \
   E_CPONLY(kColorOmniboxResultsBackgroundHovered) \
   E_CPONLY(kColorOmniboxResultsBackgroundSelected) \
@@ -466,6 +472,7 @@
   E_CPONLY(kColorSidePanelWallpaperSearchTileBackground) \
   E_CPONLY(kColorSidePanelWallpaperSearchErrorButtonBackground) \
   E_CPONLY(kColorSidePanelWallpaperSearchErrorButtonText) \
+  E_CPONLY(kColorSidePanelWallpaperSearchInspirationDescriptors) \
   /* Status bubble colors. */ \
   E_CPONLY(kColorStatusBubbleBackgroundFrameActive) \
   E_CPONLY(kColorStatusBubbleBackgroundFrameInactive) \
@@ -752,6 +759,7 @@
   E_CPONLY(kColorComposeDialogLogo) \
   E_CPONLY(kColorComposeDialogResultBackground) \
   E_CPONLY(kColorComposeDialogResultForeground) \
+  E_CPONLY(kColorComposeDialogResultForegroundWhileLoading) \
   E_CPONLY(kColorComposeDialogResultIcon) \
   E_CPONLY(kColorComposeDialogScrollbarThumb) \
   E_CPONLY(kColorComposeDialogTitle) \

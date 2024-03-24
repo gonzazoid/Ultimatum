@@ -23,7 +23,7 @@
 #include "chrome/browser/ui/side_panel/companion/companion_utils.h"
 #include "chrome/browser/ui/side_panel/side_panel_entry_id.h"
 #include "chrome/browser/ui/side_panel/side_panel_entry_key.h"
-#include "chrome/browser/ui/toolbar/pinned_toolbar_actions_model.h"
+#include "chrome/browser/ui/toolbar/pinned_toolbar/pinned_toolbar_actions_model.h"
 #include "chrome/browser/ui/toolbar/toolbar_actions_model.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
@@ -195,8 +195,9 @@ using PopulateSidePanelCallback = base::OnceCallback<void(
 // swaps the views when the content is ready. If the SidePanelContextProxy
 // doesn't exist, the content is swapped immediately.
 class SidePanelContentSwappingContainer : public views::View {
+  METADATA_HEADER(SidePanelContentSwappingContainer, views::View)
+
  public:
-  METADATA_HEADER(SidePanelContentSwappingContainer);
   explicit SidePanelContentSwappingContainer(bool show_immediately_for_testing)
       : show_immediately_for_testing_(show_immediately_for_testing) {
     SetUseDefaultFillLayout(true);
@@ -265,7 +266,7 @@ class SidePanelContentSwappingContainer : public views::View {
   PopulateSidePanelCallback loaded_callback_;
 };
 
-BEGIN_METADATA(SidePanelContentSwappingContainer, views::View)
+BEGIN_METADATA(SidePanelContentSwappingContainer)
 END_METADATA
 
 }  // namespace
@@ -936,9 +937,9 @@ std::unique_ptr<views::View> SidePanelCoordinator::CreateHeader() {
   header_pin_button_->SetFocusBehavior(views::View::FocusBehavior::ALWAYS);
   // By default, the button's accessible description is set to the button's
   // tooltip text. For the pin button, we only want the accessible name to be
-  // read on accessibility mode since it includes the tooltip text. Thus we
-  // override the accessible description.
-  header_pin_button_->GetViewAccessibility().OverrideDescription(
+  // read on accessibility mode since it includes the tooltip text. Thus we set
+  // the accessible description.
+  header_pin_button_->GetViewAccessibility().SetDescription(
       std::u16string(), ax::mojom::DescriptionFrom::kAttributeExplicitlyEmpty);
   // The icon is later set as visible for side panels that support it.
   header_pin_button_->SetVisible(false);

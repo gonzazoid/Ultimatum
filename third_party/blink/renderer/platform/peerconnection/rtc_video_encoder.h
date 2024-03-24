@@ -17,6 +17,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
 #include "media/base/video_decoder_config.h"
+#include "media/media_buildflags.h"
 #include "media/video/video_encode_accelerator.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
@@ -127,12 +128,12 @@ class PLATFORM_EXPORT RTCVideoEncoder : public webrtc::VideoEncoder {
 
   // If this has value, the value is VideoEncodeAccelerator::Config to be used
   // in up-coming Initialize().
-  absl::optional<media::VideoEncodeAccelerator::Config> vea_config_
+  std::optional<media::VideoEncodeAccelerator::Config> vea_config_
       GUARDED_BY_CONTEXT(webrtc_sequence_checker_);
   // This has a value if SetRates() is called between InitEncode() and the first
   // Encode(). The stored value is used for SetRates() after the encoder
   // initialization with |vea_config_|.
-  absl::optional<webrtc::VideoEncoder::RateControlParameters>
+  std::optional<webrtc::VideoEncoder::RateControlParameters>
       pending_rate_params_ GUARDED_BY_CONTEXT(webrtc_sequence_checker_);
 
   // Execute in SetError(). This can be valid only in testing.

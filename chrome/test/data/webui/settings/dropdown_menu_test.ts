@@ -4,7 +4,7 @@
 
 import 'chrome://settings/settings.js';
 
-import {SettingsDropdownMenuElement} from 'chrome://settings/settings.js';
+import type {SettingsDropdownMenuElement} from 'chrome://settings/settings.js';
 import {assertEquals, assertFalse, assertNotReached, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
 
@@ -93,6 +93,38 @@ suite('SettingsDropdownMenu', function() {
     dropdown.menuOptions = newMenuOptions;
     await waitUntilDropdownUpdated();
     assertEquals('AAA', selectElement.selectedOptions[0]!.textContent!.trim());
+  });
+
+  test('with noSetPref', async function() {
+    dropdown.noSetPref = true;
+    dropdown.pref = {
+      key: 'test.number',
+      type: chrome.settingsPrivate.PrefType.NUMBER,
+      value: 100,
+    };
+    dropdown.menuOptions = [
+      {value: 100, name: 'Option 100'},
+      {value: 200, name: 'Option 200'},
+      {value: 300, name: 'Option 300'},
+    ];
+    await waitUntilDropdownUpdated();
+
+    // Initially selected item.
+    assertEquals(
+        'Option 100', selectElement.selectedOptions[0]!.textContent!.trim());
+
+    // Updating the pref selects an item also with noSetPref.
+    dropdown.set('pref.value', 200);
+    await waitUntilDropdownUpdated();
+    assertEquals('200', selectElement.value);
+
+    // Selecting an item does not automatically update the pref with noSetPref.
+    await simulateChangeEvent('300');
+    assertEquals(200, dropdown.pref!.value);
+
+    // Calling |sendPrefChange()| updates the pref.
+    dropdown.sendPrefChange();
+    assertEquals(300, dropdown.pref!.value);
   });
 
   test('with custom value', async function() {

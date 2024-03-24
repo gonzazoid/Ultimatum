@@ -41,7 +41,8 @@ class TargetDeviceConnectionBroker {
 
   enum class ConnectionClosedReason {
     kComplete,
-    kUserAborted,
+    kUserAborted,  // Based on user selections on target device, which are
+                   // always informed by Chromebook UI.
     kAuthenticationFailed,
     kConnectionLost,
     kRequestTimedOut,
@@ -98,6 +99,8 @@ class TargetDeviceConnectionBroker {
     // Exposes SessionContext::GetPrepareForUpdateInfo() to the
     // AuthenticatedConnection caller.
     virtual base::Value::Dict GetPrepareForUpdateInfo() = 0;
+
+    virtual void NotifyPhoneSetupComplete() = 0;
 
     // Retrieve Instance ID (CryptAuth device ID) from BootstrapConfigurations
     // response.

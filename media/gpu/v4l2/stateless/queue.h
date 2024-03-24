@@ -32,7 +32,7 @@ class MEDIA_GPU_EXPORT BaseQueue {
   virtual ~BaseQueue() = 0;
 
   virtual bool PrepareBuffers(size_t num_buffers) = 0;
-  bool DeallocateBuffers();
+  void DeallocateBuffers();
   bool StartStreaming();
   bool StopStreaming();
   uint32_t FreeBufferCount() const { return free_buffer_indices_.size(); }
@@ -41,7 +41,7 @@ class MEDIA_GPU_EXPORT BaseQueue {
   bool AllocateBuffers(uint32_t num_planes, size_t num_buffers);
   virtual std::string Description() = 0;
   void ReturnBuffer(uint32_t index);
-  absl::optional<uint32_t> GetFreeBufferIndex();
+  std::optional<uint32_t> GetFreeBufferIndex();
 
   scoped_refptr<StatelessDevice> device_;
   const BufferType buffer_type_;
@@ -117,7 +117,7 @@ class MEDIA_GPU_EXPORT OutputQueue : public BaseQueue {
 
  private:
   // Create |VideoFrame| by exporting the dmabuf backing the buffer.
-  scoped_refptr<VideoFrame> CreateVideoFrame(uint32_t index);
+  scoped_refptr<VideoFrame> CreateVideoFrame(const Buffer& buffer);
 
   std::string Description() override;
 

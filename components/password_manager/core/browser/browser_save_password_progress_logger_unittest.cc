@@ -64,14 +64,14 @@ class BrowserSavePasswordProgressLoggerTest : public testing::Test {
     field.form_control_type = autofill::FormControlType::kInputPassword;
     field.is_focusable = true;
     field.autocomplete_attribute = "new-password";
-    field.unique_renderer_id = autofill::FieldRendererId(10);
+    field.renderer_id = autofill::FieldRendererId(10);
     form_.fields.push_back(field);
 
     // Add a text field.
     field.name = u"email";
     field.form_control_type = autofill::FormControlType::kInputText;
     field.is_focusable = false;
-    field.unique_renderer_id = autofill::FieldRendererId(42);
+    field.renderer_id = autofill::FieldRendererId(42);
     field.value = u"a@example.com";
     field.autocomplete_attribute.clear();
     form_.fields.push_back(field);
@@ -92,7 +92,6 @@ TEST_F(BrowserSavePasswordProgressLoggerTest, LogFormData) {
   EXPECT_TRUE(logger.LogsContainSubstring("Origin: http://myform.com"));
   EXPECT_TRUE(logger.LogsContainSubstring("Action: http://m.myform.com"));
   EXPECT_TRUE(logger.LogsContainSubstring("Form name: form_name"));
-  EXPECT_TRUE(logger.LogsContainSubstring("Form with form tag: true"));
   EXPECT_TRUE(logger.LogsContainSubstring("Form fields:"));
   EXPECT_TRUE(logger.LogsContainSubstring(
       "password: signature=2051817934, type=password, renderer_id=10, "

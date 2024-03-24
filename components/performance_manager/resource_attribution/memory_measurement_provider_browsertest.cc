@@ -9,13 +9,13 @@
 #include <utility>
 
 #include "base/command_line.h"
-#include "base/functional/bind.h"
 #include "base/functional/callback.h"
-#include "base/test/bind.h"
+#include "base/test/test_future.h"
 #include "build/build_config.h"
 #include "components/performance_manager/public/graph/graph.h"
 #include "components/performance_manager/public/resource_attribution/query_results.h"
 #include "components/performance_manager/public/resource_attribution/resource_contexts.h"
+#include "components/performance_manager/resource_attribution/performance_manager_aliases.h"
 #include "components/performance_manager/test_support/performance_manager_browsertest_harness.h"
 #include "components/performance_manager/test_support/resource_attribution/gtest_util.h"
 #include "components/performance_manager/test_support/run_in_graph.h"
@@ -30,10 +30,9 @@
 #include "services/resource_coordinator/public/cpp/memory_instrumentation/memory_instrumentation.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/variant.h"
 #include "url/gurl.h"
 
-namespace performance_manager::resource_attribution {
+namespace resource_attribution {
 
 namespace {
 
@@ -46,13 +45,11 @@ using ::testing::IsEmpty;
 using ::testing::IsSupersetOf;
 using ::testing::Lt;
 using ::testing::Pair;
-using ::testing::VariantWith;
-using ResultMap = std::map<ResourceContext, QueryResult>;
 
 class ResourceAttrMemoryMeasurementProviderBrowserTest
-    : public PerformanceManagerBrowserTestHarness {
+    : public performance_manager::PerformanceManagerBrowserTestHarness {
  protected:
-  using Super = PerformanceManagerBrowserTestHarness;
+  using Super = performance_manager::PerformanceManagerBrowserTestHarness;
 
   void OnGraphCreated(Graph* graph) override {
     memory_provider_ = std::make_unique<MemoryMeasurementProvider>(graph);
@@ -62,35 +59,35 @@ class ResourceAttrMemoryMeasurementProviderBrowserTest
   void TearDownOnMainThread() override {
     // Delete MemoryMeasurementProvider before tearing down the graph to avoid
     // dangling pointers.
-    RunInGraph([&] { memory_provider_.reset(); });
+    performance_manager::RunInGraph([&] { memory_provider_.reset(); });
     Super::TearDownOnMainThread();
   }
 
   // Calls MemoryMeasurementProvider::RequestMemorySummary, waits for its result
   // callback to fire, and returns the result map passed to the callback.
-  ResultMap WaitForMemorySummary() {
-    ResultMap return_results;
-    RunInGraph([&](base::OnceClosure quit_closure) {
+  QueryResultMap WaitForMemorySummary() {
+    base::test::TestFuture<QueryResultMap> results_future;
+    base::OnceCallback<void(QueryResultMap)> results_callback =
+        results_future.GetSequenceBoundCallback();
+    performance_manager::RunInGraph([&](base::OnceClosure quit_closure) {
       memory_provider_->RequestMemorySummary(
-          base::BindOnce(base::BindLambdaForTesting([&](ResultMap results) {
-            return_results = std::move(results);
-          })).Then(std::move(quit_closure)));
+          std::move(results_callback).Then(std::move(quit_closure)));
     });
-    return return_results;
+    return results_future.Take();
   }
 
  private:
   std::unique_ptr<MemoryMeasurementProvider> memory_provider_;
 };
 
-// GMock matcher expecting that a given MemorySummaryResult has the metadata
-// filled in and all memory measurements >0. `expected_algorithm` is the
-// measurement algorithm that should be used.
+// GMock matcher expecting that a given QueryResults object contains a
+// MemorySummaryResult with the metadata filled in and all memory measurements
+// >0. `expected_algorithm` is the measurement algorithm that should be used.
 auto MemorySummaryResultIsPositive(MeasurementAlgorithm expected_algorithm) {
   // Expect any positive measurement time in the past.
   auto expected_measurement_time_matcher =
       AllOf(Gt(base::TimeTicks()), Lt(base::TimeTicks::Now()));
-  return VariantWith<MemorySummaryResult>(AllOf(
+  return QueryResultsMatch<MemorySummaryResult>(AllOf(
 #if BUILDFLAG(IS_IOS)
       // TODO(crbug.com/1506552): iOS doesn't support private_memory_footprint,
       // so it's always 0.
@@ -133,7 +130,7 @@ IN_PROC_BROWSER_TEST_F(ResourceAttrMemoryMeasurementProviderBrowserTest,
 
   // Measure the memory of all processes. Results will include the browser and
   // utility processes.
-  ResultMap results = WaitForMemorySummary();
+  QueryResultMap results = WaitForMemorySummary();
   EXPECT_THAT(
       results,
       IsSupersetOf({
@@ -149,11 +146,11 @@ IN_PROC_BROWSER_TEST_F(ResourceAttrMemoryMeasurementProviderBrowserTest,
 
   // The process memory should be split between frames in the process.
   const auto main_frame_result =
-      absl::get<MemorySummaryResult>(results.at(main_frame_context));
+      results.at(main_frame_context).memory_summary_result.value();
   const auto child_frame_result =
-      absl::get<MemorySummaryResult>(results.at(child_frame_context));
+      results.at(child_frame_context).memory_summary_result.value();
   const auto process_result =
-      absl::get<MemorySummaryResult>(results.at(process_context));
+      results.at(process_context).memory_summary_result.value();
   EXPECT_LE(main_frame_result.resident_set_size_kb,
             process_result.resident_set_size_kb);
   EXPECT_LE(main_frame_result.private_footprint_kb,
@@ -165,7 +162,7 @@ IN_PROC_BROWSER_TEST_F(ResourceAttrMemoryMeasurementProviderBrowserTest,
 
   // The page memory should be the sum of all its frames, from any process.
   const auto page_result =
-      absl::get<MemorySummaryResult>(results.at(page_context));
+      results.at(page_context).memory_summary_result.value();
   EXPECT_EQ(page_result.resident_set_size_kb,
             main_frame_result.resident_set_size_kb +
                 child_frame_result.resident_set_size_kb);
@@ -204,7 +201,7 @@ IN_PROC_BROWSER_TEST_F(ResourceAttrMemoryMeasurementProviderBrowserTest,
 
   // Measure the memory of all processes. Results will include the browser and
   // utility processes.
-  ResultMap results = WaitForMemorySummary();
+  QueryResultMap results = WaitForMemorySummary();
   EXPECT_THAT(
       results,
       IsSupersetOf({
@@ -225,13 +222,13 @@ IN_PROC_BROWSER_TEST_F(ResourceAttrMemoryMeasurementProviderBrowserTest,
   // Each process memory should be assigned entirely to the frame in the
   // process.
   const auto main_frame_result =
-      absl::get<MemorySummaryResult>(results.at(main_frame_context));
+      results.at(main_frame_context).memory_summary_result.value();
   const auto child_frame_result =
-      absl::get<MemorySummaryResult>(results.at(child_frame_context));
+      results.at(child_frame_context).memory_summary_result.value();
   const auto process_a_result =
-      absl::get<MemorySummaryResult>(results.at(process_a_context));
+      results.at(process_a_context).memory_summary_result.value();
   const auto process_b_result =
-      absl::get<MemorySummaryResult>(results.at(process_b_context));
+      results.at(process_b_context).memory_summary_result.value();
   EXPECT_EQ(main_frame_result.resident_set_size_kb,
             process_a_result.resident_set_size_kb);
   EXPECT_EQ(main_frame_result.private_footprint_kb,
@@ -243,7 +240,7 @@ IN_PROC_BROWSER_TEST_F(ResourceAttrMemoryMeasurementProviderBrowserTest,
 
   // The page memory should be the sum of all its frames, from any process.
   const auto page_result =
-      absl::get<MemorySummaryResult>(results.at(page_context));
+      results.at(page_context).memory_summary_result.value();
   EXPECT_EQ(page_result.resident_set_size_kb,
             main_frame_result.resident_set_size_kb +
                 child_frame_result.resident_set_size_kb);
@@ -254,4 +251,4 @@ IN_PROC_BROWSER_TEST_F(ResourceAttrMemoryMeasurementProviderBrowserTest,
 
 }  // namespace
 
-}  // namespace performance_manager::resource_attribution
+}  // namespace resource_attribution

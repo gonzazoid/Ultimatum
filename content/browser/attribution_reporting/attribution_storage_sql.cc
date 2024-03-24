@@ -40,6 +40,7 @@
 #include "components/attribution_reporting/aggregatable_dedup_key.h"
 #include "components/attribution_reporting/aggregatable_trigger_config.h"
 #include "components/attribution_reporting/aggregatable_trigger_data.h"
+#include "components/attribution_reporting/aggregatable_values.h"
 #include "components/attribution_reporting/aggregation_keys.h"
 #include "components/attribution_reporting/constants.h"
 #include "components/attribution_reporting/destination_set.h"
@@ -331,7 +332,7 @@ AttributionStorageSql::ReadSourceFromStatement(sql::Statement& statement) {
   }
 
   attribution_reporting::MaxEventLevelReports max_event_level_reports;
-  std::optional<EventReportWindows> event_report_windows;
+  std::optional<attribution_reporting::TriggerSpecs> trigger_specs;
   attribution_reporting::EventLevelEpsilon event_level_epsilon;
 
   std::optional<proto::AttributionReadOnlySourceData>
@@ -347,11 +348,13 @@ AttributionStorageSql::ReadSourceFromStatement(sql::Statement& statement) {
           ReportCorruptionStatus::kSourceInvalidMaxEventLevelReports);
     }
 
-    event_report_windows =
-        DeserializeEventReportWindows(*read_only_source_data_msg);
-    if (!event_report_windows.has_value()) {
-      corruption_causes.Put(
-          ReportCorruptionStatus::kSourceInvalidEventReportWindows);
+    if (source_type.has_value()) {
+      trigger_specs =
+          DeserializeTriggerSpecs(*read_only_source_data_msg, *source_type);
+      if (!trigger_specs.has_value()) {
+        corruption_causes.Put(
+            ReportCorruptionStatus::kSourceInvalidTriggerSpecs);
+      }
     }
 
     if (read_only_source_data_msg->has_event_level_epsilon() &&
@@ -408,20 +411,17 @@ AttributionStorageSql::ReadSourceFromStatement(sql::Statement& statement) {
                               ? read_only_source_data_msg->debug_cookie_set()
                               : debug_key.has_value();
 
-  auto trigger_specs = attribution_reporting::TriggerSpecs::Default(
-      *source_type, std::move(*event_report_windows));
-
   double randomized_response_rate =
       read_only_source_data_msg->has_randomized_response_rate()
           ? read_only_source_data_msg->randomized_response_rate()
           : delegate_->GetRandomizedResponseRate(
-                trigger_specs, max_event_level_reports, event_level_epsilon);
+                *trigger_specs, max_event_level_reports, event_level_epsilon);
 
   std::optional<StoredSource> stored_source = StoredSource::Create(
       CommonSourceInfo(std::move(*source_origin), std::move(*reporting_origin),
                        *source_type),
       source_event_id, std::move(*destination_set), source_time, expiry_time,
-      std::move(trigger_specs), aggregatable_report_window_time,
+      std::move(*trigger_specs), aggregatable_report_window_time,
       max_event_level_reports, priority, std::move(*filter_data), debug_key,
       std::move(*aggregation_keys), *attribution_logic, *active_state,
       source_id, aggregatable_budget_consumed, randomized_response_rate,
@@ -467,9 +467,7 @@ AttributionStorageSql::AttributionStorageSql(
     : path_to_database_(user_data_directory.empty()
                             ? base::FilePath()
                             : DatabasePath(user_data_directory)),
-      db_(sql::DatabaseOptions{.exclusive_locking = true,
-                               .page_size = 4096,
-                               .cache_size = 32}),
+      db_(sql::DatabaseOptions{.page_size = 4096, .cache_size = 32}),
       delegate_(std::move(delegate)),
       rate_limit_table_(delegate_.get()) {
   DCHECK(delegate_);
@@ -512,6 +510,11 @@ StoreSourceResult AttributionStorageSql::StoreSource(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   CHECK(!source.registration().debug_key.has_value() || debug_cookie_set);
+
+  // TODO(crbug.com/1499890): Support multiple specs.
+  if (source.registration().trigger_specs.specs().size() > 1u) {
+    return StoreSourceResult::InternalError();
+  }
 
   // Force the creation of the database if it doesn't exist, as we need to
   // persist the source.
@@ -604,14 +607,11 @@ StoreSourceResult AttributionStorageSql::StoreSource(
   const base::Time aggregatable_report_window_time =
       source_time + reg.aggregatable_report_window;
 
-  auto trigger_specs = attribution_reporting::TriggerSpecs::Default(
-      common_info.source_type(), reg.event_report_windows);
-
   ASSIGN_OR_RETURN(
       const auto randomized_response_data,
-      delegate_->GetRandomizedResponse(common_info.source_type(), trigger_specs,
-                                       reg.max_event_level_reports,
-                                       reg.event_level_epsilon, source_time),
+      delegate_->GetRandomizedResponse(
+          common_info.source_type(), reg.trigger_specs,
+          reg.max_event_level_reports, reg.event_level_epsilon, source_time),
       [](auto) -> StoreSourceResult {
         return StoreSourceResult::ExceedsMaxChannelCapacity();
       });
@@ -663,11 +663,10 @@ StoreSourceResult AttributionStorageSql::StoreSource(
 
   statement.BindBlob(14, SerializeAggregationKeys(reg.aggregation_keys));
   statement.BindBlob(15, SerializeFilterData(reg.filter_data));
-  statement.BindBlob(
-      16, SerializeReadOnlySourceData(
-              reg.event_report_windows, reg.max_event_level_reports,
-              randomized_response_data.rate(), reg.trigger_data_matching,
-              debug_cookie_set));
+  statement.BindBlob(16, SerializeReadOnlySourceData(
+                             reg.trigger_specs, reg.max_event_level_reports,
+                             randomized_response_data.rate(),
+                             reg.trigger_data_matching, debug_cookie_set));
 
   if (!statement.Run()) {
     return StoreSourceResult::InternalError();
@@ -691,7 +690,7 @@ StoreSourceResult AttributionStorageSql::StoreSource(
 
   std::optional<StoredSource> stored_source = StoredSource::Create(
       source.common_info(), reg.source_event_id, reg.destination_set,
-      source_time, expiry_time, std::move(trigger_specs),
+      source_time, expiry_time, reg.trigger_specs,
       aggregatable_report_window_time, reg.max_event_level_reports,
       reg.priority, reg.filter_data, reg.debug_key, reg.aggregation_keys,
       attribution_logic, *active_state, source_id,
@@ -926,7 +925,11 @@ bool IsSuccessResult(std::optional<AggregatableResult> result) {
 bool HasAggregatableData(
     const attribution_reporting::TriggerRegistration& trigger_registration) {
   return !trigger_registration.aggregatable_trigger_data.empty() ||
-         !trigger_registration.aggregatable_values.values().empty();
+         base::ranges::any_of(
+             trigger_registration.aggregatable_values,
+             [](const attribution_reporting::AggregatableValues& values) {
+               return !values.values().empty();
+             });
 }
 
 }  // namespace
@@ -2259,7 +2262,10 @@ void AttributionStorageSql::VerifyReports(DeletionCounts* deletion_counts) {
       ReportCorruptionStatusSetAndIds corruption_case = report.error();
       for (ReportCorruptionStatus corruption_cause :
            corruption_case.status_set) {
-        base::UmaHistogramEnumeration("Conversions.CorruptReportsInDatabase4",
+        static_assert(ReportCorruptionStatus::kMaxValue ==
+                          ReportCorruptionStatus::kSourceInvalidTriggerSpecs,
+                      "bump metric version");
+        base::UmaHistogramEnumeration("Conversions.CorruptReportsInDatabase5",
                                       corruption_cause);
       }
       if (deletion_counts) {

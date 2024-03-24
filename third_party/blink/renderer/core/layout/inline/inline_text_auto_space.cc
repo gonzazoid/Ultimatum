@@ -52,7 +52,7 @@ class SpacingApplier {
                   const InlineItem* current_item,
                   const ComputedStyle& style) {
     DCHECK(current_item->TextShapeResult());
-    const float spacing = TextAutoSpace::GetSpacingWidth(style.GetFont());
+    const float spacing = TextAutoSpace::GetSpacingWidth(&style.GetFont());
     const wtf_size_t* offset = offsets.begin();
     if (!offsets.empty() && *offset == current_item->StartOffset()) {
       DCHECK(last_item_);
@@ -94,14 +94,8 @@ class SpacingApplier {
     }
     DCHECK(last_item_);
 
-    // TODO(https://crbug.com/1463890): Using `const_cast` does not look good,
-    // consider refactoring.
-    // TODO(https://crbug.com/1463890): Instead of recreating a new
-    // `ShapeResult`, maybe we can reuse the `ShapeResult` and skip the applying
-    // text-space step.
     InlineItem* item = const_cast<InlineItem*>(last_item_);
-    ShapeResult* shape_result =
-        const_cast<ShapeResult*>(item->TextShapeResultNotShared());
+    ShapeResult* shape_result = item->CloneTextShapeResult();
     DCHECK(shape_result);
     shape_result->ApplyTextAutoSpacing(offsets_with_spacing_);
     item->SetUnsafeToReuseShapeResult();
@@ -163,7 +157,7 @@ void InlineTextAutoSpace::Apply(InlineItemsData& data,
   Vector<wtf_size_t, 16> offsets;
   CHECK(!ranges_.empty());
   const RunSegmenter::RunSegmenterRange* range = ranges_.begin();
-  absl::optional<CharType> last_type = kOther;
+  std::optional<CharType> last_type = kOther;
 
   // The initial value does not matter, as the value is used for determine
   // whether to add spacing into the bound of two items.

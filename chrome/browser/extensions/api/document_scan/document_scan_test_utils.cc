@@ -10,10 +10,11 @@ namespace extensions {
 
 crosapi::mojom::ScannerInfoPtr CreateTestScannerInfo() {
   auto scanner = crosapi::mojom::ScannerInfo::New();
-  scanner->id = "test:scanner:1234";
+  scanner->id = "scanneridabc123";
   scanner->display_name = "GoogleTest Scanner";
   scanner->manufacturer = "GoogleTest";
   scanner->model = "Scanner";
+  scanner->protocol_type = "Mopria";
   return scanner;
 }
 

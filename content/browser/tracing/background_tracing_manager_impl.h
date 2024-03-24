@@ -12,11 +12,13 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/no_destructor.h"
 #include "base/threading/sequence_bound.h"
 #include "base/timer/timer.h"
 #include "base/token.h"
+#include "base/trace_event/named_trigger.h"
 #include "content/browser/tracing/background_tracing_config_impl.h"
 #include "content/browser/tracing/trace_report/trace_report_database.h"
 #include "content/browser/tracing/trace_report/trace_upload_list.h"
@@ -42,9 +44,11 @@ class TracingDelegate;
 
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kBackgroundTracingDatabase);
 
-class BackgroundTracingManagerImpl : public BackgroundTracingManager,
-                                     public TraceUploadList,
-                                     public TracingScenario::Delegate {
+class BackgroundTracingManagerImpl
+    : public BackgroundTracingManager,
+      public base::trace_event::NamedTriggerManager,
+      public TraceUploadList,
+      public TracingScenario::Delegate {
  public:
   class AgentObserver {
    public:
@@ -226,9 +230,11 @@ class BackgroundTracingManagerImpl : public BackgroundTracingManager,
 
   // Note, these sets are not mutated during iteration so it is okay to not use
   // base::ObserverList.
-  std::set<EnabledStateTestObserver*> background_tracing_observers_;
-  std::set<tracing::mojom::BackgroundTracingAgent*> agents_;
-  std::set<AgentObserver*> agent_observers_;
+  std::set<raw_ptr<EnabledStateTestObserver, SetExperimental>>
+      background_tracing_observers_;
+  std::set<raw_ptr<tracing::mojom::BackgroundTracingAgent, SetExperimental>>
+      agents_;
+  std::set<raw_ptr<AgentObserver, SetExperimental>> agent_observers_;
 
   std::map<int, mojo::Remote<tracing::mojom::BackgroundTracingAgentProvider>>
       pending_agents_;

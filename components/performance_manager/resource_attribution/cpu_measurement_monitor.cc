@@ -12,6 +12,8 @@
 
 #include "base/check_op.h"
 #include "base/containers/contains.h"
+#include "base/debug/crash_logging.h"
+#include "base/debug/dump_without_crashing.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback.h"
 #include "base/functional/overloaded.h"
@@ -33,7 +35,7 @@
 #include "content/public/common/process_type.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 
-namespace performance_manager::resource_attribution {
+namespace resource_attribution {
 
 namespace {
 
@@ -57,26 +59,9 @@ bool IsDeadContext(const ResourceContext& resource_context) {
                      resource_context);
 }
 
-// Returns true if `result` is in the default-initialized state.
-bool IsEmptyCPUTimeResult(const CPUTimeResult& result) {
-  if (result.metadata.measurement_time.is_null()) {
-    CHECK(result.start_time.is_null());
-    CHECK(result.cumulative_cpu.is_zero());
-    return true;
-  }
-  return false;
-}
-
-// CHECK's that `result` obeys all constraints: either it is empty (both start
-// and end timestamps are null, and `cumulative_cpu` is zero) or the start and
-// end timestamps form a positive interval and `cumulative_cpu` will fit into
-// that interval.
+// CHECK's that `result` obeys all constraints: the start and end timestamps
+// form a positive interval and `cumulative_cpu` will fit into that interval.
 void ValidateCPUTimeResult(const CPUTimeResult& result) {
-  // Empty struct is valid.
-  if (IsEmptyCPUTimeResult(result)) {
-    return;
-  }
-
   // Start and end must form a valid interval.
   CHECK(!result.metadata.measurement_time.is_null());
   CHECK(!result.start_time.is_null());
@@ -85,51 +70,6 @@ void ValidateCPUTimeResult(const CPUTimeResult& result) {
   CHECK(interval.is_positive());
 
   CHECK(!result.cumulative_cpu.is_negative());
-}
-
-// Adds the measurement in `delta` to `result`. The start time of `delta` must
-// follow the end time of `result`. Used for adding successive measurements of
-// process, frame and worker contexts, so the algorithm in the metadata for
-// `result` should match that of `delta`. There may be gaps between deltas, such
-// as if a process died and was restarted.
-void ApplySequentialDelta(CPUTimeResult& result, const CPUTimeResult& delta) {
-  CHECK(!IsEmptyCPUTimeResult(delta));
-  ValidateCPUTimeResult(delta);
-  if (IsEmptyCPUTimeResult(result)) {
-    result = delta;
-  } else {
-    ValidateCPUTimeResult(result);
-    CHECK_EQ(result.metadata.algorithm, delta.metadata.algorithm);
-    CHECK_LE(result.metadata.measurement_time, delta.start_time);
-    result.metadata.measurement_time = delta.metadata.measurement_time;
-    result.cumulative_cpu += delta.cumulative_cpu;
-  }
-
-  // Adding a valid delta to a valid result should produce a valid result.
-  ValidateCPUTimeResult(result);
-}
-
-// Adds the measurement in `delta` to `result`. Delta may start before `result`
-// or end after it. Used for adding frame and worker measurements to page
-// contexts, since the frames and workers can be added in any order. The
-// algorithm in the metadata for `result` will be set to kSum.
-void ApplyOverlappingDelta(CPUTimeResult& result, const CPUTimeResult& delta) {
-  CHECK(!IsEmptyCPUTimeResult(delta));
-  ValidateCPUTimeResult(delta);
-  if (IsEmptyCPUTimeResult(result)) {
-    result = delta;
-    result.metadata.algorithm = MeasurementAlgorithm::kSum;
-  } else {
-    ValidateCPUTimeResult(result);
-    CHECK_EQ(result.metadata.algorithm, MeasurementAlgorithm::kSum);
-    result.metadata.measurement_time = std::max(
-        result.metadata.measurement_time, delta.metadata.measurement_time);
-    result.start_time = std::min(result.start_time, delta.start_time);
-    result.cumulative_cpu += delta.cumulative_cpu;
-  }
-
-  // Adding a valid delta to a valid result should produce a valid result.
-  ValidateCPUTimeResult(result);
 }
 
 }  // namespace
@@ -187,18 +127,13 @@ bool CPUMeasurementMonitor::IsMonitoring() const {
   return graph_;
 }
 
-std::map<ResourceContext, QueryResult>
-CPUMeasurementMonitor::UpdateAndGetCPUMeasurements() {
+QueryResultMap CPUMeasurementMonitor::UpdateAndGetCPUMeasurements() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   UpdateAllCPUMeasurements();
-  std::map<ResourceContext, QueryResult> results;
+  QueryResultMap results;
   for (const auto& [context, result] : measurement_results_) {
     ValidateCPUTimeResult(result);
-    if (IsEmptyCPUTimeResult(result)) {
-      // Don't include empty measurements in the public results.
-      continue;
-    }
-    results.emplace(context, QueryResult(result));
+    results.emplace(context, QueryResults{.cpu_time_result = result});
   }
 
   // After a node is deleted its measurements should only be kept until used
@@ -384,16 +319,16 @@ void CPUMeasurementMonitor::UpdateCPUMeasurements(
 
   absl::visit(base::Overloaded{
                   [&nodes_to_skip](GraphChangeAddFrame change) {
-                    nodes_to_skip.insert(change.frame_node);
+                    nodes_to_skip.insert(change.frame_node.get());
                   },
                   [&nodes_to_skip](GraphChangeAddWorker change) {
-                    nodes_to_skip.insert(change.worker_node);
+                    nodes_to_skip.insert(change.worker_node.get());
                   },
                   [&extra_nodes](GraphChangeRemoveFrame change) {
-                    extra_nodes.insert(change.frame_node);
+                    extra_nodes.insert(change.frame_node.get());
                   },
                   [&extra_nodes](GraphChangeRemoveWorker change) {
-                    extra_nodes.insert(change.worker_node);
+                    extra_nodes.insert(change.worker_node.get());
                   },
                   [](auto change) {
                     // Do nothing.
@@ -424,27 +359,67 @@ void CPUMeasurementMonitor::ApplyMeasurementDeltas(
 
     // Add the new process, frame and worker measurements to the existing
     // measurements.
-    ApplySequentialDelta(measurement_results_[context], delta);
+    ApplySequentialDelta(context, delta);
 
     // Aggregate new frame and worker measurements to pages.
     if (ContextIs<FrameContext>(context)) {
       const FrameNode* frame_node =
           AsContext<FrameContext>(context).GetFrameNode();
       CHECK(frame_node);
-      ApplyOverlappingDelta(
-          measurement_results_[frame_node->GetPageNode()->GetResourceContext()],
-          delta);
+      ApplyOverlappingDelta(frame_node->GetPageNode()->GetResourceContext(),
+                            delta);
     } else if (ContextIs<WorkerContext>(context)) {
       const WorkerNode* worker_node =
           AsContext<WorkerContext>(context).GetWorkerNode();
       CHECK(worker_node);
       for (const PageNode* page_node :
            GetWorkerClientPages(worker_node, graph_change)) {
-        ApplyOverlappingDelta(
-            measurement_results_[page_node->GetResourceContext()], delta);
+        ApplyOverlappingDelta(page_node->GetResourceContext(), delta);
       }
     }
   }
+}
+
+void CPUMeasurementMonitor::ApplySequentialDelta(const ResourceContext& context,
+                                                 const CPUTimeResult& delta) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  ValidateCPUTimeResult(delta);
+  auto [it, inserted] = measurement_results_.try_emplace(context, delta);
+  if (inserted) {
+    // First result for `context`, use `delta` unchanged.
+    return;
+  }
+  CPUTimeResult& result = it->second;
+  ValidateCPUTimeResult(result);
+  CHECK_EQ(result.metadata.algorithm, delta.metadata.algorithm);
+  CHECK_LE(result.metadata.measurement_time, delta.start_time);
+  result.metadata.measurement_time = delta.metadata.measurement_time;
+  result.cumulative_cpu += delta.cumulative_cpu;
+
+  // Adding a valid delta to a valid result should produce a valid result.
+  ValidateCPUTimeResult(result);
+}
+
+void CPUMeasurementMonitor::ApplyOverlappingDelta(const PageContext& context,
+                                                  const CPUTimeResult& delta) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  ValidateCPUTimeResult(delta);
+  auto [it, inserted] = measurement_results_.try_emplace(context, delta);
+  if (inserted) {
+    // First result for `context`, use `delta` with correct algorithm for pages.
+    it->second.metadata.algorithm = MeasurementAlgorithm::kSum;
+    return;
+  }
+  CPUTimeResult& result = it->second;
+  ValidateCPUTimeResult(result);
+  CHECK_EQ(result.metadata.algorithm, MeasurementAlgorithm::kSum);
+  result.metadata.measurement_time = std::max(result.metadata.measurement_time,
+                                              delta.metadata.measurement_time);
+  result.start_time = std::min(result.start_time, delta.start_time);
+  result.cumulative_cpu += delta.cumulative_cpu;
+
+  // Adding a valid delta to a valid result should produce a valid result.
+  ValidateCPUTimeResult(result);
 }
 
 base::Value::Dict CPUMeasurementMonitor::DescribeContextData(
@@ -457,10 +432,12 @@ base::Value::Dict CPUMeasurementMonitor::DescribeContextData(
     const base::TimeDelta measurement_interval =
         result.metadata.measurement_time - result.start_time;
     dict.Set("algorithm", static_cast<int>(result.metadata.algorithm));
-    dict.Set("measurement_time",
-             TimeSinceEpochToValue(result.metadata.measurement_time));
-    dict.Set("measurement_interval", TimeDeltaToValue(measurement_interval));
-    dict.Set("cumulative_cpu", TimeDeltaToValue(result.cumulative_cpu));
+    dict.Set("measurement_time", performance_manager::TimeSinceEpochToValue(
+                                     result.metadata.measurement_time));
+    dict.Set("measurement_interval",
+             performance_manager::TimeDeltaToValue(measurement_interval));
+    dict.Set("cumulative_cpu",
+             performance_manager::TimeDeltaToValue(result.cumulative_cpu));
   }
   return dict;
 }
@@ -488,7 +465,7 @@ void CPUMeasurementMonitor::CPUMeasurement::MeasureAndDistributeCPUUsage(
     const NodeSplitSet& extra_nodes,
     const NodeSplitSet& nodes_to_skip,
     std::map<ResourceContext, CPUTimeResult>& measurement_deltas) {
-  // TODO(crbug.com/1471683): Handle final CPU usage of a process.
+  // TODO(crbug.com/325330345): Handle final CPU usage of a process.
   //
   // There isn't a good way to get the process CPU usage after it exits here:
   //
@@ -516,14 +493,10 @@ void CPUMeasurementMonitor::CPUMeasurement::MeasureAndDistributeCPUUsage(
   //
   // So it's not possible to attribute the final CPU usage of a process to its
   // frames without a refactor of PerformanceManager to keep the FrameNodes
-  // alive slightly longer.
+  // alive slightly longer, or keeping a snapshot of the frame topology using
+  // FrameContext until after the ChildProcessTerminationInfo is received, and
+  // using that snapshot to distribute the measurements.
   //
-  // A better and more complete way to handle this would be to update the CPU
-  // usage of a PageNode every time a frame or worker is created or deleted.
-  // This would keep the estimate up to date with the page topology, which is
-  // important to avoid under-estimating the CPU usage of pages that create a
-  // lot of short-lived iframes.
-
   // Assume that the previous measurement was taken at time A
   // (`last_measurement_time_`), and the current measurement is being taken at
   // time B (TimeTicks::Now()). Since a measurement is taken in the
@@ -591,28 +564,44 @@ void CPUMeasurementMonitor::CPUMeasurement::MeasureAndDistributeCPUUsage(
   const base::TimeTicks measurement_interval_end = base::TimeTicks::Now();
   CHECK(!measurement_interval_start.is_null());
   CHECK(!measurement_interval_end.is_null());
-  CHECK_LE(process_node->GetLaunchTime(), measurement_interval_start);
+  // TODO(https://crbug.com/326201232): Turn this back into a CHECK or remove it
+  // after figuring out why it's being hit in production sometimes.
+  if (process_node->GetLaunchTime() > measurement_interval_start) {
+    SCOPED_CRASH_KEY_NUMBER(
+        "CPUMeasurement", "process_start",
+        (process_node->GetLaunchTime() - base::TimeTicks()).InNanoseconds());
+    SCOPED_CRASH_KEY_NUMBER(
+        "CPUMeasurement", "interval_start",
+        (measurement_interval_start - base::TimeTicks()).InNanoseconds());
+    base::debug::DumpWithoutCrashing();
+  }
   if (measurement_interval_start == measurement_interval_end) {
     // No time has passed to measure.
     return;
   }
   CHECK_LT(measurement_interval_start, measurement_interval_end);
 
-  base::TimeDelta current_cpu_usage = delegate_->GetCumulativeCPUUsage();
-  if (!current_cpu_usage.is_positive()) {
+  std::optional<base::TimeDelta> current_cpu_usage =
+      delegate_->GetCumulativeCPUUsage();
+  if (!current_cpu_usage.has_value()) {
     // GetCumulativeCPUUsage() failed. Don't update the measurement state.
-    // Most platforms return a zero TimeDelta on error, Linux returns a
-    // negative.
     return;
   }
+  if (!most_recent_measurement_.has_value()) {
+    // This is the first successful reading. Just record it.
+    most_recent_measurement_ = current_cpu_usage;
+    last_measurement_time_ = measurement_interval_end;
+    return;
+  }
+
   // When measured in quick succession, GetCumulativeCPUUsage() can go
   // backwards.
-  if (current_cpu_usage < most_recent_measurement_) {
+  if (current_cpu_usage.value() < most_recent_measurement_.value()) {
     current_cpu_usage = most_recent_measurement_;
   }
 
   const base::TimeDelta cumulative_cpu_delta =
-      current_cpu_usage - most_recent_measurement_;
+      current_cpu_usage.value() - most_recent_measurement_.value();
   most_recent_measurement_ = current_cpu_usage;
   last_measurement_time_ = measurement_interval_end;
 
@@ -629,12 +618,12 @@ void CPUMeasurementMonitor::CPUMeasurement::MeasureAndDistributeCPUUsage(
     // is measured.
     CHECK(!cpu_delta.is_negative());
     const auto [_, inserted] = measurement_deltas.emplace(
-        context, CPUTimeResult{
-                     .metadata = {.measurement_time = measurement_interval_end,
-                                  .algorithm = algorithm},
-                     .start_time = measurement_interval_start,
-                     .cumulative_cpu = cpu_delta,
-                 });
+        context,
+        CPUTimeResult{
+            .metadata = ResultMetadata(measurement_interval_end, algorithm),
+            .start_time = measurement_interval_start,
+            .cumulative_cpu = cpu_delta,
+        });
     CHECK(inserted);
   };
 
@@ -652,4 +641,4 @@ void CPUMeasurementMonitor::CPUMeasurement::MeasureAndDistributeCPUUsage(
       });
 }
 
-}  // namespace performance_manager::resource_attribution
+}  // namespace resource_attribution

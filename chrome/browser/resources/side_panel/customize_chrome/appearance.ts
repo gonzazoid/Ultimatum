@@ -13,14 +13,15 @@ import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
 import 'chrome://resources/cr_elements/cr_icons.css.js';
 import 'chrome://resources/cr_elements/cr_toggle/cr_toggle.js';
 
-import {CrToggleElement} from 'chrome://resources/cr_elements/cr_toggle/cr_toggle.js';
+import type {CrToggleElement} from 'chrome://resources/cr_elements/cr_toggle/cr_toggle.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 import {assert} from 'chrome://resources/js/assert.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './appearance.html.js';
 import {CustomizeChromeAction, recordCustomizeChromeAction} from './common.js';
-import {CustomizeChromePageCallbackRouter, CustomizeChromePageHandlerInterface, Theme} from './customize_chrome.mojom-webui.js';
+import type {CustomizeChromePageCallbackRouter, CustomizeChromePageHandlerInterface, Theme} from './customize_chrome.mojom-webui.js';
 import {CustomizeChromeApiProxy} from './customize_chrome_api_proxy.js';
 
 export interface AppearanceElement {
@@ -37,7 +38,8 @@ export interface AppearanceElement {
   };
 }
 
-export class AppearanceElement extends PolymerElement {
+export class AppearanceElement extends I18nMixin
+(PolymerElement) {
   static get is() {
     return 'customize-chrome-appearance';
   }
@@ -55,6 +57,11 @@ export class AppearanceElement extends PolymerElement {
         type: Boolean,
         value: () =>
             document.documentElement.hasAttribute('chrome-refresh-2023'),
+      },
+
+      editThemeButtonText_: {
+        type: String,
+        computed: 'computeEditThemeButtonText_(wallpaperSearchButtonEnabled_)',
       },
 
       thirdPartyThemeId_: {
@@ -113,12 +120,25 @@ export class AppearanceElement extends PolymerElement {
       },
 
       showManagedDialog_: Boolean,
+
+      wallpaperSearchButtonEnabled_: {
+        type: Boolean,
+        value: () => loadTimeData.getBoolean('wallpaperSearchButtonEnabled'),
+        reflectToAttribute: true,
+      },
+
+      wallpaperSearchEnabled_: {
+        type: Boolean,
+        value: () => loadTimeData.getBoolean('wallpaperSearchEnabled'),
+      },
     };
   }
 
   private theme_: Theme|undefined = undefined;
   private themeButtonClass_: string;
   private chromeRefresh2023Enabled_: boolean;
+  private editThemeButtonText_:
+    string;
   private thirdPartyThemeId_: string|null = null;
   private thirdPartyThemeName_: string|null = null;
   private hasUploadedImage_: boolean;
@@ -128,6 +148,10 @@ export class AppearanceElement extends PolymerElement {
   private showDeviceThemeToggle_: boolean;
   private showThemeSnapshot: boolean;
   private showManagedDialog_: boolean;
+  private wallpaperSearchButtonEnabled_:
+    boolean;
+  private wallpaperSearchEnabled_:
+    boolean;
 
   private setThemeListenerId_: number|null = null;
 
@@ -160,6 +184,14 @@ export class AppearanceElement extends PolymerElement {
 
   focusOnThemeButton() {
     this.$.editThemeButton.focus();
+  }
+
+  private computeEditThemeButtonText_(): string {
+    if (!this.wallpaperSearchButtonEnabled_) {
+      return this.i18n('changeTheme');
+    } else {
+      return this.i18n('categoriesHeader');
+    }
   }
 
   private computeThirdPartyThemeId_(): string|null {
@@ -227,6 +259,15 @@ export class AppearanceElement extends PolymerElement {
     this.dispatchEvent(new Event('edit-theme-click'));
   }
 
+  private onWallpaperSearchClicked_() {
+    recordCustomizeChromeAction(
+        CustomizeChromeAction.WALLPAPER_SEARCH_APPEARANCE_BUTTON_CLICKED);
+    if (this.handleClickForManagedThemes_()) {
+      return;
+    }
+    this.dispatchEvent(new Event('wallpaper-search-click'));
+  }
+
   private onThirdPartyLinkButtonClick_() {
     if (this.thirdPartyThemeId_) {
       this.pageHandler_.openThirdPartyThemePage(this.thirdPartyThemeId_);
@@ -238,7 +279,11 @@ export class AppearanceElement extends PolymerElement {
   }
 
   private onSearchedImageButtonClick_() {
-    this.dispatchEvent(new CustomEvent('wallpaper-search-click'));
+    if (this.wallpaperSearchEnabled_) {
+      this.dispatchEvent(new CustomEvent('wallpaper-search-click'));
+    } else {
+      this.dispatchEvent(new Event('edit-theme-click'));
+    }
   }
 
   private onSetClassicChromeClicked_() {
@@ -247,6 +292,8 @@ export class AppearanceElement extends PolymerElement {
     }
     this.pageHandler_.removeBackgroundImage();
     this.pageHandler_.setDefaultColor();
+    recordCustomizeChromeAction(
+        CustomizeChromeAction.SET_CLASSIC_CHROME_THEME_CLICKED);
   }
 
   private onFollowThemeToggleChange_(e: CustomEvent<boolean>) {

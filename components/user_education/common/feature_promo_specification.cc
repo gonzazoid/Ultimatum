@@ -83,24 +83,28 @@ bool IsAllowedLegacyPromo(const base::Feature& promo_feature) {
 
 }  // namespace
 
-FeaturePromoSpecification::Metadata::Metadata(
-    int launch_milestone_,
-    std::string owners_,
-    std::string triggering_condition_description_,
-    base::flat_set<const base::Feature*> required_features_,
-    base::flat_set<Platforms> platforms_)
-    : launch_milestone(launch_milestone_),
-      owners(std::move(owners_)),
-      triggering_condition_description(
-          std::move(triggering_condition_description_)),
-      required_features(std::move(required_features_)),
-      platforms(std::move(platforms_)) {}
+FeaturePromoSpecification::AdditionalConditions::AdditionalConditions() =
+    default;
+FeaturePromoSpecification::AdditionalConditions::AdditionalConditions(
+    AdditionalConditions&&) noexcept = default;
+FeaturePromoSpecification::AdditionalConditions&
+FeaturePromoSpecification::AdditionalConditions::operator=(
+    AdditionalConditions&&) noexcept = default;
+FeaturePromoSpecification::AdditionalConditions::~AdditionalConditions() =
+    default;
 
-FeaturePromoSpecification::Metadata::Metadata() = default;
-FeaturePromoSpecification::Metadata::Metadata(Metadata&&) noexcept = default;
-FeaturePromoSpecification::Metadata&
-FeaturePromoSpecification::Metadata::operator=(Metadata&&) noexcept = default;
-FeaturePromoSpecification::Metadata::~Metadata() = default;
+void FeaturePromoSpecification::AdditionalConditions::AddAdditionalCondition(
+    const AdditionalCondition& additional_condition) {
+  additional_conditions_.emplace_back(additional_condition);
+}
+
+void FeaturePromoSpecification::AdditionalConditions::AddAdditionalCondition(
+    const char* event_name,
+    Constraint constraint,
+    uint32_t count,
+    std::optional<uint32_t> in_days) {
+  AddAdditionalCondition({event_name, constraint, count, in_days});
+}
 
 FeaturePromoSpecification::AcceleratorInfo::AcceleratorInfo() = default;
 FeaturePromoSpecification::AcceleratorInfo::AcceleratorInfo(
@@ -330,6 +334,12 @@ FeaturePromoSpecification& FeaturePromoSpecification::SetAnchorElementFilter(
 FeaturePromoSpecification& FeaturePromoSpecification::SetInAnyContext(
     bool in_any_context) {
   in_any_context_ = in_any_context;
+  return *this;
+}
+
+FeaturePromoSpecification& FeaturePromoSpecification::SetAdditionalConditions(
+    AdditionalConditions additional_conditions) {
+  additional_conditions_ = std::move(additional_conditions);
   return *this;
 }
 

@@ -249,8 +249,7 @@ message ClientPhishingRequest {
   // users.
   optional VisualFeatures visual_features = 26;
 
-  // Carried over from realtime API response, this is used to identify cases
-  // where the scoring from protego requested this request.
+  // This is used to identify what process sent the ping.
   optional ClientSideDetectionType client_side_detection_type = 28;
 
   // Image embedding from model output tensor
@@ -981,6 +980,9 @@ message ClientDownloadRequest {
     // The number of files and directories contained within.
     optional int32 file_count = 2;
     optional int32 directory_count = 3;
+
+    // True if at least one entry is encrypted or headers are encrypted.
+    optional bool is_encrypted = 4;
   }
   optional ArchiveSummary archive_summary = 85;
 
@@ -1004,12 +1006,12 @@ message ClientDownloadRequest {
   }
   optional TailoredInfo tailored_info = 86;
 
-  // Fields 87-89 are reserved for server-side use and are never sent by the
+  // Fields 87-90 are reserved for server-side use and are never sent by the
   // client.
-  reserved 87 to 89;
+  reserved 87 to 90;
 
   // The token from previous requests related to this download, if any exists.
-  optional bytes previous_token = 90;
+  optional bytes previous_token = 91;
 }
 
 message ReferrerChainOptions {
@@ -1150,6 +1152,10 @@ enum ClientSideDetectionType {
   CLIENT_SIDE_DETECTION_TYPE_UNSPECIFIED = 0;
   // Send a CSD request regardless of the client side model's score values.
   FORCE_REQUEST = 1;
+  // Either the local DOM or visual model triggered.
+  TRIGGER_MODELS = 2;
+  // A Notification prompt triggered.
+  NOTIFICATION_PERMISSION_PROMPT = 3;
 }
 
 message ClientDownloadResponse {
@@ -1502,7 +1508,7 @@ message DownloadMetadata {
 // A Detailed Safebrowsing Report from clients. Chrome safebrowsing reports are
 // only sent by Chrome users who have opted into extended Safe Browsing.
 // This proto is replacing ClientMalwareReportRequest.
-// Next tag: 34
+// Next tag: 35
 message ClientSafeBrowsingReportRequest {
   // Note: A lot of the "optional" fields would make sense to be
   // "required" instead.  However, having them as optional allows the
@@ -1530,6 +1536,7 @@ message ClientSafeBrowsingReportRequest {
     HASH_PREFIX_REAL_TIME_EXPERIMENT = 21 [deprecated = true];
     PHISHY_SITE_INTERACTIONS = 22;
     WARNING_SHOWN = 23;
+    NOTIFICATION_PERMISSION_ACCEPTED = 24;
   }
 
   message HTTPHeader {
@@ -1651,6 +1658,13 @@ message ClientSafeBrowsingReportRequest {
     optional int64 google_play_services_version = 2;
     optional bool is_instant_apps = 3;
     optional SafeBrowsingUrlApiType url_api_type = 4;
+    // Server-side only fields.
+    reserved 5;
+    reserved 6;
+    // Whether this is an asynchronous check. If true,
+    // the user may see the page before they see a warning. See
+    // go/async-sb-check-telemetry for details.
+    optional bool is_async_check = 7;
   }
   optional SafeBrowsingClientProperties client_properties = 17;
 
@@ -1857,6 +1871,8 @@ message ClientSafeBrowsingReportRequest {
     DICTIONARY = 25;
     // Speculation rules (Speculation-Rules: "..." header).
     SPECULATION_RULES = 26;
+    // import "..." with { type: "json" }
+    JSON = 27;
   }
 
   // Only populated for interstitial reports (URL_PHISHING, URL_MALWARE,
@@ -1959,6 +1975,18 @@ message ClientSafeBrowsingReportRequest {
   }
 
   optional WarningShownInfo warning_shown_info = 33;
+
+  // Information included in NOTIFICATION_PERMISSION_ACCEPTED reports.
+  message PermissionPromptInfo {
+    // The request origin of the permission prompt.
+    optional string origin = 1;
+
+    // The amount of time the user spent on the permission prompt before
+    // accepting the permission.
+    optional int64 display_duration_sec = 2;
+  }
+
+  optional PermissionPromptInfo permission_prompt_info = 34;
 }
 
 // An HTML Element on the page (eg: iframe, div, script, etc).
@@ -2315,14 +2343,16 @@ message ExtensionTelemetryReportRequest {
         CREATE = 1;
         UPDATE = 2;
         REMOVE = 3;
+        CAPTURE_VISIBLE_TAB = 4;
       }
       message CallDetails {
         // The API method invoked.
         optional ApiMethod method = 1;
-        // The URL to navigate the tab to.
+        // The URL to navigate the tab to. This field is only valid when
+        // method is one of CREATE or UPDATE.
         optional string new_url = 2;
-        // The currently committed URL for the tab. This field is not applicable
-        // when method = CREATE.
+        // The currently committed URL for the tab. This field is only
+        // valid when method is one of UPDATE, REMOVE, or CAPTURE_VISIBLE_TAB.
         optional string current_url = 3;
         // Number of times this call was made.
         optional uint32 count = 4;
@@ -2346,6 +2376,8 @@ message ExtensionTelemetryReportRequest {
   // The telemetry configuration version used to generate this report.
   // This field is not present if the default configuration is used.
   optional uint32 configuration_version = 3;
+  // Tracks the current setting of developer mode in chrome://extensions page.
+  optional bool developer_mode_enabled = 4;
 }
 
 message ExtensionTelemetryReportResponse {

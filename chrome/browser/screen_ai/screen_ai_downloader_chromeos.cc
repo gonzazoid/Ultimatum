@@ -22,12 +22,13 @@ namespace {
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
 void SetScreenAIComponentPath(
     bool set_failed_state_if_not_available,
-    const absl::optional<base::FilePath>& component_path) {
+    const std::optional<base::FilePath>& component_path) {
   auto* install_state = screen_ai::ScreenAIInstallState::GetInstance();
   if (component_path) {
     install_state->SetComponentFolder(*component_path);
   } else if (set_failed_state_if_not_available) {
-    install_state->SetState(screen_ai::ScreenAIInstallState::State::kFailed);
+    install_state->SetState(
+        screen_ai::ScreenAIInstallState::State::kDownloadFailed);
   }
 }
 #else
@@ -107,7 +108,7 @@ void ScreenAIDownloaderChromeOS::MaybeGetComponentFolderFromAsh(
   if (!impl || !impl->IsAvailable<crosapi::mojom::ScreenAIDownloader>()) {
     VLOG(0) << "ScreenAIDownloaderChromeOS is not available.";
     ScreenAIInstallState::GetInstance()->SetState(
-        ScreenAIInstallState::State::kFailed);
+        ScreenAIInstallState::State::kDownloadFailed);
     return;
   }
 

@@ -29,13 +29,6 @@ constexpr int kDefinitionHeaderTextWidth =
     (quick_answers::kContentSingleSpacing +
      quick_answers::kRichAnswersIconContainerRadius);
 
-// Subcontent view.
-constexpr int kSubContentViewIndent = 12;
-constexpr auto kSubContentViewInsets =
-    gfx::Insets::TLBR(0, kSubContentViewIndent, 0, 0);
-constexpr int kSubContentTextWidth =
-    quick_answers::kContentTextWidth - kSubContentViewIndent;
-
 constexpr char kBulletSymbol[] = " \u2022 ";
 
 }  // namespace
@@ -91,6 +84,8 @@ void RichAnswersDefinitionView::AddHeaderViews() {
   // - settings_button_view (flex=0): no resize
   views::BoxLayoutView* box_layout_view =
       content_view_->AddChildView(CreateHorizontalBoxLayoutView());
+  box_layout_view->SetCrossAxisAlignment(
+      views::BoxLayout::CrossAxisAlignment::kCenter);
   views::FlexLayoutView* header_view =
       box_layout_view->AddChildView(CreateHorizontalFlexLayoutView());
 
@@ -150,7 +145,7 @@ void RichAnswersDefinitionView::AddPhoneticsAudioButtonTo(
           phonetics_audio_button_closure_image_model,
           cros_tokens::kCrosSysHoverOnSubtle,
           l10n_util::GetStringUTF16(
-              IDS_QUICK_ANSWERS_PHONETICS_BUTTON_TOOLTIP_TEXT)));
+              IDS_RICH_ANSWERS_VIEW_PHONETICS_BUTTON_A11Y_NAME_TEXT)));
   button_view->SetMinimumImageSize(
       gfx::Size(kRichAnswersIconSizeDip, kRichAnswersIconSizeDip));
 }
@@ -192,7 +187,7 @@ void RichAnswersDefinitionView::MaybeAddSampleSentence(
     views::View* container_view,
     const Sense& sense,
     int label_width) {
-  if (!sense.sample_sentence.has_value()) {
+  if (!sense.sample_sentence) {
     return;
   }
 
@@ -205,7 +200,7 @@ void RichAnswersDefinitionView::MaybeAddSampleSentence(
 void RichAnswersDefinitionView::MaybeAddSynonyms(views::View* container_view,
                                                  const Sense& sense,
                                                  int label_width) {
-  if (!sense.synonyms_list.has_value()) {
+  if (!sense.synonyms_list) {
     return;
   }
 
@@ -220,7 +215,7 @@ void RichAnswersDefinitionView::MaybeAddSynonyms(views::View* container_view,
   QuickAnswersTextLabel* similar_label =
       box_layout_view->AddChildView(QuickAnswersTextLabel::CreateLabelWithStyle(
           l10n_util::GetStringUTF8(
-              IDS_QUICK_ANSWERS_DEFINITION_SYNONYMS_LABEL_TEXT),
+              IDS_RICH_ANSWERS_VIEW_DEFINITION_SYNONYMS_LABEL_TEXT),
           GetFontList(TypographyToken::kCrosBody2), label_width,
           /*is_multi_line=*/true, cros_tokens::kHighlightColorGreen));
   std::string synonyms_text =
@@ -239,7 +234,7 @@ void RichAnswersDefinitionView::MaybeAddSynonyms(views::View* container_view,
 }
 
 void RichAnswersDefinitionView::MaybeAddAdditionalDefinitions() {
-  if (!definition_result_.subsenses_list.has_value()) {
+  if (!definition_result_.subsenses_list) {
     return;
   }
 
@@ -277,7 +272,7 @@ void RichAnswersDefinitionView::AddSubsense(const Sense& subsense) {
   box_layout_view->SetFlexForView(subsense_view, /*flex=*/1);
 }
 
-BEGIN_METADATA(RichAnswersDefinitionView, RichAnswersView)
+BEGIN_METADATA(RichAnswersDefinitionView)
 END_METADATA
 
 }  // namespace quick_answers

@@ -18,6 +18,7 @@
 
 namespace segmentation_platform::processing {
 class FeatureProcessorState;
+struct Data;
 
 // A query processor that takes a list of UMAFeatures, fetches samples from the
 // SignalDatabase and computes an input tensor to be used for ML model
@@ -40,6 +41,12 @@ class UmaFeatureProcessor : public QueryProcessor {
                QueryProcessorCallback callback) override;
 
  private:
+  void ProcessNextFeature();
+  void OnGetSamplesForUmaFeature(FeatureIndex index,
+                                 const proto::UMAFeature& feature,
+                                 const base::Time end_time,
+                                 std::vector<SignalDatabase::DbEntry> samples);
+
   // Function for processing the next UMAFeature type of input for ML model.
   void ProcessOnGotAllSamples(
       FeatureProcessorState& feature_processor_state,
@@ -74,6 +81,7 @@ class UmaFeatureProcessor : public QueryProcessor {
   const base::TimeDelta bucket_duration_;
   const proto::SegmentId segment_id_;
   const bool is_output_;
+  const bool is_batch_processing_enabled_;
 
   // Callback for sending the resulting indexed tensors to the feature list
   // processor.

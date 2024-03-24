@@ -4,6 +4,7 @@
 
 package org.chromium.chrome.browser.bookmarks;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.mockito.ArgumentMatchers.any;
@@ -39,8 +40,8 @@ import org.robolectric.annotation.Config;
 import org.chromium.base.Callback;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Batch;
+import org.chromium.base.test.util.Features;
 import org.chromium.base.test.util.JniMocker;
-import org.chromium.chrome.test.util.browser.Features;
 import org.chromium.components.bookmarks.BookmarkId;
 import org.chromium.components.bookmarks.BookmarkItem;
 import org.chromium.components.bookmarks.BookmarkType;
@@ -49,6 +50,9 @@ import org.chromium.components.favicon.IconType;
 import org.chromium.components.favicon.LargeIconBridge;
 import org.chromium.components.favicon.LargeIconBridge.LargeIconCallback;
 import org.chromium.components.image_fetcher.ImageFetcher;
+import org.chromium.components.power_bookmarks.PowerBookmarkMeta;
+import org.chromium.components.power_bookmarks.PowerBookmarkMeta.Image;
+import org.chromium.components.power_bookmarks.ShoppingSpecifics;
 import org.chromium.ui.base.TestActivity;
 import org.chromium.url.GURL;
 import org.chromium.url.JUnitTestGURLs;
@@ -207,6 +211,32 @@ public class BookmarkImageFetcherTest {
     public void testFetchImageForBookmarkWithFaviconFallback() {
         mBookmarkImageFetcher.fetchImageForBookmarkWithFaviconFallback(
                 mBookmarkItem1, mDrawableCallback);
+        verify(mDrawableCallback).onResult(mDrawableCaptor.capture());
+        // There shouldn't be any interaction with large icon bridge since an image was found.
+        verify(mLargeIconBridge, times(0)).getLargeIconForUrl(any(), anyInt(), anyInt(), any());
+
+        assertNotNull(mDrawableCaptor.getValue());
+    }
+
+    @Test
+    public void testFetchImageForBookmarkWithFaviconFallback_withShoppingSpecifics() {
+        String metaImageUrl = "https://shoppingmeta.com/";
+        PowerBookmarkMeta meta =
+                PowerBookmarkMeta.newBuilder()
+                        .setShoppingSpecifics(
+                                ShoppingSpecifics.newBuilder().setProductClusterId(1234L).build())
+                        .setLeadImage(Image.newBuilder().setUrl(metaImageUrl).build())
+                        .build();
+
+        doReturn(meta).when(mBookmarkModel).getPowerBookmarkMeta(mBookmarkId1);
+        mBookmarkImageFetcher.fetchImageForBookmarkWithFaviconFallback(
+                mBookmarkItem1, mDrawableCallback);
+
+        ArgumentCaptor<ImageFetcher.Params> paramsArgumentCaptor =
+                ArgumentCaptor.forClass(ImageFetcher.Params.class);
+        verify(mImageFetcher).fetchImage(paramsArgumentCaptor.capture(), any());
+        assertEquals(paramsArgumentCaptor.getValue().url, metaImageUrl);
+
         verify(mDrawableCallback).onResult(mDrawableCaptor.capture());
         // There shouldn't be any interaction with large icon bridge since an image was found.
         verify(mLargeIconBridge, times(0)).getLargeIconForUrl(any(), anyInt(), anyInt(), any());

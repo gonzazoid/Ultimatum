@@ -54,7 +54,8 @@ class MEDIA_EXPORT MimeUtil {
     DTSXP2,
     DTSE,
     AC4,
-    LAST_CODEC = AC4
+    IAMF,
+    LAST_CODEC = IAMF
   };
 
   // Platform configuration structure.  Controls which codecs are supported at
@@ -74,7 +75,7 @@ class MEDIA_EXPORT MimeUtil {
   struct ParsedCodecResult {
     Codec codec;
     bool is_ambiguous;
-    absl::optional<VideoType> video;
+    std::optional<VideoType> video;
   };
 
   // See mime_util.h for more information on these methods.
@@ -82,7 +83,7 @@ class MEDIA_EXPORT MimeUtil {
   void SplitCodecs(base::StringPiece codecs,
                    std::vector<std::string>* codecs_out) const;
   void StripCodecs(std::vector<std::string>* codecs) const;
-  absl::optional<VideoType> ParseVideoCodecString(
+  std::optional<VideoType> ParseVideoCodecString(
       std::string_view mime_type,
       std::string_view codec_id,
       bool allow_ambiguous_matches) const;

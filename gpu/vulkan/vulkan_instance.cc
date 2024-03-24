@@ -260,6 +260,25 @@ bool VulkanInstance::InitializeFromANGLE(
   for (const auto& extension : extensions)
     vulkan_info_.enabled_instance_extensions.push_back(extension.data());
 
+#if DCHECK_IS_ON()
+  for (const char* required_extension_name : required_extensions) {
+    bool found = false;
+    for (const char* enabled_extension :
+         vulkan_info_.enabled_instance_extensions) {
+      if (strcmp(required_extension_name, enabled_extension) == 0) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      DLOG(ERROR) << "Required extension " << required_extension_name
+                  << " missing from enumerated Vulkan extensions. "
+                     "vkCreateInstance will may fail but could succeed if "
+                     "extension has been promoted to core.";
+    }
+  }
+#endif
+
   VulkanFunctionPointers* vulkan_function_pointers =
       gpu::GetVulkanFunctionPointers();
   if (!vulkan_function_pointers->BindInstanceFunctionPointers(
@@ -304,7 +323,8 @@ bool VulkanInstance::CollectBasicInfo(
     result = vkEnumerateInstanceExtensionProperties(
         layer_name, &num_instance_exts, nullptr);
     if (VK_SUCCESS != result) {
-      LOG(ERROR) << "vkEnumerateInstanceExtensionProperties(" << layer_name
+      LOG(ERROR) << "vkEnumerateInstanceExtensionProperties("
+                 << (layer_name ? layer_name : "nullptr")
                  << ") failed: " << result;
       return false;
     }
@@ -317,7 +337,8 @@ bool VulkanInstance::CollectBasicInfo(
         layer_name, &num_instance_exts,
         &vulkan_info_.instance_extensions.data()[previous_extension_count]);
     if (VK_SUCCESS != result) {
-      LOG(ERROR) << "vkEnumerateInstanceExtensionProperties(" << layer_name
+      LOG(ERROR) << "vkEnumerateInstanceExtensionProperties("
+                 << (layer_name ? layer_name : "nullptr")
                  << ") failed: " << result;
       return false;
     }

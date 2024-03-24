@@ -59,6 +59,11 @@ class TestAutofillManager : public BrowserAutofillManager {
 
   const std::vector<FormData>& seen_forms() { return seen_forms_; }
 
+  void ResetTestState() {
+    seen_forms_.clear();
+    forms_seen_waiter_.Reset();
+  }
+
  private:
   std::vector<FormData> seen_forms_;
 
@@ -87,11 +92,6 @@ class AutofillAcrossIframesTest : public AutofillTestWithWebState {
         std::make_unique<TestAutofillManagerInjector<TestAutofillManager>>(
             web_state());
 
-    // Driver factory needs to exist before any call to
-    // `AutofillDriverIOS::FromWebStateAndWebFrame`, or we crash.
-    autofill::AutofillDriverIOSFactory::CreateForWebState(
-        web_state(), &autofill_client_, /*bridge=*/nil, /*locale=*/"en");
-
     // AutofillAgent init crashes without this.
     UniqueIDDataTabHelper::CreateForWebState(web_state());
 
@@ -99,6 +99,12 @@ class AutofillAcrossIframesTest : public AutofillTestWithWebState {
     prefs_ = autofill::test::PrefServiceForTesting();
     autofill_agent_ = [[AutofillAgent alloc] initWithPrefService:prefs_.get()
                                                         webState:web_state()];
+
+    // Driver factory needs to exist before any call to
+    // `AutofillDriverIOS::FromWebStateAndWebFrame`, or we crash.
+    autofill::AutofillDriverIOSFactory::CreateForWebState(
+        web_state(), &autofill_client_, /*bridge=*/autofill_agent_,
+        /*locale=*/"en");
   }
 
   web::WebFrame* WaitForMainFrame() {
@@ -220,7 +226,7 @@ TEST_F(AutofillAcrossIframesTest, WithChildFrames) {
 
   // Get the frame tokens from the registrar. Wrap this in a block because the
   // registrar receives these from each frame in a separate JS message.
-  __block absl::optional<LocalFrameToken> local_token1, local_token2;
+  __block std::optional<LocalFrameToken> local_token1, local_token2;
   ASSERT_TRUE(base::test::ios::WaitUntilConditionOrTimeout(
       base::test::ios::kWaitForJSCompletionTimeout, ^bool {
         local_token1 = registrar->LookupChildFrame(
@@ -259,7 +265,7 @@ TEST_F(AutofillAcrossIframesTest, WithChildFrames) {
   EXPECT_EQ(form.fields.size(), 2u);
   for (const FormFieldData& field : form.fields) {
     EXPECT_EQ(field.host_frame, form.host_frame);
-    EXPECT_EQ(field.host_form_id, form.unique_renderer_id);
+    EXPECT_EQ(field.host_form_id, form.renderer_id);
     EXPECT_EQ(field.origin, url::Origin::Create(form.url));
     EXPECT_EQ(field.host_form_signature, form_signature);
   }
@@ -348,6 +354,39 @@ TEST_F(AutofillAcrossIframesTest, SetAndGetParent) {
       web_state(), *local_token);
   ASSERT_TRUE(child_frame_driver);
   EXPECT_EQ(main_frame_driver(), child_frame_driver->GetParent());
+}
+
+TEST_F(AutofillAcrossIframesTest, TriggerExtractionInFrame) {
+  AddInput("text", "name");
+  AddIframe("cf1", "<form><input id='address'></input></form>");
+  StartTestServerAndLoad();
+
+  web::WebFramesManager* frames_manager =
+      FormUtilJavaScriptFeature::GetInstance()->GetWebFramesManager(
+          web_state());
+  ASSERT_TRUE(frames_manager);
+
+  // Wait for the main frame and the child frame to be known to the
+  // WebFramesManager.
+  ASSERT_TRUE(base::test::ios::WaitUntilConditionOrTimeout(
+      base::test::ios::kWaitForJSCompletionTimeout, ^bool {
+        return frames_manager->GetAllWebFrames().size() == 2;
+      }));
+
+  for (web::WebFrame* frame : frames_manager->GetAllWebFrames()) {
+    auto* driver =
+        AutofillDriverIOS::FromWebStateAndWebFrame(web_state(), frame);
+    auto& manager =
+        static_cast<TestAutofillManager&>(driver->GetAutofillManager());
+
+    // Extraction will have triggered on page load. Wait for this to complete.
+    EXPECT_TRUE(manager.WaitForFormsSeen(1));
+    manager.ResetTestState();
+
+    // Manually retrigger extraction, and wait for a fresh FormsSeen event.
+    driver->TriggerFormExtractionInDriverFrame();
+    EXPECT_TRUE(manager.WaitForFormsSeen(1));
+  }
 }
 
 // Ensure that disabling the feature actually disables the feature.

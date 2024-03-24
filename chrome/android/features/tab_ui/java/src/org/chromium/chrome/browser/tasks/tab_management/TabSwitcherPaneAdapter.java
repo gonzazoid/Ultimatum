@@ -8,8 +8,11 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import org.chromium.base.supplier.Supplier;
+import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tasks.tab_management.TabSwitcher.Controller;
 import org.chromium.chrome.browser.tasks.tab_management.TabSwitcher.TabListDelegate;
+
+import java.util.List;
 
 /**
  * Implementation of {@link TabSwitcher} for adapting the tab switcher pane. {@link
@@ -38,14 +41,15 @@ public class TabSwitcherPaneAdapter implements TabSwitcher {
 
     @Override
     public Controller getController() {
-        // TODO(crbug/1505772): Elements of Controller might need to be implemented.
+        // TODO(crbug/1505772): So far no elements of Controller are needed. Consider deprecation.
         assert false : "Not implemented.";
         return null;
     }
 
     @Override
     public TabListDelegate getTabListDelegate() {
-        // TODO(crbug/1505772): Elements of TabListDelegate might need to be implemented.
+        // TODO(crbug/1505772): So far no elements of TabListDelegate are needed. Consider
+        // deprecation.
         assert false : "Not implemented.";
         return null;
     }
@@ -68,5 +72,15 @@ public class TabSwitcherPaneAdapter implements TabSwitcher {
     @Override
     public void setTabSwitcherRecyclerViewPosition(RecyclerViewPosition position) {
         mTabSwitcherPane.setTabSwitcherRecyclerViewPosition(position);
+    }
+
+    @Override
+    public void showQuickDeleteAnimation(Runnable onAnimationEnd, List<Tab> tabs) {
+        mTabSwitcherPane.showQuickDeleteAnimation(onAnimationEnd, tabs);
+    }
+
+    @Override
+    public void refreshTabList() {
+        mTabSwitcherPane.showAllTabs();
     }
 }

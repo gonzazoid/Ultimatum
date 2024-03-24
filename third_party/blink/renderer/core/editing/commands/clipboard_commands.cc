@@ -92,7 +92,7 @@ class ExecutionContextClipboardEventState
 
   struct State {
     const AtomicString* event_type = nullptr;
-    absl::optional<EditorCommandSource> source;
+    std::optional<EditorCommandSource> source;
   };
 
   base::AutoReset<State> SetState(const AtomicString& event_type,
@@ -285,7 +285,9 @@ void ClipboardCommands::WriteSelectionToClipboard(LocalFrame& frame) {
   const KURL& url = frame.GetDocument()->Url();
   const String html = frame.Selection().SelectedHTMLForClipboard();
   String plain_text = frame.SelectedTextForClipboard();
-  frame.GetSystemClipboard()->WriteHTML(html, url,
+  // On Mac, add a meta charset tag for compatibility with native apps.
+  // See comments in AddMetaCharsetTagToHtmlOnMac for more details.
+  frame.GetSystemClipboard()->WriteHTML(AddMetaCharsetTagToHtmlOnMac(html), url,
                                         GetSmartReplaceOption(frame));
   ReplaceNBSPWithSpace(plain_text);
   frame.GetSystemClipboard()->WritePlainText(plain_text,
@@ -460,10 +462,15 @@ ClipboardCommands::GetFragmentFromClipboard(LocalFrame& frame) {
     unsigned fragment_start = 0;
     unsigned fragment_end = 0;
     KURL url;
+    // On Mac, remove meta charset tag that was added for compatibility with
+    // native apps. See comments in AddMetaCharsetTagToHtmlOnMac for more
+    // details.
     const String markup =
         frame.GetSystemClipboard()->ReadHTML(url, fragment_start, fragment_end);
-    fragment = CreateSanitizedFragmentFromMarkupWithContext(
-        *frame.GetDocument(), markup, fragment_start, fragment_end, url);
+    const String html_markup = RemoveMetaTagAndCalcFragmentOffsetsFromHtmlOnMac(
+        markup, fragment_start, fragment_end);
+    fragment = CreateStrictlyProcessedFragmentFromMarkupWithContext(
+        *frame.GetDocument(), html_markup, fragment_start, fragment_end, url);
   }
   if (fragment)
     return std::make_pair(fragment, false);
@@ -640,7 +647,7 @@ class CORE_EXPORT PasteImageResourceObserver final
     unsigned fragment_start = 0;
     unsigned fragment_end = 0;
 
-    return CreateSanitizedFragmentFromMarkupWithContext(
+    return CreateStrictlyProcessedFragmentFromMarkupWithContext(
         *(frame_->GetDocument()), BuildMarkup(), fragment_start, fragment_end,
         String());
   }

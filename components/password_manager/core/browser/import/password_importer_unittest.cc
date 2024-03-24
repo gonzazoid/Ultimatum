@@ -12,16 +12,13 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "components/password_manager/core/browser/affiliation/fake_affiliation_service.h"
+#include "components/affiliations/core/browser/fake_affiliation_service.h"
 #include "components/password_manager/core/browser/import/csv_password_sequence.h"
 #include "components/password_manager/core/browser/import/import_results.h"
 #include "components/password_manager/core/browser/password_store/test_password_store.h"
 #include "components/password_manager/core/browser/ui/credential_ui_entry.h"
 #include "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
-#include "components/password_manager/core/common/password_manager_features.h"
-#include "components/sync/base/features.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -62,8 +59,6 @@ class FakePasswordParserService : public mojom::CSVPasswordParser {
 class PasswordImporterTest : public testing::Test {
  public:
   PasswordImporterTest() : receiver_{&service_}, importer_(&presenter_) {
-    feature_list_.InitAndEnableFeature(syncer::kPasswordNotesWithBackup);
-
     CHECK(temp_directory_.CreateUniqueTempDir());
     mojo::PendingRemote<mojom::CSVPasswordParser> pending_remote{
         receiver_.BindNewPipeAndPassRemote()};
@@ -170,7 +165,6 @@ class PasswordImporterTest : public testing::Test {
     import_results_ = results;
   }
 
-  base::test::ScopedFeatureList feature_list_;
   base::test::TaskEnvironment task_environment_;
   password_manager::ImportResults import_results_;
   bool results_callback_called_ = false;
@@ -180,7 +174,7 @@ class PasswordImporterTest : public testing::Test {
       base::MakeRefCounted<TestPasswordStore>(IsAccountStore(false));
   scoped_refptr<TestPasswordStore> account_store_ =
       base::MakeRefCounted<TestPasswordStore>(IsAccountStore(true));
-  FakeAffiliationService affiliation_service_;
+  affiliations::FakeAffiliationService affiliation_service_;
   SavedPasswordsPresenter presenter_{&affiliation_service_, profile_store_,
                                      account_store_};
   password_manager::PasswordImporter importer_;

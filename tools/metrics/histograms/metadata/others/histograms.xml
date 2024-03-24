@@ -131,11 +131,6 @@ chromium-metrics-reviews@google.com.
   <variant name=".NtpRealbox" summary="from the realbox on the NTP"/>
 </variants>
 
-<variants name="VoiceIntentTargetVariant">
-  <variant name="Assistant" summary="Assistant voice transcription."/>
-  <variant name="System" summary="System voice transcription."/>
-</variants>
-
 <variants name="WebContentsObserverMethods">
   <variant name="DidChangeVisibleSecurityState"/>
   <variant name="DidFinishLoad"/>
@@ -183,7 +178,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="AccessCodeCast.Discovery.CastModeOnSuccess"
-    enum="AccessCodeCastCastMode" expires_after="2024-06-02">
+    enum="AccessCodeCastCastMode" expires_after="2024-08-04">
   <owner>bzielinski@google.com</owner>
   <owner>cros-edu-eng@google.com</owner>
   <summary>
@@ -205,7 +200,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="AccessCodeCast.Discovery.RememberedDevicesCount"
-    units="cast devices" expires_after="2024-05-19">
+    units="cast devices" expires_after="2024-07-21">
   <owner>bzielinski@google.com</owner>
   <owner>cros-edu-eng@google.com</owner>
   <summary>
@@ -321,7 +316,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="AccessCodeCast.Ui.DialogCloseReason"
-    enum="AccessCodeCastDialogCloseReason" expires_after="2024-06-02">
+    enum="AccessCodeCastDialogCloseReason" expires_after="2024-08-04">
   <owner>bzielinski@google.com</owner>
   <owner>cros-edu-eng@google.com</owner>
   <summary>
@@ -331,7 +326,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="AccessCodeCast.Ui.DialogLoadTime" units="ms"
-    expires_after="2024-06-02">
+    expires_after="2024-08-04">
   <owner>bzielinski@google.com</owner>
   <owner>cros-edu-eng@google.com</owner>
   <summary>
@@ -783,6 +778,26 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="Ads.InterestGroup.Auction.NumOwnersWithoutInterestGroups"
+    units="owners" expires_after="2024-07-18">
+  <owner>dmcardle@chromium.org</owner>
+  <owner>privacy-sandbox-dev@chromium.org</owner>
+  <summary>
+    The number of owner origins listed in an auction configuration that were
+    excluded from taking part in a FLEDGE auction because they have no eligible
+    interest groups. This does not count owners that were filtered due to user
+    settings. For multi-seller auctions, this is the sum of all such excluded
+    owners across all component auctions. This double-counts owners that
+    participate in multiple component auctions. Recorded after all interest
+    groups participating in an auction have been retrieved from storage at the
+    start of an auction. This is related to the sibling histogram named
+    &quot;NumOwnersWithInterestGroups&quot;.
+
+    See https://github.com/WICG/turtledove/blob/main/FLEDGE.md for the latest
+    version of the FLEDGE explainer.
+  </summary>
+</histogram>
+
 <histogram name="Ads.InterestGroup.Auction.NumSellersWithBidders"
     units="sellers" expires_after="2024-06-20">
   <owner>mmenke@chromium.org</owner>
@@ -803,7 +818,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Ads.InterestGroup.Auction.ParseBaServerResponseDuration"
-    units="ms" expires_after="2024-05-19">
+    units="ms" expires_after="2024-07-21">
   <owner>behamilton@google.com</owner>
   <owner>pauljensen@chromium.org</owner>
   <owner>privacy-sandbox-dev@chromium.org</owner>
@@ -1274,7 +1289,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Ads.InterestGroup.ServerAuction.AdAuctionDataLoadTime"
-    units="ms" expires_after="M125">
+    units="ms" expires_after="2024-07-21">
   <owner>behamilton@google.com</owner>
   <owner>pauljensen@chromium.org</owner>
   <owner>privacy-sandbox-dev@chromium.org</owner>
@@ -1292,7 +1307,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Ads.InterestGroup.ServerAuction.EndToEndTime" units="ms"
-    expires_after="2024-06-02">
+    expires_after="2024-08-04">
   <owner>behamilton@google.com</owner>
   <owner>pauljensen@chromium.org</owner>
   <owner>privacy-sandbox-dev@chromium.org</owner>
@@ -1311,7 +1326,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Ads.InterestGroup.ServerAuction.EndToEndTimeNoWinner"
-    units="ms" expires_after="2024-05-19">
+    units="ms" expires_after="2024-07-21">
   <owner>behamilton@google.com</owner>
   <owner>pauljensen@chromium.org</owner>
   <owner>privacy-sandbox-dev@chromium.org</owner>
@@ -1329,8 +1344,23 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="Ads.InterestGroup.ServerAuction.InvalidServerResponseReason"
+    enum="AuctionInvalidServerResponseReason" expires_after="2024-08-04">
+  <owner>behamilton@google.com</owner>
+  <owner>privacy-sandbox-dev@chromium.org</owner>
+  <summary>
+    Reason that a server response in a Bidding and Auction API server auction
+    was rejected. Recorded when we reject the server response.
+
+    See
+    https://github.com/WICG/turtledove/blob/main/FLEDGE_browser_bidding_and_auction_API.md
+    for the latest version of the Protected Audience Bidding &amp; Auction
+    Services explainer.
+  </summary>
+</histogram>
+
 <histogram name="Ads.InterestGroup.ServerAuction.KeyFetch.Cached"
-    enum="Boolean" expires_after="M125">
+    enum="Boolean" expires_after="2024-07-21">
   <owner>behamilton@google.com</owner>
   <owner>pauljensen@chromium.org</owner>
   <owner>privacy-sandbox-dev@chromium.org</owner>
@@ -1346,8 +1376,25 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="Ads.InterestGroup.ServerAuction.KeyFetch.DBCached"
+    enum="Boolean" expires_after="2024-07-21">
+  <owner>abigailkatcoff@google.com</owner>
+  <owner>pauljensen@chromium.org</owner>
+  <owner>privacy-sandbox-dev@chromium.org</owner>
+  <summary>
+    Whether the key requested for a Bidding and Auction Services auction was
+    cached in the database. If a fetch request for the key is already in
+    progress this metric is not logged.
+
+    See
+    https://github.com/WICG/turtledove/blob/main/FLEDGE_browser_bidding_and_auction_API.md
+    for the latest version of the Protected Audience Bidding &amp; Auction
+    Services explainer.
+  </summary>
+</histogram>
+
 <histogram name="Ads.InterestGroup.ServerAuction.KeyFetch.NetworkCached"
-    enum="Boolean" expires_after="M125">
+    enum="Boolean" expires_after="2024-07-21">
   <owner>behamilton@google.com</owner>
   <owner>pauljensen@chromium.org</owner>
   <owner>privacy-sandbox-dev@chromium.org</owner>
@@ -1383,7 +1430,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Ads.InterestGroup.ServerAuction.KeyFetch.TotalTime" units="ms"
-    expires_after="M125">
+    expires_after="2024-07-21">
   <owner>behamilton@google.com</owner>
   <owner>pauljensen@chromium.org</owner>
   <owner>privacy-sandbox-dev@chromium.org</owner>
@@ -1392,6 +1439,40 @@ chromium-metrics-reviews@google.com.
     Bidding and Auction Services auction. This metric is only recorded on a
     per-fetch level so it will not be recorded if the key is requested while
     waiting for an existing fetch for the key to complete.
+
+    See
+    https://github.com/WICG/turtledove/blob/main/FLEDGE_browser_bidding_and_auction_API.md
+    for the latest version of the Protected Audience Bidding &amp; Auction
+    Services explainer.
+  </summary>
+</histogram>
+
+<histogram name="Ads.InterestGroup.ServerAuction.Request.NumGroups"
+    units="count" expires_after="M126">
+  <owner>behamilton@google.com</owner>
+  <owner>pauljensen@chromium.org</owner>
+  <owner>privacy-sandbox-dev@chromium.org</owner>
+  <summary>
+    The number of interest groups included in a request constructed using the
+    Bidding and Auction Services API. Recorded when the request is created.
+
+    See
+    https://github.com/WICG/turtledove/blob/main/FLEDGE_browser_bidding_and_auction_API.md
+    for the latest version of the Protected Audience Bidding &amp; Auction
+    Services explainer.
+  </summary>
+</histogram>
+
+<histogram
+    name="Ads.InterestGroup.ServerAuction.Request.RelativeCompressedSize"
+    units="%" expires_after="M126">
+  <owner>behamilton@google.com</owner>
+  <owner>pauljensen@chromium.org</owner>
+  <owner>privacy-sandbox-dev@chromium.org</owner>
+  <summary>
+    The compressed size as a percentage of the uncompressed size when
+    compressing a request constructed using the Bidding and Auction API.
+    Recorded when the request is created.
 
     See
     https://github.com/WICG/turtledove/blob/main/FLEDGE_browser_bidding_and_auction_API.md
@@ -1500,7 +1581,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Ads.InterestGroup.{AuctionType}.ReportDelay" units="ms"
-    expires_after="M125">
+    expires_after="2024-07-21">
   <owner>behamilton@google.com</owner>
   <owner>pauljensen@chromium.org</owner>
   <owner>privacy-sandbox-dev@chromium.org</owner>
@@ -1675,7 +1756,7 @@ chromium-metrics-reviews@google.com.
   <summary>Records whenever a Blimp tab toggles visibility.</summary>
 </histogram>
 
-<histogram name="BlueZ.AdapterLost" units="seconds" expires_after="2024-04-28">
+<histogram name="BlueZ.AdapterLost" units="seconds" expires_after="2024-08-11">
   <owner>mcchou@chromium.org</owner>
   <owner>chromeos-bt-platform-sw-core@google.com</owner>
   <summary>
@@ -2094,7 +2175,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Cast.Sender.RemotePlayback.InitiationLocation"
-    enum="RemotePlaybackInitiationLocation" expires_after="2024-05-26">
+    enum="RemotePlaybackInitiationLocation" expires_after="2024-07-28">
   <owner>muyaoxu@google.com</owner>
   <owner>openscreen-eng@google.com</owner>
   <summary>
@@ -2116,46 +2197,6 @@ chromium-metrics-reviews@google.com.
 
     Warning: this histogram was expired from 2021-10-17 to 2022-12-15; data may
     be missing.
-  </summary>
-</histogram>
-
-<histogram name="CastV2.Transport.Connect.Latency.Unknown" units="ms"
-    expires_after="M85">
-  <owner>Please list the metric's owners. Add more owner tags as needed.</owner>
-  <owner>cast-analytics@google.com</owner>
-  <summary>
-    The latency between when a Cast V2 connection is established and the first
-    message is received on that connection. &quot;Unknown&quot; is the peer
-    type, which is not known at this point in the CastV2 connection
-    establishment. Naming conforms to the CastV2 sender-side histogram naming
-    convention &quot;CastV2.[action].[name].[peer_type]&quot;.
-  </summary>
-</histogram>
-
-<histogram name="CastV2.Transport.SslHandshake.Error.Unknown"
-    enum="NetErrorCodes" expires_after="M85">
-  <owner>Please list the metric's owners. Add more owner tags as needed.</owner>
-  <owner>cast-analytics@google.com</owner>
-  <summary>
-    On accepting a Cast V2 transport socket connection, if an error is
-    encountered, the error code is logged here. &quot;Unknown&quot; is the peer
-    type, which is not known at this point in the CastV2 connection
-    establishment. &quot;SslHandshake.Error&quot; is the name of the action.
-    Naming conforms to the CastV2 sender-side histogram naming convention
-    &quot;CastV2.[action].[name].[peer_type]&quot;.
-  </summary>
-</histogram>
-
-<histogram name="CastV2.Transport.SslHandshake.Unknown" units="ms"
-    expires_after="M85">
-  <owner>Please list the metric's owners. Add more owner tags as needed.</owner>
-  <owner>cast-analytics@google.com</owner>
-  <summary>
-    The time taken to do the handshake during Cast V2 transport socket creation.
-    &quot;Unknown&quot; is the peer type, which is not known at this point in
-    the CastV2 connection establishment. Naming conforms to the CastV2
-    sender-side histogram naming convention
-    &quot;CastV2.[action].[name].[peer_type]&quot;.
   </summary>
 </histogram>
 
@@ -2229,7 +2270,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ChildProcess.Launched.UtilityProcessHash"
-    enum="UtilityProcessNameHash" expires_after="2024-05-19">
+    enum="UtilityProcessNameHash" expires_after="2024-07-21">
   <owner>wfh@chromium.org</owner>
   <summary>
     Count of child utility process launches, bucketed by the hash of their
@@ -2314,7 +2355,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ChromiumAndroidLinker.RelroSharingStatus2"
-    enum="RelroSharingStatus" expires_after="2024-05-12">
+    enum="RelroSharingStatus" expires_after="2024-07-14">
   <owner>lizeb@chromium.org</owner>
   <owner>pasko@chromium.org</owner>
   <summary>
@@ -2417,9 +2458,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ClientHints.AcceptCHFrame" enum="AcceptCHFrameRestart"
-    expires_after="2024-07-07">
+    expires_after="2024-10-01">
   <owner>victortan@chromium.org</owner>
   <owner>miketaylr@chromium.org</owner>
+  <owner>potassium-katabolism@google.com</owner>
   <summary>
     Emitted on two related events: First, when an request that is eligable to be
     restarted receives an ACCEPT_CH HTTP2/HTTP3 frame via a TLS connection with
@@ -2429,16 +2471,18 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ClientHints.CriticalCHRestart" enum="CriticalCHRestart"
-    expires_after="2024-07-07">
+    expires_after="2024-10-01">
   <owner>victortan@chromium.org</owner>
   <owner>miketaylr@chromium.org</owner>
+  <owner>potassium-katabolism@google.com</owner>
   <summary>
     Count of requests restarted because of the Critical-CH response header.
   </summary>
 </histogram>
 
 <histogram name="ClientHints.FetchLatency{OperationType}" units="microseconds"
-    expires_after="2024-06-30">
+    expires_after="2024-10-01">
+  <owner>victortan@chromium.org</owner>
   <owner>miketaylr@chromium.org</owner>
   <owner>potassium-katabolism@google.com</owner>
   <summary>
@@ -2457,7 +2501,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ClientHints.StoreLatency" units="ms"
-    expires_after="2024-07-07">
+    expires_after="2024-10-01">
+  <owner>victortan@chromium.org</owner>
   <owner>miketaylr@chromium.org</owner>
   <owner>potassium-katabolism@google.com</owner>
   <summary>
@@ -2467,7 +2512,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ClientHints.UpdateEventCount" units="count"
-    expires_after="2024-03-03">
+    expires_after="2024-10-01">
   <owner>victortan@chromium.org</owner>
   <owner>potassium-katabolism@google.com</owner>
   <summary>
@@ -2477,7 +2522,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ClientHints.UpdateSize" units="count"
-    expires_after="2024-05-05">
+    expires_after="2024-10-01">
   <owner>victortan@chromium.org</owner>
   <owner>potassium-katabolism@google.com</owner>
   <summary>
@@ -2500,7 +2545,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="ComponentUpdater.AndroidComponentLoader.LoadStatus.{Component}"
-    units="BooleanSuccess" expires_after="2024-11-28">
+    enum="BooleanSuccess" expires_after="2024-11-28">
   <owner>avvall@chromium.org</owner>
   <owner>src/android_webview/OWNERS</owner>
   <owner>src/components/component_updater/android/OWNERS</owner>
@@ -2535,36 +2580,15 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="ComponentUpdater.ClientHealth.AvailableStorage" units="MB"
-    expires_after="2024-06-30">
-  <owner>noahrose@google.com</owner>
-  <owner>src/components/component_updater/OWNERS</owner>
-  <summary>
-    The amount of available storage for component updates. Recorded each time a
-    network quality esitmate is delivered to the component updater.
-  </summary>
-</histogram>
-
-<histogram name="ComponentUpdater.ClientHealth.DownstreamThroughput"
-    units="kbps" expires_after="2024-06-30">
-  <owner>noahrose@google.com</owner>
-  <owner>src/components/component_updater/OWNERS</owner>
-  <summary>
-    Downstream throughput in kilobytes per second of clients who have ample
-    storage (20gb or more) available for component updates. Recorded each time a
-    network quality estimate is delivered to the component updater.
-  </summary>
-</histogram>
-
 <histogram name="ComponentUpdater.UpdateCompleteError"
-    enum="UpdateClientErrors" expires_after="2024-05-19">
+    enum="UpdateClientErrors" expires_after="2024-07-21">
   <owner>sorin@chromium.org</owner>
   <owner>src/components/component_updater/OWNERS</owner>
   <summary>The result of an install or an update check.</summary>
 </histogram>
 
 <histogram name="ComponentUpdater.UpdateCompleteResult" enum="BooleanError"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>sorin@chromium.org</owner>
   <owner>src/components/component_updater/OWNERS</owner>
   <summary>The result of an install or an update check.</summary>
@@ -2717,7 +2741,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ContextMenu.Shown{Type}" enum="BooleanPresent"
-    expires_after="2024-05-27">
+    expires_after="2024-07-28">
   <owner>mpearson@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <owner>clank-app-team@google.com</owner>
@@ -2761,7 +2785,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ContextMenu.TimeToTakeAction.SelectedItem" units="ms"
-    expires_after="2024-05-12">
+    expires_after="2024-07-14">
   <owner>twellington@chromium.org</owner>
   <owner>clank-app-team@google.com</owner>
   <summary>
@@ -2782,7 +2806,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.AggregatableKeysPerSource" units="keys"
-    expires_after="2024-05-12">
+    expires_after="2024-07-14">
   <owner>linnan@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -2795,7 +2819,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram name="Conversions.AggregatableReport.AssembleReportStatus"
     enum="ConversionAssembleAggregatableReportStatus"
-    expires_after="2024-05-12">
+    expires_after="2024-07-14">
   <owner>linnan@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -2854,7 +2878,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Conversions.AggregatableReport.ExtraReportDelayForSuccessfulSend"
-    units="ms" expires_after="2024-05-12">
+    units="ms" expires_after="2024-07-14">
   <owner>tquintanilla@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -2882,7 +2906,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.AggregatableReport.NumContributionsPerReport2"
-    units="contribution" expires_after="2024-06-02">
+    units="contribution" expires_after="2024-08-04">
   <owner>linnan@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -2894,7 +2918,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Conversions.AggregatableReport.PendingAndBrowserWentOffline.{TimeSpan}"
-    units="ms" expires_after="2024-05-12">
+    units="ms" expires_after="2024-07-14">
   <owner>anthonygarant@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
   <summary>
@@ -2944,7 +2968,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.AggregatableReport.SchedulerReportDelay"
-    units="ms" expires_after="2024-05-12">
+    units="ms" expires_after="2024-07-14">
   <owner>linnan@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -2985,7 +3009,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.AndroidOperationResult.{Operation}"
-    enum="ConversionAndroidOperationResult" expires_after="2024-05-12">
+    enum="ConversionAndroidOperationResult" expires_after="2024-07-14">
   <owner>linnan@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3042,7 +3066,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.BackgroundNavigation.Outcome"
-    enum="ConversionBackgroundNavigationOutcome" expires_after="M121">
+    enum="ConversionBackgroundNavigationOutcome" expires_after="2024-11-12">
   <owner>anthonygarant@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
   <summary>
@@ -3065,7 +3089,7 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Conversions.CorruptReportsInDatabase4"
+<histogram name="Conversions.CorruptReportsInDatabase5"
     enum="ConversionCorruptReportStatus" expires_after="2024-07-07">
   <owner>tquintanilla@chromium.org</owner>
   <owner>apaseltiner@chromium.org</owner>
@@ -3113,7 +3137,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.DbVersionOnSourceStored" units="Source"
-    expires_after="2024-04-28">
+    expires_after="2024-07-14">
   <owner>tquintanilla@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3151,7 +3175,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.DebugReport.ReportRetrySucceedAggregatable"
-    enum="BooleanSuccess" expires_after="2024-06-02">
+    enum="BooleanSuccess" expires_after="2024-08-04">
   <owner>anthonygarant@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3163,7 +3187,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.DebugReport.ReportRetrySucceedEventLevel"
-    enum="BooleanSuccess" expires_after="2024-06-02">
+    enum="BooleanSuccess" expires_after="2024-08-04">
   <owner>anthonygarant@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3186,7 +3210,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.DebugReport.ReportStatusEventLevel"
-    enum="ConversionReportStatus" expires_after="2024-05-10">
+    enum="ConversionReportStatus" expires_after="2024-07-14">
   <owner>anthonygarant@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3197,7 +3221,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.DeferredDataHostProcessedAfterTimeout"
-    enum="Boolean" expires_after="2024-05-12">
+    enum="Boolean" expires_after="2024-07-14">
   <owner>anthonygarant@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
   <summary>
@@ -3213,7 +3237,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.DelayOnAttestationsLoaded" units="ms"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>linnan@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3236,7 +3260,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.EnqueueEventAllowed" enum="BooleanAllowed"
-    expires_after="2024-05-12">
+    expires_after="2024-07-14">
   <owner>apaseltiner@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3249,7 +3273,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.EnqueueOsEventAllowed" enum="BooleanAllowed"
-    expires_after="2024-05-12">
+    expires_after="2024-07-14">
   <owner>apaseltiner@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3263,7 +3287,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.ExtraReportDelay2" units="ms"
-    expires_after="2024-05-12">
+    expires_after="2024-07-14">
   <owner>apaseltiner@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>csharrison@chromium.org</owner>
@@ -3276,7 +3300,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.ExtraReportDelayForSuccessfulSend" units="ms"
-    expires_after="2024-05-12">
+    expires_after="2024-07-14">
   <owner>tquintanilla@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3302,7 +3326,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.GetMeasurementStatusTime" units="ms"
-    expires_after="2024-05-12">
+    expires_after="2024-07-14">
   <owner>linnan@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3334,7 +3358,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.HttpResponseOrNetErrorCodeAggregatable"
-    enum="CombinedHttpResponseAndNetErrorCode" expires_after="2024-05-12">
+    enum="CombinedHttpResponseAndNetErrorCode" expires_after="2024-07-14">
   <owner>anthonygarant@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3347,7 +3371,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.HttpResponseOrNetErrorCodeEventLevel"
-    enum="CombinedHttpResponseAndNetErrorCode" expires_after="2024-05-12">
+    enum="CombinedHttpResponseAndNetErrorCode" expires_after="2024-07-14">
   <owner>anthonygarant@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3370,7 +3394,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.ImpressionsDeletedInDataClearOperation"
-    units="impressions" expires_after="2024-05-12">
+    units="impressions" expires_after="2024-07-14">
   <owner>johnidel@chromium.org</owner>
   <owner>csharrison@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
@@ -3380,7 +3404,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.IncrementalTaintingFailures"
-    units="failed registrations" expires_after="2024-05-12">
+    units="failed registrations" expires_after="2024-07-14">
   <owner>csharrison@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
   <summary>
@@ -3447,8 +3471,61 @@ chromium-metrics-reviews@google.com.
   </token>
 </histogram>
 
+<histogram name="Conversions.OsRegistrationsBufferFlushAfterTimeout"
+    enum="Boolean" expires_after="2024-06-12">
+  <owner>anthonygarant@chromium.org</owner>
+  <owner>measurement-api-dev+metrics@google.com</owner>
+  <summary>
+    The OS allows associating a navigation's input event to a single call. As a
+    result, all registrations tied to a navigation are buffered before
+    delegating them to the OS.
+
+    To ensure that buffered OS registrations are eventually sent to the OS, we
+    flush the buffer after 20s if we haven't had confirmation yet that the
+    navigation will no longer receive any more registrations.
+
+    When flushing an OS registrations buffer, this histogram emits the reason
+    why the buffer was flushed. It will only emit if there actually are buffered
+    registrations to flush.
+  </summary>
+</histogram>
+
+<histogram name="Conversions.OsRegistrationsBufferWithSameContext"
+    enum="Boolean" expires_after="2024-06-12">
+  <owner>anthonygarant@chromium.org</owner>
+  <owner>measurement-api-dev+metrics@google.com</owner>
+  <summary>
+    The OS allows associating a navigation's input event to a single call. As a
+    result, all registrations tied to a navigation are buffered before
+    delegating them to the OS.
+
+    Registrations buffered in one buffer should all have the same context. This
+    histogram emits a boolean indicating if the context match that of the first
+    buffered registration.
+  </summary>
+</histogram>
+
+<histogram name="Conversions.OsRegistrationsSkipBufferRegistrationsSize"
+    units="count" expires_after="2024-06-12">
+  <owner>anthonygarant@chromium.org</owner>
+  <owner>measurement-api-dev+metrics@google.com</owner>
+  <summary>
+    The OS allows associating a navigation's input event to a single call. As a
+    result, all registrations tied to a navigation are buffered before
+    delegating them to the OS.
+
+    To ensure that buffered OS registrations are eventually sent to the OS, we
+    flush the buffer after 20s if we haven't had confirmation yet that the
+    navigation will no longer receive any more registrations.
+
+    If we do receive registrations after a buffer has been flushed, we still
+    attempt to send them to the OS with a previously used input event and emit
+    this histogram.
+  </summary>
+</histogram>
+
 <histogram name="Conversions.ProcessRegisterDataHostDelay" units="ms"
-    expires_after="2024-05-12">
+    expires_after="2024-07-14">
   <owner>anthonygarant@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
   <summary>
@@ -3459,7 +3536,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.RegisterDataHostOutcome"
-    enum="ConversionRegisterDataHostOutcome" expires_after="2024-05-12">
+    enum="ConversionRegisterDataHostOutcome" expires_after="2024-07-14">
   <owner>anthonygarant@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
   <summary>
@@ -3469,7 +3546,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.RegistrationsPerRedirectChain"
-    units="registrations" expires_after="2024-05-10">
+    units="registrations" expires_after="2024-07-14">
   <owner>linnan@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3480,7 +3557,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.ReportRetrySucceedAggregatable"
-    enum="BooleanSuccess" expires_after="2024-06-02">
+    enum="BooleanSuccess" expires_after="2024-08-04">
   <owner>anthonygarant@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3491,7 +3568,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.ReportRetrySucceedEventLevel"
-    enum="BooleanSuccess" expires_after="2024-05-12">
+    enum="BooleanSuccess" expires_after="2024-07-14">
   <owner>anthonygarant@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3502,7 +3579,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.ReportsDeletedInDataClearOperation.Aggregatable"
-    units="conversions" expires_after="2024-05-12">
+    units="conversions" expires_after="2024-07-14">
   <owner>johnidel@chromium.org</owner>
   <owner>tquintanilla@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3513,7 +3590,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.ReportsDeletedInDataClearOperation.Event"
-    units="conversions" expires_after="2024-05-12">
+    units="conversions" expires_after="2024-07-14">
   <owner>johnidel@chromium.org</owner>
   <owner>csharrison@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
@@ -3543,7 +3620,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.ReportStatusAggregatable"
-    enum="ConversionReportStatus" expires_after="2024-05-12">
+    enum="ConversionReportStatus" expires_after="2024-07-14">
   <owner>anthonygarant@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3555,7 +3632,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.ReportStatusEventLevel"
-    enum="ConversionReportStatus" expires_after="2024-05-12">
+    enum="ConversionReportStatus" expires_after="2024-07-14">
   <owner>anthonygarant@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3636,7 +3713,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.RequestSupportHeader"
-    enum="ConversionRequestSupportHeader" expires_after="2024-05-05">
+    enum="ConversionRequestSupportHeader" expires_after="2024-08-04">
   <owner>tquintanilla@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3648,7 +3725,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.SchedulerReportDelay" units="ms"
-    expires_after="2024-03-10">
+    expires_after="2024-07-31">
   <owner>linnan@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3663,7 +3740,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.SentVerboseDebugReportType4"
-    enum="ConversionVerboseDebugReportType" expires_after="2024-02-20">
+    enum="ConversionVerboseDebugReportType" expires_after="2024-07-31">
   <owner>tquintanilla@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3675,7 +3752,7 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Conversions.SourceRegistrationError10"
+<histogram name="Conversions.SourceRegistrationError11"
     enum="ConversionSourceRegistrationError" expires_after="2024-06-16">
   <owner>tquintanilla@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
@@ -3737,7 +3814,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.Storage.CreationTime" units="ms"
-    expires_after="2024-03-10">
+    expires_after="2024-07-31">
   <owner>johnidel@chromium.org</owner>
   <owner>csharrison@chromium.org</owner>
   <summary>
@@ -3748,7 +3825,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.Storage.MigrationTime" units="ms"
-    expires_after="2024-05-12">
+    expires_after="2024-07-14">
   <owner>johnidel@chromium.org</owner>
   <owner>csharrison@chromium.org</owner>
   <summary>
@@ -3771,7 +3848,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.Storage.Sql.FileSize2.PerSource" units="bytes"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>anthonygarant@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3783,7 +3860,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.Storage.Sql.FileSizeSourcesPerOriginLimitReached2"
-    units="KB" expires_after="2024-06-02">
+    units="KB" expires_after="2024-08-04">
   <owner>tquintanilla@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3796,7 +3873,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Conversions.Storage.Sql.FileSizeSourcesPerOriginLimitReached2.PerSource"
-    units="bytes" expires_after="2024-06-02">
+    units="bytes" expires_after="2024-08-04">
   <owner>anthonygarant@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3808,7 +3885,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.Storage.Sql.InitStatus2"
-    enum="ConversionStorageSqlInitStatus" expires_after="2024-06-02">
+    enum="ConversionStorageSqlInitStatus" expires_after="2024-08-04">
   <owner>johnidel@chromium.org</owner>
   <owner>csharrison@chromium.org</owner>
   <summary>
@@ -3818,7 +3895,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.TimeFromConversionToReportSend" units="hours"
-    expires_after="2024-05-12">
+    expires_after="2024-07-14">
   <owner>johnidel@chromium.org</owner>
   <owner>csharrison@chromium.org</owner>
   <summary>
@@ -3828,7 +3905,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.TimeFromTriggerToReportSentSuccessfully"
-    units="hours" expires_after="2024-03-10">
+    units="hours" expires_after="2024-07-31">
   <owner>linnan@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3840,7 +3917,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.TriggerRegistrationError9"
-    enum="ConversionTriggerRegistrationError" expires_after="2024-05-10">
+    enum="ConversionTriggerRegistrationError" expires_after="2024-07-14">
   <owner>tquintanilla@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3862,7 +3939,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.ValuesPerFilter" units="values"
-    expires_after="2024-05-10">
+    expires_after="2024-07-14">
   <owner>linnan@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3875,7 +3952,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.VerboseDebugReport.HttpResponseOrNetErrorCode"
-    enum="CombinedHttpResponseAndNetErrorCode" expires_after="2024-05-12">
+    enum="CombinedHttpResponseAndNetErrorCode" expires_after="2024-07-14">
   <owner>linnan@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3887,7 +3964,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.{ReportType}.NetworkConnectionTypeOnFailure"
-    enum="NetworkConnectionType" expires_after="2024-05-12">
+    enum="NetworkConnectionType" expires_after="2024-07-14">
   <owner>linnan@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -3903,7 +3980,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Conversions.{ReportType}.ReportRetriesTillSuccessOrFailure"
-    enum="ConversionReportSendRetryCount" expires_after="2024-06-02">
+    enum="ConversionReportSendRetryCount" expires_after="2024-08-04">
   <owner>tquintanilla@chromium.org</owner>
   <owner>johnidel@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -4080,7 +4157,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Crashpad.IntermediateDump.Reader.InvalidKeySize"
-    enum="CrashpadIntermediateDumpKey" expires_after="2024-02-20">
+    enum="CrashpadIntermediateDumpKey" expires_after="2025-02-20">
   <owner>justincohen@chromium.org</owner>
   <owner>crashpad-dev@chromium.org</owner>
   <summary>
@@ -4089,7 +4166,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Crashpad.IntermediateDump.Reader.MissingKey"
-    enum="CrashpadIntermediateDumpKey" expires_after="2024-02-20">
+    enum="CrashpadIntermediateDumpKey" expires_after="2025-02-20">
   <owner>justincohen@chromium.org</owner>
   <owner>crashpad-dev@chromium.org</owner>
   <summary>Records key id when id is missing in an intermediate dump.</summary>
@@ -4249,6 +4326,17 @@ chromium-metrics-reviews@google.com.
   <token key="HighlightsDetailsPageName" variants="HighlightsDetailsPageName"/>
 </histogram>
 
+<histogram name="DemoMode.Highlights.Error" enum="DemoModeHighlightsError"
+    expires_after="2024-05-24">
+  <owner>llin@chromium.org</owner>
+  <owner>xiqiruan@chromium.org</owner>
+  <owner>cros-demo-mode-eng@google.com</owner>
+  <summary>
+    Unexpected Demo Mode Highlight app error. The metrics will be emitted when
+    encounting an error.
+  </summary>
+</histogram>
+
 <histogram name="DemoMode.Highlights.FirstInteraction"
     enum="DemoModeHighlightsAction" expires_after="2024-05-24">
   <owner>llin@chromium.org</owner>
@@ -4277,7 +4365,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="DemoMode.IdleLogoutWarningEvent"
-    enum="DemoModeIdleLogoutWarningEvent" expires_after="2024-05-24">
+    enum="DemoModeIdleLogoutWarningEvent" expires_after="2024-08-04">
   <owner>llin@chromium.org</owner>
   <owner>xiqiruan@chromium.org</owner>
   <owner>yilkal@chromium.org</owner>
@@ -4350,7 +4438,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="DemoMode.Setup.EnrollDuration" units="minutes"
-    expires_after="M121">
+    expires_after="2024-06-30">
   <owner>llin@chromium.org</owner>
   <owner>xiqiruan@chromium.org</owner>
   <owner>yilkal@chromium.org</owner>
@@ -4376,7 +4464,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="DemoMode.Setup.NumRetries" units="units"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>llin@chromium.org</owner>
   <owner>xiqiruan@chromium.org</owner>
   <owner>yilkal@chromium.org</owner>
@@ -4401,7 +4489,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="DemoMode.UserClicksAndPresses" units="clicks"
-    expires_after="2024-06-02">
+    expires_after="2024-08-04">
   <owner>llin@chromium.org</owner>
   <owner>xiqiruan@chromium.org</owner>
   <owner>yilkal@chromium.org</owner>
@@ -4541,7 +4629,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Document.BeforeUnloadDialog" enum="BeforeUnloadDialogResult"
-    expires_after="2024-02-04">
+    expires_after="2024-07-23">
   <owner>panicker@chromium.org</owner>
   <owner>chikamune@chromium.org</owner>
   <summary>
@@ -4567,7 +4655,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="DocumentScan.ScanFailed" enum="DocumentScanSaneBackend"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>bmgordon@chromium.org</owner>
   <owner>project-bolton@google.com</owner>
   <summary>
@@ -4596,7 +4684,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="DocumentScan.ScanRequested" enum="DocumentScanSaneBackend"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>bmgordon@chromium.org</owner>
   <owner>project-bolton@google.com</owner>
   <summary>
@@ -4606,7 +4694,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="DocumentScan.ScanSucceeded" enum="DocumentScanSaneBackend"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>bmgordon@chromium.org</owner>
   <owner>project-bolton@google.com</owner>
   <summary>
@@ -4682,7 +4770,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="DrmUtil.CreateDisplaySnapshot.IsHDR" enum="Boolean"
-    expires_after="2024-05-16">
+    expires_after="2024-07-21">
   <owner>mcasas@chromium.org</owner>
   <owner>chromeos-gfx-video@google.com</owner>
   <summary>
@@ -5135,7 +5223,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Feedback.ChromeOSApp.GetBigFeedbackLogs.Success"
-    units="boolean" expires_after="2024-08-30">
+    enum="Boolean" expires_after="2024-08-30">
   <owner>xiangdongkong@google.com</owner>
   <owner>cros-feedback-app@google.com</owner>
   <summary>
@@ -5181,7 +5269,7 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Feedback.ChromeOSApp.IncludedEmail" units="boolean"
+<histogram name="Feedback.ChromeOSApp.IncludedEmail" enum="Boolean"
     expires_after="2024-08-30">
   <owner>longbowei@google.com</owner>
   <owner>xiangdongkong@google.com</owner>
@@ -5192,7 +5280,7 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Feedback.ChromeOSApp.IncludedFile" units="boolean"
+<histogram name="Feedback.ChromeOSApp.IncludedFile" enum="Boolean"
     expires_after="2024-08-30">
   <owner>longbowei@google.com</owner>
   <owner>xiangdongkong@google.com</owner>
@@ -5203,7 +5291,7 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Feedback.ChromeOSApp.IncludedScreenshot" units="boolean"
+<histogram name="Feedback.ChromeOSApp.IncludedScreenshot" enum="Boolean"
     expires_after="2024-08-30">
   <owner>longbowei@google.com</owner>
   <owner>xiangdongkong@google.com</owner>
@@ -5214,7 +5302,7 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Feedback.ChromeOSApp.IncludedSystemInfo" units="boolean"
+<histogram name="Feedback.ChromeOSApp.IncludedSystemInfo" enum="Boolean"
     expires_after="2024-08-30">
   <owner>longbowei@google.com</owner>
   <owner>xiangdongkong@google.com</owner>
@@ -5225,7 +5313,7 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Feedback.ChromeOSApp.IncludedUrl" units="boolean"
+<histogram name="Feedback.ChromeOSApp.IncludedUrl" enum="Boolean"
     expires_after="2024-08-30">
   <owner>longbowei@google.com</owner>
   <owner>xiangdongkong@google.com</owner>
@@ -5276,7 +5364,7 @@ chromium-metrics-reviews@google.com.
   </token>
 </histogram>
 
-<histogram name="Feedback.ChromeOSApp.ViewedHelpContent" units="boolean"
+<histogram name="Feedback.ChromeOSApp.ViewedHelpContent" enum="Boolean"
     expires_after="2024-08-30">
   <owner>longbowei@google.com</owner>
   <owner>xiangdongkong@google.com</owner>
@@ -5287,7 +5375,7 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Feedback.ChromeOSApp.ViewedImage" units="boolean"
+<histogram name="Feedback.ChromeOSApp.ViewedImage" enum="Boolean"
     expires_after="2024-08-30">
   <owner>longbowei@google.com</owner>
   <owner>xiangdongkong@google.com</owner>
@@ -5298,7 +5386,7 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Feedback.ChromeOSApp.ViewedMetrics" units="boolean"
+<histogram name="Feedback.ChromeOSApp.ViewedMetrics" enum="Boolean"
     expires_after="2024-08-30">
   <owner>longbowei@google.com</owner>
   <owner>xiangdongkong@google.com</owner>
@@ -5309,7 +5397,7 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Feedback.ChromeOSApp.ViewedScreenshot" units="boolean"
+<histogram name="Feedback.ChromeOSApp.ViewedScreenshot" enum="Boolean"
     expires_after="2024-08-30">
   <owner>longbowei@google.com</owner>
   <owner>xiangdongkong@google.com</owner>
@@ -5320,7 +5408,7 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Feedback.ChromeOSApp.ViewedSystemAndAppInfo" units="boolean"
+<histogram name="Feedback.ChromeOSApp.ViewedSystemAndAppInfo" enum="Boolean"
     expires_after="2024-08-30">
   <owner>longbowei@google.com</owner>
   <owner>xiangdongkong@google.com</owner>
@@ -5453,8 +5541,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Feedback.ReportSending.Online" units="boolean"
-    expires_after="2024-05-19">
+<histogram name="Feedback.ReportSending.Online" enum="Boolean"
+    expires_after="2024-07-21">
   <owner>xiangdongkong@google.com</owner>
   <owner>cros-feedback-app@google.com</owner>
   <summary>
@@ -5463,7 +5551,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Feedback.ReportSending.Result"
-    enum="FeedbackReportSendingResult" expires_after="2024-05-19">
+    enum="FeedbackReportSendingResult" expires_after="2024-07-21">
   <owner>xiangdongkong@google.com</owner>
   <owner>cros-feedback-app@google.com</owner>
   <summary>
@@ -5475,13 +5563,14 @@ chromium-metrics-reviews@google.com.
 <histogram name="Feedback.RequestSource" enum="FeedbackSource"
     expires_after="2024-06-30">
   <owner>afakhry@chromium.org</owner>
-  <owner>cros-telemetry@google.com</owner>
+  <owner>cros-feedback-app@google.com</owner>
   <summary>Records the source that requested showing the feedback app.</summary>
 </histogram>
 
 <histogram name="Feedback.SecurityPage.SurveyRequested" enum="Boolean"
     expires_after="2024-07-10">
   <owner>zackhan@chromium.org</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     Recorded once every time the security page survey is triggered.
   </summary>
@@ -5511,7 +5600,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Feedback.TrustSafetySentiment.TriggerOccurred"
-    enum="TrustSafetySentimentFeatureArea" expires_after="2024-05-19">
+    enum="TrustSafetySentimentFeatureArea" expires_after="2024-07-21">
   <owner>sauski@google.com</owner>
   <owner>chrome-hats-eng@google.com</owner>
   <summary>
@@ -5522,7 +5611,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="FetchKeepAlive.Browser.Metrics"
-    enum="FetchKeepAliveBrowserMetricType" expires_after="2024-04-10">
+    enum="FetchKeepAliveBrowserMetricType" expires_after="2024-07-10">
   <owner>mych@chromium.org</owner>
   <owner>chrome-bfcache@google.com</owner>
   <summary>
@@ -5531,156 +5620,43 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="FetchKeepAlive.Browser.Total" enum="Boolean"
-    expires_after="2024-04-10">
+<histogram name="FetchKeepAlive.Browser.Total{LoaderStatus}" enum="Boolean"
+    expires_after="2024-07-10">
   <owner>mych@chromium.org</owner>
   <owner>chrome-bfcache@google.com</owner>
   <summary>
-    Recorded true every time a new Fetch keepalive request is created by a
-    browser. It does NOT equal to the total number of JavaScript Fetch keepalive
-    call, as the latter can be immediately rejected with various JavaScript
-    exceptions.
-
-    This number should be compared with `FetchKeepAlive.Renderer.Total`.
+    Recorded true every time a Fetch keepalive request loader in browser has
+    {LoaderStatus}
   </summary>
-</histogram>
-
-<histogram name="FetchKeepAlive.Browser.Total.Finished" enum="Boolean"
-    expires_after="2024-04-10">
-  <owner>mych@chromium.org</owner>
-  <owner>chrome-bfcache@google.com</owner>
-  <summary>
-    Recorded once every time a FetchLater request loading is finished in
-    browser. A finished loading can be either suceeded or failed.
-
-    This number may be &lt;= `FetchKeepAlive.Browser.Total.Started`, as a
-    request may be dropped for other undocumented reasons like browser killed or
-    crashes. Also, this number is ~= `kLoadingSuceeded` + `kLoadingFailed` in
-    `FetchKeepAlive.Browser.Metrics`.
-  </summary>
-</histogram>
-
-<histogram name="FetchKeepAlive.Browser.Total.ReceivedResponse" enum="Boolean"
-    expires_after="2024-04-10">
-  <owner>mych@chromium.org</owner>
-  <owner>chrome-bfcache@google.com</owner>
-  <summary>
-    Recorded once every time a Fetch keepalive request loader in browser has
-    received a response.
-
-    This number should be compared with
-    `FetchKeepAlive.Renderer.Total.ReceivedResponse`.
-  </summary>
-</histogram>
-
-<histogram name="FetchKeepAlive.Browser.Total.Redirected" enum="Boolean"
-    expires_after="2024-04-10">
-  <owner>mych@chromium.org</owner>
-  <owner>chrome-bfcache@google.com</owner>
-  <summary>
-    Recorded once every time a Fetch keepalive request loader in browser has
-    received a redirect.
-
-    This number should be compared with
-    `FetchKeepAlive.Renderer.Total.Redirected`.
-  </summary>
-</histogram>
-
-<histogram name="FetchKeepAlive.Browser.Total.Started" enum="Boolean"
-    expires_after="2024-04-10">
-  <owner>mych@chromium.org</owner>
-  <owner>chrome-bfcache@google.com</owner>
-  <summary>
-    Recorded once every time a created Fetch keepalive request is started in the
-    browser. This number should be the same as `FetchKeepAlive.Browser.Total`,
-    but logging to figure out if any differneces exist.
-  </summary>
-</histogram>
-
-<histogram name="FetchKeepAlive.Renderer.Duration" units="ms"
-    expires_after="2024-06-23">
-  <owner>mych@chromium.org</owner>
-  <owner>chrome-bfcache@google.com</owner>
-  <summary>
-    Recorded the time taken to complete a fetch keepalive request in a renderer
-    process, no matter a request succeeds or fails.
-
-    As this is from the view of a renderer, it should not be used if in-browser
-    migration is enabled, as renderer will not be able to outlive even if any of
-    fetch keepalive request is still pending.
-  </summary>
-</histogram>
-
-<histogram name="FetchKeepAlive.Renderer.Duration.Failed" units="ms"
-    expires_after="2024-06-23">
-  <owner>mych@chromium.org</owner>
-  <owner>chrome-bfcache@google.com</owner>
-  <summary>
-    Recorded the time taken to complete a failed fetch keepalive request in a
-    renderer process.
-
-    This is the duration of a subset of requests logged by
-    `FetchKeepAlive.Renderer.Duration`. See that histogram for more details.
-  </summary>
-</histogram>
-
-<histogram name="FetchKeepAlive.Renderer.Duration.Succeeded" units="ms"
-    expires_after="2024-06-23">
-  <owner>mych@chromium.org</owner>
-  <owner>chrome-bfcache@google.com</owner>
-  <summary>
-    Recorded the time taken to complete a succeeded fetch keepalive request in a
-    renderer process.
-
-    This is the duration of a subset of requests logged by
-    `FetchKeepAlive.Renderer.Duration`. See that histogram for more details.
-  </summary>
-</histogram>
-
-<histogram name="FetchKeepAlive.Renderer.DurationAfterDetached" units="ms"
-    expires_after="2024-04-10">
-  <owner>mych@chromium.org</owner>
-  <owner>chrome-bfcache@google.com</owner>
-  <summary>
-    Recorded the time between a fetch context is &quot;detached&quot; and
-    completing a fetch keepalive request, no matter a request succeeds or fails.
-
-    As this is from the view of a renderer, it should not be used if in-browser
-    migration is enabled, as renderer will not be able to detach even if any of
-    fetch keepalive request is still pending.
-  </summary>
-</histogram>
-
-<histogram name="FetchKeepAlive.Renderer.DurationAfterDetached.Failed"
-    units="ms" expires_after="2024-04-10">
-  <owner>mych@chromium.org</owner>
-  <owner>chrome-bfcache@google.com</owner>
-  <summary>
-    Recorded the time between a fetch context is &quot;detached&quot; and
-    completing a failed fetch keepalive request.
-
-    This is the duration of a subset of requests logged by
-    `FetchKeepAlive.Renderer.DurationAfterDetached`. See that histogram for more
-    details.
-  </summary>
-</histogram>
-
-<histogram name="FetchKeepAlive.Renderer.DurationAfterDetached.Succeeded"
-    units="ms" expires_after="2024-04-10">
-  <owner>mych@chromium.org</owner>
-  <owner>chrome-bfcache@google.com</owner>
-  <summary>
-    Recorded the time between a fetch context is &quot;detached&quot; and
-    completing a succeeded fetch keepalive request.
-
-    This is the duration of a subset of requests logged by
-    `FetchKeepAlive.Renderer.DurationAfterDetached`. See that histogram for more
-    details.
-  </summary>
+  <token key="LoaderStatus">
+    <variant name=""
+        summary="been created. It does NOT equal to the total number of
+                 JavaScript Fetch keepalive call, as the latter can be
+                 immediately rejected with various JavaScript exceptions.
+                 This number should be compared with
+                 `FetchKeepAlive.Renderer.Total`."/>
+    <variant name=".Finished"
+        summary="finished loading. A finished loading can be either suceeded
+                 or failed. This number may be &lt;=
+                 `FetchKeepAlive.Browser.Total.Started`, as a request may be
+                 dropped for other undocumented reasons like browser killed
+                 or crashes. Also, this number is ~= `kLoadingSuceeded` +
+                 `kLoadingFailed` in `FetchKeepAlive.Browser.Metrics`."/>
+    <variant name=".ReceivedResponse"
+        summary="received a response. This number should be compared with
+                 `FetchKeepAlive.Renderer.Total.ReceivedResponse`."/>
+    <variant name=".Redirected"
+        summary="received a redirect. This number should be compared with
+                 `FetchKeepAlive.Renderer.Total.Redirected`."/>
+    <variant name=".Started"
+        summary="started to load. This number should be the same as
+                 `FetchKeepAlive.Browser.Total`, but logging to figure out if
+                 any differneces exist."/>
+  </token>
 </histogram>
 
 <histogram name="FetchKeepAlive.Renderer.Metrics"
-    enum="FetchKeepAliveRendererMetricType" expires_after="2024-04-10">
+    enum="FetchKeepAliveRendererMetricType" expires_after="2024-07-10">
   <owner>mych@chromium.org</owner>
   <owner>chrome-bfcache@google.com</owner>
   <summary>
@@ -5689,76 +5665,69 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="FetchKeepAlive.Renderer.Total" enum="Boolean"
-    expires_after="2024-04-10">
+<histogram name="FetchKeepAlive.Renderer.Total{LoaderStatus}" enum="Boolean"
+    expires_after="2024-07-10">
   <owner>mych@chromium.org</owner>
   <owner>chrome-bfcache@google.com</owner>
   <summary>
-    Recorded true every time a new FetchLater request is created by a renderer.
-    It does NOT equal to the total number of JavaScript FetchLater API call, as
-    the latter can be immediately rejected with various JavaScript exceptions.
-
-    This metric is recorded to compare whether different behavior happens
-    between renderer and browser. This number should be compared with
-    `FetchKeepAlive.Browser.Total`.
+    Recorded true every time a Fetch keepalive request loader in a renderer
+    {LoaderStatus}
   </summary>
+  <token key="LoaderStatus">
+    <variant name=""
+        summary="is created. It does NOT equal to the total number of
+                 JavaScript Fetch API call, as the latter can be immediately
+                 rejected with various JavaScript exceptions. This metric is
+                 recorded to compare whether different behavior happens
+                 between renderer and browser. This number should be compared
+                 with `FetchKeepAlive.Browser.Total`."/>
+    <variant name=".Finished"
+        summary="is finished loading. A finished loading can be either
+                 suceeded or failed. This number may be &lt;=
+                 `FetchKeepAlive.Renderer.Total.Started`, as a request may be
+                 dropped for other undocumented reasons like browser killed
+                 or crashes. Also, this number is &lt;=
+                 `FetchKeepAlive.Browser.Total.Finished`."/>
+    <variant name=".ReceivedResponse"
+        summary="has received a response. This number should be compared with
+                 `FetchKeepAlive.Renderer.Total.ReceivedResponse`."/>
+    <variant name=".Redirected"
+        summary="has received a redirect. This number should be compared with
+                 `FetchKeepAlive.Browser.Total.Redirected`."/>
+    <variant name=".Started"
+        summary="is started to load. This number may be &lt;=
+                 `FetchKeepAlive.Renderer.Total`, as a created request may
+                 not be started at all."/>
+  </token>
 </histogram>
 
-<histogram name="FetchKeepAlive.Renderer.Total.Finished" enum="Boolean"
-    expires_after="2024-04-10">
+<histogram name="FetchKeepAlive.Renderer.{DurationType}{RequestStatus}"
+    units="ms" expires_after="2024-07-10">
   <owner>mych@chromium.org</owner>
   <owner>chrome-bfcache@google.com</owner>
-  <summary>
-    Recorded once every time a Fetch keepalive request loading is finished in a
-    renderer process. A finished loading can be either suceeded or failed.
-
-    This number may be &lt;= `FetchKeepAlive.Renderer.Total.Started`, as a
-    request may be dropped for other undocumented reasons like browser killed or
-    crashes. Also, this number is &lt;= `FetchKeepAlive.Browser.Total.Finished`.
-  </summary>
-</histogram>
-
-<histogram name="FetchKeepAlive.Renderer.Total.ReceivedResponse" enum="Boolean"
-    expires_after="2024-04-10">
-  <owner>mych@chromium.org</owner>
-  <owner>chrome-bfcache@google.com</owner>
-  <summary>
-    Recorded once every time a Fetch keepalive request loader in a renderer has
-    received a response.
-
-    This number should be compared with
-    `FetchKeepAlive.Renderer.Total.ReceivedResponse`.
-  </summary>
-</histogram>
-
-<histogram name="FetchKeepAlive.Renderer.Total.Redirected" enum="Boolean"
-    expires_after="2024-04-10">
-  <owner>mych@chromium.org</owner>
-  <owner>chrome-bfcache@google.com</owner>
-  <summary>
-    Recorded once every time a Fetch keepalive request loader in a renderer has
-    received a redirect.
-
-    This number should be compared with
-    `FetchKeepAlive.Browser.Total.Redirected`.
-  </summary>
-</histogram>
-
-<histogram name="FetchKeepAlive.Renderer.Total.Started" enum="Boolean"
-    expires_after="2024-04-10">
-  <owner>mych@chromium.org</owner>
-  <owner>chrome-bfcache@google.com</owner>
-  <summary>
-    Recorded once every time a created Fetch keepalive request is started in a
-    renderer process.
-
-    This number may be &lt;= `FetchKeepAlive.Renderer.Total`, as a created
-    request may not be started at all.
-  </summary>
+  <summary>Recorded the time {DurationType} {RequestStatus}</summary>
+  <token key="DurationType">
+    <variant name="Duration"
+        summary="taken to complete a fetch keepalive request in a renderer
+                 process"/>
+    <variant name="DurationAfterDetached"
+        summary="between a fetch context is &quot;detached&quot; and
+                 completing a fetch keepalive request"/>
+  </token>
+  <token key="RequestStatus">
+    <variant name=""
+        summary=", no matter a request succeeds or fails. As this is from the
+                 view of a renderer, it should not be used if in-browser
+                 migration is enabled, as renderer will not be able to
+                 outlive even if any of fetch keepalive request is still
+                 pending."/>
+    <variant name=".Failed" summary=", where the request has failed."/>
+    <variant name=".Succeeded" summary=", where the request has succeeded."/>
+  </token>
 </histogram>
 
 <histogram name="FetchLater.Browser.Metrics" enum="FetchLaterBrowserMetricType"
-    expires_after="2024-04-10">
+    expires_after="2024-07-10">
   <owner>mych@chromium.org</owner>
   <owner>chrome-bfcache@google.com</owner>
   <summary>
@@ -5767,36 +5736,30 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="FetchLater.Browser.Total" enum="Boolean"
-    expires_after="2024-04-10">
+<histogram name="FetchLater.Browser.Total{LoaderStatus}" enum="Boolean"
+    expires_after="2024-07-10">
   <owner>mych@chromium.org</owner>
   <owner>chrome-bfcache@google.com</owner>
-  <summary>
-    Records true every time a new FetchLater request is scheduled by a browser.
-    It does NOT equal to the total number of JavaScript FetchLater API call, as
-    the latter can be immediately rejected with various JavaScript exceptions.
-
-    This number should be compared with `FetchLater.Renderer.Total`, and it may
-    be &gt;= the sum of `FetchLater.Browser.Metrics`, as a request may be
-    dropped for other undocumented reasons like browser killed or crashes.
-  </summary>
-</histogram>
-
-<histogram name="FetchLater.Browser.Total.Started" enum="Boolean"
-    expires_after="2024-04-10">
-  <owner>mych@chromium.org</owner>
-  <owner>chrome-bfcache@google.com</owner>
-  <summary>
-    Records once every time a scheduled FetchLater request is started in
-    browser.
-
-    This number should be the sum of enum values &quot;kStarted*&quot; in
-    `FetchLater.Browser.Metrics`.
-  </summary>
+  <summary>Records true every time {LoaderStatus}</summary>
+  <token key="LoaderStatus">
+    <variant name=""
+        summary="a new FetchLater request is scheduled by a browser. It does
+                 NOT equal to the total number of JavaScript FetchLater API
+                 call, as the latter can be immediately rejected with various
+                 JavaScript exceptions. This number should be compared with
+                 `FetchLater.Renderer.Total`, and it may be &gt;= the sum of
+                 `FetchLater.Browser.Metrics`, as a request may be dropped
+                 for other undocumented reasons like browser killed or
+                 crashes."/>
+    <variant name=".Started"
+        summary="a scheduled FetchLater request is started in browser. This
+                 number should be the sum of enum values
+                 &quot;kStarted*&quot; in `FetchLater.Browser.Metrics`."/>
+  </token>
 </histogram>
 
 <histogram name="FetchLater.Renderer.Metrics"
-    enum="FetchLaterRendererMetricType" expires_after="2024-04-10">
+    enum="FetchLaterRendererMetricType" expires_after="2024-07-10">
   <owner>mych@chromium.org</owner>
   <owner>chrome-bfcache@google.com</owner>
   <summary>
@@ -5806,7 +5769,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="FetchLater.Renderer.Total" enum="Boolean"
-    expires_after="2024-04-10">
+    expires_after="2024-07-10">
   <owner>mych@chromium.org</owner>
   <owner>chrome-bfcache@google.com</owner>
   <summary>
@@ -5822,7 +5785,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="FirstPartySets.Database.InitStatus"
-    enum="FirstPartySetsDatabaseInitStatus" expires_after="2024-05-12">
+    enum="FirstPartySetsDatabaseInitStatus" expires_after="2024-07-14">
   <owner>shuuran@google.com</owner>
   <owner>kaustubhag@google.com</owner>
   <summary>
@@ -5832,7 +5795,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="FirstPartySets.Initialization.ClearSiteDataOutcome"
-    enum="BooleanSuccess" expires_after="2024-05-12">
+    enum="BooleanSuccess" expires_after="2024-07-14">
   <owner>shuuran@google.com</owner>
   <owner>kaustubhag@google.com</owner>
   <summary>
@@ -5883,7 +5846,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="FirstRun.LaunchSource" enum="FirstRunLaunchSource"
-    expires_after="2024-06-02">
+    expires_after="2024-08-04">
   <owner>jlebel@chromium.org</owner>
   <owner>olivierrobin@chromium.org</owner>
   <summary>
@@ -5894,7 +5857,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="FirstRun.NewUserExperience.GoogleAppsInteraction"
-    enum="NuxGoogleAppsInteractions" expires_after="2024-05-26">
+    enum="NuxGoogleAppsInteractions" expires_after="2024-07-28">
   <owner>johntlee@chromium.org</owner>
   <owner>dpapad@chromium.org</owner>
   <summary>
@@ -5934,7 +5897,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="FirstRun.NewUserExperience.NtpBackgroundInteraction"
-    enum="NuxNtpBackgroundInteractions" expires_after="2024-05-19">
+    enum="NuxNtpBackgroundInteractions" expires_after="2024-07-21">
   <owner>johntlee@chromium.org</owner>
   <owner>dpapad@chromium.org</owner>
   <summary>
@@ -5961,7 +5924,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="FirstRun.NewUserExperience.SignInInterstitialInteraction"
-    enum="NuxSignInInterstitialInteractions" expires_after="2024-05-26">
+    enum="NuxSignInInterstitialInteractions" expires_after="2024-07-28">
   <owner>johntlee@chromium.org</owner>
   <owner>dpapad@chromium.org</owner>
   <summary>
@@ -5974,7 +5937,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="FirstRun.Sentinel.Created" enum="FirstRunSentinelResult"
-    expires_after="2024-06-02">
+    expires_after="2024-08-04">
   <owner>jlebel@chromium.org</owner>
   <owner>chrome-signin-team@google.com</owner>
   <summary>
@@ -6004,7 +5967,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="FirstRun.Stage" enum="FirstRunStageResult"
-    expires_after="2024-06-02">
+    expires_after="2024-08-04">
   <owner>tinazwang@chromium.org</owner>
   <owner>bling-get-started@google.com</owner>
   <summary>
@@ -6126,7 +6089,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Gamepad.KnownGamepadConnectedWithId"
-    enum="GamepadVendorProduct" expires_after="2024-05-12">
+    enum="GamepadVendorProduct" expires_after="2024-07-14">
   <owner>mattreynolds@chromium.org</owner>
   <owner>deviceapi-team@google.com</owner>
   <summary>
@@ -6142,6 +6105,17 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="Gamepad.ReadContentionCount" units="Contentions"
+    expires_after="2024-05-12">
+  <owner>mattreynolds@google.com</owner>
+  <owner>reillyg@google.com</owner>
+  <summary>
+    Counts the number of read contentions on the gamepad SeqLock. This is
+    sampled at 60Hz when the gamepad API is active for the page. It is capped at
+    a maximum of 10, after which the read fails.
+  </summary>
+</histogram>
+
 <histogram name="Gamepad.UnknownGamepadConnected" enum="GamepadSource"
     expires_after="2024-05-12">
   <owner>mattreynolds@chromium.org</owner>
@@ -6153,9 +6127,62 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="GestureNavigation.Type" enum="GestureNavigationType"
-    expires_after="2022-08-21">
-  <owner>jinsukkim@chromium.org</owner>
+<histogram name="Gamepad.ValidSharedMemoryHandle" enum="HandleValidity"
+    expires_after="2024-05-12">
+  <owner>mattreynolds@google.com</owner>
+  <owner>reillyg@google.com</owner>
+  <summary>
+    Whether the browser sent a valid shared memory handle to the renderer.
+  </summary>
+</histogram>
+
+<histogram name="GestureNavigation.Activated2"
+    enum="GestureNavigationDirection" expires_after="2024-10-21">
+  <owner>twellington@chromium.org</owner>
+  <owner>clank-app-team@google.com</owner>
+  <summary>
+    Overscroll gesture was made beyond a threshold big enough to regard it as a
+    valid gesture navigation i.e. at least 1/3 of the arrow puck is visible.
+    Similar to 'Triggered' but is used in pair with 'Cancelled' on M81 forward
+    to measure cancellation rate. Implemented for Android.
+  </summary>
+</histogram>
+
+<histogram name="GestureNavigation.Cancelled2"
+    enum="GestureNavigationDirection" expires_after="2024-10-21">
+  <owner>twellington@chromium.org</owner>
+  <owner>clank-app-team@google.com</owner>
+  <summary>
+    Overscroll gestures that were cancelled before they were completed. Similar
+    to 'Abandoned' but is used in pair with 'Activated' on M81 forward to
+    measure cancellation rate. Implemented for Android.
+  </summary>
+</histogram>
+
+<histogram name="GestureNavigation.Completed2"
+    enum="GestureNavigationDirection" expires_after="2024-10-21">
+  <owner>twellington@chromium.org</owner>
+  <owner>clank-app-team@google.com</owner>
+  <summary>
+    Navigations that were triggered due to completed overscroll gesture.
+    Implemented for Android.
+  </summary>
+</histogram>
+
+<histogram name="GestureNavigation.Reversed2" enum="GestureNavigationDirection"
+    expires_after="2024-10-21">
+  <owner>twellington@chromium.org</owner>
+  <owner>clank-app-team@google.com</owner>
+  <summary>
+    Overscroll gesture was made to trigger navigation, but within 3 seconds user
+    used overscroll gesture to navigate back to the page. Implemented for
+    Android.
+  </summary>
+</histogram>
+
+<histogram name="GestureNavigation.Type2" enum="GestureNavigationType"
+    expires_after="2024-10-21">
+  <owner>twellington@chromium.org</owner>
   <owner>clank-app-team@google.com</owner>
   <summary>
     Gesture navigation type. It can be either Chrome's own gesture UI that
@@ -6199,7 +6226,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Hardware.Display.Count.OnChange" units="units"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>sashamcintosh@chromium.org</owner>
   <owner>chromeos-gfx@chromium.org</owner>
   <summary>
@@ -6209,7 +6236,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Hardware.Display.Count.OnStartup" units="units"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>sashamcintosh@chromium.org</owner>
   <owner>chromeos-gfx@chromium.org</owner>
   <summary>
@@ -6219,7 +6246,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Hardware.Display.SupportsHDR" enum="BooleanSupported"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>cassew@google.com</owner>
   <owner>media-dev-uma@chromium.org</owner>
   <summary>
@@ -6231,7 +6258,7 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Hardware.TotalDiskSpace" units="GB" expires_after="2024-05-19">
+<histogram name="Hardware.TotalDiskSpace" units="GB" expires_after="2024-07-21">
   <owner>zmo@chromium.org</owner>
   <owner>graphics-dev@chromium.org</owner>
   <summary>
@@ -6241,7 +6268,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Hwsec.Attestation.PrepareDuration" units="ms"
-    expires_after="2024-05-12">
+    expires_after="2024-07-14">
   <owner>chingkang@chromium.org</owner>
   <owner>cros-hwsec-userland-eng+uma@google.com</owner>
   <summary>The duration of preparation for enrollment in attestation.</summary>
@@ -6306,7 +6333,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ImportantFile.FileReplaceRetryCount" units="attempt count"
-    expires_after="2024-06-12">
+    expires_after="2024-08-11">
   <owner>etienneb@chromium.org</owner>
   <owner>grt@chromium.org</owner>
   <summary>
@@ -6343,7 +6370,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram name="Incognito.ClearBrowsingDataDialog.ActionType"
     enum="IncognitoClearBrowsingDataDialogActionType"
-    expires_after="2024-05-12">
+    expires_after="2024-07-14">
   <owner>roagarwal@chromium.org</owner>
   <owner>chrome-incognito@google.com</owner>
   <summary>
@@ -6476,19 +6503,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="InstanceID.GetToken.RequestStatus.FcmInvalidations"
-    enum="GCMRegistrationRequestStatus" expires_after="2024-02-20">
-  <owner>peter@chromium.org</owner>
-  <owner>rushans@chromium.org</owner>
-  <owner>treib@chromium.org</owner>
-  <summary>
-    Status code of the outcome of GetToken request for FCM invalidations
-    (subtype was &quot;com.google.chrome.fcm.invalidations&quot;).
-  </summary>
-</histogram>
-
 <histogram name="InstanceID.GetToken.RequestStatus.SyncInvalidations"
-    enum="GCMRegistrationRequestStatus" expires_after="2024-05-12">
+    enum="GCMRegistrationRequestStatus" expires_after="2024-07-14">
   <owner>peter@chromium.org</owner>
   <owner>rushans@chromium.org</owner>
   <owner>treib@chromium.org</owner>
@@ -6838,7 +6854,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="LoadingPredictor.LcppStatCorruptedAtLearnTime" enum="Boolean"
-    expires_after="2024-02-01">
+    expires_after="2024-05-01">
   <owner>yyanagisawa@chromium.org</owner>
   <owner>chrome-loading@google.com</owner>
   <summary>
@@ -6963,7 +6979,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="LoadingPredictor.SetLcppNavigationHint.Status"
-    enum="LcppHintStatus" expires_after="2024-02-01">
+    enum="LcppHintStatus" expires_after="2024-05-01">
   <owner>yyanagisawa@chromium.org</owner>
   <owner>chrome-loading@google.com</owner>
   <summary>
@@ -7101,7 +7117,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Mojo.Channel.WriteMessageSize" units="bytes"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>amistry@chromium.org</owner>
   <owner>bgeffon@chromium.org</owner>
   <owner>rockot@google.com</owner>
@@ -7165,8 +7181,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Mojo.InvalidUTF8String" enum="BooleanValid"
-    expires_after="2023-10-08">
-  <owner>rsesek@chromium.org</owner>
+    expires_after="2024-10-08">
+  <owner>ellyjones@chromium.org</owner>
   <owner>chrome-mojo@google.com</owner>
   <summary>
     Emitted any time a Mojo string is deserialized and is not valid UTF-8.
@@ -7174,8 +7190,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Mouse.PointerSensitivity.Changed" enum="PointerSensitivity"
-    expires_after="2024-05-19">
-  <owner>zentaro@chromium.org</owner>
+    expires_after="2024-07-21">
+  <owner>zhangwenyu@google.com</owner>
   <owner>cros-peripherals@google.com</owner>
   <summary>
     Tracks mouse sensitivity setting changes by the user. This replaces the old
@@ -7195,14 +7211,36 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="Mouse.PrimaryButtonRight.Changed" enum="PrimaryButtonRight"
+    expires_after="2024-03-10">
+  <owner>gavinwill@chromium.org</owner>
+  <owner>cros-peripherals@chromium.org</owner>
+  <summary>
+    Tracks mouse PrimaryButtonRight setting. Only reported on Chrome OS.
+  </summary>
+</histogram>
+
+<histogram name="Mouse.PrimaryButtonRight.Started" enum="PrimaryButtonRight"
+    expires_after="2024-03-10">
+  <owner>gavinwill@chromium.org</owner>
+  <owner>cros-peripherals@chromium.org</owner>
+  <summary>
+    Tracks mouse PrimaryButtonRight setting on startup. Only reported on Chrome
+    OS.
+  </summary>
+</histogram>
+
 <histogram base="true" name="Mouse.ScrollAcceleration" enum="BooleanEnabled"
-    expires_after="2022-06-15">
+    expires_after="2025-02-11">
 <!-- Name completed by histogram_suffixes name="PreferenceChangeType" -->
 
-  <owner>khorimoto@chromium.org</owner>
-  <owner>zentaro@chromium.org</owner>
+  <owner>zhangwenyu@google.com</owner>
+  <owner>cros-peripherals@google.com</owner>
   <summary>
     Whether mouse scroll acceleration is enabled. Only reported on Chrome OS.
+
+    Warning: this histogram was expired from 2022-06-15 to M123; data may be
+    missing.
   </summary>
 </histogram>
 
@@ -7210,7 +7248,7 @@ chromium-metrics-reviews@google.com.
     expires_after="2024-06-30">
 <!-- Name completed by histogram_suffixes name="PreferenceChangeType" -->
 
-  <owner>zentaro@chromium.org</owner>
+  <owner>zhangwenyu@google.com</owner>
   <owner>cros-peripherals@google.com</owner>
   <summary>
     Mouse scroll sensitivity value. Only reported on Chrome OS.
@@ -7231,19 +7269,11 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="MPArch.ChildProcessLaunchSubsequent" units="ms"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>pasko@chromium.org</owner>
   <owner>yfriedman@chromium.org</owner>
   <summary>
     The time it takes to spawn child sub processes not counting the first one.
-  </summary>
-</histogram>
-
-<histogram name="MPArch.ForkTime" units="ms" expires_after="2020-02-23">
-  <owner>lizeb@chromium.org</owner>
-  <summary>
-    Time to call fork() or clone(), in ms. Recorded at each fork excluding from
-    the zygote, only on posix platforms.
   </summary>
 </histogram>
 
@@ -7347,7 +7377,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="OnDeviceModel.BenchmarkDuration" units="ms"
-    expires_after="2024-05-27">
+    expires_after="2024-07-28">
   <owner>cduvall@chromium.org</owner>
   <owner>sophiechang@chromium.org</owner>
   <summary>
@@ -7358,7 +7388,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="OnDeviceModel.BenchmarkEstimatedTokensPerSecond.{Stage}"
-    units="tk/s" expires_after="2024-05-27">
+    units="tk/s" expires_after="2024-07-28">
   <owner>cduvall@chromium.org</owner>
   <owner>sophiechang@chromium.org</owner>
   <summary>
@@ -7373,7 +7403,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="OnDeviceModel.BenchmarkSuccess" enum="Boolean"
-    expires_after="2024-05-27">
+    expires_after="2024-07-28">
   <owner>cduvall@chromium.org</owner>
   <owner>sophiechang@chromium.org</owner>
   <summary>
@@ -7394,7 +7424,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="OnDeviceModel.DeviceHeapSize.{GpuType}" units="MB"
-    expires_after="2024-05-27">
+    expires_after="2024-07-28">
   <owner>cduvall@chromium.org</owner>
   <owner>sophiechang@chromium.org</owner>
   <summary>
@@ -7428,7 +7458,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="OnDeviceModel.LoadModelDuration" units="ms"
-    expires_after="2024-05-27">
+    expires_after="2024-07-28">
   <owner>cduvall@chromium.org</owner>
   <owner>sophiechang@chromium.org</owner>
   <summary>
@@ -7438,7 +7468,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="OnDeviceModel.MaxBufferSize.{GpuType}" units="MB"
-    expires_after="2024-05-27">
+    expires_after="2024-07-28">
   <owner>cduvall@chromium.org</owner>
   <owner>sophiechang@chromium.org</owner>
   <summary>
@@ -7452,7 +7482,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="OnDeviceModel.SystemRAM.{GpuType}" units="MB"
-    expires_after="2024-05-27">
+    expires_after="2024-07-28">
   <owner>cduvall@chromium.org</owner>
   <owner>sophiechang@chromium.org</owner>
   <summary>
@@ -7619,7 +7649,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="OSCrypt.AppBoundEncryption.Decrypt.ResultCode" enum="Hresult"
-    expires_after="2024-06-02">
+    expires_after="2024-08-04">
   <owner>wfh@chromium.org</owner>
   <owner>nparker@chromium.org</owner>
   <summary>
@@ -7630,7 +7660,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="OSCrypt.AppBoundEncryption.Decrypt.ResultLastError"
-    enum="WinGetLastError" expires_after="2024-06-02">
+    enum="WinGetLastError" expires_after="2024-08-04">
   <owner>wfh@chromium.org</owner>
   <owner>nparker@chromium.org</owner>
   <summary>
@@ -7641,7 +7671,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="OSCrypt.AppBoundEncryption.Decrypt.Time" units="ms"
-    expires_after="2024-06-02">
+    expires_after="2024-08-04">
   <owner>wfh@chromium.org</owner>
   <owner>nparker@chromium.org</owner>
   <summary>
@@ -7652,7 +7682,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="OSCrypt.AppBoundEncryption.Encrypt.ResultCode" enum="Hresult"
-    expires_after="2024-06-02">
+    expires_after="2024-08-04">
   <owner>wfh@chromium.org</owner>
   <owner>nparker@chromium.org</owner>
   <summary>
@@ -7664,7 +7694,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="OSCrypt.AppBoundEncryption.Encrypt.ResultLastError"
-    enum="WinGetLastError" expires_after="2024-06-02">
+    enum="WinGetLastError" expires_after="2024-08-04">
   <owner>wfh@chromium.org</owner>
   <owner>nparker@chromium.org</owner>
   <summary>
@@ -7677,7 +7707,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="OSCrypt.AppBoundEncryption.Encrypt.Time" units="ms"
-    expires_after="2024-06-02">
+    expires_after="2024-08-04">
   <owner>wfh@chromium.org</owner>
   <owner>nparker@chromium.org</owner>
   <summary>
@@ -7689,12 +7719,24 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="OSCrypt.BackendUsage" enum="LinuxPasswordStoreUsage"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>cfroussios@chromium.org</owner>
   <owner>mamir@chromium.org</owner>
   <summary>
     The backend selected for this user and whether it was initialised
     successfully.
+  </summary>
+</histogram>
+
+<histogram name="OSCrypt.DPAPIProvider.Status" enum="OSCryptDPAPIKeyStatus"
+    expires_after="2024-06-30">
+  <owner>wfh@chromium.org</owner>
+  <owner>nparker@chromium.org</owner>
+  <summary>
+    The result of the DPAPI OSCrypt Async Key Provider reading the OSCrypt Sync
+    DPAPI key from pref store when being initialized. This is recorded once
+    during browser startup if the DPAPI Key Provider is enabled, on Windows
+    only.
   </summary>
 </histogram>
 
@@ -7710,7 +7752,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="OSCrypt.Win.Decrypt.Result" enum="BooleanSuccess"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>wfh@chromium.org</owner>
   <owner>nparker@chromium.org</owner>
   <summary>
@@ -7730,7 +7772,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="OSCrypt.Win.Encrypt.Result" enum="BooleanSuccess"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>wfh@chromium.org</owner>
   <owner>nparker@chromium.org</owner>
   <summary>
@@ -7845,7 +7887,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Ozone.TouchEventConverterEvdev.PalmTouchCount"
-    enum="BooleanDetected" expires_after="2024-06-01">
+    enum="BooleanDetected" expires_after="2024-08-04">
   <owner>jiwan@chromium.org</owner>
   <owner>robsc@chromium.org</owner>
   <summary>
@@ -7856,7 +7898,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Ozone.TouchEventConverterEvdev.RepeatedTouchCount"
-    units="BooleanDetected" expires_after="2024-06-01">
+    enum="BooleanDetected" expires_after="2024-08-04">
   <owner>jiwan@chromium.org</owner>
   <owner>robsc@chromium.org</owner>
   <summary>
@@ -7868,7 +7910,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Ozone.TouchEventConverterEvdev.StylusSessionCount"
-    units="BooleanDetected" expires_after="2024-06-01">
+    enum="BooleanDetected" expires_after="2024-08-04">
   <owner>jiwan@chromium.org</owner>
   <owner>robsc@chromium.org</owner>
   <summary>
@@ -7879,7 +7921,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Ozone.TouchEventConverterEvdev.StylusSessionLength"
-    units="duration" expires_after="2024-06-01">
+    units="duration" expires_after="2024-08-04">
   <owner>jiwan@chromium.org</owner>
   <owner>robsc@chromium.org</owner>
   <summary>
@@ -7915,7 +7957,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Ozone.TouchEventConverterEvdev.TouchSessionCount"
-    units="BooleanDetected" expires_after="2024-06-01">
+    enum="BooleanDetected" expires_after="2024-06-01">
   <owner>jiwan@chromium.org</owner>
   <owner>robsc@chromium.org</owner>
   <summary>
@@ -7926,7 +7968,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Ozone.TouchEventConverterEvdev.TouchSessionLength"
-    units="duration" expires_after="2024-06-01">
+    units="duration" expires_after="2024-08-04">
   <owner>jiwan@chromium.org</owner>
   <owner>robsc@chromium.org</owner>
   <summary>
@@ -7948,7 +7990,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Ozone.TouchEventConverterEvdev.TouchTypeBeforeStylus"
-    enum="TouchType" expires_after="2024-06-01">
+    enum="TouchType" expires_after="2024-08-04">
   <owner>jiwan@chromium.org</owner>
   <owner>robsc@chromium.org</owner>
   <summary>
@@ -8143,7 +8185,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Pepper.InterfaceUsed" enum="PepperInterface"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>fabiansommer@chromium.org</owner>
   <owner>dschuff@chromium.org</owner>
   <summary>
@@ -8170,6 +8212,11 @@ chromium-metrics-reviews@google.com.
     Whether a Pepper UDP bind attempt comes from a plugin in a secure or an
     insecure origin.
   </summary>
+</histogram>
+
+<histogram name="Pepper.PluginHung" enum="BooleanHit" expires_after="M124">
+  <owner>mackinlay@google.com</owner>
+  <summary>Count how often the plugin hung infobar is displayed.</summary>
 </histogram>
 
 <histogram name="PeriodicBackgroundSync.Event.BatchSize" units="events"
@@ -8297,6 +8344,20 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="Plugin.DisabledPlugins" enum="PluginType" expires_after="M124">
+  <owner>xhwang@chromium.org</owner>
+  <summary>
+    Record of the number of attempts to load a plugin that were blocked because
+    the plugin in question was disabled. An attempt to load a plugin may be made
+    typically once during a page load (or re-load).
+  </summary>
+</histogram>
+
+<histogram name="Plugin.MissingPlugins" enum="PluginType" expires_after="M124">
+  <owner>xhwang@chromium.org</owner>
+  <summary>Number of times the plugin has been found missing.</summary>
+</histogram>
+
 <histogram base="true" name="PointingStick.Acceleration" enum="BooleanEnabled"
     expires_after="2024-06-11">
   <owner>dpad@google.com</owner>
@@ -8385,20 +8446,27 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Process.Sandbox.StartSandboxedWin.TotalDuration"
+<histogram name="Process.Sandbox.StartSandboxedWin.{Event}Duration"
     units="microseconds" expires_after="2024-06-30">
   <owner>ajgo@chromium.org</owner>
   <owner>src/sandbox/policy/win/OWNERS</owner>
   <summary>
-    Duration of StartSandboxedProcess() including the time Windows spends
-    starting the suspended process. Emitted on a successful launch of a
-    sandboxed process on Windows. Only emitted where a high-resolution timer is
-    available (see Windows.HasHighResolutionTimeTicks).
+    Duration of {Event} within StartSandboxedProcess() including the time
+    Windows spends starting the suspended process. Emitted on a successful
+    launch of a sandboxed process on Windows. Only emitted where a
+    high-resolution timer is available (see Windows.HasHighResolutionTimeTicks).
   </summary>
+  <token key="Event">
+    <variant name="CreatePolicy"/>
+    <variant name="GeneratePolicy"/>
+    <variant name="PostSpawnTarget"/>
+    <variant name="SpawnTarget"/>
+    <variant name="Total" summary="the total time"/>
+  </token>
 </histogram>
 
 <histogram name="PushMessaging.DeliveryStatus" enum="PushEventStatus"
-    expires_after="2024-05-12">
+    expires_after="2024-07-14">
   <owner>peter@chromium.org</owner>
   <owner>knollr@chromium.org</owner>
   <summary>
@@ -8445,6 +8513,17 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="PushMessaging.SilentNotification" enum="SilentPushEvent"
+    expires_after="2025-01-31">
+  <owner>tommasin@chromium.org</owner>
+  <owner>kartoffel-core-eng@google.com</owner>
+  <summary>
+    When a new silent push message is received, this records wether a generic
+    notification is shown or not. Additionally it records if the &quot;No silent
+    pushes&quot; enforcement is skipped.
+  </summary>
+</histogram>
+
 <histogram name="PushMessaging.TimeToReadPersistedMessages" units="ms"
     expires_after="M98">
   <owner>peter@chromium.org</owner>
@@ -8468,7 +8547,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="PushMessaging.UnregistrationStatus"
-    enum="PushUnregistrationStatus" expires_after="2024-06-09">
+    enum="PushUnregistrationStatus" expires_after="2024-08-11">
   <owner>peter@chromium.org</owner>
   <owner>knollr@chromium.org</owner>
   <summary>
@@ -8578,7 +8657,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ReadingList.Read.Number" units="count"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>gambard@chromium.org</owner>
   <owner>bling-team@google.com</owner>
   <summary>Number of read entries in reading list.</summary>
@@ -8594,7 +8673,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ReadingList.Unread.Number" units="count"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>gambard@chromium.org</owner>
   <owner>bling-team@google.com</owner>
   <summary>Number of unread entries in reading list.</summary>
@@ -8612,7 +8691,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ReadingList.WebUI.LoadCompletedTime" units="ms"
-    expires_after="2024-05-12">
+    expires_after="2024-07-14">
   <owner>corising@chromium.org</owner>
   <owner>chrome-desktop-ui-sea@google.com</owner>
   <summary>
@@ -8623,7 +8702,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ReadingList.WebUI.LoadDocumentTime" units="ms"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>corising@chromium.org</owner>
   <owner>chrome-desktop-ui-sea@google.com</owner>
   <summary>
@@ -8808,7 +8887,12 @@ chromium-metrics-reviews@google.com.
   <owner>mpearson@chromium.org</owner>
   <owner>chrome-analysis-team@google.com</owner>
   <summary>
-    Count of renderer view context menu items (Only commands now) used.
+    Count of renderer view context menu items (Only commands now) used. Note
+    that this counts cases where the context menu item is used, but the item has
+    no effect (eg. autofill commands have no effect if the RenderFrameHost is
+    null). Update: as of M122, setting text direction via the context menu may
+    also have no effect if the RFH is null, though we will continue to count in
+    this case.
 
     The user action RenderViewContextMenu.Used.IDC_CONTENT_CONTEXT_SEARCHWEBFOR
     is also logged in case that IDC_CONTENT_CONTEXT_SEARCHWEBFOR is logged to
@@ -8820,7 +8904,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ReportingAndNEL.ErrorInitializeDB"
-    enum="SqliteLoggedResultCode" expires_after="2024-05-19">
+    enum="SqliteLoggedResultCode" expires_after="2024-07-21">
   <owner>wfh@chromium.org</owner>
   <owner>src/net/reporting/OWNERS</owner>
   <summary>
@@ -8855,7 +8939,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ReportingAndNEL.NumberOfLoadedReportingEndpointGroups2"
-    units="endpoint group count" expires_after="2024-05-12">
+    units="endpoint group count" expires_after="2024-07-14">
   <owner>yhirano@chromium.org</owner>
   <owner>src/net/reporting/OWNERS</owner>
   <summary>
@@ -8867,7 +8951,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ReportingAndNEL.NumberOfLoadedReportingEndpoints2"
-    units="endpoint count" expires_after="2024-05-12">
+    units="endpoint count" expires_after="2024-07-14">
   <owner>yhirano@chromium.org</owner>
   <owner>src/net/reporting/OWNERS</owner>
   <summary>
@@ -8890,7 +8974,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ReportingAndNEL.WinGetLastErrorInitializeDB"
-    enum="WinGetLastError" expires_after="2024-05-12">
+    enum="WinGetLastError" expires_after="2024-07-14">
   <owner>wfh@chromium.org</owner>
   <owner>src/net/reporting/OWNERS</owner>
   <summary>
@@ -9071,7 +9155,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="SB2.RemoteCall.CanCheckUrl.{CheckType}"
-    enum="BooleanCanCheckUrl" expires_after="2024-03-01">
+    enum="BooleanCanCheckUrl" expires_after="2025-01-22">
   <owner>xinghuilu@chromium.org</owner>
   <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
@@ -9089,7 +9173,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="SB2.RemoteCall.CheckDelta" units="microseconds"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>vakh@chromium.org</owner>
   <owner>csharrison@chromium.org</owner>
   <owner>chrome-counter-abuse-alerts@google.com</owner>
@@ -9148,7 +9232,7 @@ Safe Browsing lookups, which is critical for security. -->
 </histogram>
 
 <histogram base="true" name="SB2.RequestDestination" enum="RequestDestination"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>xinghuilu@chromium.org</owner>
   <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
@@ -9423,7 +9507,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="ShortcutsProvider.DatabaseSize" units="units"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>mpearson@chromium.org</owner>
   <summary>
     The number of entries in shortcuts backend's database when initialized,
@@ -9432,7 +9516,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="Shutdown.BrowserExit.Time2" units="ms"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>etienneb@chromium.org</owner>
   <owner>gab@chromium.org</owner>
   <summary>
@@ -9443,7 +9527,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="Shutdown.EndSession.Time2" units="ms"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>etienneb@chromium.org</owner>
   <owner>gab@chromium.org</owner>
   <summary>
@@ -9466,7 +9550,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="Shutdown.OtherExit.Time2" units="ms"
-    expires_after="2024-05-12">
+    expires_after="2024-07-14">
   <owner>etienneb@chromium.org</owner>
   <owner>gab@chromium.org</owner>
   <summary>
@@ -9477,7 +9561,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="Shutdown.ShutdownType2" enum="ShutdownType"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>etienneb@chromium.org</owner>
   <owner>gab@chromium.org</owner>
   <summary>
@@ -9502,7 +9586,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="Shutdown.WindowClose.Time2" units="ms"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>etienneb@chromium.org</owner>
   <owner>gab@chromium.org</owner>
   <summary>
@@ -9689,7 +9773,7 @@ should be kept until we remove incident reporting. -->
   </summary>
 </histogram>
 
-<histogram name="SiteIsolatedCodeCache.JS.Hit" units="Boolean"
+<histogram name="SiteIsolatedCodeCache.JS.Hit" enum="Boolean"
     expires_after="2023-10-08">
   <owner>yhirano@chromium.org</owner>
   <owner>loading-dev@chromium.org</owner>
@@ -9741,7 +9825,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="SiteIsolatedCodeCache.WASM.Behaviour"
-    enum="SiteIsolatedCodeCacheWASMBehaviour" expires_after="2024-06-02">
+    enum="SiteIsolatedCodeCacheWASMBehaviour" expires_after="2024-08-04">
   <owner>awillia@chromium.org</owner>
   <owner>loading-dev@chromium.org</owner>
   <summary>
@@ -9847,6 +9931,14 @@ should be kept until we remove incident reporting. -->
   </summary>
 </histogram>
 
+<histogram name="SpellCheck.api.showUI" enum="BooleanEnabled"
+    expires_after="M124">
+  <owner>groby@chromium.org</owner>
+  <summary>
+    The number of times the platform spelling UI was enabled/disabled.
+  </summary>
+</histogram>
+
 <histogram name="SpellCheck.CheckedWords" units="words"
     expires_after="2024-04-01">
   <owner>basiaz@google.com</owner>
@@ -9859,7 +9951,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="SpellCheck.CheckedWordsPerHour" units="words"
-    expires_after="2024-06-02">
+    expires_after="2024-08-04">
   <owner>basiaz@google.com</owner>
   <owner>chrome-language@google.com</owner>
   <summary>
@@ -9869,7 +9961,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="SpellCheck.Enabled2" enum="BooleanEnabled"
-    expires_after="2024-06-02">
+    expires_after="2024-08-04">
   <owner>basiaz@google.com</owner>
   <owner>chrome-language@google.com</owner>
   <summary>
@@ -9966,6 +10058,11 @@ should be kept until we remove incident reporting. -->
   </summary>
 </histogram>
 
+<histogram name="SpellCheck.UniqueWords" units="words" expires_after="M124">
+  <owner>groby@chromium.org</owner>
+  <summary>The number of unique checked words within a session.</summary>
+</histogram>
+
 <histogram base="true" name="Spellcheck.Windows.ChromeLocalesSupport2"
     units="locales" expires_after="2024-04-01">
   <owner>gujen@google.com</owner>
@@ -10055,7 +10152,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="SSORecallPromo.AccountsAvailable" units="units"
-    expires_after="2024-06-02">
+    expires_after="2024-08-04">
   <owner>jlebel@chromium.org</owner>
   <owner>chrome-signin-team@google.com</owner>
   <summary>
@@ -10074,7 +10171,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="SSORecallPromo.PromoSeenCount" units="units"
-    expires_after="2024-06-02">
+    expires_after="2024-08-04">
   <owner>jlebel@chromium.org</owner>
   <owner>chrome-signin-team@google.com</owner>
   <summary>
@@ -10083,7 +10180,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="Style.InvalidationTime" units="microseconds"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>futhark@chromium.org</owner>
   <summary>
     Microseconds spent in StyleEngine::InvalidateStyle. Only samples from high
@@ -10092,7 +10189,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="Style.RebuildLayoutTreeTime" units="microseconds"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>futhark@chromium.org</owner>
   <summary>
     Microseconds spent in RebuildLayoutTree called from Document::UpdateStyle.
@@ -10100,7 +10197,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="Style.RecalcTime" units="microseconds"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>futhark@chromium.org</owner>
   <summary>
     Microseconds spent in RecalcStyle called from Document::UpdateStyle.
@@ -10108,8 +10205,8 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="SubresourceWebBundles.BundleFetchErrorCode"
-    enum="NetErrorCodes" expires_after="2024-03-01">
-  <owner>ksakamoto@chromium.org</owner>
+    enum="NetErrorCodes" expires_after="2024-07-24">
+  <owner>hayato@chromium.org</owner>
   <owner>webpackage-dev@chromium.org</owner>
   <summary>
     The net error code recorded when request for a subresource web bundle was
@@ -10118,7 +10215,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="SubresourceWebBundles.ContentLength" units="bytes"
-    expires_after="2024-03-01">
+    expires_after="2024-07-24">
   <owner>horo@chromium.org</owner>
   <owner>webpackage-dev@chromium.org</owner>
   <summary>
@@ -10128,14 +10225,14 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="SubresourceWebBundles.LoadResult"
-    enum="SubresourceWebBundleLoadResult" expires_after="2024-07-07">
+    enum="SubresourceWebBundleLoadResult" expires_after="2024-09-07">
   <owner>horo@chromium.org</owner>
   <owner>webpackage-dev@chromium.org</owner>
   <summary>The result of loading subresource web bundles.</summary>
 </histogram>
 
 <histogram name="SubresourceWebBundles.MaxMemoryUsagePerProcess" units="bytes"
-    expires_after="2024-03-01">
+    expires_after="2024-07-24">
   <owner>horo@chromium.org</owner>
   <owner>webpackage-dev@chromium.org</owner>
   <summary>
@@ -10146,7 +10243,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="SubresourceWebBundles.OriginType"
-    enum="SubresourceWebBundleOriginType" expires_after="2024-03-01">
+    enum="SubresourceWebBundleOriginType" expires_after="2024-07-24">
   <owner>hayato@chromium.org</owner>
   <owner>webpackage-dev@chromium.org</owner>
   <summary>
@@ -10157,7 +10254,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="SubresourceWebBundles.ReceivedSize" units="bytes"
-    expires_after="2024-03-01">
+    expires_after="2024-07-24">
   <owner>horo@chromium.org</owner>
   <owner>webpackage-dev@chromium.org</owner>
   <summary>
@@ -10167,8 +10264,8 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="SubresourceWebBundles.ResourceCount" units="resources"
-    expires_after="2024-03-01">
-  <owner>ksakamoto@chromium.org</owner>
+    expires_after="2024-07-24">
+  <owner>hayato@chromium.org</owner>
   <owner>webpackage-dev@chromium.org</owner>
   <summary>
     The number of resources contained in a web bundle. Recorded when bundle
@@ -10584,7 +10681,7 @@ features through Chrome Labs. -->
 
 <histogram name="Touchpad.NaturalScroll.Changed" enum="BooleanEnabled"
     expires_after="2024-06-30">
-  <owner>zentaro@chromium.org</owner>
+  <owner>zhangwenyu@google.com</owner>
   <owner>cros-peripherals@google.com</owner>
   <summary>
     Tracks touchpad natural scroll setting changes by the user. Only reported on
@@ -10597,7 +10694,7 @@ features through Chrome Labs. -->
 
 <histogram name="Touchpad.NaturalScroll.Started" enum="BooleanEnabled"
     expires_after="2024-06-30">
-  <owner>zentaro@chromium.org</owner>
+  <owner>zhangwenyu@google.com</owner>
   <owner>cros-peripherals@google.com</owner>
   <summary>
     Tracks touchpad natural scroll setting on startup. Only reported on Chrome
@@ -10607,7 +10704,7 @@ features through Chrome Labs. -->
 
 <histogram name="Touchpad.PointerSensitivity.Changed" enum="PointerSensitivity"
     expires_after="2024-04-28">
-  <owner>zentaro@chromium.org</owner>
+  <owner>zhangwenyu@google.com</owner>
   <owner>cros-peripherals@google.com</owner>
   <summary>
     Tracks touchpad sensitivity setting changes by the user. This replaces the
@@ -10620,7 +10717,7 @@ features through Chrome Labs. -->
 
 <histogram name="Touchpad.PointerSensitivity.Started" enum="PointerSensitivity"
     expires_after="2024-04-28">
-  <owner>zentaro@chromium.org</owner>
+  <owner>zhangwenyu@google.com</owner>
   <owner>cros-peripherals@google.com</owner>
   <summary>
     Tracks touchpad sensitivity setting on startup. This replaces the old
@@ -10632,36 +10729,36 @@ features through Chrome Labs. -->
 </histogram>
 
 <histogram base="true" name="Touchpad.ScrollAcceleration" enum="BooleanEnabled"
-    expires_after="2023-12-10">
+    expires_after="2025-02-11">
 <!-- Name completed by histogram_suffixes name="PreferenceChangeType" -->
 
-  <owner>zentaro@chromium.org</owner>
+  <owner>zhangwenyu@google.com</owner>
   <owner>cros-peripherals@google.com</owner>
   <summary>
     Whether touchpad scroll acceleration is enabled. Only reported on Chrome OS.
 
-    Warning: this histogram was expired from 2020-12-01 to M105; data may be
-    missing.
+    Warning: this histogram was expired from 2020-12-01 to M105, 2023-12-10 to
+    M123; data may be missing.
   </summary>
 </histogram>
 
 <histogram base="true" name="Touchpad.ScrollSensitivity"
-    enum="PointerSensitivity" expires_after="2023-12-10">
+    enum="PointerSensitivity" expires_after="2025-02-11">
 <!-- Name completed by histogram_suffixes name="PreferenceChangeType" -->
 
-  <owner>zentaro@chromium.org</owner>
+  <owner>zhangwenyu@google.com</owner>
   <owner>cros-peripherals@google.com</owner>
   <summary>
     Touchpad scroll sensitivity value. Only reported on Chrome OS.
 
-    Warning: this histogram was expired from 2020-12-01 to M105; data may be
-    missing.
+    Warning: this histogram was expired from 2020-12-01 to M105, 2023-12-10 to
+    M123; data may be missing.
   </summary>
 </histogram>
 
 <histogram name="Touchpad.TapDragging.Changed" enum="BooleanEnabled"
-    expires_after="2024-06-30">
-  <owner>zentaro@chromium.org</owner>
+    expires_after="2025-02-11">
+  <owner>zhangwenyu@google.com</owner>
   <owner>cros-peripherals@google.com</owner>
   <summary>
     Tracks touchpad TapDragging setting changes by the user. Only reported on
@@ -10673,8 +10770,8 @@ features through Chrome Labs. -->
 </histogram>
 
 <histogram name="Touchpad.TapDragging.Started" enum="BooleanEnabled"
-    expires_after="2024-02-11">
-  <owner>zentaro@chromium.org</owner>
+    expires_after="2025-02-11">
+  <owner>zhangwenyu@google.com</owner>
   <owner>cros-peripherals@google.com</owner>
   <summary>
     Tracks touchpad TapDragging setting on startup. Only reported on Chrome OS.
@@ -10685,8 +10782,8 @@ features through Chrome Labs. -->
 </histogram>
 
 <histogram name="Touchpad.TapToClick.Changed" enum="BooleanEnabled"
-    expires_after="2024-02-11">
-  <owner>zentaro@chromium.org</owner>
+    expires_after="2025-02-11">
+  <owner>zhangwenyu@google.com</owner>
   <owner>cros-peripherals@google.com</owner>
   <summary>
     Tracks touchpad TapToClick setting changes by the user. Only reported on
@@ -10698,8 +10795,8 @@ features through Chrome Labs. -->
 </histogram>
 
 <histogram name="Touchpad.TapToClick.Started" enum="BooleanEnabled"
-    expires_after="2024-02-11">
-  <owner>zentaro@chromium.org</owner>
+    expires_after="2025-02-11">
+  <owner>zhangwenyu@google.com</owner>
   <owner>cros-peripherals@google.com</owner>
   <summary>
     Tracks touchpad TapToClick setting changes by the user. Only reported on
@@ -10725,7 +10822,7 @@ features through Chrome Labs. -->
 </histogram>
 
 <histogram name="Tracing.Background.CompressedTraceSizeInKB" units="KB"
-    expires_after="2024-05-26">
+    expires_after="2024-07-28">
   <owner>etiennep@chromium.org</owner>
   <owner>tracing@chromium.org</owner>
   <owner>chrometto-team@google.com</owner>
@@ -10759,7 +10856,7 @@ features through Chrome Labs. -->
 </histogram>
 
 <histogram name="Tracing.Background.Scenario.{Event}"
-    enum="BackgroundTracingScenarioNameHash" expires_after="2024-04-28">
+    enum="BackgroundTracingScenarioNameHash" expires_after="2024-07-21">
   <owner>etiennep@chromium.org</owner>
   <owner>chrometto-team@google.com</owner>
   <summary>
@@ -10794,7 +10891,7 @@ features through Chrome Labs. -->
 </histogram>
 
 <histogram name="Tracing.SharedBufferIsValid" enum="BooleanSuccess"
-    expires_after="2024-05-26">
+    expires_after="2024-07-28">
   <owner>eseckler@chromium.org</owner>
   <owner>tracing@chromium.org</owner>
   <summary>
@@ -10803,7 +10900,7 @@ features through Chrome Labs. -->
   </summary>
 </histogram>
 
-<histogram name="UI.DeviceScale" units="%" expires_after="2024-05-26">
+<histogram name="UI.DeviceScale" units="%" expires_after="2024-07-28">
   <owner>bsep@chromium.org</owner>
   <summary>
     The device scales available on the system at startup. A system may report
@@ -11110,7 +11207,7 @@ features through Chrome Labs. -->
 </histogram>
 
 <histogram name="UsageStats.Events" enum="UsageStatsEvents"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>pnoland@chromium.org</owner>
   <owner>fgorski@chromium.org</owner>
   <summary>
@@ -11236,7 +11333,7 @@ regressions. -->
 </histogram>
 
 <histogram name="VoiceInteraction.DismissedEventSource"
-    enum="VoiceInteractionEventSource" expires_after="2024-05-19">
+    enum="VoiceInteractionEventSource" expires_after="2024-07-21">
   <owner>basiaz@google.com</owner>
   <owner>chrome-language@google.com</owner>
   <summary>
@@ -11245,19 +11342,8 @@ regressions. -->
   </summary>
 </histogram>
 
-<histogram name="VoiceInteraction.DismissedEventTarget"
-    enum="VoiceIntentTarget" expires_after="2024-01-14">
-  <owner>basiaz@google.com</owner>
-  <owner>chrome-language@google.com</owner>
-  <summary>
-    Android: The target of a dismissed voice search, such as the system
-    transcription dialog or Assistant. This is recorded after the dismissed
-    intent returns to Chrome.
-  </summary>
-</histogram>
-
 <histogram name="VoiceInteraction.FailureEventSource"
-    enum="VoiceInteractionEventSource" expires_after="2024-02-04">
+    enum="VoiceInteractionEventSource" expires_after="2024-07-04">
   <owner>basiaz@google.com</owner>
   <owner>chrome-language@google.com</owner>
   <summary>
@@ -11268,36 +11354,13 @@ regressions. -->
   </summary>
 </histogram>
 
-<histogram name="VoiceInteraction.FailureEventTarget" enum="VoiceIntentTarget"
-    expires_after="2023-08-20">
-  <owner>basiaz@google.com</owner>
-  <owner>chrome-language@google.com</owner>
-  <summary>
-    Android: The target of a failed voice search, such as the system
-    transcription dialog or Assistant. This is recorded after any intent
-    failure, which could occur before an intent is sent (if the send fails) or
-    after the intent returns unsuccessfully. It will only be recorded once.
-  </summary>
-</histogram>
-
 <histogram name="VoiceInteraction.FinishEventSource"
-    enum="VoiceInteractionEventSource" expires_after="2024-05-19">
+    enum="VoiceInteractionEventSource" expires_after="2024-07-21">
   <owner>basiaz@google.com</owner>
   <owner>chrome-language@google.com</owner>
   <summary>
     Android: The source of a successful voice search, such as omnibox or NTP.
     This is recorded immediately after the successful intent returns to Chrome.
-  </summary>
-</histogram>
-
-<histogram name="VoiceInteraction.FinishEventTarget" enum="VoiceIntentTarget"
-    expires_after="2024-05-19">
-  <owner>basiaz@google.com</owner>
-  <owner>chrome-language@google.com</owner>
-  <summary>
-    Android: The target of a successful voice search, such as the system
-    transcription dialog or Assistant. This is recorded immediately after the
-    successful intent returns to Chrome.
   </summary>
 </histogram>
 
@@ -11319,20 +11382,6 @@ regressions. -->
     receiving the transcribed voice query. This is recorded after an Assistant
     intent has completed successfully.
   </summary>
-</histogram>
-
-<histogram name="VoiceInteraction.QueryDuration.Android.Target.{Target}"
-    units="ms" expires_after="2023-07-05">
-  <owner>basiaz@google.com</owner>
-  <owner>chrome-language@google.com</owner>
-  <summary>
-    Records the time it takes between the user clicking the mic and chrome
-    receiving the transcribed voice query. This is recorded after an Assistant
-    intent has completed successfully. This histogram is limited to intents sent
-    to {Target}. See VoiceInteraction.QueryDuration.Android for the total count
-    across all targets.
-  </summary>
-  <token key="Target" variants="VoiceIntentTargetVariant"/>
 </histogram>
 
 <histogram name="VoiceInteraction.QueryDuration.Android{Action}" units="ms"
@@ -11358,23 +11407,12 @@ regressions. -->
 </histogram>
 
 <histogram name="VoiceInteraction.StartEventSource"
-    enum="VoiceInteractionEventSource" expires_after="2024-05-19">
+    enum="VoiceInteractionEventSource" expires_after="2024-07-21">
   <owner>basiaz@google.com</owner>
   <owner>chrome-language@google.com</owner>
   <summary>
     Android: The source of a voice search start event, such as omnibox or NTP.
     This is recorded immediately before the voice transcription intent is sent.
-  </summary>
-</histogram>
-
-<histogram name="VoiceInteraction.StartEventTarget" enum="VoiceIntentTarget"
-    expires_after="2024-05-19">
-  <owner>basiaz@google.com</owner>
-  <owner>chrome-language@google.com</owner>
-  <summary>
-    Android: The target of a voice search start event, such as the system
-    transcription dialog or Assistant. This is recorded immediately before the
-    voice transcription intent is sent.
   </summary>
 </histogram>
 
@@ -11386,17 +11424,6 @@ regressions. -->
     Android: The source of an incoming result that doesn't align with an
     outgoing request from Chrome. This is recorded when the extraneous intent
     response is received.
-  </summary>
-</histogram>
-
-<histogram name="VoiceInteraction.UnexpectedResultTarget"
-    enum="VoiceIntentTarget" expires_after="2023-07-05">
-  <owner>basiaz@google.com</owner>
-  <owner>chrome-language@google.com</owner>
-  <summary>
-    Android: The target of an intent result that doesn't align with an outgoing
-    request from Chrome. This is recorded when the extraneous intent response is
-    received.
   </summary>
 </histogram>
 
@@ -11418,38 +11445,14 @@ regressions. -->
   </summary>
 </histogram>
 
-<histogram name="VoiceInteraction.VoiceResultConfidenceValue.{Target}"
-    units="%" expires_after="2023-07-05">
-  <owner>basiaz@google.com</owner>
-  <owner>chrome-language@google.com</owner>
-  <summary>
-    Android: Records the confidence value of a successful voice search as a
-    percentage, limited to intents sent to {Target}. This is recorded when the
-    voice intent returns successfully.
-  </summary>
-  <token key="Target" variants="VoiceIntentTargetVariant"/>
-</histogram>
-
 <histogram name="VoiceInteraction.VoiceSearchResult" enum="BooleanSuccess"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>basiaz@google.com</owner>
   <owner>chrome-language@google.com</owner>
   <summary>
     Android: Records whether the voice search produced results. This is recorded
     when the voice intent returns successfully.
   </summary>
-</histogram>
-
-<histogram name="VoiceInteraction.VoiceSearchResult.{Target}"
-    enum="BooleanSuccess" expires_after="2023-07-05">
-  <owner>basiaz@google.com</owner>
-  <owner>chrome-language@google.com</owner>
-  <summary>
-    Android: Records whether the voice search produced results, limited to
-    intents sent to {Target}. This is recorded when the voice intent returns
-    successfully.
-  </summary>
-  <token key="Target" variants="VoiceIntentTargetVariant"/>
 </histogram>
 
 <histogram name="WebContentsObserver.{Method}" units="ms"
@@ -11476,7 +11479,7 @@ regressions. -->
 </histogram>
 
 <histogram name="WebController.CertVerificationErrorsCacheHit"
-    enum="BooleanCacheHit" expires_after="2024-03-20">
+    enum="BooleanCacheHit" expires_after="2025-02-12">
   <owner>ajuma@chromium.org</owner>
   <owner>gambard@chromium.org</owner>
   <summary>
@@ -11488,7 +11491,7 @@ regressions. -->
 </histogram>
 
 <histogram name="WebDatabase.AutofillWebDataBackendImpl.OperationResult"
-    enum="AutofillWebDataBackendImplOperationResult" expires_after="2024-06-02">
+    enum="AutofillWebDataBackendImplOperationResult" expires_after="2024-08-04">
   <owner>battre@chromium.org</owner>
   <owner>asully@chromium.org</owner>
   <summary>
@@ -11648,7 +11651,7 @@ regressions. -->
 </histogram>
 
 <histogram name="WebUI.Settings.PathVisited" enum="WebUISettingsPathHashes"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>dschuyler@chromium.org</owner>
   <owner>tbuckley@chromium.org</owner>
   <owner>bettes@chromium.org</owner>
@@ -11672,8 +11675,8 @@ regressions. -->
   </summary>
 </histogram>
 
-<histogram name="WebUICodeCache.FeatureEnabled" units="Boolean"
-    expires_after="2024-04-12">
+<histogram name="WebUICodeCache.FeatureEnabled" enum="Boolean"
+    expires_after="2024-07-14">
   <owner>temao@chromium.org</owner>
   <owner>tluk@chromium.org</owner>
   <summary>
@@ -11694,7 +11697,7 @@ regressions. -->
 </histogram>
 
 <histogram name="WebUITabStrip.CloseTabAction"
-    enum="WebUITabStripCloseTabActions" expires_after="2024-05-15">
+    enum="WebUITabStripCloseTabActions" expires_after="2024-07-14">
   <owner>johntlee@chromium.org</owner>
   <owner>dpapad@chromium.org</owner>
   <summary>
@@ -11917,7 +11920,7 @@ regressions. -->
 </histogram>
 
 <histogram name="WrenchMenu.MenuAction" enum="WrenchMenuAction"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>ainslie@chromium.org</owner>
   <owner>edwardjung@chromium.org</owner>
   <summary>Number of times that each menu item is clicked.</summary>

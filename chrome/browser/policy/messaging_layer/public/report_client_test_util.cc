@@ -35,7 +35,11 @@ ReportingClient::TestEnvironment::CreateWithLocalStorage(
         StorageSelector::CreateLocalStorageModule(
             reporting_path, verification_key,
             CompressionInformation::COMPRESSION_SNAPPY,
-            base::BindRepeating(&ReportingClient::AsyncStartUploader),
+            base::BindPostTask(
+                ReportQueueProvider::GetInstance()->sequenced_task_runner(),
+                base::BindRepeating(
+                    &ReportingClient::AsyncStartUploader,
+                    ReportQueueProvider::GetInstance()->GetWeakPtr())),
             std::move(storage_created_cb));
       },
       reporting_path, verification_key)));
@@ -58,14 +62,12 @@ ReportingClient::TestEnvironment::CreateWithStorageModule(
 
 ReportingClient::TestEnvironment::TestEnvironment(
     ReportingClient::StorageModuleCreateCallback storage_create_cb)
-    : saved_storage_create_cb_(
-          std::move(ReportingClient::GetInstance()->storage_create_cb_)) {
-  ReportingClient::GetInstance()->storage_create_cb_ = storage_create_cb;
+    // Below we convert ReportingClient::SmartPtr to std::unique_ptr.
+    : client_(ReportingClient::Create(
+                  base::SequencedTaskRunner::GetCurrentDefault())
+                  .release()) {
+  client_->storage_create_cb_ = storage_create_cb;
 }
 
-ReportingClient::TestEnvironment::~TestEnvironment() {
-  ReportingClient::GetInstance()->storage_create_cb_ =
-      std::move(saved_storage_create_cb_);
-  base::Singleton<ReportingClient>::OnExit(nullptr);
-}
+ReportingClient::TestEnvironment::~TestEnvironment() = default;
 }  // namespace reporting

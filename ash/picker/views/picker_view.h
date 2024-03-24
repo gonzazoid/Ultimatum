@@ -5,13 +5,15 @@
 #ifndef ASH_PICKER_VIEWS_PICKER_VIEW_H_
 #define ASH_PICKER_VIEWS_PICKER_VIEW_H_
 
+#include <memory>
 #include <optional>
 
 #include "ash/ash_export.h"
+#include "ash/picker/metrics/picker_session_metrics.h"
 #include "ash/picker/model/picker_category.h"
-#include "ash/picker/picker_session_metrics.h"
 #include "ash/public/cpp/ash_web_view.h"
 #include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 #include "ui/views/widget/unique_widget_ptr.h"
@@ -24,24 +26,31 @@ class NonClientFrameView;
 
 namespace ash {
 
+class BubbleEventFilter;
 class PickerContentsView;
 class PickerSearchFieldView;
 class PickerSearchResult;
 class PickerSearchResults;
 class PickerSearchResultsView;
-class PickerUserEducationView;
 class PickerViewDelegate;
 class PickerZeroStateView;
 class PickerCategoryView;
+class SystemShadow;
 
 // View for the Picker widget.
 class ASH_EXPORT PickerView : public views::WidgetDelegateView {
+  METADATA_HEADER(PickerView, views::WidgetDelegateView)
+
  public:
-  METADATA_HEADER(PickerView);
+  enum class PickerLayoutType {
+    kResultsBelowSearchField,
+    kResultsAboveSearchField,
+  };
 
   // `delegate` must remain valid for the lifetime of this class.
   explicit PickerView(PickerViewDelegate* delegate,
-                      base::TimeTicks trigger_event_timestamp);
+                      base::TimeTicks trigger_event_timestamp,
+                      PickerLayoutType layout_type);
   PickerView(const PickerView&) = delete;
   PickerView& operator=(const PickerView&) = delete;
   ~PickerView() override;
@@ -51,20 +60,31 @@ class ASH_EXPORT PickerView : public views::WidgetDelegateView {
   // click, then it should be the timestamp of the click. By default, the
   // timestamp is the time this function is called.
   // `delegate` must remain valid for the lifetime of the created Widget.
+  // `caret_bounds` and `cursor_point` should be in screen coordinates.
   static views::UniqueWidgetPtr CreateWidget(
+      const gfx::Rect& caret_bounds,
+      const gfx::Point& cursor_point,
+      const gfx::Rect& focused_window_bounds,
       PickerViewDelegate* delegate,
       base::TimeTicks trigger_event_timestamp = base::TimeTicks::Now());
 
   // views::WidgetDelegateView:
-  void PaintChildren(const views::PaintInfo& paint_info) override;
+  bool AcceleratorPressed(const ui::Accelerator& accelerator) override;
   std::unique_ptr<views::NonClientFrameView> CreateNonClientFrameView(
       views::Widget* widget) override;
   void AddedToWidget() override;
   void RemovedFromWidget() override;
 
+  // Returns the target bounds for this Picker view. The target bounds try to
+  // vertically align `search_field_view_` with `anchor_bounds`. `anchor_bounds`
+  // and returned bounds should be in screen coordinates.
+  gfx::Rect GetTargetBounds(const gfx::Rect& anchor_bounds,
+                            PickerLayoutType layout_type);
+
   PickerSearchFieldView& search_field_view_for_testing() {
     return *search_field_view_;
   }
+  PickerContentsView& contents_view_for_testing() { return *contents_view_; }
   PickerSearchResultsView& search_results_view_for_testing() {
     return *search_results_view_;
   }
@@ -91,7 +111,17 @@ class ASH_EXPORT PickerView : public views::WidgetDelegateView {
   // Displays `results` in the category view.
   void PublishCategoryResults(const PickerSearchResults& results);
 
+  void OnClickOutsideWidget();
+
+  void AddSearchFieldView();
+  void AddContentsView(PickerLayoutType layout_type);
+
   std::optional<PickerCategory> selected_category_;
+
+  // Used to close the Picker widget when the user clicks outside of it.
+  std::unique_ptr<BubbleEventFilter> bubble_event_filter_;
+
+  std::unique_ptr<SystemShadow> shadow_;
 
   PickerSessionMetrics session_metrics_;
   raw_ptr<PickerViewDelegate> delegate_ = nullptr;
@@ -101,7 +131,10 @@ class ASH_EXPORT PickerView : public views::WidgetDelegateView {
   raw_ptr<PickerZeroStateView> zero_state_view_ = nullptr;
   raw_ptr<PickerCategoryView> category_view_ = nullptr;
   raw_ptr<PickerSearchResultsView> search_results_view_ = nullptr;
-  raw_ptr<PickerUserEducationView> user_education_view_ = nullptr;
+
+  // Whether the first set of results for the current search have been published
+  // yet.
+  bool published_first_results_ = false;
 
   base::WeakPtrFactory<PickerView> weak_ptr_factory_{this};
 };

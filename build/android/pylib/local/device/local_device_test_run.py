@@ -162,6 +162,7 @@ class LocalDeviceTestRun(test_run.TestRun):
         self._env.ResetCurrentTry()
         while self._env.current_try < self._env.max_tries and tests:
           tries = self._env.current_try
+          tests = self._SortTests(tests)
           grouped_tests = self._GroupTests(tests)
           logging.info('STARTING TRY #%d/%d', tries + 1, self._env.max_tries)
           if tries > 0 and self._env.recover_devices:
@@ -253,7 +254,10 @@ class LocalDeviceTestRun(test_run.TestRun):
                                 for test, result in tests_and_results.values()
                                 if is_failure_result(result))
 
-    return [t for t, r in failed_tests_and_results if self._ShouldRetry(t, r)]
+    failed_tests = [
+        t for t, r in failed_tests_and_results if self._ShouldRetry(t, r)
+    ]
+    return self._AppendPreTestsForRetry(failed_tests, tests)
 
   def _ApplyExternalSharding(self, tests, shard_index, total_shards):
     logging.info('Using external sharding settings. This is shard %d/%d',
@@ -323,6 +327,11 @@ class LocalDeviceTestRun(test_run.TestRun):
       # if the size of the test group is larger than the max partition size on
       # its own, just put the group in its own shard instead of splitting up the
       # group.
+      # TODO(crbug/1257820): Add logic to support PRE_ test recognition but it
+      # may hurt performance in most scenarios. Currently all PRE_ tests are
+      # partitioned into the last shard. Unless the number of PRE_ tests are
+      # larger than the partition size, the PRE_ test may get assigned into a
+      # different shard and cause test failure.
       if (last_partition_size + test_count > partition_size
           and last_partition_size > 0):
         num_desired_partitions -= 1
@@ -387,6 +396,10 @@ class LocalDeviceTestRun(test_run.TestRun):
   def _GroupTests(self, tests):
     # pylint: disable=no-self-use
     return tests
+
+  def _AppendPreTestsForRetry(self, failed_tests, tests):
+    # pylint: disable=no-self-use,unused-argument
+    return failed_tests
 
   def _RunTest(self, device, test):
     raise NotImplementedError

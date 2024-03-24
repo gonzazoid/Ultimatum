@@ -155,6 +155,7 @@
 #include "third_party/blink/public/common/switches.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/page_transition_types.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/gfx/geometry/point_conversions.h"
 
 #if !BUILDFLAG(IS_CHROMEOS)
@@ -686,8 +687,8 @@ class FakeDownloadProtectionService
   }
 
  private:
-  absl::optional<safe_browsing::DownloadCheckResult> fake_result_;
-  absl::optional<safe_browsing::ClientDownloadResponse::Verdict> fake_verdict_;
+  std::optional<safe_browsing::DownloadCheckResult> fake_result_;
+  std::optional<safe_browsing::ClientDownloadResponse::Verdict> fake_verdict_;
 };
 
 class FakeSafeBrowsingService : public safe_browsing::TestSafeBrowsingService {
@@ -1891,8 +1892,7 @@ IN_PROC_BROWSER_TEST_F(DownloadTest, CrxDenyInstall) {
   // Check that the CRX is not installed.
   extensions::ExtensionRegistry* extension_registry =
       extensions::ExtensionRegistry::Get(browser()->profile());
-  ASSERT_FALSE(extension_registry->GetExtensionById(
-      kGoodCrxId, extensions::ExtensionRegistry::ENABLED));
+  ASSERT_FALSE(extension_registry->enabled_extensions().Contains(kGoodCrxId));
 }
 
 // Download an extension.  Expect a dangerous download warning.
@@ -1931,8 +1931,7 @@ IN_PROC_BROWSER_TEST_F(DownloadTest, CrxInstallDenysPermissions) {
   // Check that the extension was not installed.
   extensions::ExtensionRegistry* extension_registry =
       extensions::ExtensionRegistry::Get(browser()->profile());
-  ASSERT_FALSE(extension_registry->GetExtensionById(
-      kGoodCrxId, extensions::ExtensionRegistry::ENABLED));
+  ASSERT_FALSE(extension_registry->enabled_extensions().Contains(kGoodCrxId));
 }
 
 // Download an extension.  Expect a dangerous download warning.
@@ -1974,8 +1973,7 @@ IN_PROC_BROWSER_TEST_F(DownloadTest, CrxInstallAcceptPermissions) {
   // Check that the extension was installed.
   extensions::ExtensionRegistry* extension_registry =
       extensions::ExtensionRegistry::Get(browser()->profile());
-  ASSERT_TRUE(extension_registry->GetExtensionById(
-      kGoodCrxId, extensions::ExtensionRegistry::ENABLED));
+  ASSERT_TRUE(extension_registry->enabled_extensions().Contains(kGoodCrxId));
 }
 
 // Test installing a CRX that fails integrity checks.
@@ -2002,8 +2000,7 @@ IN_PROC_BROWSER_TEST_F(DownloadTest, CrxInvalid) {
   // Check that the extension was not installed.
   extensions::ExtensionRegistry* extension_registry =
       extensions::ExtensionRegistry::Get(browser()->profile());
-  ASSERT_FALSE(extension_registry->GetExtensionById(
-      kGoodCrxId, extensions::ExtensionRegistry::ENABLED));
+  ASSERT_FALSE(extension_registry->enabled_extensions().Contains(kGoodCrxId));
 }
 
 // Install a large (100kb) theme.
@@ -2044,8 +2041,8 @@ IN_PROC_BROWSER_TEST_F(DownloadTest, CrxLargeTheme) {
   // Check that the extension was installed.
   extensions::ExtensionRegistry* extension_registry =
       extensions::ExtensionRegistry::Get(browser()->profile());
-  ASSERT_TRUE(extension_registry->GetExtensionById(
-      kLargeThemeCrxId, extensions::ExtensionRegistry::ENABLED));
+  ASSERT_TRUE(
+      extension_registry->enabled_extensions().Contains(kLargeThemeCrxId));
 }
 
 // Tests for download initiation functions.
@@ -2216,6 +2213,11 @@ class PdfDownloadTestSplitCacheEnabled : public base::test::WithFeatureOverride,
 
   bool UseOopif() const { return GetParam(); }
 
+  pdf::TestPdfViewerStreamManager* GetTestPdfViewerStreamManager() {
+    return factory_.GetTestPdfViewerStreamManager(
+        browser()->tab_strip_model()->GetActiveWebContents());
+  }
+
   std::vector<base::test::FeatureRef> GetEnabledFeatures() const override {
     std::vector<base::test::FeatureRef> enabled =
         DownloadTestSplitCacheEnabled::GetEnabledFeatures();
@@ -2233,6 +2235,9 @@ class PdfDownloadTestSplitCacheEnabled : public base::test::WithFeatureOverride,
     }
     return disabled;
   }
+
+ private:
+  pdf::TestPdfViewerStreamManagerFactory factory_;
 };
 
 IN_PROC_BROWSER_TEST_P(PdfDownloadTestSplitCacheEnabled,
@@ -2263,7 +2268,7 @@ IN_PROC_BROWSER_TEST_P(PdfDownloadTestSplitCacheEnabled,
   // the download request.
   ASSERT_TRUE(https_test_server()->ShutdownAndWaitUntilComplete());
 
-  absl::optional<network::ResourceRequest::TrustedParams> trusted_params;
+  std::optional<network::ResourceRequest::TrustedParams> trusted_params;
   net::SiteForCookies site_for_cookies;
 
   base::RunLoop request_waiter;
@@ -2334,12 +2339,10 @@ IN_PROC_BROWSER_TEST_P(PdfDownloadTestSplitCacheEnabled,
   // `pdf::PDFDocumentHelper`.
   content::RenderFrameHost* document_frame;
   if (UseOopif()) {
-    auto* test_pdf_viewer_stream_manager =
-        pdf::TestPdfViewerStreamManager::CreateForWebContents(web_contents);
-
-    content::BeginNavigateIframeToURL(web_contents,
-                                      /*iframe_id=*/"test", subframe_url);
-    test_pdf_viewer_stream_manager->WaitUntilPdfLoaded();
+    content::NavigateIframeToURL(web_contents,
+                                 /*iframe_id=*/"test", subframe_url);
+    ASSERT_TRUE(
+        GetTestPdfViewerStreamManager()->WaitUntilPdfLoadedInFirstChild());
 
     content::RenderFrameHost* extension_host =
         pdf_extension_test_util::GetOnlyPdfExtensionHost(web_contents);
@@ -2374,7 +2377,7 @@ IN_PROC_BROWSER_TEST_P(PdfDownloadTestSplitCacheEnabled,
   // the download request.
   ASSERT_TRUE(https_test_server()->ShutdownAndWaitUntilComplete());
 
-  absl::optional<network::ResourceRequest::TrustedParams> trusted_params;
+  std::optional<network::ResourceRequest::TrustedParams> trusted_params;
   net::SiteForCookies site_for_cookies;
 
   base::RunLoop request_waiter;
@@ -2446,7 +2449,7 @@ IN_PROC_BROWSER_TEST_F(DownloadTestSplitCacheEnabled,
   // the download request.
   ASSERT_TRUE(https_test_server()->ShutdownAndWaitUntilComplete());
 
-  absl::optional<network::ResourceRequest::TrustedParams> trusted_params;
+  std::optional<network::ResourceRequest::TrustedParams> trusted_params;
   net::SiteForCookies site_for_cookies;
 
   base::RunLoop request_waiter;
@@ -2522,12 +2525,10 @@ IN_PROC_BROWSER_TEST_P(PdfDownloadTestSplitCacheEnabled,
   // viewer, this will be the PDF extension `RenderFrameHost`.
   content::RenderFrameHost* target_frame;
   if (UseOopif()) {
-    auto* test_pdf_viewer_stream_manager =
-        pdf::TestPdfViewerStreamManager::CreateForWebContents(web_contents);
-
-    content::BeginNavigateIframeToURL(web_contents,
-                                      /*iframe_id=*/"test", subframe_url);
-    test_pdf_viewer_stream_manager->WaitUntilPdfLoaded();
+    content::NavigateIframeToURL(web_contents,
+                                 /*iframe_id=*/"test", subframe_url);
+    ASSERT_TRUE(
+        GetTestPdfViewerStreamManager()->WaitUntilPdfLoadedInFirstChild());
 
     target_frame = pdf_extension_test_util::GetOnlyPdfPluginFrame(web_contents);
     ASSERT_TRUE(target_frame);
@@ -2559,7 +2560,7 @@ IN_PROC_BROWSER_TEST_P(PdfDownloadTestSplitCacheEnabled,
   // the download request.
   ASSERT_TRUE(https_test_server()->ShutdownAndWaitUntilComplete());
 
-  absl::optional<network::ResourceRequest::TrustedParams> trusted_params;
+  std::optional<network::ResourceRequest::TrustedParams> trusted_params;
   net::SiteForCookies site_for_cookies;
 
   base::RunLoop request_waiter;
@@ -2722,13 +2723,13 @@ IN_PROC_BROWSER_TEST_F(DownloadTest, MAYBE_SaveLargeImage) {
   base::FilePath data_file = ui_test_utils::GetTestFilePath(
       base::FilePath().AppendASCII("downloads"),
       base::FilePath().AppendASCII("large_image.png"));
-  std::string png_data, data_url;
+  std::string png_data;
   {
     base::ScopedAllowBlockingForTesting allow_blocking;
     CHECK(base::ReadFileToString(data_file, &png_data));
   }
 
-  base::Base64Encode(png_data, &data_url);
+  std::string data_url = base::Base64Encode(png_data);
   data_url.insert(0, "data:image/png;base64,");
 
   ASSERT_GE(data_url.size(), url::kMaxURLChars);

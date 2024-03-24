@@ -11,6 +11,7 @@
 #import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
 #import "ios/chrome/browser/shared/public/commands/mini_map_commands.h"
 #import "ios/chrome/browser/shared/public/commands/open_new_tab_command.h"
+#import "ios/chrome/browser/shared/public/commands/settings_commands.h"
 #import "ios/chrome/browser/ui/mini_map/mini_map_action_handler.h"
 #import "ios/chrome/browser/ui/mini_map/mini_map_interstitial_view_controller.h"
 #import "ios/chrome/browser/ui/mini_map/mini_map_mediator.h"
@@ -22,7 +23,7 @@
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/public/provider/chrome/browser/mini_map/mini_map_api.h"
 #import "ios/web/public/web_state.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 #import "ui/base/l10n/l10n_util.h"
 
 @interface MiniMapCoordinator () <MiniMapActionHandler, MiniMapMediatorDelegate>
@@ -148,8 +149,8 @@
 
 - (void)userPressedContentSettings {
   [self.mediator userOpenedSettingsInConsent];
-  id<ApplicationSettingsCommands> settingsCommandHandler = HandlerForProtocol(
-      self.browser->GetCommandDispatcher(), ApplicationSettingsCommands);
+  id<SettingsCommands> settingsCommandHandler = HandlerForProtocol(
+      self.browser->GetCommandDispatcher(), SettingsCommands);
   [settingsCommandHandler
       showContentsSettingsFromViewController:self.consentViewController];
 }
@@ -220,8 +221,8 @@
 - (void)showContentSettingsFromMiniMapInViewController:
     (UIViewController*)viewController {
   [self.mediator userOpenedSettingsFromMiniMap];
-  id<ApplicationSettingsCommands> settingsCommandHandler = HandlerForProtocol(
-      self.browser->GetCommandDispatcher(), ApplicationSettingsCommands);
+  id<SettingsCommands> settingsCommandHandler = HandlerForProtocol(
+      self.browser->GetCommandDispatcher(), SettingsCommands);
   [settingsCommandHandler
       showContentsSettingsFromViewController:viewController];
 }

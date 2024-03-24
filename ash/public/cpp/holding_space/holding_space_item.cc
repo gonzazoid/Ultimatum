@@ -54,17 +54,14 @@ HoldingSpaceItem::InProgressCommand::InProgressCommand(
       icon(other.icon),
       handler(other.handler) {}
 
-HoldingSpaceItem::InProgressCommand::~InProgressCommand() = default;
-
 HoldingSpaceItem::InProgressCommand&
-HoldingSpaceItem::InProgressCommand::operator=(const InProgressCommand& other) =
+HoldingSpaceItem::InProgressCommand::operator=(const InProgressCommand&) =
     default;
 
+HoldingSpaceItem::InProgressCommand::~InProgressCommand() = default;
+
 bool HoldingSpaceItem::InProgressCommand::operator==(
-    const InProgressCommand& other) const {
-  return command_id == other.command_id && label_id == other.label_id &&
-         icon == other.icon && handler == other.handler;
-}
+    const InProgressCommand&) const = default;
 
 // HoldingSpaceItem ------------------------------------------------------------
 
@@ -75,7 +72,7 @@ HoldingSpaceItem::~HoldingSpaceItem() {
 bool HoldingSpaceItem::operator==(const HoldingSpaceItem& rhs) const {
   return type_ == rhs.type_ && id_ == rhs.id_ && file_ == rhs.file_ &&
          text_ == rhs.text_ && secondary_text_ == rhs.secondary_text_ &&
-         secondary_text_color_id_ == rhs.secondary_text_color_id_ &&
+         secondary_text_color_variant_ == rhs.secondary_text_color_variant_ &&
          *image_ == *rhs.image_ && progress_ == rhs.progress_ &&
          in_progress_commands_ == rhs.in_progress_commands_;
 }
@@ -302,45 +299,59 @@ void HoldingSpaceItem::Initialize(const HoldingSpaceFile& file) {
   file_ = file;
 }
 
-bool HoldingSpaceItem::SetBackingFile(const HoldingSpaceFile& file) {
+std::optional<HoldingSpaceFile> HoldingSpaceItem::SetBackingFile(
+    const HoldingSpaceFile& file) {
   if (file_ == file) {
-    return false;
+    return std::nullopt;
   }
 
+  auto previous_file = std::move(file_);
   file_ = file;
   image_->UpdateBackingFilePath(file_.file_path);
 
-  return true;
+  return previous_file;
 }
 
 std::u16string HoldingSpaceItem::GetText() const {
   return text_.value_or(file_.file_path.BaseName().LossyDisplayName());
 }
 
-bool HoldingSpaceItem::SetText(const std::optional<std::u16string>& text) {
-  if (text_ == text)
-    return false;
+std::optional<std::optional<std::u16string>> HoldingSpaceItem::SetText(
+    const std::optional<std::u16string>& text) {
+  if (text_ == text) {
+    return std::nullopt;
+  }
 
+  auto previous_text = std::move(text_);
   text_ = text;
-  return true;
+
+  return previous_text;
 }
 
-bool HoldingSpaceItem::SetSecondaryText(
+std::optional<std::optional<std::u16string>> HoldingSpaceItem::SetSecondaryText(
     const std::optional<std::u16string>& secondary_text) {
-  if (secondary_text_ == secondary_text)
-    return false;
+  if (secondary_text_ == secondary_text) {
+    return std::nullopt;
+  }
 
+  auto previous_secondary_text = std::move(secondary_text_);
   secondary_text_ = secondary_text;
-  return true;
+
+  return previous_secondary_text;
 }
 
-bool HoldingSpaceItem::SetSecondaryTextColorId(
-    const std::optional<ui::ColorId>& secondary_text_color_id) {
-  if (secondary_text_color_id_ == secondary_text_color_id)
-    return false;
+std::optional<std::optional<HoldingSpaceColorVariant>>
+HoldingSpaceItem::SetSecondaryTextColorVariant(
+    const std::optional<HoldingSpaceColorVariant>&
+        secondary_text_color_variant) {
+  if (secondary_text_color_variant_ == secondary_text_color_variant) {
+    return std::nullopt;
+  }
 
-  secondary_text_color_id_ = secondary_text_color_id;
-  return true;
+  auto previous_secondary_text_color_variant = secondary_text_color_variant_;
+  secondary_text_color_variant_ = secondary_text_color_variant;
+
+  return previous_secondary_text_color_variant;
 }
 
 std::u16string HoldingSpaceItem::GetAccessibleName() const {
@@ -357,29 +368,37 @@ std::u16string HoldingSpaceItem::GetAccessibleName() const {
       secondary_text_.value());
 }
 
-bool HoldingSpaceItem::SetAccessibleName(
+std::optional<std::optional<std::u16string>>
+HoldingSpaceItem::SetAccessibleName(
     const std::optional<std::u16string>& accessible_name) {
-  if (accessible_name_ == accessible_name)
-    return false;
+  if (accessible_name_ == accessible_name) {
+    return std::nullopt;
+  }
 
+  auto previous_accessible_name = std::move(accessible_name_);
   accessible_name_ = accessible_name;
-  return true;
+
+  return previous_accessible_name;
 }
 
-bool HoldingSpaceItem::SetProgress(const HoldingSpaceProgress& progress) {
+std::optional<HoldingSpaceProgress> HoldingSpaceItem::SetProgress(
+    const HoldingSpaceProgress& progress) {
   // NOTE: Progress can only be updated for in progress items.
-  if (progress_ == progress || progress_.IsComplete())
-    return false;
+  if (progress_ == progress || progress_.IsComplete()) {
+    return std::nullopt;
+  }
 
+  auto previous_progress = progress_;
   progress_ = progress;
 
   if (progress_.IsComplete())
     in_progress_commands_.clear();
 
-  return true;
+  return previous_progress;
 }
 
-bool HoldingSpaceItem::SetInProgressCommands(
+std::optional<std::vector<HoldingSpaceItem::InProgressCommand>>
+HoldingSpaceItem::SetInProgressCommands(
     std::vector<InProgressCommand> in_progress_commands) {
   DCHECK(base::ranges::all_of(in_progress_commands,
                               [](const InProgressCommand& in_progress_command) {
@@ -387,11 +406,14 @@ bool HoldingSpaceItem::SetInProgressCommands(
                                     in_progress_command.command_id);
                               }));
 
-  if (progress_.IsComplete() || in_progress_commands_ == in_progress_commands)
-    return false;
+  if (progress_.IsComplete() || in_progress_commands_ == in_progress_commands) {
+    return std::nullopt;
+  }
 
+  auto previous_in_progress_commands = std::move(in_progress_commands_);
   in_progress_commands_ = in_progress_commands;
-  return true;
+
+  return previous_in_progress_commands;
 }
 
 void HoldingSpaceItem::InvalidateImage() {

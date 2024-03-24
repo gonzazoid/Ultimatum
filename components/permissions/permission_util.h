@@ -22,14 +22,12 @@ enum class PermissionType;
 namespace content {
 class RenderFrameHost;
 class RenderProcessHost;
-struct PermissionResult;
 }  // namespace content
 
 class GURL;
 
 namespace permissions {
 class PermissionRequest;
-struct PermissionResult;
 
 // This enum backs a UMA histogram, so it must be treated as append-only.
 enum class PermissionAction {
@@ -74,7 +72,7 @@ class PermissionUtil {
 
   // Returns the corresponding permissions policy feature to the given content
   // settings type, or nullopt if there is none.
-  static absl::optional<blink::mojom::PermissionsPolicyFeature>
+  static std::optional<blink::mojom::PermissionsPolicyFeature>
   GetPermissionsPolicyFeature(ContentSettingsType type);
 
   // Checks whether the given ContentSettingsType is a permission. Use this

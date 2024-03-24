@@ -83,7 +83,11 @@ class CookieControlsController final
 
  private:
   struct Status {
+    // TODO(b/317975095): Remove `status` in favor of `control_visible` and
+    // `protections_on`.
     CookieControlsStatus status;
+    bool controls_visible;
+    bool protections_on;
     CookieControlsEnforcement enforcement;
     CookieBlocking3pcdStatus blocking_status;
     base::Time expiration;
@@ -146,9 +150,9 @@ class CookieControlsController final
   CookieControlsBreakageConfidenceLevel GetConfidenceLevel(
       CookieControlsStatus status,
       CookieControlsEnforcement enforcement,
-      int allowed_sites,
-      int blocked_sites,
-      int bounce_count);
+      bool site_data_accessed);
+
+  bool HasOriginSandboxedTopLevelDocument() const;
 
   // Updates the blocked cookie count of |icon_|.
   void PresentBlockedCookieCounter();
@@ -157,20 +161,8 @@ class CookieControlsController final
 
   void OnPageFinishedLoading();
 
-  // Returns the number of allowed cookies.
-  int GetAllowedCookieCount() const;
-
-  // Returns the number of blocked cookies.
-  int GetBlockedCookieCount() const;
-
   // Returns the number of stateful bounces leading to this page.
   int GetStatefulBounceCount() const;
-
-  // Returns the number of allowed sites.
-  int GetAllowedSitesCount() const;
-
-  // Returns the number of blocked sites.
-  int GetBlockedSitesCount() const;
 
   // Returns the number of allowed third-party sites with cookies.
   int GetAllowedThirdPartyCookiesSitesCount() const;
@@ -182,6 +174,9 @@ class CookieControlsController final
 
   // Record metrics when third-party cookies are allowed.
   void RecordActivationMetrics();
+
+  bool SiteDataAccessed(int third_party_allowed_sites,
+                        int third_party_blocked_sites);
 
   content::WebContents* GetWebContents() const;
 

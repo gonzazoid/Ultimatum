@@ -7,8 +7,17 @@
 NSString* const kPlusAddressModalDescriptionAccessibilityIdentifier =
     @"plusAddressModalDescriptionAXID";
 
+NSString* const kPlusAddressModalErrorMessageAccessibilityIdentifier =
+    @"plusAddressModalErrorMessageAXID";
+
 const CGFloat kPrimaryAddressBottomMargin = 20;
 
 const CGFloat kBeforeImageTopMargin = 10;
 
-const CGFloat kImageSize = 26;
+const CGFloat kAfterImageMargin = 0;
+
+const CGFloat kImageSize = 32;
+
+const CGFloat kBrandedImageWidth = 40;
+
+const CGFloat kScrollViewBottomInsets = 26;

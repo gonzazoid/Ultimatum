@@ -28,6 +28,7 @@
 #include "components/web_package/signed_web_bundles/signed_web_bundle_id.h"
 #include "components/webapps/common/web_app_id.h"
 #include "content/public/common/content_features.h"
+#include "content/public/test/browser_test_utils.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "third_party/blink/public/common/features_generated.h"
 #include "third_party/skia/include/core/SkBitmap.h"
@@ -187,18 +188,5 @@ webapps::AppId AddDummyIsolatedAppToRegistry(
   provider->install_manager().NotifyWebAppInstalled(app_id);
   return app_id;
 }
-
-// TODO(cmfcmf): Move more test utils into this `test` namespace
-namespace test {
-
-std::string BitmapAsPng(const SkBitmap& bitmap) {
-  SkDynamicMemoryWStream stream;
-  EXPECT_TRUE(SkPngEncoder::Encode(&stream, bitmap.pixmap(), {}));
-  sk_sp<SkData> icon_skdata = stream.detachAsData();
-  return std::string(static_cast<const char*>(icon_skdata->data()),
-                     icon_skdata->size());
-}
-
-}  // namespace test
 
 }  // namespace web_app

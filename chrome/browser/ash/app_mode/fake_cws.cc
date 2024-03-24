@@ -9,6 +9,7 @@
 #include "base/command_line.h"
 #include "base/files/file_util.h"
 #include "base/functional/bind.h"
+#include "base/json/json_writer.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_tokenizer.h"
@@ -250,7 +251,7 @@ void FakeCWS::SetUpdateCrx(const std::string& app_id,
   }
 
   const std::string sha256 = crypto::SHA256HashString(crx_content);
-  const std::string sha256_hex = base::HexEncode(sha256.c_str(), sha256.size());
+  const std::string sha256_hex = base::HexEncode(sha256);
 
   id_to_update_check_content_map_[app_id] =
       base::BindRepeating(&ApplyHasUpdateTemplate, app_id, crx_download_url,

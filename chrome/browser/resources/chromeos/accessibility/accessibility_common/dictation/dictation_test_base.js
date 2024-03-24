@@ -94,10 +94,7 @@ DictationE2ETestBase = class extends E2ETestBase {
     };
 
     // Re-initialize AccessibilityCommon with mock APIs.
-    const reinit = module => {
-      accessibilityCommon = new module.AccessibilityCommon();
-    };
-    import('/accessibility_common/accessibility_common_loader.js').then(reinit);
+    accessibilityCommon = new AccessibilityCommon();
   }
 
   /** @override */
@@ -105,14 +102,9 @@ DictationE2ETestBase = class extends E2ETestBase {
     await super.setUpDeferred();
 
     // Wait for the Dictation module to load and set the Dictation locale.
-    await Promise.all([
-      importModule('Dictation', '/accessibility_common/dictation/dictation.js'),
-      importModule(
-          'LocaleInfo', '/accessibility_common/dictation/locale_info.js'),
-      new Promise(
-          resolve => chrome.accessibilityFeatures.dictation.set(
-              {value: true}, resolve)),
-    ]);
+    await new Promise(
+        resolve =>
+            chrome.accessibilityFeatures.dictation.set({value: true}, resolve));
     assertNotNullNorUndefined(Dictation);
     await this.setPref(Dictation.DICTATION_LOCALE_PREF, 'en-US');
 
@@ -274,32 +266,6 @@ DictationE2ETestBase = class extends E2ETestBase {
   /** @return {boolean} */
   getDictationActive() {
     return accessibilityCommon.dictation_.active_;
-  }
-
-  /**
-   * Async function to get a preference value from Settings.
-   * @param {string} name
-   * @return {!Promise<*>}
-   */
-  async getPref(name) {
-    return new Promise(resolve => {
-      chrome.settingsPrivate.getPref(name, ret => {
-        resolve(ret);
-      });
-    });
-  }
-
-  /**
-   * Async function to set a preference value in Settings.
-   * @param {string} name
-   * @return {!Promise}
-   */
-  async setPref(name, value) {
-    return new Promise(resolve => {
-      chrome.settingsPrivate.setPref(name, value, undefined, () => {
-        resolve();
-      });
-    });
   }
 
   /** @return {InputTextStrategy} */

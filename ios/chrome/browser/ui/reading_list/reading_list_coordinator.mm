@@ -5,6 +5,7 @@
 #import "ios/chrome/browser/ui/reading_list/reading_list_coordinator.h"
 
 #import "base/ios/ios_util.h"
+#import "base/memory/raw_ptr.h"
 #import "base/memory/scoped_refptr.h"
 #import "base/metrics/histogram_macros.h"
 #import "base/metrics/user_metrics.h"
@@ -21,8 +22,8 @@
 #import "components/sync/base/user_selectable_type.h"
 #import "components/sync/service/sync_service.h"
 #import "components/sync/service/sync_user_settings.h"
-#import "ios/chrome/browser/favicon/ios_chrome_favicon_loader_factory.h"
-#import "ios/chrome/browser/favicon/ios_chrome_large_icon_service_factory.h"
+#import "ios/chrome/browser/favicon/model/ios_chrome_favicon_loader_factory.h"
+#import "ios/chrome/browser/favicon/model/ios_chrome_large_icon_service_factory.h"
 #import "ios/chrome/browser/feature_engagement/model/tracker_factory.h"
 #import "ios/chrome/browser/metrics/model/new_tab_page_uma.h"
 #import "ios/chrome/browser/net/model/crurl.h"
@@ -113,13 +114,13 @@
   // Handler for sign-in commands.
   id<ApplicationCommands> _applicationCommandsHandler;
   // Authentication Service to retrieve the user's signed-in state.
-  AuthenticationService* _authService;
+  raw_ptr<AuthenticationService> _authService;
   // Service to retrieve preference values.
-  PrefService* _prefService;
+  raw_ptr<PrefService> _prefService;
   // Manager for user's Google identities.
-  signin::IdentityManager* _identityManager;
+  raw_ptr<signin::IdentityManager> _identityManager;
   // Sync service.
-  syncer::SyncService* _syncService;
+  raw_ptr<syncer::SyncService> _syncService;
   // Coordinator of manage sync settings.
   ManageSyncSettingsCoordinator* _manageSyncSettingsCoordinator;
 }
@@ -295,7 +296,7 @@
     return;
   }
   [self loadEntryURL:entry->URL()
-          withOfflineURL:GURL::EmptyGURL()
+          withOfflineURL:GURL()
       loadOfflineVersion:NO
                 inNewTab:NO
                incognito:NO];
@@ -312,7 +313,7 @@
     return;
   }
   [self loadEntryURL:entry->URL()
-          withOfflineURL:GURL::EmptyGURL()
+          withOfflineURL:GURL()
       loadOfflineVersion:NO
                 inNewTab:YES
                incognito:incognito];
@@ -383,8 +384,9 @@
   base::RecordAction(base::UserMetricsAction("MobileReadingListOpen"));
   web::WebState* activeWebState =
       self.browser->GetWebStateList()->GetActiveWebState();
-  new_tab_page_uma::RecordAction(
-      self.browser->GetBrowserState()->IsOffTheRecord(), activeWebState,
+  bool is_ntp = activeWebState->GetVisibleURL() == kChromeUINewTabURL;
+  new_tab_page_uma::RecordNTPAction(
+      self.browser->GetBrowserState()->IsOffTheRecord(), is_ntp,
       new_tab_page_uma::ACTION_OPENED_READING_LIST_ENTRY);
 
   // Load the offline URL if available.
@@ -488,7 +490,7 @@
             return;
 
           [weakSelf loadEntryURL:item.entryURL
-                  withOfflineURL:GURL::EmptyGURL()
+                  withOfflineURL:GURL()
               loadOfflineVersion:NO
                         inNewTab:YES
                        incognito:NO];
@@ -504,7 +506,7 @@
                 return;
 
               [weakSelf loadEntryURL:item.entryURL
-                      withOfflineURL:GURL::EmptyGURL()
+                      withOfflineURL:GURL()
                   loadOfflineVersion:NO
                             inNewTab:YES
                            incognito:YES];
@@ -579,8 +581,11 @@
   CHECK(!_syncService->GetAccountInfo().IsEmpty())
       << base::SysNSStringToUTF8([self description]);
   SyncSettingsAccountState accountState =
-      _syncService->HasSyncConsent() ? SyncSettingsAccountState::kSyncing
-                                     : SyncSettingsAccountState::kSignedIn;
+      (base::FeatureList::IsEnabled(
+           syncer::kReplaceSyncPromosWithSignInPromos) &&
+       !_syncService->HasSyncConsent())
+          ? SyncSettingsAccountState::kSignedIn
+          : SyncSettingsAccountState::kSyncing;
   _manageSyncSettingsCoordinator = [[ManageSyncSettingsCoordinator alloc]
       initWithBaseViewController:self.tableViewController
                          browser:self.browser

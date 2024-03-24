@@ -10,7 +10,6 @@
 #include "components/no_state_prefetch/common/prerender_canceler.mojom.h"
 #include "net/base/request_priority.h"
 #include "services/network/public/mojom/fetch_api.mojom-shared.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/loader/url_loader_throttle.h"
 
 namespace prerender {
@@ -20,10 +19,6 @@ class NoStatePrefetchURLLoaderThrottle : public blink::URLLoaderThrottle {
   NoStatePrefetchURLLoaderThrottle(
       mojo::PendingRemote<prerender::mojom::PrerenderCanceler> canceler);
   ~NoStatePrefetchURLLoaderThrottle() override;
-
-  // Called when the prerender is used. This will unpaused requests and set the
-  // priorities to the original value.
-  void PrerenderUsed();
 
   void set_destruction_closure(base::OnceClosure closure) {
     destruction_closure_ = std::move(closure);
@@ -49,11 +44,6 @@ class NoStatePrefetchURLLoaderThrottle : public blink::URLLoaderThrottle {
   network::mojom::RequestDestination request_destination_;
 
   mojo::PendingRemote<prerender::mojom::PrerenderCanceler> canceler_;
-
-  // The throttle changes most request priorities to IDLE during prerendering.
-  // The priority is reset back to the original priority when prerendering is
-  // finished.
-  absl::optional<net::RequestPriority> original_request_priority_;
 
   base::OnceClosure destruction_closure_;
 

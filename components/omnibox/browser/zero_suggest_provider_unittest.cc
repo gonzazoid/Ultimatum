@@ -51,7 +51,9 @@ constexpr int kCacheSize = 10;
 class FakeAutocompleteProviderClient : public MockAutocompleteProviderClient {
  public:
   FakeAutocompleteProviderClient()
-      : template_url_service_(new TemplateURLService(nullptr, 0)),
+      : template_url_service_(std::make_unique<TemplateURLService>(
+            /*prefs=*/nullptr,
+            /*search_engine_choice_service=*/nullptr)),
         pref_service_(new TestingPrefServiceSimple()) {
     ZeroSuggestProvider::RegisterProfilePrefs(pref_service_->registry());
     zero_suggest_cache_service_ = std::make_unique<ZeroSuggestCacheService>(
@@ -1247,7 +1249,7 @@ TEST_F(ZeroSuggestProviderTest, TestPsuggestZeroSuggestCachingFirstRunNTP) {
       "Omnibox.ZeroSuggestProvider.NoURL.NonPrefetch", /*kRequestSent*/ 1, 1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.NoURL.NonPrefetch",
-      /*kRemoteResponseReceived*/ 3, 1);
+      /*kResponseReceived*/ 3, 1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.NoURL.NonPrefetch",
       /*kRemoteResponseCached*/ 4, 1);
@@ -1313,7 +1315,7 @@ TEST_F(ZeroSuggestProviderTest, TestPsuggestZeroSuggestCachingFirstRunSRP) {
       1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.URLBased.NonPrefetch",
-      /*kRemoteResponseReceived*/ 3, 1);
+      /*kResponseReceived*/ 3, 1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.URLBased.NonPrefetch",
       /*kRemoteResponseCached*/ 4, 1);
@@ -1380,7 +1382,7 @@ TEST_F(ZeroSuggestProviderTest, TestPsuggestZeroSuggestCachingFirstRunWeb) {
       1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.URLBased.NonPrefetch",
-      /*kRemoteResponseReceived*/ 3, 1);
+      /*kResponseReceived*/ 3, 1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.URLBased.NonPrefetch",
       /*kRemoteResponseCached*/ 4, 1);
@@ -1577,7 +1579,7 @@ TEST_F(ZeroSuggestProviderTest, TestPsuggestZeroSuggestHasCachedResultsNTP) {
       "Omnibox.ZeroSuggestProvider.NoURL.NonPrefetch", /*kRequestSent*/ 1, 1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.NoURL.NonPrefetch",
-      /*kRemoteResponseReceived*/ 3, 1);
+      /*kResponseReceived*/ 3, 1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.NoURL.NonPrefetch",
       /*kRemoteResponseCached*/ 4, 1);
@@ -1655,7 +1657,7 @@ TEST_F(ZeroSuggestProviderTest, TestZeroSuggestHasInMemoryCachedResultsNTP) {
       "Omnibox.ZeroSuggestProvider.NoURL.NonPrefetch", /*kRequestSent*/ 1, 1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.NoURL.NonPrefetch",
-      /*kRemoteResponseReceived*/ 3, 1);
+      /*kResponseReceived*/ 3, 1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.NoURL.NonPrefetch",
       /*kRemoteResponseCached*/ 4, 1);
@@ -1739,7 +1741,7 @@ TEST_F(ZeroSuggestProviderTest, TestPsuggestZeroSuggestHasCachedResultsSRP) {
       1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.URLBased.NonPrefetch",
-      /*kRemoteResponseReceived*/ 3, 1);
+      /*kResponseReceived*/ 3, 1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.URLBased.NonPrefetch",
       /*kRemoteResponseCached*/ 4, 1);
@@ -1825,7 +1827,7 @@ TEST_F(ZeroSuggestProviderTest, TestZeroSuggestHasInMemoryCachedResultsSRP) {
       1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.URLBased.NonPrefetch",
-      /*kRemoteResponseReceived*/ 3, 1);
+      /*kResponseReceived*/ 3, 1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.URLBased.NonPrefetch",
       /*kRemoteResponseCached*/ 4, 1);
@@ -1910,7 +1912,7 @@ TEST_F(ZeroSuggestProviderTest, TestPsuggestZeroSuggestHasCachedResultsWeb) {
       1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.URLBased.NonPrefetch",
-      /*kRemoteResponseReceived*/ 3, 1);
+      /*kResponseReceived*/ 3, 1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.URLBased.NonPrefetch",
       /*kRemoteResponseCached*/ 4, 1);
@@ -1996,7 +1998,7 @@ TEST_F(ZeroSuggestProviderTest, TestZeroSuggestHasInMemoryCachedResultsWeb) {
       1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.URLBased.NonPrefetch",
-      /*kRemoteResponseReceived*/ 3, 1);
+      /*kResponseReceived*/ 3, 1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.URLBased.NonPrefetch",
       /*kRemoteResponseCached*/ 4, 1);
@@ -2071,7 +2073,7 @@ TEST_F(ZeroSuggestProviderTest,
       "Omnibox.ZeroSuggestProvider.NoURL.NonPrefetch", /*kRequestSent*/ 1, 1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.NoURL.NonPrefetch",
-      /*kRemoteResponseReceived*/ 3, 1);
+      /*kResponseReceived*/ 3, 1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.NoURL.NonPrefetch",
       /*kRemoteResponseCached*/ 4, 1);
@@ -2152,7 +2154,7 @@ TEST_F(ZeroSuggestProviderTest,
       1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.URLBased.NonPrefetch",
-      /*kRemoteResponseReceived*/ 3, 1);
+      /*kResponseReceived*/ 3, 1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.URLBased.NonPrefetch",
       /*kRemoteResponseCached*/ 4, 1);
@@ -2234,7 +2236,7 @@ TEST_F(ZeroSuggestProviderTest,
       1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.URLBased.NonPrefetch",
-      /*kRemoteResponseReceived*/ 3, 1);
+      /*kResponseReceived*/ 3, 1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.URLBased.NonPrefetch",
       /*kRemoteResponseCached*/ 4, 1);
@@ -2308,7 +2310,7 @@ TEST_F(ZeroSuggestProviderTest, TestZeroSuggestReceivedInvalidResults) {
       invalid_responses.size());
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.NoURL.NonPrefetch",
-      /*kRemoteResponseReceived*/ 3, invalid_responses.size());
+      /*kResponseReceived*/ 3, invalid_responses.size());
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.NoURL.NonPrefetch",
       /*kRemoteResponseCached*/ 4, 0);
@@ -2367,7 +2369,7 @@ TEST_F(ZeroSuggestProviderTest, TestPsuggestZeroSuggestPrefetchThenNTPOnFocus) {
         "Omnibox.ZeroSuggestProvider.NoURL.Prefetch", /*kRequestSent*/ 1, 1);
     histogram_tester.ExpectBucketCount(
         "Omnibox.ZeroSuggestProvider.NoURL.Prefetch",
-        /*kRemoteResponseReceived*/ 3, 1);
+        /*kResponseReceived*/ 3, 1);
     histogram_tester.ExpectBucketCount(
         "Omnibox.ZeroSuggestProvider.NoURL.Prefetch",
         /*kRemoteResponseCached*/ 4, 1);
@@ -2428,7 +2430,7 @@ TEST_F(ZeroSuggestProviderTest, TestPsuggestZeroSuggestPrefetchThenNTPOnFocus) {
         "Omnibox.ZeroSuggestProvider.NoURL.NonPrefetch", /*kRequestSent*/ 1, 1);
     histogram_tester.ExpectBucketCount(
         "Omnibox.ZeroSuggestProvider.NoURL.NonPrefetch",
-        /*kRemoteResponseReceived*/ 3, 1);
+        /*kResponseReceived*/ 3, 1);
     histogram_tester.ExpectBucketCount(
         "Omnibox.ZeroSuggestProvider.NoURL.NonPrefetch",
         /*kRemoteResponseCached*/ 4, 1);
@@ -2517,7 +2519,7 @@ TEST_F(ZeroSuggestProviderTest, TestMultipleZeroSuggestPrefetchesInFlight) {
       /*kRequestInvalidated*/ 2, 0);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.URLBased.Prefetch",
-      /*kRemoteResponseReceived*/ 3, 1);
+      /*kResponseReceived*/ 3, 1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.URLBased.Prefetch",
       /*kRemoteResponseCached*/ 4, 1);
@@ -2529,7 +2531,7 @@ TEST_F(ZeroSuggestProviderTest, TestMultipleZeroSuggestPrefetchesInFlight) {
       0);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.NoURL.Prefetch",
-      /*kRemoteResponseReceived*/ 3, 1);
+      /*kResponseReceived*/ 3, 1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.NoURL.Prefetch",
       /*kRemoteResponseCached*/ 4, 1);
@@ -2611,7 +2613,7 @@ TEST_F(ZeroSuggestProviderTest,
         "Omnibox.ZeroSuggestProvider.URLBased.Prefetch", /*kRequestSent*/ 1, 1);
     histogram_tester.ExpectBucketCount(
         "Omnibox.ZeroSuggestProvider.URLBased.Prefetch",
-        /*kRemoteResponseReceived*/ 3, 1);
+        /*kResponseReceived*/ 3, 1);
 
     // Expect the provider to not have notified the provider listener since the
     // matches were not updated.
@@ -2667,7 +2669,7 @@ TEST_F(ZeroSuggestProviderTest,
         1);
     histogram_tester.ExpectBucketCount(
         "Omnibox.ZeroSuggestProvider.URLBased.NonPrefetch",
-        /*kRemoteResponseReceived*/ 3, 1);
+        /*kResponseReceived*/ 3, 1);
     histogram_tester.ExpectBucketCount(
         "Omnibox.ZeroSuggestProvider.URLBased.NonPrefetch",
         /*kRemoteResponseConvertedToMatches*/ 5, 1);
@@ -2747,7 +2749,7 @@ TEST_F(ZeroSuggestProviderTest,
         "Omnibox.ZeroSuggestProvider.URLBased.Prefetch", /*kRequestSent*/ 1, 1);
     histogram_tester.ExpectBucketCount(
         "Omnibox.ZeroSuggestProvider.URLBased.Prefetch",
-        /*kRemoteResponseReceived*/ 3, 1);
+        /*kResponseReceived*/ 3, 1);
 
     // Expect the provider to not have notified the provider listener since the
     // matches were not updated.
@@ -2802,7 +2804,7 @@ TEST_F(ZeroSuggestProviderTest,
         1);
     histogram_tester.ExpectBucketCount(
         "Omnibox.ZeroSuggestProvider.URLBased.NonPrefetch",
-        /*kRemoteResponseReceived*/ 3, 1);
+        /*kResponseReceived*/ 3, 1);
     histogram_tester.ExpectBucketCount(
         "Omnibox.ZeroSuggestProvider.URLBased.NonPrefetch",
         /*kRemoteResponseConvertedToMatches*/ 5, 1);
@@ -2887,7 +2889,7 @@ TEST_F(ZeroSuggestProviderTest, TestNoURLResultTypeWithNonEmptyURLInput) {
       "Omnibox.ZeroSuggestProvider.NoURL.NonPrefetch", /*kRequestSent*/ 1, 1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.NoURL.NonPrefetch",
-      /*kRemoteResponseReceived*/ 3, 1);
+      /*kResponseReceived*/ 3, 1);
   histogram_tester.ExpectBucketCount(
       "Omnibox.ZeroSuggestProvider.NoURL.NonPrefetch",
       /*kRemoteResponseCached*/ 4, 1);

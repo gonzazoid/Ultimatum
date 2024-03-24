@@ -9,8 +9,8 @@
 #import "components/keyed_service/ios/browser_state_dependency_manager.h"
 #import "components/password_manager/core/common/password_manager_features.h"
 #import "ios/chrome/browser/credential_provider/model/credential_provider_service.h"
-#import "ios/chrome/browser/favicon/favicon_loader.h"
-#import "ios/chrome/browser/favicon/ios_chrome_favicon_loader_factory.h"
+#import "ios/chrome/browser/favicon/model/favicon_loader.h"
+#import "ios/chrome/browser/favicon/model/ios_chrome_favicon_loader_factory.h"
 #import "ios/chrome/browser/passwords/model/ios_chrome_account_password_store_factory.h"
 #import "ios/chrome/browser/passwords/model/ios_chrome_affiliation_service_factory.h"
 #import "ios/chrome/browser/passwords/model/ios_chrome_profile_password_store_factory.h"
@@ -68,7 +68,7 @@ CredentialProviderServiceFactory::BuildServiceInstanceFor(
       IdentityManagerFactory::GetForBrowserState(browser_state);
   syncer::SyncService* sync_service =
       SyncServiceFactory::GetForBrowserState(browser_state);
-  password_manager::AffiliationService* affiliation_service =
+  affiliations::AffiliationService* affiliation_service =
       IOSChromeAffiliationServiceFactory::GetForBrowserState(context);
   FaviconLoader* favicon_loader =
       IOSChromeFaviconLoaderFactory::GetForBrowserState(browser_state);

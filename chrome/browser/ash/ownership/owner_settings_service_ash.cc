@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -15,6 +16,7 @@
 #include "ash/constants/ash_switches.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/debug/dump_without_crashing.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback.h"
 #include "base/functional/callback_helpers.h"
@@ -51,7 +53,6 @@
 #include "crypto/nss_util_internal.h"
 #include "crypto/scoped_nss_types.h"
 #include "crypto/signature_creator.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace em = enterprise_management;
 
@@ -343,17 +344,42 @@ bool OwnerSettingsServiceAsh::Set(const std::string& setting,
   return true;
 }
 
+// Returns the latest list for setting:
+// 1: retrieve the list from pending changes
+// 2: retrieve the list with CrosSettings, be careful
+// - the CrosSettings is on observer of this object
+// - or the list is already written to the disk
+base::Value::List OwnerSettingsServiceAsh::GetListForSetting(
+    const std::string& setting) const {
+  auto iter = pending_changes_.find(setting);
+  if (iter != pending_changes_.end()) {
+    const std::unique_ptr<base::Value>& pending_val = iter->second;
+    if (!pending_val->is_list()) {
+      LOG(ERROR) << "The " << setting << " setting is not a list!";
+      base::debug::DumpWithoutCrashing();
+      return base::Value::List();
+    }
+    return pending_val->GetList().Clone();
+  }
+  const base::Value* old_value = CrosSettings::Get()->GetPref(setting);
+
+  if (old_value == nullptr) {
+    return base::Value::List();
+  }
+
+  if (!old_value->is_list()) {
+    LOG(ERROR) << "The " << setting << " setting is not a list!";
+    base::debug::DumpWithoutCrashing();
+    return base::Value::List();
+  }
+
+  return old_value->GetList().Clone();
+}
+
 bool OwnerSettingsServiceAsh::AppendToList(const std::string& setting,
                                            const base::Value& value) {
   DCHECK(thread_checker_.CalledOnValidThread());
-  const base::Value::List* old_value;
-  if (!CrosSettings::Get()->GetList(setting, &old_value)) {
-    return false;
-  }
-
-  base::Value::List new_value =
-      old_value ? old_value->Clone() : base::Value::List();
-
+  base::Value::List new_value = GetListForSetting(setting);
   new_value.Append(value.Clone());
   return Set(setting, base::Value(std::move(new_value)));
 }
@@ -361,12 +387,7 @@ bool OwnerSettingsServiceAsh::AppendToList(const std::string& setting,
 bool OwnerSettingsServiceAsh::RemoveFromList(const std::string& setting,
                                              const base::Value& value) {
   DCHECK(thread_checker_.CalledOnValidThread());
-  const base::Value* old_value = CrosSettings::Get()->GetPref(setting);
-  if (old_value && !old_value->is_list())
-    return false;
-  base::Value::List new_value;
-  if (old_value)
-    new_value = old_value->GetList().Clone();
+  base::Value::List new_value = GetListForSetting(setting);
   new_value.EraseValue(value);
   return Set(setting, base::Value(std::move(new_value)));
 }
@@ -549,7 +570,7 @@ void OwnerSettingsServiceAsh::UpdateDeviceSettings(
           if (account_id)
             account->set_account_id(*account_id);
 
-          absl::optional<int> type =
+          std::optional<int> type =
               entry_dict.FindInt(kAccountsPrefDeviceLocalAccountsKeyType);
           if (type.has_value()) {
             account->set_type(

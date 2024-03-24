@@ -24,8 +24,7 @@ class GPU_GLES2_EXPORT OzoneImageBackingFactory
     : public SharedImageBackingFactory {
  public:
   explicit OzoneImageBackingFactory(SharedContextState* shared_context_state,
-                                    const GpuDriverBugWorkarounds& workarounds,
-                                    const GpuPreferences& gpu_preferences);
+                                    const GpuDriverBugWorkarounds& workarounds);
 
   ~OzoneImageBackingFactory() override;
 
@@ -105,7 +104,6 @@ class GPU_GLES2_EXPORT OzoneImageBackingFactory
 
   const raw_ptr<SharedContextState> shared_context_state_;
   const GpuDriverBugWorkarounds workarounds_;
-  bool use_passthrough_;
 
   // This method optionally takes BufferUsage as a parameter.
   // TODO(crbug.com/1467584) : BufferUsage will be eventually merged into
@@ -119,6 +117,7 @@ class GPU_GLES2_EXPORT OzoneImageBackingFactory
       GrSurfaceOrigin surface_origin,
       SkAlphaType alpha_type,
       uint32_t usage,
+      std::string debug_label,
       std::optional<gfx::BufferUsage> buffer_usage = std::nullopt);
 };
 

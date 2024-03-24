@@ -34,6 +34,10 @@ void ToggleOverview(
 void WaitForOverviewEnterAnimation();
 void WaitForOverviewExitAnimation();
 
+// Like `WaitForOverviewEnterAnimation()` but waits even if using zero duration.
+// Used to wait for async pine image read operation.
+void WaitForOverviewEntered();
+
 OverviewGrid* GetOverviewGridForRoot(aura::Window* root);
 
 const std::vector<std::unique_ptr<OverviewItemBase>>& GetOverviewItemsForRoot(
@@ -59,6 +63,10 @@ void DragItemToPoint(OverviewItemBase* item,
 // Press the key repeatedly until a window is focused, i.e. ignoring any
 // desk items.
 void SendKeyUntilOverviewItemIsFocused(ui::KeyboardCode key);
+
+// Waits until the occlusion state for window is equal to `target_state`.
+void WaitForOcclusionStateChange(aura::Window* window,
+                                 aura::Window::OcclusionState target_state);
 
 }  // namespace ash
 

@@ -8,6 +8,7 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/ash_prefs.h"
+#include "ash/user_education/user_education_types.h"
 #include "ash/user_education/welcome_tour/welcome_tour_metrics.h"
 #include "base/json/values_util.h"
 #include "base/strings/strcat.h"
@@ -28,25 +29,10 @@ using welcome_tour_metrics::PreventedReason;
 
 // Constants -------------------------------------------------------------------
 
-static constexpr char kTimeOfFirstInteractionPrefPrefix[] =
-    "ash.welcome_tour.interaction_time.";
 static constexpr char kTimeOfFirstTourPrevention[] =
     "ash.welcome_tour.prevented.first_time";
 static constexpr char kReasonForFirstTourPrevention[] =
     "ash.welcome_tour.prevented.first_reason";
-
-// Helpers ---------------------------------------------------------------------
-
-// Fetches the time pref associated with the first time of a given interaction.
-std::optional<base::Time> GetTimeOfFirstInteraction(PrefService* prefs,
-                                                    Interaction interaction) {
-  auto pref_name = base::StrCat({kTimeOfFirstInteractionPrefPrefix,
-                                 welcome_tour_metrics::ToString(interaction),
-                                 ".first_time"});
-  auto* pref = prefs->FindPreference(pref_name);
-  return pref->IsDefaultValue() ? std::nullopt
-                                : base::ValueToTime(pref->GetValue());
-}
 
 }  // namespace
 
@@ -73,6 +59,8 @@ class WelcomeTourPrefsTest : public testing::Test {
 
 // Expects the first interaction time prefs can be set exactly once.
 TEST_F(WelcomeTourPrefsTest, FirstInteraction) {
+  MarkTimeOfFirstTourCompletion(pref_service());
+
   for (auto interaction : kAllInteractionsSet) {
     // Should be unset by default.
     EXPECT_EQ(GetTimeOfFirstInteraction(pref_service(), interaction),

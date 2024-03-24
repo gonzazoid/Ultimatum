@@ -38,7 +38,6 @@ public final class PlusAddressCreationMediatorTest {
     private static final int TAB1_ID = 1;
     private static final int TAB2_ID = 2;
     private static final String PROPOSED_PLUS_ADDRESS = "foo@bar.com";
-    private static final String ERROR_MESSAGE = "error!";
 
     @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule();
 
@@ -86,8 +85,8 @@ public final class PlusAddressCreationMediatorTest {
 
     @Test
     public void testShowError_callsBottomSheetShowError() {
-        mMediator.showError(ERROR_MESSAGE);
-        verify(mBottomSheetContent).showError(ERROR_MESSAGE);
+        mMediator.showError();
+        verify(mBottomSheetContent).showError();
     }
 
     @Test
@@ -136,6 +135,14 @@ public final class PlusAddressCreationMediatorTest {
     }
 
     @Test
+    public void testOnSheetClosed_callsBridgeOnCanceled_whenSwipeToDismiss() {
+        mMediator.onSheetClosed(StateChangeReason.SWIPE);
+
+        verify(mBridge).onCanceled();
+        verify(mBridge).onPromptDismissed();
+    }
+
+    @Test
     public void testOnStartedShowing_hidesContent_whenNotBrowsing() {
         mMediator.onStartedShowing(LayoutType.TAB_SWITCHER);
 
@@ -177,9 +184,9 @@ public final class PlusAddressCreationMediatorTest {
     }
 
     @Test
-    public void testOpenManagementPage_openNewTab() {
+    public void testOpenUrl_openNewTab() {
         GURL url = new GURL("manage.com");
-        mMediator.openManagementPage(url);
+        mMediator.openUrl(url);
 
         verify(mTabModelSelector)
                 .openNewTab(

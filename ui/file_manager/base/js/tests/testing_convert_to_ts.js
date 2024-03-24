@@ -1,6 +1,7 @@
 // Copyright 2023 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+// @ts-nocheck
 
 import {assert} from 'chrome://resources/ash/common/assert.js';
 // @ts-ignore: error TS2792: Cannot find module
@@ -10,6 +11,7 @@ import {assert} from 'chrome://resources/ash/common/assert.js';
 import {ColorChangeUpdater} from 'chrome://resources/cr_components/color_change_listener/colors_css_updater.js';
 
 import {FileManagerBaseInterface} from '../../../file_manager/externs/background/file_manager_base.js';
+import {testcase} from '../testcase.js';
 
 
 // @ts-ignore: error TS2314: Generic type 'Array<T>' requires 1 type
@@ -145,3 +147,12 @@ export class FileManagerBase {
     return show;
   }
 }
+
+testcase.functionShouldBeRewrittenAndAsyncAdded = () => {
+  // The function name should be rewritten as well as the trailing semicolon
+  // along with a new async specifier added.
+};
+
+testcase.functionShouldBeRewritten = async () => {
+  // The function name should be rewritten as well as the trailing semicolon.
+};

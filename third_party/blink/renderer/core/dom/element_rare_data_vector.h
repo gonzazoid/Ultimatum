@@ -40,7 +40,7 @@ class ResizeObservation;
 class StyleScopeData;
 class CustomElementDefinition;
 class PopoverData;
-class PositionFallbackData;
+class OutOfFlowData;
 class HTMLElement;
 
 enum class ElementFlags;
@@ -97,7 +97,7 @@ class CORE_EXPORT ElementRareDataVector final : public NodeRareData {
     kLastRememberedInlineSize = 28,
     kRestrictionTargetId = 29,
     kStyleScopeData = 30,
-    kPositionFallbackData = 31,
+    kOutOfFlowData = 31,
 
     kNumFields = 32,
   };
@@ -159,7 +159,7 @@ class CORE_EXPORT ElementRareDataVector final : public NodeRareData {
   }
 
   template <typename T>
-  void SetOptionalField(FieldId field_id, absl::optional<T> data) {
+  void SetOptionalField(FieldId field_id, std::optional<T> data) {
     if (data) {
       SetWrappedField<T>(field_id, *data);
     } else {
@@ -168,11 +168,11 @@ class CORE_EXPORT ElementRareDataVector final : public NodeRareData {
   }
 
   template <typename T>
-  absl::optional<T> GetOptionalField(FieldId field_id) const {
+  std::optional<T> GetOptionalField(FieldId field_id) const {
     if (auto* value = GetWrappedField<T>(field_id)) {
       return *value;
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
  public:
@@ -257,8 +257,8 @@ class CORE_EXPORT ElementRareDataVector final : public NodeRareData {
   StyleScopeData& EnsureStyleScopeData();
   StyleScopeData* GetStyleScopeData() const;
 
-  PositionFallbackData& EnsurePositionFallbackData();
-  PositionFallbackData* GetPositionFallbackData() const;
+  OutOfFlowData& EnsureOutOfFlowData();
+  OutOfFlowData* GetOutOfFlowData() const;
 
   // Returns the crop-ID if one was set, or nullptr otherwise.
   const RegionCaptureCropId* GetRegionCaptureCropId() const;
@@ -283,10 +283,10 @@ class CORE_EXPORT ElementRareDataVector final : public NodeRareData {
   void SetCustomElementDefinition(CustomElementDefinition* definition);
   CustomElementDefinition* GetCustomElementDefinition() const;
 
-  void SetLastRememberedBlockSize(absl::optional<LayoutUnit> size);
-  void SetLastRememberedInlineSize(absl::optional<LayoutUnit> size);
-  absl::optional<LayoutUnit> LastRememberedBlockSize() const;
-  absl::optional<LayoutUnit> LastRememberedInlineSize() const;
+  void SetLastRememberedBlockSize(std::optional<LayoutUnit> size);
+  void SetLastRememberedInlineSize(std::optional<LayoutUnit> size);
+  std::optional<LayoutUnit> LastRememberedBlockSize() const;
+  std::optional<LayoutUnit> LastRememberedInlineSize() const;
 
   PopoverData* GetPopoverData() const;
   PopoverData& EnsurePopoverData();

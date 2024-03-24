@@ -29,20 +29,20 @@
 
 #include "third_party/blink/renderer/core/css/media_query_evaluator.h"
 
-#include "services/device/public/mojom/device_posture_provider.mojom-blink.h"
 #include "third_party/blink/public/common/css/forced_colors.h"
 #include "third_party/blink/public/common/css/navigation_controls.h"
 #include "third_party/blink/public/common/css/scripting.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_metric_builder.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_study_settings.h"
 #include "third_party/blink/public/common/privacy_budget/identifiable_surface.h"
+#include "third_party/blink/public/mojom/device_posture/device_posture_provider.mojom-blink.h"
 #include "third_party/blink/public/mojom/manifest/display_mode.mojom-shared.h"
 #include "third_party/blink/public/mojom/webpreferences/web_preferences.mojom-blink.h"
 #include "third_party/blink/renderer/core/css/css_container_values.h"
-#include "third_party/blink/renderer/core/css/css_custom_property_declaration.h"
 #include "third_party/blink/renderer/core/css/css_primitive_value.h"
 #include "third_party/blink/renderer/core/css/css_resolution_units.h"
 #include "third_party/blink/renderer/core/css/css_to_length_conversion_data.h"
+#include "third_party/blink/renderer/core/css/css_unparsed_declaration_value.h"
 #include "third_party/blink/renderer/core/css/media_feature_names.h"
 #include "third_party/blink/renderer/core/css/media_features.h"
 #include "third_party/blink/renderer/core/css/media_list.h"
@@ -119,7 +119,7 @@ KleeneValue KleeneAnd(KleeneValue a, KleeneValue b) {
 
 }  // namespace
 
-using device::mojom::blink::DevicePostureType;
+using mojom::blink::DevicePostureType;
 using mojom::blink::HoverType;
 using mojom::blink::PointerType;
 
@@ -448,6 +448,8 @@ static bool DisplayModeMediaFeatureEval(const MediaQueryExpValue& value,
       return mode == blink::mojom::DisplayMode::kBorderless;
     case CSSValueID::kTabbed:
       return mode == blink::mojom::DisplayMode::kTabbed;
+    case CSSValueID::kPictureInPicture:
+      return mode == blink::mojom::DisplayMode::kPictureInPicture;
     default:
       NOTREACHED();
       return false;
@@ -1738,9 +1740,9 @@ KleeneValue MediaQueryEvaluator::EvalStyleFeature(
       container, CSSPropertyName(property_name), query_specified);
 
   if (const auto* decl_value =
-          DynamicTo<CSSCustomPropertyDeclaration>(query_value)) {
+          DynamicTo<CSSUnparsedDeclarationValue>(query_value)) {
     CSSVariableData* query_computed =
-        decl_value ? &decl_value->Value() : nullptr;
+        decl_value ? decl_value->VariableDataValue() : nullptr;
     CSSVariableData* computed =
         container->ComputedStyleRef().GetVariableData(property_name);
 

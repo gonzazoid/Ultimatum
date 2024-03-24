@@ -27,10 +27,11 @@
 #include "media/filters/source_buffer_parse_warnings.h"
 #include "media/filters/source_buffer_state.h"
 #include "media/filters/source_buffer_stream.h"
-
-class MEDIA_EXPORT SourceBufferStream;
+#include "media/filters/stream_parser_factory.h"
 
 namespace media {
+
+class SourceBufferStream;
 
 class AudioDecoderConfig;
 class VideoDecoderConfig;
@@ -239,7 +240,7 @@ class MEDIA_EXPORT ChunkDemuxer : public Demuxer {
       override;
   base::TimeDelta GetStartTime() const override;
   int64_t GetMemoryUsage() const override;
-  absl::optional<container_names::MediaContainerName> GetContainerForMetrics()
+  std::optional<container_names::MediaContainerName> GetContainerForMetrics()
       const override;
   void AbortPendingReads() override;
 
@@ -270,6 +271,15 @@ class MEDIA_EXPORT ChunkDemuxer : public Demuxer {
                              std::unique_ptr<AudioDecoderConfig> audio_config);
   [[nodiscard]] Status AddId(const std::string& id,
                              std::unique_ptr<VideoDecoderConfig> video_config);
+
+  // `AddAutoDetectedCodecsId` operates similarly to the `AddId` methods, except
+  // that it creates parsers which are capable of auto-detecting the codecs
+  // present. It is used internally by the HLS demuxer.
+#if BUILDFLAG(ENABLE_HLS_DEMUXER)
+  [[nodiscard]] Status AddAutoDetectedCodecsId(
+      const std::string& id,
+      RelaxedParserSupportedType mime_type);
+#endif
 
   // Notifies a caller via `tracks_updated_cb` that the set of media tracks
   // for a given `id` has changed. This callback must be set before any calls to
@@ -468,9 +478,11 @@ class MEDIA_EXPORT ChunkDemuxer : public Demuxer {
   ChunkDemuxer::Status AddIdInternal(
       const std::string& id,
       std::unique_ptr<media::StreamParser> stream_parser,
-      std::string expected_codecs);
+      std::optional<std::string_view> expected_codecs);
 
-  // Helper for vide and audio track changing.
+  // Helper for video and audio track changing. For the `track_type`, enables
+  // tracks associated with `track_ids` and disables the rest. Fires
+  // `change_completed_cb` when the operation is completed.
   void FindAndEnableProperTracks(const std::vector<MediaTrack::Id>& track_ids,
                                  base::TimeDelta curr_time,
                                  DemuxerStream::Type track_type,

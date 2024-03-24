@@ -17,6 +17,7 @@
 #include "base/strings/stringprintf.h"
 #include "base/time/time.h"
 #include "base/types/optional_ref.h"
+#include "content/browser/interest_group/ad_auction_page_data.h"
 #include "content/browser/interest_group/auction_metrics_recorder.h"
 #include "content/browser/interest_group/auction_nonce_manager.h"
 #include "content/browser/interest_group/interest_group_auction_reporter.h"
@@ -79,7 +80,7 @@ std::unique_ptr<AuctionRunner> AuctionRunner::CreateAndStart(
     InterestGroupManagerImpl* interest_group_manager,
     BrowserContext* browser_context,
     PrivateAggregationManager* private_aggregation_manager,
-    AdAuctionPageData* ad_auction_page_data,
+    AdAuctionPageDataCallback ad_auction_page_data_callback,
     InterestGroupAuctionReporter::LogPrivateAggregationRequestsCallback
         log_private_aggregation_requests_callback,
     const blink::AuctionConfig& auction_config,
@@ -94,7 +95,8 @@ std::unique_ptr<AuctionRunner> AuctionRunner::CreateAndStart(
     RunAuctionCallback callback) {
   std::unique_ptr<AuctionRunner> instance(new AuctionRunner(
       auction_worklet_manager, auction_nonce_manager, interest_group_manager,
-      browser_context, private_aggregation_manager, ad_auction_page_data,
+      browser_context, private_aggregation_manager,
+      std::move(ad_auction_page_data_callback),
       std::move(log_private_aggregation_requests_callback),
       DetermineKAnonMode(), std::move(auction_config), main_frame_origin,
       frame_origin, ukm_source_id, std::move(client_security_state),
@@ -213,6 +215,32 @@ void AuctionRunner::ResolvedBuyerTimeoutsPromise(
   NotifyPromiseResolved(auction_id.get(), config);
 }
 
+void AuctionRunner::ResolvedDeprecatedRenderURLReplacementsPromise(
+    blink::mojom::AuctionAdConfigAuctionIdPtr auction_id,
+    const std::vector<::blink::AuctionConfig::AdKeywordReplacement>&
+        deprecated_render_url_replacements) {
+  if (state_ == State::kFailed) {
+    return;
+  }
+  blink::AuctionConfig* config =
+      LookupAuction(*owned_auction_config_, auction_id);
+  if (!config) {
+    mojo::ReportBadMessage(
+        "Invalid auction ID in ResolvedDeprecatedRenderURLReplacementsPromise");
+    return;
+  }
+  if (!config->deprecated_render_url_replacements.is_promise()) {
+    mojo::ReportBadMessage(
+        "ResolvedDeprecatedRenderURLReplacementsPromise updating non-promise");
+    return;
+  }
+
+  config->deprecated_render_url_replacements =
+      blink::AuctionConfig::MaybePromiseDeprecatedRenderURLReplacements::
+          FromValue(deprecated_render_url_replacements);
+  NotifyPromiseResolved(auction_id.get(), config);
+}
+
 void AuctionRunner::ResolvedBuyerCurrenciesPromise(
     blink::mojom::AuctionAdConfigAuctionIdPtr auction_id,
     const blink::AuctionConfig::BuyerCurrencies& buyer_currencies) {
@@ -304,17 +332,19 @@ void AuctionRunner::ResolvedDirectFromSellerSignalsHeaderAdSlotPromise(
     return;
   }
 
-  AdAuctionPageData* page_data = ad_auction_page_data_.get();
-  // The `page_data` shouldn't be null (since we create it before starting the
-  // auction), but if it is, the auction will just pass default-constructed
-  // signals to worklets.
+  AdAuctionPageData* page_data = ad_auction_page_data_callback_.Run();
+  if (!page_data) {
+    // Page is in process of being torn down, so just abort.
+    FailAuction(false);
+    return;
+  }
 
   if (auction_id->is_main_auction()) {
     auction_.NotifyDirectFromSellerSignalsHeaderAdSlotConfig(
-        page_data, std::move(direct_from_seller_signals_header_ad_slot));
+        *page_data, std::move(direct_from_seller_signals_header_ad_slot));
   } else {
     auction_.NotifyComponentDirectFromSellerSignalsHeaderAdSlotConfig(
-        auction_id->get_component_auction(), page_data,
+        auction_id->get_component_auction(), *page_data,
         std::move(direct_from_seller_signals_header_ad_slot));
   }
 
@@ -343,7 +373,7 @@ void AuctionRunner::ResolvedAuctionAdResponsePromise(
     return;
   }
   config->server_response->got_response = true;
-  AdAuctionPageData* page_data = ad_auction_page_data_.get();
+  AdAuctionPageData* page_data = ad_auction_page_data_callback_.Run();
   if (!page_data) {
     // There's no page data attached so we can't decode the response. There's
     // no way the auction can proceed.
@@ -352,10 +382,10 @@ void AuctionRunner::ResolvedAuctionAdResponsePromise(
   }
 
   if (auction_id->is_main_auction()) {
-    auction_.HandleServerResponse(std::move(response), page_data);
+    auction_.HandleServerResponse(std::move(response), *page_data);
   } else {
     auction_.HandleComponentServerResponse(auction_id->get_component_auction(),
-                                           std::move(response), page_data);
+                                           std::move(response), *page_data);
   }
 }
 
@@ -386,12 +416,18 @@ void AuctionRunner::ResolvedAdditionalBids(
 
   config->expects_additional_bids = false;
 
-  AdAuctionPageData* page_data = ad_auction_page_data_.get();
+  AdAuctionPageData* page_data = ad_auction_page_data_callback_.Run();
+  if (!page_data) {
+    // Page is in process of being torn down, so just abort.
+    FailAuction(false);
+    return;
+  }
+
   if (auction_id->is_main_auction()) {
-    auction_.NotifyAdditionalBidsConfig(page_data);
+    auction_.NotifyAdditionalBidsConfig(*page_data);
   } else {
     auction_.NotifyComponentAdditionalBidsConfig(
-        auction_id->get_component_auction(), page_data);
+        auction_id->get_component_auction(), *page_data);
   }
 
   NotifyPromiseResolved(auction_id.get(), config);
@@ -455,7 +491,7 @@ AuctionRunner::AuctionRunner(
     InterestGroupManagerImpl* interest_group_manager,
     BrowserContext* browser_context,
     PrivateAggregationManager* private_aggregation_manager,
-    AdAuctionPageData* ad_auction_page_data,
+    AdAuctionPageDataCallback ad_auction_page_data_callback,
     InterestGroupAuctionReporter::LogPrivateAggregationRequestsCallback
         log_private_aggregation_requests_callback,
     auction_worklet::mojom::KAnonymityBidMode kanon_mode,
@@ -478,7 +514,7 @@ AuctionRunner::AuctionRunner(
       url_loader_factory_(std::move(url_loader_factory)),
       is_interest_group_api_allowed_callback_(
           std::move(is_interest_group_api_allowed_callback)),
-      ad_auction_page_data_(ad_auction_page_data),
+      ad_auction_page_data_callback_(std::move(ad_auction_page_data_callback)),
       attestation_callback_(attestation_callback),
       abort_receiver_(this, std::move(abort_receiver)),
       kanon_mode_(kanon_mode),
@@ -494,7 +530,9 @@ AuctionRunner::AuctionRunner(
                auction_nonce_manager,
                interest_group_manager,
                &auction_metrics_recorder_,
-               ad_auction_page_data,
+               base::BindRepeating(&AuctionRunner::GetDataDecoder,
+                                   // `this` owns `auction_`.
+                                   base::Unretained(this)),
                /*auction_start_time=*/base::Time::Now(),
                is_interest_group_api_allowed_callback_,
                std::move(log_private_aggregation_requests_callback)) {}
@@ -573,9 +611,13 @@ void AuctionRunner::OnBidsGeneratedAndScored(base::TimeTicks start_time,
   UpdateInterestGroupsPostAuction();
 
   auto errors = auction_.TakeErrors();
-  // Need this before `CreateReporter()` since the reporter takes over
-  // AuctonConfig.
+  // Need these before `CreateReporter()` since the reporter takes over
+  // AuctionConfig and sets it to null, even for all component auctions.
   auto requested_ad_size = auction_.RequestedAdSize();
+  auto ad_descriptor_with_replacements =
+      auction_.top_bid()->bid->GetAdDescriptorWithReplacements();
+  auto component_ad_descriptors_with_replacements =
+      auction_.top_bid()->bid->GetComponentAdDescriptorsWithReplacements();
 
   std::unique_ptr<InterestGroupAuctionReporter> reporter =
       auction_.CreateReporter(
@@ -593,8 +635,8 @@ void AuctionRunner::OnBidsGeneratedAndScored(base::TimeTicks start_time,
   state_ = State::kSucceeded;
   std::move(callback_).Run(
       this, /*aborted_by_script=*/false, std::move(winning_group_key),
-      std::move(requested_ad_size), auction_.top_bid()->bid->ad_descriptor,
-      auction_.top_bid()->bid->ad_component_descriptors, std::move(errors),
+      std::move(requested_ad_size), std::move(ad_descriptor_with_replacements),
+      std::move(component_ad_descriptors_with_replacements), std::move(errors),
       std::move(reporter));
 }
 
@@ -641,6 +683,15 @@ void AuctionRunner::NotifyPromiseResolved(
   if (promise_fields_in_auction_config_ == 0) {
     auction_.NotifyConfigPromisesResolved();
   }
+}
+
+data_decoder::DataDecoder* AuctionRunner::GetDataDecoder(
+    const url::Origin& origin) {
+  AdAuctionPageData* page_data = ad_auction_page_data_callback_.Run();
+  if (!page_data) {
+    return nullptr;
+  }
+  return page_data->GetDecoderFor(origin);
 }
 
 }  // namespace content

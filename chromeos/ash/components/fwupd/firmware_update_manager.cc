@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <string_view>
 #include <utility>
 
 #include "ash/constants/ash_features.h"
@@ -19,7 +20,6 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
-#include "base/logging.h"
 #include "base/path_service.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -28,6 +28,7 @@
 #include "base/time/time.h"
 #include "chromeos/ash/components/dbus/fwupd/fwupd_client.h"
 #include "chromeos/ash/components/fwupd/histogram_util.h"
+#include "components/device_event_log/device_event_log.h"
 #include "crypto/sha2.h"
 #include "dbus/message.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -82,7 +83,7 @@ base::ScopedFD OpenFileAndGetFileDescriptor(base::FilePath download_path) {
   base::File dest_file(download_path,
                        base::File::FLAG_OPEN | base::File::FLAG_READ);
   if (!dest_file.IsValid() || !base::PathExists(download_path)) {
-    LOG(ERROR) << "Invalid destination file at path: " << download_path;
+    FIRMWARE_LOG(ERROR) << "Invalid destination file: " << download_path;
     firmware_update::metrics::EmitInstallResult(
         firmware_update::metrics::FirmwareUpdateInstallResult::
             kInvalidDestinationFile);
@@ -116,16 +117,16 @@ base::File VerifyChecksum(base::File file, const std::string& checksum) {
     return base::File();
   }
 
-  const base::StringPiece contents(buf.data(), file_length);
+  const std::string_view contents(buf.data(), file_length);
 
   const std::string sha_contents = crypto::SHA256HashString(contents);
 
-  const std::string encoded_sha = base::ToLowerASCII(
-      base::HexEncode(sha_contents.data(), sha_contents.size()));
+  const std::string encoded_sha =
+      base::ToLowerASCII(base::HexEncode(sha_contents));
 
   if (encoded_sha != checksum) {
-    LOG(ERROR) << "Wrong checksum, expected: " << checksum
-               << " but got: " << encoded_sha;
+    FIRMWARE_LOG(ERROR) << "Wrong checksum, expected: " << checksum
+                        << ", got: " << encoded_sha;
     return base::File();
   }
 
@@ -251,6 +252,7 @@ FirmwareUpdateManager::FirmwareUpdateManager()
     : task_runner_(base::ThreadPool::CreateSequencedTaskRunner(
           {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
            base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN})) {
+  FIRMWARE_LOG(EVENT) << "FirmwareUpdateManager()";
   if (FwupdClient::Get()) {
     FwupdClient::Get()->AddObserver(this);
   }
@@ -324,6 +326,8 @@ bool FirmwareUpdateManager::HasPendingUpdates() {
 
 void FirmwareUpdateManager::ObservePeripheralUpdates(
     mojo::PendingRemote<firmware_update::mojom::UpdateObserver> observer) {
+  FIRMWARE_LOG(USER) << "ObservePeripheralUpdates. Observers: "
+                     << update_list_observers_.size();
   update_list_observers_.Add(std::move(observer));
   if (!HasPendingUpdates()) {
     RequestAllUpdates();
@@ -373,6 +377,7 @@ void FirmwareUpdateManager::RequestAllUpdates() {
   if (is_fetching_updates_) {
     return;
   }
+  FIRMWARE_LOG(USER) << "RequestAllUpdates()";
   is_fetching_updates_ = true;
   RequestDevices();
 }
@@ -408,8 +413,8 @@ void FirmwareUpdateManager::StartInstall(const std::string& device_id,
       base::BindOnce(
           [](const base::FilePath& path) {
             if (!CreateDirIfNotExists(path)) {
-              LOG(ERROR) << "Cannot create firmware update directory, "
-                         << "may be created already.";
+              FIRMWARE_LOG(ERROR) << "Cannot create firmware update directory, "
+                                     "may be created already.";
               firmware_update::metrics::EmitInstallResult(
                   firmware_update::metrics::FirmwareUpdateInstallResult::
                       kFailedToCreateUpdateDirectory);
@@ -437,8 +442,7 @@ void FirmwareUpdateManager::CreateLocalPatchFile(
             const bool write_file_success =
                 base::WriteFile(patch_path, /*data=*/"");
             if (!write_file_success) {
-              LOG(ERROR) << "Writing into the file: " << patch_path
-                         << " failed.";
+              FIRMWARE_LOG(ERROR) << "Writing to file failed: " << patch_path;
             }
             return write_file_success;
           },
@@ -482,7 +486,7 @@ void FirmwareUpdateManager::MaybeDownloadFileToInternal(
     }
   }
 
-  LOG(ERROR) << "Invalid file or download URI: " << filepath.value();
+  FIRMWARE_LOG(ERROR) << "Invalid file or download URI: " << filepath.value();
   std::move(callback).Run();
 }
 
@@ -519,9 +523,9 @@ void FirmwareUpdateManager::OnUrlDownloadedToFile(
     base::OnceCallback<void()> callback,
     base::FilePath download_path) {
   if (simple_loader->NetError() != net::OK) {
-    LOG(ERROR) << "Downloading to file failed with error code: "
-               << GetResponseCode(simple_loader.get()) << " with network error "
-               << simple_loader->NetError();
+    FIRMWARE_LOG(ERROR) << "Downloading to file failed with error code: "
+                        << GetResponseCode(simple_loader.get())
+                        << ", network error " << simple_loader->NetError();
     firmware_update::metrics::EmitInstallResult(
         firmware_update::metrics::FirmwareUpdateInstallResult::
             kFailedToDownloadToFile);
@@ -551,7 +555,7 @@ void FirmwareUpdateManager::OnGetFileDescriptor(
     base::OnceCallback<void()> callback,
     base::ScopedFD file_descriptor) {
   if (!file_descriptor.is_valid()) {
-    LOG(ERROR) << "Invalid file descriptor.";
+    FIRMWARE_LOG(ERROR) << "Invalid file descriptor for device: " << device_id;
     firmware_update::metrics::EmitInstallResult(
         firmware_update::metrics::FirmwareUpdateInstallResult::
             kInvalidFileDescriptor);
@@ -596,6 +600,8 @@ void FirmwareUpdateManager::InstallUpdate(const std::string& device_id,
 void FirmwareUpdateManager::OnDeviceListResponse(FwupdDeviceList* devices) {
   DCHECK(devices);
   DCHECK(!HasPendingUpdates());
+  FIRMWARE_LOG(EVENT) << "OnDeviceListResponse(). Devices: " << devices->size();
+
   // Clear all cached updates prior to fetching the new update list.
   updates_.clear();
 
@@ -643,20 +649,21 @@ void FirmwareUpdateManager::OnUpdateListResponse(const std::string& device_id,
     return;
   }
 
+  FIRMWARE_LOG(EVENT) << "OnUpdateListResponse(). Updates: " << updates_.size();
   RecordUpdateMetrics();
 
   // We only want to show the notification once, at startup.
   if (is_first_response_) {
     ShowNotificationIfRequired();
+    is_first_response_ = false;
   }
-
-  is_first_response_ = false;
 
   // Fire the observer since there are no remaining devices pending updates.
   NotifyUpdateListObservers();
 }
 
 void FirmwareUpdateManager::OnInstallResponse(bool success) {
+  FIRMWARE_LOG(EVENT) << "OnInstallResponse(). Success: " << success;
   auto state = success ? firmware_update::mojom::UpdateState::kSuccess
                        : firmware_update::mojom::UpdateState::kFailed;
   if (!success) {
@@ -714,9 +721,13 @@ void FirmwareUpdateManager::BindInterface(
 
 void FirmwareUpdateManager::OnDeviceRequestResponse(FwupdRequest request) {
   if (!device_request_observer_.is_bound()) {
-    LOG(ERROR) << "OnDeviceRequestResponse triggered with unbound observer";
+    FIRMWARE_LOG(ERROR)
+        << "OnDeviceRequestResponse triggered with unbound observer";
     return;
   }
+  FIRMWARE_LOG(EVENT) << "OnDeviceRequestResponse(). Id: " << request.id
+                      << ", Kind: " << request.kind;
+
   // Convert the FwupdRequest into a mojom DeviceRequest, then record the metric
   // and pass that request to observers.
   firmware_update::metrics::EmitDeviceRequest(GetDeviceRequest(request));
@@ -729,10 +740,11 @@ void FirmwareUpdateManager::OnDeviceRequestResponse(FwupdRequest request) {
 
 void FirmwareUpdateManager::OnPropertiesChangedResponse(
     FwupdProperties* properties) {
-  if (!properties || !update_progress_observer_.is_bound()) {
+  if (!properties || !update_progress_observer_.is_bound() ||
+      !properties->IsStatusValid() || !properties->IsPercentageValid()) {
     return;
   }
-  const auto status = FwupdStatus(properties->status.value());
+  const auto status = FwupdStatus(properties->GetStatus());
 
   // If the FwupdStatus just switched from WaitingForUser to anything else,
   // consider the request successful and record a metric.
@@ -752,10 +764,10 @@ void FirmwareUpdateManager::OnPropertiesChangedResponse(
   }
 
   last_fwupd_status_ = status;
-  const auto percentage = properties->percentage.value();
-  VLOG(1) << "fwupd: OnPropertiesChangedResponse called with Status: "
-          << GetFwupdStatusString(static_cast<FwupdStatus>(status))
-          << " | Percentage: " << percentage;
+  const auto percentage = properties->GetPercentage();
+  FIRMWARE_LOG(EVENT) << "OnPropertiesChangedResponse(). Status: "
+                      << GetFwupdStatusString(static_cast<FwupdStatus>(status))
+                      << ", Percentage: " << percentage;
   update_progress_observer_->OnStatusChanged(
       ash::firmware_update::mojom::InstallationProgress::New(
           percentage, GetUpdateState(status)));

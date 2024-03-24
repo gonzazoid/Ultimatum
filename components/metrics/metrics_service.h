@@ -45,10 +45,6 @@ FORWARD_DECLARE_TEST(ChromeMetricsServiceClientTest,
 FORWARD_DECLARE_TEST(IOSChromeMetricsServiceClientTest,
                      TestRegisterMetricsServiceProviders);
 
-namespace base {
-class PrefService;
-}  // namespace base
-
 namespace variations {
 class SyntheticTrialRegistry;
 }
@@ -114,6 +110,9 @@ class MetricsService {
   int GetLowEntropySource();
   int GetOldLowEntropySource();
   int GetPseudoLowEntropySource();
+
+  // Get the limited entropy randomization source.
+  std::string_view GetLimitedEntropyRandomizationSource();
 
   // Set an external provided id for the metrics service. This method can be
   // set by a caller which wants to explicitly control the *next* id used by the
@@ -223,11 +222,11 @@ class MetricsService {
   //
   // See comments at MetricsServiceClient::GetCurrentUserMetricsConsent() for
   // more details.
-  absl::optional<bool> GetCurrentUserMetricsConsent() const;
+  std::optional<bool> GetCurrentUserMetricsConsent() const;
 
   // Returns the current logged in user id. See comments at
   // MetricsServiceClient::GetCurrentUserId() for more details.
-  absl::optional<std::string> GetCurrentUserId() const;
+  std::optional<std::string> GetCurrentUserId() const;
 
   // Updates the current user metrics consent. No-ops if no user has logged in.
   void UpdateCurrentUserMetricsConsent(bool user_metrics_consent);
@@ -596,7 +595,7 @@ class MetricsService {
       std::unique_ptr<MetricsLogHistogramWriter> log_histogram_writer,
       std::unique_ptr<MetricsLog> log,
       bool truncate_events,
-      absl::optional<ChromeUserMetricsExtension::RealLocalTime> close_time,
+      std::optional<ChromeUserMetricsExtension::RealLocalTime> close_time,
       std::string&& current_app_version,
       std::string&& signing_key);
 
@@ -610,7 +609,7 @@ class MetricsService {
       MetricsLogHistogramWriter* log_histogram_writer,
       std::unique_ptr<MetricsLog> log,
       bool truncate_events,
-      absl::optional<ChromeUserMetricsExtension::RealLocalTime> close_time,
+      std::optional<ChromeUserMetricsExtension::RealLocalTime> close_time,
       std::string&& current_app_version,
       std::string&& signing_key);
 
@@ -619,7 +618,7 @@ class MetricsService {
   static FinalizedLog FinalizeLog(
       std::unique_ptr<MetricsLog> log,
       bool truncate_events,
-      absl::optional<ChromeUserMetricsExtension::RealLocalTime> close_time,
+      std::optional<ChromeUserMetricsExtension::RealLocalTime> close_time,
       const std::string& current_app_version,
       const std::string& signing_key);
 

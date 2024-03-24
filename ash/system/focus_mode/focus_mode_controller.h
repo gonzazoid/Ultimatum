@@ -9,6 +9,7 @@
 
 #include "ash/ash_export.h"
 #include "ash/public/cpp/session/session_observer.h"
+#include "ash/system/focus_mode/focus_mode_histogram_names.h"
 #include "ash/system/focus_mode/focus_mode_session.h"
 #include "ash/system/focus_mode/focus_mode_tasks_provider.h"
 #include "base/observer_list.h"
@@ -88,7 +89,10 @@ class ASH_EXPORT FocusModeController : public SessionObserver {
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);
 
-  void ToggleFocusMode();
+  // Starts or ends a focus session by a toggle `source`.
+  void ToggleFocusMode(
+      focus_mode_histogram_names::ToggleSource source =
+          focus_mode_histogram_names::ToggleSource::kFocusPanel);
 
   // SessionObserver:
   void OnActiveUserSessionChanged(const AccountId& account_id) override;
@@ -150,7 +154,7 @@ class ASH_EXPORT FocusModeController : public SessionObserver {
  private:
   // Starts a focus session by updating UI elements, starting `timer_`, and
   // setting `current_session_` to the desired session duration and end time.
-  void StartFocusSession();
+  void StartFocusSession(focus_mode_histogram_names::ToggleSource source);
 
   // Called every time a second passes on `timer_` while the session is active.
   void OnTimerTick();

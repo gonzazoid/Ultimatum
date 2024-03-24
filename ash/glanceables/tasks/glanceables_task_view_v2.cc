@@ -20,7 +20,6 @@
 #include "ash/style/typography.h"
 #include "ash/system/time/calendar_utils.h"
 #include "ash/system/time/date_helper.h"
-#include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -47,24 +46,31 @@
 #include "ui/views/controls/textfield/textfield_controller.h"
 #include "ui/views/layout/flex_layout_view.h"
 #include "ui/views/widget/widget_delegate.h"
+#include "ui/wm/core/focus_controller.h"
 
 namespace ash {
 namespace {
 
-constexpr int kIconSize = 24;
+constexpr int kIconSize = 20;
 constexpr char kFormatterPattern[] = "EEE, MMM d";  // "Wed, Feb 28"
 
-constexpr auto kSecondRowItemsMargin = gfx::Insets::TLBR(0, 0, 0, 4);
+// Margins between icons and labels in `tasks_details_view_`.
+constexpr auto kDetailItemsMargin = gfx::Insets::TLBR(0, 0, 0, 4);
 
-constexpr auto kSingleRowButtonMargin = gfx::Insets::VH(8, 0);
-constexpr auto kDoubleRowButtonMargin = gfx::Insets::VH(2, 0);
+constexpr auto kSingleRowInteriorMargin = gfx::Insets::TLBR(6, 0, 2, 0);
+constexpr auto kDoubleRowInteriorMargin = gfx::Insets();
 
-constexpr auto kSingleRowTextMargins = gfx::Insets::TLBR(6, 6, 6, 8);
-constexpr auto kDoubleRowTextMargins = gfx::Insets::TLBR(0, 6, 4, 8);
+constexpr auto kCheckButtonMargin = gfx::Insets::VH(2, 0);
+constexpr auto kContentsMargin = gfx::Insets::TLBR(0, 6, 4, 8);
+// In edit state, the bottom margin is smaller to accommodate
+// `edit_in_browser_button_`.
+constexpr auto kContentsMarginInEditState = gfx::Insets::TLBR(0, 6, 0, 8);
 
 constexpr auto kTitleAndDetailMarginsInViewState =
     gfx::Insets::TLBR(0, 8, 0, 0);
 constexpr auto kTitleMarginsInEditState = gfx::Insets();
+constexpr auto kDetailMarginsInEditState = gfx::Insets::TLBR(4, 8, 0, 0);
+constexpr auto kEditInBrowserMargins = gfx::Insets::TLBR(8, 2, 0, 0);
 
 views::Label* SetupLabel(views::View* parent) {
   views::Label* label = parent->AddChildView(std::make_unique<views::Label>());
@@ -102,7 +108,6 @@ std::u16string GetFormattedDueDate(const base::Time& due) {
 std::unique_ptr<views::ImageView> CreateSecondRowIcon(
     const gfx::VectorIcon& icon) {
   auto icon_view = std::make_unique<views::ImageView>();
-  icon_view->SetProperty(views::kMarginsKey, kSecondRowItemsMargin);
   icon_view->SetImage(ui::ImageModel::FromVectorIcon(
       icon, cros_tokens::kCrosSysOnSurfaceVariant));
   return icon_view;
@@ -121,11 +126,13 @@ class TaskViewTextField : public SystemTextfield,
       : SystemTextfield(Type::kMedium),
         SystemTextfieldController(/*textfield=*/this),
         on_finished_editing_(std::move(on_finished_editing)) {
-    SetAccessibleName(u"[l10n] Title");
+    SetAccessibleName(
+        l10n_util::GetStringUTF16(IDS_GLANCEABLES_TASKS_TEXTFIELD_PLACEHOLDER));
     SetBackgroundColor(SK_ColorTRANSPARENT);
     SetController(this);
     SetID(base::to_underlying(GlanceablesViewId::kTaskItemTitleTextField));
-    SetPlaceholderText(u"[l10n] Title");
+    SetPlaceholderText(
+        l10n_util::GetStringUTF16(IDS_GLANCEABLES_TASKS_TEXTFIELD_PLACEHOLDER));
     SetText(title);
     SetFontList(TypographyProvider::Get()->ResolveTypographyToken(
         TypographyToken::kCrosButton2));
@@ -177,6 +184,25 @@ class TaskViewTextField : public SystemTextfield,
 BEGIN_METADATA(TaskViewTextField)
 END_METADATA
 
+class EditInBrowserButton : public views::LabelButton {
+  METADATA_HEADER(EditInBrowserButton, views::LabelButton)
+ public:
+  explicit EditInBrowserButton(PressedCallback callback)
+      : views::LabelButton(std::move(callback),
+                           l10n_util::GetStringUTF16(
+                               IDS_GLANCEABLES_TASKS_EDIT_IN_TASKS_LABEL)) {
+    SetID(base::to_underlying(GlanceablesViewId::kTaskItemEditInBrowserLabel));
+    SetBorder(views::CreateEmptyBorder(gfx::Insets::VH(3, 6)));
+    SetProperty(views::kMarginsKey, kEditInBrowserMargins);
+    SetEnabledTextColorIds(cros_tokens::kCrosSysPrimary);
+    label()->SetFontList(TypographyProvider::Get()->ResolveTypographyToken(
+        TypographyToken::kCrosButton2));
+  }
+};
+
+BEGIN_METADATA(EditInBrowserButton)
+END_METADATA
+
 }  // namespace
 
 class GlanceablesTaskViewV2::CheckButton : public views::ImageButton {
@@ -185,6 +211,7 @@ class GlanceablesTaskViewV2::CheckButton : public views::ImageButton {
  public:
   explicit CheckButton(PressedCallback pressed_callback)
       : views::ImageButton(std::move(pressed_callback)) {
+    SetBorder(views::CreateEmptyBorder(gfx::Insets(2)));
     SetAccessibleRole(ax::mojom::Role::kCheckBox);
     UpdateImage();
     SetFlipCanvasOnPaintForRTLUI(/*enable=*/false);
@@ -228,7 +255,7 @@ class GlanceablesTaskViewV2::CheckButton : public views::ImageButton {
   bool checked_ = false;
 };
 
-BEGIN_METADATA(GlanceablesTaskViewV2, CheckButton, views::ImageButton)
+BEGIN_METADATA(GlanceablesTaskViewV2, CheckButton)
 END_METADATA
 
 class GlanceablesTaskViewV2::TaskTitleButton : public views::LabelButton {
@@ -248,6 +275,7 @@ class GlanceablesTaskViewV2::TaskTitleButton : public views::LabelButton {
     const auto color_id = completed ? cros_tokens::kCrosSysSecondary
                                     : cros_tokens::kCrosSysOnSurface;
     SetEnabledTextColorIds(color_id);
+    SetTextColorId(views::Button::ButtonState::STATE_DISABLED, color_id);
     label()->SetFontList(
         TypographyProvider::Get()
             ->ResolveTypographyToken(TypographyToken::kCrosButton2)
@@ -256,26 +284,29 @@ class GlanceablesTaskViewV2::TaskTitleButton : public views::LabelButton {
   }
 };
 
-BEGIN_METADATA(GlanceablesTaskViewV2, TaskTitleButton, views::LabelButton)
+BEGIN_METADATA(GlanceablesTaskViewV2, TaskTitleButton)
 END_METADATA
 
 GlanceablesTaskViewV2::GlanceablesTaskViewV2(
     const api::Task* task,
     MarkAsCompletedCallback mark_as_completed_callback,
-    SaveCallback save_callback)
+    SaveCallback save_callback,
+    base::RepeatingClosure edit_in_browser_callback)
     : task_id_(task ? task->id : ""),
       task_title_(task ? base::UTF8ToUTF16(task->title) : u""),
       mark_as_completed_callback_(std::move(mark_as_completed_callback)),
-      save_callback_(std::move(save_callback)) {
+      save_callback_(std::move(save_callback)),
+      edit_in_browser_callback_(std::move(edit_in_browser_callback)) {
   CHECK(features::IsGlanceablesTimeManagementTasksViewEnabled());
   SetAccessibleRole(ax::mojom::Role::kListItem);
 
   SetCrossAxisAlignment(views::LayoutAlignment::kStart);
   SetOrientation(views::LayoutOrientation::kHorizontal);
-  SetCollapseMargins(true);
 
-  button_ = AddChildView(std::make_unique<CheckButton>(base::BindRepeating(
-      &GlanceablesTaskViewV2::CheckButtonPressed, base::Unretained(this))));
+  check_button_ =
+      AddChildView(std::make_unique<CheckButton>(base::BindRepeating(
+          &GlanceablesTaskViewV2::CheckButtonPressed, base::Unretained(this))));
+  check_button_->SetProperty(views::kMarginsKey, kCheckButtonMargin);
 
   contents_view_ = AddChildView(std::make_unique<views::FlexLayoutView>());
   contents_view_->SetCrossAxisAlignment(views::LayoutAlignment::kStretch);
@@ -298,10 +329,7 @@ GlanceablesTaskViewV2::GlanceablesTaskViewV2(
       contents_view_->AddChildView(std::make_unique<views::FlexLayoutView>());
   tasks_details_view_->SetCrossAxisAlignment(views::LayoutAlignment::kCenter);
   tasks_details_view_->SetOrientation(views::LayoutOrientation::kHorizontal);
-  tasks_details_view_->SetProperty(views::kMarginsKey,
-                                   kTitleAndDetailMarginsInViewState);
-
-  UpdateTaskTitleViewForState(TaskTitleViewState::kView);
+  tasks_details_view_->SetDefault(views::kMarginsKey, kDetailItemsMargin);
 
   std::vector<std::u16string> details;
   if (task && task->due.has_value()) {
@@ -317,7 +345,6 @@ GlanceablesTaskViewV2::GlanceablesTaskViewV2(
     due_date_label->SetText(formatted_due_date);
     due_date_label->SetID(
         base::to_underlying(GlanceablesViewId::kTaskItemDueLabel));
-    due_date_label->SetProperty(views::kMarginsKey, kSecondRowItemsMargin);
     due_date_label->SetFontList(
         TypographyProvider::Get()->ResolveTypographyToken(
             TypographyToken::kCrosAnnotation1));
@@ -340,14 +367,13 @@ GlanceablesTaskViewV2::GlanceablesTaskViewV2(
         CreateSecondRowIcon(kGlanceablesTasksNotesIcon));
   }
 
+  UpdateTaskTitleViewForState(TaskTitleViewState::kView);
+
   // Use different margins depending on the number of
   // rows of text shown.
   const bool double_row = tasks_details_view_->children().size() > 0;
-  contents_view_->SetProperty(views::kMarginsKey, double_row
-                                                      ? kDoubleRowTextMargins
-                                                      : kSingleRowTextMargins);
-  button_->SetProperty(views::kMarginsKey, double_row ? kDoubleRowButtonMargin
-                                                      : kSingleRowButtonMargin);
+  SetInteriorMargin(double_row ? kDoubleRowInteriorMargin
+                               : kSingleRowInteriorMargin);
 
   auto a11y_description = task_title_;
   if (!details.empty()) {
@@ -356,53 +382,86 @@ GlanceablesTaskViewV2::GlanceablesTaskViewV2(
         IDS_GLANCEABLES_TASKS_TASK_ITEM_METADATA_WRAPPER_ACCESSIBLE_DESCRIPTION,
         base::JoinString(details, u", "));
   }
-  button_->SetAccessibleDescription(a11y_description);
-  button_->NotifyAccessibilityEvent(ax::mojom::Event::kTextChanged, true);
+  check_button_->SetAccessibleDescription(a11y_description);
+  check_button_->NotifyAccessibilityEvent(ax::mojom::Event::kTextChanged, true);
 }
 
 GlanceablesTaskViewV2::~GlanceablesTaskViewV2() = default;
 
 const views::ImageButton* GlanceablesTaskViewV2::GetCheckButtonForTest() const {
-  return button_;
+  return check_button_;
 }
 
 bool GlanceablesTaskViewV2::GetCompletedForTest() const {
-  return button_->checked();
+  return check_button_->checked();
 }
 
 void GlanceablesTaskViewV2::UpdateTaskTitleViewForState(
     TaskTitleViewState state) {
   task_title_button_ = nullptr;
+  task_title_textfield_ = nullptr;
   tasks_title_view_->RemoveAllChildViews();
 
   switch (state) {
+    case TaskTitleViewState::kNotInitialized:
+      NOTREACHED_NORETURN();
     case TaskTitleViewState::kView:
+      if (contents_view_ && edit_in_browser_button_) {
+        contents_view_->RemoveChildViewT(
+            std::exchange(edit_in_browser_button_, nullptr));
+      }
       task_title_button_ =
           tasks_title_view_->AddChildView(std::make_unique<TaskTitleButton>(
               task_title_, base::BindRepeating(
                                &GlanceablesTaskViewV2::TaskTitleButtonPressed,
                                base::Unretained(this))));
-      task_title_button_->UpdateLabelForState(/*completed=*/button_->checked());
-      task_title_button_->SetProperty(views::kMarginsKey,
-                                      kTitleAndDetailMarginsInViewState);
+      task_title_button_->UpdateLabelForState(
+          /*completed=*/check_button_->checked());
       break;
     case TaskTitleViewState::kEdit:
-      auto* const text_field =
+      task_title_textfield_ =
           tasks_title_view_->AddChildView(std::make_unique<TaskViewTextField>(
               task_title_,
               base::BindOnce(&GlanceablesTaskViewV2::OnFinishedEditing,
                              base::Unretained(this))));
-      text_field->SetProperty(views::kMarginsKey, kTitleMarginsInEditState);
       GetWidget()->widget_delegate()->SetCanActivate(true);
-      text_field->RequestFocus();
+      task_title_textfield_->RequestFocus();
+
+      edit_in_browser_button_ = contents_view_->AddChildView(
+          std::make_unique<EditInBrowserButton>(edit_in_browser_callback_));
+      check_button_->SetEnabled(false);
+      break;
+  }
+
+  UpdateContentsMargins(state);
+}
+
+void GlanceablesTaskViewV2::UpdateContentsMargins(TaskTitleViewState state) {
+  switch (state) {
+    case TaskTitleViewState::kNotInitialized:
+      NOTREACHED_NORETURN();
+    case TaskTitleViewState::kView:
+      contents_view_->SetProperty(views::kMarginsKey, kContentsMargin);
+      task_title_button_->SetProperty(views::kMarginsKey,
+                                      kTitleAndDetailMarginsInViewState);
+      tasks_details_view_->SetProperty(views::kMarginsKey,
+                                       kTitleAndDetailMarginsInViewState);
+      break;
+    case TaskTitleViewState::kEdit:
+      contents_view_->SetProperty(views::kMarginsKey,
+                                  kContentsMarginInEditState);
+      task_title_textfield_->SetProperty(views::kMarginsKey,
+                                         kTitleMarginsInEditState);
+      tasks_details_view_->SetProperty(views::kMarginsKey,
+                                       kDetailMarginsInEditState);
       break;
   }
 }
 
 void GlanceablesTaskViewV2::CheckButtonPressed() {
-  bool target_state = !button_->checked();
-  // Visually mark the task as completed.
-  button_->SetChecked(target_state);
+  bool target_state = !check_button_->checked();
+  check_button_->SetChecked(target_state);
+
   if (task_title_button_) {
     task_title_button_->UpdateLabelForState(/*completed=*/target_state);
   }
@@ -411,7 +470,8 @@ void GlanceablesTaskViewV2::CheckButtonPressed() {
 }
 
 void GlanceablesTaskViewV2::TaskTitleButtonPressed() {
-  // TODO(b/301253574): notify siblings to switch to `kView`.
+  RecordUserModifyingTask();
+
   UpdateTaskTitleViewForState(TaskTitleViewState::kEdit);
 }
 
@@ -421,9 +481,23 @@ void GlanceablesTaskViewV2::OnFinishedEditing(const std::u16string& title) {
     task_title_ = title;
   }
 
-  UpdateTaskTitleViewForState(TaskTitleViewState::kView);
+  // Skip the title view resetting when the window lost active. Let the view
+  // hierarchy clean up be done by the native widget.
+  if (!(GetWidget() &&
+        GetWidget()->GetNativeWindow() !=
+            Shell::Get()->focus_controller()->GetActiveWindow())) {
+    UpdateTaskTitleViewForState(TaskTitleViewState::kView);
+  }
 
   if (task_id_.empty() || task_title_ != old_title) {
+    if (task_title_button_) {
+      task_title_button_->SetEnabled(false);
+    }
+    // Note: result for task addition flow will be recorded in the parent view,
+    // which initialized add task flow.
+    if (!task_id_.empty()) {
+      RecordTaskModificationResult(TaskModificationResult::kCommitted);
+    }
     save_callback_.Run(weak_ptr_factory_.GetWeakPtr(), task_id_,
                        base::UTF16ToUTF8(task_title_),
                        base::BindOnce(&GlanceablesTaskViewV2::OnSaved,
@@ -431,17 +505,27 @@ void GlanceablesTaskViewV2::OnFinishedEditing(const std::u16string& title) {
     // TODO(b/301253574): introduce "disabled" state for this view to prevent
     // editing / marking as complete while the task is not fully created yet and
     // race conditions while editing the same task.
+  } else {
+    // Note: result for task addition flow will be recorded in the parent view,
+    // which initialized add task flow.
+    check_button_->SetEnabled(true);
+    if (!task_id_.empty()) {
+      RecordTaskModificationResult(TaskModificationResult::kCancelled);
+    }
   }
 }
 
 void GlanceablesTaskViewV2::OnSaved(const api::Task* task) {
-  if (!task) {
-    return;
+  check_button_->SetEnabled(true);
+  if (task_title_button_) {
+    task_title_button_->SetEnabled(true);
   }
-  task_id_ = task->id;
+  if (task) {
+    task_id_ = task->id;
+  }
 }
 
-BEGIN_METADATA(GlanceablesTaskViewV2, views::View)
+BEGIN_METADATA(GlanceablesTaskViewV2)
 END_METADATA
 
 }  // namespace ash

@@ -21,12 +21,12 @@
 #include "third_party/blink/public/common/media/video_capture.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom-blink.h"
 #include "third_party/blink/public/web/modules/mediastream/media_stream_video_source.h"
-#include "third_party/blink/renderer/bindings/modules/v8/v8_captured_wheel_action.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/video_capture/video_capturer_source.h"
 
 namespace blink {
 
+class DOMException;
 class LocalFrame;
 class VideoCapturerSource;
 
@@ -91,24 +91,23 @@ class MODULES_EXPORT MediaStreamVideoCapturerSource
   void StopSourceImpl() override;
   void StopSourceForRestartImpl() override;
   void RestartSourceImpl(const media::VideoCaptureFormat& new_format) override;
-  absl::optional<media::VideoCaptureFormat> GetCurrentFormat() const override;
+  std::optional<media::VideoCaptureFormat> GetCurrentFormat() const override;
   void ChangeSourceImpl(const MediaStreamDevice& new_device) override;
 #if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
-  void SendWheel(
-      CapturedWheelAction* action,
-      base::OnceCallback<void(bool, const String&)> callback) override;
-  void GetZoomLevel(base::OnceCallback<void(absl::optional<int>, const String&)>
-                        callback) override;
-  void SetZoomLevel(
-      int zoom_level,
-      base::OnceCallback<void(bool, const String&)> callback) override;
+  void SendWheel(double relative_x,
+                 double relative_y,
+                 int wheel_delta_x,
+                 int wheel_delta_y,
+                 base::OnceCallback<void(DOMException*)> callback) override;
+  void SetZoomLevel(int zoom_level,
+                    base::OnceCallback<void(DOMException*)> callback) override;
   void ApplySubCaptureTarget(
       media::mojom::blink::SubCaptureTargetType type,
       const base::Token& sub_capture_target,
       uint32_t sub_capture_target_version,
       base::OnceCallback<void(media::mojom::ApplySubCaptureTargetResult)>
           callback) override;
-  absl::optional<uint32_t> GetNextSubCaptureTargetVersion() override;
+  std::optional<uint32_t> GetNextSubCaptureTargetVersion() override;
 #endif
   uint32_t GetSubCaptureTargetVersion() const override;
   base::WeakPtr<MediaStreamVideoSource> GetWeakPtr() override;

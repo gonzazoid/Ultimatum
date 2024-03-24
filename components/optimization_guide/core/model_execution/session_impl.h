@@ -5,13 +5,16 @@
 #ifndef COMPONENTS_OPTIMIZATION_GUIDE_CORE_MODEL_EXECUTION_SESSION_IMPL_H_
 #define COMPONENTS_OPTIMIZATION_GUIDE_CORE_MODEL_EXECUTION_SESSION_IMPL_H_
 
+#include <optional>
 #include <string>
+#include <vector>
 
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
 #include "components/optimization_guide/core/model_execution/optimization_guide_model_execution_error.h"
 #include "components/optimization_guide/core/optimization_guide_model_executor.h"
 #include "components/optimization_guide/proto/model_quality_service.pb.h"
+#include "components/optimization_guide/proto/text_safety_model_metadata.pb.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/on_device_model/public/mojom/on_device_model.mojom.h"
@@ -47,8 +50,7 @@ class SessionImpl : public OptimizationGuideModelExecutor::Session,
     kMaxValue = kFailedConstructingInput,
   };
 
-  // Possible outcomes of ExecuteModel(). Maps to histogram enum
-  // "OptimizationGuideOnDeviceExecuteModelResult".
+  // Possible outcomes of ExecuteModel().
   // These values are persisted to logs. Entries should not be renumbered and
   // numeric values should never be reused.
   enum class ExecuteModelResult {
@@ -76,7 +78,19 @@ class SessionImpl : public OptimizationGuideModelExecutor::Session,
     kUsedOnDeviceOutputUnsafe = 9,
     // On-device was used, but the output was rejected (because contained PII).
     kContainedPII = 10,
-    kMaxValue = kContainedPII,
+    // On-device was used, but the output was rejected because it had repeats.
+    kResponseHadRepeats = 11,
+    // On-device was used and the output was complete but the output was
+    // rejected since it did not have the required safety scores.
+    kResponseCompleteButNoRequiredSafetyScores = 12,
+    // On-device was used and completed successfully, but the output was not in
+    // a language that could be reliably evaluated for safety.
+    kUsedOnDeviceOutputUnsupportedLanguage = 13,
+
+    // Please update OptimizationGuideOnDeviceExecuteModelResult in
+    // optimization/enums.xml.
+
+    kMaxValue = kUsedOnDeviceOutputUnsupportedLanguage,
   };
 
   SessionImpl(
@@ -85,6 +99,7 @@ class SessionImpl : public OptimizationGuideModelExecutor::Session,
       std::optional<proto::OnDeviceModelVersions> on_device_model_versions,
       const OnDeviceModelExecutionConfigInterpreter* config_interpreter,
       base::WeakPtr<OnDeviceModelServiceController> controller,
+      const std::optional<proto::FeatureTextSafetyConfiguration>& safety_config,
       ExecuteRemoteFn execute_remote_fn,
       OptimizationGuideLogger* optimization_guide_logger);
   ~SessionImpl() override;
@@ -97,8 +112,8 @@ class SessionImpl : public OptimizationGuideModelExecutor::Session,
       OptimizationGuideModelExecutionResultStreamingCallback callback) override;
 
   // on_device_model::mojom::StreamingResponder:
-  void OnResponse(const std::string& response) override;
-  void OnComplete(on_device_model::mojom::ResponseStatus status) override;
+  void OnResponse(on_device_model::mojom::ResponseChunkPtr chunk) override;
+  void OnComplete(on_device_model::mojom::ResponseSummaryPtr summary) override;
 
   // Returns true if the on-device model should be used.
   bool ShouldUseOnDeviceModel() const;
@@ -135,8 +150,7 @@ class SessionImpl : public OptimizationGuideModelExecutor::Session,
 
   // Captures all state used for the on device model.
   struct OnDeviceState {
-    OnDeviceState(StartSessionFn start_session_fn,
-                  on_device_model::mojom::StreamingResponder* session);
+    OnDeviceState(StartSessionFn start_session_fn, SessionImpl* session);
     ~OnDeviceState();
 
     // Returns true if ExecuteModel() was called and the complete response
@@ -148,6 +162,9 @@ class SessionImpl : public OptimizationGuideModelExecutor::Session,
     // Returns the mutable on-device model service response for logging.
     proto::OnDeviceModelServiceResponse* MutableLoggedResponse();
 
+    // Adds an execution info for the text safety model based on `this`.
+    void AddTextSafetyExecutionLogging(bool is_unsafe);
+
     // Resets all state related to a request.
     void ResetRequestState();
 
@@ -157,6 +174,7 @@ class SessionImpl : public OptimizationGuideModelExecutor::Session,
     std::unique_ptr<ContextProcessor> context_processor;
     mojo::Receiver<on_device_model::mojom::StreamingResponder> receiver;
     std::string current_response;
+    on_device_model::mojom::SafetyInfoPtr current_safety_info;
     OptimizationGuideModelExecutionResultStreamingCallback callback;
     // If true, the context is added before execution. This is set to true if
     // a disconnect happens.
@@ -170,6 +188,10 @@ class SessionImpl : public OptimizationGuideModelExecutor::Session,
     std::unique_ptr<ExecuteModelHistogramLogger> histogram_logger;
     // Used to log execution information for the request.
     std::unique_ptr<proto::LogAiDataRequest> log_ai_data_request;
+
+    // Factory for weak pointers related to this session that are invalidated
+    // with the request state.
+    base::WeakPtrFactory<SessionImpl> session_weak_ptr_factory_;
   };
 
   AddContextResult AddContextImpl(
@@ -200,9 +222,21 @@ class SessionImpl : public OptimizationGuideModelExecutor::Session,
   std::unique_ptr<google::protobuf::MessageLite> MergeContext(
       const google::protobuf::MessageLite& request);
 
+  // Whether the text is in a language not supported by the safety classifier,
+  // or the language could not be detected despite the classifier requiring one
+  // or more specific languages.
+  bool IsTextInUnsupportedOrUndeterminedLanguage(
+      const on_device_model::mojom::SafetyInfoPtr& safety_info) const;
+
+  // Whether the text is unsafe.
+  bool IsUnsafeText(
+      const on_device_model::mojom::SafetyInfoPtr& safety_info) const;
+
   base::WeakPtr<OnDeviceModelServiceController> controller_;
   const proto::ModelExecutionFeature feature_;
   const std::optional<proto::OnDeviceModelVersions> on_device_model_versions_;
+
+  std::optional<proto::FeatureTextSafetyConfiguration> safety_config_;
 
   ExecuteRemoteFn execute_remote_fn_;
 

@@ -283,7 +283,7 @@ struct VideoCaptureImpl::VideoFrameInitData {
       frame_or_buffer;
 };
 
-absl::optional<VideoCaptureImpl::VideoFrameInitData>
+std::optional<VideoCaptureImpl::VideoFrameInitData>
 VideoCaptureImpl::CreateVideoFrameInitData(
     media::mojom::blink::ReadyBufferPtr ready_buffer) {
   const auto iter = client_buffers_.find(ready_buffer->buffer_id);
@@ -418,7 +418,7 @@ VideoCaptureImpl::CreateVideoFrameInitData(
         if (!video_frame_init_data.ready_buffer->info->is_premapped ||
             !buffer_context->data()) {
           // If the frame isn't premapped, can't do anything here.
-          return absl::nullopt;
+          return std::nullopt;
         }
 
         scoped_refptr<media::VideoFrame> frame =
@@ -432,7 +432,7 @@ VideoCaptureImpl::CreateVideoFrameInitData(
                 buffer_context->data_size(),
                 video_frame_init_data.ready_buffer->info->timestamp);
         if (!frame) {
-          return absl::nullopt;
+          return std::nullopt;
         }
         video_frame_init_data.frame_or_buffer = frame;
         break;
@@ -449,7 +449,6 @@ VideoCaptureImpl::CreateVideoFrameInitData(
             break;
           default:
             LOG(FATAL) << "Unsupported pixel format";
-            return absl::nullopt;
         }
         // The GpuMemoryBuffer is allocated and owned by the video capture
         // buffer pool from the video capture service process, so we don't need
@@ -500,7 +499,7 @@ VideoCaptureImpl::CreateVideoFrameInitData(
               base::span<uint8_t>(premapped_data, buffer_context->data_size()));
       if (!buffer) {
         LOG(ERROR) << "Failed to open GpuMemoryBuffer handle";
-        return absl::nullopt;
+        return std::nullopt;
       }
       video_frame_init_data.frame_or_buffer = std::move(buffer);
     }
@@ -578,13 +577,14 @@ bool VideoCaptureImpl::BindVideoFrameOnMediaTaskRunner(
   // if OOP-R is not enabled.
   // NOTE: GLES2_READ can be removed once OOP-R ships definitively.
   uint32_t usage =
-      gpu::SHARED_IMAGE_USAGE_GLES2_READ | gpu::SHARED_IMAGE_USAGE_RASTER |
+      gpu::SHARED_IMAGE_USAGE_GLES2_READ | gpu::SHARED_IMAGE_USAGE_RASTER_READ |
       gpu::SHARED_IMAGE_USAGE_DISPLAY_READ | gpu::SHARED_IMAGE_USAGE_SCANOUT;
 #if BUILDFLAG(IS_APPLE)
   usage |= gpu::SHARED_IMAGE_USAGE_MACOS_VIDEO_TOOLBOX;
 #endif
 #if BUILDFLAG(IS_CHROMEOS)
-  usage |= gpu::SHARED_IMAGE_USAGE_WEBGPU;
+  // These SharedImages may be used for zero-copy of VideoFrames into WebGPU.
+  usage |= gpu::SHARED_IMAGE_USAGE_WEBGPU_READ;
 #endif
 
   // The feature flags here are a little subtle:
@@ -1064,16 +1064,16 @@ void VideoCaptureImpl::OnBufferReady(
                        (reference_time - base::TimeTicks()).InMicroseconds(),
                        "time_delta", buffer->info->timestamp.InMicroseconds());
 
+  const int buffer_id = buffer->buffer_id;
   // Convert `buffer` into a media::VideoFrame or a gfx::GpuMemoryBuffer.
-  absl::optional<VideoFrameInitData> video_frame_init_data =
+  std::optional<VideoFrameInitData> video_frame_init_data =
       CreateVideoFrameInitData(std::move(buffer));
   if (!video_frame_init_data.has_value()) {
     // Error during initialization of the frame or buffer.
     OnFrameDropped(media::VideoCaptureFrameDropReason::
                        kVideoCaptureImplFailedToWrapDataAsMediaVideoFrame);
-    GetVideoCaptureHost()->ReleaseBuffer(
-        device_id_, video_frame_init_data->ready_buffer->buffer_id,
-        DefaultFeedback());
+    GetVideoCaptureHost()->ReleaseBuffer(device_id_, buffer_id,
+                                         DefaultFeedback());
     return;
   }
 

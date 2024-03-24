@@ -3,6 +3,19 @@
 # found in the LICENSE file.
 
 import("//mojo/public/tools/fuzzers/mojolpm.gni")
+import("//third_party/protobuf/proto_library.gni")
+
+source_set("coreml_graph_builder") {
+  sources = [
+    "coreml/graph_builder.cc",
+    "coreml/graph_builder.h",
+  ]
+  deps = [
+    "//base",
+    "//services/webnn/public/mojom",
+    "//third_party/coremltools:modelformat_proto",
+  ]
+}
 
 component("webnn_service") {
   sources = [
@@ -48,8 +61,24 @@ component("webnn_service") {
     "//services/webnn/public/mojom",
   ]
 
+  if (is_mac) {
+    sources += [
+      "coreml/context_impl.h",
+      "coreml/context_impl.mm",
+      "coreml/graph_impl.h",
+      "coreml/graph_impl.mm",
+    ]
+    frameworks = [
+      "CoreFoundation.framework",
+      "CoreML.framework",
+      "Foundation.framework",
+    ]
+    deps += [ ":coreml_graph_builder" ]
+  }
+
   if (is_win) {
     deps += [
+      "//third_party/fp16",
       "//ui/gl",
       "//ui/gl/init",
     ]
@@ -75,12 +104,15 @@ source_set("tests") {
       "dml/command_recorder_test.cc",
       "dml/context_impl_test.cc",
       "dml/graph_builder_test.cc",
-      "dml/graph_impl_test.cc",
       "dml/platform_functions_test.cc",
       "dml/tensor_desc_test.cc",
       "dml/test_base.cc",
       "dml/test_base.h",
     ]
+  }
+
+  if (is_mac || is_win) {
+    sources += [ "webnn_graph_impl_backend_test.cc" ]
   }
 
   deps = [
@@ -92,6 +124,7 @@ source_set("tests") {
     "//mojo/public/cpp/test_support:test_utils",
     "//services/webnn/public/mojom",
     "//testing/gtest",
+    "//third_party/fp16",
   ]
 
   if (is_win) {
@@ -111,6 +144,7 @@ mojolpm_fuzzer_test("webnn_graph_mojolpm_fuzzer") {
   proto_deps = [ "//services/webnn/public/mojom:mojom_mojolpm" ]
 
   deps = [
+    ":coreml_graph_builder",
     ":webnn_service",
     "//base",
     "//base/test:test_support",

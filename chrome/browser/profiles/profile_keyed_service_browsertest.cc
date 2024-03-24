@@ -21,15 +21,23 @@
 #include "components/keyed_service/core/keyed_service_base_factory.h"
 #include "components/omnibox/common/omnibox_features.h"
 #include "components/optimization_guide/machine_learning_tflite_buildflags.h"
+#include "components/services/screen_ai/buildflags/buildflags.h"
+#include "components/signin/public/base/signin_switches.h"
 #include "components/supervised_user/core/common/buildflags.h"
 #include "content/public/common/content_features.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/test_utils.h"
 #include "extensions/buildflags/buildflags.h"
 #include "net/base/features.h"
 #include "pdf/buildflags.h"
 #include "printing/buildflags/buildflags.h"
+#include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "third_party/blink/public/common/features.h"
 #include "ui/base/ui_base_features.h"
+
+#if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
+#include "ui/accessibility/accessibility_features.h"
+#endif
 
 #if !BUILDFLAG(IS_ANDROID)
 #include "chrome/common/companion/visual_query/features.h"
@@ -173,9 +181,16 @@ class ProfileKeyedServiceBrowserTest : public InProcessBrowserTest {
           features::kTrustSafetySentimentSurvey,
           companion::visual_query::features::kVisualQuerySuggestions,
 #endif  // !BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_WIN)
+          switches::kEnableBoundSessionCredentials,
+#endif  // BUILDFLAG(IS_WIN)
           blink::features::kBrowsingTopics,
           net::features::kTpcdMetadataGrants,
-          net::features::kTpcdSupportSettings,
+          net::features::kTpcdTrialSettings,
+          net::features::kTopLevelTpcdTrialSettings,
+#if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
+          features::kPdfOcr,
+#endif
           features::kPersistentOriginTrials,
           features::kSidePanelPinning,
           features::kChromeRefresh2023,
@@ -236,6 +251,9 @@ IN_PROC_BROWSER_TEST_F(ProfileKeyedServiceBrowserTest,
     "BluetoothSocketEventDispatcher",
     "BrowsingDataLifetimeManager",
     "CookieSettings",
+#if BUILDFLAG(IS_WIN)
+    "BoundSessionCookieRefreshService",
+#endif  // BUILDFLAG(IS_WIN)
     "ExtensionSystem",
     "ExtensionURLLoaderFactory::BrowserContextShutdownNotifierFactory",
     "FederatedIdentityPermissionContext",
@@ -290,6 +308,9 @@ IN_PROC_BROWSER_TEST_F(ProfileKeyedServiceBrowserTest,
     "TrackingProtectionSettings",
     "UDPSocketEventDispatcher",
     "UkmBackgroundRecorderService",
+#if BUILDFLAG(IS_WIN)
+    "UnexportableKeyService",
+#endif  // BUILDFLAG(IS_WIN)
     "UpdaterService",
     "UsbDeviceManager",
     "UsbDeviceResourceManager",
@@ -499,6 +520,7 @@ IN_PROC_BROWSER_TEST_F(ProfileKeyedServiceBrowserTest,
     "SafeBrowsingMetricsCollector",
     "SafeBrowsingPrivateEventRouter",
     "SafeBrowsingTailoredSecurityService",
+    "SearchEngineChoiceServiceFactory",
     "SendTabToSelfClientService",
     "SendTabToSelfSyncService",
     "SerialConnectionManager",
@@ -527,7 +549,8 @@ IN_PROC_BROWSER_TEST_F(ProfileKeyedServiceBrowserTest,
     "TemplateURLServiceFactory",
     "ThemeService",
     "ToolbarActionsModel",
-    "TpcdSupportService",
+    "TopLevelTrialService",
+    "TpcdTrialService",
     "TrackingProtectionSettings",
     "TranslateRanker",
     "TriggeredProfileResetter",

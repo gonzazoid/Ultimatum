@@ -24,8 +24,9 @@ namespace file_manager {
 namespace test {
 
 static const char kODFSSampleUrl[] = "https://1drv.ms/123";
-static const char kSampleUserEmail1[] = "user1@gmail.com";
-static const char kSampleUserEmail2[] = "user2@gmail.com";
+static const char kSampleUserEmail1[] = "user.1@gmail.com";
+static const char kSampleUserUpperCaseEmail1[] = "USER.1@gmail.com";
+static const char kSampleUserEmail2[] = "user.2@gmail.com";
 
 // A dummy folder in a temporary path that is automatically mounted as a
 // Profile's Downloads folder.
@@ -214,8 +215,8 @@ class FakeExtensionProviderOneDrive
   std::unique_ptr<ash::file_system_provider::ProvidedFileSystemInterface>
   CreateProvidedFileSystem(
       Profile* profile,
-      const ash::file_system_provider::ProvidedFileSystemInfo& file_system_info)
-      override;
+      const ash::file_system_provider::ProvidedFileSystemInfo& file_system_info,
+      ash::file_system_provider::ContentCache* content_cache) override;
 
   // Calls `request_mount_callback` if set.
   bool RequestMount(

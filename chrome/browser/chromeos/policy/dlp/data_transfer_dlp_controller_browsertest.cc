@@ -35,7 +35,6 @@
 #include "components/policy/proto/cloud_policy.pb.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "components/reporting/client/mock_report_queue.h"
-#include "components/reporting/storage/test_storage_module.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
@@ -161,7 +160,7 @@ class FakeDlpController : public DataTransferDlpController,
   }
 
   raw_ptr<FakeClipboardNotifier> helper_ = nullptr;
-  absl::optional<ui::DataTransferEndpoint> blink_data_dst_;
+  std::optional<ui::DataTransferEndpoint> blink_data_dst_;
   bool force_paste_on_warn_ = false;
 
  protected:
@@ -207,9 +206,8 @@ class DataTransferDlpBrowserTest : public InProcessBrowserTest {
 
   void SetUpOnMainThread() override {
     InProcessBrowserTest::SetUpOnMainThread();
-    test_reporting_ =
-        ::reporting::ReportingClient::TestEnvironment::CreateWithStorageModule(
-            base::MakeRefCounted<::reporting::test::TestStorageModule>());
+    test_reporting_ = ::reporting::ReportingClient::TestEnvironment::
+        CreateWithStorageModule();
 
     policy::DlpRulesManagerFactory::GetInstance()->SetTestingFactory(
         browser()->profile(),
@@ -246,6 +244,7 @@ class DataTransferDlpBrowserTest : public InProcessBrowserTest {
     reporting_queue_ = nullptr;
     dlp_controller_.reset();
     reporting_manager_.reset();
+    test_reporting_.reset();
   }
 
   void SetupTextfield() {
@@ -280,14 +279,15 @@ class DataTransferDlpBrowserTest : public InProcessBrowserTest {
   }
 
   // Expects `event` to be reported then quits `run_loop`.
-  void ExpectEventTobeReported(DlpPolicyEvent event, base::RunLoop& run_loop) {
+  void ExpectEventTobeReported(DlpPolicyEvent expected_event,
+                               base::RunLoop& run_loop) {
     EXPECT_CALL(*reporting_queue_, AddRecord)
-        .WillOnce([&run_loop](
+        .WillOnce([&run_loop, expected_event](
                       base::StringPiece record, ::reporting::Priority priority,
                       ::reporting::ReportQueue::EnqueueCallback callback) {
           DlpPolicyEvent event;
           ASSERT_TRUE(event.ParseFromString(std::string(record)));
-          EXPECT_THAT(event, data_controls::IsDlpPolicyEvent(event));
+          EXPECT_THAT(event, data_controls::IsDlpPolicyEvent(expected_event));
           std::move(callback).Run(::reporting::Status::StatusOK());
           run_loop.Quit();
         });
@@ -350,7 +350,7 @@ IN_PROC_BROWSER_TEST_F(DataTransferDlpBrowserTest, BlockDestination) {
 
   base::RunLoop run_loop;
   ExpectEventTobeReported(
-      CreateDlpPolicyEvent(kMailUrl, "*",
+      CreateDlpPolicyEvent(GURL(kMailUrl).spec(), GURL(kExampleUrl).spec(),
                            DlpRulesManager::Restriction::kClipboard, kRuleName1,
                            kRuleId1, DlpRulesManager::Level::kBlock),
       run_loop);
@@ -403,12 +403,13 @@ IN_PROC_BROWSER_TEST_F(DataTransferDlpBrowserTest, MAYBE_WarnDestination) {
   {
     base::RunLoop run_loop;
     ExpectEventTobeReported(
-        CreateDlpPolicyEvent(
-            kMailUrl, "*", DlpRulesManager::Restriction::kClipboard, kRuleName1,
-            kRuleId1, DlpRulesManager::Level::kWarn),
+        CreateDlpPolicyEvent(GURL(kMailUrl).spec(), "*",
+                             DlpRulesManager::Restriction::kClipboard,
+                             kRuleName1, kRuleId1,
+                             DlpRulesManager::Level::kWarn),
         run_loop);
-    event_generator_->PressKey(ui::VKEY_V, ui::EF_CONTROL_DOWN);
-    event_generator_->ReleaseKey(ui::VKEY_V, ui::EF_CONTROL_DOWN);
+    event_generator_->PressAndReleaseKeyAndModifierKeys(ui::VKEY_V,
+                                                        ui::EF_CONTROL_DOWN);
 
     EXPECT_EQ("", base::UTF16ToUTF8(textfield_->GetText()));
     ASSERT_TRUE(dlp_controller_->ObserveWidget());
@@ -423,8 +424,8 @@ IN_PROC_BROWSER_TEST_F(DataTransferDlpBrowserTest, MAYBE_WarnDestination) {
     base::RunLoop run_loop;
     ExpectEventTobeReported(
         CreateDlpPolicyWarningProceededEvent(
-            kMailUrl, "*", DlpRulesManager::Restriction::kClipboard, kRuleName1,
-            kRuleId1),
+            GURL(kMailUrl).spec(), "*",
+            DlpRulesManager::Restriction::kClipboard, kRuleName1, kRuleId1),
         run_loop);
     ui::DataTransferEndpoint default_endpoint(ui::EndpointType::kDefault);
     auto data_src =
@@ -446,17 +447,18 @@ IN_PROC_BROWSER_TEST_F(DataTransferDlpBrowserTest, MAYBE_WarnDestination) {
   {
     base::RunLoop run_loop;
     ExpectEventTobeReported(
-        CreateDlpPolicyEvent(
-            kMailUrl, "*", DlpRulesManager::Restriction::kClipboard, kRuleName1,
-            kRuleId1, DlpRulesManager::Level::kWarn),
+        CreateDlpPolicyEvent(GURL(kMailUrl).spec(), "*",
+                             DlpRulesManager::Restriction::kClipboard,
+                             kRuleName1, kRuleId1,
+                             DlpRulesManager::Level::kWarn),
         run_loop);
     SetClipboardText(
         kClipboardText2,
         std::make_unique<ui::DataTransferEndpoint>((GURL(kMailUrl))));
     textfield_->SetText(std::u16string());
     textfield_->RequestFocus();
-    event_generator_->PressKey(ui::VKEY_V, ui::EF_CONTROL_DOWN);
-    event_generator_->ReleaseKey(ui::VKEY_V, ui::EF_CONTROL_DOWN);
+    event_generator_->PressAndReleaseKeyAndModifierKeys(ui::VKEY_V,
+                                                        ui::EF_CONTROL_DOWN);
     EXPECT_EQ("", base::UTF16ToUTF8(textfield_->GetText()));
     ASSERT_TRUE(dlp_controller_->ObserveWidget());
     widget = helper_.GetWidget()->GetWeakPtr();
@@ -551,14 +553,15 @@ class MAYBE_DataTransferDlpBlinkBrowserTest : public InProcessBrowserTest {
   }
 
   // Expects `event` to be reported then quits `run_loop`.
-  void ExpectEventTobeReported(DlpPolicyEvent event, base::RunLoop& run_loop) {
+  void ExpectEventTobeReported(DlpPolicyEvent expected_event,
+                               base::RunLoop& run_loop) {
     EXPECT_CALL(*reporting_queue_, AddRecord)
-        .WillOnce([&run_loop](
+        .WillOnce([&run_loop, expected_event](
                       base::StringPiece record, ::reporting::Priority priority,
                       ::reporting::ReportQueue::EnqueueCallback callback) {
           DlpPolicyEvent event;
           ASSERT_TRUE(event.ParseFromString(std::string(record)));
-          EXPECT_THAT(event, data_controls::IsDlpPolicyEvent(event));
+          EXPECT_THAT(event, data_controls::IsDlpPolicyEvent(expected_event));
           std::move(callback).Run(::reporting::Status::StatusOK());
           run_loop.Quit();
         });
@@ -618,8 +621,10 @@ IN_PROC_BROWSER_TEST_F(MAYBE_DataTransferDlpBlinkBrowserTest, ProceedOnWarn) {
     base::RunLoop run_loop;
     ExpectEventTobeReported(
         CreateDlpPolicyEvent(
-            kMailUrl, "*", DlpRulesManager::Restriction::kClipboard, kRuleName1,
-            kRuleId1, DlpRulesManager::Level::kWarn),
+            GURL(kMailUrl).spec(),
+            embedded_test_server()->GetURL("/title1.html").spec(),
+            DlpRulesManager::Restriction::kClipboard, kRuleName1, kRuleId1,
+            DlpRulesManager::Level::kWarn),
         run_loop);
     GetActiveWebContents()->Paste();
     run_loop.Run();
@@ -634,8 +639,9 @@ IN_PROC_BROWSER_TEST_F(MAYBE_DataTransferDlpBlinkBrowserTest, ProceedOnWarn) {
     base::RunLoop run_loop;
     ExpectEventTobeReported(
         CreateDlpPolicyWarningProceededEvent(
-            kMailUrl, "*", DlpRulesManager::Restriction::kClipboard, kRuleName1,
-            kRuleId1),
+            GURL(kMailUrl).spec(),
+            embedded_test_server()->GetURL("/title1.html").spec(),
+            DlpRulesManager::Restriction::kClipboard, kRuleName1, kRuleId1),
         run_loop);
     ASSERT_TRUE(dlp_controller_->blink_data_dst_.has_value());
     helper_.BlinkProceedPressed(dlp_controller_->blink_data_dst_.value());
@@ -691,8 +697,10 @@ IN_PROC_BROWSER_TEST_F(MAYBE_DataTransferDlpBlinkBrowserTest, CancelWarn) {
     base::RunLoop run_loop;
     ExpectEventTobeReported(
         CreateDlpPolicyEvent(
-            kMailUrl, "*", DlpRulesManager::Restriction::kClipboard, kRuleName1,
-            kRuleId1, DlpRulesManager::Level::kWarn),
+            GURL(kMailUrl).spec(),
+            embedded_test_server()->GetURL("/title1.html").spec(),
+            DlpRulesManager::Restriction::kClipboard, kRuleName1, kRuleId1,
+            DlpRulesManager::Level::kWarn),
         run_loop);
     GetActiveWebContents()->Paste();
     run_loop.Run();
@@ -759,8 +767,9 @@ IN_PROC_BROWSER_TEST_F(MAYBE_DataTransferDlpBlinkBrowserTest,
     base::RunLoop run_loop;
     ExpectEventTobeReported(
         CreateDlpPolicyWarningProceededEvent(
-            kMailUrl, "*", DlpRulesManager::Restriction::kClipboard, kRuleName1,
-            kRuleId1),
+            GURL(kMailUrl).spec(),
+            embedded_test_server()->GetURL("/title1.html").spec(),
+            DlpRulesManager::Restriction::kClipboard, kRuleName1, kRuleId1),
         run_loop);
     dlp_controller_->force_paste_on_warn_ = true;
     GetActiveWebContents()->Paste();
@@ -820,9 +829,11 @@ IN_PROC_BROWSER_TEST_F(MAYBE_DataTransferDlpBlinkBrowserTest, Reporting) {
   {
     base::RunLoop run_loop;
     ExpectEventTobeReported(
-        CreateDlpPolicyWarningProceededEvent(
-            kMailUrl, "*", DlpRulesManager::Restriction::kClipboard, kRuleName1,
-            kRuleId1),
+        CreateDlpPolicyEvent(
+            GURL(kMailUrl).spec(),
+            embedded_test_server()->GetURL("/title1.html").spec(),
+            DlpRulesManager::Restriction::kClipboard, kRuleName1, kRuleId1,
+            DlpRulesManager::Level::kReport),
         run_loop);
     GetActiveWebContents()->Paste();
     run_loop.Run();

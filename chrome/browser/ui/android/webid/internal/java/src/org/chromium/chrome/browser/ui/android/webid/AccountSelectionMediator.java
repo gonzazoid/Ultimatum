@@ -4,6 +4,7 @@
 
 package org.chromium.chrome.browser.ui.android.webid;
 
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -18,6 +19,7 @@ import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.Callback;
 import org.chromium.base.metrics.RecordHistogram;
+import org.chromium.chrome.browser.customtabs.CustomTabActivity;
 import org.chromium.chrome.browser.tab.EmptyTabObserver;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabObserver;
@@ -40,6 +42,7 @@ import org.chromium.components.browser_ui.bottomsheet.BottomSheetObserver;
 import org.chromium.components.browser_ui.bottomsheet.EmptyBottomSheetObserver;
 import org.chromium.components.image_fetcher.ImageFetcher;
 import org.chromium.content.webid.IdentityRequestDialogDismissReason;
+import org.chromium.content.webid.IdentityRequestDialogLinkType;
 import org.chromium.content_public.browser.NavigationHandle;
 import org.chromium.ui.KeyboardVisibilityDelegate;
 import org.chromium.ui.KeyboardVisibilityDelegate.KeyboardVisibilityListener;
@@ -114,6 +117,7 @@ class AccountSelectionMediator {
     private ClientIdMetadata mClientMetadata;
     private String mRpContext;
     private IdentityCredentialTokenError mError;
+    private boolean mRequestPermission;
 
     // All of the user's accounts.
     private List<Account> mAccounts;
@@ -274,7 +278,8 @@ class AccountSelectionMediator {
                 mIdpMetadata,
                 mClientMetadata,
                 /* isAutoReauthn= */ false,
-                mRpContext);
+                mRpContext,
+                mRequestPermission);
     }
 
     private PropertyModel createHeaderItem(
@@ -405,7 +410,8 @@ class AccountSelectionMediator {
             IdentityProviderMetadata idpMetadata,
             ClientIdMetadata clientMetadata,
             boolean isAutoReauthn,
-            String rpContext) {
+            String rpContext,
+            boolean requestPermission) {
         showPlaceholderIcon(idpMetadata);
         mSelectedAccount = null;
         if (accounts.size() == 1 && (isAutoReauthn || !idpMetadata.supportsAddAccount())) {
@@ -419,7 +425,8 @@ class AccountSelectionMediator {
                 idpMetadata,
                 clientMetadata,
                 isAutoReauthn,
-                rpContext);
+                rpContext,
+                requestPermission);
         setComponentShowTime(SystemClock.elapsedRealtime());
         showBrandIcon(idpMetadata);
     }
@@ -462,6 +469,20 @@ class AccountSelectionMediator {
         showBrandIcon(idpMetadata);
     }
 
+    void showUrl(Context context, @IdentityRequestDialogLinkType int linkType, GURL url) {
+        switch (linkType) {
+            case IdentityRequestDialogLinkType.TERMS_OF_SERVICE:
+                RecordHistogram.recordBooleanHistogram(
+                        "Blink.FedCm.SignUp.TermsOfServiceClicked", true);
+                break;
+            case IdentityRequestDialogLinkType.PRIVACY_POLICY:
+                RecordHistogram.recordBooleanHistogram(
+                        "Blink.FedCm.SignUp.PrivacyPolicyClicked", true);
+                break;
+        }
+        CustomTabActivity.showInfoPage(context, url.getSpec());
+    }
+
     @VisibleForTesting
     void setComponentShowTime(long componentShowTime) {
         mComponentShowTime = componentShowTime;
@@ -485,7 +506,8 @@ class AccountSelectionMediator {
             IdentityProviderMetadata idpMetadata,
             ClientIdMetadata clientMetadata,
             boolean isAutoReauthn,
-            String rpContext) {
+            String rpContext,
+            boolean requestPermission) {
         mTopFrameForDisplay = topFrameForDisplay;
         mIframeForDisplay = iframeForDisplay;
         mIdpForDisplay = idpForDisplay;
@@ -493,6 +515,7 @@ class AccountSelectionMediator {
         mIdpMetadata = idpMetadata;
         mClientMetadata = clientMetadata;
         mRpContext = rpContext;
+        mRequestPermission = requestPermission;
 
         if (mSelectedAccount != null) {
             accounts = Arrays.asList(mSelectedAccount);
@@ -510,8 +533,9 @@ class AccountSelectionMediator {
         boolean isDataSharingConsentVisible = false;
         Callback<Account> continueButtonCallback = null;
         if (mHeaderType == HeaderType.SIGN_IN && mSelectedAccount != null) {
-            // Only show the user data sharing consent text for sign up.
-            isDataSharingConsentVisible = !mSelectedAccount.isSignIn();
+            // Only show the user data sharing consent text for sign up and only
+            // if we're asked to request permission.
+            isDataSharingConsentVisible = !mSelectedAccount.isSignIn() && mRequestPermission;
             continueButtonCallback = this::onClickAccountSelected;
         }
 
@@ -564,7 +588,10 @@ class AccountSelectionMediator {
                         : null);
 
         mBottomSheetContent.computeAndUpdateAccountListHeight();
-        showContent();
+        // When a user opens a page that invokes the FedCM API in a new tab, the tab will be hidden
+        // and we should not show the bottom sheet to avoid confusion.
+        mTab.addObserver(mTabObserver);
+        if (!mTab.isHidden()) showContent();
     }
 
     private void updateHeader() {
@@ -590,10 +617,15 @@ class AccountSelectionMediator {
             if (mRegisteredObservers) return;
 
             mRegisteredObservers = true;
+            if (mHeaderType == HeaderType.SIGN_IN
+                    || mHeaderType == HeaderType.VERIFY
+                    || mHeaderType == HeaderType.VERIFY_AUTO_REAUTHN) {
+                mDelegate.onAccountsDisplayed();
+            }
             mBottomSheetController.addObserver(mBottomSheetObserver);
             KeyboardVisibilityDelegate.getInstance()
                     .addKeyboardVisibilityListener(mKeyboardVisibilityListener);
-            mTab.addObserver(mTabObserver);
+            if (!mTab.hasObserver(mTabObserver)) mTab.addObserver(mTabObserver);
         } else {
             onDismissed(IdentityRequestDialogDismissReason.OTHER);
         }
@@ -649,7 +681,7 @@ class AccountSelectionMediator {
         // This method only has an Account to match the type of the event listener.
         assert account == null;
         if (!shouldInputBeProcessed()) return;
-        mDelegate.onLoginToIdP(mIdpMetadata.getLoginUrl());
+        mDelegate.onLoginToIdP(mIdpMetadata.getConfigUrl(), mIdpMetadata.getLoginUrl());
     }
 
     /** Event listener for when the user taps on the more details button of the bottomsheet. */
@@ -687,7 +719,7 @@ class AccountSelectionMediator {
 
         Account oldSelectedAccount = mSelectedAccount;
         mSelectedAccount = selectedAccount;
-        if (oldSelectedAccount == null && !mSelectedAccount.isSignIn()) {
+        if (oldSelectedAccount == null && !mSelectedAccount.isSignIn() && mRequestPermission) {
             showAccountsInternal(
                     mTopFrameForDisplay,
                     mIframeForDisplay,
@@ -696,7 +728,8 @@ class AccountSelectionMediator {
                     mIdpMetadata,
                     mClientMetadata,
                     /* isAutoReauthn= */ false,
-                    mRpContext);
+                    mRpContext,
+                    mRequestPermission);
             return;
         }
 
@@ -745,15 +778,19 @@ class AccountSelectionMediator {
         properties.mIdpForDisplay = idpForDisplay;
         properties.mTermsOfServiceUrl = metadata.getTermsOfServiceUrl();
         properties.mPrivacyPolicyUrl = metadata.getPrivacyPolicyUrl();
-        properties.mTermsOfServiceClickRunnable =
-                () -> {
-                    RecordHistogram.recordBooleanHistogram(
-                            "Blink.FedCm.SignUp.TermsOfServiceClicked", true);
+        properties.mTermsOfServiceClickCallback =
+                (Context context) -> {
+                    showUrl(
+                            context,
+                            IdentityRequestDialogLinkType.TERMS_OF_SERVICE,
+                            metadata.getTermsOfServiceUrl());
                 };
-        properties.mPrivacyPolicyClickRunnable =
-                () -> {
-                    RecordHistogram.recordBooleanHistogram(
-                            "Blink.FedCm.SignUp.PrivacyPolicyClicked", true);
+        properties.mPrivacyPolicyClickCallback =
+                (Context context) -> {
+                    showUrl(
+                            context,
+                            IdentityRequestDialogLinkType.PRIVACY_POLICY,
+                            metadata.getPrivacyPolicyUrl());
                 };
 
         return new PropertyModel.Builder(DataSharingConsentProperties.ALL_KEYS)

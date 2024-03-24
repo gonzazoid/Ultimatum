@@ -197,6 +197,15 @@ targets.mixin(
 )
 
 targets.mixin(
+    name = "amd_radeon_rx_5500_xt",
+    swarming = targets.swarming(
+        dimensions = {
+            "gpu": "1002:7340",
+        },
+    ),
+)
+
+targets.mixin(
     name = "android",
     swarming = targets.swarming(
         dimensions = {
@@ -220,6 +229,15 @@ targets.mixin(
     swarming = targets.swarming(
         dimensions = {
             "device_os": "TP1A.220624.021",
+        },
+    ),
+)
+
+targets.mixin(
+    name = "android_u",
+    swarming = targets.swarming(
+        dimensions = {
+            "device_os": "UQ1A.240105.002",
         },
     ),
 )
@@ -403,6 +421,13 @@ targets.mixin(
 )
 
 targets.mixin(
+    name = "chromeos-tast-fieldtrial-enabled",
+    skylab = targets.skylab(
+        args = ["-var=setup.FieldTrialConfig=enable"],
+    ),
+)
+
+targets.mixin(
     name = "chromeos-jacuzzi-skylab-chrome-all-tast-tests",
     # jacuzzi is slow. So that we use more number of shards.
     shards = 20,
@@ -428,7 +453,7 @@ targets.mixin(
             "cpu": "x86-64",
             "kvm": "1",
             "gce": "1",
-            "os": "Ubuntu-18.04",
+            "os": "Ubuntu-22.04",
             "pool": "chrome.tests",
         },
         optional_dimensions = {
@@ -598,6 +623,15 @@ targets.mixin(
 )
 
 targets.mixin(
+    name = "gce",
+    swarming = targets.swarming(
+        dimensions = {
+            "gce": "1",
+        },
+    ),
+)
+
+targets.mixin(
     name = "gpu-swarming-pool",
     swarming = targets.swarming(
         dimensions = {
@@ -623,6 +657,15 @@ targets.mixin(
     swarming = targets.swarming(
         dimensions = {
             "integrity": "high",
+        },
+    ),
+)
+
+targets.mixin(
+    name = "intel_uhd_630",
+    swarming = targets.swarming(
+        dimensions = {
+            "gpu": "8086:9bc5",
         },
     ),
 )
@@ -682,24 +725,24 @@ targets.mixin(
 )
 
 targets.mixin(
-    name = "ios_runtime_cache_17_0",
-    swarming = targets.swarming(
-        named_caches = [
-            swarming.cache(
-                name = "runtime_ios_17_0",
-                path = "Runtime-ios-17.0",
-            ),
-        ],
-    ),
-)
-
-targets.mixin(
     name = "ios_runtime_cache_17_2",
     swarming = targets.swarming(
         named_caches = [
             swarming.cache(
                 name = "runtime_ios_17_2",
                 path = "Runtime-ios-17.2",
+            ),
+        ],
+    ),
+)
+
+targets.mixin(
+    name = "ios_runtime_cache_17_4",
+    swarming = targets.swarming(
+        named_caches = [
+            swarming.cache(
+                name = "runtime_ios_17_4",
+                path = "Runtime-ios-17.4",
             ),
         ],
     ),
@@ -753,15 +796,6 @@ targets.mixin(
     swarming = targets.swarming(
         dimensions = {
             "os": "Ubuntu-22.04",
-        },
-    ),
-)
-
-targets.mixin(
-    name = "linux-jammy-or-bionic",
-    swarming = targets.swarming(
-        dimensions = {
-            "os": "Ubuntu-22.04|Ubuntu-18.04",
         },
     ),
 )
@@ -1215,6 +1249,15 @@ targets.mixin(
 )
 
 targets.mixin(
+    name = "nvidia_geforce_gtx_1660",
+    swarming = targets.swarming(
+        dimensions = {
+            "gpu": "10de:2184-31.0.15.4601",
+        },
+    ),
+)
+
+targets.mixin(
     name = "nougat-x86-emulator",
     args = [
         "--avd-config=../../tools/android/avd/proto/generic_android24.textpb",
@@ -1516,7 +1559,7 @@ targets.mixin(
             targets.cipd_package(
                 package = "chromium/android_webview/tools/cts_archive",
                 location = "android_webview/tools/cts_archive",
-                revision = "dMHDxWyIpkzGNem_Z7ywDRj3Y2lUQKM7h4JT87_ejr8C",
+                revision = "Tonx5t-WDQ4lYRaMNn3IEzzOeyaIgtQ0d1ZAv0lRlwEC",
             ),
         ],
     ),
@@ -1569,7 +1612,7 @@ targets.mixin(
     swarming = targets.swarming(
         dimensions = {
             "display_attached": "1",
-            "gpu": "8086:9bc5-31.0.101.2111",
+            "gpu": "8086:9bc5-31.0.101.2114",
             "os": "Windows-10",
             "pool": "chromium.tests.gpu",
         },
@@ -1593,8 +1636,8 @@ targets.mixin(
     swarming = targets.swarming(
         dimensions = {
             "display_attached": "1",
-            "gpu": "10de:2184-27.21.14.5638",
-            "os": "Windows-10-18363",
+            "gpu": "10de:2184-31.0.15.4601",
+            "os": "Windows-10-19045",
             "pool": "chromium.tests.gpu",
         },
     ),
@@ -1617,6 +1660,22 @@ targets.mixin(
 )
 
 targets.mixin(
+    name = "win11_qualcomm_adreno_690_stable",
+    swarming = targets.swarming(
+        dimensions = {
+            "display_attached": "1",
+            # Screen scaling is mostly to ensure that pixel test output is
+            # consistent.
+            "screen_scaling_percent": "100",
+            "cpu": "arm64",
+            "gpu": "qcom:043a-27.20.1870.0",
+            "os": "Windows-11-22621.3007",
+            "pool": "chromium.tests",
+        },
+    ),
+)
+
+targets.mixin(
     name = "win11",
     swarming = targets.swarming(
         dimensions = {
@@ -1626,22 +1685,15 @@ targets.mixin(
 )
 
 targets.mixin(
-    name = "win_arm64",
+    name = "win-arm64",
     swarming = targets.swarming(
         dimensions = {
+            # Certain tests require 100 percent screen scaling, and all devices
+            # should be configured for this.
+            "screen_scaling_percent": "100",
             "cpu": "arm64",
             "os": "Windows-11",
-            "pool": "chrome.tests.arm64",
-            # Qualcomm Adreno 690.
-            "gpu": "qcom:043a",
-            # Currently used to limit testing to the homogenous fleet. Can be
-            # removed once the older experimental devices are decommissioned.
-            "zone": "us-sfo",
         },
-        # The resources are limited in the pool.
-        # The slowest test is expected to run >9 hours.
-        expiration_sec = 64800,  # 18 hours
-        hard_timeout_sec = 43200,  # 12 hours
     ),
 )
 
@@ -1658,12 +1710,12 @@ targets.mixin(
     name = "xcode_15_beta",
     args = [
         "--xcode-build-version",
-        "15c500b",
+        "15e5188j",
     ],
     swarming = targets.swarming(
         named_caches = [
             swarming.cache(
-                name = "xcode_ios_15c500b",
+                name = "xcode_ios_15e5188j",
                 path = "Xcode.app",
             ),
         ],
@@ -1674,12 +1726,12 @@ targets.mixin(
     name = "xcode_15_main",
     args = [
         "--xcode-build-version",
-        "15a507",
+        "15c500b",
     ],
     swarming = targets.swarming(
         named_caches = [
             swarming.cache(
-                name = "xcode_ios_15a507",
+                name = "xcode_ios_15c500b",
                 path = "Xcode.app",
             ),
         ],

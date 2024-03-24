@@ -4,13 +4,16 @@
 
 package org.chromium.chrome.browser.magic_stack;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import android.content.Context;
 import android.graphics.Point;
@@ -47,6 +50,7 @@ public class HomeModulesContextMenuManagerUnitTest {
     @Mock private ContextMenu mContextMenu;
     @Mock private View mView;
     @Mock private Context mContext;
+    @Mock private HomeModulesConfigManager mHomeModulesConfigManager;
 
     private @ModuleType int mModuleType;
     private Point mPoint = new Point(0, 0);
@@ -54,10 +58,12 @@ public class HomeModulesContextMenuManagerUnitTest {
 
     @Before
     public void setUp() {
-        mModuleType = 0;
+        mModuleType = ModuleType.SINGLE_TAB;
         doReturn(mContext).when(mView).getContext();
         doReturn(mModuleType).when(mModuleProvider).getModuleType();
-        mManager = new HomeModulesContextMenuManager(mModuleDelegate, mPoint);
+        mManager =
+                new HomeModulesContextMenuManager(
+                        mModuleDelegate, mPoint, mHomeModulesConfigManager);
     }
 
     @Test
@@ -65,7 +71,7 @@ public class HomeModulesContextMenuManagerUnitTest {
     public void testOnMenuItemClick() {
         doReturn(ContextMenuItemId.HIDE_MODULE).when(mMenuItem).getItemId();
         mManager.onMenuItemClickImpl(mMenuItem, mModuleProvider);
-        verify(mModuleDelegate).onHideModuleFromContextMenu(eq(mModuleType));
+        verify(mModuleDelegate).removeModuleAndDisable(eq(mModuleType));
 
         doReturn(ContextMenuItemId.SHOW_CUSTOMIZE_SETTINGS).when(mMenuItem).getItemId();
         mManager.onMenuItemClickImpl(mMenuItem, mModuleProvider);
@@ -75,11 +81,26 @@ public class HomeModulesContextMenuManagerUnitTest {
     @Test
     @SmallTest
     public void testShouldShowItem() {
-        // Verifies that two default items are shown.
-        assertTrue(mManager.shouldShowItem(ContextMenuItemId.HIDE_MODULE, mModuleProvider));
+        // Verifies that the "customize" menu item is default shown for all modules.
+        when(mHomeModulesConfigManager.hasModuleShownInSettings()).thenReturn(true);
         assertTrue(
                 mManager.shouldShowItem(
                         ContextMenuItemId.SHOW_CUSTOMIZE_SETTINGS, mModuleProvider));
+
+        // Verifies that the "customize" menu item is removed when there isn't any module to
+        // customize.
+        when(mHomeModulesConfigManager.hasModuleShownInSettings()).thenReturn(false);
+        mManager.resetHasModuleToCustomizeForTesting();
+        assertFalse(
+                mManager.shouldShowItem(
+                        ContextMenuItemId.SHOW_CUSTOMIZE_SETTINGS, mModuleProvider));
+
+        // Verifies that the "hide module" menu item is shown for all modules except the single tab
+        // module.
+        assertEquals(ModuleType.SINGLE_TAB, mModuleProvider.getModuleType());
+        assertFalse(mManager.shouldShowItem(ContextMenuItemId.HIDE_MODULE, mModuleProvider));
+        when(mModuleProvider.getModuleType()).thenReturn(ModuleType.PRICE_CHANGE);
+        assertTrue(mManager.shouldShowItem(ContextMenuItemId.HIDE_MODULE, mModuleProvider));
 
         // Cases for a customized menu item.
         doReturn(false).when(mModuleProvider).isContextMenuItemSupported(2);
@@ -93,7 +114,6 @@ public class HomeModulesContextMenuManagerUnitTest {
     @SmallTest
     public void testCreateContextMenu() {
         MenuItem menuItem1 = Mockito.mock(MenuItem.class);
-        MenuItem menuItem2 = Mockito.mock(MenuItem.class);
         doReturn(menuItem1)
                 .when(mContextMenu)
                 .add(
@@ -101,11 +121,16 @@ public class HomeModulesContextMenuManagerUnitTest {
                         eq(ContextMenuItemId.SHOW_CUSTOMIZE_SETTINGS),
                         eq(Menu.NONE),
                         anyInt());
-        doReturn(menuItem2).when(mContextMenu).add(any());
 
+        when(mHomeModulesConfigManager.hasModuleShownInSettings()).thenReturn(false);
+        mManager.createContextMenu(mContextMenu, mView, mModuleProvider);
+        verify(menuItem1, never()).setOnMenuItemClickListener(any());
+        verify(mModuleProvider, never()).onContextMenuCreated();
+
+        when(mHomeModulesConfigManager.hasModuleShownInSettings()).thenReturn(true);
+        mManager.resetHasModuleToCustomizeForTesting();
         mManager.createContextMenu(mContextMenu, mView, mModuleProvider);
         verify(menuItem1).setOnMenuItemClickListener(any());
-        verify(menuItem2).setOnMenuItemClickListener(any());
         verify(mModuleProvider).onContextMenuCreated();
     }
 }

@@ -27,6 +27,7 @@ enum class UserSelectableType;
 @interface SigninEarlGreyAppInterface : NSObject
 
 // Adds `fakeIdentity` to the fake identity service.
+// Does nothing if the fake identity is already added.
 + (void)addFakeIdentity:(FakeSystemIdentity*)fakeIdentity;
 
 // Adds `fakeIdentity` to the fake system identity interaction manager. This
@@ -54,6 +55,11 @@ enum class UserSelectableType;
 // Signs out the current user.
 + (void)signOut;
 
+// Signs in with the fake identity and access point Settings.
+// Adds the fake-identity to the identity manager if necessary.
+// Call `[SigninEarlGrey signinWithFakeIdentity:identity]` instead.
++ (void)signinWithFakeIdentity:(FakeSystemIdentity*)identity;
+
 // Triggers the reauth dialog. This is done by sending ShowSigninCommand to
 // SceneController, without any UI interaction to open the dialog.
 // TODO(crbug.com/1454101): To be consistent, this method should be renamed to
@@ -75,8 +81,10 @@ enum class UserSelectableType;
                            forIdentity:(FakeSystemIdentity*)fakeIdentity;
 + (void)setCanHaveEmailAddressDisplayed:(BOOL)value
                             forIdentity:(FakeSystemIdentity*)fakeIdentity;
-+ (void)setCanOfferExtendedChromeSyncPromos:(BOOL)value
-                                forIdentity:(FakeSystemIdentity*)fakeIdentity;
++ (void)setCanShowHistorySyncOptInsWithoutMinorModeRestrictions:(BOOL)value
+                                                    forIdentity:
+                                                        (FakeSystemIdentity*)
+                                                            fakeIdentity;
 
 + (void)setSelectedType:(syncer::UserSelectableType)type enabled:(BOOL)enabled;
 

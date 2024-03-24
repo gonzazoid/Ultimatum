@@ -12,7 +12,7 @@
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/logging.h"
-#include "base/memory/raw_ptr_exclusion.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/path_service.h"
@@ -154,9 +154,7 @@ class GpuWatchdogInit {
   void SetGpuWatchdogPtr(GpuWatchdogThread* ptr) { watchdog_ptr_ = ptr; }
 
  private:
-  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
-  // #constexpr-ctor-field-initializer
-  RAW_PTR_EXCLUSION GpuWatchdogThread* watchdog_ptr_ = nullptr;
+  raw_ptr<GpuWatchdogThread, DanglingUntriaged> watchdog_ptr_ = nullptr;
 };
 
 void PauseGpuWatchdog(GpuWatchdogThread* watchdog_thread) {
@@ -631,19 +629,9 @@ bool GpuInit::InitializeAndStartSandbox(base::CommandLine* command_line,
     }
   }
 
-  // On MacOS, the default texture target for native GpuMemoryBuffers is
-  // GL_TEXTURE_RECTANGLE_ARB. This is due to CGL's requirements for creating
-  // a GL surface. However, when ANGLE is used on top of SwiftShader or Metal,
-  // it's necessary to use GL_TEXTURE_2D instead.
-  // TODO(crbug.com/1056312): The proper behavior is to check the config
-  // parameter set by the EGL_ANGLE_iosurface_client_buffer extension
 #if BUILDFLAG(IS_MAC)
-  if (gl::GetGLImplementation() == gl::kGLImplementationEGLANGLE &&
-      (gl::GetANGLEImplementation() == gl::ANGLEImplementation::kSwiftShader ||
-       gl::GetANGLEImplementation() == gl::ANGLEImplementation::kMetal)) {
-    SetMacOSSpecificTextureTarget(GL_TEXTURE_2D);
-    gpu_info_.macos_specific_texture_target = GL_TEXTURE_2D;
-  }
+  SetMacOSSpecificTextureTargetFromCurrentGLImplementation();
+  gpu_info_.macos_specific_texture_target = GetPlatformSpecificTextureTarget();
 #endif  // BUILDFLAG(IS_MAC)
 
 #if BUILDFLAG(IS_WIN)
@@ -685,8 +673,9 @@ bool GpuInit::InitializeAndStartSandbox(base::CommandLine* command_line,
       // Fuchsia uses ANGLE for GL which requires Vulkan, so don't fall
       // back to GL if Vulkan init fails.
       LOG(FATAL) << "Vulkan initialization failed";
-#endif
+#else
       gpu_preferences_.gr_context_type = GrContextType::kGL;
+#endif
     }
   } else {
     // TODO(https://crbug.com/1095744): It would be better to cleanly tear
@@ -973,19 +962,9 @@ void GpuInit::InitializeInProcess(base::CommandLine* command_line,
     }
   }
 
-  // On MacOS, the default texture target for native GpuMemoryBuffers is
-  // GL_TEXTURE_RECTANGLE_ARB. This is due to CGL's requirements for creating
-  // a GL surface. However, when ANGLE is used on top of SwiftShader or Metal,
-  // it's necessary to use GL_TEXTURE_2D instead.
-  // TODO(crbug.com/1056312): The proper behavior is to check the config
-  // parameter set by the EGL_ANGLE_iosurface_client_buffer extension
 #if BUILDFLAG(IS_MAC)
-  if (gl::GetGLImplementation() == gl::kGLImplementationEGLANGLE &&
-      (gl::GetANGLEImplementation() == gl::ANGLEImplementation::kSwiftShader ||
-       gl::GetANGLEImplementation() == gl::ANGLEImplementation::kMetal)) {
-    SetMacOSSpecificTextureTarget(GL_TEXTURE_2D);
-    gpu_info_.macos_specific_texture_target = GL_TEXTURE_2D;
-  }
+  SetMacOSSpecificTextureTargetFromCurrentGLImplementation();
+  gpu_info_.macos_specific_texture_target = GetPlatformSpecificTextureTarget();
 #endif  // BUILDFLAG(IS_MAC)
 
   if (!gl_disabled) {

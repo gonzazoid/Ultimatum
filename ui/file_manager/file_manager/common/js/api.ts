@@ -173,9 +173,9 @@ export async function getEntry(
  * or identify the ongoing IO operation.
  */
 export async function startIOTask(
-    type: chrome.fileManagerPrivate.IOTaskType,
+    type: chrome.fileManagerPrivate.IoTaskType,
     entries: Array<Entry|FilesAppEntry>,
-    params: chrome.fileManagerPrivate.IOTaskParams) {
+    params: chrome.fileManagerPrivate.IoTaskParams) {
   if (params.destinationFolder) {
     params.destinationFolder =
         unwrapEntry(params.destinationFolder) as DirectoryEntry;
@@ -195,8 +195,7 @@ export async function parseTrashInfoFiles(entries: Entry[]) {
 }
 
 export async function getMimeType(entry: Entry|FilesAppEntry) {
-  return promisify<string|undefined>(
-      chrome.fileManagerPrivate.getMimeType, unwrapEntry(entry));
+  return chrome.fileManagerPrivate.getMimeType(entry.toURL());
 }
 
 export async function getFileTasks(
@@ -284,4 +283,13 @@ export async function getContentMetadata(
   return promisify<chrome.fileManagerPrivate.MediaMetadata>(
       chrome.fileManagerPrivate.getContentMetadata, fileEntry, mimeType,
       includeImages);
+}
+
+export async function getEntryProperties(
+    entries: Array<Entry|FilesAppEntry>,
+    properties: chrome.fileManagerPrivate.EntryPropertyName[]):
+    Promise<chrome.fileManagerPrivate.EntryProperties[]> {
+  return promisify(
+      chrome.fileManagerPrivate.getEntryProperties, entries.map(unwrapEntry),
+      properties);
 }

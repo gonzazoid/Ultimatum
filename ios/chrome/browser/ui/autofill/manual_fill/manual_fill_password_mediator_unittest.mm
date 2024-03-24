@@ -4,14 +4,15 @@
 
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_password_mediator.h"
 
+#import "base/memory/raw_ptr.h"
 #import "base/test/bind.h"
+#import "components/affiliations/core/browser/fake_affiliation_service.h"
 #import "components/autofill/core/common/autofill_test_utils.h"
 #import "components/keyed_service/core/service_access_type.h"
-#import "components/password_manager/core/browser/affiliation/fake_affiliation_service.h"
 #import "components/password_manager/core/browser/password_manager_test_utils.h"
 #import "components/password_manager/core/browser/password_store/test_password_store.h"
 #import "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
-#import "ios/chrome/browser/favicon/ios_chrome_favicon_loader_factory.h"
+#import "ios/chrome/browser/favicon/model/ios_chrome_favicon_loader_factory.h"
 #import "ios/chrome/browser/passwords/model/ios_chrome_affiliation_service_factory.h"
 #import "ios/chrome/browser/passwords/model/ios_chrome_profile_password_store_factory.h"
 #import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
@@ -61,7 +62,7 @@ class ManualFillPasswordMediatorTest : public PlatformTest {
         IOSChromeAffiliationServiceFactory::GetInstance(),
         base::BindRepeating(base::BindLambdaForTesting([](web::BrowserState*) {
           return std::unique_ptr<KeyedService>(
-              std::make_unique<password_manager::FakeAffiliationService>());
+              std::make_unique<affiliations::FakeAffiliationService>());
         })));
 
     browser_state_ = builder.Build();
@@ -72,23 +73,22 @@ class ManualFillPasswordMediatorTest : public PlatformTest {
                 browser_state_.get(), ServiceAccessType::EXPLICIT_ACCESS)
                 .get()));
 
-    affiliation_service_ =
-        static_cast<password_manager::FakeAffiliationService*>(
-            IOSChromeAffiliationServiceFactory::GetForBrowserState(
-                browser_state_.get()));
+    affiliation_service_ = static_cast<affiliations::FakeAffiliationService*>(
+        IOSChromeAffiliationServiceFactory::GetForBrowserState(
+            browser_state_.get()));
 
     presenter_ = std::make_unique<SavedPasswordsPresenter>(
         affiliation_service_, store_, /*accont_store=*/nullptr);
     presenter_->Init();
 
     mediator_ = [[ManualFillPasswordMediator alloc]
-         initWithFaviconLoader:IOSChromeFaviconLoaderFactory::
-                                   GetForBrowserState(browser_state_.get())
-                      webState:fake_web_state_.get()
-                   syncService:SyncServiceFactory::GetForBrowserState(
-                                   browser_state_.get())
-                           URL:GURL("http://www.example.com/")
-        invokedOnPasswordField:NO];
+           initWithFaviconLoader:IOSChromeFaviconLoaderFactory::
+                                     GetForBrowserState(browser_state_.get())
+                        webState:fake_web_state_.get()
+                     syncService:SyncServiceFactory::GetForBrowserState(
+                                     browser_state_.get())
+                             URL:GURL("http://www.example.com/")
+        invokedOnObfuscatedField:NO];
 
     consumer_ = OCMProtocolMock(@protocol(ManualFillPasswordConsumer));
     mediator_.consumer = consumer_;
@@ -118,7 +118,7 @@ class ManualFillPasswordMediatorTest : public PlatformTest {
   std::unique_ptr<TestChromeBrowserState> browser_state_;
   std::unique_ptr<SavedPasswordsPresenter> presenter_;
   id consumer_;
-  password_manager::FakeAffiliationService* affiliation_service_;
+  raw_ptr<affiliations::FakeAffiliationService> affiliation_service_;
   ManualFillPasswordMediator* mediator_;
 };
 

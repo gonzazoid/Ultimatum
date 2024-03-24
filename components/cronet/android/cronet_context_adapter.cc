@@ -205,6 +205,12 @@ void CronetContextAdapter::StopNetLog(JNIEnv* env,
   context_->StopNetLog();
 }
 
+void CronetContextAdapter::FlushWritePropertiesForTesting(
+    JNIEnv* env,
+    const base::android::JavaParamRef<jobject>& jcaller) {
+  context_->FlushWritePropertiesForTesting();  // IN-TEST
+}
+
 int CronetContextAdapter::default_load_flags() const {
   return context_->default_load_flags();
 }
@@ -242,8 +248,8 @@ static jlong JNI_CronetUrlRequestContext_CreateRequestContextConfig(
           configOptions.bypass_public_key_pinning_for_local_trust_anchors(),
           configOptions.network_thread_priority() >= -20 &&
                   configOptions.network_thread_priority() <= 19
-              ? absl::optional<double>(configOptions.network_thread_priority())
-              : absl::optional<double>());
+              ? std::optional<double>(configOptions.network_thread_priority())
+              : std::optional<double>());
   return reinterpret_cast<jlong>(url_request_context_config.release());
 }
 
@@ -318,7 +324,7 @@ JNI_CronetUrlRequestContext_GetHistogramDeltas(JNIEnv* env) {
   std::vector<uint8_t> data;
   if (!metrics::HistogramManager::GetInstance()->GetDeltas(&data))
     return ScopedJavaLocalRef<jbyteArray>();
-  return base::android::ToJavaByteArray(env, data.data(), data.size());
+  return base::android::ToJavaByteArray(env, data);
 }
 
 }  // namespace cronet

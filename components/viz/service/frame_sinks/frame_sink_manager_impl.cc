@@ -227,7 +227,7 @@ void FrameSinkManagerImpl::CreateFrameSinkBundle(
 
 void FrameSinkManagerImpl::CreateCompositorFrameSink(
     const FrameSinkId& frame_sink_id,
-    const absl::optional<FrameSinkBundleId>& bundle_id,
+    const std::optional<FrameSinkBundleId>& bundle_id,
     mojo::PendingReceiver<mojom::CompositorFrameSink> receiver,
     mojo::PendingRemote<mojom::CompositorFrameSinkClient> client) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
@@ -634,7 +634,7 @@ bool FrameSinkManagerImpl::ChildContains(
 void FrameSinkManagerImpl::SubmitHitTestRegionList(
     const SurfaceId& surface_id,
     uint64_t frame_index,
-    absl::optional<HitTestRegionList> hit_test_region_list) {
+    std::optional<HitTestRegionList> hit_test_region_list) {
   hit_test_manager_.SubmitHitTestRegionList(surface_id, frame_index,
                                             std::move(hit_test_region_list));
 }
@@ -761,16 +761,6 @@ void FrameSinkManagerImpl::VerifySandboxedThreadIds(
     const base::flat_set<base::PlatformThreadId>& thread_ids,
     base::OnceCallback<void(bool)> verification_callback) {
 #if BUILDFLAG(IS_ANDROID)
-  if (!base::FeatureList::IsEnabled(
-          ::features::kEnableADPFAsyncThreadsVerification)) {
-    // Do a sync check for both GPU and Browser from the GPU process, and
-    // invoke the callback immediately.
-    std::move(verification_callback)
-        .Run(CheckThreadIdsDoNotBelongToProcessIds(
-            {host_process_id_, base::GetCurrentProcId()}, thread_ids));
-    return;
-  }
-
   if (!CheckThreadIdsDoNotBelongToCurrentProcess(thread_ids)) {
     // At least one thread belongs to the GPU process, verification failed.
     std::move(verification_callback).Run(false);
@@ -836,7 +826,7 @@ void FrameSinkManagerImpl::StartThrottlingAllFrameSinks(
 }
 
 void FrameSinkManagerImpl::StopThrottlingAllFrameSinks() {
-  global_throttle_interval_ = absl::nullopt;
+  global_throttle_interval_ = std::nullopt;
   UpdateThrottling();
 }
 

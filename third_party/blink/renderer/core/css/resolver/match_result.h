@@ -53,6 +53,7 @@ struct CORE_EXPORT MatchedProperties {
   struct Data {
     unsigned link_match_type : 2;
     unsigned valid_property_filter : 3;
+    unsigned signal : 2;  // CSSSelector::Signal
     CascadeOrigin origin;
     // This is approximately equivalent to the 'shadow-including tree order'.
     // It can be used to evaluate the 'Shadow Tree' criteria. Note that the
@@ -68,6 +69,8 @@ struct CORE_EXPORT MatchedProperties {
     // Fallback styles come from fallback sizing/positioning.
     // https://drafts.csswg.org/css-anchor-position-1/#fallback
     bool is_fallback_style;
+    // See CSSSelector::IsInvisible.
+    bool is_invisible;
   };
   Data types_;
 };
@@ -86,9 +89,11 @@ struct AddMatchedPropertiesOptions {
  public:
   unsigned link_match_type = CSSSelector::kMatchAll;
   ValidPropertyFilter valid_property_filter = ValidPropertyFilter::kNoFilter;
+  CSSSelector::Signal signal = CSSSelector::Signal::kNone;
   unsigned layer_order = CascadeLayerMap::kImplicitOuterLayerOrder;
   bool is_inline_style = false;
   bool is_fallback_style = false;
+  bool is_invisible = false;
 };
 
 class CORE_EXPORT MatchResult {

@@ -108,10 +108,11 @@ void LargestContentfulPaintCalculator::UpdateWebExposedLargestContentfulImage(
   const KURL& url = media_timing->Url();
   bool expose_paint_time_to_api =
       url.ProtocolIsData() || media_timing->TimingAllowPassed();
+  const String& image_string = url.GetString();
   const String& image_url =
       url.ProtocolIsData()
-          ? url.GetString().Left(ImageElementTiming::kInlineImageMaxChars)
-          : url.GetString();
+          ? image_string.Left(ImageElementTiming::kInlineImageMaxChars)
+          : image_string;
   // Do not expose element attribution from shadow trees.
   Element* image_element =
       image_node->IsInShadowTree() ? nullptr : To<Element>(image_node);
@@ -214,7 +215,7 @@ bool LargestContentfulPaintCalculator::NotifyMetricsIfLargestImagePaintChanged(
     uint64_t image_paint_size,
     ImageRecord* image_record,
     double image_bpp,
-    absl::optional<WebURLRequest::Priority> priority) {
+    std::optional<WebURLRequest::Priority> priority) {
   // (Experimental) Images with insufficient entropy are not considered
   // candidates for LCP
   if (base::FeatureList::IsEnabled(features::kExcludeLowEntropyImagesFromLCP)) {

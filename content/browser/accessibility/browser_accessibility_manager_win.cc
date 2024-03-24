@@ -116,7 +116,7 @@ ui::AXTreeUpdate BrowserAccessibilityManagerWin::GetEmptyDocument() {
   return update;
 }
 
-HWND BrowserAccessibilityManagerWin::GetParentHWND() {
+HWND BrowserAccessibilityManagerWin::GetParentHWND() const {
   WebAXPlatformTreeManagerDelegate* delegate = GetDelegateFromRootManager();
   if (!delegate)
     return NULL;
@@ -944,6 +944,26 @@ void BrowserAccessibilityManagerWin::EnqueueSelectionChangedEvent(
   selection_changed_nodes_.insert(&node);
 }
 
+gfx::Rect BrowserAccessibilityManagerWin::GetViewBoundsInScreenCoordinates()
+    const {
+  WebAXPlatformTreeManagerDelegate* delegate = GetDelegateFromRootManager();
+  if (!delegate) {
+    return gfx::Rect();
+  }
+
+  gfx::Rect bounds = delegate->AccessibilityGetViewBounds();
+
+  // On Windows, we cannot directly multiply the bounds in screen DIPs by the
+  // display's scale factor to get screen physical coordinates like we can on
+  // other platforms. We need to go through the ScreenWin::DIPToScreenRect
+  // helper function to perform the right set of offset transformations needed.
+  //
+  // This is because Chromium transforms the screen physical coordinates it
+  // receives from Windows into an internal representation of screen physical
+  // coordinates adjusted for multiple displays of different resolutions.
+  return display::win::ScreenWin::DIPToScreenRect(GetParentHWND(), bounds);
+}
+
 void BrowserAccessibilityManagerWin::BeforeAccessibilityEvents() {
   BrowserAccessibilityManager::BeforeAccessibilityEvents();
 
@@ -953,7 +973,7 @@ void BrowserAccessibilityManagerWin::BeforeAccessibilityEvents() {
   DCHECK(ignored_changed_nodes_.empty());
 
   for (const auto& targeted_event : event_generator()) {
-    if (targeted_event.event_params.event ==
+    if (targeted_event.event_params->event ==
         ui::AXEventGenerator::Event::IGNORED_CHANGED) {
       BrowserAccessibility* event_target = GetFromID(targeted_event.node_id);
       if (!event_target)

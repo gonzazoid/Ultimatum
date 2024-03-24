@@ -7,13 +7,16 @@
 
 #include <stddef.h>
 
+#include <concepts>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "base/callback_list.h"
+#include "base/check.h"
 #include "base/containers/contains.h"
 #include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
@@ -22,8 +25,8 @@
 #include "base/memory/safety_checks.h"
 #include "base/observer_list.h"
 #include "base/strings/string_piece.h"
+#include "base/types/pass_key.h"
 #include "build/build_config.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkPath.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
@@ -52,7 +55,7 @@
 #include "ui/gfx/geometry/vector2d.h"
 #include "ui/gfx/geometry/vector2d_conversions.h"
 #include "ui/gfx/native_widget_types.h"
-#include "ui/views/action_view_interface.h"
+#include "ui/views/actions/action_view_interface.h"
 #include "ui/views/layout/layout_manager.h"
 #include "ui/views/layout/layout_types.h"
 #include "ui/views/metadata/view_factory.h"
@@ -115,9 +118,9 @@ struct VIEWS_EXPORT ViewHierarchyChangedDetails {
       : is_add(is_add), parent(parent), child(child), move_view(move_view) {}
   const bool is_add;
   // New parent if |is_add| is true, old parent if |is_add| is false.
-  const raw_ptr<View> parent;
+  const raw_ptr<View, DanglingUntriaged> parent;
   // The view being added or removed.
-  const raw_ptr<View> child;
+  const raw_ptr<View, DanglingUntriaged> child;
   // If this is a move (reparent), meaning AddChildViewAt() is invoked with an
   // existing parent, then a notification for the remove is sent first,
   // followed by one for the add.  This case can be distinguished by a
@@ -126,7 +129,7 @@ struct VIEWS_EXPORT ViewHierarchyChangedDetails {
   // being removed.
   // For the add part of move, |move_view| is the old parent of the View being
   // added.
-  const raw_ptr<View> move_view;
+  const raw_ptr<View, DanglingUntriaged> move_view;
 };
 
 using PropertyChangedCallback = ui::metadata::PropertyChangedCallback;
@@ -252,16 +255,17 @@ enum class ViewLayer {
 //
 //   For Views that expose properties which are intended to be dynamically
 //   discoverable by other subsystems, each View and its descendants must
-//   include metadata. These other subsystems, such as dev tools or a delarative
-//   layout system, can then enumerate the properties on any given instance or
-//   class. Using the enumerated information, the actual values of the
-//   properties can be read or written. This will be done by getting and setting
-//   the values using string representations. The metadata can also be used to
-//   instantiate and initialize a View (or descendant) class from a declarative
-//   "script".
+//   include metadata. These other subsystems, such as dev tools or a
+//   declarative layout system, can then enumerate the properties on any given
+//   instance or class. Using the enumerated information, the actual values of
+//   the properties can be read or written. This will be done by getting and
+//   setting the values using string representations. The metadata can also be
+//   used to instantiate and initialize a View (or descendant) class from a
+//   declarative "script".
 //
 //   For each View class in their respective header declaration, place the macro
-//   METADATA_HEADER(<classname>, <view ancestor class>) in the public section.
+//   METADATA_HEADER(<classname>, <view ancestor class>) in the initial private
+//   section.
 //
 //   In the implementing .cc file, add the following macros to the same
 //   namespace in which the class resides.
@@ -290,6 +294,7 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   ADVANCED_MEMORY_SAFETY_CHECKS();
 
  public:
+  using PassKey = base::NonCopyablePassKey<View>;
   using Views = std::vector<raw_ptr<View, VectorExperimental>>;
 
   // TODO(crbug.com/1289902): The |event| parameter is being removed. Do not add
@@ -520,7 +525,7 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
 
   // Returns the index of |view|, or nullopt if |view| is not a child of this
   // view.
-  absl::optional<size_t> GetIndexOf(const View* view) const;
+  std::optional<size_t> GetIndexOf(const View* view) const;
 
   // Size and disposition ------------------------------------------------------
   // Methods for obtaining and modifying the position and size of the view.
@@ -595,7 +600,7 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // Sets or unsets the size that this View will request during layout. The
   // actual size may differ. It should rarely be necessary to set this; usually
   // the right approach is controlling the parent's layout via a LayoutManager.
-  void SetPreferredSize(absl::optional<gfx::Size> size);
+  void SetPreferredSize(std::optional<gfx::Size> size);
 
   // Convenience method that sizes this view to its preferred size.
   void SizeToPreferredSize();
@@ -790,15 +795,33 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
 
   // Layout --------------------------------------------------------------------
 
-  // Lay out the child Views (set their bounds based on sizing heuristics
-  // specific to the current Layout Manager)
-  virtual void Layout();
+  // Lays out the child Views (sets their bounds based on sizing heuristics
+  // specific to the current LayoutManager).
+  //
+  // To customize layout behavior, use LayoutManagers; see
+  // https://chromium.googlesource.com/chromium/src/+/main/docs/ui/learn/bestpractices/layout.md?pli=1#Use-LayoutManagers.
+  // For now, classes may override Layout() to customize this manually, but this
+  // will eventually be removed; see https://crbug.com/1005568. Subclasses which
+  // need to invoke a superclass' Layout() method during their own
+  // implementation of Layout() can do so via LayoutSuperclass<SuperT>(this);
+  // calling this in any other way or context is forbidden (and will likely
+  // break at compile or run time).
+  //
+  // To cause a view to be laid out, use InvalidateLayout(), which will
+  // perform layout asynchronously; see
+  // https://chromium.googlesource.com/chromium/src/+/main/docs/ui/learn/bestpractices/layout.md?pli=1#don_t-invoke-layout_directly.
+  // For now, classes may also call DeprecatedLayoutImmediately() to
+  // synchronously lay out a view, but this will eventually be removed; see
+  // https://crbug.com/1521108. Neither of these methods should be called from
+  // Layout(); see https://crbug.com/1121681.
+  void DeprecatedLayoutImmediately();
+  virtual void Layout(PassKey);
 
   bool needs_layout() const { return needs_layout_; }
 
   // Mark this view and all parents to require a relayout. This ensures the
-  // next call to Layout() will propagate to this view, even if the bounds of
-  // parent views do not change.
+  // next layout will propagate to this view, even if the bounds of parent views
+  // do not change.
   void InvalidateLayout();
 
   // TODO(kylixrd): Update comment once UseDefaultFillLayout is true by default.
@@ -1584,7 +1607,20 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   void RemoveObserver(ViewObserver* observer);
   bool HasObserver(const ViewObserver* observer) const;
 
+  // View Controller Interfaces -----------------------------------------------
+  // These functions provide a common interface for view controllers to interact
+  // with views.
+
   virtual std::unique_ptr<ActionViewInterface> GetActionViewInterface();
+
+  // Registers a callback that can be used to notify a view controller of any
+  // changes. This is more general than the property changed callbacks as view
+  // controllers may need to recompute logic based on changes not captured by
+  // view properties.
+  base::CallbackListSubscription RegisterNotifyViewControllerCallback(
+      base::RepeatingClosureList::CallbackType callback);
+
+  void NotifyViewControllerCallback();
 
   // http://crbug.com/1162949 : Instrumentation that indicates if this is alive.
   // Callers should not depend on this as it is meant to be temporary.
@@ -1624,13 +1660,13 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // change updates. This function will only modify properties for which a value
   // has been explicitly set.
   void SetAccessibilityProperties(
-      absl::optional<ax::mojom::Role> role = absl::nullopt,
-      absl::optional<std::u16string> name = absl::nullopt,
-      absl::optional<std::u16string> description = absl::nullopt,
-      absl::optional<std::u16string> role_description = absl::nullopt,
-      absl::optional<ax::mojom::NameFrom> name_from = absl::nullopt,
-      absl::optional<ax::mojom::DescriptionFrom> description_from =
-          absl::nullopt);
+      std::optional<ax::mojom::Role> role = std::nullopt,
+      std::optional<std::u16string> name = std::nullopt,
+      std::optional<std::u16string> description = std::nullopt,
+      std::optional<std::u16string> role_description = std::nullopt,
+      std::optional<ax::mojom::NameFrom> name_from = std::nullopt,
+      std::optional<ax::mojom::DescriptionFrom> description_from =
+          std::nullopt);
 
   // Called when the accessible name of the View changed.
   virtual void OnAccessibleNameChanged(const std::u16string& new_name) {}
@@ -1804,6 +1840,20 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // example where a subclass may override this method is when it wants to clip
   // the child by adding its own layer.
   virtual void OnChildLayerChanged(View* child);
+
+  // Layout --------------------------------------------------------------------
+
+  // Invokes Layout() on a superclass on behalf of the subclass. This is to be
+  // used only inside a Layout() override, where a subclass needs to do the
+  // superclass portion of layout. Invoke like `LayoutSuperclass<SuperT>(this)`,
+  // where SuperT is the relevant superclass type.
+  template <typename Super, typename This>
+    requires std::derived_from<Super, View> && std::derived_from<This, Super> &&
+             (!std::same_as<Super, This>)
+  void LayoutSuperclass(This* ptr) {
+    CHECK(layout_allowed_);
+    static_cast<Super*>(ptr)->Super::Layout(PassKey());
+  }
 
   // Input ---------------------------------------------------------------------
 
@@ -2120,6 +2170,11 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // default fill layout or the assigned layout manager.
   bool HasLayoutManager() const;
 
+  // Implementation of synchronous layout. DeprecatedLayoutImmediately() is a
+  // temporary public accessor to this; this is the access point for the few
+  // blessed uses.
+  void LayoutImmediately();
+
   // Input ---------------------------------------------------------------------
 
   bool ProcessMousePressed(const ui::MouseEvent& event);
@@ -2234,7 +2289,7 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
 
   // Size and disposition ------------------------------------------------------
 
-  absl::optional<gfx::Size> preferred_size_;
+  std::optional<gfx::Size> preferred_size_;
 
   // This View's bounds in the parent coordinate system.
   gfx::Rect bounds_;
@@ -2277,6 +2332,30 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // Whether the view needs to be laid out.
   bool needs_layout_ = true;
 
+  // Used to generate an UMA metric for the maximum reentrant call depth seen
+  // during layout. Normally the metric value will be one (Layout() was not
+  // reentered). But, we know Layout() is reentered at least sometimes and
+  // want to measure how often that is. We also want to know if it is ever
+  // reentered more than two deep.
+  int max_layout_call_depth_ = 0;
+
+  // Current Layout() reentrant call depth (used to help determine the
+  // max_layout_call_depth_, above).
+  int current_layout_call_depth_ = 0;
+
+  // Whether Layout() access is currently legal. This is used to prevent calls
+  // to LayoutSuperclass() outside the implementation of Layout().
+  bool layout_allowed_ = false;
+
+  // How many times this view has done layout since the last time it was
+  // painted. This is used to compute metrics around unnecessary layout calls.
+  int layouts_since_last_paint_ = 0;
+
+  // How many times InvalidateLayout() is called during a Layout() call.
+  // This should never be necessary, but we don't yet know how often
+  // it is happening.
+  int invalidates_during_layout_ = 0;
+
   // The View's LayoutManager defines the sizing heuristics applied to child
   // Views. The default is absolute positioning according to bounds_.
   std::unique_ptr<LayoutManager> layout_manager_;
@@ -2284,7 +2363,7 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // The default "fill" layout manager. This is set only if |layout_manager_|
   // isn't set and SetUseDefaultFillLayout(true) is called or
   // |kUseDefaultFillLayout| is true.
-  absl::optional<DefaultFillLayout> default_fill_layout_;
+  std::optional<DefaultFillLayout> default_fill_layout_;
 
   // Whether this View's layer should be snapped to the pixel boundary.
   bool snap_layer_to_pixel_boundary_ = false;
@@ -2316,7 +2395,7 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // positioned onscreen. The default behavior should be correct in most cases,
   // but can be overridden if a particular view must always be laid out in some
   // direction regardless of the application's default UI direction.
-  absl::optional<bool> is_mirrored_;
+  std::optional<bool> is_mirrored_;
 
   // Accelerated painting ------------------------------------------------------
 
@@ -2371,13 +2450,12 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // Context menus -------------------------------------------------------------
 
   // The menu controller.
-  raw_ptr<ContextMenuController, AcrossTasksDanglingUntriaged>
-      context_menu_controller_ = nullptr;
+  raw_ptr<ContextMenuController, DanglingUntriaged> context_menu_controller_ =
+      nullptr;
 
   // Drag and drop -------------------------------------------------------------
 
-  raw_ptr<DragController, AcrossTasksDanglingUntriaged> drag_controller_ =
-      nullptr;
+  raw_ptr<DragController> drag_controller_ = nullptr;
 
   // Input  --------------------------------------------------------------------
 
@@ -2420,6 +2498,9 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
 
   // http://crbug.com/1162949 : Instrumentation that indicates if this is alive.
   LifeCycleState life_cycle_state_ = LifeCycleState::kAlive;
+
+  // View Controller Interfaces
+  base::RepeatingClosureList notify_view_controller_callback_list_;
 };
 
 class VIEWS_EXPORT BaseActionViewInterface : public ActionViewInterface {

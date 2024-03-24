@@ -77,11 +77,19 @@ class AutofillBubbleHandler {
       VirtualCardEnrollBubbleController* controller,
       bool is_user_gesture) = 0;
 
+  virtual AutofillBubbleBase* ShowVirtualCardEnrollConfirmationBubble(
+      content::WebContents* web_contents,
+      VirtualCardEnrollBubbleController* controller) = 0;
+
   virtual AutofillBubbleBase* ShowMandatoryReauthBubble(
       content::WebContents* web_contents,
       MandatoryReauthBubbleController* controller,
       bool is_user_gesture,
       MandatoryReauthBubbleType bubble_type) = 0;
+
+  virtual AutofillBubbleBase* ShowSaveCardConfirmationBubble(
+      content::WebContents* web_contents,
+      SaveCardBubbleController* controller) = 0;
 };
 
 }  // namespace autofill

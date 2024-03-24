@@ -40,19 +40,19 @@ import org.mockito.junit.MockitoRule;
 import org.chromium.base.library_loader.LibraryLoader;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.CriteriaHelper;
+import org.chromium.base.test.util.Features.DisableFeatures;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.base.test.util.JniMocker;
 import org.chromium.base.test.util.Restriction;
 import org.chromium.chrome.browser.ChromeTabbedActivity;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.preferences.Pref;
-import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.tasks.ReturnToChromeUtil;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.chrome.test.util.ActivityTestUtils;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.components.user_prefs.UserPrefs;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.ui.test.util.UiRestriction;
@@ -147,7 +147,7 @@ public class InstantStartFeedTest {
         // FEED_ARTICLES_LIST_VISIBLE should equal to ARTICLES_LIST_VISIBLE.
         CriteriaHelper.pollUiThread(
                 () ->
-                        UserPrefs.get(Profile.getLastUsedRegularProfile())
+                        UserPrefs.get(ProfileManager.getLastUsedRegularProfile())
                                         .getBoolean(Pref.ARTICLES_LIST_VISIBLE)
                                 == ReturnToChromeUtil.getFeedArticlesVisibility());
 
@@ -158,7 +158,7 @@ public class InstantStartFeedTest {
         TestThreadUtils.runOnUiThreadBlocking(
                 () ->
                         Assert.assertEquals(
-                                UserPrefs.get(Profile.getLastUsedRegularProfile())
+                                UserPrefs.get(ProfileManager.getLastUsedRegularProfile())
                                         .getBoolean(Pref.ARTICLES_LIST_VISIBLE),
                                 ReturnToChromeUtil.getFeedArticlesVisibility()));
 
@@ -169,7 +169,7 @@ public class InstantStartFeedTest {
         TestThreadUtils.runOnUiThreadBlocking(
                 () ->
                         Assert.assertEquals(
-                                UserPrefs.get(Profile.getLastUsedRegularProfile())
+                                UserPrefs.get(ProfileManager.getLastUsedRegularProfile())
                                         .getBoolean(Pref.ARTICLES_LIST_VISIBLE),
                                 ReturnToChromeUtil.getFeedArticlesVisibility()));
     }

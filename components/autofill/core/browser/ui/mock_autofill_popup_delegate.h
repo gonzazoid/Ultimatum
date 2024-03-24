@@ -36,14 +36,8 @@ class MockAutofillPopupDelegate : public AutofillPopupDelegate {
               DidPerformButtonActionForSuggestion,
               (const Suggestion&),
               (override));
-  MOCK_METHOD(bool,
-              RemoveSuggestion,
-              (const std::u16string& value,
-               PopupItemId popup_item_id,
-               Suggestion::BackendId backend_id),
-              (override));
+  MOCK_METHOD(bool, RemoveSuggestion, (const Suggestion&), (override));
   MOCK_METHOD(void, ClearPreviewedForm, (), (override));
-  MOCK_METHOD(PopupType, GetPopupType, (), (const, override));
   MOCK_METHOD(FillingProduct, GetMainFillingProduct, (), (const, override));
   MOCK_METHOD(int32_t,
               GetWebContentsPopupControllerAxId,

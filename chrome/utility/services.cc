@@ -9,8 +9,6 @@
 
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/services/qrcode_generator/public/mojom/qrcode_generator.mojom.h"
-#include "chrome/services/qrcode_generator/qrcode_generator_service_impl.h"
 #include "chrome/services/speech/buildflags/buildflags.h"
 #include "components/paint_preview/buildflags/buildflags.h"
 #include "components/password_manager/core/common/password_manager_features.h"
@@ -129,7 +127,6 @@
 #include "chromeos/ash/services/orca/orca_library.h"
 #include "chromeos/ash/services/quick_pair/quick_pair_service.h"
 #include "chromeos/ash/services/recording/recording_service.h"
-#include "chromeos/constants/chromeos_features.h"  // nogncheck
 #include "chromeos/services/tts/public/mojom/tts_service.mojom.h"
 #include "chromeos/services/tts/tts_service.h"
 
@@ -140,8 +137,11 @@
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/components/mahi/content_extraction_service.h"
+#include "chromeos/components/mahi/public/mojom/content_extraction.mojom.h"
 #include "chromeos/components/quick_answers/public/cpp/service/spell_check_service.h"
 #include "chromeos/components/quick_answers/public/mojom/spell_check.mojom.h"
+#include "chromeos/constants/chromeos_features.h"  // nogncheck
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
 namespace {
@@ -158,13 +158,6 @@ auto RunLanguageDetectionService(
     mojo::PendingReceiver<language_detection::mojom::LanguageDetectionService>
         receiver) {
   return std::make_unique<language_detection::LanguageDetectionServiceImpl>(
-      std::move(receiver));
-}
-
-auto RunQRCodeGeneratorService(
-    mojo::PendingReceiver<qrcode_generator::mojom::QRCodeGeneratorService>
-        receiver) {
-  return std::make_unique<qrcode_generator::QRCodeGeneratorServiceImpl>(
       std::move(receiver));
 }
 
@@ -426,6 +419,12 @@ auto RunQuickAnswersSpellCheckService(
   return std::make_unique<quick_answers::SpellCheckService>(
       std::move(receiver));
 }
+
+auto RunMahiContentExtractionServiceFactory(
+    mojo::PendingReceiver<mahi::mojom::ContentExtractionServiceFactory>
+        receiver) {
+  return std::make_unique<mahi::ContentExtractionService>(std::move(receiver));
+}
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace
@@ -443,7 +442,6 @@ void RegisterMainThreadServices(mojo::ServiceFactory& services) {
   services.Add(RunFilePatcher);
   services.Add(RunUnzipper);
   services.Add(RunLanguageDetectionService);
-  services.Add(RunQRCodeGeneratorService);
   services.Add(RunWebAppOriginAssociationParser);
   services.Add(RunCSVPasswordParser);
 
@@ -533,6 +531,9 @@ void RegisterMainThreadServices(mojo::ServiceFactory& services) {
 
 #if BUILDFLAG(IS_CHROMEOS)
   services.Add(RunQuickAnswersSpellCheckService);
+  if (chromeos::features::IsMahiEnabled()) {
+    services.Add(RunMahiContentExtractionServiceFactory);
+  }
 #endif  // BUILDFLAG(IS_CHROMEOS)
 }
 

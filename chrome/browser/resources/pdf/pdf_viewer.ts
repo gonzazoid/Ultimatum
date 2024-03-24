@@ -19,28 +19,45 @@ import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {listenOnce} from 'chrome://resources/js/util.js';
 
-import {Bookmark} from './bookmark_type.js';
-import {BrowserApi} from './browser_api.js';
-import {Attachment, DocumentMetadata, ExtendedKeyEvent, FittingType, Point, SaveRequestType} from './constants.js';
-import {MessageData, PluginController} from './controller.js';
+import type {Bookmark} from './bookmark_type.js';
+import type {BrowserApi} from './browser_api.js';
+import type {Attachment, DocumentMetadata, ExtendedKeyEvent, Point} from './constants.js';
+import {FittingType, SaveRequestType} from './constants.js';
+import type {MessageData} from './controller.js';
+import {PluginController} from './controller.js';
 // <if expr="enable_ink">
-import {ContentController} from './controller.js';
+import type {ContentController} from './controller.js';
 // </if>
-import {ChangePageAndXyDetail, ChangePageDetail, ChangePageOrigin, NavigateDetail} from './elements/viewer-bookmark.js';
-import {ViewerErrorDialogElement} from './elements/viewer-error-dialog.js';
-import {ViewerPasswordDialogElement} from './elements/viewer-password-dialog.js';
-import {ViewerPdfSidenavElement} from './elements/viewer-pdf-sidenav.js';
-import {ViewerToolbarElement} from './elements/viewer-toolbar.js';
+import type {ChangePageAndXyDetail, ChangePageDetail, NavigateDetail} from './elements/viewer-bookmark.js';
+import {ChangePageOrigin} from './elements/viewer-bookmark.js';
+import type {ViewerErrorDialogElement} from './elements/viewer-error-dialog.js';
+import type {ViewerPasswordDialogElement} from './elements/viewer-password-dialog.js';
+import type {ViewerPdfSidenavElement} from './elements/viewer-pdf-sidenav.js';
+import type {ViewerToolbarElement} from './elements/viewer-toolbar.js';
 // <if expr="enable_ink">
 import {InkController, InkControllerEventType} from './ink_controller.js';
 //</if>
 import {LocalStorageProxyImpl} from './local_storage_proxy.js';
-import {record, UserAction} from './metrics.js';
+import {record, recordEnumeration, UserAction} from './metrics.js';
 import {NavigatorDelegateImpl, PdfNavigator, WindowOpenDisposition} from './navigator.js';
 import {deserializeKeyEvent, LoadState} from './pdf_scripting_api.js';
 import {getTemplate} from './pdf_viewer.html.js';
-import {KeyEventData, PdfViewerBaseElement} from './pdf_viewer_base.js';
-import {DestinationMessageData, DocumentDimensionsMessageData, hasCtrlModifier, hasCtrlModifierOnly, shouldIgnoreKeyEvents} from './pdf_viewer_utils.js';
+import type {KeyEventData} from './pdf_viewer_base.js';
+import {PdfViewerBaseElement} from './pdf_viewer_base.js';
+import type {DestinationMessageData, DocumentDimensionsMessageData} from './pdf_viewer_utils.js';
+import {hasCtrlModifier, hasCtrlModifierOnly, shouldIgnoreKeyEvents} from './pdf_viewer_utils.js';
+
+/**
+ * Keep in sync with the values for enum PDFPostMessageDataType in
+ * tools/metrics/histograms/metadata/pdf/enums.xml.
+ * These values are persisted to logs. Entries should not be renumbered, removed
+ * or reused.
+ */
+enum PostMessageDataType {
+  GET_SELECTED_TEXT = 0,
+  PRINT = 1,
+  SELECT_ALL = 2,
+}
 
 interface EmailMessageData {
   type: string;
@@ -705,20 +722,28 @@ export class PdfViewerElement extends PdfViewerBaseElement {
       return true;
     }
 
+    let messageType;
     switch (message.data.type.toString()) {
       case 'getSelectedText':
+        messageType = PostMessageDataType.GET_SELECTED_TEXT;
         this.pluginController_!.getSelectedText().then(
             this.handleSelectedTextReply.bind(this));
         break;
       case 'print':
+        messageType = PostMessageDataType.PRINT;
         this.pluginController_!.print();
         break;
       case 'selectAll':
+        messageType = PostMessageDataType.SELECT_ALL;
         this.pluginController_!.selectAll();
         break;
       default:
         return false;
     }
+
+    recordEnumeration(
+        'PDF.PostMessageDataType', messageType,
+        Object.keys(PostMessageDataType).length);
     return true;
   }
 

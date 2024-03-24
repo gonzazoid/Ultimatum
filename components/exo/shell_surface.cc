@@ -132,13 +132,61 @@ ShellSurface::ScopedConfigure::~ScopedConfigure() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// ShellSurface, OcclusionObserver:
+
+ShellSurface::OcclusionObserver::OcclusionObserver(ShellSurface* shell_surface,
+                                                   aura::Window* window)
+    : state_(window->GetOcclusionState()), shell_surface_(shell_surface) {
+  window->TrackOcclusionState();
+  window_observation_.Observe(window);
+}
+
+ShellSurface::OcclusionObserver::~OcclusionObserver() {}
+
+void ShellSurface::OcclusionObserver::OnWindowDestroying(aura::Window* window) {
+  window_observation_.Reset();
+}
+
+void ShellSurface::OcclusionObserver::OnWindowOcclusionChanged(
+    aura::Window* window) {
+  MaybeConfigure(window);
+}
+
+void ShellSurface::OcclusionObserver::MaybeConfigure(aura::Window* window) {
+  auto new_state = window->GetOcclusionState();
+  if (state_ != new_state && shell_surface_->IsReady()) {
+    // If the state changes to visible, take the compositor lock so we never
+    // show missing content.
+    if (new_state == aura::Window::OcclusionState::VISIBLE) {
+      shell_surface_->MaybeSetCompositorLockForNextConfigure(
+          kSlowCompositorLockTimeoutMs);
+    }
+    state_ = new_state;
+    shell_surface_->Configure();
+  }
+}
+
+aura::Window::OcclusionState
+ShellSurface::OcclusionObserver::GetInitialStateForConfigure(
+    chromeos::WindowStateType state_type) {
+  // Assume the window is initially visible, unless it is minimized.
+  state_ = state_type == chromeos::WindowStateType::kMinimized
+               ? aura::Window::OcclusionState::HIDDEN
+               : aura::Window::OcclusionState::VISIBLE;
+  return state_;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // ShellSurface, public:
 
 ShellSurface::ShellSurface(Surface* surface,
                            const gfx::Point& origin,
                            bool can_minimize,
                            int container)
-    : ShellSurfaceBase(surface, origin, can_minimize, container) {}
+    : ShellSurfaceBase(surface, origin, can_minimize, container) {
+  CHECK(surface->window());
+  occlusion_observer_.emplace(this, surface->window());
+}
 
 ShellSurface::ShellSurface(Surface* surface)
     : ShellSurfaceBase(surface,
@@ -347,6 +395,15 @@ void ShellSurface::RemoveObserver(ShellSurfaceObserver* observer) {
   observers_.RemoveObserver(observer);
 }
 
+void ShellSurface::MaybeSetCompositorLockForNextConfigure(int milliseconds) {
+  if (!configure_callback_.is_null()) {
+    ui::Compositor* compositor =
+        widget_->GetNativeWindow()->layer()->GetCompositor();
+    configure_compositor_lock_ = compositor->GetCompositorLock(
+        nullptr, base::Milliseconds(milliseconds));
+  }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // SurfaceDelegate overrides:
 
@@ -489,10 +546,10 @@ void ShellSurface::InitializeWindowState(ash::WindowState* window_state) {
   MaybeMakeTransient();
 }
 
-absl::optional<gfx::Rect> ShellSurface::GetWidgetBounds() const {
+std::optional<gfx::Rect> ShellSurface::GetWidgetBounds() const {
   // Defer if configure requests are pending.
   if (!pending_configs_.empty() || scoped_configure_)
-    return absl::nullopt;
+    return std::nullopt;
 
   gfx::Rect new_widget_bounds = GetWidgetBoundsFromVisibleBounds();
 
@@ -568,7 +625,7 @@ void ShellSurface::OnDidProcessDisplayChanges(
                 change.changed_metrics &
                     display::DisplayObserver::DISPLAY_METRIC_WORK_AREA);
       });
-  if (should_update_window_position) {
+  if (widget_ && should_update_window_position) {
     OnWidgetScreenPositionChanged();
   }
 }
@@ -628,18 +685,13 @@ void ShellSurface::OnWindowBoundsChanged(aura::Window* window,
     // A window state change will send a configuration event. Avoid sending
     // two configuration events for the same change.
     if (!window_state_is_changing_) {
-      if (!configure_callback_.is_null()) {
-        // Lock when the display scale changes and we are a maximized window to
-        // prevent flashes.
-        if (reason != ui::PropertyChangeReason::FROM_ANIMATION &&
-            ash::WindowState::Get(window)->IsMaximizedOrFullscreenOrPinned()) {
-          ui::Compositor* compositor =
-              widget_->GetNativeWindow()->layer()->GetCompositor();
-          // TODO(crbug.com/1399478): See if we can rid of the slow lock timeout
-          // by adjusting the order of resize of windows to top to bottom.
-          configure_compositor_lock_ = compositor->GetCompositorLock(
-              nullptr, base::Milliseconds(kSlowCompositorLockTimeoutMs));
-        }
+      // Lock when the display scale changes and we are a maximized window to
+      // prevent flashes.
+      if (reason != ui::PropertyChangeReason::FROM_ANIMATION &&
+          ash::WindowState::Get(window)->IsMaximizedOrFullscreenOrPinned()) {
+        // TODO(crbug.com/1399478): See if we can rid of the slow lock timeout
+        // by adjusting the order of resize of windows to top to bottom.
+        MaybeSetCompositorLockForNextConfigure(kSlowCompositorLockTimeoutMs);
       }
 
       Configure();
@@ -700,12 +752,7 @@ void ShellSurface::OnWindowPropertyChanged(aura::Window* window,
       // buffers, we will end up animating with unnecessarily large buffers,
       // which negates the entire point of updating the raster scale. So, lock
       // the compositor until we get an ack for updating the raster scale.
-      if (!configure_callback_.is_null()) {
-        ui::Compositor* compositor =
-            widget_->GetNativeWindow()->layer()->GetCompositor();
-        configure_compositor_lock_ = compositor->GetCompositorLock(
-            nullptr, base::Milliseconds(kDefaultCompositorLockTimeoutMs));
-      }
+      MaybeSetCompositorLockForNextConfigure(kDefaultCompositorLockTimeoutMs);
       pending_raster_scale_ = raster_scale;
 
       Configure();
@@ -738,10 +785,7 @@ void ShellSurface::OnPreWindowStateTypeChange(
     if (!configure_callback_.is_null()) {
       // Give client a chance to produce a frame that takes state change into
       // account by acquiring a compositor lock.
-      ui::Compositor* compositor =
-          widget_->GetNativeWindow()->layer()->GetCompositor();
-      configure_compositor_lock_ = compositor->GetCompositorLock(
-          nullptr, base::Milliseconds(kDefaultCompositorLockTimeoutMs));
+      MaybeSetCompositorLockForNextConfigure(kDefaultCompositorLockTimeoutMs);
     } else {
       animations_disabler_ = std::make_unique<ash::ScopedAnimationDisabler>(
           widget_->GetNativeWindow());
@@ -885,6 +929,13 @@ ShellSurface::CreateNonClientFrameView(views::Widget* widget) {
   return CreateNonClientFrameViewInternal(widget);
 }
 
+void ShellSurface::SetRootSurface(Surface* root_surface) {
+  ShellSurfaceBase::SetRootSurface(root_surface);
+  if (root_surface) {
+    occlusion_observer_.emplace(this, root_surface->window());
+  }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // ui::LayerOwner::Observer overrides:
 void ShellSurface::OnLayerRecreated(ui::Layer* old_layer) {
@@ -961,18 +1012,21 @@ void ShellSurface::Configure(bool ends_drag) {
 
   if (!configure_callback_.is_null()) {
     if (window_state) {
+      auto occlusion_state = occlusion_observer_->state();
       auto restore_state_type = std::optional<chromeos::WindowStateType>{
           window_state->GetRestoreWindowState()};
       serial = configure_callback_.Run(
           GetClientBoundsInScreen(widget_), window_state->GetStateType(),
           IsResizing(), widget_->IsActive(), origin_offset,
-          pending_raster_scale_, restore_state_type);
+          pending_raster_scale_, occlusion_state, restore_state_type);
     } else {
       auto state = chromeos::ToWindowStateType(initial_show_state_);
+      auto occlusion_state =
+          occlusion_observer_->GetInitialStateForConfigure(state);
       gfx::Rect bounds = GetInitialBoundsForState(state);
-      serial =
-          configure_callback_.Run(bounds, state, false, false, origin_offset,
-                                  pending_raster_scale_, std::nullopt);
+      serial = configure_callback_.Run(bounds, state, false, false,
+                                       origin_offset, pending_raster_scale_,
+                                       occlusion_state, std::nullopt);
     }
   }
 
@@ -1120,13 +1174,20 @@ void ShellSurface::UpdateLayerSurfaceRange(
     layer->SetOldestAcceptableFallback(
         viz::SurfaceId(frame_sink_id_, current_lsi));
   } else {
-    // `current_lsi` has caught up to `layer`. Allow the shell_surface to modify
-    // the surface layer bounds, clear the oldest fallback and disable stretch.
-    layer->SetShowSurface(viz::SurfaceId(frame_sink_id_, current_lsi),
-                          layer->bounds().size(), SK_ColorWHITE,
-                          cc::DeadlinePolicy::UseDefaultDeadline(),
-                          false /* stretch_content_to_fill_bounds */);
-    layer->SetOldestAcceptableFallback(viz::SurfaceId{});
+    viz::SurfaceId surface_id(frame_sink_id_, current_lsi);
+    // Update the surface only when the surface id changes or the surface still
+    // have an fallback, which indicates that the change needs to be
+    // synchronized due to size change or scale change.
+    if (!layer->GetSurfaceId() || *layer->GetSurfaceId() != surface_id ||
+        layer->GetOldestAcceptableFallback()) {
+      // `current_lsi` has caught up to `layer`. Allow the shell_surface to
+      // modify the surface layer bounds, clear the oldest fallback and disable
+      // stretch.
+      layer->SetShowSurface(surface_id, layer->bounds().size(), SK_ColorWHITE,
+                            cc::DeadlinePolicy::UseDefaultDeadline(),
+                            false /* stretch_content_to_fill_bounds */);
+      layer->SetOldestAcceptableFallback(viz::SurfaceId{});
+    }
   }
 }
 

@@ -82,7 +82,7 @@ TEST_F(OutOfFlowLayoutPartTest, FixedInsideAbs) {
       )HTML");
 
   // Test whether the oof fragments have been collected at NG->Legacy boundary.
-  Element* rel = GetDocument().getElementById(AtomicString("rel"));
+  Element* rel = GetElementById("rel");
   auto* block_flow = To<LayoutBlockFlow>(rel->GetLayoutObject());
   const LayoutResult* result = block_flow->GetSingleCachedLayoutResult();
   EXPECT_TRUE(result);
@@ -91,8 +91,8 @@ TEST_F(OutOfFlowLayoutPartTest, FixedInsideAbs) {
       2u);
 
   // Test the final result.
-  Element* fixed_1 = GetDocument().getElementById(AtomicString("fixed1"));
-  Element* fixed_2 = GetDocument().getElementById(AtomicString("fixed2"));
+  Element* fixed_1 = GetElementById("fixed1");
+  Element* fixed_2 = GetElementById("fixed2");
   // fixed1 top is static: #abs.top + #pad.height
   EXPECT_EQ(fixed_1->OffsetTop(), LayoutUnit(99));
   // fixed2 top is positioned: #fixed2.top
@@ -1352,8 +1352,6 @@ TEST_F(OutOfFlowLayoutPartTest, AbsposNestedFragmentationNewColumns) {
       )HTML");
   String dump = DumpFragmentTree(GetElementById("container"));
 
-  // Note that it's not obvious that the block-size of the last inner
-  // fragmentainer (after the spanners) is correct; see crbug.com/1224337
   String expectation = R"DUMP(.:: LayoutNG Physical Fragment Tree ::.
   offset:unplaced size:1000x100
     offset:0,0 size:1000x100
@@ -1366,7 +1364,7 @@ TEST_F(OutOfFlowLayoutPartTest, AbsposNestedFragmentationNewColumns) {
           offset:10,30 size:480x0
           offset:10,30 size:480x0
           offset:10,30 size:480x0
-          offset:10,30 size:232x40
+          offset:258,10 size:232x20
             offset:0,0 size:5x20
 )DUMP";
   EXPECT_EQ(expectation, dump);
@@ -1404,8 +1402,10 @@ TEST_F(OutOfFlowLayoutPartTest, AbsposNestedFragmentationNewEmptyColumns) {
       )HTML");
   String dump = DumpFragmentTree(GetElementById("container"));
 
-  // Note that it's not obvious that the block-size of the last inner
-  // fragmentainers (after the spanners) are correct; see crbug.com/1224337
+  // Note that the two last inner fragmentainers (after the spanners) aren't
+  // quite right. They just keep on using the same block-offset (and block-size)
+  // of the preceding fragmentainers, since we don't let OOFs trigger creation
+  // of new outer fragmentainers. This is being discussed in crbug.com/40775119
   String expectation = R"DUMP(.:: LayoutNG Physical Fragment Tree ::.
   offset:unplaced size:1000x100
     offset:0,0 size:1000x100
@@ -1419,9 +1419,9 @@ TEST_F(OutOfFlowLayoutPartTest, AbsposNestedFragmentationNewEmptyColumns) {
           offset:0,60 size:500x0
           offset:0,60 size:500x0
           offset:0,60 size:500x0
-          offset:0,60 size:242x60
+          offset:516,0 size:242x60
             offset:0,0 size:5x60
-          offset:258,60 size:242x60
+          offset:774,0 size:242x60
             offset:0,0 size:5x60
 )DUMP";
   EXPECT_EQ(expectation, dump);

@@ -22,6 +22,7 @@
 #include "components/vector_icons/vector_icons.h"
 #include "content/public/common/content_features.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "net/dns/mock_host_resolver.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/gfx/paint_vector_icon.h"
@@ -79,7 +80,10 @@ class MidiPermissionsFlowInteractiveUITest : public InteractiveBrowserTest {
     return Steps(
         InstrumentTab(kWebContentsElementId),
         NavigateWebContents(kWebContentsElementId, GetURL()),
-        ExecuteJs(kWebContentsElementId, "navigator.requestMIDIAccess"),
+        // TODO(crbug.com/1420307) Change this call back to just
+        // `navigator.requestMIDIAccess` once the feature is ready
+        ExecuteJs(kWebContentsElementId,
+                  "() => { navigator.requestMIDIAccess( { sysex: true } ) }"),
         WaitForShow(PermissionPromptBubbleBaseView::kMainViewId));
   }
 
@@ -103,7 +107,7 @@ IN_PROC_BROWSER_TEST_F(MidiPermissionsFlowInteractiveUITest, PermissionPrompt) {
           &PermissionPromptBubbleBaseView::GetPermissionFragmentForTesting,
           l10n_util::GetStringFUTF16(
               IDS_PERMISSIONS_BUBBLE_PROMPT_ACCESSIBLE_TITLE_ONE_PERM, u"",
-              l10n_util::GetStringUTF16(IDS_MIDI_PERMISSION_FRAGMENT))));
+              l10n_util::GetStringUTF16(IDS_MIDI_SYSEX_PERMISSION_FRAGMENT))));
 }
 
 // Display MIDI permission state in page info when denied.
@@ -117,23 +121,16 @@ IN_PROC_BROWSER_TEST_F(MidiPermissionsFlowInteractiveUITest,
       AfterShow(
           PageInfoMainView::kMainLayoutElementId,
           base::BindLambdaForTesting([](ui::TrackedElement* element) {
-            bool includes_midi = false;
             bool includes_midi_sysex = false;
             for (PermissionToggleRowView* permission_toggle_row :
                  AsView<PageInfoMainView>(element)->GetToggleRowsForTesting()) {
               if (permission_toggle_row->GetRowTitleForTesting() ==
-                  l10n_util::GetStringUTF16(IDS_SITE_SETTINGS_TYPE_MIDI)) {
-                includes_midi = true;
-                EXPECT_FALSE(
-                    permission_toggle_row->GetToggleButtonStateForTesting());
-              } else if (permission_toggle_row->GetRowTitleForTesting() ==
                          l10n_util::GetStringUTF16(
                              IDS_SITE_SETTINGS_TYPE_MIDI_SYSEX)) {
                 includes_midi_sysex = true;
               }
             }
-            EXPECT_TRUE(includes_midi);
-            EXPECT_FALSE(includes_midi_sysex);
+            EXPECT_TRUE(includes_midi_sysex);
           })));
 }
 
@@ -148,23 +145,16 @@ IN_PROC_BROWSER_TEST_F(MidiPermissionsFlowInteractiveUITest,
       AfterShow(
           PageInfoMainView::kMainLayoutElementId,
           base::BindLambdaForTesting([](ui::TrackedElement* element) {
-            bool includes_midi = false;
             bool includes_midi_sysex = false;
             for (PermissionToggleRowView* permission_toggle_row :
                  AsView<PageInfoMainView>(element)->GetToggleRowsForTesting()) {
               if (permission_toggle_row->GetRowTitleForTesting() ==
-                  l10n_util::GetStringUTF16(IDS_SITE_SETTINGS_TYPE_MIDI)) {
-                includes_midi = true;
-                EXPECT_TRUE(
-                    permission_toggle_row->GetToggleButtonStateForTesting());
-              } else if (permission_toggle_row->GetRowTitleForTesting() ==
                          l10n_util::GetStringUTF16(
                              IDS_SITE_SETTINGS_TYPE_MIDI_SYSEX)) {
                 includes_midi_sysex = true;
               }
             }
-            EXPECT_TRUE(includes_midi);
-            EXPECT_FALSE(includes_midi_sysex);
+            EXPECT_TRUE(includes_midi_sysex);
           })));
 }
 
@@ -179,7 +169,7 @@ IN_PROC_BROWSER_TEST_F(MidiPermissionsFlowInteractiveUITest,
       PressButton(PermissionPromptBubbleBaseView::kBlockButtonElementId),
       WaitForHide(PermissionPromptBubbleBaseView::kMainViewId),
       AfterShow(
-          ContentSettingImageView::kMidiActivityIndicatorElementId,
+          ContentSettingImageView::kMidiSysexActivityIndicatorElementId,
           base::BindOnce([](ui::TrackedElement* element) {
             auto* element_view = AsView<ContentSettingImageView>(element);
             EXPECT_EQ(element_view->get_icon_for_testing(),
@@ -190,11 +180,11 @@ IN_PROC_BROWSER_TEST_F(MidiPermissionsFlowInteractiveUITest,
                       base::FeatureList::IsEnabled(features::kChromeRefresh2023)
                           ? &gfx::kNoneIcon
                           : &vector_icons::kBlockedBadgeIcon);
-            EXPECT_EQ(element_view->get_tooltip_text_for_testing(),
-                      l10n_util::GetStringUTF16(IDS_BLOCKED_MIDI_MESSAGE));
+            EXPECT_EQ(
+                element_view->get_tooltip_text_for_testing(),
+                l10n_util::GetStringUTF16(IDS_BLOCKED_MIDI_SYSEX_MESSAGE));
           })));
   // TODO(b/315345075): Add a check for the strings displayed in the bubble.
-  // TODO(b/315345075): Add a check to ensure only one MIDI icon is displayed.
 }
 
 // Display in-use indicator of MIDI when allowed.
@@ -205,7 +195,7 @@ IN_PROC_BROWSER_TEST_F(MidiPermissionsFlowInteractiveUITest,
       PressButton(PermissionPromptBubbleBaseView::kAllowButtonElementId),
       WaitForHide(PermissionPromptBubbleBaseView::kMainViewId),
       AfterShow(
-          ContentSettingImageView::kMidiActivityIndicatorElementId,
+          ContentSettingImageView::kMidiSysexActivityIndicatorElementId,
           base::BindOnce([](ui::TrackedElement* element) {
             auto* element_view = AsView<ContentSettingImageView>(element);
             EXPECT_EQ(element_view->get_icon_for_testing(),
@@ -214,9 +204,9 @@ IN_PROC_BROWSER_TEST_F(MidiPermissionsFlowInteractiveUITest,
                           : &vector_icons::kMidiIcon);
             EXPECT_EQ(element_view->get_icon_badge_for_testing(),
                       &gfx::kNoneIcon);
-            EXPECT_EQ(element_view->get_tooltip_text_for_testing(),
-                      l10n_util::GetStringUTF16(IDS_ALLOWED_MIDI_MESSAGE));
+            EXPECT_EQ(
+                element_view->get_tooltip_text_for_testing(),
+                l10n_util::GetStringUTF16(IDS_ALLOWED_MIDI_SYSEX_MESSAGE));
           })));
   // TODO(b/315345075): Add a check for the strings displayed in the bubble.
-  // TODO(b/315345075): Add a check to ensure only one MIDI icon is displayed.
 }

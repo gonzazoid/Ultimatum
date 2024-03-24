@@ -31,7 +31,7 @@
 #include "base/mac/scoped_ioobject.h"
 #include "base/posix/sysctl.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
+
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
@@ -271,6 +271,21 @@ bool RemoveQuarantineAttribute(const FilePath& file_path) {
   const char kQuarantineAttrName[] = "com.apple.quarantine";
   int status = removexattr(file_path.value().c_str(), kQuarantineAttrName, 0);
   return status == 0 || errno == ENOATTR;
+}
+
+void SetFileTags(const FilePath& file_path,
+                 const std::vector<std::string>& file_tags) {
+  if (file_tags.empty()) {
+    return;
+  }
+
+  NSMutableArray* tag_array = [NSMutableArray array];
+  for (const auto& tag : file_tags) {
+    [tag_array addObject:SysUTF8ToNSString(tag)];
+  }
+
+  NSURL* file_url = apple::FilePathToNSURL(file_path);
+  [file_url setResourceValue:tag_array forKey:NSURLTagNamesKey error:nil];
 }
 
 namespace {

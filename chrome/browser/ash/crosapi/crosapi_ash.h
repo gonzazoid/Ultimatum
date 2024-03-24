@@ -18,6 +18,7 @@
 #include "chromeos/crosapi/mojom/emoji_picker.mojom-forward.h"
 #include "chromeos/crosapi/mojom/firewall_hole.mojom.h"
 #include "chromeos/crosapi/mojom/lacros_shelf_item_tracker.mojom.h"
+#include "chromeos/crosapi/mojom/mahi.mojom-forward.h"
 #include "chromeos/crosapi/mojom/task_manager.mojom.h"
 #include "chromeos/crosapi/mojom/telemetry_diagnostic_routine_service.mojom.h"
 #include "media/gpu/buildflags.h"
@@ -32,7 +33,7 @@ class DigitalGoodsFactoryAsh;
 
 namespace ash {
 class DiagnosticsServiceAsh;
-class MahiManagerAsh;
+class MahiBrowserDelegateAsh;
 class ProbeServiceAsh;
 class SmartReaderManagerAsh;
 class TelemetryDiagnosticsRoutineServiceAsh;
@@ -62,6 +63,7 @@ class ClipboardAsh;
 class ClipboardHistoryAsh;
 class ContentProtectionAsh;
 class CrosapiDependencyRegistry;
+class DebugInterfaceRegistererAsh;
 class DeskAsh;
 class DeskProfilesAsh;
 class DeskTemplateAsh;
@@ -204,6 +206,8 @@ class CrosapiAsh : public mojom::Crosapi {
   void BindCrosDisplayConfigController(
       mojo::PendingReceiver<mojom::CrosDisplayConfigController> receiver)
       override;
+  void BindDebugInterfaceRegisterer(
+      mojo::PendingReceiver<mojom::DebugInterfaceRegisterer> receiver) override;
   void BindDesk(mojo::PendingReceiver<mojom::Desk> receiver) override;
   void BindDeskProfileObserver(
       mojo::PendingReceiver<mojom::DeskProfileObserver> receiver) override;
@@ -300,6 +304,8 @@ class CrosapiAsh : public mojom::Crosapi {
       mojo::PendingReceiver<
           chromeos::machine_learning::mojom::MachineLearningService> receiver)
       override;
+  void BindMahiBrowserDelegate(
+      mojo::PendingReceiver<mojom::MahiBrowserDelegate> receiver) override;
   void BindMediaUI(mojo::PendingReceiver<mojom::MediaUI> receiver) override;
   void BindMediaSessionAudioFocus(
       mojo::PendingReceiver<media_session::mojom::AudioFocusManager> receiver)
@@ -452,6 +458,10 @@ class CrosapiAsh : public mojom::Crosapi {
     return chrome_app_kiosk_service_ash_.get();
   }
 
+  DebugInterfaceRegistererAsh* debug_interface_registerer_ash() {
+    return debug_interface_registerer_ash_.get();
+  }
+
   DeskAsh* desk_ash() { return desk_ash_.get(); }
 
   DeskProfilesAsh* desk_profiles_ash() { return desk_profiles_ash_.get(); }
@@ -528,6 +538,10 @@ class CrosapiAsh : public mojom::Crosapi {
   }
 
   LoginStateAsh* login_state_ash() { return login_state_ash_.get(); }
+
+  ash::MahiBrowserDelegateAsh* mahi_browser_delegate_ash() {
+    return mahi_browser_delegate_ash_.get();
+  }
 
   MediaUIAsh* media_ui_ash() { return media_ui_ash_.get(); }
 
@@ -633,6 +647,7 @@ class CrosapiAsh : public mojom::Crosapi {
   std::unique_ptr<ClipboardAsh> clipboard_ash_;
   std::unique_ptr<ClipboardHistoryAsh> clipboard_history_ash_;
   std::unique_ptr<ContentProtectionAsh> content_protection_ash_;
+  std::unique_ptr<DebugInterfaceRegistererAsh> debug_interface_registerer_ash_;
   std::unique_ptr<DeskAsh> desk_ash_;
   std::unique_ptr<DeskProfilesAsh> desk_profiles_ash_;
   std::unique_ptr<DeskTemplateAsh> desk_template_ash_;
@@ -676,7 +691,7 @@ class CrosapiAsh : public mojom::Crosapi {
   std::unique_ptr<LoginAsh> login_ash_;
   std::unique_ptr<LoginScreenStorageAsh> login_screen_storage_ash_;
   std::unique_ptr<LoginStateAsh> login_state_ash_;
-  std::unique_ptr<ash::MahiManagerAsh> mahi_manager_ash_;
+  std::unique_ptr<ash::MahiBrowserDelegateAsh> mahi_browser_delegate_ash_;
   std::unique_ptr<MediaUIAsh> media_ui_ash_;
   std::unique_ptr<MessageCenterAsh> message_center_ash_;
   std::unique_ptr<MetricsAsh> metrics_ash_;

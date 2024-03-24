@@ -40,6 +40,7 @@
 #include "ui/display/screen.h"
 #include "ui/events/event_constants.h"
 #include "ui/gfx/geometry/rect.h"
+#include "url/gurl.h"
 
 namespace ash {
 namespace first_run {
@@ -51,8 +52,8 @@ namespace {
 // public accounts.
 bool IsRegularUserOrSupervisedChild(user_manager::UserManager* user_manager) {
   switch (user_manager->GetActiveUser()->GetType()) {
-    case user_manager::USER_TYPE_REGULAR:
-    case user_manager::USER_TYPE_CHILD:
+    case user_manager::UserType::kRegular:
+    case user_manager::UserType::kChild:
       return true;
     default:
       return false;
@@ -67,7 +68,7 @@ bool ShouldShowGetStarted(Profile* profile,
   if (profile->IsChild())
     return true;
   switch (user_manager->GetActiveUser()->GetType()) {
-    case user_manager::USER_TYPE_REGULAR:
+    case user_manager::UserType::kRegular:
       return !profile->GetProfilePolicyConnector()->IsManaged();
     default:
       return false;
@@ -101,7 +102,10 @@ class AppLauncher final : public ProfileObserver {
   AppLauncher& operator=(const AppLauncher&) = delete;
 
   void LaunchHelpApp() {
-    LaunchSystemWebAppAsync(profile_, SystemWebAppType::HELP);
+    ash::SystemAppLaunchParams params;
+    params.url = GURL("chrome://help-app?launchSource=first-run");
+    params.launch_source = apps::LaunchSource::kFromFirstRun;
+    LaunchSystemWebAppAsync(profile_, SystemWebAppType::HELP, params);
     profile_->GetPrefs()->SetBoolean(prefs::kFirstRunTutorialShown, true);
     delete this;
   }
@@ -146,6 +150,10 @@ bool ShouldLaunchHelpApp(Profile* profile) {
 
   if (command_line->HasSwitch(switches::kForceFirstRunUI)) {
     return true;
+  }
+
+  if (command_line->HasSwitch(switches::kDisableFirstRunUI)) {
+    return false;
   }
 
   if (display::Screen::GetScreen()->InTabletMode()) {

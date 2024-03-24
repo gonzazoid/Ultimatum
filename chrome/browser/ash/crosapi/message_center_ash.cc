@@ -68,6 +68,18 @@ mc::FullscreenVisibility FromMojo(mojom::FullscreenVisibility visibility) {
   }
 }
 
+mc::SettingsButtonHandler FromMojo(
+    mojom::SettingsButtonHandler settings_button_handler) {
+  switch (settings_button_handler) {
+    case mojom::SettingsButtonHandler::kNone:
+      return mc::SettingsButtonHandler::NONE;
+    case mojom::SettingsButtonHandler::kInline:
+      return mc::SettingsButtonHandler::INLINE;
+    case mojom::SettingsButtonHandler::kDelegate:
+      return mc::SettingsButtonHandler::DELEGATE;
+  }
+}
+
 std::unique_ptr<mc::Notification> FromMojo(
     mojom::NotificationPtr notification) {
   mc::RichNotificationData rich_data;
@@ -84,9 +96,7 @@ std::unique_ptr<mc::Notification> FromMojo(
     }
   }
   for (const auto& mojo_item : notification->items) {
-    mc::NotificationItem item;
-    item.title = mojo_item->title;
-    item.message = mojo_item->message;
+    mc::NotificationItem item(mojo_item->title, mojo_item->message);
     rich_data.items.push_back(item);
   }
   rich_data.progress = std::clamp(notification->progress, -1, 100);
@@ -104,7 +114,8 @@ std::unique_ptr<mc::Notification> FromMojo(
   rich_data.fullscreen_visibility =
       FromMojo(notification->fullscreen_visibility);
   rich_data.accent_color = notification->accent_color;
-
+  rich_data.settings_button_handler =
+      FromMojo(notification->settings_button_handler);
   gfx::Image icon;
   if (!notification->icon.isNull())
     icon = gfx::Image(notification->icon);

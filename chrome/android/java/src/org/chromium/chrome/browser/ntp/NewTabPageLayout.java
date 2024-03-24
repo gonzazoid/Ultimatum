@@ -15,6 +15,7 @@ import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.text.Editable;
 import android.util.AttributeSet;
+import android.view.DragEvent;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -45,11 +46,10 @@ import org.chromium.chrome.browser.logo.LogoView;
 import org.chromium.chrome.browser.ntp.NewTabPage.OnSearchBoxScrollListener;
 import org.chromium.chrome.browser.ntp.search.SearchBoxCoordinator;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.suggestions.tile.MostVisitedTilesCoordinator;
 import org.chromium.chrome.browser.suggestions.tile.TileGroup;
 import org.chromium.chrome.browser.suggestions.tile.TileGroup.Delegate;
-import org.chromium.chrome.browser.tab_resumption.TabResumptionModuleCoordinator;
-import org.chromium.chrome.browser.tab_resumption.TabResumptionModuleUtils;
 import org.chromium.chrome.browser.ui.native_page.TouchEnabledDelegate;
 import org.chromium.chrome.browser.user_education.IPHCommandBuilder;
 import org.chromium.chrome.browser.user_education.UserEducationHelper;
@@ -67,6 +67,7 @@ import org.chromium.components.browser_ui.widget.highlight.ViewHighlighter.Highl
 import org.chromium.components.feature_engagement.FeatureConstants;
 import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.ui.base.DeviceFormFactor;
+import org.chromium.ui.base.MimeTypeUtils;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.text.EmptyTextWatcher;
 
@@ -93,8 +94,6 @@ public class NewTabPageLayout extends LinearLayout {
     private SearchBoxCoordinator mSearchBoxCoordinator;
     private ViewGroup mMvTilesContainerLayout;
     private MostVisitedTilesCoordinator mMostVisitedTilesCoordinator;
-
-    private TabResumptionModuleCoordinator mTabResumptionModuleCoordinator;
 
     private OnSearchBoxScrollListener mSearchBoxScrollListener;
 
@@ -249,7 +248,7 @@ public class NewTabPageLayout extends LinearLayout {
         mIsNtpAsHomeSurfaceOnTablet = isNtpAsHomeSurfaceOnTablet;
         mIsSurfacePolishEnabled = isSurfacePolishEnabled;
         mIsSurfacePolishOmniboxColorEnabled = isSurfacePolishOmniboxColorEnabled;
-        Profile profile = Profile.getLastUsedRegularProfile();
+        Profile profile = ProfileManager.getLastUsedRegularProfile();
         mIsTablet = isTablet;
         mTabStripHeightSupplier = tabStripHeightSupplier;
 
@@ -313,7 +312,6 @@ public class NewTabPageLayout extends LinearLayout {
         initializeSearchBoxTextView();
         initializeVoiceSearchButton();
         initializeLensButton();
-        initializeTabResumptionModuleCoordinator(profile);
         initializeLayoutChangeListener();
 
         manager.addDestructionObserver(NewTabPageLayout.this::onDestroy);
@@ -325,6 +323,10 @@ public class NewTabPageLayout extends LinearLayout {
             setBackground(
                     AppCompatResources.getDrawable(mContext, R.drawable.home_surface_background));
         }
+    }
+
+    public void reload() {
+        // TODO(1515325): Add handler in Magic Stack and dispatcher.
     }
 
     /**
@@ -365,6 +367,29 @@ public class NewTabPageLayout extends LinearLayout {
         TraceEvent.begin(TAG + ".initializeSearchBoxTextView()");
 
         mSearchBoxCoordinator.setSearchBoxClickListener(v -> mManager.focusSearchBox(false, null));
+
+        // @TODO(crbug.com/1519592): Add test case for search box OnDragListener.
+        mSearchBoxCoordinator.setSearchBoxDragListener(
+                new OnDragListener() {
+                    @Override
+                    public boolean onDrag(View view, DragEvent dragEvent) {
+                        // Disable search box EditText when tab is dropped.
+                        if (dragEvent.getClipDescription() == null
+                                || !dragEvent
+                                        .getClipDescription()
+                                        .hasMimeType(MimeTypeUtils.CHROME_MIMETYPE_TAB)) {
+                            return false;
+                        } else {
+                            if (dragEvent.getAction() == DragEvent.ACTION_DRAG_STARTED) {
+                                view.setEnabled(false);
+                            } else if (dragEvent.getAction() == DragEvent.ACTION_DRAG_ENDED) {
+                                view.setEnabled(true);
+                            }
+                        }
+                        return false;
+                    }
+                });
+
         mSearchBoxCoordinator.setSearchBoxTextWatcher(
                 new EmptyTextWatcher() {
                     @Override
@@ -395,14 +420,6 @@ public class NewTabPageLayout extends LinearLayout {
                 });
         updateActionButtonVisibility();
         TraceEvent.end(TAG + ".initializeLensButton()");
-    }
-
-    private void initializeTabResumptionModuleCoordinator(Profile profile) {
-        TraceEvent.begin(TAG + ".initializeTabResumptionModuleCoordinator()");
-        mTabResumptionModuleCoordinator =
-                TabResumptionModuleUtils.mayCreateTabResumptionModuleCoordinator(
-                        this, profile, R.id.tab_resumption_module_container_stub);
-        TraceEvent.end(TAG + ".initializeTabResumptionModuleCoordinator()");
     }
 
     private void initializeLayoutChangeListener() {
@@ -1011,10 +1028,6 @@ public class NewTabPageLayout extends LinearLayout {
         if (mLogoCoordinator != null) {
             mLogoCoordinator.destroy();
             mLogoCoordinator = null;
-        }
-
-        if (mTabResumptionModuleCoordinator != null) {
-            mTabResumptionModuleCoordinator.destroy();
         }
 
         mSearchBoxCoordinator.destroy();

@@ -205,15 +205,6 @@ void BackgroundTracingManager::SetInstance(
 }
 
 // static
-bool BackgroundTracingManager::EmitNamedTrigger(
-    const std::string& trigger_name) {
-  if (g_background_tracing_manager) {
-    return g_background_tracing_manager->DoEmitNamedTrigger(trigger_name);
-  }
-  return false;
-}
-
-// static
 void BackgroundTracingManagerImpl::RecordMetric(Metrics metric) {
   UMA_HISTOGRAM_ENUMERATION("Tracing.Background.ScenarioState", metric,
                             Metrics::NUMBER_OF_BACKGROUND_TRACING_METRICS);
@@ -248,7 +239,8 @@ BackgroundTracingManagerImpl::BackgroundTracingManagerImpl()
            base::TaskShutdownBehavior::BLOCK_SHUTDOWN})),
       trace_database_(nullptr,
                       base::OnTaskRunnerDeleter(database_task_runner_)) {
-  SetInstance(this);
+  BackgroundTracingManager::SetInstance(this);
+  NamedTriggerManager::SetInstance(this);
   g_background_tracing_manager_impl = this;
   BackgroundStartupTracingObserver::GetInstance();
 }
@@ -265,7 +257,8 @@ BackgroundTracingManagerImpl::~BackgroundTracingManagerImpl() {
   if (legacy_active_scenario_) {
     legacy_active_scenario_->AbortScenario();
   }
-  SetInstance(nullptr);
+  BackgroundTracingManager::SetInstance(nullptr);
+  NamedTriggerManager::SetInstance(nullptr);
   g_background_tracing_manager_impl = nullptr;
 }
 
@@ -404,7 +397,7 @@ void BackgroundTracingManagerImpl::OnTraceSaved(
   if (success) {
     ++scenario_saved_counts_[scenario_name];
   }
-  for (auto* observer : background_tracing_observers_) {
+  for (EnabledStateTestObserver* observer : background_tracing_observers_) {
     observer->OnTraceSaved();
   }
 }
@@ -528,7 +521,7 @@ bool BackgroundTracingManagerImpl::SetActiveScenario(
       std::move(config_impl), delegate_.get(),
       base::BindOnce(&BackgroundTracingManagerImpl::OnScenarioAborted,
                      base::Unretained(this)));
-  for (auto* observer : background_tracing_observers_) {
+  for (EnabledStateTestObserver* observer : background_tracing_observers_) {
     observer->OnScenarioActive(
         legacy_active_scenario_->GetConfig()->scenario_name());
   }
@@ -583,7 +576,7 @@ bool BackgroundTracingManagerImpl::OnScenarioActive(
   active_scenario_ = active_scenario;
   UMA_HISTOGRAM_SPARSE("Tracing.Background.Scenario.Active",
                        variations::HashName(active_scenario->scenario_name()));
-  for (auto* observer : background_tracing_observers_) {
+  for (EnabledStateTestObserver* observer : background_tracing_observers_) {
     observer->OnScenarioActive(active_scenario_->scenario_name());
   }
   for (auto& scenario : scenarios_) {
@@ -601,7 +594,7 @@ bool BackgroundTracingManagerImpl::OnScenarioIdle(
   active_scenario_ = nullptr;
   UMA_HISTOGRAM_SPARSE("Tracing.Background.Scenario.Idle",
                        variations::HashName(idle_scenario->scenario_name()));
-  for (auto* observer : background_tracing_observers_) {
+  for (EnabledStateTestObserver* observer : background_tracing_observers_) {
     observer->OnScenarioIdle(idle_scenario->scenario_name());
   }
   bool is_allowed_finalization =
@@ -723,7 +716,7 @@ void BackgroundTracingManagerImpl::AddAgent(
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   agents_.insert(agent);
 
-  for (auto* observer : agent_observers_) {
+  for (AgentObserver* observer : agent_observers_) {
     observer->OnAgentAdded(agent);
   }
 }
@@ -731,7 +724,7 @@ void BackgroundTracingManagerImpl::AddAgent(
 void BackgroundTracingManagerImpl::RemoveAgent(
     tracing::mojom::BackgroundTracingAgent* agent) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  for (auto* observer : agent_observers_) {
+  for (AgentObserver* observer : agent_observers_) {
     observer->OnAgentRemoved(agent);
   }
 
@@ -744,7 +737,7 @@ void BackgroundTracingManagerImpl::AddAgentObserver(AgentObserver* observer) {
 
   MaybeConstructPendingAgents();
 
-  for (auto* agent : agents_) {
+  for (tracing::mojom::BackgroundTracingAgent* agent : agents_) {
     observer->OnAgentAdded(agent);
   }
 }
@@ -754,7 +747,7 @@ void BackgroundTracingManagerImpl::RemoveAgentObserver(
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   agent_observers_.erase(observer);
 
-  for (auto* agent : agents_) {
+  for (tracing::mojom::BackgroundTracingAgent* agent : agents_) {
     observer->OnAgentRemoved(agent);
   }
 }
@@ -803,7 +796,7 @@ void BackgroundTracingManagerImpl::OnProtoDataComplete(
     const base::Token& uuid) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  for (auto* observer : background_tracing_observers_) {
+  for (EnabledStateTestObserver* observer : background_tracing_observers_) {
     observer->OnTraceReceived(serialized_trace);
   }
   if (!receive_callback_) {
@@ -909,7 +902,7 @@ void BackgroundTracingManagerImpl::InvalidateTriggersCallbackForTesting() {
 
 void BackgroundTracingManagerImpl::OnStartTracingDone() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  for (auto* observer : background_tracing_observers_) {
+  for (EnabledStateTestObserver* observer : background_tracing_observers_) {
     observer->OnTraceStarted();
   }
 }
@@ -936,7 +929,7 @@ void BackgroundTracingManagerImpl::AbortScenarioForTesting() {
 void BackgroundTracingManagerImpl::OnScenarioAborted() {
   DCHECK(legacy_active_scenario_);
 
-  for (auto* observer : background_tracing_observers_) {
+  for (EnabledStateTestObserver* observer : background_tracing_observers_) {
     observer->OnScenarioIdle(
         legacy_active_scenario_->GetConfig()->scenario_name());
   }

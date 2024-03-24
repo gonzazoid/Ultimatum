@@ -8,6 +8,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/process/process.h"
 #include "base/test/bind.h"
+#include "base/trace_event/named_trigger.h"
 #include "components/performance_manager/graph/frame_node_impl.h"
 #include "components/performance_manager/public/render_process_host_id.h"
 #include "components/performance_manager/public/render_process_host_proxy.h"
@@ -246,10 +247,17 @@ TEST_F(ProcessNodeImplTest, PublicInterface) {
 namespace {
 
 class LenientFakeBackgroundTracingManager
-    : public content::BackgroundTracingManager {
+    : public content::BackgroundTracingManager,
+      public base::trace_event::NamedTriggerManager {
  public:
-  LenientFakeBackgroundTracingManager() { SetInstance(this); }
-  ~LenientFakeBackgroundTracingManager() override { SetInstance(nullptr); }
+  LenientFakeBackgroundTracingManager() {
+    BackgroundTracingManager::SetInstance(this);
+    NamedTriggerManager::SetInstance(this);
+  }
+  ~LenientFakeBackgroundTracingManager() override {
+    BackgroundTracingManager::SetInstance(nullptr);
+    NamedTriggerManager::SetInstance(nullptr);
+  }
 
   // Functions we want to intercept.
   MOCK_METHOD(bool, HasActiveScenario, (), (override));
@@ -274,9 +282,8 @@ class LenientFakeBackgroundTracingManager
 
   bool HasTraceToUpload() override { return false; }
   void GetTraceToUpload(
-      base::OnceCallback<void(absl::optional<std::string>,
-                              absl::optional<std::string>)> callback) override {
-  }
+      base::OnceCallback<void(std::optional<std::string>,
+                              std::optional<std::string>)> callback) override {}
   std::unique_ptr<content::BackgroundTracingConfig> GetBackgroundTracingConfig(
       const std::string& trial_name) override {
     return nullptr;

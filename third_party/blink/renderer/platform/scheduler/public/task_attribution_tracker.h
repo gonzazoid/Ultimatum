@@ -5,8 +5,9 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_PUBLIC_TASK_ATTRIBUTION_TRACKER_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_PUBLIC_TASK_ATTRIBUTION_TRACKER_H_
 
+#include <optional>
+
 #include "base/functional/function_ref.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/scheduler/task_attribution_id.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
@@ -18,6 +19,10 @@ class DOMTaskSignal;
 class ExecutionContext;
 class ScriptState;
 }  // namespace blink
+
+namespace v8 {
+class Isolate;
+}  // namespace v8
 
 namespace blink::scheduler {
 
@@ -36,6 +41,7 @@ class PLATFORM_EXPORT TaskAttributionTracker {
     kPopState,
     kSchedulerPostTask,
     kRequestIdleCallback,
+    kXMLHttpRequest,
   };
 
   // A class maintaining the scope of the current task. Keeping it alive ensures
@@ -52,7 +58,7 @@ class PLATFORM_EXPORT TaskAttributionTracker {
 
   class Observer : public GarbageCollectedMixin {
    public:
-    virtual void OnCreateTaskScope(TaskAttributionInfo&, ScriptState*) = 0;
+    virtual void OnCreateTaskScope(TaskAttributionInfo&) = 0;
     virtual ExecutionContext* GetExecutionContext() = 0;
   };
 
@@ -71,8 +77,8 @@ class PLATFORM_EXPORT TaskAttributionTracker {
       AbortSignal* abort_source,
       DOMTaskSignal* priority_source) = 0;
 
-  // Get the ID of the currently running task.
-  virtual TaskAttributionInfo* RunningTask(ScriptState*) const = 0;
+  // Get the `TaskAttributionInfo` for the currently running task.
+  virtual TaskAttributionInfo* RunningTask(v8::Isolate*) const = 0;
 
   // Returns true iff `task` has an ancestor task with `ancestor_id`.
   virtual bool IsAncestor(const TaskAttributionInfo& task,

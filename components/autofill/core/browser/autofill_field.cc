@@ -62,7 +62,8 @@ static constexpr auto kAutofillHeuristicsVsHtmlOverrides =
          {ADDRESS_HOME_DEPENDENT_LOCALITY, HtmlFieldType::kAddressLine2},
          {ADDRESS_HOME_DEPENDENT_LOCALITY, HtmlFieldType::kAddressLine3},
          {ADDRESS_HOME_OVERFLOW_AND_LANDMARK, HtmlFieldType::kAddressLine2},
-         {ADDRESS_HOME_OVERFLOW, HtmlFieldType::kAddressLine2}});
+         {ADDRESS_HOME_OVERFLOW, HtmlFieldType::kAddressLine2},
+         {ADDRESS_HOME_OVERFLOW, HtmlFieldType::kAddressLine3}});
 
 // This list includes pairs (heuristic_type, server_type) that express which
 // heuristics predictions should be prioritized over server predictions. The
@@ -86,7 +87,8 @@ static constexpr auto kAutofillHeuristicsVsServerOverrides =
          {ADDRESS_HOME_LANDMARK, ADDRESS_HOME_LINE2},
          {ADDRESS_HOME_BETWEEN_STREETS_OR_LANDMARK, ADDRESS_HOME_LINE2},
          {ADDRESS_HOME_OVERFLOW_AND_LANDMARK, ADDRESS_HOME_LINE2},
-         {ADDRESS_HOME_OVERFLOW, ADDRESS_HOME_LINE2}});
+         {ADDRESS_HOME_OVERFLOW, ADDRESS_HOME_LINE2},
+         {ADDRESS_HOME_OVERFLOW, ADDRESS_HOME_LINE3}});
 
 // Returns true, if the prediction is non-experimental and should be used by
 // autofill or password manager.
@@ -145,8 +147,7 @@ bool PreferHeuristicOverServer(FieldType heuristic_type,
 // won't be overridden by heuristics or server predictions, up to a few
 // exceptions. Check function `ComputedType` for more details.
 DenseSet<HtmlFieldType> BelievedHtmlTypes(FieldType heuristic_prediction,
-                                          FieldType server_prediction,
-                                          bool is_credit_card_prediction) {
+                                          FieldType server_prediction) {
   DenseSet<HtmlFieldType> believed_html_types = {};
   constexpr auto kMin = base::to_underlying(HtmlFieldType::kMinValue);
   constexpr auto kMax = base::to_underlying(HtmlFieldType::kMaxValue);
@@ -155,14 +156,15 @@ DenseSet<HtmlFieldType> BelievedHtmlTypes(FieldType heuristic_prediction,
   }
   // We always override unspecified autocomplete attribute.
   believed_html_types.erase(HtmlFieldType::kUnspecified);
-  auto is_precedence_feature_enabled = []() {
-    return base::FeatureList::IsEnabled(
-        features::kAutofillStreetNameOrHouseNumberPrecedenceOverAutocomplete);
+  auto is_street_name_or_house_number_type = [](FieldType field_type) {
+    return field_type == ADDRESS_HOME_STREET_NAME ||
+           field_type == ADDRESS_HOME_HOUSE_NUMBER;
   };
-
-  if ((IsStreetNameOrHouseNumberType(heuristic_prediction) ||
-       IsStreetNameOrHouseNumberType(server_prediction)) &&
-      is_precedence_feature_enabled()) {
+  // When the heuristics or server predict that an address is a street name or a
+  // house number, we prioritize this over "address-line[1|2]" autocomplete
+  // since those signals are usually stronger for this combination.
+  if (is_street_name_or_house_number_type(heuristic_prediction) ||
+      is_street_name_or_house_number_type(server_prediction)) {
     believed_html_types.erase_all(
         {HtmlFieldType::kAddressLine1, HtmlFieldType::kAddressLine2});
   }
@@ -347,8 +349,7 @@ AutofillType AutofillField::ComputedType() const {
     return AutofillType(heuristic_type());
   }
 
-  if (BelievedHtmlTypes(heuristic_type(), server_type(),
-                        IsCreditCardPrediction())
+  if (BelievedHtmlTypes(heuristic_type(), server_type())
           .contains(html_type())) {
     return AutofillType(html_type_);
   }

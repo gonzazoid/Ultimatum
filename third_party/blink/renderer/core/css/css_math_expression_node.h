@@ -31,9 +31,11 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_CSS_CSS_MATH_EXPRESSION_NODE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_CSS_CSS_MATH_EXPRESSION_NODE_H_
 
+#include <optional>
+
 #include "base/check_op.h"
+#include "base/containers/enum_set.h"
 #include "base/dcheck_is_on.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/css_anchor_query_enums.h"
 #include "third_party/blink/renderer/core/css/css_length_resolver.h"
@@ -41,6 +43,7 @@
 #include "third_party/blink/renderer/core/css/css_primitive_value.h"
 #include "third_party/blink/renderer/core/css/css_value.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser_token_range.h"
+#include "third_party/blink/renderer/core/css_value_keywords.h"
 #include "third_party/blink/renderer/platform/geometry/calculation_value.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 
@@ -60,7 +63,8 @@ enum CalculationResultCategory {
   kCalcPercent,
   // TODO(crbug.com/1309178): We are now using this for all calculated lengths
   // that can't be resolved at style time, including not only calc(px + %) but
-  // also anchor queries. Rename this category accordingly.
+  // also anchor queries and intrinsic size keywords in calc-size(). Rename
+  // this category accordingly.
   kCalcPercentLength,
   kCalcAngle,
   kCalcTime,
@@ -77,15 +81,25 @@ class CORE_EXPORT CSSMathExpressionNode
   static CSSMathExpressionNode* Create(PixelsAndPercent pixels_and_percent);
   static CSSMathExpressionNode* Create(const CalculationExpressionNode& node);
 
+  enum class Flag : uint8_t {
+    AllowPercent,
+    AllowCalcSize,
+
+    MinValue = AllowPercent,
+    MaxValue = AllowCalcSize,
+  };
+
+  using Flags = base::EnumSet<Flag, Flag::MinValue, Flag::MaxValue>;
+
   static CSSMathExpressionNode* ParseMathFunction(
       CSSValueID function_id,
       CSSParserTokenRange tokens,
       const CSSParserContext&,
-      const bool is_percentage_allowed,
+      const Flags parsing_flags,
       CSSAnchorQueryTypes allowed_anchor_queries,
       // Variable substitutions for relative color syntax.
       // https://www.w3.org/TR/css-color-5/#relative-colors
-      const HashMap<CSSValueID, double> color_channel_keyword_values = {});
+      const HashMap<CSSValueID, double>& color_channel_keyword_values = {});
 
   virtual CSSMathExpressionNode* Copy() const = 0;
 
@@ -93,6 +107,7 @@ class CORE_EXPORT CSSMathExpressionNode
   virtual bool IsOperation() const { return false; }
   virtual bool IsAnchorQuery() const { return false; }
   virtual bool IsIdentifierLiteral() const { return false; }
+  virtual bool IsSizingKeywordLiteral() const { return false; }
 
   virtual bool IsMathFunction() const { return false; }
 
@@ -112,7 +127,7 @@ class CORE_EXPORT CSSMathExpressionNode
       CSSPrimitiveValue::LengthTypeFlags& types) const = 0;
   virtual scoped_refptr<const CalculationExpressionNode>
   ToCalculationExpression(const CSSLengthResolver&) const = 0;
-  virtual absl::optional<PixelsAndPercent> ToPixelsAndPercent(
+  virtual std::optional<PixelsAndPercent> ToPixelsAndPercent(
       const CSSLengthResolver&) const = 0;
 
   scoped_refptr<const CalculationValue> ToCalcValue(
@@ -130,7 +145,7 @@ class CORE_EXPORT CSSMathExpressionNode
   // - A type conversion that doesn't have a fixed conversion ratio is needed
   //   (e.g., between 'px' and 'em').
   // - There's an unsupported calculation, e.g., dividing two lengths.
-  virtual absl::optional<double> ComputeValueInCanonicalUnit() const = 0;
+  virtual std::optional<double> ComputeValueInCanonicalUnit() const = 0;
 
   virtual String CustomCSSText() const = 0;
   virtual bool operator==(const CSSMathExpressionNode& other) const {
@@ -144,6 +159,7 @@ class CORE_EXPORT CSSMathExpressionNode
     return category_ == kCalcPercent || category_ == kCalcPercentLength;
   }
   virtual bool InvolvesPercentage() const { return HasPercentage(); }
+  virtual bool InvolvesAnchorQueries() const { return IsAnchorQuery(); }
 
   // Returns the unit type of the math expression *without doing any type
   // conversion* (e.g., 1px + 1em needs type conversion to resolve).
@@ -226,10 +242,10 @@ class CORE_EXPORT CSSMathExpressionNumericLiteral final
   String CustomCSSText() const final;
   scoped_refptr<const CalculationExpressionNode> ToCalculationExpression(
       const CSSLengthResolver&) const final;
-  absl::optional<PixelsAndPercent> ToPixelsAndPercent(
+  std::optional<PixelsAndPercent> ToPixelsAndPercent(
       const CSSLengthResolver&) const final;
   double DoubleValue() const final;
-  absl::optional<double> ComputeValueInCanonicalUnit() const final;
+  std::optional<double> ComputeValueInCanonicalUnit() const final;
   double ComputeLengthPx(const CSSLengthResolver& length_resolver) const final;
   bool AccumulateLengthArray(CSSLengthArray& length_array,
                              double multiplier) const final;
@@ -287,16 +303,16 @@ class CORE_EXPORT CSSMathExpressionIdentifierLiteral final
   String CustomCSSText() const final { return identifier_; }
   scoped_refptr<const CalculationExpressionNode> ToCalculationExpression(
       const CSSLengthResolver&) const final;
-  absl::optional<PixelsAndPercent> ToPixelsAndPercent(
+  std::optional<PixelsAndPercent> ToPixelsAndPercent(
       const CSSLengthResolver&) const final {
-    return absl::nullopt;
+    return std::nullopt;
   }
   double DoubleValue() const final {
     NOTREACHED();
     return 0;
   }
-  absl::optional<double> ComputeValueInCanonicalUnit() const final {
-    return absl::nullopt;
+  std::optional<double> ComputeValueInCanonicalUnit() const final {
+    return std::nullopt;
   }
   double ComputeLengthPx(const CSSLengthResolver& length_resolver) const final {
     NOTREACHED();
@@ -342,6 +358,87 @@ struct DowncastTraits<CSSMathExpressionIdentifierLiteral> {
   }
 };
 
+// Used for size keyword and intrinsic size keywords in calc-size().
+class CORE_EXPORT CSSMathExpressionSizingKeywordLiteral final
+    : public CSSMathExpressionNode {
+ public:
+  static CSSMathExpressionSizingKeywordLiteral* Create(CSSValueID keyword) {
+    return MakeGarbageCollected<CSSMathExpressionSizingKeywordLiteral>(keyword);
+  }
+
+  explicit CSSMathExpressionSizingKeywordLiteral(CSSValueID keyword);
+
+  CSSMathExpressionNode* Copy() const final { return Create(keyword_); }
+
+  CSSValueID GetValue() const { return keyword_; }
+
+  bool IsSizingKeywordLiteral() const final { return true; }
+
+  const CSSMathExpressionNode& PopulateWithTreeScope(
+      const TreeScope* tree_scope) const final {
+    NOTREACHED();
+    return *this;
+  }
+
+  bool IsZero() const final { return false; }
+  String CustomCSSText() const final { return getValueName(keyword_); }
+  scoped_refptr<const CalculationExpressionNode> ToCalculationExpression(
+      const CSSLengthResolver&) const final;
+  std::optional<PixelsAndPercent> ToPixelsAndPercent(
+      const CSSLengthResolver&) const final {
+    return std::nullopt;
+  }
+  double DoubleValue() const final {
+    NOTREACHED();
+    return 0;
+  }
+  std::optional<double> ComputeValueInCanonicalUnit() const final {
+    return std::nullopt;
+  }
+  double ComputeLengthPx(const CSSLengthResolver& length_resolver) const final {
+    NOTREACHED();
+    return 0;
+  }
+  bool AccumulateLengthArray(CSSLengthArray& length_array,
+                             double multiplier) const final {
+    return false;
+  }
+  void AccumulateLengthUnitTypes(
+      CSSPrimitiveValue::LengthTypeFlags& types) const final {}
+  bool IsComputationallyIndependent() const final { return true; }
+  bool operator==(const CSSMathExpressionNode& other) const final {
+    return other.IsSizingKeywordLiteral() &&
+           DynamicTo<CSSMathExpressionSizingKeywordLiteral>(other)
+                   ->GetValue() == GetValue();
+  }
+  CSSPrimitiveValue::UnitType ResolvedUnitType() const final {
+    return CSSPrimitiveValue::UnitType::kIdent;
+  }
+  void Trace(Visitor* visitor) const final {
+    CSSMathExpressionNode::Trace(visitor);
+  }
+
+#if DCHECK_IS_ON()
+  bool InvolvesPercentageComparisons() const final { return false; }
+#endif
+
+ protected:
+  double ComputeDouble(const CSSLengthResolver& length_resolver) const final {
+    NOTREACHED();
+    return 0;
+  }
+
+ private:
+  CSSValueID keyword_;
+};
+
+template <>
+struct DowncastTraits<CSSMathExpressionSizingKeywordLiteral> {
+  static bool AllowFrom(const CSSMathExpressionNode& node) {
+    return node.IsSizingKeywordLiteral();
+  }
+};
+
 class CORE_EXPORT CSSMathExpressionOperation final
     : public CSSMathExpressionNode {
  public:
@@ -377,6 +474,10 @@ class CORE_EXPORT CSSMathExpressionOperation final
   static CSSMathExpressionNode* CreateSignRelatedFunction(
       Operands&& operands,
       CSSValueID function_id);
+
+  static CSSMathExpressionNode* CreateCalcSizeOperation(
+      const CSSMathExpressionNode* left_side,
+      const CSSMathExpressionNode* right_side);
 
   CSSMathExpressionOperation(const CSSMathExpressionNode* left_side,
                              const CSSMathExpressionNode* right_side,
@@ -429,24 +530,26 @@ class CORE_EXPORT CSSMathExpressionOperation final
     return operator_ == CSSMathOperator::kAbs ||
            operator_ == CSSMathOperator::kSign;
   }
+  bool IsCalcSize() const { return operator_ == CSSMathOperator::kCalcSize; }
 
   // TODO(crbug.com/1284199): Check other math functions too.
   bool IsMathFunction() const final {
     return IsMinOrMax() || IsClamp() || IsSteppedValueFunction() ||
-           IsTrigonometricFunction() || IsSignRelatedFunction();
+           IsTrigonometricFunction() || IsSignRelatedFunction() || IsCalcSize();
   }
 
   bool InvolvesPercentage() const final;
+  bool InvolvesAnchorQueries() const final;
 
   String CSSTextAsClamp() const;
 
   bool IsZero() const final;
   scoped_refptr<const CalculationExpressionNode> ToCalculationExpression(
       const CSSLengthResolver&) const final;
-  absl::optional<PixelsAndPercent> ToPixelsAndPercent(
+  std::optional<PixelsAndPercent> ToPixelsAndPercent(
       const CSSLengthResolver&) const final;
   double DoubleValue() const final;
-  absl::optional<double> ComputeValueInCanonicalUnit() const final;
+  std::optional<double> ComputeValueInCanonicalUnit() const final;
   double ComputeLengthPx(const CSSLengthResolver& length_resolver) const final;
   bool AccumulateLengthArray(CSSLengthArray& length_array,
                              double multiplier) const final;
@@ -524,28 +627,20 @@ class CORE_EXPORT CSSMathExpressionAnchorQuery final
   CSSPrimitiveValue::UnitType ResolvedUnitType() const final {
     return CSSPrimitiveValue::UnitType::kUnknown;
   }
-  absl::optional<double> ComputeValueInCanonicalUnit() const final {
-    return absl::nullopt;
+  std::optional<double> ComputeValueInCanonicalUnit() const final {
+    return std::nullopt;
   }
-  absl::optional<PixelsAndPercent> ToPixelsAndPercent(
+  std::optional<PixelsAndPercent> ToPixelsAndPercent(
       const CSSLengthResolver&) const final {
-    return absl::nullopt;
+    return std::nullopt;
   }
   bool AccumulateLengthArray(CSSLengthArray& length_array,
                              double multiplier) const final {
     return false;
   }
   bool IsComputationallyIndependent() const final { return false; }
-  double DoubleValue() const final {
-    // We can't resolve an anchor query until layout time.
-    NOTREACHED();
-    return 0;
-  }
-  double ComputeLengthPx(const CSSLengthResolver& length_resolver) const final {
-    // We can't resolve an anchor query until layout time.
-    NOTREACHED();
-    return 0;
-  }
+  double DoubleValue() const final;
+  double ComputeLengthPx(const CSSLengthResolver& length_resolver) const final;
   void AccumulateLengthUnitTypes(
       CSSPrimitiveValue::LengthTypeFlags& types) const final {
     // AccumulateLengthUnitTypes() is only used when interpolating the
@@ -567,11 +662,7 @@ class CORE_EXPORT CSSMathExpressionAnchorQuery final
 #endif
 
  protected:
-  double ComputeDouble(const CSSLengthResolver& length_resolver) const final {
-    // We can't resolve an anchor query until layout time.
-    NOTREACHED();
-    return 0;
-  }
+  double ComputeDouble(const CSSLengthResolver&) const final;
 
  private:
   CSSAnchorQueryType type_;

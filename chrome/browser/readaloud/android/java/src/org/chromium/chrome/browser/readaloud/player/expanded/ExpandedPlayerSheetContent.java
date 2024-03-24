@@ -5,13 +5,16 @@
 package org.chromium.chrome.browser.readaloud.player.expanded;
 
 import android.content.Context;
+import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.text.format.DateUtils;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.accessibility.AccessibilityEvent;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
@@ -39,6 +42,8 @@ public class ExpandedPlayerSheetContent implements BottomSheetContent {
     private final BottomSheetController mBottomSheetController;
     private final PropertyModel mModel;
     private final SeekBar mSeekBar;
+    private final ScrollView mScrollView;
+    private final LinearLayout mPlayerControls;
     private View mContentView;
     // Effectively final and non null, can be null only in tests
     private OptionsMenuSheetContent mOptionsMenu;
@@ -87,6 +92,7 @@ public class ExpandedPlayerSheetContent implements BottomSheetContent {
         mNormalLayout = (LinearLayout) mContentView.findViewById(R.id.normal_layout);
         mErrorLayout = (LinearLayout) mContentView.findViewById(R.id.error_layout);
         mSeekBar = (SeekBar) mContentView.findViewById(R.id.readaloud_expanded_player_seek_bar);
+        mScrollView = (ScrollView) mContentView.findViewById(R.id.scroll_view);
 
         mSeekBar.setAccessibilityDelegate(
                 new View.AccessibilityDelegate() {
@@ -101,10 +107,13 @@ public class ExpandedPlayerSheetContent implements BottomSheetContent {
                         super.onInitializeAccessibilityEvent(host, event);
                     }
                 });
-
+        mPlayerControls =
+                (LinearLayout) mContentView.findViewById(R.id.readaloud_playback_controls);
         // Apply dynamic colors.
         Colors.setBottomSheetContentBackground(mContentView);
         Colors.setProgressBarColor(mSeekBar);
+
+        onOrientationChange(res.getConfiguration().orientation);
     }
 
     public void onPlaybackStateChanged(@PlaybackListener.State int state) {
@@ -128,6 +137,8 @@ public class ExpandedPlayerSheetContent implements BottomSheetContent {
 
     public void show() {
         mBottomSheetController.requestShowContent(this, /* animate= */ true);
+        // Reset scrolling if needed.
+        mScrollView.scrollTo(0, 0);
     }
 
     public void hide() {
@@ -354,6 +365,47 @@ public class ExpandedPlayerSheetContent implements BottomSheetContent {
                         (view) -> {
                             onClick.run();
                         });
+    }
+
+    /** Customize portraint and landscape mode sheets. Landscape mode layout is more compressed. */
+    public void onOrientationChange(int orientation) {
+        if (mOptionsMenu != null) {
+            mOptionsMenu.onOrientationChange(orientation);
+        }
+        if (mSpeedMenu != null) {
+            mSpeedMenu.onOrientationChange(orientation);
+        }
+        TextView chromeNowPlaying = mContentView.findViewById(R.id.chrome_now_playing_text);
+        ViewGroup.MarginLayoutParams chromeNowPlayingParams =
+                (ViewGroup.MarginLayoutParams) chromeNowPlaying.getLayoutParams();
+
+        ViewGroup.LayoutParams errorParams = mErrorLayout.getLayoutParams();
+        int bottomPadding = 0;
+        int topMargin = 0;
+        if (orientation == Configuration.ORIENTATION_PORTRAIT) {
+            errorParams.height =
+                    mContext.getResources()
+                            .getDimensionPixelSize(R.dimen.error_layour_portrait_height);
+            bottomPadding =
+                    mContext.getResources()
+                            .getDimensionPixelSize(R.dimen.readaloud_controls_portrait_padding);
+            topMargin =
+                    mContext.getResources()
+                            .getDimensionPixelSize(R.dimen.readaloud_now_playing_spacing_portrait);
+
+        } else if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
+
+            errorParams.height =
+                    mContext.getResources()
+                            .getDimensionPixelSize(R.dimen.error_layour_landscape_height);
+            topMargin =
+                    mContext.getResources()
+                            .getDimensionPixelSize(R.dimen.readaloud_now_playing_spacing_landscape);
+        }
+        chromeNowPlayingParams.setMargins(0, topMargin, 0, 0);
+        chromeNowPlaying.setLayoutParams(chromeNowPlayingParams);
+        mErrorLayout.setLayoutParams(errorParams);
+        mPlayerControls.setPadding(0, 0, 0, bottomPadding);
     }
 
     @VisibleForTesting

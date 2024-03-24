@@ -23,6 +23,8 @@
 #include "base/containers/contains.h"
 #include "base/containers/flat_map.h"
 #include "base/dcheck_is_on.h"
+#include "base/debug/crash_logging.h"
+#include "base/debug/dump_without_crashing.h"
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/location.h"
@@ -53,6 +55,7 @@
 #include "chrome/browser/ash/system_web_apps/apps/os_url_handler_system_web_app_info.h"
 #include "chrome/browser/ash/system_web_apps/apps/personalization_app/personalization_system_app_delegate.h"
 #include "chrome/browser/ash/system_web_apps/apps/print_management_web_app_info.h"
+#include "chrome/browser/ash/system_web_apps/apps/print_preview_cros_system_web_app_info.h"
 #include "chrome/browser/ash/system_web_apps/apps/projector_system_web_app_info.h"
 #include "chrome/browser/ash/system_web_apps/apps/scanning_system_web_app_info.h"
 #include "chrome/browser/ash/system_web_apps/apps/shimless_rma_system_web_app_info.h"
@@ -102,10 +105,6 @@ const constexpr char kIconsFixedOnReinstallMetricName[] =
 
 namespace {
 
-// Number of attempts to install a given version & locale of the SWAs before
-// bailing out.
-const int kInstallFailureAttempts = 3;
-
 SystemWebAppDelegateMap CreateSystemWebApps(Profile* profile) {
   std::vector<std::unique_ptr<SystemWebAppDelegate>> info_vec;
   // TODO(crbug.com/1051229): Currently unused, will be hooked up
@@ -141,6 +140,7 @@ SystemWebAppDelegateMap CreateSystemWebApps(Profile* profile) {
   info_vec.push_back(
       std::make_unique<vc_background_ui::VcBackgroundUISystemAppDelegate>(
           profile));
+  info_vec.push_back(std::make_unique<PrintPreviewCrosDelegate>(profile));
 
 #if !defined(OFFICIAL_BUILD)
   info_vec.push_back(std::make_unique<SampleSystemAppDelegate>(profile));
@@ -372,6 +372,9 @@ void SystemWebAppManager::Start() {
     LOG(ERROR)
         << "Exceeded SWA install retry attempts.  Skipping installation, will "
            "retry on next OS update or when locale changes.";
+    SCOPED_CRASH_KEY_BOOL("SystemWebAppManager", "broken_icons",
+                          PreviousSessionHadBrokenIcons());
+    base::debug::DumpWithoutCrashing();
     return;
   }
 
@@ -796,10 +799,9 @@ void SystemWebAppManager::UpdateLastAttemptedInfo() {
   const std::string& last_attempted_locale(
       pref_service_->GetString(prefs::kSystemWebAppLastAttemptedLocale));
 
-  const bool is_retry = (last_attempted_version.IsValid() &&
-                         last_attempted_version == CurrentVersion() &&
-                         last_attempted_locale == CurrentLocale()) ||
-                        PreviousSessionHadBrokenIcons();
+  const bool is_retry = last_attempted_version.IsValid() &&
+                        last_attempted_version == CurrentVersion() &&
+                        last_attempted_locale == CurrentLocale();
 
   if (!is_retry) {
     pref_service_->SetInteger(prefs::kSystemWebAppInstallFailureCount, 0);

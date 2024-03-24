@@ -5,6 +5,7 @@
 #include "chrome/browser/ash/policy/dlp/dlp_files_controller_ash.h"
 
 #include <sys/types.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -12,6 +13,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "ash/webui/system_apps/public/system_web_app_type.h"
@@ -29,7 +31,6 @@
 #include "base/memory/raw_ref.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/strcat.h"
-#include "base/strings/string_piece.h"
 #include "base/task/bind_post_task.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
@@ -153,7 +154,7 @@ file_manager::VolumeManager* GetVolumeManager(
 // Returns whether `url` represents the URL of a system application.
 bool IsSystemAppURL(const GURL& url) {
   static constexpr auto kSystemURLsMap =
-      base::MakeFixedFlatSet<base::StringPiece>(
+      base::MakeFixedFlatSet<std::string_view>(
           {kFileManagerUrl, kImageLoaderUrl});
   return kSystemURLsMap.contains(url.spec());
 }
@@ -398,7 +399,7 @@ void DlpFilesControllerAsh::CheckIfDownloadAllowed(
             }
             if (!is_allowed) {
               ::policy::files_controller_ash_utils::ShowDlpBlockedFiles(
-                  profile, /*task_id=*/absl::nullopt, {file_path},
+                  profile, /*task_id=*/std::nullopt, {file_path},
                   dlp::FileAction::kDownload);
             }
             std::move(result_callback).Run(is_allowed);
@@ -852,7 +853,7 @@ void DlpFilesControllerAsh::ReturnAllowedUploads(
         });
 
     ::policy::files_controller_ash_utils::ShowDlpBlockedFiles(
-        profile_, /*task_id=*/absl::nullopt, std::move(restricted_files),
+        profile_, /*task_id=*/std::nullopt, std::move(restricted_files),
         dlp::FileAction::kUpload);
   }
 

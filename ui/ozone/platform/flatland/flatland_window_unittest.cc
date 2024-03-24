@@ -20,6 +20,7 @@
 #include "base/fuchsia/scoped_service_publisher.h"
 #include "base/fuchsia/test_component_context_for_process.h"
 #include "base/logging.h"
+#include "base/test/fidl_matchers.h"
 #include "base/test/task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/events/fuchsia/util/pointer_event_utility.h"
@@ -51,23 +52,24 @@ Matcher<FakeGraph> IsWindowGraph(
         parent_viewport_watcher,
     const fuchsia::ui::views::ViewportCreationToken& viewport_creation_token,
     Matcher<std::vector<FakeTransformPtr>> children_transform_matcher) {
-  absl::optional<zx_koid_t> view_token_koid =
+  std::optional<zx_koid_t> view_token_koid =
       base::GetRelatedKoid(viewport_creation_token.value);
   EXPECT_TRUE(view_token_koid.has_value());
-  absl::optional<zx_koid_t> watcher_koid =
+  std::optional<zx_koid_t> watcher_koid =
       base::GetRelatedKoid(parent_viewport_watcher.channel());
   EXPECT_TRUE(watcher_koid.has_value());
 
   return AllOf(
       Field("root_transform", &FakeGraph::root_transform,
-            Pointee(AllOf(Field("translation", &FakeTransform::translation,
-                                FakeTransform::kDefaultTranslation),
-                          Field("scale", &FakeTransform::scale,
-                                FakeTransform::kDefaultScale),
-                          Field("opacity", &FakeTransform::opacity,
-                                FakeTransform::kDefaultOpacity),
-                          Field("children", &FakeTransform::children,
-                                children_transform_matcher)))),
+            Pointee(AllOf(
+                Field("translation", &FakeTransform::translation,
+                      ::base::test::FidlEq(FakeTransform::kDefaultTranslation)),
+                Field("scale", &FakeTransform::scale,
+                      ::base::test::FidlEq(FakeTransform::kDefaultScale)),
+                Field("opacity", &FakeTransform::opacity,
+                      FakeTransform::kDefaultOpacity),
+                Field("children", &FakeTransform::children,
+                      children_transform_matcher)))),
       Field("view", &FakeGraph::view,
             Optional(AllOf(
                 Field("view_token", &FakeView::view_token, view_token_koid),
@@ -83,7 +85,7 @@ Matcher<fuchsia::ui::composition::ViewportProperties> IsViewportProperties(
                true),
       Property("logical_size",
                &fuchsia::ui::composition::ViewportProperties::logical_size,
-               logical_size));
+               ::base::test::FidlEq(logical_size)));
 }
 
 Matcher<FakeTransformPtr> IsViewport(
@@ -93,8 +95,9 @@ Matcher<FakeTransformPtr> IsViewport(
 
   return Pointee(AllOf(
       Field("translation", &FakeTransform::translation,
-            FakeTransform::kDefaultTranslation),
-      Field("scale", &FakeTransform::scale, FakeTransform::kDefaultScale),
+            ::base::test::FidlEq(FakeTransform::kDefaultTranslation)),
+      Field("scale", &FakeTransform::scale,
+            ::base::test::FidlEq(FakeTransform::kDefaultScale)),
       Field("opacity", &FakeTransform::opacity, FakeTransform::kDefaultOpacity),
       Field("children", &FakeTransform::children, IsEmpty()),
       Field("content", &FakeTransform::content,
@@ -112,7 +115,8 @@ Matcher<FakeTransformPtr> IsHitShield() {
             testing::Eq(std::nullopt)),
       // Hit region must be "infinite".
       Field("hit_regions", &FakeTransform::hit_regions,
-            testing::Contains(scenic::kInfiniteHitRegion))));
+            testing::Contains(
+                ::base::test::FidlEq(scenic::kInfiniteHitRegion)))));
 }
 
 }  // namespace

@@ -34,6 +34,11 @@ class VirtualCardEnrollBubbleControllerImplTestApi {
   void SetFields(const VirtualCardEnrollmentFields& fields) {
     controller_->ui_model_.enrollment_fields = fields;
   }
+#else
+  VirtualCardEnrollBubbleControllerImpl::EnrollmentStatus
+  GetEnrollmentStatus() {
+    return controller_->enrollment_status_;
+  }
 #endif  // IS_ANDROID
 
  private:

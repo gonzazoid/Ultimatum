@@ -5,7 +5,9 @@
 #include "chrome/browser/extensions/installed_loader.h"
 
 #include <stddef.h>
+
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -29,6 +31,7 @@
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/extensions/chrome_manifest_url_handlers.h"
 #include "chrome/common/extensions/manifest_handlers/settings_overrides_handler.h"
+#include "chrome/common/pref_names.h"
 #include "chrome/common/webui_url_constants.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "content/public/browser/browser_thread.h"
@@ -47,13 +50,13 @@
 #include "extensions/common/extension_l10n_util.h"
 #include "extensions/common/extension_set.h"
 #include "extensions/common/extension_urls.h"
+#include "extensions/common/features/feature_developer_mode_only.h"
 #include "extensions/common/file_util.h"
 #include "extensions/common/manifest.h"
 #include "extensions/common/manifest_constants.h"
 #include "extensions/common/manifest_handlers/background_info.h"
 #include "extensions/common/permissions/api_permission.h"
 #include "extensions/common/permissions/permissions_data.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/profiles/profile_helper.h"
@@ -276,6 +279,13 @@ void LogHostPermissionsAccess(const Extension& extension,
   }
 }
 
+bool ShouldCollectDevModeDataForLocation(mojom::ManifestLocation location) {
+  return location == mojom::ManifestLocation::kExternalPref ||
+         location == mojom::ManifestLocation::kExternalPrefDownload ||
+         location == mojom::ManifestLocation::kExternalRegistry ||
+         location == mojom::ManifestLocation::kUnpacked;
+}
+
 }  // namespace
 
 InstalledLoader::InstalledLoader(ExtensionService* extension_service)
@@ -356,7 +366,7 @@ void InstalledLoader::Load(const ExtensionInfo& info, bool write_to_prefs) {
         // Non-policy extensions are repaired on startup. Add any corrupted
         // user-installed extensions to the reinstaller as well.
         corrupted_extension_reinstaller->ExpectReinstallForCorruption(
-            extension->id(), absl::nullopt, extension->location());
+            extension->id(), std::nullopt, extension->location());
       }
     }
   } else {
@@ -511,6 +521,9 @@ void InstalledLoader::RecordExtensionsMetrics(Profile* profile,
   ManifestVersion2And3Counts unpacked_manifest_version_counts;
 
   bool should_record_incremented_metrics = is_user_profile;
+  bool should_record_offstore_developer_mode_metrics =
+      !profile->GetPrefs()->GetBoolean(prefs::kExtensionsUIDeveloperMode) &&
+      is_user_profile;
 
   const ExtensionSet& extensions = extension_registry_->enabled_extensions();
   for (ExtensionSet::const_iterator iter = extensions.begin();
@@ -554,7 +567,21 @@ void InstalledLoader::RecordExtensionsMetrics(Profile* profile,
           UMA_HISTOGRAM_ENUMERATION("Extensions.FromWebstoreInconsistency2",
                                     BAD_UPDATE_URL, 2);
         }
+      } else if (should_record_offstore_developer_mode_metrics &&
+                 ShouldCollectDevModeDataForLocation(location)) {
+        // Record non-webstore extensions when user is not in developer
+        // mode. Only include external pref, registry, and unpacked locations.
+        base::UmaHistogramEnumeration(
+            "Extensions.NonWebstoreLocationWithDeveloperModeOff.Enabled",
+            location);
       }
+    }
+
+    if (is_user_profile) {
+      bool dev_mode_enabled =
+          GetCurrentDeveloperMode(util::GetBrowserContextId(profile));
+      base::UmaHistogramBoolean("Extensions.DeveloperModeEnabled",
+                                dev_mode_enabled);
     }
 
     if (Manifest::IsExternalLocation(location)) {
@@ -848,18 +875,20 @@ void InstalledLoader::RecordExtensionsMetrics(Profile* profile,
   const ExtensionSet& disabled_extensions =
       extension_registry_->disabled_extensions();
 
-  for (ExtensionSet::const_iterator ex = disabled_extensions.begin();
-       ex != disabled_extensions.end();
-       ++ex) {
-    if (extension_prefs_->DidExtensionEscalatePermissions((*ex)->id())) {
+  for (const scoped_refptr<const Extension>& disabled_extension :
+       disabled_extensions) {
+    mojom::ManifestLocation location = disabled_extension->location();
+    if (extension_prefs_->DidExtensionEscalatePermissions(
+            disabled_extension->id())) {
       ++disabled_for_permissions_count;
     }
     if (should_record_incremented_metrics) {
-      RecordDisableReasons(extension_prefs_->GetDisableReasons((*ex)->id()));
+      RecordDisableReasons(
+          extension_prefs_->GetDisableReasons(disabled_extension->id()));
     }
-    if (Manifest::IsExternalLocation((*ex)->location())) {
+    if (Manifest::IsExternalLocation(location)) {
       // See loop above for ENABLED.
-      if (extension_management->UpdatesFromWebstore(**ex)) {
+      if (extension_management->UpdatesFromWebstore(*disabled_extension)) {
         UMA_HISTOGRAM_ENUMERATION("Extensions.ExternalItemState",
                                   EXTERNAL_ITEM_WEBSTORE_DISABLED,
                                   EXTERNAL_ITEM_MAX_ITEMS);
@@ -880,8 +909,19 @@ void InstalledLoader::RecordExtensionsMetrics(Profile* profile,
       }
     }
 
+    // Record disabled non-webstore extensions when user is not in developer
+    // mode.  Only include external pref, registry, and unpacked locations.
+    if (should_record_offstore_developer_mode_metrics &&
+        !extension_management->UpdatesFromWebstore(*disabled_extension) &&
+        !disabled_extension->from_webstore() &&
+        ShouldCollectDevModeDataForLocation(location)) {
+      base::UmaHistogramEnumeration(
+          "Extensions.NonWebstoreLocationWithDeveloperModeOff.Disabled",
+          location);
+    }
+
     if (extension_service_->allowlist()->GetExtensionAllowlistState(
-            (*ex)->id()) == ALLOWLIST_NOT_ALLOWLISTED) {
+            disabled_extension->id()) == ALLOWLIST_NOT_ALLOWLISTED) {
       // Record the number of not allowlisted disabled extensions.
       ++disabled_not_allowlisted_count;
     }

@@ -5,7 +5,9 @@
 #include "components/safe_browsing/content/browser/client_side_phishing_model.h"
 
 #include <stdint.h>
+
 #include <memory>
+#include <optional>
 
 #include "base/command_line.h"
 #include "base/feature_list.h"
@@ -30,7 +32,6 @@
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace safe_browsing {
 
@@ -117,7 +118,7 @@ std::pair<std::string, base::File> LoadModelAndVisualTfLiteFile(
     return std::pair<std::string, base::File>();
   }
 
-  absl::optional<base::FilePath> visual_tflite_path = absl::nullopt;
+  std::optional<base::FilePath> visual_tflite_path = std::nullopt;
 
   for (const base::FilePath& path : additional_files) {
     // There should only be one loop after above check
@@ -152,6 +153,11 @@ void CloseModelFile(base::File model_file) {
   model_file.Close();
 }
 
+int* GetLiveClientPhishingModelCount() {
+  static int count = 0;
+  return &count;
+}
+
 }  // namespace
 
 // --- ClientSidePhishingModel methods ---
@@ -164,7 +170,11 @@ ClientSidePhishingModel::ClientSidePhishingModel(
       beginning_time_(base::TimeTicks::Now()) {
   opt_guide_->AddObserverForOptimizationTargetModel(
       optimization_guide::proto::OPTIMIZATION_TARGET_CLIENT_SIDE_PHISHING,
-      /*model_metadata=*/absl::nullopt, this);
+      /*model_metadata=*/std::nullopt, this);
+  *GetLiveClientPhishingModelCount() += 1;
+  base::UmaHistogramCounts1000(
+      "SBClientPhishing.LiveClientPhishingModelCountAtCreation",
+      *GetLiveClientPhishingModelCount());
 }
 
 void ClientSidePhishingModel::OnModelUpdated(
@@ -246,7 +256,7 @@ void ClientSidePhishingModel::SubscribeToImageEmbedderOptimizationGuide() {
     opt_guide_->AddObserverForOptimizationTargetModel(
         optimization_guide::proto::
             OPTIMIZATION_TARGET_CLIENT_SIDE_PHISHING_IMAGE_EMBEDDER,
-        /*model_metadata=*/absl::nullopt, this);
+        /*model_metadata=*/std::nullopt, this);
   }
 }
 
@@ -255,7 +265,7 @@ bool ClientSidePhishingModel::IsSubscribedToImageEmbeddingModelUpdates() {
 }
 
 void ClientSidePhishingModel::OnModelAndVisualTfLiteFileLoaded(
-    absl::optional<optimization_guide::proto::Any> model_metadata,
+    std::optional<optimization_guide::proto::Any> model_metadata,
     std::pair<std::string, base::File> model_and_tflite) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
@@ -330,8 +340,8 @@ void ClientSidePhishingModel::OnModelAndVisualTfLiteFileLoaded(
         "SBClientPhishing.OptimizationGuide.ModelFetchTime",
         base::TimeTicks::Now() - beginning_time_);
 
-    absl::optional<optimization_guide::proto::ClientSidePhishingModelMetadata>
-        client_side_phishing_model_metadata = absl::nullopt;
+    std::optional<optimization_guide::proto::ClientSidePhishingModelMetadata>
+        client_side_phishing_model_metadata = std::nullopt;
 
     if (model_metadata.has_value()) {
       client_side_phishing_model_metadata =
@@ -355,7 +365,7 @@ void ClientSidePhishingModel::OnModelAndVisualTfLiteFileLoaded(
 }
 
 void ClientSidePhishingModel::OnImageEmbeddingModelLoaded(
-    absl::optional<optimization_guide::proto::Any> model_metadata,
+    std::optional<optimization_guide::proto::Any> model_metadata,
     base::File image_embedding_model) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
@@ -369,8 +379,8 @@ void ClientSidePhishingModel::OnImageEmbeddingModelLoaded(
 
   image_embedding_model_ = std::move(image_embedding_model);
 
-  absl::optional<optimization_guide::proto::ClientSidePhishingModelMetadata>
-      image_embedding_model_metadata = absl::nullopt;
+  std::optional<optimization_guide::proto::ClientSidePhishingModelMetadata>
+      image_embedding_model_metadata = std::nullopt;
 
   if (model_metadata.has_value()) {
     image_embedding_model_metadata = optimization_guide::ParsedAnyMetadata<
@@ -432,6 +442,8 @@ ClientSidePhishingModel::~ClientSidePhishingModel() {
   }
 
   opt_guide_ = nullptr;
+
+  *GetLiveClientPhishingModelCount() -= 1;
 }
 
 base::CallbackListSubscription ClientSidePhishingModel::RegisterCallback(
@@ -696,7 +708,7 @@ void ClientSidePhishingModel::SetModelAndVisualTfLiteForTesting(
       base::BindOnce(&LoadModelAndVisualTfLiteFile, model_file_path,
                      additional_files),
       base::BindOnce(&ClientSidePhishingModel::OnModelAndVisualTfLiteFileLoaded,
-                     weak_ptr_factory_.GetWeakPtr(), absl::nullopt));
+                     weak_ptr_factory_.GetWeakPtr(), std::nullopt));
 }
 
 }  // namespace safe_browsing

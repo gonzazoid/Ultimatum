@@ -43,19 +43,22 @@ build_webui("build") {
 
   icons_html_files = [ "icons.html" ]
 
-  mojo_files_deps =
-      [ "//chrome/browser/ui/webui/ash/emoji:mojo_bindings_ts__generator" ]
+  mojo_files_deps = [
+    "//chrome/browser/ui/webui/ash/emoji:mojo_bindings_ts__generator",
+    "//chromeos/ash/components/emoji:mojo_bindings_ts__generator",
+  ]
   mojo_files = [
     "$root_gen_dir/chrome/browser/ui/webui/ash/emoji/emoji_picker.mojom-webui.ts",
     "$root_gen_dir/chrome/browser/ui/webui/ash/emoji/new_window_proxy.mojom-webui.ts",
+    "$root_gen_dir/chromeos/ash/components/emoji/emoji_search.mojom-webui.ts",
   ]
 
   ts_composite = true
   ts_definitions = [ "$preprocess_folder/fuse.d.ts" ]
   ts_deps = [
+    "//ash/webui/common/resources/cr_elements:build_ts",
     "//third_party/polymer/v3_0:library",
     "//ui/webui/resources/cr_components/color_change_listener:build_ts",
-    "//ui/webui/resources/cr_elements:build_ts",
     "//ui/webui/resources/js:build_ts",
     "//ui/webui/resources/mojo:build_ts",
   ]

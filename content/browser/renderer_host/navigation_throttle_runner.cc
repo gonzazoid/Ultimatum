@@ -4,11 +4,14 @@
 
 #include "content/browser/renderer_host/navigation_throttle_runner.h"
 
+#include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/metrics_hashes.h"
 #include "base/strings/strcat.h"
 #include "build/build_config.h"
 #include "content/browser/devtools/devtools_instrumentation.h"
+#include "content/browser/preloading/prefetch/contamination_delay_navigation_throttle.h"
+#include "content/browser/preloading/prefetch/prefetch_features.h"
 #include "content/browser/preloading/prerender/prerender_navigation_throttle.h"
 #include "content/browser/preloading/prerender/prerender_subframe_navigation_throttle.h"
 #include "content/browser/renderer_host/ancestor_throttle.h"
@@ -187,6 +190,14 @@ void NavigationThrottleRunner::RegisterNavigationThrottles() {
   AddThrottle(
       MixedContentNavigationThrottle::CreateThrottleForNavigation(request));
 
+  if (base::FeatureList::IsEnabled(
+          features::kPrefetchStateContaminationMitigation)) {
+    // Delay response processing for certain prefetch responses where it might
+    // otherwise reveal information about cross-site state.
+    AddThrottle(
+        std::make_unique<ContaminationDelayNavigationThrottle>(request));
+  }
+
   // Block certain requests that are not permitted for prerendering.
   AddThrottle(PrerenderNavigationThrottle::MaybeCreateThrottleFor(request));
 
@@ -220,6 +231,15 @@ void NavigationThrottleRunner::RegisterNavigationThrottles() {
   // subframe navigations should not proceed.
   AddThrottle(
       SubframeHistoryNavigationThrottle::MaybeCreateThrottleFor(request));
+
+  // Defer subframe navigation in bfcached page if it hasn't sent a network
+  // request.
+  if (base::FeatureList::IsEnabled(
+          features::kEnableBackForwardCacheForOngoingSubframeNavigation)) {
+    AddThrottle(
+        BackForwardCacheSubframeNavigationThrottle::MaybeCreateThrottleFor(
+            request));
+  }
 
   // Insert all testing NavigationThrottles last.
   throttles_.insert(throttles_.end(),

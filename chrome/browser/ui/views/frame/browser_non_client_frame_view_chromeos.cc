@@ -350,13 +350,6 @@ void BrowserNonClientFrameViewChromeOS::UpdateMinimumSize() {
   GetWidget()->OnSizeConstraintsChanged();
 }
 
-void BrowserNonClientFrameViewChromeOS::OnBrowserViewInitViewsComplete() {
-  // We need to wait till browser views are fully initialized to apply rounded
-  // corners on the frame. This ensure that NativeViewHosts hosting browser's
-  // web contents are initialized.
-  UpdateWindowRoundedCorners();
-}
-
 gfx::Rect BrowserNonClientFrameViewChromeOS::GetBoundsForClientView() const {
   // The ClientView must be flush with the top edge of the widget so that the
   // web contents can take up the entire screen in immersive fullscreen (with
@@ -457,7 +450,7 @@ bool BrowserNonClientFrameViewChromeOS::AppIsPwaWithBorderlessDisplayMode()
          browser_view()->AppUsesBorderlessMode();
 }
 
-void BrowserNonClientFrameViewChromeOS::Layout() {
+void BrowserNonClientFrameViewChromeOS::Layout(PassKey) {
   // The header must be laid out before computing |painted_height| because the
   // computation of |painted_height| for app and popup windows depends on the
   // position of the window controls.
@@ -479,7 +472,7 @@ void BrowserNonClientFrameViewChromeOS::Layout() {
     UpdateBorderlessModeEnabled();
   }
 
-  BrowserNonClientFrameView::Layout();
+  LayoutSuperclass<BrowserNonClientFrameView>(this);
   UpdateTopViewInset();
 
   if (frame_header_) {
@@ -561,7 +554,7 @@ void BrowserNonClientFrameViewChromeOS::ChildPreferredSizeChanged(
     views::View* child) {
   if (browser_view()->initialized()) {
     InvalidateLayout();
-    frame()->GetRootView()->Layout();
+    frame()->GetRootView()->DeprecatedLayoutImmediately();
   }
 }
 
@@ -689,7 +682,7 @@ void BrowserNonClientFrameViewChromeOS::OnTabletModeToggled(bool enabled) {
   if (frame()->client_view())
     frame()->client_view()->InvalidateLayout();
   if (frame()->GetRootView())
-    frame()->GetRootView()->Layout();
+    frame()->GetRootView()->DeprecatedLayoutImmediately();
 }
 
 bool BrowserNonClientFrameViewChromeOS::ShouldTabIconViewAnimate() const {
@@ -805,12 +798,12 @@ void BrowserNonClientFrameViewChromeOS::OnImmersiveRevealStarted() {
   auto* container = browser_view()->top_container();
   container->AddChildViewAt(caption_button_container_.get(), 0);
 
-  container->Layout();
+  container->DeprecatedLayoutImmediately();
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   // In Lacros, when entering in immersive fullscreen, it is possible
-  // that chromeos::FrameHeader::painted_height_ is set to '0', when
-  // Layout() is called. This is because the tapstrip gets hidden.
+  // that chromeos::FrameHeader::painted_height_ is set to '0', when layout
+  // occurs. This is because the tapstrip gets hidden.
   //
   // When it happens, PaintFrameImagesInRoundRect() has an empty rect
   // to paint onto, and the TabStrip's new theme is not painted.
@@ -823,7 +816,7 @@ void BrowserNonClientFrameViewChromeOS::OnImmersiveRevealEnded() {
   ResetWindowControls();
   AddChildViewAt(caption_button_container_.get(), 0);
 
-  Layout();
+  DeprecatedLayoutImmediately();
 }
 
 void BrowserNonClientFrameViewChromeOS::OnImmersiveFullscreenExited() {
@@ -1031,26 +1024,31 @@ void BrowserNonClientFrameViewChromeOS::UpdateProfileIcons() {
     if (needs_layout && root_view) {
       // Adding a child does not invalidate the layout.
       InvalidateLayout();
-      root_view->Layout();
+      root_view->DeprecatedLayoutImmediately();
     }
   } else if (profile_indicator_icon_) {
     RemoveChildViewT(std::exchange(profile_indicator_icon_, nullptr));
     if (root_view)
-      root_view->Layout();
+      root_view->DeprecatedLayoutImmediately();
   }
 #endif
 }
 
 void BrowserNonClientFrameViewChromeOS::UpdateWindowRoundedCorners() {
-  const int corner_radius =
-      chromeos::GetFrameCornerRadius(frame()->GetNativeWindow());
+  DCHECK(GetWidget());
+
+  aura::Window* frame_window = GetWidget()->GetNativeWindow();
+
+  const int corner_radius = chromeos::GetFrameCornerRadius(frame_window);
+  frame_window->SetProperty(aura::client::kWindowCornerRadiusKey,
+                            corner_radius);
 
   if (frame_header_) {
     frame_header_->SetHeaderCornerRadius(corner_radius);
   }
 
   if (chromeos::features::IsRoundedWindowsEnabled()) {
-    GetWidget()->client_view()->UpdateWindowRoundedCorners();
+    GetWidget()->client_view()->UpdateWindowRoundedCorners(corner_radius);
   }
 }
 

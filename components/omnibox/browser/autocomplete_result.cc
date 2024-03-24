@@ -6,8 +6,10 @@
 
 #include <functional>
 #include <iterator>
+#include <optional>
 #include <string>
 #include <unordered_set>
+#include <utility>
 
 #include "base/check_op.h"
 #include "base/command_line.h"
@@ -46,7 +48,6 @@
 #include "components/strings/grit/components_strings.h"
 #include "components/url_formatter/url_fixer.h"
 #include "omnibox_triggered_feature_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/metrics_proto/omnibox_event.pb.h"
 #include "third_party/metrics_proto/omnibox_focus_type.pb.h"
 #include "third_party/metrics_proto/omnibox_input_type.pb.h"
@@ -203,7 +204,7 @@ void AutocompleteResult::TransferOldMatches(const AutocompleteInput& input,
 
   if (empty()) {
     // If we've got no matches we can copy everything from the last result.
-    Swap(old_matches);
+    SwapMatchesWith(old_matches);
     for (auto& match : *this)
       match.from_previous = true;
     return;
@@ -288,7 +289,7 @@ void AutocompleteResult::DeduplicateMatches(
 void AutocompleteResult::Sort(
     const AutocompleteInput& input,
     TemplateURLService* template_url_service,
-    absl::optional<AutocompleteMatch> default_match_to_preserve) {
+    std::optional<AutocompleteMatch> default_match_to_preserve) {
   if (!is_ios)
     DemoteOnDeviceSearchSuggestions();
 
@@ -347,7 +348,7 @@ void AutocompleteResult::SortAndCull(
     const AutocompleteInput& input,
     TemplateURLService* template_url_service,
     OmniboxTriggeredFeatureService* triggered_feature_service,
-    absl::optional<AutocompleteMatch> default_match_to_preserve) {
+    std::optional<AutocompleteMatch> default_match_to_preserve) {
   SCOPED_UMA_HISTOGRAM_TIMER_MICROS(
       "Omnibox.AutocompletionTime.UpdateResult.SortAndCull");
   Sort(input, template_url_service, default_match_to_preserve);
@@ -757,7 +758,7 @@ void AutocompleteResult::ConvertOpenTabMatches(
     // If already converted this match, don't re-search through open tabs and
     // possibly re-change the description.
     // Note: explicitly check for value rather than deferring to implicit
-    // boolean conversion of absl::optional.
+    // boolean conversion of std::optional.
     if (match.has_tab_match.has_value()) {
       continue;
     }
@@ -1032,6 +1033,11 @@ size_t AutocompleteResult::CalculateNumMatchesPerUrlCount(
 }
 
 void AutocompleteResult::Reset() {
+  ClearMatches();
+  session_.Reset();
+}
+
+void AutocompleteResult::ClearMatches() {
   matches_.clear();
   suggestion_groups_map_.clear();
   MergeSuggestionGroupsMap(omnibox::BuildDefaultGroups());
@@ -1040,21 +1046,28 @@ void AutocompleteResult::Reset() {
 #endif
 }
 
-void AutocompleteResult::Swap(AutocompleteResult* other) {
+void AutocompleteResult::SessionData::Reset() {
+  zero_prefix_enabled_ = false;
+  num_zero_prefix_suggestions_shown_ = 0u;
+}
+
+void AutocompleteResult::SwapMatchesWith(AutocompleteResult* other) {
   matches_.swap(other->matches_);
   suggestion_groups_map_.swap(other->suggestion_groups_map_);
+
 #if BUILDFLAG(IS_ANDROID)
   DestroyJavaObject();
   other->DestroyJavaObject();
 #endif
 }
 
-void AutocompleteResult::CopyFrom(const AutocompleteResult& other) {
+void AutocompleteResult::CopyMatchesFrom(const AutocompleteResult& other) {
   if (this == &other)
     return;
 
   matches_ = other.matches_;
   suggestion_groups_map_ = other.suggestion_groups_map_;
+
 #if BUILDFLAG(IS_ANDROID)
   DestroyJavaObject();
 #endif
@@ -1208,6 +1221,12 @@ bool AutocompleteResult::IsSuggestionGroupHidden(
     return false;
   }
 
+  // Always show the suggestion group if there's no associated group header (and
+  // thus no user-visible control for toggling the visiblity of the group).
+  if (GetHeaderForSuggestionGroup(suggestion_group_id).empty()) {
+    return false;
+  }
+
   omnibox::SuggestionGroupVisibility user_preference =
       omnibox::GetUserPreferenceForSuggestionGroupVisibility(
           prefs, suggestion_group_id);
@@ -1311,7 +1330,6 @@ void AutocompleteResult::MaybeCullTailSuggestions(
       if (!default_tail && match.allowed_to_be_default_match)
         default_tail = true;
     } else if (is_history_cluster(match)) {
-      DCHECK(!match.allowed_to_be_default_match);
       any_history_clusters = true;
     } else {
       any_normals = true;

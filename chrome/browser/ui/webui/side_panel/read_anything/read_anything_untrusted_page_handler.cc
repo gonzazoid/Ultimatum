@@ -9,10 +9,14 @@
 #include <utility>
 #include <vector>
 
+#include "base/check_op.h"
 #include "base/containers/flat_map.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/values.h"
+#include "chrome/browser/browser_features.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/screen_ai/screen_ai_service_router.h"
+#include "chrome/browser/screen_ai/screen_ai_service_router_factory.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/views/side_panel/read_anything/read_anything_controller.h"
@@ -22,23 +26,30 @@
 #include "components/language/core/common/locale_util.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
+#include "content/public/browser/browser_accessibility_state.h"
+#include "content/public/browser/scoped_accessibility_mode.h"
+#include "content/public/browser/web_contents_user_data.h"
 #include "content/public/browser/web_ui.h"
 #include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/ax_action_data.h"
+#include "ui/accessibility/ax_enums.mojom-shared.h"
 #include "ui/accessibility/ax_mode.h"
 #include "ui/accessibility/ax_tree_update.h"
+#include "ui/gfx/geometry/rect.h"
 #include "url/gurl.h"
-
-#if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
-#include "chrome/browser/screen_ai/screen_ai_service_router.h"
-#include "chrome/browser/screen_ai/screen_ai_service_router_factory.h"
-#endif
 
 using read_anything::mojom::ReadAnythingTheme;
 using read_anything::mojom::UntrustedPage;
 using read_anything::mojom::UntrustedPageHandler;
 
 namespace {
+
+// All components of kAXModeWebContentsOnly are needed. |ui::AXMode::kHTML| is
+// needed for URL information. |ui::AXMode::kScreenReader| is needed for heading
+// level information. |ui::AXMode::kInlineTextBoxes| is needed for complete
+// Screen2x output -- if excluded, some nodes from the tree will not be
+// identified as content nodes.
+constexpr ui::AXMode kReadAnythingAXMode = ui::kAXModeWebContentsOnly;
 
 int GetNormalizedFontScale(double font_scale) {
   DCHECK(font_scale >= kReadAnythingMinimumFontScale &&
@@ -47,13 +58,85 @@ int GetNormalizedFontScale(double font_scale) {
          (1 / kReadAnythingFontScaleIncrement);
 }
 
+class PersistentAccessibilityHelper
+    : public content::WebContentsUserData<PersistentAccessibilityHelper> {
+ public:
+  ~PersistentAccessibilityHelper() override = default;
+
+  // Persists `scoped_accessibility_mode` for `web_contents`.
+  static void PersistForWebContents(
+      content::WebContents& web_contents,
+      std::unique_ptr<content::ScopedAccessibilityMode>
+          scoped_accessibility_mode);
+
+ private:
+  friend content::WebContentsUserData<PersistentAccessibilityHelper>;
+
+  PersistentAccessibilityHelper(
+      content::WebContents& web_contents,
+      std::unique_ptr<content::ScopedAccessibilityMode>
+          scoped_accessibility_mode)
+      : WebContentsUserData(web_contents),
+        scoped_accessibility_mode_(std::move(scoped_accessibility_mode)) {}
+
+  WEB_CONTENTS_USER_DATA_KEY_DECL();
+  std::unique_ptr<content::ScopedAccessibilityMode> scoped_accessibility_mode_;
+};
+
+// static
+void PersistentAccessibilityHelper::PersistForWebContents(
+    content::WebContents& web_contents,
+    std::unique_ptr<content::ScopedAccessibilityMode>
+        scoped_accessibility_mode) {
+  if (auto* const instance = FromWebContents(&web_contents); instance) {
+    instance->scoped_accessibility_mode_ = std::move(scoped_accessibility_mode);
+  } else {
+    web_contents.SetUserData(
+        UserDataKey(),
+        base::WrapUnique(new PersistentAccessibilityHelper(
+            web_contents, std::move(scoped_accessibility_mode))));
+  }
+}
+
+WEB_CONTENTS_USER_DATA_KEY_IMPL(PersistentAccessibilityHelper);
+
 }  // namespace
 
 ReadAnythingWebContentsObserver::ReadAnythingWebContentsObserver(
     base::SafeRef<ReadAnythingUntrustedPageHandler> page_handler,
-    content::WebContents* web_contents)
+    content::WebContents* web_contents,
+    ui::AXMode accessibility_mode)
     : page_handler_(page_handler) {
   Observe(web_contents);
+
+  // Enable accessibility for the top level render frame and all descendants.
+  // This causes AXTreeSerializer to reset and send accessibility events of
+  // the AXTree when it is re-serialized.
+  if (web_contents) {
+    // Force a reset if web accessibility is already enabled to ensure that new
+    // observers of accessibility events get the full accessibility tree from
+    // scratch.
+    const bool need_reset =
+        web_contents->GetAccessibilityMode().has_mode(ui::AXMode::kWebContents);
+
+    scoped_accessibility_mode_ =
+        content::BrowserAccessibilityState::GetInstance()
+            ->CreateScopedModeForWebContents(web_contents, accessibility_mode);
+
+    if (base::FeatureList::IsEnabled(
+            features::kReadAnythingPermanentAccessibility)) {
+      // If permanent accessibility for Read Anything is enabled, give ownership
+      // of the scoper to the WebContents. This ensures that those modes are
+      // kept active even when RA is no longer handling events from the WC.
+      // This codepath is to be deleted at the conclusion of the study.
+      PersistentAccessibilityHelper::PersistForWebContents(
+          *web_contents, std::move(scoped_accessibility_mode_));
+    }
+
+    if (need_reset) {
+      web_contents->ResetAccessibility();
+    }
+  }
 }
 
 ReadAnythingWebContentsObserver::~ReadAnythingWebContentsObserver() = default;
@@ -111,6 +194,7 @@ ReadAnythingUntrustedPageHandler::ReadAnythingUntrustedPageHandler(
             prefs->GetInteger(prefs::kAccessibilityReadAnythingLetterSpacing)),
         prefs->GetString(prefs::kAccessibilityReadAnythingFontName),
         prefs->GetDouble(prefs::kAccessibilityReadAnythingFontScale),
+        prefs->GetBoolean(prefs::kAccessibilityReadAnythingLinksEnabled),
         static_cast<read_anything::mojom::Colors>(
             prefs->GetInteger(prefs::kAccessibilityReadAnythingColorInfo)),
         speechRate,
@@ -120,19 +204,16 @@ ReadAnythingUntrustedPageHandler::ReadAnythingUntrustedPageHandler(
         highlightGranularity);
   }
 
-#if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
   if (features::IsReadAnythingWithScreen2xEnabled()) {
-    if (screen_ai::ScreenAIInstallState::GetInstance()->get_state() ==
-        screen_ai::ScreenAIInstallState::State::kReady) {
-      // Notify that the screen ai service is already ready so we can bind to
-      // the content extractor.
-      page_->ScreenAIServiceReady();
-    } else if (!component_ready_observer_.IsObserving()) {
-      component_ready_observer_.Observe(
-          screen_ai::ScreenAIInstallState::GetInstance());
-    }
+    screen_ai::ScreenAIServiceRouterFactory::GetForBrowserContext(
+        browser_->profile())
+        ->GetServiceStateAsync(
+            screen_ai::ScreenAIServiceRouter::Service::kMainContentExtraction,
+            base::BindOnce(
+                &ReadAnythingUntrustedPageHandler::OnScreenAIServiceInitialized,
+                weak_factory_.GetWeakPtr()));
   }
-#endif
+
   OnActiveWebContentsChanged();
 }
 
@@ -214,6 +295,12 @@ void ReadAnythingUntrustedPageHandler::OnFontSizeChange(double font_size) {
         prefs::kAccessibilityReadAnythingFontScale, saved_font_size);
   }
 }
+void ReadAnythingUntrustedPageHandler::OnLinksEnabledChanged(bool enabled) {
+  if (browser_) {
+    browser_->profile()->GetPrefs()->SetBoolean(
+        prefs::kAccessibilityReadAnythingLinksEnabled, enabled);
+  }
+}
 void ReadAnythingUntrustedPageHandler::OnColorChange(
     read_anything::mojom::Colors color) {
   if (browser_) {
@@ -253,13 +340,34 @@ void ReadAnythingUntrustedPageHandler::OnLinkClicked(
   action_data.target_tree_id = target_tree_id;
   action_data.action = ax::mojom::Action::kDoDefault;
   action_data.target_node_id = target_node_id;
+
+  PerformActionInTargetTree(target_tree_id, action_data);
+}
+
+void ReadAnythingUntrustedPageHandler::OnImageDataRequested(
+    const ui::AXTreeID& target_tree_id,
+    ui::AXNodeID target_node_id) {
+  ui::AXActionData action_data;
+  action_data.target_tree_id = target_tree_id;
+  action_data.action = ax::mojom::Action::kGetImageData;
+  action_data.target_node_id = target_node_id;
+  // The rect size is the max size of the image;
+  action_data.target_rect = gfx::Rect(gfx::Size(INT_MAX, INT_MAX));
+
+  PerformActionInTargetTree(target_tree_id, action_data);
+}
+
+void ReadAnythingUntrustedPageHandler::PerformActionInTargetTree(
+    const ui::AXTreeID& target_tree_id,
+    const ui::AXActionData& data) {
+  CHECK_EQ(target_tree_id, data.target_tree_id);
   ui::AXActionHandlerBase* handler =
       ui::AXActionHandlerRegistry::GetInstance()->GetActionHandler(
           target_tree_id);
   if (!handler) {
     return;
   }
-  handler->PerformAction(action_data);
+  handler->PerformAction(data);
 }
 
 void ReadAnythingUntrustedPageHandler::OnSelectionChange(
@@ -297,6 +405,7 @@ void ReadAnythingUntrustedPageHandler::OnCollapseSelection() {
 void ReadAnythingUntrustedPageHandler::OnReadAnythingThemeChanged(
     const std::string& font_name,
     double font_scale,
+    bool links_enabled,
     ui::ColorId foreground_color_id,
     ui::ColorId background_color_id,
     ui::ColorId separator_color_id,
@@ -314,9 +423,9 @@ void ReadAnythingUntrustedPageHandler::OnReadAnythingThemeChanged(
   SkColor background_skcolor =
       web_contents->GetColorProvider().GetColor(background_color_id);
 
-  page_->OnThemeChanged(
-      ReadAnythingTheme::New(font_name, font_scale, foreground_skcolor,
-                             background_skcolor, line_spacing, letter_spacing));
+  page_->OnThemeChanged(ReadAnythingTheme::New(
+      font_name, font_scale, links_enabled, foreground_skcolor,
+      background_skcolor, line_spacing, letter_spacing));
 }
 
 void ReadAnythingUntrustedPageHandler::SetDefaultLanguageCode(
@@ -345,24 +454,13 @@ void ReadAnythingUntrustedPageHandler::OnSidePanelControllerDestroyed() {
 // screen_ai::ScreenAIInstallState::Observer:
 ///////////////////////////////////////////////////////////////////////////////
 
-#if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
-void ReadAnythingUntrustedPageHandler::StateChanged(
-    screen_ai::ScreenAIInstallState::State state) {
+void ReadAnythingUntrustedPageHandler::OnScreenAIServiceInitialized(
+    bool successful) {
   DCHECK(features::IsReadAnythingWithScreen2xEnabled());
-  // If Screen AI library is downloaded but not initialized yet, ensure it is
-  // loadable and initializes without any problems.
-  if (state == screen_ai::ScreenAIInstallState::State::kDownloaded &&
-      browser_) {
-    screen_ai::ScreenAIServiceRouterFactory::GetForBrowserContext(
-        browser_->profile())
-        ->InitializeMainContentExtractionIfNeeded();
-    return;
-  }
-  if (state == screen_ai::ScreenAIInstallState::State::kReady) {
+  if (successful) {
     page_->ScreenAIServiceReady();
   }
 }
-#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 // TabStripModelObserver:
@@ -387,18 +485,9 @@ void ReadAnythingUntrustedPageHandler::OnTabStripModelDestroyed(
 ///////////////////////////////////////////////////////////////////////////////
 
 void ReadAnythingUntrustedPageHandler::OnActiveWebContentsChanged() {
-  // TODO(crbug.com/1266555): Disable accessibility.and stop observing events
-  // on the now inactive tab. But make sure that we don't disable it for
-  // assistive technology users. Some options here are:
-  // 1. Cache the current AXMode of the active web contents before enabling
-  //    accessibility, and reset the mode to that mode when the tab becomes
-  //    inactive.
-  // 2. Set an AXContext on the web contents with web contents only mode
-  //    enabled.
-  content::WebContents* web_contents = nullptr;
-  if (active_ && browser_) {
-    web_contents = browser_->tab_strip_model()->GetActiveWebContents();
-  }
+  content::WebContents* const web_contents =
+      active_ && browser_ ? browser_->tab_strip_model()->GetActiveWebContents()
+                          : nullptr;
 
   if (features::IsReadAnythingLocalSidePanelEnabled()) {
     if (!tab_helper_ && web_contents) {
@@ -406,21 +495,13 @@ void ReadAnythingUntrustedPageHandler::OnActiveWebContentsChanged() {
     }
   }
 
-  main_observer_ = std::make_unique<ReadAnythingWebContentsObserver>(
-      weak_factory_.GetSafeRef(), web_contents);
-  pdf_observer_.reset();
-
   // Enable accessibility for the top level render frame and all descendants.
   // This causes AXTreeSerializer to reset and send accessibility events of
   // the AXTree when it is re-serialized.
-  // All components of kAXModeWebContentsOnly are needed. |ui::AXMode::kHTML| is
-  // needed for URL information. |ui::AXMode::kScreenReader| is needed for
-  // heading level information. |ui::AXMode::kInlineTextBoxes| is needed for
-  // complete Screen2x output -- if excluded, some nodes from the tree will not
-  // be identified as content nodes.
-  if (web_contents) {
-    web_contents->EnableAccessibilityMode(ui::kAXModeWebContentsOnly);
-  }
+  main_observer_ = std::make_unique<ReadAnythingWebContentsObserver>(
+      weak_factory_.GetSafeRef(), web_contents, kReadAnythingAXMode);
+  pdf_observer_.reset();
+
   OnActiveAXTreeIDChanged();
 }
 
@@ -497,8 +578,6 @@ void ReadAnythingUntrustedPageHandler::EnablePDFContentAccessibility(
 
   CHECK(IsPdfExtensionOrigin(
       contents->GetPrimaryMainFrame()->GetLastCommittedOrigin()));
-  pdf_observer_ = std::make_unique<ReadAnythingWebContentsObserver>(
-      weak_factory_.GetSafeRef(), contents);
 
   // TODO(crbug.com/1513227): Improve PDF OCR support for Reading Mode. Maybe
   // it would make it easy to read and maintain the code if setting the AXMode
@@ -506,11 +585,12 @@ void ReadAnythingUntrustedPageHandler::EnablePDFContentAccessibility(
   // Enable accessibility to receive events (data) from PDF. Set kPDFOcr only
   // when the PDF OCR feature flag is enabled to support inaccessible PDFs.
   // Reset accessibility to get the new updated trees.
-  ui::AXMode ax_mode = ui::kAXModeWebContentsOnly;
+  ui::AXMode ax_mode = kReadAnythingAXMode;
   if (features::IsPdfOcrEnabled()) {
     ax_mode |= ui::AXMode::kPDFOcr;
   }
-  contents->EnableAccessibilityMode(ax_mode);
+  pdf_observer_ = std::make_unique<ReadAnythingWebContentsObserver>(
+      weak_factory_.GetSafeRef(), contents, ax_mode);
 
   // Trigger distillation.
   OnActiveAXTreeIDChanged(true);

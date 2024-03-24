@@ -142,7 +142,12 @@ class MultiInstanceManagerApi31 extends MultiInstanceManager implements Activity
                 mActivity,
                 mModalDialogManagerSupplier.get(),
                 new LargeIconBridge(getProfile()),
-                (instanceInfo) -> moveTabAction(instanceInfo, tab, TabList.INVALID_TAB_INDEX),
+                (instanceInfo) -> {
+                    moveTabAction(instanceInfo, tab, TabList.INVALID_TAB_INDEX);
+
+                    // Close the source instance window, if needed.
+                    closeChromeWindowIfEmpty(mInstanceId);
+                },
                 getInstanceInfo());
     }
 
@@ -551,8 +556,15 @@ class MultiInstanceManagerApi31 extends MultiInstanceManager implements Activity
             if (info != null && (info.id == removedTaskId || info.taskId == removedTaskId)) {
                 String message =
                         "Removed instance data for Task still available in all app tasks. " + info;
-                ChromePureJavaExceptionReporter.reportJavaException(new Throwable(message));
                 Log.i(TAG_MULTI_INSTANCE, message);
+                if (info != null && info.isRunning) {
+                    String crashMessage =
+                            "This is not a crash. Removed instance data for running Task still"
+                                    + " available in all app tasks. "
+                                    + info;
+                    ChromePureJavaExceptionReporter.reportJavaException(
+                            new Throwable(crashMessage));
+                }
                 break;
             }
         }
@@ -923,6 +935,7 @@ class MultiInstanceManagerApi31 extends MultiInstanceManager implements Activity
 
     /**
      * Move the specified tab to the current instance of the ChromeTabbedActivity window.
+     *
      * @param activity Activity of the Chrome Window in which the tab is to be moved.
      * @param tab Tab that is to be moved to the current instance.
      * @param atIndex Tab position index in the destination window instance.
@@ -965,5 +978,37 @@ class MultiInstanceManagerApi31 extends MultiInstanceManager implements Activity
             }
         }
         return null;
+    }
+
+    /**
+     * Determine if a Chrome instance can be closed based on the environment.
+     *
+     * @param instanceId Instance Id of the Chrome window that needs to be closed.
+     */
+    private boolean canCloseChromeWindow(int instanceId) {
+        // Close the source instance window after reparenting if permitted by the feature flag and
+        // the source instance is known.
+        return TabUiFeatureUtilities.isTabDragAsWindowEnabled()
+                && instanceId != INVALID_INSTANCE_ID;
+    }
+
+    /**
+     * Close a Chrome window instance only if it contains no open tabs including incognito ones.
+     *
+     * @param instanceId Instance id of the Chrome window that needs to be closed.
+     */
+    @Override
+    public void closeChromeWindowIfEmpty(int instanceId) {
+        if (canCloseChromeWindow(instanceId)) {
+            TabModelSelector selector =
+                    TabWindowManagerSingleton.getInstance().getTabModelSelectorById(instanceId);
+            // Determine if the drag source Chrome instance window has any tabs including incognito
+            // ones
+            // left so as to close if it is empty.
+            if (selector.getTotalTabCount() == 0) {
+                Log.i(TAG, "Closing empty Chrome instance as no tabs exist.");
+                closeInstance(instanceId, INVALID_TASK_ID);
+            }
+        }
     }
 }

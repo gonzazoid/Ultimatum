@@ -101,6 +101,10 @@ BASE_FEATURE(kUseDMSAAForTiles,
 BASE_FEATURE(kUseDMSAAForTilesAndroidGL,
              "UseDMSAAForTilesAndroidGL",
              base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kAndroidNoSurfaceSyncForBrowserControls,
+             "AndroidNoSurfaceSyncForBrowserControls",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 #endif
 
 BASE_FEATURE(kUpdateBrowserControlsWithoutProxy,
@@ -173,8 +177,16 @@ BASE_FEATURE(kEvictionThrottlesDraw,
              "EvictionThrottlesDraw",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
-BASE_FEATURE(kResetTimerWhenNoActiveTreeLikely,
-             "ResetTimerWhenNoActiveTreeLikely",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kUseRecordedBoundsForTiling,
+             "UseRecordedBoundsForTiling",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kAdjustFastMainThreadThreshold,
+             "AdjustFastMainThreadThreshold",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kClearCanvasResourcesInBackground,
+             "ClearCanvasResourcesInBackground",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 }  // namespace features

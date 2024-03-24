@@ -7,6 +7,8 @@
 #include <numeric>
 
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_promise_tester.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_ml_context.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_ml_operand_descriptor.h"
 #include "third_party/blink/renderer/modules/ml/ml.h"
 #include "third_party/blink/renderer/modules/ml/ml_context.h"
@@ -17,11 +19,18 @@ MLGraphBuilder* CreateMLGraphBuilder(ExecutionContext* execution_context,
                                      ScriptState* script_state,
                                      ExceptionState& exception_state,
                                      MLContextOptions* options) {
-  auto* ml = MakeGarbageCollected<ML>(execution_context);
-  MLContext* ml_context =
-      ml->createContextSync(script_state, options, exception_state);
-  // createContextSync fails to create due to validation or invalid script
-  // state.
+  ML* ml = MakeGarbageCollected<ML>(execution_context);
+
+  ScriptPromise promise =
+      ml->createContext(script_state, options, exception_state);
+  ScriptPromiseTester tester(script_state, promise);
+  tester.WaitUntilSettled();
+  if (tester.IsRejected()) {
+    return nullptr;
+  }
+
+  MLContext* ml_context = V8MLContext::ToWrappable(tester.Value().GetIsolate(),
+                                                   tester.Value().V8Value());
   CHECK(ml_context);
   return MLGraphBuilder::Create(ml_context);
 }
@@ -93,7 +102,7 @@ MLOperand* BuildConstant(
     const Vector<uint32_t>& dimensions,
     V8MLOperandDataType::Enum data_type,
     ExceptionState& exception_state,
-    absl::optional<NotShared<DOMArrayBufferView>> user_buffer_view) {
+    std::optional<NotShared<DOMArrayBufferView>> user_buffer_view) {
   auto* desc = MLOperandDescriptor::Create();
   desc->setDimensions(dimensions);
   desc->setDataType(data_type);

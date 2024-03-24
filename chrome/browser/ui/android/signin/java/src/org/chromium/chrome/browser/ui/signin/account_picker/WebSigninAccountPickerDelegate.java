@@ -26,6 +26,7 @@ import org.chromium.content_public.browser.LoadUrlParams;
 /** Implementation of {@link AccountPickerDelegate} for the web-signin flow. */
 public class WebSigninAccountPickerDelegate implements AccountPickerDelegate {
     private final Tab mCurrentTab;
+    private final Profile mProfile;
     private final WebSigninBridge.Factory mWebSigninBridgeFactory;
     private final String mContinueUrl;
     private final SigninManager mSigninManager;
@@ -41,18 +42,15 @@ public class WebSigninAccountPickerDelegate implements AccountPickerDelegate {
     public WebSigninAccountPickerDelegate(
             Tab currentTab, WebSigninBridge.Factory webSigninBridgeFactory, String continueUrl) {
         mCurrentTab = currentTab;
+        mProfile = currentTab.getProfile();
         mWebSigninBridgeFactory = webSigninBridgeFactory;
         mContinueUrl = continueUrl;
-        mSigninManager =
-                IdentityServicesProvider.get()
-                        .getSigninManager(Profile.getLastUsedRegularProfile());
-        mIdentityManager =
-                IdentityServicesProvider.get()
-                        .getIdentityManager(Profile.getLastUsedRegularProfile());
+        mSigninManager = IdentityServicesProvider.get().getSigninManager(mProfile);
+        mIdentityManager = IdentityServicesProvider.get().getIdentityManager(mProfile);
     }
 
     @Override
-    public void destroy() {
+    public void onAccountPickerDestroy() {
         destroyWebSigninBridge();
     }
 
@@ -68,7 +66,7 @@ public class WebSigninAccountPickerDelegate implements AccountPickerDelegate {
         }
         mWebSigninBridge =
                 mWebSigninBridgeFactory.create(
-                        Profile.getLastUsedRegularProfile(),
+                        mProfile,
                         accountInfo,
                         createWebSigninBridgeListener(
                                 mCurrentTab, mContinueUrl, onSignInErrorCallback));

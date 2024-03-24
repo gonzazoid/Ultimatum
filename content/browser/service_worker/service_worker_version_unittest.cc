@@ -2040,6 +2040,8 @@ TEST_P(ServiceWorkerVersionStaticRouterTest, SetRouterEvaluator) {
       helper_->context()->registry(), registration_.get(),
       GURL("https://www.example.com/test/service_worker.js"),
       blink::mojom::ScriptType::kClassic);
+  version->set_fetch_handler_type(
+      ServiceWorkerVersion::FetchHandlerType::kNotSkippable);
 
   // The router_evaluator should be unset on setup.
   EXPECT_FALSE(version->router_evaluator());
@@ -2062,7 +2064,7 @@ TEST_P(ServiceWorkerVersionStaticRouterTest, SetRouterEvaluator) {
         {blink::ServiceWorkerRouterRunningStatusCondition::RunningStatusEnum::
              kRunning});
     blink::ServiceWorkerRouterSource source;
-    source.type = blink::ServiceWorkerRouterSource::Type::kNetwork;
+    source.type = network::mojom::ServiceWorkerRouterSourceType::kNetwork;
     source.network_source = blink::ServiceWorkerRouterNetworkSource{};
     rule.sources.emplace_back(source);
     rules.rules.emplace_back(rule);
@@ -2081,7 +2083,7 @@ TEST_P(ServiceWorkerVersionStaticRouterTest, SetRouterEvaluator) {
         {blink::ServiceWorkerRouterRunningStatusCondition::RunningStatusEnum::
              kNotRunning});
     blink::ServiceWorkerRouterSource source;
-    source.type = blink::ServiceWorkerRouterSource::Type::kFetchEvent;
+    source.type = network::mojom::ServiceWorkerRouterSourceType::kFetchEvent;
     source.fetch_event_source = blink::ServiceWorkerRouterFetchEventSource{};
     rule.sources.emplace_back(source);
     rules.rules.emplace_back(rule);
@@ -2096,14 +2098,14 @@ TEST_P(ServiceWorkerVersionStaticRouterTest, SetRouterEvaluator) {
               blink::ServiceWorkerRouterRunningStatusCondition::
                   RunningStatusEnum::kRunning);
     EXPECT_EQ(first_rule.sources.begin()->type,
-              blink::ServiceWorkerRouterSource::Type::kNetwork);
+              network::mojom::ServiceWorkerRouterSourceType::kNetwork);
     auto&& [second_url_pattern, second_request, second_running_status,
             second_or_condition] = second_rule.condition.get();
     EXPECT_EQ(second_running_status->status,
               blink::ServiceWorkerRouterRunningStatusCondition::
                   RunningStatusEnum::kNotRunning);
     EXPECT_EQ(second_rule.sources.begin()->type,
-              blink::ServiceWorkerRouterSource::Type::kFetchEvent);
+              network::mojom::ServiceWorkerRouterSourceType::kFetchEvent);
   }
 }
 

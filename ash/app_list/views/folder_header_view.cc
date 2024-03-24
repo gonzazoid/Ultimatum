@@ -267,7 +267,7 @@ class FolderHeaderView::FolderNameView : public views::Textfield,
   bool has_mouse_already_entered_ = false;
 };
 
-BEGIN_METADATA(FolderHeaderView, FolderNameView, views::Textfield)
+BEGIN_METADATA(FolderHeaderView, FolderNameView)
 END_METADATA
 
 class FolderHeaderView::FolderNameJellyView
@@ -298,7 +298,6 @@ class FolderHeaderView::FolderNameJellyView
   void OnFocus() override {
     starting_name_ = GetText();
     SystemTextfield::OnFocus();
-    SetActive(true);
   }
 
   void OnBlur() override {
@@ -314,6 +313,14 @@ class FolderHeaderView::FolderNameJellyView
     }
 
     SystemTextfield::OnBlur();
+
+    // OnBlur updates background ONLY if the ActiveState is changed. Since the
+    // SystemTextField component does not clear focus after changing the
+    // ActiveState, there are some instances where removing focus will not
+    // trigger a background update.
+    // TODO(b/323054951): Clean this code once the SystemTextfield has
+    // implemented clearing focus.
+    UpdateBackground();
   }
 
   bool DoesMouseEventActuallyIntersect(const ui::MouseEvent& event) {
@@ -345,7 +352,7 @@ class FolderHeaderView::FolderNameJellyView
   std::u16string starting_name_;
 };
 
-BEGIN_METADATA(FolderHeaderView, FolderNameJellyView, ash::SystemTextfield)
+BEGIN_METADATA(FolderHeaderView, FolderNameJellyView)
 END_METADATA
 
 class FolderHeaderView::FolderNameViewController
@@ -357,6 +364,7 @@ class FolderHeaderView::FolderNameViewController
       SystemTextfield* textfield,
       const ContentsChangedCallback& contents_changed_callback)
       : SystemTextfieldController(textfield),
+        textfield_(textfield),
         contents_changed_callback_(contents_changed_callback) {}
 
   FolderNameViewController(const FolderNameViewController&) = delete;
@@ -372,6 +380,16 @@ class FolderHeaderView::FolderNameViewController
   bool HandleKeyEvent(views::Textfield* sender,
                       const ui::KeyEvent& key_event) override {
     if (SystemTextfieldController::HandleKeyEvent(sender, key_event)) {
+      // TODO(b/323054951): Clean this code once the SystemTextfield has
+      // implemented clearing focus.
+      const bool should_clear_focus =
+          key_event.type() == ui::ET_KEY_PRESSED &&
+          (key_event.key_code() == ui::VKEY_RETURN ||
+           key_event.key_code() == ui::VKEY_ESCAPE);
+
+      if (should_clear_focus) {
+        textfield_->GetFocusManager()->ClearFocus();
+      }
       return true;
     }
 
@@ -383,6 +401,7 @@ class FolderHeaderView::FolderNameViewController
   }
 
  private:
+  raw_ptr<SystemTextfield> textfield_ = nullptr;
   const ContentsChangedCallback contents_changed_callback_;
 };
 
@@ -462,7 +481,7 @@ void FolderHeaderView::Update() {
     UpdateFolderNameAccessibleName();
   }
 
-  Layout();
+  DeprecatedLayoutImmediately();
 }
 
 void FolderHeaderView::UpdateFolderNameAccessibleName() {
@@ -540,7 +559,7 @@ std::u16string FolderHeaderView::GetElidedFolderName() const {
   return elided_name;
 }
 
-void FolderHeaderView::Layout() {
+void FolderHeaderView::Layout(PassKey) {
   gfx::Rect rect(GetContentsBounds());
   if (rect.IsEmpty()) {
     return;
@@ -594,7 +613,7 @@ void FolderHeaderView::UpdateFolderName(
 
   UpdateFolderNameAccessibleName();
 
-  Layout();
+  DeprecatedLayoutImmediately();
 }
 
 bool FolderHeaderView::ShouldNameViewClearFocus(const ui::KeyEvent& key_event) {

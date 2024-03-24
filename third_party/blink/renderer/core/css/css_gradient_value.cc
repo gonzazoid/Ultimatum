@@ -42,6 +42,7 @@
 #include "third_party/blink/renderer/core/css/css_value_pair.h"
 #include "third_party/blink/renderer/core/css/properties/computed_style_utils.h"
 #include "third_party/blink/renderer/core/css/properties/longhands.h"
+#include "third_party/blink/renderer/core/css/resolver/style_builder_converter.h"
 #include "third_party/blink/renderer/core/css_value_keywords.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/dom/text_link_colors.h"
@@ -156,7 +157,8 @@ scoped_refptr<Image> CSSGradientValue::GetImage(
   CSSToLengthConversionData conversion_data(
       style, &style, root_style,
       CSSToLengthConversionData::ViewportSize(document.GetLayoutView()),
-      container_sizes, style.EffectiveZoom(), ignored_flags);
+      container_sizes, CSSToLengthConversionData::AnchorData(),
+      style.EffectiveZoom(), ignored_flags);
 
   scoped_refptr<Gradient> gradient;
   switch (GetClassType()) {
@@ -359,8 +361,12 @@ static void ReplaceColorHintsWithColorStops(
 static Color ResolveStopColor(const CSSValue& stop_color,
                               const Document& document,
                               const ComputedStyle& style) {
-  return document.GetTextLinkColors().ColorFromCSSValue(
-      stop_color, style.VisitedDependentColor(GetCSSPropertyColor()),
+  mojom::blink::ColorScheme color_scheme = style.UsedColorScheme();
+  const StyleColor style_stop_color =
+      ResolveColorValue(stop_color, document.GetTextLinkColors(), color_scheme,
+                        document.GetColorProviderForPainting(color_scheme));
+  return style_stop_color.Resolve(
+      style.VisitedDependentColor(GetCSSPropertyColor()),
       style.UsedColorScheme());
 }
 
@@ -446,8 +452,11 @@ static const CSSValue* GetComputedStopColor(const CSSValue* color,
 
     default:
       // TODO(crbug.com/929098) Need to pass an appropriate color scheme here.
+      // TODO(crbug.com/1231644): Need to pass an appropriate color provider
+      // here.
       return CSSColor::Create(StyleColor::ColorFromKeyword(
-          value_id, mojom::blink::ColorScheme::kLight));
+          value_id, mojom::blink::ColorScheme::kLight,
+          /*color_provider=*/nullptr));
   }
 }
 

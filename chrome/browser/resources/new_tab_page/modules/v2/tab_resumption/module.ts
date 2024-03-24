@@ -2,22 +2,27 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import './icons.html.js';
 import 'chrome://resources/cr_elements/cr_shared_style.css.js';
+import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import '../../history_clusters/page_favicon.js';
 
-import {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
+import type {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
+import type {DomRepeatEvent} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {Tab} from '../../../history_types.mojom-webui.js';
+import type {Tab} from '../../../history_types.mojom-webui.js';
+import {DeviceType} from '../../../history_types.mojom-webui.js';
 import {I18nMixin, loadTimeData} from '../../../i18n_setup.js';
-import {InfoDialogElement} from '../../info_dialog';
+import type {InfoDialogElement} from '../../info_dialog';
 import {ModuleDescriptor} from '../../module_descriptor.js';
-import {MenuItem, ModuleHeaderElementV2} from '../module_header';
+import type {MenuItem, ModuleHeaderElementV2} from '../module_header';
 
 import {getTemplate} from './module.html.js';
 import {TabResumptionProxyImpl} from './tab_resumption_proxy.js';
 
-export const MAX_TABS = 10;
+export const MAX_TABS =
+    !loadTimeData.getBoolean('modulesRedesignedEnabled') ? 3 : 5;
 
 export interface TabResumptionModuleElement {
   $: {
@@ -42,6 +47,23 @@ export class TabResumptionModuleElement extends I18nMixin
       tabs: {
         type: Object,
       },
+
+      /** To determine if the hover layer should have all rounded corners. */
+      isSingleTab_: {
+        type: Boolean,
+        reflectToAttribute: true,
+        computed: `computeIsSingleTab_(tabs)`,
+      },
+
+      /**
+       * Although this is a V2 class, we use this to make it work for V1
+       * modules.
+       */
+      modulesRedesigned_: {
+        type: Boolean,
+        reflectToAttribute: true,
+        value: () => loadTimeData.getBoolean('modulesRedesignedEnabled'),
+      },
     };
   }
 
@@ -51,6 +73,11 @@ tabs:
   private getMenuItemGroups_(): MenuItem[][] {
     return [
       [
+        {
+          action: 'dismiss',
+          icon: 'modules:thumb_down',
+          text: this.i18n('modulesTabResumptionDismissButton'),
+        },
         {
           action: 'disable',
           icon: 'modules:block',
@@ -91,6 +118,65 @@ tabs:
 
   private onMenuButtonClick_(e: Event) {
     this.$.moduleHeaderElementV2.showAt(e);
+  }
+
+  private onTabClick_(e: DomRepeatEvent<Tab>) {
+    chrome.metricsPrivate.recordSmallCount(
+        'NewTabPage.TabResumption.ClickIndex', e.model.index);
+
+    // Calculate the number of milliseconds in the difference. Max is 4 days.
+    chrome.metricsPrivate.recordValue(
+        {
+          metricName: 'NewTabPage.TabResumption.TimeElapsedSinceLastVisit',
+          type: chrome.metricsPrivate.MetricTypeType.HISTOGRAM_LOG,
+          min: 60 * 1000,
+          max: 4 * 24 * 60 * 60 * 1000,
+          buckets: 50,
+        },
+        Number(e.model.item.relativeTime.microseconds / 1000n));
+  }
+
+  private onDismissButtonClick_() {
+    const urls = this.tabs.map((tab: Tab) => tab.url);
+    TabResumptionProxyImpl.getInstance().handler.dismissModule(urls);
+    this.dispatchEvent(new CustomEvent('dismiss-module-instance', {
+      bubbles: true,
+      composed: true,
+      detail: {
+        message: loadTimeData.getStringF(
+            'dismissModuleToastMessage',
+            loadTimeData.getString('modulesTabResumptionSentence')),
+        restoreCallback: () =>
+            TabResumptionProxyImpl.getInstance().handler.restoreModule(),
+      },
+    }));
+  }
+
+  private computeDomain_(tab: Tab): string {
+    let domain = (new URL(tab.url.url)).hostname;
+    domain = domain.replace('www.', '');
+    return domain;
+  }
+
+  private computeIcon_(tab: Tab): string {
+    switch (tab.deviceType) {
+      case DeviceType.kDesktop:
+        return 'tab_resumption:computer';
+      case DeviceType.kPhone:
+        return 'tab_resumption:phone';
+      case DeviceType.kTablet:
+        return 'tab_resumption:tablet';
+      default:
+        return 'tab_resumption:globe';
+    }
+  }
+
+  private computeIsSingleTab_(): boolean {
+    return this.tabs && this.tabs.length === 1;
+  }
+
+  private computeFaviconSize_(): number {
+    return loadTimeData.getBoolean('modulesRedesignedEnabled') ? 16 : 19;
   }
 }
 

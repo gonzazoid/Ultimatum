@@ -404,7 +404,7 @@ void TreeView::SetDrawingProvider(
   drawing_provider_ = std::move(provider);
 }
 
-void TreeView::Layout() {
+void TreeView::Layout(PassKey) {
   int width = preferred_size_.width();
   int height = preferred_size_.height();
   if (parent()) {
@@ -654,18 +654,18 @@ size_t TreeView::GetRowCount() {
   return row_count;
 }
 
-absl::optional<size_t> TreeView::GetSelectedRow() {
+std::optional<size_t> TreeView::GetSelectedRow() {
   // Type-ahead searches should be relative to the active node, so return the
   // row of the active node for |PrefixSelector|.
   ui::TreeModelNode* model_node = GetActiveNode();
   if (!model_node)
-    return absl::nullopt;
+    return std::nullopt;
   const int row = GetRowForNode(model_node);
-  return (row == -1) ? absl::nullopt
-                     : absl::make_optional(static_cast<size_t>(row));
+  return (row == -1) ? std::nullopt
+                     : std::make_optional(static_cast<size_t>(row));
 }
 
-void TreeView::SetSelectedRow(absl::optional<size_t> row) {
+void TreeView::SetSelectedRow(std::optional<size_t> row) {
   // Type-ahead manipulates selection because active node is synced to selected
   // node, so call SetSelectedNode() instead of SetActiveNode().
   // TODO(crbug.com/1080944): Decouple active node from selected node by adding
@@ -1063,7 +1063,7 @@ void TreeView::LayoutEditor() {
   // Scroll as necessary to ensure that the editor is visible.
   ScrollRectToVisible(outter_bounds);
   editor_->SetBoundsRect(row_bounds);
-  editor_->Layout();
+  editor_->DeprecatedLayoutImmediately();
 }
 
 void TreeView::SchedulePaintForNode(InternalNode* node) {
@@ -1181,7 +1181,7 @@ void TreeView::PaintExpandControl(gfx::Canvas* canvas,
 void TreeView::PaintNodeIcon(gfx::Canvas* canvas,
                              InternalNode* node,
                              const gfx::Rect& bounds) {
-  absl::optional<size_t> icon_index = model_->GetIconIndex(node->model_node());
+  std::optional<size_t> icon_index = model_->GetIconIndex(node->model_node());
   int icon_x = kArrowRegionSize + kImagePadding;
   if (!icon_index.has_value()) {
     // Flip just the |bounds| region of |canvas|.

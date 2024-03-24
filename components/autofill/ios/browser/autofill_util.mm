@@ -85,7 +85,7 @@ bool IsContextSecureForWebState(web::WebState* web_state) {
 }
 
 std::unique_ptr<base::Value> ParseJson(NSString* json_string) {
-  absl::optional<base::Value> json_value =
+  std::optional<base::Value> json_value =
       base::JSONReader::Read(base::SysNSStringToUTF8(json_string));
   if (!json_value) {
     return nullptr;
@@ -202,11 +202,11 @@ bool ExtractFormData(const base::Value::Dict& form,
   // main_frame_origin is used for logging UKM.
   form_data->main_frame_origin = url::Origin::Create(main_frame_url);
 
-  const std::string* unique_renderer_id = form.FindString("unique_renderer_id");
-  if (unique_renderer_id && !unique_renderer_id->empty()) {
-    StringToUint(*unique_renderer_id, &form_data->unique_renderer_id.value());
+  const std::string* renderer_id = form.FindString("renderer_id");
+  if (renderer_id && !renderer_id->empty()) {
+    StringToUint(*renderer_id, &form_data->renderer_id.value());
   } else {
-    form_data->unique_renderer_id = FormRendererId();
+    form_data->renderer_id = FormRendererId();
   }
 
   // Action is optional.
@@ -223,8 +223,6 @@ bool ExtractFormData(const base::Value::Dict& form,
   if (const std::string* id_attribute = form.FindString("id_attribute")) {
     form_data->id_attribute = base::UTF8ToUTF16(*id_attribute);
   }
-  form_data->is_form_tag =
-      form.FindBool("is_form_tag").value_or(form_data->is_form_tag);
 
   if (include_frame_metadata) {
     // Child frame tokens, optional.
@@ -254,7 +252,7 @@ bool ExtractFormData(const base::Value::Dict& form,
       // field level. Reuse the extracted values.
       if (include_frame_metadata) {
         field_data.host_frame = form_data->host_frame;
-        field_data.host_form_id = form_data->unique_renderer_id;
+        field_data.host_form_id = form_data->renderer_id;
         field_data.origin = frame_origin_object;
       }
       form_data->fields.push_back(std::move(field_data));
@@ -286,12 +284,11 @@ bool ExtractFormFieldData(const base::Value::Dict& field,
   field_data->form_control_type = autofill::StringToFormControlTypeDiscouraged(
       *form_control_type, /*fallback=*/std::nullopt);
 
-  const std::string* unique_renderer_id =
-      field.FindString("unique_renderer_id");
-  if (unique_renderer_id && !unique_renderer_id->empty()) {
-    StringToUint(*unique_renderer_id, &field_data->unique_renderer_id.value());
+  const std::string* renderer_id = field.FindString("renderer_id");
+  if (renderer_id && !renderer_id->empty()) {
+    StringToUint(*renderer_id, &field_data->renderer_id.value());
   } else {
-    field_data->unique_renderer_id = FieldRendererId();
+    field_data->renderer_id = FieldRendererId();
   }
 
   // Optional fields.
@@ -316,7 +313,7 @@ bool ExtractFormFieldData(const base::Value::Dict& field,
           field.FindString("autocomplete_attribute")) {
     field_data->autocomplete_attribute = *autocomplete_attribute;
   }
-  if (absl::optional<int> max_length = field.FindInt("max_length")) {
+  if (std::optional<int> max_length = field.FindInt("max_length")) {
     field_data->max_length = *max_length;
   }
   field_data->parsed_autocomplete =
@@ -347,7 +344,7 @@ bool ExtractFormFieldData(const base::Value::Dict& field,
 
   // RoleAttribute::kOther is the default value. The only other value as of this
   // writing is RoleAttribute::kPresentation.
-  absl::optional<int> role = field.FindInt("role");
+  std::optional<int> role = field.FindInt("role");
   if (role &&
       *role == static_cast<int>(FormFieldData::RoleAttribute::kPresentation)) {
     field_data->role = FormFieldData::RoleAttribute::kPresentation;
@@ -377,11 +374,11 @@ bool ExtractFormFieldData(const base::Value::Dict& field,
   }
 
   // Fill user input and properties mask.
-  if (field_data_manager.HasFieldData(field_data->unique_renderer_id)) {
+  if (field_data_manager.HasFieldData(field_data->renderer_id)) {
     field_data->user_input =
-        field_data_manager.GetUserInput(field_data->unique_renderer_id);
-    field_data->properties_mask = field_data_manager.GetFieldPropertiesMask(
-        field_data->unique_renderer_id);
+        field_data_manager.GetUserInput(field_data->renderer_id);
+    field_data->properties_mask =
+        field_data_manager.GetFieldPropertiesMask(field_data->renderer_id);
   }
 
   return true;

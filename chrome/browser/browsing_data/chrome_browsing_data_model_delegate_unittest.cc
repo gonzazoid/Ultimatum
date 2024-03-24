@@ -26,10 +26,6 @@
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "url/gurl.h"
 
-#if BUILDFLAG(ENABLE_SUPERVISED_USERS)
-#include "components/supervised_user/core/common/features.h"
-#endif
-
 #if !BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/web_applications/web_app_command_manager.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
@@ -74,9 +70,6 @@ class ChromeBrowsingDataModelDelegateTest : public testing::Test {
     feature_list_.InitWithFeatures(
         /*enabled_features=*/
         {
-#if BUILDFLAG(ENABLE_SUPERVISED_USERS)
-          supervised_user::kClearingCookiesKeepsSupervisedUsersSignedIn,
-#endif
               media_device_salt::kMediaDeviceIdPartitioning
         },
         /*disabled_features=*/{});
@@ -226,7 +219,7 @@ TEST_F(ChromeBrowsingDataModelDelegateTest, GetAllDataKeysAndGetDataOwner) {
                   entry.storage_type),
               ChromeBrowsingDataModelDelegate::StorageType::kMediaDeviceSalt);
 
-    absl::optional<BrowsingDataModel::DataOwner> owner =
+    std::optional<BrowsingDataModel::DataOwner> owner =
         delegate()->GetDataOwner(
             entry.data_key, static_cast<BrowsingDataModel::StorageType>(
                                 ChromeBrowsingDataModelDelegate::StorageType::
@@ -267,8 +260,7 @@ TEST_F(ChromeBrowsingDataModelDelegateTest, RemoveIsolatedWebAppData) {
 }
 #endif  // !BUILDFLAG(IS_ANDROID)
 
-// TODO(crbug.com/1493504): Re-enable on macOS once flakiness is resolved.
-#if !BUILDFLAG(IS_MAC) && BUILDFLAG(ENABLE_SUPERVISED_USERS)
+#if BUILDFLAG(ENABLE_SUPERVISED_USERS)
 TEST_F(ChromeBrowsingDataModelDelegateTest, CookieDeletionFilterChildUser) {
   profile_->SetIsSupervisedProfile(true);
 
@@ -308,7 +300,7 @@ TEST_F(ChromeBrowsingDataModelDelegateTest, CookieDeletionFilterIncognitoUser) {
   EXPECT_FALSE(
       delegate()->IsCookieDeletionDisabled(GURL("https://youtube.com")));
 }
-#endif  // !BUILDFLAG(IS_MAC) && BUILDFLAG(ENABLE_SUPERVISED_USERS)
+#endif  // BUILDFLAG(ENABLE_SUPERVISED_USERS)
 
 TEST_F(ChromeBrowsingDataModelDelegateTest, RemoveFederatedIdentityData) {
   const url::Origin kRequester =

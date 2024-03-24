@@ -22,33 +22,20 @@ chromium-metrics-reviews@google.com.
 
 <histograms>
 
-<variants name="BackgroundContextType">
-  <variant name="ExtensionEventPage3"
-      summary="event page. Emitted when extensions browser code receives
-               receives an ack from the renderer that it fired the event in
-               the event page. It only counts events that ran in a event page
-               background script, other listeners in the extension renderer
-               that can receive the event are not counted. Replaced previous
-               version because values were inaccurate due to a bug where we
-               recorded this metric for all events for an extension, rather
-               that just for those that ran in the lazy background page
-               script 2023-10"/>
-  <variant name="ExtensionPersistentBackgroundPage"
-      summary="persistent background page. Emitted shortly after extensions
-               browser code receives the ack from the renderer that it fired
-               the event in the persistent background page.
-               &quot;shortly&quot; because there is an IPC call between
-               dispatching the event in the renderer and the acknowledgement
-               by the browser side that emits the value"/>
-  <variant name="ExtensionServiceWorker2"
-      summary="service worker. Emitted shortly after extensions browser code
-               receives the ack from the renderer that it fired the event in
-               the service worker. &quot;shortly&quot; because there is a
-               function call between the receipt by the browser and recording
-               the value. Note: this may include some amount of execution
-               time of the extension service worker JS listener. Replaced
-               previous version because values were inaccurate due to a bug
-               with recording the dispatch start time 2023-08"/>
+<variants name="DeclarativeNetRequestRegexRulesetSize">
+  <variant name="15To100Rules" summary="15 to 100 regex rules"/>
+  <variant name="100To500Rules" summary="100 to 500 regex rules"/>
+  <variant name="LessThan15Rules" summary="less than 15 regex rules"/>
+  <variant name="Over500Rules" summary="Over 500 regex rules"/>
+</variants>
+
+<variants name="DeclarativeNetRequestRulesetSize">
+  <variant name="1000To10000Rules" summary="1,000 to 10,000 rules"/>
+  <variant name="10000To30000Rules" summary="10,000 to 30,000 rules"/>
+  <variant name="30000To100000Rules" summary="30,000 to 100,000 rules"/>
+  <variant name="100000To300000Rules" summary="100,000 to 300,000 rules"/>
+  <variant name="LessThan1000Rules" summary="less than 1,000 rules"/>
+  <variant name="Over300000Rules" summary="over 300,000 rules"/>
 </variants>
 
 <variants name="ExtensionFunctionExecutionTime">
@@ -149,7 +136,7 @@ of interesting buckets, such as "internal + external".
 </histogram>
 
 <histogram name="ExtensionBlacklist.UnblacklistInstalled"
-    enum="ExtensionLocation" expires_after="2024-05-26">
+    enum="ExtensionLocation" expires_after="2024-07-28">
   <owner>anunoy@chromium.org</owner>
   <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
@@ -175,7 +162,7 @@ of interesting buckets, such as "internal + external".
 </histogram>
 
 <histogram name="Extensions.ActiveScriptController.DeniedExtensions"
-    units="Extension Count" expires_after="2024-06-02">
+    units="Extension Count" expires_after="2024-08-04">
   <owner>rdevlin.cronin@chromium.org</owner>
   <owner>extensions-core@chromium.org</owner>
   <summary>
@@ -466,7 +453,7 @@ of interesting buckets, such as "internal + external".
 </histogram>
 
 <histogram name="Extensions.ContentVerification.FetchResult"
-    enum="BooleanSuccess" expires_after="2024-05-19">
+    enum="BooleanSuccess" expires_after="2024-07-21">
   <owner>vkovalova@google.com</owner>
   <owner>lazyboy@chromium.org</owner>
   <owner>rdevlin.cronin@chromium.org</owner>
@@ -493,8 +480,7 @@ of interesting buckets, such as "internal + external".
 
 <histogram name="Extensions.CorruptExtensionDisabledReason"
     enum="CorruptExtensionDisabledReason" expires_after="2024-11-20">
-  <owner>lazyboy@chromium.org</owner>
-  <owner>rockot@chromium.org</owner>
+  <owner>jlulejian@chromium.org</owner>
   <owner>extensions-core@chromium.org</owner>
   <summary>
     The reason why an extension was detected to be corrupted. Recorded each time
@@ -609,7 +595,7 @@ of interesting buckets, such as "internal + external".
 </histogram>
 
 <histogram name="Extensions.CWSInfoService.NetworkResponseCodeOrError"
-    enum="CombinedHttpResponseAndNetErrorCode" expires_after="2024-05-04">
+    enum="CombinedHttpResponseAndNetErrorCode" expires_after="2024-08-04">
   <owner>anunoy@chromium.org</owner>
   <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
@@ -619,7 +605,7 @@ of interesting buckets, such as "internal + external".
 </histogram>
 
 <histogram name="Extensions.CWSInfoService.NetworkRetriesTillSuccess"
-    units="retries" expires_after="2024-05-04">
+    units="retries" expires_after="2024-08-04">
   <owner>anunoy@chromium.org</owner>
   <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
@@ -700,7 +686,7 @@ of interesting buckets, such as "internal + external".
 </histogram>
 
 <histogram name="Extensions.DeclarativeNetRequest.CreateVerifiedMatcherTime"
-    units="ms" expires_after="2024-05-19">
+    units="ms" expires_after="2024-07-21">
   <owner>kelvinjiang@chromium.org</owner>
   <owner>src/extensions/OWNERS</owner>
   <summary>
@@ -740,7 +726,7 @@ of interesting buckets, such as "internal + external".
 
 <histogram name="Extensions.DeclarativeNetRequest.IndexAndPersistRulesTime"
     units="ms" expires_after="2024-10-01">
-  <owner>lazyboy@chromium.org</owner>
+  <owner>kelvinjiang@chromium.org</owner>
   <owner>src/extensions/OWNERS</owner>
   <summary>
     Time taken to index and persist to disk, the deserialized json rules
@@ -751,7 +737,7 @@ of interesting buckets, such as "internal + external".
 </histogram>
 
 <histogram name="Extensions.DeclarativeNetRequest.IsLargeRegexRule"
-    enum="RegexRuleStatus" expires_after="2024-03-17">
+    enum="RegexRuleStatus" expires_after="2025-03-17">
   <owner>kelvinjiang@chromium.org</owner>
   <owner>src/extensions/OWNERS</owner>
   <summary>
@@ -798,30 +784,59 @@ of interesting buckets, such as "internal + external".
     name="Extensions.DeclarativeNetRequest.RegexRulesBeforeRequestActionTime.{RegexRulesetSize}"
     units="microseconds" expires_after="2024-08-28">
   <owner>rdevlin.cronin@chromium.org</owner>
+  <owner>kelvinjiang.cronin@chromium.org</owner>
   <owner>src/extensions/OWNERS</owner>
   <summary>
     The time taken to evaluate regex rules for a single declarativeNetRequest
-    ruleset where the ruleset has {RegexRulesetSize}. Emitted once per ruleset
-    per evaluated request. This is recorded only for clients with
-    high-resolution clocks.
+    ruleset where the ruleset has {RegexRulesetSize}, before the request was
+    sent. Emitted once per ruleset per evaluated request. This is recorded only
+    for clients with high-resolution clocks.
   </summary>
-  <token key="RegexRulesetSize">
-    <variant name="15To100Rules" summary="15 to 100 regex rules"/>
-    <variant name="100To500Rules" summary="100 to 500 regex rules"/>
-    <variant name="LessThan15Rules" summary="less than 15 regex rules"/>
-    <variant name="Over500Rules" summary="Over 500 regex rules"/>
-  </token>
+  <token key="RegexRulesetSize"
+      variants="DeclarativeNetRequestRegexRulesetSize"/>
 </histogram>
 
 <histogram
     name="Extensions.DeclarativeNetRequest.RegexRulesEvaluationPercentage"
     units="%" expires_after="2024-08-28">
   <owner>rdevlin.cronin@chromium.org</owner>
+  <owner>kelvinjiang.cronin@chromium.org</owner>
   <owner>src/extensions/OWNERS</owner>
   <summary>
     For a single declarativeNetRequest ruleset, the percent of the total amount
-    of time spent on evaluating regex rules. Emitted once per ruleset per
-    evaluated request if the ruleset has at least one regex rule.
+    of time spent on evaluating regex rules, before the request was sent (in the
+    onBeforeRequest stage). Emitted once per ruleset per evaluated request if
+    the ruleset has at least one regex rule.
+  </summary>
+</histogram>
+
+<histogram
+    name="Extensions.DeclarativeNetRequest.RegexRulesHeadersReceivedActionTime.{RegexRulesetSize}"
+    units="microseconds" expires_after="2024-08-28">
+  <owner>rdevlin.cronin@chromium.org</owner>
+  <owner>kelvinjiang.cronin@chromium.org</owner>
+  <owner>src/extensions/OWNERS</owner>
+  <summary>
+    The time taken to evaluate regex rules for a single declarativeNetRequest
+    ruleset where the ruleset has {RegexRulesetSize}, after the request has
+    received response headers. Emitted once per ruleset per evaluated request.
+    This is recorded only for clients with high-resolution clocks.
+  </summary>
+  <token key="RegexRulesetSize"
+      variants="DeclarativeNetRequestRegexRulesetSize"/>
+</histogram>
+
+<histogram
+    name="Extensions.DeclarativeNetRequest.RegexRulesHeadersReceivedEvaluationPercentage"
+    units="%" expires_after="2024-08-28">
+  <owner>rdevlin.cronin@chromium.org</owner>
+  <owner>kelvinjiang.cronin@chromium.org</owner>
+  <owner>src/extensions/OWNERS</owner>
+  <summary>
+    For a single declarativeNetRequest ruleset, the percent of the total amount
+    of time spent on evaluating regex rules, after the request has received
+    response headers. Emitted once per ruleset per evaluated request if the
+    ruleset has at least one regex rule.
   </summary>
 </histogram>
 
@@ -912,21 +927,30 @@ of interesting buckets, such as "internal + external".
     name="Extensions.DeclarativeNetRequest.RulesetMatchingBeforeRequestActionTime.{RulesetSize}"
     units="microseconds" expires_after="2024-08-28">
   <owner>rdevlin.cronin@chromium.org</owner>
+  <owner>kelvinjiang@chromium.org</owner>
   <owner>src/extensions/OWNERS</owner>
   <summary>
     The time taken to determine the appropriate declarativeNetRequest action for
     a given request from a single ruleset in an extension where the ruleset has
-    {RulesetSize}. This is recorded only for clients with high-resolution
-    clocks.
+    {RulesetSize}, before the request was sent. This is recorded only for
+    clients with high-resolution clocks.
   </summary>
-  <token key="RulesetSize">
-    <variant name="1000To10000Rules" summary="1,000 to 10,000 rules"/>
-    <variant name="10000To30000Rules" summary="10,000 to 30,000 rules"/>
-    <variant name="30000To100000Rules" summary="30,000 to 100,000 rules"/>
-    <variant name="100000To300000Rules" summary="100,000 to 300,000 rules"/>
-    <variant name="LessThan1000Rules" summary="less than 1,000 rules"/>
-    <variant name="Over300000Rules" summary="over 300,000 rules"/>
-  </token>
+  <token key="RulesetSize" variants="DeclarativeNetRequestRulesetSize"/>
+</histogram>
+
+<histogram
+    name="Extensions.DeclarativeNetRequest.RulesetMatchingHeadersReceivedActionTime.{RulesetSize}"
+    units="microseconds" expires_after="2024-08-28">
+  <owner>rdevlin.cronin@chromium.org</owner>
+  <owner>kelvinjiang@chromium.org</owner>
+  <owner>src/extensions/OWNERS</owner>
+  <summary>
+    The time taken to determine the appropriate declarativeNetRequest action for
+    a given request from a single ruleset in an extension where the ruleset has
+    {RulesetSize}, after the request has received response headers. This is
+    recorded only for clients with high-resolution clocks.
+  </summary>
+  <token key="RulesetSize" variants="DeclarativeNetRequestRulesetSize"/>
 </histogram>
 
 <histogram name="Extensions.DeclarativeNetRequest.RulesetReindexSuccessful"
@@ -983,6 +1007,21 @@ of interesting buckets, such as "internal + external".
     It is possible that there are multiple bits set, however, in which case
     those corresponding values will show up as missing buckets in the UMA
     dashboard.
+  </summary>
+</histogram>
+
+<histogram name="Extensions.DeveloperModeEnabled" enum="Boolean"
+    expires_after="2024-08-15">
+  <owner>jlulejian@chromium.org</owner>
+  <owner>extensions-core@chromium.org</owner>
+  <summary>
+    Logged once on profile open for &quot;user profiles&quot; (profiles where
+    people can install extensions, specifically profiles that can have
+    non-component extensions installed). This emits true if the user has
+    extension developer mode enabled. Note: this is only on profile open, so if
+    a user either 1) later enables dev mode or 2) enables dev mode after profile
+    start and disables it before the next profile start we emit false once in
+    either scenario.
   </summary>
 </histogram>
 
@@ -1266,7 +1305,7 @@ of interesting buckets, such as "internal + external".
 
 <histogram
     name="Extensions.Events.DidDispatchToAckSucceed.{BackgroundContextType}"
-    units="Boolean" expires_after="never">
+    enum="Boolean" expires_after="never">
 <!-- expires-never: Monitors core extension system health. -->
 
   <owner>jlulejian@chromium.org</owner>
@@ -1351,6 +1390,35 @@ of interesting buckets, such as "internal + external".
 </histogram>
 
 <histogram
+    name="Extensions.Events.DispatchToAckTime.ExtensionPersistentBackgroundPage"
+    units="microseconds" expires_after="never">
+<!-- expires-never: Monitors core extension system health. -->
+
+  <owner>jlulejian@chromium.org</owner>
+  <owner>extensions-core@chromium.org</owner>
+  <summary>
+    Note: Separate from
+    Extensions.Events.DispatchToAckTime.{BackgroundContextType}{ContextActive}
+    because PersistentBackgroundPages are always active (and thus don't need a
+    ContextActive variant).
+
+    Records the time it took for the event to be sent to the event router for
+    dispatch for background page of type persistent background page. Emitted
+    shortly after extensions browser code receives the ack from the renderer
+    that it fired the event in the persistent background page.
+    &quot;shortly&quot; because there is an IPC call between dispatching the
+    event in the renderer and the acknowledgement by the browser side that emits
+    the value. Reports samples at microseconds granualarity up to 5 minutes.
+    Values over 5 minutes are bucketed together since no ack is expected to take
+    longer than that. 5 minutes was decided since that is the maximum for
+    extension service worker event lifetime. This is recorded only for clients
+    with high-resolution clocks. It does not include any requests that utilize
+    the EventRouter::DispatchEventToSender() event routing flow (some web
+    request API, and web view API events).
+  </summary>
+</histogram>
+
+<histogram
     name="Extensions.Events.DispatchToAckTime.{BackgroundContextType}{ContextActive}"
     units="microseconds" expires_after="never">
 <!-- expires-never: Monitors core extension system health. -->
@@ -1368,7 +1436,28 @@ of interesting buckets, such as "internal + external".
     EventRouter::DispatchEventToSender() event routing flow (some web request
     API, and web view API events).
   </summary>
-  <token key="BackgroundContextType" variants="BackgroundContextType"/>
+  <token key="BackgroundContextType">
+    <variant name="ExtensionEventPage3"
+        summary="event page. Emitted when extensions browser code receives
+                 receives an ack from the renderer that it fired the event in
+                 the event page. It only counts events that ran in a event
+                 page background script, other listeners in the extension
+                 renderer that can receive the event are not counted.
+                 Replaced previous version because values were inaccurate due
+                 to a bug where we recorded this metric for all events for an
+                 extension, rather that just for those that ran in the lazy
+                 background page script 2023-10"/>
+    <variant name="ExtensionServiceWorker2"
+        summary="service worker. Emitted shortly after extensions browser
+                 code receives the ack from the renderer that it fired the
+                 event in the service worker. &quot;shortly&quot; because
+                 there is a function call between the receipt by the browser
+                 and recording the value. Note: this may include some amount
+                 of execution time of the extension service worker JS
+                 listener. Replaced previous version because values were
+                 inaccurate due to a bug with recording the dispatch start
+                 time 2023-08"/>
+  </token>
   <token key="ContextActive">
     <variant name="" summary=""/>
     <variant name=".Active"
@@ -1541,7 +1630,7 @@ of interesting buckets, such as "internal + external".
 </histogram>
 
 <histogram name="Extensions.ExtensionReenabledRemotely" units="count"
-    expires_after="2024-06-10">
+    expires_after="2024-08-11">
   <owner>anunoy@chromium.org</owner>
   <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
@@ -1895,6 +1984,18 @@ of interesting buckets, such as "internal + external".
   </summary>
 </histogram>
 
+<histogram name="Extensions.ForceInstalledPreInstalledDeprecatedAppOpenUrl"
+    enum="ExtensionForceInstalledPreInstalledDeprecatedSite"
+    expires_after="2025-01-01">
+  <owner>erikchen@chromium.org</owner>
+  <owner>extensions-core@chromium.org</owner>
+  <summary>
+    Called once each time the user clicks the accept button on the
+    force-installed, pre-installed deprecated apps dialog. This results in the
+    browser opening a new tab with a URL to one of 6 pre-defined sites.
+  </summary>
+</histogram>
+
 <histogram name="Extensions.ForceInstalledReadyTime" units="ms"
     expires_after="2024-12-01">
   <owner>vkovalova@google.com</owner>
@@ -2032,7 +2133,7 @@ of interesting buckets, such as "internal + external".
 </histogram>
 
 <histogram name="Extensions.ForceInstalled{ErrorType}NetworkErrorCode"
-    enum="NetErrorCodes" expires_after="2024-04-28">
+    enum="NetErrorCodes" expires_after="2024-07-14">
   <owner>vkovalova@google.com</owner>
   <owner>burunduk@chromium.org</owner>
   <owner>managed-devices@google.com</owner>
@@ -2226,7 +2327,7 @@ of interesting buckets, such as "internal + external".
 </histogram>
 
 <histogram name="Extensions.Functions.SucceededTotalExecutionTime" units="ms"
-    expires_after="2024-05-12">
+    expires_after="2024-07-14">
   <owner>rdevlin.cronin@chromium.org</owner>
   <owner>extensions-core@chromium.org</owner>
   <summary>
@@ -2239,7 +2340,7 @@ of interesting buckets, such as "internal + external".
 </histogram>
 
 <histogram name="Extensions.Functions.SynchronousExecutionTime" units="ms"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>rdevlin.cronin@chromium.org</owner>
   <owner>extensions-core@chromium.org</owner>
   <summary>
@@ -2728,7 +2829,7 @@ of interesting buckets, such as "internal + external".
 </histogram>
 
 <histogram name="Extensions.InstallFrictionDialogAction"
-    enum="ExtensionInstallFrictionDialogAction" expires_after="2024-04-28">
+    enum="ExtensionInstallFrictionDialogAction" expires_after="2024-07-14">
   <owner>jeffcyr@google.com</owner>
   <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
@@ -3618,6 +3719,25 @@ of interesting buckets, such as "internal + external".
   </summary>
 </histogram>
 
+<histogram
+    name="Extensions.NonWebstoreLocationWithDeveloperModeOff{ExtensionState}"
+    enum="ExtensionLocation" expires_after="2024-06-30">
+  <owner>richche@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
+  <summary>
+    The number of {ExtensionState} non-webstore extensions with a non-webstore
+    update_url loaded on profile open and developer mode disabled. Grouped by
+    Extension::Location, which only includes external pref, registry, and
+    unpacked. Emitted on every profile open only for &quot;user profiles&quot;
+    (profiles where people can install extensions, specifically profiles that
+    can have non-component extensions installed).
+  </summary>
+  <token key="ExtensionState">
+    <variant name=".Disabled" summary="disabled"/>
+    <variant name=".Enabled" summary="enabled"/>
+  </token>
+</histogram>
+
 <histogram name="Extensions.NonWebStoreNewTabPageOverrides" units="units"
     expires_after="2023-07-07">
   <owner>anunoy@chromium.org</owner>
@@ -3968,6 +4088,21 @@ of interesting buckets, such as "internal + external".
     their manifest. Recorded once per &quot;user profile&quot; (profiles where
     people can install extensions, specifically profiles that can have
     non-component extensions installed) at profile initialization.
+  </summary>
+</histogram>
+
+<histogram
+    name="Extensions.ServiceWorkerBackground.AddPendingTaskForRunningWorker"
+    enum="Boolean" expires_after="2024-07-09">
+<!-- expires-never: Monitors core extension system health. -->
+
+  <owner>jlulejian@chromium.org</owner>
+  <owner>extensions-core@chromium.org</owner>
+  <summary>
+    It is emitted every time we add a pending task for a worker. Records true if
+    the worker was ready to run tasks when pendings tasks are added (this is not
+    optimal). Records false if the worker was not ready to run tasks when the
+    pending task was added (this is the optimal expected state).
   </summary>
 </histogram>
 

@@ -21,20 +21,26 @@ class COMPONENT_EXPORT(WM) WmDropHandler {
  public:
   // Notifies that drag has entered the window.
   // |point| is in the coordinate space of the PlatformWindow in DIP.
-  // |operation| contains bitmask of ui::DragDropTypes suggested by the source.
+  // |operations| contains bitmask of ui::DragDropTypes suggested by the source.
   // |modifiers| contains bitmask of ui::EventFlags that accompany the event.
   virtual void OnDragEnter(const gfx::PointF& point,
-                           std::unique_ptr<OSExchangeData> data,
-                           int operation,
+                           int operations,
                            int modifiers) = 0;
+
+  // Notifies that the data advertised by the drag source was fully fetched,
+  // which is delivered through |data| parameter. It must be called after
+  // OnDragEnter and before OnDragLeave/OnDragDrop. Callers must also ensure
+  // that this function is called every time the cursor re-enters a given
+  // window, even in a single drag session.
+  virtual void OnDragDataAvailable(std::unique_ptr<OSExchangeData> data) = 0;
 
   // Notifies that drag location has changed.
   // |point| is in the coordinate space of the PlatformWindow in DIP.
-  // |operation| contains bitmask of ui::DragDropTypes suggested by the source.
+  // |operations| contains bitmask of ui::DragDropTypes suggested by the source.
   // |modifiers| contains bitmask of ui::EventFlags that accompany the event.
   // Returns one of ui::DragDropTypes values selected by the client.
   virtual int OnDragMotion(const gfx::PointF& point,
-                           int operation,
+                           int operations,
                            int modifiers) = 0;
 
   // Notifies that the dragged data has been dropped. The location of the drop

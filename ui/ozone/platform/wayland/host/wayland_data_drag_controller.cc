@@ -14,9 +14,12 @@
 #include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/task/task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
+#include "base/threading/scoped_blocking_call.h"
 #include "ui/base/clipboard/clipboard_constants.h"
 #include "ui/base/dragdrop/drag_drop_types.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
@@ -26,10 +29,12 @@
 #include "ui/events/event_constants.h"
 #include "ui/events/platform/platform_event_source.h"
 #include "ui/events/platform/scoped_event_dispatcher.h"
+#include "ui/gfx/geometry/point_conversions.h"
 #include "ui/gfx/image/image_skia_rep.h"
 #include "ui/ozone/platform/wayland/common/wayland_util.h"
 #include "ui/ozone/platform/wayland/host/dump_util.h"
 #include "ui/ozone/platform/wayland/host/wayland_connection.h"
+#include "ui/ozone/platform/wayland/host/wayland_cursor_position.h"
 #include "ui/ozone/platform/wayland/host/wayland_data_device_manager.h"
 #include "ui/ozone/platform/wayland/host/wayland_data_offer.h"
 #include "ui/ozone/platform/wayland/host/wayland_data_source.h"
@@ -164,8 +169,8 @@ bool WaylandDataDragController::StartSession(const OSExchangeData& data,
       icon_surface_buffer_scale_ = origin_window->applied_state().window_scale;
       icon_surface_->set_surface_buffer_scale(icon_surface_buffer_scale_);
       // Icon surface do not need input.
-      const gfx::Rect empty_region_px;
-      icon_surface_->set_input_region(empty_region_px);
+      const std::vector<gfx::Rect> kEmptyRegionPx{{}};
+      icon_surface_->set_input_region(kEmptyRegionPx);
       icon_surface_->ApplyPendingState();
 
       auto icon_offset = -data.provider().GetDragImageOffset();
@@ -221,7 +226,7 @@ void WaylandDataDragController::DumpState(std::ostream& out) const {
   constexpr auto kStateToString = base::MakeFixedFlatMap<State, const char*>(
       {{State::kIdle, "idle"},
        {State::kStarted, "started"},
-       {State::kTransferring, "transferring"}});
+       {State::kFetching, "fetching"}});
   out << "WaylandDataDragController: state="
       << GetMapValueOrDefault(kStateToString, state_)
       << ", drag_source=" << !!drag_source_
@@ -229,7 +234,6 @@ void WaylandDataDragController::DumpState(std::ostream& out) const {
       << ", origin_window=" << GetWindowName(origin_window_)
       << ", current_window=" << GetWindowName(window_)
       << ", last_drag_location=" << last_drag_location_.ToString()
-      << ", is_leave_pending=" << is_leave_pending_
       << ", icon_surface_bufer_scale=" << icon_surface_buffer_scale_
       << ", pending_icon_offset=" << pending_icon_offset_.ToString()
       << ", current_icon_offset=" << current_icon_offset_.ToString();
@@ -371,64 +375,89 @@ void WaylandDataDragController::OnDragEnter(WaylandWindow* window,
     DCHECK(pointer_grabber_for_window_drag_);
   }
 
+  window_->OnDragEnter(
+      location, DndActionsToDragOperations(data_offer_->source_actions()));
+
   if (IsDragSource()) {
     // If the DND session was initiated from a Chromium window,
     // |offered_exchange_data_provider_| already holds the data to be exchanged,
     // so we don't need to read it through Wayland and can just copy it here.
+    DCHECK_EQ(state_, State::kStarted);
     DCHECK(offered_exchange_data_provider_);
-    PropagateOnDragEnter(location, timestamp,
-                         std::make_unique<OSExchangeData>(
-                             offered_exchange_data_provider_->Clone()));
+    window_->OnDragDataAvailable(std::make_unique<OSExchangeData>(
+        offered_exchange_data_provider_->Clone()));
   } else {
     // Otherwise, we are about to accept data dragged from another application.
-    // Reading the data may take some time so set |state_| to |kTransferring|,
-    // which will defer sending OnDragEnter to the client until the data
-    // is ready.
-    state_ = State::kTransferring;
-    PostDataTransferTask(location, timestamp);
+    // Reading the data may take some time so set |state_| to |kFetching|, and
+    // schedule a task to do the actual data fetching. Also, as a safeguard
+    // against buggy/malicious compositors, before posting a new fetch task
+    // cancel the previous one, if any, so preventing from flooding the thread
+    // pool.
+    CancelDataFetchingIfNeeded();
+    state_ = State::kFetching;
+    auto cancel_flag = base::MakeRefCounted<CancelFlag>();
+    PostDataFetchingTask(location, timestamp, cancel_flag);
   }
+
+  OnDragMotion(location, timestamp);
 }
 
 void WaylandDataDragController::OnDragMotion(const gfx::PointF& location,
                                              base::TimeTicks timestamp) {
   VLOG(2) << __FUNCTION__ << " window=" << !!window_
           << " location=" << location.ToString()
-          << " transferring=" << (state_ == State::kTransferring);
+          << " fetching=" << (state_ == State::kFetching);
 
   if (!window_) {
     return;
   }
 
-  if (state_ == State::kTransferring) {
-    last_drag_location_ = location;
-    return;
+  // TODO(crbug.com/1519772): we should update the cursor position when some
+  // data is dragged from another client. Currently `drag_source_` may be
+  // nullopt in that case.
+  if (drag_source_.has_value()) {
+    // Update the cursor position only for drag with mouse.
+    if (*drag_source_ == mojom::DragEventSource::kMouse) {
+      auto* cursor_position = connection_->wayland_cursor_position();
+      if (cursor_position) {
+        CHECK(window_);
+        // TODO(crbug.com/1521286): Once we enable the input region for
+        // subsurfaces, we need to update this part since the location will no
+        // longer be relative to the window.
+        auto location_in_screen =
+            gfx::ToRoundedPoint(location) +
+            window_->GetBoundsInDIP().origin().OffsetFromOrigin();
+        cursor_position->OnCursorPositionChanged(location_in_screen);
+      }
+    }
   }
 
   DCHECK(data_offer_);
-  int available_operations =
-      DndActionsToDragOperations(data_offer_->source_actions());
-  int client_operations = window_->OnDragMotion(location, available_operations);
+  const int client_operations = window_->OnDragMotion(
+      location, DndActionsToDragOperations(data_offer_->source_actions()));
 
   data_offer_->SetDndActions(DragOperationsToDndActions(client_operations));
 }
 
 void WaylandDataDragController::OnDragLeave(base::TimeTicks timestamp) {
-  VLOG(2) << __FUNCTION__ << " window=" << !!window_
-          << " transferring=" << (state_ == State::kTransferring);
+  VLOG(1) << __FUNCTION__ << " window=" << !!window_
+          << " fetching=" << (state_ == State::kFetching)
+          << " is_source=" << IsDragSource();
 
-  if (state_ == State::kTransferring) {
-    // We cannot leave until the transfer is finished.  Postponing.
-    is_leave_pending_ = true;
+  // For incoming drag sessions, i.e: originated in an external application,
+  // reset state kIdle now. Otherwise, it'll be reset in OnDataSourceFinish.
+  if (!IsDragSource()) {
+    state_ = State::kIdle;
+    CancelDataFetchingIfNeeded();
+  }
+
+  if (!window_) {
     return;
   }
 
-  if (window_) {
-    window_->OnDragLeave();
-  }
-
+  window_->OnDragLeave();
   window_ = nullptr;
   data_offer_.reset();
-  is_leave_pending_ = false;
 }
 
 void WaylandDataDragController::OnDragDrop(base::TimeTicks timestamp) {
@@ -459,7 +488,7 @@ void WaylandDataDragController::OnDataSourceFinish(WaylandDataSource* source,
         completed ? DndActionToDragOperation(data_source_->dnd_action())
                   : DragOperation::kNone);
     // DnD handlers expect DragLeave to be sent for drag sessions that end up
-    // with no data transfer (wl_data_source::cancelled event).
+    // with no data fetching (wl_data_source::cancelled event).
     if (!completed) {
       origin_window_->OnDragLeave();
     }
@@ -519,13 +548,15 @@ void WaylandDataDragController::OnWindowRemoved(WaylandWindow* window) {
   }
 }
 
-void WaylandDataDragController::PostDataTransferTask(
+void WaylandDataDragController::PostDataFetchingTask(
     const gfx::PointF& location,
-    base::TimeTicks start_time) {
+    base::TimeTicks start_time,
+    const scoped_refptr<CancelFlag>& cancel_flag) {
   using FetchingInfo = std::vector<std::pair<std::string, int>>;
 
-  DCHECK_EQ(state_, State::kTransferring);
+  DCHECK_EQ(state_, State::kFetching);
   DCHECK(data_offer_);
+  DCHECK(!cancel_flag->data.IsSet());
 
   FetchingInfo offered_data;
   for (const auto& mime_type : data_offer_->mime_types()) {
@@ -534,32 +565,42 @@ void WaylandDataDragController::PostDataTransferTask(
       continue;
     }
 
-    VLOG(1) << __func__ << " requests to receive data for " << mime_type;
+    VLOG(1) << __func__ << " requesting to receive data for " << mime_type;
     base::ScopedFD fd = data_offer_->Receive(mime_type);
     if (!fd.is_valid()) {
-      DPLOG(ERROR) << "Failed to open file descriptor for " << mime_type;
+      PLOG(ERROR) << "Failed to open file descriptor for " << mime_type;
       continue;
     }
     offered_data.emplace_back(mime_type, fd.release());
   }
   connection_->Flush();
 
-  auto fetch_data_closure = [](FetchingInfo offered_data) {
+  auto fetch_data_closure = [](FetchingInfo offered_data,
+                               const scoped_refptr<CancelFlag>& cancel_flag)
+      -> std::unique_ptr<OSExchangeData> {
+    base::ScopedBlockingCall blocking_call(FROM_HERE,
+                                           base::BlockingType::MAY_BLOCK);
     auto fetched_data = std::make_unique<WaylandExchangeDataProvider>();
-    VLOG(1) << __func__ << " Starting data fetching for " << offered_data.size()
+
+    VLOG(1) << "Starting data fetching for " << offered_data.size()
             << " mime types.";
 
     for (const auto& [mime_type, fd_handle] : offered_data) {
       DCHECK(IsMimeTypeSupported(mime_type));
-      VLOG(1) << __func__ << " will fetch data for " << mime_type;
 
+      if (cancel_flag->data.IsSet()) {
+        VLOG(1) << "cancelled data fetching.";
+        return {};
+      }
+
+      VLOG(1) << "will fetch data for " << mime_type;
       std::vector<uint8_t> contents;
       wl::ReadDataFromFD(base::ScopedFD(fd_handle), &contents);
       if (contents.empty()) {
         continue;
       }
 
-      VLOG(1) << __func__ << " fetched " << contents.size() << " bytes.";
+      VLOG(1) << "did fetch " << contents.size() << " bytes.";
       fetched_data->AddData(base::RefCountedBytes::TakeVector(&contents),
                             mime_type);
     }
@@ -568,69 +609,55 @@ void WaylandDataDragController::PostDataTransferTask(
   };
 
   last_drag_location_ = location;
-  base::ThreadPool::PostTaskAndReplyWithResult(
-      FROM_HERE, {base::MayBlock()},
-      base::BindOnce(fetch_data_closure, std::move(offered_data)),
-      base::BindOnce(&WaylandDataDragController::OnDataTransferFinished,
+  data_fetch_cancel_flag_ = cancel_flag;
+
+  GetDataFetchTaskRunner().PostTaskAndReplyWithResult(
+      FROM_HERE,
+      base::BindOnce(fetch_data_closure, std::move(offered_data), cancel_flag),
+      base::BindOnce(&WaylandDataDragController::OnDataFetchingFinished,
                      weak_factory_.GetWeakPtr(), std::move(start_time)));
 }
 
-void WaylandDataDragController::OnDataTransferFinished(
+void WaylandDataDragController::OnDataFetchingFinished(
     base::TimeTicks timestamp,
     std::unique_ptr<OSExchangeData> received_data) {
-  VLOG(1) << __func__ << " leave_pending=" << is_leave_pending_
+  // This is expected to be called only in incoming drag sessions.
+  DCHECK(!IsDragSource());
+  VLOG(1) << __func__ << " fetching=" << (state_ == State::kFetching)
           << " window=" << !!window_;
-  if (state_ == State::kIdle) {
+
+  // Null `received_data` means the fetching task was cancelled. ie: drag leave
+  // arrived before data was fetched, in which case the `window_` was already
+  // notified and state already reset in OnDragLeave(), so just early out here.
+  if (!received_data) {
+    VLOG(1) << "fetching cancelled.";
     return;
   }
 
-  state_ = State::kIdle;
+  // Move to `kStarted` state, regardless it is possible or not to deliver it.
+  state_ = State::kStarted;
 
-  // If a 'leave' event was received while incoming data was on transit (see
-  // OnDragLeave function), propagating 'enter' event at this point makes no
-  // sense anymore. So reset internal state and exit.
-  if (is_leave_pending_) {
-    DCHECK(!IsDragSource());
-    if (data_offer_) {
-      data_offer_->FinishOffer();
-      data_offer_.reset();
-    }
-    offered_exchange_data_provider_.reset();
-    data_device_->ResetDragDelegateIfNotDragSource();
-    is_leave_pending_ = false;
-    return;
-  }
-
-  PropagateOnDragEnter(last_drag_location_, timestamp,
-                       std::move(received_data));
-}
-
-void WaylandDataDragController::PropagateOnDragEnter(
-    const gfx::PointF& location,
-    base::TimeTicks timestamp,
-    std::unique_ptr<OSExchangeData> data) {
-  VLOG(1) << __func__ << " window=" << !!window_ << " offer=" << !!data_offer_;
-
-  // |data_offer_| may have already been destroyed at this point if, for
-  // example, the drop event comes in while the data fetching was ongoing and no
-  // subsequent 'leave' is received, so just early-out in this case.
-  if (!data_offer_) {
-    return;
-  }
-
-  // |window_| may have already been unset here if, for instance, user has
-  // dragged out of it in incoming dnd sessions. See https://crbug.com/1487387.
+  // |window_| may have already been unset here if, eg: programmatically
+  // destroyed by the application. See https://crbug.com/1487387.
   if (!window_) {
     return;
   }
-
-  window_->OnDragEnter(
-      location, std::move(data),
-      DndActionsToDragOperations(data_offer_->source_actions()));
-  OnDragMotion(location, timestamp);
+  window_->OnDragDataAvailable(std::move(received_data));
 }
 
-absl::optional<wl::Serial>
+void WaylandDataDragController::CancelDataFetchingIfNeeded() {
+  if (state_ == State::kFetching) {
+    return;
+  }
+  if (data_fetch_cancel_flag_) {
+    VLOG_IF(1, data_fetch_cancel_flag_->data.IsSet())
+        << "Cancelling data fetching.";
+    data_fetch_cancel_flag_->data.Set();
+    data_fetch_cancel_flag_ = nullptr;
+  }
+}
+
+std::optional<wl::Serial>
 WaylandDataDragController::GetAndValidateSerialForDrag(DragEventSource source) {
   wl::SerialType serial_type;
   bool should_drag = false;
@@ -646,7 +673,7 @@ WaylandDataDragController::GetAndValidateSerialForDrag(DragEventSource source) {
       break;
   }
   return should_drag ? connection_->serial_tracker().GetSerial(serial_type)
-                     : absl::nullopt;
+                     : std::nullopt;
 }
 
 void WaylandDataDragController::SetOfferedExchangeDataProvider(
@@ -709,6 +736,20 @@ uint32_t WaylandDataDragController::DispatchEvent(const PlatformEvent& event) {
   }
 
   return POST_DISPATCH_PERFORM_DEFAULT;
+}
+
+//  Data fetch task runner is lazily initialized so unrelated test suites
+//  (without ThreadPool available) do not fail.
+//
+//  TODO(b/328574254): Move to constructor once the offending test suites
+//  provide a suitable task environment.
+base::TaskRunner& WaylandDataDragController::GetDataFetchTaskRunner() {
+  if (!data_fetch_task_runner_) {
+    data_fetch_task_runner_ = base::ThreadPool::CreateSequencedTaskRunner(
+        {base::TaskPriority::USER_VISIBLE, base::MayBlock()});
+  }
+  CHECK(data_fetch_task_runner_);
+  return *data_fetch_task_runner_;
 }
 
 }  // namespace ui

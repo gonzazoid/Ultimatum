@@ -639,6 +639,12 @@ void RenderThreadImpl::Init() {
 
   UpdateForegroundCrashKey(
       /*foreground=*/!blink::kLaunchingProcessIsBackgrounded);
+
+  use_cached_routing_table_ =
+      base::FeatureList::IsEnabled(features::kFrameRoutingCache);
+  if (use_cached_routing_table_) {
+    RequestNewItemsForFrameRoutingCache();
+  }
 }
 
 RenderThreadImpl::~RenderThreadImpl() {
@@ -739,8 +745,56 @@ bool RenderThreadImpl::GenerateFrameRoutingID(
     blink::LocalFrameToken& frame_token,
     base::UnguessableToken& devtools_frame_token,
     blink::DocumentToken& document_token) {
-  return render_message_filter()->GenerateFrameRoutingID(
-      &routing_id, &frame_token, &devtools_frame_token, &document_token);
+  if (!use_cached_routing_table_) {
+    mojom::FrameRoutingInfoPtr info;
+    if (!render_message_filter()->GenerateSingleFrameRoutingInfo(&info)) {
+      return false;
+    }
+    routing_id = info->routing_id;
+    frame_token = info->frame_token;
+    devtools_frame_token = info->devtools_frame_token;
+    document_token = info->document_token;
+    return true;
+  }
+
+  // If table is empty force a synchronous fetch.
+  if (cached_frame_routing_.empty()) {
+    std::vector<mojom::FrameRoutingInfoPtr> infos;
+    if (!render_message_filter()->GenerateFrameRoutingInfos(&infos)) {
+      return false;
+    }
+    for (auto& info : infos) {
+      cached_frame_routing_.push_back(std::move(info));
+    }
+  }
+
+  auto& front = cached_frame_routing_.front();
+  routing_id = front->routing_id;
+  frame_token = front->frame_token;
+  devtools_frame_token = front->devtools_frame_token;
+  document_token = front->document_token;
+  cached_frame_routing_.pop_front();
+
+  // If the table drops to 2 or less, request an asynchronous populate.
+  if (!cached_items_requested_ && cached_frame_routing_.size() <= 2) {
+    RequestNewItemsForFrameRoutingCache();
+  }
+  return true;
+}
+
+void RenderThreadImpl::RequestNewItemsForFrameRoutingCache() {
+  cached_items_requested_ = true;
+  render_message_filter()->GenerateFrameRoutingInfos(
+      base::BindOnce(&RenderThreadImpl::PopulateFrameRoutingCacheWithItems,
+                     base::Unretained(this)));
+}
+
+void RenderThreadImpl::PopulateFrameRoutingCacheWithItems(
+    std::vector<mojom::FrameRoutingInfoPtr> infos) {
+  cached_items_requested_ = false;
+  for (auto& info : infos) {
+    cached_frame_routing_.push_back(std::move(info));
+  }
 }
 
 void RenderThreadImpl::AddObserver(RenderThreadObserver* observer) {
@@ -1071,10 +1125,6 @@ RenderThreadImpl::SharedMainThreadContextProvider() {
   // See https://crbug.com/880901
   bool automatic_flushes = true;
 
-  // We use kGpuStreamIdDefault here, the same as in
-  // PepperVideoDecodeContextProvider, so we don't need to handle
-  // synchronization between the pepper context and the shared main thread
-  // context.
   shared_main_thread_contexts_ = CreateOffscreenContext(
       std::move(gpu_channel_host), gpu::SharedMemoryLimits(), support_locking,
       support_gles2_interface, support_raster_interface,
@@ -1088,43 +1138,6 @@ RenderThreadImpl::SharedMainThreadContextProvider() {
   }
 
   return shared_main_thread_contexts_;
-}
-
-scoped_refptr<viz::ContextProviderCommandBuffer>
-RenderThreadImpl::PepperVideoDecodeContextProvider() {
-  DCHECK(IsMainThread());
-  if (pepper_video_decode_contexts_ &&
-      pepper_video_decode_contexts_->ContextGL()->GetGraphicsResetStatusKHR() ==
-          GL_NO_ERROR)
-    return pepper_video_decode_contexts_;
-
-  scoped_refptr<gpu::GpuChannelHost> gpu_channel_host(
-      EstablishGpuChannelSync());
-  if (!gpu_channel_host) {
-    pepper_video_decode_contexts_ = nullptr;
-    return nullptr;
-  }
-
-  bool support_locking = false;
-  bool support_raster_interface = false;
-  bool support_oop_rasterization = false;
-  bool support_gles2_interface = true;
-  bool support_grcontext = !support_oop_rasterization;
-  bool automatic_flushes = false;
-  // We use kGpuStreamIdDefault here, the same as in
-  // SharedMainThreadContextProvider, so we don't need to handle
-  // synchronization between the pepper context and the shared main thread
-  // context.
-  pepper_video_decode_contexts_ = CreateOffscreenContext(
-      std::move(gpu_channel_host), gpu::SharedMemoryLimits::ForMailboxContext(),
-      support_locking, support_gles2_interface, support_raster_interface,
-      support_oop_rasterization, support_grcontext, automatic_flushes,
-      viz::command_buffer_metrics::ContextType::RENDERER_MAIN_THREAD,
-      kGpuStreamIdDefault, kGpuStreamPriorityDefault);
-  auto result = pepper_video_decode_contexts_->BindToCurrentSequence();
-  if (result != gpu::ContextResult::kSuccess)
-    pepper_video_decode_contexts_ = nullptr;
-  return pepper_video_decode_contexts_;
 }
 
 #if BUILDFLAG(IS_ANDROID)

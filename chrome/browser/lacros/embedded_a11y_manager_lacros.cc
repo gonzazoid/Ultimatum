@@ -5,6 +5,7 @@
 #include "chrome/browser/lacros/embedded_a11y_manager_lacros.h"
 
 #include <memory>
+#include <optional>
 
 #include "base/memory/singleton.h"
 #include "base/path_service.h"
@@ -27,11 +28,10 @@
 #include "extensions/browser/extension_system.h"
 #include "extensions/common/extension_l10n_util.h"
 #include "extensions/common/file_util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 
-absl::optional<base::Value::Dict> LoadManifestOnFileThread(
+std::optional<base::Value::Dict> LoadManifestOnFileThread(
     const base::FilePath& path,
     const base::FilePath::CharType* manifest_filename,
     bool localize) {
@@ -42,7 +42,7 @@ absl::optional<base::Value::Dict> LoadManifestOnFileThread(
   if (!manifest) {
     LOG(ERROR) << "Can't load " << path.Append(manifest_filename).AsUTF8Unsafe()
                << ": " << error;
-    return absl::nullopt;
+    return std::nullopt;
   }
   if (localize) {
     // This is only called for Lacros component extensions which are loaded
@@ -196,6 +196,17 @@ void EmbeddedA11yManagerLacros::AddFocusChangedCallbackForTest(
   focus_changed_callback_for_test_ = std::move(callback);
 }
 
+void EmbeddedA11yManagerLacros::SetReadingModeEnabled(bool enabled) {
+  if (reading_mode_enabled_ != enabled) {
+    reading_mode_enabled_ = enabled;
+    UpdateAllProfiles();
+  }
+}
+
+bool EmbeddedA11yManagerLacros::IsReadingModeEnabled() {
+  return reading_mode_enabled_;
+}
+
 void EmbeddedA11yManagerLacros::OnProfileWillBeDestroyed(Profile* profile) {
   observed_profiles_.RemoveObservation(profile);
 }
@@ -230,9 +241,11 @@ void EmbeddedA11yManagerLacros::UpdateAllProfiles() {
 }
 
 void EmbeddedA11yManagerLacros::UpdateProfile(Profile* profile) {
-  // Switch Access and Select to Speak share a helper extension which has a
-  // manifest content script to tell Google Docs to annotate the HTML canvas.
-  if (select_to_speak_enabled_ || switch_access_enabled_) {
+  // Switch Access, Select to Speak, and Reading Mode share a helper extension
+  // which has a manifest content script to tell Google Docs to annotate the
+  // HTML canvas.
+  if (select_to_speak_enabled_ || switch_access_enabled_ ||
+      reading_mode_enabled_) {
     MaybeInstallExtension(profile,
                           extension_misc::kEmbeddedA11yHelperExtensionId,
                           extension_misc::kEmbeddedA11yHelperExtensionPath,
@@ -251,10 +264,12 @@ void EmbeddedA11yManagerLacros::UpdateProfile(Profile* profile) {
     MaybeRemoveExtension(profile, extension_misc::kChromeVoxHelperExtensionId);
   }
 
-  PrefService* const pref_service = profile->GetPrefs();
-  CHECK(pref_service);
-  pref_service->SetBoolean(::prefs::kAccessibilityPdfOcrAlwaysActive,
-                           pdf_ocr_always_active_enabled_);
+  if (pdf_ocr_always_active_enabled_.has_value()) {
+    PrefService* const pref_service = profile->GetPrefs();
+    CHECK(pref_service);
+    pref_service->SetBoolean(::prefs::kAccessibilityPdfOcrAlwaysActive,
+                             pdf_ocr_always_active_enabled_.value());
+  }
 }
 
 void EmbeddedA11yManagerLacros::OnChromeVoxEnabledChanged(base::Value value) {
@@ -343,7 +358,7 @@ void EmbeddedA11yManagerLacros::InstallExtension(
     extensions::ComponentLoader* component_loader,
     const base::FilePath& path,
     const std::string& extension_id,
-    absl::optional<base::Value::Dict> manifest) {
+    std::optional<base::Value::Dict> manifest) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   if (component_loader->Exists(extension_id)) {
     // Because this is async and called from another thread, it's possible we

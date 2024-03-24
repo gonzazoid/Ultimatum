@@ -4,15 +4,19 @@
 #ifndef IOS_CHROME_BROWSER_PASSWORDS_MODEL_WELL_KNOWN_CHANGE_PASSWORD_TAB_HELPER_H_
 #define IOS_CHROME_BROWSER_PASSWORDS_MODEL_WELL_KNOWN_CHANGE_PASSWORD_TAB_HELPER_H_
 
+#import "base/memory/raw_ptr.h"
 #include "components/password_manager/core/browser/well_known_change_password/well_known_change_password_state.h"
 #include "components/password_manager/core/browser/well_known_change_password/well_known_change_password_util.h"
 #include "ios/web/public/navigation/web_state_policy_decider.h"
 #include "ios/web/public/web_state_observer.h"
 #import "ios/web/public/web_state_user_data.h"
 
-namespace password_manager {
-
+namespace affiliations {
 class AffiliationService;
+}  // namespace affiliations
+
+// TODO(b/324553078): Move out of namespace.
+namespace password_manager {
 
 // This TabHelper checks whether a site supports the .well-known/change-password
 // url. To check whether a site supports the change-password url the TabHelper
@@ -74,7 +78,7 @@ class WellKnownChangePasswordTabHelper
   // Records the given UKM metric.
   void RecordMetric(WellKnownChangePasswordResult result);
 
-  web::WebState* web_state_ = nullptr;
+  raw_ptr<web::WebState> web_state_ = nullptr;
   ProcessingState processing_state_ = kWaitingForFirstRequest;
   // Stores the request_url if the first navigation was to
   // .well-known/change-password. It is later used to redirect to the origin.
@@ -84,7 +88,7 @@ class WellKnownChangePasswordTabHelper
   web::WebStatePolicyDecider::PolicyDecisionCallback response_policy_callback_;
   password_manager::WellKnownChangePasswordState
       well_known_change_password_state_{this};
-  password_manager::AffiliationService* affiliation_service_ = nullptr;
+  raw_ptr<affiliations::AffiliationService> affiliation_service_ = nullptr;
   WEB_STATE_USER_DATA_KEY_DECL();
 };
 

@@ -125,7 +125,7 @@ CreateIncomingPasswordSharingInvitation(const std::string& invitation_guid,
 
   const CrossUserSharingPublicPrivateKeyPair& key_pair =
       cryptographer->GetCrossUserSharingKeyPair(/*version=*/0);
-  absl::optional<std::vector<uint8_t>> encrypted_data =
+  std::optional<std::vector<uint8_t>> encrypted_data =
       cryptographer->AuthEncryptForCrossUserSharing(
           base::as_bytes(base::make_span(serialized_data)),
           key_pair.GetRawPublicKey());
@@ -1636,13 +1636,13 @@ TEST_F(ModelTypeWorkerTest, CommitOnly) {
   const SyncEntity entity =
       server()->GetNthCommitMessage(0).commit().entries(0);
 
-  EXPECT_FALSE(entity.has_ctime());
-  EXPECT_FALSE(entity.has_deleted());
   EXPECT_FALSE(entity.has_folder());
-  EXPECT_FALSE(entity.has_id_string());
-  EXPECT_FALSE(entity.has_mtime());
-  EXPECT_FALSE(entity.has_version());
-  EXPECT_FALSE(entity.has_name());
+  EXPECT_TRUE(entity.has_ctime());
+  EXPECT_TRUE(entity.has_deleted());
+  EXPECT_TRUE(entity.has_mtime());
+  EXPECT_TRUE(entity.has_version());
+  EXPECT_TRUE(entity.has_name());
+  EXPECT_TRUE(entity.has_id_string());
   EXPECT_TRUE(entity.specifics().has_user_event());
   EXPECT_EQ(id, entity.specifics().user_event().event_time_usec());
 
@@ -1974,8 +1974,7 @@ TEST(ModelTypeWorkerPopulateUpdateResponseDataTest,
   *entity.mutable_specifics()
        ->mutable_webauthn_credential()
        ->mutable_sync_id() = sync_id;
-  *entity.mutable_client_tag_hash() =
-      base::HexEncode(sync_id.data(), sync_id.size());
+  *entity.mutable_client_tag_hash() = base::HexEncode(sync_id);
 
   ASSERT_EQ(
       ModelTypeWorker::SUCCESS,
@@ -2662,19 +2661,7 @@ TEST_F(ModelTypeWorkerTest, ShouldHaveLocalChangesWhenContributedMaxEntities) {
   EXPECT_FALSE(worker()->HasLocalChanges());
 }
 
-class ModelTypeWorkerPasswordsTestWithNotes
-    : public ModelTypeWorkerPasswordsTest {
- public:
-  ModelTypeWorkerPasswordsTestWithNotes() {
-    feature_list_.InitAndEnableFeature(syncer::kPasswordNotesWithBackup);
-  }
-  ~ModelTypeWorkerPasswordsTestWithNotes() override = default;
-
- private:
-  base::test::ScopedFeatureList feature_list_;
-};
-
-TEST_F(ModelTypeWorkerPasswordsTestWithNotes,
+TEST_F(ModelTypeWorkerPasswordsTest,
        ShouldIgnoreTheEncryptedNotesBackupWhenNotesInPasswordSpecificsData) {
   base::HistogramTester histogram_tester;
   const std::string kPasswordInSpecificsNote = "Note Value";
@@ -2723,7 +2710,7 @@ TEST_F(ModelTypeWorkerPasswordsTestWithNotes,
       syncer::PasswordNotesStateForUMA::kSetInSpecificsData, 1);
 }
 
-TEST_F(ModelTypeWorkerPasswordsTestWithNotes,
+TEST_F(ModelTypeWorkerPasswordsTest,
        ShouldUseTheEncryptedNotesBackupWhenMissingInPasswordSpecificsData) {
   base::HistogramTester histogram_tester;
   const std::string kPasswordNoteBackup = "Note Backup";
@@ -2768,8 +2755,7 @@ TEST_F(ModelTypeWorkerPasswordsTestWithNotes,
       syncer::PasswordNotesStateForUMA::kSetOnlyInBackup, 1);
 }
 
-TEST_F(ModelTypeWorkerPasswordsTestWithNotes,
-       ShouldEmitUnsetWhenNoNotesInUpdate) {
+TEST_F(ModelTypeWorkerPasswordsTest, ShouldEmitUnsetWhenNoNotesInUpdate) {
   base::HistogramTester histogram_tester;
   NormalInitialize();
 
@@ -2796,7 +2782,7 @@ TEST_F(ModelTypeWorkerPasswordsTestWithNotes,
                                       1);
 }
 
-TEST_F(ModelTypeWorkerPasswordsTestWithNotes, ShouldEmitNotesBackupCorrupted) {
+TEST_F(ModelTypeWorkerPasswordsTest, ShouldEmitNotesBackupCorrupted) {
   base::HistogramTester histogram_tester;
   const std::string kPasswordNoteBackup = "Note Backup";
   NormalInitialize();
@@ -2837,8 +2823,7 @@ TEST_F(ModelTypeWorkerPasswordsTestWithNotes, ShouldEmitNotesBackupCorrupted) {
       syncer::PasswordNotesStateForUMA::kSetOnlyInBackupButCorrupted, 1);
 }
 
-TEST_F(ModelTypeWorkerPasswordsTestWithNotes,
-       ShouldPopulatePasswordNotesBackup) {
+TEST_F(ModelTypeWorkerPasswordsTest, ShouldPopulatePasswordNotesBackup) {
   const std::string kPasswordInSpecificsNote = "Note Value";
   NormalInitialize();
 
@@ -2871,7 +2856,7 @@ TEST_F(ModelTypeWorkerPasswordsTestWithNotes,
   EXPECT_EQ(kPasswordInSpecificsNote, decrypted_notes.note(0).value());
 }
 
-TEST_F(ModelTypeWorkerPasswordsTestWithNotes,
+TEST_F(ModelTypeWorkerPasswordsTest,
        ShouldPopulatePasswordNotesBackupWhenNoLocalNotes) {
   NormalInitialize();
 

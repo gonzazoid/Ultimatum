@@ -11,7 +11,6 @@
 #import "ios/chrome/browser/ui/settings/google_services/bulk_upload/bulk_upload_table_view_controller.h"
 #import "ios/chrome/browser/ui/settings/google_services/bulk_upload/bulk_upload_view_controller_presentation_delegate.h"
 #import "ios/chrome/browser/ui/settings/settings_controller_protocol.h"
-#import "ios/chrome/common/button_configuration_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/elements/highlight_button.h"
 #import "ios/chrome/common/ui/util/button_util.h"
@@ -71,6 +70,11 @@ const char kBulkUploadCloseUserAction[] = "Signin_BulkUpload_Close";
                  forControlEvents:UIControlEventTouchUpInside];
   _saveInAccountButton.enabled = NO;
   [self.view addSubview:_saveInAccountButton];
+  // Create the Cancel button.
+  self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
+      initWithBarButtonSystemItem:UIBarButtonSystemItemCancel
+                           target:self
+                           action:@selector(didTapCancelButton:)];
   // Add constraints.
   [NSLayoutConstraint activateConstraints:@[
     [tableView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
@@ -145,6 +149,10 @@ const char kBulkUploadCloseUserAction[] = "Signin_BulkUpload_Close";
 
 - (void)saveInAccountTapped:(UIButton*)button {
   [self.mutator requestSave];
+}
+
+- (void)didTapCancelButton:(UIButton*)button {
+  [self.delegate viewControllerWantsToBeDismissed:self];
 }
 
 @end

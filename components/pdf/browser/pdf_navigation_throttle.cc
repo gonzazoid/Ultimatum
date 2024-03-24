@@ -5,6 +5,7 @@
 #include "components/pdf/browser/pdf_navigation_throttle.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "base/check.h"
@@ -18,7 +19,6 @@
 #include "content/public/browser/navigation_throttle.h"
 #include "content/public/browser/page_navigator.h"
 #include "content/public/browser/web_contents.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/page_transition_types.h"
 #include "url/gurl.h"
 
@@ -53,10 +53,15 @@ const char* PdfNavigationThrottle::GetNameForLogging() {
 content::NavigationThrottle::ThrottleCheckResult
 PdfNavigationThrottle::WillStartRequest() {
   // Ignore unless navigating to the stream URL.
-  const absl::optional<GURL> original_url =
+  const std::optional<GURL> original_url =
       stream_delegate_->MapToOriginalUrl(*navigation_handle());
-  if (!original_url.has_value())
-    return PROCEED;
+  if (!original_url.has_value()) {
+    // Block any non-PDF navigations in PDF frames. Allow all other navigations
+    // to proceed.
+    return stream_delegate_->ShouldAllowPdfFrameNavigation(navigation_handle())
+               ? PROCEED
+               : BLOCK_REQUEST;
+  }
 
   // Uses the same pattern as `PDFIFrameNavigationThrottle` to redirect
   // navigation to the original URL. We'll use this to navigate to the correct

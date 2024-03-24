@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include <cursor-shape-v1-client-protocol.h>
 #include <cursor-shapes-unstable-v1-client-protocol.h>
 #include <linux/input.h>
 #include <wayland-server-core.h>
@@ -51,6 +52,7 @@
 #include "ui/ozone/platform/wayland/common/wayland_util.h"
 #include "ui/ozone/platform/wayland/host/wayland_buffer_manager_host.h"
 #include "ui/ozone/platform/wayland/host/wayland_connection_test_api.h"
+#include "ui/ozone/platform/wayland/host/wayland_cursor_shape.h"
 #include "ui/ozone/platform/wayland/host/wayland_event_source.h"
 #include "ui/ozone/platform/wayland/host/wayland_output.h"
 #include "ui/ozone/platform/wayland/host/wayland_output_manager.h"
@@ -145,6 +147,16 @@ wl::ScopedWlArray InitializeWlArrayWithActivatedState() {
 wl::ScopedWlArray MakeStateArray(const std::vector<int32_t> states) {
   return wl::ScopedWlArray(states);
 }
+
+class MockCursorShape : public WaylandCursorShape {
+ public:
+  MockCursorShape() : WaylandCursorShape(nullptr, nullptr) {}
+  MockCursorShape(const MockCursorShape&) = delete;
+  MockCursorShape& operator=(const MockCursorShape&) = delete;
+  ~MockCursorShape() override = default;
+
+  MOCK_METHOD(void, SetCursorShape, (uint32_t), (override));
+};
 
 class MockZcrCursorShapes : public WaylandZcrCursorShapes {
  public:
@@ -262,6 +274,14 @@ class WaylandWindowTest : public WaylandTest {
     hit_tests->push_back(static_cast<int>(HTTOP));
     hit_tests->push_back(static_cast<int>(HTTOPLEFT));
     hit_tests->push_back(static_cast<int>(HTTOPRIGHT));
+  }
+
+  MockCursorShape* InstallMockCursorShape() {
+    auto zcr_cursor_shapes = std::make_unique<MockCursorShape>();
+    MockCursorShape* mock_cursor_shapes = zcr_cursor_shapes.get();
+    WaylandConnectionTestApi test_api(connection_.get());
+    test_api.SetCursorShape(std::move(zcr_cursor_shapes));
+    return mock_cursor_shapes;
   }
 
   MockZcrCursorShapes* InstallMockZcrCursorShapes() {
@@ -448,7 +468,7 @@ TEST_P(WaylandWindowTest, ApplyPendingStatesAndCommit) {
 
   std::vector<gfx::Rect> region_px = {gfx::Rect{500, 300}};
   window_->root_surface()->set_opaque_region(region_px);
-  window_->root_surface()->set_input_region(region_px[0]);
+  window_->root_surface()->set_input_region(region_px);
   window_->root_surface()->set_surface_buffer_scale(2);
 
   wl::SyncDisplay(connection_->display_wrapper(), *connection_->display());
@@ -536,7 +556,8 @@ TEST_P(WaylandWindowTest, SetDecorationInsets) {
     wl::MockSurface* surface = server->GetObject<wl::MockSurface>(id);
     ASSERT_TRUE(surface);
     wl::MockXdgSurface* xdg_surface = surface->xdg_surface();
-    EXPECT_CALL(*xdg_surface, SetWindowGeometry(_)).Times(0);
+    EXPECT_CALL(*xdg_surface, SetWindowGeometry(gfx::Rect(28, 24, 900, 500)))
+        .Times(1);
   });
 
   window_->SetDecorationInsets(&kDecorationInsets_2x);
@@ -557,6 +578,57 @@ TEST_P(WaylandWindowTest, SetDecorationInsets) {
     SendConfigureEvent(surface_id_, bounds_with_insets.size(), state);
     AdvanceFrameToCurrent(window_.get(), delegate_);
   }
+}
+
+// Checks that geometry is set when decoration insets change even when bounds or
+// scale don't.
+TEST_P(WaylandWindowTest, OnlyChangeDecorationInsets) {
+  // The bounds never change throughout this test
+  constexpr gfx::Rect kBounds{980, 1188};
+
+  window_->SetBoundsInDIP(kBounds);
+
+  auto state = InitializeWlArrayWithActivatedState();
+
+  PostToServerAndWait([id = surface_id_](wl::TestWaylandServerThread* server) {
+    wl::TestOutput* output = server->output();
+    // Send the window to |output|.
+    wl::MockSurface* surface = server->GetObject<wl::MockSurface>(id);
+    ASSERT_TRUE(surface);
+    wl_surface_send_enter(surface->resource(), output->resource());
+  });
+
+  const auto kInitialInsets = gfx::Insets::TLBR(20, 36, 52, 36);
+  auto bounds_with_insets = kBounds;
+  bounds_with_insets.Inset(kInitialInsets);
+  EXPECT_CALL(delegate_, OnBoundsChanged(_)).Times(0);
+  PostToServerAndWait([id = surface_id_, bounds_with_insets](
+                          wl::TestWaylandServerThread* server) {
+    wl::MockSurface* surface = server->GetObject<wl::MockSurface>(id);
+    ASSERT_TRUE(surface);
+    wl::MockXdgSurface* xdg_surface = surface->xdg_surface();
+    EXPECT_CALL(*xdg_surface, SetWindowGeometry(bounds_with_insets));
+  });
+  window_->SetDecorationInsets(&kInitialInsets);
+  AdvanceFrameToCurrent(window_.get(), delegate_);
+
+  const auto kNewInsets = gfx::Insets::TLBR(10, 10, 10, 10);
+  bounds_with_insets = kBounds;
+  bounds_with_insets.Inset(kNewInsets);
+  EXPECT_CALL(delegate_, OnBoundsChanged(_)).Times(0);
+  PostToServerAndWait([id = surface_id_, bounds_with_insets](
+                          wl::TestWaylandServerThread* server) {
+    wl::MockSurface* surface = server->GetObject<wl::MockSurface>(id);
+    ASSERT_TRUE(surface);
+    wl::MockXdgSurface* xdg_surface = surface->xdg_surface();
+    EXPECT_CALL(*xdg_surface, SetWindowGeometry(bounds_with_insets));
+  });
+
+  // Change insets here so that these are detected when a new state is requested
+  // from the server.
+  window_->SetDecorationInsets(&kNewInsets);
+  SendConfigureEvent(surface_id_, bounds_with_insets.size(), state);
+  AdvanceFrameToCurrent(window_.get(), delegate_);
 }
 
 #if BUILDFLAG(IS_LINUX)
@@ -1691,6 +1763,62 @@ TEST_P(WaylandWindowTest, CanDispatchMouseEventFocus) {
   EXPECT_TRUE(window_->CanDispatchEvent(&test_mouse_event_));
 }
 
+TEST_P(WaylandWindowTest, SetCursorUsesCursorShapeForCommonTypes) {
+  SetPointerFocusedWindow(window_.get());
+  MockCursorShape* mock_cursor_shape = InstallMockCursorShape();
+
+  // Verify some commonly-used cursors.
+  EXPECT_CALL(*mock_cursor_shape,
+              SetCursorShape(WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_DEFAULT));
+  auto pointer_cursor = AsPlatformCursor(
+      base::MakeRefCounted<BitmapCursor>(mojom::CursorType::kPointer));
+  window_->SetCursor(pointer_cursor.get());
+
+  EXPECT_CALL(*mock_cursor_shape,
+              SetCursorShape(WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_POINTER));
+  auto hand_cursor = AsPlatformCursor(
+      base::MakeRefCounted<BitmapCursor>(mojom::CursorType::kHand));
+  window_->SetCursor(hand_cursor.get());
+
+  EXPECT_CALL(*mock_cursor_shape,
+              SetCursorShape(WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_TEXT));
+  auto ibeam_cursor = AsPlatformCursor(
+      base::MakeRefCounted<BitmapCursor>(mojom::CursorType::kIBeam));
+  window_->SetCursor(ibeam_cursor.get());
+}
+
+TEST_P(WaylandWindowTest, SetCursorCallsCursorShapeOncePerCursor) {
+  SetPointerFocusedWindow(window_.get());
+  MockCursorShape* mock_cursor_shape = InstallMockCursorShape();
+  auto hand_cursor = AsPlatformCursor(
+      base::MakeRefCounted<BitmapCursor>(mojom::CursorType::kHand));
+  // Setting the same cursor twice on the client only calls the server once.
+  EXPECT_CALL(*mock_cursor_shape, SetCursorShape(_)).Times(1);
+  window_->SetCursor(hand_cursor.get());
+  window_->SetCursor(hand_cursor.get());
+}
+
+TEST_P(WaylandWindowTest, SetCursorDoesNotUseCursorShapeForNoneCursor) {
+  SetPointerFocusedWindow(window_.get());
+  MockCursorShape* mock_cursor_shape = InstallMockCursorShape();
+  EXPECT_CALL(*mock_cursor_shape, SetCursorShape(_)).Times(0);
+  auto none_cursor = AsPlatformCursor(
+      base::MakeRefCounted<BitmapCursor>(mojom::CursorType::kNone));
+  window_->SetCursor(none_cursor.get());
+}
+
+TEST_P(WaylandWindowTest, SetCursorDoesNotUseCursorShapeForCustomCursors) {
+  SetPointerFocusedWindow(window_.get());
+  MockCursorShape* mock_cursor_shape = InstallMockCursorShape();
+
+  // Custom cursors require bitmaps, so they do not use server-side cursors.
+  EXPECT_CALL(*mock_cursor_shape, SetCursorShape(_)).Times(0);
+  auto custom_cursor = AsPlatformCursor(
+      base::MakeRefCounted<BitmapCursor>(mojom::CursorType::kCustom, SkBitmap(),
+                                         gfx::Point(), kDefaultCursorScale));
+  window_->SetCursor(custom_cursor.get());
+}
+
 TEST_P(WaylandWindowTest, SetCursorUsesZcrCursorShapesForCommonTypes) {
   SetPointerFocusedWindow(window_.get());
   MockZcrCursorShapes* mock_cursor_shapes = InstallMockZcrCursorShapes();
@@ -1929,6 +2057,43 @@ TEST_P(WaylandWindowTest, ManyConfigureEventsDoesNotCrash) {
   AdvanceFrameToCurrent(window_.get(), delegate_);
 }
 
+TEST_P(WaylandWindowTest,
+       ThrottledConfigureEventsDoNotGetStuckOnHiddenOcclusion) {
+  uint32_t serial = 2u;
+
+  WaylandWindow::WindowStates window_states;
+  window_states.is_maximized = true;
+  gfx::Size size{500, 300};
+
+  // Configure window and expect the state to be applied. Use a hidden
+  // occlusion state.
+  window_->SetPendingOcclusionState(PlatformWindowOcclusionState::kHidden);
+  window_->HandleAuraToplevelConfigure(0, 0, size.width(), size.height(),
+                                       window_states);
+  window_->HandleSurfaceConfigure(serial);
+  EXPECT_EQ(size, window_->applied_state().bounds_dip.size());
+
+  // Send enough configures without any frame occurring to cause throttling.
+  for (int i = 1; i < 10; ++i) {
+    size.Enlarge(1, 1);
+    window_->HandleAuraToplevelConfigure(0, 0, size.width(), size.height(),
+                                         window_states);
+    window_->HandleSurfaceConfigure(++serial);
+  }
+  // Confirm throttling has occurred - we expect `applied_state()` to have
+  // the last bounds that was actually applied, which will not be the current
+  // value of `size` if throttling has occurred.
+  EXPECT_NE(size, window_->applied_state().bounds_dip.size());
+
+  // Send a configure with a visible occlusion state, and confirm that it will
+  // be applied even though we are in a throttled state. This is to ensure
+  // we can't get stuck in a throttled and hidden state with no way to make
+  // frames.
+  window_->SetPendingOcclusionState(PlatformWindowOcclusionState::kVisible);
+  window_->HandleSurfaceConfigure(++serial);
+  EXPECT_EQ(size, window_->applied_state().bounds_dip.size());
+}
+
 // If the server immediately changes the bounds after a window is initialised,
 // make sure that the client doesn't wait for a new frame to be produced.
 // See https://crbug.com/1427954.
@@ -1989,8 +2154,6 @@ TEST_P(WaylandWindowTest, OnAcceleratedWidgetDestroy) {
 
 TEST_P(WaylandWindowTest, CanCreateMenuWindow) {
   MockWaylandPlatformWindowDelegate menu_window_delegate;
-  EXPECT_CALL(menu_window_delegate, GetMenuType())
-      .WillRepeatedly(Return(MenuType::kRootContextMenu));
 
   // SetPointerFocus(true) requires a WaylandPointer.
   PostToServerAndWait([](wl::TestWaylandServerThread* server) {
@@ -2027,8 +2190,6 @@ TEST_P(WaylandWindowTest, CreateAndDestroyNestedMenuWindow) {
   gfx::AcceleratedWidget menu_window_widget;
   EXPECT_CALL(menu_window_delegate, OnAcceleratedWidgetAvailable(_))
       .WillOnce(SaveArg<0>(&menu_window_widget));
-  EXPECT_CALL(menu_window_delegate, GetMenuType())
-      .WillRepeatedly(Return(MenuType::kRootContextMenu));
 
   std::unique_ptr<WaylandWindow> menu_window = CreateWaylandWindowWithParams(
       PlatformWindowType::kMenu, gfx::Rect(10, 10), &menu_window_delegate,
@@ -2046,8 +2207,6 @@ TEST_P(WaylandWindowTest, CreateAndDestroyNestedMenuWindow) {
 
 TEST_P(WaylandWindowTest, DispatchesLocatedEventsToCapturedWindow) {
   MockWaylandPlatformWindowDelegate menu_window_delegate;
-  EXPECT_CALL(menu_window_delegate, GetMenuType())
-      .WillOnce(Return(MenuType::kRootContextMenu));
   std::unique_ptr<WaylandWindow> menu_window = CreateWaylandWindowWithParams(
       PlatformWindowType::kMenu, gfx::Rect(10, 10, 10, 10),
       &menu_window_delegate, widget_);
@@ -2122,8 +2281,6 @@ TEST_P(WaylandWindowTest, DispatchesLocatedEventsToCapturedWindow) {
   // If nested menu window is added, the events are still correctly translated
   // to the captured window.
   MockWaylandPlatformWindowDelegate nested_menu_window_delegate;
-  EXPECT_CALL(nested_menu_window_delegate, GetMenuType())
-      .WillOnce(Return(MenuType::kRootContextMenu));
   std::unique_ptr<WaylandWindow> nested_menu_window =
       CreateWaylandWindowWithParams(
           PlatformWindowType::kMenu, gfx::Rect(15, 18, 10, 10),
@@ -2183,15 +2340,13 @@ TEST_P(WaylandWindowTest, ConvertEventToTarget) {
   // Create a menu.
   constexpr gfx::Rect kMenuBounds{100, 100, 80, 50};
   MockWaylandPlatformWindowDelegate menu_window_delegate;
-  EXPECT_CALL(menu_window_delegate, GetMenuType())
-      .WillOnce(Return(MenuType::kRootContextMenu));
   std::unique_ptr<WaylandWindow> menu_window = CreateWaylandWindowWithParams(
       PlatformWindowType::kMenu, kMenuBounds, &menu_window_delegate, widget_);
   EXPECT_TRUE(menu_window);
 
   // Now translate the event located at (0, 0) in the parent window into the
   // coordinate system of the menu.  Its coordinates must be equal to:
-  //     -(offset of parent geometry + offset of the menu).
+  //     -(offset of the menu).
   constexpr gfx::PointF kParentPoint{0, 0};
   ui::MouseEvent event(ui::EventType::ET_MOUSE_MOVED, kParentPoint,
                        kParentPoint, {}, ui::EF_NONE, ui::EF_NONE);
@@ -2200,10 +2355,8 @@ TEST_P(WaylandWindowTest, ConvertEventToTarget) {
   dispatcher_api.set_target(window_.get());
 
   ui::WaylandEventSource::ConvertEventToTarget(menu_window.get(), &event);
-  EXPECT_EQ(event.AsLocatedEvent()->x(),
-            -(kMenuBounds.x() + kMainWindowInsets.left()));
-  EXPECT_EQ(event.AsLocatedEvent()->y(),
-            -(kMenuBounds.y() + kMainWindowInsets.top()));
+  EXPECT_EQ(event.AsLocatedEvent()->x(), -kMenuBounds.x());
+  EXPECT_EQ(event.AsLocatedEvent()->y(), -kMenuBounds.y());
 }
 
 // Tests that the event grabber gets the events processed by its toplevel parent
@@ -2212,8 +2365,6 @@ TEST_P(WaylandWindowTest, ConvertEventToTarget) {
 TEST_P(WaylandWindowTest,
        DispatchesLocatedEventsToCapturedWindowInTheSameStack) {
   MockWaylandPlatformWindowDelegate menu_window_delegate;
-  EXPECT_CALL(menu_window_delegate, GetMenuType())
-      .WillOnce(Return(MenuType::kRootContextMenu));
   std::unique_ptr<WaylandWindow> menu_window = CreateWaylandWindowWithParams(
       PlatformWindowType::kMenu, gfx::Rect(30, 40, 20, 50),
       &menu_window_delegate, widget_);
@@ -2287,8 +2438,6 @@ TEST_P(WaylandWindowTest,
 
 TEST_P(WaylandWindowTest, DispatchesKeyboardEventToToplevelWindow) {
   MockWaylandPlatformWindowDelegate menu_window_delegate;
-  EXPECT_CALL(menu_window_delegate, GetMenuType())
-      .WillOnce(Return(MenuType::kRootContextMenu));
   std::unique_ptr<WaylandWindow> menu_window = CreateWaylandWindowWithParams(
       PlatformWindowType::kMenu, gfx::Rect(10, 10, 10, 10),
       &menu_window_delegate, widget_);
@@ -2361,8 +2510,6 @@ TEST_P(WaylandWindowTest, CanDispatchEvent) {
   gfx::AcceleratedWidget menu_window_widget;
   EXPECT_CALL(menu_window_delegate, OnAcceleratedWidgetAvailable(_))
       .WillOnce(SaveArg<0>(&menu_window_widget));
-  EXPECT_CALL(menu_window_delegate, GetMenuType())
-      .WillOnce(Return(MenuType::kRootContextMenu));
 
   std::unique_ptr<WaylandWindow> menu_window = CreateWaylandWindowWithParams(
       PlatformWindowType::kMenu, gfx::Rect(10, 10), &menu_window_delegate,
@@ -2370,8 +2517,6 @@ TEST_P(WaylandWindowTest, CanDispatchEvent) {
   EXPECT_TRUE(menu_window);
 
   MockWaylandPlatformWindowDelegate nested_menu_window_delegate;
-  EXPECT_CALL(nested_menu_window_delegate, GetMenuType())
-      .WillOnce(Return(MenuType::kRootContextMenu));
   std::unique_ptr<WaylandWindow> nested_menu_window =
       CreateWaylandWindowWithParams(
           PlatformWindowType::kMenu, gfx::Rect(20, 0, 10, 10),
@@ -3309,10 +3454,8 @@ TEST_P(WaylandWindowTest, PopupPassesDefaultAnchorInformation) {
   // be used as anchor rect and anchor position, gravity and constraints should
   // be normal.
   MockWaylandPlatformWindowDelegate menu_window_delegate;
-  EXPECT_CALL(menu_window_delegate, GetMenuType())
-      .WillOnce(Return(MenuType::kRootMenu));
   EXPECT_CALL(menu_window_delegate, GetOwnedWindowAnchorAndRectInDIP())
-      .WillOnce(Return(absl::nullopt));
+      .WillOnce(Return(std::nullopt));
   gfx::Rect menu_window_bounds(gfx::Point(439, 46),
                                menu_window_positioner.size);
   std::unique_ptr<WaylandWindow> menu_window = CreateWaylandWindowWithParams(
@@ -3329,8 +3472,6 @@ TEST_P(WaylandWindowTest, PopupPassesDefaultAnchorInformation) {
 
   // Case 2: the nested menu window is positioned normally.
   MockWaylandPlatformWindowDelegate nested_menu_window_delegate;
-  EXPECT_CALL(nested_menu_window_delegate, GetMenuType())
-      .WillRepeatedly(Return(MenuType::kChildMenu));
   gfx::Rect nested_menu_window_bounds(gfx::Point(724, 47),
                                       nested_menu_window_positioner.size);
   std::unique_ptr<WaylandWindow> nested_menu_window =
@@ -3362,8 +3503,6 @@ TEST_P(WaylandWindowTest, PopupPassesSetAnchorInformation) {
   toplevel_window->SetBoundsInDIP(gfx::Rect(508, 212));
 
   MockWaylandPlatformWindowDelegate menu_window_delegate;
-  EXPECT_CALL(menu_window_delegate, GetMenuType())
-      .WillOnce(Return(MenuType::kRootMenu));
   ui::OwnedWindowAnchor anchor = {
       gfx::Rect(menu_window_positioner.anchor_rect),
       OwnedWindowAnchorPosition::kBottomRight,
@@ -3381,8 +3520,6 @@ TEST_P(WaylandWindowTest, PopupPassesSetAnchorInformation) {
   VerifyXdgPopupPosition(menu_window.get(), menu_window_positioner);
 
   MockWaylandPlatformWindowDelegate nested_menu_window_delegate;
-  EXPECT_CALL(nested_menu_window_delegate, GetMenuType())
-      .WillRepeatedly(Return(MenuType::kChildMenu));
   anchor = {{180, 157, 312, 1},
             OwnedWindowAnchorPosition::kTopRight,
             OwnedWindowAnchorGravity::kBottomRight,
@@ -3466,8 +3603,6 @@ TEST_P(WaylandWindowTest, OnCloseRequest) {
 TEST_P(WaylandWindowTest, WaylandPopupSimpleParent) {
   VerifyAndClearExpectations();
 
-  EXPECT_CALL(delegate_, GetMenuType())
-      .WillRepeatedly(Return(MenuType::kRootContextMenu));
   // WaylandPopup must ignore the parent provided by aura and should always
   // use focused window instead.
   gfx::Rect wayland_popup_bounds(gfx::Point(15, 15), gfx::Size(10, 10));
@@ -3612,12 +3747,12 @@ TEST_P(WaylandWindowTest, OnSizeConstraintsChanged) {
   const bool kBooleans[] = {false, true};
   for (bool has_min_size : kBooleans) {
     for (bool has_max_size : kBooleans) {
-      absl::optional<gfx::Size> min_size =
-          has_min_size ? absl::optional<gfx::Size>(gfx::Size(100, 200))
-                       : absl::nullopt;
-      absl::optional<gfx::Size> max_size =
-          has_max_size ? absl::optional<gfx::Size>(gfx::Size(300, 400))
-                       : absl::nullopt;
+      std::optional<gfx::Size> min_size =
+          has_min_size ? std::optional<gfx::Size>(gfx::Size(100, 200))
+                       : std::nullopt;
+      std::optional<gfx::Size> max_size =
+          has_max_size ? std::optional<gfx::Size>(gfx::Size(300, 400))
+                       : std::nullopt;
       EXPECT_CALL(delegate_, GetMinimumSizeForWindow())
           .WillOnce(Return(min_size));
       EXPECT_CALL(delegate_, GetMaximumSizeForWindow())
@@ -3670,8 +3805,6 @@ TEST_P(WaylandWindowTest, DestroysCreatesSurfaceOnHideShow) {
 
 TEST_P(WaylandWindowTest, DestroysCreatesPopupsOnHideShow) {
   MockWaylandPlatformWindowDelegate delegate;
-  EXPECT_CALL(delegate, GetMenuType())
-      .WillRepeatedly(Return(MenuType::kRootContextMenu));
   auto window = CreateWaylandWindowWithParams(PlatformWindowType::kMenu,
                                               gfx::Rect(50, 50), &delegate,
                                               window_->GetWidget());
@@ -3839,8 +3972,8 @@ TEST_P(WaylandWindowTest, MAYBE_SetsPropertiesOnShow) {
   });
 
   // Now, propagate size constraints and title.
-  absl::optional<gfx::Size> min_size(gfx::Size(1, 1));
-  absl::optional<gfx::Size> max_size(gfx::Size(100, 100));
+  std::optional<gfx::Size> min_size(gfx::Size(1, 1));
+  std::optional<gfx::Size> max_size(gfx::Size(100, 100));
   EXPECT_CALL(delegate, GetMinimumSizeForWindow())
       .WillRepeatedly(Return(min_size));
   EXPECT_CALL(delegate, GetMaximumSizeForWindow())
@@ -3929,8 +4062,6 @@ TEST_P(WaylandWindowTest, CreatesPopupOnButtonPressSerial) {
 
     // Create a popup window and verify the client used correct serial.
     MockWaylandPlatformWindowDelegate delegate;
-    EXPECT_CALL(delegate, GetMenuType())
-        .WillOnce(Return(MenuType::kRootContextMenu));
     auto popup = CreateWaylandWindowWithParams(PlatformWindowType::kMenu,
                                                gfx::Rect(50, 50), &delegate,
                                                window_->GetWidget());
@@ -4000,8 +4131,6 @@ TEST_P(WaylandWindowTest, CreatesPopupOnTouchDownSerial) {
 
     // Create a popup window and verify the client used correct serial.
     MockWaylandPlatformWindowDelegate delegate;
-    EXPECT_CALL(delegate, GetMenuType())
-        .WillRepeatedly(Return(MenuType::kRootContextMenu));
     auto popup = CreateWaylandWindowWithParams(PlatformWindowType::kMenu,
                                                gfx::Rect(50, 50), &delegate,
                                                window_->GetWidget());
@@ -4107,8 +4236,6 @@ TEST_P(WaylandWindowTest, NestedPopupWindowsGetCorrectParent) {
 TEST_P(WaylandWindowTest, DoesNotGrabPopupIfNoSeat) {
   // Create a popup window and verify the grab serial is not set.
   MockWaylandPlatformWindowDelegate delegate;
-  EXPECT_CALL(delegate, GetMenuType())
-      .WillOnce(Return(MenuType::kRootContextMenu));
   auto popup = CreateWaylandWindowWithParams(PlatformWindowType::kMenu,
                                              gfx::Rect(50, 50), &delegate,
                                              window_->GetWidget());
@@ -4137,7 +4264,6 @@ TEST_P(WaylandWindowTest, DoesNotGrabPopupUnlessParentHasGrab) {
 
   MockWaylandPlatformWindowDelegate delegate;
   std::unique_ptr<WaylandWindow> root_menu;
-  EXPECT_CALL(delegate, GetMenuType()).WillOnce(Return(MenuType::kRootMenu));
   root_menu = CreateWaylandWindowWithParams(PlatformWindowType::kMenu,
                                             gfx::Rect(50, 50), &delegate,
                                             window_->GetWidget());
@@ -4175,7 +4301,6 @@ TEST_P(WaylandWindowTest, DoesNotGrabPopupUnlessParentHasGrab) {
 
   MockWaylandPlatformWindowDelegate delegate_2;
   std::unique_ptr<WaylandWindow> child_menu;
-  EXPECT_CALL(delegate_2, GetMenuType()).WillOnce(Return(MenuType::kChildMenu));
   child_menu = CreateWaylandWindowWithParams(PlatformWindowType::kMenu,
                                              gfx::Rect(10, 10), &delegate_2,
                                              root_menu->GetWidget());
@@ -4347,7 +4472,7 @@ class WaylandSubsurfaceTest : public WaylandWindowTest {
         });
     wayland_subsurface->ConfigureAndShowSurface(
         subsurface_bounds, gfx::RectF(0, 0, 640, 480) /*parent_bounds_px*/,
-        absl::nullopt /*clip_rect_px*/, gfx::OVERLAY_TRANSFORM_NONE,
+        std::nullopt /*clip_rect_px*/, gfx::OVERLAY_TRANSFORM_NONE,
         1.f /*buffer_scale*/, nullptr, nullptr);
     connection_->Flush();
 
@@ -4436,7 +4561,7 @@ TEST_P(WaylandSubsurfaceTest, NoDuplicateSubsurfaceRequests) {
   for (auto* subsurface : subsurfaces) {
     subsurface->ConfigureAndShowSurface(
         gfx::RectF(1.f, 2.f, 10.f, 20.f), gfx::RectF(0.f, 0.f, 800.f, 600.f),
-        absl::nullopt, gfx::OVERLAY_TRANSFORM_NONE, 1.f, nullptr, nullptr);
+        std::nullopt, gfx::OVERLAY_TRANSFORM_NONE, 1.f, nullptr, nullptr);
   }
   connection_->Flush();
 
@@ -4465,13 +4590,13 @@ TEST_P(WaylandSubsurfaceTest, NoDuplicateSubsurfaceRequests) {
   // Stack subsurfaces[0] to be from bottom to top, and change its position.
   subsurfaces[0]->ConfigureAndShowSurface(
       gfx::RectF(0.f, 0.f, 10.f, 20.f), gfx::RectF(0.f, 0.f, 800.f, 600.f),
-      absl::nullopt, gfx::OVERLAY_TRANSFORM_NONE, 1.f, subsurfaces[2], nullptr);
+      std::nullopt, gfx::OVERLAY_TRANSFORM_NONE, 1.f, subsurfaces[2], nullptr);
   subsurfaces[1]->ConfigureAndShowSurface(
       gfx::RectF(1.f, 2.f, 10.f, 20.f), gfx::RectF(0.f, 0.f, 800.f, 600.f),
-      absl::nullopt, gfx::OVERLAY_TRANSFORM_NONE, 1.f, nullptr, subsurfaces[2]);
+      std::nullopt, gfx::OVERLAY_TRANSFORM_NONE, 1.f, nullptr, subsurfaces[2]);
   subsurfaces[2]->ConfigureAndShowSurface(
       gfx::RectF(1.f, 2.f, 10.f, 20.f), gfx::RectF(0.f, 0.f, 800.f, 600.f),
-      absl::nullopt, gfx::OVERLAY_TRANSFORM_NONE, 1.f, nullptr, subsurfaces[0]);
+      std::nullopt, gfx::OVERLAY_TRANSFORM_NONE, 1.f, nullptr, subsurfaces[0]);
   connection_->Flush();
 
   VerifyAndClearExpectations();
@@ -4588,8 +4713,6 @@ TEST_P(WaylandWindowTest, NoDuplicateViewporterRequests) {
 TEST_P(WaylandWindowTest, RepositionPopups) {
   VerifyAndClearExpectations();
 
-  EXPECT_CALL(delegate_, GetMenuType())
-      .WillRepeatedly(Return(MenuType::kRootContextMenu));
   gfx::Rect menu_window_bounds(gfx::Rect(6, 20, 8, 20));
   std::unique_ptr<WaylandWindow> menu_window = CreateWaylandWindowWithParams(
       PlatformWindowType::kMenu, menu_window_bounds, &delegate_,
@@ -5138,6 +5261,64 @@ TEST_P(WaylandWindowTest, SetUnsetFloat) {
   post_to_server_and_wait();
 }
 
+TEST_P(WaylandWindowTest,
+       UnsynchronizedOcclusionStateNotOverridenByConfigureOcclusionState) {
+  if (GetParam().enable_aura_shell != wl::EnableAuraShellProtocol::kEnabled) {
+    GTEST_SKIP();
+  }
+
+  constexpr gfx::Rect kNormalBounds{500, 300};
+  EXPECT_CALL(delegate_, OnBoundsChanged(Eq(kDefaultBoundsChange)));
+  // OnOcclusionStateChanged(kHidden) will be called two times. First from the
+  // unsynchronized occlusion state change, then from the synchronized occlusion
+  // state which, which should have had its pending value overwritten.
+  EXPECT_CALL(delegate_, OnOcclusionStateChanged(
+                             ui::PlatformWindowOcclusionState::kHidden))
+      .Times(2);
+  EXPECT_CALL(delegate_, OnOcclusionStateChanged(
+                             ui::PlatformWindowOcclusionState::kVisible))
+      .Times(0);
+
+  PostToServerAndWait([id = surface_id_, bounds = kNormalBounds](
+                          wl::TestWaylandServerThread* server) {
+    auto* mock_surface = server->GetObject<wl::MockSurface>(id);
+    ASSERT_TRUE(mock_surface);
+    auto* xdg_surface = mock_surface->xdg_surface();
+    EXPECT_CALL(*xdg_surface, SetWindowGeometry(gfx::Rect(bounds.size())))
+        .Times(0);
+    EXPECT_CALL(*xdg_surface, AckConfigure(_)).Times(0);
+    EXPECT_CALL(*mock_surface, SetOpaqueRegion(_)).Times(0);
+    EXPECT_CALL(*mock_surface, SetInputRegion(_)).Times(0);
+  });
+
+  // Set pending occlusion state (as if by configure).
+  window_->SetPendingOcclusionState(ui::PlatformWindowOcclusionState::kVisible);
+
+  // Set the occlusion state (as if by unsynchronized occlusion state setting).
+  // The applied occlusion state should be the unsynchronized one, since it came
+  // later.
+  window_->OcclusionStateChanged(ui::PlatformWindowOcclusionState::kHidden);
+
+  auto state = InitializeWlArrayWithActivatedState();
+  constexpr uint32_t kConfigureSerial = 2u;
+  SendConfigureEvent(surface_id_, kNormalBounds.size(), state,
+                     kConfigureSerial);
+
+  PostToServerAndWait([id = surface_id_, bounds = kNormalBounds](
+                          wl::TestWaylandServerThread* server) {
+    auto* mock_surface = server->GetObject<wl::MockSurface>(id);
+    ASSERT_TRUE(mock_surface);
+    auto* xdg_surface = mock_surface->xdg_surface();
+    EXPECT_CALL(*xdg_surface, SetWindowGeometry(bounds));
+    EXPECT_CALL(*xdg_surface, AckConfigure(kConfigureSerial));
+    EXPECT_CALL(*mock_surface, SetOpaqueRegion(_));
+    EXPECT_CALL(*mock_surface, SetInputRegion(_));
+  });
+
+  AdvanceFrameToCurrent(window_.get(), delegate_);
+  VerifyAndClearExpectations();
+}
+
 INSTANTIATE_TEST_SUITE_P(XdgVersionStableTest,
                          WaylandWindowTest,
                          Values(wl::ServerConfig{}));
@@ -5150,7 +5331,8 @@ INSTANTIATE_TEST_SUITE_P(
                                 wl::EnableAuraShellProtocol::kEnabled},
            wl::ServerConfig{
                .enable_aura_shell = wl::EnableAuraShellProtocol::kEnabled,
-               .use_aura_output_manager = true}));
+               .aura_output_manager_protocol =
+                   wl::AuraOutputManagerProtocol::kEnabledV2}));
 #endif
 
 INSTANTIATE_TEST_SUITE_P(XdgVersionStableTest,
@@ -5165,7 +5347,8 @@ INSTANTIATE_TEST_SUITE_P(
                                 wl::EnableAuraShellProtocol::kEnabled},
            wl::ServerConfig{
                .enable_aura_shell = wl::EnableAuraShellProtocol::kEnabled,
-               .use_aura_output_manager = true}));
+               .aura_output_manager_protocol =
+                   wl::AuraOutputManagerProtocol::kEnabledV2}));
 #endif
 
 }  // namespace ui

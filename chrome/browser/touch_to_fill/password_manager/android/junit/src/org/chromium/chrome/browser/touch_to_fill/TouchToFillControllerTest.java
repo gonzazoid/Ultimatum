@@ -66,6 +66,8 @@ import org.chromium.base.metrics.UmaRecorderHolder;
 import org.chromium.base.task.TaskTraits;
 import org.chromium.base.task.test.ShadowPostTask;
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.base.test.util.Features;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.password_manager.GetLoginMatchType;
@@ -75,8 +77,6 @@ import org.chromium.chrome.browser.touch_to_fill.TouchToFillProperties.MorePassk
 import org.chromium.chrome.browser.touch_to_fill.common.BottomSheetFocusHelper;
 import org.chromium.chrome.browser.touch_to_fill.data.Credential;
 import org.chromium.chrome.browser.touch_to_fill.data.WebauthnCredential;
-import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 import org.chromium.components.browser_ui.util.AvatarGenerator;
 import org.chromium.components.favicon.IconType;
@@ -209,9 +209,8 @@ public class TouchToFillControllerTest {
         assertThat(
                 itemList.get(0).model.get(SUBTITLE),
                 is(
-                        String.format(
-                                mContext.getString(
-                                        R.string.touch_to_fill_sheet_subtitle_submission),
+                        mContext.getString(
+                                R.string.touch_to_fill_sheet_subtitle_submission,
                                 TEST_URL_FORMATTED)));
         assertThat(itemList.get(1).type, is(ItemType.CREDENTIAL));
         assertThat(itemList.get(1).model.get(CREDENTIAL), is(ANA));
@@ -343,9 +342,8 @@ public class TouchToFillControllerTest {
         assertThat(
                 itemList.get(0).model.get(SUBTITLE),
                 is(
-                        String.format(
-                                mContext.getString(
-                                        R.string.touch_to_fill_sheet_subtitle_submission),
+                        mContext.getString(
+                                R.string.touch_to_fill_sheet_subtitle_submission,
                                 TEST_URL_FORMATTED)));
 
         assertThat(itemList.get(2).type, is(ItemType.FILL_BUTTON));
@@ -429,10 +427,8 @@ public class TouchToFillControllerTest {
         assertThat(
                 itemList.get(0).model.get(SUBTITLE),
                 is(
-                        String.format(
-                                mContext.getString(
-                                        R.string
-                                                .touch_to_fill_sheet_shared_passwords_one_password_subtitle),
+                        mContext.getString(
+                                R.string.touch_to_fill_sheet_shared_passwords_one_password_subtitle,
                                 "<b>Sender Name</b>",
                                 TEST_URL_FORMATTED)));
         mImageFetcher.answerWithBitmap();
@@ -507,10 +503,9 @@ public class TouchToFillControllerTest {
         assertThat(
                 itemList.get(0).model.get(SUBTITLE),
                 is(
-                        String.format(
-                                mContext.getString(
-                                        R.string
-                                                .touch_to_fill_sheet_shared_passwords_multiple_passwords_subtitle),
+                        mContext.getString(
+                                R.string
+                                        .touch_to_fill_sheet_shared_passwords_multiple_passwords_subtitle,
                                 TEST_URL_FORMATTED)));
     }
 

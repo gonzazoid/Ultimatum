@@ -10,7 +10,6 @@
 #include <string>
 #include <utility>
 
-#include "base/barrier_closure.h"
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/feature_list.h"
@@ -19,6 +18,7 @@
 #include "base/files/file_util.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback.h"
+#include "base/functional/concurrent_closures.h"
 #include "base/json/json_file_value_serializer.h"
 #include "base/json/json_reader.h"
 #include "base/memory/scoped_refptr.h"
@@ -157,7 +157,7 @@ bool IsTabletFormFactor() {
 }
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
-absl::optional<bool> HasStylusEnabledTouchscreen() {
+std::optional<bool> HasStylusEnabledTouchscreen() {
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   return chromeos::BrowserParamsProxy::Get()
       ->DeviceProperties()
@@ -459,7 +459,7 @@ SynchronizeDecision GetSynchronizeDecision(
 
   // Only install if device has a built-in touch screen with stylus support.
   if (options.disable_if_touchscreen_with_stylus_not_supported) {
-    absl::optional<bool> has_stylus = HasStylusEnabledTouchscreen();
+    std::optional<bool> has_stylus = HasStylusEnabledTouchscreen();
 
     if (!has_stylus.has_value()) {
       return {.type = SynchronizeDecision::kIgnore,
@@ -727,14 +727,12 @@ void PreinstalledWebAppManager::LoadAndSynchronize(
     return;
   }
 
-  int num_barriers_issued = 2;
-  base::RepeatingClosure barrier_closure = base::BarrierClosure(
-      num_barriers_issued, std::move(load_and_synchronize));
-  device_data_initialized_event_->Post(barrier_closure);
-
+  base::ConcurrentClosures concurrent;
+  device_data_initialized_event_->Post(concurrent.CreateClosure());
   // Make sure ExtensionSystem is ready to know if default apps new installation
   // will be performed.
-  extensions::OnExtensionSystemReady(profile_, barrier_closure);
+  extensions::OnExtensionSystemReady(profile_, concurrent.CreateClosure());
+  std::move(concurrent).Done(std::move(load_and_synchronize));
 }
 
 void PreinstalledWebAppManager::Load(ConsumeInstallOptions callback) {

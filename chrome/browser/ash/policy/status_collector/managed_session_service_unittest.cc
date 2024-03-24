@@ -7,7 +7,6 @@
 #include "base/memory/raw_ptr.h"
 #include "base/test/simple_test_clock.h"
 #include "base/time/time.h"
-#include "chrome/browser/ash/login/users/chrome_user_manager.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/test/base/testing_profile.h"
@@ -59,7 +58,7 @@ class ManagedSessionServiceTest : public ::testing::Test,
     profile_builder.SetProfileName(account_id.GetUserEmail());
     auto profile = profile_builder.Build();
     user_manager_->AddUserWithAffiliationAndTypeAndProfile(
-        account_id, is_affiliated, user_manager::UserType::USER_TYPE_REGULAR,
+        account_id, is_affiliated, user_manager::UserType::kRegular,
         profile.get());
     if (login) {
       user_manager_->LoginUser(account_id, true);

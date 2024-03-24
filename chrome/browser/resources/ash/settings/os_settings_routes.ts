@@ -172,6 +172,8 @@ export interface OsSettingsRoutes extends MinimumRoutes {
   KNOWN_NETWORKS: Route;
   LOCK_SCREEN: Route;
   MANAGE_ACCESSIBILITY: Route;
+  MANAGE_FACEGAZE_CURSOR_SETTINGS: Route;
+  MANAGE_FACEGAZE_FACIAL_EXPRESSIONS_SETTINGS: Route;
   MANAGE_ISOLATED_WEB_APPS: Route;
   MANAGE_SWITCH_ACCESS_SETTINGS: Route;
   MANAGE_TTS_SETTINGS: Route;
@@ -438,20 +440,23 @@ export function createRoutes(): OsSettingsRoutes {
   r.MANAGE_ACCESSIBILITY = createSubpage(
       r.OS_ACCESSIBILITY, routesMojom.MANAGE_ACCESSIBILITY_SUBPAGE_PATH,
       Subpage.kManageAccessibility);
+  const a11yParentRoute = loadTimeData.getBoolean('isKioskModeActive') ?
+      r.MANAGE_ACCESSIBILITY :
+      r.OS_ACCESSIBILITY;
   r.A11Y_TEXT_TO_SPEECH = createSubpage(
-      r.OS_ACCESSIBILITY, routesMojom.TEXT_TO_SPEECH_PAGE_PATH,
+      a11yParentRoute, routesMojom.TEXT_TO_SPEECH_PAGE_PATH,
       Subpage.kTextToSpeechPage);
   r.A11Y_DISPLAY_AND_MAGNIFICATION = createSubpage(
-      r.OS_ACCESSIBILITY, routesMojom.DISPLAY_AND_MAGNIFICATION_SUBPAGE_PATH,
+      a11yParentRoute, routesMojom.DISPLAY_AND_MAGNIFICATION_SUBPAGE_PATH,
       Subpage.kDisplayAndMagnification);
   r.A11Y_KEYBOARD_AND_TEXT_INPUT = createSubpage(
-      r.OS_ACCESSIBILITY, routesMojom.KEYBOARD_AND_TEXT_INPUT_SUBPAGE_PATH,
+      a11yParentRoute, routesMojom.KEYBOARD_AND_TEXT_INPUT_SUBPAGE_PATH,
       Subpage.kKeyboardAndTextInput);
   r.A11Y_CURSOR_AND_TOUCHPAD = createSubpage(
-      r.OS_ACCESSIBILITY, routesMojom.CURSOR_AND_TOUCHPAD_SUBPAGE_PATH,
+      a11yParentRoute, routesMojom.CURSOR_AND_TOUCHPAD_SUBPAGE_PATH,
       Subpage.kCursorAndTouchpad);
   r.A11Y_AUDIO_AND_CAPTIONS = createSubpage(
-      r.OS_ACCESSIBILITY, routesMojom.AUDIO_AND_CAPTIONS_SUBPAGE_PATH,
+      a11yParentRoute, routesMojom.AUDIO_AND_CAPTIONS_SUBPAGE_PATH,
       Subpage.kAudioAndCaptions);
   r.A11Y_CHROMEVOX = createSubpage(
       r.A11Y_TEXT_TO_SPEECH, routesMojom.CHROME_VOX_SUBPAGE_PATH,
@@ -466,6 +471,14 @@ export function createRoutes(): OsSettingsRoutes {
       r.A11Y_KEYBOARD_AND_TEXT_INPUT,
       routesMojom.SWITCH_ACCESS_OPTIONS_SUBPAGE_PATH,
       Subpage.kSwitchAccessOptions);
+  r.MANAGE_FACEGAZE_CURSOR_SETTINGS = createSubpage(
+      r.A11Y_CURSOR_AND_TOUCHPAD,
+      routesMojom.FACE_GAZE_CURSOR_SETTINGS_SUBPAGE_PATH,
+      Subpage.kFaceGazeCursorSettings);
+  r.MANAGE_FACEGAZE_FACIAL_EXPRESSIONS_SETTINGS = createSubpage(
+      r.A11Y_CURSOR_AND_TOUCHPAD,
+      routesMojom.FACE_GAZE_FACIAL_EXPRESSIONS_SETTINGS_SUBPAGE_PATH,
+      Subpage.kFaceGazeFacialExpressionsSettings);
 
   // Privacy and Security section.
   r.OS_PRIVACY = createSection(
@@ -541,6 +554,8 @@ export function createRoutes(): OsSettingsRoutes {
         r.OFFICE = createSubpage(
             r.SYSTEM_PREFERENCES, routesMojom.OFFICE_FILES_SUBPAGE_PATH,
             Subpage.kOfficeFiles);
+      }
+      if (loadTimeData.getBoolean('showOneDriveSettings')) {
         r.ONE_DRIVE = createSubpage(
             r.SYSTEM_PREFERENCES, routesMojom.ONE_DRIVE_SUBPAGE_PATH,
             Subpage.kOneDrive);
@@ -626,12 +641,14 @@ export function createRoutes(): OsSettingsRoutes {
           r.ADVANCED, routesMojom.FILES_SECTION_PATH, Section.kFiles);
       r.GOOGLE_DRIVE = createSubpage(
           r.FILES, routesMojom.GOOGLE_DRIVE_SUBPAGE_PATH, Subpage.kGoogleDrive);
+      if (loadTimeData.getBoolean('showOneDriveSettings')) {
+        r.ONE_DRIVE = createSubpage(
+            r.FILES, routesMojom.ONE_DRIVE_SUBPAGE_PATH, Subpage.kOneDrive);
+      }
       if (loadTimeData.getBoolean('showOfficeSettings')) {
         r.OFFICE = createSubpage(
             r.FILES, routesMojom.OFFICE_FILES_SUBPAGE_PATH,
             Subpage.kOfficeFiles);
-        r.ONE_DRIVE = createSubpage(
-            r.FILES, routesMojom.ONE_DRIVE_SUBPAGE_PATH, Subpage.kOneDrive);
       }
       r.SMB_SHARES = createSubpage(
           r.FILES, routesMojom.NETWORK_FILE_SHARES_SUBPAGE_PATH,

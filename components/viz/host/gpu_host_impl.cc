@@ -57,7 +57,7 @@ class FontRenderParams {
 
   void Set(const gfx::FontRenderParams& params);
   void Reset();
-  const absl::optional<gfx::FontRenderParams>& Get();
+  const std::optional<gfx::FontRenderParams>& Get();
 
  private:
   friend class base::NoDestructor<FontRenderParams>;
@@ -66,7 +66,7 @@ class FontRenderParams {
   ~FontRenderParams();
 
   THREAD_CHECKER(thread_checker_);
-  absl::optional<gfx::FontRenderParams> params_;
+  std::optional<gfx::FontRenderParams> params_;
 };
 
 void FontRenderParams::Set(const gfx::FontRenderParams& params) {
@@ -76,10 +76,10 @@ void FontRenderParams::Set(const gfx::FontRenderParams& params) {
 
 void FontRenderParams::Reset() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  params_ = absl::nullopt;
+  params_ = std::nullopt;
 }
 
-const absl::optional<gfx::FontRenderParams>& FontRenderParams::Get() {
+const std::optional<gfx::FontRenderParams>& FontRenderParams::Get() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   return params_;
 }
@@ -496,12 +496,22 @@ void GpuHostImpl::OnChannelEstablished(
   auto callback = std::move(it->second);
   channel_requests_.erase(it);
 
+  // If the GPU process sent an empty handle back, it could be a transient error
+  // in which case the client should try again so return kGpuHostInvalid.
+  if (!channel_handle.is_valid()) {
+    std::move(callback).Run(mojo::ScopedMessagePipeHandle(), gpu::GPUInfo(),
+                            gpu::GpuFeatureInfo(),
+                            gpu::SharedImageCapabilities(),
+                            EstablishChannelStatus::kGpuHostInvalid);
+    return;
+  }
+
   // Currently if any of the GPU features are blocklisted, we don't establish a
   // GPU channel.
   bool gpu_channel_allowed = shared_bitmap_to_shared_image_flag_
                                  ? true
                                  : delegate_->GpuAccessAllowed();
-  if (channel_handle.is_valid() && !gpu_channel_allowed) {
+  if (!gpu_channel_allowed) {
     gpu_service_remote_->CloseChannel(client_id);
     std::move(callback).Run(mojo::ScopedMessagePipeHandle(), gpu::GPUInfo(),
                             gpu::GpuFeatureInfo(),
@@ -532,9 +542,8 @@ void GpuHostImpl::OnChannelEstablished(
 void GpuHostImpl::DidInitialize(
     const gpu::GPUInfo& gpu_info,
     const gpu::GpuFeatureInfo& gpu_feature_info,
-    const absl::optional<gpu::GPUInfo>& gpu_info_for_hardware_gpu,
-    const absl::optional<gpu::GpuFeatureInfo>&
-        gpu_feature_info_for_hardware_gpu,
+    const std::optional<gpu::GPUInfo>& gpu_info_for_hardware_gpu,
+    const std::optional<gpu::GpuFeatureInfo>& gpu_feature_info_for_hardware_gpu,
     const gfx::GpuExtraInfo& gpu_extra_info) {
   delegate_->DidInitialize(gpu_info, gpu_feature_info,
                            gpu_info_for_hardware_gpu,

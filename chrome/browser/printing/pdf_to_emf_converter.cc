@@ -8,6 +8,7 @@
 #include <windows.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -33,7 +34,6 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "printing/emf_win.h"
 #include "printing/pdf_render_settings.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 using content::BrowserThread;
@@ -41,22 +41,6 @@ using content::BrowserThread;
 namespace printing {
 
 namespace {
-
-// Emf subclass that knows how to play back PostScript data embedded as EMF
-// comment records.
-class PostScriptMetaFile : public Emf {
- public:
-  PostScriptMetaFile() = default;
-
-  PostScriptMetaFile(const PostScriptMetaFile&) = delete;
-  PostScriptMetaFile& operator=(const PostScriptMetaFile&) = delete;
-
-  ~PostScriptMetaFile() override = default;
-
- private:
-  // Emf:
-  bool SafePlayback(HDC hdc) const override;
-};
 
 // Class for converting PDF to another format for printing (Emf, Postscript).
 // Class lives on the UI thread.
@@ -72,7 +56,7 @@ class PdfConverterImpl : public PdfConverter {
  public:
   PdfConverterImpl(scoped_refptr<base::RefCountedMemory> data,
                    const PdfRenderSettings& conversion_settings,
-                   const absl::optional<bool>& use_skia,
+                   const std::optional<bool>& use_skia,
                    const GURL& url,
                    StartCallback start_callback);
 
@@ -140,7 +124,7 @@ class PdfConverterImpl : public PdfConverter {
 
   const PdfRenderSettings settings_;
 
-  absl::optional<bool> use_skia_;
+  std::optional<bool> use_skia_;
 
   const GURL url_;
 
@@ -187,26 +171,9 @@ std::unique_ptr<MetafilePlayer> PdfConverterImpl::GetMetaFileFromMapping(
   return metafile;
 }
 
-bool PostScriptMetaFile::SafePlayback(HDC hdc) const {
-  Emf::Enumerator emf_enum(*this, nullptr, nullptr);
-  for (const Emf::Record& record : emf_enum) {
-    auto* emf_record = record.record();
-    if (emf_record->iType != EMR_GDICOMMENT)
-      continue;
-
-    const EMRGDICOMMENT* comment =
-        reinterpret_cast<const EMRGDICOMMENT*>(emf_record);
-    const char* data = reinterpret_cast<const char*>(comment->Data);
-    const uint16_t* ptr = reinterpret_cast<const uint16_t*>(data);
-    int ret = ExtEscape(hdc, PASSTHROUGH, 2 + *ptr, data, 0, nullptr);
-    DCHECK_EQ(*ptr, ret);
-  }
-  return true;
-}
-
 PdfConverterImpl::PdfConverterImpl(scoped_refptr<base::RefCountedMemory> data,
                                    const PdfRenderSettings& settings,
-                                   const absl::optional<bool>& use_skia,
+                                   const std::optional<bool>& use_skia,
                                    const GURL& url,
                                    StartCallback start_callback)
     : settings_(settings),
@@ -391,7 +358,7 @@ PdfConverter::~PdfConverter() = default;
 std::unique_ptr<PdfConverter> PdfConverter::StartPdfConverter(
     scoped_refptr<base::RefCountedMemory> data,
     const PdfRenderSettings& conversion_settings,
-    const absl::optional<bool>& use_skia,
+    const std::optional<bool>& use_skia,
     const GURL& url,
     StartCallback start_callback) {
   return std::make_unique<PdfConverterImpl>(data, conversion_settings, use_skia,

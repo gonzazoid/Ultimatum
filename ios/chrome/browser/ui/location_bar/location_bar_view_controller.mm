@@ -31,6 +31,7 @@
 #import "ios/chrome/browser/ui/orchestrator/location_bar_offset_provider.h"
 #import "ios/chrome/browser/ui/toolbar/public/toolbar_type.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
+#import "ios/chrome/common/ui/util/pointer_interaction_util.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/public/provider/chrome/browser/lens/lens_api.h"
 #import "ui/base/l10n/l10n_util.h"
@@ -496,6 +497,10 @@ const NSString* kScribbleOmniboxElementId = @"omnibox";
           l10n_util::GetNSString(IDS_IOS_TOOLS_MENU_VOICE_SEARCH);
       self.locationBarSteadyView.trailingButton.accessibilityIdentifier =
           kOmniboxVoiceSearchButtonIdentifier;
+      self.locationBarSteadyView.trailingButton.layer.cornerRadius =
+          self.locationBarSteadyView.trailingButton.frame.size.width / 2;
+      self.locationBarSteadyView.trailingButton.clipsToBounds = YES;
+
       [self.locationBarSteadyView enableTrailingButton:YES];
     }
   }

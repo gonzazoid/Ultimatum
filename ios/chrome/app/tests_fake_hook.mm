@@ -66,6 +66,7 @@ GetOverriddenRecipientsFetcher() {
 }
 void SetUpTestsIfPresent() {}
 void RunTestsIfPresent() {}
+void SignalAppLaunched() {}
 
 base::TimeDelta PasswordCheckMinimumDuration() {
   return base::Seconds(3);
@@ -73,6 +74,10 @@ base::TimeDelta PasswordCheckMinimumDuration() {
 
 std::unique_ptr<drive::DriveService> GetOverriddenDriveService() {
   return nullptr;
+}
+
+std::optional<std::string> FETDemoModeOverride() {
+  return std::nullopt;
 }
 
 }  // namespace tests_hook

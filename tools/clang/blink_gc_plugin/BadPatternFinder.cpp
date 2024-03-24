@@ -197,6 +197,11 @@ class CollectionOfGarbageCollectedMatcher : public MatchFinder::MatchCallback {
         // conservative stack scanning.
         return;
       }
+      if (member && (collection->getNameAsString() == "array")) {
+        // std::array of Members is fine as long as it is traced (which is
+        // enforced by another checker).
+        return;
+      }
       if (gc_type) {
         diagnostics_.CollectionOfGCed(bad_decl, collection, gc_type);
       } else {
@@ -506,9 +511,7 @@ void FindBadPatterns(clang::ASTContext& ast_context,
   }
 
   WeakPtrToGCedMatcher weak_ptr_to_gced(diagnostics);
-  if (options.enable_weak_ptrs_check) {
-    weak_ptr_to_gced.Register(match_finder);
-  }
+  weak_ptr_to_gced.Register(match_finder);
 
   match_finder.matchAST(ast_context);
 }

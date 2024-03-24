@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/mock_callback.h"
@@ -696,7 +697,8 @@ class FileTransferConnectorFilesAppBrowserTestBase {
           expected_results,
           /*username*/ kUserName,
           /*profile_identifier*/ profile->GetPath().AsUTF8Unsafe(),
-          /*scan_ids*/ expected_scan_ids);
+          /*scan_ids*/ expected_scan_ids,
+          /*content_transfer_method*/ absl::nullopt);
 
       return true;
     }
@@ -932,12 +934,12 @@ class FileTransferConnectorFilesAppBrowserTest
     CHECK_NE(web_contents, nullptr);
     gfx::NativeWindow native_window = web_contents->GetTopLevelNativeWindow();
 
-    std::set<views::Widget*> owned_widgets;
+    std::set<raw_ptr<views::Widget, SetExperimental>> owned_widgets;
     views::Widget::GetAllOwnedWidgets(native_window, &owned_widgets);
 
     // Verify that the FilesPolicyErrorDialog widget is displayed.
     ASSERT_EQ(owned_widgets.size(), 1ul);
-    auto* widget = *owned_widgets.begin();
+    auto* widget = (*owned_widgets.begin()).get();
     ASSERT_EQ(widget->GetName(), "FilesPolicyErrorDialog");
 
     auto* view = widget->GetRootView()->GetViewByID(
@@ -974,12 +976,12 @@ class FileTransferConnectorFilesAppBrowserTest
     CHECK_NE(web_contents, nullptr);
     gfx::NativeWindow native_window = web_contents->GetTopLevelNativeWindow();
 
-    std::set<views::Widget*> owned_widgets;
+    std::set<raw_ptr<views::Widget, SetExperimental>> owned_widgets;
     views::Widget::GetAllOwnedWidgets(native_window, &owned_widgets);
 
     // Verify that the FilesPolicyWarnDialog widget is displayed.
     ASSERT_EQ(owned_widgets.size(), 1ul);
-    auto* widget = *owned_widgets.begin();
+    auto* widget = (*owned_widgets.begin()).get();
     ASSERT_EQ(widget->GetName(), "FilesPolicyWarnDialog");
 
     auto* view = widget->GetRootView()->GetViewByID(
@@ -1234,6 +1236,10 @@ WRAPPED_INSTANTIATE_TEST_SUITE_P(
         FILE_TRANSFER_TEST_CASE("transferConnectorFromDriveToDownloadsFlat")
             .FileTransferConnectorReportOnlyMode()
             .NewDirectoryTree(),
+        FILE_TRANSFER_TEST_CASE("transferConnectorFromDriveToDownloadsFlatDesti"
+                                "nationNoSpaceForReportOnly")
+            .FileTransferConnectorReportOnlyMode()
+            .NewDirectoryTree(),
         FILE_TRANSFER_TEST_CASE("transferConnectorFromDriveToDownloadsMoveDeep")
             .NewDirectoryTree(),
         FILE_TRANSFER_TEST_CASE("transferConnectorFromDriveToDownloadsMoveDeep")
@@ -1292,6 +1298,9 @@ WRAPPED_INSTANTIATE_TEST_SUITE_P(
             .FileTransferConnectorReportOnlyMode(),
         FILE_TRANSFER_TEST_CASE("transferConnectorFromDriveToDownloadsFlat"),
         FILE_TRANSFER_TEST_CASE("transferConnectorFromDriveToDownloadsFlat")
+            .FileTransferConnectorReportOnlyMode(),
+        FILE_TRANSFER_TEST_CASE("transferConnectorFromDriveToDownloadsFlatDesti"
+                                "nationNoSpaceForReportOnly")
             .FileTransferConnectorReportOnlyMode(),
         FILE_TRANSFER_TEST_CASE(
             "transferConnectorFromDriveToDownloadsMoveDeep"),

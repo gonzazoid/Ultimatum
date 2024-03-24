@@ -56,7 +56,7 @@ void JNI_DisplayAgent_OnUserAction(JNIEnv* env,
     button_click_info.type =
         static_cast<notifications::ActionButtonType>(j_button_type);
     action_data.button_click_info =
-        absl::make_optional(std::move(button_click_info));
+        std::make_optional(std::move(button_click_info));
   }
 
   GetUserActionHandler()->OnUserAction(action_data);
@@ -71,7 +71,7 @@ void DisplayAgentAndroid::ShowNotification(
     std::unique_ptr<SystemData> system_data) {
   // TODO(xingliu): Refactor and hook to NotificationDisplayService.
   DCHECK(notification_data);
-  JNIEnv* env = base::android::AttachCurrentThread();
+  JNIEnv* env = jni_zero::AttachCurrentThread();
   DCHECK(!notification_data->title.empty());
   DCHECK(!notification_data->message.empty());
 

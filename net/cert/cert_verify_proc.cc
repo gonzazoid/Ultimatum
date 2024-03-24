@@ -7,6 +7,8 @@
 #include <stdint.h>
 
 #include <algorithm>
+#include <optional>
+#include <string_view>
 
 #include "base/containers/flat_set.h"
 #include "base/containers/span.h"
@@ -204,13 +206,13 @@ void BestEffortCheckOCSP(const std::string& raw_response,
     return;
   }
 
-  base::StringPiece cert_der =
+  std::string_view cert_der =
       x509_util::CryptoBufferAsStringPiece(certificate.cert_buffer());
 
   // Try to get the certificate that signed |certificate|. This will run into
   // problems if the CertVerifyProc implementation doesn't return the ordered
   // certificates. If that happens the OCSP verification may be incorrect.
-  base::StringPiece issuer_der;
+  std::string_view issuer_der;
   if (certificate.intermediate_buffers().empty()) {
     if (X509Certificate::IsSelfSigned(certificate.cert_buffer())) {
       issuer_der = cert_der;
@@ -274,8 +276,8 @@ void RecordTrustAnchorHistogram(const HashValueVector& spki_hashes,
 [[nodiscard]] bool InspectSignatureAlgorithmForCert(
     const CRYPTO_BUFFER* cert,
     CertVerifyResult* verify_result) {
-  base::StringPiece cert_algorithm_sequence;
-  base::StringPiece tbs_algorithm_sequence;
+  std::string_view cert_algorithm_sequence;
+  std::string_view tbs_algorithm_sequence;
 
   // Extract the AlgorithmIdentifier SEQUENCEs
   if (!asn1::ExtractSignatureAlgorithmsFromDERCert(
@@ -284,9 +286,9 @@ void RecordTrustAnchorHistogram(const HashValueVector& spki_hashes,
     return false;
   }
 
-  absl::optional<bssl::SignatureAlgorithm> cert_algorithm =
+  std::optional<bssl::SignatureAlgorithm> cert_algorithm =
       bssl::ParseSignatureAlgorithm(bssl::der::Input(cert_algorithm_sequence));
-  absl::optional<bssl::SignatureAlgorithm> tbs_algorithm =
+  std::optional<bssl::SignatureAlgorithm> tbs_algorithm =
       bssl::ParseSignatureAlgorithm(bssl::der::Input(tbs_algorithm_sequence));
   if (!cert_algorithm || !tbs_algorithm || *cert_algorithm != *tbs_algorithm) {
     return false;
@@ -458,7 +460,8 @@ int CertVerifyProc::Verify(X509Certificate* cert,
                            const std::string& sct_list,
                            int flags,
                            CertVerifyResult* verify_result,
-                           const NetLogWithSource& net_log) {
+                           const NetLogWithSource& net_log,
+                           std::optional<base::Time> time_now) {
   CHECK(cert);
   CHECK(verify_result);
 
@@ -479,7 +482,7 @@ int CertVerifyProc::Verify(X509Certificate* cert,
   verify_result->verified_cert = cert;
 
   int rv = VerifyInternal(cert, hostname, ocsp_response, sct_list, flags,
-                          verify_result, net_log);
+                          verify_result, net_log, time_now);
 
   CHECK(verify_result->verified_cert);
 
@@ -509,7 +512,7 @@ int CertVerifyProc::Verify(X509Certificate* cert,
     if (hash.tag() != HASH_VALUE_SHA256) {
       continue;
     }
-    if (!crl_set()->IsKnownInterceptionKey(base::StringPiece(
+    if (!crl_set()->IsKnownInterceptionKey(std::string_view(
             reinterpret_cast<const char*>(hash.data()), hash.size()))) {
       continue;
     }
@@ -672,7 +675,7 @@ void CertVerifyProc::LogNameNormalizationMetrics(
 // CheckNameConstraints verifies that every name in |dns_names| is in one of
 // the domains specified by |domains|.
 static bool CheckNameConstraints(const std::vector<std::string>& dns_names,
-                                 base::span<const base::StringPiece> domains) {
+                                 base::span<const std::string_view> domains) {
   for (const auto& host : dns_names) {
     bool ok = false;
     url::CanonHostInfo host_info;
@@ -694,8 +697,8 @@ static bool CheckNameConstraints(const std::vector<std::string>& dns_names,
       DCHECK_EQ('.', domain[0]);
       if (dns_name.size() <= domain.size())
         continue;
-      base::StringPiece suffix =
-          base::StringPiece(dns_name).substr(dns_name.size() - domain.size());
+      std::string_view suffix =
+          std::string_view(dns_name).substr(dns_name.size() - domain.size());
       if (!base::EqualsCaseInsensitiveASCII(suffix, domain))
         continue;
       ok = true;
@@ -715,7 +718,7 @@ bool CertVerifyProc::HasNameConstraintsViolation(
     const std::string& common_name,
     const std::vector<std::string>& dns_names,
     const std::vector<std::string>& ip_addrs) {
-  static constexpr base::StringPiece kDomainsANSSI[] = {
+  static constexpr std::string_view kDomainsANSSI[] = {
       ".fr",  // France
       ".gp",  // Guadeloupe
       ".gf",  // Guyane
@@ -731,7 +734,7 @@ bool CertVerifyProc::HasNameConstraintsViolation(
       ".tf",  // Terres australes et antarctiques françaises
   };
 
-  static constexpr base::StringPiece kDomainsTest[] = {
+  static constexpr std::string_view kDomainsTest[] = {
       ".example.com",
   };
 
@@ -745,7 +748,7 @@ bool CertVerifyProc::HasNameConstraintsViolation(
   //   openssl dgst -sha256 -binary | xxd -i
   static const struct PublicKeyDomainLimitation {
     SHA256HashValue public_key_hash;
-    base::span<const base::StringPiece> domains;
+    base::span<const std::string_view> domains;
   } kLimits[] = {
       // C=FR, ST=France, L=Paris, O=PM/SGDN, OU=DCSSI,
       // CN=IGC/A/emailAddress=igca@sgdn.pm.gouv.fr

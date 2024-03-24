@@ -23,13 +23,18 @@ namespace {
 constexpr base::TimeDelta kAshContextualNudgesMinInterval = base::Seconds(0);
 constexpr base::TimeDelta kAshContextualNudgesMaxInterval = base::Seconds(60);
 
-// The hash value for the secret key of the birch feature.
-constexpr char kBirchHashKey[] =
+// The hash value for the secret key of the forest feature.
+constexpr char kForestHashKey[] =
     "\x1a\x93\x5f\x64\x0d\x7f\x0c\x2f\x88\xe8\x80\x9a\x5f\x16\xbb\xd8\x74\x06"
     "\x8a\xb1";
 
-// Whether checking the birch secret key is ignored.
-bool g_ignore_birch_secret_key = false;
+// Whether checking the forest secret key is ignored.
+bool g_ignore_forest_secret_key = false;
+
+// The hash value for the secret key of the campbell feature.
+constexpr char kCampbellHashKey[] =
+    "\x78\xb6\xa7\x59\x06\x11\xc7\xea\x09\x7e\x92\xe3\xe9\xff\xa6\x01\x4c"
+    "\x03\x18\x32";
 
 }  // namespace
 
@@ -313,8 +318,10 @@ const char kAshUiModeTablet[] = "touch_view";
 // instead of displaying an interactive animation.
 const char kAuraLegacyPowerButton[] = "aura-legacy-power-button";
 
-// Supply secret key for the Birch feature.
-const char kBirchFeatureKey[] = "birch-feature-key";
+// Switch used to pass in a secret key for Campbell feature. Unless the correct
+// secret key is provided, Campbell feature will remain disabled, regardless of
+// the state of the associated feature flag.
+const char kCampbellKey[] = "campbell-key";
 
 // If this flag is set, it indicates that this device is a "Cellular First"
 // device. Cellular First devices use cellular telephone data networks as
@@ -653,6 +660,9 @@ const char kForceCryptohomeRecoveryForTesting[] =
 // Forces first-run UI to be shown for every login.
 const char kForceFirstRunUI[] = "force-first-run-ui";
 
+// Disables first-run UI from being shown.
+const char kDisableFirstRunUI[] = "disable-first-run-ui";
+
 // Forces Hardware ID check (happens during OOBE) to fail or succeed. Possible
 // values: "failure" or "success". Should be used only for testing.
 const char kForceHWIDCheckResultForTest[] = "force-hwid-check-result-for-test";
@@ -685,6 +695,9 @@ const char kForceShowReleaseTrack[] = "force-show-release-track";
 // If set, tablet-like power button behavior (i.e. tapping the button turns the
 // screen off) is used even if the device is in laptop mode.
 const char kForceTabletPowerButton[] = "force-tablet-power-button";
+
+// Supply secret key for the Forest feature.
+const char kForestFeatureKey[] = "forest-feature-key";
 
 // Specifies the device's form factor. If provided, this flag overrides the
 // value from the LSB release info. Possible values are: "CHROMEBASE",
@@ -1328,19 +1341,37 @@ bool ShouldAllowDefaultShelfPinLayoutIgnoringSync() {
       kAllowDefaultShelfPinLayoutIgnoringSync);
 }
 
-bool IsBirchSecretKeyMatched() {
-  if (g_ignore_birch_secret_key) {
+bool IsCampbellSecretKeyMatched() {
+  // Commandline looks like:
+  //  out/Default/chrome --user-data-dir=/tmp/tmp123
+  //  --campbell-key="INSERT KEY HERE"
+  //  --enable-features=CampbellGlyph:icon/<icon>
+  const std::string provided_key_hash = base::SHA1HashString(
+      base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
+          kCampbellKey));
+
+  const bool key_matched = (provided_key_hash == kCampbellHashKey);
+  if (!key_matched) {
+    LOG(ERROR)
+        << "Provided campbel secrey key does not match the expected one.";
+  }
+
+  return key_matched;
+}
+
+bool IsForestSecretKeyMatched() {
+  if (g_ignore_forest_secret_key) {
     return true;
   }
 
   // Commandline looks like:
   //  out/Default/chrome --user-data-dir=/tmp/tmp123
-  //  --birch-feature-key="INSERT KEY HERE" --enable-features=BirchFeature
+  //  --birch-feature-key="INSERT KEY HERE" --enable-features=ForestFeature
   const std::string provided_key_hash = base::SHA1HashString(
       base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
-          switches::kBirchFeatureKey));
+          kForestFeatureKey));
 
-  bool birch_key_matched = (provided_key_hash == kBirchHashKey);
+  bool birch_key_matched = (provided_key_hash == kForestHashKey);
   if (!birch_key_matched) {
     LOG(ERROR) << "Provided secret key does not match with the expected one.";
   }
@@ -1348,8 +1379,8 @@ bool IsBirchSecretKeyMatched() {
   return birch_key_matched;
 }
 
-void SetIgnoreBirchSecretKeyForTest(bool ignore) {
-  g_ignore_birch_secret_key = ignore;
+void SetIgnoreForestSecretKeyForTest(bool ignore) {
+  g_ignore_forest_secret_key = ignore;
 }
 
 }  // namespace switches

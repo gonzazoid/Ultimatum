@@ -26,7 +26,7 @@ const CGFloat kSpacing = 2;
 }
 
 - (instancetype)init {
-  self = [super initWithSpacing:kSpacing];
+  self = [super initWithSpacing:kSpacing adaptForCompactSizeClass:NO];
   if (self) {
     self.applicableCornerRadius = kGroupGridBottomTrailingCellCornerRadius;
     _mainSubview = [[GroupTabView alloc] init];
@@ -61,7 +61,7 @@ const CGFloat kSpacing = 2;
 - (void)configureWithGroupTabInfo:(GroupTabInfo*)groupTabInfo {
   [self hideAllViews];
   [_mainSubview configureWithSnapshot:groupTabInfo.snapshot
-                              favicon:groupTabInfo.snapshot];
+                              favicon:groupTabInfo.favicon];
   _mainSubview.hidden = NO;
 }
 

@@ -7,10 +7,11 @@ load("//lib/args.star", "args")
 load("//lib/branches.star", "branches")
 load("//lib/builder_config.star", "builder_config")
 load("//lib/builder_health_indicators.star", "health_spec")
-load("//lib/builders.star", "cpu", "os", "reclient", "sheriff_rotations", "xcode")
+load("//lib/builders.star", "cpu", "os", "reclient", "sheriff_rotations")
 load("//lib/ci.star", "ci")
 load("//lib/consoles.star", "consoles")
 load("//lib/gn_args.star", "gn_args")
+load("//lib/xcode.star", "xcode")
 
 ci.defaults.set(
     executable = ci.DEFAULT_EXECUTABLE,
@@ -87,7 +88,6 @@ ci.builder(
             "release_builder",
             "reclient",
             "minimal_symbols",
-            "disable_nacl",
             "x64",
         ],
     ),
@@ -157,6 +157,7 @@ ci.builder(
             build_config = builder_config.build_config.RELEASE,
             target_arch = builder_config.target_arch.ARM,
             target_bits = 64,
+            target_platform = builder_config.target_platform.MAC,
         ),
     ),
     gn_args = gn_args.config(
@@ -233,7 +234,6 @@ ci.builder(
             "release_builder",
             "reclient",
             "minimal_symbols",
-            "disable_nacl",
         ],
     ),
     os = os.MAC_DEFAULT,
@@ -258,6 +258,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.MAC,
         ),
     ),
     gn_args = gn_args.config(

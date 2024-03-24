@@ -25,7 +25,7 @@
 #include "extensions/browser/view_type_utils.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension.h"
-#include "extensions/common/extension_messages.h"
+#include "extensions/common/extension_id.h"
 #include "extensions/common/mojom/view_type.mojom.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "third_party/blink/public/mojom/autoplay/autoplay.mojom.h"
@@ -83,18 +83,18 @@ void ExtensionWebContentsObserver::Initialize() {
 
   extension_frame_host_ = CreateExtensionFrameHost(web_contents());
 
+  content::RenderFrameHost* main_frame = web_contents()->GetPrimaryMainFrame();
+  // We only initialize the frame if the renderer counterpart is live;
+  // otherwise we wait for the RenderFrameCreated notification.
+  if (main_frame->IsRenderFrameLive()) {
+    InitializeRenderFrame(main_frame);
+  }
+
+  // At the point of initialization, the *only* frame that can exist is the
+  // main frame.
   web_contents()->ForEachRenderFrameHost(
-      [this](content::RenderFrameHost* render_frame_host) {
-        // ForEachRenderFrameHost descends into inner WebContents, so make sure
-        // the RenderFrameHost is actually one bound to this object.
-        if (content::WebContents::FromRenderFrameHost(render_frame_host) !=
-            web_contents()) {
-          return;
-        }
-        // We only initialize the frame if the renderer counterpart is live;
-        // otherwise we wait for the RenderFrameCreated notification.
-        if (render_frame_host->IsRenderFrameLive())
-          InitializeRenderFrame(render_frame_host);
+      [main_frame](content::RenderFrameHost* render_frame_host) {
+        CHECK_EQ(render_frame_host, main_frame);
       });
 
   // It would be ideal if SessionTabHelper was created before this object,
@@ -327,7 +327,7 @@ const Extension* ExtensionWebContentsObserver::GetExtensionFromFrame(
     content::RenderFrameHost* render_frame_host,
     bool verify_url) const {
   DCHECK(initialized_);
-  std::string extension_id = util::GetExtensionIdFromFrame(render_frame_host);
+  ExtensionId extension_id = util::GetExtensionIdFromFrame(render_frame_host);
   if (extension_id.empty())
     return nullptr;
 

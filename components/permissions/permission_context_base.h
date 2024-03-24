@@ -204,6 +204,9 @@ class PermissionContextBase : public content_settings::Observer {
       PermissionRequest::PermissionDecidedCallback permission_decided_callback,
       base::OnceClosure delete_callback) const;
 
+  // Implementors can override this method to avoid using automatic embargo.
+  virtual bool UsesAutomaticEmbargo() const;
+
   base::ObserverList<permissions::Observer> permission_observers_;
 
   // Set by subclasses to inform the base class that they will handle adding
@@ -240,8 +243,7 @@ class PermissionContextBase : public content_settings::Observer {
       std::pair<std::unique_ptr<PermissionRequest>, BrowserPermissionCallback>>
       pending_requests_;
 
-  mutable absl::optional<bool> last_has_device_permission_result_ =
-      absl::nullopt;
+  mutable std::optional<bool> last_has_device_permission_result_ = std::nullopt;
 
   // Must be the last member, to ensure that it will be
   // destroyed first, which will invalidate weak pointers

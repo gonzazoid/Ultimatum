@@ -85,6 +85,8 @@ class CONTENT_EXPORT PrefetchService {
   PrefetchServiceDelegate* GetPrefetchServiceDelegate() const {
     return delegate_.get();
   }
+  void SetPrefetchServiceDelegateForTesting(
+      std::unique_ptr<PrefetchServiceDelegate> delegate);
 
   PrefetchProxyConfigurator* GetPrefetchProxyConfigurator() const {
     return prefetch_proxy_configurator_.get();
@@ -151,6 +153,8 @@ class CONTENT_EXPORT PrefetchService {
   base::WeakPtr<PrefetchService> GetWeakPtr();
 
  private:
+  friend class PrefetchURLLoaderInterceptorTestBase;
+
   // Checks whether the given |prefetch_container| is eligible for prefetch.
   // Once the eligibility is determined then |result_callback| will be called
   // with result (`PreloadingEligibility::kEligible` when eligible).
@@ -215,6 +219,11 @@ class CONTENT_EXPORT PrefetchService {
       network::mojom::URLResponseHeadPtr redirect_head,
       base::WeakPtr<PrefetchContainer> prefetch_container,
       PreloadingEligibility eligibility);
+
+  // Adds `prefetch_container` to the cache but doesn't initiate prefetching.
+  // Use `AddPrefetchContainer()` for non-test cases.
+  void AddPrefetchContainerWithoutStartingPrefetch(
+      std::unique_ptr<PrefetchContainer> prefetch_container);
 
   // Starts the network requests for as many prefetches in |prefetch_queue_| as
   // possible.

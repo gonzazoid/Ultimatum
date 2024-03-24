@@ -102,7 +102,7 @@ class ASH_EXPORT NotifierSettingsView : public views::View,
   };
 
   // Overridden from views::View:
-  void Layout() override;
+  void Layout(PassKey) override;
   gfx::Size GetMinimumSize() const override;
   gfx::Size CalculatePreferredSize() const override;
   bool OnKeyPressed(const ui::KeyEvent& event) override;
@@ -129,7 +129,7 @@ class ASH_EXPORT NotifierSettingsView : public views::View,
   raw_ptr<views::ScrollView> scroller_ = nullptr;
   raw_ptr<views::View> no_notifiers_view_ = nullptr;
   // TODO(crbug/1194632): remove |buttons_| and all related views.
-  std::set<NotifierButton*> buttons_;
+  std::set<raw_ptr<NotifierButton, SetExperimental>> buttons_;
 };
 
 }  // namespace ash

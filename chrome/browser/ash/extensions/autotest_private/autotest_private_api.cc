@@ -10,6 +10,7 @@
 #include <optional>
 #include <set>
 #include <sstream>
+#include <string_view>
 #include <utility>
 
 #include "ash/accessibility/accessibility_controller.h"
@@ -72,7 +73,6 @@
 #include "base/scoped_observation.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "base/system/sys_info.h"
 #include "base/task/bind_post_task.h"
@@ -325,6 +325,8 @@ std::string ConvertToString(message_center::NotificationType type) {
       return "progress";
     case message_center::NOTIFICATION_TYPE_CUSTOM:
       return "custom";
+    case message_center::NOTIFICATION_TYPE_CONVERSATION:
+      return "conversation";
   }
   return "unknown";
 }
@@ -592,6 +594,8 @@ std::string SetAllowedPref(Profile* profile,
     DCHECK(value.is_bool());
   } else if (pref_name == ash::prefs::kAccessibilityVirtualKeyboardEnabled) {
     DCHECK(value.is_bool());
+  } else if (pref_name == prefs::kDocumentScanAPITrustedExtensions) {
+    DCHECK(value.is_list());
   } else if (pref_name == ash::prefs::kEnableAutoScreenLock) {
     DCHECK(value.is_bool());
   } else if (pref_name == prefs::kLanguagePreloadEngines) {
@@ -1512,10 +1516,10 @@ ExtensionFunction::ResponseAction
 AutotestPrivateGetAllEnterprisePoliciesFunction::Run() {
   DVLOG(1) << "AutotestPrivateGetAllEnterprisePoliciesFunction";
 
-  auto client = std::make_unique<policy::ChromePolicyConversionsClient>(
-      browser_context());
   base::Value::Dict all_policies_dict =
-      policy::DictionaryPolicyConversions(std::move(client))
+      policy::PolicyConversions(
+          std::make_unique<policy::ChromePolicyConversionsClient>(
+              browser_context()))
           .EnableDeviceLocalAccountPolicies(true)
           .EnableDeviceInfo(true)
           .ToValueDict();
@@ -1822,7 +1826,7 @@ AutotestPrivateGetVisibleNotificationsFunction::Run() {
   message_center::NotificationList::Notifications notification_set =
       message_center::MessageCenter::Get()->GetVisibleNotifications();
   base::Value::List values;
-  for (auto* notification : notification_set) {
+  for (message_center::Notification* notification : notification_set) {
     values.Append(MakeDictionaryFromNotification(*notification));
   }
   return RespondNow(WithArguments(std::move(values)));
@@ -3732,7 +3736,7 @@ AutotestPrivateClearAllowedPrefFunction::
 
 ExtensionFunction::ResponseAction
 AutotestPrivateClearAllowedPrefFunction::Run() {
-  absl::optional<api::autotest_private::ClearAllowedPref::Params> params =
+  std::optional<api::autotest_private::ClearAllowedPref::Params> params =
       api::autotest_private::ClearAllowedPref::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   if (!ClearAllowedPref(Profile::FromBrowserContext(browser_context()),
@@ -4807,7 +4811,7 @@ class AutotestPrivateInstallPWAForCurrentURLFunction::PWABannerObserver
 
     // If PWA is already loaded, call callback immediately.
     Installable installable =
-        app_banner_manager_->GetInstallableWebAppCheckResultForTesting();
+        app_banner_manager_->GetInstallableWebAppCheckResult();
     if (installable == Installable::kYes_Promotable ||
         installable == Installable::kYes_ByUserRequest) {
       observation_.Reset();
@@ -4820,10 +4824,10 @@ class AutotestPrivateInstallPWAForCurrentURLFunction::PWABannerObserver
 
   ~PWABannerObserver() override {}
 
-  void OnInstallableWebAppStatusUpdated() override {
-    Installable installable =
-        app_banner_manager_->GetInstallableWebAppCheckResultForTesting();
-    switch (installable) {
+  void OnInstallableWebAppStatusUpdated(
+      webapps::InstallableWebAppCheckResult result,
+      const std::optional<webapps::WebAppBannerData>& data) override {
+    switch (result) {
       case Installable::kNo:
         [[fallthrough]];
       case Installable::kNo_AlreadyInstalled:
@@ -4843,7 +4847,7 @@ class AutotestPrivateInstallPWAForCurrentURLFunction::PWABannerObserver
   }
 
  private:
-  using Installable = webapps::AppBannerManager::InstallableWebAppCheckResult;
+  using Installable = webapps::InstallableWebAppCheckResult;
 
   base::ScopedObservation<webapps::AppBannerManager,
                           webapps::AppBannerManager::Observer>
@@ -4993,6 +4997,7 @@ AutotestPrivateActivateAcceleratorFunction::Run() {
   auto* accelerator_controller = ash::AcceleratorController::Get();
   accelerator_controller->GetAcceleratorHistory()->StoreCurrentAccelerator(
       accelerator);
+  accelerator_controller->ApplyAcceleratorForTesting(accelerator);  // IN-TEST
 
   if (!accelerator_controller->IsRegistered(accelerator)) {
     // If it's not ash accelerator, try aplication's accelerator.
@@ -5873,9 +5878,10 @@ void AutotestPrivateStopSmoothnessTrackingFunction::OnReportData(
   timeout_timer_.AbandonAndStop();
 
   api::autotest_private::DisplaySmoothnessData result_data;
-  result_data.frames_expected = frame_data.frames_expected;
-  result_data.frames_produced = frame_data.frames_produced;
-  result_data.jank_count = frame_data.jank_count;
+  result_data.frames_expected = frame_data.frames_expected_v3;
+  result_data.frames_produced =
+      frame_data.frames_expected_v3 - frame_data.frames_dropped_v3;
+  result_data.jank_count = frame_data.jank_count_v3;
   result_data.throughput = std::move(throughput);
 
   Respond(ArgumentList(
@@ -6077,9 +6083,10 @@ AutotestPrivateStopThroughputTrackerDataCollectionFunction::Run() {
     animation_data.stop_offset_ms =
         (data.stop_tick - g_last_start_throughput_data_collection_tick)
             .InMilliseconds();
-    animation_data.frames_expected = data.smoothness_data.frames_expected;
-    animation_data.frames_produced = data.smoothness_data.frames_produced;
-    animation_data.jank_count = data.smoothness_data.jank_count;
+    animation_data.frames_expected = data.smoothness_data.frames_expected_v3;
+    animation_data.frames_produced = data.smoothness_data.frames_expected_v3 -
+                                     data.smoothness_data.frames_dropped_v3;
+    animation_data.jank_count = data.smoothness_data.jank_count_v3;
     result_data.emplace_back(std::move(animation_data));
   }
   return RespondNow(
@@ -6110,9 +6117,10 @@ AutotestPrivateGetThroughputTrackerDataFunction::Run() {
     animation_data.stop_offset_ms =
         (data.stop_tick - g_last_start_throughput_data_collection_tick)
             .InMilliseconds();
-    animation_data.frames_expected = data.smoothness_data.frames_expected;
-    animation_data.frames_produced = data.smoothness_data.frames_produced;
-    animation_data.jank_count = data.smoothness_data.jank_count;
+    animation_data.frames_expected = data.smoothness_data.frames_expected_v3;
+    animation_data.frames_produced = data.smoothness_data.frames_expected_v3 -
+                                     data.smoothness_data.frames_dropped_v3;
+    animation_data.jank_count = data.smoothness_data.jank_count_v3;
     result_data.emplace_back(std::move(animation_data));
   }
   return RespondNow(ArgumentList(
@@ -6660,7 +6668,7 @@ void AutotestPrivateInstallBruschettaFunction::OnInstallerFinish(
   if (result == bruschetta::BruschettaInstallResult::kSuccess) {
     Respond(NoArguments());
   } else {
-    Respond(Error(base::UTF16ToUTF8(base::StringPiece16(
+    Respond(Error(base::UTF16ToUTF8(std::u16string_view(
         bruschetta::BruschettaInstallResultString(result)))));
   }
 }
@@ -6886,6 +6894,31 @@ void AutotestPrivateGetArcWakefulnessModeFunction::OnGetWakefulnessStateRespond(
     arc::mojom::WakefulnessMode mode) {
   return Respond(
       WithArguments(api::autotest_private::ToString(GetWakefulnessMode(mode))));
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AutotestPrivateSetDeviceLanguageFunction
+///////////////////////////////////////////////////////////////////////////////
+
+AutotestPrivateSetDeviceLanguageFunction::
+    AutotestPrivateSetDeviceLanguageFunction() = default;
+
+AutotestPrivateSetDeviceLanguageFunction::
+    ~AutotestPrivateSetDeviceLanguageFunction() = default;
+
+ExtensionFunction::ResponseAction
+AutotestPrivateSetDeviceLanguageFunction::Run() {
+  std::optional<api::autotest_private::SetDeviceLanguage::Params> params =
+      api::autotest_private::SetDeviceLanguage::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
+  DVLOG(1) << "AutotestPrivateSetDeviceLanguageFunction " << params->locale;
+
+  Profile* const profile = Profile::FromBrowserContext(browser_context());
+  // Note that this only change the prefs, a restart would be required for the
+  // change to take effect.
+  profile->ChangeAppLocale(params->locale,
+                           Profile::APP_LOCALE_CHANGED_VIA_SETTINGS);
+  return RespondNow(NoArguments());
 }
 
 ///////////////////////////////////////////////////////////////////////////////

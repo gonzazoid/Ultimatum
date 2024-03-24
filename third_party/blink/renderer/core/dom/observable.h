@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_DOM_OBSERVABLE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_DOM_OBSERVABLE_H_
 
+#include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
@@ -12,11 +13,13 @@
 namespace blink {
 
 class ExecutionContext;
+class ObservableInternalObserver;
 class ScriptState;
 class Subscriber;
 class SubscribeOptions;
 class V8SubscribeCallback;
 class V8UnionObserverOrObserverCallback;
+class V8Visitor;
 
 // Implementation of the DOM `Observable` API. See
 // https://github.com/WICG/observable and
@@ -49,9 +52,35 @@ class CORE_EXPORT Observable final : public ScriptWrappable,
                  V8UnionObserverOrObserverCallback*,
                  SubscribeOptions*);
 
+  // Observable-returning operators. See
+  // https://wicg.github.io/observable/#observable-returning-operators.
+  Observable* takeUntil(ScriptState*, Observable*);
+
+  // Promise-returning operators. See
+  // https://wicg.github.io/observable/#promise-returning-operators.
+  ScriptPromiseTyped<IDLSequence<IDLAny>> toArray(ScriptState*,
+                                                  SubscribeOptions*);
+  ScriptPromise forEach(ScriptState*, V8Visitor*, SubscribeOptions*);
+
   void Trace(Visitor*) const override;
 
+  // The `subscribe()` API is used when web content subscribes to an Observable
+  // with a `V8UnionObserverOrObserverCallback`, whereas this API is used when
+  // native code subscribes to an `Observable` with a native internal observer.
+  // For consistency with the web-exposed `subscribe()` method, the
+  // `ScriptState` does not have to be associated with a valid context.
+  void SubscribeWithNativeObserver(ScriptState*,
+                                   ObservableInternalObserver*,
+                                   SubscribeOptions*);
+
  private:
+  // The `ScriptState` argument does not need to be associated with a valid
+  // context (this method early-returns in that case).
+  void SubscribeInternal(ScriptState*,
+                         V8UnionObserverOrObserverCallback*,
+                         ObservableInternalObserver*,
+                         SubscribeOptions*);
+
   // Exactly one of `subscribe_callback_` and `subscribe_delegate_` must be
   // non-null. `subscribe_callback_` is non-null when `this` is created from
   // script, and the subscribe callback is a JS-provided callback function,

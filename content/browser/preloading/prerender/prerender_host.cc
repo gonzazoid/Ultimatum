@@ -30,6 +30,7 @@
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/preloading_trigger_type.h"
+#include "content/public/browser/web_contents_delegate.h"
 #include "content/public/common/referrer.h"
 #include "net/base/load_flags.h"
 #include "net/http/http_request_headers.h"
@@ -115,19 +116,8 @@ bool PrerenderHost::AreHttpRequestHeadersCompatible(
   prerender_headers.RemoveHeader("sec-ch-viewport-height");
   potential_activation_headers.RemoveHeader("sec-ch-viewport-height");
 
-  if (PrerenderHost::IsActivationHeaderMatch(potential_activation_headers,
-                                             prerender_headers, reason)) {
-    return true;
-  }
-
-  // The headers mismatch. Analyze the headers asynchronously.
-  base::ThreadPool::PostTask(
-      FROM_HERE, {base::TaskPriority::BEST_EFFORT},
-      base::BindOnce(&AnalyzePrerenderActivationHeader,
-                     std::move(potential_activation_headers),
-                     std::move(prerender_headers), trigger_type,
-                     embedder_histogram_suffix));
-  return false;
+  return PrerenderHost::IsActivationHeaderMatch(potential_activation_headers,
+                                                prerender_headers, reason);
 }
 
 // static
@@ -235,15 +225,6 @@ bool PrerenderHost::IsActivationHeaderMatch(
   std::sort(potential_header_list.begin(), potential_header_list.end(), cmp);
   std::sort(prerender_header_list.begin(), prerender_header_list.end(), cmp);
 
-  // The two vectors should be exactly the same if the headers are the same.
-  if (std::equal(potential_header_list.begin(), potential_header_list.end(),
-                 prerender_header_list.begin(), prerender_header_list.end(),
-                 same_predicate)) {
-    return true;
-  }
-
-  // If the two vectors are not exactly the same, it means that header mismatch
-  // occurred.
   std::unique_ptr<std::vector<PrerenderMismatchedHeaders>> mismatched_headers =
       std::make_unique<std::vector<PrerenderMismatchedHeaders>>();
 
@@ -287,7 +268,9 @@ bool PrerenderHost::IsActivationHeaderMatch(
                                      potential_header_list_it->value);
     potential_header_list_it++;
   }
-
+  if (mismatched_headers->empty()) {
+    return true;
+  }
   reason.SetPrerenderMismatchedHeaders(std::move(mismatched_headers));
   return false;
 }
@@ -363,10 +346,6 @@ bool PrerenderHost::ShouldPreserveAbortedURLs() {
   return false;
 }
 
-WebContents* PrerenderHost::DeprecatedGetWebContents() {
-  return &*web_contents_;
-}
-
 // TODO(https://crbug.com/1132746): Inspect diffs from the current
 // no-state-prefetch implementation. See PrerenderContents::StartPrerendering()
 // for example.
@@ -388,6 +367,9 @@ bool PrerenderHost::StartPrerendering() {
 
   // Just use the referrer from attributes, as NoStatePrefetch does.
   load_url_params.referrer = attributes_.referrer;
+
+  load_url_params.override_user_agent =
+      web_contents_->GetDelegate()->ShouldOverrideUserAgentForPrerender2();
 
   // TODO(https://crbug.com/1406149, https://crbug.com/1378921): Set
   // `override_user_agent` for Android. This field is determined on the Java

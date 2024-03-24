@@ -268,29 +268,24 @@ PhysicalRect LayoutInline::LocalCaretRect(
   if (extra_width_to_end_of_line)
     *extra_width_to_end_of_line = LayoutUnit();
 
-  LayoutUnit inline_size = RuntimeEnabledFeatures::EmptyCaretInVerticalEnabled()
-                               ? BorderAndPaddingLogicalWidth()
-                               : BorderAndPaddingWidth();
-  DeprecatedLayoutRect caret_rect =
-      LocalCaretRectForEmptyElement(inline_size, LayoutUnit());
+  LogicalRect logical_caret_rect = LocalCaretRectForEmptyElement(
+      BorderAndPaddingLogicalWidth(), LayoutUnit());
 
   if (IsInLayoutNGInlineFormattingContext()) {
     InlineCursor cursor;
     cursor.MoveTo(*this);
     if (cursor) {
-      if (RuntimeEnabledFeatures::EmptyCaretInVerticalEnabled()) {
-        caret_rect = WritingModeConverter(
-                         {StyleRef().GetWritingMode(), TextDirection::kLtr},
-                         cursor.CurrentItem()->Size())
-                         .ToPhysical(LogicalRect(caret_rect))
-                         .ToLayoutRect();
-      }
-      caret_rect.MoveBy(
-          cursor.Current().OffsetInContainerFragment().ToLayoutPoint());
+      PhysicalRect caret_rect =
+          WritingModeConverter(
+              {StyleRef().GetWritingMode(), TextDirection::kLtr},
+              cursor.CurrentItem()->Size())
+              .ToPhysical(logical_caret_rect);
+      caret_rect.Move(cursor.Current().OffsetInContainerFragment());
+      return caret_rect;
     }
   }
 
-  return PhysicalRect(caret_rect);
+  return PhysicalRect(logical_caret_rect.ToLayoutRect());
 }
 
 void LayoutInline::AddChild(LayoutObject* new_child,
@@ -447,7 +442,7 @@ void LayoutInline::QuadsForSelfInternal(Vector<gfx::QuadF>& quads,
                                         MapCoordinatesFlags mode,
                                         bool map_to_absolute) const {
   NOT_DESTROYED();
-  absl::optional<gfx::Transform> mapping_to_absolute;
+  std::optional<gfx::Transform> mapping_to_absolute;
   // Set to true if the transform to absolute space depends on the point
   // being mapped (in which case we can't use LocalToAbsoluteTransform).
   bool transform_depends_on_point = false;
@@ -485,17 +480,17 @@ void LayoutInline::QuadsForSelfInternal(Vector<gfx::QuadF>& quads,
   }
 }
 
-absl::optional<PhysicalOffset> LayoutInline::FirstLineBoxTopLeftInternal()
+std::optional<PhysicalOffset> LayoutInline::FirstLineBoxTopLeftInternal()
     const {
   NOT_DESTROYED();
   if (IsInLayoutNGInlineFormattingContext()) {
     InlineCursor cursor;
     cursor.MoveToIncludingCulledInline(*this);
     if (!cursor)
-      return absl::nullopt;
+      return std::nullopt;
     return cursor.CurrentOffsetInBlockFlow();
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 PhysicalOffset LayoutInline::AnchorPhysicalLocation() const {

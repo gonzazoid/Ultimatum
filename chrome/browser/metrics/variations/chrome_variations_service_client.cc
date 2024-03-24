@@ -91,12 +91,12 @@ bool ChromeVariationsServiceClient::OverridesRestrictParameter(
   // branded Lacros build, see crbug.com/1474764.
   if (!g_browser_process->browser_policy_connector()->GetDeviceSettings()) {
     CHECK_IS_TEST();  // IN-TEST
-    CHECK(chromeos::BrowserParamsProxy::Get()
-              ->IsCrosapiDisabledForTesting());  // IN-TEST
+    CHECK(chromeos::BrowserParamsProxy::
+              IsCrosapiDisabledForTesting());  // IN-TEST
     return false;
   }
 
-  const absl::optional<std::string>& policy_value =
+  const std::optional<std::string>& policy_value =
       g_browser_process->browser_policy_connector()
           ->GetDeviceSettings()
           ->device_variations_restrict_parameter;
@@ -162,11 +162,4 @@ void ChromeVariationsServiceClient::
   for (const auto& profile : variations_profiles_to_delete) {
     variations_prefs_dict.Remove(profile);
   }
-}
-
-void ChromeVariationsServiceClient::RegisterLimitedEntropySyntheticTrial(
-    std::string_view group_name) {
-  ChromeMetricsServiceAccessor::RegisterSyntheticFieldTrial(
-      variations::kLimitedEntropySyntheticTrialName, group_name,
-      variations::SyntheticTrialAnnotationMode::kCurrentLog);
 }

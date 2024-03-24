@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "base/containers/contains.h"
+#include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
@@ -27,6 +28,7 @@
 #include "components/policy/core/common/cloud/realtime_reporting_job_configuration.h"
 #include "components/policy/core/common/cloud/signing_service.h"
 #include "components/policy/core/common/policy_logger.h"
+#include "components/policy/core/common/policy_types.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "google_apis/gaia/gaia_constants.h"
 #include "google_apis/gaia/gaia_urls.h"
@@ -40,6 +42,12 @@ using PsmExecutionResult = em::DeviceRegisterRequest::PsmExecutionResult;
 namespace policy {
 
 namespace {
+
+#if BUILDFLAG(IS_WIN)
+BASE_FEATURE(kGetBrowserIdentifierAsync,
+             "GetBrowserIdentifierAsync",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+#endif
 
 // Translates the DeviceRegisterResponse::DeviceMode |mode| to the enum used
 // internally to represent different device modes.
@@ -247,8 +255,8 @@ CloudPolicyClient::CloudPolicyClient(
     std::string_view machine_model,
     std::string_view brand_code,
     std::string_view attested_device_id,
-    absl::optional<MacAddress> ethernet_mac_address,
-    absl::optional<MacAddress> dock_mac_address,
+    std::optional<MacAddress> ethernet_mac_address,
+    std::optional<MacAddress> dock_mac_address,
     std::string_view manufacture_date,
     DeviceManagementService* service,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
@@ -257,16 +265,24 @@ CloudPolicyClient::CloudPolicyClient(
       machine_model_(machine_model),
       brand_code_(brand_code),
       attested_device_id_(attested_device_id),
-      ethernet_mac_address_(ethernet_mac_address.has_value()
-                                ? FormatMacAddress(ethernet_mac_address.value())
+      ethernet_mac_address_(ethernet_mac_address
+                                ? FormatMacAddress(*ethernet_mac_address)
                                 : std::string()),
-      dock_mac_address_(dock_mac_address.has_value()
-                            ? FormatMacAddress(dock_mac_address.value())
-                            : std::string()),
+      dock_mac_address_(dock_mac_address ? FormatMacAddress(*dock_mac_address)
+                                         : std::string()),
       manufacture_date_(manufacture_date),
       service_(service),  // Can be null for unit tests.
       device_dm_token_callback_(device_dm_token_callback),
       url_loader_factory_(url_loader_factory) {}
+
+CloudPolicyClient::CloudPolicyClient(
+    const std::string& profile_id,
+    DeviceManagementService* service,
+    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
+    DeviceDMTokenCallback device_dm_token_callback)
+    : CloudPolicyClient(service, url_loader_factory, device_dm_token_callback) {
+  profile_id_ = profile_id;
+}
 
 CloudPolicyClient::CloudPolicyClient(
     DeviceManagementService* service,
@@ -275,6 +291,13 @@ CloudPolicyClient::CloudPolicyClient(
     : service_(service),  // Can be null for unit tests.
       device_dm_token_callback_(device_dm_token_callback),
       url_loader_factory_(url_loader_factory) {}
+
+CloudPolicyClient::CloudPolicyClient(
+    DeviceManagementService* service,
+    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory)
+    : CloudPolicyClient(service,
+                        url_loader_factory,
+                        CloudPolicyClient::DeviceDMTokenCallback()) {}
 
 CloudPolicyClient::~CloudPolicyClient() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -413,6 +436,37 @@ void CloudPolicyClient::RegisterWithToken(
                               base::Unretained(this), std::move(config)));
 }
 
+void CloudPolicyClient::RegisterWithOidcResponse(
+    const RegistrationParameters& parameters,
+    const std::string& oauth_token,
+    const std::string& oidc_id_token,
+    const std::string& client_id) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  CHECK(!oidc_id_token.empty());
+  CHECK(!oauth_token.empty());
+
+  SetClientId(client_id);
+  auto params = DMServerJobConfiguration::CreateParams::WithClient(
+      DeviceManagementService::JobConfiguration::TYPE_OIDC_REGISTRATION, this);
+  params.profile_id = profile_id_;
+  params.oauth_token = oauth_token;
+  params.auth_data = DMAuth::FromOidcResponse(oidc_id_token);
+  params.callback = base::BindOnce(&CloudPolicyClient::OnRegisterCompleted,
+                                   weak_ptr_factory_.GetWeakPtr());
+
+  auto config =
+      std::make_unique<RegistrationJobConfiguration>(std::move(params));
+
+  em::DeviceRegisterRequest* request =
+      config->request()->mutable_register_request();
+  CreateDeviceRegisterRequest(parameters, client_id, request);
+
+  // TODO(b/319479021): Reregistration behaviour is yet to be defined due to
+  // the expiring nature of OIDC responses.
+
+  unique_request_job_ = service_->CreateJob(std::move(config));
+}
+
 void CloudPolicyClient::OnRegisterWithCertificateRequestSigned(
     std::unique_ptr<SigningService> signing_service,
     bool success,
@@ -479,10 +533,19 @@ void CloudPolicyClient::FetchPolicy(PolicyFetchReason reason) {
   params.profile_id = profile_id_;
   params.callback = base::BindOnce(&CloudPolicyClient::OnPolicyFetchCompleted,
                                    weak_ptr_factory_.GetWeakPtr());
+  // Marking a small number of fetch reasons critical helps on DMServer, see for
+  // instance https://crbug.com/660009.
+  if (reason == PolicyFetchReason::kDeviceEnrollment) {
+    params.critical = true;
+  }
 
   auto config = std::make_unique<DMServerJobConfiguration>(std::move(params));
 
   em::DeviceManagementRequest* request = config->request();
+
+#if BUILDFLAG(IS_WIN)
+  em::PolicyFetchRequest* cbcm_policy_fetch_request = nullptr;
+#endif
 
   // Build policy fetch requests.
   em::DevicePolicyRequest* policy_request = request->mutable_policy_request();
@@ -520,8 +583,15 @@ void CloudPolicyClient::FetchPolicy(PolicyFetchReason reason) {
     // desktop.
     if (type_to_fetch.first ==
         dm_protocol::kChromeMachineLevelUserCloudPolicyType) {
-      fetch_request->set_allocated_browser_device_identifier(
-          GetBrowserDeviceIdentifier().release());
+#if BUILDFLAG(IS_WIN)
+      if (base::FeatureList::IsEnabled(kGetBrowserIdentifierAsync)) {
+        cbcm_policy_fetch_request = fetch_request;
+      } else
+#endif  // BUILDFLAG(IS_WIN)
+      {
+        fetch_request->set_allocated_browser_device_identifier(
+            GetBrowserDeviceIdentifier().release());
+      }
     }
 #endif
   }
@@ -543,8 +613,30 @@ void CloudPolicyClient::FetchPolicy(PolicyFetchReason reason) {
   // since it is now the invalidation version used for the latest fetch.
   fetched_invalidation_version_ = invalidation_version_;
 
+  // CBCM policy fetch request on Windows needs to get device identifier on a
+  // background COM thread.
+#if BUILDFLAG(IS_WIN)
+  if (cbcm_policy_fetch_request) {
+    GetBrowserDeviceIdentifierAsync(
+        base::BindOnce(&CloudPolicyClient::SetBrowserDeviceIdentifier,
+                       weak_ptr_factory_.GetWeakPtr(),
+                       cbcm_policy_fetch_request, std::move(config)));
+    return;
+  }
+#endif  // BUILDFLAG(IS_WIN)
   unique_request_job_ = service_->CreateJob(std::move(config));
 }
+
+#if BUILDFLAG(IS_WIN)
+void CloudPolicyClient::SetBrowserDeviceIdentifier(
+    em::PolicyFetchRequest* request,
+    std::unique_ptr<DMServerJobConfiguration> config,
+    std::unique_ptr<em::BrowserDeviceIdentifier> identifier) {
+  request->set_allocated_browser_device_identifier(
+      GetBrowserDeviceIdentifier().release());
+  unique_request_job_ = service_->CreateJob(std::move(config));
+}
+#endif  // BUILDFLAG(IS_WIN)
 
 void CloudPolicyClient::UploadPolicyValidationReport(
     CloudPolicyValidatorBase::Status status,
@@ -1139,7 +1231,7 @@ void CloudPolicyClient::OnRegisterCompleted(DMServerJobResult result) {
     dm_token_ = result.response.register_response().device_management_token();
     reregistration_dm_token_.clear();
     if (result.response.register_response().has_configuration_seed()) {
-      absl::optional<base::Value> configuration_seed = base::JSONReader::Read(
+      std::optional<base::Value> configuration_seed = base::JSONReader::Read(
           result.response.register_response().configuration_seed(),
           base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS);
       if (configuration_seed && configuration_seed->is_dict()) {
@@ -1366,7 +1458,7 @@ void CloudPolicyClient::OnRealtimeReportUploadCompleted(
     DeviceManagementService::Job* job,
     DeviceManagementStatus status,
     int reponse_code,
-    absl::optional<base::Value::Dict> response) {
+    std::optional<base::Value::Dict> response) {
   last_dm_status_ = status;
   if (status != DM_STATUS_SUCCESS) {
     NotifyClientError();

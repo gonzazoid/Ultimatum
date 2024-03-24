@@ -11,6 +11,7 @@
 #import <memory>
 
 #import "base/apple/foundation_util.h"
+#import "base/memory/raw_ptr.h"
 #import "base/test/scoped_feature_list.h"
 #import "components/content_settings/core/browser/host_content_settings_map.h"
 #import "components/open_from_clipboard/fake_clipboard_recent_content.h"
@@ -18,9 +19,9 @@
 #import "components/supervised_user/core/common/features.h"
 #import "ios/chrome/browser/bookmarks/model/local_or_syncable_bookmark_model_factory.h"
 #import "ios/chrome/browser/content_settings/model/host_content_settings_map_factory.h"
-#import "ios/chrome/browser/favicon/favicon_service_factory.h"
-#import "ios/chrome/browser/favicon/ios_chrome_favicon_loader_factory.h"
-#import "ios/chrome/browser/favicon/ios_chrome_large_icon_service_factory.h"
+#import "ios/chrome/browser/favicon/model/favicon_service_factory.h"
+#import "ios/chrome/browser/favicon/model/ios_chrome_favicon_loader_factory.h"
+#import "ios/chrome/browser/favicon/model/ios_chrome_large_icon_service_factory.h"
 #import "ios/chrome/browser/feature_engagement/model/tracker_factory.h"
 #import "ios/chrome/browser/history/model/history_service_factory.h"
 #import "ios/chrome/browser/lens/model/lens_browser_agent.h"
@@ -42,6 +43,7 @@
 #import "ios/chrome/browser/shared/public/commands/page_info_commands.h"
 #import "ios/chrome/browser/shared/public/commands/parcel_tracking_opt_in_commands.h"
 #import "ios/chrome/browser/shared/public/commands/qr_scanner_commands.h"
+#import "ios/chrome/browser/shared/public/commands/settings_commands.h"
 #import "ios/chrome/browser/shared/public/commands/snackbar_commands.h"
 #import "ios/chrome/browser/shared/public/commands/text_zoom_commands.h"
 #import "ios/chrome/browser/signin/model/authentication_service_factory.h"
@@ -86,10 +88,6 @@
 class BrowserViewControllerTest : public BlockCleanupTest {
  public:
  protected:
-  BrowserViewControllerTest() {
-    scoped_feature_list_.InitAndEnableFeature(
-        supervised_user::kFilterWebsitesForSupervisedUsersOnDesktopAndIOS);
-  }
 
   void SetUp() override {
     BlockCleanupTest::SetUp();
@@ -178,26 +176,20 @@ class BrowserViewControllerTest : public BlockCleanupTest {
         startDispatchingToTarget:mockParcelTrackingCommandHandler
                      forProtocol:@protocol(ParcelTrackingOptInCommands)];
 
-    // Set up ApplicationCommands mock. Because ApplicationCommands conforms
-    // to ApplicationSettingsCommands, that needs to be mocked and dispatched
-    // as well.
-    mockApplicationCommandHandler_ =
-        OCMProtocolMock(@protocol(ApplicationCommands));
-    id mockApplicationSettingsCommandHandler =
-        OCMProtocolMock(@protocol(ApplicationSettingsCommands));
-    [dispatcher startDispatchingToTarget:mockApplicationCommandHandler_
+    // Set up Applicationhander and SettingsHandler mocks.
+    mock_application_handler_ = OCMProtocolMock(@protocol(ApplicationCommands));
+    id mock_settings_handler = OCMProtocolMock(@protocol(SettingsCommands));
+    [dispatcher startDispatchingToTarget:mock_application_handler_
                              forProtocol:@protocol(ApplicationCommands)];
-    [dispatcher
-        startDispatchingToTarget:mockApplicationSettingsCommandHandler
-                     forProtocol:@protocol(ApplicationSettingsCommands)];
+    [dispatcher startDispatchingToTarget:mock_settings_handler
+                             forProtocol:@protocol(SettingsCommands)];
 
     // Create three web states.
     for (int i = 0; i < 3; i++) {
       web::WebState::CreateParams params(chrome_browser_state_.get());
       std::unique_ptr<web::WebState> webState = web::WebState::Create(params);
       AttachTabHelpers(webState.get(), NO);
-      browser_->GetWebStateList()->InsertWebState(0, std::move(webState), 0,
-                                                  WebStateOpener());
+      browser_->GetWebStateList()->InsertWebState(std::move(webState));
       browser_->GetWebStateList()->ActivateWebStateAt(0);
     }
 
@@ -226,17 +218,13 @@ class BrowserViewControllerTest : public BlockCleanupTest {
     HostContentSettingsMap* settings_map =
         ios::HostContentSettingsMapFactory::GetForBrowserState(
             chrome_browser_state_.get());
-    UrlLoadingNotifierBrowserAgent* url_loading_notifier =
-        UrlLoadingNotifierBrowserAgent::FromBrowser(browser_.get());
 
     bubble_presenter_ = [[BubblePresenter alloc]
         initWithDeviceSwitcherResultDispatcher:nullptr
                         hostContentSettingsMap:(HostContentSettingsMap*)
                                                    settings_map
-                               loadingNotifier:url_loading_notifier
                                    prefService:chrome_browser_state_.get()
                                                    ->GetPrefs()
-                                    sceneState:scene_state_
                        tabStripCommandsHandler:nil
                                        tracker:(feature_engagement::Tracker*)
                                                    tracker
@@ -291,7 +279,7 @@ class BrowserViewControllerTest : public BlockCleanupTest {
     dependencies.webStateList = browser_->GetWebStateList()->AsWeakPtr();
     dependencies.safeAreaProvider = safe_area_provider_;
     dependencies.pagePlaceholderBrowserAgent = page_placeholder_browser_agent_;
-    dependencies.applicationCommandsHandler = mockApplicationCommandHandler_;
+    dependencies.applicationCommandsHandler = mock_application_handler_;
     dependencies.ntpCoordinator = NTPCoordinator_;
 
     bvc_ = [[BrowserViewController alloc]
@@ -303,6 +291,8 @@ class BrowserViewControllerTest : public BlockCleanupTest {
     id mockReauthHandler = OCMProtocolMock(@protocol(IncognitoReauthCommands));
     bvc_.reauthHandler = mockReauthHandler;
 
+    UrlLoadingNotifierBrowserAgent* url_loading_notifier =
+        UrlLoadingNotifierBrowserAgent::FromBrowser(browser_.get());
     tab_events_mediator_ = [[TabEventsMediator alloc]
         initWithWebStateList:browser_.get()->GetWebStateList()
               ntpCoordinator:NTPCoordinator_
@@ -336,9 +326,9 @@ class BrowserViewControllerTest : public BlockCleanupTest {
 
   void InsertWebState(std::unique_ptr<web::WebState> web_state) {
     WebStateList* web_state_list = browser_->GetWebStateList();
-    web_state_list->InsertWebState(0, std::move(web_state),
-                                   WebStateList::INSERT_ACTIVATE,
-                                   WebStateOpener());
+    web_state_list->InsertWebState(
+        std::move(web_state),
+        WebStateList::InsertionParams::Automatic().Activate());
   }
 
   std::unique_ptr<web::WebState> CreateWebState() {
@@ -412,14 +402,13 @@ class BrowserViewControllerTest : public BlockCleanupTest {
   TabStripLegacyCoordinator* legacy_tab_strip_coordinator_;
   SideSwipeMediator* side_swipe_mediator_;
   BookmarksCoordinator* bookmarks_coordinator_;
-  FullscreenController* fullscreen_controller_;
+  raw_ptr<FullscreenController> fullscreen_controller_;
   TabEventsMediator* tab_events_mediator_;
   NewTabPageCoordinator* NTPCoordinator_;
-  TabUsageRecorderBrowserAgent* tab_usage_recorder_browser_agent_;
+  raw_ptr<TabUsageRecorderBrowserAgent> tab_usage_recorder_browser_agent_;
   SafeAreaProvider* safe_area_provider_;
-  PagePlaceholderBrowserAgent* page_placeholder_browser_agent_;
-  id mockApplicationCommandHandler_;
-  base::test::ScopedFeatureList scoped_feature_list_;
+  raw_ptr<PagePlaceholderBrowserAgent> page_placeholder_browser_agent_;
+  id mock_application_handler_;
 };
 
 TEST_F(BrowserViewControllerTest, TestWebStateSelected) {
@@ -485,14 +474,13 @@ TEST_F(BrowserViewControllerTest,
                      animated:NO
                    completion:nil];
 
-  OCMExpect(
-      [mockApplicationCommandHandler_ dismissModalDialogsWithCompletion:nil]);
+  OCMExpect([mock_application_handler_ dismissModalDialogsWithCompletion:nil]);
 
   // Present incognito authentication must dismiss presented state.
   [bvc_ setItemsRequireAuthentication:YES];
 
   // Verify that the command was dispatched.
-  EXPECT_OCMOCK_VERIFY(mockApplicationCommandHandler_);
+  EXPECT_OCMOCK_VERIFY(mock_application_handler_);
 }
 
 // Tests that an off-the-record web state can be created and inserted in the

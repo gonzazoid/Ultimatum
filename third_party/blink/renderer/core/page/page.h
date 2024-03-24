@@ -24,12 +24,12 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_PAGE_PAGE_H_
 
 #include <memory>
+#include <optional>
 
 #include "base/check_op.h"
 #include "base/dcheck_is_on.h"
 #include "base/types/pass_key.h"
 #include "services/network/public/mojom/attribution.mojom-shared.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/fenced_frame/redacted_fenced_frame_config.h"
 #include "third_party/blink/public/common/metrics/document_update_reason.h"
@@ -126,12 +126,14 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
       ChromeClient& chrome_client,
       Page* opener,
       AgentGroupScheduler& agent_group_scheduler,
-      const BrowsingContextGroupInfo& browsing_context_group_info);
+      const BrowsingContextGroupInfo& browsing_context_group_info,
+      const ColorProviderColorMaps* color_provider_colors);
 
   Page(base::PassKey<Page>,
        ChromeClient& chrome_client,
        AgentGroupScheduler& agent_group_scheduler,
        const BrowsingContextGroupInfo& browsing_context_group_info,
+       const ColorProviderColorMaps* color_provider_colors,
        bool is_ordinary);
   Page(const Page&) = delete;
   Page& operator=(const Page&) = delete;
@@ -296,6 +298,9 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   // Frozen state corresponds to "lifecycle state for CPU suspension"
   // https://wicg.github.io/page-lifecycle/#sec-lifecycle-states
   bool Frozen() const { return frozen_; }
+
+  bool ShowPausedHudOverlay() const { return show_paused_hud_overlay_; }
+  void SetShowPausedHudOverlay(bool show_overlay);
 
   void SetPageScaleFactor(float);
   float PageScaleFactor() const;
@@ -580,6 +585,7 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   // controlled from the renderer.
   bool paused_ = false;
   bool frozen_ = false;
+  bool show_paused_hud_overlay_ = false;
 
 #if DCHECK_IS_ON()
   bool is_painting_ = false;

@@ -5,9 +5,10 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_ML_WEBNN_ML_GRAPH_BUILDER_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_ML_WEBNN_ML_GRAPH_BUILDER_H_
 
+#include <optional>
+
 #include "base/types/expected.h"
 #include "components/ml/webnn/graph_validation_utils.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_ml_auto_pad.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_ml_operand_data_type.h"
@@ -33,12 +34,12 @@ class MLConvTranspose2dOptions;
 class MLEluOptions;
 class MLGatherOptions;
 class MLGemmOptions;
-class MLGraph;
 class MLHardSigmoidOptions;
 class MLInstanceNormalizationOptions;
 class MLLayerNormalizationOptions;
 class MLLeakyReluOptions;
 class MLLinearOptions;
+class MLLstmOptions;
 class MLPadOptions;
 class MLPool2dOptions;
 class MLReduceOptions;
@@ -226,6 +227,14 @@ class MODULES_EXPORT MLGraphBuilder final : public ScriptWrappable {
   MLActivation* linear(const MLLinearOptions* options,
                        ExceptionState& exception_state);
 
+  HeapVector<Member<const MLOperand>> lstm(const MLOperand* input,
+                                           const MLOperand* weight,
+                                           const MLOperand* recurrent_weight,
+                                           const uint32_t steps,
+                                           const uint32_t hidden_size,
+                                           const MLLstmOptions* options,
+                                           ExceptionState& exception_state);
+
   MLOperand* matmul(const MLOperand* a,
                     const MLOperand* b,
                     ExceptionState& exception_state);
@@ -240,6 +249,9 @@ class MODULES_EXPORT MLGraphBuilder final : public ScriptWrappable {
   MLOperand* averagePool2d(const MLOperand* input,
                            const MLPool2dOptions* options,
                            ExceptionState& exception_state);
+  MLOperand* l2Pool2d(const MLOperand* input,
+                      const MLPool2dOptions* options,
+                      ExceptionState& exception_state);
   MLOperand* maxPool2d(const MLOperand* input,
                        const MLPool2dOptions* options,
                        ExceptionState& exception_state);
@@ -336,22 +348,13 @@ class MODULES_EXPORT MLGraphBuilder final : public ScriptWrappable {
                       const MLNamedOperands& outputs,
                       ExceptionState& exception_state);
 
-  MLGraph* buildSync(ScriptState* script_state,
-                     const MLNamedOperands& named_outputs,
-                     ExceptionState& exception_state);
-
   // The test cases can override the graph building behavior by implementing
   // this class and setting its instance by SetBackendForTesting().
   class BackendForTesting {
    public:
-    virtual void BuildGraphAsyncImpl(MLContext* context,
-                                     const MLNamedOperands& named_outputs,
-                                     ScriptPromiseResolver* resolver) = 0;
-
-    virtual MLGraph* BuildGraphSyncImpl(ScriptState* script_state,
-                                        MLContext* context,
-                                        const MLNamedOperands& named_outputs,
-                                        ExceptionState& exception_state) = 0;
+    virtual void BuildGraphImpl(MLContext* context,
+                                const MLNamedOperands& named_outputs,
+                                ScriptPromiseResolver* resolver) = 0;
   };
 
   static void SetBackendForTesting(BackendForTesting* backend_for_testing);

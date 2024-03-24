@@ -5,6 +5,7 @@
 <translation id="1036348656032585052">Изключване</translation>
 <translation id="1044891598689252897">Сайтовете ще работят нормално</translation>
 <translation id="1073417869336441572">Помогнете ни да подобрим Chrome, като ни кажете защо разрешихте „бисквитките“ на трети страни. <ph name="BEGIN_LINK" />Изпращане на отзиви<ph name="END_LINK" /></translation>
+<translation id="1113435009358629918">Скриване на картата за понижение на цената</translation>
 <translation id="1178581264944972037">Пауза</translation>
 <translation id="1181037720776840403">Премахване</translation>
 <translation id="1192844206376121885">Всички данни и „бисквитки“, съхранявани от <ph name="ORIGIN" />, ще бъдат изтрити.</translation>
@@ -21,7 +22,6 @@
 <translation id="1383876407941801731">Търсене</translation>
 <translation id="1384959399684842514">Изтеглянето е на пауза</translation>
 <translation id="1415402041810619267">URL адресът е съкратен</translation>
-<translation id="1426410128494586442">Да</translation>
 <translation id="1448064542941920355">Намаляване на нивото на мащаба</translation>
 <translation id="146867109637325312">{COUNT,plural, =1{<ph name="SITE_COUNT" /> сайт}other{<ph name="SITE_COUNT" /> сайта}}</translation>
 <translation id="1510341833810331442">Сайтовете нямат разрешение да запазват данни на устройството ви</translation>
@@ -48,7 +48,7 @@
 <translation id="1979673356880165407">Уголемявайте и смалявайте текста и изображенията на всички сайтове, които посещавате</translation>
 <translation id="1984937141057606926">Разрешено, но не и за трети страни</translation>
 <translation id="1985247341569771101">Когато настройката е включена, сайтовете могат да използват сензорите за движение на устройството ви. Когато е изключена, сайтовете не могат да правят това.</translation>
-<translation id="1989112275319619282">Сърфиране</translation>
+<translation id="1989112275319619282">Разглеждане</translation>
 <translation id="1994173015038366702">URL адрес на сайт</translation>
 <translation id="2004697686368036666">Функциите в някои сайтове може да не работят</translation>
 <translation id="2025115093177348061">Обогатена реалност</translation>
@@ -66,6 +66,7 @@
 <translation id="2228071138934252756">За да разрешите на <ph name="APP_NAME" /> да осъществява достъп до камерата ви, тя трябва да бъде включена и от <ph name="BEGIN_LINK" />настройките на Android<ph name="END_LINK" />.</translation>
 <translation id="2235344399760031203">„Бисквитките“ на трети страни са блокирани</translation>
 <translation id="2238944249568001759">Предложения за търсене въз основа на последния ви раздел</translation>
+<translation id="2241587408274973373">Карти за нов раздел в браузъра</translation>
 <translation id="2241634353105152135">Само веднъж</translation>
 <translation id="2253414712144136228">Премахване на <ph name="NAME_OF_LIST_ITEM" /></translation>
 <translation id="2253989982043948086">{NUM_SELECTED,plural, =1{Блокиран е 1 сайт}other{Блокирани са # сайта}}</translation>
@@ -92,6 +93,7 @@
 <translation id="2498359688066513246">Помощ и отзиви</translation>
 <translation id="2501278716633472235">Назад</translation>
 <translation id="2546283357679194313">„Бисквитки“ и данни за сайтове</translation>
+<translation id="2550801787432930915">Карта за понижение на цената</translation>
 <translation id="2569468611847789653">{COOKIE_COUNT,plural, =1{Блокирана е 1 „бисквитка“}other{Блокирани са # „бисквитки“}}</translation>
 <translation id="2570922361219980984">Достъпът до местоположението е изключен и за това устройство. Включете го от <ph name="BEGIN_LINK" />настройките на Android<ph name="END_LINK" />.</translation>
 <translation id="257931822824936280">Разгънато – кликнете за свиване.</translation>
@@ -119,8 +121,8 @@
 <translation id="2968755619301702150">Визуализатор на сертификатите</translation>
 <translation id="2979365474350987274">„Бисквитките“ на трети страни са ограничени</translation>
 <translation id="3008272652534848354">Нулиране на разрешенията</translation>
-<translation id="3013291976881901233">MIDI устройства</translation>
 <translation id="301521992641321250">Автоматично блокирано</translation>
+<translation id="3025010840409371499"><ph name="RECENCY" /> <ph name="SEPARATOR" /> <ph name="HOST_NAME" /></translation>
 <translation id="3069226013421428034">Разрешаване на влизането с профили от трети страни за конкретен сайт.</translation>
 <translation id="3082992102194421695">{COUNT,plural, =1{Изтича утре}other{Изтича след # дни}}</translation>
 <translation id="310297983047869047">Предишният слайд</translation>
@@ -190,7 +192,7 @@
 <translation id="4169549551965910670">Установена е връзка с USB устройство</translation>
 <translation id="4194328954146351878">Извеждане на запитване, преди да се разреши на сайтовете да четат и променят информация на устройства с NFC (препоръчително)</translation>
 <translation id="4200726100658658164">Отваряне на настройките за местоположението</translation>
-<translation id="4212246570487010370">Продължаване на сърфирането</translation>
+<translation id="4206661981211220935"><ph name="RECENCY" /> <ph name="SEPARATOR" /> От <ph name="FROM_DEVICE" /></translation>
 <translation id="4226663524361240545">Възможно е устройството да вибрира при известия</translation>
 <translation id="4259722352634471385">Навигирането е блокирано: <ph name="URL" /></translation>
 <translation id="4278390842282768270">Разрешено</translation>
@@ -211,6 +213,7 @@
 <translation id="4566417217121906555">Заглушаване на микрофона</translation>
 <translation id="4570913071927164677">Подробности</translation>
 <translation id="4598549027014564149">Докато сте в режим „инкогнито“, сайтовете не могат да използват „бисквитките“ ви, за да виждат активността ви при сърфиране в други сайтове, дори да са сродни. Активността ви при сърфиране не се използва за неща като персонализиране на рекламите. Функциите в някои сайтове може да не работят.</translation>
+<translation id="4619615317237390068">Раздели от други устройства</translation>
 <translation id="4644713492825682049">Изтриване и нулиране</translation>
 <translation id="4645575059429386691">Управлява се от ваш родител</translation>
 <translation id="4670064810192446073">Виртуална реалност</translation>
@@ -328,6 +331,7 @@
 <translation id="6405650995156823521"><ph name="FIRST_PART" /> • <ph name="SECOND_PART" /></translation>
 <translation id="6439114592976064011">Блокиране на сайтовете, така че да не използват устройствата и данните ви за виртуална реалност</translation>
 <translation id="6447842834002726250">„Бисквитки“</translation>
+<translation id="6452138246455930388">Цената на <ph name="PRODUCT_NAME" /> в отворения раздел е понижена от <ph name="OLD_PRICE" /> на <ph name="NEW_PRICE" /> в сайта <ph name="DOMAIN_NAME" /></translation>
 <translation id="6500423977866688905">Заявяване на изглед за мобилни устройства, когато прозорецът е тесен</translation>
 <translation id="6527303717912515753">Споделяне</translation>
 <translation id="652937045869844725">Опитайте да разрешите „бисквитките“ на трети страни. Това ще понижи нивото на защита, но е по-вероятно функциите на сайта да работят</translation>
@@ -351,6 +355,7 @@
 <translation id="6790428901817661496">Пускане</translation>
 <translation id="6818926723028410516">Избор на елементи</translation>
 <translation id="6864395892908308021">Това устройство не може да чете NFC</translation>
+<translation id="6867014948848323204">От <ph name="FROM_DEVICE" /></translation>
 <translation id="6912998170423641340">Забраняване на сайтовете да четат текста и изображенията от буферната памет</translation>
 <translation id="6945221475159498467">Избиране</translation>
 <translation id="6950072572526089586">Сайтовете, които посещавате, могат да запазват информация за нещата, които правите, така че да работят по очаквания начин – например за да не излизате от профила си в даден сайт или за запазване на артикулите в пазарската ви кошница. Сайтовете често запазват тази информация временно на устройството ви.</translation>
@@ -363,7 +368,6 @@
 <translation id="7053983685419859001">Блокиране</translation>
 <translation id="7066151586745993502">{NUM_SELECTED,plural, =1{Избран е 1}other{Избрани са #}}</translation>
 <translation id="7087918508125750058">Избрани: <ph name="ITEM_COUNT" />. Налице са опции близо до горната част на екрана</translation>
-<translation id="7137403271056944713">Управл./препрограм. на MIDI у-ва</translation>
 <translation id="7141896414559753902">Блокиране на показването на изскачащи прозорци и пренасочвания от сайтовете (препоръчително)</translation>
 <translation id="7176368934862295254"><ph name="KILOBYTES" /> КБ</translation>
 <translation id="7180611975245234373">Опресняване</translation>
@@ -399,8 +403,10 @@
 <translation id="7667547420449112975">Вълшебникът от Оз</translation>
 <translation id="7684642910516280563">Забраняване на даден сайт да използва „бисквитки“ на трети страни</translation>
 <translation id="7719367874908701697">Промяна на мащаба на страницата</translation>
+<translation id="7759147511335618829">MIDI у-ва: Контрол. и препрогр.</translation>
 <translation id="7781829728241885113">Вчера</translation>
 <translation id="7791543448312431591">Добавяне</translation>
+<translation id="7801888679188438140">{TILE_COUNT,plural, =1{Продължаване с този раздел}other{Продължаване с тези раздели}}</translation>
 <translation id="780301667611848630">Не, благодаря</translation>
 <translation id="7804248752222191302">Сайт използва камерата ви</translation>
 <translation id="7807060072011926525">Предоставено от Google</translation>
@@ -477,6 +483,7 @@
 <translation id="8803526663383843427">Когато е включено</translation>
 <translation id="8805385115381080995">Сърфирането е по-бързо, тъй като е по-малко вероятно даден сайт да поиска да потвърдите, че сте истински човек</translation>
 <translation id="8816026460808729765">Блокиране на достъпа на сайтовете до сензорите</translation>
+<translation id="8843699287283948910">Скриване на разделите от другите устройства</translation>
 <translation id="8847988622838149491">USB</translation>
 <translation id="8874790741333031443">Опитайте временно да разрешите „бисквитките“ на трети страни. Това ще понижи нивото на защита при сърфиране, но е по-вероятно функциите на сайта да работят по очаквания начин.</translation>
 <translation id="8889294078294184559">Докато сърфирате, сайтовете могат да направят справка с Chrome и да потвърдят чрез по-рано посетен от вас сайт, че най-вероятно сте истински човек</translation>

@@ -14,6 +14,7 @@
 #include "components/autofill/core/browser/data_model/autofill_i18n_formatting_expressions.h"
 #include "components/autofill/core/browser/data_model/autofill_i18n_parsing_expressions.h"
 #include "components/autofill/core/browser/data_model/autofill_structured_address.h"
+#include "components/autofill/core/browser/data_model/autofill_structured_address_component_test_api.h"
 #include "components/autofill/core/browser/data_model/autofill_structured_address_format_provider.h"
 #include "components/autofill/core/browser/data_model/autofill_structured_address_name.h"
 #include "components/autofill/core/browser/field_types.h"
@@ -38,72 +39,73 @@ bool IsTree(AddressComponent* node, FieldTypeSet* visited_types) {
     return true;
   }
   return base::ranges::all_of(node->Subcomponents(),
-                              [&visited_types](auto& child) {
-                                return IsTree(child.get(), visited_types);
+                              [&visited_types](AddressComponent* child) {
+                                return IsTree(child, visited_types);
                               });
 }
 }  // namespace
 
 class AutofillI18nApiTest : public testing::Test {
  public:
-  AutofillI18nApiTest() = default;
+  AutofillI18nApiTest() {
+    feature_list_.InitWithFeatures(
+        {
+            features::kAutofillUseI18nAddressModel,
+            features::kAutofillUseDEAddressModel,
+            features::kAutofillUseINAddressModel,
+        },
+        {});
+  }
   ~AutofillI18nApiTest() override = default;
 
  private:
-  base::test::ScopedFeatureList feature_list_{
-      features::kAutofillUseI18nAddressModel};
+  base::test::ScopedFeatureList feature_list_;
 };
 
 TEST_F(AutofillI18nApiTest, GetAddressComponentModel_ReturnsNonEmptyModel) {
-  for (const auto& [country_code, properties] : kAutofillModelRules) {
-      // Make sure that the process of building the model finishes and returns a
-      // non empty hierarchy.
-      std::unique_ptr<AddressComponent> model = CreateAddressComponentModel(
-          AddressCountryCode(std::string(country_code)));
+  CountryDataMap *country_data_map = CountryDataMap::GetInstance();
+  for (const std::string &country_code : country_data_map->country_codes()) {
+    // Make sure that the process of building the model finishes and returns a
+    // non empty hierarchy.
+    AddressComponentsStore model =
+        CreateAddressComponentModel(AddressCountryCode(country_code));
 
-      ASSERT_TRUE(model);
-      FieldTypeSet field_type_set;
-      model->GetSupportedTypes(&field_type_set);
-      EXPECT_FALSE(field_type_set.empty());
-      EXPECT_FALSE(field_type_set.contains_any(
-          {NO_SERVER_DATA, UNKNOWN_TYPE, EMPTY_TYPE}));
+    FieldTypeSet field_type_set;
+    model.Root()->GetSupportedTypes(&field_type_set);
+    EXPECT_FALSE(field_type_set.empty());
+    EXPECT_FALSE(field_type_set.contains_any(
+        {NO_SERVER_DATA, UNKNOWN_TYPE, EMPTY_TYPE}));
 
-      EXPECT_EQ(model->GetRootNodeForTesting().GetStorageType(),
-                ADDRESS_HOME_ADDRESS);
-    }
+    EXPECT_EQ(test_api(model.Root()).GetRootNode().GetStorageType(),
+              ADDRESS_HOME_ADDRESS);
+  }
 }
 
 TEST_F(AutofillI18nApiTest, GetAddressComponentModel_ReturnedModelIsTree) {
-  for (const auto& [country_code, tree_def] : kAutofillModelRules) {
+  CountryDataMap *country_data_map = CountryDataMap::GetInstance();
+  for (const std::string &country_code : country_data_map->country_codes()) {
     // Currently, the model for kAddressModel should comprise all the nodes in
     // the rules.
-    std::unique_ptr<AddressComponent> root = CreateAddressComponentModel(
-        AddressCountryCode(std::string(country_code)));
+    AddressComponentsStore model =
+        CreateAddressComponentModel(AddressCountryCode(country_code));
+    AddressComponent* root = model.Root();
 
     FieldTypeSet supported_types;
-    EXPECT_TRUE(IsTree(root.get(), &supported_types));
-
-    // Test that all field types in the country rules are accessible through the
-    // root (i.e. the tree is connected).
-    for (const auto& [node_type, children_types] : tree_def) {
-      EXPECT_TRUE(root->GetNodeForTypeForTesting(node_type));
-
-      for (FieldType child_type : children_types) {
-        EXPECT_TRUE(root->GetNodeForTypeForTesting(child_type));
-      }
-    }
+    EXPECT_TRUE(IsTree(root, &supported_types));
   }
 }
 
 TEST_F(AutofillI18nApiTest, GetAddressComponentModel_CountryNodeHasValue) {
-  for (const auto& [country_code, tree_def] : kAutofillModelRules) {
-    std::unique_ptr<AddressComponent> model = CreateAddressComponentModel(
-        AddressCountryCode(std::string(country_code)));
+  CountryDataMap *country_data_map = CountryDataMap::GetInstance();
+  for (const std::string &country_code : country_data_map->country_codes()) {
+    AddressComponentsStore model =
+        CreateAddressComponentModel(AddressCountryCode(country_code));
     std::u16string expected_country =
         country_code != kLegacyHierarchyCountryCodeString
             ? base::UTF8ToUTF16(country_code)
             : u"";
-    EXPECT_EQ(model->GetValueForType(ADDRESS_HOME_COUNTRY), expected_country);
+    EXPECT_EQ(model.Root()->GetValueForType(ADDRESS_HOME_COUNTRY),
+              expected_country);
   }
 }
 
@@ -113,15 +115,15 @@ TEST_F(AutofillI18nApiTest, GetLegacyAddressHierarchy) {
 
   // Set up expected legacy hierarchy for non-migrated country.
   ASSERT_FALSE(kAutofillModelRules.contains("ES"));
-  auto legacy_address_hierarchy_es =
+  AddressComponentsStore legacy_address_hierarchy_es =
       CreateAddressComponentModel(AddressCountryCode("ES"));
 
-  auto legacy_address_hierarchy_xx =
+  AddressComponentsStore legacy_address_hierarchy_xx =
       CreateAddressComponentModel(kLegacyHierarchyCountryCode);
-  legacy_address_hierarchy_xx->SetValueForType(ADDRESS_HOME_COUNTRY, u"ES",
-                                               VerificationStatus::kObserved);
-  EXPECT_TRUE(
-      legacy_address_hierarchy_xx->SameAs(*legacy_address_hierarchy_es.get()));
+  legacy_address_hierarchy_xx.Root()->SetValueForType(
+      ADDRESS_HOME_COUNTRY, u"ES", VerificationStatus::kObserved);
+  EXPECT_TRUE(legacy_address_hierarchy_xx.Root()->SameAs(
+      *legacy_address_hierarchy_es.Root()));
 }
 
 TEST_F(AutofillI18nApiTest, GetFormattingExpressions) {
@@ -160,14 +162,14 @@ TEST_F(AutofillI18nApiTest, ParseValueByI18nRegularExpression) {
 
   std::string street_address = "street no 123 apt 10";
 
-  // Parsing expression for address street in not available for Germany.
+  // Parsing expression for address street in not available for Spain.
   ASSERT_TRUE(
-      kAutofillParsingRulesMap.find({"DE", ADDRESS_HOME_STREET_ADDRESS}) ==
+      kAutofillParsingRulesMap.find({"ES", ADDRESS_HOME_STREET_ADDRESS}) ==
       kAutofillParsingRulesMap.end());
   // In that case the legacy expression is used (if available).
   EXPECT_EQ(ParseValueByI18nRegularExpression(street_address,
                                               ADDRESS_HOME_STREET_ADDRESS,
-                                              AddressCountryCode("DE")),
+                                              AddressCountryCode("ES")),
             ParseValueByI18nRegularExpression(street_address,
                                               ADDRESS_HOME_STREET_ADDRESS,
                                               kLegacyHierarchyCountryCode));
@@ -196,7 +198,7 @@ TEST_F(AutofillI18nApiTest, IsTypeEnabledForCountry) {
   CountryDataMap* country_data_map = CountryDataMap::GetInstance();
   for (const std::string& country_code : country_data_map->country_codes()) {
     AddressCountryCode address_country_code{country_code};
-    std::unique_ptr<AddressComponent> address =
+    AddressComponentsStore store =
         CreateAddressComponentModel(address_country_code);
 
     for (std::underlying_type_t<FieldType> i = 0; i < MAX_VALID_FIELD_TYPE;
@@ -209,15 +211,65 @@ TEST_F(AutofillI18nApiTest, IsTypeEnabledForCountry) {
                    << "Testing type " << FieldTypeToStringView(field_type)
                    << " in country " << address_country_code);
 
-      if (!kAutofillModelRules.contains(country_code)) {
-        EXPECT_FALSE(IsTypeEnabledForCountry(field_type, address_country_code));
-      } else {
-        bool is_contained =
-            address->GetNodeForTypeForTesting(field_type) != nullptr;
-        EXPECT_EQ(is_contained,
-                  IsTypeEnabledForCountry(field_type, address_country_code));
-      }
+      bool is_contained =
+          test_api(store.Root()).GetNodeForType(field_type) != nullptr;
+      EXPECT_EQ(is_contained,
+                IsTypeEnabledForCountry(field_type, address_country_code));
     }
   }
 }
+
+TEST_F(AutofillI18nApiTest, IsSynthesizedType) {
+  EXPECT_TRUE(IsSynthesizedType(ADDRESS_HOME_DEPENDENT_LOCALITY_AND_LANDMARK,
+                                AddressCountryCode("IN")));
+  EXPECT_TRUE(IsSynthesizedType(ADDRESS_HOME_STREET_LOCATION_AND_LANDMARK,
+                                AddressCountryCode("IN")));
+  EXPECT_FALSE(
+      IsSynthesizedType(ADDRESS_HOME_OVERFLOW, AddressCountryCode("DE")));
+  EXPECT_FALSE(IsSynthesizedType(ADDRESS_HOME_LINE1, AddressCountryCode("US")));
+}
+
+TEST_F(AutofillI18nApiTest, SynthesizedTypesAreAccessible) {
+  AddressComponentsStore store =
+      CreateAddressComponentModel(AddressCountryCode("IN"));
+  // Test that synthesized node values can be accessed through the root node.
+  ASSERT_TRUE(
+      test_api(store.Root())
+          .GetNodeForType(ADDRESS_HOME_DEPENDENT_LOCALITY_AND_LANDMARK));
+  ASSERT_TRUE(test_api(store.Root())
+                  .GetNodeForType(ADDRESS_HOME_STREET_LOCATION_AND_LANDMARK));
+}
+
+TEST_F(AutofillI18nApiTest, SynthesizedTypesAreSupportedButNotStorable) {
+  AddressComponentsStore store =
+      CreateAddressComponentModel(AddressCountryCode("IN"));
+
+  FieldTypeSet field_type_set;
+  store.Root()->GetStorableTypes(&field_type_set);
+  EXPECT_FALSE(
+      field_type_set.contains(ADDRESS_HOME_DEPENDENT_LOCALITY_AND_LANDMARK));
+
+  field_type_set.clear();
+  store.Root()->GetSupportedTypes(&field_type_set);
+  EXPECT_TRUE(
+      field_type_set.contains(ADDRESS_HOME_DEPENDENT_LOCALITY_AND_LANDMARK));
+}
+
+TEST_F(AutofillI18nApiTest, SynthesizedTypesDoNotSupportSetValueForType) {
+  AddressComponentsStore store =
+      CreateAddressComponentModel(AddressCountryCode("IN"));
+
+  FieldType synthesized_type = ADDRESS_HOME_DEPENDENT_LOCALITY_AND_LANDMARK;
+  ASSERT_TRUE(test_api(store.Root()).GetNodeForType(synthesized_type));
+  EXPECT_FALSE(store.Root()->SetValueForType(synthesized_type, u"foo",
+                                             VerificationStatus::kObserved));
+  EXPECT_EQ(u"", store.Root()->GetValueForType(synthesized_type));
+
+  FieldType normal_type = ADDRESS_HOME_STREET_LOCATION_AND_LOCALITY;
+  ASSERT_TRUE(test_api(store.Root()).GetNodeForType(normal_type));
+  EXPECT_TRUE(store.Root()->SetValueForType(normal_type, u"foo",
+                                            VerificationStatus::kObserved));
+  EXPECT_EQ(u"foo", store.Root()->GetValueForType(normal_type));
+}
+
 }  // namespace autofill::i18n_model_definition

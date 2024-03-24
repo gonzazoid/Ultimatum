@@ -5,9 +5,10 @@
 #ifndef IOS_CHROME_BROWSER_UI_DOWNLOAD_DOWNLOAD_MANAGER_VIEW_CONTROLLER_PROTOCOL_H_
 #define IOS_CHROME_BROWSER_UI_DOWNLOAD_DOWNLOAD_MANAGER_VIEW_CONTROLLER_PROTOCOL_H_
 
-#import <UIKit/UIkit.h>
+#import <UIKit/UIKit.h>
 
 @protocol DownloadManagerViewControllerDelegate;
+class FullscreenController;
 @class LayoutGuideCenter;
 
 // Base protocol for the DownloadManagerViewController.
@@ -23,6 +24,9 @@
 
 // View to use as source for the "Open in" popover.
 @property(nonatomic, readonly) UIView* openInSourceView;
+
+// Sets the fullscreen controller to update UI on fullscreen changes.
+- (void)setFullscreenController:(FullscreenController*)fullscreenController;
 
 @end
 

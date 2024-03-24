@@ -41,18 +41,18 @@ import org.chromium.chrome.browser.multiwindow.MultiWindowModeStateDispatcher;
 import org.chromium.chrome.browser.profiles.ProfileProvider;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tabmodel.TabCreatorManager;
-import org.chromium.chrome.browser.tabmodel.TabModelFilter;
+import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.browser.tabmodel.TabModelFilterProvider;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.tabmodel.TabModelSelectorObserver;
 import org.chromium.chrome.browser.tasks.pseudotab.PseudoTab;
+import org.chromium.chrome.browser.tasks.tab_groups.TabGroupModelFilter;
 import org.chromium.chrome.browser.tasks.tab_management.TabListCoordinator.TabListMode;
 import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
 import org.chromium.components.browser_ui.widget.scrim.ScrimCoordinator;
 import org.chromium.ui.base.TestActivity;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -79,7 +79,8 @@ public class TabSwitcherPaneCoordinatorFactoryUnitTest {
     @Mock private ActivityLifecycleDispatcher mLifecycleDispatcher;
     @Mock private TabModelSelector mTabModelSelector;
     @Mock private TabModelFilterProvider mTabModelFilterProvider;
-    @Mock private TabModelFilter mTabModelFilter;
+    @Mock private TabGroupModelFilter mTabModelFilter;
+    @Mock private TabModel mTabModel;
     @Mock private TabContentManager mTabContentManager;
     @Mock private TabCreatorManager mTabCreatorManager;
     @Mock private BrowserControlsStateProvider mBrowserControlsStateProvider;
@@ -93,7 +94,6 @@ public class TabSwitcherPaneCoordinatorFactoryUnitTest {
     @Captor private ArgumentCaptor<TabModelSelectorObserver> mTabModelSelectorObserverCaptor;
 
     private Tab mTab1;
-    private Tab mTab2;
 
     private Activity mActivity;
     private FrameLayout mParentView;
@@ -102,10 +102,12 @@ public class TabSwitcherPaneCoordinatorFactoryUnitTest {
     @Before
     public void setUp() {
         mTab1 = TabUiUnitTestUtils.prepareTab(TAB1_ID, TAB1_TITLE);
-        mTab2 = TabUiUnitTestUtils.prepareTab(TAB2_ID);
 
         when(mTabModelSelector.getTabModelFilterProvider()).thenReturn(mTabModelFilterProvider);
         when(mTabModelFilterProvider.getTabModelFilter(false)).thenReturn(mTabModelFilter);
+        when(mTabModelFilter.getTabModel()).thenReturn(mTabModel);
+        when(mTabModel.getCount()).thenReturn(1);
+        when(mTabModel.getTabAt(0)).thenReturn(mTab1);
 
         mActivityScenarioRule.getScenario().onActivity(this::onActivityReady);
     }
@@ -159,8 +161,7 @@ public class TabSwitcherPaneCoordinatorFactoryUnitTest {
     @SmallTest
     public void testGetTitle_Tab() {
         when(mTabModelSelector.isTabStateInitialized()).thenReturn(true);
-        List<Tab> tab = Collections.singletonList(mTab1);
-        when(mTabModelFilter.getRelatedTabList(TAB1_ID)).thenReturn(tab);
+        when(mTabModelFilter.isTabInTabGroup(mTab1)).thenReturn(false);
 
         PseudoTab tab1 = PseudoTab.fromTab(mTab1);
         assertEquals(TAB1_TITLE, mFactory.getTitle(mActivity, tab1));
@@ -170,12 +171,13 @@ public class TabSwitcherPaneCoordinatorFactoryUnitTest {
     @SmallTest
     public void testGetTitle_TabGroup() {
         when(mTabModelSelector.isTabStateInitialized()).thenReturn(true);
-        List<Tab> tabs = Arrays.asList(mTab1, mTab2);
-        when(mTabModelFilter.getRelatedTabList(TAB1_ID)).thenReturn(tabs);
+        when(mTabModelFilter.isTabInTabGroup(mTab1)).thenReturn(true);
+        int tabCount = 2;
+        when(mTabModelFilter.getRelatedTabCountForRootId(TAB1_ID)).thenReturn(tabCount);
 
         PseudoTab tab1 = PseudoTab.fromTab(mTab1);
         assertEquals(
-                TabGroupTitleEditor.getDefaultTitle(mActivity, tabs.size()),
+                TabGroupTitleEditor.getDefaultTitle(mActivity, tabCount),
                 mFactory.getTitle(mActivity, tab1));
     }
 
@@ -187,8 +189,8 @@ public class TabSwitcherPaneCoordinatorFactoryUnitTest {
 
     @Test
     @SmallTest
-    public void testCreateTabModelFilterSupplier_AlreadyInitialized() {
-        when(mTabModelSelector.isTabStateInitialized()).thenReturn(true);
+    public void testCreateTabModelFilterSupplier_AlreadyCreated() {
+        when(mTabModelSelector.getModels()).thenReturn(List.of(mTabModel));
 
         var supplier = mFactory.createTabModelFilterSupplier(false);
         verify(mTabModelSelector, never()).addObserver(any());
@@ -197,8 +199,8 @@ public class TabSwitcherPaneCoordinatorFactoryUnitTest {
 
     @Test
     @SmallTest
-    public void testCreateTabModelFilterSupplier_WaitForInit() {
-        when(mTabModelSelector.isTabStateInitialized()).thenReturn(false);
+    public void testCreateTabModelFilterSupplier_WaitForChange() {
+        when(mTabModelSelector.getModels()).thenReturn(Collections.emptyList());
 
         var supplier = mFactory.createTabModelFilterSupplier(false);
         verify(mTabModelSelector).addObserver(mTabModelSelectorObserverCaptor.capture());
@@ -206,7 +208,8 @@ public class TabSwitcherPaneCoordinatorFactoryUnitTest {
 
         TabModelSelectorObserver observer = mTabModelSelectorObserverCaptor.getValue();
 
-        observer.onTabStateInitialized();
+        when(mTabModelSelector.getModels()).thenReturn(List.of(mTabModel));
+        observer.onChange();
         verify(mTabModelSelector).removeObserver(observer);
         assertEquals(mTabModelFilter, supplier.get());
     }

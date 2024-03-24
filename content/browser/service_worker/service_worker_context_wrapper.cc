@@ -17,7 +17,6 @@
 #include "base/files/file_path.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
-#include "base/lazy_instance.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
@@ -31,6 +30,7 @@
 #include "content/browser/blob_storage/chrome_blob_storage_context.h"
 #include "content/browser/devtools/devtools_instrumentation.h"
 #include "content/browser/loader/navigation_url_loader_impl.h"
+#include "content/browser/loader/url_loader_factory_utils.h"
 #include "content/browser/service_worker/service_worker_container_host.h"
 #include "content/browser/service_worker/service_worker_host.h"
 #include "content/browser/service_worker/service_worker_object_host.h"
@@ -58,6 +58,7 @@
 #include "net/base/url_util.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
+#include "services/network/public/cpp/url_loader_factory_builder.h"
 #include "services/network/public/mojom/client_security_state.mojom.h"
 #include "storage/browser/quota/quota_client_type.h"
 #include "storage/browser/quota/quota_manager_proxy.h"
@@ -88,9 +89,6 @@ BASE_FEATURE(kServiceWorkerStorageControlOnThreadPool,
 
 const base::FeatureParam<int> kUpdateDelayParam{
     &blink::features::kServiceWorkerUpdateDelay, "update_delay_in_ms", 1000};
-
-base::LazyInstance<ServiceWorkerContextWrapper::URLLoaderFactoryInterceptor>::
-    Leaky g_loader_factory_interceptor = LAZY_INSTANCE_INITIALIZER;
 
 void DidFindRegistrationForStartActiveWorker(
     ServiceWorkerContextWrapper::StatusCallback callback,
@@ -930,6 +928,12 @@ void ServiceWorkerContextWrapper::WarmUpServiceWorker(
   // takes time to compute. Hence avoid calling it when the given URL clearly
   // doesn't register service workers.
   if (!OriginCanAccessServiceWorkers(document_url)) {
+    std::move(callback).Run();
+    return;
+  }
+
+  // Only warm-up http or https URLs. Do not warm-up extensions and others.
+  if (!document_url.SchemeIsHTTPOrHTTPS()) {
     std::move(callback).Run();
     return;
   }
@@ -1819,14 +1823,6 @@ ServiceWorkerContextWrapper::GetLoaderFactoryForUpdateCheck(
       /*version_id=*/std::nullopt, std::move(client_security_state));
 }
 
-// static
-void ServiceWorkerContextWrapper::SetURLLoaderFactoryInterceptorForTesting(
-    const URLLoaderFactoryInterceptor& interceptor) {
-  DCHECK(!BrowserThread::IsThreadInitialized(BrowserThread::UI) ||
-         BrowserThread::CurrentlyOn(BrowserThread::UI));
-  g_loader_factory_interceptor.Get() = interceptor;
-}
-
 scoped_refptr<network::SharedURLLoaderFactory>
 ServiceWorkerContextWrapper::GetLoaderFactoryForMainScriptFetch(
     const GURL& scope,
@@ -1855,8 +1851,7 @@ ServiceWorkerContextWrapper::GetLoaderFactoryForBrowserInitiatedRequest(
   const url::Origin scope_origin = url::Origin::Create(scope);
 
   mojo::PendingRemote<network::mojom::URLLoaderFactory> remote;
-  mojo::PendingReceiver<network::mojom::URLLoaderFactory> pending_receiver =
-      remote.InitWithNewPipeAndPassReceiver();
+  network::URLLoaderFactoryBuilder factory_builder;
   mojo::PendingRemote<network::mojom::TrustedURLLoaderHeaderClient>
       header_client;
   bool bypass_redirect_checks = false;
@@ -1869,7 +1864,7 @@ ServiceWorkerContextWrapper::GetLoaderFactoryForBrowserInitiatedRequest(
       ChildProcessHost::kInvalidUniqueID,
       ContentBrowserClient::URLLoaderFactoryType::kServiceWorkerScript,
       scope_origin, /*navigation_id=*/std::nullopt, ukm::kInvalidSourceIdObj,
-      &pending_receiver, &header_client, &bypass_redirect_checks,
+      factory_builder, &header_client, &bypass_redirect_checks,
       /*disable_secure_dns=*/nullptr,
       /*factory_override=*/nullptr,
       /*navigation_response_task_runner=*/nullptr);
@@ -1877,36 +1872,41 @@ ServiceWorkerContextWrapper::GetLoaderFactoryForBrowserInitiatedRequest(
   // If we have a version_id, we are fetching a worker main script. We have a
   // DevtoolsAgentHost ready for the worker and we can add the devtools override
   // before instantiating the URLFactoryLoader.
-  if (version_id.has_value()) {
-    devtools_instrumentation::
-        WillCreateURLLoaderFactoryForServiceWorkerMainScript(
-            this, version_id.value(), &pending_receiver);
+  if (auto params = devtools_instrumentation::WillCreateURLLoaderFactoryParams::
+          ForServiceWorkerMainScript(this, version_id)) {
+    params->Run(
+        /*is_navigation=*/true, /*is_download=*/false, factory_builder,
+        /*factory_override=*/nullptr);
   }
 
   bool use_client_header_factory = header_client.is_valid();
   if (use_client_header_factory) {
-    NavigationURLLoaderImpl::CreateURLLoaderFactoryWithHeaderClient(
-        std::move(header_client), std::move(pending_receiver),
+    remote = NavigationURLLoaderImpl::CreateURLLoaderFactoryWithHeaderClient(
+        std::move(header_client), std::move(factory_builder),
         storage_partition());
   } else {
     DCHECK(storage_partition());
     if (base::FeatureList::IsEnabled(
             features::kPrivateNetworkAccessForWorkers)) {
-      if (g_loader_factory_interceptor.Get()) {
-        g_loader_factory_interceptor.Get().Run(&pending_receiver);
+      if (url_loader_factory::GetTestingInterceptor()) {
+        url_loader_factory::GetTestingInterceptor().Run(
+            network::mojom::kBrowserProcessId, factory_builder);
       }
 
       network::mojom::URLLoaderFactoryParamsPtr params =
           storage_partition_->CreateURLLoaderFactoryParams();
       params->client_security_state = std::move(client_security_state);
-      storage_partition_->GetNetworkContext()->CreateURLLoaderFactory(
-          std::move(pending_receiver), std::move(params));
+      remote =
+          std::move(factory_builder)
+              .Finish<mojo::PendingRemote<network::mojom::URLLoaderFactory>>(
+                  storage_partition_->GetNetworkContext(), std::move(params));
     } else {
       // Set up a Mojo connection to the network loader factory if it's not been
       // created yet.
-      scoped_refptr<network::SharedURLLoaderFactory> network_factory =
-          storage_partition_->GetURLLoaderFactoryForBrowserProcess();
-      network_factory->Clone(std::move(pending_receiver));
+      remote =
+          std::move(factory_builder)
+              .Finish<mojo::PendingRemote<network::mojom::URLLoaderFactory>>(
+                  storage_partition_->GetURLLoaderFactoryForBrowserProcess());
     }
   }
 

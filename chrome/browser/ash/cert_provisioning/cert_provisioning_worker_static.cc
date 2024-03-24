@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include <optional>
+#include <string_view>
 #include <vector>
 
 #include "base/base64.h"
@@ -16,7 +17,6 @@
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/syslog_logging.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
@@ -184,7 +184,7 @@ std::string ConstructFailureMessage(
 
 // TODO(b/192071491): Remove the use of this function by changing the
 // dependencies.
-std::vector<uint8_t> StrToBytes(base::StringPiece str) {
+std::vector<uint8_t> StrToBytes(std::string_view str) {
   return std::vector<uint8_t>(str.begin(), str.end());
 }
 
@@ -837,7 +837,12 @@ void CertProvisioningWorkerStatic::ScheduleNextStep(base::TimeDelta delay) {
 
 void CertProvisioningWorkerStatic::OnShouldContinue(ContinueReason reason) {
   switch (reason) {
-    case ContinueReason::kInvalidation:
+    case ContinueReason::kSubscribedToInvalidation:
+      RecordEvent(
+          cert_profile_.protocol_version, cert_scope_,
+          CertProvisioningEvent::kSuccessfullySubscribedToInvalidationTopic);
+      break;
+    case ContinueReason::kInvalidationReceived:
       RecordEvent(cert_profile_.protocol_version, cert_scope_,
                   CertProvisioningEvent::kInvalidationReceived);
       break;
@@ -1023,9 +1028,8 @@ void CertProvisioningWorkerStatic::RegisterForInvalidationTopic() {
   // |invalidator_| is destroyed.
   invalidator_->Register(
       invalidation_topic_,
-      base::BindRepeating(&CertProvisioningWorkerStatic::OnShouldContinue,
-                          base::Unretained(this),
-                          ContinueReason::kInvalidation));
+      base::BindRepeating(&CertProvisioningWorkerStatic::OnInvalidationEvent,
+                          base::Unretained(this)));
 
   RecordEvent(cert_profile_.protocol_version, cert_scope_,
               CertProvisioningEvent::kRegisteredToInvalidationTopic);
@@ -1037,6 +1041,22 @@ void CertProvisioningWorkerStatic::UnregisterFromInvalidationTopic() {
   DCHECK(invalidator_);
 
   invalidator_->Unregister();
+}
+
+void CertProvisioningWorkerStatic::OnInvalidationEvent(
+    InvalidationEvent invalidation_event) {
+  // This function logs as WARNING so the messages are visible in feedback logs
+  // to monitor for b/307340577 .
+  switch (invalidation_event) {
+    case InvalidationEvent::kSuccessfullySubscribed:
+      LOG(WARNING) << "Successfully subscribed to invalidations";
+      OnShouldContinue(ContinueReason::kSubscribedToInvalidation);
+      break;
+    case InvalidationEvent::kInvalidationReceived:
+      LOG(WARNING) << "Invalidation received";
+      OnShouldContinue(ContinueReason::kInvalidationReceived);
+      break;
+  }
 }
 
 }  // namespace ash::cert_provisioning

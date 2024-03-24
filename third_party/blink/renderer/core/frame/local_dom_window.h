@@ -193,7 +193,7 @@ class CORE_EXPORT LocalDOMWindow final : public DOMWindow,
   void ReportPermissionsPolicyViolation(
       mojom::blink::PermissionsPolicyFeature,
       mojom::blink::PolicyDisposition,
-      const absl::optional<String>& reporting_endpoint,
+      const std::optional<String>& reporting_endpoint,
       const String& message = g_empty_string) const final;
   void ReportDocumentPolicyViolation(
       mojom::blink::DocumentPolicyFeature,
@@ -367,11 +367,13 @@ class CORE_EXPORT LocalDOMWindow final : public DOMWindow,
   void releaseEvents() {}
   External* external();
 
-  bool isSecureContext() const;
+  bool isSecureContext() const;  // NOLINT(bugprone-virtual-near-miss)
 
   DEFINE_ATTRIBUTE_EVENT_LISTENER(search, kSearch)
 
   DEFINE_ATTRIBUTE_EVENT_LISTENER(orientationchange, kOrientationchange)
+
+  DEFINE_ATTRIBUTE_EVENT_LISTENER(pageconceal, kPageconceal)
 
   DEFINE_ATTRIBUTE_EVENT_LISTENER(pagereveal, kPagereveal)
 

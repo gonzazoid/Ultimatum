@@ -108,15 +108,7 @@ MagnifierSurfaceControl::MagnifierSurfaceControl(
       surface_layer_(cc::slim::SurfaceLayer::Create()) {
   local_surface_id_allocator_.GenerateId();
 
-  {
-    cc::slim::LayerTree::InitParams params;
-    params.cc_task_graph_runner =
-        CompositorDependenciesAndroid::Get().GetTaskGraphRunner();
-    params.task_runner =
-        content::GetUIThreadTaskRunner({BrowserTaskType::kUserInput});
-    params.client = this;
-    layer_tree_ = cc::slim::LayerTree::Create(std::move(params));
-  }
+  layer_tree_ = cc::slim::LayerTree::Create(this);
   layer_tree_->set_background_color(SkColors::kTransparent);
   layer_tree_->SetViewportRectAndScale(
       gfx::Rect(surface_size_), device_scale,
@@ -182,8 +174,7 @@ MagnifierSurfaceControl::MagnifierSurfaceControl(
   root_layer_->AddChild(rounded_corner_layer_);
 
   zoom_layer_->SetBounds(gfx::Size(width, height));
-  zoom_layer_->SetTransformOrigin(
-      gfx::Point3F(width / 2.0f, height / 2.0f, 0.0f));
+  zoom_layer_->SetTransformOrigin(gfx::PointF(width / 2.0f, height / 2.0f));
   zoom_layer_->SetTransform(gfx::Transform::MakeScale(zoom));
 
   layer_tree_->SetRoot(root_layer_);

@@ -2,8 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {Flags} from '../common/flags.js';
-import {InstanceChecker} from '../common/instance_checker.js';
+import '/common/testing/test_import_manager.js';
+
+import {Flags} from '/common/flags.js';
+import {InstanceChecker} from '/common/instance_checker.js';
+import {TestImportManager} from '/common/testing/test_import_manager.js';
 
 import {Autoclick} from './autoclick/autoclick.js';
 import {Dictation} from './dictation/dictation.js';
@@ -30,6 +33,7 @@ export class AccessibilityCommon {
   // setOnLoadDesktopCallbackForTest() is migrated to typescript.
   private magnifierLoadCallbackForTest_: (() => void)|null = null;
   private dictationLoadCallbackForTest_: Function|null = null;
+  private facegazeLoadCallbackForTest_: Function|null = null;
 
   static readonly FACEGAZE_PREF_NAME = 'settings.a11y.face_gaze.enabled';
 
@@ -138,6 +142,10 @@ export class AccessibilityCommon {
     if (details.value && !this.faceGaze_) {
       // Initialize the FaceGaze extension.
       this.faceGaze_ = new FaceGaze();
+      if (this.facegazeLoadCallbackForTest_) {
+        this.facegazeLoadCallbackForTest_();
+        this.facegazeLoadCallbackForTest_ = null;
+      }
     } else if (!details.value && this.faceGaze_) {
       this.faceGaze_.onFaceGazeDisabled();
       this.faceGaze_ = null;
@@ -207,6 +215,13 @@ export class AccessibilityCommon {
       }
       // Magnifier already loaded.
       this.magnifier_.setOnLoadDesktopCallbackForTest(callback);
+    } else if (feature === 'facegaze') {
+      if (!this.faceGaze_) {
+        this.facegazeLoadCallbackForTest_ = callback;
+        return;
+      }
+      // Facegaze already loaded.
+      callback();
     }
   }
 }
@@ -215,3 +230,6 @@ export class AccessibilityCommon {
 InstanceChecker.closeExtraInstances();
 // Initialize the AccessibilityCommon extension.
 AccessibilityCommon.init();
+
+TestImportManager.exportForTesting(
+    ['AccessibilityCommon', AccessibilityCommon]);

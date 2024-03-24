@@ -19,17 +19,18 @@ import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.DisabledTest;
+import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.chrome.browser.browsing_data.BrowsingDataBridge;
 import org.chromium.chrome.browser.browsing_data.BrowsingDataType;
 import org.chromium.chrome.browser.browsing_data.TimePeriod;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.chrome.test.batch.BlankCTATabInitialStateRule;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
 import org.chromium.components.browser_ui.site_settings.WebsitePreferenceBridge;
 import org.chromium.components.content_settings.ContentSettingValues;
 import org.chromium.components.content_settings.ContentSettingsType;
@@ -130,11 +131,11 @@ public class CookieControlsBridgeTest {
         CallbackHelper helper = new CallbackHelper();
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
-                    Profile profile = Profile.getLastUsedRegularProfile();
+                    Profile profile = ProfileManager.getLastUsedRegularProfile();
                     UserPrefs.get(profile).clearPref(PrefNames.COOKIE_CONTROLS_MODE);
                     WebsitePreferenceBridge.setDefaultContentSetting(
                             profile, ContentSettingsType.COOKIES, ContentSettingValues.DEFAULT);
-                    BrowsingDataBridge.getInstance()
+                    BrowsingDataBridge.getForProfile(profile)
                             .clearBrowsingData(
                                     helper::notifyCalled,
                                     new int[] {BrowsingDataType.COOKIES},
@@ -151,7 +152,7 @@ public class CookieControlsBridgeTest {
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     // Set CookieControlsMode Pref to Off
-                    UserPrefs.get(Profile.getLastUsedRegularProfile())
+                    UserPrefs.get(ProfileManager.getLastUsedRegularProfile())
                             .setInteger(PrefNames.COOKIE_CONTROLS_MODE, CookieControlsMode.OFF);
                 });
         int currentCallCount = mCallbackHelper.getCallCount();
@@ -179,7 +180,7 @@ public class CookieControlsBridgeTest {
     public void testCookieBridgeWith3PCookiesEnabledUserBypass() throws Exception {
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
-                    UserPrefs.get(Profile.getLastUsedRegularProfile())
+                    UserPrefs.get(ProfileManager.getLastUsedRegularProfile())
                             .setInteger(
                                     PrefNames.COOKIE_CONTROLS_MODE,
                                     CookieControlsMode.BLOCK_THIRD_PARTY);
@@ -241,13 +242,13 @@ public class CookieControlsBridgeTest {
     public void testCookieBridgeWithChangingBlockedCookiesCountUserBypass() throws Exception {
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
-                    UserPrefs.get(Profile.getLastUsedRegularProfile())
+                    UserPrefs.get(ProfileManager.getLastUsedRegularProfile())
                             .setInteger(
                                     PrefNames.COOKIE_CONTROLS_MODE,
                                     CookieControlsMode.BLOCK_THIRD_PARTY);
                     // Block all cookies
                     WebsitePreferenceBridge.setCategoryEnabled(
-                            Profile.getLastUsedRegularProfile(),
+                            ProfileManager.getLastUsedRegularProfile(),
                             ContentSettingsType.COOKIES,
                             false);
                 });
@@ -286,7 +287,7 @@ public class CookieControlsBridgeTest {
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     // Set CookieControlsMode Pref to IncognitoOnly
-                    UserPrefs.get(Profile.getLastUsedRegularProfile())
+                    UserPrefs.get(ProfileManager.getLastUsedRegularProfile())
                             .setInteger(
                                     PrefNames.COOKIE_CONTROLS_MODE,
                                     CookieControlsMode.INCOGNITO_ONLY);

@@ -146,9 +146,7 @@ std::string Gzip(const std::string& data) {
 
 // Gzips |data| and then base64-encodes it.
 std::string GzipAndBase64Encode(const std::string& data) {
-  std::string result;
-  base::Base64Encode(Gzip(data), &result);
-  return result;
+  return base::Base64Encode(Gzip(data));
 }
 
 // Serializes |seed| to gzipped base64-encoded protobuf binary format.
@@ -901,7 +899,7 @@ struct InvalidSafeSeedTestParams {
   const std::string seed;
   const std::string signature;
   StoreSeedResult store_seed_result;
-  absl::optional<VerifySignatureResult> verify_signature_result = absl::nullopt;
+  std::optional<VerifySignatureResult> verify_signature_result = std::nullopt;
 };
 
 using StoreInvalidSafeSeedTest =

@@ -115,7 +115,6 @@ SkiaOutputDeviceGL::SkiaOutputDeviceGL(
   }
   capabilities_.pending_swap_params.max_pending_swaps =
       gl_surface_->GetBufferCount() - 1;
-  capabilities_.supports_gpu_vsync = gl_surface_->SupportsGpuVSync();
 #if BUILDFLAG(IS_ANDROID)
   // TODO(weiliangc): This capability is used to check whether we should do
   // overlay. Since currently none of the other overlay system is implemented,
@@ -272,7 +271,7 @@ bool SkiaOutputDeviceGL::Reshape(const SkImageInfo& image_info,
   return !!sk_surface_;
 }
 
-void SkiaOutputDeviceGL::Present(const absl::optional<gfx::Rect>& update_rect,
+void SkiaOutputDeviceGL::Present(const std::optional<gfx::Rect>& update_rect,
                                  BufferPresentedCallback feedback,
                                  OutputSurfaceFrame frame) {
   if (multisurface_swapbuffers_tracker_) {

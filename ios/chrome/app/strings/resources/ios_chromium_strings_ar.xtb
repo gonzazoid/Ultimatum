@@ -15,6 +15,7 @@
 <translation id="1423007117030725713">‏يمكنك بدء البحث في علامة تبويب جديدة على Chromium.</translation>
 <translation id="1431818719585918472">‏اسمح لمتصفّح Chromium بقفل علامات التبويب في وضع التصفّح المتخفي.</translation>
 <translation id="1472013873724362412">‏لا يعمل حسابك على Chromium. يُرجى الاتصال بمشرف النطاق أو استخدام حساب Google عادي لتسجيل الدخول.</translation>
+<translation id="1503199973012840174">‏إصدار Chromium الحالي قديم. يُرجى تحديثه للحفاظ على أمان بياناتك.</translation>
 <translation id="1507010443238049608">‏المساعدة على تحسين ميزات Chromium وأدائه</translation>
 <translation id="1513122820609681462">‏ضبط Chromium كمتصفِّح تلقائي</translation>
 <translation id="1531155317299575425">‏عرض طلبات تسجيل الدخول إلى Chromium</translation>
@@ -25,6 +26,7 @@
 <translation id="1617663976202781617">‏البيانات من مزامنة Chromium</translation>
 <translation id="1647558790457890304">‏إعدادات Chromium</translation>
 <translation id="164952285225495380">‏سبق أن تم تتبُّع هذا الطرد على Chromium.</translation>
+<translation id="1707458603865303524">‏يؤدي هذا الإعداد إلى فتح Chromium عند النقر على الروابط في الرسائل أو التطبيقات الأخرى.</translation>
 <translation id="1722370509450468186">سيتم حفظ كلمة المرور في حسابك (<ph name="EMAIL" />).</translation>
 <translation id="1736662517232558588">‏تم محو بيانات Chromium</translation>
 <translation id="1791845338122684020">‏يؤدي هذا الاختصار إلى فتح صفحة "سجلّ Chromium".</translation>
@@ -40,13 +42,16 @@
 <translation id="2054703085270098503">‏الحفاظ على أمانك باستخدام Chromium</translation>
 <translation id="2098023844024447022">‏فتح آخر علامة تبويب في Chromium.</translation>
 <translation id="2109439615198500433">‏معلومة عن Chromium</translation>
+<translation id="2147210759439165826">‏يمكنك متابعة المحتوى ونصائح Chromium المفيدة.</translation>
 <translation id="2168108852149185974">‏تتسبب بعض الإضافات في تعطل Chromium. يُرجى إلغاء تثبيتها:</translation>
 <translation id="2178608107313874732">‏يتعذر على Chromium استخدام الكاميرا في الوقت الحالي</translation>
 <translation id="2195025571279539885">‏هل ترغب في أن يعرض Chromium ترجمة صفحات <ph name="LANGUAGE_NAME" /> من الموقع الإلكتروني هذا في المرة القادمة؟</translation>
+<translation id="2216344354848599203">‏اضغط مع الاستمرار على رمز Chromium وانقر على "تعديل الشاشة الرئيسية"</translation>
 <translation id="2218146227246548550">‏تطلُب مؤسستك منك تسجيل الدخول للتمكّن من استخدام Chromium. <ph name="BEGIN_LINK" />مزيد من المعلومات<ph name="END_LINK" /></translation>
-<translation id="22313767259766852">‏هذا العنوان محفوظ حاليًا في Chromium. لاستخدامه في جميع منتجات Google، عليك حفظه في حسابك على Google، <ph name="USER_EMAIL" />.</translation>
+<translation id="22313767259766852">‏هذا العنوان محفوظ حاليًا في Chromium. لاستخدامه في جميع منتجات Google، عليك حفظه في حسابك على Google‏، <ph name="USER_EMAIL" />.</translation>
 <translation id="2236584955986023187">‏يعني هذا أنّ Chromium سيطلب دائمًا استخدام الموقع الإلكتروني المتوافق مع الكمبيوتر المكتبي.</translation>
 <translation id="2313870531055795960">‏يعمل هذا الوضع على التحقّق من عناوين URL التي تحتوي على قائمة بمواقع إلكترونية غير آمنة مُخزّنة في Chromium. وإذا حاول موقع إلكتروني سرقة كلمة المرور أو إذا نزّلت ملفًا ضارًا، قد يرسل متصفِّح Chromium أيضًا عناوين URL تتضمّن أجزاء من محتوى الصفحة إلى "التصفُّح الآمن".</translation>
+<translation id="231828342043114302">‏لتلقّي محتوى مخصَّص استنادًا إلى اهتماماتك، عليك تسجيل الدخول إلى Chromium.</translation>
 <translation id="2374627437126809292">‏يستخدم Chromium "خرائط Google" لإعلامك بالاتجاهات مع معلومات محلية عن العناوين المكتشفة.</translation>
 <translation id="2386292341327187942">‏أدخِل كلمة "Chromium" في مربّع "البحث في التطبيقات المصغّرة"</translation>
 <translation id="2426113998523353159">‏تطلُب المؤسسة منك تسجيل الدخول للتمكّن من استخدام Chromium.</translation>
@@ -81,7 +86,6 @@
 <translation id="3366305173356742781">‏بيانات Chromium في حسابك</translation>
 <translation id="3387107508582892610">{THRESHOLD,plural, =1{‏يحدث هذا الإجراء في حال عدم استخدام Chromium لمدة دقيقة واحدة ({THRESHOLD}). ويمكن أن يشمل ذلك بيانات السجلّ والملء التلقائي.}zero{‏يحدث هذا الإجراء في حال عدم استخدام Chromium لمدة {THRESHOLD} دقيقة. ويمكن أن يشمل ذلك بيانات السجلّ والملء التلقائي.}two{‏يحدث هذا الإجراء في حال عدم استخدام Chromium لمدة دقيقتَين ({THRESHOLD}). ويمكن أن يشمل ذلك بيانات السجلّ والملء التلقائي.}few{‏يحدث هذا الإجراء في حال عدم استخدام Chromium لمدة {THRESHOLD} دقائق. ويمكن أن يشمل ذلك بيانات السجلّ والملء التلقائي.}many{‏يحدث هذا الإجراء في حال عدم استخدام Chromium لمدة {THRESHOLD} دقيقة. ويمكن أن يشمل ذلك بيانات السجلّ والملء التلقائي.}other{‏يحدث هذا الإجراء في حال عدم استخدام Chromium لمدة {THRESHOLD} دقيقة. ويمكن أن يشمل ذلك بيانات السجلّ والملء التلقائي.}}</translation>
 <translation id="3472200483164753384">‏غير متاح على Chromium Canary</translation>
-<translation id="3478750326643748149">‏إخفاء قائمة "الاستفادة بشكل أفضل من Chromium"</translation>
 <translation id="347967311580159871">‏للوصول إلى الإعدادات الإضافية التي تستخدم البيانات لتحسين تجربة استخدام Chromium، انتقِل إلى <ph name="BEGIN_LINK" />خدمات Google<ph name="END_LINK" />.</translation>
 <translation id="3512168799938877162">‏لم تتم مشاركة كلمة المرور. يُرجى التحقّق من اتصالك بالإنترنت وأنّك سجَّلت الدخول إلى Chromium. ثم أعِد المحاولة.</translation>
 <translation id="3554027294407525061">‏يمكنك محو بيانات التصفُّح في Chromium.</translation>
@@ -96,25 +100,27 @@
 <translation id="3805899903892079518">‏لا تتوفر لدى Chromium إمكانية الدخول إلى الصور أو الفيديوهات. تستطيع تفعيل الدخول في إعدادات نظام التشغيل iOS &gt; الخصوصية &gt; الصور.</translation>
 <translation id="3827545470516145620">يتم توفير حماية أمنية عادية على هذا الجهاز.</translation>
 <translation id="3833326979834193417">‏يشغّل Chromium ميزة "تأكيد السلامة" تلقائيًا كل يوم للحفاظ على أمان معلوماتك من عمليات اختراق البيانات والمواقع الإلكترونية غير الآمنة وغيرها من المشاكل. يمكنك العثور على مزيد من المعلومات حول ميزة "تأكيد السلامة" في الإعدادات.</translation>
+<translation id="3855938650519180865">‏الميزات الجديدة في Chromium</translation>
 <translation id="3886689467633467988">‏يمكنك تسجيل الدخول إلى هذا الموقع الإلكتروني وإلى Chromium للحصول على إشاراتك المرجعية وغيرها على جميع أجهزتك.</translation>
+<translation id="3904484643286601695">‏يمكنك تعديل اختياراتك متى شئت من خلال إعدادات Chromium.</translation>
 <translation id="394413318816989199">‏عند استخدام عبارة مرور، لا يتم تشفير طُرق الدفع والعناوين.
 
 لتغيير هذه الإعدادات، يُرجى <ph name="BEGIN_LINK" />محو بيانات Chromium في حسابك<ph name="END_LINK" />.</translation>
 <translation id="3955621079070267756">‏فتح Chromium من أي تطبيق</translation>
-<translation id="4002314982058020967">‏في حال نسيت عبارة المرور أو أردت تغيير هذه الإعدادات، يمكنك <ph name="BEGIN_LINK" />محو بيانات Chromium في حسابك<ph name="END_LINK" />.</translation>
 <translation id="4005283307739974863">‏يؤدي هذا الاختصار إلى فتح صفحة "التحقّق من الأمان" وإجرائه في Chromium.</translation>
 <translation id="4043291146360695975">يتم حفظ كلمات المرور في "مدير كلمات المرور" على هذا الجهاز فقط.</translation>
+<translation id="4076589763479456892">‏في حال نسيت عبارة المرور أو أردت تغيير هذه الإعدادات، يمكنك <ph name="BEGIN_LINK" />محو بيانات Chromium في حسابك<ph name="END_LINK" />.</translation>
 <translation id="4099085513035183040">‏غير متاح على الإصدار التجريبي من Chromium</translation>
 <translation id="4106512142782407609">‏تم تسجيل الدخول بحساب <ph name="EMAIL" />.
 
 وتم تشفير بياناتك باستخدام عبارة المرور. عليك إدخال عبارة المرور لاستخدام بيانات Chromium وحفظها في حسابك على Google.</translation>
+<translation id="4118287192800900567">‏نصيحة من Chromium: سجِّل الدخول إلى Chromium</translation>
 <translation id="4195557071150719219">‏الاطلاع على علامات التبويب الأخيرة في Chromium</translation>
 <translation id="4200712796753248893">‏استخدام "إجراءات Chrome" على نظام التشغيل iOS</translation>
 <translation id="420541179527342563">‏لإيقاف "وضع إلغاء التأمين" في Chromium، عليك إيقافه على جهاز iPad.</translation>
 <translation id="4408912345039114853">‏إجراء "التحقّق من الأمان" في Chromium</translation>
 <translation id="4432744876818348753">‏يمكنك تسجيل الدخول للاستفادة إلى أقصى حدّ من Chromium</translation>
 <translation id="4445228361214254027">‏أوقفت مؤسستك إمكانية استخدام وحفظ بيانات Chromium في حسابك على Google. سيتم حفظ كلمات المرور والإشارات المرجعية الجديدة وغيرها على هذا الجهاز فقط.</translation>
-<translation id="4485517920713468480">‏سيرصد Chromium أرقام التتبُّع على المواقع الإلكترونية التي تزورها ويعرض لك إشعارات بشأن الطرود في صفحة "علامة تبويب جديدة". وستتم مشاركة بياناتك مع Google لتوفير هذه الميزة وتحسين خدمة Shopping للجميع. ويمكنك تغيير ذلك في <ph name="BEGIN_LINK" />إعدادات تتبُّع الطرود<ph name="END_LINK" />.</translation>
 <translation id="4498832288620833153">‏يُضيف هذا الاختصار عناوين URL التي تم إدخالها إلى "قائمة القراءة" في Chromium.</translation>
 <translation id="452436063477828504">‏يُرجى التأكُّد من أنّه يمكنك استخدام بيانات Chromium في حسابك على Google في أي وقت.</translation>
 <translation id="4555020257205549924">‏عند تفعيل هذه الميزة، سيقترح Chromium ترجمة الصفحات المكتوبة بلغات أخرى باستخدام "ترجمة Google". <ph name="BEGIN_LINK" />مزيد من المعلومات<ph name="END_LINK" /></translation>
@@ -156,9 +162,11 @@
 <translation id="5534584691915394889">‏سيتم استخدام هذه البيانات لإنشاء الأحداث في تطبيق Apple Calendar (تقويم Apple) من Chromium و"عدسة Google".</translation>
 <translation id="5571094606370987472">‏فتح علامات التبويب الأخيرة في Chromium</translation>
 <translation id="5623083843656850677">‏يمكنك قفل علامات التبويب في وضع التصفُّح المتخفي عند مغادرة Chromium أو التبديل إلى تطبيق مختلف.</translation>
+<translation id="5671188105328420281">‏معلومات بشأن استخدام متصفِّح Chromium</translation>
 <translation id="5688047395118852662">‏تعرض لك هذه القائمة اقتراحات حول كيفية الاستفادة إلى أقصى حدّ من Chromium.</translation>
 <translation id="5700709190537129682">‏يتعذّر على متصفِّح Chromium التحقُّق من كلمات المرور.</translation>
 <translation id="5777187867430702742">‏صفحة متصفِّح Chromium</translation>
+<translation id="584239279770005676">‏نصيحة من Chromium: اضبط Chromium كمتصفِّح تلقائي</translation>
 <translation id="584550191241316896">‏تم تسجيل الدخول إلى Chromium</translation>
 <translation id="5889847953983052353">‏عند تفعيل هذا الخيار:
 <ph name="BEGIN_INDENT" />  • ستساعد في تحسين متصفِّح Chromium لتلبية احتياجاتك أنت وغيرك من المستخدمين.<ph name="END_INDENT" />
@@ -173,6 +181,7 @@
 <translation id="5951593919357934226">‏يمكنك الاستفادة إلى أقصى حدّ من Chromium.</translation>
 <translation id="5983312940147103417">‏تحسين أداء متصفِّح Chromium</translation>
 <translation id="5985102273857091344">‏اختَر "Chromium".</translation>
+<translation id="5985254578475526217">‏لتلقّي الإشعارات من Chromium، فعِّل الإشعارات في إعدادات iOS.</translation>
 <translation id="6062449165341879460">‏ستتمكن مؤسستك <ph name="DOMAIN" /> من الوصول إلى البيانات والإشارات المرجعية والسجلّ وكلمات المرور الخاصة بمتصفِّح Chromium والإعدادات الأخرى التي تخزنها في هذا الحساب. سيتم محو البيانات من هذا الجهاز عند تسجيل الخروج.  ومع ذلك، ستبقى بياناتك مُخزَّنة في حساب Google المُدار، وستكون متاحة لمؤسستك. يمكن لمؤسستك ضبط سياسات المُستخدِم الخاصة بذلك الحساب لتغيير سلوك متصفِّح Chromium.</translation>
 <translation id="6093744543579359059">‏إدارة كلمات المرور في Chromium</translation>
 <translation id="6104024151682120539">‏فتح في Chromium</translation>
@@ -181,6 +190,7 @@
 1. افتح Settings (الإعدادات).
 2. انقر على Default Browser App (تطبيق المتصفِّح التلقائي).
 3. اختَر Chromium.</translation>
+<translation id="6132149203299792222">‏يمكنك تسجيل الدخول باستخدام حسابك على Google لمزامنة كلمات المرور والإشارات المرجعية وغير ذلك.</translation>
 <translation id="6154098560469640583">‏يؤدي هذا الإعداد إلى فتح Chromium عند النقر على الروابط في الرسائل والمستندات والتطبيقات الأخرى.</translation>
 <translation id="6170619162539716595">‏يرجى السماح لمتصفِّح Chromium باستخدام "خرائط Google" لإعلامك بالاتجاهات مع معلومات محلية عن العناوين التي تم رصدها.</translation>
 <translation id="6175967839221456271">‏مشاركة إلى Chromium</translation>
@@ -192,10 +202,12 @@
 <translation id="632825460376924298">‏السماح بتسجيل الدخول إلى Chromium</translation>
 <translation id="6337530241089703714">‏اختيار ما إذا كنت تريد محو بيانات Chromium المخزَّنة على هذا الجهاز أو الاحتفاظ بها</translation>
 <translation id="6348483005826990855">‏‫3. اختيار Chromium</translation>
+<translation id="6383607155624074112">‏يمكنك الوصول إلى Chromium بصورة أسرع من خلال شريط التطبيقات في الشاشة الرئيسية</translation>
 <translation id="6407399265324739055">‏لن يتم تشفير طُرق الدفع والعناوين. ولن تتم مزامنة سجلّ التصفُّح من Chromium.
 
 ولا يمكن لأحد الوصول إلى بياناتك المشفّرة بدون استخدام عبارة المرور الخاصة بك. ولا تحصل Google على عبارة المرور هذه أو تخزّنها. في حال نسيت عبارة المرور أو أردت تغيير هذه الإعدادات، يمكنك <ph name="BEGIN_LINK" />محو بيانات Chromium في حسابك<ph name="END_LINK" />.</translation>
 <translation id="6424492062988593837">‏لقد أصبح Chromium أفضل من ذي قبل! يتوفر إصدار جديد.</translation>
+<translation id="6433172051771630690">‏نصائح حول الاستفادة إلى أقصى حدّ من Chromium</translation>
 <translation id="6502321914804101924">‏تم تسجيل الخروج من Chromium</translation>
 <translation id="6563921047760808519">‏مزيد من المعلومات حول <ph name="BEGIN_LINK" />الطريقة التي يتّبعها Chromium للحفاظ على خصوصية بياناتك<ph name="END_LINK" /></translation>
 <translation id="6625409903340039086">‏يمكن الآن في Chromium ضبط سياسات المستخدم للحساب المُدارَ</translation>
@@ -203,6 +215,7 @@
 <translation id="6752854822223394465">‏تعمل مؤسستك حاليًا على إعداد Chromium...</translation>
 <translation id="6794054469102824109">‏يؤدي هذا الاختصار إلى فتح لعبة الديناصور في Chromium.</translation>
 <translation id="6820823224820483452">‏تعذّر على متصفِّح Chromium التحقُّق من جميع كلمات المرور. يُرجى إعادة المحاولة غدًا.</translation>
+<translation id="6830362027989570433">‏عرض موسَّع لميزة "الملء التلقائي" في Chromium</translation>
 <translation id="6852799557929001644">‏يمكنك الوصول إلى كلمات مرورك على Chromium وغيرها في التطبيقات الأخرى على هذا الجهاز.</translation>
 <translation id="6887138405044152640">‏لإرسال علامة التبويب هذه إلى جهاز آخر، عليك تسجيل الدخول إلى Chromium على ذلك الجهاز.</translation>
 <translation id="6911341667534646387">‏مواصلة استخدام بيانات Chromium في حسابك على Google</translation>
@@ -213,7 +226,7 @@
 <translation id="7099326575020694068">‏يتعذر على Chromium استخدام الكاميرا في وضع تقسيم العرض</translation>
 <translation id="7163483974919055112">‏البحث عن العناصر المرئية في Chromium</translation>
 <translation id="7165402419892018581">‏اختيار Chromium للاستفادة من ميزة "الملء التلقائي"</translation>
-<translation id="7175400662502680481">‏تم الكشف عن كلمة المرور الخاصة بك في عملية اختراق بيانات، لذلك ينصح "مدير كلمات المرور" من Google بتغييرها الآن.</translation>
+<translation id="7175400662502680481">‏تم الكشف عن كلمة المرور الخاصة بك في عملية اختراق للبيانات، لذلك ينصح "مدير كلمات المرور في Google" بتغييرها الآن.</translation>
 <translation id="7192111075364461693">‏إنّ إشعارات Chromium غير مفعَّلة حاليًا في إعدادات جهازك.</translation>
 <translation id="7198580735512160509">‏لتخصيص متصفِّح Chromium وخلاصة "اقتراحات"، يُرجى تفعيل المزامنة.</translation>
 <translation id="7222001353246886083">‏البحث عن ${searchPhrase} في Chromium</translation>
@@ -248,6 +261,7 @@
 <translation id="7990085102929105708">‏لن يتم تشفير طُرق الدفع والعناوين من Google Pay. ولن تتم مزامنة سجلّ التصفُّح من Chromium.
 
 ولا يمكن لأحد الوصول إلى بياناتك المشفّرة بدون استخدام عبارة المرور الخاصة بك. ولا تحصل Google على عبارة المرور هذه أو تخزّنها. في حال نسيت عبارة المرور أو أردت تغيير هذه الإعدادات، يمكنك <ph name="BEGIN_LINK" />محو بيانات Chromium في حسابك<ph name="END_LINK" />.</translation>
+<translation id="7994322153108931467">‏للحصول على نصائح مفيدة حول استخدام Chromium، يمكنك تفعيل الإشعارات في إعدادات أجهزة iOS.</translation>
 <translation id="7995166854192397899">‏تستند الاقتراحات إلى نشاط التصفُّح على أجهزتك الأخرى. للحصول على اقتراحات، سجِّل الدخول إلى Chromium على جميع أجهزتك.</translation>
 <translation id="800195749539500647">‏يمكنك الاستفادة إلى أقصى حدّ من Chromium.</translation>
 <translation id="8013573822802650211">‏للاطّلاع على علامات التبويب من أي جهاز تستخدم فيه Chromium، سجِّل الدخول على جميع أجهزتك.</translation>
@@ -258,6 +272,7 @@
 <translation id="8234150821523419638">‏فتح قائمة Chromium</translation>
 <translation id="8235427517854598594">‏هل تريد أن يكون Chromium المتصفِّح التلقائي؟</translation>
 <translation id="8240981428553046115">‏تعذّر على Chromium البحث عن تحديثات. يُرجى إعادة المحاولة لاحقًا.</translation>
+<translation id="8254729934443216898">‏تعرَّف على الميزات الجديدة التي تساعدك في الاستفادة إلى أقصى حدّ من Chromium.</translation>
 <translation id="8303579360494576778">‏إدارة "طرق الدفع" في Chromium</translation>
 <translation id="830951810931292870">‏يؤدي هذا الاختصار إلى فتح عناوين URL التي تم إدخالها في Chromium في وضع التصفّح المتخفي.</translation>
 <translation id="8386869251364507178">‏إجراءات Chromium</translation>
@@ -286,6 +301,7 @@
 <translation id="8776843108004031667">‏ستتم إزالة هذا الحساب بالإضافة إلى أي بيانات لم يتم حفظها من Chromium.</translation>
 <translation id="88376265765385899">‏فتح الإشارات المرجعية في Chromium.</translation>
 <translation id="8860548555286245440">‏فتح عناوين URL في وضع التصفُّح المتخفي من Chromium</translation>
+<translation id="8866191443434488382">‏سيرصُد Chromium أرقام التتبُّع على المواقع الإلكترونية التي تزورها ويعرض لك إشعارات الطرود في صفحة "علامة تبويب جديدة". وسيتم إرسال رقم تتبُّع الطرد واسم الموقع الإلكتروني إلى فريق Chromium لتوفير هذه الميزة وتحسين ميزات التسوّق للجميع. ويمكنك تغيير ذلك في أي وقت في <ph name="BEGIN_LINK" />إعدادات تتبُّع الطرود<ph name="END_LINK" />.</translation>
 <translation id="8909995017390087892">‏Chromium لنظام التشغيل iOS</translation>
 <translation id="8924617840944134898">‏فتح علامة تبويب في وضع التصفّح المتخفي في Chromium</translation>
 <translation id="894437814105052438">‏عند تسجيل الخروج، لن تتم مزامنة أي بيانات جديدة في Chromium مع حسابك على Google. وتظلّ البيانات التي تمت مزامنتها سابقًا متوفّرة في حسابك.</translation>
@@ -299,7 +315,6 @@
 <translation id="9059693977935746710">لن تضطر إلى تذكُّر كلمة المرور هذه. وسيتم حفظ كلمة المرور في "مدير كلمات المرور" على عنوان البريد الإلكتروني <ph name="EMAIL" />.</translation>
 <translation id="9089354809943900324">‏إصدار Chromium قديم</translation>
 <translation id="9110075932708282655">‏استخدام Chromium بشكل تلقائي</translation>
-<translation id="9137114218472648150">‏إصدار Chromium الحالي قديم، ويجب تحديثه إلى آخر إصدار للحفاظ على الأمان.</translation>
 <translation id="921174536258924340">‏تعذّر على متصفِّح Chromium التحقُّق من جميع كلمات المرور. يُرجى إعادة المحاولة غدًا أو <ph name="BEGIN_LINK" />التحقُّق من كلمات المرور في حسابك على Google<ph name="END_LINK" />.</translation>
 <translation id="971488683725792095">‏يمكنك استخدام Chromium تلقائيًا عند النقر على الروابط في الرسائل والمستندات والتطبيقات الأخرى.</translation>
 <translation id="981812233959540767">‏تشغيل لعبة الديناصور في Chromium</translation>

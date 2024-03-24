@@ -24,6 +24,7 @@
 #include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "content/public/browser/focused_node_details.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "content/public/test/focus_changed_observer.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/accessibility/accessibility_features.h"
@@ -94,7 +95,7 @@ class AccessibilityFocusHighlightBrowserTest : public InProcessBrowserTest {
     // Keep trying until we get a successful capture.
     while (true) {
       base::test::TestFuture<gfx::Image> future;
-      ui::GrabViewSnapshotAsync(native_view, bounds, future.GetCallback());
+      ui::GrabViewSnapshot(native_view, bounds, future.GetCallback());
       gfx::Image result_image = future.Take();
 
       if (result_image.Size().IsEmpty()) {

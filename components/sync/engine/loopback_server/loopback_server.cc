@@ -6,10 +6,10 @@
 
 #include <algorithm>
 #include <limits>
+#include <map>
 #include <set>
 #include <utility>
 
-#include "base/containers/cxx20_erase.h"
 #include "base/files/file_util.h"
 #include "base/format_macros.h"
 #include "base/logging.h"
@@ -710,10 +710,9 @@ void LoopbackServer::ClearServerData() {
 
 void LoopbackServer::DeleteAllEntitiesForModelType(ModelType model_type) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  auto should_delete_entry = [model_type](const auto& id_and_entity) {
+  std::erase_if(entities_, [model_type](const auto& id_and_entity) {
     return id_and_entity.second->GetModelType() == model_type;
-  };
-  base::EraseIf(entities_, should_delete_entry);
+  });
   ScheduleSaveStateToFile();
 }
 
@@ -866,14 +865,14 @@ bool LoopbackServer::DeSerializeState(
   return true;
 }
 
-absl::optional<std::string> LoopbackServer::SerializeData() {
+std::optional<std::string> LoopbackServer::SerializeData() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   sync_pb::LoopbackServerProto proto;
   SerializeState(&proto);
   std::string data;
   if (!proto.SerializeToString(&data)) {
     LOG(ERROR) << "Loopback sync proto could not be serialized";
-    return absl::nullopt;
+    return std::nullopt;
   }
   UMA_HISTOGRAM_MEMORY_KB(
       "Sync.Local.FileSizeKB",

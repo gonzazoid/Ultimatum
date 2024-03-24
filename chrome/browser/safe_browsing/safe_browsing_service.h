@@ -195,7 +195,7 @@ class SafeBrowsingService : public SafeBrowsingServiceInterface,
       download::DownloadItem* download,
       ClientSafeBrowsingReportRequest::ReportType report_type,
       bool did_proceed,
-      absl::optional<bool> show_download_in_folder);
+      std::optional<bool> show_download_in_folder);
 
   // Sends phishy site report to backend. Returns true if the report is sent
   // successfully.
@@ -205,6 +205,21 @@ class SafeBrowsingService : public SafeBrowsingServiceInterface,
       const GURL& page_url,
       const PhishySiteInteractionMap& phishy_interaction_data);
 #endif
+
+  // Sends NOTIFICATION_PERMISSION_ACCEPTED report to backend if the user
+  // bypassed a warning before granting a notification permission. Returns true
+  // if the report is sent successfully. The profile and render_frame_host are
+  // used to help fill the referrer_chain. The profile also help us obtain the
+  // browser's ChromePingManagerFactory for sending the report. The other
+  // parameters are for filling in their respective
+  // NOTIFICATION_PERMISSION_ACCEPTED report fields.
+  virtual bool MaybeSendNotificationsAcceptedReport(
+      content::RenderFrameHost* render_frame_host,
+      Profile* profile,
+      const GURL& url,
+      const GURL& page_url,
+      const GURL& permission_prompt_origin,
+      base::TimeDelta permission_prompt_display_duration_sec);
 
   // Create the default v4 protocol config struct. This just calls into a helper
   // function, but it's still useful so that TestSafeBrowsingService can
@@ -241,6 +256,7 @@ class SafeBrowsingService : public SafeBrowsingServiceInterface,
   friend class TestSafeBrowsingService;
   friend class TestSafeBrowsingServiceFactory;
   friend class V4SafeBrowsingServiceTest;
+  friend class SendNotificationsAcceptedTest;
 
   void SetDatabaseManagerForTest(SafeBrowsingDatabaseManager* database_manager);
 
@@ -291,6 +307,21 @@ class SafeBrowsingService : public SafeBrowsingServiceInterface,
   // Logs metrics related to cookies.
   void RecordStartupCookieMetrics(Profile* profile);
 
+  // Fills out_referrer_chain with the referrer chain value.
+  void FillReferrerChain(Profile* profile,
+                         content::RenderFrameHost* render_frame_host,
+                         google::protobuf::RepeatedPtrField<ReferrerChainEntry>*
+                             out_referrer_chain);
+
+  // Helper method that allows us to return true for tests. If not for tests,
+  // check with the ui manager.
+  bool IsURLAllowlisted(const GURL& url,
+                        content::RenderFrameHost* primary_main_frame);
+
+  void SetUrlIsAllowlistedForTesting() {
+    url_is_allowlisted_for_testing_ = true;
+  }
+
   std::unique_ptr<ProxyConfigMonitor> proxy_config_monitor_;
 
   // Whether SafeBrowsing Extended Reporting is enabled by the current set of
@@ -331,6 +362,8 @@ class SafeBrowsingService : public SafeBrowsingServiceInterface,
       observed_profiles_{this};
 
   std::unique_ptr<TriggerManager> trigger_manager_;
+
+  bool url_is_allowlisted_for_testing_ = false;
 };
 
 SafeBrowsingServiceFactory* GetSafeBrowsingServiceFactory();

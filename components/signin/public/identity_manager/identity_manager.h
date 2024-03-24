@@ -171,7 +171,7 @@ class IdentityManager : public KeyedService,
   // documentation.
   // Returns a non-empty struct if the primary account exists and was granted
   // the required consent level.
-  // TODO(crbug.com/1462978): revisit this once `ConsentLevel::kSync` is
+  // TODO(crbug.com/40067058): revisit this once `ConsentLevel::kSync` is
   // removed.
   // TODO(1046746): Update (./README.md).
   CoreAccountInfo GetPrimaryAccountInfo(ConsentLevel consent_level) const;
@@ -185,7 +185,7 @@ class IdentityManager : public KeyedService,
   // account for sync.
   // Note that `ConsentLevel::kSync` is deprecated, see the `ConsentLevel`
   // documentation.
-  // TODO(crbug.com/1462978): revisit this once `ConsentLevel::kSync` is
+  // TODO(crbug.com/40067058): revisit this once `ConsentLevel::kSync` is
   // removed.
   bool HasPrimaryAccount(ConsentLevel consent_level) const;
 
@@ -407,6 +407,15 @@ class IdentityManager : public KeyedService,
     return account_consistency_;
   }
 
+  // Calling this method provides a hint that a new account may be added in the
+  // near future, and front-loads some processing to speed that up.
+  //
+  // Calling this API is an optional optimization (particularly for cases where
+  // latency of async processing is user-visible). It is OK to call this even
+  // if a new account is not then added, and it is OK to not call this even if a
+  // new account is later added.
+  void PrepareForAddingNewAccount();
+
 #if BUILDFLAG(IS_ANDROID)
   // Returns a pointer to the AccountTrackerService Java instance associated
   // with this object.
@@ -421,11 +430,11 @@ class IdentityManager : public KeyedService,
   // Provide the reference on the java IdentityMutator.
   base::android::ScopedJavaLocalRef<jobject> GetIdentityMutatorJavaObject();
 
-  // This method refreshes the all accounts with refresh tokens if the existing
-  // account info is stale. Otherwise it's a no-op.
+  // This method refreshes the AccountInfo associated with |account_id| when
+  // the existing account info is stale. Otherwise it's a no-op.
   // This method triggers an OnExtendedAccountInfoUpdated() callback if the
   // info was successfully fetched.
-  void RefreshAccountInfoIfStale();
+  void RefreshAccountInfoIfStale(const CoreAccountId& account_id);
 
   // Overloads for calls from java:
   bool HasPrimaryAccount(JNIEnv* env) const;
@@ -445,9 +454,13 @@ class IdentityManager : public KeyedService,
   base::android::ScopedJavaLocalRef<jobjectArray> GetAccountsWithRefreshTokens(
       JNIEnv* env) const;
 
-  // Refreshes all accounts with refresh tokens. See
-  // RefreshAccountInfoIfStale().
-  void RefreshAccountInfoIfStale(JNIEnv* env);
+  // Refreshes account associated with |j_core_account_id| if it's not null.
+  // Else refreshes all accounts with refresh tokens if they are stale. See
+  // RefreshAccountInfoIfStale(const CoreAccountId&).
+  // TODO(crbug.com/1491005): Remove |j_core_account_id| from parameters.
+  void RefreshAccountInfoIfStale(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>& j_core_account_id);
 
   // Returns true if the browser allows the primary account to be cleared.
   jboolean IsClearPrimaryAccountAllowed(JNIEnv* env) const;
@@ -674,7 +687,7 @@ class IdentityManager : public KeyedService,
   AccountConsistencyMethod account_consistency_ =
       AccountConsistencyMethod::kDisabled;
 
-  // TODO(crbug.com/1462858): Remove this field once
+  // TODO(crbug.com/40067025): Remove this field once
   // kReplaceSyncPromosWithSignInPromos launches.
   const bool should_verify_scope_access_;
 

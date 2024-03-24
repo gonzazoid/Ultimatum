@@ -40,7 +40,7 @@ std::string StripDigitsIfRequired(std::string_view input) {
 
     // If `input[i]` is a digit, find the range of consecutive digits starting
     // at `i`. If this range is shorter than 5 characters append it to `result`.
-    auto* end_it = base::ranges::find_if_not(input.substr(i), IsDigit);
+    auto end_it = base::ranges::find_if_not(input.substr(i), IsDigit);
     std::string_view digits = base::MakeStringPiece(input.begin() + i, end_it);
     DCHECK(base::ranges::all_of(digits, IsDigit));
     if (digits.size() < 5)
@@ -122,6 +122,10 @@ FormSignature CalculateAlternativeFormSignature(const FormData& form_data) {
   for (const FormFieldData& field : form_data.fields) {
     if (!IsCheckable(field.check_status)) {
       // Add all supported form fields' form control types to the signature.
+      // We use the string representation of the FormControlType because
+      // changing the signature algorithm is non-trivial. If and when the
+      // sectioning algorithm, we could use the raw FormControlType enum
+      // instead.
       base::StrAppend(&form_signature_field_types,
                       {"&", FormControlTypeToString(field.form_control_type)});
     }

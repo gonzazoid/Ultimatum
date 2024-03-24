@@ -11,7 +11,6 @@
 #include "ash/game_dashboard/game_dashboard_context.h"
 #include "ash/game_dashboard/game_dashboard_main_menu_view.h"
 #include "ash/game_dashboard/game_dashboard_toolbar_view.h"
-#include "ash/game_dashboard/game_dashboard_widget.h"
 #include "ash/public/cpp/ash_view_ids.h"
 #include "ash/style/icon_button.h"
 #include "ash/style/pill_button.h"
@@ -41,10 +40,10 @@ const base::RepeatingTimer& GameDashboardContextTestApi::GetRecordingTimer()
 
 const std::u16string& GameDashboardContextTestApi::GetRecordingDuration()
     const {
-  return context_->recording_duration_;
+  return context_->GetRecordingDuration();
 }
 
-GameDashboardWidget* GameDashboardContextTestApi::GetGameDashboardButtonWidget()
+views::Widget* GameDashboardContextTestApi::GetGameDashboardButtonWidget()
     const {
   return context_->game_dashboard_button_widget();
 }
@@ -106,13 +105,13 @@ GameDashboardContextTestApi::GetMainMenuGameControlsDetailsButton() {
 PillButton* GameDashboardContextTestApi::GetMainMenuGameControlsSetupButton() {
   auto* main_menu_view = GetMainMenuView();
   CHECK(main_menu_view);
-  return main_menu_view->game_controls_setup_button_;
+  return main_menu_view->GetGameControlsSetupButton();
 }
 
 Switch* GameDashboardContextTestApi::GetMainMenuGameControlsFeatureSwitch() {
   auto* main_menu_view = GetMainMenuView();
   CHECK(main_menu_view);
-  return main_menu_view->game_controls_feature_switch_;
+  return main_menu_view->GetGameControlsFeatureSwith();
 }
 
 views::LabelButton* GameDashboardContextTestApi::GetMainMenuFeedbackButton() {
@@ -135,6 +134,10 @@ AnchoredNudge* GameDashboardContextTestApi::GetGameControlsSetupNudge() {
     return main_menu->GetGameControlsSetupNudgeForTesting();
   }
   return nullptr;
+}
+
+views::Widget* GameDashboardContextTestApi::GetWelcomeDialogWidget() {
+  return context_->welcome_dialog_widget_.get();
 }
 
 void GameDashboardContextTestApi::OpenTheMainMenu() {
@@ -163,7 +166,7 @@ void GameDashboardContextTestApi::CloseTheMainMenu() {
   ASSERT_FALSE(GetMainMenuWidget());
 }
 
-GameDashboardWidget* GameDashboardContextTestApi::GetToolbarWidget() {
+views::Widget* GameDashboardContextTestApi::GetToolbarWidget() {
   return context_->toolbar_widget_.get();
 }
 
@@ -223,7 +226,7 @@ void GameDashboardContextTestApi::OpenTheToolbar() {
 }
 
 void GameDashboardContextTestApi::SetFocusOnToolbar() {
-  GameDashboardWidget* toolbar_widget = GetToolbarWidget();
+  views::Widget* toolbar_widget = GetToolbarWidget();
   ASSERT_TRUE(toolbar_widget)
       << "The toolbar view must be opened before trying to place focus on it.";
   toolbar_widget->Activate();

@@ -793,6 +793,9 @@ ci.builder(
             "official_optimize",
             "stable_channel",
             "v8_release_branch",
+            # Allows the bot to measure low-end arm32 and high-end arm64 using
+            # a single build.
+            "android_low_end_secondary_toolchain",
         ],
     ),
     builderless = False,
@@ -833,7 +836,7 @@ ci.builder(
     ),
     gn_args = gn_args.config(
         configs = [
-            "android_builder",
+            "android_builder_without_codecs",
             "cronet_android",
             "debug_static_builder",
             "reclient",
@@ -878,7 +881,7 @@ ci.builder(
     ),
     gn_args = gn_args.config(
         configs = [
-            "android_builder",
+            "android_builder_without_codecs",
             "cronet_android",
             "official_optimize",
             "release_builder",
@@ -920,7 +923,7 @@ ci.builder(
     ),
     gn_args = gn_args.config(
         configs = [
-            "android_builder",
+            "android_builder_without_codecs",
             "cronet_android",
             "debug_static_builder",
             "reclient",
@@ -958,7 +961,7 @@ ci.builder(
     ),
     gn_args = gn_args.config(
         configs = [
-            "android_builder",
+            "android_builder_without_codecs",
             "cronet_android",
             "official_optimize",
             "release_builder",
@@ -999,7 +1002,7 @@ ci.builder(
     ),
     gn_args = gn_args.config(
         configs = [
-            "android_builder",
+            "android_builder_without_codecs",
             "cronet_android",
             "release_builder",
             "reclient",
@@ -1041,7 +1044,7 @@ ci.builder(
     ),
     gn_args = gn_args.config(
         configs = [
-            "android_builder",
+            "android_builder_without_codecs",
             "cronet_android",
             "debug_static_builder",
             "reclient",
@@ -1081,7 +1084,7 @@ ci.builder(
     ),
     gn_args = gn_args.config(
         configs = [
-            "android_builder",
+            "android_builder_without_codecs",
             "cronet_android",
             "official_optimize",
             "release_builder",
@@ -1124,7 +1127,7 @@ ci.builder(
     ),
     gn_args = gn_args.config(
         configs = [
-            "android_builder",
+            "android_builder_without_codecs",
             "cronet_android",
             "debug_static_builder",
             "reclient",
@@ -1164,7 +1167,7 @@ ci.builder(
     ),
     gn_args = gn_args.config(
         configs = [
-            "android_builder",
+            "android_builder_without_codecs",
             "cronet_android",
             "official_optimize",
             "release_builder",
@@ -1212,7 +1215,7 @@ ci.builder(
     ),
     gn_args = gn_args.config(
         configs = [
-            "android_builder",
+            "android_builder_without_codecs",
             "cronet_android",
             "debug_static_builder",
             "reclient",
@@ -1252,7 +1255,7 @@ ci.builder(
     ),
     gn_args = gn_args.config(
         configs = [
-            "android_builder",
+            "android_builder_without_codecs",
             "cronet_android",
             "official_optimize",
             "release_builder",
@@ -1278,7 +1281,7 @@ ci.builder(
     executable = "recipe:cronet",
     gn_args = gn_args.config(
         configs = [
-            "android_builder",
+            "android_builder_without_codecs",
             "cronet_android",
             "official_optimize",
             "release_builder",
@@ -1323,7 +1326,7 @@ ci.builder(
     ),
     gn_args = gn_args.config(
         configs = [
-            "android_builder",
+            "android_builder_without_codecs",
             "cronet_android",
             "debug_static_builder",
             "reclient",
@@ -1361,7 +1364,7 @@ ci.builder(
     ),
     gn_args = gn_args.config(
         configs = [
-            "android_builder",
+            "android_builder_without_codecs",
             "cronet_android",
             "official_optimize",
             "release_builder",
@@ -1407,7 +1410,7 @@ ci.builder(
     ),
     gn_args = gn_args.config(
         configs = [
-            "android_builder",
+            "android_builder_without_codecs",
             "cronet_android",
             "debug_static_builder",
             "reclient",
@@ -1450,7 +1453,7 @@ ci.builder(
     ),
     gn_args = gn_args.config(
         configs = [
-            "android_builder",
+            "android_builder_without_codecs",
             "cronet_android",
             "debug_static_builder",
             "reclient",
@@ -1840,7 +1843,7 @@ ci.builder(
     ),
     gn_args = gn_args.config(
         configs = [
-            "android_builder",
+            "android_builder_without_codecs",
             "cronet_android",
             "official_optimize",
             "release_builder",
@@ -1881,7 +1884,7 @@ ci.builder(
     ),
     gn_args = gn_args.config(
         configs = [
-            "android_builder",
+            "android_builder_without_codecs",
             "cronet_android",
             "official_optimize",
             "release_builder",

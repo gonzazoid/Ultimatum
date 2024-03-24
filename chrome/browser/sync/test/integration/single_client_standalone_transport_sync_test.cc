@@ -16,7 +16,6 @@
 #include "chrome/browser/sync/test/integration/sync_test.h"
 #include "chrome/common/chrome_paths.h"
 #include "components/password_manager/core/browser/features/password_features.h"
-#include "components/signin/public/base/signin_switches.h"
 #include "components/sync/base/features.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/service/glue/sync_transport_data_prefs.h"
@@ -66,14 +65,7 @@ class SyncConsentDisabledChecker : public SingleClientStatusChangeChecker {
 
 class SingleClientStandaloneTransportSyncTest : public SyncTest {
  public:
-  SingleClientStandaloneTransportSyncTest() : SyncTest(SINGLE_CLIENT) {
-    feature_list_.InitAndDisableFeature(switches::kUnoDesktop);
-  }
-
-  ~SingleClientStandaloneTransportSyncTest() override = default;
-
- private:
-  base::test::ScopedFeatureList feature_list_;
+  SingleClientStandaloneTransportSyncTest() : SyncTest(SINGLE_CLIENT) {}
 };
 
 // On Chrome OS sync auto-starts on sign-in.
@@ -513,6 +505,9 @@ IN_PROC_BROWSER_TEST_F(
       syncer::PRIORITY_PREFERENCES));
 }
 
+// TODO(crbug.com/1117345): Android currently doesn't support PRE_ tests and
+// all of these are.
+#if !BUILDFLAG(IS_ANDROID)
 // A test fixture to cover migration behavior: In PRE_ tests, the
 // kReplaceSyncPromosWithSignInPromos is *dis*abled, in non-PRE_ tests it is
 // *en*abled.
@@ -525,7 +520,6 @@ class SingleClientStandaloneTransportReplaceSyncWithSigninMigrationSyncTest
     default_features_.InitWithFeatures(
         /*enabled_features=*/
         {syncer::kReadingListEnableSyncTransportModeUponSignIn,
-         password_manager::features::kEnablePasswordsAccountStorage,
          syncer::kSyncEnableContactInfoDataTypeInTransportMode,
          syncer::kEnableBookmarkFoldersForAccountStorage,
          syncer::kEnablePreferencesAccountStorage},
@@ -543,8 +537,6 @@ class SingleClientStandaloneTransportReplaceSyncWithSigninMigrationSyncTest
   base::test::ScopedFeatureList sync_to_signin_feature_;
 };
 
-// TODO(crbug.com/1117345): Android currently doesn't support PRE_ tests.
-#if !BUILDFLAG(IS_ANDROID)
 IN_PROC_BROWSER_TEST_F(
     SingleClientStandaloneTransportReplaceSyncWithSigninMigrationSyncTest,
     PRE_MigratesSignedInUser) {

@@ -57,6 +57,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_scroll_to_options.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_void_function.h"
 #include "third_party/blink/renderer/bindings/core/v8/window_proxy.h"
+#include "third_party/blink/renderer/bindings/core/v8/window_proxy_manager.h"
 #include "third_party/blink/renderer/core/accessibility/ax_context.h"
 #include "third_party/blink/renderer/core/aom/computed_accessible_node.h"
 #include "third_party/blink/renderer/core/css/css_computed_style_declaration.h"
@@ -120,6 +121,7 @@
 #include "third_party/blink/renderer/core/layout/adjust_for_absolute_zoom.h"
 #include "third_party/blink/renderer/core/layout/layout_view.h"
 #include "third_party/blink/renderer/core/loader/document_loader.h"
+#include "third_party/blink/renderer/core/loader/frame_load_request.h"
 #include "third_party/blink/renderer/core/navigation_api/navigation_api.h"
 #include "third_party/blink/renderer/core/origin_trials/origin_trial_context.h"
 #include "third_party/blink/renderer/core/page/chrome_client.h"
@@ -175,7 +177,7 @@ void SetCurrentTaskAsCallbackParent(
   ScriptState* script_state = callback->CallbackRelevantScriptState();
   auto* tracker = ThreadScheduler::Current()->GetTaskAttributionTracker();
   if (tracker && script_state->World().IsMainWorld()) {
-    callback->SetParentTask(tracker->RunningTask(script_state));
+    callback->SetParentTask(tracker->RunningTask(script_state->GetIsolate()));
   }
 }
 
@@ -264,8 +266,12 @@ void LocalDOMWindow::Initialize() {
 void LocalDOMWindow::ResetWindowAgent(WindowAgent* agent) {
   GetAgent()->DetachContext(this);
   ResetAgent(agent);
-  if (document_)
+  if (document_) {
     document_->ResetAgent(*agent);
+  }
+
+  CHECK(GetFrame());
+  GetFrame()->GetFrameScheduler()->SetAgentClusterId(GetAgentClusterID());
 
   // This is only called on Android WebView, we need to reassign the microtask
   // queue if there already is one for the associated context. There shouldn't
@@ -296,9 +302,8 @@ ScriptValue LocalDOMWindow::event(ScriptState* script_state) {
                        v8::Undefined(script_state->GetIsolate()));
   }
 
-  return ScriptValue(
-      script_state->GetIsolate(),
-      ToV8Traits<Event>::ToV8(script_state, CurrentEvent()).ToLocalChecked());
+  return ScriptValue(script_state->GetIsolate(),
+                     ToV8Traits<Event>::ToV8(script_state, CurrentEvent()));
 }
 
 Event* LocalDOMWindow::CurrentEvent() const {
@@ -583,16 +588,13 @@ scoped_refptr<base::SingleThreadTaskRunner> LocalDOMWindow::GetTaskRunner(
 void LocalDOMWindow::ReportPermissionsPolicyViolation(
     mojom::blink::PermissionsPolicyFeature feature,
     mojom::blink::PolicyDisposition disposition,
-    const absl::optional<String>& reporting_endpoint,
+    const std::optional<String>& reporting_endpoint,
     const String& message) const {
   if (disposition == mojom::blink::PolicyDisposition::kEnforce) {
     const_cast<LocalDOMWindow*>(this)->CountPermissionsPolicyUsage(
         feature, UseCounterImpl::PermissionsPolicyUsageType::kViolation);
   }
 
-  if (!RuntimeEnabledFeatures::PermissionsPolicyReportingEnabled(this)) {
-    return;
-  }
   if (!GetFrame()) {
     return;
   }
@@ -665,7 +667,7 @@ void LocalDOMWindow::ReportDocumentPolicyViolation(
   document_policy_violation_reports_sent_.insert(report_id);
 
   // Send the document policy violation report to any ReportingObservers.
-  const absl::optional<std::string> endpoint =
+  const std::optional<std::string> endpoint =
       relevant_document_policy->GetFeatureEndpoint(feature);
 
   if (is_report_only) {
@@ -705,7 +707,7 @@ void LocalDOMWindow::AddConsoleMessageImpl(ConsoleMessage* console_message,
         line_number = parser->LineNumber().OneBasedInt();
     }
     Vector<DOMNodeId> nodes(console_message->Nodes());
-    absl::optional<mojom::blink::ConsoleMessageCategory> category =
+    std::optional<mojom::blink::ConsoleMessageCategory> category =
         console_message->Category();
     console_message = MakeGarbageCollected<ConsoleMessage>(
         console_message->GetSource(), console_message->GetLevel(),
@@ -843,8 +845,9 @@ void LocalDOMWindow::DocumentWasClosed() {
   //
   // 4.5. ..., invoke the reset algorithm of each of those elements.
   // 4.6.3. Run any session history document visibility change steps ...
-  if (document_)
+  if (document_) {
     document_->GetFormController().RestoreImmediately();
+  }
 
   // 4.6.4. Fire an event named pageshow at the Document object's relevant
   // global object, ...
@@ -880,6 +883,10 @@ void LocalDOMWindow::DispatchPersistedPageshowEvent(
 
 void LocalDOMWindow::DispatchPagehideEvent(
     PageTransitionEventPersistence persistence) {
+  if (document_->IsPrerendering()) {
+    // Do not dispatch the event while prerendering.
+    return;
+  }
   if (document_->UnloadStarted()) {
     // We've already dispatched pagehide (since it's the first thing we do when
     // starting unload) and shouldn't dispatch it again. We might get here on
@@ -904,15 +911,9 @@ void LocalDOMWindow::DispatchPagehideEvent(
 void LocalDOMWindow::EnqueueHashchangeEvent(const String& old_url,
                                             const String& new_url) {
   DCHECK(GetFrame());
-  if (GetFrame()->IsMainFrame()) {
-    if (auto* script_state = ToScriptStateForMainWorld(GetFrame())) {
-      // script_state can be nullptr here.
-      // TODO(yoav): get a better understanding of when this happens and add a
-      // test to guard against this.
-      SoftNavigationHeuristics* heuristics =
-          SoftNavigationHeuristics::From(*this);
-      heuristics->SameDocumentNavigationStarted(script_state);
-    }
+  if (SoftNavigationHeuristics* heuristics =
+          SoftNavigationHeuristics::From(*this)) {
+    heuristics->SameDocumentNavigationStarted();
   }
   // https://html.spec.whatwg.org/C/#history-traversal
   EnqueueWindowEvent(*HashChangeEvent::Create(old_url, new_url),
@@ -1988,6 +1989,7 @@ External* LocalDOMWindow::external() {
   return external_.Get();
 }
 
+// NOLINTNEXTLINE(bugprone-virtual-near-miss)
 bool LocalDOMWindow::isSecureContext() const {
   return IsSecureContext();
 }

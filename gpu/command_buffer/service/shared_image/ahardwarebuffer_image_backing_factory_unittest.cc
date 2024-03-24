@@ -474,10 +474,12 @@ GlLegacySharedImage::GlLegacySharedImage(
   gpu::SurfaceHandle surface_handle = gpu::kNullSurfaceHandle;
   GLenum expected_target = GL_TEXTURE_2D;
 
-  // SHARED_IMAGE_USAGE_DISPLAY_READ for skia read and SHARED_IMAGE_USAGE_RASTER
-  // for skia write.
-  uint32_t usage = SHARED_IMAGE_USAGE_GLES2_READ |
-                   SHARED_IMAGE_USAGE_GLES2_WRITE | SHARED_IMAGE_USAGE_RASTER;
+  // Provide usage settings to model an SI that is written via raster and read
+  // via GL (e.g., for canvas import into WebGL). Add
+  // SHARED_IMAGE_USAGE_DISPLAY_READ if modeling the display compositor being on
+  // the same thread as raster.
+  uint32_t usage =
+      SHARED_IMAGE_USAGE_GLES2_READ | SHARED_IMAGE_USAGE_RASTER_WRITE;
   if (!is_thread_safe) {
     usage |= SHARED_IMAGE_USAGE_DISPLAY_READ;
   }

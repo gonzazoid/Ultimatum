@@ -99,7 +99,7 @@ void StatusAreaOverflowButtonTray::IconView::UpdateRotation() {
   SetTransform(transform);
 }
 
-BEGIN_METADATA(StatusAreaOverflowButtonTray, IconView, views::ImageView)
+BEGIN_METADATA(StatusAreaOverflowButtonTray, IconView)
 END_METADATA
 
 StatusAreaOverflowButtonTray::StatusAreaOverflowButtonTray(Shelf* shelf)
@@ -166,7 +166,7 @@ void StatusAreaOverflowButtonTray::ResetStateToCollapsed() {
   icon_->ToggleState(state_);
 }
 
-BEGIN_METADATA(StatusAreaOverflowButtonTray, TrayBackgroundView);
+BEGIN_METADATA(StatusAreaOverflowButtonTray);
 END_METADATA
 
 }  // namespace ash

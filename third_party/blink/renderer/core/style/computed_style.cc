@@ -48,6 +48,7 @@
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
+#include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/core/html/html_body_element.h"
 #include "third_party/blink/renderer/core/html/html_html_element.h"
 #include "third_party/blink/renderer/core/html/html_progress_element.h"
@@ -95,6 +96,8 @@
 #include "third_party/blink/renderer/platform/wtf/size_assertions.h"
 #include "third_party/blink/renderer/platform/wtf/text/case_map.h"
 #include "third_party/blink/renderer/platform/wtf/text/math_transform.h"
+#include "third_party/blink/renderer/platform/wtf/text/text_offset_map.h"
+#include "third_party/blink/renderer/platform/wtf/thread_specific.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/gfx/geometry/point_f.h"
 
@@ -159,8 +162,44 @@ PseudoElementStyleCache& ComputedStyle::EnsurePseudoElementStyleCache() const {
   return *cached_data_->pseudo_element_styles_;
 }
 
-const ComputedStyle* ComputedStyle::CreateInitialStyleSingleton() {
-  return MakeGarbageCollected<ComputedStyle>(PassKey());
+const ComputedStyle* ComputedStyle::GetInitialStyleSingleton() {
+  DEFINE_THREAD_SAFE_STATIC_LOCAL(
+      ThreadSpecific<Persistent<const ComputedStyle>>,
+      thread_specific_initial_style, ());
+  Persistent<const ComputedStyle>& persistent = *thread_specific_initial_style;
+  if (UNLIKELY(!persistent)) {
+    persistent = MakeGarbageCollected<ComputedStyle>(PassKey());
+    LEAK_SANITIZER_IGNORE_OBJECT(&persistent);
+  }
+  return persistent.Get();
+}
+
+namespace {
+
+const ComputedStyle* BuildInitialStyleForImg(
+    const ComputedStyle& initial_style) {
+  // This matches the img {} declarations in html.css to avoid copy-on-write
+  // when only UA styles apply for these properties. See crbug.com/1369454
+  // for details.
+  ComputedStyleBuilder builder(initial_style);
+  builder.SetOverflowX(EOverflow::kClip);
+  builder.SetOverflowY(EOverflow::kClip);
+  builder.SetOverflowClipMargin(StyleOverflowClipMargin::CreateContent());
+  return builder.TakeStyle();
+}
+
+}  // namespace
+
+const ComputedStyle* ComputedStyle::GetInitialStyleForImgSingleton() {
+  DEFINE_THREAD_SAFE_STATIC_LOCAL(
+      ThreadSpecific<Persistent<const ComputedStyle>>,
+      thread_specific_initial_style, ());
+  Persistent<const ComputedStyle>& persistent = *thread_specific_initial_style;
+  if (UNLIKELY(!persistent)) {
+    persistent = BuildInitialStyleForImg(*GetInitialStyleSingleton());
+    LEAK_SANITIZER_IGNORE_OBJECT(&persistent);
+  }
+  return persistent.Get();
 }
 
 Vector<AtomicString>* ComputedStyle::GetVariableNamesCache() const {
@@ -581,35 +620,83 @@ bool ComputedStyle::operator==(const ComputedStyle& o) const {
 bool ComputedStyle::HighlightPseudoElementStylesDependOnRelativeUnits() const {
   const StyleHighlightData& highlight_data = HighlightData();
   if (highlight_data.Selection() &&
-      (highlight_data.Selection()->HasFontRelativeUnits() ||
-       highlight_data.Selection()->HasContainerRelativeUnits() ||
-       highlight_data.Selection()->HasLogicalDirectionRelativeUnits())) {
+      highlight_data.Selection()->HasAnyRelativeUnits()) {
     return true;
   }
   if (highlight_data.TargetText() &&
-      (highlight_data.TargetText()->HasFontRelativeUnits() ||
-       highlight_data.TargetText()->HasContainerRelativeUnits() ||
-       highlight_data.TargetText()->HasLogicalDirectionRelativeUnits())) {
+      highlight_data.TargetText()->HasAnyRelativeUnits()) {
     return true;
   }
   if (highlight_data.SpellingError() &&
-      (highlight_data.SpellingError()->HasFontRelativeUnits() ||
-       highlight_data.SpellingError()->HasContainerRelativeUnits() ||
-       highlight_data.SpellingError()->HasLogicalDirectionRelativeUnits())) {
+      highlight_data.SpellingError()->HasAnyRelativeUnits()) {
     return true;
   }
   if (highlight_data.GrammarError() &&
-      (highlight_data.GrammarError()->HasFontRelativeUnits() ||
-       highlight_data.GrammarError()->HasContainerRelativeUnits() ||
-       highlight_data.GrammarError()->HasLogicalDirectionRelativeUnits())) {
+      highlight_data.GrammarError()->HasAnyRelativeUnits()) {
     return true;
   }
   const CustomHighlightsStyleMap& custom_highlights =
       highlight_data.CustomHighlights();
   for (auto custom_highlight : custom_highlights) {
-    if (custom_highlight.value->HasFontRelativeUnits() ||
-        custom_highlight.value->HasContainerRelativeUnits() ||
-        custom_highlight.value->HasLogicalDirectionRelativeUnits()) {
+    if (custom_highlight.value->HasAnyRelativeUnits()) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool ComputedStyle::HighlightPseudoElementStylesDependOnContainerUnits() const {
+  const StyleHighlightData& highlight_data = HighlightData();
+  if (highlight_data.Selection() &&
+      highlight_data.Selection()->HasContainerRelativeUnits()) {
+    return true;
+  }
+  if (highlight_data.TargetText() &&
+      highlight_data.TargetText()->HasContainerRelativeUnits()) {
+    return true;
+  }
+  if (highlight_data.SpellingError() &&
+      highlight_data.SpellingError()->HasContainerRelativeUnits()) {
+    return true;
+  }
+  if (highlight_data.GrammarError() &&
+      highlight_data.GrammarError()->HasContainerRelativeUnits()) {
+    return true;
+  }
+  const CustomHighlightsStyleMap& custom_highlights =
+      highlight_data.CustomHighlights();
+  for (auto custom_highlight : custom_highlights) {
+    if (custom_highlight.value->HasContainerRelativeUnits()) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool ComputedStyle::HighlightPseudoElementStylesDependOnViewportUnits() const {
+  const StyleHighlightData& highlight_data = HighlightData();
+  if (highlight_data.Selection() &&
+      highlight_data.Selection()->HasViewportUnits()) {
+    return true;
+  }
+  if (highlight_data.TargetText() &&
+      highlight_data.TargetText()->HasViewportUnits()) {
+    return true;
+  }
+  if (highlight_data.SpellingError() &&
+      highlight_data.SpellingError()->HasViewportUnits()) {
+    return true;
+  }
+  if (highlight_data.GrammarError() &&
+      highlight_data.GrammarError()->HasViewportUnits()) {
+    return true;
+  }
+  const CustomHighlightsStyleMap& custom_highlights =
+      highlight_data.CustomHighlights();
+  for (auto custom_highlight : custom_highlights) {
+    if (custom_highlight.value->HasViewportUnits()) {
       return true;
     }
   }
@@ -971,7 +1058,7 @@ void ComputedStyle::AdjustDiffForNeedsPaintInvalidation(
   }
 
   if (PaintImagesInternal()) {
-    for (const auto& image : *PaintImagesInternal()) {
+    for (const auto& image : PaintImagesInternal()->Images()) {
       DCHECK(image);
       if (DiffNeedsPaintInvalidationForPaintImage(*image, other, document)) {
         diff.SetNeedsNormalPaintInvalidation();
@@ -1192,7 +1279,7 @@ bool ComputedStyle::HasCSSPaintImagesUsingCustomProperty(
     const AtomicString& custom_property_name,
     const Document& document) const {
   if (PaintImagesInternal()) {
-    for (const auto& image : *PaintImagesInternal()) {
+    for (const auto& image : PaintImagesInternal()->Images()) {
       DCHECK(image);
       // IsPaintImage is true for CSS Paint images only, please refer to the
       // constructor of StyleGeneratedImage.
@@ -1625,8 +1712,6 @@ void ComputedStyle::ApplyMotionPathTransform(float origin_x,
       case BasicShape::kBasicShapeCircleType:
       case BasicShape::kBasicShapeEllipseType:
       case BasicShape::kBasicShapeInsetType:
-      case BasicShape::kBasicShapeXYWHType:
-      case BasicShape::kBasicShapeRectType:
       case BasicShape::kBasicShapePolygonType: {
         const gfx::RectF reference_box = GetReferenceBox(box, coord_box);
         const gfx::PointF offset_from_reference_box =
@@ -1834,7 +1919,7 @@ static String DisableNewGeorgianCapitalLetters(const String& text) {
 
 namespace {
 
-String ApplyMathAutoTransform(const String& text) {
+String ApplyMathAutoTransform(const String& text, TextOffsetMap* offset_map) {
   if (text.length() != 1) {
     return text;
   }
@@ -1847,7 +1932,11 @@ String ApplyMathAutoTransform(const String& text) {
   Vector<UChar> transformed_text(U16_LENGTH(transformed_char));
   int i = 0;
   U16_APPEND_UNSAFE(transformed_text, i, transformed_char);
-  return String(transformed_text);
+  String transformed_string = String(transformed_text);
+  if (offset_map) {
+    offset_map->Append(text.length(), transformed_string.length());
+  }
+  return transformed_string;
 }
 
 }  // namespace
@@ -1872,7 +1961,7 @@ String ComputedStyle::ApplyTextTransform(const String& text,
       return case_map.ToLower(text, offset_map);
     }
     case ETextTransform::kMathAuto:
-      return ApplyMathAutoTransform(text);
+      return ApplyMathAutoTransform(text, offset_map);
   }
   NOTREACHED();
 }
@@ -2126,7 +2215,7 @@ template <typename T>
 CSSVariableData* GetVariableData(
     const T& style_or_builder,
     const AtomicString& name,
-    absl::optional<bool> inherited_hint = absl::nullopt) {
+    std::optional<bool> inherited_hint = std::nullopt) {
   if (inherited_hint.value_or(true) && style_or_builder.InheritedVariables()) {
     if (auto data = style_or_builder.InheritedVariables()->GetData(name)) {
       return *data;
@@ -2148,7 +2237,7 @@ template <typename T>
 const CSSValue* GetVariableValue(
     const T& style_or_builder,
     const AtomicString& name,
-    absl::optional<bool> inherited_hint = absl::nullopt) {
+    std::optional<bool> inherited_hint = std::nullopt) {
   if (inherited_hint.value_or(true) && style_or_builder.InheritedVariables()) {
     if (auto data = style_or_builder.InheritedVariables()->GetValue(name)) {
       return *data;
@@ -2188,6 +2277,24 @@ const CSSValue* ComputedStyle::GetVariableValue(
     const AtomicString& name,
     bool is_inherited_property) const {
   return blink::GetVariableValue(*this, name, is_inherited_property);
+}
+
+bool ComputedStyle::HasCustomScrollbarStyle(const Document& document) const {
+
+  // Ignore ::-webkit-scrollbar when the web setting to prefer default scrollbar
+  // styling is true. This web setting ignores both ::-webkit-scrollbar styling
+  // and standard properties.
+  if (RuntimeEnabledFeatures::PreferDefaultScrollbarStylesEnabled()) {
+    const Settings* settings = document.GetSettings();
+    if (settings && settings->GetPrefersDefaultScrollbarStyles()) {
+      return false;
+    }
+  }
+
+  // Ignore non-standard ::-webkit-scrollbar when standard properties are in
+  // use.
+  return HasPseudoElementStyle(kPseudoIdScrollbar) &&
+         !UsesStandardScrollbarStyle();
 }
 
 Length ComputedStyle::LineHeight() const {
@@ -2475,8 +2582,7 @@ blink::Color ComputedStyle::GetInternalForcedCurrentColor(
     return GetCurrentColor(is_current_color);
   }
   return InternalForcedColor().Resolve(blink::Color(), UsedColorScheme(),
-                                       is_current_color,
-                                       /* is_forced_color */ true);
+                                       is_current_color);
 }
 
 blink::Color ComputedStyle::GetInternalForcedVisitedCurrentColor(
@@ -2486,8 +2592,7 @@ blink::Color ComputedStyle::GetInternalForcedVisitedCurrentColor(
     return GetInternalVisitedCurrentColor(is_current_color);
   }
   return InternalForcedVisitedColor().Resolve(blink::Color(), UsedColorScheme(),
-                                              is_current_color,
-                                              /* is_forced_color */ true);
+                                              is_current_color);
 }
 
 bool ComputedStyle::ShadowListHasCurrentColor(const ShadowList* shadow_list) {
@@ -2515,32 +2620,30 @@ bool ComputedStyle::MarkerShouldBeInside(const Element& parent) const {
          (IsA<HTMLLIElement>(parent) && !IsInsideListElement());
 }
 
-absl::optional<blink::Color> ComputedStyle::AccentColorResolved() const {
+std::optional<blink::Color> ComputedStyle::AccentColorResolved() const {
   const StyleAutoColor& auto_color = AccentColor();
   if (auto_color.IsAutoColor()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return auto_color.Resolve(GetCurrentColor(), UsedColorScheme());
 }
 
-absl::optional<blink::Color> ComputedStyle::ScrollbarThumbColorResolved()
-    const {
-  const absl::optional<StyleScrollbarColor>& scrollbar_color = ScrollbarColor();
+std::optional<blink::Color> ComputedStyle::ScrollbarThumbColorResolved() const {
+  const std::optional<StyleScrollbarColor>& scrollbar_color = ScrollbarColor();
   if (scrollbar_color.has_value()) {
     return scrollbar_color.value().GetThumbColor().Resolve(GetCurrentColor(),
                                                            UsedColorScheme());
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
-absl::optional<blink::Color> ComputedStyle::ScrollbarTrackColorResolved()
-    const {
-  const absl::optional<StyleScrollbarColor>& scrollbar_color = ScrollbarColor();
+std::optional<blink::Color> ComputedStyle::ScrollbarTrackColorResolved() const {
+  const std::optional<StyleScrollbarColor>& scrollbar_color = ScrollbarColor();
   if (scrollbar_color.has_value()) {
     return scrollbar_color.value().GetTrackColor().Resolve(GetCurrentColor(),
                                                            UsedColorScheme());
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 bool ComputedStyle::ShouldApplyAnyContainment(const Element& element,

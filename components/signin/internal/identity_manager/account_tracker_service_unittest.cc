@@ -515,15 +515,13 @@ void AccountTrackerServiceTest::
     scoped_feature_list.InitWithFeatures(
         {supervised_user::kFilterWebsitesForSupervisedUsersOnDesktopAndIOS,
          supervised_user::kSupervisedPrefsControlledBySupervisedStore,
-         supervised_user::kEnableManagedByParentUi,
-         supervised_user::kClearingCookiesKeepsSupervisedUsersSignedIn},
+         supervised_user::kEnableManagedByParentUi},
         {});
   } else {
     scoped_feature_list.InitWithFeatures(
         {}, {supervised_user::kFilterWebsitesForSupervisedUsersOnDesktopAndIOS,
              supervised_user::kSupervisedPrefsControlledBySupervisedStore,
-             supervised_user::kEnableManagedByParentUi,
-             supervised_user::kClearingCookiesKeepsSupervisedUsersSignedIn});
+             supervised_user::kEnableManagedByParentUi});
   }
 
   SimulateTokenAvailable(kAccountKeyChild);
@@ -551,7 +549,7 @@ void AccountTrackerServiceTest::ReturnAccountCapabilitiesFetchFailure(
     AccountKey account_key) {
   IssueAccessToken(account_key);
   fake_account_capabilities_fetcher_factory_->CompleteAccountCapabilitiesFetch(
-      AccountKeyToAccountId(account_key), absl::nullopt);
+      AccountKeyToAccountId(account_key), std::nullopt);
 }
 
 TEST_F(AccountTrackerServiceTest, Basic) {}
@@ -1145,7 +1143,7 @@ TEST_F(AccountTrackerServiceTest, ChildStatusMigration) {
   // The deprecated key has been removed.
   EXPECT_FALSE(dict->FindBool(kDeprecatedChildKey));
   // The new key has been written.
-  absl::optional<int> new_key = dict->FindInt(kNewChildKey);
+  std::optional<int> new_key = dict->FindInt(kNewChildKey);
   ASSERT_TRUE(new_key.has_value());
   EXPECT_EQ(static_cast<int>(signin::Tribool::kTrue), new_key.value());
 }
@@ -1887,10 +1885,12 @@ TEST_F(AccountTrackerServiceTest, CapabilityPrefNameMigration) {
 
   // The capability is unknown, and none of the capability-related keys should
   // be set.
-  EXPECT_EQ(signin::Tribool::kUnknown,
-            account_tracker()
-                ->GetAccountInfo(AccountKeyToAccountId(kAccountKeyAlpha))
-                .capabilities.can_offer_extended_chrome_sync_promos());
+  EXPECT_EQ(
+      signin::Tribool::kUnknown,
+      account_tracker()
+          ->GetAccountInfo(AccountKeyToAccountId(kAccountKeyAlpha))
+          .capabilities
+          .can_show_history_sync_opt_ins_without_minor_mode_restrictions());
   ScopedListPrefUpdate update(prefs(), prefs::kAccountInfo);
   ASSERT_FALSE(update->empty());
   base::Value::Dict* dict = (*update)[0].GetIfDict();
@@ -1918,12 +1918,15 @@ TEST_F(AccountTrackerServiceTest, CapabilityPrefNameMigration) {
   ASSERT_EQ(1u, infos.size());
   CheckAccountDetails(kAccountKeyAlpha, infos[0]);
   // The deprecated key has been read.
-  EXPECT_EQ(signin::Tribool::kTrue,
-            infos[0].capabilities.can_offer_extended_chrome_sync_promos());
+  EXPECT_EQ(
+      signin::Tribool::kTrue,
+      infos[0]
+          .capabilities
+          .can_show_history_sync_opt_ins_without_minor_mode_restrictions());
   // The deprecated key has been removed.
   EXPECT_FALSE(dict->FindIntByDottedPath(kDeprecatedCapabilityKey));
   // The new key has been written.
-  absl::optional<int> new_key = dict->FindIntByDottedPath(kNewCapabilityKey);
+  std::optional<int> new_key = dict->FindIntByDottedPath(kNewCapabilityKey);
   ASSERT_TRUE(new_key.has_value());
   EXPECT_EQ(static_cast<int>(signin::Tribool::kTrue), new_key.value());
 }

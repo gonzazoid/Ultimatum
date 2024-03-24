@@ -25,6 +25,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_DOM_CONTAINER_NODE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_DOM_CONTAINER_NODE_H_
 
+#include "base/functional/function_ref.h"
 #include "third_party/blink/public/mojom/input/focus_type.mojom-blink-forward.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/css_value.h"
@@ -39,6 +40,8 @@ namespace blink {
 
 class Element;
 class ExceptionState;
+class GetHTMLOptions;
+class GetInnerHTMLOptions;
 class HTMLCollection;
 class RadioNodeList;
 class StyleRecalcContext;
@@ -152,8 +155,11 @@ class CORE_EXPORT ContainerNode : public Node {
                                   bool only_match_img_elements = false);
 
   // Returns the contents of the first descendant element, if any, that contains
-  // only text, a part of which is the given substring.
-  String FindTextInElementWith(const AtomicString& substring) const;
+  // only text, a part of which is the given substring, if the given validity
+  // checker returns true for it.
+  String FindTextInElementWith(
+      const AtomicString& substring,
+      base::FunctionRef<bool(const String&)> validity_checker) const;
 
   // These methods are only used during parsing.
   // They don't send DOM mutation events or accept DocumentFragments.
@@ -459,6 +465,11 @@ class CORE_EXPORT ContainerNode : public Node {
   void ReplaceChildren(const VectorOf<Node>& nodes,
                        ExceptionState& exception_state);
 
+  // Common implementation of getHTML and getInnerHTML. These are exposed (via
+  // IDL) on Element and ShadowRoot only.
+  String getInnerHTML(const GetInnerHTMLOptions* options) const;
+  String getHTML(const GetHTMLOptions*, ExceptionState&) const;
+
   // DocumentOrElementEventHandlers:
   // These event listeners are only actually web-exposed on interfaces that
   // include the DocumentOrElementEventHandlers mixin in their idl.
@@ -514,12 +525,11 @@ class CORE_EXPORT ContainerNode : public Node {
   void RemoveBetween(Node* previous_child, Node* next_child, Node& old_child);
   // Inserts the specified nodes before |next|.
   // |next| may be nullptr.
-  // |post_insertion_notification_targets| must not be nullptr.
   template <typename Functor>
   void InsertNodeVector(const NodeVector&,
                         Node* next,
                         const Functor&,
-                        NodeVector* post_insertion_notification_targets);
+                        NodeVector& post_insertion_notification_targets);
   void DidInsertNodeVector(
       const NodeVector&,
       Node* next,

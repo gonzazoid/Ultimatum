@@ -5,14 +5,18 @@
 #include "net/socket/client_socket_pool.h"
 
 #include <memory>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 #include "base/check_op.h"
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
+#include "base/strings/strcat.h"
 #include "net/base/features.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/proxy_chain.h"
+#include "net/base/session_usage.h"
 #include "net/dns/public/secure_dns_policy.h"
 #include "net/http/http_proxy_connect_job.h"
 #include "net/log/net_log_event_type.h"
@@ -24,6 +28,7 @@
 #include "net/socket/stream_socket.h"
 #include "net/spdy/spdy_session.h"
 #include "net/spdy/spdy_session_pool.h"
+#include "net/ssl/ssl_config.h"
 #include "url/gurl.h"
 #include "url/scheme_host_port.h"
 #include "url/url_constants.h"
@@ -57,18 +62,43 @@ OnHostResolutionCallbackResult OnHostResolution(
       spdy_session_key, is_for_websockets, endpoint_results, aliases);
 }
 
+std::string_view GetPrivacyModeGroupIdPrefix(PrivacyMode privacy_mode) {
+  switch (privacy_mode) {
+    case PrivacyMode::PRIVACY_MODE_DISABLED:
+      return "";
+    case PrivacyMode::PRIVACY_MODE_ENABLED:
+      return "pm/";
+    case PrivacyMode::PRIVACY_MODE_ENABLED_WITHOUT_CLIENT_CERTS:
+      return "pmwocc/";
+    case PrivacyMode::PRIVACY_MODE_ENABLED_PARTITIONED_STATE_ALLOWED:
+      return "pmpsa/";
+  }
+}
+
+std::string_view GetSecureDnsPolicyGroupIdPrefix(
+    SecureDnsPolicy secure_dns_policy) {
+  switch (secure_dns_policy) {
+    case SecureDnsPolicy::kAllow:
+      return "";
+    case SecureDnsPolicy::kDisable:
+      return "dsd/";
+    case SecureDnsPolicy::kBootstrap:
+      return "dns_bootstrap/";
+  }
+}
+
 }  // namespace
 
 ClientSocketPool::SocketParams::SocketParams(
-    std::unique_ptr<SSLConfig> ssl_config_for_origin)
-    : ssl_config_for_origin_(std::move(ssl_config_for_origin)) {}
+    const std::vector<SSLConfig::CertAndStatus>& allowed_bad_certs)
+    : allowed_bad_certs_(allowed_bad_certs) {}
 
 ClientSocketPool::SocketParams::~SocketParams() = default;
 
 scoped_refptr<ClientSocketPool::SocketParams>
 ClientSocketPool::SocketParams::CreateForHttpForTesting() {
   return base::MakeRefCounted<SocketParams>(
-      /*ssl_config_for_origin=*/nullptr);
+      /*allowed_bad_certs=*/std::vector<SSLConfig::CertAndStatus>());
 }
 
 ClientSocketPool::GroupId::GroupId()
@@ -78,14 +108,16 @@ ClientSocketPool::GroupId::GroupId(
     url::SchemeHostPort destination,
     PrivacyMode privacy_mode,
     NetworkAnonymizationKey network_anonymization_key,
-    SecureDnsPolicy secure_dns_policy)
+    SecureDnsPolicy secure_dns_policy,
+    bool disable_cert_network_fetches)
     : destination_(std::move(destination)),
       privacy_mode_(privacy_mode),
       network_anonymization_key_(
           NetworkAnonymizationKey::IsPartitioningEnabled()
               ? std::move(network_anonymization_key)
               : NetworkAnonymizationKey()),
-      secure_dns_policy_(secure_dns_policy) {
+      secure_dns_policy_(secure_dns_policy),
+      disable_cert_network_fetches_(disable_cert_network_fetches) {
   DCHECK(destination_.IsValid());
 
   // ClientSocketPool only expected to be used for HTTP/HTTPS/WS/WSS cases, and
@@ -105,29 +137,14 @@ ClientSocketPool::GroupId& ClientSocketPool::GroupId::operator=(
     GroupId&& group_id) = default;
 
 std::string ClientSocketPool::GroupId::ToString() const {
-  std::string result = destination_.Serialize();
-
-  if (privacy_mode_)
-    result = "pm/" + result;
-
-  if (NetworkAnonymizationKey::IsPartitioningEnabled()) {
-    result += " <";
-    result += network_anonymization_key_.ToDebugString();
-    result += ">";
-  }
-
-  switch (secure_dns_policy_) {
-    case SecureDnsPolicy::kAllow:
-      break;
-    case SecureDnsPolicy::kDisable:
-      result = "dsd/" + result;
-      break;
-    case SecureDnsPolicy::kBootstrap:
-      result = "dns_bootstrap/" + result;
-      break;
-  }
-
-  return result;
+  return base::StrCat(
+      {disable_cert_network_fetches_ ? "disable_cert_network_fetches/" : "",
+       GetSecureDnsPolicyGroupIdPrefix(secure_dns_policy_),
+       GetPrivacyModeGroupIdPrefix(privacy_mode_), destination_.Serialize(),
+       NetworkAnonymizationKey::IsPartitioningEnabled()
+           ? base::StrCat(
+                 {" <", network_anonymization_key_.ToDebugString(), ">"})
+           : ""});
 }
 
 ClientSocketPool::~ClientSocketPool() = default;
@@ -168,7 +185,7 @@ std::unique_ptr<ConnectJob> ClientSocketPool::CreateConnectJob(
     GroupId group_id,
     scoped_refptr<SocketParams> socket_params,
     const ProxyChain& proxy_chain,
-    const absl::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
+    const std::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
     RequestPriority request_priority,
     SocketTag socket_tag,
     ConnectJob::Delegate* delegate) {
@@ -183,10 +200,11 @@ std::unique_ptr<ConnectJob> ClientSocketPool::CreateConnectJob(
         &OnHostResolution, common_connect_job_params_->spdy_session_pool,
         // TODO(crbug.com/1206799): Pass along as SchemeHostPort.
         SpdySessionKey(HostPortPair::FromSchemeHostPort(group_id.destination()),
-                       proxy_chain, group_id.privacy_mode(),
-                       SpdySessionKey::IsProxySession::kFalse, socket_tag,
+                       group_id.privacy_mode(), proxy_chain,
+                       SessionUsage::kDestination, socket_tag,
                        group_id.network_anonymization_key(),
-                       group_id.secure_dns_policy()),
+                       group_id.secure_dns_policy(),
+                       group_id.disable_cert_network_fetches()),
         is_for_websockets_);
   }
 
@@ -209,10 +227,11 @@ std::unique_ptr<ConnectJob> ClientSocketPool::CreateConnectJob(
 
   return connect_job_factory_->CreateConnectJob(
       group_id.destination(), proxy_chain, proxy_annotation_tag,
-      socket_params->ssl_config_for_origin(), alpn_mode, force_tunnel,
+      socket_params->allowed_bad_certs(), alpn_mode, force_tunnel,
       group_id.privacy_mode(), resolution_callback, request_priority,
       socket_tag, group_id.network_anonymization_key(),
-      group_id.secure_dns_policy(), common_connect_job_params_, delegate);
+      group_id.secure_dns_policy(), group_id.disable_cert_network_fetches(),
+      common_connect_job_params_, delegate);
 }
 
 }  // namespace net

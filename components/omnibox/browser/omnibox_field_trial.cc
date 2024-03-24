@@ -596,6 +596,17 @@ bool OmniboxFieldTrial::ShouldEncodeLeadingSpaceForOnDeviceTailSuggest() {
                                                  /*default_value=*/false);
 }
 
+bool OmniboxFieldTrial::ShouldApplyOnDeviceHeadModelSelectionFix() {
+  return base::GetFieldTrialParamByFeatureAsBool(
+             omnibox::kOnDeviceHeadProviderNonIncognito,
+             OmniboxFieldTrial::kOnDeviceHeadModelSelectionFix,
+             /*default_value=*/false) ||
+         base::GetFieldTrialParamByFeatureAsBool(
+             omnibox::kOnDeviceHeadProviderIncognito,
+             OmniboxFieldTrial::kOnDeviceHeadModelSelectionFix,
+             /*default_value=*/false);
+}
+
 bool OmniboxFieldTrial::IsOnDeviceHeadSuggestEnabledForLocale(
     const std::string& locale) {
   if (IsKoreanLocale(locale) &&
@@ -785,6 +796,7 @@ const char OmniboxFieldTrial::kDynamicMaxAutocompleteIncreasedLimitParam[] =
 
 const char OmniboxFieldTrial::kOnDeviceHeadModelLocaleConstraint[] =
     "ForceModelLocaleConstraint";
+const char OmniboxFieldTrial::kOnDeviceHeadModelSelectionFix[] = "SelectionFix";
 
 int OmniboxFieldTrial::kDefaultMinimumTimeBetweenSuggestQueriesMs = 100;
 
@@ -966,7 +978,7 @@ const base::FeatureParam<omnibox::CompanyEntityIconAdjustmentGroup>
     kCompanyEntityIconAdjustmentGroup{
         &omnibox::kCompanyEntityIconAdjustment,
         "OmniboxCompanyEntityAdjustmentGroup",
-        omnibox::CompanyEntityIconAdjustmentGroup::kLeastAggressive,
+        omnibox::CompanyEntityIconAdjustmentGroup::kModerate,
         &kCompanyEntityIconAdjustmentGroupOptions};
 
 const base::FeatureParam<bool> kCompanyEntityIconAdjustmentCounterfactual(
@@ -988,7 +1000,7 @@ const base::FeatureParam<bool> kEnableScoringSignalsAnnotatorsForLogging(
 const base::FeatureParam<bool> kEnableScoringSignalsAnnotatorsForMlScoring(
     &omnibox::kMlUrlScoring,
     "enable_scoring_signals_annotators_for_ml_scoring",
-    false);
+    true);
 
 // If true, runs the ML scoring model but does not assign new relevance scores
 // to the URL suggestions and does not rerank them.
@@ -1020,7 +1032,7 @@ MLConfig::MLConfig() {
                                "MlUrlScoringShortcutDocumentSignals", false)
           .Get() ||
       base::FeatureParam<bool>(&omnibox::kMlUrlScoring,
-                               "MlUrlScoringShortcutDocumentSignals", false)
+                               "MlUrlScoringShortcutDocumentSignals", true)
           .Get();
 
   ml_url_scoring = base::FeatureList::IsEnabled(omnibox::kMlUrlScoring);
@@ -1029,9 +1041,33 @@ MLConfig::MLConfig() {
       kMlUrlScoringUnlimitedNumCandidates.Get();
   ml_url_scoring_max_matches_by_provider =
       kMlUrlScoringMaxMatchesByProvider.Get();
-  stable_search_ranking =
-      base::FeatureParam<bool>(&omnibox::kMlUrlScoring, "stable_search_ranking",
-                               false)
+
+  // `kMlUrlSearchBlending` parameters.
+  stable_search_blending =
+      base::FeatureParam<bool>(&omnibox::kMlUrlSearchBlending,
+                               "MlUrlSearchBlending_StableSearchBlending",
+                               stable_search_blending)
+          .Get();
+  mapped_search_blending =
+      base::FeatureParam<bool>(&omnibox::kMlUrlSearchBlending,
+                               "MlUrlSearchBlending_MappedSearchBlending",
+                               mapped_search_blending)
+          .Get();
+  mapped_search_blending_min =
+      base::FeatureParam<int>(&omnibox::kMlUrlSearchBlending,
+                              "MlUrlSearchBlending_MappedSearchBlendingMin",
+                              mapped_search_blending_min)
+          .Get();
+  mapped_search_blending_max =
+      base::FeatureParam<int>(&omnibox::kMlUrlSearchBlending,
+                              "MlUrlSearchBlending_MappedSearchBlendingMax",
+                              mapped_search_blending_max)
+          .Get();
+  mapped_search_blending_grouping_threshold =
+      base::FeatureParam<int>(
+          &omnibox::kMlUrlSearchBlending,
+          "MlUrlSearchBlending_MappedSearchBlendingGroupingThreshold",
+          mapped_search_blending_grouping_threshold)
           .Get();
 
   url_scoring_model = base::FeatureList::IsEnabled(omnibox::kUrlScoringModel);
@@ -1103,6 +1139,17 @@ const base::FeatureParam<int>
         "max_prefetches_per_omnibox_session",
         5);
 // <- Touch Down Trigger For Prefetch
+// ---------------------------------------------------------
+// Site Search Starter Pack ->
+const base::FeatureParam<std::string> kGeminiUrlOverride(
+    &omnibox::kStarterPackExpansion,
+    "StarterPackGeminiUrlOverride",
+    "https://gemini.google.com/prompt");
+
+bool IsStarterPackExpansionEnabled() {
+  return base::FeatureList::IsEnabled(omnibox::kStarterPackExpansion);
+}
+// <- Site Search Starter Pack
 // ---------------------------------------------------------
 
 }  // namespace OmniboxFieldTrial

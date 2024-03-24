@@ -27,8 +27,30 @@ BASE_FEATURE(kEnableUpdatingUserBiddingSignals,
              "EnableUpdatingUserBiddingSignals",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
+// Enable write ahead logging for interest group storage.
+BASE_FEATURE(kFledgeEnableWALForInterestGroupStorage,
+             "FledgeEnableWALForInterestGroupStorage",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
 BASE_FEATURE(kFledgeFacilitatedTestingSignalsHeaders,
              "FledgeFacilitatedTestingSignalsHeaders",
              base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Enable prefetching B&A keys on the first joinAdInterestGroup call.
+BASE_FEATURE(kFledgePrefetchBandAKeys,
+             "FledgePrefetchBandAKeys",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Enable storing a retrieving B&A keys for the interest group
+// database.
+BASE_FEATURE(kFledgeStoreBandAKeysInDB,
+             "FledgeStoreBandAKeysInDB",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Enable detecting inconsistency in the `PageImpl` used in the auction. Abort
+// the auction when detected.
+BASE_FEATURE(kDetectInconsistentPageImpl,
+             "DetectInconsistentPageImpl",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 }  // namespace features

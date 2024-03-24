@@ -8,6 +8,7 @@
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
 #import "components/autofill/core/browser/autofill_test_utils.h"
+#import "components/autofill/core/common/autofill_payments_features.h"
 #import "components/url_formatter/elide_url.h"
 #import "ios/chrome/browser/metrics/model/metrics_app_interface.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
@@ -88,7 +89,8 @@ BOOL WaitForKeyboardToAppear() {
 
 - (AppLaunchConfiguration)appConfigurationForTestCase {
   AppLaunchConfiguration config;
-  config.features_enabled.push_back(kIOSPaymentsBottomSheet);
+  config.features_enabled.push_back(
+      autofill::features::kAutofillEnableVirtualCards);
   return config;
 }
 
@@ -132,9 +134,12 @@ id<GREYMatcher> SubtitleString(const GURL& url) {
 }
 
 id<GREYMatcher> ExpirationDateLabel() {
-  return grey_text(
-      base::SysUTF8ToNSString(autofill::test::NextMonth() + "/" +
-                              autofill::test::NextYear().substr(2)));
+  return grey_text(ExpirationDateNSString());
+}
+
+NSString* ExpirationDateNSString() {
+  return base::SysUTF8ToNSString(autofill::test::NextMonth() + "/" +
+                                 autofill::test::NextYear().substr(2));
 }
 
 #pragma mark - Helper methods
@@ -265,7 +270,7 @@ id<GREYMatcher> ExpirationDateLabel() {
   [[EarlGrey selectElementWithMatcher:continueButton] performAction:grey_tap()];
 
   // Verify the CVC requester is visible.
-  [[EarlGrey selectElementWithMatcher:grey_text(@"Confirm Card")]
+  [[EarlGrey selectElementWithMatcher:grey_text(@"Verification")]
       assertWithMatcher:grey_notNil()];
 
   GREYAssertNil(
@@ -509,6 +514,44 @@ id<GREYMatcher> ExpirationDateLabel() {
       performAction:grey_tap()];
 
   WaitForKeyboardToAppear();
+}
+
+// Tests that both the virtual card and the original card are shown
+// in the Payments Bottom Sheet.
+- (void)testPaymentsBottomSheetShowsVirtualCard {
+  // TODO(b/324870929): This test is flaky on iPad.
+  if ([ChromeEarlGrey isIPadIdiom]) {
+    EARL_GREY_TEST_DISABLED(@"Fails flakily on iPad.");
+  }
+
+  // Add a credit card enrolled in VCN to the Personal Data Manager.
+  NSString* enrolledCardNameAndLastFour =
+      [AutofillAppInterface saveMaskedCreditCardEnrolledInVirtualCard];
+
+  [self loadPaymentsPage];
+
+  // Trigger autofill.
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::WebViewMatcher()]
+      performAction:chrome_test_util::TapWebElementWithId(kFormCardName)];
+
+  // Confirm virtual card is displayed.
+  [[EarlGrey
+      selectElementWithMatcher:grey_accessibilityID([NSString
+                                   stringWithFormat:@"%@ %@",
+                                                    enrolledCardNameAndLastFour,
+                                                    @"Virtual card"])]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  // Confirm original card is displayed.
+  [[EarlGrey
+      selectElementWithMatcher:grey_accessibilityID([NSString
+                                   stringWithFormat:@"%@ %@",
+                                                    enrolledCardNameAndLastFour,
+                                                    ExpirationDateNSString()])]
+      assertWithMatcher:grey_sufficientlyVisible()];
+
+  // Dismiss the bottom sheet by tapping outside.
+  [[EarlGrey selectElementWithMatcher:grey_keyWindow()]
+      performAction:grey_tap()];
 }
 
 @end

@@ -9,6 +9,7 @@
 #include "base/traits_bag.h"
 #include "build/build_config.h"
 #include "ui/gl/gl_bindings.h"
+#include "ui/gl/gl_context.h"
 #include "ui/gl/gl_display.h"
 #include "ui/gl/gl_implementation.h"
 #include "ui/gl/gl_utils.h"
@@ -34,10 +35,19 @@ GLsync glFenceSyncEmulateEGL(GLenum condition, GLbitfield flags) {
   DCHECK(condition == GL_SYNC_GPU_COMMANDS_COMPLETE);
   DCHECK(flags == 0);
 
+  // Prefer EGL_ANGLE_global_fence_sync as it guarantees synchronization with
+  // past submissions from all contexts, rather than the current context.
+  gl::GLContext* context = gl::GLContext::GetCurrent();
+  gl::GLDisplayEGL* display = context ? context->GetGLDisplayEGL() : nullptr;
+  const EGLenum syncType =
+      display && display->ext->b_EGL_ANGLE_global_fence_sync
+          ? EGL_SYNC_GLOBAL_FENCE_ANGLE
+          : EGL_SYNC_FENCE_KHR;
+
   init::EGLFenceData* data = new EGLFenceData;
 
   data->display = eglGetCurrentDisplay();
-  data->sync = eglCreateSyncKHR(data->display, EGL_SYNC_FENCE_KHR, nullptr);
+  data->sync = eglCreateSyncKHR(data->display, syncType, nullptr);
 
   return reinterpret_cast<GLsync>(data);
 }
@@ -138,12 +148,12 @@ GrGLFunction<R GR_GL_FUNCTION_TYPE(Args...)> bind_impl(
           return R();
       }
 
-      absl::optional<gl::ScopedProgressReporter> scoped_reporter;
+      std::optional<gl::ScopedProgressReporter> scoped_reporter;
       // Not using constexpr if here to avoid unused progress_reporter warning.
       if (slow && progress_reporter)
         scoped_reporter.emplace(progress_reporter);
 
-      absl::optional<FlushHelper> flush_helper;
+      std::optional<FlushHelper> flush_helper;
       if constexpr (need_flush)
         flush_helper.emplace();
       return func(args...);

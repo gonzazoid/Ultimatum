@@ -136,11 +136,10 @@ class ASH_EXPORT LoginShelfView : public views::View,
 
   // views::View:
   void AddedToWidget() override;
-  const char* GetClassName() const override;
   void OnFocus() override;
   void AboutToRequestFocusFromTabTraversal(bool reverse) override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
-  void Layout() override;
+  void Layout(PassKey) override;
 
   // ShelfConfig::Observer:
   void OnShelfConfigUpdated() override;
@@ -314,7 +313,7 @@ class ASH_EXPORT LoginShelfView : public views::View,
   // Set of the tray buttons which are in disabled state. It is used to record
   // and recover the states of tray buttons after temporarily disable of the
   // buttons.
-  std::set<TrayBackgroundView*> disabled_tray_buttons_;
+  std::set<raw_ptr<TrayBackgroundView, SetExperimental>> disabled_tray_buttons_;
 
   base::WeakPtrFactory<LoginShelfView> weak_ptr_factory_{this};
 };

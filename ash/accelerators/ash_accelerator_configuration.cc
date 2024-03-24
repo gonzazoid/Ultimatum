@@ -157,6 +157,12 @@ std::vector<ash::AcceleratorData> GetDefaultAccelerators() {
                         ash::kToggleGameDashboardAcceleratorDataLength));
   }
 
+  if (ash::features::IsPickerUpdateEnabled()) {
+    AppendAcceleratorData(
+        accelerators, base::make_span(ash::kTogglePickerAcceleratorData,
+                                      ash::kTogglePickerAcceleratorDataLength));
+  }
+
   // Debug accelerators.
   if (ash::debug::DebugAcceleratorsEnabled()) {
     AppendAcceleratorData(accelerators,
@@ -578,6 +584,17 @@ AshAcceleratorConfiguration::DoReplaceAccelerator(
 
   // Now add the new accelerator.
   return DoAddAccelerator(action_id, new_accelerator, /*save_override=*/true);
+}
+
+void AshAcceleratorConfiguration::SetUsePositionalLookup(
+    bool use_positional_lookup) {
+  accelerator_to_id_.set_use_positional_lookup(use_positional_lookup);
+  deprecated_accelerators_to_id_.set_use_positional_lookup(
+      use_positional_lookup);
+  default_accelerators_to_id_cache_.set_use_positional_lookup(
+      use_positional_lookup);
+  default_deprecated_accelerators_to_id_cache_.set_use_positional_lookup(
+      use_positional_lookup);
 }
 
 const DeprecatedAcceleratorData*

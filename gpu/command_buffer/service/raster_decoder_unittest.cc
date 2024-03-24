@@ -295,9 +295,13 @@ class RasterDecoderOOPTest : public testing::Test, DecoderClient {
     gpu::Mailbox mailbox = gpu::Mailbox::GenerateForSharedImage();
     gfx::Size size(width, height);
     auto color_space = gfx::ColorSpace::CreateSRGB();
+
+    // Via this function, this test creates mailboxes that are used as both the
+    // sources of reads and destinations of writes via the raster interface.
     shared_image_factory_->CreateSharedImage(
         mailbox, format, size, color_space, kTopLeft_GrSurfaceOrigin,
-        kPremul_SkAlphaType, gpu::kNullSurfaceHandle, SHARED_IMAGE_USAGE_RASTER,
+        kPremul_SkAlphaType, gpu::kNullSurfaceHandle,
+        SHARED_IMAGE_USAGE_RASTER_READ | SHARED_IMAGE_USAGE_RASTER_WRITE,
         "TestLabel");
 
     if (cleared) {

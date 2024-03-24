@@ -46,6 +46,8 @@ DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(PermissionPromptBubbleBaseView,
                                       kBlockButtonElementId);
 DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(PermissionPromptBubbleBaseView,
                                       kAllowButtonElementId);
+DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(PermissionPromptBubbleBaseView,
+                                      kAllowOnceButtonElementId);
 
 PermissionPromptBubbleBaseView::PermissionPromptBubbleBaseView(
     Browser* browser,
@@ -83,13 +85,18 @@ void PermissionPromptBubbleBaseView::CreatePermissionButtons(
         views::BoxLayout::Orientation::kVertical, gfx::Insets(),
         DISTANCE_BUTTON_VERTICAL));
 
-    auto allow_once_button = std::make_unique<views::MdTextButton>(
-        base::BindRepeating(&PermissionPromptBubbleBaseView::
-                                FilterUnintenedEventsAndRunCallbacks,
-                            base::Unretained(this),
-                            GetViewId(PermissionDialogButton::kAcceptOnce)),
-        l10n_util::GetStringUTF16(IDS_PERMISSION_ALLOW_THIS_TIME));
-    allow_once_button->SetID(GetViewId(PermissionDialogButton::kAcceptOnce));
+    auto allow_once_button =
+        views::Builder<views::MdTextButton>()
+            .SetText(l10n_util::GetStringUTF16(IDS_PERMISSION_ALLOW_THIS_TIME))
+            .SetCallback(base::BindRepeating(
+                &PermissionPromptBubbleBaseView::
+                    FilterUnintenedEventsAndRunCallbacks,
+                base::Unretained(this),
+                GetViewId(PermissionDialogButton::kAcceptOnce)))
+            .SetID(GetViewId(PermissionDialogButton::kAcceptOnce))
+            .SetProperty(views::kElementIdentifierKey,
+                         kAllowOnceButtonElementId)
+            .Build();
 
     auto allow_always_button = std::make_unique<views::MdTextButton>(
         base::BindRepeating(&PermissionPromptBubbleBaseView::
@@ -248,7 +255,6 @@ bool PermissionPromptBubbleBaseView::ShouldShowCloseButton() const {
 
 void PermissionPromptBubbleBaseView::ClosingPermission() {
   DCHECK_EQ(prompt_style_, PermissionPromptStyle::kBubbleOnly);
-  RecordDecision(permissions::PermissionAction::DISMISSED);
   if (delegate_) {
     delegate_->Dismiss();
   }
@@ -258,15 +264,12 @@ void PermissionPromptBubbleBaseView::RunButtonCallback(int button_id) {
   PermissionDialogButton button = GetPermissionDialogButton(button_id);
   switch (button) {
     case PermissionDialogButton::kAccept:
-      RecordDecision(permissions::PermissionAction::GRANTED);
       delegate_->Accept();
       return;
     case PermissionDialogButton::kAcceptOnce:
-      RecordDecision(permissions::PermissionAction::GRANTED_ONCE);
       delegate_->AcceptThisTime();
       return;
     case PermissionDialogButton::kDeny:
-      RecordDecision(permissions::PermissionAction::DENIED);
       delegate_->Deny();
       return;
   }
@@ -314,36 +317,6 @@ std::u16string PermissionPromptBubbleBaseView::GetAllowAlwaysText(
 
   // Use the generic text.
   return l10n_util::GetStringUTF16(IDS_PERMISSION_ALLOW_EVERY_VISIT);
-}
-
-void PermissionPromptBubbleBaseView::RecordDecision(
-    permissions::PermissionAction action) {
-  const std::string uma_suffix =
-      permissions::PermissionUmaUtil::GetPermissionActionString(action);
-
-  std::string time_to_decision_uma_name = std::string();
-
-  switch (prompt_style_) {
-    case PermissionPromptStyle::kBubbleOnly:
-      time_to_decision_uma_name = "Permissions.Prompt.TimeToDecision";
-      break;
-    case PermissionPromptStyle::kEmbeddedElementSecondaryUI:
-      time_to_decision_uma_name =
-          "Permissions.kEmbeddedElementSecondaryUI.TimeToDecision";
-      break;
-    case PermissionPromptStyle::kChip:
-      time_to_decision_uma_name = "Permissions.Chip.TimeToDecision";
-      break;
-    default:
-      // |PermissionPromptStyle::kQuietChip| and
-      // |PermissionPromptStyle::kLocationBarRightIcon| do not use
-      // PermissionPromptBubbleBaseView and will reach this case.
-      NOTREACHED();
-  }
-
-  base::UmaHistogramLongTimes(
-      time_to_decision_uma_name + "." + uma_suffix,
-      base::TimeTicks::Now() - permission_requested_time_);
 }
 
 BEGIN_METADATA(PermissionPromptBubbleBaseView)

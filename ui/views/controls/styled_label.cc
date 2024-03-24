@@ -8,13 +8,13 @@
 
 #include <algorithm>
 #include <limits>
+#include <optional>
 #include <utility>
 
 #include "base/i18n/rtl.h"
 #include "base/memory/raw_ptr.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -164,12 +164,12 @@ void StyledLabel::SetDefaultTextStyle(int text_style) {
   OnPropertyChanged(&default_text_style_, kPropertyEffectsPreferredSizeChanged);
 }
 
-absl::optional<ui::ColorId> StyledLabel::GetDefaultEnabledColorId() const {
+std::optional<ui::ColorId> StyledLabel::GetDefaultEnabledColorId() const {
   return default_enabled_color_id_;
 }
 
 void StyledLabel::SetDefaultEnabledColorId(
-    absl::optional<ui::ColorId> enabled_color_id) {
+    std::optional<ui::ColorId> enabled_color_id) {
   if (default_enabled_color_id_ == enabled_color_id) {
     return;
   }
@@ -243,16 +243,36 @@ const StyledLabel::LayoutSizeInfo& StyledLabel::GetLayoutSizeInfoForWidth(
 }
 
 void StyledLabel::SizeToFit(int fixed_width) {
-  CalculateLayout(fixed_width == 0 ? std::numeric_limits<int>::max()
-                                   : fixed_width);
-  gfx::Size size = layout_size_info_.total_size;
+  DCHECK_LE(0, fixed_width);
+  fixed_width_ = fixed_width;
+  gfx::Size size = CalculatePreferredSize(
+      SizeBounds(fixed_width_ == 0 ? SizeBound() : SizeBound(width()), {}));
   size.set_width(std::max(size.width(), fixed_width));
   SetSize(size);
 }
 
 gfx::Size StyledLabel::CalculatePreferredSize() const {
   // Respect any existing size.  If there is none, default to a single line.
-  CalculateLayout((width() == 0) ? std::numeric_limits<int>::max() : width());
+  return CalculatePreferredSize(
+      SizeBounds(width() == 0 ? SizeBound() : SizeBound(width()), {}));
+}
+
+gfx::Size StyledLabel::CalculatePreferredSize(
+    const SizeBounds& available_size) const {
+  int width = 0;
+  if (fixed_width_ && !use_legacy_preferred_size_) {
+    // TODO(322715559): Remove the legacy path. We would like the preferred size
+    // to be independent of the current layout (e.g. width).
+    // Investigate why in the new behavior, SizeToFit() with a large width leads
+    // to an unexpectedly small height in the bug, causing layout issues not
+    // seen with legacy behavior where preferred size is width-dependent.
+    width = fixed_width_;
+  } else if (available_size.width().is_bounded()) {
+    width = available_size.width().value();
+  }
+
+  // Respect any existing size.  If there is none, default to a single line.
+  CalculateLayout(width == 0 ? std::numeric_limits<int>::max() : width);
   return layout_size_info_.total_size;
 }
 
@@ -260,7 +280,7 @@ int StyledLabel::GetHeightForWidth(int w) const {
   return GetLayoutSizeInfoForWidth(w).total_size.height();
 }
 
-void StyledLabel::Layout() {
+void StyledLabel::Layout(PassKey) {
   CalculateLayout(width());
 
   // If the layout has been recalculated, add and position all views.
@@ -631,9 +651,9 @@ void StyledLabel::UpdateLabelBackgroundColor() {
       DCHECK(IsViewClass<Label>(child) || IsViewClass<LinkFragment>(child));
       static_cast<Label*>(child)->SetBackgroundColorId(
           absl::holds_alternative<ui::ColorId>(displayed_on_background_color_)
-              ? absl::optional<ui::ColorId>(
+              ? std::optional<ui::ColorId>(
                     absl::get<ui::ColorId>(displayed_on_background_color_))
-              : absl::nullopt);
+              : std::nullopt);
       if (absl::holds_alternative<SkColor>(displayed_on_background_color_)) {
         static_cast<Label*>(child)->SetBackgroundColor(
             absl::get<SkColor>(displayed_on_background_color_));
@@ -657,7 +677,7 @@ ADD_PROPERTY_METADATA(int, DefaultTextStyle)
 ADD_PROPERTY_METADATA(int, LineHeight)
 ADD_PROPERTY_METADATA(bool, AutoColorReadabilityEnabled)
 ADD_PROPERTY_METADATA(StyledLabel::ColorVariant, DisplayedOnBackgroundColor)
-ADD_PROPERTY_METADATA(absl::optional<ui::ColorId>, DefaultEnabledColorId)
+ADD_PROPERTY_METADATA(std::optional<ui::ColorId>, DefaultEnabledColorId)
 END_METADATA
 
 }  // namespace views

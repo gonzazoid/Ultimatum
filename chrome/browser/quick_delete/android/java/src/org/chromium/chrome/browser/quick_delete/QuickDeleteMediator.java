@@ -48,11 +48,13 @@ class QuickDeleteMediator
      */
     @Override
     public void onTimePeriodChanged(@TimePeriod int timePeriod) {
+        mQuickDeleteTabsFilter.prepareListOfTabsToBeClosed(timePeriod);
+
         mPropertyModel.set(
                 QuickDeleteProperties.IS_SIGNED_IN, QuickDeleteDelegate.isSignedIn(mProfile));
         mPropertyModel.set(
                 QuickDeleteProperties.CLOSED_TABS_COUNT,
-                mQuickDeleteTabsFilter.getListOfTabsToBeClosed(timePeriod).size());
+                mQuickDeleteTabsFilter.getListOfTabsFilteredToBeClosed().size());
         mPropertyModel.set(QuickDeleteProperties.TIME_PERIOD, timePeriod);
 
         mPropertyModel.set(QuickDeleteProperties.IS_SYNCING_HISTORY, false);
@@ -64,10 +66,10 @@ class QuickDeleteMediator
     /**
      * Called when the domain count and last visited domain are fetched from local history.
      *
-     * @param lastVisitedDomain The synced last visited domain on all devices in the last 15
-     *                          minutes.
-     * @param domainCount The number of synced unique domains visited on all devices in the
-     *                    last 15 minutes.
+     * @param lastVisitedDomain The synced last visited domain on all devices within the selected
+     *     time period.
+     * @param domainCount The number of synced unique domains visited on all devices within the
+     *     selected time period.
      */
     @Override
     public void onLastVisitedDomainAndUniqueDomainCountReady(

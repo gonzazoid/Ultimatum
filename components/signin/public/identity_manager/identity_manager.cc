@@ -4,6 +4,7 @@
 
 #include "components/signin/public/identity_manager/identity_manager.h"
 
+#include <optional>
 #include <string>
 
 #include "base/functional/bind.h"
@@ -25,7 +26,6 @@
 #include "components/signin/public/identity_manager/diagnostics_provider.h"
 #include "components/signin/public/identity_manager/primary_account_mutator.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/jni_string.h"
@@ -166,10 +166,10 @@ IdentityManager::IdentityManager(IdentityManager::InitParameters&& parameters)
   // Profile / KeyedServices - but with the availability of IdentityManager. We
   // don't have such a place in Lacros - which guarantees that the Primary
   // Account will be available on startup - just like Ash.
-  absl::optional<account_manager::Account> initial_account =
+  std::optional<account_manager::Account> initial_account =
       signin_client_->GetInitialPrimaryAccount();
   if (initial_account.has_value()) {
-    const absl::optional<bool>& initial_account_is_child =
+    const std::optional<bool>& initial_account_is_child =
         signin_client_->IsInitialPrimaryAccountChild();
     CHECK(initial_account_is_child.has_value());
     SetPrimaryAccount(this, account_tracker_service_.get(), signin_client_,
@@ -217,7 +217,7 @@ void IdentityManager::RemoveObserver(Observer* observer) {
   observer_list_.RemoveObserver(observer);
 }
 
-// TODO(862619) change return type to absl::optional<CoreAccountInfo>
+// TODO(862619) change return type to std::optional<CoreAccountInfo>
 CoreAccountInfo IdentityManager::GetPrimaryAccountInfo(
     ConsentLevel consent) const {
   return primary_account_manager_->GetPrimaryAccountInfo(consent);
@@ -419,6 +419,10 @@ DiagnosticsProvider* IdentityManager::GetDiagnosticsProvider() {
   return diagnostics_provider_.get();
 }
 
+void IdentityManager::PrepareForAddingNewAccount() {
+  account_fetcher_service_->PrepareForFetchingAccountCapabilities();
+}
+
 #if BUILDFLAG(IS_ANDROID)
 base::android::ScopedJavaLocalRef<jobject>
 IdentityManager::LegacyGetAccountTrackerServiceJavaObject() {
@@ -436,22 +440,24 @@ IdentityManager::GetIdentityMutatorJavaObject() {
       identity_mutator_->GetJavaObject());
 }
 
-void IdentityManager::RefreshAccountInfoIfStale() {
-  std::vector<CoreAccountInfo> accounts = GetAccountsWithRefreshTokens();
-  for (const CoreAccountInfo& account : accounts) {
-    DCHECK(HasAccountWithRefreshToken(account.account_id));
-    AccountInfo account_info =
-        account_tracker_service_->GetAccountInfo(account.account_id);
-    if (account_info.account_image.IsEmpty()) {
-      account_info_fetch_start_times_[account.account_id] =
-          base::TimeTicks::Now();
-    }
-    account_fetcher_service_->RefreshAccountInfoIfStale(account.account_id);
+void IdentityManager::RefreshAccountInfoIfStale(
+    const CoreAccountId& account_id) {
+  DCHECK(HasAccountWithRefreshToken(account_id));
+  AccountInfo account_info =
+      account_tracker_service_->GetAccountInfo(account_id);
+  if (account_info.account_image.IsEmpty()) {
+    account_info_fetch_start_times_[account_id] = base::TimeTicks::Now();
   }
+  account_fetcher_service_->RefreshAccountInfoIfStale(account_id);
 }
 
-void IdentityManager::RefreshAccountInfoIfStale(JNIEnv* env) {
-  RefreshAccountInfoIfStale();
+void IdentityManager::RefreshAccountInfoIfStale(
+    JNIEnv* env,
+    const base::android::JavaParamRef<jobject>& j_core_account_id) {
+  if (j_core_account_id) {
+    RefreshAccountInfoIfStale(
+        ConvertFromJavaCoreAccountId(env, j_core_account_id));
+  }
 }
 
 base::android::ScopedJavaLocalRef<jobject>
@@ -715,6 +721,11 @@ void IdentityManager::OnAccountUpdated(const AccountInfo& info) {
 }
 
 void IdentityManager::OnAccountRemoved(const AccountInfo& info) {
+#if (BUILDFLAG(IS_ANDROID))
+  if (base::FeatureList::IsEnabled(switches::kSeedAccountsRevamp)) {
+    account_fetcher_service_->DestroyFetchers(info.account_id);
+  }
+#endif
   for (auto& observer : observer_list_)
     observer.OnExtendedAccountInfoRemoved(info);
 }

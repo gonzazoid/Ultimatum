@@ -2,19 +2,22 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {Discount} from 'chrome://new-tab-page/discount.mojom-webui.js';
-import {Cluster, InteractionState, URLVisit} from 'chrome://new-tab-page/history_cluster_types.mojom-webui.js';
+import type {Discount} from 'chrome://new-tab-page/discount.mojom-webui.js';
+import type {Cluster, URLVisit} from 'chrome://new-tab-page/history_cluster_types.mojom-webui.js';
+import {InteractionState} from 'chrome://new-tab-page/history_cluster_types.mojom-webui.js';
 import {LayoutType} from 'chrome://new-tab-page/history_clusters_layout_type.mojom-webui.js';
 import {PageHandlerRemote} from 'chrome://new-tab-page/history_clusters_v2.mojom-webui.js';
-import {DismissModuleInstanceEvent, HistoryClustersProxyImplV2, historyClustersV2Descriptor, HistoryClustersV2ModuleElement, HistoryClusterV2ImageDisplayState, PageImageServiceBrowserProxy, VisitTileModuleElement} from 'chrome://new-tab-page/lazy_load.js';
+import type {DismissModuleInstanceEvent, HistoryClustersV2ModuleElement, VisitTileModuleElement} from 'chrome://new-tab-page/lazy_load.js';
+import {HistoryClustersProxyImplV2, historyClustersV2Descriptor, HistoryClusterV2ImageDisplayState, PageImageServiceBrowserProxy} from 'chrome://new-tab-page/lazy_load.js';
 import {$$} from 'chrome://new-tab-page/new_tab_page.js';
 import {PageImageServiceHandlerRemote} from 'chrome://resources/cr_components/page_image_service/page_image_service.mojom-webui.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
-import {Url} from 'chrome://resources/mojo/url/mojom/url.mojom-webui.js';
+import type {Url} from 'chrome://resources/mojo/url/mojom/url.mojom-webui.js';
 import {assertDeepEquals, assertEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {fakeMetricsPrivate, MetricsTracker} from 'chrome://webui-test/metrics_test_support.js';
+import type {MetricsTracker} from 'chrome://webui-test/metrics_test_support.js';
+import {fakeMetricsPrivate} from 'chrome://webui-test/metrics_test_support.js';
 import {waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
-import {TestMock} from 'chrome://webui-test/test_mock.js';
+import type {TestMock} from 'chrome://webui-test/test_mock.js';
 import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
 import {installMock} from '../../../test_support.js';
@@ -25,13 +28,15 @@ function createSampleClusters(count: number): Cluster[] {
       (_, i) => createSampleCluster(2, {id: BigInt(i)}));
 }
 
+const SAMPLE_CLUSTER_ID = BigInt(111);
+
 function createSampleCluster(
     numRelatedSearches: number,
     overrides?: Partial<Cluster>,
     ): Cluster {
   const cluster: Cluster = Object.assign(
       {
-        id: BigInt(111),
+        id: SAMPLE_CLUSTER_ID,
         visits: createSampleVisits(2, 2),
         label: '',
         labelMatchPositions: [],
@@ -98,10 +103,11 @@ suite('NewTabPageModulesHistoryClustersV2ModuleTest', () => {
   }
 
   async function assertUpdateClusterVisitsInteractionStateCall(
-      state: InteractionState, count: number) {
-    const [visits, interactionState] =
+      id: bigint, state: InteractionState, count: number) {
+    const [clusterId, visits, interactionState] =
         await handler.whenCalled('updateClusterVisitsInteractionState');
 
+    assertEquals(id, clusterId);
     assertEquals(count, visits.length);
     visits.forEach((visit: URLVisit, index: number) => {
       assertEquals(index, Number(visit.visitId));
@@ -202,7 +208,8 @@ suite('NewTabPageModulesHistoryClustersV2ModuleTest', () => {
           await waitForDismissEvent;
       assertEquals(
           `${sampleCluster.label!} hidden`, dismissEvent.detail.message);
-      assertUpdateClusterVisitsInteractionStateCall(InteractionState.kDone, 3);
+      assertUpdateClusterVisitsInteractionStateCall(
+          SAMPLE_CLUSTER_ID, InteractionState.kDone, 3);
     });
 
     test(
@@ -271,7 +278,7 @@ suite('NewTabPageModulesHistoryClustersV2ModuleTest', () => {
               `${sampleCluster.label!} hidden`, dismissEvent.detail.message);
           assertTrue(!!dismissEvent.detail.restoreCallback);
           assertUpdateClusterVisitsInteractionStateCall(
-              InteractionState.kHidden, 3);
+              SAMPLE_CLUSTER_ID, InteractionState.kHidden, 3);
 
           // Act.
           const restoreCallback = dismissEvent.detail.restoreCallback!;
@@ -279,7 +286,7 @@ suite('NewTabPageModulesHistoryClustersV2ModuleTest', () => {
 
           // Assert.
           assertUpdateClusterVisitsInteractionStateCall(
-              InteractionState.kDefault, 3);
+              SAMPLE_CLUSTER_ID, InteractionState.kDefault, 3);
         });
 
     test(
@@ -309,7 +316,7 @@ suite('NewTabPageModulesHistoryClustersV2ModuleTest', () => {
               `${sampleCluster.label!} hidden`, dismissEvent.detail.message);
           assertTrue(!!dismissEvent.detail.restoreCallback);
           assertUpdateClusterVisitsInteractionStateCall(
-              InteractionState.kDone, 3);
+              SAMPLE_CLUSTER_ID, InteractionState.kDone, 3);
 
           // Act.
           const restoreCallback = dismissEvent.detail.restoreCallback!;
@@ -317,8 +324,27 @@ suite('NewTabPageModulesHistoryClustersV2ModuleTest', () => {
 
           // Assert.
           assertUpdateClusterVisitsInteractionStateCall(
-              InteractionState.kDefault, 3);
+              SAMPLE_CLUSTER_ID, InteractionState.kDefault, 3);
         });
+
+    test('Backend is notified when module is disabled', async () => {
+      // Arrange.
+      const sampleCluster = createSampleCluster(2, {label: '"Sample Journey"'});
+      const moduleElements = await initializeModule([sampleCluster]);
+      const moduleElement = moduleElements[0];
+      assertTrue(!!moduleElement);
+
+      // Act.
+      const disableButton =
+          moduleElement.shadowRoot!.querySelector('history-clusters-header-v2')!
+              .shadowRoot!.querySelector('ntp-module-header-v2')!.shadowRoot!
+              .querySelector('#disable')! as HTMLButtonElement;
+      disableButton.click();
+
+      // Assert.
+      const clusterId = await handler.whenCalled('recordDisabled');
+      assertEquals(BigInt(111), clusterId);
+    });
 
     test('Show History side panel invoked when clicking header', async () => {
       loadTimeData.overrideValues({

@@ -7,22 +7,22 @@
  * 'os-settings-a11y-page' is the small section of advanced settings containing
  * a subpage with Accessibility settings for ChromeOS.
  */
-import 'chrome://resources/cr_elements/cr_link_row/cr_link_row.js';
-import '/shared/settings/controls/settings_toggle_button.js';
+import 'chrome://resources/ash/common/cr_elements/cr_link_row/cr_link_row.js';
+import '../controls/settings_toggle_button.js';
 import '../os_settings_page/os_settings_animated_pages.js';
 import '../os_settings_page/os_settings_subpage.js';
 import '../os_settings_page/settings_card.js';
 import '../settings_shared.css.js';
 
-import {SettingsToggleButtonElement} from '/shared/settings/controls/settings_toggle_button.js';
 import {PrefsMixin} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
-import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/ash/common/cr_elements/web_ui_listener_mixin.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {DeepLinkingMixin} from '../common/deep_linking_mixin.js';
 import {isRevampWayfindingEnabled} from '../common/load_time_booleans.js';
 import {RouteOriginMixin} from '../common/route_origin_mixin.js';
+import {SettingsToggleButtonElement} from '../controls/settings_toggle_button.js';
 import {Section} from '../mojom-webui/routes.mojom-webui.js';
 import {Setting} from '../mojom-webui/setting.mojom-webui.js';
 import {Route, Router, routes} from '../router.js';
@@ -150,6 +150,10 @@ export class OsSettingsA11yPageElement extends OsSettingsA11yPageElementBase {
     this.route = routes.OS_ACCESSIBILITY;
 
     this.browserProxy_ = OsA11yPageBrowserProxyImpl.getInstance();
+
+    if (this.isKioskModeActive_) {
+      this.redirectToOldA11ySettings();
+    }
   }
 
   override ready(): void {
@@ -198,11 +202,19 @@ export class OsSettingsA11yPageElement extends OsSettingsA11yPageElementBase {
     }
   }
 
+  private redirectToOldA11ySettings(): void {
+    Router.getInstance().navigateTo(routes.MANAGE_ACCESSIBILITY);
+  }
+
   private onToggleAccessibilityImageLabels_(): void {
     const a11yImageLabelsOn = this.$.a11yImageLabelsToggle.checked;
     if (a11yImageLabelsOn) {
       this.browserProxy_.confirmA11yImageLabels();
     }
+  }
+
+  private onSwitchAccessSettingsClick_(): void {
+    Router.getInstance().navigateTo(routes.MANAGE_SWITCH_ACCESS_SETTINGS);
   }
 
   private onTextToSpeechClick_(): void {

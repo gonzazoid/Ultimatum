@@ -10,6 +10,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+
 #include "base/check.h"
 #include "base/check_op.h"
 #include "base/feature_list.h"
@@ -60,6 +61,7 @@
 #include "services/network/public/cpp/record_ontransfersizeupdate_utils.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/url_loader_completion_status.h"
+#include "services/network/public/cpp/url_loader_factory_builder.h"
 #include "services/network/public/mojom/early_hints.mojom.h"
 #include "services/network/public/mojom/network_service.mojom.h"
 #include "services/network/public/mojom/parsed_headers.mojom-forward.h"
@@ -1143,6 +1145,8 @@ void WebRequestProxyingURLLoaderFactory::InProgressRequest::
     case URLLoaderFactoryType::kServiceWorkerScript:
     case URLLoaderFactoryType::kDownload:
     case URLLoaderFactoryType::kPrefetch:
+    case URLLoaderFactoryType::kDevTools:
+    case URLLoaderFactoryType::kEarlyHints:
       break;
   }
 
@@ -1322,6 +1326,7 @@ void WebRequestProxyingURLLoaderFactory::InProgressRequest::
 
   std::move(callback_pair.second).Run(net::OK);
 }
+
 void WebRequestProxyingURLLoaderFactory::InProgressRequest::OnRequestError(
     const network::URLLoaderCompletionStatus& status,
     State state) {
@@ -1430,6 +1435,13 @@ network::URLLoaderCompletionStatus WebRequestProxyingURLLoaderFactory::
   return status;
 }
 
+void WebRequestProxyingURLLoaderFactory::InProgressRequest::
+    EraseDNRActionsForExtension(const ExtensionId& extension_id) {
+  if (info_) {
+    info_->EraseDNRActionsForExtension(extension_id);
+  }
+}
+
 WebRequestProxyingURLLoaderFactory::WebRequestProxyingURLLoaderFactory(
     content::BrowserContext* browser_context,
     int render_process_id,
@@ -1439,8 +1451,7 @@ WebRequestProxyingURLLoaderFactory::WebRequestProxyingURLLoaderFactory(
     std::unique_ptr<ExtensionNavigationUIData> navigation_ui_data,
     std::optional<int64_t> navigation_id,
     ukm::SourceIdObj ukm_source_id,
-    mojo::PendingReceiver<network::mojom::URLLoaderFactory> loader_receiver,
-    mojo::PendingRemote<network::mojom::URLLoaderFactory> target_factory_remote,
+    network::URLLoaderFactoryBuilder& factory_builder,
     mojo::PendingReceiver<network::mojom::TrustedURLLoaderHeaderClient>
         header_client_receiver,
     WebRequestAPI::ProxySet* proxies,
@@ -1468,6 +1479,8 @@ WebRequestProxyingURLLoaderFactory::WebRequestProxyingURLLoaderFactory(
           ->Subscribe(base::BindRepeating(&WebRequestAPI::ProxySet::RemoveProxy,
                                           base::Unretained(proxies_), this));
 
+  auto [loader_receiver, target_factory_remote] = factory_builder.Append();
+
   target_factory_.Bind(std::move(target_factory_remote));
   target_factory_.set_disconnect_handler(
       base::BindOnce(&WebRequestProxyingURLLoaderFactory::OnTargetFactoryError,
@@ -1494,8 +1507,7 @@ void WebRequestProxyingURLLoaderFactory::StartProxying(
     std::unique_ptr<ExtensionNavigationUIData> navigation_ui_data,
     std::optional<int64_t> navigation_id,
     ukm::SourceIdObj ukm_source_id,
-    mojo::PendingReceiver<network::mojom::URLLoaderFactory> loader_receiver,
-    mojo::PendingRemote<network::mojom::URLLoaderFactory> target_factory_remote,
+    network::URLLoaderFactoryBuilder& factory_builder,
     mojo::PendingReceiver<network::mojom::TrustedURLLoaderHeaderClient>
         header_client_receiver,
     WebRequestAPI::ProxySet* proxies,
@@ -1506,9 +1518,9 @@ void WebRequestProxyingURLLoaderFactory::StartProxying(
   auto proxy = std::make_unique<WebRequestProxyingURLLoaderFactory>(
       browser_context, render_process_id, frame_routing_id, view_routing_id,
       request_id_generator, std::move(navigation_ui_data),
-      std::move(navigation_id), ukm_source_id, std::move(loader_receiver),
-      std::move(target_factory_remote), std::move(header_client_receiver),
-      proxies, loader_factory_type, std::move(navigation_response_task_runner));
+      std::move(navigation_id), ukm_source_id, factory_builder,
+      std::move(header_client_receiver), proxies, loader_factory_type,
+      std::move(navigation_response_task_runner));
 
   proxies->AddProxy(std::move(proxy));
 }
@@ -1613,6 +1625,13 @@ void WebRequestProxyingURLLoaderFactory::HandleAuthRequest(
   DCHECK(request_it != requests_.end());
   request_it->second->HandleAuthRequest(auth_info, std::move(response_headers),
                                         std::move(callback));
+}
+
+void WebRequestProxyingURLLoaderFactory::OnDNRExtensionUnloaded(
+    const Extension* extension) {
+  for (auto& request : requests_) {
+    request.second->EraseDNRActionsForExtension(extension->id());
+  }
 }
 
 WebRequestProxyingURLLoaderFactory::~WebRequestProxyingURLLoaderFactory() =

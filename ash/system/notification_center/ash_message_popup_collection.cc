@@ -11,6 +11,7 @@
 #include "ash/constants/ash_constants.h"
 #include "ash/constants/ash_features.h"
 #include "ash/focus_cycler.h"
+#include "ash/public/cpp/message_center/arc_notification_constants.h"
 #include "ash/public/cpp/shelf_types.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/root_window_controller.h"
@@ -20,8 +21,10 @@
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/notification_center/fullscreen_notification_blocker.h"
 #include "ash/system/notification_center/message_center_constants.h"
+#include "ash/system/notification_center/message_center_utils.h"
 #include "ash/system/notification_center/message_view_factory.h"
 #include "ash/system/notification_center/metrics_utils.h"
+#include "ash/system/notification_center/notification_style_utils.h"
 #include "ash/system/status_area_widget.h"
 #include "ash/system/status_area_widget_delegate.h"
 #include "ash/system/tray/system_tray_notifier.h"
@@ -44,6 +47,7 @@
 #include "ui/gfx/native_widget_types.h"
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/public/cpp/message_center_constants.h"
+#include "ui/message_center/public/cpp/notification_types.h"
 #include "ui/message_center/views/message_popup_collection.h"
 #include "ui/message_center/views/message_popup_view.h"
 #include "ui/message_center/views/message_view.h"
@@ -459,10 +463,17 @@ message_center::MessagePopupView* AshMessagePopupCollection::CreatePopup(
   bool a11_feedback_on_init =
       notification.rich_notification_data()
           .should_make_spoken_feedback_for_popup_updates;
-  return new message_center::MessagePopupView(
+  auto* popup_view = new message_center::MessagePopupView(
       MessageViewFactory::Create(notification, /*shown_in_popup=*/true)
           .release(),
       this, a11_feedback_on_init);
+
+  // Custom arc notifications handle their own styling and background.
+  if (notification.custom_view_type() != kArcNotificationCustomViewType) {
+    notification_style_utils::StyleNotificationPopup(
+        popup_view->message_view());
+  }
+  return popup_view;
 }
 
 void AshMessagePopupCollection::ClosePopupItem(const PopupItem& item) {
@@ -475,7 +486,7 @@ void AshMessagePopupCollection::ClosePopupItem(const PopupItem& item) {
 
 bool AshMessagePopupCollection::IsWidgetAPopupNotification(
     views::Widget* widget) {
-  for (auto* popup_widget : tracked_widgets_) {
+  for (views::Widget* popup_widget : tracked_widgets_) {
     if (widget == popup_widget) {
       return true;
     }

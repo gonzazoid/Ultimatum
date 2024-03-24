@@ -10,6 +10,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <type_traits>
@@ -26,7 +27,6 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/accessibility/ax_common.h"
 #include "ui/accessibility/ax_enum_util.h"
 #include "ui/accessibility/ax_enums.mojom.h"
@@ -838,8 +838,14 @@ class AXPosition {
           return true;
         }
 
+        // If the anchor is ignored, then by default it will not have a
+        // PreviousOnLineID set since we only set this on unignored nodes.
+        // However, it could still have something previous to it on the same
+        // line, like for example if we have some text on the same line, and a
+        // text node in the middle is set to aria-hidden.
         return text_position->GetPreviousOnLineID() == kInvalidAXNodeID &&
-               text_position->AtStartOfAnchor();
+               text_position->AtStartOfAnchor() &&
+               !text_position->GetAnchor()->IsIgnored();
     }
   }
 
@@ -3799,11 +3805,11 @@ class AXPosition {
   //    0: if this position is logically equivalent to the other position
   //   <0: if this position is logically less than the other position
   //   >0: if this position is logically greater than the other position
-  absl::optional<int> CompareTo(const AXPosition& other) const {
+  std::optional<int> CompareTo(const AXPosition& other) const {
     if (IsNullPosition() || other.IsNullPosition()) {
       if (IsNullPosition() && other.IsNullPosition())
         return 0;
-      return absl::nullopt;
+      return std::nullopt;
     }
     // Valid positions are required for comparison. Use `AsValidPosition`
     // or `SnapToMaxTextOffsetIfBeyond` before calling `CompareTo` or making
@@ -3883,7 +3889,7 @@ class AXPosition {
     }
 
     if (!common_anchor)
-      return absl::nullopt;
+      return std::nullopt;
 
     // If each position has an uncommon ancestor node, we can compare those
     // instead of needing to compute ancestor positions. Otherwise we need to
@@ -3984,17 +3990,17 @@ class AXPosition {
   // A less optimized, but much slower version of "CompareTo". Should only be
   // used when optimizations cannot be applied, e.g. when comparing ignored
   // positions. See "CompareTo" for an explanation of the return values.
-  absl::optional<int> SlowCompareTo(const AXPosition& other) const {
+  std::optional<int> SlowCompareTo(const AXPosition& other) const {
     if (IsNullPosition() && other.IsNullPosition())
       return 0;
     if (IsNullPosition() || other.IsNullPosition())
-      return absl::nullopt;
+      return std::nullopt;
 
     // If both positions share an anchor and either one is a text position, or
     // both are tree positions, we can do a straight comparison of text offsets
     // or child indices.
     if (GetAnchor() == other.GetAnchor()) {
-      absl::optional<int> optional_result;
+      std::optional<int> optional_result;
       ax::mojom::TextAffinity this_affinity;
       ax::mojom::TextAffinity other_affinity;
 
@@ -4055,14 +4061,14 @@ class AXPosition {
 
     const AXNode* common_anchor = this->LowestCommonAnchor(other);
     if (!common_anchor)
-      return absl::nullopt;
+      return std::nullopt;
 
     // If either of the two positions is a text position, and if one position is
     // an ancestor of the other, we need to compare using text positions,
     // because converting to tree positions will potentially lose information if
     // the text offset is anything other than 0 or `MaxTextOffset()`.
     if (IsTextPosition() || other.IsTextPosition()) {
-      absl::optional<int> optional_result;
+      std::optional<int> optional_result;
       ax::mojom::TextAffinity this_affinity;
       ax::mojom::TextAffinity other_affinity;
 
@@ -4357,15 +4363,12 @@ class AXPosition {
   // text representation. Some platforms use an embedded object replacement
   // character that replaces the text coming from most child nodes and empty
   // objects.
-  const std::u16string GetText(
+  std::u16string GetText(
       const AXEmbeddedObjectBehavior embedded_object_behavior =
           g_ax_embedded_object_behavior) const {
-    // Note that the use of `base::EmptyString16()` is a special case here. For
-    // performance reasons `base::EmptyString16()` should only be used when
-    // returning a const reference to a string and there is an error condition,
-    // not in any other case when an empty string16 is required.
-    if (IsNullPosition())
-      return base::EmptyString16();
+    if (IsNullPosition()) {
+      return std::u16string();
+    }
 
     static const base::NoDestructor<std::u16string> embedded_character_str(
         AXNode::kEmbeddedObjectCharacterUTF16);
@@ -4928,6 +4931,36 @@ class AXPosition {
                                      &next_on_line_id)) {
       return static_cast<AXNodeID>(next_on_line_id);
     }
+    AXNode* parent = GetAnchor()->GetUnignoredParent();
+
+    if (!parent) {
+      return kInvalidAXNodeID;
+    }
+
+    // We should not need to bubble up to find the NextOnLine if we are not
+    // in an InlineTextBox, because the only cases where the relevant NextOnLine
+    // information is stored in the parent is in cases where we have text inside
+    // inline-block elements.
+    //
+    // We only want to bubble up to the parent to find the nextOnLine
+    // if we are in a leaf that is a last child.
+    // This is because if we have a structure where there are multiple
+    // InlineTextBox children that are in different lines, and the parent's
+    // NextOnLine only applies to the last child.
+    if (GetAnchor()->GetRole() != ax::mojom::Role::kInlineTextBox ||
+        parent->GetLastUnignoredChild() != GetAnchor()) {
+      return kInvalidAXNodeID;
+    }
+
+    while (parent &&
+           !parent->GetIntAttribute(ax::mojom::IntAttribute::kNextOnLineId,
+                                    &next_on_line_id)) {
+      parent = parent->GetUnignoredParent();
+    }
+
+    if (parent) {
+      return static_cast<AXNodeID>(next_on_line_id);
+    }
     return kInvalidAXNodeID;
   }
 
@@ -4939,6 +4972,42 @@ class AXPosition {
     int previous_on_line_id;
     if (GetAnchor()->GetIntAttribute(ax::mojom::IntAttribute::kPreviousOnLineId,
                                      &previous_on_line_id)) {
+      return static_cast<AXNodeID>(previous_on_line_id);
+    }
+    AXNode* parent = GetAnchor()->GetUnignoredParent();
+
+    if (!parent) {
+      return kInvalidAXNodeID;
+    }
+
+    // We should not need to bubble up to find the PreviousOnLine if we are not
+    // in an InlineTextBox, because the only cases where the relevant
+    // PreviousOnLine information is stored in the parent is in cases where we
+    // have text inside inline-block elements.
+    //
+    // We have some expectations that
+    // line break elements are not expected to have a previous on line element.
+    //
+    // We only want to bubble up to the parent to find the previousOnLine
+    // if we are in a leaf that is a first child.
+    // This is because if we have a structure where there are multiple
+    // InlineTextBox children that are in different lines, and the parent's
+    // PreviousOnLine only applies to the first child.
+    parent->GetIntAttribute(ax::mojom::IntAttribute::kPreviousOnLineId,
+                            &previous_on_line_id);
+    if (GetAnchor()->GetRole() != ax::mojom::Role::kInlineTextBox ||
+        parent->GetRole() == ax::mojom::Role::kLineBreak ||
+        parent->GetFirstUnignoredChild() != GetAnchor()) {
+      return kInvalidAXNodeID;
+    }
+
+    while (parent &&
+           !parent->GetIntAttribute(ax::mojom::IntAttribute::kPreviousOnLineId,
+                                    &previous_on_line_id)) {
+      parent = parent->GetUnignoredParent();
+    }
+
+    if (parent) {
       return static_cast<AXNodeID>(previous_on_line_id);
     }
     return kInvalidAXNodeID;
@@ -5806,14 +5875,14 @@ const int AXPosition<AXPositionType, AXNodeType>::INVALID_OFFSET;
 template <class AXPositionType, class AXNodeType>
 bool operator==(const AXPosition<AXPositionType, AXNodeType>& first,
                 const AXPosition<AXPositionType, AXNodeType>& second) {
-  const absl::optional<int> compare_to_optional = first.CompareTo(second);
+  const std::optional<int> compare_to_optional = first.CompareTo(second);
   return compare_to_optional.has_value() && compare_to_optional.value() == 0;
 }
 
 template <class AXPositionType, class AXNodeType>
 bool operator!=(const AXPosition<AXPositionType, AXNodeType>& first,
                 const AXPosition<AXPositionType, AXNodeType>& second) {
-  const absl::optional<int> compare_to_optional = first.CompareTo(second);
+  const std::optional<int> compare_to_optional = first.CompareTo(second);
   // It makes sense to also return false if the positions are not comparable,
   // because by definition non-comparable positions are uniqual. Positions are
   // not comparable when one position is null and the other is not or if the
@@ -5824,28 +5893,28 @@ bool operator!=(const AXPosition<AXPositionType, AXNodeType>& first,
 template <class AXPositionType, class AXNodeType>
 bool operator<(const AXPosition<AXPositionType, AXNodeType>& first,
                const AXPosition<AXPositionType, AXNodeType>& second) {
-  const absl::optional<int> compare_to_optional = first.CompareTo(second);
+  const std::optional<int> compare_to_optional = first.CompareTo(second);
   return compare_to_optional.has_value() && compare_to_optional.value() < 0;
 }
 
 template <class AXPositionType, class AXNodeType>
 bool operator<=(const AXPosition<AXPositionType, AXNodeType>& first,
                 const AXPosition<AXPositionType, AXNodeType>& second) {
-  const absl::optional<int> compare_to_optional = first.CompareTo(second);
+  const std::optional<int> compare_to_optional = first.CompareTo(second);
   return compare_to_optional.has_value() && compare_to_optional.value() <= 0;
 }
 
 template <class AXPositionType, class AXNodeType>
 bool operator>(const AXPosition<AXPositionType, AXNodeType>& first,
                const AXPosition<AXPositionType, AXNodeType>& second) {
-  const absl::optional<int> compare_to_optional = first.CompareTo(second);
+  const std::optional<int> compare_to_optional = first.CompareTo(second);
   return compare_to_optional.has_value() && compare_to_optional.value() > 0;
 }
 
 template <class AXPositionType, class AXNodeType>
 bool operator>=(const AXPosition<AXPositionType, AXNodeType>& first,
                 const AXPosition<AXPositionType, AXNodeType>& second) {
-  const absl::optional<int> compare_to_optional = first.CompareTo(second);
+  const std::optional<int> compare_to_optional = first.CompareTo(second);
   return compare_to_optional.has_value() && compare_to_optional.value() >= 0;
 }
 

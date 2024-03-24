@@ -4,148 +4,95 @@
 
 #include "ash/wm/overview/birch/birch_bar_view.h"
 
-#include "ash/public/cpp/shell_window_ids.h"
-#include "ash/resources/vector_icons/vector_icons.h"
-#include "ash/shell.h"
-#include "ash/style/icon_button.h"
-#include "ash/wm/work_area_insets.h"
+#include "ash/public/cpp/shelf_types.h"
+#include "ash/root_window_settings.h"
+#include "ash/shelf/shelf.h"
+#include "base/containers/contains.h"
 #include "base/functional/bind.h"
-#include "base/ranges/algorithm.h"
-#include "base/time/time.h"
+#include "base/functional/callback_helpers.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
-#include "ui/gfx/geometry/transform_util.h"
-#include "ui/views/animation/animation_builder.h"
-#include "ui/views/background.h"
-#include "ui/views/layout/box_layout_view.h"
+#include "ui/display/display.h"
+#include "ui/display/screen.h"
+#include "ui/views/metadata/view_factory_internal.h"
 #include "ui/views/view_class_properties.h"
-#include "ui/views/widget/widget.h"
 
 namespace ash {
 
 namespace {
 
+// The capacity of chips bar.
 constexpr int kMaxChipsNum = 4;
-constexpr gfx::Insets kHideButtonMargin = gfx::Insets::VH(12, 5);
+// The spacing between chips and chips rows.
 constexpr int kChipSpacing = 8;
-constexpr int kBarHeight = 60;
-constexpr int kBarBottomPadding = 10;
-constexpr base::TimeDelta kShowHideAnimationDuration = base::Milliseconds(500);
+// Horizontal paddings of the bar container.
+constexpr int kContainerHorizontalPaddingNoShelf = 32;
+constexpr int kContainerHorizontalPaddingWithShelf = 64;
+// The bottom padding of bar container.
+constexpr int kContainerBottomPadding = 16;
+// The height of the chips.
+constexpr int kChipHeight = 64;
+// The optimal chip width for large screen.
+constexpr int kOptimalChipWidth = 278;
+// The threshold for large screen.
+constexpr int kLargeScreenThreshold = 1450;
 
-// ----- For test use -----------
-std::unique_ptr<views::Widget> g_widget_for_testing;
+// Calculate the space for each chip according to the available space and
+// number of chips.
+int GetChipSpace(int available_size, int chips_num) {
+  return chips_num
+             ? (available_size - (chips_num - 1) * kChipSpacing) / chips_num
+             : available_size;
+}
 
 }  // namespace
 
-//------------------------------------------------------------------------------
-// BirchBarView::BirchChipsContainer
-// The chips container with birch chips and hiding chips button.
-class BirchBarView::BirchChipsContainer : public views::BoxLayoutView {
-  METADATA_HEADER(BirchChipsContainer, views::BoxLayoutView)
-
- public:
-  explicit BirchChipsContainer(BirchBarView* birch_bar)
-      : birch_bar_(birch_bar) {
-    SetPaintToLayer();
-    layer()->SetFillsBoundsOpaquely(false);
-    SetOrientation(views::BoxLayout::Orientation::kHorizontal);
-    SetMainAxisAlignment(views::BoxLayout::MainAxisAlignment::kCenter);
-    SetCrossAxisAlignment(views::BoxLayout::CrossAxisAlignment::kCenter);
-    SetBetweenChildSpacing(kChipSpacing);
-    hide_chips_button_ = AddChildView(std::make_unique<IconButton>(
-        base::BindRepeating(&BirchBarView::OnShowHideChipsButtonPressed,
-                            base::Unretained(birch_bar_), /*show=*/false),
-        IconButton::Type::kMedium, &kChevronDownIcon, u"Hide", false, false));
-    hide_chips_button_->SetProperty(views::kMarginsKey, kHideButtonMargin);
-    hide_chips_button_->SetEnableBlurredBackgroundShield(true);
-  }
-
-  BirchChipsContainer(const BirchChipsContainer&) = delete;
-  BirchChipsContainer& operator=(const BirchChipsContainer&) = delete;
-  ~BirchChipsContainer() override = default;
-
-  void AddChip(std::unique_ptr<BirchChipButton> chip) {
-    if (static_cast<int>(chips_.size()) == kMaxChipsNum) {
-      NOTREACHED() << "The number of birch chips reaches the limit of 4";
-      return;
-    }
-    const size_t child_num = children().size();
-    CHECK_GE(child_num, 1u);
-    // Insert the chip before `hide_chips_button_`.
-    chips_.push_back(AddChildViewAt(std::move(chip), child_num - 1));
-  }
-
-  void RemoveChip(BirchChipButton* chip) {
-    auto iter = base::ranges::find(chips_, chip);
-    if (iter != chips_.end()) {
-      RemoveChildViewT(chip);
-      chips_.erase(iter);
-      Layout();
-    }
-  }
-
- private:
-  raw_ptr<BirchBarView> birch_bar_;
-  std::vector<raw_ptr<BirchChipButton>> chips_;
-  raw_ptr<IconButton> hide_chips_button_;
-};
-
-BEGIN_METADATA(BirchBarView, BirchChipsContainer, views::BoxLayoutView)
-END_METADATA
-
-//------------------------------------------------------------------------------
-// BirchBarView
-BirchBarView::BirchBarView() {
-  chips_container_ = AddChildView(std::make_unique<BirchChipsContainer>(this));
-
-  show_chips_button_container_ = AddChildView(std::make_unique<views::View>());
-  show_chips_button_container_->SetPaintToLayer();
-  show_chips_button_container_->layer()->SetFillsBoundsOpaquely(false);
-  show_chips_button_container_->SetUseDefaultFillLayout(true);
-
-  auto* show_chips_button =
-      show_chips_button_container_->AddChildView(std::make_unique<IconButton>(
-          base::BindRepeating(&BirchBarView::OnShowHideChipsButtonPressed,
-                              base::Unretained(this), /*show=*/true),
-          IconButton::Type::kMedium, &kChevronUpIcon, u"Show", false, false));
-  show_chips_button->SetEnableBlurredBackgroundShield(true);
-
-  chips_container_->SetVisible(false);
+BirchBarView::BirchBarView(aura::Window* root_window)
+    : root_window_(root_window), chip_size_(GetChipSize()) {
+  // Build up a 3 levels nested box layout hierarchy.
+  using MainAxisAlignment = views::BoxLayout::MainAxisAlignment;
+  using CrossAxisAlignment = views::BoxLayout::CrossAxisAlignment;
+  views::Builder<views::BoxLayoutView>(this)
+      .SetOrientation(views::BoxLayout::Orientation::kVertical)
+      .SetMainAxisAlignment(MainAxisAlignment::kCenter)
+      .SetCrossAxisAlignment(CrossAxisAlignment::kStart)
+      .SetBetweenChildSpacing(kChipSpacing)
+      .AddChildren(views::Builder<views::BoxLayoutView>()
+                       .CopyAddressTo(&primary_row_)
+                       .SetMainAxisAlignment(MainAxisAlignment::kStart)
+                       .SetCrossAxisAlignment(CrossAxisAlignment::kCenter)
+                       .SetBetweenChildSpacing(kChipSpacing),
+                   views::Builder<views::BoxLayoutView>()
+                       .CopyAddressTo(&secondary_row_)
+                       .SetMainAxisAlignment(MainAxisAlignment::kStart)
+                       .SetCrossAxisAlignment(CrossAxisAlignment::kCenter)
+                       .SetBetweenChildSpacing(kChipSpacing))
+      .BuildChildren();
 }
 
 BirchBarView::~BirchBarView() = default;
 
-void BirchBarView::ShowWidgetForTesting(
-    std::unique_ptr<BirchBarView> bar_view) {
-  views::Widget::InitParams params;
-  params.type = views::Widget::InitParams::TYPE_POPUP;
-  params.layer_type = ui::LAYER_NOT_DRAWN;
-  params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
-  params.opacity = views::Widget::InitParams::WindowOpacity::kTranslucent;
-  auto* root_window = Shell::Get()->GetPrimaryRootWindow();
-  const gfx::Rect work_area =
-      WorkAreaInsets::ForWindow(root_window)->user_work_area_bounds();
-  const gfx::Size bar_size = bar_view->GetPreferredSize();
-  params.bounds =
-      gfx::Rect(gfx::Point(work_area.bottom_center().x() - bar_size.width() / 2,
-                           work_area.bottom_center().y() - bar_size.height() -
-                               kBarBottomPadding),
-                bar_size);
-  params.parent = Shell::Get()->GetContainer(
-      root_window, kShellWindowId_AlwaysOnTopContainer);
-
-  g_widget_for_testing = std::make_unique<views::Widget>(std::move(params));
-  g_widget_for_testing->SetContentsView(std::move(bar_view));
-  g_widget_for_testing->Show();
+gfx::Insets BirchBarView::GetContainerPaddings() const {
+  // Calculate the insets according to the shelf position.
+  const ShelfAlignment shelf_alignment =
+      Shelf::ForWindow(root_window_)->alignment();
+  const int left_inset = shelf_alignment == ShelfAlignment::kLeft
+                             ? kContainerHorizontalPaddingWithShelf
+                             : kContainerHorizontalPaddingNoShelf;
+  const int right_inset = shelf_alignment == ShelfAlignment::kRight
+                              ? kContainerHorizontalPaddingWithShelf
+                              : kContainerHorizontalPaddingNoShelf;
+  return gfx::Insets::TLBR(0, left_inset, kContainerBottomPadding, right_inset);
 }
 
-void BirchBarView::HideWidgetForTesting() {
-  if (g_widget_for_testing) {
-    g_widget_for_testing->CloseWithReason(
-        views::Widget::ClosedReason::kUnspecified);
-    g_widget_for_testing.reset();
+void BirchBarView::UpdateAvailableSpace(int available_space) {
+  if (available_space_ == available_space) {
+    return;
   }
+
+  available_space_ = available_space;
+  Relayout();
 }
 
 void BirchBarView::AddChip(
@@ -155,92 +102,96 @@ void BirchBarView::AddChip(
     views::Button::PressedCallback callback,
     std::optional<std::u16string> button_title,
     std::optional<views::Button::PressedCallback> button_callback) {
+  if (static_cast<int>(chips_.size()) == kMaxChipsNum) {
+    NOTREACHED() << "The number of birch chips reaches the limit of 4";
+    return;
+  }
+
   auto chip = views::Builder<BirchChipButton>()
                   .SetIconImage(icon)
                   .SetTitleText(title)
                   .SetSubtitleText(sub_title)
                   .SetCallback(std::move(callback))
                   .SetDelegate(this)
+                  .SetPreferredSize(chip_size_)
                   .Build();
   if (button_title.has_value() && button_callback.has_value()) {
     chip->SetActionButton(button_title.value(),
                           std::move(button_callback.value()));
   }
-  chips_container_->AddChip(std::move(chip));
-}
 
-gfx::Size BirchBarView::CalculatePreferredSize() const {
-  gfx::Size preferred_size;
-  for (views::View* content : children()) {
-    preferred_size.SetToMax(content->GetPreferredSize());
-  }
-  return gfx::Size(preferred_size.width(), kBarHeight);
-}
-
-int BirchBarView::GetHeightForWidth(int width) const {
-  return kBarHeight;
-}
-
-void BirchBarView::Layout() {
-  // Centralize the chips container/show button.
-  const gfx::Point center_point = GetContentsBounds().CenterPoint();
-  for (views::View* content : children()) {
-    content->SizeToPreferredSize();
-    content->SetPosition(gfx::Point(center_point.x() - content->width() / 2,
-                                    center_point.y() - content->height() / 2));
-  }
+  // Attach the chip to the secondary row if it is not empty, otherwise, to the
+  // primary row.
+  chips_.emplace_back(
+      (secondary_row_->children().empty() ? primary_row_ : secondary_row_)
+          ->AddChildView(std::move(chip)));
+  Relayout();
 }
 
 void BirchBarView::RemoveChip(BirchChipButton* chip) {
-  chips_container_->RemoveChip(chip);
-}
+  CHECK(base::Contains(chips_, chip));
 
-void BirchBarView::OnAnimationsEnded(bool show) {
-  // Update contents visibility and opacity on animation completed or aborted.
-  animation_in_progress_ = false;
-  if (show) {
-    show_chips_button_container_->SetVisible(false);
+  base::Erase(chips_, chip);
+  // Remove the chip from its owner.
+  if (primary_row_->Contains(chip)) {
+    primary_row_->RemoveChildViewT(chip);
   } else {
-    chips_container_->SetVisible(false);
+    secondary_row_->RemoveChildViewT(chip);
   }
+  Relayout();
 }
 
-void BirchBarView::OnShowHideChipsButtonPressed(bool show) {
-  if (animation_in_progress_) {
-    return;
+gfx::Size BirchBarView::GetChipSize() const {
+  const gfx::Rect display_bounds = display::Screen::GetScreen()
+                                       ->GetDisplayNearestWindow(root_window_)
+                                       .bounds();
+  // Always use the longest side of the display to calculate the chip width.
+  const int max_display_dim =
+      std::max(display_bounds.width(), display_bounds.height());
+
+  // When in a large screen, the optimal chip width is used.
+  if (max_display_dim > kLargeScreenThreshold) {
+    return gfx::Size(kOptimalChipWidth, kChipHeight);
   }
 
-  animation_in_progress_ = true;
+  // Otherwise, the bar tends to fill the longest side of the display with 4
+  // chips.
+  const int horizontal_insets = GetContainerPaddings().width();
+  const int chip_width =
+      GetChipSpace(max_display_dim - horizontal_insets, kMaxChipsNum);
+  return gfx::Size(chip_width, kChipHeight);
+}
 
-  // Fade in/out and expand/shrink the showing button.
-  show_chips_button_container_->SetVisible(true);
-  auto* show_chips_button_layer = show_chips_button_container_->layer();
-  show_chips_button_layer->SetOpacity(show ? 1.0f : 0.0f);
-  gfx::Transform shrink = gfx::GetScaleTransform(
-      show_chips_button_container_->GetContentsBounds().CenterPoint(), 0.3f);
-  show_chips_button_layer->SetTransform(show ? gfx::Transform() : shrink);
+BirchBarView::LayoutType BirchBarView::GetExpectedLayoutType() const {
+  // Calculate the expected layout type according to the chip space estimated by
+  // current available space and number of chips.
+  const int chip_space = GetChipSpace(available_space_, chips_.size());
+  return chip_space < chip_size_.width() ? LayoutType::kTwoByTwo
+                                         : LayoutType::kOneByFour;
+}
 
-  // Fade in/out and rise/fall the chips container.
-  chips_container_->SetVisible(true);
-  auto* chips_container_layer = chips_container_->layer();
-  chips_container_layer->SetOpacity(show ? 0.0f : 1.0f);
-  const gfx::Transform vertical_shift =
-      gfx::Transform::MakeTranslation(0, kBarHeight);
-  chips_container_->SetTransform(show ? vertical_shift : gfx::Transform());
+void BirchBarView::Relayout() {
+  const size_t primary_size =
+      GetExpectedLayoutType() == LayoutType::kOneByFour ? 4u : 2u;
 
-  // Setup animations.
-  auto animation_complete_callback = base::BindRepeating(
-      &BirchBarView::OnAnimationsEnded, base::Unretained(this), show);
-  views::AnimationBuilder animation_builder;
-  animation_builder.OnEnded(base::OnceClosure(animation_complete_callback))
-      .OnAborted(base::OnceClosure(animation_complete_callback))
-      .Once()
-      .SetDuration(kShowHideAnimationDuration)
-      .SetOpacity(show_chips_button_layer, show ? 0.0f : 1.0f)
-      .SetTransform(show_chips_button_layer, show ? shrink : gfx::Transform())
-      .SetOpacity(chips_container_layer, show ? 1.0f : 0.0f)
-      .SetTransform(chips_container_layer,
-                    show ? gfx::Transform() : vertical_shift);
+  // Pop the extra chips from the end of the primary row and push to the head of
+  // the secondary row.
+  const views::View::Views& chips_in_primary = primary_row_->children();
+  while (chips_in_primary.size() > primary_size) {
+    secondary_row_->AddChildViewAt(
+        primary_row_->RemoveChildViewT(chips_in_primary.back()), 0);
+  }
+
+  // Pop the chips from the head of the secondary row to the end of the primary
+  // row if it still has available space.
+  const views::View::Views& chips_in_secondary = secondary_row_->children();
+  while (chips_in_primary.size() < primary_size &&
+         !chips_in_secondary.empty()) {
+    primary_row_->AddChildView(
+        secondary_row_->RemoveChildViewT(chips_in_secondary.front()));
+  }
+
+  InvalidateLayout();
 }
 
 BEGIN_METADATA(BirchBarView)

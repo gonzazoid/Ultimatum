@@ -163,14 +163,6 @@ class DevToolsAgent::IOAgent : public mojom::blink::DevToolsAgent {
     }
   }
 
-  void GetUniqueFormControlId(
-      int nodeId,
-      GetUniqueFormControlIdCallback callback) override {
-    // GetUniqueFormControlId on a worker doesn't make sense because there is no
-    // DOM.
-    NOTREACHED();
-  }
-
  private:
   scoped_refptr<base::SingleThreadTaskRunner> io_task_runner_;
   scoped_refptr<InspectorTaskRunner> inspector_task_runner_;
@@ -355,27 +347,13 @@ void DevToolsAgent::ReportChildTargets(bool report,
   }
 }
 
-void DevToolsAgent::GetUniqueFormControlId(
-    int nodeId,
-    GetUniqueFormControlIdCallback callback) {
-  auto* node = blink::DOMNodeIds::NodeForId(nodeId);
-  if (auto* form_control = DynamicTo<HTMLFormControlElement>(node)) {
-    std::move(callback).Run(base::FeatureList::IsEnabled(
-                                features::kAutofillUseDomNodeIdForRendererId)
-                                ? form_control->GetDomNodeId()
-                                : form_control->UniqueRendererFormControlId());
-    return;
-  }
-  std::move(callback).Run(0);  // invalid ID.
-}
-
 // static
 std::unique_ptr<WorkerDevToolsParams> DevToolsAgent::WorkerThreadCreated(
     ExecutionContext* parent_context,
     WorkerThread* worker_thread,
     const KURL& url,
     const String& global_scope_name,
-    const absl::optional<const blink::DedicatedWorkerToken>& token) {
+    const std::optional<const blink::DedicatedWorkerToken>& token) {
   auto result = std::make_unique<WorkerDevToolsParams>();
   base::UnguessableToken devtools_worker_token =
       token.has_value() ? token.value().value()
@@ -444,6 +422,12 @@ void DevToolsAgent::CleanupConnection() {
   associated_host_remote_.reset();
   report_child_workers_ = false;
   pause_child_workers_on_start_ = false;
+}
+
+void DevToolsAgent::BringDevToolsWindowToFocus() {
+  if (associated_host_remote_.is_bound()) {
+    associated_host_remote_->BringToForeground();
+  }
 }
 
 }  // namespace blink

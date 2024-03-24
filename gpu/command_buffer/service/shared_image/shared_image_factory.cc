@@ -38,6 +38,7 @@
 #include "ui/gl/gl_implementation.h"
 #include "ui/gl/gl_switches.h"
 #include "ui/gl/gl_utils.h"
+#include "ui/gl/gl_version_info.h"
 #include "ui/gl/trace_util.h"
 
 #if BUILDFLAG(ENABLE_VULKAN)
@@ -340,17 +341,14 @@ SharedImageFactory::SharedImageFactory(
 #endif  // defined(USE_EGL)
 
 #if BUILDFLAG(IS_ANDROID)
-  bool is_ahb_supported =
-      base::AndroidHardwareBufferCompat::IsSupportAvailable();
+  bool is_ahb_supported = true;
   if (gr_context_type_ == GrContextType::kVulkan) {
     const auto& enabled_extensions = context_state->vk_context_provider()
                                          ->GetDeviceQueue()
                                          ->enabled_extensions();
-    is_ahb_supported =
-        is_ahb_supported &&
-        gfx::HasExtension(
-            enabled_extensions,
-            VK_ANDROID_EXTERNAL_MEMORY_ANDROID_HARDWARE_BUFFER_EXTENSION_NAME);
+    is_ahb_supported = gfx::HasExtension(
+        enabled_extensions,
+        VK_ANDROID_EXTERNAL_MEMORY_ANDROID_HARDWARE_BUFFER_EXTENSION_NAME);
   }
   if (is_ahb_supported) {
     auto ahb_factory = std::make_unique<AHardwareBufferImageBackingFactory>(
@@ -368,8 +366,8 @@ SharedImageFactory::SharedImageFactory(
   if (ui::OzonePlatform::GetInstance()
           ->GetPlatformRuntimeProperties()
           .supports_native_pixmaps) {
-    auto ozone_factory = std::make_unique<OzoneImageBackingFactory>(
-        context_state, workarounds, gpu_preferences);
+    auto ozone_factory =
+        std::make_unique<OzoneImageBackingFactory>(context_state, workarounds);
     factories_.push_back(std::move(ozone_factory));
   }
 #if BUILDFLAG(ENABLE_VULKAN)
@@ -893,6 +891,23 @@ gpu::SharedImageCapabilities SharedImageFactory::MakeCapabilities() {
       workarounds_.r8_egl_images_broken;
   shared_image_caps.disable_webgpu_shared_images =
       workarounds_.disable_webgpu_shared_images;
+  if (!shared_context_state_) {
+    shared_image_caps.is_r16f_supported = false;
+  } else if (is_skia_graphite || gr_context_type_ == GrContextType::kVulkan) {
+    // R16F is always supported with Dawn and Vulkan contexts.
+    shared_image_caps.is_r16f_supported = true;
+  } else if (gr_context_type_ == GrContextType::kGL) {
+    CHECK(shared_context_state_->gr_context());
+    // With Skia GL, R16F is supported only with GLES 3.0 and above.
+    shared_image_caps.is_r16f_supported =
+        shared_context_state_->feature_info()->gl_version_info().IsAtLeastGLES(
+            3, 0) &&
+        shared_context_state_->gr_context()->colorTypeSupportedAsImage(
+            kA16_float_SkColorType);
+  }
+
+  shared_image_caps.texture_target_exception_list =
+      gpu_preferences_.texture_target_exception_list;
 
 #if BUILDFLAG(IS_WIN)
   shared_image_caps.shared_image_d3d =
@@ -1059,9 +1074,10 @@ SharedImageRepresentationFactory::ProduceDawn(
     const Mailbox& mailbox,
     const wgpu::Device& device,
     wgpu::BackendType backend_type,
-    std::vector<wgpu::TextureFormat> view_formats) {
+    std::vector<wgpu::TextureFormat> view_formats,
+    scoped_refptr<SharedContextState> context_state) {
   return manager_->ProduceDawn(mailbox, tracker_.get(), device, backend_type,
-                               std::move(view_formats));
+                               std::move(view_formats), context_state);
 }
 
 std::unique_ptr<OverlayImageRepresentation>
@@ -1084,6 +1100,17 @@ std::unique_ptr<LegacyOverlayImageRepresentation>
 SharedImageRepresentationFactory::ProduceLegacyOverlay(
     const gpu::Mailbox& mailbox) {
   return manager_->ProduceLegacyOverlay(mailbox, tracker_.get());
+}
+#endif
+
+#if BUILDFLAG(ENABLE_VULKAN) && BUILDFLAG(IS_OZONE)
+std::unique_ptr<VulkanImageRepresentation>
+SharedImageRepresentationFactory::ProduceVulkan(
+    const gpu::Mailbox& mailbox,
+    gpu::VulkanDeviceQueue* vulkan_device_queue,
+    gpu::VulkanImplementation& vulkan_impl) {
+  return manager_->ProduceVulkan(mailbox, tracker_.get(), vulkan_device_queue,
+                                 vulkan_impl);
 }
 #endif
 

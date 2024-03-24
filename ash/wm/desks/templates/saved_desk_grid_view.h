@@ -21,13 +21,13 @@ class SavedDeskItemView;
 // A view that shows a grid of saved desks. Each saved desk is a
 // `SavedDeskItemView`.
 class SavedDeskGridView : public views::View {
+  METADATA_HEADER(SavedDeskGridView, views::View)
+
  public:
   enum class LayoutMode {
     LANDSCAPE = 0,
     PORTRAIT,
   };
-
-  METADATA_HEADER(SavedDeskGridView);
 
   SavedDeskGridView();
   SavedDeskGridView(const SavedDeskGridView&) = delete;
@@ -73,7 +73,7 @@ class SavedDeskGridView : public views::View {
 
   // views::View:
   gfx::Size CalculatePreferredSize() const override;
-  void Layout() override;
+  void Layout(PassKey) override;
   void OnBoundsChanged(const gfx::Rect& previous_bounds) override;
 
   bool IsAnimating() const;

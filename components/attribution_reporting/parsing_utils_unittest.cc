@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include <limits>
+#include <optional>
 #include <string>
 
 #include "base/test/gmock_expected_support.h"
@@ -16,8 +17,6 @@
 #include "components/attribution_reporting/constants.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/numeric/int128.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/abseil-cpp/absl/types/variant.h"
 
 namespace attribution_reporting {
 namespace {
@@ -52,27 +51,27 @@ TEST(AttributionReportingParsingUtilsTest, ParseUint64) {
   const struct {
     const char* description;
     const char* json;
-    base::expected<absl::optional<uint64_t>, absl::monostate> expected;
+    base::expected<std::optional<uint64_t>, ParseError> expected;
   } kTestCases[] = {
       {
           "missing_key",
           R"json({})json",
-          absl::nullopt,
+          std::nullopt,
       },
       {
           "not_string",
           R"json({"key":123})json",
-          base::unexpected(absl::monostate()),
+          base::unexpected(ParseError()),
       },
       {
           "invalid_format",
           R"json({"key":"0x123"})json",
-          base::unexpected(absl::monostate()),
+          base::unexpected(ParseError()),
       },
       {
           "negative",
           R"json({"key":"-1"})json",
-          base::unexpected(absl::monostate()),
+          base::unexpected(ParseError()),
       },
       {
           "zero",
@@ -87,7 +86,7 @@ TEST(AttributionReportingParsingUtilsTest, ParseUint64) {
       {
           "out_of_range",
           R"json({"key":"18446744073709551616"})json",
-          base::unexpected(absl::monostate()),
+          base::unexpected(ParseError()),
       },
   };
 
@@ -102,22 +101,22 @@ TEST(AttributionReportingParsingUtilsTest, ParseInt64) {
   const struct {
     const char* description;
     const char* json;
-    base::expected<absl::optional<int64_t>, absl::monostate> expected;
+    base::expected<std::optional<int64_t>, ParseError> expected;
   } kTestCases[] = {
       {
           "missing_key",
           R"json({})json",
-          absl::nullopt,
+          std::nullopt,
       },
       {
           "not_string",
           R"json({"key":123})json",
-          base::unexpected(absl::monostate()),
+          base::unexpected(ParseError()),
       },
       {
           "invalid_format",
           R"json({"key":"0x123"})json",
-          base::unexpected(absl::monostate()),
+          base::unexpected(ParseError()),
       },
       {
           "zero",
@@ -137,7 +136,7 @@ TEST(AttributionReportingParsingUtilsTest, ParseInt64) {
       {
           "out_of_range",
           R"json({"key":"9223372036854775808"})json",
-          base::unexpected(absl::monostate()),
+          base::unexpected(ParseError()),
       },
   };
 

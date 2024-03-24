@@ -9,9 +9,11 @@
 #import "base/task/sequenced_task_runner.h"
 #import "base/task/thread_pool.h"
 #import "components/feature_engagement/public/tracker.h"
-#import "ios/chrome/browser/promos_manager/features.h"
-#import "ios/chrome/browser/promos_manager/promos_manager_event_exporter.h"
-#import "ios/chrome/browser/promos_manager/promos_manager_event_exporter_factory.h"
+#import "ios/chrome/app/tests_hook.h"
+#import "ios/chrome/browser/feature_engagement/model/ios_tracker_session_controller.h"
+#import "ios/chrome/browser/promos_manager/model/features.h"
+#import "ios/chrome/browser/promos_manager/model/promos_manager_event_exporter.h"
+#import "ios/chrome/browser/promos_manager/model/promos_manager_event_exporter_factory.h"
 #import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
 
 namespace {
@@ -26,6 +28,12 @@ namespace feature_engagement {
 
 std::unique_ptr<KeyedService> CreateFeatureEngagementTracker(
     web::BrowserState* context) {
+  std::optional<std::string> fetDemoModeOverride =
+      tests_hook::FETDemoModeOverride();
+  if (fetDemoModeOverride.has_value()) {
+    return CreateDemoModeTracker(fetDemoModeOverride.value());
+  }
+
   ChromeBrowserState* browser_state =
       ChromeBrowserState::FromBrowserState(context);
 
@@ -40,13 +48,15 @@ std::unique_ptr<KeyedService> CreateFeatureEngagementTracker(
       browser_state->GetProtoDatabaseProvider();
 
   base::WeakPtr<PromosManagerEventExporter> event_exporter =
-      ShouldPromosManagerUseFET()
-          ? PromosManagerEventExporterFactory::GetForBrowserState(browser_state)
-                ->AsWeakPtr()
-          : nullptr;
+      PromosManagerEventExporterFactory::GetForBrowserState(browser_state)
+          ->AsWeakPtr();
+
+  auto session_controller = std::make_unique<IOSTrackerSessionController>();
 
   return base::WrapUnique(feature_engagement::Tracker::Create(
-      storage_dir, background_task_runner, db_provider, event_exporter));
+      storage_dir, background_task_runner, db_provider, event_exporter,
+      feature_engagement::Tracker::GetDefaultConfigurationProviders(),
+      std::move(session_controller)));
 }
 
 }  // namespace feature_engagement

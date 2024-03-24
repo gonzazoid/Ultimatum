@@ -6,13 +6,12 @@
 #define CHROME_BROWSER_UI_VIEWS_QRCODE_GENERATOR_QRCODE_GENERATOR_BUBBLE_H_
 
 #include <memory>
+#include <optional>
 
-#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/qrcode_generator/qrcode_generator_bubble_view.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_bubble_delegate_view.h"
-#include "chrome/services/qrcode_generator/public/cpp/qrcode_generator_service.h"
-#include "chrome/services/qrcode_generator/public/mojom/qrcode_generator.mojom.h"
+#include "components/qr_code_generator/bitmap_generator.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/textfield/textfield_controller.h"
@@ -74,10 +73,7 @@ class QRCodeGeneratorBubble : public QRCodeGeneratorBubbleView,
   views::Label* error_label_for_testing() { return bottom_error_label_; }
   views::LabelButton* download_button_for_testing() { return download_button_; }
 
-  void SetQRCodeServiceForTesting(
-      base::RepeatingCallback<void(mojom::GenerateQRCodeRequestPtr request,
-                                   QRImageGenerator::ResponseCallback callback)>
-          qrcode_service_override);
+  void SetQRCodeErrorForTesting(std::optional<qr_code_generator::Error> error);
 
  private:
   // Updates and formats QR code, text, and controls.
@@ -90,7 +86,7 @@ class QRCodeGeneratorBubble : public QRCodeGeneratorBubbleView,
   void DisplayPlaceholderImage();
 
   // Shows an error message.
-  void DisplayError(mojom::QRCodeGeneratorError error);
+  void DisplayError(qr_code_generator::Error error);
 
   // Hides all error messages and enables or disables download button.
   void HideErrors(bool enable_download_button);
@@ -123,26 +119,9 @@ class QRCodeGeneratorBubble : public QRCodeGeneratorBubbleView,
 
   void BackButtonPressed();
 
-  // Callback for the request to the OOP service to generate a new image.
-  void OnCodeGeneratorResponse(const mojom::GenerateQRCodeResponsePtr response);
-
-  // TODO(https://crbug.com/1431991): Remove this field once there is no
-  // internal state (e.g. no `mojo::Remote`) that needs to be maintained by the
-  // `QRImageGenerator` class.
-  std::unique_ptr<QRImageGenerator> qrcode_service_;
-
-  // Unit tests can set `qr_code_service_override_` to intercept QR code
-  // requests and inject test-controlled QR code responses.
-  //
-  // Rationale for using a `RepeatingCallback` instead of implementing
-  // dependency injection using virtual methods: 1) `GenerateQRCode` will become
-  // a free function after shipping https://crbug.com/1431991, 2) in general
-  // `RepeatingCallback` is equivalent to a pure interface with a single method,
-  // (note that `RepeatingCallback` below has the same signature as
-  // `GenerateQRCode`).
-  base::RepeatingCallback<void(mojom::GenerateQRCodeRequestPtr request,
-                               QRImageGenerator::ResponseCallback callback)>
-      qrcode_service_override_;
+  // Unit tests can set `qr_code_error_override_` to inject QR code
+  // generation errors.
+  std::optional<qr_code_generator::Error> qrcode_error_override_;
 
   // URL for which the QR code is being generated.
   // Used for validation.

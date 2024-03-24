@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
+import 'chrome://resources/ash/common/cr_elements/cr_shared_vars.css.js';
 
-import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {I18nMixin} from 'chrome://resources/ash/common/cr_elements/i18n_mixin.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {WebApprovalsParams} from '../parent_access_ui.mojom-webui.js';
@@ -15,7 +15,7 @@ import {getTemplate} from './local_web_approvals_after.html.js';
 
 const LocalWebApprovalsAfterBase = I18nMixin(PolymerElement);
 
-export class LocalWebApprovalsAfterElement extends LocalWebApprovalsAfterBase {
+export class LocalWebApprovalsAfter extends LocalWebApprovalsAfterBase {
   static get is() {
     return 'local-web-approvals-after';
   }
@@ -62,4 +62,4 @@ export class LocalWebApprovalsAfterElement extends LocalWebApprovalsAfterBase {
 }
 
 customElements.define(
-    LocalWebApprovalsAfterElement.is, LocalWebApprovalsAfterElement);
+    LocalWebApprovalsAfter.is, LocalWebApprovalsAfter);

@@ -471,19 +471,18 @@ void LayoutTheme::AdjustSliderContainerStyle(
     ComputedStyleBuilder& builder) const {
   DCHECK(IsSliderContainer(element));
 
-  if (RuntimeEnabledFeatures::
-          NonStandardAppearanceValueSliderVerticalEnabled() &&
-      builder.EffectiveAppearance() == kSliderVerticalPart) {
+  if (RuntimeEnabledFeatures::FormControlsVerticalWritingModeSupportEnabled() &&
+      !IsHorizontalWritingMode(builder.GetWritingMode())) {
+    builder.SetTouchAction(TouchAction::kPanX);
+    // If FormControlsVerticalWritingModeDirectionSupport disabled, then it is
+    // always RTL because the slider value increases up even in LTR.
+  } else if (RuntimeEnabledFeatures::
+                 NonStandardAppearanceValueSliderVerticalEnabled() &&
+             builder.EffectiveAppearance() == kSliderVerticalPart) {
     builder.SetTouchAction(TouchAction::kPanX);
     builder.SetWritingMode(WritingMode::kVerticalRl);
     // It's always in RTL because the slider value increases up even in LTR.
     builder.SetDirection(TextDirection::kRtl);
-  } else if (RuntimeEnabledFeatures::
-                 FormControlsVerticalWritingModeSupportEnabled() &&
-             !IsHorizontalWritingMode(builder.GetWritingMode())) {
-    builder.SetTouchAction(TouchAction::kPanX);
-    // If FormControlsVerticalWritingModeDirectionSupport disabled, then it is
-    // always RTL because the slider value increases up even in LTR.
     if (!RuntimeEnabledFeatures::
             FormControlsVerticalWritingModeDirectionSupportEnabled()) {
       builder.SetDirection(TextDirection::kRtl);
@@ -777,7 +776,7 @@ Color LayoutTheme::SystemColorFromNativeTheme(
     default:
       return DefaultSystemColor(css_value_id, color_scheme);
   }
-  const absl::optional<SkColor> system_color =
+  const std::optional<SkColor> system_color =
       WebThemeEngineHelper::GetNativeThemeEngine()->GetSystemColor(theme_color);
   if (system_color)
     return Color::FromSkColor((system_color.value()));

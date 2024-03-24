@@ -51,6 +51,7 @@
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "third_party/blink/public/common/switches.h"
 #include "ui/base/test/ui_controls.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/views/focus/focus_manager.h"
 #include "ui/views/widget/widget.h"
 
@@ -106,8 +107,7 @@ class FocusChangeObserver : public views::FocusChangeListener,
 namespace base {
 
 template <>
-struct ::base::ScopedObservationTraits<views::FocusManager,
-                                       FocusChangeObserver> {
+struct ScopedObservationTraits<views::FocusManager, FocusChangeObserver> {
   static void AddObserver(views::FocusManager* source,
                           FocusChangeObserver* observer) {
     source->AddFocusChangeListener(observer);
@@ -763,6 +763,10 @@ IN_PROC_BROWSER_TEST_F(BrowserFocusTest, NoFocusForBackgroundNTP) {
 #define MAYBE_PopupLocationBar PopupLocationBar
 #endif
 IN_PROC_BROWSER_TEST_F(BrowserFocusTest, MAYBE_PopupLocationBar) {
+  // TODO (crbug/1520655): Remove the skip once the test is fixed.
+  if (features::IsChromeRefresh2023()) {
+    GTEST_SKIP();
+  }
   Browser* popup_browser = CreateBrowserForPopup(browser()->profile());
 
   // Make sure the popup is in the front. Otherwise the test is flaky.

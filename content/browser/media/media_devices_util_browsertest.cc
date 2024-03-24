@@ -71,7 +71,7 @@ void VerifyHMACDeviceID(MediaDeviceType device_type,
 blink::StreamControls GetAudioStreamControls(std::string hmac_device_id) {
   blink::StreamControls stream_controls{/*request_audio=*/true,
                                         /*request_video=*/false};
-  stream_controls.audio.device_id = hmac_device_id;
+  stream_controls.audio.device_ids = {hmac_device_id};
   return stream_controls;
 }
 
@@ -152,7 +152,8 @@ class MediaDevicesUtilBrowserTest : public ContentBrowserTest {
             /*device_changed_cb=*/base::DoNothing(),
             /*device_request_state_change_cb*/ base::DoNothing(),
             /*device_capture_configuration_change_cb=*/base::DoNothing(),
-            /*device_capture_handle_change_cb=*/base::DoNothing()));
+            /*device_capture_handle_change_cb=*/base::DoNothing(),
+            /*zoom_level_change_callback=*/base::DoNothing()));
   }
 
   GlobalRenderFrameHostId frame_id_;

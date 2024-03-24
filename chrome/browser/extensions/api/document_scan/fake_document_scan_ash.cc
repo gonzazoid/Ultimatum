@@ -9,7 +9,7 @@
 #include "base/check.h"
 #include "base/containers/contains.h"
 #include "base/notreached.h"
-#include "base/strings/strcat.h"
+#include "base/strings/stringprintf.h"
 #include "chrome/browser/extensions/api/document_scan/document_scan_test_utils.h"
 
 namespace extensions {
@@ -36,7 +36,7 @@ void FakeDocumentScanAsh::ScanFirstPage(const std::string& scanner_name,
                             scan_data_.value()[0]);
   } else {
     std::move(callback).Run(crosapi::mojom::ScanFailureMode::kDeviceBusy,
-                            absl::nullopt);
+                            std::nullopt);
   }
 }
 
@@ -92,7 +92,10 @@ void FakeDocumentScanAsh::OpenScanner(const std::string& client_id,
 
   crosapi::mojom::OpenScannerResponsePtr response =
       open_responses_[scanner_id].Clone();
-  open_scanners_[response->scanner_handle.value_or(scanner_id + "-handle")] =
+  response->scanner_handle =
+      response->scanner_handle.value_or(scanner_id + "-handle") +
+      base::StringPrintf("%03zu", ++handle_count_);
+  open_scanners_[response->scanner_handle.value()] =
       OpenScannerState(client_id, scanner_id);
   std::move(callback).Run(std::move(response));
 }
@@ -149,7 +152,8 @@ void FakeDocumentScanAsh::StartPreparedScan(
   auto response = crosapi::mojom::StartPreparedScanResponse::New();
   response->scanner_handle = scanner_handle;
   response->result = crosapi::mojom::ScannerOperationResult::kSuccess;
-  response->job_handle = base::StrCat({scanner_handle, "-job-handle"});
+  response->job_handle = base::StringPrintf(
+      "%s-job-%03zu", scanner_handle.c_str(), ++handle_count_);
   open_scanners_.at(scanner_handle).job_handle = response->job_handle;
   std::move(callback).Run(std::move(response));
 }
@@ -329,7 +333,7 @@ void FakeDocumentScanAsh::SetGetScannerNamesResponse(
 }
 
 void FakeDocumentScanAsh::SetScanResponse(
-    const absl::optional<std::vector<std::string>>& scan_data) {
+    const std::optional<std::vector<std::string>>& scan_data) {
   if (scan_data.has_value()) {
     DCHECK(!scan_data.value().empty());
   }

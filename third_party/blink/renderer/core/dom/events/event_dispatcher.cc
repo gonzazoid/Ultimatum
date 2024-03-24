@@ -27,6 +27,8 @@
 
 #include "third_party/blink/renderer/core/dom/events/event_dispatcher.h"
 
+#include <optional>
+
 #include "base/feature_list.h"
 #include "base/memory/scoped_refptr.h"
 #include "build/build_config.h"
@@ -198,7 +200,7 @@ DispatchEventResult EventDispatcher::Dispatch() {
   }
 
   if (frame && window) {
-    eventTiming = EventTiming::Create(window, *event_);
+    eventTiming = EventTiming::Create(window, *event_, event_->target());
   }
 
   if (event_->type() == event_type_names::kChange && event_->isTrusted() &&
@@ -221,19 +223,21 @@ DispatchEventResult EventDispatcher::Dispatch() {
        event_->type() == event_type_names::kKeyup) &&
       is_target_body_element;
 
-  std::unique_ptr<SoftNavigationEventScope> soft_navigation_scope;
+  std::optional<SoftNavigationHeuristics::EventScope> soft_navigation_scope;
   if ((is_click || is_unfocused_keyboard_event) && event_->isTrusted() &&
       frame) {
-    if (window && frame->IsMainFrame() &&
+    if (window &&
         base::FeatureList::IsEnabled(features::kSoftNavigationDetection)) {
-      bool is_new_interaction =
-          is_click || (event_->type() == event_type_names::kKeydown);
-      soft_navigation_scope = std::make_unique<SoftNavigationEventScope>(
-          SoftNavigationHeuristics::From(*window),
-          is_unfocused_keyboard_event
-              ? SoftNavigationHeuristics::EventScopeType::kKeyboard
-              : SoftNavigationHeuristics::EventScopeType::kClick,
-          is_new_interaction);
+      if (SoftNavigationHeuristics* heuristics =
+              SoftNavigationHeuristics::From(*window)) {
+        bool is_new_interaction =
+            is_click || (event_->type() == event_type_names::kKeydown);
+        soft_navigation_scope = heuristics->CreateEventScope(
+            is_unfocused_keyboard_event
+                ? SoftNavigationHeuristics::EventScope::Type::kKeyboard
+                : SoftNavigationHeuristics::EventScope::Type::kClick,
+            is_new_interaction);
+      }
     }
     // A genuine mouse click cannot be triggered by script so we don't expect
     // there are any script in the stack.

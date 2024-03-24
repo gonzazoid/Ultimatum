@@ -22,11 +22,11 @@
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
-#include "base/strings/string_piece.h"
 #include "base/thread_annotations.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "components/services/storage/indexed_db/locks/partitioned_lock.h"
+#include "components/services/storage/privileged/mojom/indexed_db_control_test.mojom.h"
 #include "components/services/storage/public/cpp/buckets/bucket_locator.h"
 #include "content/browser/indexed_db/indexed_db.h"
 #include "content/browser/indexed_db/indexed_db_external_object.h"
@@ -56,6 +56,7 @@ class IndexedDBBucketContext;
 class IndexedDBActiveBlobRegistry;
 class LevelDBWriteBatch;
 class TransactionalLevelDBDatabase;
+class TransactionalLevelDBFactory;
 class TransactionalLevelDBIterator;
 class TransactionalLevelDBTransaction;
 struct IndexedDBValue;
@@ -64,12 +65,6 @@ namespace indexed_db_backing_store_unittest {
 class IndexedDBBackingStoreTest;
 FORWARD_DECLARE_TEST(IndexedDBBackingStoreTest, ReadCorruptionInfo);
 }  // namespace indexed_db_backing_store_unittest
-
-enum class V2SchemaCorruptionStatus {
-  kUnknown = 0,  // Due to other unknown/critical errors.
-  kNo = 1,
-  kYes = 2,
-};
 
 // This class is not thread-safe.
 // All accessses to one instance must occur on the same sequence. Currently,
@@ -386,6 +381,7 @@ class CONTENT_EXPORT IndexedDBBackingStore {
       Mode backing_store_mode,
       const storage::BucketLocator& bucket_locator,
       const base::FilePath& blob_path,
+      TransactionalLevelDBFactory& transactional_leveldb_factory,
       std::unique_ptr<TransactionalLevelDBDatabase> db,
       BlobFilesCleanedCallback blob_files_cleaned,
       ReportOutstandingBlobsCallback report_outstanding_blobs,
@@ -411,6 +407,9 @@ class CONTENT_EXPORT IndexedDBBackingStore {
   IndexedDBActiveBlobRegistry* active_blob_registry() {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     return active_blob_registry_.get();
+  }
+  TransactionalLevelDBFactory& transactional_leveldb_factory() const {
+    return *transactional_leveldb_factory_;
   }
 
   // Virtual for testing.
@@ -609,7 +608,8 @@ class CONTENT_EXPORT IndexedDBBackingStore {
   // Returns true if a blob cleanup job is pending on journal_cleaning_timer_.
   bool IsBlobCleanupPending();
 
-  int64_t GetInMemoryBlobSize() const;
+  // Gets the total size of blobs and the database for in-memory backing stores.
+  int64_t GetInMemorySize() const;
 
 #if DCHECK_IS_ON()
   int NumBlobFilesDeletedForTesting() {
@@ -628,15 +628,6 @@ class CONTENT_EXPORT IndexedDBBackingStore {
 
   // Stops the journal_cleaning_timer_ and runs its pending task.
   void ForceRunBlobCleanup();
-
-  // HasV2SchemaCorruption() returns whether the backing store is v2 and
-  // has blob references.
-  V2SchemaCorruptionStatus HasV2SchemaCorruption();
-
-  // RevertSchemaToV2() updates a backing store state on disk to override its
-  // metadata version to 2.  This allows triggering https://crbug.com/829141 on
-  // an otherwise healthy backing store.
-  leveldb::Status RevertSchemaToV2();
 
   bool in_memory() const { return backing_store_mode_ == Mode::kInMemory; }
 
@@ -692,11 +683,11 @@ class CONTENT_EXPORT IndexedDBBackingStore {
   void CleanRecoveryJournalIgnoreReturn();
 
  private:
+  FRIEND_TEST_ALL_PREFIXES(IndexedDBBackingStoreTestWithExternalObjects,
+                           ActiveBlobJournal);
+
   friend class AutoDidCommitTransaction;
 
-  leveldb::Status MigrateToV1(LevelDBWriteBatch* write_batch);
-  leveldb::Status MigrateToV2(LevelDBWriteBatch* write_batch);
-  leveldb::Status MigrateToV3(LevelDBWriteBatch* write_batch);
   leveldb::Status MigrateToV4(LevelDBWriteBatch* write_batch);
   leveldb::Status MigrateToV5(LevelDBWriteBatch* write_batch);
 
@@ -758,6 +749,10 @@ class CONTENT_EXPORT IndexedDBBackingStore {
   mutable int num_blob_files_deleted_ GUARDED_BY_CONTEXT(sequence_checker_) = 0;
 #endif
 
+  // This factory is used to modify LevelDB behavior for tests. It's owned by
+  // the bucket context even though ideally it would be owned by `this`, which
+  // is due to poor encapsulation of LevelDB operations within `this`.
+  raw_ref<TransactionalLevelDBFactory> transactional_leveldb_factory_;
   const std::unique_ptr<TransactionalLevelDBDatabase> db_;
 
   const BlobFilesCleanedCallback blob_files_cleaned_;

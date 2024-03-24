@@ -6,6 +6,7 @@
 #define COMPONENTS_PAGE_LOAD_METRICS_RENDERER_METRICS_RENDER_FRAME_OBSERVER_H_
 
 #include <memory>
+#include <optional>
 #include <set>
 
 #include "base/scoped_observation.h"
@@ -13,7 +14,6 @@
 #include "components/page_load_metrics/renderer/page_resource_data_use.h"
 #include "components/page_load_metrics/renderer/page_timing_metadata_recorder.h"
 #include "content/public/renderer/render_frame_observer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/loader/loading_behavior_flag.h"
 #include "third_party/blink/public/common/responsiveness_metrics/user_interaction_latency.h"
 #include "third_party/blink/public/common/subresource_load_metrics.h"
@@ -82,6 +82,7 @@ class MetricsRenderFrameObserver : public content::RenderFrameObserver,
   void DidChangePerformanceTiming() override;
   void DidObserveUserInteraction(base::TimeTicks max_event_start,
                                  base::TimeTicks max_event_end,
+                                 base::TimeTicks max_event_queued_main_thread,
                                  blink::UserInteractionType interaction_type,
                                  uint64_t interaction_offset) override;
   void DidChangeCpuTiming(base::TimeDelta time) override;
@@ -112,7 +113,7 @@ class MetricsRenderFrameObserver : public content::RenderFrameObserver,
                                       bool from_archive) override;
   void DidStartNavigation(
       const GURL& url,
-      absl::optional<blink::WebNavigationType> navigation_type) override;
+      std::optional<blink::WebNavigationType> navigation_type) override;
   void DidSetPageLifecycleState() override;
 
   void ReadyToCommitNavigation(
@@ -186,7 +187,7 @@ class MetricsRenderFrameObserver : public content::RenderFrameObserver,
   // The main frame intersection rectangle signal received before
   // `page_timing_metrics_sender_` is created. The signal will be send out right
   // after `page_timing_metrics_sender_` is created.
-  absl::optional<gfx::Rect>
+  std::optional<gfx::Rect>
       main_frame_intersection_rect_before_metrics_sender_created_;
 
   // Will be null when we're not actively sending metrics.
@@ -194,7 +195,7 @@ class MetricsRenderFrameObserver : public content::RenderFrameObserver,
 
   // DocumentToken associated with current page load. Only available after
   // `DidCreateDocumentElement` event.
-  absl::optional<blink::DocumentToken> document_token_;
+  std::optional<blink::DocumentToken> document_token_;
 };
 
 }  // namespace page_load_metrics

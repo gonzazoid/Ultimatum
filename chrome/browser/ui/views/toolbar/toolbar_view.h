@@ -16,7 +16,7 @@
 #include "chrome/browser/ui/page_action/page_action_icon_type.h"
 #include "chrome/browser/ui/toolbar/app_menu_icon_controller.h"
 #include "chrome/browser/ui/toolbar/back_forward_menu_model.h"
-#include "chrome/browser/ui/toolbar/chrome_labs_model.h"
+#include "chrome/browser/ui/toolbar/chrome_labs/chrome_labs_model.h"
 #include "chrome/browser/ui/views/frame/browser_root_view.h"
 #include "chrome/browser/ui/views/frame/toolbar_button_provider.h"
 #include "chrome/browser/ui/views/intent_picker_bubble_view.h"
@@ -197,7 +197,7 @@ class ToolbarView : public views::AccessiblePaneView,
   // views::View:
   gfx::Size CalculatePreferredSize() const override;
   gfx::Size GetMinimumSize() const override;
-  void Layout() override;
+  void Layout(PassKey) override;
   void OnThemeChanged() override;
   bool AcceleratorPressed(const ui::Accelerator& acc) override;
   void ChildPreferredSizeChanged(views::View* child) override;
@@ -311,8 +311,7 @@ class ToolbarView : public views::AccessiblePaneView,
   AppMenuIconController app_menu_icon_controller_;
 
   std::unique_ptr<ChromeLabsModel> chrome_labs_model_;
-  std::unique_ptr<ExtensionsToolbarCoordinator>
-      extensions_toolbar_coordinator_ = nullptr;
+  std::unique_ptr<ExtensionsToolbarCoordinator> extensions_toolbar_coordinator_;
 
   // Controls whether or not a home button should be shown on the toolbar.
   BooleanPrefMember show_home_button_;

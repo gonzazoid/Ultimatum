@@ -107,6 +107,7 @@ static_library("browser") {
   deps = [
     "//base",
     "//base:i18n",
+    "//build:ios_buildflags",
     "//components/crash/core/common:crash_key",
     "//components/database_utils",
     "//components/favicon/core:database",
@@ -126,7 +127,6 @@ static_library("browser") {
     "//net",
     "//services/network/public/cpp",
     "//sql",
-    "//third_party/sqlite",
     "//ui/base",
     "//ui/gfx",
     "//url",
@@ -202,7 +202,6 @@ source_set("unit_tests") {
     "//sql",
     "//sql:test_support",
     "//testing/gtest",
-    "//third_party/sqlite",
     "//ui/gfx",
     "//ui/gfx:test_support",
     "//url",

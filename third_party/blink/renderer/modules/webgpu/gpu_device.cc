@@ -50,7 +50,7 @@ namespace blink {
 
 namespace {
 
-absl::optional<V8GPUFeatureName::Enum> RequiredFeatureForTextureFormat(
+std::optional<V8GPUFeatureName::Enum> RequiredFeatureForTextureFormat(
     V8GPUTextureFormat::Enum format) {
   switch (format) {
     case V8GPUTextureFormat::Enum::kBc1RgbaUnorm:
@@ -115,7 +115,7 @@ absl::optional<V8GPUFeatureName::Enum> RequiredFeatureForTextureFormat(
       return V8GPUFeatureName::Enum::kDepth32FloatStencil8;
 
     default:
-      return absl::nullopt;
+      return std::nullopt;
   }
 }
 
@@ -376,7 +376,7 @@ void GPUDevice::OnDeviceLostError(WGPUDeviceLostReason reason,
 }
 
 void GPUDevice::OnCreateRenderPipelineAsyncCallback(
-    absl::optional<String> label,
+    std::optional<String> label,
     ScriptPromiseResolver* resolver,
     WGPUCreatePipelineAsyncStatus status,
     WGPURenderPipeline render_pipeline,
@@ -404,21 +404,20 @@ void GPUDevice::OnCreateRenderPipelineAsyncCallback(
     case WGPUCreatePipelineAsyncStatus_InternalError:
     case WGPUCreatePipelineAsyncStatus_DeviceLost:
     case WGPUCreatePipelineAsyncStatus_DeviceDestroyed:
-    case WGPUCreatePipelineAsyncStatus_Unknown: {
+    case WGPUCreatePipelineAsyncStatus_Unknown:
+    default: {
+      // TODO(dawn:1987): Remove the default case after handling
+      // InstanceDropped.
       resolver->Reject(GPUPipelineError::Create(
           script_state->GetIsolate(), StringFromASCIIAndUTF8(message),
           V8GPUPipelineErrorReason::Enum::kInternal));
       break;
     }
-
-    default: {
-      NOTREACHED();
-    }
   }
 }
 
 void GPUDevice::OnCreateComputePipelineAsyncCallback(
-    absl::optional<String> label,
+    std::optional<String> label,
     ScriptPromiseResolver* resolver,
     WGPUCreatePipelineAsyncStatus status,
     WGPUComputePipeline compute_pipeline,
@@ -452,9 +451,13 @@ void GPUDevice::OnCreateComputePipelineAsyncCallback(
           V8GPUPipelineErrorReason::Enum::kInternal));
       break;
     }
-
     default: {
-      NOTREACHED();
+      // TODO(dawn:1987): Remove the default case after handling
+      // InstanceDropped.
+      resolver->Reject(GPUPipelineError::Create(
+          script_state->GetIsolate(), StringFromASCIIAndUTF8(message),
+          V8GPUPipelineErrorReason::Enum::kInternal));
+      break;
     }
   }
 }
@@ -467,7 +470,8 @@ GPUSupportedFeatures* GPUDevice::features() const {
   return features_.Get();
 }
 
-ScriptPromise GPUDevice::lost(ScriptState* script_state) {
+ScriptPromiseTyped<GPUDeviceLostInfo> GPUDevice::lost(
+    ScriptState* script_state) {
   return lost_property_->Promise(script_state->World());
 }
 
@@ -561,7 +565,7 @@ ScriptPromise GPUDevice::createRenderPipelineAsync(
   if (exception_state.HadException()) {
     resolver->Reject(exception_state);
   } else {
-    absl::optional<String> label = {};
+    std::optional<String> label = {};
     if (descriptor->hasLabel()) {
       label = descriptor->label();
     }
@@ -602,7 +606,7 @@ ScriptPromise GPUDevice::createComputePipelineAsync(
     dawn_desc.nextInChain = &fullSubgroupsOptions.chain;
   }
 
-  absl::optional<String> label = {};
+  std::optional<String> label = {};
   if (descriptor->hasLabel()) {
     label = descriptor->label();
   }

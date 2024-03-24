@@ -328,6 +328,31 @@ ValidateReduceAxesAndInferOutput(base::span<const uint32_t> input_dimensions,
   return output_shape;
 }
 
+// Validate the operand of recurrent network.
+base::expected<void, std::string> ValidateRecurrentNetworkOperand(
+    const Operand& operand,
+    const char* operand_name,
+    base::span<const uint32_t> expected_shape,
+    Operand::DataType input_data_type) {
+  const auto& operand_dimensions = operand.dimensions;
+  if (operand_dimensions.size() != expected_shape.size()) {
+    return base::unexpected(
+        base::StringPrintf("The %s operand should be a %zu-D tensor.",
+                           operand_name, expected_shape.size()));
+  }
+  if (!std::equal(operand_dimensions.begin(), operand_dimensions.end(),
+                  expected_shape.begin(), expected_shape.end())) {
+    return base::unexpected(
+        base::StringPrintf("The %s operand shape is invalid.", operand_name));
+  }
+  if (operand.data_type != input_data_type) {
+    return base::unexpected(base::StringPrintf(
+        "The %s operand data type doesn't match the input data type.",
+        operand_name));
+  }
+  return base::ok();
+}
+
 }  // namespace
 
 Operand::Operand(DataType data_type, std::vector<uint32_t> dimensions) {
@@ -878,7 +903,7 @@ base::expected<Operand, std::string> ValidateMatmulAndInferOutput(
                                               a_dimensions.end() - 2);
     std::vector<uint32_t> sliced_b_dimensions(b_dimensions.begin(),
                                               b_dimensions.end() - 2);
-    absl::optional<std::vector<uint32_t>> optional_output_dimensions =
+    std::optional<std::vector<uint32_t>> optional_output_dimensions =
         BroadcastShapes(sliced_a_dimensions, sliced_b_dimensions, true);
     if (!optional_output_dimensions) {
       return base::unexpected("The matmul input shapes are not broadcastable.");
@@ -1342,6 +1367,151 @@ base::expected<Operand, std::string> ValidateLayerNormalizationAndInferOutput(
   return Operand(input.data_type, std::move(input.dimensions));
 }
 
+LstmAttributes::LstmAttributes() = default;
+LstmAttributes::~LstmAttributes() = default;
+
+LstmAttributes::LstmAttributes(LstmAttributes&& other) = default;
+LstmAttributes& LstmAttributes::operator=(LstmAttributes&& other) = default;
+
+base::expected<std::vector<Operand>, std::string> ValidateLstmAndInferOutput(
+    const Operand& input,
+    const Operand& weight,
+    const Operand& recurrent_weight,
+    const uint32_t steps,
+    const uint32_t hidden_size,
+    const LstmAttributes& attributes) {
+  if (steps <= 0) {
+    return base::unexpected("The steps must be greater than 0.");
+  }
+  if (hidden_size <= 0) {
+    return base::unexpected("The hidden size must be greater than 0.");
+  }
+
+  uint32_t four_times_hidden_size;
+  auto checked_four_times_hidden_size = base::MakeCheckedNum(hidden_size) * 4;
+  if (!checked_four_times_hidden_size.AssignIfValid(&four_times_hidden_size)) {
+    return base::unexpected("The hidden size is too large.");
+  }
+
+  const auto& input_dimensions = input.dimensions;
+  if (input_dimensions.size() != 3) {
+    return base::unexpected("The input should be a 3-D tensor.");
+  }
+  if (input_dimensions[0] != steps) {
+    return base::unexpected(
+        "The input dimensions[0] must be equal to the steps.");
+  }
+  // The current spec doesn't specify the operand data type constraints of
+  // lstm. An issue has been filed to track it:
+  // https://github.com/webmachinelearning/webnn/issues/283.
+  if (!IsFloatingPointType(input.data_type)) {
+    return base::unexpected(
+        "The data type of input must be one of the floating point types.");
+  }
+
+  const uint32_t batch_size = input_dimensions[1];
+  const uint32_t input_size = input_dimensions[2];
+  const uint32_t direction_count =
+      attributes.direction == RecurrentNetworkDirection::kBoth ? 2 : 1;
+
+  // Validate the weight operand.
+  uint32_t expected_weight_shape[3] = {direction_count, four_times_hidden_size,
+                                       input_size};
+  auto weight_validation_result = ValidateRecurrentNetworkOperand(
+      weight, "weight", expected_weight_shape, input.data_type);
+  if (!weight_validation_result.has_value()) {
+    return base::unexpected(weight_validation_result.error());
+  }
+
+  // Validate the recurrent weight operand.
+  uint32_t expected_recurrent_weight_shape[3] = {
+      direction_count, four_times_hidden_size, hidden_size};
+  auto recurrent_weight_validation_result = ValidateRecurrentNetworkOperand(
+      recurrent_weight, "recurrent weight", expected_recurrent_weight_shape,
+      input.data_type);
+  if (!recurrent_weight_validation_result.has_value()) {
+    return base::unexpected(recurrent_weight_validation_result.error());
+  }
+
+  // Validate the bias operand.
+  if (attributes.bias) {
+    uint32_t expected_bias_shape[2] = {direction_count, four_times_hidden_size};
+    auto bias_validation_result = ValidateRecurrentNetworkOperand(
+        attributes.bias.value(), "bias", expected_bias_shape, input.data_type);
+    if (!bias_validation_result.has_value()) {
+      return base::unexpected(bias_validation_result.error());
+    }
+  }
+
+  // Validate the recurrent bias operand.
+  if (attributes.recurrent_bias) {
+    uint32_t expected_recurrent_bias_shape[2] = {direction_count,
+                                                 four_times_hidden_size};
+    auto recurrent_bias_validation_result = ValidateRecurrentNetworkOperand(
+        attributes.recurrent_bias.value(), "recurrent bias",
+        expected_recurrent_bias_shape, input.data_type);
+    if (!recurrent_bias_validation_result.has_value()) {
+      return base::unexpected(recurrent_bias_validation_result.error());
+    }
+  }
+
+  // Validate the peephole weight operand.
+  if (attributes.peephole_weight) {
+    // Here `3 * hidden_size` will not overflow because `4 * hidden_size` has
+    // already been checked.
+    uint32_t expected_peephole_weight_shape[2] = {direction_count,
+                                                  3 * hidden_size};
+    auto peephole_weight_validation_result = ValidateRecurrentNetworkOperand(
+        attributes.peephole_weight.value(), "peephole weight",
+        expected_peephole_weight_shape, input.data_type);
+    if (!peephole_weight_validation_result.has_value()) {
+      return base::unexpected(peephole_weight_validation_result.error());
+    }
+  }
+
+  // Validate the initial hidden state operand.
+  if (attributes.initial_hidden_state) {
+    uint32_t expected_initial_hidden_state_shape[3] = {direction_count,
+                                                       batch_size, hidden_size};
+    auto initial_hidden_state_validation_result =
+        ValidateRecurrentNetworkOperand(
+            attributes.initial_hidden_state.value(), "initial hidden state",
+            expected_initial_hidden_state_shape, input.data_type);
+    if (!initial_hidden_state_validation_result.has_value()) {
+      return base::unexpected(initial_hidden_state_validation_result.error());
+    }
+  }
+
+  // Validate the initial cell state operand.
+  if (attributes.initial_cell_state) {
+    uint32_t expected_initial_cell_state_shape[3] = {direction_count,
+                                                     batch_size, hidden_size};
+    auto initial_cell_state_validation_result = ValidateRecurrentNetworkOperand(
+        attributes.initial_cell_state.value(), "initial cell state",
+        expected_initial_cell_state_shape, input.data_type);
+    if (!initial_cell_state_validation_result.has_value()) {
+      return base::unexpected(initial_cell_state_validation_result.error());
+    }
+  }
+
+  if (attributes.activation_count && attributes.activation_count.value() != 3) {
+    return base::unexpected(
+        "The activations should be a sequence of length 3.");
+  }
+
+  std::vector<Operand> outputs;
+  outputs.emplace_back(input.data_type,
+                       std::vector{direction_count, batch_size, hidden_size});
+  outputs.emplace_back(input.data_type,
+                       std::vector{direction_count, batch_size, hidden_size});
+  if (attributes.return_sequence) {
+    outputs.emplace_back(input.data_type, std::vector{steps, direction_count,
+                                                      batch_size, hidden_size});
+  }
+
+  return outputs;
+}
+
 base::expected<Operand, std::string> ValidateConcatAndInferOutput(
     const std::vector<Operand>& inputs,
     const uint32_t axis) {
@@ -1611,7 +1781,7 @@ base::expected<void, std::string> ValidateAxes(base::span<const uint32_t> axes,
   return base::ok();
 }
 
-absl::optional<std::vector<uint32_t>> BroadcastShapes(
+std::optional<std::vector<uint32_t>> BroadcastShapes(
     base::span<const uint32_t> dims_lhs,
     base::span<const uint32_t> dims_rhs,
     bool bidirectional) {
@@ -1630,10 +1800,10 @@ absl::optional<std::vector<uint32_t>> BroadcastShapes(
     // they are equal, or the lhs dimension is 1.
     if (bidirectional) {
       if (dim_lhs != dim_rhs && dim_lhs != 1 && dim_rhs != 1) {
-        return absl::nullopt;
+        return std::nullopt;
       }
     } else if (dim_lhs != dim_rhs && dim_lhs != 1) {
-      return absl::nullopt;
+      return std::nullopt;
     }
     // If bidirectional is true, for each dimension of the output tensor, its
     // size is the maximum size along that dimension of the input shapes.
@@ -1644,11 +1814,11 @@ absl::optional<std::vector<uint32_t>> BroadcastShapes(
   return dims_output;
 }
 
-absl::optional<PaddingSizes> CalculateConv2dPadding(AutoPad auto_pad,
-                                                    const uint32_t input_size,
-                                                    const uint32_t filter_size,
-                                                    const uint32_t stride,
-                                                    const uint32_t dilation) {
+std::optional<PaddingSizes> CalculateConv2dPadding(AutoPad auto_pad,
+                                                   const uint32_t input_size,
+                                                   const uint32_t filter_size,
+                                                   const uint32_t stride,
+                                                   const uint32_t dilation) {
   auto checked_output_size =
       (base::MakeCheckedNum<uint32_t>(input_size) + stride - 1) / stride;
   auto checked_dilated_filter_size =
@@ -1656,7 +1826,7 @@ absl::optional<PaddingSizes> CalculateConv2dPadding(AutoPad auto_pad,
   auto checked_needed_input_size =
       (checked_output_size - 1) * stride + checked_dilated_filter_size;
   if (!checked_needed_input_size.IsValid()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   auto checked_total_padding =
       checked_needed_input_size.ValueOrDie() > input_size
@@ -1680,12 +1850,12 @@ absl::optional<PaddingSizes> CalculateConv2dPadding(AutoPad auto_pad,
   uint32_t padding_begin, padding_end;
   if (!checked_padding_begin.AssignIfValid(&padding_begin) ||
       !checked_padding_end.AssignIfValid(&padding_end)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return PaddingSizes({.begin = padding_begin, .end = padding_end});
 }
 
-absl::optional<PaddingSizes> CalculateConvTranspose2dPadding(
+std::optional<PaddingSizes> CalculateConvTranspose2dPadding(
     AutoPad auto_pad,
     const uint32_t input_size,
     const uint32_t filter_size,
@@ -1717,7 +1887,7 @@ absl::optional<PaddingSizes> CalculateConvTranspose2dPadding(
   uint32_t padding_begin, padding_end;
   if (!checked_padding_begin.AssignIfValid(&padding_begin) ||
       !checked_padding_end.AssignIfValid(&padding_end)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return webnn::PaddingSizes({.begin = padding_begin, .end = padding_end});
 }

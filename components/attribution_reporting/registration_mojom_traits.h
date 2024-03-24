@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -34,7 +35,6 @@
 #include "net/base/schemeful_site.h"
 #include "services/network/public/cpp/schemeful_site_mojom_traits.h"
 #include "third_party/abseil-cpp/absl/numeric/int128.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 #include "url/mojom/origin_mojom_traits.h"
 #include "url/mojom/url_gurl_mojom_traits.h"
@@ -72,7 +72,7 @@ template <>
 struct COMPONENT_EXPORT(ATTRIBUTION_REPORTING_REGISTRATION_MOJOM_TRAITS)
     StructTraits<attribution_reporting::mojom::FilterConfigDataView,
                  attribution_reporting::FilterConfig> {
-  static const absl::optional<base::TimeDelta>& lookback_window(
+  static const std::optional<base::TimeDelta>& lookback_window(
       const attribution_reporting::FilterConfig& filter_config) {
     return filter_config.lookback_window();
   }
@@ -186,9 +186,9 @@ struct COMPONENT_EXPORT(ATTRIBUTION_REPORTING_REGISTRATION_MOJOM_TRAITS)
     return source.aggregatable_report_window;
   }
 
-  static const attribution_reporting::EventReportWindows& event_report_windows(
+  static const attribution_reporting::TriggerSpecs& trigger_specs(
       const attribution_reporting::SourceRegistration& source) {
-    return source.event_report_windows;
+    return source.trigger_specs;
   }
 
   static int max_event_level_reports(
@@ -201,7 +201,7 @@ struct COMPONENT_EXPORT(ATTRIBUTION_REPORTING_REGISTRATION_MOJOM_TRAITS)
     return source.priority;
   }
 
-  static absl::optional<uint64_t> debug_key(
+  static std::optional<uint64_t> debug_key(
       const attribution_reporting::SourceRegistration& source) {
     return source.debug_key;
   }
@@ -267,7 +267,7 @@ struct COMPONENT_EXPORT(ATTRIBUTION_REPORTING_REGISTRATION_MOJOM_TRAITS)
     return data.priority;
   }
 
-  static absl::optional<uint64_t> dedup_key(
+  static std::optional<uint64_t> dedup_key(
       const attribution_reporting::EventTriggerData& data) {
     return data.dedup_key;
   }
@@ -325,13 +325,13 @@ struct COMPONENT_EXPORT(ATTRIBUTION_REPORTING_REGISTRATION_MOJOM_TRAITS)
     return trigger.aggregatable_trigger_data;
   }
 
-  static const attribution_reporting::AggregatableValues::Values&
+  static const std::vector<attribution_reporting::AggregatableValues>&
   aggregatable_values(
       const attribution_reporting::TriggerRegistration& trigger) {
-    return trigger.aggregatable_values.values();
+    return trigger.aggregatable_values;
   }
 
-  static absl::optional<uint64_t> debug_key(
+  static std::optional<uint64_t> debug_key(
       const attribution_reporting::TriggerRegistration& trigger) {
     return trigger.debug_key;
   }
@@ -347,7 +347,7 @@ struct COMPONENT_EXPORT(ATTRIBUTION_REPORTING_REGISTRATION_MOJOM_TRAITS)
     return trigger.debug_reporting;
   }
 
-  static const absl::optional<attribution_reporting::SuitableOrigin>&
+  static const std::optional<attribution_reporting::SuitableOrigin>&
   aggregation_coordinator_origin(
       const attribution_reporting::TriggerRegistration& trigger) {
     return trigger.aggregation_coordinator_origin;
@@ -360,7 +360,7 @@ struct COMPONENT_EXPORT(ATTRIBUTION_REPORTING_REGISTRATION_MOJOM_TRAITS)
         .source_registration_time_config();
   }
 
-  static const absl::optional<std::string>& trigger_context_id(
+  static const std::optional<std::string>& trigger_context_id(
       const attribution_reporting::TriggerRegistration& trigger) {
     return trigger.aggregatable_trigger_config.trigger_context_id();
   }
@@ -374,7 +374,7 @@ template <>
 struct COMPONENT_EXPORT(ATTRIBUTION_REPORTING_REGISTRATION_MOJOM_TRAITS)
     StructTraits<attribution_reporting::mojom::AggregatableDedupKeyDataView,
                  attribution_reporting::AggregatableDedupKey> {
-  static absl::optional<uint64_t> dedup_key(
+  static std::optional<uint64_t> dedup_key(
       const attribution_reporting::AggregatableDedupKey& data) {
     return data.dedup_key;
   }
@@ -387,6 +387,25 @@ struct COMPONENT_EXPORT(ATTRIBUTION_REPORTING_REGISTRATION_MOJOM_TRAITS)
   static bool Read(
       attribution_reporting::mojom::AggregatableDedupKeyDataView data,
       attribution_reporting::AggregatableDedupKey* out);
+};
+
+template <>
+struct COMPONENT_EXPORT(ATTRIBUTION_REPORTING_REGISTRATION_MOJOM_TRAITS)
+    StructTraits<attribution_reporting::mojom::AggregatableValuesDataView,
+                 attribution_reporting::AggregatableValues> {
+  static const attribution_reporting::AggregatableValues::Values& values(
+      const attribution_reporting::AggregatableValues& data) {
+    return data.values();
+  }
+
+  static const attribution_reporting::FilterPair& filters(
+      const attribution_reporting::AggregatableValues& data) {
+    return data.filters();
+  }
+
+  static bool Read(
+      attribution_reporting::mojom::AggregatableValuesDataView data,
+      attribution_reporting::AggregatableValues* out);
 };
 
 template <>

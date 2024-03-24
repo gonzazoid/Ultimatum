@@ -216,14 +216,27 @@ class BookmarkBridge {
 
     /**
      * @return The top level folders, including special folders (managed bookmarks, reading list,
-     *     partner bookmarks).
+     *     partner bookmarks). Will show empty folder according to the logic in BookmarkClient.
      */
     public List<BookmarkId> getTopLevelFolderIds() {
+        return getTopLevelFolderIds(/* ignoreVisibility= */ false);
+    }
+
+    /**
+     * @param ignoreVisibility Whether the visible while empty logic, found in BookmarkClient, is
+     *     used when gathering nodes. When true, all folders are shown regardless of client defined
+     *     visibility. When false, the client defined visibility rules are used. See
+     *     components/bookmarks/browser/bookmark_client.h for more information.
+     * @return The top level folders, including special folders (managed bookmarks, reading list,
+     *     partner bookmarks).
+     */
+    public List<BookmarkId> getTopLevelFolderIds(boolean ignoreVisibility) {
         ThreadUtils.assertOnUiThread();
         if (mNativeBookmarkBridge == 0) return new ArrayList<>();
         assert mIsNativeBookmarkModelLoaded;
         List<BookmarkId> result = new ArrayList<>();
-        BookmarkBridgeJni.get().getTopLevelFolderIds(mNativeBookmarkBridge, result);
+        BookmarkBridgeJni.get()
+                .getTopLevelFolderIds(mNativeBookmarkBridge, ignoreVisibility, result);
         return result;
     }
 
@@ -325,9 +338,7 @@ class BookmarkBridge {
         }
     }
 
-    /**
-     * @return The BookmarkId for root folder node
-     */
+    /** Returns the BookmarkId for root folder node. */
     public BookmarkId getRootFolderId() {
         ThreadUtils.assertOnUiThread();
         if (mNativeBookmarkBridge == 0) return null;
@@ -338,9 +349,7 @@ class BookmarkBridge {
         return mRootFolderId;
     }
 
-    /**
-     * @return The BookmarkId for Mobile folder node
-     */
+    /** Returns the BookmarkId for Mobile folder node. */
     public BookmarkId getMobileFolderId() {
         ThreadUtils.assertOnUiThread();
         if (mNativeBookmarkBridge == 0) return null;
@@ -351,9 +360,7 @@ class BookmarkBridge {
         return mMobileFolderId;
     }
 
-    /**
-     * @return Id representing the special "other" folder from bookmark model.
-     */
+    /** Returns Id representing the special "other" folder from bookmark model. */
     public BookmarkId getOtherFolderId() {
         ThreadUtils.assertOnUiThread();
         if (mNativeBookmarkBridge == 0) return null;
@@ -364,9 +371,7 @@ class BookmarkBridge {
         return mOtherFolderId;
     }
 
-    /**
-     * @return BookmarkId representing special "desktop" folder, namely "bookmark bar".
-     */
+    /** Returns the BookmarkId representing special "desktop" folder, namely "bookmark bar". */
     public BookmarkId getDesktopFolderId() {
         ThreadUtils.assertOnUiThread();
         if (mNativeBookmarkBridge == 0) return null;
@@ -375,6 +380,32 @@ class BookmarkBridge {
             mDesktopFolderId = BookmarkBridgeJni.get().getDesktopFolderId(mNativeBookmarkBridge);
         }
         return mDesktopFolderId;
+    }
+
+    /** Returns the id representing the special account "mobile" folder from bookmark model. */
+    public BookmarkId getAccountMobileFolderId() {
+        ThreadUtils.assertOnUiThread();
+        if (mNativeBookmarkBridge == 0) return null;
+        assert mIsNativeBookmarkModelLoaded;
+        return BookmarkBridgeJni.get().getAccountMobileFolderId(mNativeBookmarkBridge);
+    }
+
+    /** Returns the id representing the special account "other" folder from bookmark model. */
+    public BookmarkId getAccountOtherFolderId() {
+        ThreadUtils.assertOnUiThread();
+        if (mNativeBookmarkBridge == 0) return null;
+        assert mIsNativeBookmarkModelLoaded;
+        return BookmarkBridgeJni.get().getAccountOtherFolderId(mNativeBookmarkBridge);
+    }
+
+    /**
+     * @return BookmarkId representing special account "desktop" folder, namely "bookmark bar".
+     */
+    public BookmarkId getAccountDesktopFolderId() {
+        ThreadUtils.assertOnUiThread();
+        if (mNativeBookmarkBridge == 0) return null;
+        assert mIsNativeBookmarkModelLoaded;
+        return BookmarkBridgeJni.get().getAccountDesktopFolderId(mNativeBookmarkBridge);
     }
 
     /**
@@ -646,6 +677,7 @@ class BookmarkBridge {
     public void removeAllUserBookmarks() {
         ThreadUtils.assertOnUiThread();
         if (mNativeBookmarkBridge == 0) return;
+        assert mIsNativeBookmarkModelLoaded;
         BookmarkBridgeJni.get().removeAllUserBookmarks(mNativeBookmarkBridge);
     }
 
@@ -654,11 +686,13 @@ class BookmarkBridge {
      *
      * @param bookmarkId The id of the bookmark that is being moved.
      * @param newParentId The parent folder id.
-     * @param index The new index for the bookmark.
+     * @param index The new index for the bookmark, this argument is ignored if the types of
+     *     bookmarkId and newParentId differ.
      */
     public void moveBookmark(BookmarkId bookmarkId, BookmarkId newParentId, int index) {
         ThreadUtils.assertOnUiThread();
         if (mNativeBookmarkBridge == 0) return;
+        assert mIsNativeBookmarkModelLoaded;
         BookmarkBridgeJni.get().moveBookmark(mNativeBookmarkBridge, bookmarkId, newParentId, index);
     }
 
@@ -848,6 +882,7 @@ class BookmarkBridge {
      * @return Whether the URL has been bookmarked.
      */
     public boolean isBookmarked(GURL url) {
+        ThreadUtils.assertOnUiThread();
         if (mNativeBookmarkBridge == 0) return false;
         return BookmarkBridgeJni.get().isBookmarked(mNativeBookmarkBridge, url);
     }
@@ -1020,7 +1055,10 @@ class BookmarkBridge {
 
         BookmarkItem getBookmarkById(long nativeBookmarkBridge, long id, int type);
 
-        void getTopLevelFolderIds(long nativeBookmarkBridge, List<BookmarkId> bookmarksList);
+        void getTopLevelFolderIds(
+                long nativeBookmarkBridge,
+                boolean ignoreVisibility,
+                List<BookmarkId> bookmarksList);
 
         BookmarkId getLocalOrSyncableReadingListFolder(long nativeBookmarkBridge);
 
@@ -1039,6 +1077,12 @@ class BookmarkBridge {
         BookmarkId getOtherFolderId(long nativeBookmarkBridge);
 
         BookmarkId getDesktopFolderId(long nativeBookmarkBridge);
+
+        BookmarkId getAccountMobileFolderId(long nativeBookmarkBridge);
+
+        BookmarkId getAccountOtherFolderId(long nativeBookmarkBridge);
+
+        BookmarkId getAccountDesktopFolderId(long nativeBookmarkBridge);
 
         BookmarkId getPartnerFolderId(long nativeBookmarkBridge);
 

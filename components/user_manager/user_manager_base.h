@@ -7,6 +7,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -25,7 +26,6 @@
 #include "components/user_manager/user_manager.h"
 #include "components/user_manager/user_manager_export.h"
 #include "components/user_manager/user_type.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefRegistrySimple;
 
@@ -95,6 +95,9 @@ class USER_MANAGER_EXPORT UserManagerBase : public UserManager {
                     const std::string& user_id_hash,
                     bool browser_restart,
                     bool is_child) override;
+  bool OnUserProfileCreated(const AccountId& account_id,
+                            PrefService* prefs) override;
+  void OnUserProfileWillBeDestroyed(const AccountId& account_id) override;
   void SwitchActiveUser(const AccountId& account_id) override;
   void SwitchToLastActiveUser() override;
   void OnSessionStarted() override;
@@ -102,6 +105,7 @@ class USER_MANAGER_EXPORT UserManagerBase : public UserManager {
                   UserRemovalReason reason) override;
   void RemoveUserFromList(const AccountId& account_id) override;
   void RemoveUserFromListForRecreation(const AccountId& account_id) override;
+  void CleanStaleUserInformationFor(const AccountId& account_id) override;
   bool IsKnownUser(const AccountId& account_id) const override;
   const User* FindUser(const AccountId& account_id) const override;
   User* FindUserAndModify(const AccountId& account_id) override;
@@ -114,12 +118,11 @@ class USER_MANAGER_EXPORT UserManagerBase : public UserManager {
                              bool force_online_signin) override;
   void SaveUserDisplayName(const AccountId& account_id,
                            const std::u16string& display_name) override;
-  std::u16string GetUserDisplayName(const AccountId& account_id) const override;
   void SaveUserDisplayEmail(const AccountId& account_id,
                             const std::string& display_email) override;
   UserType GetUserType(const AccountId& account_id) override;
   void SaveUserType(const User* user) override;
-  absl::optional<std::string> GetOwnerEmail() override;
+  std::optional<std::string> GetOwnerEmail() override;
   void RecordOwner(const AccountId& owner) override;
   void UpdateUserAccountData(const AccountId& account_id,
                              const UserAccountData& account_data) override;
@@ -128,6 +131,7 @@ class USER_MANAGER_EXPORT UserManagerBase : public UserManager {
   bool IsEphemeralUser(const User* user) const override;
   bool IsCurrentUserOwner() const override;
   bool IsCurrentUserNew() const final;
+  void SetIsCurrentUserNew(bool is_new) override;
   bool IsCurrentUserNonCryptohomeDataEphemeral() const override;
   bool IsCurrentUserCryptohomeDataEphemeral() const override;
   bool CanCurrentUserLock() const override;
@@ -180,10 +184,6 @@ class USER_MANAGER_EXPORT UserManagerBase : public UserManager {
   const User* AddKioskAppUserForTesting(const AccountId& account_id,
                                         const std::string& username_hash);
 
-  // This method updates "User was added to the device in this session nad is
-  // not full initialized yet" flag.
-  void SetIsCurrentUserNew(bool is_new);
-
   // Helper function that converts users from |users_list| to |users_vector| and
   // |users_set|. Duplicates and users already present in |existing_users| are
   // skipped.
@@ -191,9 +191,6 @@ class USER_MANAGER_EXPORT UserManagerBase : public UserManager {
                      const std::set<AccountId>& existing_users,
                      std::vector<AccountId>* users_vector,
                      std::set<AccountId>* users_set);
-
-  // Returns true if device is enterprise managed.
-  virtual bool IsEnterpriseManaged() const = 0;
 
  protected:
   // Adds |user| to users list, and adds it to front of LRU list. It is assumed
@@ -260,7 +257,7 @@ class USER_MANAGER_EXPORT UserManagerBase : public UserManager {
   // If |trigger_cryptohome_removal| is set to true, this triggeres an
   // asynchronous operation to remove the user data in Cryptohome.
   void RemoveUserFromListImpl(const AccountId& account_id,
-                              absl::optional<UserRemovalReason> reason,
+                              std::optional<UserRemovalReason> reason,
                               bool trigger_cryptohome_removal);
 
   // Implementation for RemoveUser method. This is an asynchronous part of the
@@ -412,7 +409,7 @@ class USER_MANAGER_EXPORT UserManagerBase : public UserManager {
 
   // Cached name of device owner. Defaults to empty if the value has not
   // been read from trusted device policy yet.
-  absl::optional<AccountId> owner_account_id_ = absl::nullopt;
+  std::optional<AccountId> owner_account_id_ = std::nullopt;
 
   mutable base::OnceCallbackList<void(const AccountId&)>
       pending_owner_callbacks_;

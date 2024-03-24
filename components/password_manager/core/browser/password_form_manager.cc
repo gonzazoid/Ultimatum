@@ -24,11 +24,11 @@
 #include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
+#include "components/affiliations/core/browser/affiliation_utils.h"
 #include "components/autofill/core/common/form_data.h"
 #include "components/autofill/core/common/password_form_generation_data.h"
 #include "components/autofill/core/common/password_generation_util.h"
 #include "components/autofill/core/common/unique_ids.h"
-#include "components/password_manager/core/browser/affiliation/affiliation_utils.h"
 #include "components/password_manager/core/browser/browser_save_password_progress_logger.h"
 #include "components/password_manager/core/browser/features/password_features.h"
 #include "components/password_manager/core/browser/field_info_manager.h"
@@ -116,37 +116,37 @@ bool IsCurrentUserEvicted(PasswordManagerClient* client) {
       password_manager::prefs::kUnenrolledFromGoogleMobileServicesDueToErrors);
 }
 
-bool IsAuthError(std::optional<PasswordStoreBackendError> error) {
-  return error.has_value() &&
-         (error.value().type ==
-              PasswordStoreBackendErrorType::kAuthErrorResolvable ||
-          error.value().type ==
-              PasswordStoreBackendErrorType::kAuthErrorUnresolvable);
-}
-
-bool ShouldShowErrorMessage(
+std::optional<PasswordStoreBackendError> GetErrorForErrorMessage(
     std::optional<PasswordStoreBackendError> profile_store_backend_error,
     std::optional<PasswordStoreBackendError> account_store_backend_error,
     PasswordManagerClient* client) {
-  std::optional<PasswordStoreBackendError> auth_error;
-  if (IsAuthError(account_store_backend_error)) {
-    auth_error = account_store_backend_error;
-  } else if (IsAuthError(profile_store_backend_error)) {
+  if (!profile_store_backend_error && !account_store_backend_error) {
+    return std::nullopt;
+  }
+
+  if (IsCurrentUserEvicted(client)) {
+    return std::nullopt;
+  }
+
+  base::flat_set<PasswordStoreBackendErrorType> supported_error_types = {
+      PasswordStoreBackendErrorType::kAuthErrorResolvable,
+      PasswordStoreBackendErrorType::kAuthErrorUnresolvable,
+      PasswordStoreBackendErrorType::kKeyRetrievalRequired,
+  };
+
+  if (account_store_backend_error.has_value() &&
+      supported_error_types.contains(
+          account_store_backend_error.value().type)) {
+    return account_store_backend_error;
+  } else if (profile_store_backend_error.has_value() &&
+             supported_error_types.contains(
+                 profile_store_backend_error.value().type)) {
     // This is possible only before the store split. This needs to be removed
     // after the profile store starts to be used only for non-syncing passwords.
-    auth_error = profile_store_backend_error;
+    return profile_store_backend_error;
   }
 
-  if (!auth_error.has_value()) {
-    return false;
-  }
-  if (IsCurrentUserEvicted(client)) {
-    return false;
-  }
-  CHECK(auth_error.value().recovery_type !=
-        PasswordStoreBackendErrorRecoveryType::kUnrecoverable);
-
-  return true;
+  return std::nullopt;
 }
 #endif
 
@@ -231,7 +231,7 @@ bool ShouldUploadCrowdsourcingVotes(const FormOrDigest& form_or_digest) {
 
 #if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
 bool ShouldShowKeychainErrorBubble(
-    absl::optional<PasswordStoreBackendError> backend_error) {
+    std::optional<PasswordStoreBackendError> backend_error) {
   if (!backend_error.has_value()) {
     return false;
   }
@@ -302,7 +302,7 @@ bool PasswordFormManager::DoesManage(
   if (driver != driver_.get())
     return false;
   CHECK(observed_form());
-  return observed_form()->unique_renderer_id == form_renderer_id;
+  return observed_form()->renderer_id == form_renderer_id;
 }
 
 bool PasswordFormManager::IsEqualToSubmittedForm(
@@ -412,7 +412,11 @@ bool PasswordFormManager::IsMovableToAccountStore() const {
 }
 
 void PasswordFormManager::Save() {
-  CHECK_EQ(form_fetcher_->GetState(), FormFetcher::State::NOT_WAITING);
+  if (form_fetcher_->GetState() == FormFetcher::State::WAITING) {
+    should_schedule_save_for_later_ = true;
+    return;
+  }
+
   CHECK(!client_->IsOffTheRecord());
   if (IsBlocklisted()) {
     password_save_manager_->Unblocklist(ConstructObservedFormDigest());
@@ -443,8 +447,8 @@ void PasswordFormManager::OnUpdateUsernameFromPrompt(
   if (!new_username.empty()) {
     // Try to find `new_username` in the usernames `parsed_submitted_form_`
     // knows about. Set `votes_uploader_`'s UsernameChangeState depending on
-    // whether the username is present or not. Also set `username_element` if it
-    // is a known username.
+    // whether the username is present or not. Also set `username_element` if
+    // it is a known username.
     const auto& alternative_usernames =
         parsed_submitted_form_->all_alternative_usernames;
     auto alternative_username_it = base::ranges::find(
@@ -476,8 +480,8 @@ void PasswordFormManager::OnUpdatePasswordFromPrompt(
   parsed_submitted_form_->password_element.clear();
   parsed_submitted_form_->password_element_renderer_id = FieldRendererId();
 
-  // The user updated a password from the prompt. It means that heuristics were
-  // wrong. So clear new password, since it is likely wrong.
+  // The user updated a password from the prompt. It means that heuristics
+  // were wrong. So clear new password, since it is likely wrong.
   parsed_submitted_form_->new_password_value.clear();
   parsed_submitted_form_->new_password_element.clear();
   parsed_submitted_form_->new_password_element_renderer_id = FieldRendererId();
@@ -567,16 +571,17 @@ void PasswordFormManager::MoveCredentialsToAccountStore() {
 }
 
 void PasswordFormManager::BlockMovingCredentialsToAccountStore() {
-  // Nothing to do if there is no signed in user or the credentials are already
-  // blocked for moving.
-  if (!IsMovableToAccountStore())
+  // Nothing to do if there is no signed in user or the credentials are
+  // already blocked for moving.
+  if (!IsMovableToAccountStore()) {
     return;
+  }
   const std::string gaia_id =
       client_->GetIdentityManager()
           ->GetPrimaryAccountInfo(signin::ConsentLevel::kSignin)
           .gaia;
-  // The above call to IsMovableToAccountStore() guarantees there is a signed in
-  // user.
+  // The above call to IsMovableToAccountStore() guarantees there is a signed
+  // in user.
   DCHECK(!gaia_id.empty());
   password_save_manager_->BlockMovingToAccountStoreFor(
       GaiaIdHash::FromGaiaId(gaia_id));
@@ -598,8 +603,9 @@ void PasswordFormManager::PresaveGeneratedPassword(
 }
 
 void PasswordFormManager::PasswordNoLongerGenerated() {
-  if (!HasGeneratedPassword())
+  if (!HasGeneratedPassword()) {
     return;
+  }
 
   password_save_manager_->PasswordNoLongerGenerated();
 }
@@ -650,11 +656,11 @@ void PasswordFormManager::UpdateStateOnUserInput(
     FormRendererId form_id,
     FieldRendererId field_id,
     const std::u16string& field_value) {
-  DCHECK(observed_form()->unique_renderer_id == form_id);
+  DCHECK(observed_form()->renderer_id == form_id);
   // Update the observed field value.
   auto modified_field = base::ranges::find_if(
       mutable_observed_form()->fields, [&field_id](const FormFieldData& field) {
-        return field.unique_renderer_id == field_id;
+        return field.renderer_id == field_id;
       });
   if (modified_field == mutable_observed_form()->fields.end())
     return;
@@ -684,7 +690,7 @@ void PasswordFormManager::ProvisionallySaveFieldDataManagerInfo(
     const PasswordManagerDriver* driver) {
   bool data_found = false;
   for (FormFieldData& field : mutable_observed_form()->fields) {
-    FieldRendererId field_id = field.unique_renderer_id;
+    FieldRendererId field_id = field.renderer_id;
     if (!field_data_manager.HasFieldData(field_id))
       continue;
     field.user_input = field_data_manager.GetUserInput(field_id);
@@ -774,30 +780,24 @@ void PasswordFormManager::OnFetchCompleted() {
   autofills_left_ = kMaxTimesAutofill;
 
 #if BUILDFLAG(IS_ANDROID)
-  std::optional<PasswordStoreBackendError> profile_backend_error =
-      form_fetcher_->GetProfileStoreBackendError();
-  std::optional<PasswordStoreBackendError> account_backend_error =
-      form_fetcher_->GetAccountStoreBackendError();
+  std::optional<PasswordStoreBackendError> error = GetErrorForErrorMessage(
+      form_fetcher_->GetProfileStoreBackendError(),
+      form_fetcher_->GetAccountStoreBackendError(), client_);
+
   // If there is no FormData, this is an http authentication form. We don't
   // show the message for it because it would be hidden behind a sign in
   // dialog and the user could miss it.
-  if (observed_form() != nullptr &&
-      ShouldShowErrorMessage(profile_backend_error, account_backend_error,
-                             client_)) {
+  if (observed_form() != nullptr && error.has_value()) {
     std::unique_ptr<PasswordForm> password_form = parser_.Parse(
         *observed_form(), FormDataParser::Mode::kFilling, GetStoredUsernames());
-    // If ShouldShowErrorMessage returns true, at least one of the store errors
-    // is an auth error.
-    password_manager::PasswordStoreBackendErrorType error_type =
-        IsAuthError(account_backend_error) ? account_backend_error->type
-                                           : profile_backend_error->type;
+
     client_->ShowPasswordManagerErrorMessage(
         password_form && (password_form->IsLikelySignupForm() ||
                           password_form->IsLikelyChangePasswordForm() ||
                           password_form->IsLikelyResetPasswordForm())
             ? password_manager::ErrorMessageFlowType::kSaveFlow
             : password_manager::ErrorMessageFlowType::kFillFlow,
-        error_type);
+        error.value().type);
   }
 
 #elif BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
@@ -834,6 +834,11 @@ void PasswordFormManager::OnFetchCompleted() {
     FillNow();
   } else if (!async_predictions_waiter_.IsActive()) {
     DelayFillForServerSidePredictions();
+  }
+
+  if (should_schedule_save_for_later_) {
+    should_schedule_save_for_later_ = false;
+    Save();
   }
 }
 
@@ -902,7 +907,7 @@ bool PasswordFormManager::ProvisionallySave(
     const PasswordManagerDriver* driver,
     const base::LRUCache<PossibleUsernameFieldIdentifier, PossibleUsernameData>*
         possible_usernames) {
-  DCHECK(DoesManage(submitted_form.unique_renderer_id, driver));
+  DCHECK(DoesManage(submitted_form.renderer_id, driver));
   auto [parsed_submitted_form, in_form_username_detection_method] =
       ParseFormAndMakeLogging(submitted_form, FormDataParser::Mode::kSaving);
   RecordMetricOnReadonly(parser_.readonly_status(), !!parsed_submitted_form,
@@ -1038,12 +1043,12 @@ void PasswordFormManager::FillNow() {
   if (observed_password_form->is_new_password_reliable && !IsBlocklisted()) {
     driver_->FormEligibleForGenerationFound({
 #if BUILDFLAG(IS_IOS)
-      .form_renderer_id = observed_password_form->form_data.unique_renderer_id,
+        .form_renderer_id = observed_password_form->form_data.renderer_id,
 #endif
-      .new_password_renderer_id =
-          observed_password_form->new_password_element_renderer_id,
-      .confirmation_password_renderer_id =
-          observed_password_form->confirmation_password_element_renderer_id,
+        .new_password_renderer_id =
+            observed_password_form->new_password_element_renderer_id,
+        .confirmation_password_renderer_id =
+            observed_password_form->confirmation_password_element_renderer_id,
     });
   }
 
@@ -1071,7 +1076,7 @@ void PasswordFormManager::OnGeneratedPasswordAccepted(
   // Find the generating element to update its value. The parser needs a non
   // empty value.
   auto it = base::ranges::find(form_data.fields, generation_element_id,
-                               &FormFieldData::unique_renderer_id);
+                               &FormFieldData::renderer_id);
   // The parameters are coming from the renderer and can't be trusted.
   if (it == form_data.fields.end())
     return;
@@ -1095,7 +1100,7 @@ bool PasswordFormManager::ObservedFormHasField(int driver_id,
   }
   CHECK(observed_form());
   for (const auto& field : observed_form()->fields) {
-    if (field.unique_renderer_id == field_id) {
+    if (field.renderer_id == field_id) {
       LogUsingPossibleUsername(client_, /*is_used*/ false, "Same form");
       return true;
     }
@@ -1606,7 +1611,7 @@ bool HasObservedFormChanged(const FormData& form_data,
     const FormFieldData& lhs_field = lhs.fields[i];
     const FormFieldData& rhs_field = rhs.fields[i];
 
-    if (lhs_field.unique_renderer_id != rhs_field.unique_renderer_id) {
+    if (lhs_field.renderer_id != rhs_field.renderer_id) {
       differences_bitmask |= PasswordFormMetricsRecorder::kRendererFieldIDs;
     }
 

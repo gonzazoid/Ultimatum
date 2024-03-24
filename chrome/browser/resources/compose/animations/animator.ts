@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert.js';
+import {assert} from '//resources/js/assert.js';
 
 export const STANDARD_EASING = 'cubic-bezier(0.2, 0.0, 0, 1.0)';
 
@@ -28,10 +28,12 @@ export class Animator {
 
   animate(
       selector: string, keyframes: Keyframe[],
-      options: KeyframeAnimationOptions): Animation[] {
-    if (!this.animationsEnabled_) {
+      options: KeyframeAnimationOptions,
+      meetsCondition: boolean = true): Animation[] {
+    if (!this.animationsEnabled_ || !meetsCondition) {
       return [];
     }
+
     const elements = Array.from(
         this.root_.shadowRoot!.querySelectorAll<HTMLElement>(selector));
     assert(elements.length > 0);

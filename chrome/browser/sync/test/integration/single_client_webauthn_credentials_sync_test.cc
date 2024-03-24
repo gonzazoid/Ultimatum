@@ -15,7 +15,6 @@
 #include "chrome/browser/sync/test/integration/webauthn_credentials_helper.h"
 #include "chrome/browser/ui/browser.h"
 #include "components/password_manager/core/browser/features/password_manager_features_util.h"
-#include "components/signin/public/base/signin_switches.h"
 #include "components/sync/base/client_tag_hash.h"
 #include "components/sync/base/features.h"
 #include "components/sync/base/model_type.h"
@@ -104,9 +103,7 @@ CreateEntityWithCustomClientTagHash(
 
 class SingleClientWebAuthnCredentialsSyncTest : public SyncTest {
  public:
-  SingleClientWebAuthnCredentialsSyncTest() : SyncTest(SINGLE_CLIENT) {
-    feature_list_.InitAndDisableFeature(switches::kUnoDesktop);
-  }
+  SingleClientWebAuthnCredentialsSyncTest() : SyncTest(SINGLE_CLIENT) {}
 
   ~SingleClientWebAuthnCredentialsSyncTest() override = default;
 
@@ -144,9 +141,6 @@ class SingleClientWebAuthnCredentialsSyncTest : public SyncTest {
   webauthn::PasskeySyncBridge& GetModel() {
     return webauthn_credentials_helper::GetModel(kSingleProfile);
   }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
 };
 
 // Adding a local passkey should sync to the server.
@@ -347,7 +341,7 @@ IN_PROC_BROWSER_TEST_F(SingleClientWebAuthnCredentialsSyncTest, GetPasskeys) {
               Optional(PasskeyHasSyncId(sync_id1b)));
   EXPECT_EQ(
       GetModel().GetPasskeyByCredentialId(kRpId2, passkey1a.credential_id()),
-      absl::nullopt);
+      std::nullopt);
 
   EXPECT_THAT(GetModel().GetPasskeysForRelyingPartyId(kRpId2),
               UnorderedElementsAre(PasskeyHasSyncId(sync_id2)));
@@ -382,7 +376,7 @@ IN_PROC_BROWSER_TEST_F(SingleClientWebAuthnCredentialsSyncTest,
               Optional(PasskeyHasSyncId(sync_id1)));
   EXPECT_EQ(GetModel().GetPasskeyByCredentialId(
                 passkey1_shadow.rp_id(), passkey1_shadow.credential_id()),
-            absl::nullopt);
+            std::nullopt);
   EXPECT_THAT(GetModel().GetPasskeysForRelyingPartyId(passkey2.rp_id()),
               UnorderedElementsAre(PasskeyHasSyncId(sync_id2)));
   EXPECT_THAT(
@@ -676,7 +670,7 @@ IN_PROC_BROWSER_TEST_F(SingleClientWebAuthnCredentialsSyncTest,
 }
 
 IN_PROC_BROWSER_TEST_F(SingleClientWebAuthnCredentialsSyncTest,
-                       LegacySyncIdCompatibility) {
+                       LegacySyncIdCompatibilityUponInitialDownload) {
   // Ordinarily, client_tag_hash is derived from the 16-byte `sync_id`.
   // Internally, it's computed as Base64(SHA1(prefix + client_tag)), which is 28
   // bytes long.
@@ -735,6 +729,83 @@ IN_PROC_BROWSER_TEST_F(SingleClientWebAuthnCredentialsSyncTest,
   // Ensure the expected styles of client_tag_hash sync, but none of the invalid
   // ones do.
   ASSERT_TRUE(SetupSync());
+  EXPECT_THAT(GetModel().GetAllSyncIds(),
+              testing::UnorderedElementsAreArray(expected_sync_ids));
+}
+
+IN_PROC_BROWSER_TEST_F(SingleClientWebAuthnCredentialsSyncTest,
+                       LegacySyncIdCompatibilityUponIncrementalUpdate) {
+  ASSERT_TRUE(SetupSync());
+
+  // Ordinarily, client_tag_hash is derived from the 16-byte `sync_id`.
+  // Internally, it's computed as Base64(SHA1(prefix + client_tag)), which is 28
+  // bytes long.
+  std::vector<std::string> expected_sync_ids;
+  {
+    sync_pb::WebauthnCredentialSpecifics specifics1 = NewPasskey();
+    expected_sync_ids.push_back(specifics1.sync_id());
+    std::string client_tag_hash1 =
+        syncer::ClientTagHash::FromUnhashed(syncer::WEBAUTHN_CREDENTIAL,
+                                            specifics1.sync_id())
+            .value();
+    fake_server_->InjectEntity(
+        CreateEntityWithCustomClientTagHash(client_tag_hash1, specifics1));
+  }
+
+  // But older Play Services clients set the `client_tag_hash` to be the
+  // hex-encoded sync_id`.
+  {
+    sync_pb::WebauthnCredentialSpecifics specifics2 = NewPasskey();
+    expected_sync_ids.push_back(specifics2.sync_id());
+    fake_server_->InjectEntity(CreateEntityWithCustomClientTagHash(
+        /*client_tag_hash=*/base::HexEncode(
+            base::as_bytes(base::make_span(specifics2.sync_id()))),
+        specifics2));
+  }
+
+  // Test upper and lower case hex encoding (in practice, Play Services uses
+  // lower case).
+  {
+    sync_pb::WebauthnCredentialSpecifics specifics3 = NewPasskey();
+    expected_sync_ids.push_back(specifics3.sync_id());
+    fake_server_->InjectEntity(CreateEntityWithCustomClientTagHash(
+        /*client_tag_hash=*/base::ToLowerASCII(base::HexEncode(
+            base::as_bytes(base::make_span(specifics3.sync_id())))),
+        specifics3));
+  }
+
+  // Also test some invalid client tag hash values are ignored:
+  // Client tag hash has an entirely different format.
+  {
+    sync_pb::WebauthnCredentialSpecifics specifics4 = NewPasskey();
+    fake_server_->InjectEntity(CreateEntityWithCustomClientTagHash(
+        /*client_tag_hash=*/"INVALID", specifics4));
+  }
+
+  // Client tag hash is 16 byte hex, but encoding an unrelated sync ID.
+  {
+    sync_pb::WebauthnCredentialSpecifics specifics5 = NewPasskey();
+    sync_pb::WebauthnCredentialSpecifics specifics6 = NewPasskey();
+    fake_server_->InjectEntity(CreateEntityWithCustomClientTagHash(
+        /*client_tag_hash=*/base::HexEncode(
+            base::as_bytes(base::make_span(specifics6.sync_id()))),
+        specifics5));
+  }
+
+  // Add one dummy regular entity for the purpose of waiting it is downloaded.
+  {
+    sync_pb::WebauthnCredentialSpecifics barrier_passkey = NewPasskey();
+    const std::string barrier_sync_id =
+        InjectPasskeyToFakeServer(barrier_passkey);
+    ASSERT_TRUE(LocalPasskeysMatchChecker(
+                    kSingleProfile,
+                    testing::Contains(PasskeyHasSyncId(barrier_sync_id)))
+                    .Wait());
+    expected_sync_ids.push_back(barrier_passkey.sync_id());
+  }
+
+  // Ensure the expected styles of client_tag_hash sync, but none of the invalid
+  // ones do.
   EXPECT_THAT(GetModel().GetAllSyncIds(),
               testing::UnorderedElementsAreArray(expected_sync_ids));
 }

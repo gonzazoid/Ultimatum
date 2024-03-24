@@ -23,6 +23,16 @@ BASE_FEATURE(kCapReferrerToOriginOnCrossOrigin,
              "CapReferrerToOriginOnCrossOrigin",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
+BASE_FEATURE(kAsyncDns,
+             "AsyncDns",
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_ANDROID) || \
+    BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
+             base::FEATURE_ENABLED_BY_DEFAULT
+#else
+             base::FEATURE_DISABLED_BY_DEFAULT
+#endif
+);
+
 BASE_FEATURE(kDnsTransactionDynamicTimeouts,
              "DnsTransactionDynamicTimeouts",
              base::FEATURE_DISABLED_BY_DEFAULT);
@@ -66,6 +76,10 @@ const base::FeatureParam<base::TimeDelta> kUseDnsHttpsSvcbSecureExtraTimeMin{
 BASE_FEATURE(kUseDnsHttpsSvcbAlpn,
              "UseDnsHttpsSvcbAlpn",
              base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kUseHostResolverCache,
+             "UseHostResolverCache",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 const base::FeatureParam<int> kAlternativePortForGloballyReachableCheck{
     &kUseAlternativePortForGloballyReachableCheck,
@@ -271,11 +285,11 @@ BASE_FEATURE(kSupportPartitionedBlobUrl,
              "SupportPartitionedBlobUrl",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
-BASE_FEATURE(kTpcdSupportSettings,
+BASE_FEATURE(kTpcdTrialSettings,
              "TpcdSupportSettings",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
-BASE_FEATURE(kTopLevelTpcdSupportSettings,
+BASE_FEATURE(kTopLevelTpcdTrialSettings,
              "TopLevelTpcdSupportSettings",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
@@ -396,17 +410,9 @@ const base::FeatureParam<bool> kIpPrivacyDirectOnly{
     &kEnableIpProtectionProxy, /*name=*/"IpPrivacyDirectOnly",
     /*default_value=*/false};
 
-const base::FeatureParam<bool> kIpPrivacyBsaEnablePrivacyPass{
-    &kEnableIpProtectionProxy, /*name=*/"IpPrivacyBsaEnablePrivacyPass",
-    /*default_value=*/false};
-
 const base::FeatureParam<std::string> kIpPrivacyProxyBPsk{
     &kEnableIpProtectionProxy, /*name=*/"IpPrivacyProxyBPsk",
     /*default_value=*/""};
-
-const base::FeatureParam<bool> kIpPrivacyUseProxyChains{
-    &kEnableIpProtectionProxy, /*name=*/"IpPrivacyUseProxyChains",
-    /*default_value=*/false};
 
 const base::FeatureParam<bool> kIpPrivacyIncludeOAuthTokenInGetProxyConfig{
     &kEnableIpProtectionProxy,
@@ -424,6 +430,10 @@ const base::FeatureParam<std::string> kIpPrivacyProxyBHostnameOverride{
 const base::FeatureParam<bool> kIpPrivacyAddHeaderToProxiedRequests{
     &kEnableIpProtectionProxy, /*name=*/"IpPrivacyAddHeaderToProxiedRequests",
     /*default_value=*/false};
+
+const base::FeatureParam<base::TimeDelta> kIpPrivacyExpirationFuzz{
+    &kEnableIpProtectionProxy, /*name=*/"IpPrivacyExpirationFuzz",
+    /*default_value=*/base::Minutes(15)};
 
 // Network-change migration requires NetworkHandle support, which are currently
 // only supported on Android (see
@@ -483,7 +493,7 @@ BASE_FEATURE(kEnableWebTransportDraft07,
 
 BASE_FEATURE(kZstdContentEncoding,
              "ZstdContentEncoding",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // When enabled, partitioned storage will be allowed even if third-party cookies
 // are disabled by default. Partitioned storage will not be allowed if
@@ -518,6 +528,10 @@ BASE_FEATURE(kUseNewAlpsCodepointQUIC,
 
 BASE_FEATURE(kTreatHTTPExpiresHeaderValueZeroAsExpired,
              "TreatHTTPExpiresHeaderValueZeroAsExpired",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kTruncateBodyToContentLength,
+             "TruncateBodyToContentLength",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 }  // namespace net::features

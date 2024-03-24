@@ -34,6 +34,13 @@ extern CONTENT_EXPORT const char kSharedStorageSelectURLDisabledMessage[];
 extern CONTENT_EXPORT const char kSharedStorageAddModuleDisabledMessage[];
 extern CONTENT_EXPORT const char kSharedStorageSelectURLLimitReachedMessage[];
 
+// Will conditionally combine an `input_message` with a `debug_message`
+// containing additional details if the
+// `blink::features::kSharedStorageDebugDisabledMessage` feature param is true,
+// returning `input_message` otherwise.
+std::string GetSharedStorageErrorMessage(const std::string& debug_message,
+                                         const std::string& input_message);
+
 // Handle renderer-initiated shared storage access and worklet operations. The
 // worklet operations (i.e. `addModule()`, `selectURL()`, `run()`) will be
 // dispatched to the `SharedStorageWorkletHost` to be handled.
@@ -53,6 +60,7 @@ class CONTENT_EXPORT SharedStorageDocumentServiceImpl final
   // blink::mojom::SharedStorageDocumentService.
   void CreateWorklet(
       const GURL& script_source_url,
+      network::mojom::CredentialsMode credentials_mode,
       const std::vector<blink::mojom::OriginTrialFeature>&
           origin_trial_features,
       mojo::PendingAssociatedReceiver<blink::mojom::SharedStorageWorkletHost>
@@ -82,9 +90,10 @@ class CONTENT_EXPORT SharedStorageDocumentServiceImpl final
 
   storage::SharedStorageManager* GetSharedStorageManager();
 
-  bool IsSharedStorageAllowed();
+  bool IsSharedStorageAllowed(std::string* out_debug_message = nullptr);
 
-  bool IsSharedStorageAddModuleAllowed();
+  bool IsSharedStorageAddModuleAllowed(
+      std::string* out_debug_message = nullptr);
 
   std::string SerializeLastCommittedOrigin() const;
 

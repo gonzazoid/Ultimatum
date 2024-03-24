@@ -296,20 +296,17 @@ def main():
         # llvm-ml for Windows cross builds.
         'bin/llvm-ml',
 
-        # Include libclang_rt.builtins.a for Fuchsia targets.
-        'lib/clang/$V/lib/aarch64-unknown-fuchsia/libclang_rt.builtins.a',
-        'lib/clang/$V/lib/x86_64-unknown-fuchsia/libclang_rt.builtins.a',
-
         # Add llvm-readobj (symlinked from llvm-readelf) for extracting SONAMEs.
         'bin/llvm-readobj',
     ])
-    if not args.build_mac_arm:
-      # TODO(thakis): Figure out why this doesn't build in --build-mac-arm
-      # builds.
+    if sys.platform != 'darwin':
+      # The Fuchsia runtimes are only built on non-Mac platforms.
+      want.append(
+          'lib/clang/$V/lib/aarch64-unknown-fuchsia/libclang_rt.builtins.a')
+      want.append(
+          'lib/clang/$V/lib/x86_64-unknown-fuchsia/libclang_rt.builtins.a')
       want.append(
           'lib/clang/$V/lib/x86_64-unknown-fuchsia/libclang_rt.profile.a')
-    if sys.platform != 'darwin':
-      # The Fuchsia asan runtime is only built on non-Mac platforms.
       want.append('lib/clang/$V/lib/x86_64-unknown-fuchsia/libclang_rt.asan.so')
       want.append(
           'lib/clang/$V/lib/x86_64-unknown-fuchsia/libclang_rt.asan-preinit.a')
@@ -317,6 +314,9 @@ def main():
           'lib/clang/$V/lib/x86_64-unknown-fuchsia/libclang_rt.asan_static.a')
   if sys.platform == 'darwin':
     want.extend([
+      # Add llvm-objcopy for its use as install_name_tool.
+      'bin/llvm-objcopy',
+
       # AddressSanitizer runtime.
       'lib/clang/$V/lib/darwin/libclang_rt.asan_iossim_dynamic.dylib',
       'lib/clang/$V/lib/darwin/libclang_rt.asan_osx_dynamic.dylib',
@@ -568,8 +568,12 @@ def main():
     os.symlink('lld', os.path.join(pdir, 'bin', 'wasm-ld'))
     os.symlink('llvm-readobj', os.path.join(pdir, 'bin', 'llvm-readelf'))
 
-  if sys.platform.startswith('linux'):
+  if sys.platform.startswith('linux') or sys.platform == 'darwin':
     os.symlink('llvm-objcopy', os.path.join(pdir, 'bin', 'llvm-strip'))
+    os.symlink('llvm-objcopy',
+               os.path.join(pdir, 'bin', 'llvm-install-name-tool'))
+    os.symlink('llvm-install-name-tool',
+               os.path.join(pdir, 'bin', 'install_name_tool'))
 
     # Make `--target=*-cros-linux-gnu` work with
     # LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON.

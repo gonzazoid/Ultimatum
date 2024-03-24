@@ -38,6 +38,8 @@ namespace {
 constexpr float kCornerRadius = 8.0f;
 constexpr int kLabelSize = 32;
 
+constexpr ui::ColorId kPenIconColor = cros_tokens::kCrosSysOnPrimaryContainer;
+
 // Pulse animation specs.
 constexpr int kPulseTimes = 3;
 constexpr int kPulseExtraHalfSize = 32;
@@ -47,10 +49,12 @@ constexpr base::TimeDelta kPulseDuration = base::Seconds(2);
 
 EditLabel::EditLabel(DisplayOverlayController* controller,
                      Action* action,
+                     bool for_editing_list,
                      size_t index)
     : views::LabelButton(),
       controller_(controller),
       action_(action),
+      for_editing_list_(for_editing_list),
       index_(index) {
   Init();
 }
@@ -90,7 +94,7 @@ void EditLabel::PerformPulseAnimation(int pulse_count) {
   DCHECK(pulse_layer_);
 
   // Initial bounds in its widget coordinate.
-  auto view_bounds = ConvertRectToWidget(bounds());
+  auto view_bounds = ConvertRectToWidget(gfx::Rect(size()));
 
   // Set initial properties.
   pulse_layer_->SetBounds(view_bounds);
@@ -121,8 +125,6 @@ void EditLabel::PerformPulseAnimation(int pulse_count) {
 void EditLabel::Init() {
   SetHorizontalAlignment(gfx::ALIGN_CENTER);
   SetPreferredSize(gfx::Size(kLabelSize, kLabelSize));
-  SetAccessibilityProperties(ax::mojom::Role::kLabelText,
-                             CalculateAccessibleName());
   SetFocusBehavior(FocusBehavior::ALWAYS);
   SetInstallFocusRingOnFocus(false);
   SetRequestFocusOnPress(true);
@@ -146,17 +148,18 @@ void EditLabel::SetLabelContent() {
 
   // Clear icon if it is a valid key for new action.
   SetImageModel(views::Button::STATE_NORMAL,
-                output_string.empty() ? ui::ImageModel::FromVectorIcon(
-                                            kGameControlsEditPenIcon,
-                                            cros_tokens::kCrosSysHighlightShape)
-                                      : ui::ImageModel());
+                output_string.empty()
+                    ? ui::ImageModel::FromVectorIcon(kGameControlsEditPenIcon,
+                                                     kPenIconColor)
+                    : ui::ImageModel());
   // Set text label by `output_string` even it is empty to clear the text label.
   SetTextLabel(output_string);
 }
 
 void EditLabel::SetTextLabel(const std::u16string& text) {
   SetText(text);
-  SetAccessibleName(CalculateAccessibleName());
+  UpdateAccessibleName();
+
   SetBackground(views::CreateThemedRoundedRectBackground(
       text == kUnknownBind && !action_->is_new()
           ? cros_tokens::kCrosSysErrorHighlight
@@ -176,10 +179,21 @@ void EditLabel::SetNameTagState(bool is_error,
   parent_view->SetNameTagState(is_error, error_tooltip);
 }
 
-std::u16string EditLabel::CalculateAccessibleName() {
-  return l10n_util::GetStringUTF16(IDS_INPUT_OVERLAY_KEYMAPPING_KEY)
-      .append(u" ")
-      .append(GetDisplayTextAccessibleName(label()->GetText()));
+void EditLabel::UpdateAccessibleName() {
+  const std::u16string a11y_name =
+      GetDisplayTextAccessibleName(label()->GetText());
+  const std::u16string reassign = l10n_util::GetStringUTF16(
+      IDS_INPUT_OVERLAY_EDIT_LABEL_REASSIGN_A11Y_LABEL);
+
+  if (a11y_name.empty() || a11y_name.compare(kUnknownBind) == 0) {
+    SetAccessibleName(l10n_util::GetStringUTF16(
+        IDS_INPUT_OVERLAY_EDIT_LABEL_UNASSIGNED_A11Y_LABEL));
+  } else if (for_editing_list_) {
+    SetAccessibleName(l10n_util::GetStringFUTF16(
+        IDS_INPUT_OVERLAY_EDIT_LABEL_A11Y_LABEL_TEMPLATE, a11y_name, reassign));
+  } else {
+    SetAccessibleName(reassign);
+  }
 }
 
 void EditLabel::SetToDefault() {
@@ -192,7 +206,7 @@ void EditLabel::SetToDefault() {
 void EditLabel::SetToFocused() {
   SetEnabledTextColorIds(IsInputUnbound() && !action_->is_new()
                              ? cros_tokens::kCrosSysError
-                             : cros_tokens::kCrosSysHighlightText);
+                             : cros_tokens::kCrosSysOnSurface);
   SetBorder(views::CreateThemedRoundedRectBorder(
       /*thickness=*/2, kCornerRadius, cros_tokens::kCrosSysPrimary));
 }
@@ -217,10 +231,9 @@ void EditLabel::OnBlur() {
   }
 
   if (action_->is_new() && GetText().empty()) {
-    SetImageModel(
-        views::Button::STATE_NORMAL,
-        ui::ImageModel::FromVectorIcon(kGameControlsEditPenIcon,
-                                       cros_tokens::kCrosSysHighlightShape));
+    SetImageModel(views::Button::STATE_NORMAL,
+                  ui::ImageModel::FromVectorIcon(kGameControlsEditPenIcon,
+                                                 kPenIconColor));
   }
   SetToDefault();
   // Reset the error state if an reserved key was pressed.
@@ -274,7 +287,7 @@ bool EditLabel::OnKeyPressed(const ui::KeyEvent& event) {
   return true;
 }
 
-BEGIN_METADATA(EditLabel, views::LabelButton)
+BEGIN_METADATA(EditLabel)
 END_METADATA
 
 }  // namespace arc::input_overlay

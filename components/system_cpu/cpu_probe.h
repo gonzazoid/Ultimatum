@@ -6,14 +6,14 @@
 #define COMPONENTS_SYSTEM_CPU_CPU_PROBE_H_
 
 #include <memory>
+#include <optional>
 
 #include "base/functional/callback_forward.h"
 #include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/thread_annotations.h"
-#include "components/system_cpu/pressure_sample.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/system_cpu/cpu_sample.h"
 
 namespace system_cpu {
 
@@ -36,8 +36,7 @@ namespace system_cpu {
 // Instances are not thread-safe and should be used on the same sequence.
 class CpuProbe {
  public:
-  using SampleCallback =
-      base::OnceCallback<void(absl::optional<PressureSample>)>;
+  using SampleCallback = base::OnceCallback<void(std::optional<CpuSample>)>;
 
   // Instantiates the CpuProbe subclass most suitable for the current platform.
   //
@@ -49,7 +48,8 @@ class CpuProbe {
 
   virtual ~CpuProbe();
 
-  // Samples the CPU load to get a baseline for calls to RequestSample().
+  // Samples the CPU load to get a baseline for calls to RequestSample(). May be
+  // called again to refresh the baseline.
   // `started_callback` will be invoked once the baseline is available, so tests
   // can verify the timing.
   void StartSampling(base::OnceClosure started_callback = base::DoNothing());
@@ -58,6 +58,10 @@ class CpuProbe {
   // RequestSample(). It's an error to call this without calling StartSampling()
   // first.
   void RequestSample(SampleCallback callback);
+
+  // Called to return a WeakPtr to the CpuProbe. Subclasses must own a
+  // WeakPtrFactory to implement this.
+  virtual base::WeakPtr<CpuProbe> GetWeakPtr() = 0;
 
  protected:
   // The constructor is intentionally only exposed to subclasses. Production
@@ -68,29 +72,25 @@ class CpuProbe {
   // systems. It must call `callback` with the result.
   virtual void Update(SampleCallback callback) = 0;
 
-  // Called to return a WeakPtr to the CpuProbe. Subclasses must own a
-  // WeakPtrFactory to implement this.
-  virtual base::WeakPtr<CpuProbe> GetWeakPtr() = 0;
-
   SEQUENCE_CHECKER(sequence_checker_);
 
  private:
   // Called with the result of an Update() triggered by StartSampling(). Will do
   // some bookkeeping and then call `started_callback`, ignoring the
-  // PressureSample.
+  // CpuSample.
   void OnSamplingStarted(base::OnceClosure started_callback,
-                         absl::optional<PressureSample>);
+                         std::optional<CpuSample>);
 
   // Called with the result of an Update() triggered by RequestSample(). Will do
   // some bookkeeping and then pass `sample` to `callback`.
-  void OnPressureSampleAvailable(SampleCallback callback,
-                                 absl::optional<PressureSample> sample);
+  void OnSampleAvailable(SampleCallback callback,
+                         std::optional<CpuSample> sample);
 
   // True if the CpuProbe state will be reported after the next update.
   //
-  // The PressureSample reported by many CpuProbe implementations relies
+  // The CpuSample reported by many CpuProbe implementations relies
   // on the differences observed between two Update() calls. For this reason,
-  // the PressureSample reported after a first Update() call is not
+  // the CpuSample reported after a first Update() call is not
   // reported via the SampleCallback.
   bool got_probe_baseline_ GUARDED_BY_CONTEXT(sequence_checker_) = false;
 };

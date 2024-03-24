@@ -97,6 +97,7 @@ class PasswordStoreBackendMigrationDecorator : public PasswordStoreBackend {
                    base::RepeatingClosure sync_enabled_or_disabled_cb,
                    base::OnceCallback<void(bool)> completion) override;
   void Shutdown(base::OnceClosure shutdown_completed) override;
+  bool IsAbleToSavePasswords() override;
   void GetAllLoginsAsync(LoginsOrErrorReply callback) override;
   void GetAllLoginsWithAffiliationAndBrandingAsync(
       LoginsOrErrorReply callback) override;
@@ -132,6 +133,8 @@ class PasswordStoreBackendMigrationDecorator : public PasswordStoreBackend {
   std::unique_ptr<syncer::ProxyModelTypeControllerDelegate>
   CreateSyncControllerDelegate() override;
   void OnSyncServiceInitialized(syncer::SyncService* sync_service) override;
+  void RecordAddLoginAsyncCalledFromTheStore() override;
+  void RecordUpdateLoginAsyncCalledFromTheStore() override;
   base::WeakPtr<PasswordStoreBackend> AsWeakPtr() override;
 
   // Starts migration process.
@@ -142,11 +145,11 @@ class PasswordStoreBackendMigrationDecorator : public PasswordStoreBackend {
   // TODO(https://crbug.com/) Remove this method when no longer needed.
   void SyncStatusChanged();
 
-  std::unique_ptr<PasswordStoreBackend> built_in_backend_;
-  std::unique_ptr<PasswordStoreBackend> android_backend_;
-
   // Proxy backend to which all responsibilities are being delegated.
   std::unique_ptr<PasswordStoreBackend> active_backend_;
+
+  raw_ptr<PasswordStoreBackend> built_in_backend_;
+  raw_ptr<PasswordStoreBackend> android_backend_;
 
   const raw_ptr<PrefService> prefs_ = nullptr;
 

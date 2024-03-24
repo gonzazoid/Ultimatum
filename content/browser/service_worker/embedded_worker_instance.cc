@@ -22,6 +22,7 @@
 #include "content/browser/devtools/network_service_devtools_observer.h"
 #include "content/browser/devtools/service_worker_devtools_agent_host.h"
 #include "content/browser/devtools/service_worker_devtools_manager.h"
+#include "content/browser/loader/url_loader_factory_utils.h"
 #include "content/browser/network/cross_origin_embedder_policy_reporter.h"
 #include "content/browser/process_lock.h"
 #include "content/browser/renderer_host/render_process_host_impl.h"
@@ -244,7 +245,6 @@ void EmbeddedWorkerInstance::Start(
   status_ = blink::EmbeddedWorkerStatus::kStarting;
   starting_phase_ = ALLOCATING_PROCESS;
   network_accessed_for_script_ = false;
-  token_ = blink::ServiceWorkerToken();
 
   for (auto& observer : listener_list_)
     observer.OnStarting();
@@ -254,7 +254,6 @@ void EmbeddedWorkerInstance::Start(
   params->wait_for_debugger = false;
   params->subresource_loader_updater =
       subresource_loader_updater_.BindNewPipeAndPassReceiver();
-  params->service_worker_token = token_.value();
 
   // TODO(https://crbug.com/978694): Consider a reset flow since new mojo types
   // check is_bound strictly.
@@ -491,8 +490,6 @@ void EmbeddedWorkerInstance::Stop() {
   // Discard the info for starting a worker because this worker is going to be
   // stopped.
   inflight_start_info_.reset();
-
-  pause_initializing_global_scope_ = false;
 
   // Don't send the StopWorker message if the StartWorker message hasn't
   // been sent.
@@ -860,10 +857,11 @@ EmbeddedWorkerInstance::CreateFactoryBundle(
           rph, origin, storage_key.ToPartialNetIsolationInfo(),
           std::move(coep_reporter),
           static_cast<StoragePartitionImpl*>(rph->GetStoragePartition())
-              ->CreateAuthCertObserverForServiceWorker(),
+              ->CreateAuthCertObserverForServiceWorker(rph->GetID()),
           NetworkServiceDevToolsObserver::MakeSelfOwned(devtools_worker_token),
           std::move(client_security_state),
-          "EmbeddedWorkerInstance::CreateFactoryBundle");
+          "EmbeddedWorkerInstance::CreateFactoryBundle",
+          /*require_cross_site_request_for_cookies=*/false);
 
   DCHECK(factory_type ==
              ContentBrowserClient::URLLoaderFactoryType::kServiceWorkerScript ||
@@ -872,18 +870,18 @@ EmbeddedWorkerInstance::CreateFactoryBundle(
 
   // See if the default factory needs to be tweaked by the embedder.
   bool bypass_redirect_checks = false;
-  GetContentClient()->browser()->WillCreateURLLoaderFactory(
-      rph->GetBrowserContext(), nullptr /* frame_host */, rph->GetID(),
-      factory_type, origin, std::nullopt /* navigation_id */,
-      ukm::kInvalidSourceIdObj, &default_factory_receiver,
-      &factory_params->header_client, &bypass_redirect_checks,
-      nullptr /* disable_secure_dns */, &factory_params->factory_override,
-      /*navigation_response_task_runner=*/nullptr);
-  devtools_instrumentation::WillCreateURLLoaderFactoryForServiceWorker(
-      rph, routing_id, &factory_params->factory_override);
-
-  rph->CreateURLLoaderFactory(std::move(default_factory_receiver),
-                              std::move(factory_params));
+  url_loader_factory::CreateAndConnectToPendingReceiver(
+      std::move(default_factory_receiver), factory_type,
+      url_loader_factory::TerminalParams::ForNetworkContext(
+          rph->GetStoragePartition()->GetNetworkContext(),
+          std::move(factory_params),
+          url_loader_factory::HeaderClientOption::kAllow,
+          url_loader_factory::FactoryOverrideOption::kAllow),
+      url_loader_factory::ContentClientParams(
+          rph->GetBrowserContext(), nullptr /* frame_host */, rph->GetID(),
+          origin, ukm::kInvalidSourceIdObj, &bypass_redirect_checks),
+      devtools_instrumentation::WillCreateURLLoaderFactoryParams::
+          ForServiceWorker(*rph, routing_id));
 
   factory_bundle->set_bypass_redirect_checks(bypass_redirect_checks);
 
@@ -1036,7 +1034,6 @@ void EmbeddedWorkerInstance::ReleaseProcess() {
   status_ = blink::EmbeddedWorkerStatus::kStopped;
   starting_phase_ = NOT_STARTING;
   thread_id_ = ServiceWorkerConsts::kInvalidEmbeddedWorkerThreadId;
-  token_ = std::nullopt;
 
   DCHECK(!foreground_notified_);
 }

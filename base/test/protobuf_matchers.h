@@ -6,10 +6,15 @@
 #define BASE_TEST_PROTOBUF_MATCHERS_H_
 
 #include <string>
+#include <tuple>
 
 #include "testing/gmock/include/gmock/gmock-matchers.h"
 
 namespace base::test {
+
+// Parses a binary proto and returns a raw TextProto, where all fields are
+// unnamed. The input must be a valid serialized protobuf message.
+std::string BinaryProtoToRawTextProto(const std::string& binary_message);
 
 // Matcher that verifies two protobufs contain the same data.
 MATCHER_P(EqualsProto,
@@ -27,11 +32,21 @@ MATCHER_P(EqualsProto,
   }
   if (expected_serialized != actual_serialized) {
     *result_listener << "Provided proto did not match the expected proto"
-                     << "\n Serialized Expected Proto: " << expected_serialized
-                     << "\n Serialized Provided Proto: " << actual_serialized;
+                     << "\n Expected Raw TextProto:\n"
+                     << BinaryProtoToRawTextProto(expected_serialized)
+                     << "\n Provided Raw TextProto:\n"
+                     << BinaryProtoToRawTextProto(actual_serialized);
     return false;
   }
   return true;
+}
+
+// EqualsProto() implementation for 2-tuple matchers.
+MATCHER(EqualsProto,
+        "Matches if the tuple's proto Message arguments are equal.") {
+  return ::testing::Matcher<decltype(std::get<0>(arg))>(
+             EqualsProto(std::get<1>(arg)))
+      .MatchAndExplain(std::get<0>(arg), result_listener);
 }
 
 }  // namespace base::test

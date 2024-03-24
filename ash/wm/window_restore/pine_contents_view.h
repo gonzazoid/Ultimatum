@@ -9,27 +9,62 @@
 #include <string>
 #include <vector>
 
+#include "ash/ash_export.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/layout/box_layout_view.h"
 #include "ui/views/widget/widget.h"
 
+namespace views {
+class ImageButton;
+class MenuModelAdapter;
+class MenuRunner;
+}  // namespace views
+
 namespace ash {
 
-class PineContentsView : public views::BoxLayoutView {
+class PillButton;
+class PineContextMenuModel;
+
+class ASH_EXPORT PineContentsView : public views::BoxLayoutView {
+  METADATA_HEADER(PineContentsView, views::BoxLayoutView)
+
  public:
-  METADATA_HEADER(PineContentsView);
-
-  // Temporary typedefs to describe a bunch of apps. An app is described by an
-  // app id and a vector of urls, which can be empty if the app is not Chrome.
-  using AppData = std::pair<std::string, std::vector<std::string>>;
-  using AppsData = std::vector<AppData>;
-
-  explicit PineContentsView(const AppsData& apps);
+  PineContentsView();
   PineContentsView(const PineContentsView&) = delete;
   PineContentsView& operator=(const PineContentsView&) = delete;
   ~PineContentsView() override;
 
   static std::unique_ptr<views::Widget> Create(aura::Window* root);
+
+  // TODO(sammiequon): Move this to a test api.
+  const PillButton* restore_button_for_testing() const {
+    return restore_button_for_testing_;
+  }
+
+ private:
+  FRIEND_TEST_ALL_PREFIXES(PineContextMenuModelTest,
+                           ShowContextMenuOnSettingsButtonClicked);
+
+  // Callbacks for the buttons on the dialog.
+  void OnRestoreButtonPressed();
+  void OnCancelButtonPressed();
+  void OnSettingsButtonPressed();
+
+  // Called when the pine context menu is closed. Used as a callback for
+  // `menu_model_adapter_`.
+  void OnMenuClosed();
+
+  raw_ptr<views::ImageButton> settings_button_ = nullptr;
+
+  // The context menu model and its adapter for `settings_button_view_`.
+  std::unique_ptr<PineContextMenuModel> context_menu_model_;
+  std::unique_ptr<views::MenuModelAdapter> menu_model_adapter_;
+  // The menu runner that is responsible for the context menu.
+  std::unique_ptr<views::MenuRunner> menu_runner_;
+
+  raw_ptr<PillButton> restore_button_for_testing_ = nullptr;
+
+  base::WeakPtrFactory<PineContentsView> weak_ptr_factory_{this};
 };
 
 BEGIN_VIEW_BUILDER(/* no export */, PineContentsView, views::BoxLayoutView)

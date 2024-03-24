@@ -34,17 +34,20 @@ public class ModuleRegistryUnitTest {
     private static final int REGISTERED_MODULE_TYPE = 0;
     private static final int UNREGISTERED_MODULE_TYPE = 1;
 
-    @Mock private ModuleProviderBuilder mModuleProviderBuilder;
+    @Mock private ModuleProviderBuilder mModuleProviderBuilder1;
+    @Mock private ModuleProviderBuilder mModuleProviderBuilder2;
+
     @Mock private ModuleDelegate mModuleDelegate;
     @Mock private Callback<ModuleProvider> mOnModuleBuiltCallback;
     @Mock private SimpleRecyclerViewAdapter mAdapter;
     @Mock private ModuleRegistry.OnViewCreatedCallback mOnViewCreatedCallback;
+    @Mock private HomeModulesConfigManager mHomeModulesConfigManager;
 
     private ModuleRegistry mModuleRegistry;
 
     @Before
     public void setUp() {
-        mModuleRegistry = ModuleRegistry.getInstance();
+        mModuleRegistry = new ModuleRegistry(mHomeModulesConfigManager);
     }
 
     @After
@@ -55,20 +58,20 @@ public class ModuleRegistryUnitTest {
     @Test
     @SmallTest
     public void testBuild() {
-        mModuleRegistry.registerModule(REGISTERED_MODULE_TYPE, mModuleProviderBuilder);
+        mModuleRegistry.registerModule(REGISTERED_MODULE_TYPE, mModuleProviderBuilder1);
 
         mModuleRegistry.build(UNREGISTERED_MODULE_TYPE, mModuleDelegate, mOnModuleBuiltCallback);
-        verify(mModuleProviderBuilder, never())
+        verify(mModuleProviderBuilder1, never())
                 .build(eq(mModuleDelegate), eq(mOnModuleBuiltCallback));
 
         mModuleRegistry.build(REGISTERED_MODULE_TYPE, mModuleDelegate, mOnModuleBuiltCallback);
-        verify(mModuleProviderBuilder).build(eq(mModuleDelegate), eq(mOnModuleBuiltCallback));
+        verify(mModuleProviderBuilder1).build(eq(mModuleDelegate), eq(mOnModuleBuiltCallback));
     }
 
     @Test
     @SmallTest
     public void testRegisterAdapter() {
-        mModuleRegistry.registerModule(REGISTERED_MODULE_TYPE, mModuleProviderBuilder);
+        mModuleRegistry.registerModule(REGISTERED_MODULE_TYPE, mModuleProviderBuilder1);
 
         // Verifies that only registered ModuleProviderBuilder will be added to the adapter.
         mModuleRegistry.registerAdapter(mAdapter, mOnViewCreatedCallback);

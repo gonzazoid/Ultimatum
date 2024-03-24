@@ -6,6 +6,7 @@
 #define COMPONENTS_OPTIMIZATION_GUIDE_CORE_HINTS_FETCHER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -17,7 +18,6 @@
 #include "base/time/clock.h"
 #include "base/time/time.h"
 #include "components/optimization_guide/proto/hints.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 class OptimizationGuideLogger;
@@ -34,7 +34,7 @@ namespace optimization_guide {
 // to pass back the fetched hints response from the remote Optimization Guide
 // Service.
 using HintsFetchedCallback = base::OnceCallback<void(
-    absl::optional<std::unique_ptr<proto::GetHintsResponse>>)>;
+    std::optional<std::unique_ptr<proto::GetHintsResponse>>)>;
 
 // A class to handle requests for optimization hints from a remote Optimization
 // Guide Service.
@@ -74,7 +74,8 @@ class HintsFetcher {
       const std::string& locale,
       const std::string& access_token,
       bool skip_cache,
-      HintsFetchedCallback hints_fetched_callback);
+      HintsFetchedCallback hints_fetched_callback,
+      proto::RequestContextMetadata* request_context_metadata);
 
   // Set |time_clock_| for testing.
   void SetTimeClockForTesting(const base::Clock* time_clock);
@@ -153,7 +154,7 @@ class HintsFetcher {
   optimization_guide::proto::RequestContext request_context_;
 
   // A reference to the PrefService for this profile. Not owned.
-  raw_ptr<PrefService, DanglingUntriaged> pref_service_ = nullptr;
+  raw_ptr<PrefService> pref_service_ = nullptr;
 
   // Holds the hosts being requested by the hints fetcher.
   std::vector<std::string> hosts_fetched_;

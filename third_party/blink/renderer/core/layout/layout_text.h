@@ -44,6 +44,7 @@ class ContentCaptureManager;
 class OffsetMapping;
 struct InlineItemsData;
 struct InlineItemSpan;
+struct TextDiffRange;
 
 // LayoutText is the root class for anything that represents
 // a text node (see core/dom/text.h).
@@ -94,7 +95,11 @@ class CORE_EXPORT LayoutText : public LayoutObject {
   }
   virtual bool IsWordBreak() const;
 
+  // Returns a string in the corresponding Text node.
+  // Returns a null string for an element-based LayoutText such as LayoutBR
+  // and LayoutWordBreak.
   virtual String OriginalText() const;
+  // This should not be called for LayoutBR.
   unsigned OriginalTextLength() const;
 
   bool HasInlineFragments() const final;
@@ -176,7 +181,7 @@ class CORE_EXPORT LayoutText : public LayoutObject {
 
   void SetTextIfNeeded(String);
   void ForceSetText(String);
-  void SetTextWithOffset(String, unsigned offset, unsigned len);
+  void SetTextWithOffset(String, const TextDiffRange&);
   void SetTextInternal(String);
 
   // Apply text-transform and -webkit-text-security to OriginalText(), and
@@ -205,8 +210,7 @@ class CORE_EXPORT LayoutText : public LayoutObject {
 
   // Returns the offset in the original text that corresponds to the given
   // position in DOM; Returns nullopt is the position is not in this LayoutText.
-  virtual absl::optional<unsigned> CaretOffsetForPosition(
-      const Position&) const;
+  virtual std::optional<unsigned> CaretOffsetForPosition(const Position&) const;
 
   // Returns true if the offset (0-based in the original text) is next to a
   // non-collapsed non-linebreak character, or before a forced linebreak (<br>,
@@ -424,6 +428,8 @@ class CORE_EXPORT LayoutText : public LayoutObject {
  private:
   ContentCaptureManager* GetOrResetContentCaptureManager();
   void DetachAbstractInlineTextBoxes();
+
+  virtual unsigned NonCollapsedCaretMaxOffset() const;
 
   // Used for LayoutNG with accessibility. True if inline fragments are
   // associated to |AbstractInlineTextBox|.

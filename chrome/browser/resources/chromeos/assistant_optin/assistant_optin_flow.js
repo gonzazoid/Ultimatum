@@ -49,7 +49,7 @@ const AssistantOptInFlowBase = mixinBehaviors(
 /**
  * @polymer
  */
-class AssistantOptInFlow extends AssistantOptInFlowBase {
+export class AssistantOptInFlow extends AssistantOptInFlowBase {
   static get is() {
     return 'assistant-optin-flow-element';
   }
@@ -224,7 +224,7 @@ class AssistantOptInFlow extends AssistantOptInFlowBase {
    * @param {AssistantUIState} step The step to be shown.
    */
   showStep(step) {
-    if (this.currentStep == step) {
+    if (this.currentStep === step) {
       return;
     }
     if (this.currentStep) {

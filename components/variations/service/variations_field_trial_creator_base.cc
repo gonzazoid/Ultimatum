@@ -16,6 +16,7 @@
 
 #include "base/base_switches.h"
 #include "base/command_line.h"
+#include "base/debug/dump_without_crashing.h"
 #include "base/files/file_path.h"
 #include "base/functional/bind.h"
 #include "base/json/json_file_value_serializer.h"
@@ -34,16 +35,21 @@
 #include "build/chromeos_buildflags.h"
 #include "components/metrics/metrics_state_manager.h"
 #include "components/prefs/pref_service.h"
+#include "components/variations/entropy_provider.h"
 #include "components/variations/field_trial_config/field_trial_util.h"
 #include "components/variations/limited_entropy_mode_gate.h"
 #include "components/variations/platform_field_trials.h"
 #include "components/variations/pref_names.h"
 #include "components/variations/proto/variations_seed.pb.h"
 #include "components/variations/service/buildflags.h"
+#include "components/variations/service/limited_entropy_randomization.h"
+#include "components/variations/service/limited_entropy_synthetic_trial.h"
 #include "components/variations/service/safe_seed_manager.h"
 #include "components/variations/service/variations_service_client.h"
 #include "components/variations/service/variations_service_utils.h"
+#include "components/variations/synthetic_trial_registry.h"
 #include "components/variations/variations_ids_provider.h"
+#include "components/variations/variations_layers.h"
 #include "components/variations/variations_seed_processor.h"
 #include "components/variations/variations_switches.h"
 #include "components/version_info/version_info.h"
@@ -231,6 +237,7 @@ bool VariationsFieldTrialCreatorBase::SetUpFieldTrials(
     const std::vector<base::FeatureList::FeatureOverrideInfo>& extra_overrides,
     std::unique_ptr<base::FeatureList> feature_list,
     metrics::MetricsStateManager* metrics_state_manager,
+    SyntheticTrialRegistry* synthetic_trial_registry,
     PlatformFieldTrials* platform_field_trials,
     SafeSeedManagerBase* safe_seed_manager,
     bool add_entropy_source_to_variations_ids) {
@@ -238,6 +245,7 @@ bool VariationsFieldTrialCreatorBase::SetUpFieldTrials(
   DCHECK(metrics_state_manager);
   DCHECK(platform_field_trials);
   DCHECK(safe_seed_manager);
+  CHECK(client_);
 
   MaybeExtendVariationsSafeMode(metrics_state_manager);
 
@@ -310,12 +318,16 @@ bool VariationsFieldTrialCreatorBase::SetUpFieldTrials(
         command_line->GetSwitchValuePath(switches::kVariationsTestSeedJsonPath));
   }
 
-  auto entropy_providers = metrics_state_manager->CreateEntropyProviders();
+  auto entropy_providers = metrics_state_manager->CreateEntropyProviders(
+      IsLimitedEntropyRandomizationSourceEnabled(
+          client_->GetChannelForVariations(),
+          limited_entropy_synthetic_trial_));
 
   bool used_seed = false;
   if (!used_testing_config) {
-    used_seed = CreateTrialsFromSeed(*entropy_providers, feature_list.get(),
-                                     safe_seed_manager);
+    used_seed =
+        CreateTrialsFromSeed(*entropy_providers, feature_list.get(),
+                             safe_seed_manager, synthetic_trial_registry);
   }
 
   platform_field_trials->SetUpClientSideFieldTrials(
@@ -363,10 +375,7 @@ VariationsFieldTrialCreatorBase::GetClientFilterableStateForVersion(
   state->form_factor = GetCurrentFormFactor();
   state->cpu_architecture = GetCurrentCpuArchitecture();
   state->platform = GetPlatform();
-  // TODO(crbug/1111131): Expand to other platforms.
-#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_ANDROID)
-  state->hardware_class = base::SysInfo::HardwareModelName();
-#endif
+  state->hardware_class = ClientFilterableState::GetHardwareClass();
 #if BUILDFLAG(IS_ANDROID)
   // This is set on Android only currently, because the IsLowEndDevice() API
   // on other platforms has no intrinsic meaning outside of a field trial that
@@ -599,15 +608,33 @@ VariationsFieldTrialCreatorBase::GetGoogleGroupsFromPrefs() {
   return groups;
 }
 
+bool VariationsFieldTrialCreatorBase::
+    ShouldActivateLimitedEntropySyntheticTrial(const VariationsSeed& seed) {
+  return limited_entropy_synthetic_trial_ &&
+         IsLimitedEntropyModeEnabled(client_->GetChannelForVariations()) &&
+         ContainsLimitedEntropyLayer(seed);
+}
+
+void VariationsFieldTrialCreatorBase::
+    RegisterLimitedEntropySyntheticTrialIfNeeded(
+        const VariationsSeed& seed,
+        SyntheticTrialRegistry* synthetic_trial_registry) {
+  if (ShouldActivateLimitedEntropySyntheticTrial(seed)) {
+    limited_entropy_synthetic_trial_->Register(*synthetic_trial_registry);
+  }
+}
+
 bool VariationsFieldTrialCreatorBase::CreateTrialsFromSeed(
     const EntropyProviders& entropy_providers,
     base::FeatureList* feature_list,
-    SafeSeedManagerBase* safe_seed_manager) {
+    SafeSeedManagerBase* safe_seed_manager,
+    SyntheticTrialRegistry* synthetic_trial_registry) {
   // This histogram name uses "VariationsFieldTrialCreator" rather than
   // "VariationsFieldTrialCreatorBase" for consistency with historical data
   TRACE_EVENT0("startup", "VariationsFieldTrialCreator::CreateTrialsFromSeed");
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   CHECK(!create_trials_from_seed_called_);
+  CHECK(client_);
   create_trials_from_seed_called_ = true;
 
   base::TimeTicks start_time = base::TimeTicks::Now();
@@ -663,14 +690,27 @@ bool VariationsFieldTrialCreatorBase::CreateTrialsFromSeed(
   RecordVariationsSeedUsage(run_in_safe_mode ? SeedUsage::kSafeSeedUsed
                                              : SeedUsage::kRegularSeedUsed);
 
-  // Register group membership for the limited entropy synthetic trial if the
-  // required parameters are non null, and a LIMITED entropy layer is in the
-  // seed.
+  RegisterLimitedEntropySyntheticTrialIfNeeded(seed, synthetic_trial_registry);
+  VariationsLayers layers(seed, entropy_providers);
+
+  // The server is not expected to send a seed with misconfigured entropy. Just
+  // in case there is an unexpected server-side bug and the entropy is
+  // misconfigured, return early to skip assigning any trials from the seed.
+  // Also, generate a crash report, so that the misconfigured seed can be
+  // identified and rolled back.
+  //
+  // Checking `IsLimitedEntropyModeEnabled()` is a safety measure, but is
+  // redundant given that `VariationsLayers` ensures that no layer with
+  // `EntropyMode.LIMITED` is marked as active for clients without a limited
+  // entropy provider (i.e. have limited entropy mode disabled, see
+  // `IsLimitedEntropyRandomizationSourceEnabled()`). For such clients,
+  // `SeedHasMisconfiguredEntropy()` will always be false.
   if (IsLimitedEntropyModeEnabled(client_->GetChannelForVariations()) &&
-      limited_entropy_synthetic_trial_ && ContainsLimitedEntropyLayer(seed)) {
-    client_->RegisterLimitedEntropySyntheticTrial(
-        limited_entropy_synthetic_trial_->GetGroupName());
+      SeedHasMisconfiguredEntropy(layers, seed)) {
+    base::debug::DumpWithoutCrashing();
+    return false;
   }
+
   // Note that passing base::Unretained(this) below is safe because the callback
   // is executed synchronously. It is not possible to pass UIStringOverrider
   // directly to VariationsSeedProcessor (which is in components/variations and
@@ -680,7 +720,7 @@ bool VariationsFieldTrialCreatorBase::CreateTrialsFromSeed(
       seed, *client_filterable_state,
       base::BindRepeating(&VariationsFieldTrialCreatorBase::OverrideUIString,
                           base::Unretained(this)),
-      entropy_providers, feature_list);
+      entropy_providers, layers, feature_list);
 
   VLOG(1) << "CreateTrialsFromSeed complete with "
           << "seed.version='" << seed.version() << "'";
@@ -750,6 +790,21 @@ void VariationsFieldTrialCreatorBase::LoadSeedFromJsonFile(
 
 VariationsSeedStore* VariationsFieldTrialCreatorBase::GetSeedStore() {
   return seed_store_.get();
+}
+
+// static
+bool VariationsFieldTrialCreatorBase::
+    IsLimitedEntropyRandomizationSourceEnabled(
+        version_info::Channel channel,
+        LimitedEntropySyntheticTrial* trial) {
+  // Channel gated clients should not generate a limited entropy randomization
+  // source.
+  if (!IsLimitedEntropyModeEnabled(channel)) {
+    return false;
+  }
+  // Only clients in the enabled group of the limited entropy synthetic trial
+  // should have a limited entropy randomization source.
+  return trial && trial->IsEnabled();
 }
 
 }  // namespace variations

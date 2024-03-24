@@ -48,6 +48,7 @@
 #include "gpu/command_buffer/service/shared_image/shared_image_representation.h"
 #include "gpu/command_buffer/service/skia_utils.h"
 #include "gpu/command_buffer/service/webgpu_decoder.h"
+#include "gpu/config/gpu_feature_info.h"
 #include "gpu/config/gpu_finch_features.h"
 #include "gpu/config/gpu_preferences.h"
 #include "gpu/config/webgpu_blocklist.h"
@@ -185,22 +186,18 @@ class WebGPUDecoderImpl final : public WebGPUDecoder {
   void PerformPollingWork() override {
     TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("gpu.dawn"),
                  "WebGPUDecoderImpl::PerformPollingWork");
-    has_polling_work_ = false;
     if (known_device_metadata_.empty()) {
       wire_serializer_->Flush();
       return;
     }
 
-    // Call DeviceTick() on all known devices, and prune any that are no longer
-    // on the wire and do not need a tick.
+    has_polling_work_ =
+        dawn::native::InstanceProcessEvents(dawn_instance_->Get());
+
     for (auto it = known_device_metadata_.begin();
          it != known_device_metadata_.end();) {
       auto& device = it->first;
       const bool known = wire_server_->IsDeviceKnown(device.Get());
-      const bool needs_tick = dawn::native::DeviceTick(device.Get());
-      if (needs_tick) {
-        has_polling_work_ = true;
-      }
       if (!known) {
         // The client has dropped all references and the device has been
         // removed from the wire.
@@ -1083,7 +1080,7 @@ WebGPUDecoderImpl::WebGPUDecoderImpl(
       memory_transfer_service_(new DawnServiceMemoryTransferService(this)),
       wire_serializer_(new DawnServiceSerializer(client)),
       isolation_key_provider_(isolation_key_provider) {
-  if (gpu_preferences.enable_webgpu_developer_features) {
+  if (gpu_preferences.enable_webgpu_experimental_features) {
     safety_level_ = webgpu::SafetyLevel::kSafeExperimental;
   }
   if (gpu_preferences.enable_unsafe_webgpu) {
@@ -1214,8 +1211,7 @@ bool WebGPUDecoderImpl::IsFeatureExposed(wgpu::FeatureName feature) const {
         return true;
       }
 
-      auto* info =
-          dawn_instance_->GetFeatureInfo(static_cast<WGPUFeatureName>(feature));
+      auto* info = dawn::native::GetFeatureInfo(feature);
       if (info == nullptr) {
         return false;
       }
@@ -1443,7 +1439,7 @@ void WebGPUDecoderImpl::RequestDeviceImpl(
 
         if (device) {
           // Intercept the response so we can add a device ref to the list of
-          // known devices that we may need to call DeviceTick on.
+          // known devices on.
           wgpu::AdapterProperties properties;
           adapter.GetProperties(&properties);
           decoder->known_device_metadata_.emplace(
@@ -1886,7 +1882,8 @@ WebGPUDecoderImpl::AssociateMailboxDawn(
     std::vector<wgpu::TextureFormat> view_formats) {
   std::unique_ptr<DawnImageRepresentation> shared_image =
       shared_image_representation_factory_->ProduceDawn(
-          mailbox, device, backendType, std::move(view_formats));
+          mailbox, device, backendType, std::move(view_formats),
+          shared_context_state_);
 
   if (!shared_image) {
     DLOG(ERROR) << "AssociateMailbox: Couldn't produce shared image";
@@ -2190,6 +2187,18 @@ error::Error WebGPUDecoderImpl::HandleSetWebGPUExecutionContextToken(
         blink::DedicatedWorkerToken>(): {
       execution_context_token = blink::WebGPUExecutionContextToken(
           blink::DedicatedWorkerToken(unguessable_token.value()));
+      break;
+    }
+    case blink::WebGPUExecutionContextToken::IndexOf<
+        blink::SharedWorkerToken>(): {
+      execution_context_token = blink::WebGPUExecutionContextToken(
+          blink::SharedWorkerToken(unguessable_token.value()));
+      break;
+    }
+    case blink::WebGPUExecutionContextToken::IndexOf<
+        blink::ServiceWorkerToken>(): {
+      execution_context_token = blink::WebGPUExecutionContextToken(
+          blink::ServiceWorkerToken(unguessable_token.value()));
       break;
     }
     default:

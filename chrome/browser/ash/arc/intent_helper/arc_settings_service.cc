@@ -5,6 +5,7 @@
 #include "chrome/browser/ash/arc/intent_helper/arc_settings_service.h"
 
 #include <string>
+#include <string_view>
 
 #include "ash/components/arc/arc_browser_context_keyed_service_factory_base.h"
 #include "ash/components/arc/arc_features.h"
@@ -25,7 +26,6 @@
 #include "base/memory/singleton.h"
 #include "base/scoped_observation.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -188,7 +188,7 @@ bool GetHttpProxyServer(const ProxyConfigDictionary* proxy_config_dict,
 
   const net::ProxyChain& chain = proxy_list->First();
   CHECK(chain.is_single_proxy());
-  const net::ProxyServer& server = chain.GetProxyServer(/*chain_index=*/0);
+  const net::ProxyServer& server = chain.First();
   *host = server.host_port_pair().host();
   *port = server.host_port_pair().port();
   return !host->empty() && *port;

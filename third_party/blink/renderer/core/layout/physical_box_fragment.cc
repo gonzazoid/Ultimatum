@@ -113,7 +113,7 @@ const PhysicalBoxFragment* PhysicalBoxFragment::Create(
       ToPhysicalSize(builder->Size(), builder->GetWritingMode());
   WritingModeConverter converter(writing_direction, physical_size);
 
-  absl::optional<PhysicalRect> inflow_bounds;
+  std::optional<PhysicalRect> inflow_bounds;
   if (builder->inflow_bounds_)
     inflow_bounds = converter.ToPhysical(*builder->inflow_bounds_);
 
@@ -275,18 +275,21 @@ PhysicalBoxFragment::PhysicalBoxFragment(
     const PhysicalBoxStrut& borders,
     bool has_padding,
     const PhysicalBoxStrut& padding,
-    const absl::optional<PhysicalRect>& inflow_bounds,
+    const std::optional<PhysicalRect>& inflow_bounds,
     bool has_fragment_items,
     WritingMode block_or_line_writing_mode)
     : PhysicalFragment(builder,
                        block_or_line_writing_mode,
                        kFragmentBox,
-                       builder->BoxType()),
+                       builder->GetBoxType()),
       bit_field_(ConstHasFragmentItemsFlag::encode(has_fragment_items) |
                  HasDescendantsForTablePartFlag::encode(false) |
                  IsFragmentationContextRootFlag::encode(
                      builder->is_fragmentation_context_root_) |
-                 IsMonolithicFlag::encode(builder->is_monolithic_)) {
+                 IsMonolithicFlag::encode(builder->is_monolithic_) |
+                 IsMonolithicOverflowPropagationDisabledFlag::encode(
+                     builder->GetConstraintSpace()
+                         .IsMonolithicOverflowPropagationDisabled())) {
   DCHECK(layout_object_);
   DCHECK(layout_object_->IsBoxModelObject());
   DCHECK(!builder->break_token_ || builder->break_token_->IsBlockType());
@@ -309,7 +312,7 @@ PhysicalBoxFragment::PhysicalBoxFragment(
     auto* items = const_cast<FragmentItems*>(ComputeItemsAddress());
     DCHECK_EQ(items_builder->GetWritingMode(), block_or_line_writing_mode);
     DCHECK_EQ(items_builder->Direction(), builder->Direction());
-    absl::optional<PhysicalSize> new_size =
+    std::optional<PhysicalSize> new_size =
         items_builder->ToFragmentItems(Size(), items);
     if (new_size)
       size_ = *new_size;
@@ -697,189 +700,6 @@ bool PhysicalBoxFragment::MayIntersect(
   return true;
 }
 
-PhysicalRect PhysicalBoxFragment::ComputeRubyEmHeightBox() const {
-  DCHECK(GetLayoutObject());
-  // TODO(kojii): It might be that |ComputeAnnotationOverflow| should move to
-  // scrollable overflow recalc, but it is to be thought out.
-  if (UNLIKELY(IsLayoutObjectDestroyedOrMoved())) {
-    NOTREACHED();
-    return PhysicalRect();
-  }
-  const LayoutObject* layout_object = GetLayoutObject();
-  if (IsRubyBox()) {
-    return ComputeRubyEmHeightBoxFromChildren();
-  }
-  if (const auto* layout_box = DynamicTo<LayoutBox>(layout_object)) {
-    if (HasNonVisibleOverflow())
-      return PhysicalRect({}, Size());
-    // Legacy is the source of truth for overflow
-    return layout_box->ScrollableOverflowRect();
-  } else if (layout_object->IsLayoutInline()) {
-    // Inline overflow is a union of child overflows.
-    PhysicalRect overflow;
-    if (GetBoxType() != kInlineBox) {
-      overflow = PhysicalRect({}, Size());
-    }
-    for (const auto& child_fragment : PostLayoutChildren()) {
-      PhysicalRect child_overflow =
-          child_fragment->ComputeRubyEmHeightBoxForPropagation(*this);
-      child_overflow.offset += child_fragment.Offset();
-      overflow.Unite(child_overflow);
-    }
-    return overflow;
-  } else {
-    NOTREACHED();
-  }
-  return PhysicalRect({}, Size());
-}
-
-PhysicalRect PhysicalBoxFragment::ComputeRubyEmHeightBoxFromChildren() const {
-  // TODO(kojii): See |ComputeRubyEmHeightBox|.
-  const FragmentItems* items = Items();
-  if (Children().empty() && !items)
-    return PhysicalRect();
-
-  // Internal struct to share logic between child fragments and child items.
-  // - Inline children's overflow expands by padding end/after.
-  // - Float / OOF overflow is added as is.
-  // - Children not reachable by scroll overflow do not contribute to it.
-  struct ComputeOverflowContext {
-    STACK_ALLOCATED();
-
-   public:
-    explicit ComputeOverflowContext(const PhysicalBoxFragment& container)
-        : container(container),
-          style(container.Style()),
-          writing_direction(style.GetWritingDirection()),
-          border_inline_start(LayoutUnit(style.BorderInlineStartWidth())),
-          border_block_start(LayoutUnit(style.BorderBlockStartWidth())) {
-      DCHECK_EQ(&style, container.GetLayoutObject()->Style(
-                            container.UsesFirstLineStyle()));
-
-      // End and under padding are added to scroll overflow of inline children.
-      // https://github.com/w3c/csswg-drafts/issues/129
-      DCHECK_EQ(container.HasNonVisibleOverflow(),
-                container.GetLayoutObject()->HasNonVisibleOverflow());
-      if (container.HasNonVisibleOverflow()) {
-        const auto* layout_object = To<LayoutBox>(container.GetLayoutObject());
-        padding_strut =
-            BoxStrut(LayoutUnit(), layout_object->PaddingInlineEnd(),
-                     LayoutUnit(), layout_object->PaddingBlockEnd())
-                .ConvertToPhysical(writing_direction);
-      }
-    }
-
-    void AddChild(const PhysicalRect& child_scrollable_overflow) {
-      // Do not add overflow if fragment is not reachable by scrolling.
-      children_overflow.Unite(child_scrollable_overflow);
-    }
-
-    void AddFloatingOrOutOfFlowPositionedChild(
-        const PhysicalFragment& child,
-        const PhysicalOffset& child_offset) {
-      DCHECK(child.IsFloatingOrOutOfFlowPositioned());
-      PhysicalRect child_scrollable_overflow =
-          child.ComputeRubyEmHeightBoxForPropagation(container);
-      child_scrollable_overflow.offset += child_offset;
-      AddChild(child_scrollable_overflow);
-    }
-
-    void AddLineBoxChild(const PhysicalLineBoxFragment& child,
-                         const PhysicalOffset& child_offset) {
-      if (padding_strut)
-        AddLineBoxRect({child_offset, child.Size()});
-      PhysicalRect child_scrollable_overflow =
-          child.ComputeRubyEmHeightBox(container, style);
-      child_scrollable_overflow.offset += child_offset;
-      AddChild(child_scrollable_overflow);
-    }
-
-    void AddLineBoxChild(const FragmentItem& child,
-                         const InlineCursor& cursor) {
-      DCHECK_EQ(&child, cursor.CurrentItem());
-      DCHECK_EQ(child.Type(), FragmentItem::kLine);
-      if (padding_strut)
-        AddLineBoxRect(child.RectInContainerFragment());
-      const PhysicalLineBoxFragment* line_box = child.LineBoxFragment();
-      DCHECK(line_box);
-      PhysicalRect child_scrollable_overflow =
-          line_box->ComputeRubyEmHeightBoxForLine(container, style, child,
-                                                  cursor);
-      AddChild(child_scrollable_overflow);
-    }
-
-    void AddLineBoxRect(const PhysicalRect& linebox_rect) {
-      DCHECK(padding_strut);
-      if (lineboxes_enclosing_rect)
-        lineboxes_enclosing_rect->Unite(linebox_rect);
-      else
-        lineboxes_enclosing_rect = linebox_rect;
-    }
-
-    void AddPaddingToLineBoxChildren() {
-      if (lineboxes_enclosing_rect) {
-        DCHECK(padding_strut);
-        lineboxes_enclosing_rect->Expand(*padding_strut);
-        AddChild(*lineboxes_enclosing_rect);
-      }
-    }
-
-    const PhysicalBoxFragment& container;
-    const ComputedStyle& style;
-    const WritingDirectionMode writing_direction;
-    const LayoutUnit border_inline_start;
-    const LayoutUnit border_block_start;
-    absl::optional<PhysicalBoxStrut> padding_strut;
-    absl::optional<PhysicalRect> lineboxes_enclosing_rect;
-    PhysicalRect children_overflow;
-  } context(*this);
-
-  // Traverse child items.
-  if (items) {
-    for (InlineCursor cursor(*this, *items); cursor;
-         cursor.MoveToNextSkippingChildren()) {
-      const FragmentItem* item = cursor.CurrentItem();
-      if (item->Type() == FragmentItem::kLine) {
-        context.AddLineBoxChild(*item, cursor);
-        continue;
-      }
-
-      if (const PhysicalBoxFragment* child_box =
-              item->PostLayoutBoxFragment()) {
-        if (child_box->IsFloatingOrOutOfFlowPositioned()) {
-          context.AddFloatingOrOutOfFlowPositionedChild(
-              *child_box, item->OffsetInContainerFragment());
-        }
-      }
-    }
-  }
-
-  // Traverse child fragments.
-  const bool add_inline_children = !items && IsInlineFormattingContext();
-  // Only add overflow for fragments NG has not reflected into Legacy.
-  // These fragments are:
-  // - inline fragments,
-  // - out of flow fragments whose css container is inline box.
-  // TODO(layout-dev) Transforms also need to be applied to compute overflow
-  // correctly. NG is not yet transform-aware. crbug.com/855965
-  for (const auto& child : PostLayoutChildren()) {
-    if (child->IsFloatingOrOutOfFlowPositioned()) {
-      context.AddFloatingOrOutOfFlowPositionedChild(*child, child.Offset());
-    } else if (add_inline_children && child->IsLineBox()) {
-      context.AddLineBoxChild(To<PhysicalLineBoxFragment>(*child),
-                              child.Offset());
-    } else if (IsRubyColumn()) {
-      PhysicalRect r = child->ComputeRubyEmHeightBox(*this);
-      r.offset += child.offset;
-      context.AddChild(r);
-    }
-  }
-
-  context.AddPaddingToLineBoxChildren();
-
-  return context.children_overflow;
-}
-
 gfx::Vector2d PhysicalBoxFragment::PixelSnappedScrolledContentOffset() const {
   DCHECK(GetLayoutObject());
   return To<LayoutBox>(*GetLayoutObject()).PixelSnappedScrolledContentOffset();
@@ -976,6 +796,66 @@ PhysicalBoxFragment::GetMutableForContainerLayout() const {
   DCHECK(layout_object_->GetFrameView()->IsInPerformLayout());
   return MutableForContainerLayout(base::PassKey<PhysicalBoxFragment>(),
                                    const_cast<PhysicalBoxFragment&>(*this));
+}
+
+void PhysicalBoxFragment::MutableForOofFragmentation::AddChildFragmentainer(
+    const PhysicalBoxFragment& child_fragment,
+    LogicalOffset child_offset) {
+  // We should only end up here when updating a nested multicol container that
+  // has already being laid out, to add new fragmentainers to hold OOFs.
+  DCHECK(fragment_.IsFragmentationContextRoot());
+  DCHECK(child_fragment.IsFragmentainerBox());
+
+  WritingModeConverter converter(fragment_.Style().GetWritingDirection(),
+                                 fragment_.Size());
+  PhysicalFragmentLink link;
+  link.offset = converter.ToPhysical(child_offset, child_fragment.Size());
+  link.fragment = &child_fragment;
+  fragment_.children_.push_back(link);
+}
+
+void PhysicalBoxFragment::MutableForOofFragmentation::Merge(
+    const PhysicalBoxFragment& placeholder_fragmentainer) {
+  DCHECK(placeholder_fragmentainer.IsFragmentainerBox());
+
+  // Copy all child fragments.
+  for (const PhysicalFragmentLink& new_child :
+       placeholder_fragmentainer.children_) {
+    fragment_.children_.push_back(new_child);
+    DCHECK(new_child->IsOutOfFlowPositioned());
+    fragment_.has_out_of_flow_fragment_child_ = true;
+  }
+
+  // The existing break token may need to be updated, because of monolithic
+  // overflow (printing).
+  if (const BlockBreakToken* new_break_token =
+          placeholder_fragmentainer.GetBreakToken()) {
+    if (const BlockBreakToken* old_break_token = fragment_.GetBreakToken()) {
+      old_break_token->GetMutableForOofFragmentation().Merge(*new_break_token);
+    } else {
+      fragment_.break_token_ = new_break_token;
+    }
+  }
+
+  // Copy over any additional anchor queries.
+  if (const PhysicalAnchorQuery* query =
+          placeholder_fragmentainer.AnchorQuery()) {
+    if (!fragment_.oof_data_) {
+      fragment_.oof_data_ = MakeGarbageCollected<OofData>();
+    }
+    for (auto entry : *query) {
+      fragment_.oof_data_->anchor_query.insert(entry.key, entry.value);
+    }
+  }
+
+  UpdateOverflow();
+}
+
+void PhysicalBoxFragment::MutableForOofFragmentation::UpdateOverflow() {
+  PhysicalRect overflow =
+      ScrollableOverflowCalculator::RecalculateScrollableOverflowForFragment(
+          fragment_, /* has_block_fragmentation */ true);
+  fragment_.GetMutableForStyleRecalc().SetScrollableOverflow(overflow);
 }
 
 void PhysicalBoxFragment::SetInkOverflow(const PhysicalRect& self,
@@ -1094,6 +974,9 @@ PhysicalRect PhysicalBoxFragment::RecalcContentsInkOverflow() {
 PhysicalRect PhysicalBoxFragment::ComputeSelfInkOverflow() const {
   DCHECK_EQ(PostLayout(), this);
   const ComputedStyle& style = Style();
+
+  // TODO(crbug.com/325215738): Remove this when we're done investigating.
+  CHECK(&style);
 
   PhysicalRect ink_overflow(LocalRect());
   if (UNLIKELY(IsTableRow())) {
@@ -1296,17 +1179,6 @@ void PhysicalBoxFragment::AddOutlineRectsForInlineBox(
 
   if (ShouldIncludeBlockInkOverflowForAnchorOnly(outline_type) &&
       !HasNonVisibleOverflow() && !HasControlClip(*this)) {
-    if (!RuntimeEnabledFeatures::LayoutNewContainingBlockEnabled() &&
-        container->IsAnonymousBlock()) {
-      const auto* container_box = DynamicTo<LayoutBox>(
-          container->GetLayoutObject()->NonAnonymousAncestor());
-      if (!container_box)
-        return;
-      // TODO(crbug.com/1380673): Just picking the first fragment isn't right.
-      container = container_box->GetPhysicalFragment(0);
-      DCHECK(container);
-    }
-
     for (const auto& child : container->PostLayoutChildren()) {
       if (!child->IsOutOfFlowPositioned() ||
           child->GetLayoutObject()->ContainerForAbsolutePosition() !=

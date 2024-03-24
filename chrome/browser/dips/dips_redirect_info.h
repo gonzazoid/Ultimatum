@@ -21,6 +21,7 @@ struct DIPSRedirectChainInfo {
                         const GURL& final_url,
                         size_t length,
                         bool is_partial_chain);
+  DIPSRedirectChainInfo(const DIPSRedirectChainInfo&);
   ~DIPSRedirectChainInfo();
 
   const GURL initial_url;
@@ -38,7 +39,7 @@ struct DIPSRedirectChainInfo {
 
   // These properties aren't known at the time of creation, and are filled in
   // later:
-  absl::optional<DIPSCookieMode> cookie_mode;
+  std::optional<DIPSCookieMode> cookie_mode;
 };
 
 // Properties of one URL within a redirect chain.
@@ -59,6 +60,7 @@ struct DIPSRedirectInfo {
                    base::TimeDelta client_bounce_delay,
                    bool has_sticky_activation,
                    bool web_authn_assertion_request_succeeded);
+  DIPSRedirectInfo(const DIPSRedirectInfo&);
   ~DIPSRedirectInfo();
 
   // These properties are required for all redirects:
@@ -73,7 +75,7 @@ struct DIPSRedirectInfo {
 
   // These properties aren't known at the time of creation, and are filled in
   // later:
-  absl::optional<bool> has_interaction;
+  std::optional<bool> has_interaction;
   size_t chain_index = 0u;
 
   // The following properties are only applicable for client-side redirects:

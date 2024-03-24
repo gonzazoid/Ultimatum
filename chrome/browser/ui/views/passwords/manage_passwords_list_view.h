@@ -26,12 +26,13 @@ class ManagePasswordsListView : public views::BoxLayoutView {
   // callback that informs the embedder that the manage password entry has been
   // clicked.
   ManagePasswordsListView(
-      const std::vector<std::unique_ptr<password_manager::PasswordForm>>&
+      base::span<std::unique_ptr<password_manager::PasswordForm> const>
           credentials,
       ui::ImageModel favicon,
       base::RepeatingCallback<void(password_manager::PasswordForm)>
           on_row_clicked_callback,
-      base::RepeatingClosure on_navigate_to_settings_clicked_callback);
+      base::RepeatingClosure on_navigate_to_settings_clicked_callback,
+      bool is_account_storage_available);
 
   ManagePasswordsListView(const ManagePasswordsListView&) = delete;
   ManagePasswordsListView& operator=(const ManagePasswordsListView&) = delete;

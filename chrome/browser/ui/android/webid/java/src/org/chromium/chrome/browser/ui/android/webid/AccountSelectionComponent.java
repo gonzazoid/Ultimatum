@@ -9,6 +9,7 @@ import org.chromium.chrome.browser.ui.android.webid.data.ClientIdMetadata;
 import org.chromium.chrome.browser.ui.android.webid.data.IdentityCredentialTokenError;
 import org.chromium.chrome.browser.ui.android.webid.data.IdentityProviderMetadata;
 import org.chromium.content.webid.IdentityRequestDialogDismissReason;
+import org.chromium.content.webid.IdentityRequestDialogLinkType;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.url.GURL;
 
@@ -37,17 +38,21 @@ public interface AccountSelectionComponent {
         void onDismissed(@IdentityRequestDialogDismissReason int dismissReason);
 
         /** Called when the user clicks on the button to sign in to the IDP. */
-        void onLoginToIdP(GURL idpLoginUrl);
+        void onLoginToIdP(GURL idpConfigUrl, GURL idpLoginUrl);
 
         /** Called when the user clicks on the more details button in an error dialog. */
         void onMoreDetails();
 
         /** Called on the opener when a modal dialog that it opened has been closed. */
         void onModalDialogClosed();
+
+        /** Called when the accounts UI is displayed. */
+        void onAccountsDisplayed();
     }
 
     /**
      * Displays the given accounts in a new bottom sheet.
+     *
      * @param topFrameEtldPlusOne The {@link String} for the relying party's top frame.
      * @param iframeEtldPlusOne The {@link String} for the relying party's iframe.
      * @param idpEtldPlusOne The {@link String} for the identity provider.
@@ -56,8 +61,9 @@ public interface AccountSelectionComponent {
      * @param clientMetadata Metadata related to relying party.
      * @param isAutoReauthn A {@link boolean} that represents whether this is an auto re-authn flow.
      * @param rpContext is a {@link String} representing the desired text to be used in the title of
-     *         the FedCM prompt: "signin", "continue", etc.
-     *
+     *     the FedCM prompt: "signin", "continue", etc.
+     * @param requestPermission A {@link boolean} indicating whether we need to request permission
+     *     from the user to share their data with the IDP, if the user is not a returning user.
      */
     void showAccounts(
             String topFrameEtldPlusOne,
@@ -67,7 +73,8 @@ public interface AccountSelectionComponent {
             IdentityProviderMetadata idpMetadata,
             ClientIdMetadata clientMetadata,
             boolean isAutoReauthn,
-            String rpContext);
+            String rpContext,
+            boolean requestPermission);
 
     /**
      * Displays a dialog telling the user that they can sign in to an IDP for the purpose of
@@ -117,6 +124,9 @@ public interface AccountSelectionComponent {
 
     /** Gets the sheet's subtitle, if any, or null.. */
     String getSubtitle();
+
+    /** Show the given URL in a popup window. */
+    void showUrl(@IdentityRequestDialogLinkType int linkType, GURL url);
 
     /**
      * Shows a modal dialog with the given url. Returns the WebContents of the new dialog.

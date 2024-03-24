@@ -4,14 +4,18 @@
 
 #include <thread>
 
+#include "base/files/scoped_temp_dir.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/strings/stringprintf.h"
 #include "base/test/test_trace_processor.h"
 #include "base/test/trace_test_utils.h"
 #include "build/build_config.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test.h"
 #include "content/public/test/content_browser_test_utils.h"
 #include "services/resource_coordinator/public/cpp/memory_instrumentation/tracing_observer_proto.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "third_party/perfetto/protos/perfetto/config/chrome/chrome_config.gen.h"
 
 #if BUILDFLAG(IS_POSIX)
@@ -550,11 +554,17 @@ IN_PROC_BROWSER_TEST_F(SystemTracingEndToEndBrowserTest, SimpleTraceEvent) {
                                      std::vector<std::string>{"test_event"}));
 }
 
-// The test fails on Android because Renderers can't connect to an arbitrary
-// socket.
-#if !BUILDFLAG(IS_ANDROID)
 // Tests that system tracing works from a sandboxed process (Renderer).
-IN_PROC_BROWSER_TEST_F(SystemTracingEndToEndBrowserTest, PerformanceMark) {
+// The test fails on Android because Renderers can't connect to an
+// arbitrary socket. Flaky on Mac since the renderer doesn't connect on
+// time. crbug.com/324063092
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_MAC)
+#define MAYBE_PerformanceMark DISABLED_PerformanceMark
+#else
+#define MAYBE_PerformanceMark PerformanceMark
+#endif
+IN_PROC_BROWSER_TEST_F(SystemTracingEndToEndBrowserTest,
+                       MAYBE_PerformanceMark) {
   auto session = perfetto::Tracing::NewTrace(perfetto::kSystemBackend);
   session->Setup(base::test::DefaultTraceConfig("blink.user_timing", false));
   base::RunLoop start_session;
@@ -572,7 +582,8 @@ IN_PROC_BROWSER_TEST_F(SystemTracingEndToEndBrowserTest, PerformanceMark) {
   // connecting to the service), but it doesn't matter. We just want to make
   // sure that at least one of them is there.
   std::vector<char> trace;
-  for (size_t i = 0; i < 100; i++) {
+  size_t i = 0;
+  for (; i < 300; i++) {
     EXPECT_TRUE(ExecJs(tab, "performance.mark('mark1');"));
 
     base::RunLoop flush;
@@ -588,6 +599,7 @@ IN_PROC_BROWSER_TEST_F(SystemTracingEndToEndBrowserTest, PerformanceMark) {
       break;
     }
   }
+  ASSERT_LT(i, 300U);
 
   base::test::TestTraceProcessorImpl ttp;
   absl::Status status = ttp.ParseTrace(trace);
@@ -603,7 +615,6 @@ IN_PROC_BROWSER_TEST_F(SystemTracingEndToEndBrowserTest, PerformanceMark) {
               ::testing::ElementsAre(std::vector<std::string>{"name"},
                                      std::vector<std::string>{"mark1"}));
 }
-#endif  // !BUILDFLAG(IS_ANDROID)
 #endif  // BUILDFLAG(IS_POSIX)
 
 }  // namespace content

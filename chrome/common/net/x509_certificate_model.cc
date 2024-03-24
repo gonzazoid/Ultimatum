@@ -33,7 +33,6 @@
 #include "third_party/boringssl/src/pki/parse_values.h"
 #include "third_party/boringssl/src/pki/parser.h"
 #include "third_party/boringssl/src/pki/signature_algorithm.h"
-#include "third_party/boringssl/src/pki/tag.h"
 #include "third_party/boringssl/src/pki/verify_signed_data.h"
 #include "ui/base/l10n/l10n_util.h"
 
@@ -314,10 +313,6 @@ std::string ProcessRawBytes(base::span<const uint8_t> data) {
   return ProcessRawBytesWithSeparators(data, ' ', '\n');
 }
 
-std::string ProcessRawBytes(bssl::der::Input data) {
-  return ProcessRawBytes(data.AsSpan());
-}
-
 OptionalStringOrError FindAttributeOfType(
     bssl::der::Input oid,
     const bssl::RelativeDistinguishedName& rdn) {
@@ -365,7 +360,7 @@ OptionalStringOrError FindLastNameOfType(bssl::der::Input oid,
 // "OID.", or an empty string on error.
 std::string OidToNumericString(bssl::der::Input oid) {
   CBS cbs;
-  CBS_init(&cbs, oid.UnsafeData(), oid.Length());
+  CBS_init(&cbs, oid.data(), oid.size());
   bssl::UniquePtr<char> text(CBS_asn1_oid_to_text(&cbs));
   if (!text)
     return std::string();
@@ -527,18 +522,18 @@ constexpr auto kOidStringMap = base::MakeFixedFlatMap<bssl::der::Input, int>({
      IDS_CERT_EKU_MS_KEY_RECOVERY_AGENT},
 });
 
-absl::optional<std::string> GetOidText(bssl::der::Input oid) {
+std::optional<std::string> GetOidText(bssl::der::Input oid) {
   // TODO(crbug.com/1311404): this should be "const auto i" since it's an
   // iterator, but fixed_flat_map iterators are raw pointers and the
   // chromium-style plugin complains.
   const auto* i = kOidStringMap.find(oid);
   if (i != kOidStringMap.end())
     return l10n_util::GetStringUTF8(i->second);
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 std::string GetOidTextOrNumeric(bssl::der::Input oid) {
-  absl::optional<std::string> oid_text = GetOidText(oid);
+  std::optional<std::string> oid_text = GetOidText(oid);
   return oid_text ? *oid_text : OidToNumericString(oid);
 }
 
@@ -588,13 +583,13 @@ OptionalStringOrError RDNSequenceToStringMultiLine(
   return rv;
 }
 
-absl::optional<std::string> ProcessIA5String(bssl::der::Input extension_data) {
+std::optional<std::string> ProcessIA5String(bssl::der::Input extension_data) {
   bssl::der::Input value;
   bssl::der::Parser parser(extension_data);
   std::string rv;
-  if (!parser.ReadTag(bssl::der::kIA5String, &value) || parser.HasMore() ||
+  if (!parser.ReadTag(CBS_ASN1_IA5STRING, &value) || parser.HasMore() ||
       !bssl::der::ParseIA5String(value, &rv)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   // TODO(mattm): do something about newlines (or other control chars)?
   return rv;
@@ -603,9 +598,9 @@ absl::optional<std::string> ProcessIA5String(bssl::der::Input extension_data) {
 // Returns a comma-separated string of the strings in |string_map| for the bits
 // in |bitfield| that are set.
 // string_map may contain -1 for reserved positions that should not be set.
-absl::optional<std::string> ProcessBitField(bssl::der::BitString bitfield,
-                                            base::span<const int> string_map,
-                                            char separator) {
+std::optional<std::string> ProcessBitField(bssl::der::BitString bitfield,
+                                           base::span<const int> string_map,
+                                           char separator) {
   std::string rv;
   for (size_t i = 0; i < string_map.size(); ++i) {
     if (bitfield.AssertsBit(i)) {
@@ -613,7 +608,7 @@ absl::optional<std::string> ProcessBitField(bssl::der::BitString bitfield,
       // TODO(mattm): is returning an error here correct? Or should it encode
       // some generic string like "reserved bit N set"?
       if (string_id < 0)
-        return absl::nullopt;
+        return std::nullopt;
       if (!rv.empty())
         rv += separator;
       rv += l10n_util::GetStringUTF8(string_id);
@@ -625,32 +620,32 @@ absl::optional<std::string> ProcessBitField(bssl::der::BitString bitfield,
 }
 
 // Returns nullopt on error, or empty string if no bits were set.
-absl::optional<std::string> ProcessBitStringValue(
+std::optional<std::string> ProcessBitStringValue(
     bssl::der::Input value,
     base::span<const int> string_map,
     char separator) {
-  absl::optional<bssl::der::BitString> decoded =
+  std::optional<bssl::der::BitString> decoded =
       bssl::der::ParseBitString(value);
   if (!decoded) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return ProcessBitField(decoded.value(), string_map, separator);
 }
 
-absl::optional<std::string> ProcessBitStringExtension(
+std::optional<std::string> ProcessBitStringExtension(
     bssl::der::Input extension_data,
     base::span<const int> string_map,
     char separator) {
   bssl::der::Input value;
   bssl::der::Parser parser(extension_data);
-  if (!parser.ReadTag(bssl::der::kBitString, &value) || parser.HasMore()) {
-    return absl::nullopt;
+  if (!parser.ReadTag(CBS_ASN1_BITSTRING, &value) || parser.HasMore()) {
+    return std::nullopt;
   }
 
   return ProcessBitStringValue(value, string_map, separator);
 }
 
-absl::optional<std::string> ProcessNSCertTypeExtension(
+std::optional<std::string> ProcessNSCertTypeExtension(
     bssl::der::Input extension_data) {
   static const int usage_strings[] = {
       IDS_CERT_USAGE_SSL_CLIENT,
@@ -665,7 +660,7 @@ absl::optional<std::string> ProcessNSCertTypeExtension(
   return ProcessBitStringExtension(extension_data, usage_strings, '\n');
 }
 
-absl::optional<std::string> ProcessKeyUsageExtension(
+std::optional<std::string> ProcessKeyUsageExtension(
     bssl::der::Input extension_data) {
   static const int usage_strings[] = {
       IDS_CERT_X509_KEY_USAGE_SIGNING,
@@ -678,22 +673,22 @@ absl::optional<std::string> ProcessKeyUsageExtension(
       IDS_CERT_X509_KEY_USAGE_ENCIPHER_ONLY,
       IDS_CERT_X509_KEY_USAGE_DECIPHER_ONLY,
   };
-  absl::optional<std::string> rv =
+  std::optional<std::string> rv =
       ProcessBitStringExtension(extension_data, usage_strings, '\n');
   if (rv && rv->empty()) {
     // RFC 5280 4.2.1.3:
     // When the keyUsage extension appears in a certificate, at least one of
     // the bits MUST be set to 1.
-    return absl::nullopt;
+    return std::nullopt;
   }
   return rv;
 }
 
-absl::optional<std::string> ProcessBasicConstraints(
+std::optional<std::string> ProcessBasicConstraints(
     bssl::der::Input extension_data) {
   bssl::ParsedBasicConstraints basic_constraints;
   if (!bssl::ParseBasicConstraints(extension_data, &basic_constraints)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   std::string rv;
@@ -716,17 +711,16 @@ absl::optional<std::string> ProcessBasicConstraints(
   return rv;
 }
 
-absl::optional<std::string> ProcessExtKeyUsage(
-    bssl::der::Input extension_data) {
+std::optional<std::string> ProcessExtKeyUsage(bssl::der::Input extension_data) {
   std::vector<bssl::der::Input> extended_key_usage;
   if (!bssl::ParseEKUExtension(extension_data, &extended_key_usage)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   std::string rv;
   for (const auto& oid : extended_key_usage) {
     std::string numeric_oid = OidToNumericString(oid);
-    absl::optional<std::string> oid_text = GetOidText(oid);
+    std::optional<std::string> oid_text = GetOidText(oid);
 
     // If oid is one that is recognized, display the text description along
     // with the numeric_oid. If we don't recognize the OID just display the
@@ -768,13 +762,13 @@ bool ParseOtherName(bssl::der::Input other_name,
   //      type-id    OBJECT IDENTIFIER,
   //      value      [0] EXPLICIT ANY DEFINED BY type-id }
   bssl::der::Parser sequence_parser(other_name);
-  return sequence_parser.ReadTag(bssl::der::kOid, type) &&
-         sequence_parser.ReadTag(bssl::der::ContextSpecificConstructed(0),
-                                 value) &&
+  return sequence_parser.ReadTag(CBS_ASN1_OBJECT, type) &&
+         sequence_parser.ReadTag(
+             CBS_ASN1_CONTEXT_SPECIFIC | CBS_ASN1_CONSTRUCTED | 0, value) &&
          !sequence_parser.HasMore();
 }
 
-absl::optional<std::string> ProcessGeneralNames(
+std::optional<std::string> ProcessGeneralNames(
     const bssl::GeneralNames& names) {
   // Note: The old x509_certificate_model_nss impl would process names in the
   // order they appeared in the certificate, whereas this impl parses names
@@ -785,7 +779,7 @@ absl::optional<std::string> ProcessGeneralNames(
     bssl::der::Input type;
     bssl::der::Input value;
     if (!ParseOtherName(other_name, &type, &value)) {
-      return absl::nullopt;
+      return std::nullopt;
     }
     // x509_certificate_model_nss went a bit further in parsing certain
     // otherName types, but it probably isn't worth bothering.
@@ -809,7 +803,7 @@ absl::optional<std::string> ProcessGeneralNames(
   for (const auto& directory_name : names.directory_names) {
     OptionalStringOrError name = ProcessNameValue(directory_name);
     if (!absl::holds_alternative<std::string>(name))
-      return absl::nullopt;
+      return std::nullopt;
     rv += FormatGeneralName(IDS_CERT_GENERAL_NAME_DIRECTORY_NAME,
                             absl::get<std::string>(name));
   }
@@ -824,15 +818,15 @@ absl::optional<std::string> ProcessGeneralNames(
                             uniform_resource_identifier);
   }
   for (const auto& ip_address_bytes : names.ip_addresses) {
-    net::IPAddress ip_address(ip_address_bytes.AsSpan());
+    net::IPAddress ip_address(ip_address_bytes);
     // The `GeneralNames` parser should guarantee this.
     CHECK(ip_address.IsValid());
     rv += FormatGeneralName(IDS_CERT_GENERAL_NAME_IP_ADDRESS,
                             ip_address.ToString());
   }
   for (const auto& ip_address_range : names.ip_address_ranges) {
-    net::IPAddress ip_address(ip_address_range.first.AsSpan());
-    net::IPAddress mask(ip_address_range.second.AsSpan());
+    net::IPAddress ip_address(ip_address_range.first);
+    net::IPAddress mask(ip_address_range.second);
     // The `GeneralNames` parser should guarantee this.
     CHECK(ip_address.IsValid());
     CHECK(mask.IsValid());
@@ -849,43 +843,43 @@ absl::optional<std::string> ProcessGeneralNames(
   return rv;
 }
 
-absl::optional<std::string> ProcessGeneralNamesTlv(
+std::optional<std::string> ProcessGeneralNamesTlv(
     bssl::der::Input extension_data) {
   bssl::CertErrors unused_errors;
   std::unique_ptr<bssl::GeneralNames> alt_names =
       bssl::GeneralNames::Create(extension_data, &unused_errors);
   if (!alt_names)
-    return absl::nullopt;
+    return std::nullopt;
   return ProcessGeneralNames(*alt_names);
 }
 
-absl::optional<std::string> ProcessGeneralNamesValue(
+std::optional<std::string> ProcessGeneralNamesValue(
     bssl::der::Input general_names_value) {
   bssl::CertErrors unused_errors;
   std::unique_ptr<bssl::GeneralNames> alt_names =
       bssl::GeneralNames::CreateFromValue(general_names_value, &unused_errors);
   if (!alt_names)
-    return absl::nullopt;
+    return std::nullopt;
   return ProcessGeneralNames(*alt_names);
 }
 
-absl::optional<std::string> ProcessSubjectKeyId(
+std::optional<std::string> ProcessSubjectKeyId(
     bssl::der::Input extension_data) {
   bssl::der::Input subject_key_identifier;
   if (!bssl::ParseSubjectKeyIdentifier(extension_data,
                                        &subject_key_identifier)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return l10n_util::GetStringFUTF8(
       IDS_CERT_KEYID_FORMAT,
       base::ASCIIToUTF16(ProcessRawBytes(subject_key_identifier)));
 }
 
-absl::optional<std::string> ProcessAuthorityKeyId(
+std::optional<std::string> ProcessAuthorityKeyId(
     bssl::der::Input extension_data) {
   bssl::ParsedAuthorityKeyIdentifier authority_key_id;
   if (!bssl::ParseAuthorityKeyIdentifier(extension_data, &authority_key_id)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   std::string rv;
@@ -896,10 +890,10 @@ absl::optional<std::string> ProcessAuthorityKeyId(
     rv += '\n';
   }
   if (authority_key_id.authority_cert_issuer) {
-    absl::optional<std::string> s =
+    std::optional<std::string> s =
         ProcessGeneralNamesValue(*authority_key_id.authority_cert_issuer);
     if (!s)
-      return absl::nullopt;
+      return std::nullopt;
     rv += l10n_util::GetStringFUTF8(IDS_CERT_ISSUER_FORMAT,
                                     base::UTF8ToUTF16(*s));
     rv += '\n';
@@ -915,40 +909,40 @@ absl::optional<std::string> ProcessAuthorityKeyId(
   return rv;
 }
 
-absl::optional<std::string> ProcessUserNoticeDisplayText(
-    bssl::der::Tag tag,
+std::optional<std::string> ProcessUserNoticeDisplayText(
+    CBS_ASN1_TAG tag,
     bssl::der::Input value) {
   std::string display_text;
   switch (tag) {
-    case bssl::der::kIA5String:
+    case CBS_ASN1_IA5STRING:
       if (!bssl::der::ParseIA5String(value, &display_text)) {
-        return absl::nullopt;
+        return std::nullopt;
       }
       break;
-    case bssl::der::kVisibleString:
+    case CBS_ASN1_VISIBLESTRING:
       if (!bssl::der::ParseVisibleString(value, &display_text)) {
-        return absl::nullopt;
+        return std::nullopt;
       }
       break;
-    case bssl::der::kBmpString:
+    case CBS_ASN1_BMPSTRING:
       if (!bssl::der::ParseBmpString(value, &display_text)) {
-        return absl::nullopt;
+        return std::nullopt;
       }
       break;
-    case bssl::der::kUtf8String:
+    case CBS_ASN1_UTF8STRING:
       if (!base::IsStringUTF8AllowingNoncharacters(value.AsStringView())) {
-        return absl::nullopt;
+        return std::nullopt;
       }
       display_text = value.AsString();
       break;
     default:
-      return absl::nullopt;
+      return std::nullopt;
   }
   // TODO(mattm): do something about newlines (or other control chars)?
   return display_text;
 }
 
-absl::optional<std::string> ProcessUserNotice(bssl::der::Input qualifier) {
+std::optional<std::string> ProcessUserNotice(bssl::der::Input qualifier) {
   // RFC 5280 section 4.2.1.4:
   //
   //    UserNotice ::= SEQUENCE {
@@ -968,37 +962,37 @@ absl::optional<std::string> ProcessUserNotice(bssl::der::Input qualifier) {
   bssl::der::Parser outer_parser(qualifier);
   bssl::der::Parser parser;
   if (!outer_parser.ReadSequence(&parser) || outer_parser.HasMore())
-    return absl::nullopt;
+    return std::nullopt;
 
-  absl::optional<bssl::der::Input> notice_ref_value;
-  if (!parser.ReadOptionalTag(bssl::der::kSequence, &notice_ref_value)) {
-    return absl::nullopt;
+  std::optional<bssl::der::Input> notice_ref_value;
+  if (!parser.ReadOptionalTag(CBS_ASN1_SEQUENCE, &notice_ref_value)) {
+    return std::nullopt;
   }
 
   std::string rv;
   if (notice_ref_value) {
     bssl::der::Parser notice_ref_parser(*notice_ref_value);
-    bssl::der::Tag organization_tag;
+    CBS_ASN1_TAG organization_tag;
     bssl::der::Input organization_value;
     if (!notice_ref_parser.ReadTagAndValue(&organization_tag,
                                            &organization_value)) {
-      return absl::nullopt;
+      return std::nullopt;
     }
-    absl::optional<std::string> s =
+    std::optional<std::string> s =
         ProcessUserNoticeDisplayText(organization_tag, organization_value);
     if (!s)
-      return absl::nullopt;
+      return std::nullopt;
     rv += *s;
     rv += " - ";
 
     bssl::der::Parser notice_numbers_parser;
     if (!notice_ref_parser.ReadSequence(&notice_numbers_parser))
-      return absl::nullopt;
+      return std::nullopt;
     bool first = true;
     while (notice_numbers_parser.HasMore()) {
       bssl::der::Input notice_number;
-      if (!notice_numbers_parser.ReadTag(bssl::der::kInteger, &notice_number)) {
-        return absl::nullopt;
+      if (!notice_numbers_parser.ReadTag(CBS_ASN1_INTEGER, &notice_number)) {
+        return std::nullopt;
       }
       if (!first)
         rv += ", ";
@@ -1014,31 +1008,31 @@ absl::optional<std::string> ProcessUserNotice(bssl::der::Input qualifier) {
   }
 
   if (parser.HasMore()) {
-    bssl::der::Tag explicit_text_tag;
+    CBS_ASN1_TAG explicit_text_tag;
     bssl::der::Input explicit_text_value;
     if (!parser.ReadTagAndValue(&explicit_text_tag, &explicit_text_value))
-      return absl::nullopt;
+      return std::nullopt;
     rv += "\n    ";
-    absl::optional<std::string> s =
+    std::optional<std::string> s =
         ProcessUserNoticeDisplayText(explicit_text_tag, explicit_text_value);
     if (!s)
-      return absl::nullopt;
+      return std::nullopt;
     rv += *s;
   }
 
   if (parser.HasMore())
-    return absl::nullopt;
+    return std::nullopt;
 
   return rv;
 }
 
-absl::optional<std::string> ProcessCertificatePolicies(
+std::optional<std::string> ProcessCertificatePolicies(
     bssl::der::Input extension_data) {
   std::vector<bssl::PolicyInformation> policies;
   bssl::CertErrors errors;
   if (!bssl::ParseCertificatePoliciesExtension(extension_data, &policies,
                                                &errors)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   std::string rv;
   for (const auto& policy_info : policies) {
@@ -1061,18 +1055,18 @@ absl::optional<std::string> ProcessCertificatePolicies(
                                             qualifier_info.qualifier_oid)));
         if (qualifier_info.qualifier_oid ==
             bssl::der::Input(bssl::kCpsPointerId)) {
-          absl::optional<std::string> s =
+          std::optional<std::string> s =
               ProcessIA5String(qualifier_info.qualifier);
           if (!s)
-            return absl::nullopt;
+            return std::nullopt;
           rv += "    ";
           rv += *s;
         } else if (qualifier_info.qualifier_oid ==
                    bssl::der::Input(bssl::kUserNoticeId)) {
-          absl::optional<std::string> s =
+          std::optional<std::string> s =
               ProcessUserNotice(qualifier_info.qualifier);
           if (!s)
-            return absl::nullopt;
+            return std::nullopt;
           rv += *s;
         } else {
           rv += ProcessRawBytes(qualifier_info.qualifier);
@@ -1084,11 +1078,11 @@ absl::optional<std::string> ProcessCertificatePolicies(
   return rv;
 }
 
-absl::optional<std::string> ProcessCrlDistributionPoints(
+std::optional<std::string> ProcessCrlDistributionPoints(
     bssl::der::Input extension_data) {
   std::vector<bssl::ParsedDistributionPoint> distribution_points;
   if (!ParseCrlDistributionPoints(extension_data, &distribution_points))
-    return absl::nullopt;
+    return std::nullopt;
 
   //    ReasonFlags ::= BIT STRING {
   static const int kReasonStrings[] = {
@@ -1116,10 +1110,10 @@ absl::optional<std::string> ProcessCrlDistributionPoints(
   std::string rv;
   for (const auto& dp : distribution_points) {
     if (dp.distribution_point_fullname) {
-      absl::optional<std::string> s =
+      std::optional<std::string> s =
           ProcessGeneralNames(*dp.distribution_point_fullname);
       if (!s)
-        return absl::nullopt;
+        return std::nullopt;
       rv += *s;
     }
 
@@ -1128,19 +1122,19 @@ absl::optional<std::string> ProcessCrlDistributionPoints(
       bssl::der::Parser rdnParser(
           *dp.distribution_point_name_relative_to_crl_issuer);
       if (!bssl::ReadRdn(&rdnParser, &name_relative_to_crl_issuer)) {
-        return absl::nullopt;
+        return std::nullopt;
       }
       std::string s = ProcessRDN(name_relative_to_crl_issuer);
       if (s.empty())
-        return absl::nullopt;
+        return std::nullopt;
       rv += s;
     }
 
     if (dp.reasons) {
-      absl::optional<std::string> s =
+      std::optional<std::string> s =
           ProcessBitStringValue(*dp.reasons, kReasonStrings, ',');
       if (!s)
-        return absl::nullopt;
+        return std::nullopt;
       rv += *s + '\n';
     }
 
@@ -1149,10 +1143,10 @@ absl::optional<std::string> ProcessCrlDistributionPoints(
       auto crl_issuer =
           bssl::GeneralNames::CreateFromValue(*dp.crl_issuer, &unused_errors);
       if (!crl_issuer)
-        return absl::nullopt;
-      absl::optional<std::string> s = ProcessGeneralNames(*crl_issuer);
+        return std::nullopt;
+      std::optional<std::string> s = ProcessGeneralNames(*crl_issuer);
       if (!s)
-        return absl::nullopt;
+        return std::nullopt;
       rv += l10n_util::GetStringFUTF8(IDS_CERT_ISSUER_FORMAT,
                                       base::UTF8ToUTF16(*s));
     }
@@ -1161,11 +1155,11 @@ absl::optional<std::string> ProcessCrlDistributionPoints(
   return rv;
 }
 
-absl::optional<std::string> ProcessAuthorityInfoAccess(
+std::optional<std::string> ProcessAuthorityInfoAccess(
     bssl::der::Input extension_data) {
   std::vector<bssl::AuthorityInfoAccessDescription> access_descriptions;
   if (!bssl::ParseAuthorityInfoAccess(extension_data, &access_descriptions)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   std::string rv;
@@ -1175,12 +1169,12 @@ absl::optional<std::string> ProcessAuthorityInfoAccess(
     if (!bssl::ParseGeneralName(access_description.access_location,
                                 bssl::GeneralNames::IP_ADDRESS_ONLY, &name,
                                 &unused_errors)) {
-      return absl::nullopt;
+      return std::nullopt;
     }
 
-    absl::optional<std::string> s = ProcessGeneralNames(name);
+    std::optional<std::string> s = ProcessGeneralNames(name);
     if (!s)
-      return absl::nullopt;
+      return std::nullopt;
     std::u16string location_str = base::UTF8ToUTF16(*s);
     if (access_description.access_method_oid ==
         bssl::der::Input(bssl::kAdOcspOid)) {
@@ -1225,8 +1219,7 @@ bool ParseSubjectPublicKeyInfo(bssl::der::Input spki_tlv,
   if (!sequence_parser.ReadRawTLV(algorithm_tlv))
     return false;
 
-  if (!sequence_parser.ReadTag(bssl::der::kBitString,
-                               subject_public_key_value)) {
+  if (!sequence_parser.ReadTag(CBS_ASN1_BITSTRING, subject_public_key_value)) {
     return false;
   }
 
@@ -1254,8 +1247,8 @@ X509CertificateModel::X509CertificateModel(
   options.allow_invalid_serial_numbers = true;
   bssl::CertErrors unused_errors;
   if (!bssl::ParseCertificate(
-          bssl::der::Input(CRYPTO_BUFFER_data(cert_data_.get()),
-                           CRYPTO_BUFFER_len(cert_data_.get())),
+          bssl::der::Input(
+              net::x509_util::CryptoBufferAsSpan(cert_data_.get())),
           &tbs_certificate_tlv_, &signature_algorithm_tlv_, &signature_value_,
           &unused_errors) ||
       !ParseTbsCertificate(tbs_certificate_tlv_, options, &tbs_,
@@ -1328,7 +1321,7 @@ std::string X509CertificateModel::GetVersion() const {
 
 std::string X509CertificateModel::GetSerialNumberHexified() const {
   DCHECK(parsed_successfully_);
-  return ProcessRawBytesWithSeparators(tbs_.serial_number.AsSpan(), ':', ':');
+  return ProcessRawBytesWithSeparators(tbs_.serial_number, ':', ':');
 }
 
 bool X509CertificateModel::GetTimes(base::Time* not_before,
@@ -1458,7 +1451,7 @@ std::string X509CertificateModel::ProcessExtension(
     const bssl::ParsedExtension& extension) const {
   base::StringPiece criticality =
       extension.critical ? critical_label : non_critical_label;
-  absl::optional<std::string> processed_extension =
+  std::optional<std::string> processed_extension =
       ProcessExtensionData(extension);
   return base::StrCat(
       {criticality, "\n",
@@ -1467,7 +1460,7 @@ std::string X509CertificateModel::ProcessExtension(
             : l10n_util::GetStringUTF8(IDS_CERT_EXTENSION_DUMP_ERROR))});
 }
 
-absl::optional<std::string> X509CertificateModel::ProcessExtensionData(
+std::optional<std::string> X509CertificateModel::ProcessExtensionData(
     const bssl::ParsedExtension& extension) const {
   if (extension.oid == bssl::der::Input(kNetscapeCertificateTypeOid)) {
     return ProcessNSCertTypeExtension(extension.value);
@@ -1548,7 +1541,7 @@ std::string X509CertificateModel::ProcessSecAlgorithmSignatureWrap() const {
 
 std::string X509CertificateModel::ProcessSubjectPublicKeyInfo() const {
   DCHECK(parsed_successfully_);
-  std::string rv = ProcessRawSubjectPublicKeyInfo(tbs_.spki_tlv.AsSpan());
+  std::string rv = ProcessRawSubjectPublicKeyInfo(tbs_.spki_tlv);
   if (rv.empty())
     return std::string();
   return rv;
@@ -1556,7 +1549,7 @@ std::string X509CertificateModel::ProcessSubjectPublicKeyInfo() const {
 
 std::string X509CertificateModel::HashSpkiSHA256() const {
   DCHECK(parsed_successfully_);
-  auto hash = crypto::SHA256Hash(tbs_.spki_tlv.AsSpan());
+  auto hash = crypto::SHA256Hash(tbs_.spki_tlv);
   return base::ToLowerASCII(base::HexEncode(hash));
 }
 

@@ -47,11 +47,6 @@ https://doc.rust-lang.org/cargo/reference/manifest.html), though the crate
 itself is never built, it is only used to collect dependencies through the
 `[dependencies]` section.
 
-These instructions require the presence of nightly `cargo` which is normally found
-in `//third_party/rust-toolchain/bin`. But [on Mac Arm](https://crbug.com/1515913)
-it is missing, and will need to be installed separately with
-[`rustup install nightly`](https://rustup.rs/) and added to the `PATH` environment.
-
 To use a third-party crate "bar" version 3 from first party code:
 1. Change directory to the root `src/` dir of Chromium.
 1. Add the crate to `//third_party/rust/chromium_crates_io/Cargo.toml`:
@@ -69,7 +64,7 @@ To use a third-party crate "bar" version 3 from first party code:
      an error will be printed. See [patching errors](#patching-errors) below for how to resolve
      this.
 1. Add the new files to git:
-   * `git add -f third_party/rust/chromium_crates_io/vendor`
+   * `git add -f third_party/rust/chromium_crates_io`
    * The `-f` is important, as files may be skipped otherwise from a
      `.gitignore` inside the crate.
 1. (optional) If the crate is only to be used by tests and tooling, then
@@ -87,7 +82,7 @@ To use a third-party crate "bar" version 3 from first party code:
       * `./tools/crates/run_cargo.py install --git https://github.com/mozilla/cargo-vet cargo-vet`
       * We use `--git` to install cargo-vet from HEAD in order to use the `--cargo-arg` argument
         which is not released yet.
-   * `./tools/crates/run_cargo.py -Zunstable-options -C third_party/rust/chromium_crates_io/ vet check --cargo-arg=-Zbindeps --no-registry-suggestions`
+   * `./tools/crates/run_cargo_vet.py check`
    * If `check` fails, then there are missing audits, which need to be added to
      `//third_party/rust/chromium_crates_io/supply-chain/audits.toml`.
       * See [auditing_standards.md](https://github.com/google/rust-crate-audits/blob/main/auditing_standards.md)
@@ -98,7 +93,7 @@ To use a third-party crate "bar" version 3 from first party code:
         while others will require specialists from the Security team. These are
         explained in the
         [auditing_standards.md](https://github.com/google/rust-crate-audits/blob/main/auditing_standards.md).
-   * Audit updates in `audit.toml` should be part of the submitted CL so that
+   * Audit updates in `audits.toml` should be part of the submitted CL so that
      `cargo vet` will continue to pass after the CL lands.
 1. Upload the CL. If there is any `unsafe` usage then Security experts will need to
    audit the "ub-risk" level. Mark any `unsafe` usage with `TODO` code review comments,
@@ -173,12 +168,15 @@ group in `gnrt_config.toml`.
 
 To update crates to their latest minor versions:
 1. Change directory to the root `src/` dir of Chromium.
-1. Update the versions in `//third_party/rust/chromium_crates_io/Cargo.lock`.
+1. Update the versions in `//third_party/rust/chromium_crates_io/Cargo.toml`.
    * `vpython3 ./tools/crates/run_gnrt.py update`
    * Or, directly through (nightly) cargo:
      `cargo run --release --manifest-path tools/crates/gnrt/Cargo.toml --target-dir out/gnrt update`
 1. Download any updated crate's files:
    * `./tools/crates/run_gnrt.py vendor`
+   * If you want to restrict the update to certain crates, add the crate names
+     as arguments to `vendor`, like: `./tools/crates/run_gnrt.py vendor
+     <crate-name>`
    * Or, directly through (nightly) cargo:
      `cargo run --release --manifest-path tools/crates/gnrt/Cargo.toml --target-dir out/gnrt vendor`
 1. Add the downloaded files to git:
@@ -250,6 +248,12 @@ file, rooted in the `gen` output directory, use
 ```
 #include "the/path/to/the/rust/file.rs.h"
 ```
+
+# Debugging hints
+
+There are not yet Rust wrappers for Chromium's base logging APIs. We recommend
+use of Rust's standard [`eprintln`](https://doc.rust-lang.org/std/macro.eprintln.html)
+and [`dbg`](https://doc.rust-lang.org/std/macro.dbg.html) macros.
 
 # Using VSCode
 

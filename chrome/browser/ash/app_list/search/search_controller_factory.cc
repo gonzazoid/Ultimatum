@@ -47,6 +47,7 @@
 #include "chrome/browser/ui/webui/ash/settings/services/settings_manager/os_settings_manager.h"
 #include "chrome/browser/ui/webui/ash/settings/services/settings_manager/os_settings_manager_factory.h"
 #include "chromeos/constants/chromeos_features.h"
+#include "components/omnibox/browser/autocomplete_classifier.h"
 #include "components/session_manager/core/session_manager.h"
 
 namespace app_list {
@@ -56,6 +57,16 @@ namespace {
 // Maximum number of results to show for the given type.
 constexpr size_t kMaxAppShortcutResults = 4;
 constexpr size_t kMaxPlayStoreResults = 12;
+
+int AutocompleteProviderTypes() {
+  // We use all the default providers except for the document provider, which
+  // suggests Drive files on enterprise devices. This is disabled to avoid
+  // duplication with search results from DriveFS.
+  int providers = AutocompleteClassifier::DefaultOmniboxProviders() &
+                  ~AutocompleteProvider::TYPE_DOCUMENT;
+  providers |= AutocompleteProvider::TYPE_OPEN_TAB;
+  return providers;
+}
 
 }  // namespace
 
@@ -80,8 +91,8 @@ std::unique_ptr<SearchController> CreateSearchController(
     controller->AddProvider(std::make_unique<OmniboxLacrosProvider>(
         profile, list_controller, crosapi::CrosapiManager::Get()));
   } else {
-    controller->AddProvider(
-        std::make_unique<OmniboxProvider>(profile, list_controller));
+    controller->AddProvider(std::make_unique<OmniboxProvider>(
+        profile, list_controller, AutocompleteProviderTypes()));
   }
 
   controller->AddProvider(std::make_unique<AssistantTextSearchProvider>());
@@ -100,8 +111,8 @@ std::unique_ptr<SearchController> CreateSearchController(
           std::make_unique<LocalImageSearchProvider>(profile));
     }
     if (chromeos::features::IsCrosWebAppShortcutUiUpdateEnabled()) {
-      controller->AddProvider(
-          std::make_unique<AppShortcutsSearchProvider>(profile));
+      controller->AddProvider(std::make_unique<AppShortcutsSearchProvider>(
+          profile, list_controller));
     }
   }
 
@@ -115,7 +126,7 @@ std::unique_ptr<SearchController> CreateSearchController(
         kMaxAppShortcutResults, profile, list_controller));
   }
 
-  if (app_list_features::IsContinueSectionWithRecentsEnabled() ||
+  if (ash::features::IsLauncherContinueSectionWithRecentsEnabled() ||
       base::GetFieldTrialParamByFeatureAsBool(
           ash::features::kProductivityLauncher, "enable_continue", false)) {
     controller->AddProvider(std::make_unique<ZeroStateFileProvider>(profile));
@@ -151,10 +162,8 @@ std::unique_ptr<SearchController> CreateSearchController(
   controller->AddProvider(
       std::make_unique<HelpAppZeroStateProvider>(profile, notifier));
 
-  if (base::FeatureList::IsEnabled(ash::features::kAppLaunchAutomation)) {
-    controller->AddProvider(
-        std::make_unique<DesksAdminTemplateProvider>(profile, list_controller));
-  }
+  controller->AddProvider(
+      std::make_unique<DesksAdminTemplateProvider>(profile, list_controller));
 
   if (search_features::IsLauncherGameSearchEnabled()) {
     controller->AddProvider(

@@ -50,7 +50,7 @@ TargetDeviceBootstrapController::TargetDeviceBootstrapController(
       accessibility_manager_wrapper_(std::move(accessibility_manager_wrapper)),
       quick_start_connectivity_service_(quick_start_connectivity_service) {
   connection_broker_ = TargetDeviceConnectionBrokerFactory::Create(
-      session_context_, quick_start_connectivity_service_);
+      &session_context_, quick_start_connectivity_service_);
 }
 
 TargetDeviceBootstrapController::~TargetDeviceBootstrapController() {
@@ -130,7 +130,9 @@ void TargetDeviceBootstrapController::CloseOpenConnections(
 }
 
 void TargetDeviceBootstrapController::PrepareForUpdate() {
-  if (status_.step != Step::WIFI_CREDENTIALS_RECEIVED ||
+  constexpr Step kPossibleSteps[] = {Step::EMPTY_WIFI_CREDENTIALS_RECEIVED,
+                                     Step::WIFI_CREDENTIALS_RECEIVED};
+  if (!base::Contains(kPossibleSteps, status_.step) ||
       !authenticated_connection_) {
     return;
   }
@@ -146,7 +148,7 @@ void TargetDeviceBootstrapController::OnPinVerificationRequested(
                                      Step::ADVERTISING_WITH_QR_CODE};
   CHECK(base::Contains(kPossibleSteps, status_.step));
 
-  UpdateStatus(/*step=*/Step::PIN_VERIFICATION, /*payload=*/pin);
+  UpdateStatus(/*step=*/Step::PIN_VERIFICATION, /*payload=*/PinString(pin));
 }
 
 void TargetDeviceBootstrapController::OnConnectionAuthenticated(
@@ -157,6 +159,12 @@ void TargetDeviceBootstrapController::OnConnectionAuthenticated(
                                      Step::PIN_VERIFICATION};
   CHECK(base::Contains(kPossibleSteps, status_.step));
   authenticated_connection_ = authenticated_connection;
+
+  if (session_context_.is_resume_after_update()) {
+    UpdateStatus(/*step=*/Step::CONNECTED, /*payload=*/absl::monostate());
+    return;
+  }
+
   WaitForUserVerification();
 }
 
@@ -167,14 +175,25 @@ void TargetDeviceBootstrapController::OnConnectionRejected() {
 }
 
 void TargetDeviceBootstrapController::OnConnectionClosed(
-    TargetDeviceConnectionBroker::ConnectionClosedReason reason) {
+    ConnectionClosedReason reason) {
   if (status_.step == Step::REQUESTING_WIFI_CREDENTIALS) {
     QuickStartMetrics::RecordWifiTransferResult(
         /*succeeded=*/false, /*failure_reason=*/QuickStartMetrics::
             WifiTransferResultFailureReason::kConnectionDroppedDuringAttempt);
   }
 
-  UpdateStatus(/*step=*/Step::ERROR, /*payload=*/ErrorCode::CONNECTION_CLOSED);
+  if (reason == ConnectionClosedReason::kUserAborted) {
+    UpdateStatus(/*step=*/Step::FLOW_ABORTED,
+                 /*payload=*/absl::monostate());
+  } else if (status_.step != Step::SETUP_COMPLETE) {
+    // UI observer will automatically exit the QuickStartScreen if there's an
+    // error. We want the user to manually exit the Quick Start screen when the
+    // setup is complete, so don't update the status to Step::Error in this
+    // case.
+    UpdateStatus(/*step=*/Step::ERROR,
+                 /*payload=*/ErrorCode::CONNECTION_CLOSED);
+  }
+
   authenticated_connection_.reset();
   CleanupIfNeeded();
 }
@@ -244,9 +263,7 @@ void TargetDeviceBootstrapController::OnNotifySourceOfUpdateResponse(
     prefs->CommitPendingWrite();
   }
 
-  authenticated_connection_->Close(
-      TargetDeviceConnectionBroker::ConnectionClosedReason::
-          kTargetDeviceUpdate);
+  authenticated_connection_->Close(ConnectionClosedReason::kTargetDeviceUpdate);
 }
 
 void TargetDeviceBootstrapController::WaitForUserVerification() {
@@ -309,7 +326,7 @@ void TargetDeviceBootstrapController::RequestGoogleAccountInfo() {
 void TargetDeviceBootstrapController::OnGoogleAccountInfoReceived(
     std::string account_email) {
   UpdateStatus(/*step=*/Step::GOOGLE_ACCOUNT_INFO_RECEIVED,
-               /*payload=*/account_email);
+               /*payload=*/EmailString(account_email));
 }
 
 void TargetDeviceBootstrapController::AttemptGoogleAccountTransfer() {
@@ -327,7 +344,14 @@ void TargetDeviceBootstrapController::AttemptGoogleAccountTransfer() {
 
 void TargetDeviceBootstrapController::Cleanup() {
   status_ = Status();
+  session_context_.ResetSession();
   CleanupIfNeeded();
+}
+
+void TargetDeviceBootstrapController::OnSetupComplete() {
+  CHECK(authenticated_connection_);
+  UpdateStatus(/*step=*/Step::SETUP_COMPLETE, /*payload=*/absl::monostate());
+  authenticated_connection_->NotifyPhoneSetupComplete();
 }
 
 void TargetDeviceBootstrapController::OnChallengeBytesReceived(
@@ -493,6 +517,12 @@ std::ostream& operator<<(std::ostream& stream,
     case TargetDeviceBootstrapController::Step::
         TRANSFERRED_GOOGLE_ACCOUNT_DETAILS:
       stream << "[transferred Google account details]";
+      break;
+    case TargetDeviceBootstrapController::Step::SETUP_COMPLETE:
+      stream << "[setup complete]";
+      break;
+    case TargetDeviceBootstrapController::Step::FLOW_ABORTED:
+      stream << "[flow aborted]";
       break;
   }
 

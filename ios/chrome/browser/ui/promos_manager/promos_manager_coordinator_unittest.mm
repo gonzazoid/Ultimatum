@@ -11,11 +11,12 @@
 #import "base/test/scoped_feature_list.h"
 #import "components/prefs/pref_registry_simple.h"
 #import "components/prefs/testing_pref_service.h"
-#import "ios/chrome/browser/promos_manager/features.h"
+#import "ios/chrome/browser/promos_manager/model/features.h"
 #import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
 #import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
 #import "ios/chrome/browser/shared/model/prefs/pref_names.h"
 #import "ios/chrome/browser/shared/public/commands/credential_provider_promo_commands.h"
+#import "ios/chrome/browser/shared/public/commands/docking_promo_commands.h"
 #import "ios/chrome/browser/sync/model/sync_service_factory.h"
 #import "ios/chrome/browser/ui/promos_manager/bannered_promo_view_provider.h"
 #import "ios/chrome/browser/ui/promos_manager/standard_promo_action_handler.h"
@@ -24,6 +25,7 @@
 #import "ios/chrome/common/ui/promo_style/promo_style_view_controller.h"
 #import "ios/chrome/test/ios_chrome_scoped_testing_local_state.h"
 #import "ios/chrome/test/scoped_key_window.h"
+#import "ios/chrome/test/testing_application_context.h"
 #import "ios/web/public/test/web_task_environment.h"
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/platform_test.h"
@@ -41,6 +43,7 @@ class PromosManagerCoordinatorTest : public PlatformTest {
     browser_ = std::make_unique<TestBrowser>(browser_state_.get());
     view_controller_ = [[UIViewController alloc] init];
     [scoped_key_window_.Get() setRootViewController:view_controller_];
+    TestingApplicationContext::GetGlobal()->SetLastShutdownClean(true);
   }
 
   // Initializes a new `PromosManagerCoordinator` for testing.
@@ -49,7 +52,9 @@ class PromosManagerCoordinatorTest : public PlatformTest {
             initWithBaseViewController:view_controller_
                                browser:browser_.get()
         credentialProviderPromoHandler:OCMStrictProtocolMock(@protocol(
-                                           CredentialProviderPromoCommands))];
+                                           CredentialProviderPromoCommands))
+                   dockingPromoHandler:OCMStrictProtocolMock(
+                                           @protocol(DockingPromoCommands))];
   }
 
  protected:

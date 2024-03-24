@@ -2,11 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "chrome/browser/extensions/pref_mapping.h"
+
+#include <optional>
 #include <span>  // std::size.
 
 #include "base/containers/contains.h"
 #include "base/strings/stringprintf.h"
-#include "chrome/browser/extensions/pref_mapping.h"
 #include "chrome/browser/extensions/pref_transformer_interface.h"
 #include "chrome/browser/prefetch/pref_names.h"
 #include "chrome/browser/preloading/preloading_prefs.h"
@@ -20,7 +22,6 @@
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "components/spellcheck/browser/pref_names.h"
 #include "components/translate/core/browser/translate_pref_names.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
 #include "chrome/browser/chromeos/extensions/controlled_pref_mapping.h"
@@ -56,7 +57,6 @@ const PrefMappingEntry kMappings[] = {
      password_manager::prefs::kCredentialsEnableService,
      APIPermissionID::kPrivacy, APIPermissionID::kPrivacy},
 
-    // Note in Lacros this is Ash-controlled.
     {"protectedContentEnabled", prefs::kProtectedContentDefault,
      APIPermissionID::kPrivacy, APIPermissionID::kPrivacy},
 
@@ -153,14 +153,14 @@ const PrefMappingEntry kMappings[] = {
 
 class IdentityPrefTransformer : public PrefTransformerInterface {
  public:
-  absl::optional<base::Value> ExtensionToBrowserPref(
+  std::optional<base::Value> ExtensionToBrowserPref(
       const base::Value& extension_pref,
       std::string& error,
       bool& bad_message) override {
     return extension_pref.Clone();
   }
 
-  absl::optional<base::Value> BrowserToExtensionPref(
+  std::optional<base::Value> BrowserToExtensionPref(
       const base::Value& browser_pref,
       bool is_incognito_profile) override {
     return browser_pref.Clone();
@@ -222,39 +222,38 @@ crosapi::mojom::PrefPath PrefMapping::GetPrefPathForPrefName(
   static const auto name_to_extension_prefpath =
       base::MakeFixedFlatMapNonConsteval<base::StringPiece,
                                          crosapi::mojom::PrefPath>(
-      {{chromeos::prefs::kDockedMagnifierEnabled,
-        crosapi::mojom::PrefPath::kDockedMagnifierEnabled},
-       {chromeos::prefs::kAccessibilityAutoclickEnabled,
-        crosapi::mojom::PrefPath::kAccessibilityAutoclickEnabled},
-       {chromeos::prefs::kAccessibilityCaretHighlightEnabled,
-        crosapi::mojom::PrefPath::kAccessibilityCaretHighlightEnabled},
-       {chromeos::prefs::kAccessibilityCursorColorEnabled,
-        crosapi::mojom::PrefPath::kAccessibilityCursorColorEnabled},
-       {chromeos::prefs::kAccessibilityCursorHighlightEnabled,
-        crosapi::mojom::PrefPath::kAccessibilityCursorHighlightEnabled},
-       {chromeos::prefs::kAccessibilityDictationEnabled,
-        crosapi::mojom::PrefPath::kAccessibilityDictationEnabled},
-       {chromeos::prefs::kAccessibilityFocusHighlightEnabled,
-        crosapi::mojom::PrefPath::kAccessibilityFocusHighlightEnabled},
-       {chromeos::prefs::kAccessibilityHighContrastEnabled,
-        crosapi::mojom::PrefPath::kAccessibilityHighContrastEnabled},
-       {chromeos::prefs::kAccessibilityLargeCursorEnabled,
-        crosapi::mojom::PrefPath::kAccessibilityLargeCursorEnabled},
-       {chromeos::prefs::kAccessibilityScreenMagnifierEnabled,
-        crosapi::mojom::PrefPath::kAccessibilityScreenMagnifierEnabled},
-       {chromeos::prefs::kAccessibilitySelectToSpeakEnabled,
-        crosapi::mojom::PrefPath::kAccessibilitySelectToSpeakEnabled},
-       {chromeos::prefs::kAccessibilitySpokenFeedbackEnabled,
-        crosapi::mojom::PrefPath::kExtensionAccessibilitySpokenFeedbackEnabled},
-       {chromeos::prefs::kAccessibilityStickyKeysEnabled,
-        crosapi::mojom::PrefPath::kAccessibilityStickyKeysEnabled},
-       {chromeos::prefs::kAccessibilitySwitchAccessEnabled,
-        crosapi::mojom::PrefPath::kAccessibilitySwitchAccessEnabled},
-       {chromeos::prefs::kAccessibilityVirtualKeyboardEnabled,
-        crosapi::mojom::PrefPath::kAccessibilityVirtualKeyboardEnabled},
-       {prefs::kProtectedContentDefault,
-        crosapi::mojom::PrefPath::kProtectedContentDefault},
-       {proxy_config::prefs::kProxy, crosapi::mojom::PrefPath::kProxy}});
+          {{chromeos::prefs::kDockedMagnifierEnabled,
+            crosapi::mojom::PrefPath::kDockedMagnifierEnabled},
+           {chromeos::prefs::kAccessibilityAutoclickEnabled,
+            crosapi::mojom::PrefPath::kAccessibilityAutoclickEnabled},
+           {chromeos::prefs::kAccessibilityCaretHighlightEnabled,
+            crosapi::mojom::PrefPath::kAccessibilityCaretHighlightEnabled},
+           {chromeos::prefs::kAccessibilityCursorColorEnabled,
+            crosapi::mojom::PrefPath::kAccessibilityCursorColorEnabled},
+           {chromeos::prefs::kAccessibilityCursorHighlightEnabled,
+            crosapi::mojom::PrefPath::kAccessibilityCursorHighlightEnabled},
+           {chromeos::prefs::kAccessibilityDictationEnabled,
+            crosapi::mojom::PrefPath::kAccessibilityDictationEnabled},
+           {chromeos::prefs::kAccessibilityFocusHighlightEnabled,
+            crosapi::mojom::PrefPath::kAccessibilityFocusHighlightEnabled},
+           {chromeos::prefs::kAccessibilityHighContrastEnabled,
+            crosapi::mojom::PrefPath::kAccessibilityHighContrastEnabled},
+           {chromeos::prefs::kAccessibilityLargeCursorEnabled,
+            crosapi::mojom::PrefPath::kAccessibilityLargeCursorEnabled},
+           {chromeos::prefs::kAccessibilityScreenMagnifierEnabled,
+            crosapi::mojom::PrefPath::kAccessibilityScreenMagnifierEnabled},
+           {chromeos::prefs::kAccessibilitySelectToSpeakEnabled,
+            crosapi::mojom::PrefPath::kAccessibilitySelectToSpeakEnabled},
+           {chromeos::prefs::kAccessibilitySpokenFeedbackEnabled,
+            crosapi::mojom::PrefPath::
+                kExtensionAccessibilitySpokenFeedbackEnabled},
+           {chromeos::prefs::kAccessibilityStickyKeysEnabled,
+            crosapi::mojom::PrefPath::kAccessibilityStickyKeysEnabled},
+           {chromeos::prefs::kAccessibilitySwitchAccessEnabled,
+            crosapi::mojom::PrefPath::kAccessibilitySwitchAccessEnabled},
+           {chromeos::prefs::kAccessibilityVirtualKeyboardEnabled,
+            crosapi::mojom::PrefPath::kAccessibilityVirtualKeyboardEnabled},
+           {proxy_config::prefs::kProxy, crosapi::mojom::PrefPath::kProxy}});
   auto* pref_iter = name_to_extension_prefpath.find(pref_name);
   return pref_iter == name_to_extension_prefpath.end()
              ? crosapi::mojom::PrefPath::kUnknown

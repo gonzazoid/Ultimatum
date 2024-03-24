@@ -6,10 +6,11 @@
 load("//lib/args.star", "args")
 load("//lib/builder_config.star", "builder_config")
 load("//lib/builder_health_indicators.star", "health_spec")
-load("//lib/builders.star", "builders", "os", "reclient", "sheriff_rotations", "xcode")
+load("//lib/builders.star", "builders", "os", "reclient", "sheriff_rotations")
 load("//lib/ci.star", "ci")
 load("//lib/consoles.star", "consoles")
 load("//lib/gn_args.star", "gn_args")
+load("//lib/xcode.star", "xcode")
 
 ci.defaults.set(
     executable = ci.DEFAULT_EXECUTABLE,
@@ -74,6 +75,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.DEBUG,
             target_bits = 64,
+            target_platform = builder_config.target_platform.WIN,
         ),
         clusterfuzz_archive = builder_config.clusterfuzz_archive(
             archive_name_prefix = "asan",
@@ -112,6 +114,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.DEBUG,
             target_bits = 32,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         clusterfuzz_archive = builder_config.clusterfuzz_archive(
             archive_name_prefix = "asan-v8-arm",
@@ -151,6 +154,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         clusterfuzz_archive = builder_config.clusterfuzz_archive(
             archive_name_prefix = "asan",
@@ -191,6 +195,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 32,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         clusterfuzz_archive = builder_config.clusterfuzz_archive(
             archive_name_prefix = "asan-v8-arm",
@@ -231,6 +236,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         clusterfuzz_archive = builder_config.clusterfuzz_archive(
             archive_name_prefix = "asan",
@@ -267,7 +273,6 @@ ci.builder(
             "asan",
             "chromeos_codecs",
             "pdf_xfa",
-            "disable_nacl",
             "optimize_for_fuzzing",
             "shared",
             "release",
@@ -298,6 +303,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 32,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         clusterfuzz_archive = builder_config.clusterfuzz_archive(
             archive_name_prefix = "asan-v8-arm",
@@ -342,6 +348,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.CHROMEOS,
         ),
         clusterfuzz_archive = builder_config.clusterfuzz_archive(
             archive_name_prefix = "asan",
@@ -384,6 +391,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         clusterfuzz_archive = builder_config.clusterfuzz_archive(
             archive_name_prefix = "msan-chained-origins",
@@ -423,6 +431,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         clusterfuzz_archive = builder_config.clusterfuzz_archive(
             archive_name_prefix = "msan-no-origins",
@@ -461,6 +470,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.MAC,
         ),
         clusterfuzz_archive = builder_config.clusterfuzz_archive(
             archive_name_prefix = "asan",
@@ -471,7 +481,6 @@ ci.builder(
     gn_args = gn_args.config(
         configs = [
             "asan",
-            "disable_nacl",
             "fuzzer",
             "v8_heap",
             "release_builder",
@@ -508,6 +517,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.MAC,
         ),
         clusterfuzz_archive = builder_config.clusterfuzz_archive(
             archive_name_prefix = "asan",
@@ -518,7 +528,6 @@ ci.builder(
     gn_args = gn_args.config(
         configs = [
             "asan",
-            "disable_nacl",
             "fuzzer",
             "v8_heap",
             "chrome_with_codecs",
@@ -551,6 +560,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.DEBUG,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         clusterfuzz_archive = builder_config.clusterfuzz_archive(
             archive_name_prefix = "tsan",
@@ -561,7 +571,6 @@ ci.builder(
     gn_args = gn_args.config(
         configs = [
             "tsan",
-            "disable_nacl",
             "debug_builder",
             "reclient",
         ],
@@ -590,6 +599,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         clusterfuzz_archive = builder_config.clusterfuzz_archive(
             archive_name_prefix = "tsan",
@@ -600,7 +610,6 @@ ci.builder(
     gn_args = gn_args.config(
         configs = [
             "tsan",
-            "disable_nacl",
             "release_builder",
             "reclient",
         ],
@@ -625,6 +634,7 @@ ci.builder(
             apply_configs = ["mb"],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         clusterfuzz_archive = builder_config.clusterfuzz_archive(
             archive_name_prefix = "ubsan",
@@ -659,6 +669,7 @@ ci.builder(
             apply_configs = ["mb"],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         clusterfuzz_archive = builder_config.clusterfuzz_archive(
             archive_name_prefix = "ubsan-vptr",
@@ -698,6 +709,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.WIN,
         ),
         clusterfuzz_archive = builder_config.clusterfuzz_archive(
             archive_name_prefix = "asan",
@@ -740,6 +752,7 @@ ci.builder(
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 32,
+            target_platform = builder_config.target_platform.WIN,
         ),
         clusterfuzz_archive = builder_config.clusterfuzz_archive(
             archive_name_prefix = "asan",
@@ -783,7 +796,6 @@ ci.builder(
             "reclient",
             "chromeos_with_codecs",
             "pdf_xfa",
-            "disable_nacl",
             "optimize_for_fuzzing",
             "disable_seed_corpus",
         ],
@@ -793,8 +805,8 @@ ci.builder(
         short_name = "chromeos-asan",
     ),
     contact_team_email = "chrome-deet-core@google.com",
-    execution_timeout = 4 * time.hour,
-    reclient_jobs = reclient.jobs.LOW_JOBS_FOR_CI,
+    execution_timeout = 6 * time.hour,
+    reclient_jobs = reclient.jobs.HIGH_JOBS_FOR_CI,
 )
 
 ci.builder(
@@ -837,7 +849,6 @@ ci.builder(
             "asan",
             "chromeos_codecs",
             "pdf_xfa",
-            "disable_nacl",
             "optimize_for_fuzzing",
             "mojo_fuzzer",
             "shared",
@@ -869,7 +880,6 @@ ci.builder(
             "shared",
             "chromeos_codecs",
             "pdf_xfa",
-            "disable_nacl",
             "optimize_for_fuzzing",
             "disable_seed_corpus",
         ],
@@ -899,14 +909,11 @@ ci.builder(
             "reclient",
             "chromeos_codecs",
             "pdf_xfa",
-            "disable_nacl",
             "optimize_for_fuzzing",
             "disable_seed_corpus",
         ],
     ),
     os = os.LINUX_FOCAL,
-    # TODO(crbug.com/1513729): Add back to a sheriff rotation when it's stable.
-    sheriff_rotations = args.ignore_default(None),
     console_view_entry = consoles.console_view_entry(
         category = "libfuzz",
         short_name = "linux-msan",
@@ -929,7 +936,6 @@ ci.builder(
             "reclient",
             "chromeos_codecs",
             "pdf_xfa",
-            "disable_nacl",
             "optimize_for_fuzzing",
             "disable_seed_corpus",
             "shared",
@@ -961,7 +967,6 @@ ci.builder(
             "reclient",
             "chromeos_codecs",
             "pdf_xfa",
-            "disable_nacl",
             "optimize_for_fuzzing",
             "v8_simulate_arm64",
             "disable_seed_corpus",
@@ -989,7 +994,6 @@ ci.builder(
             "shared",
             "chromeos_codecs",
             "pdf_xfa",
-            "disable_nacl",
             "optimize_for_fuzzing",
             "v8_simulate_arm64",
             "disable_seed_corpus",
@@ -1017,7 +1021,6 @@ ci.builder(
             "reclient",
             "chromeos_codecs",
             "pdf_xfa",
-            "disable_nacl",
             "optimize_for_fuzzing",
             "x86",
             "disable_seed_corpus",
@@ -1046,7 +1049,6 @@ ci.builder(
             "reclient",
             "chromeos_codecs",
             "pdf_xfa",
-            "disable_nacl",
             "optimize_for_fuzzing",
             "v8_simulate_arm",
             "disable_seed_corpus",
@@ -1075,7 +1077,6 @@ ci.builder(
             "shared",
             "chromeos_codecs",
             "pdf_xfa",
-            "disable_nacl",
             "optimize_for_fuzzing",
             "v8_simulate_arm",
             "disable_seed_corpus",
@@ -1100,7 +1101,6 @@ ci.builder(
             "reclient",
             "chrome_with_codecs",
             "pdf_xfa",
-            "disable_nacl",
             "optimize_for_fuzzing",
         ],
     ),
@@ -1131,7 +1131,6 @@ ci.builder(
             "reclient",
             "chrome_with_codecs",
             "pdf_xfa",
-            "disable_nacl",
             "minimal_symbols",
             "mojo_fuzzer",
         ],
@@ -1145,6 +1144,6 @@ ci.builder(
     contact_team_email = "chrome-deet-core@google.com",
     # crbug.com/1175182: Temporarily increase timeout
     # crbug.com/1372531: Increase timeout again
-    execution_timeout = 6 * time.hour,
+    execution_timeout = 8 * time.hour,
     reclient_jobs = reclient.jobs.LOW_JOBS_FOR_CI,
 )

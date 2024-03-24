@@ -27,8 +27,13 @@ class IbanSaveManager {
    public:
     virtual ~ObserverForTest() = default;
     virtual void OnOfferLocalSave() {}
+    virtual void OnOfferUploadSave() {}
     virtual void OnAcceptSaveIbanComplete() {}
     virtual void OnDeclineSaveIbanComplete() {}
+    virtual void OnReceivedGetUploadDetailsResponse() {}
+    virtual void OnSentUploadRequest() {}
+    virtual void OnAcceptUploadSaveIbanComplete() {}
+    virtual void OnAcceptUploadSaveIbanFailed() {}
   };
 
   // The type of save that should be offered for the IBAN candidate.
@@ -97,13 +102,16 @@ class IbanSaveManager {
   }
 
   TypeOfOfferToSave DetermineHowToSaveIbanForTesting(
-      Iban& import_candidate) const {
+      const Iban& import_candidate) {
     return DetermineHowToSaveIban(import_candidate);
   }
 
   bool HasContextTokenForTesting() const { return !context_token_.empty(); }
 
  private:
+  // Sets the `record_type` of this given `import_candidate`.
+  void UpdateRecordType(Iban& import_candidate);
+
   // Returns whether the given `import_candidate` should be offered to be saved
   // to GPay, locally, or not at all.
   TypeOfOfferToSave DetermineHowToSaveIban(const Iban& import_candidate) const;

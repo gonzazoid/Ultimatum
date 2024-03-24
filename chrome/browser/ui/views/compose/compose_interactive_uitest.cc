@@ -31,6 +31,7 @@
 #include "components/signin/public/identity_manager/identity_test_utils.h"
 #include "components/unified_consent/pref_names.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "content/public/test/fenced_frame_test_util.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/default_handlers.h"
@@ -111,7 +112,6 @@ class MAYBE_ComposeInteractiveUiTest : public InteractiveBrowserTest {
   MAYBE_ComposeInteractiveUiTest() {
     feature_list_.InitWithFeatures(
         {compose::features::kEnableCompose,
-         autofill::features::kAutofillContentEditables,
          optimization_guide::features::kOptimizationGuideModelExecution},
         {});
     subscription_ =
@@ -254,12 +254,12 @@ class MAYBE_ComposeInteractiveUiTest : public InteractiveBrowserTest {
                   FROM_HERE,
                   base::BindOnce(
                       std::move(callback),
-                      OptimizationGuideResponse(
-                          ComposeResponse(true, "Cucumbers")),
-                      std::make_unique<
-                          optimization_guide::ModelQualityLogEntry>(
+                      OptimizationGuideStreamingResult(
+                          ComposeResponse(true, "Cucumbers"), true, false,
                           std::make_unique<
-                              optimization_guide::proto::LogAiDataRequest>())));
+                              optimization_guide::ModelQualityLogEntry>(
+                              std::make_unique<optimization_guide::proto::
+                                                   LogAiDataRequest>()))));
             })));
   }
 
@@ -302,6 +302,18 @@ class MAYBE_ComposeInteractiveUiTest : public InteractiveBrowserTest {
         .response = any,
         .is_complete = is_complete,
     };
+  }
+
+  optimization_guide::OptimizationGuideModelStreamingExecutionResult
+  OptimizationGuideStreamingResult(
+      const optimization_guide::proto::ComposeResponse compose_response,
+      bool is_complete = true,
+      bool provided_by_on_device = false,
+      std::unique_ptr<optimization_guide::ModelQualityLogEntry> log_entry =
+          nullptr) {
+    return optimization_guide::OptimizationGuideModelStreamingExecutionResult(
+        base::ok(OptimizationGuideResponse(compose_response, is_complete)),
+        provided_by_on_device, std::move(log_entry));
   }
 
   optimization_guide::proto::ComposeResponse ComposeResponse(

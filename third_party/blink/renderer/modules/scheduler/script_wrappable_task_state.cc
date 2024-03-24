@@ -32,10 +32,8 @@ void ScriptWrappableTaskState::Trace(Visitor* visitor) const {
 
 // static
 ScriptWrappableTaskState* ScriptWrappableTaskState::GetCurrent(
-    ScriptState* script_state) {
-  DCHECK(script_state);
-  v8::Isolate* isolate = script_state->GetIsolate();
-  DCHECK(isolate);
+    v8::Isolate* isolate) {
+  CHECK(isolate);
   if (isolate->IsExecutionTerminating()) {
     return nullptr;
   }
@@ -78,8 +76,7 @@ void ScriptWrappableTaskState::SetCurrent(
   } else {
     ScriptState::Scope scope(script_state);
     isolate->SetContinuationPreservedEmbedderData(
-        ToV8Traits<ScriptWrappableTaskState>::ToV8(script_state, task_state)
-            .ToLocalChecked());
+        ToV8Traits<ScriptWrappableTaskState>::ToV8(script_state, task_state));
   }
 }
 

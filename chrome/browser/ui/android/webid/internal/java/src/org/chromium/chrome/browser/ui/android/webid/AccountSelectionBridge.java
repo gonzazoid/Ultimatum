@@ -21,6 +21,7 @@ import org.chromium.chrome.browser.ui.android.webid.data.IdentityProviderMetadat
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetControllerProvider;
 import org.chromium.content.webid.IdentityRequestDialogDismissReason;
+import org.chromium.content.webid.IdentityRequestDialogLinkType;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.url.GURL;
@@ -96,7 +97,9 @@ class AccountSelectionBridge implements AccountSelectionComponent.Delegate {
      * @param clientIdMetadata is the metadata of the RP.
      * @param isAutoReauthn represents whether this is an auto re-authn flow.
      * @param rpContext is a {@link String} representing the desired text to be used in the title of
-     *         the FedCM prompt: "signin", "continue", etc.
+     *     the FedCM prompt: "signin", "continue", etc.
+     * @param requestPermission A {@link boolean} indicating whether we need to request permission
+     *     from the user to share their data with the IDP, if the user is not a returning user.
      */
     @CalledByNative
     private void showAccounts(
@@ -107,7 +110,8 @@ class AccountSelectionBridge implements AccountSelectionComponent.Delegate {
             IdentityProviderMetadata idpMetadata,
             ClientIdMetadata clientIdMetadata,
             boolean isAutoReauthn,
-            String rpContext) {
+            String rpContext,
+            boolean requestPermission) {
         assert accounts != null && accounts.length > 0;
         mAccountSelectionComponent.showAccounts(
                 topFrameForDisplay,
@@ -117,7 +121,8 @@ class AccountSelectionBridge implements AccountSelectionComponent.Delegate {
                 idpMetadata,
                 clientIdMetadata,
                 isAutoReauthn,
-                rpContext);
+                rpContext,
+                requestPermission);
     }
 
     /**
@@ -178,6 +183,11 @@ class AccountSelectionBridge implements AccountSelectionComponent.Delegate {
     }
 
     @CalledByNative
+    private void showUrl(@IdentityRequestDialogLinkType int linkType, GURL url) {
+        mAccountSelectionComponent.showUrl(linkType, url);
+    }
+
+    @CalledByNative
     private WebContents showModalDialog(GURL url) {
         return mAccountSelectionComponent.showModalDialog(url);
     }
@@ -211,9 +221,9 @@ class AccountSelectionBridge implements AccountSelectionComponent.Delegate {
     }
 
     @Override
-    public void onLoginToIdP(GURL idpLoginUrl) {
+    public void onLoginToIdP(GURL idpConfigUrl, GURL idpLoginUrl) {
         if (mNativeView != 0) {
-            AccountSelectionBridgeJni.get().onLoginToIdP(mNativeView, idpLoginUrl);
+            AccountSelectionBridgeJni.get().onLoginToIdP(mNativeView, idpConfigUrl, idpLoginUrl);
         }
     }
 
@@ -221,6 +231,13 @@ class AccountSelectionBridge implements AccountSelectionComponent.Delegate {
     public void onMoreDetails() {
         if (mNativeView != 0) {
             AccountSelectionBridgeJni.get().onMoreDetails(mNativeView);
+        }
+    }
+
+    @Override
+    public void onAccountsDisplayed() {
+        if (mNativeView != 0) {
+            AccountSelectionBridgeJni.get().onAccountsDisplayed(mNativeView);
         }
     }
 
@@ -242,8 +259,11 @@ class AccountSelectionBridge implements AccountSelectionComponent.Delegate {
                 long nativeAccountSelectionViewAndroid,
                 @IdentityRequestDialogDismissReason int dismissReason);
 
-        void onLoginToIdP(long nativeAccountSelectionViewAndroid, GURL idpLoginUrl);
+        void onLoginToIdP(
+                long nativeAccountSelectionViewAndroid, GURL idpConfigUrl, GURL idpLoginUrl);
 
         void onMoreDetails(long nativeAccountSelectionViewAndroid);
+
+        void onAccountsDisplayed(long nativeAccountSelectionViewAndroid);
     }
 }

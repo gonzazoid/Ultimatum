@@ -9,6 +9,7 @@ import android.graphics.drawable.Drawable;
 
 import androidx.appcompat.content.res.AppCompatResources;
 
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.browser.tabmodel.TabModelUtils;
@@ -59,12 +60,27 @@ public class TabListEditorGroupAction extends TabListEditorAction {
                 editorSupportsActionOnRelatedTabs()
                         ? getTabCountIncludingRelatedTabs(getTabGroupModelFilter(), tabIds)
                         : tabIds.size();
-        setEnabledAndItemCount(tabIds.size() > 1, size);
+
+        boolean isEnabled = tabIds.size() > 1;
+        if (ChromeFeatureList.sAndroidTabGroupStableIds.isEnabled() && tabIds.size() == 1) {
+            TabGroupModelFilter filter = getTabGroupModelFilter();
+            Tab tab = TabModelUtils.getTabById(filter.getTabModel(), tabIds.get(0));
+            isEnabled = tab != null && !filter.isTabInTabGroup(tab);
+        }
+        setEnabledAndItemCount(isEnabled, size);
     }
 
     @Override
     public boolean performAction(List<Tab> tabs) {
         TabGroupModelFilter tabGroupModelFilter = getTabGroupModelFilter();
+
+        if (ChromeFeatureList.sAndroidTabGroupStableIds.isEnabled() && tabs.size() == 1) {
+            Tab tab = tabs.get(0);
+            if (tabGroupModelFilter.isTabInTabGroup(tab)) return true;
+
+            tabGroupModelFilter.createSingleTabGroup(tab, /* notify= */ true);
+            return true;
+        }
 
         HashSet<Tab> selectedTabs = new HashSet<>(tabs);
         Tab destinationTab =

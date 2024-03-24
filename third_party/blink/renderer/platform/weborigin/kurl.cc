@@ -217,10 +217,12 @@ const KURL& NullURL() {
 }
 
 String KURL::ElidedString() const {
-  if (GetString().length() <= 1024)
-    return GetString();
+  const WTF::String& string = string_;
+  if (string.length() <= 1024) {
+    return string;
+  }
 
-  return GetString().Left(511) + "..." + GetString().Right(510);
+  return string.Left(511) + "..." + string.Right(510);
 }
 
 KURL::KURL()
@@ -381,6 +383,10 @@ String KURL::Protocol() const {
 
 String KURL::Host() const {
   return ComponentString(parsed_.host);
+}
+
+StringView KURL::HostView() const {
+  return ComponentStringView(parsed_.host);
 }
 
 uint16_t KURL::Port() const {

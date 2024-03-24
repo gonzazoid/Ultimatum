@@ -6,6 +6,7 @@
 #define COMPONENTS_OMNIBOX_BROWSER_AUTOCOMPLETE_CONTROLLER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -33,7 +34,6 @@
 #include "components/omnibox/browser/omnibox_log.h"
 #include "components/omnibox/browser/open_tab_provider.h"
 #include "components/optimization_guide/machine_learning_tflite_buildflags.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/omnibox_proto/types.pb.h"
 
 #if BUILDFLAG(BUILD_WITH_TFLITE_LIB)
@@ -52,6 +52,11 @@ class SearchProvider;
 class TemplateURLService;
 class VoiceSuggestProvider;
 class ZeroSuggestProvider;
+
+// The header used to report whether a navigation to google.com is coming from
+// omnibox. Only set when the navigation is initiated from the Gemini
+// built-in keyword.
+inline constexpr char kOmniboxGeminiHeader[] = "X-Omnibox-Gemini";
 
 // The AutocompleteController is the center of the autocomplete system.  A
 // class creates an instance of the controller, which in turn creates a set of
@@ -333,10 +338,10 @@ class AutocompleteController : public AutocompleteProviderListener,
               AutocompleteResult* result);
     ~OldResult();
 
-    absl::optional<AutocompleteMatch> last_default_match;
+    std::optional<AutocompleteMatch> last_default_match;
     std::u16string last_default_associated_keyword;
     AutocompleteResult matches_to_transfer;
-    absl::optional<AutocompleteMatch> default_match_to_preserve;
+    std::optional<AutocompleteMatch> default_match_to_preserve;
   };
 
   // Helpers called by the constructor. These initialize the specified providers
@@ -363,7 +368,7 @@ class AutocompleteController : public AutocompleteProviderListener,
 
   // `UpdateResult()` helper. Returns whether the default match changed.
   bool CheckWhetherDefaultMatchChanged(
-      absl::optional<AutocompleteMatch> last_default_match,
+      std::optional<AutocompleteMatch> last_default_match,
       std::u16string last_default_associated_keyword);
 
   // Attaches actions to matches: pedals, history clusters, tab switch, etc.
@@ -423,19 +428,19 @@ class AutocompleteController : public AutocompleteProviderListener,
   bool ShouldRunProvider(AutocompleteProvider* provider) const;
 
 #if BUILDFLAG(BUILD_WITH_TFLITE_LIB)
-  // Runs the batch scoring for all the eligible matches in
-  // `results_.matches_`. `*WithStableSearches` avoids swapping the default
-  // suggestion from a search to a URL or vice versa. See
-  // `stable_search_ranking`'s comment for details.
+  // Runs the batch scoring for all the eligible matches in `results_.matches_`.
+  // `*WithStableSearches` avoids swapping the default suggestion from a search
+  // to a URL or vice versa. See `stable_search_blending`'s comment for details.
   void RunBatchUrlScoringModel(OldResult& old_result);
   void RunBatchUrlScoringModelWithStableSearches(OldResult& old_result);
+  void RunBatchUrlScoringModelMappedSearchBlending(OldResult& old_result);
 #endif  // BUILDFLAG(BUILD_WITH_TFLITE_LIB)
 
   // Constructs a destination URL from supplied search terms args.
   // TODO(1418077): look for a way to dissolve this function into direct
   // application where it's needed.
   GURL ComputeURLFromSearchTermsArgs(
-      TemplateURL* template_url,
+      const TemplateURL* template_url,
       const TemplateURLRef::SearchTermsArgs& args) const;
 
   // May remove company entity images if omnibox::kCompanyEntityIconAdjustment

@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -27,7 +28,6 @@
 #include "media/formats/mp4/eac3.h"
 #include "media/formats/mp4/fourccs.h"
 #include "media/media_buildflags.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
 namespace mp4 {
@@ -352,8 +352,8 @@ struct MEDIA_EXPORT VideoSampleEntry : Box {
   // When set and found on a Dolby Vision source buffer, `dv_info`
   // will be used to upgrade `video_info` from its backwards
   // compatible codec (e.g., H.264, H.265) to a Dolby Vision codec.
-  absl::optional<CodecProfileLevel> dv_info;
-  absl::optional<gfx::HDRMetadata> hdr_metadata;
+  std::optional<CodecProfileLevel> dv_info;
+  std::optional<gfx::HDRMetadata> hdr_metadata;
 
   bool IsFormatValid() const;
 
@@ -434,6 +434,22 @@ struct MEDIA_EXPORT AC4SpecificBox : Box {
 };
 #endif  // BUILDFLAG(ENABLE_PLATFORM_AC4_AUDIO)
 
+#if BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
+struct MEDIA_EXPORT IamfSpecificBox : Box {
+  DECLARE_BOX_METHODS(IamfSpecificBox);
+  bool ReadOBU(BufferReader* reader);
+  bool ReadOBUHeader(BufferReader* reader,
+                     uint8_t* obu_type,
+                     uint32_t* obu_size);
+  bool ReadLeb128Value(BufferReader* reader, uint32_t* value) const;
+
+  uint8_t profile;
+  bool redundant_copy = false;
+
+  std::vector<uint8_t> ia_descriptors;
+};
+#endif  // BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
+
 struct MEDIA_EXPORT AudioSampleEntry : Box {
   DECLARE_BOX_METHODS(AudioSampleEntry);
 
@@ -458,6 +474,9 @@ struct MEDIA_EXPORT AudioSampleEntry : Box {
 #if BUILDFLAG(ENABLE_PLATFORM_AC4_AUDIO)
   AC4SpecificBox ac4;
 #endif  // BUILDFLAG(ENABLE_PLATFORM_AC4_AUDIO)
+#if BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
+  IamfSpecificBox iamf;
+#endif  // BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
 };
 
 struct MEDIA_EXPORT SampleDescription : Box {

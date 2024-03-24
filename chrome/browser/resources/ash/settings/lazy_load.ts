@@ -32,10 +32,12 @@ import './internet_page/internet_known_networks_subpage.js';
 import './internet_page/internet_subpage.js';
 import './internet_page/passpoint_subpage.js';
 import './kerberos_page/kerberos_accounts_subpage.js';
-import './os_a11y_page/display_and_magnification_subpage.js';
-import './os_a11y_page/keyboard_and_text_input_page.js';
-import './os_a11y_page/cursor_and_touchpad_page.js';
 import './os_a11y_page/chromevox_subpage.js';
+import './os_a11y_page/cursor_and_touchpad_page.js';
+import './os_a11y_page/display_and_magnification_subpage.js';
+import './os_a11y_page/facegaze_cursor_subpage.js';
+import './os_a11y_page/facegaze_facial_expression_subpage.js';
+import './os_a11y_page/keyboard_and_text_input_page.js';
 import './os_a11y_page/select_to_speak_subpage.js';
 import './os_a11y_page/switch_access_subpage.js';
 import './os_a11y_page/text_to_speech_subpage.js';
@@ -54,6 +56,7 @@ import './os_people_page/os_sync_controls_subpage.js';
 import './os_people_page/os_sync_subpage.js';
 import './os_privacy_page/manage_users_subpage.js';
 import './os_privacy_page/privacy_hub_camera_subpage.js';
+import './os_privacy_page/privacy_hub_geolocation_advanced_subpage.js';
 import './os_privacy_page/privacy_hub_geolocation_subpage.js';
 import './os_privacy_page/privacy_hub_microphone_subpage.js';
 import './os_privacy_page/privacy_hub_subpage.js';
@@ -124,28 +127,27 @@ import './os_printing_page/cups_printers_entry.js';
 import './os_printing_page/cups_saved_printers.js';
 import './os_printing_page/cups_settings_add_printer_dialog.js';
 import './os_printing_page/printer_status.js';
+import './os_privacy_page/secure_dns.js';
+import './os_privacy_page/secure_dns_input.js';
 import './os_reset_page/os_powerwash_dialog.js';
 import './os_reset_page/os_powerwash_dialog_esim_item.js';
-import '/shared/settings/privacy_page/secure_dns.js';
-import '/shared/settings/privacy_page/secure_dns_input.js';
+import './os_reset_page/os_sanitize_dialog.js';
 
-/**
- * With the optimize_webui() build step, the generated JS files are bundled
- * into a single JS file. The exports below are necessary so they can be
- * imported into browser tests.
- */
-export {SettingsRadioGroupElement} from '/shared/settings/controls/settings_radio_group.js';
 export {LifetimeBrowserProxyImpl} from '/shared/settings/lifetime_browser_proxy.js';
 export {NetworkListElement} from 'chrome://resources/ash/common/network/network_list.js';
 export {AddSmbShareDialogElement} from 'chrome://resources/ash/common/smb_shares/add_smb_share_dialog.js';
 export {SmbBrowserProxy, SmbBrowserProxyImpl, SmbMountResult} from 'chrome://resources/ash/common/smb_shares/smb_browser_proxy.js';
-export {AppManagementSupportedLinksItemElement} from 'chrome://resources/cr_components/app_management/supported_links_item.js';
-export {AppManagementSupportedLinksOverlappingAppsDialogElement} from 'chrome://resources/cr_components/app_management/supported_links_overlapping_apps_dialog.js';
 // Tests should use this export of `sanitizerInnerHtml` to prevent repeated
 // TrustedTypes policies from being created.
 export {sanitizeInnerHtml} from 'chrome://resources/js/parse_html_subset.js';
 export {AppLanguageSelectionDialogElement} from './common/app_language_selection_dialog/app_language_selection_dialog.js';
 export {AppLanguageSelectionItemElement} from './common/app_language_selection_dialog/app_language_selection_item.js';
+/**
+ * With the optimize_webui() build step, the generated JS files are bundled
+ * into a single JS file. The exports below are necessary so they can be
+ * imported into browser tests.
+ */
+export {SettingsRadioGroupElement} from './controls/settings_radio_group.js';
 export {BruschettaSubpageElement} from './crostini_page/bruschetta_subpage.js';
 export {SettingsCrostiniArcAdbElement} from './crostini_page/crostini_arc_adb.js';
 export {CrostiniBrowserProxy, CrostiniBrowserProxyImpl, CrostiniDiskInfo, CrostiniPortActiveSetting, CrostiniPortProtocol, CrostiniPortSetting} from './crostini_page/crostini_browser_proxy.js';
@@ -183,9 +185,11 @@ export {ContainerInfo, CROSTINI_TYPE, GuestId, GuestOsBrowserProxy, GuestOsBrows
 export {ContainerSelectElement} from './guest_os/guest_os_container_select.js';
 export {SettingsGuestOsSharedPathsElement} from './guest_os/guest_os_shared_paths.js';
 export {SettingsGuestOsSharedUsbDevicesElement} from './guest_os/guest_os_shared_usb_devices.js';
+export {ApnSubpageElement} from './internet_page/apn_subpage.js';
 export {CellularNetworksListElement} from './internet_page/cellular_networks_list.js';
 export {CellularRoamingToggleButtonElement} from './internet_page/cellular_roaming_toggle_button.js';
 export {EsimInstallErrorDialogElement} from './internet_page/esim_install_error_dialog.js';
+export {EsimRemoveProfileDialogElement} from './internet_page/esim_remove_profile_dialog.js';
 export {SettingsHotspotSubpageElement} from './internet_page/hotspot_subpage.js';
 export {SettingsInternetDetailPageElement} from './internet_page/internet_detail_subpage.js';
 export {SettingsInternetKnownNetworksPageElement} from './internet_page/internet_known_networks_subpage.js';
@@ -219,6 +223,8 @@ export {ChangeDictationLocaleDialog, DictationLocaleOption} from './os_a11y_page
 export {SettingsChromeVoxSubpageElement} from './os_a11y_page/chromevox_subpage.js';
 export {SettingsCursorAndTouchpadPageElement} from './os_a11y_page/cursor_and_touchpad_page.js';
 export {SettingsDisplayAndMagnificationSubpageElement} from './os_a11y_page/display_and_magnification_subpage.js';
+export {SettingsFaceGazeCursorSubpageElement} from './os_a11y_page/facegaze_cursor_subpage.js';
+export {SettingsFaceGazeFacialExpressionSubpageElement} from './os_a11y_page/facegaze_facial_expression_subpage.js';
 export {SettingsKeyboardAndTextInputPageElement} from './os_a11y_page/keyboard_and_text_input_page.js';
 export {HandlerVoice, SettingsSelectToSpeakSubpageElement} from './os_a11y_page/select_to_speak_subpage.js';
 export {SettingsSwitchAccessActionAssignmentDialogElement} from './os_a11y_page/switch_access_action_assignment_dialog.js';
@@ -228,6 +234,10 @@ export {SettingsSwitchAccessSetupGuideDialogElement} from './os_a11y_page/switch
 export {SettingsSwitchAccessSubpageElement} from './os_a11y_page/switch_access_subpage.js';
 export {PdfOcrUserSelection, ScreenAiInstallStatus, SettingsTextToSpeechSubpageElement} from './os_a11y_page/text_to_speech_subpage.js';
 export {SettingsTtsVoiceSubpageElement} from './os_a11y_page/tts_voice_subpage.js';
+export {SettingsChannelSwitcherDialogElement} from './os_about_page/channel_switcher_dialog.js';
+export {SettingsConsumerAutoUpdateToggleDialogElement} from './os_about_page/consumer_auto_update_toggle_dialog.js';
+export {SettingsDetailedBuildInfoSubpageElement} from './os_about_page/detailed_build_info_subpage.js';
+export {EditHostnameDialogElement} from './os_about_page/edit_hostname_dialog.js';
 export {SettingsAndroidAppsSubpageElement} from './os_apps_page/android_apps_subpage.js';
 export {AppManagementAppDetailViewElement} from './os_apps_page/app_management_page/app_detail_view.js';
 export {AppManagementAppDetailsItem} from './os_apps_page/app_management_page/app_details_item.js';
@@ -240,11 +250,16 @@ export {AppManagementChromeAppDetailViewElement} from './os_apps_page/app_manage
 export {AppManagementDomSwitchElement} from './os_apps_page/app_management_page/dom_switch.js';
 export {AppManagementMainViewElement} from './os_apps_page/app_management_page/main_view.js';
 export {AppManagementPermissionHeadingElement} from './os_apps_page/app_management_page/permission_heading.js';
+export {AppManagementPermissionItemElement} from './os_apps_page/app_management_page/permission_item.js';
 export {AppManagementPinToShelfItemElement} from './os_apps_page/app_management_page/pin_to_shelf_item.js';
 export {AppManagementPluginVmDetailViewElement} from './os_apps_page/app_management_page/plugin_vm_page/plugin_vm_detail_view.js';
 export {AppManagementPwaDetailViewElement} from './os_apps_page/app_management_page/pwa_detail_view.js';
 export {AppManagementResizeLockItemElement} from './os_apps_page/app_management_page/resize_lock_item.js';
 export {AppManagementSubAppsItemElement} from './os_apps_page/app_management_page/sub_apps_item.js';
+export {AppManagementSupportedLinksItemElement} from './os_apps_page/app_management_page/supported_links_item.js';
+export {AppManagementSupportedLinksOverlappingAppsDialogElement} from './os_apps_page/app_management_page/supported_links_overlapping_apps_dialog.js';
+export {AppManagementUninstallButtonElement} from './os_apps_page/app_management_page/uninstall_button.js';
+export {AppNotificationRowElement} from './os_apps_page/app_notifications_page/app_notification_row.js';
 export {SettingsAppNotificationsManagerSubpage} from './os_apps_page/app_notifications_page/app_notifications_manager_subpage.js';
 export {AppNotificationsSubpage} from './os_apps_page/app_notifications_page/app_notifications_subpage.js';
 export {ManageIsolatedWebAppsSubpageElement} from './os_apps_page/manage_isolated_web_apps_page/manage_isolated_web_apps_subpage.js';
@@ -308,13 +323,18 @@ export {SettingsManageUsersSubpageElement} from './os_privacy_page/manage_users_
 export {MediaDevicesProxy} from './os_privacy_page/media_devices_proxy.js';
 export {PrivacyHubBrowserProxy, PrivacyHubBrowserProxyImpl} from './os_privacy_page/privacy_hub_browser_proxy.js';
 export {SettingsPrivacyHubCameraSubpage} from './os_privacy_page/privacy_hub_camera_subpage.js';
+export {SettingsPrivacyHubGeolocationAdvancedSubpage} from './os_privacy_page/privacy_hub_geolocation_advanced_subpage.js';
 export {SettingsPrivacyHubGeolocationSubpage} from './os_privacy_page/privacy_hub_geolocation_subpage.js';
 export {SettingsPrivacyHubMicrophoneSubpage} from './os_privacy_page/privacy_hub_microphone_subpage.js';
 export {SettingsPrivacyHubSubpage} from './os_privacy_page/privacy_hub_subpage.js';
+export {SecureDnsResolverType, SettingsSecureDnsElement} from './os_privacy_page/secure_dns.js';
+export {SettingsSecureDnsDialogElement} from './os_privacy_page/secure_dns_dialog.js';
+export {SecureDnsInputElement} from './os_privacy_page/secure_dns_input.js';
 export {SettingsSmartPrivacySubpage} from './os_privacy_page/smart_privacy_subpage.js';
 export {OsSettingsPowerwashDialogElement} from './os_reset_page/os_powerwash_dialog.js';
 export {OsResetBrowserProxyImpl} from './os_reset_page/os_reset_browser_proxy.js';
 export {OsSettingsResetPageElement} from './os_reset_page/os_reset_page.js';
+export {OsSettingsSanitizeDialogElement} from './os_reset_page/os_sanitize_dialog.js';
 export {ResetSettingsCardElement} from './os_reset_page/reset_settings_card.js';
 export {GoogleAssistantBrowserProxy, GoogleAssistantBrowserProxyImpl} from './os_search_page/google_assistant_browser_proxy.js';
 export {ConsentStatus, DspHotwordState, SettingsGoogleAssistantSubpageElement} from './os_search_page/google_assistant_subpage.js';

@@ -4,10 +4,14 @@
 
 #include "chrome/browser/ash/app_restore/full_restore_service.h"
 
+#include <memory>
 #include <optional>
 
+#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/constants/ash_switches.h"
+#include "ash/wm/window_restore/pine_contents_data.h"
+#include "ash/wm/window_restore/window_restore_util.h"
 #include "base/command_line.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/json/json_string_value_serializer.h"
@@ -19,12 +23,15 @@
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/first_run/first_run.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
+#include "chrome/browser/prefs/browser_prefs.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
 #include "chrome/browser/sessions/exit_type_service.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/generated_resources.h"
+#include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
+#include "chrome/test/base/testing_profile_manager.h"
 #include "components/account_id/account_id.h"
 #include "components/app_constants/constants.h"
 #include "components/app_restore/app_launch_info.h"
@@ -77,7 +84,7 @@ syncer::SyncData CreateRestoreOnStartupPrefSyncData(
 
 syncer::SyncData CreateRestoreAppsAndPagesPrefSyncData(RestoreOption value) {
   sync_pb::EntitySpecifics specifics;
-  SetPrefValue(kRestoreAppsAndPagesPrefName,
+  SetPrefValue(prefs::kRestoreAppsAndPagesPrefName,
                base::Value(static_cast<int>(value)),
                specifics.mutable_os_preference()->mutable_preference());
   return syncer::SyncData::CreateRemoteData(
@@ -93,33 +100,49 @@ bool CanPerformRestore(const AccountId& account_id) {
       account_id);
 }
 
+class MockFullRestoreServiceDelegate : public FullRestoreService::Delegate {
+ public:
+  MockFullRestoreServiceDelegate() = default;
+  MockFullRestoreServiceDelegate(const MockFullRestoreServiceDelegate&) =
+      delete;
+  MockFullRestoreServiceDelegate& operator=(
+      const MockFullRestoreServiceDelegate&) = delete;
+  ~MockFullRestoreServiceDelegate() override = default;
+
+  MOCK_METHOD(void,
+              MaybeStartPineOverviewSession,
+              (std::unique_ptr<ash::PineContentsData> restore_data),
+              (override));
+  MOCK_METHOD(void, MaybeEndPineOverviewSession, (), (override));
+};
+
 }  // namespace
 
 class FullRestoreServiceTest : public testing::Test {
  public:
   FullRestoreServiceTest() = default;
-
-  ~FullRestoreServiceTest() override = default;
-
   FullRestoreServiceTest(const FullRestoreServiceTest&) = delete;
   FullRestoreServiceTest& operator=(const FullRestoreServiceTest&) = delete;
+  ~FullRestoreServiceTest() override = default;
 
+  // testing::Test:
   void SetUp() override {
     fake_user_manager_.Reset(std::make_unique<ash::FakeChromeUserManager>());
+    profile_manager_ = std::make_unique<TestingProfileManager>(
+        TestingBrowserProcess::GetGlobal());
+    ASSERT_TRUE(profile_manager_->SetUp());
     EXPECT_TRUE(temp_dir_.CreateUniqueTempDir());
-    TestingProfile::Builder profile_builder;
-    profile_builder.SetProfileName("user.test@gmail.com");
-    profile_builder.SetPath(temp_dir_.GetPath().AppendASCII("TestArcProfile"));
-    profile_ = profile_builder.Build();
-    profile_->GetPrefs()->ClearPref(kRestoreAppsAndPagesPrefName);
-
+    auto prefs =
+        std::make_unique<sync_preferences::TestingPrefServiceSyncable>();
+    RegisterUserProfilePrefs(prefs->registry());
+    auto* prefs_ptr = prefs.get();
     account_id_ =
         AccountId::FromUserEmailGaiaId("usertest@gmail.com", "1234567890");
-    const auto* user = GetFakeUserManager()->AddUser(account_id_);
+    GetFakeUserManager()->AddUser(account_id_);
     fake_user_manager_->LoginUser(account_id_);
-    ProfileHelper::Get()->SetUserToProfileMappingForTesting(user,
-                                                            profile_.get());
-
+    profile_ = profile_manager_->CreateTestingProfile(
+        "usertest@gmail.com", TestingProfile::TestingFactories());
+    fake_user_manager_->OnUserProfileCreated(account_id_, prefs_ptr);
     ::app_restore::AppRestoreInfo::GetInstance()->SetRestorePref(account_id_,
                                                                  false);
 
@@ -127,19 +150,29 @@ class FullRestoreServiceTest : public testing::Test {
         std::make_unique<NotificationDisplayServiceTester>(profile_.get());
   }
 
-  void TearDown() override { profile_.reset(); }
+  void TearDown() override {
+    GetFakeUserManager()->OnUserProfileWillBeDestroyed(account_id_);
+    profile_ = nullptr;
+    profile_manager_ = nullptr;
+  }
 
   FakeChromeUserManager* GetFakeUserManager() const {
     return fake_user_manager_.Get();
   }
 
-  void CreateFullRestoreServiceForTesting() {
+  void CreateFullRestoreServiceForTesting(
+      std::unique_ptr<MockFullRestoreServiceDelegate> mock_delegate = nullptr) {
     FullRestoreServiceFactory::GetInstance()->SetTestingFactoryAndUse(
         profile(), base::BindRepeating([](content::BrowserContext* context)
                                            -> std::unique_ptr<KeyedService> {
           return std::make_unique<FullRestoreService>(
               Profile::FromBrowserContext(context));
         }));
+
+    if (mock_delegate) {
+      FullRestoreService::GetForProfile(profile())->delegate_ =
+          std::move(mock_delegate);
+    }
     content::RunAllTasksUntilIdle();
   }
 
@@ -151,14 +184,14 @@ class FullRestoreServiceTest : public testing::Test {
 
   bool HasNotificationFor(const std::string& notification_id) {
     std::optional<message_center::Notification> message_center_notification =
-        display_service()->GetNotification(notification_id);
+        display_service_->GetNotification(notification_id);
     return message_center_notification.has_value();
   }
 
   void VerifyRestoreNotificationTitle(const std::string& notification_id,
                                       bool is_reboot_notification) {
     std::optional<message_center::Notification> message_center_notification =
-        display_service()->GetNotification(notification_id);
+        display_service_->GetNotification(notification_id);
     ASSERT_TRUE(message_center_notification.has_value());
     const std::u16string& title = message_center_notification.value().title();
     if (is_reboot_notification) {
@@ -189,7 +222,7 @@ class FullRestoreServiceTest : public testing::Test {
 
   void SimulateClick(const std::string& notification_id,
                      RestoreNotificationButtonIndex action_index) {
-    display_service()->SimulateClick(
+    display_service_->SimulateClick(
         NotificationHandler::Type::TRANSIENT, notification_id,
         static_cast<int>(action_index), std::nullopt);
   }
@@ -259,29 +292,26 @@ class FullRestoreServiceTest : public testing::Test {
 
   RestoreOption GetRestoreOption() const {
     return static_cast<RestoreOption>(
-        profile()->GetPrefs()->GetInteger(kRestoreAppsAndPagesPrefName));
+        profile()->GetPrefs()->GetInteger(prefs::kRestoreAppsAndPagesPrefName));
   }
 
   TestingProfile* profile() const { return profile_.get(); }
 
   const AccountId& account_id() const { return account_id_; }
 
-  NotificationDisplayServiceTester* display_service() const {
-    return display_service_.get();
-  }
-
  private:
   content::BrowserTaskEnvironment task_environment_;
 
   user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
       fake_user_manager_;
-  std::unique_ptr<TestingProfile> profile_;
+  std::unique_ptr<TestingProfileManager> profile_manager_;
   base::ScopedTempDir temp_dir_;
   AccountId account_id_;
 
   std::unique_ptr<NotificationDisplayServiceTester> display_service_;
 
   base::HistogramTester histogram_tester_;
+  raw_ptr<TestingProfile> profile_ = nullptr;
 };
 
 // If the system is crash, and there is no FullRestore file, don't show the
@@ -301,7 +331,7 @@ TEST_F(FullRestoreServiceTest, Crash) {
 // file, after reboot, don't show the notification, and don't restore
 TEST_F(FullRestoreServiceTest, AskEveryTime) {
   profile()->GetPrefs()->SetInteger(
-      kRestoreAppsAndPagesPrefName,
+      prefs::kRestoreAppsAndPagesPrefName,
       static_cast<int>(RestoreOption::kAskEveryTime));
   CreateFullRestoreServiceForTesting();
 
@@ -414,10 +444,10 @@ TEST_F(FullRestoreServiceTestHavingFullRestoreFile, CrashAndCloseNotification) {
 
 // For an existing user, if re-image, don't show notifications for the first
 // run.
-TEST_F(FullRestoreServiceTestHavingFullRestoreFile, ExsitingUserReImage) {
+TEST_F(FullRestoreServiceTestHavingFullRestoreFile, ExistingUserReImage) {
   // Set the restore pref setting to simulate sync for the first time.
   profile()->GetPrefs()->SetInteger(
-      kRestoreAppsAndPagesPrefName,
+      prefs::kRestoreAppsAndPagesPrefName,
       static_cast<int>(RestoreOption::kAskEveryTime));
 
   first_run::ResetCachedSentinelDataForTesting();
@@ -577,7 +607,7 @@ TEST_F(FullRestoreServiceTest, Upgrading) {
 // notification, and verify the restore flag when click the restore button.
 TEST_F(FullRestoreServiceTestHavingFullRestoreFile, AskEveryTimeAndRestore) {
   profile()->GetPrefs()->SetInteger(
-      kRestoreAppsAndPagesPrefName,
+      prefs::kRestoreAppsAndPagesPrefName,
       static_cast<int>(RestoreOption::kAskEveryTime));
   CreateFullRestoreServiceForTesting();
 
@@ -603,7 +633,7 @@ TEST_F(FullRestoreServiceTestHavingFullRestoreFile, AskEveryTimeAndRestore) {
 // notification, and verify the restore flag when click the Settings button.
 TEST_F(FullRestoreServiceTestHavingFullRestoreFile, AskEveryTimeAndSettings) {
   profile()->GetPrefs()->SetInteger(
-      kRestoreAppsAndPagesPrefName,
+      prefs::kRestoreAppsAndPagesPrefName,
       static_cast<int>(RestoreOption::kAskEveryTime));
   CreateFullRestoreServiceForTesting();
 
@@ -637,7 +667,7 @@ TEST_F(FullRestoreServiceTestHavingFullRestoreFile, AskEveryTimeAndSettings) {
 TEST_F(FullRestoreServiceTestHavingFullRestoreFile,
        AskEveryTimeAndCloseNotification) {
   profile()->GetPrefs()->SetInteger(
-      kRestoreAppsAndPagesPrefName,
+      prefs::kRestoreAppsAndPagesPrefName,
       static_cast<int>(RestoreOption::kAskEveryTime));
   CreateFullRestoreServiceForTesting();
 
@@ -662,7 +692,7 @@ TEST_F(FullRestoreServiceTestHavingFullRestoreFile,
 TEST_F(FullRestoreServiceTestHavingFullRestoreFile,
        AskEveryTimeWithPostRebootNotification) {
   profile()->GetPrefs()->SetInteger(
-      kRestoreAppsAndPagesPrefName,
+      prefs::kRestoreAppsAndPagesPrefName,
       static_cast<int>(RestoreOption::kAskEveryTime));
   profile()->GetPrefs()->SetBoolean(prefs::kShowPostRebootNotification, true);
   CreateFullRestoreServiceForTesting();
@@ -680,7 +710,7 @@ TEST_F(FullRestoreServiceTestHavingFullRestoreFile,
 // created.
 TEST_F(FullRestoreServiceTestHavingFullRestoreFile, CloseNotificationEarly) {
   profile()->GetPrefs()->SetInteger(
-      kRestoreAppsAndPagesPrefName,
+      prefs::kRestoreAppsAndPagesPrefName,
       static_cast<int>(RestoreOption::kAskEveryTime));
 
   FullRestoreServiceFactory::GetInstance()->SetTestingFactoryAndUse(
@@ -708,7 +738,7 @@ TEST_F(FullRestoreServiceTestHavingFullRestoreFile, CloseNotificationEarly) {
 // If the OS restore setting is 'Always', after reboot, don't show any
 // notfications, and verify the restore flag.
 TEST_F(FullRestoreServiceTest, Always) {
-  profile()->GetPrefs()->SetInteger(kRestoreAppsAndPagesPrefName,
+  profile()->GetPrefs()->SetInteger(prefs::kRestoreAppsAndPagesPrefName,
                                     static_cast<int>(RestoreOption::kAlways));
   CreateFullRestoreServiceForTesting();
 
@@ -724,7 +754,7 @@ TEST_F(FullRestoreServiceTest, Always) {
 // notfications, and verify the restore flag.
 TEST_F(FullRestoreServiceTest, NotRestore) {
   profile()->GetPrefs()->SetInteger(
-      kRestoreAppsAndPagesPrefName,
+      prefs::kRestoreAppsAndPagesPrefName,
       static_cast<int>(RestoreOption::kDoNotRestore));
   CreateFullRestoreServiceForTesting();
 
@@ -734,6 +764,71 @@ TEST_F(FullRestoreServiceTest, NotRestore) {
   VerifyNotification(false, false);
 
   EXPECT_FALSE(CanPerformRestore(account_id()));
+}
+
+class ForestFullRestoreServiceTestHavingFullRestoreFile
+    : public FullRestoreServiceTestHavingFullRestoreFile {
+ protected:
+  ForestFullRestoreServiceTestHavingFullRestoreFile() = default;
+  ForestFullRestoreServiceTestHavingFullRestoreFile(
+      const ForestFullRestoreServiceTestHavingFullRestoreFile&) = delete;
+  ForestFullRestoreServiceTestHavingFullRestoreFile& operator=(
+      const ForestFullRestoreServiceTestHavingFullRestoreFile&) = delete;
+  ~ForestFullRestoreServiceTestHavingFullRestoreFile() override = default;
+
+  void SetUp() override {
+    switches::SetIgnoreForestSecretKeyForTest(true);
+    FullRestoreServiceTestHavingFullRestoreFile::SetUp();
+  }
+
+  void TearDown() override {
+    switches::SetIgnoreForestSecretKeyForTest(false);
+    FullRestoreServiceTestHavingFullRestoreFile::TearDown();
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_{features::kForestFeature};
+};
+
+// If the system is crash, the delegate is notified.
+TEST_F(ForestFullRestoreServiceTestHavingFullRestoreFile, CrashAndRestore) {
+  ExitTypeService::GetInstanceForProfile(profile())
+      ->SetLastSessionExitTypeForTest(ExitType::kCrashed);
+
+  auto mock_delegate = std::make_unique<MockFullRestoreServiceDelegate>();
+  EXPECT_CALL(*mock_delegate, MaybeStartPineOverviewSession(testing::_))
+      .WillOnce([](std::unique_ptr<PineContentsData> data) {
+        ASSERT_TRUE(data);
+        EXPECT_TRUE(data->last_session_crashed);
+      });
+  CreateFullRestoreServiceForTesting(std::move(mock_delegate));
+
+  // The notification should not show up anymore with forest enabled.
+  VerifyNotification(/*has_crash_notification=*/false,
+                     /*has_restore_notification=*/false);
+
+  EXPECT_TRUE(CanPerformRestore(account_id()));
+  EXPECT_TRUE(allow_save());
+}
+
+TEST_F(ForestFullRestoreServiceTestHavingFullRestoreFile,
+       AskEveryTimeAndRestore) {
+  profile()->GetPrefs()->SetInteger(
+      prefs::kRestoreAppsAndPagesPrefName,
+      static_cast<int>(RestoreOption::kAskEveryTime));
+  auto mock_delegate = std::make_unique<MockFullRestoreServiceDelegate>();
+  EXPECT_CALL(*mock_delegate, MaybeStartPineOverviewSession(testing::_))
+      .Times(1);
+  CreateFullRestoreServiceForTesting(std::move(mock_delegate));
+
+  // The notification should not show up anymore with forest enabled.
+  VerifyRestoreInitSettingHistogram(RestoreOption::kAskEveryTime, 1);
+  VerifyNotification(/*has_crash_notification=*/false,
+                     /*has_restore_notification=*/false);
+
+  EXPECT_EQ(RestoreOption::kAskEveryTime, GetRestoreOption());
+  EXPECT_TRUE(CanPerformRestore(account_id()));
+  EXPECT_TRUE(allow_save());
 }
 
 class FullRestoreServiceMultipleUsersTest
@@ -755,7 +850,7 @@ class FullRestoreServiceMultipleUsersTest
     profile_builder.SetProfileName("user2@gmail.com");
     profile_builder.SetPath(temp_dir2_.GetPath().AppendASCII("TestProfile2"));
     profile2_ = profile_builder.Build();
-    profile2_->GetPrefs()->ClearPref(kRestoreAppsAndPagesPrefName);
+    profile2_->GetPrefs()->ClearPref(prefs::kRestoreAppsAndPagesPrefName);
 
     account_id2_ = AccountId::FromUserEmailGaiaId(
         profile2_->GetProfileUserName(), "111111");
@@ -789,13 +884,13 @@ class FullRestoreServiceMultipleUsersTest
   }
 
   RestoreOption GetRestoreOptionForProfile2() const {
-    return static_cast<RestoreOption>(
-        profile2()->GetPrefs()->GetInteger(kRestoreAppsAndPagesPrefName));
+    return static_cast<RestoreOption>(profile2()->GetPrefs()->GetInteger(
+        prefs::kRestoreAppsAndPagesPrefName));
   }
 
   bool HasNotificationForProfile2(const std::string& notification_id) {
     std::optional<message_center::Notification> message_center_notification =
-        display_service2()->GetNotification(notification_id);
+        display_service2_->GetNotification(notification_id);
     return message_center_notification.has_value();
   }
 
@@ -814,13 +909,9 @@ class FullRestoreServiceMultipleUsersTest
 
   void SimulateClickForProfile2(const std::string& notification_id,
                                 RestoreNotificationButtonIndex action_index) {
-    display_service2()->SimulateClick(
+    display_service2_->SimulateClick(
         NotificationHandler::Type::TRANSIENT, notification_id,
         static_cast<int>(action_index), std::nullopt);
-  }
-
-  NotificationDisplayServiceTester* display_service2() const {
-    return display_service2_.get();
   }
 
   TestingProfile* profile2() const { return profile2_.get(); }
@@ -845,10 +936,10 @@ TEST_F(FullRestoreServiceMultipleUsersTest, TwoUsersLoginAtTheSameTime) {
   GetFakeUserManager()->set_last_session_active_account_id(account_id());
 
   profile()->GetPrefs()->SetInteger(
-      kRestoreAppsAndPagesPrefName,
+      prefs::kRestoreAppsAndPagesPrefName,
       static_cast<int>(RestoreOption::kAskEveryTime));
   profile2()->GetPrefs()->SetInteger(
-      kRestoreAppsAndPagesPrefName,
+      prefs::kRestoreAppsAndPagesPrefName,
       static_cast<int>(RestoreOption::kAskEveryTime));
   CreateFullRestoreServiceForTesting();
   CreateFullRestoreService2ForTesting();
@@ -899,7 +990,7 @@ TEST_F(FullRestoreServiceMultipleUsersTest, TwoUsersLoginAtTheSameTime) {
 // Verify the full restore init process when 2 users login one by one.
 TEST_F(FullRestoreServiceMultipleUsersTest, TwoUsersLoginOneByOne) {
   profile()->GetPrefs()->SetInteger(
-      kRestoreAppsAndPagesPrefName,
+      prefs::kRestoreAppsAndPagesPrefName,
       static_cast<int>(RestoreOption::kAskEveryTime));
   CreateFullRestoreServiceForTesting();
   VerifyRestoreInitSettingHistogram(RestoreOption::kAskEveryTime, 1);
@@ -920,7 +1011,7 @@ TEST_F(FullRestoreServiceMultipleUsersTest, TwoUsersLoginOneByOne) {
 
   // Simulate switch to the second user.
   profile2()->GetPrefs()->SetInteger(
-      kRestoreAppsAndPagesPrefName,
+      prefs::kRestoreAppsAndPagesPrefName,
       static_cast<int>(RestoreOption::kAskEveryTime));
   CreateFullRestoreService2ForTesting();
 
@@ -957,10 +1048,10 @@ TEST_F(FullRestoreServiceMultipleUsersTest, TwoUsersLoginWithActiveUserLogin) {
   GetFakeUserManager()->set_last_session_active_account_id(account_id2());
 
   profile()->GetPrefs()->SetInteger(
-      kRestoreAppsAndPagesPrefName,
+      prefs::kRestoreAppsAndPagesPrefName,
       static_cast<int>(RestoreOption::kAskEveryTime));
   profile2()->GetPrefs()->SetInteger(
-      kRestoreAppsAndPagesPrefName,
+      prefs::kRestoreAppsAndPagesPrefName,
       static_cast<int>(RestoreOption::kAskEveryTime));
   CreateFullRestoreServiceForTesting();
   CreateFullRestoreService2ForTesting();

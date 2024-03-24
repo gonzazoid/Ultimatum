@@ -36,6 +36,7 @@ class GPU_GLES2_EXPORT SkiaGraphiteDawnImageRepresentation
 
   std::vector<skgpu::graphite::BackendTexture> BeginReadAccess() override;
   void EndReadAccess() override;
+  bool SupportsMultipleConcurrentReadAccess() override;
 
  private:
   SkiaGraphiteDawnImageRepresentation(
@@ -50,7 +51,8 @@ class GPU_GLES2_EXPORT SkiaGraphiteDawnImageRepresentation
       wgpu::TextureUsage supported_tex_usages);
 
   std::vector<skgpu::graphite::BackendTexture> CreateBackendTextures(
-      wgpu::Texture texture);
+      wgpu::Texture texture,
+      bool readonly);
 
   std::unique_ptr<DawnImageRepresentation> dawn_representation_;
   std::unique_ptr<DawnImageRepresentation::ScopedAccess> dawn_scoped_access_;

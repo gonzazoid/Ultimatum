@@ -5,8 +5,9 @@
 // clang-format off
 import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
 
-import {AnchorAlignment, CrActionMenuElement} from 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
-import {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
+import type { CrActionMenuElement} from 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
+import {AnchorAlignment} from 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
+import type {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
 import {isMac, isWindows} from 'chrome://resources/js/platform.js';
 import {FocusOutlineManager} from 'chrome://resources/js/focus_outline_manager.js';
 import {getDeepActiveElement} from 'chrome://resources/js/util.js';
@@ -439,50 +440,57 @@ suite('CrActionMenu', function() {
     menu.close();
   });
 
-  (function() {
-    // TODO(dpapad): fix flakiness and re-enable this test.
-    test.skip(
-        '[auto-reposition] enables repositioning if content changes',
-        function(done) {
-          menu.autoReposition = true;
+  function autoRepositionTest(done: () => void) {
+    menu.autoReposition = true;
 
-          dots.style.marginLeft = '800px';
+    dots.style.marginLeft = '800px';
 
-          const dotsRect = dots.getBoundingClientRect();
+    const dotsRect = dots.getBoundingClientRect();
 
-          // Anchored at right-top by default.
-          menu.showAt(dots);
-          assertTrue(dialog.open);
-          let menuRect = dialog.getBoundingClientRect();
-          assertEquals(
-              Math.round(dotsRect.left + dotsRect.width),
-              Math.round(menuRect.left + menuRect.width));
-          assertEquals(dotsRect.top, menuRect.top);
+    // Anchored at right-top by default.
+    menu.showAt(dots);
+    assertTrue(dialog.open);
+    let menuRect = dialog.getBoundingClientRect();
+    assertEquals(
+        Math.round(dotsRect.left + dotsRect.width),
+        Math.round(menuRect.left + menuRect.width));
+    assertEquals(dotsRect.top, menuRect.top);
 
-          const lastMenuLeft = menuRect.left;
-          const lastMenuWidth = menuRect.width;
+    const lastMenuLeft = menuRect.left;
+    const lastMenuWidth = menuRect.width;
 
-          menu.addEventListener('cr-action-menu-repositioned', () => {
-            assertTrue(dialog.open);
-            menuRect = dialog.getBoundingClientRect();
-            // Test that menu width got larger.
-            assertTrue(menuRect.width > lastMenuWidth);
-            // Test that menu upper-left moved further left.
-            assertTrue(menuRect.left < lastMenuLeft);
-            // Test that right and top did not move since it is anchored there.
-            assertEquals(
-                Math.round(dotsRect.left + dotsRect.width),
-                Math.round(menuRect.left + menuRect.width));
-            assertEquals(dotsRect.top, menuRect.top);
-            done();
-          });
+    menu.addEventListener('cr-action-menu-repositioned', () => {
+      assertTrue(dialog.open);
+      menuRect = dialog.getBoundingClientRect();
+      // Test that menu width got larger.
+      assertTrue(menuRect.width > lastMenuWidth);
+      // Test that menu upper-left moved further left.
+      assertTrue(menuRect.left < lastMenuLeft);
+      // Test that right and top did not move since it is anchored there.
+      assertEquals(
+          Math.round(dotsRect.left + dotsRect.width),
+          Math.round(menuRect.left + menuRect.width));
+      assertEquals(dotsRect.top, menuRect.top);
+      done();
+    });
 
-          // Still anchored at the right place after content size changes.
-          items[0]!.textContent = 'this is a long string to make menu wide';
-        });
-  })();
+    // Still anchored at the right place after content size changes.
+    items[0]!.textContent = 'this is a long string to make menu wide';
+  }
 
-  test('accessibilityLabel', function() {
+  // <if expr="is_win">
+  // TODO(dpapad): Figure out why it fails on windows only and re-enable.
+  test.skip(
+      '[auto-reposition] enables repositioning if content changes',
+      autoRepositionTest);
+  // </if>
+  // <if expr="not is_win">
+  test(
+      '[auto-reposition] enables repositioning if content changes',
+      autoRepositionTest);
+  // </if>
+
+  test('accessibilityLabel', async function() {
     document.body.innerHTML = getTrustedStaticHtml`
       <cr-action-menu accessibility-label="foo">
         <button class="dropdown-item">Un</button>
@@ -496,16 +504,18 @@ suite('CrActionMenu', function() {
     // Check value provided with direct assignment.
     const label: string = 'dummy label';
     menu.accessibilityLabel = label;
+    await menu.updateComplete;
     assertEquals(label, menu.$.wrapper.ariaLabel);
     assertEquals(label, menu.$.wrapper.getAttribute('aria-label'));
 
     // Check setting to undefined.
     menu.accessibilityLabel = undefined;
+    await menu.updateComplete;
     assertEquals(null, menu.$.wrapper.ariaLabel);
     assertFalse(menu.$.wrapper.hasAttribute('aria-label'));
   });
 
-  test('roleDescription', function() {
+  test('roleDescription', async function() {
     document.body.innerHTML = getTrustedStaticHtml`
       <cr-action-menu role-description="foo">
         <button class="dropdown-item">Un</button>
@@ -520,12 +530,14 @@ suite('CrActionMenu', function() {
     // Check value provided with direct assignment.
     const description: string = 'dummy description';
     menu.roleDescription = description;
+    await menu.updateComplete;
     assertEquals(description, menu.$.dialog.ariaRoleDescription);
     assertEquals(
         description, menu.$.dialog.getAttribute('aria-roledescription'));
 
     // Check setting to undefined.
     menu.roleDescription = undefined;
+    await menu.updateComplete;
     assertEquals(null, menu.$.dialog.ariaRoleDescription);
     assertFalse(menu.$.dialog.hasAttribute('aria-roledescription'));
   });

@@ -8,25 +8,26 @@ import 'chrome://settings/lazy_load.js';
 import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {CrInputElement, SettingsSyncEncryptionOptionsElement, SettingsSyncPageElement} from 'chrome://settings/lazy_load.js';
+import type {CrExpandButtonElement, CrInputElement, SettingsSyncEncryptionOptionsElement, SettingsSyncPageElement} from 'chrome://settings/lazy_load.js';
 // <if expr="not chromeos_ash">
-import {CrDialogElement} from 'chrome://settings/lazy_load.js';
+import type {CrDialogElement} from 'chrome://settings/lazy_load.js';
 // </if>
 
-import {CrButtonElement, CrRadioButtonElement, CrRadioGroupElement, PageStatus, Router, routes, StatusAction, SyncBrowserProxyImpl} from 'chrome://settings/settings.js';
+import type {CrButtonElement, CrRadioButtonElement, CrRadioGroupElement} from 'chrome://settings/settings.js';
+import {PageStatus, Router, routes, StatusAction, SyncBrowserProxyImpl} from 'chrome://settings/settings.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {waitBeforeNextRender} from 'chrome://webui-test/polymer_test_util.js';
-
 // <if expr="not chromeos_ash">
 import {eventToPromise} from 'chrome://webui-test/test_util.js';
+
 // </if>
 
 // <if expr="not chromeos_ash">
 import {simulateStoredAccounts} from './sync_test_util.js';
 // </if>
 
-import {getSyncAllPrefs, setupRouterWithSyncRoutes, SyncRoutes} from './sync_test_util.js';
-
+import type {SyncRoutes} from './sync_test_util.js';
+import {getSyncAllPrefs, setupRouterWithSyncRoutes} from './sync_test_util.js';
 import {TestSyncBrowserProxy} from './test_sync_browser_proxy.js';
 
 // clang-format on
@@ -246,15 +247,17 @@ suite('SyncSettingsTests', function() {
     assertTrue(spinnerPage.hidden);
   });
 
-  test('EncryptionExpandButton', function() {
+  test('EncryptionExpandButton', async function() {
     const encryptionDescription =
-        syncPage.shadowRoot!.querySelector<HTMLElement>(
-            '#encryptionDescription')!;
+        syncPage.shadowRoot!.querySelector<CrExpandButtonElement>(
+            '#encryptionDescription');
+    assertTrue(!!encryptionDescription);
     const encryptionCollapse = syncPage.$.encryptionCollapse;
 
     // No encryption with custom passphrase.
     assertFalse(encryptionCollapse.opened);
     encryptionDescription.click();
+    await encryptionDescription.updateComplete;
     assertTrue(encryptionCollapse.opened);
 
     // Push sync prefs with |prefs.encryptAllData| unchanged. The encryption
@@ -264,6 +267,7 @@ suite('SyncSettingsTests', function() {
     assertTrue(encryptionCollapse.opened);
 
     encryptionDescription.click();
+    await encryptionDescription.updateComplete;
     assertFalse(encryptionCollapse.opened);
 
     // Data encrypted with custom passphrase.

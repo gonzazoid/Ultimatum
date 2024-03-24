@@ -39,10 +39,12 @@ perfetto::protos::pbzero::BlinkTaskScope::TaskScopeType ToProtoEnum(
       return ProtoType::TASK_SCOPE_SCHEDULER_POST_TASK;
     case TaskAttributionTracker::TaskScopeType::kRequestIdleCallback:
       return ProtoType::TASK_SCOPE_REQUEST_IDLE_CALLBACK;
+    case TaskAttributionTracker::TaskScopeType::kXMLHttpRequest:
+      return ProtoType::TASK_SCOPE_XML_HTTP_REQUEST;
   }
 }
 
-int64_t TaskAttributionIdToInt(absl::optional<TaskAttributionId> id) {
+int64_t TaskAttributionIdToInt(std::optional<TaskAttributionId> id) {
   return id ? static_cast<int64_t>(id.value().value()) : -1;
 }
 
@@ -51,9 +53,9 @@ int64_t TaskAttributionIdToInt(absl::optional<TaskAttributionId> id) {
 TaskAttributionTrackerImpl::TaskAttributionTrackerImpl() : next_task_id_(0) {}
 
 TaskAttributionInfo* TaskAttributionTrackerImpl::RunningTask(
-    ScriptState* script_state) const {
+    v8::Isolate* isolate) const {
   ScriptWrappableTaskState* task_state =
-      GetCurrentTaskContinuationData(script_state);
+      ScriptWrappableTaskState::GetCurrent(isolate);
 
   // V8 embedder state may have no value in the case of a JSPromise that wasn't
   // yet resolved.
@@ -103,7 +105,7 @@ TaskAttributionTrackerImpl::CreateTaskScope(ScriptState* script_state,
                                             DOMTaskSignal* priority_source) {
   TaskAttributionInfo* running_task_to_be_restored = running_task_;
   ScriptWrappableTaskState* continuation_task_state_to_be_restored =
-      GetCurrentTaskContinuationData(script_state);
+      ScriptWrappableTaskState::GetCurrent(script_state->GetIsolate());
 
   // This compresses the task graph when encountering long task chains.
   // TODO(crbug.com/1501999): Consider compressing the task graph further.
@@ -118,11 +120,11 @@ TaskAttributionTrackerImpl::CreateTaskScope(ScriptState* script_state,
   ExecutionContext* execution_context = ExecutionContext::From(script_state);
   for (Observer* observer : observers_) {
     if (observer->GetExecutionContext() == execution_context) {
-      observer->OnCreateTaskScope(*running_task_, script_state);
+      observer->OnCreateTaskScope(*running_task_);
     }
   }
 
-  SetCurrentTaskContinuationData(
+  ScriptWrappableTaskState::SetCurrent(
       script_state, MakeGarbageCollected<ScriptWrappableTaskState>(
                         running_task_.Get(), abort_source, priority_source));
 
@@ -130,8 +132,8 @@ TaskAttributionTrackerImpl::CreateTaskScope(ScriptState* script_state,
       script_state, this, running_task_->Id(), running_task_to_be_restored,
       continuation_task_state_to_be_restored, type,
       running_task_->Parent()
-          ? absl::optional<TaskAttributionId>(running_task_->Parent()->Id())
-          : absl::nullopt);
+          ? std::optional<TaskAttributionId>(running_task_->Parent()->Id())
+          : std::nullopt);
 }
 
 void TaskAttributionTrackerImpl::TaskScopeCompleted(
@@ -139,7 +141,7 @@ void TaskAttributionTrackerImpl::TaskScopeCompleted(
   DCHECK(running_task_);
   DCHECK(running_task_->Id() == task_scope.GetTaskId());
   running_task_ = task_scope.RunningTaskToBeRestored();
-  SetCurrentTaskContinuationData(
+  ScriptWrappableTaskState::SetCurrent(
       task_scope.GetScriptState(),
       task_scope.ContinuationTaskStateToBeRestored());
 }
@@ -172,18 +174,6 @@ TaskAttributionInfo* TaskAttributionTrackerImpl::CommitSameDocumentNavigation(
   return nullptr;
 }
 
-void TaskAttributionTrackerImpl::SetCurrentTaskContinuationData(
-    ScriptState* script_state,
-    ScriptWrappableTaskState* task_state) {
-  ScriptWrappableTaskState::SetCurrent(script_state, task_state);
-}
-
-ScriptWrappableTaskState*
-TaskAttributionTrackerImpl::GetCurrentTaskContinuationData(
-    ScriptState* script_state) const {
-  return ScriptWrappableTaskState::GetCurrent(script_state);
-}
-
 // TaskScope's implementation
 //////////////////////////////////////
 TaskAttributionTrackerImpl::TaskScopeImpl::TaskScopeImpl(
@@ -193,7 +183,7 @@ TaskAttributionTrackerImpl::TaskScopeImpl::TaskScopeImpl(
     TaskAttributionInfo* running_task,
     ScriptWrappableTaskState* continuation_task_state,
     TaskScopeType type,
-    absl::optional<TaskAttributionId> parent_task_id)
+    std::optional<TaskAttributionId> parent_task_id)
     : task_tracker_(task_tracker),
       scope_task_id_(scope_task_id),
       running_task_to_be_restored_(running_task),
@@ -211,9 +201,9 @@ TaskAttributionTrackerImpl::TaskScopeImpl::TaskScopeImpl(
         data->set_continuation_task_id_to_be_restored(TaskAttributionIdToInt(
             continuation_state_to_be_restored_ &&
                     continuation_state_to_be_restored_->GetTask()
-                ? absl::optional<TaskAttributionId>(
+                ? std::optional<TaskAttributionId>(
                       continuation_state_to_be_restored_->GetTask()->Id())
-                : absl::nullopt));
+                : std::nullopt));
         data->set_parent_task_id(TaskAttributionIdToInt(parent_task_id));
       });
 }

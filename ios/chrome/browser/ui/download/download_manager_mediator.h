@@ -17,6 +17,7 @@ namespace drive {
 class DriveService;
 }
 
+class PrefService;
 class UploadTask;
 
 namespace signin {
@@ -48,6 +49,9 @@ class DownloadManagerMediator : public web::DownloadTaskObserver,
   // Sets the Drive service.
   void SetDriveService(drive::DriveService* drive_service);
 
+  // Sets the pref service.
+  void SetPrefService(PrefService* pref_service);
+
   // Sets download manager consumer. Not retained by mediator.
   void SetConsumer(id<DownloadManagerConsumer> consumer);
 
@@ -67,16 +71,25 @@ class DownloadManagerMediator : public web::DownloadTaskObserver,
   // Converts web::DownloadTask::State to DownloadManagerState.
   DownloadManagerState GetDownloadManagerState() const;
 
- private:
-  // Updates consumer from web::DownloadTask.
+  // Returns whether Drive should be presented as a destination for downloads.
+  bool IsSaveToDriveAvailable() const;
+
+  // Updates consumer.
   void UpdateConsumer();
 
+ private:
   // Moves the downloaded file to user's Documents if it exists.
   void MoveToUserDocumentsIfFileExists(base::FilePath task_path,
                                        bool file_exists);
 
+  // Removes the downloaded file if it exists.
+  void RemoveIfFileExists(base::FilePath task_path, bool file_exists);
+
   // Checks if the move has been completed.
   void MoveComplete(bool move_completed);
+
+  // Checks if the remove has been completed.
+  void RemoveComplete(bool remove_completed);
 
   // Converts DownloadTask progress [0;100] to float progress [0.0f;1.0f].
   float GetDownloadManagerProgress() const;
@@ -101,6 +114,7 @@ class DownloadManagerMediator : public web::DownloadTaskObserver,
 
   raw_ptr<signin::IdentityManager> identity_manager_ = nullptr;
   raw_ptr<drive::DriveService> drive_service_ = nullptr;
+  raw_ptr<PrefService> pref_service_ = nullptr;
   bool is_incognito_;
   base::FilePath download_path_;
   raw_ptr<web::DownloadTask> download_task_ = nullptr;

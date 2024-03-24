@@ -16,11 +16,10 @@ ScriptValue DeprecationReportBody::anticipatedRemoval(
   if (!anticipated_removal_)
     return ScriptValue::CreateNull(isolate);
   return ScriptValue(isolate, ToV8Traits<IDLNullable<IDLDate>>::ToV8(
-                                  script_state, *anticipated_removal_)
-                                  .ToLocalChecked());
+                                  script_state, *anticipated_removal_));
 }
 
-absl::optional<base::Time> DeprecationReportBody::AnticipatedRemoval() const {
+std::optional<base::Time> DeprecationReportBody::AnticipatedRemoval() const {
   return anticipated_removal_;
 }
 

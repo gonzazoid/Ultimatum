@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "ash/public/cpp/ash_public_export.h"
+#include "ash/public/cpp/holding_space/holding_space_colors.h"
 #include "ash/public/cpp/holding_space/holding_space_constants.h"
 #include "ash/public/cpp/holding_space/holding_space_file.h"
 #include "ash/public/cpp/holding_space/holding_space_progress.h"
@@ -30,6 +31,10 @@ namespace ash {
 
 class HoldingSpaceImage;
 
+namespace holding_space_metrics {
+enum class EventSource;
+}  // namespace holding_space_metrics
+
 // Contains data needed to display a single item in the holding space UI.
 class ASH_PUBLIC_EXPORT HoldingSpaceItem {
  public:
@@ -38,22 +43,21 @@ class ASH_PUBLIC_EXPORT HoldingSpaceItem {
   // secondary actions on the item's view itself.
   struct InProgressCommand {
    public:
-    using Handler =
-        base::RepeatingCallback<void(const HoldingSpaceItem* item,
-                                     HoldingSpaceCommandId command_id)>;
+    using Handler = base::RepeatingCallback<void(
+        const HoldingSpaceItem* item,
+        HoldingSpaceCommandId command_id,
+        holding_space_metrics::EventSource event_source)>;
 
     InProgressCommand(HoldingSpaceCommandId command_id,
                       int label_id,
                       const gfx::VectorIcon* icon,
                       Handler handler);
 
-    InProgressCommand(const InProgressCommand& other);
-
-    InProgressCommand& operator=(const InProgressCommand& other);
-
+    InProgressCommand(const InProgressCommand&);
+    InProgressCommand& operator=(const InProgressCommand&);
     ~InProgressCommand();
 
-    bool operator==(const InProgressCommand& other) const;
+    bool operator==(const InProgressCommand&) const;
 
     // The identifier for the command.
     HoldingSpaceCommandId command_id;
@@ -73,7 +77,8 @@ class ASH_PUBLIC_EXPORT HoldingSpaceItem {
   // so append new values to the end and do not change the meaning of existing
   // values.
   enum class Type {
-    kPinnedFile = 0,
+    kMinValue = 0,
+    kPinnedFile = kMinValue,
     kScreenshot = 1,
     kDownload = 2,
     kNearbyShare = 3,
@@ -166,49 +171,57 @@ class ASH_PUBLIC_EXPORT HoldingSpaceItem {
   // `Deserialize()`.
   void Initialize(const HoldingSpaceFile& file);
 
-  // Sets the `file` backing the item, returning `true` if a change occurred or
-  // `false` to indicate no-op.
-  bool SetBackingFile(const HoldingSpaceFile& file);
+  // Sets the `file` backing the item, returning the previous value if a change
+  // occurred or `std::nullopt` to indicate no-op.
+  std::optional<HoldingSpaceFile> SetBackingFile(const HoldingSpaceFile& file);
 
   // Returns `text_`, falling back to the lossy display name of the item's
   // backing file if absent.
   std::u16string GetText() const;
 
-  // Sets the text that should be shown for the item, returning `true` if a
-  // change occurred or `false` to indicate no-op. If absent, the lossy display
-  // name of the item's backing file will be used.
-  bool SetText(const std::optional<std::u16string>& text);
+  // Sets the text that should be shown for the item, returning the previous
+  // value if a change occurred or `std::nullopt` to indicate no-op. If
+  // `std::nullopt` is provided, text will fall back to the lossy display name
+  // of the item's backing file.
+  std::optional<std::optional<std::u16string>> SetText(
+      const std::optional<std::u16string>& text);
 
-  // Sets the secondary text that should be shown for the item, returning `true`
-  // if a change occurred or `false` to indicate no-op.
-  bool SetSecondaryText(const std::optional<std::u16string>& secondary_text);
+  // Sets the secondary text that should be shown for the item, returning the
+  // previous value if a change occurred or `std::nullopt` to indicate no-op.
+  std::optional<std::optional<std::u16string>> SetSecondaryText(
+      const std::optional<std::u16string>& secondary_text);
 
-  // Sets the color id for the secondary text that should be shown for the item,
-  // returning `true` if a change occurred or `false` to indicate no-op. If
-  // `std::nullopt` is provided, secondary text color will fallback to default.
-  bool SetSecondaryTextColorId(
-      const std::optional<ui::ColorId>& secondary_text_color_id);
+  // Sets the color variant for the secondary text that should be shown for the
+  // item, returning the previous value if a change occurred or `std::nullopt`
+  // to indicate no-op. If `std::nullopt` is provided, secondary text color will
+  // fall back to default.
+  std::optional<std::optional<HoldingSpaceColorVariant>>
+  SetSecondaryTextColorVariant(const std::optional<HoldingSpaceColorVariant>&
+                                   secondary_text_color_variant);
 
   // Returns `accessible_name_`, falling back to a concatenation of primary
   // and secondary text if absent.
   std::u16string GetAccessibleName() const;
 
-  // Sets the accessible name that should be used for the item, returning `true`
-  // if a change occurred or `false` to indicate no-op. Note that if the
-  // accessible name is absent, `GetAccessibleName()` will fallback to a
+  // Sets the accessible name that should be used for the item, returning the
+  // previous value if a change occurred or `std::nullopt` to indicate no-op. If
+  // `std::nullopt` is provided, accessible name will fall back to a
   // concatenation of primary and secondary text.
-  bool SetAccessibleName(const std::optional<std::u16string>& accessible_name);
+  std::optional<std::optional<std::u16string>> SetAccessibleName(
+      const std::optional<std::u16string>& accessible_name);
 
   // Sets the commands for an in-progress item which are shown in the item's
   // context menu and possibly, in the case of cancel/pause/resume, as primary/
-  // secondary actions on the item view itself.
-  bool SetInProgressCommands(
+  // secondary actions on the item view itself. Returns the previous value if a
+  // change occurred or `std::nullopt` to indicate no-op.
+  std::optional<std::vector<InProgressCommand>> SetInProgressCommands(
       std::vector<InProgressCommand> in_progress_commands);
 
-  // Sets the `progress_` of the item, returning `true` if a change occurred or
-  // `false` to indicate no-op.
+  // Sets the `progress_` of the item, returning the previous value if a change
+  // occurred or `std::nullopt` to indicate no-op.
   // NOTE: Progress can only be updated for in progress items.
-  bool SetProgress(const HoldingSpaceProgress& progress);
+  std::optional<HoldingSpaceProgress> SetProgress(
+      const HoldingSpaceProgress& progress);
 
   // Invalidates the current holding space image, so fresh image representations
   // are loaded when the image is next needed.
@@ -222,8 +235,9 @@ class ASH_PUBLIC_EXPORT HoldingSpaceItem {
     return secondary_text_;
   }
 
-  const std::optional<ui::ColorId>& secondary_text_color_id() const {
-    return secondary_text_color_id_;
+  const std::optional<HoldingSpaceColorVariant>& secondary_text_color_variant()
+      const {
+    return secondary_text_color_variant_;
   }
 
   const HoldingSpaceImage& image() const { return *image_; }
@@ -260,9 +274,9 @@ class ASH_PUBLIC_EXPORT HoldingSpaceItem {
   // If set, the secondary text that should be shown for the item.
   std::optional<std::u16string> secondary_text_;
 
-  // If set, the color resolved from the color id for the secondary text that
-  // should be shown for the item.
-  std::optional<ui::ColorId> secondary_text_color_id_;
+  // If set, the color resolved from the color variant for the secondary text
+  // that should be shown for the item.
+  std::optional<HoldingSpaceColorVariant> secondary_text_color_variant_;
 
   // If set, the accessible name that should be used for the item.
   std::optional<std::u16string> accessible_name_;

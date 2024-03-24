@@ -4,6 +4,8 @@
 
 #include "chrome/browser/notifications/mac/notification_utils.h"
 
+#include <optional>
+
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/i18n/number_formatting.h"
@@ -20,12 +22,10 @@
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/notifications/notification_constants.h"
 #include "chrome/common/notifications/notification_operation.h"
-#include "chrome/services/mac_notifications/public/cpp/mac_notification_metrics.h"
 #include "components/url_formatter/elide_url.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/notifications/notification_constants.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -40,7 +40,7 @@ void DoProcessMacNotificationResponse(
   ProfileManager* profile_manager = g_browser_process->profile_manager();
   DCHECK(profile_manager);
 
-  absl::optional<int> action_index;
+  std::optional<int> action_index;
   if (info->button_index != kNotificationInvalidButtonIndex)
     action_index = info->button_index;
 
@@ -163,13 +163,10 @@ void ProcessMacNotificationResponse(
     mac_notifications::NotificationStyle notification_style,
     mac_notifications::mojom::NotificationActionInfoPtr info) {
   bool is_valid = VerifyMacNotificationData(info);
-  mac_notifications::LogMacNotificationActionReceived(notification_style,
-                                                      is_valid);
-
   if (!is_valid)
     return;
 
-  absl::optional<int> actionIndex;
+  std::optional<int> actionIndex;
   if (info->button_index != kNotificationInvalidButtonIndex)
     actionIndex = info->button_index;
 
@@ -212,8 +209,8 @@ mac_notifications::mojom::NotificationPtr CreateMacNotification(
 
   std::u16string body = notification.items().empty()
                             ? notification.message()
-                            : (notification.items().at(0).title + u" - " +
-                               notification.items().at(0).message);
+                            : (notification.items().at(0).title() + u" - " +
+                               notification.items().at(0).message());
 
   return mac_notifications::mojom::Notification::New(
       std::move(meta), CreateMacNotificationTitle(notification),

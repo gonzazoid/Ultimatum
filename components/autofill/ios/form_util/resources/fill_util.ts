@@ -30,6 +30,47 @@ declare interface IndexableElement extends Element {
     [key: symbol]: number;
 }
 
+declare interface AutofillFormFieldData {
+  name: string;
+  value: string;
+  renderer_id: string;
+  form_control_type: string;
+  autocomplete_attribute: string;
+  max_length: number;
+  is_autofilled: boolean;
+  is_user_edited: boolean;
+  is_checkable: boolean;
+  is_focusable: boolean;
+  should_autocomplete: boolean;
+  role: number;
+  placeholder_attribute: string;
+  aria_label: string;
+  aria_description: string;
+  option_contents: string[];
+  option_values: string[];
+  label?: string;
+  identifier?: string;
+  name_attribute?: string;
+  id_attribute?: string;
+}
+
+declare interface AutofillFormData {
+  name: string;
+  renderer_id: string;
+  origin: string;
+  action: string;
+  fields: AutofillFormFieldData[];
+  frame_id: string;
+  child_frames?: FrameTokenWithPredecessor[];
+  name_attribute?: string;
+  id_attribute?: string;
+}
+
+declare interface FrameTokenWithPredecessor {
+  token: string;
+  predecessor: number;
+}
+
 /**
  * Maps elements using their unique ID
  */
@@ -687,7 +728,7 @@ gCrWeb.fill.getUniqueID = function(element: any): string {
 };
 
 /**
- * @param Unique ID.
+ * @param id Unique ID.
  * @return element Form or form input element.
  */
 gCrWeb.fill.getElementByUniqueID = function(id: number): Element | null {
@@ -699,3 +740,5 @@ gCrWeb.fill.getElementByUniqueID = function(id: number): Element | null {
     return null;
   }
 };
+
+export {AutofillFormFieldData, AutofillFormData, FrameTokenWithPredecessor};

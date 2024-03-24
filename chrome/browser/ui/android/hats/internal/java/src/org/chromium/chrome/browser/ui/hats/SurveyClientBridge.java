@@ -12,6 +12,7 @@ import org.jni_zero.CalledByNative;
 import org.jni_zero.JNINamespace;
 
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
+import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcherProvider;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.ui.base.WindowAndroid;
 
@@ -24,8 +25,9 @@ import java.util.Map;
  */
 @JNINamespace("hats")
 class SurveyClientBridge implements SurveyClient {
+
     private final SurveyClient mDelegate;
-    private long mNativeSurveyClient;
+    private final long mNativeSurveyClient;
 
     private SurveyClientBridge(long nativeSurveyClient, SurveyClient delegate) {
         mNativeSurveyClient = nativeSurveyClient;
@@ -35,10 +37,16 @@ class SurveyClientBridge implements SurveyClient {
     @CalledByNative
     @VisibleForTesting
     static SurveyClientBridge create(
-            long nativeSurveyClient, String trigger, SurveyUiDelegate uiDelegate, Profile profile) {
+            long nativeSurveyClient,
+            String trigger,
+            SurveyUiDelegate uiDelegate,
+            Profile profile,
+            String suppliedTriggerId) {
         assert SurveyClientFactory.getInstance() != null;
-        SurveyConfig config = SurveyConfig.get(trigger);
-        if (config == null) return null;
+        SurveyConfig config = SurveyConfig.get(trigger, suppliedTriggerId);
+        if (config == null) {
+            return null;
+        }
 
         return new SurveyClientBridge(
                 nativeSurveyClient,
@@ -85,6 +93,12 @@ class SurveyClientBridge implements SurveyClient {
         }
 
         Activity activity = windowAndroid.getActivity().get();
-        showSurvey(activity, null, bitsValues, stringValues);
+        ActivityLifecycleDispatcher lifecycleDispatcher = null;
+        if (activity instanceof ActivityLifecycleDispatcherProvider) {
+            // TODO(crbug/326643655): Allow access ActivityLifecycleDispatcher from WindowAndroid.
+            lifecycleDispatcher =
+                    ((ActivityLifecycleDispatcherProvider) activity).getLifecycleDispatcher();
+        }
+        showSurvey(activity, lifecycleDispatcher, bitsValues, stringValues);
     }
 }

@@ -25,9 +25,9 @@ namespace ash {
 // notification by either showing a banner on top of the notification image for
 // image captures, or a play icon on top of the video thumbnail.
 class ASH_EXPORT CaptureModeAshNotificationView : public AshNotificationView {
- public:
-  METADATA_HEADER(CaptureModeAshNotificationView);
+  METADATA_HEADER(CaptureModeAshNotificationView, AshNotificationView)
 
+ public:
   CaptureModeAshNotificationView(
       const message_center::Notification& notification,
       CaptureModeType capture_type,
@@ -55,7 +55,7 @@ class ASH_EXPORT CaptureModeAshNotificationView : public AshNotificationView {
   // AshNotificationView:
   void UpdateWithNotification(
       const message_center::Notification& notification) override;
-  void Layout() override;
+  void Layout(PassKey) override;
 
  private:
   void CreateExtraView();

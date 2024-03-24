@@ -23,7 +23,7 @@ chromium-metrics-reviews@google.com.
 <histograms>
 
 <histogram name="PDF.Actions" enum="ChromePDFViewerActions"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>hnakashima@chromium.org</owner>
   <summary>
     Tracks user actions in the PDF viewer. Logged when the document is opened
@@ -59,7 +59,7 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="PDF.HasAttachment" enum="Boolean" expires_after="2024-05-19">
+<histogram name="PDF.HasAttachment" enum="Boolean" expires_after="2024-07-21">
   <owner>nigi@chromium.org</owner>
   <owner>thestig@chromium.org</owner>
   <summary>
@@ -69,7 +69,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="PDF.LoadStatus" enum="ChromePDFViewerLoadStatus"
-    expires_after="2024-05-12">
+    expires_after="2024-07-14">
   <owner>kmoon@chromium.org</owner>
   <owner>thestig@chromium.org</owner>
   <summary>
@@ -79,11 +79,20 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="PDF.PageCount" units="pages" expires_after="2024-05-19">
+<histogram name="PDF.PageCount" units="pages" expires_after="2024-07-21">
   <owner>hnakashima@chromium.org</owner>
   <owner>thestig@chromium.org</owner>
   <summary>
     Tracks the number of pages in PDF documents opened in the PDF viewer.
+  </summary>
+</histogram>
+
+<histogram name="PDF.PostMessageDataType" enum="PDFPostMessageDataType"
+    expires_after="2024-11-30">
+  <owner>andyphan@chromium.org</owner>
+  <owner>thestig@chromium.org</owner>
+  <summary>
+    Tracks the type of postMessage() call made to the PDF viewer.
   </summary>
 </histogram>
 

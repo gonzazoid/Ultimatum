@@ -143,6 +143,11 @@ void AccountFetcherService::EnableAccountRemovalForTest() {
   enable_account_removal_for_test_ = true;
 }
 
+AccountCapabilitiesFetcherFactory*
+AccountFetcherService::GetAccountCapabilitiesFetcherFactoryForTest() {
+  return account_capabilities_fetcher_factory_.get();
+}
+
 void AccountFetcherService::EnableAccountCapabilitiesFetcherForTest(
     bool enabled) {
   enable_account_capabilities_fetcher_for_test_ = enabled;
@@ -249,12 +254,22 @@ void AccountFetcherService::SetIsChildAccount(const CoreAccountId& account_id,
 }
 #endif
 
+void AccountFetcherService::DestroyFetchers(const CoreAccountId& account_id) {
+  user_info_requests_.erase(account_id);
+  account_capabilities_requests_.erase(account_id);
+}
+
 bool AccountFetcherService::IsAccountCapabilitiesFetchingEnabled() {
   if (enable_account_capabilities_fetcher_for_test_)
     return true;
 
   return base::FeatureList::IsEnabled(
       switches::kEnableFetchingAccountCapabilities);
+}
+
+void AccountFetcherService::PrepareForFetchingAccountCapabilities() {
+  account_capabilities_fetcher_factory_
+      ->PrepareForFetchingAccountCapabilities();
 }
 
 void AccountFetcherService::StartFetchingAccountCapabilities(
@@ -408,7 +423,7 @@ void AccountFetcherService::OnUserInfoFetchFailure(
 
 void AccountFetcherService::OnAccountCapabilitiesFetchComplete(
     const CoreAccountId& account_id,
-    const absl::optional<AccountCapabilities>& account_capabilities) {
+    const std::optional<AccountCapabilities>& account_capabilities) {
   if (account_capabilities.has_value()) {
     account_tracker_service_->SetAccountCapabilities(account_id,
                                                      *account_capabilities);
@@ -452,8 +467,7 @@ void AccountFetcherService::OnRefreshTokenRevoked(
     return;
   }
 
-  user_info_requests_.erase(account_id);
-  account_capabilities_requests_.erase(account_id);
+  DestroyFetchers(account_id);
 #if BUILDFLAG(IS_ANDROID)
   UpdateChildInfo();
 #endif

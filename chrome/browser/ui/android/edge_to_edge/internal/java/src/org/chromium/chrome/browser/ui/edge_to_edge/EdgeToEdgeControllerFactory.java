@@ -4,6 +4,8 @@
 
 package org.chromium.chrome.browser.ui.edge_to_edge;
 
+import static org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeUtils.hasTappableBottomBar;
+
 import android.app.Activity;
 import android.os.Build;
 import android.os.Build.VERSION_CODES;
@@ -12,9 +14,8 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.view.WindowInsetsCompat;
 
+import org.chromium.base.BuildInfo;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.tab.Tab;
@@ -60,20 +61,18 @@ public class EdgeToEdgeControllerFactory {
     /**
      * @return whether the configuration of the device should allow Edge To Edge.
      */
-    public static boolean isSupportedConfiguration(AppCompatActivity activity) {
+    public static boolean isSupportedConfiguration(Activity activity) {
         if (android.os.Build.VERSION.SDK_INT < VERSION_CODES.R) return false;
         return isEnabled()
                 && !DeviceFormFactor.isNonMultiDisplayContextOnTablet(activity)
-                && WindowInsetsCompat.toWindowInsetsCompat(
-                                        activity.getWindow().getDecorView().getRootWindowInsets())
-                                .getInsets(WindowInsetsCompat.Type.tappableElement())
-                                .bottom
-                        == 0
+                && !BuildInfo.getInstance().isAutomotive
+                // TODO(https://crbug.com/325356134) use UiUtils#isGestureNavigationMode instead.
+                && !hasTappableBottomBar(activity.getWindow())
                 && !sHas3ButtonNavBarForTesting;
     }
 
     @VisibleForTesting
-    static void setHas3ButtonNavBar(boolean has3ButtonNavBar) {
+    public static void setHas3ButtonNavBar(boolean has3ButtonNavBar) {
         sHas3ButtonNavBarForTesting = has3ButtonNavBar;
     }
 }

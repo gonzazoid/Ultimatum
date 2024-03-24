@@ -4,6 +4,7 @@
 
 source_set("commands") {
   sources = [
+    "account_picker_commands.h",
     "activity_service_commands.h",
     "application_commands.h",
     "autofill_bottom_sheet_commands.h",
@@ -15,6 +16,7 @@ source_set("commands") {
     "command_dispatcher.h",
     "command_dispatcher.mm",
     "credential_provider_promo_commands.h",
+    "docking_promo_commands.h",
     "feed_commands.h",
     "find_in_page_commands.h",
     "generate_qr_code_command.h",
@@ -22,6 +24,7 @@ source_set("commands") {
     "help_commands.h",
     "lens_commands.h",
     "load_query_commands.h",
+    "manage_storage_alert_commands.h",
     "mini_map_commands.h",
     "new_tab_page_commands.h",
     "omnibox_commands.h",
@@ -52,6 +55,7 @@ source_set("commands") {
     "search_image_with_lens_command.h",
     "search_image_with_lens_command.mm",
     "security_alert_commands.h",
+    "settings_commands.h",
     "share_download_overlay_commands.h",
     "share_highlight_command.h",
     "share_highlight_command.mm",
@@ -84,7 +88,7 @@ source_set("commands") {
     "//components/plus_addresses",
     "//ios/chrome/browser/browsing_data/model:model_remove_mask",
     "//ios/chrome/browser/discover_feed/model:constants",
-    "//ios/chrome/browser/promos_manager:constants",
+    "//ios/chrome/browser/promos_manager/model:constants",
   ]
 }
 

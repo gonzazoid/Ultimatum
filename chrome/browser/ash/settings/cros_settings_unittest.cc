@@ -6,6 +6,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "ash/constants/ash_features.h"
@@ -38,7 +39,6 @@
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace em = enterprise_management;
 
@@ -149,7 +149,7 @@ class CrosSettingsTest : public testing::Test {
   }
 
   bool IsUserAllowed(const std::string& username,
-                     const absl::optional<user_manager::UserType>& user_type) {
+                     const std::optional<user_manager::UserType>& user_type) {
     return CrosSettings::Get()->IsUserAllowlisted(username, nullptr, user_type);
   }
 
@@ -404,9 +404,9 @@ TEST_F(CrosSettingsTest, AllowFamilyLinkAccountsWithEmptyAllowlist) {
   ExpectPref(kAccountsPrefUsers, base::Value(base::Value::Type::LIST));
   ExpectPref(kAccountsPrefFamilyLinkAccountsAllowed, base::Value(false));
 
-  EXPECT_FALSE(IsUserAllowed(kUser1, absl::nullopt));
-  EXPECT_FALSE(IsUserAllowed(kUser1, user_manager::USER_TYPE_CHILD));
-  EXPECT_FALSE(IsUserAllowed(kUser1, user_manager::USER_TYPE_REGULAR));
+  EXPECT_FALSE(IsUserAllowed(kUser1, std::nullopt));
+  EXPECT_FALSE(IsUserAllowed(kUser1, user_manager::UserType::kChild));
+  EXPECT_FALSE(IsUserAllowed(kUser1, user_manager::UserType::kRegular));
 }
 
 // DeviceFamilyLinkAccountsAllowed should not have any effect if the feature is
@@ -431,10 +431,10 @@ TEST_F(CrosSettingsTest, AllowFamilyLinkAccountsWithFeatureDisabled) {
   ExpectPref(kAccountsPrefUsers, base::Value(std::move(allowlist)));
   ExpectPref(kAccountsPrefFamilyLinkAccountsAllowed, base::Value(false));
 
-  EXPECT_TRUE(IsUserAllowed(kOwner, absl::nullopt));
-  EXPECT_FALSE(IsUserAllowed(kUser1, absl::nullopt));
-  EXPECT_FALSE(IsUserAllowed(kUser1, user_manager::USER_TYPE_CHILD));
-  EXPECT_FALSE(IsUserAllowed(kUser1, user_manager::USER_TYPE_REGULAR));
+  EXPECT_TRUE(IsUserAllowed(kOwner, std::nullopt));
+  EXPECT_FALSE(IsUserAllowed(kUser1, std::nullopt));
+  EXPECT_FALSE(IsUserAllowed(kUser1, user_manager::UserType::kChild));
+  EXPECT_FALSE(IsUserAllowed(kUser1, user_manager::UserType::kRegular));
 }
 
 TEST_F(CrosSettingsTest, AllowFamilyLinkAccountsWithAllowlist) {
@@ -456,10 +456,10 @@ TEST_F(CrosSettingsTest, AllowFamilyLinkAccountsWithAllowlist) {
   ExpectPref(kAccountsPrefUsers, base::Value(std::move(allowlist)));
   ExpectPref(kAccountsPrefFamilyLinkAccountsAllowed, base::Value(true));
 
-  EXPECT_TRUE(IsUserAllowed(kOwner, absl::nullopt));
-  EXPECT_FALSE(IsUserAllowed(kUser1, absl::nullopt));
-  EXPECT_TRUE(IsUserAllowed(kUser1, user_manager::USER_TYPE_CHILD));
-  EXPECT_FALSE(IsUserAllowed(kUser1, user_manager::USER_TYPE_REGULAR));
+  EXPECT_TRUE(IsUserAllowed(kOwner, std::nullopt));
+  EXPECT_FALSE(IsUserAllowed(kUser1, std::nullopt));
+  EXPECT_TRUE(IsUserAllowed(kUser1, user_manager::UserType::kChild));
+  EXPECT_FALSE(IsUserAllowed(kUser1, user_manager::UserType::kRegular));
 }
 
 }  // namespace ash

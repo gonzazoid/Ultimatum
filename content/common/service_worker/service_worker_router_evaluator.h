@@ -44,9 +44,14 @@ class CONTENT_EXPORT ServiceWorkerRouterEvaluator {
 
   const blink::ServiceWorkerRouterRules& rules() const { return rules_; }
   bool need_running_status() const { return need_running_status_; }
+  bool has_fetch_event_source() const { return has_fetch_event_source_; }
+  bool has_non_fetch_event_source() const {
+    return has_non_fetch_event_source_;
+  }
 
   base::Value ToValue() const;
   std::string ToString() const;
+  void RecordRouterRuleCount() const;
 
  private:
   class RouterRule;
@@ -59,6 +64,8 @@ class CONTENT_EXPORT ServiceWorkerRouterEvaluator {
   std::vector<std::unique_ptr<RouterRule>> compiled_rules_;
   bool is_valid_ = false;
   bool need_running_status_ = false;
+  bool has_fetch_event_source_ = false;
+  bool has_non_fetch_event_source_ = false;
 };
 
 }  // namespace content

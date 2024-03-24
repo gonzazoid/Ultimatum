@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ash/input_method/editor_mediator.h"
 
+#include <optional>
 #include <string_view>
 
 #include "ash/constants/ash_pref_names.h"
@@ -11,6 +12,7 @@
 #include "base/check_op.h"
 #include "base/containers/contains.h"
 #include "base/containers/fixed_flat_set.h"
+#include "chrome/browser/ash/input_method/editor_consent_enums.h"
 #include "chrome/browser/ash/input_method/editor_helpers.h"
 #include "chrome/browser/ash/input_method/editor_metrics_enums.h"
 #include "chrome/browser/ash/input_method/editor_metrics_recorder.h"
@@ -18,7 +20,6 @@
 #include "chrome/browser/ash/input_method/editor_text_query_provider_for_testing.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ui/webui/ash/mako/mako_bubble_coordinator.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/ime/ash/ime_bridge.h"
 #include "ui/display/screen.h"
 #include "ui/display/tablet_state.h"
@@ -29,9 +30,11 @@ EditorMediator::EditorMediator(Profile* profile, std::string_view country_code)
     : profile_(profile),
       panel_manager_(this),
       editor_switch_(std::make_unique<EditorSwitch>(profile, country_code)),
+      metrics_recorder_(
+          std::make_unique<EditorMetricsRecorder>(GetEditorOpportunityMode())),
       consent_store_(
           std::make_unique<EditorConsentStore>(profile->GetPrefs(),
-                                               editor_switch_.get())) {
+                                               metrics_recorder_.get())) {
   editor_switch_->OnTabletModeUpdated(
       display::Screen::GetScreen()->InTabletMode());
 }
@@ -49,8 +52,8 @@ void EditorMediator::OnEditorServiceConnected(bool is_connection_successful) {}
 
 void EditorMediator::SetUpNewEditorService() {
   if (editor_service_connector_.SetUpNewEditorService()) {
-    mojo::PendingAssociatedRemote<orca::mojom::TextActuator>
-        text_actuator_remote;
+    mojo::PendingAssociatedRemote<orca::mojom::SystemActuator>
+        system_actuator_remote;
     mojo::PendingAssociatedRemote<orca::mojom::TextQueryProvider>
         text_query_provider_remote;
     mojo::PendingAssociatedReceiver<orca::mojom::EditorClientConnector>
@@ -58,12 +61,12 @@ void EditorMediator::SetUpNewEditorService() {
     mojo::PendingAssociatedReceiver<orca::mojom::EditorEventSink>
         editor_event_sink_receiver;
 
-    text_actuator_ = std::make_unique<EditorTextActuator>(
-        profile_, text_actuator_remote.InitWithNewEndpointAndPassReceiver(),
+    system_actuator_ = std::make_unique<EditorSystemActuator>(
+        profile_, system_actuator_remote.InitWithNewEndpointAndPassReceiver(),
         this);
     text_query_provider_ = std::make_unique<TextQueryProviderForOrca>(
         text_query_provider_remote.InitWithNewEndpointAndPassReceiver(),
-        profile_, editor_switch_.get());
+        profile_, metrics_recorder_.get());
     editor_client_connector_ = std::make_unique<EditorClientConnector>(
         editor_client_connector_receiver.InitWithNewEndpointAndPassRemote());
     editor_event_proxy_ = std::make_unique<EditorEventProxy>(
@@ -71,7 +74,8 @@ void EditorMediator::SetUpNewEditorService() {
 
     editor_service_connector_.BindEditor(
         std::move(editor_client_connector_receiver),
-        std::move(editor_event_sink_receiver), std::move(text_actuator_remote),
+        std::move(editor_event_sink_receiver),
+        std::move(system_actuator_remote),
         std::move(text_query_provider_remote));
 
     // TODO: b:300838514 - We should only bind the native UI with the shared lib when the
@@ -100,8 +104,8 @@ void EditorMediator::OnFocus(int context_id) {
       base::BindOnce(&EditorMediator::OnTextFieldContextualInfoChanged,
                      weak_ptr_factory_.GetWeakPtr()));
 
-  if (text_actuator_ != nullptr) {
-    text_actuator_->OnFocus(context_id);
+  if (system_actuator_ != nullptr) {
+    system_actuator_->OnFocus(context_id);
   }
 }
 
@@ -109,10 +113,6 @@ void EditorMediator::OnBlur() {
   if (mako_bubble_coordinator_.IsShowingUI() ||
       panel_manager_.IsEditorMenuVisible()) {
     return;
-  }
-
-  if (text_actuator_ != nullptr) {
-    text_actuator_->OnBlur();
   }
 }
 
@@ -150,10 +150,14 @@ void EditorMediator::OnSurroundingTextChanged(const std::u16string& text,
   editor_switch_->OnTextSelectionLengthChanged(selected_length);
 }
 
+void EditorMediator::Announce(const std::u16string& message) {
+  announcer_.Announce(message);
+}
+
 void EditorMediator::ProcessConsentAction(ConsentAction consent_action) {
   consent_store_->ProcessConsentAction(consent_action);
-  HandleTrigger(/*preset_query_id=*/absl::nullopt,
-                /*freeform_text=*/absl::nullopt);
+  HandleTrigger(/*preset_query_id=*/std::nullopt,
+                /*freeform_text=*/std::nullopt);
 }
 
 void EditorMediator::ShowUI() {
@@ -173,21 +177,23 @@ void EditorMediator::OnPromoCardDeclined() {
 }
 
 void EditorMediator::HandleTrigger(
-    absl::optional<std::string_view> preset_query_id,
-    absl::optional<std::string_view> freeform_text) {
+    std::optional<std::string_view> preset_query_id,
+    std::optional<std::string_view> freeform_text) {
+  metrics_recorder_->SetTone(preset_query_id, freeform_text);
   switch (GetEditorMode()) {
     case EditorMode::kRewrite:
       mako_bubble_coordinator_.LoadEditorUI(profile_, MakoEditorMode::kRewrite,
                                             preset_query_id, freeform_text);
-      LogEditorState(EditorStates::kNativeRequest, EditorMode::kRewrite);
+      metrics_recorder_->LogEditorState(EditorStates::kNativeRequest);
       break;
     case EditorMode::kWrite:
       mako_bubble_coordinator_.LoadEditorUI(profile_, MakoEditorMode::kWrite,
                                             preset_query_id, freeform_text);
-      LogEditorState(EditorStates::kNativeRequest, EditorMode::kWrite);
+      metrics_recorder_->LogEditorState(EditorStates::kNativeRequest);
       break;
     case EditorMode::kConsentNeeded:
       mako_bubble_coordinator_.LoadConsentUI(profile_);
+      metrics_recorder_->LogEditorState(EditorStates::kConsentScreenImpression);
       break;
     case EditorMode::kBlocked:
       mako_bubble_coordinator_.CloseUI();
@@ -200,12 +206,6 @@ void EditorMediator::CacheContext() {
     editor_event_proxy_->OnSurroundingTextChanged(
         surrounding_text_.text, surrounding_text_.selection_range);
   }
-}
-
-void EditorMediator::OnTextInsertionRequested() {
-  // After queuing the text to be inserted, closing the mako web ui should
-  // return the focus back to the original input.
-  mako_bubble_coordinator_.CloseUI();
 }
 
 void EditorMediator::OnTextFieldContextualInfoChanged(
@@ -222,8 +222,16 @@ EditorMode EditorMediator::GetEditorMode() const {
   return editor_switch_->GetEditorMode();
 }
 
+EditorMetricsRecorder* EditorMediator::GetMetricsRecorder() {
+  return metrics_recorder_.get();
+}
+
 EditorOpportunityMode EditorMediator::GetEditorOpportunityMode() const {
   return editor_switch_->GetEditorOpportunityMode();
+}
+
+std::vector<EditorBlockedReason> EditorMediator::GetBlockedReasons() const {
+  return editor_switch_->GetBlockedReasons();
 }
 
 void EditorMediator::Shutdown() {

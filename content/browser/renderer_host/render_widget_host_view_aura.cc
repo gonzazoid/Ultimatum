@@ -11,7 +11,6 @@
 
 #include "base/auto_reset.h"
 #include "base/command_line.h"
-#include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
 #include "base/logging.h"
@@ -54,7 +53,6 @@
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/device_service.h"
 #include "content/public/browser/render_view_host.h"
-#include "content/public/common/content_features.h"
 #include "content/public/common/page_visibility_state.h"
 #include "services/service_manager/public/cpp/interface_provider.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
@@ -129,11 +127,6 @@
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ui/wm/core/ime_util_chromeos.h"
-#endif
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ui/base/ime/ash/extension_ime_util.h"
-#include "ui/base/ime/ash/input_method_manager.h"
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -321,7 +314,7 @@ void RenderWidgetHostViewAura::InitAsChild(gfx::NativeView parent_view) {
 
 #if BUILDFLAG(IS_WIN)
   // This will fetch and set the display features.
-  EnsureDevicePostureServiceConnection();
+  ObserveDevicePosturePlatformProvider();
 #endif
 }
 
@@ -400,7 +393,7 @@ void RenderWidgetHostViewAura::InitAsPopup(
 
 #if BUILDFLAG(IS_WIN)
   // This will fetch and set the display features.
-  EnsureDevicePostureServiceConnection();
+  ObserveDevicePosturePlatformProvider();
 #endif
 }
 
@@ -732,40 +725,42 @@ void RenderWidgetHostViewAura::UpdateBackgroundColor() {
 }
 
 #if BUILDFLAG(IS_WIN)
-void RenderWidgetHostViewAura::EnsureDevicePostureServiceConnection() {
-  if (device_posture_provider_.is_bound() &&
-      device_posture_provider_.is_connected()) {
+void RenderWidgetHostViewAura::ObserveDevicePosturePlatformProvider() {
+  if (device_posture_observation_.IsObserving()) {
     return;
   }
-  GetDeviceService().BindDevicePostureProvider(
-      device_posture_provider_.BindNewPipeAndPassReceiver());
-  device_posture_provider_->AddListenerAndGetCurrentViewportSegments(
-      device_posture_receiver_.BindNewPipeAndPassRemote(),
-      base::BindOnce(&RenderWidgetHostViewAura::OnViewportSegmentsChanged,
-                     base::Unretained(this)));
+
+  DevicePosturePlatformProvider* platform_provider =
+      GetDevicePosturePlatformProvider();
+  if (!platform_provider) {
+    return;
+  }
+
+  device_posture_observation_.Observe(platform_provider);
+  OnDisplayFeatureBoundsChanged(platform_provider->GetDisplayFeatureBounds());
 }
 #endif
 
-void RenderWidgetHostViewAura::OnViewportSegmentsChanged(
-    const std::vector<gfx::Rect>& segments) {
+void RenderWidgetHostViewAura::OnDisplayFeatureBoundsChanged(
+    const gfx::Rect& display_feature_bounds) {
   display_feature_ = std::nullopt;
-  viewport_segments_.clear();
-  if (segments.empty()) {
+  display_feature_bounds_ = gfx::Rect();
+  if (display_feature_bounds.IsEmpty()) {
     SynchronizeVisualProperties(cc::DeadlinePolicy::UseDefaultDeadline(),
                                 window_->GetLocalSurfaceId());
     return;
   }
 
-  if (segments.size() >= 2) {
-    viewport_segments_ = std::move(segments);
-    ComputeDisplayFeature();
-  }
+  display_feature_bounds_ = display_feature_bounds;
+  ComputeDisplayFeature();
+
   SynchronizeVisualProperties(cc::DeadlinePolicy::UseDefaultDeadline(),
                               window_->GetLocalSurfaceId());
 }
 
 void RenderWidgetHostViewAura::ComputeDisplayFeature() {
-  if (viewport_segments_.size() < 2) {
+  if (display_feature_bounds_.IsEmpty() ||
+      display_feature_overridden_for_testing_) {
     return;
   }
 
@@ -786,7 +781,7 @@ void RenderWidgetHostViewAura::ComputeDisplayFeature() {
   float dip_scale = 1 / device_scale_factor_;
   // Segments coming from the platform are in native resolution.
   gfx::Rect transformed_display_feature =
-      gfx::ScaleToRoundedRect(viewport_segments_[1], dip_scale);
+      gfx::ScaleToRoundedRect(display_feature_bounds_, dip_scale);
   transformed_display_feature.Offset(-GetViewBounds().x(),
                                      -GetViewBounds().y());
   transformed_display_feature.Intersect(gfx::Rect(GetVisibleViewportSize()));
@@ -807,10 +802,12 @@ std::optional<DisplayFeature> RenderWidgetHostViewAura::GetDisplayFeature() {
 
 void RenderWidgetHostViewAura::SetDisplayFeatureForTesting(
     const DisplayFeature* display_feature) {
-  if (display_feature)
+  if (display_feature) {
     display_feature_ = *display_feature;
-  else
+  } else {
     display_feature_ = std::nullopt;
+  }
+  display_feature_overridden_for_testing_ = true;
 }
 
 void RenderWidgetHostViewAura::WindowTitleChanged() {
@@ -819,7 +816,7 @@ void RenderWidgetHostViewAura::WindowTitleChanged() {
       base::UTF16ToUTF8(window_->GetTitle()));
 }
 
-bool RenderWidgetHostViewAura::IsMouseLocked() {
+bool RenderWidgetHostViewAura::IsPointerLocked() {
   return event_handler_->mouse_locked();
 }
 
@@ -1271,21 +1268,22 @@ void RenderWidgetHostViewAura::SetMainFrameAXTreeID(ui::AXTreeID id) {
   window_->SetProperty(ui::kChildAXTreeID, id.ToString());
 }
 
-blink::mojom::PointerLockResult RenderWidgetHostViewAura::LockMouse(
+blink::mojom::PointerLockResult RenderWidgetHostViewAura::LockPointer(
     bool request_unadjusted_movement) {
-  return event_handler_->LockMouse(request_unadjusted_movement);
+  return event_handler_->LockPointer(request_unadjusted_movement);
 }
 
-blink::mojom::PointerLockResult RenderWidgetHostViewAura::ChangeMouseLock(
+blink::mojom::PointerLockResult RenderWidgetHostViewAura::ChangePointerLock(
     bool request_unadjusted_movement) {
-  return event_handler_->ChangeMouseLock(request_unadjusted_movement);
+  return event_handler_->ChangePointerLock(request_unadjusted_movement);
 }
 
-void RenderWidgetHostViewAura::UnlockMouse() {
-  event_handler_->UnlockMouse();
+void RenderWidgetHostViewAura::UnlockPointer() {
+  event_handler_->UnlockPointer();
 }
 
-bool RenderWidgetHostViewAura::GetIsMouseLockedUnadjustedMovementForTesting() {
+bool RenderWidgetHostViewAura::
+    GetIsPointerLockedUnadjustedMovementForTesting() {
   return event_handler_->mouse_locked_unadjusted_movement();
 }
 
@@ -1744,19 +1742,6 @@ bool RenderWidgetHostViewAura::SetAutocorrectRange(
     base::UmaHistogramEnumeration(
         "InputMethod.Assistive.Autocorrect.Count",
         TextInputClient::SubClass::kRenderWidgetHostViewAura);
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    auto* input_method_manager = ash::input_method::InputMethodManager::Get();
-    if (input_method_manager &&
-        ash::extension_ime_util::IsExperimentalMultilingual(
-            input_method_manager->GetActiveIMEState()
-                ->GetCurrentInputMethod()
-                .id())) {
-      base::UmaHistogramEnumeration(
-          "InputMethod.MultilingualExperiment.Autocorrect.Count",
-          TextInputClient::SubClass::kRenderWidgetHostViewAura);
-    }
-#endif
   }
 
   auto* input_handler = GetFrameWidgetInputHandlerForFocusedWidget();
@@ -1967,8 +1952,9 @@ void RenderWidgetHostViewAura::OnBoundsChanged(const gfx::Rect& old_bounds,
 }
 
 gfx::NativeCursor RenderWidgetHostViewAura::GetCursor(const gfx::Point& point) {
-  if (IsMouseLocked())
+  if (IsPointerLocked()) {
     return ui::mojom::CursorType::kNone;
+  }
   return current_cursor_.GetNativeCursor();
 }
 
@@ -2305,7 +2291,7 @@ RenderWidgetHostViewAura::~RenderWidgetHostViewAura() {
   if (window_) {
     if (window_->GetHost())
       window_->GetHost()->RemoveObserver(this);
-    UnlockMouse();
+    UnlockPointer();
     wm::SetTooltipText(window_, nullptr);
 
     // This call is usually no-op since |this| object is already removed from
@@ -2586,7 +2572,7 @@ void RenderWidgetHostViewAura::InternalSetBounds(const gfx::Rect& rect) {
   if (!in_bounds_changed_)
     window_->SetBounds(rect);
 
-  if (!viewport_segments_.empty()) {
+  if (!display_feature_bounds_.IsEmpty()) {
     // The view bounds have changed so if we have viewport segments from the
     // platform we need to make sure display_feature_ is updated considering the
     // new view bounds.
@@ -2602,8 +2588,9 @@ void RenderWidgetHostViewAura::InternalSetBounds(const gfx::Rect& rect) {
 #if BUILDFLAG(IS_WIN)
   UpdateLegacyWin();
 
-  if (IsMouseLocked())
+  if (IsPointerLocked()) {
     UpdateMouseLockRegion();
+  }
 #endif
 }
 
@@ -2727,13 +2714,8 @@ void RenderWidgetHostViewAura::ForwardKeyboardEventWithLatencyInfo(
   auto* linux_ui = ui::LinuxUi::instance();
   std::vector<ui::TextEditCommandAuraLinux> commands;
   if (!event.skip_if_unhandled && linux_ui && event.os_event &&
-      linux_ui->GetTextEditCommandsForEvent(
-          *event.os_event,
-          base::FeatureList::IsEnabled(
-              blink::features::kArrowKeysInVerticalWritingModes)
-              ? GetTextInputFlags()
-              : ui::TEXT_INPUT_FLAG_NONE,
-          &commands)) {
+      linux_ui->GetTextEditCommandsForEvent(*event.os_event,
+                                            GetTextInputFlags(), &commands)) {
     // Transform from ui/ types to content/ types.
     std::vector<blink::mojom::EditCommandPtr> edit_commands;
     for (std::vector<ui::TextEditCommandAuraLinux>::const_iterator it =

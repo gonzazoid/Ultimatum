@@ -5,9 +5,9 @@
 #ifndef UI_GFX_COLOR_CONVERSIONS_H_
 #define UI_GFX_COLOR_CONVERSIONS_H_
 
+#include <optional>
 #include <tuple>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/gfx_export.h"
 
@@ -79,6 +79,14 @@ GFX_EXPORT std::tuple<float, float, float> XYZD65TosRGBLinear(float x,
                                                               float y,
                                                               float z);
 
+GFX_EXPORT std::tuple<float, float, float> SRGBToSRGBLegacy(float r,
+                                                            float g,
+                                                            float b);
+
+GFX_EXPORT std::tuple<float, float, float> SRGBLegacyToSRGB(float r,
+                                                            float g,
+                                                            float b);
+
 GFX_EXPORT std::tuple<float, float, float> XYZD50TosRGB(float x,
                                                         float y,
                                                         float z);
@@ -109,9 +117,19 @@ GFX_EXPORT SkColor4f LabToSkColor4f(float l, float a, float b, float alpha);
 
 GFX_EXPORT SkColor4f OklabToSkColor4f(float l, float a, float b, float alpha);
 
+GFX_EXPORT SkColor4f OklabGamutMapToSkColor4f(float l,
+                                              float a,
+                                              float b,
+                                              float alpha);
+
 GFX_EXPORT SkColor4f LchToSkColor4f(float l, float a, float b, float alpha);
 
 GFX_EXPORT SkColor4f OklchToSkColor4f(float l, float a, float h, float alpha);
+
+GFX_EXPORT SkColor4f OklchGamutMapToSkColor4f(float l,
+                                              float a,
+                                              float h,
+                                              float alpha);
 
 GFX_EXPORT SkColor4f SRGBLinearToSkColor4f(float r,
                                            float g,

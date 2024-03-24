@@ -159,11 +159,6 @@ class PageSpecificContentSettings
         content::RenderFrameHost* rfh,
         RendererContentSettingRules* rules) = 0;
 
-    // Gets any additional file system types which should be used when
-    // constructing a browsing_data::FileSystemHelper.
-    virtual std::vector<storage::FileSystemType>
-    GetAdditionalFileSystemTypes() = 0;
-
     virtual browsing_data::CookieHelper::IsDeletionDisabledCallback
     GetIsDeletionDisabledCallback() = 0;
 
@@ -260,12 +255,14 @@ class PageSpecificContentSettings
       ContentSettingsType type);
 
   // Called when a specific Shared Worker was accessed.
-  static void SharedWorkerAccessed(int render_process_id,
-                                   int render_frame_id,
-                                   const GURL& worker_url,
-                                   const std::string& name,
-                                   const blink::StorageKey& storage_key,
-                                   bool blocked_by_policy);
+  static void SharedWorkerAccessed(
+      int render_process_id,
+      int render_frame_id,
+      const GURL& worker_url,
+      const std::string& name,
+      const blink::StorageKey& storage_key,
+      const blink::mojom::SharedWorkerSameSiteCookies same_site_cookies,
+      bool blocked_by_policy);
 
   // Called when |api_origin| attempts to join an interest group via the
   // Interest Group API.
@@ -369,19 +366,6 @@ class PageSpecificContentSettings
   void OnTwoSitePermissionChanged(ContentSettingsType type,
                                   net::SchemefulSite requesting_site,
                                   ContentSetting content_setting);
-
-  // |originating_page| is non-null when it differs from page(), which happens
-  // when an embedding page's PSCS is notified of an access that happens in an
-  // embedded page (through |MaybeUpdateParent|).
-  void OnStorageAccessed(
-      mojom::ContentSettingsManager::StorageType storage_type,
-      const blink::StorageKey& storage_key,
-      bool blocked_by_policy,
-      content::Page* originating_page = nullptr);
-  void OnSharedWorkerAccessed(const GURL& worker_url,
-                              const std::string& name,
-                              const blink::StorageKey& storage_key,
-                              bool blocked_by_policy);
   void OnInterestGroupJoined(const url::Origin& api_origin,
                              bool blocked_by_policy);
   void OnTopicAccessed(const url::Origin& api_origin,
@@ -404,7 +388,9 @@ class PageSpecificContentSettings
       const GURL& request_origin,
       MicrophoneCameraState new_microphone_camera_state);
 
-  // See |OnStorageAccessed| documentation for more info on |originating_page|.
+  // |originating_page| is non-null when it differs from page(), which happens
+  // when an embedding page's PSCS is notified of an access that happens in an
+  // embedded page (through |MaybeUpdateParent|).
   void OnCookiesAccessed(const content::CookieAccessDetails& details,
                          content::Page* originating_page = nullptr);
   void OnServiceWorkerAccessed(const GURL& scope,
@@ -462,6 +448,12 @@ class PageSpecificContentSettings
   // Remove `ContentSettingsType` from a set of currently displaying activity
   // indicators.
   void OnPermissionIndicatorHidden(ContentSettingsType type);
+
+  // If permission requests need to be cleaned up due to a page refresh, PSCS
+  // should be temporarily frozen to prevent unnecessary update of activity
+  // indicators.
+  void OnPermissionRequestCleanupStart() { freeze_indicators_ = true; }
+  void OnPermissionRequestCleanupEnd() { freeze_indicators_ = false; }
 
   void set_media_stream_access_origin_for_testing(const GURL& url) {
     media_stream_access_origin_ = url;
@@ -562,6 +554,12 @@ class PageSpecificContentSettings
   // updating synced PageSpecificContentSettings for the document
   // picture-in-picture case.
   bool is_updating_synced_pscs_ = false;
+
+  // If `false` PSCS is allowed to save a new blocked state for an activity
+  // indicator. If `true` PSCS is frozen and a new blocked state will be
+  // ignored. This variable is controlled by PermissionRequestManager to prevent
+  // showing indicators after requests were cleaned up due to a new navigation.
+  bool freeze_indicators_ = false;
 
   raw_ptr<Delegate> delegate_;
 

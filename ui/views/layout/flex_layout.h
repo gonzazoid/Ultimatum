@@ -8,12 +8,12 @@
 #include <list>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <utility>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/class_property.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/views/layout/flex_layout_types.h"
@@ -66,8 +66,8 @@ class View;
 // take up its preferred size in the layout.
 //
 // The core function of this class is contained in
-// GetPreferredSize(maximum_size) and Layout(). In both cases, a layout will
-// be cached and typically not recalculated as long as none of the layout's
+// GetPreferredSize(maximum_size) and Layout(). In both cases, a layout will be
+// cached and typically not recalculated as long as none of the layout's
 // properties or the preferred size or visibility of any of its children has
 // changed.
 class VIEWS_EXPORT FlexLayout : public LayoutManagerBase {
@@ -130,6 +130,11 @@ class VIEWS_EXPORT FlexLayout : public LayoutManagerBase {
   FlexLayout& SetDefault(const ui::ClassProperty<T>* key, const U& value) {
     layout_defaults_.SetProperty(key, value);
     return *this;
+  }
+
+  template <class T>
+  T* GetDefaultForTesting(const ui::ClassProperty<T*>* key) const {
+    return GetDefault(key);
   }
 
  protected:
@@ -204,8 +209,8 @@ class VIEWS_EXPORT FlexLayout : public LayoutManagerBase {
   // Calculates the preferred spacing between two child views, or between a
   // view edge and the first or last visible child views.
   int CalculateChildSpacing(const FlexLayoutData& layout,
-                            absl::optional<size_t> child1_index,
-                            absl::optional<size_t> child2_index) const;
+                            std::optional<size_t> child1_index,
+                            std::optional<size_t> child2_index) const;
 
   // Calculates the position of each child view and the size of the overall
   // layout based on tentative visibilities and sizes for each child.

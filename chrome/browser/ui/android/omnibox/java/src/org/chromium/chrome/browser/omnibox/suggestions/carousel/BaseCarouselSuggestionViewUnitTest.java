@@ -7,8 +7,11 @@ package org.chromium.chrome.browser.omnibox.suggestions.carousel;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -47,9 +50,7 @@ public class BaseCarouselSuggestionViewUnitTest {
     @Before
     public void setUp() {
         mView.setSelectionControllerForTesting(mController);
-        mView.setItemDecorationForTesting(mDecoration);
-
-        assertEquals(mDecoration, mView.getItemDecoration());
+        mView.setItemDecoration(mDecoration);
         clearInvocations(mView, mAdapter, mController, mChild);
     }
 
@@ -64,6 +65,20 @@ public class BaseCarouselSuggestionViewUnitTest {
         verify(mController).selectNextItem();
 
         verifyNoMoreInteractions(mController);
+    }
+
+    @Test
+    public void setItemDecoration_nullDecorations() {
+        // One decoration installed by the setUp routine.
+        assertEquals(1, mView.getItemDecorationCount());
+
+        // Reset current decoration to null.
+        mView.setItemDecoration(null);
+        assertEquals(0, mView.getItemDecorationCount());
+
+        // One decoration re-installed.
+        mView.setItemDecoration(mDecoration);
+        assertEquals(1, mView.getItemDecorationCount());
     }
 
     @Test
@@ -148,20 +163,30 @@ public class BaseCarouselSuggestionViewUnitTest {
     @Test
     public void setSelected_resetsCarouselSelectionWhenSelected() {
         mView.setSelected(true);
-        verify(mController, times(1)).setSelectedItem(0, /* force= */ true);
+        verify(mController, times(1)).setSelectedItem(0);
         verifyNoMoreInteractions(mController);
     }
 
     @Test
     public void setSelected_resetsCarouselSelectionWhenDeselected() {
         mView.setSelected(false);
-        verify(mController, times(1)).setSelectedItem(RecyclerView.NO_POSITION, /* force= */ false);
+        verify(mController, times(1)).setSelectedItem(RecyclerView.NO_POSITION);
         verifyNoMoreInteractions(mController);
     }
 
     @Test
-    public void onMeasure_updatesElementSpacingWhenSizeChanges() {
+    public void onMeasure_invalidateItemDecorationsWhenTheyChange() {
+        doReturn(true).when(mDecoration).notifyViewSizeChanged(anyBoolean(), anyInt(), anyInt());
         mView.onMeasure(0, 0);
-        verify(mDecoration).notifyViewMeasuredSizeChanged();
+        // Must be called if the decorations report changes.
+        verify(mView).invalidateItemDecorations();
+    }
+
+    @Test
+    public void onMeasure_dontInvalidateItemDecorationsWhenTheyDontChange() {
+        doReturn(false).when(mDecoration).notifyViewSizeChanged(anyBoolean(), anyInt(), anyInt());
+        mView.onMeasure(0, 0);
+        // Must be called if the decorations report changes.
+        verify(mView, never()).invalidateItemDecorations();
     }
 }

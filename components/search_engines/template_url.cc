@@ -145,8 +145,7 @@ class SearchTermLocation {
              (url_component_type == url::Parsed::REF));
       url::Component query, key, value;
       query.len = static_cast<int>(url_component.size());
-      while (url::ExtractQueryKeyValue(url_component.data(), &query, &key,
-                                       &value)) {
+      while (url::ExtractQueryKeyValue(url_component, &query, &key, &value)) {
         if (key.is_nonempty() && value.is_nonempty()) {
           const base::StringPiece value_string =
               url_component.substr(value.begin, value.len);
@@ -443,8 +442,9 @@ bool TemplateURLRef::SupportsReplacement(
 std::string TemplateURLRef::ReplaceSearchTerms(
     const SearchTermsArgs& search_terms_args,
     const SearchTermsData& search_terms_data,
-    PostContent* post_content) const {
-  ParseIfNecessary(search_terms_data);
+    PostContent* post_content,
+    std::string url_override) const {
+  ParseIfNecessary(search_terms_data, url_override);
   if (!valid_)
     return std::string();
 
@@ -641,7 +641,7 @@ bool TemplateURLRef::ExtractSearchTermsFromURL(
     url::Component query, key, value;
     query.len = static_cast<int>(source.size());
     bool key_found = false;
-    while (url::ExtractQueryKeyValue(source.data(), &query, &key, &value)) {
+    while (url::ExtractQueryKeyValue(source, &query, &key, &value)) {
       if (key.is_nonempty()) {
         if (source.substr(key.begin, key.len) == search_term_key_) {
           // Fail if search term key is found twice.
@@ -907,12 +907,14 @@ std::string TemplateURLRef::ParseURL(const std::string& url,
   return parsed_url;
 }
 
-void TemplateURLRef::ParseIfNecessary(
-    const SearchTermsData& search_terms_data) const {
-  if (!parsed_) {
+void TemplateURLRef::ParseIfNecessary(const SearchTermsData& search_terms_data,
+                                      std::string url_override) const {
+  bool url_override_is_valid = GURL(url_override).is_valid();
+  if (!parsed_ || url_override_is_valid) {
     InvalidateCachedValues();
     parsed_ = true;
-    parsed_url_ = ParseURL(GetURL(), &replacements_, &post_params_, &valid_);
+    parsed_url_ = ParseURL(url_override_is_valid ? url_override : GetURL(),
+                           &replacements_, &post_params_, &valid_);
     supports_replacements_ = false;
     if (valid_) {
       bool has_only_one_search_term = false;
@@ -1348,9 +1350,8 @@ std::string TemplateURLRef::HandleReplacements(
         break;
 
       case GOOGLE_IMAGE_THUMBNAIL_BASE64: {
-        std::string base64_thumbnail_content;
-        base::Base64Encode(search_terms_args.image_thumbnail_content,
-                           &base64_thumbnail_content);
+        std::string base64_thumbnail_content =
+            base::Base64Encode(search_terms_args.image_thumbnail_content);
         HandleReplacement(std::string(), base64_thumbnail_content, replacement,
                           &url);
         if (replacement.is_post_param) {
@@ -1691,8 +1692,16 @@ BuiltinEngineType TemplateURL::GetBuiltinEngineType() const {
         return KEYWORD_MODE_STARTER_PACK_HISTORY;
       case TemplateURLStarterPackData::kTabs:
         return KEYWORD_MODE_STARTER_PACK_TABS;
+      case TemplateURLStarterPackData::kAskGoogle:
+        return KEYWORD_MODE_STARTER_PACK_ASK_GOOGLE;
       default:
-        NOTREACHED();
+        // In theory, this code path should never be reached.  However, it's
+        // possible that when expanding the starter pack, a new entry may
+        // persist in the database that does not yet exist in this version of
+        // chrome. (e.g. a user runs a newer version with the new starter pack
+        // entry, has sync on, which syncs to another login instance running an
+        // older version that hasn't received the new starter pack update yet).
+        // Realistically, this is not catastrophic.
         return KEYWORD_MODE_NON_BUILT_IN;
     }
   } else {
@@ -1878,7 +1887,7 @@ GURL TemplateURL::RemoveSideSearchParamFromURL(
   if (!IsSideSearchSupported())
     return side_search_url;
   return net::AppendOrReplaceQueryParameter(side_search_url,
-                                            side_search_param(), absl::nullopt);
+                                            side_search_param(), std::nullopt);
 }
 
 GURL TemplateURL::GenerateSideImageSearchURL(const GURL& image_search_url,
@@ -1899,7 +1908,7 @@ GURL TemplateURL::RemoveSideImageSearchParamFromURL(
   if (!IsSideImageSearchSupported())
     return image_search_url;
   return net::AppendOrReplaceQueryParameter(
-      image_search_url, side_image_search_param(), absl::nullopt);
+      image_search_url, side_image_search_param(), std::nullopt);
 }
 
 void TemplateURL::CopyFrom(const TemplateURL& other) {

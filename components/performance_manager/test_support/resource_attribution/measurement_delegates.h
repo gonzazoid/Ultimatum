@@ -7,6 +7,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/functional/callback_forward.h"
@@ -16,13 +17,12 @@
 #include "base/types/pass_key.h"
 #include "components/performance_manager/public/resource_attribution/cpu_measurement_delegate.h"
 #include "components/performance_manager/public/resource_attribution/memory_measurement_delegate.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace performance_manager {
 class ProcessNode;
 }
 
-namespace performance_manager::resource_attribution {
+namespace resource_attribution {
 
 class SimulatedCPUMeasurementDelegate;
 
@@ -71,14 +71,16 @@ class SimulatedCPUMeasurementDelegateFactory final
   // Returns a delegate for `process_node`. This can be used to set initial
   // values on delegates before the code under test gets a pointer to them using
   // CreateDelegateForProcess().
-  SimulatedCPUMeasurementDelegate& GetDelegate(const ProcessNode* process_node);
+  SimulatedCPUMeasurementDelegate& GetDelegate(
+      const performance_manager::ProcessNode* process_node);
 
   // CPUMeasurementDelegate::Factory:
 
-  bool ShouldMeasureProcess(const ProcessNode* process_node) final;
+  bool ShouldMeasureProcess(
+      const performance_manager::ProcessNode* process_node) final;
 
   std::unique_ptr<CPUMeasurementDelegate> CreateDelegateForProcess(
-      const ProcessNode* process_node) final;
+      const performance_manager::ProcessNode* process_node) final;
 
   // Private implementation guarded by PassKey:
 
@@ -97,12 +99,14 @@ class SimulatedCPUMeasurementDelegateFactory final
   // Map of ProcessNode to CPUMeasurementDelegate that simulates that process.
   // The delegates are owned by `pending_cpu_delegates_` when they're created,
   // then ownership is passed to the caller of TakeDelegate().
-  std::map<const ProcessNode*, SimulatedCPUMeasurementDelegate*>
+  std::map<const performance_manager::ProcessNode*,
+           SimulatedCPUMeasurementDelegate*>
       simulated_cpu_delegates_;
 
   // CPUMeasurementDelegates that have been created but not passed to the caller
   // of TakeDelegate() yet.
-  std::map<const ProcessNode*, std::unique_ptr<SimulatedCPUMeasurementDelegate>>
+  std::map<const performance_manager::ProcessNode*,
+           std::unique_ptr<SimulatedCPUMeasurementDelegate>>
       pending_cpu_delegates_;
 
   base::WeakPtrFactory<SimulatedCPUMeasurementDelegateFactory> weak_factory_{
@@ -132,17 +136,14 @@ class SimulatedCPUMeasurementDelegate final : public CPUMeasurementDelegate {
   void SetCPUUsage(SimulatedCPUUsage usage,
                    base::TimeTicks start_time = base::TimeTicks::Now());
 
-  // Sets the process to have an error that will be reported as `usage_error`.
-  void SetError(base::TimeDelta usage_error);
-
-  // Clears any error that was set with SetCPUUsageError().
-  void ClearError();
+  // Sets whether the process will report an error from GetCumulativeCPUUsage().
+  void SetError(bool has_error) { has_error_ = has_error; }
 
   // CPUMeasurementDelegate:
 
   // Returns the simulated CPU usage of the process by summing
-  // `cpu_usage_periods`.
-  base::TimeDelta GetCumulativeCPUUsage() final;
+  // `cpu_usage_periods`, or nullopt if SetError(true) was called.
+  std::optional<base::TimeDelta> GetCumulativeCPUUsage() final;
 
  private:
   struct CPUUsagePeriod {
@@ -158,9 +159,9 @@ class SimulatedCPUMeasurementDelegate final : public CPUMeasurementDelegate {
   // List of periods of varying CPU usage.
   std::vector<CPUUsagePeriod> cpu_usage_periods_;
 
-  // If not nullopt, GetCumulativeCPUUsage() will ignore `cpu_usage_periods` and
-  // return this value to simulate an error.
-  absl::optional<base::TimeDelta> usage_error_;
+  // If true, GetCumulativeCPUUsage() will ignore `cpu_usage_periods` and
+  // return nullopt to simulate an error.
+  bool has_error_ = false;
 };
 
 // A factory that manages FakeMemoryMeasurementDelegate instances. Embed an
@@ -190,7 +191,8 @@ class FakeMemoryMeasurementDelegateFactory final
 
   // MemoryMeasurementDelegate::Factory:
 
-  std::unique_ptr<MemoryMeasurementDelegate> CreateDelegate(Graph*) final;
+  std::unique_ptr<MemoryMeasurementDelegate> CreateDelegate(
+      performance_manager::Graph*) final;
 
  private:
   // The MemorySummary results returned by delegates created by this factory.
@@ -228,6 +230,6 @@ class FakeMemoryMeasurementDelegate final : public MemoryMeasurementDelegate {
   base::SafeRef<FakeMemoryMeasurementDelegateFactory> factory_;
 };
 
-}  // namespace performance_manager::resource_attribution
+}  // namespace resource_attribution
 
 #endif  // COMPONENTS_PERFORMANCE_MANAGER_TEST_SUPPORT_RESOURCE_ATTRIBUTION_MEASUREMENT_DELEGATES_H_

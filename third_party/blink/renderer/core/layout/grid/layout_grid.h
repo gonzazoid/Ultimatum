@@ -28,8 +28,8 @@ class CORE_EXPORT LayoutGrid : public LayoutBlock {
 
   bool HasCachedMinMaxSizes() const;
   const MinMaxSizes& CachedMinMaxSizes() const;
-  void SetCachedMinMaxSizes(MinMaxSizes&& min_max_sizes);
-  void InvalidateCachedMinMaxSizes();
+  void SetMinMaxSizesCache(MinMaxSizes&& min_max_sizes);
+  void InvalidateMinMaxSizesCache();
 
   wtf_size_t AutoRepeatCountForDirection(
       const GridTrackSizingDirection track_direction) const;
@@ -66,8 +66,8 @@ class CORE_EXPORT LayoutGrid : public LayoutBlock {
   void StyleDidChange(StyleDifference diff,
                       const ComputedStyle* old_style) override;
 
-  absl::optional<GridPlacementData> cached_placement_data_;
-  absl::optional<MinMaxSizes> cached_min_max_sizes_;
+  std::optional<GridPlacementData> cached_placement_data_;
+  std::optional<MinMaxSizes> cached_min_max_sizes_;
 };
 
 // wtf/casting.h helper.

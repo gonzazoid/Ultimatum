@@ -35,6 +35,14 @@
 // and accessibility trait UIAccessibilityTraitButton.
 + (id<GREYMatcher>)buttonWithAccessibilityLabelID:(int)messageID;
 
+// Matcher for element with foreground color corresponding to `colorName`
+// and accessibility trait UIAccessibilityTraitButton.
++ (id<GREYMatcher>)buttonWithForegroundColor:(NSString*)colorName;
+
+// Matcher for element with background color corresponding to `colorName`
+// and accessibility trait UIAccessibilityTraitButton.
++ (id<GREYMatcher>)buttonWithBackgroundColor:(NSString*)colorName;
+
 // Matcher for context menu items with accessibility label
 // corresponding to `label`.
 + (id<GREYMatcher>)contextMenuItemWithAccessibilityLabel:(NSString*)label;
@@ -114,6 +122,12 @@
 
 // Returns a matcher for the omnibox.
 + (id<GREYMatcher>)omnibox;
+
+// Returns a matcher for the omnibox at the bottom.
++ (id<GREYMatcher>)omniboxAtBottom;
+
+// Returns a matcher for the omnibox on the top.
++ (id<GREYMatcher>)omniboxOnTop;
 
 // Returns a matcher for the location view.
 + (id<GREYMatcher>)defocusedLocationView;
@@ -524,6 +538,9 @@
 // be used to validate that the tab grid normal mode is active.
 + (id<GREYMatcher>)tabGridNormalModePageControl;
 
+// Returns the GREYMatcher for the Inactive Tabs button of the tab grid.
++ (id<GREYMatcher>)tabGridInactiveTabsButton;
+
 // Returns the GREYMatcher for the background of the tab grid.
 + (id<GREYMatcher>)tabGridBackground;
 
@@ -693,9 +710,6 @@
 
 // Returns a matcher for the a password in the manual fallback list.
 + (id<GREYMatcher>)manualFallbackPasswordButtonMatcher;
-
-// Returns a matcher for the PasswordTableView window.
-+ (id<GREYMatcher>)manualFallbackPasswordTableViewWindowMatcher;
 
 // Returns a matcher for the profiles icon in the keyboard accessory bar.
 + (id<GREYMatcher>)manualFallbackProfilesIconMatcher;

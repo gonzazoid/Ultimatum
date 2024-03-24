@@ -61,22 +61,23 @@ PageSpecificContentSettingsDelegate::FromWebContents(
 void PageSpecificContentSettingsDelegate::OnIsCapturingVideoChanged(
     content::WebContents* web_contents,
     bool is_capturing_video) {
-  PageSpecificContentSettings* pscs = PageSpecificContentSettings::GetForFrame(
-      web_contents->GetPrimaryMainFrame());
-
-  if (pscs == nullptr) {
-    // There are cases, e.g. MPArch, where there is no active instance of
-    // PageSpecificContentSettings for a frame.
-    return;
-  }
-
-  pscs->OnCapturingStateChanged(ContentSettingsType::MEDIASTREAM_CAMERA,
-                                is_capturing_video);
+  OnCapturingStateChanged(web_contents, ContentSettingsType::MEDIASTREAM_CAMERA,
+                          is_capturing_video);
 }
 
 void PageSpecificContentSettingsDelegate::OnIsCapturingAudioChanged(
     content::WebContents* web_contents,
     bool is_capturing_audio) {
+  OnCapturingStateChanged(web_contents, ContentSettingsType::MEDIASTREAM_MIC,
+                          is_capturing_audio);
+}
+
+void PageSpecificContentSettingsDelegate::OnCapturingStateChanged(
+    content::WebContents* web_contents,
+    ContentSettingsType type,
+    bool is_capturing) {
+  DCHECK(web_contents);
+
   PageSpecificContentSettings* pscs = PageSpecificContentSettings::GetForFrame(
       web_contents->GetPrimaryMainFrame());
 
@@ -86,8 +87,13 @@ void PageSpecificContentSettingsDelegate::OnIsCapturingAudioChanged(
     return;
   }
 
-  pscs->OnCapturingStateChanged(ContentSettingsType::MEDIASTREAM_MIC,
-                                is_capturing_audio);
+  pscs->OnCapturingStateChanged(type, is_capturing);
+
+  content::WebContents* pip_web_contents =
+      PictureInPictureWindowManager::GetInstance()->GetChildWebContents();
+  if (pip_web_contents && pip_web_contents != web_contents) {
+    OnCapturingStateChanged(pip_web_contents, type, is_capturing);
+  }
 }
 
 void PageSpecificContentSettingsDelegate::UpdateLocationBar() {
@@ -198,11 +204,6 @@ void PageSpecificContentSettingsDelegate::SetDefaultRendererContentSettingRules(
   }
 }
 
-std::vector<storage::FileSystemType>
-PageSpecificContentSettingsDelegate::GetAdditionalFileSystemTypes() {
-  return browsing_data_file_system_util::GetAdditionalFileSystemTypes();
-}
-
 browsing_data::CookieHelper::IsDeletionDisabledCallback
 PageSpecificContentSettingsDelegate::GetIsDeletionDisabledCallback() {
   return CookiesTreeModel::GetCookieDeletionDisabledCallback(
@@ -264,7 +265,7 @@ void PageSpecificContentSettingsDelegate::OnContentAllowed(
   if (grant_time.is_null())
     return;
   permissions::PermissionUmaUtil::RecordTimeElapsedBetweenGrantAndUse(
-      type, base::Time::Now() - grant_time);
+      type, base::Time::Now() - grant_time, setting_info.source);
   permissions::PermissionUmaUtil::RecordPermissionUsage(
       type, web_contents()->GetBrowserContext(), web_contents(),
       web_contents()->GetLastCommittedURL());

@@ -6,11 +6,11 @@
 #define COMPONENTS_ATTRIBUTION_REPORTING_TEST_UTILS_H_
 
 #include <iosfwd>
+#include <optional>
 
 #include "components/attribution_reporting/filters.h"
 #include "components/attribution_reporting/source_type.mojom-forward.h"
 #include "components/attribution_reporting/trigger_config.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class TimeDelta;
@@ -30,12 +30,13 @@ class SummaryBuckets;
 struct AggregatableDedupKey;
 struct EventTriggerData;
 struct OsRegistrationItem;
+struct ParseError;
 struct SourceRegistration;
 struct TriggerRegistration;
 
 FiltersDisjunction FiltersForSourceType(
     mojom::SourceType,
-    absl::optional<base::TimeDelta> lookback_window = absl::nullopt);
+    std::optional<base::TimeDelta> lookback_window = std::nullopt);
 
 std::ostream& operator<<(std::ostream&, const AggregationKeys&);
 
@@ -72,6 +73,8 @@ std::ostream& operator<<(std::ostream&, const TriggerSpecs&);
 std::ostream& operator<<(std::ostream&, const TriggerSpecs::const_iterator&);
 
 std::ostream& operator<<(std::ostream&, const AggregatableTriggerConfig&);
+
+std::ostream& operator<<(std::ostream&, const ParseError&);
 
 }  // namespace attribution_reporting
 

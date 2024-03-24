@@ -3,8 +3,12 @@
 # found in the LICENSE file.
 
 import("//build/config/chromeos/ui_mode.gni")
+import("//build/config/sanitizers/sanitizers.gni")
+import("//build/util/branding.gni")
 import("//chrome/browser/buildflags.gni")
+import("//chrome/version.gni")
 import("//mojo/public/tools/bindings/mojom.gni")
+import("//testing/test.gni")
 
 source_set("web_applications") {
   sources = [
@@ -71,6 +75,8 @@ source_set("web_applications") {
     "externally_managed_app_manager.h",
     "externally_managed_app_registration_task.cc",
     "externally_managed_app_registration_task.h",
+    "features.cc",
+    "features.h",
     "file_utils_wrapper.cc",
     "file_utils_wrapper.h",
     "generated_icon_fix_manager.cc",
@@ -266,6 +272,8 @@ source_set("web_applications") {
     "web_app_icon_generator.h",
     "web_app_icon_manager.cc",
     "web_app_icon_manager.h",
+    "web_app_icon_operations.cc",
+    "web_app_icon_operations.h",
     "web_app_id_constants.h",
     "web_app_install_finalizer.cc",
     "web_app_install_finalizer.h",
@@ -567,14 +575,56 @@ source_set("web_applications") {
   ]
 }
 
+if (is_mac) {
+  source_set("web_app_shortcut_copier_lib") {
+    sources = [ "os_integration/web_app_shortcut_copier_mac.mm" ]
+
+    deps = [
+      "//base",
+      "//chrome/browser/apps/app_shim:app_shim",
+      "//content/public/common:main_function_params",
+    ]
+  }
+
+  executable("web_app_shortcut_copier") {
+    configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
+    sources = [ "os_integration/web_app_shortcut_copier_main_mac.cc" ]
+
+    deps = [ "//chrome:chrome_framework+link_nested" ]
+
+    ldflags = []
+    if (is_component_build) {
+      ldflags += [
+        # The helper is in Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/X/Helpers
+        # so set rpath up to the base.
+        "-Wl,-rpath,@executable_path/../../../../../../..",
+      ]
+    } else {
+      ldflags += [
+        # The helper is a standalone tool rather than a bundled app so the
+        # framework's install name does not work as-is. Rewrite it so the
+        # relative path is correct given the executable's location.
+        "-Wcrl,installnametool,-change,@executable_path/../Frameworks/${chrome_product_full_name} Framework.framework/Versions/${chrome_version_full}/${chrome_product_full_name} Framework,@executable_path/../${chrome_product_full_name} Framework",
+      ]
+    }
+  }
+}
+
 # This test_support library doesn't use extensions. It must not depend on
 # //chrome/test:test_support{_ui} as it is depended upon by those targets.
 source_set("web_applications_test_support") {
   testonly = true
 
   sources = [
+    "isolated_web_apps/test/isolated_web_app_builder.cc",
+    "isolated_web_apps/test/isolated_web_app_builder.h",
     "isolated_web_apps/test/isolated_web_app_fake_response_reader_factory.cc",
     "isolated_web_apps/test/isolated_web_app_fake_response_reader_factory.h",
+    "isolated_web_apps/test/iwa_test_server_configurator.cc",
+    "isolated_web_apps/test/iwa_test_server_configurator.h",
+    "isolated_web_apps/test/test_signed_web_bundle_builder.cc",
+    "isolated_web_apps/test/test_signed_web_bundle_builder.h",
     "test/debug_info_printer.cc",
     "test/debug_info_printer.h",
     "test/external_app_registration_waiter.cc",
@@ -603,8 +653,6 @@ source_set("web_applications_test_support") {
     "test/mock_data_retriever.h",
     "test/mock_file_utils_wrapper.cc",
     "test/mock_file_utils_wrapper.h",
-    "test/mock_os_integration_manager.cc",
-    "test/mock_os_integration_manager.h",
     "test/os_integration_test_override_impl.cc",
     "test/os_integration_test_override_impl.h",
     "test/signed_web_bundle_utils.cc",
@@ -628,6 +676,12 @@ source_set("web_applications_test_support") {
     "test/with_crosapi_param.cc",
     "test/with_crosapi_param.h",
   ]
+  if (is_chromeos) {
+    sources += [
+      "isolated_web_apps/test/policy_generator.cc",
+      "isolated_web_apps/test/policy_generator.h",
+    ]
+  }
   public_deps = [ "//components/webapps/common:mojo_bindings" ]
   deps = [
     ":web_applications",
@@ -685,6 +739,24 @@ source_set("prevent_close_test_support") {
     "//components/webapps/common:common",
     "//ui/base:types",
   ]
+}
+
+if (fuzztest_supported) {
+  test("web_application_fuzztests") {
+    testonly = true
+    fuzztests =
+        [ "UpdateManifestFuzzTest.UpdateManifestCanSuccessfullyParseAnyString" ]
+
+    sources = [ "isolated_web_apps/update_manifest/update_manifest_fuzzer.cc" ]
+
+    deps = [
+      ":web_applications",
+      ":web_applications_test_support",
+      "//chrome/test:test_support",
+      "//components/webapps/common:common",
+      "//third_party/fuzztest:fuzztest_gtest_main",
+    ]
+  }
 }
 
 source_set("web_applications_unit_tests") {
@@ -1101,5 +1173,9 @@ source_set("interactive_ui_tests") {
       "//components/services/app_service",
       "//components/user_manager",
     ]
+  }
+
+  if (is_mac) {
+    deps += [ "//chrome/browser/apps/app_shim" ]
   }
 }

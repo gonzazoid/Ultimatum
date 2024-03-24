@@ -88,7 +88,7 @@ inline PhysicalRect PhysicalBoxRect(const InlineCursor& cursor,
 
 inline const InlineCursor& InlineCursorForBlockFlow(
     const InlineCursor& cursor,
-    absl::optional<InlineCursor>* storage) {
+    std::optional<InlineCursor>* storage) {
   if (*storage)
     return **storage;
   *storage = cursor;
@@ -283,7 +283,7 @@ void TextFragmentPainter::Paint(const PaintInfo& paint_info,
 
   // Determine whether or not we’ll need a writing-mode rotation, but don’t
   // actually rotate until we reach the steps that need it.
-  absl::optional<AffineTransform> rotation;
+  std::optional<AffineTransform> rotation;
   const WritingMode writing_mode = style.GetWritingMode();
   const bool is_horizontal = IsHorizontalWritingMode(writing_mode);
   const LineRelativeRect rotated_box =
@@ -295,7 +295,7 @@ void TextFragmentPainter::Paint(const PaintInfo& paint_info,
 
   // Determine whether or not we're selected.
   HighlightPainter::SelectionPaintState* selection = nullptr;
-  absl::optional<HighlightPainter::SelectionPaintState>
+  std::optional<HighlightPainter::SelectionPaintState>
       selection_for_bounds_recording;
   if (UNLIKELY(!is_printing && !is_rendering_resource &&
                paint_info.phase != PaintPhase::kTextClip &&
@@ -342,7 +342,7 @@ void TextFragmentPainter::Paint(const PaintInfo& paint_info,
   // Ensure the selection bounds are recorded on the paint chunk regardless of
   // whether the display item that contains the actual selection painting is
   // reused.
-  absl::optional<SelectionBoundsRecorder> selection_recorder;
+  std::optional<SelectionBoundsRecorder> selection_recorder;
   if (UNLIKELY(selection_for_bounds_recording &&
                paint_info.phase == PaintPhase::kForeground && !is_printing)) {
     if (SelectionBoundsRecorder::ShouldRecordSelection(
@@ -360,7 +360,7 @@ void TextFragmentPainter::Paint(const PaintInfo& paint_info,
   // This is declared after selection_recorder so that this will be destructed
   // before selection_recorder to ensure the selection is painted before
   // selection_recorder records the selection bounds.
-  absl::optional<DrawingRecorder> recorder;
+  std::optional<DrawingRecorder> recorder;
   const auto& display_item_client =
       AsDisplayItemClient(cursor_, selection != nullptr);
   // Text clips are initiated only in BoxPainterBase::PaintFillLayer, which is
@@ -395,16 +395,12 @@ void TextFragmentPainter::Paint(const PaintInfo& paint_info,
   }
 
   // Set our font.
-  const Font& font =
-      UNLIKELY(text_combine && text_combine->UsesCompressedFont())
-          ? text_combine->CompressedFont()
-          : text_item.ScaledFont();
+  const Font& font = UNLIKELY(text_combine && text_combine->CompressedFont())
+                         ? *text_combine->CompressedFont()
+                         : text_item.ScaledFont();
   const SimpleFontData* font_data = font.PrimaryFont();
   DCHECK(font_data);
 
-  const bool paint_marker_backgrounds =
-      paint_info.phase != PaintPhase::kSelectionDragImage &&
-      paint_info.phase != PaintPhase::kTextClip && !is_printing;
   GraphicsContextStateSaver state_saver(context, /*save_and_restore=*/false);
   const int ascent = font_data ? font_data->GetFontMetrics().Ascent() : 0;
   LineRelativeOffset text_origin{
@@ -414,14 +410,14 @@ void TextFragmentPainter::Paint(const PaintInfo& paint_info,
           : physical_box.offset.top + ascent};
 
   TextPainter text_painter(context, font, visual_rect, text_origin,
-                           inline_context_, is_horizontal);
-  TextDecorationPainter decoration_painter(text_painter, text_item, paint_info,
-                                           style, text_style, rotated_box,
-                                           selection);
-  HighlightPainter highlight_painter(
-      fragment_paint_info, text_painter, decoration_painter, paint_info,
-      cursor_, *cursor_.CurrentItem(), rotation, physical_box.offset, style,
-      text_style, selection, is_printing);
+                           is_horizontal);
+  TextDecorationPainter decoration_painter(text_painter, inline_context_,
+                                           paint_info, style, text_style,
+                                           rotated_box, selection);
+  HighlightPainter highlight_painter(fragment_paint_info, text_painter,
+                                     decoration_painter, paint_info, cursor_,
+                                     text_item, rotation, physical_box.offset,
+                                     style, text_style, selection);
   if (paint_info.phase == PaintPhase::kForeground) {
     if (auto* mf_checker = MobileFriendlinessChecker::From(document)) {
       if (auto* text = DynamicTo<LayoutText>(*layout_object)) {
@@ -456,10 +452,16 @@ void TextFragmentPainter::Paint(const PaintInfo& paint_info,
     }
   }
 
+  const bool paint_marker_backgrounds =
+      paint_info.phase != PaintPhase::kSelectionDragImage &&
+      paint_info.phase != PaintPhase::kTextClip && !is_printing;
+
   // 1. Paint backgrounds for document markers that don’t participate in the CSS
   // highlight overlay system, such as composition highlights. They use physical
   // coordinates, so are painted before GraphicsContext rotation.
-  highlight_painter.Paint(HighlightPainter::kBackground);
+  if (paint_marker_backgrounds) {
+    highlight_painter.Paint(HighlightPainter::kBackground);
+  }
 
   if (rotation) {
     state_saver.SaveIfNeeded();
@@ -507,14 +509,14 @@ void TextFragmentPainter::Paint(const PaintInfo& paint_info,
   switch (highlight_case) {
     case HighlightPainter::kNoHighlights:
       // Fast path: just paint the text, including its decorations.
-      decoration_painter.Begin(TextDecorationPainter::kOriginating);
+      decoration_painter.Begin(text_item, TextDecorationPainter::kOriginating);
       decoration_painter.PaintExceptLineThrough(fragment_paint_info);
       text_painter.Paint(fragment_paint_info, text_style, node_id,
                          auto_dark_mode);
       decoration_painter.PaintOnlyLineThrough();
       break;
     case HighlightPainter::kFastSpellingGrammar:
-      decoration_painter.Begin(TextDecorationPainter::kOriginating);
+      decoration_painter.Begin(text_item, TextDecorationPainter::kOriginating);
       decoration_painter.PaintExceptLineThrough(fragment_paint_info);
       text_painter.Paint(fragment_paint_info, text_style, node_id,
                          auto_dark_mode);
@@ -561,7 +563,7 @@ void TextFragmentPainter::Paint(const PaintInfo& paint_info,
             auto_dark_mode);
         break;
       case HighlightPainter::kSelectionOnly:
-        decoration_painter.Begin(TextDecorationPainter::kSelection);
+        decoration_painter.Begin(text_item, TextDecorationPainter::kSelection);
         decoration_painter.PaintExceptLineThrough(fragment_paint_info);
         highlight_painter.Selection()->PaintSelectedText(
             text_painter, fragment_paint_info, text_style, node_id,

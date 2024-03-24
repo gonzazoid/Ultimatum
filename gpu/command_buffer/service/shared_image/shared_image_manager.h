@@ -85,7 +85,8 @@ class GPU_GLES2_EXPORT SharedImageManager
       MemoryTypeTracker* ref,
       const wgpu::Device& device,
       wgpu::BackendType backend_type,
-      std::vector<wgpu::TextureFormat> view_formats);
+      std::vector<wgpu::TextureFormat> view_formats,
+      scoped_refptr<SharedContextState> context_state);
   std::unique_ptr<OverlayImageRepresentation> ProduceOverlay(
       const Mailbox& mailbox,
       MemoryTypeTracker* ref);
@@ -122,6 +123,10 @@ class GPU_GLES2_EXPORT SharedImageManager
   void UpdateExternalFence(const Mailbox& mailbox,
                            scoped_refptr<gfx::D3DSharedFence> external_fence);
 #endif
+
+  // Provides the usage flags supported by the given |mailbox|. Returns nullopt
+  // if no backing is registered for `mailbox`.
+  std::optional<uint32_t> GetUsageForMailbox(const Mailbox& mailbox);
 
   // Called by SharedImageRepresentation in the destructor.
   void OnRepresentationDestroyed(const Mailbox& mailbox,

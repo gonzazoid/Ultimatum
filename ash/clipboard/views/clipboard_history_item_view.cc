@@ -463,7 +463,7 @@ Action ClipboardHistoryItemView::CalculateActionForMainButtonClick() const {
       return Action::kDelete;
     case PseudoFocus::kEmpty:
     case PseudoFocus::kMaxValue:
-      NOTREACHED();
+      DUMP_WILL_BE_NOTREACHED_NORETURN();
       return Action::kEmpty;
   }
 }
@@ -526,13 +526,13 @@ void ClipboardHistoryItemView::SetPseudoFocus(PseudoFocus new_pseudo_focus) {
   }
 }
 
-BEGIN_METADATA(ClipboardHistoryItemView, ContentsView, views::View)
+BEGIN_METADATA(ClipboardHistoryItemView, ContentsView)
 END_METADATA
 
-BEGIN_METADATA(ClipboardHistoryItemView, DisplayView, views::View)
+BEGIN_METADATA(ClipboardHistoryItemView, DisplayView)
 END_METADATA
 
-BEGIN_METADATA(ClipboardHistoryItemView, views::View)
+BEGIN_METADATA(ClipboardHistoryItemView)
 END_METADATA
 
 }  // namespace ash

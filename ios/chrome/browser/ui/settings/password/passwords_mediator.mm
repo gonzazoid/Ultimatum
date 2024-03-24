@@ -13,7 +13,7 @@
 #import "components/password_manager/core/browser/password_manager_client.h"
 #import "components/password_manager/core/browser/password_sync_util.h"
 #import "components/sync/service/sync_service_utils.h"
-#import "ios/chrome/browser/favicon/favicon_loader.h"
+#import "ios/chrome/browser/favicon/model/favicon_loader.h"
 #import "ios/chrome/browser/net/model/crurl.h"
 #import "ios/chrome/browser/passwords/model/password_check_observer_bridge.h"
 #import "ios/chrome/browser/passwords/model/password_checkup_utils.h"
@@ -32,7 +32,7 @@
 #import "ios/chrome/common/ui/favicon/favicon_constants.h"
 #import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 #import "ui/base/l10n/l10n_util_mac.h"
 #import "url/gurl.h"
 
@@ -84,16 +84,21 @@ using password_manager::WarningType;
 
   // Service to know whether passwords are synced.
   raw_ptr<syncer::SyncService> _syncService;
+
+  // The user pref service.
+  raw_ptr<PrefService> _prefService;
 }
 
 - (instancetype)initWithPasswordCheckManager:
                     (scoped_refptr<IOSChromePasswordCheckManager>)
                         passwordCheckManager
                                faviconLoader:(FaviconLoader*)faviconLoader
-                                 syncService:(syncer::SyncService*)syncService {
+                                 syncService:(syncer::SyncService*)syncService
+                                 prefService:(PrefService*)prefService {
   self = [super init];
   if (self) {
     _syncService = syncService;
+    _prefService = prefService;
     _faviconLoader = faviconLoader;
 
     _syncObserver = std::make_unique<SyncObserverBridge>(self, syncService);
@@ -122,9 +127,9 @@ using password_manager::WarningType;
   _currentState = _passwordCheckManager->GetPasswordCheckState();
   [self updateConsumerPasswordCheckState:_currentState];
   [self.consumer
-      setSavingPasswordsToAccount:password_manager::sync_util::
-                                      GetPasswordSyncState(_syncService) !=
-                                  password_manager::SyncState::kNotSyncing];
+      setSavingPasswordsToAccount:
+          password_manager::sync_util::GetPasswordSyncState(_syncService) !=
+          password_manager::sync_util::SyncState::kNotActive];
 }
 
 - (void)disconnect {
@@ -139,6 +144,7 @@ using password_manager::WarningType;
   _passwordCheckManager.reset();
   _savedPasswordsPresenter = nullptr;
   _faviconLoader = nullptr;
+  _prefService = nullptr;
   _syncService = nullptr;
 }
 
@@ -159,7 +165,8 @@ using password_manager::WarningType;
 }
 
 - (void)startPasswordCheck {
-  _passwordCheckManager->StartPasswordCheck();
+  _passwordCheckManager->StartPasswordCheck(
+      password_manager::LeakDetectionInitiator::kBulkSyncedPasswordsCheck);
 }
 
 - (NSString*)formattedElapsedTimeSinceLastCheck {
@@ -344,7 +351,8 @@ using password_manager::WarningType;
 
 // Compute whether user is capable to run password check in Google Account.
 - (BOOL)canUseAccountPasswordCheckup {
-  return password_manager::sync_util::GetAccountForSaving(_syncService) &&
+  return password_manager::sync_util::GetAccountForSaving(_prefService,
+                                                          _syncService) &&
          !_syncService->GetUserSettings()->IsEncryptEverythingEnabled();
 }
 
@@ -390,9 +398,9 @@ using password_manager::WarningType;
 
 - (void)onSyncStateChanged {
   [self.consumer
-      setSavingPasswordsToAccount:password_manager::sync_util::
-                                      GetPasswordSyncState(_syncService) !=
-                                  password_manager::SyncState::kNotSyncing];
+      setSavingPasswordsToAccount:
+          password_manager::sync_util::GetPasswordSyncState(_syncService) !=
+          password_manager::sync_util::SyncState::kNotActive];
 }
 
 @end

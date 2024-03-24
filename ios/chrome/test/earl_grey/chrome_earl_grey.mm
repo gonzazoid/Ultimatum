@@ -24,7 +24,7 @@
 #import "ios/testing/earl_grey/system_alert_handler.h"
 #import "ios/testing/nserror_util.h"
 #import "ios/web/public/test/element_selector.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 
 using base::test::ios::kWaitForActionTimeout;
 using base::test::ios::kWaitForJSCompletionTimeout;
@@ -1583,7 +1583,7 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration) {
 - (GURL)pasteboardURL {
   NSString* absoluteString = [ChromeEarlGreyAppInterface pasteboardURLSpec];
   return absoluteString ? GURL(base::SysNSStringToUTF8(absoluteString))
-                        : GURL::EmptyGURL();
+                        : GURL();
 }
 
 - (void)clearPasteboard {

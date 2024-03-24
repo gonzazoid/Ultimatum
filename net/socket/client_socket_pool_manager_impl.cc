@@ -91,7 +91,7 @@ ClientSocketPool* ClientSocketPoolManagerImpl::GetSocketPool(
   }
 
   std::pair<SocketPoolMap::iterator, bool> ret =
-      socket_pools_.insert(std::make_pair(proxy_chain, std::move(new_pool)));
+      socket_pools_.emplace(proxy_chain, std::move(new_pool));
   return ret.first->second.get();
 }
 
@@ -106,8 +106,7 @@ base::Value ClientSocketPoolManagerImpl::SocketPoolInfoToValue() const {
     const ProxyChain& proxy_chain = socket_pool.first;
     if (proxy_chain.is_direct()) {
       type = "transport_socket_pool";
-    } else if (proxy_chain.GetProxyServer(proxy_chain.length() - 1)
-                   .is_socks()) {
+    } else if (proxy_chain.Last().is_socks()) {
       type = "socks_socket_pool";
     } else {
       type = "http_proxy_socket_pool";

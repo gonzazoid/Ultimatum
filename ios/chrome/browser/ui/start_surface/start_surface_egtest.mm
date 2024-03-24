@@ -6,6 +6,7 @@
 
 #import "base/test/ios/wait_util.h"
 #import "base/time/time.h"
+#import "build/branding_buildflags.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/ui/content_suggestions/content_suggestions_constants.h"
 #import "ios/chrome/browser/ui/content_suggestions/tab_resumption/tab_resumption_constants.h"
@@ -81,7 +82,13 @@ void WaitUntilTabResumptionTileVisibleOrTimeout(bool should_show) {
 
 // Tests that navigating to a page and restarting upon cold start, an NTP page
 // is opened with the Return to Recent Tab tile.
-- (void)testColdStartOpenStartSurface {
+// TODO(b/324867042): This test fails on Official bots and ipad device.
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING) || !TARGET_OS_SIMULATOR
+#define MAYBE_testColdStartOpenStartSurface FLAKY_testColdStartOpenStartSurface
+#else
+#define MAYBE_testColdStartOpenStartSurface testColdStartOpenStartSurface
+#endif
+- (void)MAYBE_testColdStartOpenStartSurface {
   GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
   const GURL destinationUrl = self.testServer->GetURL("/pony.html");
   [ChromeEarlGrey loadURL:destinationUrl];
@@ -99,7 +106,13 @@ void WaitUntilTabResumptionTileVisibleOrTimeout(bool should_show) {
 
 // Tests that navigating to a page and then backgrounding and foregrounding, an
 // NTP page is opened.
-- (void)testWarmStartOpenStartSurface {
+// TODO(b/324867042): This test fails on Official bots and ipad device.
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING) || !TARGET_OS_SIMULATOR
+#define MAYBE_testWarmStartOpenStartSurface FLAKY_testWarmStartOpenStartSurface
+#else
+#define MAYBE_testWarmStartOpenStartSurface testWarmStartOpenStartSurface
+#endif
+- (void)MAYBE_testWarmStartOpenStartSurface {
   GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
   const GURL destinationUrl = self.testServer->GetURL("/pony.html");
   [ChromeEarlGrey loadURL:destinationUrl];
@@ -119,7 +132,15 @@ void WaitUntilTabResumptionTileVisibleOrTimeout(bool should_show) {
 // Tests that navigating to a page and restarting upon cold start, an NTP page
 // is opened with the Return to Recent Tab tile. Then, removing that last tab
 // also removes the tile while that NTP is still being shown.
-- (void)testRemoveRecentTabRemovesReturnToRecentTabTile {
+// TODO(b/324867042): This test fails on Official bots and ipad device.
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING) || !TARGET_OS_SIMULATOR
+#define MAYBE_testRemoveRecentTabRemovesReturnToRecentTabTile \
+    FLAKY_testRemoveRecentTabRemovesReturnToRecentTabTile
+#else
+#define MAYBE_testRemoveRecentTabRemovesReturnToRecentTabTile \
+    testRemoveRecentTabRemovesReturnToRecentTabTile
+#endif
+- (void)MAYBE_testRemoveRecentTabRemovesReturnToRecentTabTile {
   GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
   const GURL destinationUrl = self.testServer->GetURL("/pony.html");
   [ChromeEarlGrey loadURL:destinationUrl];

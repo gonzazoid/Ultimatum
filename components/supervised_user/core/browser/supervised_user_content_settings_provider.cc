@@ -4,12 +4,16 @@
 
 #include "components/supervised_user/core/browser/supervised_user_content_settings_provider.h"
 
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "base/functional/bind.h"
 #include "base/values.h"
+#include "components/content_settings/core/browser/content_settings_rule.h"
+#include "components/content_settings/core/common/content_settings.h"
+#include "components/content_settings/core/common/content_settings_metadata.h"
 #include "components/supervised_user/core/browser/supervised_user_settings_service.h"
 #include "components/supervised_user/core/common/supervised_user_constants.h"
 
@@ -74,6 +78,23 @@ SupervisedUserContentSettingsProvider::GetRuleIterator(
   return value_map_.GetRuleIterator(content_type);
 }
 
+std::unique_ptr<content_settings::Rule>
+SupervisedUserContentSettingsProvider::GetRule(
+    const GURL& primary_url,
+    const GURL& secondary_url,
+    ContentSettingsType content_type,
+    bool off_the_record,
+    const content_settings::PartitionKey& partition_key) const {
+  base::AutoLock auto_lock(lock_);
+  ContentSetting setting = value_map_.GetContentSetting(content_type);
+  if (setting != CONTENT_SETTING_DEFAULT) {
+    return std::make_unique<content_settings::Rule>(
+        ContentSettingsPattern::Wildcard(), ContentSettingsPattern::Wildcard(),
+        base::Value(setting), content_settings::RuleMetaData{});
+  }
+  return nullptr;
+}
+
 void SupervisedUserContentSettingsProvider::OnSupervisedSettingsAvailable(
     const base::Value::Dict& settings) {
   std::vector<ContentSettingsType> to_notify;
@@ -96,7 +117,8 @@ void SupervisedUserContentSettingsProvider::OnSupervisedSettingsAvailable(
   }
   for (ContentSettingsType type : to_notify) {
     NotifyObservers(ContentSettingsPattern::Wildcard(),
-                    ContentSettingsPattern::Wildcard(), type);
+                    ContentSettingsPattern::Wildcard(), type,
+                    /*partition_key=*/nullptr);
   }
 }
 

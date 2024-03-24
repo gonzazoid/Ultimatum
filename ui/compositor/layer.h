@@ -536,7 +536,6 @@ class COMPOSITOR_EXPORT Layer : public LayerAnimationDelegate,
   void SetScrollOffset(const gfx::PointF& offset);
 
   // ContentLayerClient implementation.
-  gfx::Rect PaintableRegion() const override;
   scoped_refptr<cc::DisplayItemList> PaintContentsToDisplayList() override;
   bool FillsBoundsCompletely() const override;
 
@@ -675,7 +674,7 @@ class COMPOSITOR_EXPORT Layer : public LayerAnimationDelegate,
   cc::Layer* GetCcLayer() const override;
   LayerThreadedAnimationDelegate* GetThreadedAnimationDelegate() override;
   LayerAnimatorCollection* GetLayerAnimatorCollection() override;
-  absl::optional<int> GetFrameNumber() const override;
+  std::optional<int> GetFrameNumber() const override;
   float GetRefreshRate() const override;
 
   // Creates a corresponding composited layer for |type_|.
@@ -815,7 +814,7 @@ class COMPOSITOR_EXPORT Layer : public LayerAnimationDelegate,
 
   std::string name_;
 
-  raw_ptr<LayerDelegate, DanglingUntriaged> delegate_;
+  raw_ptr<LayerDelegate, DanglingUntriaged> delegate_ = nullptr;
 
   base::ObserverList<LayerObserver>::Unchecked observer_list_;
 

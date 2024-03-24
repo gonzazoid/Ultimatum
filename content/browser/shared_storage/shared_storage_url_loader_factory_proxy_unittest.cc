@@ -68,7 +68,9 @@ class SharedStorageURLLoaderFactoryProxyTest : public testing::Test {
         std::make_unique<SharedStorageURLLoaderFactoryProxy>(
             factory.Unbind(),
             remote_url_loader_factory_.BindNewPipeAndPassReceiver(),
-            frame_origin_, GURL(kScriptUrl));
+            frame_origin_, GURL(kScriptUrl),
+            network::mojom::CredentialsMode::kSameOrigin,
+            net::SiteForCookies::FromOrigin(frame_origin_));
   }
 
   // Attempts to make a request for `request`.
@@ -150,7 +152,7 @@ class SharedStorageURLLoaderFactoryProxyTest : public testing::Test {
     // The initiator should be set.
     EXPECT_EQ(frame_origin_, observed_request.request_initiator);
 
-    EXPECT_EQ(network::mojom::RequestMode::kSameOrigin, observed_request.mode);
+    EXPECT_EQ(network::mojom::RequestMode::kCors, observed_request.mode);
     ASSERT_FALSE(observed_request.trusted_params);
   }
 

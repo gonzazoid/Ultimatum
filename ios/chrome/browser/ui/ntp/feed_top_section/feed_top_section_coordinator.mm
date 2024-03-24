@@ -15,6 +15,8 @@
 #import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
 #import "ios/chrome/browser/shared/public/commands/application_commands.h"
 #import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/settings_commands.h"
+#import "ios/chrome/browser/shared/public/commands/snackbar_commands.h"
 #import "ios/chrome/browser/signin/model/authentication_service.h"
 #import "ios/chrome/browser/signin/model/authentication_service_factory.h"
 #import "ios/chrome/browser/signin/model/chrome_account_manager_service.h"
@@ -27,6 +29,7 @@
 #import "ios/chrome/browser/ui/ntp/feed_top_section/feed_top_section_view_controller.h"
 #import "ios/chrome/browser/ui/ntp/new_tab_page_delegate.h"
 #import "ios/chrome/browser/ui/ntp/new_tab_page_utils.h"
+#import "ios/chrome/browser/ui/push_notification/notifications_confirmation_presenter.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util_mac.h"
 
@@ -106,6 +109,7 @@
         self.signinPromoMediator;
   }
 
+  self.feedTopSectionMediator.messagePresenter = self;
   self.feedTopSectionMediator.notificationsPresenter = self;
   self.feedTopSectionMediator.NTPDelegate = self.NTPDelegate;
   self.feedTopSectionViewController.delegate = self.feedTopSectionMediator;
@@ -202,6 +206,27 @@
                 }
                  style:UIAlertActionStyleDefault];
   [_alertCoordinator start];
+}
+
+#pragma mark - NotificationsConfirmationPresenter
+
+- (void)presentNotificationsConfirmationMessage {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    id<SnackbarCommands> snackbarHandler = HandlerForProtocol(
+        self.browser->GetCommandDispatcher(), SnackbarCommands);
+    id<SettingsCommands> settingsHandler = HandlerForProtocol(
+        self.browser->GetCommandDispatcher(), SettingsCommands);
+    NSString* title =
+        l10n_util::GetNSString(IDS_IOS_CONTENT_NOTIFICATION_SNACKBAR_TITLE);
+    NSString* buttonText = l10n_util::GetNSString(
+        IDS_IOS_CONTENT_NOTIFICATION_SNACKBAR_ACTION_MANAGE);
+    [snackbarHandler showSnackbarWithMessage:title
+                                  buttonText:buttonText
+                               messageAction:^{
+                                 [settingsHandler showNotificationsSettings];
+                               }
+                            completionAction:nil];
+  });
 }
 
 #pragma mark - Private

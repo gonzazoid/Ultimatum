@@ -74,7 +74,7 @@ class CONTENT_EXPORT IndexedDBDatabase {
 
   const Identifier& identifier() const { return identifier_; }
   IndexedDBBackingStore* backing_store();
-  PartitionedLockManager* lock_manager();
+  PartitionedLockManager& lock_manager();
 
   int64_t id() const { return metadata_.id; }
   const std::u16string& name() const { return metadata_.name; }
@@ -281,8 +281,6 @@ class CONTENT_EXPORT IndexedDBDatabase {
   bool IsObjectStoreIdInMetadataAndIndexNotInMetadata(int64_t object_store_id,
                                                       int64_t index_id) const;
 
-  bool IsTransactionBlockingOthers(IndexedDBTransaction* transaction) const;
-
   base::WeakPtr<IndexedDBDatabase> AsWeakPtr() {
     return weak_factory_.GetWeakPtr();
   }
@@ -321,7 +319,8 @@ class CONTENT_EXPORT IndexedDBDatabase {
   std::unique_ptr<IndexedDBConnection> CreateConnection(
       std::unique_ptr<IndexedDBDatabaseCallbacks> database_callbacks,
       mojo::Remote<storage::mojom::IndexedDBClientStateChecker>
-          client_state_checker);
+          client_state_checker,
+      base::UnguessableToken client_token);
 
   // Ack that one of the connections notified with a "versionchange" event did
   // not promptly close. Therefore a "blocked" event should be fired at the

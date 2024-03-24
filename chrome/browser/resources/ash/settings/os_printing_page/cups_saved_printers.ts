@@ -7,8 +7,8 @@
  * Printers.
  */
 
-import 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
-import 'chrome://resources/cr_elements/icons.html.js';
+import 'chrome://resources/ash/common/cr_elements/cr_action_menu/cr_action_menu.js';
+import 'chrome://resources/ash/common/cr_elements/icons.html.js';
 import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 import '../settings_shared.css.js';
@@ -16,13 +16,15 @@ import './cups_printer_types.js';
 import './cups_printers_browser_proxy.js';
 import './cups_printers_entry.js';
 
-import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/ash/common/cr_elements/web_ui_listener_mixin.js';
 import {assert} from 'chrome://resources/js/assert.js';
 import {addWebUiListener} from 'chrome://resources/js/cr.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import type {IronListElement} from 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {recordSettingChange} from '../metrics_recorder.js';
+import {Setting} from '../mojom-webui/setting.mojom-webui.js';
 
 import {matchesSearchTerm, sortPrinters} from './cups_printer_dialog_util.js';
 import {PrinterListEntry} from './cups_printer_types.js';
@@ -306,6 +308,13 @@ export class SettingsCupsSavedPrintersElement extends
         'filteredPrinters_',
         (printer: PrinterListEntry) => printer.printerInfo.printerId,
         updatedPrinters);
+
+    // Trigger a resize to display additional printers when the list size
+    // increases.
+    const printerEntryList =
+        this.shadowRoot!.querySelector<IronListElement>('#printerEntryList');
+    assert(printerEntryList);
+    printerEntryList.notifyResize();
   }
 
   private onOpenActionMenu_(
@@ -340,10 +349,10 @@ export class SettingsCupsSavedPrintersElement extends
     this.printerStatusReasonCache_.delete(this.activePrinter!.printerId);
     this.browserProxy_.removeCupsPrinter(
         this.activePrinter!.printerId, this.activePrinter!.printerName);
-    recordSettingChange();
     this.activePrinter = null;
     this.activePrinterListEntryIndex_ = -1;
     this.closeActionMenu_();
+    recordSettingChange(Setting.kRemovePrinter);
     recordPrinterSettingsUserAction(PrinterSettingsUserAction.REMOVE_PRINTER);
   }
 

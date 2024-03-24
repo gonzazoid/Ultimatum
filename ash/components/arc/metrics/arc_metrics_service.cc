@@ -87,7 +87,7 @@ std::string BootTypeToString(mojom::BootType boot_type) {
     case mojom::BootType::REGULAR_BOOT:
       return ".RegularBoot";
   }
-  NOTREACHED();
+  DUMP_WILL_BE_NOTREACHED_NORETURN();
   return "";
 }
 
@@ -680,8 +680,8 @@ void ArcMetricsService::ReportArcSystemHealthUpgrade(base::TimeDelta duration,
 
 void ArcMetricsService::ReportClipboardDragDropEvent(
     mojom::ArcClipboardDragDropEvent event_type) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  base::UmaHistogramEnumeration("Arc.ClipboardDragDrop", event_type);
+  // This method is deprecated.
+  // TODO(yhanada): Remove this once all callers are removed.
 }
 
 void ArcMetricsService::ReportAnr(mojom::AnrPtr anr) {
@@ -840,6 +840,16 @@ void ArcMetricsService::ReportQosSocketPercentage(int perc) {
 void ArcMetricsService::ReportArcKeyMintError(mojom::ArcKeyMintError error) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   base::UmaHistogramEnumeration("Arc.KeyMint.KeyMintError", error);
+}
+
+void ArcMetricsService::ReportDragResizeLatency(
+    const std::vector<base::TimeDelta>& durations) {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  for (const auto duration : durations) {
+    base::UmaHistogramCustomTimes("Arc.WM.WindowDragResizeTime", duration,
+                                  /*minimum=*/base::Milliseconds(1),
+                                  /*maximum=*/base::Seconds(3), 100);
+  }
 }
 
 void ArcMetricsService::OnWindowActivated(

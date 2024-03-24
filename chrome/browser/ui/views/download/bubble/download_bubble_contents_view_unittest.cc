@@ -35,6 +35,7 @@
 
 namespace {
 
+using ::testing::_;
 using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::ReturnRefOfCopy;
@@ -47,6 +48,10 @@ class MockDownloadBubbleNavigationHandler
   void OpenSecurityDialog(const offline_items_collection::ContentId&) override {
   }
   void CloseDialog(views::Widget::ClosedReason) override {}
+  MOCK_METHOD(void,
+              OnSecurityDialogButtonPress,
+              (const DownloadUIModel& model, DownloadCommands::Command command),
+              (override));
   void ResizeDialog() override {}
   void OnDialogInteracted() override {}
   std::unique_ptr<views::BubbleDialogDelegate::CloseOnDeactivatePin>
@@ -363,6 +368,61 @@ TEST_P(DownloadBubbleContentsViewTest, AddSecuritySubpageWarningActionEvent) {
       DownloadItemWarningData::GetWarningActionEvents(download_items_[0].get());
   ASSERT_EQ(events.size(), 1u);
   EXPECT_EQ(events[0].action, DownloadItemWarningData::WarningAction::BACK);
+}
+
+TEST_P(DownloadBubbleContentsViewTest, LogDismissOnDestroyed) {
+  contents_view_->ShowSecurityPage(
+      OfflineItemUtils::GetContentIdForDownload(download_items_[0].get()));
+  EXPECT_TRUE(contents_view_->security_view_for_testing()->IsInitialized());
+
+  // First action is required to be SHOWN.
+  DownloadItemWarningData::AddWarningActionEvent(
+      download_items_[0].get(),
+      DownloadItemWarningData::WarningSurface::BUBBLE_MAINPAGE,
+      DownloadItemWarningData::WarningAction::SHOWN);
+
+  contents_view_.reset();
+
+  std::vector<DownloadItemWarningData::WarningActionEvent> events =
+      DownloadItemWarningData::GetWarningActionEvents(download_items_[0].get());
+  ASSERT_EQ(events.size(), 1u);
+  EXPECT_EQ(events[0].action, DownloadItemWarningData::WarningAction::DISMISS);
+}
+
+TEST_P(DownloadBubbleContentsViewTest,
+       DontLogDismissOnDestroyedIfSecurityViewNotShown) {
+  contents_view_->ShowSecurityPage(
+      OfflineItemUtils::GetContentIdForDownload(download_items_[0].get()));
+  EXPECT_TRUE(contents_view_->security_view_for_testing()->IsInitialized());
+
+  // First action is required to be SHOWN.
+  DownloadItemWarningData::AddWarningActionEvent(
+      download_items_[0].get(),
+      DownloadItemWarningData::WarningSurface::BUBBLE_MAINPAGE,
+      DownloadItemWarningData::WarningAction::SHOWN);
+
+  contents_view_->ShowPrimaryPage();
+
+  contents_view_.reset();
+
+  std::vector<DownloadItemWarningData::WarningActionEvent> events =
+      DownloadItemWarningData::GetWarningActionEvents(download_items_[0].get());
+  EXPECT_TRUE(events.empty());
+}
+
+TEST_P(DownloadBubbleContentsViewTest,
+       ProcessSecuritySubpageButtonPressCallsOnSecurityDialogButtonPress) {
+  contents_view_->ShowSecurityPage(
+      OfflineItemUtils::GetContentIdForDownload(download_items_[0].get()));
+  EXPECT_TRUE(contents_view_->security_view_for_testing()->IsInitialized());
+
+  EXPECT_CALL(*download_items_[0], Remove());
+  EXPECT_CALL(*navigation_handler_, OnSecurityDialogButtonPress(
+                                        _, DownloadCommands::Command::DISCARD))
+      .Times(1);
+  contents_view_->ProcessSecuritySubpageButtonPress(
+      OfflineItemUtils::GetContentIdForDownload(download_items_[0].get()),
+      DownloadCommands::Command::DISCARD);
 }
 
 }  // namespace

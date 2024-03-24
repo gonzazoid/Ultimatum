@@ -4,11 +4,12 @@
 
 #include "chrome/browser/ash/login/demo_mode/demo_session.h"
 
+#include <string_view>
+
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/strings/string_piece.h"
 #include "chrome/browser/ash/login/demo_mode/demo_setup_controller.h"
 #include "chrome/browser/ash/login/login_manager_test.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
@@ -402,7 +403,7 @@ class DemoSessionLoginWithGrowthCampaignTest : public DemoSessionLoginTest {
         {});
   }
 
-  void CreateTestCampaignsFile(base::StringPiece data) {
+  void CreateTestCampaignsFile(std::string_view data) {
     auto campaigns_mounted_path = growth_campaigns_mounted_path();
     CHECK(base::CreateDirectory(campaigns_mounted_path));
 
@@ -415,8 +416,9 @@ class DemoSessionLoginWithGrowthCampaignTest : public DemoSessionLoginTest {
   base::test::ScopedFeatureList scoped_feature_list_;
 };
 
+// TODO(b/318756868): Re-enable flaky test.
 IN_PROC_BROWSER_TEST_F(DemoSessionLoginWithGrowthCampaignTest,
-                       DemoSWALaunchesOnSessionStartupWithPayload) {
+                       DISABLED_DemoSWALaunchesOnSessionStartupWithPayload) {
   base::ScopedAllowBlockingForTesting scoped_allow_blocking;
 
   CreateTestCampaignsFile(R"({
@@ -492,8 +494,9 @@ IN_PROC_BROWSER_TEST_F(DemoSessionLoginWithGrowthCampaignTest,
   EXPECT_FALSE(variations::HasSyntheticTrial("CrOSGrowthStudy"));
 }
 
+// TODO(b/318756868): Re-enable flaky test.
 IN_PROC_BROWSER_TEST_F(DemoSessionLoginWithGrowthCampaignTest,
-                       DemoSWALaunchesOnSessionStartupMismatch) {
+                       DISABLED_DemoSWALaunchesOnSessionStartupMismatch) {
   base::ScopedAllowBlockingForTesting scoped_allow_blocking;
 
   CreateTestCampaignsFile(R"({

@@ -26,6 +26,12 @@ struct DescriptorB {
 union DescriptorDValue {
   skia.mojom.SkColor color;
   float hue;
+  DescriptorDName name;
+};
+
+// Accepted color names for descriptor d.
+enum DescriptorDName {
+  kYellow,
 };
 
 // Full list of possible subject, style, and mood descriptors for the
@@ -38,6 +44,7 @@ struct Descriptors {
 
 struct Inspiration {
   mojo_base.mojom.Token id;
+  string description;
   url.mojom.Url background_url;
   url.mojom.Url thumbnail_url;
 };
@@ -62,9 +69,9 @@ struct ResultDescriptors {
   DescriptorDValue? color;
 };
 
-// Must match |NtpWallpaperSearchError| in enums.xml, since this is used
-// for the NewTabPage.WallpaperSearchError histogram. The exception is
-// kOk, since the histogram only records errors.
+// Wallpaper Search statuses. This enum must match the numbering for
+// |NtpWallpaperSearchStatus| in new_tab_page/enums.xml. These values
+// are persisted to logs. Entries should not be renumbered, removed or reused.
 enum WallpaperSearchStatus {
   kOk,
   // Generic error, not specified.
@@ -73,6 +80,8 @@ enum WallpaperSearchStatus {
   kRequestThrottled,
   // Browser offline.
   kOffline,
+  // User is signed out.
+  kSignedOut,
 };
 
 // Used by the WebUI page to bootstrap bidirectional communication.
@@ -131,6 +140,9 @@ interface WallpaperSearchHandler {
   // Opens help article about the feature in a new tab when use clicks
   // "Learn more".
   OpenHelpArticle();
+
+  // Triggers the wallpaper search HaTS survey if eligible.
+  LaunchHatsSurvey();
 };
 
 // WebUI-side handler for requests from the browser.

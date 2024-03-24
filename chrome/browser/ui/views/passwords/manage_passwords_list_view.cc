@@ -25,22 +25,23 @@
 using password_manager::metrics_util::PasswordManagementBubbleInteractions;
 
 ManagePasswordsListView::ManagePasswordsListView(
-    const std::vector<std::unique_ptr<password_manager::PasswordForm>>&
+    base::span<std::unique_ptr<password_manager::PasswordForm> const>
         credentials,
     ui::ImageModel favicon,
     base::RepeatingCallback<void(password_manager::PasswordForm)>
         on_row_clicked_callback,
-    base::RepeatingClosure on_navigate_to_settings_clicked_callback) {
+    base::RepeatingClosure on_navigate_to_settings_clicked_callback,
+    bool is_account_storage_available) {
   SetOrientation(views::BoxLayout::Orientation::kVertical);
   for (const std::unique_ptr<password_manager::PasswordForm>& password_form :
        credentials) {
     std::optional<ui::ImageModel> store_icon = std::nullopt;
-    if (base::FeatureList::IsEnabled(
+    if (is_account_storage_available &&
+        base::FeatureList::IsEnabled(
             password_manager::features::kButterOnDesktopFollowup)) {
       if (!password_form->IsUsingAccountStore()) {
         store_icon = ui::ImageModel::FromVectorIcon(
-            vector_icons::kNotUploadedIcon, gfx::kPlaceholderColor,
-            gfx::kFaviconSize);
+            vector_icons::kNotUploadedIcon, ui::kColorIcon, gfx::kFaviconSize);
       }
     } else if (password_form->IsUsingAccountStore()) {
       store_icon = ui::ImageModel::FromVectorIcon(
@@ -52,8 +53,8 @@ ManagePasswordsListView::ManagePasswordsListView(
           gfx::kPlaceholderColor, gfx::kFaviconSize);
     }
 
-    // TODO(crbug.com/1382017): Add a tooltip if needed.
-    AddChildView(std::make_unique<RichHoverButton>(
+    std::unique_ptr<RichHoverButton> list_item = std::make_unique<
+        RichHoverButton>(
         base::BindRepeating(
             [](base::RepeatingCallback<void(password_manager::PasswordForm)>
                    on_row_clicked_callback,
@@ -78,7 +79,24 @@ ManagePasswordsListView::ManagePasswordsListView(
         /*action_image_icon=*/
         ui::ImageModel::FromVectorIcon(vector_icons::kSubmenuArrowIcon,
                                        ui::kColorIcon),
-        /*state_icon=*/store_icon));
+        /*state_icon=*/store_icon);
+
+    if (is_account_storage_available &&
+        base::FeatureList::IsEnabled(
+            password_manager::features::kButterOnDesktopFollowup)) {
+      if (!password_form->IsUsingAccountStore()) {
+        list_item->SetAccessibleName(l10n_util::GetStringFUTF16(
+            IDS_PASSWORD_MANAGER_MANAGEMENT_BUBBLE_LIST_ITEM_DEVICE_ONLY_ACCESSIBLE_TEXT,
+            GetDisplayUsername(*password_form)));
+      }
+    } else if (password_form->IsUsingAccountStore()) {
+      list_item->SetAccessibleName(l10n_util::GetStringFUTF16(
+          IDS_PASSWORD_MANAGER_MANAGEMENT_BUBBLE_LIST_ITEM_ACCESSIBLE_TEXT,
+          GetDisplayUsername(*password_form)));
+    }
+
+    // TODO(crbug.com/1382017): Add a tooltip if needed.
+    AddChildView(std::move(list_item));
   }
 
   AddChildView(std::make_unique<views::Separator>())

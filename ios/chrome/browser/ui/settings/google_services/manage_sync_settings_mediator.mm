@@ -11,6 +11,7 @@
 #import "base/containers/enum_set.h"
 #import "base/containers/fixed_flat_map.h"
 #import "base/i18n/message_formatter.h"
+#import "base/memory/raw_ptr.h"
 #import "base/notreached.h"
 #import "base/strings/sys_string_conversions.h"
 #import "components/prefs/pref_service.h"
@@ -89,14 +90,6 @@ static const syncer::UserSelectableType kAccountSwitchItems[] = {
     syncer::UserSelectableType::kPayments,
     syncer::UserSelectableType::kPreferences};
 
-// Returns the configuration to be used for the accessory.
-UIImageConfiguration* AccessoryConfiguration() {
-  return [UIImageSymbolConfiguration
-      configurationWithPointSize:kSymbolAccessoryPointSize
-                          weight:UIImageSymbolWeightRegular
-                           scale:UIImageSymbolScaleMedium];
-}
-
 // Enterprise icon.
 NSString* const kGoogleServicesEnterpriseImage = @"google_services_enterprise";
 constexpr CGFloat kErrorSymbolPointSize = 22.;
@@ -134,19 +127,19 @@ constexpr CGFloat kBatchUploadSymbolPointSize = 22.;
   // Whether Sync State changes should be currently ignored.
   BOOL _ignoreSyncStateChanges;
   // Sync service.
-  syncer::SyncService* _syncService;
+  raw_ptr<syncer::SyncService> _syncService;
   // Observer for `IdentityManager`.
   std::unique_ptr<signin::IdentityManagerObserverBridge>
       _identityManagerObserver;
   // Authentication service.
-  AuthenticationService* _authenticationService;
+  raw_ptr<AuthenticationService> _authenticationService;
   // Account manager service to retrieve Chrome identities.
-  ChromeAccountManagerService* _chromeAccountManagerService;
+  raw_ptr<ChromeAccountManagerService> _chromeAccountManagerService;
   // Chrome account manager service observer bridge.
   std::unique_ptr<ChromeAccountManagerServiceObserverBridge>
-      _accountAccountManagerServiceObserver;
+      _accountManagerServiceObserver;
   // The pref service.
-  PrefService* _prefService;
+  raw_ptr<PrefService> _prefService;
   // Signed-in identity. Note: may be nil while signing out.
   id<SystemIdentity> _signedInIdentity;
 }
@@ -169,7 +162,7 @@ constexpr CGFloat kBatchUploadSymbolPointSize = 22.;
                                                                 self);
     _authenticationService = authenticationService;
     _chromeAccountManagerService = accountManagerService;
-    _accountAccountManagerServiceObserver =
+    _accountManagerServiceObserver =
         std::make_unique<ChromeAccountManagerServiceObserverBridge>(
             self, _chromeAccountManagerService);
     _signedInIdentity = _authenticationService->GetPrimaryIdentity(
@@ -186,7 +179,7 @@ constexpr CGFloat kBatchUploadSymbolPointSize = 22.;
   _identityManagerObserver.reset();
   _authenticationService = nullptr;
   _chromeAccountManagerService = nullptr;
-  _accountAccountManagerServiceObserver.reset();
+  _accountManagerServiceObserver.reset();
   _prefService = nullptr;
   _signedInIdentity = nil;
 }
@@ -455,8 +448,8 @@ constexpr CGFloat kBatchUploadSymbolPointSize = 22.;
                    kNeedsTrustedVaultKeyForEverything;
   if (hasDisclosureIndicator) {
     self.encryptionItem.accessoryView = [[UIImageView alloc]
-        initWithImage:DefaultSymbolWithConfiguration(kChevronForwardSymbol,
-                                                     AccessoryConfiguration())];
+        initWithImage:DefaultAccessorySymbolConfigurationWithRegularWeight(
+                          kChevronForwardSymbol)];
     self.encryptionItem.accessoryView.tintColor =
         [UIColor colorNamed:kTextQuaternaryColor];
   } else {
@@ -471,8 +464,8 @@ constexpr CGFloat kBatchUploadSymbolPointSize = 22.;
   TableViewImageItem* googleActivityControlsItem =
       [[TableViewImageItem alloc] initWithType:GoogleActivityControlsItemType];
   googleActivityControlsItem.accessoryView = [[UIImageView alloc]
-      initWithImage:DefaultSymbolWithConfiguration(kExternalLinkSymbol,
-                                                   AccessoryConfiguration())];
+      initWithImage:DefaultAccessorySymbolConfigurationWithRegularWeight(
+                        kExternalLinkSymbol)];
   googleActivityControlsItem.accessoryView.tintColor =
       [UIColor colorNamed:kTextQuaternaryColor];
   googleActivityControlsItem.title =
@@ -487,8 +480,8 @@ constexpr CGFloat kBatchUploadSymbolPointSize = 22.;
   TableViewImageItem* dataFromChromeSyncItem =
       [[TableViewImageItem alloc] initWithType:DataFromChromeSync];
   dataFromChromeSyncItem.accessoryView = [[UIImageView alloc]
-      initWithImage:DefaultSymbolWithConfiguration(kExternalLinkSymbol,
-                                                   AccessoryConfiguration())];
+      initWithImage:DefaultAccessorySymbolConfigurationWithRegularWeight(
+                        kExternalLinkSymbol)];
   dataFromChromeSyncItem.accessoryView.tintColor =
       [UIColor colorNamed:kTextQuaternaryColor];
   dataFromChromeSyncItem.accessibilityIdentifier =
@@ -933,6 +926,7 @@ constexpr CGFloat kBatchUploadSymbolPointSize = 22.;
     case syncer::UserSelectableType::kExtensions:
     case syncer::UserSelectableType::kApps:
     case syncer::UserSelectableType::kSavedTabGroups:
+    case syncer::UserSelectableType::kSharedTabGroupData:
       NOTREACHED();
       break;
   }
@@ -1237,7 +1231,7 @@ constexpr CGFloat kBatchUploadSymbolPointSize = 22.;
         [self.syncErrorHandler openTrustedVaultReauthForFetchKeys];
         break;
       }
-      [self.syncErrorHandler openPassphraseDialog];
+      [self.syncErrorHandler openPassphraseDialogWithModalPresentation:NO];
       break;
     }
     case GoogleActivityControlsItemType:
@@ -1257,7 +1251,7 @@ constexpr CGFloat kBatchUploadSymbolPointSize = 22.;
       break;
     }
     case ShowPassphraseDialogErrorItemType:
-      [self.syncErrorHandler openPassphraseDialog];
+      [self.syncErrorHandler openPassphraseDialogWithModalPresentation:YES];
       break;
     case SyncNeedsTrustedVaultKeyErrorItemType:
       [self.syncErrorHandler openTrustedVaultReauthForFetchKeys];

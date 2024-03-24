@@ -166,6 +166,22 @@ enum class FedCmErrorDialogResult {
   kMaxValue = kOtherWithMoreDetails
 };
 
+// This enum is used when we fail a FedCM request due to a bad
+// lifecycle state.
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class FedCmLifecycleStateFailureReason {
+  kOther = 0,
+  kSpeculative = 1,
+  kPendingCommit = 2,
+  kPrerendering = 3,
+  kInBackForwardCache = 4,
+  kRunningUnloadHandlers = 5,
+  kReadyToBeDeleted = 6,
+
+  kMaxValue = kReadyToBeDeleted
+};
+
 class CONTENT_EXPORT FedCmMetrics {
  public:
   FedCmMetrics(const GURL& provider,
@@ -225,9 +241,10 @@ class CONTENT_EXPORT FedCmMetrics {
   // Records whether the user selected account is for sign-in or not.
   void RecordIsSignInUser(bool is_sign_in);
 
-  // Records whether a user has left the page where the API is called when the
-  // browser is ready to show the accounts dialog.
-  void RecordWebContentsVisibilityUponReadyToShowDialog(bool is_visible);
+  // Records whether the frame is visible or active upon ready to show accounts
+  // UI.
+  void RecordWebContentsStatusUponReadyToShowDialog(bool is_visible,
+                                                    bool is_active);
 
   // This enum is used in histograms. Do not remove or modify existing entries.
   // You may add entries at the end, and update |kMaxValue|.
@@ -253,8 +270,22 @@ class CONTENT_EXPORT FedCmMetrics {
   // Records a sample when an accounts dialog is shown.
   void RecordAccountsDialogShown();
 
-  // Records a sample when a mismatch dialog is shown.
-  void RecordMismatchDialogShown();
+  // This enum is used in histograms. Do not remove or modify existing entries.
+  // You may add entries at the end, and update |kMaxValue|.
+  enum class MismatchDialogType {
+    kFirstWithoutHints,
+    kFirstWithHints,
+    kRepeatedWithoutHints,
+    kRepeatedWithHints,
+
+    kMaxValue = kRepeatedWithHints
+  };
+
+  // Records a sample when a mismatch dialog is shown. Also records whether this
+  // is a mismatch seen for the first time or a if there has already been a
+  // mismatch dialog for this call. Finally, records when there is a repeated
+  // mismatch and hints were requested in the call.
+  void RecordMismatchDialogShown(bool has_shown_mismatch, bool has_hints);
 
   // Records a sample when an accounts request is sent.
   void RecordAccountsRequestSent();
@@ -335,6 +366,18 @@ void RecordAccountsResponseInvalidReason(
 
 // Records the reason why we ignored an attempt to set a login status.
 void RecordSetLoginStatusIgnoredReason(FedCmSetLoginStatusIgnoredReason reason);
+
+// Records the lifecycle state if we fail a FedCM request due to a page not
+// being primary.
+void RecordLifecycleStateFailureReason(FedCmLifecycleStateFailureReason reason);
+
+// Records the number of accounts received before applying login/domain hints
+// filter.
+void RecordRawAccountsSize(int size);
+
+// Records the number of accounts received after applying login/domain hints
+// filter. If no account left, nothing will be recorded.
+void RecordReadyToShowAccountsSize(int size);
 
 }  // namespace content
 

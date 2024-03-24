@@ -4,12 +4,12 @@
 
 #import "ios/chrome/browser/web/model/web_navigation_browser_agent.h"
 
+#import "base/memory/raw_ptr.h"
 #import "ios/chrome/browser/lens/model/lens_browser_agent.h"
 #import "ios/chrome/browser/shared/model/browser/browser.h"
 #import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
 #import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
 #import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
-#import "ios/chrome/browser/shared/model/web_state_list/web_state_opener.h"
 #import "ios/chrome/browser/web/model/web_navigation_ntp_delegate.h"
 #import "ios/web/public/navigation/navigation_manager.h"
 #import "ios/web/public/test/fakes/fake_navigation_manager.h"
@@ -32,7 +32,7 @@
 @end
 
 @implementation FakeNTPDelegate {
-  web::WebState* _lastReloadedWebState;
+  raw_ptr<web::WebState> _lastReloadedWebState;
 }
 
 - (void)reloadNTPForWebState:(web::WebState*)webState {
@@ -57,15 +57,13 @@ class WebNavigationBrowserAgentTest : public PlatformTest {
     WebNavigationBrowserAgent::CreateForBrowser(browser_.get());
     agent_ = WebNavigationBrowserAgent::FromBrowser(browser_.get());
     agent_->SetDelegate(delegate_);
-    WebStateOpener opener;
     auto web_state = std::make_unique<web::FakeWebState>();
     auto navigation_manager = std::make_unique<web::FakeNavigationManager>();
     navigation_manager_ = navigation_manager.get();
     web_state->SetNavigationManager(std::move(navigation_manager));
     browser_->GetWebStateList()->InsertWebState(
-        /*index=*/0, /*webState=*/std::move(web_state),
-        /*insertion_flags=*/WebStateList::InsertionFlags::INSERT_ACTIVATE,
-        /*opener=*/opener);
+        std::move(web_state),
+        WebStateList::InsertionParams::Automatic().Activate());
   }
 
  protected:
@@ -73,10 +71,10 @@ class WebNavigationBrowserAgentTest : public PlatformTest {
   std::unique_ptr<TestChromeBrowserState> browser_state_;
   std::unique_ptr<TestBrowser> browser_;
   FakeNTPDelegate* delegate_;
-  WebNavigationBrowserAgent* agent_;
+  raw_ptr<WebNavigationBrowserAgent> agent_;
   // Navigation manager for the web state at index 0 in `browser_`'s web state
   // list.
-  web::FakeNavigationManager* navigation_manager_;
+  raw_ptr<web::FakeNavigationManager> navigation_manager_;
 };
 
 // Tests that reloading when there is no active NTP reloads the web state, and

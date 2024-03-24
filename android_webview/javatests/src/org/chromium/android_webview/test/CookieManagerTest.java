@@ -308,6 +308,7 @@ public class CookieManagerTest extends AwParameterizedTest {
                             + "secure; partitioned; samesite=none";
             List<String> cookieInfo = mCookieManager.getCookieInfo(url);
             Assert.assertNotNull(cookieInfo);
+            Assert.assertFalse("cookieInfo should not be empty", cookieInfo.isEmpty());
             Assert.assertEquals(expected, cookieInfo.get(0));
         } finally {
             webServer.shutdown();
@@ -359,6 +360,17 @@ public class CookieManagerTest extends AwParameterizedTest {
         assertHasCookies(cookieUrl);
         mCookieManager.removeAllCookies();
         assertNoCookies();
+    }
+
+    @Test
+    @SmallTest
+    @Feature({"AndroidWebView", "Privacy"})
+    @CommandLineFlags.Add({AwSwitches.WEBVIEW_FORCE_DISABLE3PCS})
+    public void testForceDisable3pcs() {
+        mAwContents.getSettings().setAcceptThirdPartyCookies(true);
+        Assert.assertFalse(
+                "Third party cookies should stay disabled if they were forced disabled",
+                mAwContents.getSettings().getAcceptThirdPartyCookies());
     }
 
     @Test

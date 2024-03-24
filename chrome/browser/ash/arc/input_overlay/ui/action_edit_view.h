@@ -35,11 +35,10 @@ class ActionEditView : public views::Button {
 
   void RemoveNewState();
 
-  virtual void OnActionNameUpdated();
   virtual void OnActionInputBindingUpdated();
 
   // Returns Action name, such as "Joystick WASD".
-  std::u16string GetActionName();
+  std::u16string CalculateActionName();
 
   Action* action() const { return action_; }
 
@@ -48,6 +47,7 @@ class ActionEditView : public views::Button {
 
   raw_ptr<DisplayOverlayController> controller_;
   raw_ptr<Action, DanglingUntriaged> action_;
+  const bool for_editing_list_;
 
   raw_ptr<EditLabels> labels_view_ = nullptr;
   raw_ptr<NameTag> name_tag_ = nullptr;
@@ -58,6 +58,13 @@ class ActionEditView : public views::Button {
   friend class OverlayViewTestBase;
 
   void OnClicked();
+  // Returns:
+  // - "Selected key is w. Tap on the button to edit the control" or
+  //   "Selected keys are w, a, s, d. Tap on the button to edit the control"
+  //   if this view is on `EditingList`.
+  // - "Tap on the button to focus on the label" if this view is on
+  //   `ButtonOptionsMenu`.
+  std::u16string CalculateAccessibleLabel() const;
 
   // views::View:
   void OnThemeChanged() override;

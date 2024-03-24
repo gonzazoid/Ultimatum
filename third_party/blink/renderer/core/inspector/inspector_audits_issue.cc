@@ -148,7 +148,7 @@ void AuditsIssue::ReportCorsIssue(
     String url,
     String initiator_origin,
     String failedParameter,
-    absl::optional<base::UnguessableToken> issue_id) {
+    std::optional<base::UnguessableToken> issue_id) {
   String devtools_request_id =
       IdentifiersFactory::SubresourceRequestId(identifier);
   std::unique_ptr<protocol::Audits::AffectedRequest> affected_request =
@@ -186,6 +186,8 @@ void AuditsIssue::ReportCorsIssue(
 }
 
 namespace {
+
+using mojom::blink::AttributionReportingIssueType;
 
 protocol::Audits::AttributionReportingIssueType
 BuildAttributionReportingIssueType(AttributionReportingIssueType type) {
@@ -239,11 +241,12 @@ BuildAttributionReportingIssueType(AttributionReportingIssueType type) {
 
 }  // namespace
 
-void AuditsIssue::ReportAttributionIssue(ExecutionContext* execution_context,
-                                         AttributionReportingIssueType type,
-                                         Element* element,
-                                         const String& request_id,
-                                         const String& invalid_parameter) {
+void AuditsIssue::ReportAttributionIssue(
+    ExecutionContext* execution_context,
+    AttributionReportingIssueType type,
+    Element* element,
+    const String& request_id,
+    const String& invalid_parameter) {
   auto details = protocol::Audits::AttributionReportingIssueDetails::create()
                      .setViolationType(BuildAttributionReportingIssueType(type))
                      .build();
@@ -343,6 +346,10 @@ RequestContextToMixedContentResourceType(
     case mojom::blink::RequestContextType::IMAGE_SET:
       return protocol::Audits::MixedContentResourceTypeEnum::Image;
     case mojom::blink::RequestContextType::INTERNAL:
+      return protocol::Audits::MixedContentResourceTypeEnum::Resource;
+    case mojom::blink::RequestContextType::JSON:
+      // TODO(crbug.com/1511738): Consider adding a type
+      // specific to JSON modules requests
       return protocol::Audits::MixedContentResourceTypeEnum::Resource;
     case mojom::blink::RequestContextType::LOCATION:
       return protocol::Audits::MixedContentResourceTypeEnum::Resource;
@@ -765,7 +772,7 @@ AuditsIssue AuditsIssue::CreateContentSecurityPolicyIssue(
     LocalFrame* frame_ancestor,
     Element* element,
     SourceLocation* source_location,
-    absl::optional<base::UnguessableToken> issue_id) {
+    std::optional<base::UnguessableToken> issue_id) {
   std::unique_ptr<protocol::Audits::ContentSecurityPolicyIssueDetails>
       cspDetails = protocol::Audits::ContentSecurityPolicyIssueDetails::create()
                        .setIsReportOnly(is_report_only)

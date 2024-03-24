@@ -5,6 +5,7 @@
 <translation id="1036348656032585052">オフにする</translation>
 <translation id="1044891598689252897">サイトは通常どおり動作します</translation>
 <translation id="1073417869336441572">Chrome の改善に役立てるため、サードパーティ Cookie を許可した理由をお聞かせください。<ph name="BEGIN_LINK" />フィードバックを送信<ph name="END_LINK" /></translation>
+<translation id="1113435009358629918">値下げカードを非表示にする</translation>
 <translation id="1178581264944972037">一時停止</translation>
 <translation id="1181037720776840403">削除</translation>
 <translation id="1192844206376121885"><ph name="ORIGIN" /> により保存されたデータと Cookie がすべて削除されます。</translation>
@@ -21,7 +22,6 @@
 <translation id="1383876407941801731">検索</translation>
 <translation id="1384959399684842514">ダウンロードを一時停止しました</translation>
 <translation id="1415402041810619267">URL の短縮バージョンです</translation>
-<translation id="1426410128494586442">はい</translation>
 <translation id="1448064542941920355">縮小</translation>
 <translation id="146867109637325312">{COUNT,plural, =1{<ph name="SITE_COUNT" /> 件のサイト}other{<ph name="SITE_COUNT" /> 件のサイト}}</translation>
 <translation id="1510341833810331442">サイトはデバイスにデータを保存できません</translation>
@@ -66,6 +66,7 @@
 <translation id="2228071138934252756"><ph name="APP_NAME" /> にカメラへのアクセスを許可するには、<ph name="BEGIN_LINK" />Android の設定<ph name="END_LINK" />でもカメラをオンにしてください。</translation>
 <translation id="2235344399760031203">サードパーティの Cookie がブロックされています</translation>
 <translation id="2238944249568001759">最後のタブに基づく検索キーワードの候補</translation>
+<translation id="2241587408274973373">新しいタブページのカード</translation>
 <translation id="2241634353105152135">一回限り</translation>
 <translation id="2253414712144136228"><ph name="NAME_OF_LIST_ITEM" />　を削除</translation>
 <translation id="2253989982043948086">{NUM_SELECTED,plural, =1{1 件のサイトがブロックされています}other{# 件のサイトがブロックされています}}</translation>
@@ -92,6 +93,7 @@
 <translation id="2498359688066513246">ヘルプとフィードバック</translation>
 <translation id="2501278716633472235">戻る</translation>
 <translation id="2546283357679194313">Cookie とサイトデータ</translation>
+<translation id="2550801787432930915">値下げカード</translation>
 <translation id="2569468611847789653">{COOKIE_COUNT,plural, =1{1 個の Cookie がブロックされました}other{# 個の Cookie がブロックされました}}</translation>
 <translation id="2570922361219980984">位置情報へのアクセスがデバイスでもオフになっています。<ph name="BEGIN_LINK" />Android の設定<ph name="END_LINK" />でオンにしてください。</translation>
 <translation id="257931822824936280">展開されています - クリックすると折りたたまれます。</translation>
@@ -119,8 +121,8 @@
 <translation id="2968755619301702150">証明書ビューア</translation>
 <translation id="2979365474350987274">サードパーティ Cookie が制限されています</translation>
 <translation id="3008272652534848354">権限をリセット</translation>
-<translation id="3013291976881901233">MIDI デバイス</translation>
 <translation id="301521992641321250">自動でブロックされました</translation>
+<translation id="3025010840409371499"><ph name="RECENCY" /> <ph name="SEPARATOR" /> <ph name="HOST_NAME" /></translation>
 <translation id="3069226013421428034">特定のサイトのサードパーティのログインを許可します。</translation>
 <translation id="3082992102194421695">{COUNT,plural, =1{明日で期限切れ}other{あと # 日で期限切れ}}</translation>
 <translation id="310297983047869047">前のスライド</translation>
@@ -190,7 +192,7 @@
 <translation id="4169549551965910670">USB デバイスに接続されています</translation>
 <translation id="4194328954146351878">サイトが NFC デバイスの情報を参照および変更することを許可する前に確認する（推奨）</translation>
 <translation id="4200726100658658164">位置情報の設定を開く</translation>
-<translation id="4212246570487010370">引き続き閲覧</translation>
+<translation id="4206661981211220935"><ph name="RECENCY" /> <ph name="SEPARATOR" /> <ph name="FROM_DEVICE" /> から</translation>
 <translation id="4226663524361240545">通知を受け取るとデバイスが振動します</translation>
 <translation id="4259722352634471385"><ph name="URL" /> へのアクセスがブロックされました</translation>
 <translation id="4278390842282768270">許可</translation>
@@ -211,6 +213,7 @@
 <translation id="4566417217121906555">マイクをミュート</translation>
 <translation id="4570913071927164677">詳細</translation>
 <translation id="4598549027014564149">シークレット モードのとき、サイトは Cookie を使用して関連サイトを含む他のサイトでの閲覧アクティビティを確認することができません。閲覧アクティビティは、広告のパーソナライズなどには使用されません。一部のサイトで機能を使用できなくなる可能性があります。</translation>
+<translation id="4619615317237390068">他のデバイスからのタブ</translation>
 <translation id="4644713492825682049">削除してリセット</translation>
 <translation id="4645575059429386691">保護者により管理されています</translation>
 <translation id="4670064810192446073">バーチャル リアリティ（VR）</translation>
@@ -321,13 +324,14 @@
 <translation id="6295158916970320988">すべてのサイト</translation>
 <translation id="6304434827459067558"><ph name="SITE" /> は次のサイトであなたの情報を使用できません</translation>
 <translation id="6320088164292336938">バイブレーション</translation>
-<translation id="6344622098450209924">トラッキング保護</translation>
+<translation id="6344622098450209924">トラッキング防止</translation>
 <translation id="6367753977865761591">特定のサイトのサードパーティのログインをブロックします。</translation>
 <translation id="6398765197997659313">全画面表示を終了</translation>
 <translation id="640163077447496506">今日で期限切れ</translation>
 <translation id="6405650995156823521"><ph name="FIRST_PART" /> • <ph name="SECOND_PART" /></translation>
 <translation id="6439114592976064011">サイトによるバーチャル リアリティ デバイスとデータの使用をブロックする</translation>
 <translation id="6447842834002726250">Cookie</translation>
+<translation id="6452138246455930388">開いているタブの値下げ情報（<ph name="OLD_PRICE" /> から <ph name="NEW_PRICE" />、<ph name="PRODUCT_NAME" />、<ph name="DOMAIN_NAME" />）</translation>
 <translation id="6500423977866688905">ウィンドウが狭い場合はモバイルビューをリクエストする</translation>
 <translation id="6527303717912515753">共有</translation>
 <translation id="652937045869844725">サードパーティ Cookie を許可してみてください。保護の強度は低下しますが、サイトの機能が動作する可能性が高くなります</translation>
@@ -351,6 +355,7 @@
 <translation id="6790428901817661496">再生</translation>
 <translation id="6818926723028410516">アイテムを選択</translation>
 <translation id="6864395892908308021">このデバイスでは NFC を読み込めません</translation>
+<translation id="6867014948848323204"><ph name="FROM_DEVICE" /> から</translation>
 <translation id="6912998170423641340">サイトによるクリップボードのテキストや画像の読み取りをブロックする</translation>
 <translation id="6945221475159498467">選択</translation>
 <translation id="6950072572526089586">アクセスしたサイトで、想定どおりに機能するよう（サイトへのログイン状態を保持する、ショッピング カートに商品を保存するなど）、行った操作に関する情報が保存されることがあります。多くの場合、こうした情報はデバイスに一時的に保存されます。</translation>
@@ -363,7 +368,6 @@
 <translation id="7053983685419859001">ブロック</translation>
 <translation id="7066151586745993502">{NUM_SELECTED,plural, =1{1 件を選択済み}other{# 件を選択済み}}</translation>
 <translation id="7087918508125750058"><ph name="ITEM_COUNT" /> 件選択されています。オプションは画面上部にあります</translation>
-<translation id="7137403271056944713">MIDI デバイス コントロール / 再プログラミング</translation>
 <translation id="7141896414559753902">サイトでのポップアップ表示とリダイレクトをブロックする（推奨）</translation>
 <translation id="7176368934862295254"><ph name="KILOBYTES" /> KB</translation>
 <translation id="7180611975245234373">更新</translation>
@@ -399,9 +403,11 @@
 <translation id="7667547420449112975">オズの魔法使い</translation>
 <translation id="7684642910516280563">サイトにサードパーティ Cookie の使用を許可しない</translation>
 <translation id="7719367874908701697">ページのズーム</translation>
+<translation id="7759147511335618829">MIDI デバイスの操作と再プログラム</translation>
 <translation id="7781829728241885113">昨日</translation>
 <translation id="7791543448312431591">追加</translation>
-<translation id="780301667611848630">同意しない</translation>
+<translation id="7801888679188438140">{TILE_COUNT,plural, =1{このタブを続行}other{これらのタブを続行}}</translation>
+<translation id="780301667611848630">キャンセル</translation>
 <translation id="7804248752222191302">サイトでカメラが使用されています</translation>
 <translation id="7807060072011926525">Google から提供</translation>
 <translation id="7822573154188733812">Chrome では、サードパーティ Cookie の使用を制限し、ブラウジング中のユーザーをトラッキングできないようにしています。<ph name="BEGIN_LINK" />トラッキング防止機能を管理<ph name="END_LINK" />するには、設定にアクセスしてください。</translation>
@@ -477,6 +483,7 @@
 <translation id="8803526663383843427">有効にした場合</translation>
 <translation id="8805385115381080995">サイトであなたが実在のユーザーであることを確認する頻度が減るため、ブラウジングが高速化されます</translation>
 <translation id="8816026460808729765">サイトによるセンサーへのアクセスをブロックする</translation>
+<translation id="8843699287283948910">他のデバイスでタブを非表示にする</translation>
 <translation id="8847988622838149491">USB</translation>
 <translation id="8874790741333031443">サードパーティ Cookie を一時的に許可してみてください。ブラウジング保護の強度は低下しますが、サイトの機能が想定どおりに動作する可能性が高くなります。</translation>
 <translation id="8889294078294184559">それ以降にアクセスしたサイトは、あなたが実在のユーザーであることを、前にアクセスしたサイトから Chrome を介して確認できます。</translation>
@@ -492,7 +499,7 @@
 <translation id="9002538116239926534">オンにすると、サイトはデバイスにデータを保存できます。オフにすると、サイトはデバイスにデータを保存できません。</translation>
 <translation id="9011903857143958461"><ph name="SITE_NAME" /> を許可しました</translation>
 <translation id="9019902583201351841">保護者により管理されています</translation>
-<translation id="9039697262778250930">これらのサイトからログアウトする可能性があります</translation>
+<translation id="9039697262778250930">これらのサイトからログアウトされる可能性があります</translation>
 <translation id="9074739597929991885">Bluetooth</translation>
 <translation id="9090268041676521955">このサイトは、アクティビティを確認できるグループに属しています。グループは <ph name="FPS_OWNER" /> によって定義されます</translation>
 <translation id="9106233582039520022">Cookie を削除しますか？</translation>

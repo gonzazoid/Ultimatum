@@ -23,12 +23,12 @@ import org.chromium.base.BaseSwitches;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.CommandLineFlags;
+import org.chromium.base.test.util.Features;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.chrome.browser.device.DeviceClassManager;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.multiwindow.MultiWindowTestUtils;
 import org.chromium.chrome.browser.util.ChromeAccessibilityUtil;
-import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 
 /** Unit Tests for {@link TabUiFeatureUtilities}. */
@@ -56,7 +56,7 @@ public class TabUiFeatureUtilitiesUnitTest {
     @Test
     @CommandLineFlags.Add({BaseSwitches.DISABLE_LOW_END_DEVICE_MODE})
     public void testCacheGridTabSwitcher_HighEnd() {
-        assertFalse(TabUiFeatureUtilities.shouldUseListMode(ContextUtils.getApplicationContext()));
+        assertFalse(TabUiFeatureUtilities.shouldUseListMode());
         assertTrue(
                 TabUiFeatureUtilities.isTabToGtsAnimationEnabled(
                         ContextUtils.getApplicationContext()));
@@ -64,7 +64,7 @@ public class TabUiFeatureUtilitiesUnitTest {
         setAccessibilityEnabledForTesting(true);
         DeviceClassManager.resetForTesting();
 
-        assertFalse(TabUiFeatureUtilities.shouldUseListMode(ContextUtils.getApplicationContext()));
+        assertFalse(TabUiFeatureUtilities.shouldUseListMode());
         assertTrue(
                 TabUiFeatureUtilities.isTabToGtsAnimationEnabled(
                         ContextUtils.getApplicationContext()));
@@ -73,7 +73,7 @@ public class TabUiFeatureUtilitiesUnitTest {
     @Test
     @CommandLineFlags.Add({BaseSwitches.ENABLE_LOW_END_DEVICE_MODE})
     public void testCacheGridTabSwitcher_LowEnd() {
-        assertTrue(TabUiFeatureUtilities.shouldUseListMode(ContextUtils.getApplicationContext()));
+        assertTrue(TabUiFeatureUtilities.shouldUseListMode());
         assertFalse(
                 TabUiFeatureUtilities.isTabToGtsAnimationEnabled(
                         ContextUtils.getApplicationContext()));
@@ -81,7 +81,7 @@ public class TabUiFeatureUtilitiesUnitTest {
         setAccessibilityEnabledForTesting(true);
         DeviceClassManager.resetForTesting();
 
-        assertTrue(TabUiFeatureUtilities.shouldUseListMode(ContextUtils.getApplicationContext()));
+        assertTrue(TabUiFeatureUtilities.shouldUseListMode());
         assertFalse(
                 TabUiFeatureUtilities.isTabToGtsAnimationEnabled(
                         ContextUtils.getApplicationContext()));

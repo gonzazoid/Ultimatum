@@ -17,7 +17,7 @@
 #include "gpu/command_buffer/common/mailbox.h"
 #include "gpu/command_buffer/common/shared_image_capabilities.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_manager.h"
-#include "gpu/command_buffer/service/texture_manager.h"
+#include "gpu/config/gpu_driver_bug_workarounds.h"
 #include "gpu/config/gpu_preferences.h"
 #include "gpu/gpu_gles2_export.h"
 #include "gpu/ipc/common/gpu_memory_buffer_support.h"
@@ -32,7 +32,6 @@ class VulkanContextProvider;
 }  // namespace viz
 
 namespace gpu {
-class GpuDriverBugWorkarounds;
 class MemoryTracker;
 class SharedContextState;
 class SharedImageBackingFactory;
@@ -131,7 +130,9 @@ class GPU_GLES2_EXPORT SharedImageFactory {
   bool AddSecondaryReference(const gpu::Mailbox& mailbox);
 
   // Returns the usage for the shared image backing. If no backing is registered
-  // for `mailbox` this will return 0.
+  // for `mailbox` this will return 0. This can only get usages for mailboxes
+  // registered on this factory. If you need to query all mailboxes use
+  // |SharedImageManager::GetUsageForMailbox|.
   uint32_t GetUsageForMailbox(const Mailbox& mailbox);
 
   SharedContextState* GetSharedContextState() const {
@@ -172,7 +173,7 @@ class GPU_GLES2_EXPORT SharedImageFactory {
   bool IsNativeBufferSupported(gfx::BufferFormat format,
                                gfx::BufferUsage usage);
 
-  raw_ptr<SharedImageManager, DanglingUntriaged> shared_image_manager_;
+  raw_ptr<SharedImageManager> shared_image_manager_;
   raw_ptr<SharedContextState> shared_context_state_;
   std::unique_ptr<MemoryTypeTracker> memory_tracker_;
 
@@ -235,7 +236,8 @@ class GPU_GLES2_EXPORT SharedImageRepresentationFactory {
       const Mailbox& mailbox,
       const wgpu::Device& device,
       wgpu::BackendType backend_type,
-      std::vector<wgpu::TextureFormat> view_formats);
+      std::vector<wgpu::TextureFormat> view_formats,
+      scoped_refptr<SharedContextState> context_state);
   std::unique_ptr<OverlayImageRepresentation> ProduceOverlay(
       const Mailbox& mailbox);
   std::unique_ptr<MemoryImageRepresentation> ProduceMemory(
@@ -246,6 +248,13 @@ class GPU_GLES2_EXPORT SharedImageRepresentationFactory {
 #if BUILDFLAG(IS_ANDROID)
   std::unique_ptr<LegacyOverlayImageRepresentation> ProduceLegacyOverlay(
       const Mailbox& mailbox);
+#endif
+
+#if BUILDFLAG(ENABLE_VULKAN) && BUILDFLAG(IS_OZONE)
+  std::unique_ptr<VulkanImageRepresentation> ProduceVulkan(
+      const Mailbox& mailbox,
+      gpu::VulkanDeviceQueue* vulkan_device_queue,
+      gpu::VulkanImplementation& vulkan_impl);
 #endif
 
  private:

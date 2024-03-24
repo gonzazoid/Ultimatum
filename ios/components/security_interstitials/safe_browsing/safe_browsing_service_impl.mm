@@ -100,7 +100,7 @@ void SafeBrowsingServiceImpl::Initialize(
   auto url_loader_factory_params =
       network::mojom::URLLoaderFactoryParams::New();
   url_loader_factory_params->process_id = network::mojom::kBrowserProcessId;
-  url_loader_factory_params->is_corb_enabled = false;
+  url_loader_factory_params->is_orb_enabled = false;
   network_context_client_->CreateURLLoaderFactory(
       std::move(url_loader_factory_pending_reciever_),
       std::move(url_loader_factory_params));
@@ -148,8 +148,6 @@ SafeBrowsingServiceImpl::CreateUrlChecker(
       client->GetRealTimeUrlLookupService();
   bool can_perform_full_url_lookup =
       url_lookup_service && url_lookup_service->CanPerformFullURLLookup();
-  bool can_url_realtime_check_subresource_url =
-      url_lookup_service && url_lookup_service->CanCheckSubresourceURL();
   scoped_refptr<safe_browsing::UrlCheckerDelegate> url_checker_delegate =
       base::MakeRefCounted<UrlCheckerDelegateImpl>(safe_browsing_db_manager_,
                                                    client->AsWeakPtr());
@@ -177,14 +175,13 @@ SafeBrowsingServiceImpl::CreateUrlChecker(
       /*frame_tree_node_id=*/
       security_interstitials::UnsafeResource::kNoFrameTreeNodeId,
       /*navigation_id=*/std::nullopt, can_perform_full_url_lookup,
-      can_url_realtime_check_subresource_url,
       /*can_check_db=*/true, /*can_check_high_confidence_allowlist=*/true,
       /*url_lookup_service_metric_suffix=*/"",
-      /*last_committed_url=*/web_state->GetLastCommittedURL(),
       web::GetUIThreadTaskRunner({}),
       url_lookup_service ? url_lookup_service->GetWeakPtr() : nullptr,
       hash_real_time_service ? hash_real_time_service->GetWeakPtr() : nullptr,
-      hash_real_time_selection);
+      hash_real_time_selection,
+      /*is_async_check=*/false);
 }
 
 bool SafeBrowsingServiceImpl::CanCheckUrl(const GURL& url) const {

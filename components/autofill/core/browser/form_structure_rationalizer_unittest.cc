@@ -88,7 +88,7 @@ std::pair<FormData, std::string> CreateFormAndServerClassification(
   form.url = GURL("http://foo.com");
   form.main_frame_origin = url::Origin::Create(form.url);
   form.host_frame = test::MakeLocalFrameToken();
-  form.unique_renderer_id = test::MakeFormRendererId();
+  form.renderer_id = test::MakeFormRendererId();
 
   // Build the fields for the form.
   for (const auto& field_template : fields) {
@@ -110,7 +110,7 @@ std::pair<FormData, std::string> CreateFormAndServerClassification(
         field_template.host_form.value_or(form.global_id()).frame_token;
     field.host_form_id =
         field_template.host_form.value_or(form.global_id()).renderer_id;
-    field.unique_renderer_id = test::MakeFieldRendererId();
+    field.renderer_id = test::MakeFieldRendererId();
     form.fields.push_back(std::move(field));
   }
 
@@ -744,6 +744,18 @@ TEST_F(FormStructureRationalizerTest,
   // standalone CVC field.
   EXPECT_THAT(GetTypes(*form_structure),
               ElementsAre(EMAIL_ADDRESS, UNKNOWN_TYPE));
+}
+
+// Tests that contenteditables types are overridden with UNKNOWN_TYPE.
+TEST_F(FormStructureRationalizerTest, RationalizeContentEditables) {
+  std::unique_ptr<FormStructure> form_structure = BuildFormStructure(
+      {{.field_type = CREDIT_CARD_NUMBER,
+        .form_control_type = FormControlType::kContentEditable},
+       {.field_type = CREDIT_CARD_NUMBER,
+        .form_control_type = FormControlType::kInputText}},
+      /*run_heuristics=*/false);
+  EXPECT_THAT(GetTypes(*form_structure),
+              ElementsAre(UNKNOWN_TYPE, CREDIT_CARD_NUMBER));
 }
 
 // Tests the rationalization that ignores certain types on the main origin. The

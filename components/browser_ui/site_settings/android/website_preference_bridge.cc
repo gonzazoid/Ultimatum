@@ -531,7 +531,7 @@ static void JNI_WebsitePreferenceBridge_RevokeObjectPermission(
     const JavaParamRef<jstring>& jobject) {
   GURL origin(ConvertJavaStringToUTF8(env, jorigin));
   DCHECK(origin.is_valid());
-  absl::optional<base::Value> object =
+  std::optional<base::Value> object =
       base::JSONReader::Read(ConvertJavaStringToUTF8(env, jobject));
   DCHECK(object && object->is_dict());
   permissions::ObjectPermissionContextBase* context = GetChooserContext(
@@ -560,9 +560,9 @@ void OnCookiesInfoReady(const ScopedJavaGlobalRef<jobject>& java_callback,
       Java_WebsitePreferenceBridge_createCookiesInfoMap(env);
 
   for (const net::CanonicalCookie& cookie : entries) {
-    std::string origin =
-        net::cookie_util::CookieOriginToURL(cookie.Domain(), cookie.IsSecure())
-            .spec();
+    std::string origin = net::cookie_util::CookieOriginToURL(
+                             cookie.Domain(), cookie.SecureAttribute())
+                             .spec();
     ScopedJavaLocalRef<jstring> java_origin =
         ConvertUTF8ToJavaString(env, origin);
     Java_WebsitePreferenceBridge_insertCookieIntoMap(env, map, java_origin);

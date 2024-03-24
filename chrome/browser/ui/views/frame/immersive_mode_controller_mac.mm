@@ -96,9 +96,8 @@ void ImmersiveModeControllerMac::SetEnabled(bool enabled) {
                                 browser_view_->frame()->GetFrameView())
                                 ->GetTopInset(false);
 
-      browser_view_->tab_overlay_widget()->SetBounds(
-          gfx::Rect(0, 0, browser_view_->top_container()->size().width(),
-                    tab_widget_height_));
+      browser_view_->tab_overlay_widget()->SetSize(gfx::Size(
+          browser_view_->top_container()->size().width(), tab_widget_height_));
       browser_view_->tab_overlay_widget()->Show();
 
       // Move the tab strip to the `tab_overlay_widget`, the host of the
@@ -141,15 +140,22 @@ void ImmersiveModeControllerMac::SetEnabled(bool enabled) {
         ->set_immersive_mode_reveal_client(this);
 
     // Move the appropriate children from the browser widget to the overlay
-    // widget. Make sure to call `Show()` on the overlay widget before enabling
-    // immersive fullscreen. The call to `Show()` actually performs the
-    // underlying window reparenting.
-    MoveChildren(browser_view_->GetWidget(), browser_view_->overlay_widget());
+    // widget, unless we are entering content fullscreen. Make sure to call
+    // `Show()` on the overlay widget before enabling immersive fullscreen. The
+    // call to `Show()` actually performs the underlying window reparenting.
+    if (!fullscreen_utils::IsInContentFullscreen(browser_view_->browser())) {
+      MoveChildren(browser_view_->GetWidget(), browser_view_->overlay_widget());
+    }
 
     // `Show()` is needed because the overlay widget's compositor is still being
     // used, even though its content view has been moved to the AppKit
     // controlled fullscreen NSWindow.
     browser_view_->overlay_widget()->Show();
+
+    // Set revealed to be true when entering immersive fullscreen so the toolbar
+    // and bookmarks bar heights are accounted for during the fullscreen
+    // transition.
+    OnImmersiveModeToolbarRevealChanged(true);
 
     // Move top chrome to the overlay view.
     browser_view_->OnImmersiveRevealStarted();
@@ -272,7 +278,8 @@ void ImmersiveModeControllerMac::OnWidgetActivationChanged(
 
 int ImmersiveModeControllerMac::GetMinimumContentOffset() const {
   if (find_bar_visible_ &&
-      !fullscreen_utils::IsAlwaysShowToolbarEnabled(browser_view_->browser())) {
+      !fullscreen_utils::IsAlwaysShowToolbarEnabled(browser_view_->browser()) &&
+      !fullscreen_utils::IsInContentFullscreen(browser_view_->browser())) {
     return overlay_height_;
   }
   return 0;
@@ -286,6 +293,26 @@ int ImmersiveModeControllerMac::GetExtraInfobarOffset() const {
     return reveal_amount_ * menu_bar_height_;
   }
   return reveal_amount_ * (menu_bar_height_ + overlay_height_);
+}
+
+void ImmersiveModeControllerMac::OnContentFullscreenChanged(
+    bool is_content_fullscreen) {
+  // Ignore this call if we are not in browser fullscreen.
+  if (!IsEnabled()) {
+    return;
+  }
+
+  if (is_content_fullscreen) {
+    // When in content fullscreen the overlay widget is not displayed. Move all
+    // the child widgets from the overlay widget to the browser widget. This is
+    // particularly important for sticky children like the find bar or
+    // permission dialogs.
+    MoveChildren(browser_view_->overlay_widget(), browser_view_->GetWidget());
+  } else {
+    // Put the children back when transitioning from content fullscreen back to
+    // browser fullscreen.
+    MoveChildren(browser_view_->GetWidget(), browser_view_->overlay_widget());
+  }
 }
 
 void ImmersiveModeControllerMac::OnWillChangeFocus(views::View* focused_before,
@@ -317,7 +344,7 @@ void ImmersiveModeControllerMac::OnViewBoundsChanged(
         new_size.width(), browser_view_->tab_strip_region_view()->height()));
     overlay_height_ += tab_widget_height_;
   }
-  browser_view_->overlay_widget()->SetBounds(bounds);
+  browser_view_->overlay_widget()->SetSize(bounds.size());
   if (auto* window = GetNSWindowMojo()) {
     window->OnTopContainerViewBoundsChanged(bounds);
   }
@@ -349,7 +376,7 @@ void ImmersiveModeControllerMac::MoveChildren(views::Widget* from_widget,
 
   views::Widget::Widgets widgets;
   views::Widget::GetAllChildWidgets(from_widget->GetNativeView(), &widgets);
-  for (auto* widget : widgets) {
+  for (views::Widget* widget : widgets) {
     if (ShouldMoveChild(widget)) {
       views::Widget::ReparentNativeView(widget->GetNativeView(),
                                         to_widget->GetNativeView());

@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "chrome/browser/profiles/profile_attributes_entry.h"
+
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -14,7 +17,6 @@
 #include "build/chromeos_buildflags.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_avatar_icon_util.h"
 #include "chrome/browser/profiles/profiles_state.h"
@@ -29,7 +31,6 @@
 #include "components/signin/public/base/signin_pref_names.h"
 #include "components/signin/public/identity_manager/account_info.h"
 #include "components/supervised_user/core/common/buildflags.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/color_utils.h"
@@ -56,6 +57,10 @@ const char kForceSigninProfileLockedKey[] = "force_signin_profile_locked";
 const char kHostedDomain[] = "hosted_domain";
 const char kProfileManagementEnrollmentToken[] =
     "profile_management_enrollment_token";
+const char kDasherlessManagement[] = "dasherless_management";
+const char kProfileManagementOidcAuthToken[] =
+    "profile_management_oidc_auth_token";
+const char kProfileManagementOidcIdToken[] = "profile_management_oidc_id_token";
 const char kProfileManagementId[] = "profile_management_id";
 const char kUserAcceptedAccountManagement[] =
     "user_accepted_account_management";
@@ -476,6 +481,10 @@ bool ProfileAttributesEntry::IsSignedInWithCredentialProvider() const {
   return GetBool(prefs::kSignedInWithCredentialProvider);
 }
 
+bool ProfileAttributesEntry::IsDasherlessManagement() const {
+  return GetBool(kDasherlessManagement);
+}
+
 size_t ProfileAttributesEntry::GetAvatarIconIndex() const {
   std::string icon_url = GetString(kAvatarIconKey);
   size_t icon_index = 0;
@@ -485,13 +494,13 @@ size_t ProfileAttributesEntry::GetAvatarIconIndex() const {
   return icon_index;
 }
 
-absl::optional<ProfileThemeColors>
+std::optional<ProfileThemeColors>
 ProfileAttributesEntry::GetProfileThemeColorsIfSet() const {
-  absl::optional<SkColor> profile_highlight_color =
+  std::optional<SkColor> profile_highlight_color =
       GetProfileThemeColor(kProfileHighlightColorKey);
-  absl::optional<SkColor> default_avatar_fill_color =
+  std::optional<SkColor> default_avatar_fill_color =
       GetProfileThemeColor(kDefaultAvatarFillColorKey);
-  absl::optional<SkColor> default_avatar_stroke_color =
+  std::optional<SkColor> default_avatar_stroke_color =
       GetProfileThemeColor(kDefaultAvatarStrokeColorKey);
 
   DCHECK_EQ(profile_highlight_color.has_value(),
@@ -500,7 +509,7 @@ ProfileAttributesEntry::GetProfileThemeColorsIfSet() const {
             default_avatar_fill_color.has_value());
 
   if (!profile_highlight_color.has_value()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   ProfileThemeColors colors;
@@ -517,8 +526,7 @@ ProfileThemeColors ProfileAttributesEntry::GetProfileThemeColors() const {
   return {gfx::kPlaceholderColor, gfx::kPlaceholderColor,
           gfx::kPlaceholderColor};
 #else
-  absl::optional<ProfileThemeColors> theme_colors =
-      GetProfileThemeColorsIfSet();
+  std::optional<ProfileThemeColors> theme_colors = GetProfileThemeColorsIfSet();
   if (theme_colors)
     return *theme_colors;
 
@@ -542,6 +550,13 @@ std::string ProfileAttributesEntry::GetHostedDomain() const {
 std::string ProfileAttributesEntry::GetProfileManagementEnrollmentToken()
     const {
   return GetString(kProfileManagementEnrollmentToken);
+}
+
+ProfileManagementOicdTokens
+ProfileAttributesEntry::GetProfileManagementOidcTokens() const {
+  return ProfileManagementOicdTokens{
+      .auth_token = GetString(kProfileManagementOidcAuthToken),
+      .id_token = GetString(kProfileManagementOidcIdToken)};
 }
 
 std::string ProfileAttributesEntry::GetProfileManagementId() const {
@@ -664,6 +679,10 @@ void ProfileAttributesEntry::SetSignedInWithCredentialProvider(bool value) {
   SetBool(prefs::kSignedInWithCredentialProvider, value);
 }
 
+void ProfileAttributesEntry::SetDasherlessManagement(bool value) {
+  SetBool(kDasherlessManagement, value);
+}
+
 void ProfileAttributesEntry::LockForceSigninProfile(bool is_lock) {
   DCHECK(signin_util::IsForceSigninEnabled());
   if (SetBool(kForceSigninProfileLockedKey, is_lock)) {
@@ -714,7 +733,7 @@ void ProfileAttributesEntry::SetAvatarIconIndex(size_t icon_index) {
 }
 
 void ProfileAttributesEntry::SetProfileThemeColors(
-    const absl::optional<ProfileThemeColors>& colors) {
+    const std::optional<ProfileThemeColors>& colors) {
   bool changed = false;
   if (colors.has_value()) {
     changed |=
@@ -747,6 +766,12 @@ void ProfileAttributesEntry::SetProfileManagementEnrollmentToken(
     profile_attributes_storage_->NotifyProfileManagementEnrollmentTokenChanged(
         GetPath());
   }
+}
+
+void ProfileAttributesEntry::SetProfileManagementOidcTokens(
+    const ProfileManagementOicdTokens& oidc_tokens) {
+  CHECK(SetString(kProfileManagementOidcAuthToken, oidc_tokens.auth_token));
+  CHECK(SetString(kProfileManagementOidcIdToken, oidc_tokens.id_token));
 }
 
 void ProfileAttributesEntry::SetProfileManagementId(const std::string& id) {
@@ -883,13 +908,13 @@ int ProfileAttributesEntry::GetInteger(const char* key) const {
   return value->GetInt();
 }
 
-absl::optional<SkColor> ProfileAttributesEntry::GetProfileThemeColor(
+std::optional<SkColor> ProfileAttributesEntry::GetProfileThemeColor(
     const char* key) const {
   // Do not use GetInteger(), as it defaults to kIntegerNotSet which is
   // undistinguishable from a valid color.
   const base::Value* value = GetValue(key);
   if (!value || !value->is_int())
-    return absl::nullopt;
+    return std::nullopt;
   return value->GetInt();
 }
 

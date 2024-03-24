@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import 'chrome://resources/ash/common/cr_elements/cr_dialog/cr_dialog.js';
 import 'chrome://resources/mojo/mojo/public/mojom/base/big_buffer.mojom-webui.js';
 import 'chrome://resources/mojo/mojo/public/mojom/base/file_path.mojom-webui.js';
 import 'chrome://resources/mojo/mojo/public/mojom/base/string16.mojom-webui.js';
@@ -12,7 +12,7 @@ import './firmware_shared_fonts.css.js';
 import './firmware_update.mojom-webui.js';
 import './strings.m.js';
 
-import {I18nMixin, I18nMixinInterface} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {I18nMixin, I18nMixinInterface} from 'chrome://resources/ash/common/cr_elements/i18n_mixin.js';
 import {assert} from 'chrome://resources/js/assert.js';
 import {mojoString16ToString} from 'chrome://resources/js/mojo_type_util.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
@@ -41,6 +41,7 @@ const deviceRequestIdToStringId = new Map<DeviceRequestId, string>([
   [DeviceRequestId.kRemoveUSBCable, 'requestIdRemoveUsbCable'],
   [DeviceRequestId.kPressUnlock, 'requestIdPressUnlock'],
   [DeviceRequestId.kRemoveReplug, 'requestIdRemoveReplug'],
+  [DeviceRequestId.kReplugPower, 'requestIdReplugPower'],
 ]);
 
 /**
@@ -83,6 +84,13 @@ export class FirmwareUpdateDialogElement extends FirmwareUpdateDialogElementBase
         value: initialDialogContent,
         computed: 'computeDialogContent(installationProgress.*,' +
             'isInitiallyInflight, lastDeviceRequestId)',
+      },
+
+      updateIsDone: {
+        type: Boolean,
+        value: false,
+        computed: 'isUpdateDone(installationProgress.state)',
+        reflectToAttribute: true,
       },
 
       /**
@@ -160,15 +168,6 @@ export class FirmwareUpdateDialogElement extends FirmwareUpdateDialogElementBase
       this.isInitiallyInflight = false;
     }
     this.installationProgress = update;
-    if (this.isUpdateInProgress() && this.isDialogOpen()) {
-      // 'aria-hidden' is used to prevent ChromeVox from announcing
-      // the body text automatically. Setting 'aria-hidden' to false
-      // here allows ChromeVox to announce the body text when a user
-      // navigates to it.
-      assert(this.shadowRoot);
-      this.shadowRoot.querySelector('#updateDialogBody')!.setAttribute(
-          'aria-hidden', 'false');
-    }
   }
 
   protected installationProgressChanged(
@@ -442,6 +441,12 @@ export class FirmwareUpdateDialogElement extends FirmwareUpdateDialogElementBase
   private isWaitingForUserAction(): boolean {
     return isAppV2Enabled() && this.lastDeviceRequestId !== null &&
         this.installationProgress.state === UpdateState.kWaitingForUser;
+  }
+
+  private getDialogBodyAriaLive(): string {
+    // Use assertive aria-live value to ensure user requests are announced
+    // before they time out.
+    return this.isWaitingForUserAction() ? 'assertive' : '';
   }
 }
 

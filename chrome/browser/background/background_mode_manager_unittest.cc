@@ -47,8 +47,9 @@
 #include "ui/message_center/public/cpp/notifier_id.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/login/users/scoped_test_user_manager.h"
+#include "chrome/browser/ash/login/users/chrome_user_manager_impl.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
+#include "components/user_manager/scoped_user_manager.h"
 #endif
 
 using extensions::mojom::ManifestLocation;
@@ -212,7 +213,7 @@ class BackgroundModeManagerTest : public testing::Test {
     profile_manager_ = CreateTestingProfileManager();
     profile_ = profile_manager_->CreateTestingProfile(
         "p1", nullptr, u"p1", 0, TestingProfile::TestingFactories(),
-        /*is_supervised_profile=*/false, absl::nullopt,
+        /*is_supervised_profile=*/false, std::nullopt,
         std::move(policy_service));
   }
 
@@ -309,7 +310,8 @@ class BackgroundModeManagerWithExtensionsTest : public testing::Test {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // ChromeOS needs extra services to run in the following order.
   ash::ScopedCrosSettingsTestHelper cros_settings_test_helper_;
-  ash::ScopedTestUserManager test_user_manager_;
+  user_manager::ScopedUserManager user_manager_{
+      ChromeUserManagerImpl::CreateChromeUserManager()};
 #endif
 };
 
@@ -1078,6 +1080,40 @@ TEST_F(BackgroundModeManagerTest, ForceInstalledExtensionsKeepAlive) {
   }));
 
   manager.GetBackgroundModeData(profile_)->OnForceInstalledExtensionsReady();
+  base::RunLoop().RunUntilIdle();
+  EXPECT_FALSE(keep_alive_registry->IsKeepingAlive());
+}
+
+TEST_F(BackgroundModeManagerTest,
+       ForceInstalledExtensionsKeepAliveReleasedOnAppTerminating) {
+  const auto* keep_alive_registry = KeepAliveRegistry::GetInstance();
+  EXPECT_FALSE(keep_alive_registry->IsKeepingAlive());
+
+  base::CommandLine command_line(base::CommandLine::NO_PROGRAM);
+  command_line.AppendSwitch(switches::kNoStartupWindow);
+  TestBackgroundModeManager manager(
+      command_line, profile_manager_->profile_attributes_storage());
+
+  manager.RegisterProfile(profile_);
+  EXPECT_TRUE(keep_alive_registry->IsKeepingAlive());
+  EXPECT_TRUE(keep_alive_registry->WouldRestartWithout({
+      KeepAliveOrigin::BACKGROUND_MODE_MANAGER_STARTUP,
+      KeepAliveOrigin::BACKGROUND_MODE_MANAGER_FORCE_INSTALLED_EXTENSIONS,
+  }));
+
+  static_cast<extensions::TestExtensionSystem*>(
+      extensions::ExtensionSystem::Get(profile_))
+      ->CreateExtensionService(&command_line, base::FilePath(), false);
+  static_cast<extensions::TestExtensionSystem*>(
+      extensions::ExtensionSystem::Get(profile_))
+      ->SetReady();
+  base::RunLoop().RunUntilIdle();
+  EXPECT_TRUE(keep_alive_registry->IsKeepingAlive());
+  EXPECT_TRUE(keep_alive_registry->WouldRestartWithout({
+      KeepAliveOrigin::BACKGROUND_MODE_MANAGER_FORCE_INSTALLED_EXTENSIONS,
+  }));
+
+  manager.OnAppTerminating();
   base::RunLoop().RunUntilIdle();
   EXPECT_FALSE(keep_alive_registry->IsKeepingAlive());
 }

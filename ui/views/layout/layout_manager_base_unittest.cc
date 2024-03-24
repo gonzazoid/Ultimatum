@@ -9,11 +9,14 @@
 #include "base/memory/raw_ptr.h"
 #include "base/ranges/algorithm.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/views/test/test_layout_manager.h"
 #include "ui/views/test/test_views.h"
 #include "ui/views/test/views_test_utils.h"
 #include "ui/views/view.h"
+#include "ui/views/view_class_properties.h"
 
 namespace views {
 
@@ -71,7 +74,7 @@ class TestLayoutManagerBase : public LayoutManagerBase {
 
  private:
   // If specified, will always return this layout.
-  absl::optional<ProposedLayout> forced_layout_;
+  std::optional<ProposedLayout> forced_layout_;
 
   size_t layout_count_ = 0;
 };
@@ -181,27 +184,27 @@ TEST(LayoutManagerBaseTest, SetChildIncludedInLayout) {
   ExpectSameViews({child1, child2, child3}, layout->GetIncludedChildViews());
 
   // Remove one.
-  layout->SetChildViewIgnoredByLayout(child2, true);
+  child2->SetProperty(kViewIgnoredByLayoutKey, true);
   ExpectSameViews({child1, child3}, layout->GetIncludedChildViews());
 
   // Remove another.
-  layout->SetChildViewIgnoredByLayout(child1, true);
+  child1->SetProperty(kViewIgnoredByLayoutKey, true);
   ExpectSameViews({child3}, layout->GetIncludedChildViews());
 
   // Removing it again should have no effect.
-  layout->SetChildViewIgnoredByLayout(child1, true);
+  child1->SetProperty(kViewIgnoredByLayoutKey, true);
   ExpectSameViews({child3}, layout->GetIncludedChildViews());
 
   // Add one back.
-  layout->SetChildViewIgnoredByLayout(child1, false);
+  child1->SetProperty(kViewIgnoredByLayoutKey, false);
   ExpectSameViews({child1, child3}, layout->GetIncludedChildViews());
 
   // Adding it back again should have no effect.
-  layout->SetChildViewIgnoredByLayout(child1, false);
+  child1->SetProperty(kViewIgnoredByLayoutKey, false);
   ExpectSameViews({child1, child3}, layout->GetIncludedChildViews());
 
   // Add the other view back.
-  layout->SetChildViewIgnoredByLayout(child2, false);
+  child2->SetProperty(kViewIgnoredByLayoutKey, false);
   ExpectSameViews({child1, child2, child3}, layout->GetIncludedChildViews());
 }
 
@@ -357,6 +360,28 @@ class LayoutManagerBaseManagerTest : public testing::Test {
 
 }  // namespace
 
+TEST_F(LayoutManagerBaseManagerTest, ProposedLayout_GetLayoutFor) {
+  AddChildView(gfx::Size());
+  AddChildView(gfx::Size());
+  AddChildView(gfx::Size());
+
+  ProposedLayout layout;
+  constexpr gfx::Rect kChild1Bounds(3, 4, 10, 15);
+  layout.child_layouts.push_back({child(0), true, kChild1Bounds});
+  layout.child_layouts.push_back({child(1), false});
+
+  const ProposedLayout& const_layout = layout;
+
+  EXPECT_EQ(&layout.child_layouts[0], layout.GetLayoutFor(child(0)));
+  EXPECT_EQ(&const_layout.child_layouts[0],
+            const_layout.GetLayoutFor(child(0)));
+  EXPECT_EQ(&layout.child_layouts[1], layout.GetLayoutFor(child(1)));
+  EXPECT_EQ(&const_layout.child_layouts[1],
+            const_layout.GetLayoutFor(child(1)));
+  EXPECT_EQ(nullptr, layout.GetLayoutFor(child(2)));
+  EXPECT_EQ(nullptr, const_layout.GetLayoutFor(child(2)));
+}
+
 TEST_F(LayoutManagerBaseManagerTest, ApplyLayout) {
   AddChildView(gfx::Size());
   AddChildView(gfx::Size());
@@ -484,30 +509,12 @@ TEST_F(LayoutManagerBaseManagerTest, Layout) {
   EXPECT_FALSE(child(2)->GetVisible());
 }
 
-TEST_F(LayoutManagerBaseManagerTest, ChildViewIgnoredByLayout) {
+TEST_F(LayoutManagerBaseManagerTest, IgnoresChildWithViewIgnoredByLayoutKey) {
   AddChildView(kSquarishSize);
   AddChildView(kLongSize);
   AddChildView(kTallSize);
 
-  EXPECT_FALSE(layout_manager()->IsChildViewIgnoredByLayout(child(0)));
-  EXPECT_FALSE(layout_manager()->IsChildViewIgnoredByLayout(child(1)));
-  EXPECT_FALSE(layout_manager()->IsChildViewIgnoredByLayout(child(2)));
-
-  layout_manager()->SetChildViewIgnoredByLayout(child(1), true);
-
-  EXPECT_FALSE(layout_manager()->IsChildViewIgnoredByLayout(child(0)));
-  EXPECT_TRUE(layout_manager()->IsChildViewIgnoredByLayout(child(1)));
-  EXPECT_FALSE(layout_manager()->IsChildViewIgnoredByLayout(child(2)));
-}
-
-TEST_F(LayoutManagerBaseManagerTest,
-       ChildViewIgnoredByLayout_IgnoresChildView) {
-  AddChildView(kSquarishSize);
-  AddChildView(kLongSize);
-  AddChildView(kTallSize);
-
-  layout_manager()->SetChildViewIgnoredByLayout(child(1), true);
-
+  child(1)->SetProperty(kViewIgnoredByLayoutKey, true);
   child(1)->SetSize(kLargeSize);
 
   // Makes enough room for all views, and triggers layout.
@@ -616,6 +623,50 @@ TEST_F(LayoutManagerBaseManagerTest, ViewRemoved) {
 
   EXPECT_TRUE(owned_child_view->GetVisible());
   EXPECT_EQ(kLargeSize, owned_child_view->size());
+}
+
+class TestDecorativeView : public View {
+  METADATA_HEADER(TestDecorativeView, View)
+ public:
+  TestDecorativeView() {
+    SetProperty(kIsDecorativeViewKey, true);
+    SetBoundsRect(kExpectedBounds);
+  }
+
+  static constexpr gfx::Rect kExpectedBounds{1, 2, 10, 40};
+};
+
+BEGIN_METADATA(TestDecorativeView)
+END_METADATA
+
+// A decorative view manages its own visibility and layout, and it does
+// not participate in its container's layout.
+TEST_F(LayoutManagerBaseManagerTest, DecorativeView) {
+  View* child_view = AddChildView(kSquarishSize);
+  test::RunScheduledLayout(host_view());
+  gfx::Rect host_view_bounds = host_view()->bounds();
+  gfx::Rect child_view_bounds = child_view->bounds();
+
+  TestDecorativeView* decorative_view =
+      host_view()->AddChildView(std::make_unique<TestDecorativeView>());
+  decorative_view->SetVisible(true);
+  test::RunScheduledLayout(host_view());
+  // The decorative view does not affect the layout of other views.
+  EXPECT_EQ(host_view()->bounds(), host_view_bounds);
+  EXPECT_EQ(child_view->bounds(), child_view_bounds);
+  // The decorative view manages its own layout.
+  EXPECT_EQ(decorative_view->bounds(), decorative_view->kExpectedBounds);
+
+  // The decorative view's visibility shouldn't be changed by the layout
+  // manager.
+  decorative_view->SetVisible(false);
+  test::RunScheduledLayout(host_view());
+  EXPECT_EQ(decorative_view->GetVisible(), false);
+  EXPECT_EQ(decorative_view->bounds(), decorative_view->kExpectedBounds);
+  decorative_view->SetVisible(true);
+  test::RunScheduledLayout(host_view());
+  EXPECT_EQ(decorative_view->GetVisible(), true);
+  EXPECT_EQ(decorative_view->bounds(), decorative_view->kExpectedBounds);
 }
 
 TEST(LayoutManagerBase_ProposedLayoutTest, Equality) {

@@ -20,8 +20,19 @@ source_set("promos") {
     "//ios/chrome/common/ui/promo_style:promo_style",
   ]
   deps = [
-    "//ios/chrome/browser/promos_manager:constants",
-    "//ios/chrome/browser/promos_manager:types",
+    "//ios/chrome/browser/promos_manager/model:constants",
+    "//ios/chrome/browser/promos_manager/model:types",
+  ]
+}
+
+source_set("utils") {
+  sources = [
+    "utils.h",
+    "utils.mm",
+  ]
+  deps = [
+    "//base",
+    "//ios/chrome/browser/shared/model/application_context",
   ]
 }
 
@@ -31,6 +42,7 @@ source_set("promos_manager_scene_agent") {
     "promos_manager_scene_agent.mm",
   ]
   deps = [
+    ":utils",
     "//ios/chrome/app/application_delegate:app_state_header",
     "//ios/chrome/browser/shared/coordinator/scene:observing_scene_agent",
     "//ios/chrome/browser/shared/coordinator/scene:scene_state_header",
@@ -49,16 +61,18 @@ source_set("promos_manager") {
   frameworks = [ "Foundation.framework" ]
   public_deps = [
     ":promos",
+    ":utils",
     "//base",
     "//components/feature_engagement/public",
     "//ios/chrome/app:tests_hook",
     "//ios/chrome/browser/feature_engagement/model",
-    "//ios/chrome/browser/promos_manager",
-    "//ios/chrome/browser/promos_manager:factory",
-    "//ios/chrome/browser/promos_manager:features",
-    "//ios/chrome/browser/promos_manager:types",
+    "//ios/chrome/browser/promos_manager/model",
+    "//ios/chrome/browser/promos_manager/model:factory",
+    "//ios/chrome/browser/promos_manager/model:features",
+    "//ios/chrome/browser/promos_manager/model:types",
     "//ios/chrome/browser/shared/coordinator/chrome_coordinator",
     "//ios/chrome/browser/sync/model",
+    "//ios/chrome/browser/ui/default_promo",
     "//ios/public/provider/chrome/browser/signin:choice_api",
   ]
   deps = [
@@ -67,7 +81,8 @@ source_set("promos_manager") {
     "//ios/chrome/app/strings",
     "//ios/chrome/browser/credential_provider_promo/model:features",
     "//ios/chrome/browser/default_browser/model:utils",
-    "//ios/chrome/browser/promos_manager:constants",
+    "//ios/chrome/browser/docking_promo/ui",
+    "//ios/chrome/browser/promos_manager/model:constants",
     "//ios/chrome/browser/shared/model/application_context",
     "//ios/chrome/browser/shared/model/browser",
     "//ios/chrome/browser/shared/public/commands",
@@ -76,6 +91,8 @@ source_set("promos_manager") {
     "//ios/chrome/browser/ui/app_store_rating",
     "//ios/chrome/browser/ui/app_store_rating:features",
     "//ios/chrome/browser/ui/credential_provider_promo",
+    "//ios/chrome/browser/ui/default_promo/post_default_abandonment",
+    "//ios/chrome/browser/ui/default_promo/post_default_abandonment:features",
     "//ios/chrome/browser/ui/default_promo/post_restore:features",
     "//ios/chrome/browser/ui/default_promo/post_restore:post_restore_default_browser",
     "//ios/chrome/browser/ui/default_promo/promo_handler",
@@ -99,8 +116,8 @@ source_set("unit_tests") {
     "//base/test:test_support",
     "//components/prefs",
     "//components/prefs:test_support",
-    "//ios/chrome/browser/promos_manager:features",
-    "//ios/chrome/browser/promos_manager:promos_manager",
+    "//ios/chrome/browser/promos_manager/model",
+    "//ios/chrome/browser/promos_manager/model:features",
     "//ios/chrome/browser/shared/model/browser/test:test_support",
     "//ios/chrome/browser/shared/model/browser_state:test_support",
     "//ios/chrome/browser/shared/model/prefs:pref_names",

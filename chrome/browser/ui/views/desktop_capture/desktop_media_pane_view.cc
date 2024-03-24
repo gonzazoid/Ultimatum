@@ -18,8 +18,7 @@ DesktopMediaPaneView::DesktopMediaPaneView(
   SetBackground(views::CreateThemedRoundedRectBackground(
       features::IsChromeRefresh2023() ? ui::kColorSysSurface4
                                       : ui::kColorSubtleEmphasisBackground,
-      /*top_radius=*/0, bottom_radius,
-      /*for_border_thickness=*/0));
+      /*top_radius=*/0, bottom_radius));
   views::BoxLayout* layout =
       SetLayoutManager(std::make_unique<views::BoxLayout>(
           views::BoxLayout::Orientation::kVertical, gfx::Insets(0)));
@@ -52,4 +51,9 @@ bool DesktopMediaPaneView::IsAudioSharingApprovedByUser() const {
 void DesktopMediaPaneView::SetAudioSharingApprovedByUser(bool is_on) {
   CHECK(share_audio_view_);
   share_audio_view_->SetAudioSharingApprovedByUser(is_on);
+}
+
+std::u16string DesktopMediaPaneView::GetAudioLabelText() const {
+  return share_audio_view_ ? share_audio_view_->GetAudioLabelText()
+                           : std::u16string();
 }

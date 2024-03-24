@@ -85,7 +85,7 @@ public class WebSigninAccountPickerDelegateTest {
 
     @Before
     public void setUp() {
-        Profile.setLastUsedProfileForTesting(mProfileMock);
+        when(mTabMock.getProfile()).thenReturn(mProfileMock);
         IdentityServicesProvider.setInstanceForTests(mock(IdentityServicesProvider.class));
         when(IdentityServicesProvider.get().getIdentityManager(any()))
                 .thenReturn(mIdentityManagerMock);
@@ -102,7 +102,7 @@ public class WebSigninAccountPickerDelegateTest {
 
     @After
     public void tearDown() {
-        mDelegate.destroy();
+        mDelegate.onAccountPickerDestroy();
     }
 
     @Test

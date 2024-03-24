@@ -45,6 +45,7 @@
 #include "net/cookies/canonical_cookie.h"
 
 #include <limits>
+#include <optional>
 #include <utility>
 
 #include "base/containers/contains.h"
@@ -67,7 +68,6 @@
 #include "net/cookies/cookie_util.h"
 #include "net/cookies/parsed_cookie.h"
 #include "net/http/http_util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 #include "url/url_canon.h"
 #include "url/url_util.h"
@@ -76,10 +76,12 @@ using base::Time;
 
 namespace net {
 
+namespace {
+
+static constexpr int kHoursInOneWeek = 24 * 7;
+static constexpr int kHoursInOneYear = 24 * 365;
 static constexpr int kMinutesInTwelveHours = 12 * 60;
 static constexpr int kMinutesInTwentyFourHours = 24 * 60;
-
-namespace {
 
 // Determine the cookie domain to use for setting the specified cookie.
 bool GetCookieDomain(const GURL& url,
@@ -337,6 +339,28 @@ bool HasValidHostPrefixAttributes(const GURL& url,
   return domain.empty() || (url.HostIsIPAddress() && url.host() == domain);
 }
 
+// Records the age in hours of a session cookie loaded from the store.
+void HistogramSessionCookieAge(const CanonicalCookie& cookie) {
+  // Ignore non-session cookies and those without creation dates.
+  if (cookie.IsPersistent() || cookie.CreationDate().is_null()) {
+    return;
+  }
+
+  // We are studying the age of session cookies being provided into browser
+  // contexts. The record is split into two histograms to improve resolution.
+  const int session_cookie_age_in_hours =
+      (Time::Now() - cookie.CreationDate()).InHours();
+  if (session_cookie_age_in_hours > kHoursInOneWeek) {
+    UMA_HISTOGRAM_CUSTOM_COUNTS("Cookie.SessionAgeInHoursGTOneWeek",
+                                session_cookie_age_in_hours,
+                                kHoursInOneWeek + 1, kHoursInOneYear, 100);
+  } else {
+    UMA_HISTOGRAM_CUSTOM_COUNTS("Cookie.SessionAgeInHoursLTEOneWeek",
+                                session_cookie_age_in_hours, 1,
+                                kHoursInOneWeek + 1, 100);
+  }
+}
+
 }  // namespace
 
 CookieAccessParams::CookieAccessParams(CookieAccessSemantics access_semantics,
@@ -369,7 +393,7 @@ CanonicalCookie::CanonicalCookie(
     bool httponly,
     CookieSameSite same_site,
     CookiePriority priority,
-    absl::optional<CookiePartitionKey> partition_key,
+    std::optional<CookiePartitionKey> partition_key,
     CookieSourceScheme source_scheme,
     int source_port)
     : name_(std::move(name)),
@@ -532,8 +556,8 @@ std::unique_ptr<CanonicalCookie> CanonicalCookie::Create(
     const GURL& url,
     const std::string& cookie_line,
     const base::Time& creation_time,
-    absl::optional<base::Time> server_time,
-    absl::optional<CookiePartitionKey> cookie_partition_key,
+    std::optional<base::Time> server_time,
+    std::optional<CookiePartitionKey> cookie_partition_key,
     bool block_truncated,
     CookieInclusionStatus* status) {
   // Put a pointer on the stack so the rest of the function can assign to it if
@@ -631,7 +655,7 @@ std::unique_ptr<CanonicalCookie> CanonicalCookie::Create(
     if (!partition_has_nonce)
       UMA_HISTOGRAM_BOOLEAN("Cookie.IsPartitionedValid", is_partitioned_valid);
   } else if (!partition_has_nonce) {
-    cookie_partition_key = absl::nullopt;
+    cookie_partition_key = std::nullopt;
   }
 
   if (!status->IsInclude())
@@ -738,7 +762,7 @@ std::unique_ptr<CanonicalCookie> CanonicalCookie::CreateSanitizedCookie(
     bool http_only,
     CookieSameSite same_site,
     CookiePriority priority,
-    absl::optional<CookiePartitionKey> partition_key,
+    std::optional<CookiePartitionKey> partition_key,
     CookieInclusionStatus* status) {
   // Put a pointer on the stack so the rest of the function can assign to it if
   // the default nullptr is passed in.
@@ -927,7 +951,7 @@ std::unique_ptr<CanonicalCookie> CanonicalCookie::FromStorage(
     bool httponly,
     CookieSameSite same_site,
     CookiePriority priority,
-    absl::optional<CookiePartitionKey> partition_key,
+    std::optional<CookiePartitionKey> partition_key,
     CookieSourceScheme source_scheme,
     int source_port) {
   // We check source_port here because it could have concievably been
@@ -954,6 +978,7 @@ std::unique_ptr<CanonicalCookie> CanonicalCookie::FromStorage(
   } else {
     return nullptr;
   }
+  HistogramSessionCookieAge(*cc);
   return cc;
 }
 
@@ -971,7 +996,7 @@ std::unique_ptr<CanonicalCookie> CanonicalCookie::CreateUnsafeCookieForTesting(
     bool httponly,
     CookieSameSite same_site,
     CookiePriority priority,
-    absl::optional<CookiePartitionKey> partition_key,
+    std::optional<CookiePartitionKey> partition_key,
     CookieSourceScheme source_scheme,
     int source_port) {
   return std::make_unique<CanonicalCookie>(
@@ -1000,13 +1025,13 @@ void CanonicalCookie::SetSourcePort(int port) {
 }
 
 CanonicalCookie::UniqueCookieKey CanonicalCookie::UniqueKey() const {
-  absl::optional<CookieSourceScheme> source_scheme =
+  std::optional<CookieSourceScheme> source_scheme =
       cookie_util::IsSchemeBoundCookiesEnabled()
-          ? absl::make_optional(source_scheme_)
-          : absl::nullopt;
-  absl::optional<int> source_port = cookie_util::IsPortBoundCookiesEnabled()
-                                        ? absl::make_optional(source_port_)
-                                        : absl::nullopt;
+          ? std::make_optional(source_scheme_)
+          : std::nullopt;
+  std::optional<int> source_port = cookie_util::IsPortBoundCookiesEnabled()
+                                       ? std::make_optional(source_port_)
+                                       : std::nullopt;
 
   return std::make_tuple(partition_key_, name_, domain_, path_, source_scheme,
                          source_port);
@@ -1014,10 +1039,10 @@ CanonicalCookie::UniqueCookieKey CanonicalCookie::UniqueKey() const {
 
 CanonicalCookie::UniqueDomainCookieKey CanonicalCookie::UniqueDomainKey()
     const {
-  absl::optional<CookieSourceScheme> source_scheme =
+  std::optional<CookieSourceScheme> source_scheme =
       cookie_util::IsSchemeBoundCookiesEnabled()
-          ? absl::make_optional(source_scheme_)
-          : absl::nullopt;
+          ? std::make_optional(source_scheme_)
+          : std::nullopt;
 
   return std::make_tuple(partition_key_, name_, domain_, path_, source_scheme);
 }
@@ -1078,13 +1103,15 @@ CookieAccessResult CanonicalCookie::IncludeForRequestURL(
   }
   switch (cookie_access_scheme) {
     case CookieAccessScheme::kNonCryptographic:
-      if (IsSecure())
+      if (SecureAttribute()) {
         status.AddExclusionReason(CookieInclusionStatus::EXCLUDE_SECURE_ONLY);
+      }
       break;
     case CookieAccessScheme::kTrustworthy:
       is_allowed_to_access_secure_cookies = true;
-      if (IsSecure() || (cookie_util::IsSchemeBoundCookiesEnabled() &&
-                         source_scheme_ == CookieSourceScheme::kSecure)) {
+      if (SecureAttribute() ||
+          (cookie_util::IsSchemeBoundCookiesEnabled() &&
+           source_scheme_ == CookieSourceScheme::kSecure)) {
         status.AddWarningReason(
             CookieInclusionStatus::
                 WARN_SECURE_ACCESS_GRANTED_NON_CRYPTOGRAPHIC);
@@ -1222,13 +1249,13 @@ CookieAccessResult CanonicalCookie::IncludeForRequestURL(
   // were created before "SameSite=None requires Secure" was enabled (as
   // SameSite=None insecure cookies cannot be set while the options are on).
   if (params.access_semantics != CookieAccessSemantics::LEGACY &&
-      SameSite() == CookieSameSite::NO_RESTRICTION && !IsSecure()) {
+      SameSite() == CookieSameSite::NO_RESTRICTION && !SecureAttribute()) {
     status.AddExclusionReason(
         CookieInclusionStatus::EXCLUDE_SAMESITE_NONE_INSECURE);
   }
 
   ApplySameSiteCookieWarningToStatus(SameSite(), effective_same_site,
-                                     IsSecure(),
+                                     SecureAttribute(),
                                      options.same_site_cookie_context(),
                                      &status, false /* is_cookie_being_set */);
 
@@ -1286,7 +1313,7 @@ CookieAccessResult CanonicalCookie::IsSetPermittedInContext(
     const CookieOptions& options,
     const CookieAccessParams& params,
     const std::vector<std::string>& cookieable_schemes,
-    const absl::optional<CookieAccessResult>& cookie_access_result) const {
+    const std::optional<CookieAccessResult>& cookie_access_result) const {
   CookieAccessResult access_result;
   if (cookie_access_result) {
     access_result = *cookie_access_result;
@@ -1307,7 +1334,7 @@ CookieAccessResult CanonicalCookie::IsSetPermittedInContext(
   switch (access_scheme) {
     case CookieAccessScheme::kNonCryptographic:
       access_result.is_allowed_to_access_secure_cookies = false;
-      if (IsSecure()) {
+      if (SecureAttribute()) {
         access_result.status.AddExclusionReason(
             CookieInclusionStatus::EXCLUDE_SECURE_ONLY);
       }
@@ -1320,7 +1347,7 @@ CookieAccessResult CanonicalCookie::IsSetPermittedInContext(
 
     case CookieAccessScheme::kTrustworthy:
       access_result.is_allowed_to_access_secure_cookies = true;
-      if (IsSecure()) {
+      if (SecureAttribute()) {
         // OK, but want people aware of this.
         // Note, we also want to apply this warning to cookies whose source
         // scheme is kSecure but are set by non-cryptographic (but trustworthy)
@@ -1345,7 +1372,7 @@ CookieAccessResult CanonicalCookie::IsSetPermittedInContext(
   // Unless legacy access semantics are in effect, SameSite=None cookies without
   // the Secure attribute will be rejected.
   if (params.access_semantics != CookieAccessSemantics::LEGACY &&
-      SameSite() == CookieSameSite::NO_RESTRICTION && !IsSecure()) {
+      SameSite() == CookieSameSite::NO_RESTRICTION && !SecureAttribute()) {
     DVLOG(net::cookie_util::kVlogSetCookies)
         << "SetCookie() rejecting insecure cookie with SameSite=None.";
     access_result.status.AddExclusionReason(
@@ -1401,7 +1428,7 @@ CookieAccessResult CanonicalCookie::IsSetPermittedInContext(
   }
 
   ApplySameSiteCookieWarningToStatus(
-      SameSite(), access_result.effective_same_site, IsSecure(),
+      SameSite(), access_result.effective_same_site, SecureAttribute(),
       options.same_site_cookie_context(), &access_result.status,
       true /* is_cookie_being_set */);
 
@@ -1569,8 +1596,9 @@ std::string CanonicalCookie::BuildCookieAttributesLine(
     cookie_line += "; path=" + cookie.Path();
   if (cookie.ExpiryDate() != base::Time())
     cookie_line += "; expires=" + HttpUtil::TimeFormatHTTP(cookie.ExpiryDate());
-  if (cookie.IsSecure())
+  if (cookie.SecureAttribute()) {
     cookie_line += "; secure";
+  }
   if (cookie.IsHttpOnly())
     cookie_line += "; httponly";
   if (cookie.IsPartitioned() &&
@@ -1787,7 +1815,7 @@ bool CanonicalCookie::IsCookiePartitionedValid(const GURL& url,
 CookieAndLineWithAccessResult::CookieAndLineWithAccessResult() = default;
 
 CookieAndLineWithAccessResult::CookieAndLineWithAccessResult(
-    absl::optional<CanonicalCookie> cookie,
+    std::optional<CanonicalCookie> cookie,
     std::string cookie_string,
     CookieAccessResult access_result)
     : cookie(std::move(cookie)),

@@ -6,6 +6,7 @@
 
 #include "third_party/blink/renderer/modules/ml/webnn/ml_graph_utils.h"
 
+#include "third_party/blink/renderer/bindings/modules/v8/v8_ml_gemm_options.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_typed_array.h"
 #include "third_party/blink/renderer/modules/ml/webnn/ml_operand.h"
 #include "third_party/blink/renderer/modules/ml/webnn/ml_operator.h"
@@ -83,12 +84,12 @@ HeapVector<Member<const MLOperator>>* GetOperatorsInTopologicalOrder(
   return toposorted_operators;
 }
 
-absl::optional<ArrayBufferViewInfo> TransferArrayBufferView(
+std::optional<ArrayBufferViewInfo> TransferArrayBufferView(
     v8::Isolate* isolate,
     NotShared<DOMArrayBufferView> source_view,
     ExceptionState& exception_state) {
   // A detached ArrayBufferView should be caught by
-  // `ValidateNamedArrayBufferViews()` called in `MLGraph::ComputeAsync()`.
+  // `ValidateNamedArrayBufferViews()` called in `MLGraph::Compute()`.
   CHECK(!source_view->IsDetached());
 
   // Avoid transferring a non-detachable ArrayBuffer.
@@ -99,7 +100,7 @@ absl::optional<ArrayBufferViewInfo> TransferArrayBufferView(
   if (!source_view->buffer()->IsDetachable(isolate)) {
     exception_state.ThrowDOMException(DOMExceptionCode::kDataError,
                                       "The ArrayBuffer is not detachable.");
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // Get the offset and length of the source view before transferring it.
@@ -113,7 +114,7 @@ absl::optional<ArrayBufferViewInfo> TransferArrayBufferView(
   // detach key of the ArrayBuffer is not `undefined`.
   if (!source_view->buffer()->Transfer(isolate, view_info.contents,
                                        exception_state)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   return view_info;
@@ -272,6 +273,40 @@ base::expected<void, String> ValidateFilterLayout(
       return base::unexpected(String::Format(
           "The filter layout %s is not supported.", filter_layout.AsCStr()));
     }
+  }
+
+  return base::ok();
+}
+
+base::expected<void, String> ValidateGemmOptions(const MLGemmOptions* options,
+                                                 uint32_t output_channels) {
+  CHECK(options);
+  if (options->hasC()) {
+    // Both XNNPACK and TFLite fully connected operator only supports 1-D bias
+    // tensor (operand c of WebNN gemm operator) with [output_channels]
+    // dimensions.
+    const auto* bias = options->c();
+    if (bias->Dimensions().size() != 1u ||
+        bias->Dimensions()[0] != output_channels) {
+      // TODO(crbug.com/1273291): Support the bias with other dimensions by
+      // element-wise addition operator.
+      return base::unexpected(String::Format(
+          "The dimensions of bias must be [%u].", output_channels));
+    }
+  }
+  if (options->alpha() != 1.0f) {
+    // TODO(crbug.com/1273291): Support alpha by using element-wise
+    // multiplication operator.
+    return base::unexpected("gemm doesn't support alpha option.");
+  }
+  if (options->beta() != 1.0f) {
+    // TODO(crbug.com/1273291): Support beta by using element-wise
+    // multiplication operator.
+    return base::unexpected("gemm doesn't support beta option.");
+  }
+  if (options->aTranspose()) {
+    // TODO(crbug.com/1273291): Support aTranspose by using transpose operator.
+    return base::unexpected("gemm doesn't support aTranspose option.");
   }
 
   return base::ok();

@@ -7,6 +7,7 @@
 #include <stddef.h>
 
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 
@@ -25,10 +26,9 @@
 #include "chrome/test/base/testing_profile.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_utils.h"
-#include "extensions/browser/content_verifier.h"
+#include "extensions/browser/content_verifier/content_verifier.h"
 #include "extensions/common/extension_builder.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using extensions::URLPatternSet;
 
@@ -72,9 +72,8 @@ TEST_F(ExtensionUserScriptLoaderTest, NoScriptsWithCallbackAfterLoad) {
                                    /*listen_for_extension_system_loaded=*/true,
                                    /*content_verifier=*/nullptr);
   base::RunLoop run_loop;
-  auto on_load_complete = [&run_loop](
-                              UserScriptLoader* loader,
-                              const absl::optional<std::string>& error) {
+  auto on_load_complete = [&run_loop](UserScriptLoader* loader,
+                                      const std::optional<std::string>& error) {
     EXPECT_FALSE(error.has_value()) << *error;
     run_loop.Quit();
   };
@@ -97,7 +96,7 @@ TEST_F(ExtensionUserScriptLoaderTest, NoScriptsAddedWithCallback) {
   // synchronously.
   bool callback_called = false;
   auto callback = [&callback_called](UserScriptLoader* loader,
-                                     const absl::optional<std::string>& error) {
+                                     const std::optional<std::string>& error) {
     // Check that there is at least an error message.
     EXPECT_TRUE(error.has_value());
     EXPECT_THAT(*error, testing::HasSubstr("No changes to loaded scripts"));
@@ -129,7 +128,7 @@ TEST_F(ExtensionUserScriptLoaderTest, QueuedLoadWithCallback) {
   // otherwise completes the test.
   auto on_load_complete = [&run_loop, &first_callback_fired](
                               UserScriptLoader* loader,
-                              const absl::optional<std::string>& error) {
+                              const std::optional<std::string>& error) {
     EXPECT_FALSE(error.has_value()) << *error;
     EXPECT_TRUE(loader->initial_load_complete());
     if (first_callback_fired)

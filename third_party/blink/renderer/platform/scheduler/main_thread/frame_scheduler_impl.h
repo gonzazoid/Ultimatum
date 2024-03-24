@@ -17,6 +17,7 @@
 #include "base/task/sequence_manager/task_queue.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
+#include "base/unguessable_token.h"
 #include "net/base/request_priority.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "third_party/blink/public/platform/task_type.h"
@@ -88,9 +89,7 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
   void SetFrameVisible(bool frame_visible) override;
   bool IsFrameVisible() const override;
   void SetVisibleAreaLarge(bool is_large) override;
-  bool IsVisibleAreaLarge() const override;
   void SetHadUserActivation(bool had_user_activation) override;
-  bool HadUserActivation() const override;
 
   bool IsPageVisible() const override;
 
@@ -99,6 +98,9 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
 
   void SetCrossOriginToNearestMainFrame(bool cross_origin) override;
   bool IsCrossOriginToNearestMainFrame() const override;
+
+  void SetAgentClusterId(
+      const base::UnguessableToken& agent_cluster_id) override;
 
   void SetIsAdFrame(bool is_ad_frame) override;
   bool IsAdFrame() const override;
@@ -279,13 +281,16 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
     return frame_task_queue_controller_.get();
   }
 
-  // Create the QueueTraits for a specific TaskType. This returns absl::nullopt
+  // Create the QueueTraits for a specific TaskType. This returns std::nullopt
   // for loading tasks and non-frame-level tasks.
   static MainThreadTaskQueue::QueueTraits CreateQueueTraitsForTaskType(
       TaskType);
 
   // Reset the state which should not persist across navigations.
   void ResetForNavigation();
+
+  // Whether the frame is considered important.
+  bool IsImportant() const;
 
   base::WeakPtr<FrameOrWorkerScheduler> GetFrameOrWorkerSchedulerWeakPtr()
       override;
@@ -312,6 +317,8 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
   // Whether this scheduler is created for a frame that is contained
   // inside an embedded frame tree. See /docs/frame_trees.md.
   const bool is_in_embedded_frame_tree_;
+
+  base::UnguessableToken agent_cluster_id_ = base::UnguessableToken::Null();
 
   bool is_ad_frame_ = false;
 
@@ -359,6 +366,8 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
       back_forward_cache_disabling_feature_tracker_;
 
   TaskPriority default_loading_task_priority_ = TaskPriority::kNormalPriority;
+
+  TaskPriority low_priority_async_script_task_priority_;
 
   // These are the states of the Page.
   // They should be accessed via GetPageScheduler()->SetPageState().

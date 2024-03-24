@@ -31,7 +31,7 @@
 #include "services/network/public/cpp/record_ontransfersizeupdate_utils.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
-#include "services/network/public/cpp/wrapper_shared_url_loader_factory.h"
+#include "services/network/public/cpp/url_loader_factory_builder.h"
 #include "services/network/public/mojom/early_hints.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "url/gurl.h"
@@ -79,7 +79,7 @@ StreamingSearchPrefetchURLLoader::ResponseReader::ResponseReader(
     mojo::PendingReceiver<network::mojom::URLLoader> forward_receiver,
     mojo::PendingRemote<network::mojom::URLLoaderClient> forwarding_client,
     base::OnceCallback<void(ResponseReader*)> forwarding_disconnection_callback,
-    absl::optional<network::URLLoaderCompletionStatus> status,
+    std::optional<network::URLLoaderCompletionStatus> status,
     scoped_refptr<StreamingSearchPrefetchURLLoader> loader)
     : disconnection_callback_(std::move(forwarding_disconnection_callback)),
       loader_(std::move(loader)),
@@ -142,7 +142,7 @@ void StreamingSearchPrefetchURLLoader::ResponseReader::
   CHECK(resource_response);
   forwarding_client_->OnReceiveResponse(resource_response->Clone(),
                                         std::move(consumer_handle),
-                                        /*cached_metadata=*/absl::nullopt);
+                                        /*cached_metadata=*/std::nullopt);
 }
 
 void StreamingSearchPrefetchURLLoader::ResponseReader::PushData() {
@@ -255,7 +255,7 @@ void StreamingSearchPrefetchURLLoader::ResponseReader::FollowRedirect(
     const std::vector<std::string>& removed_headers,
     const net::HttpRequestHeaders& modified_headers,
     const net::HttpRequestHeaders& modified_cors_exempt_headers,
-    const absl::optional<GURL>& new_url) {}
+    const std::optional<GURL>& new_url) {}
 void StreamingSearchPrefetchURLLoader::ResponseReader::SetPriority(
     net::RequestPriority priority,
     int32_t intra_priority_value) {}
@@ -295,9 +295,7 @@ StreamingSearchPrefetchURLLoader::StreamingSearchPrefetchURLLoader(
 
   // Maybe proxies the prefetch URL loader via the Extension Web Request API, so
   // that extensions can be informed of any prefetches.
-  mojo::PendingReceiver<network::mojom::URLLoaderFactory> pending_receiver;
-  mojo::PendingRemote<network::mojom::URLLoaderFactory> pending_remote =
-      pending_receiver.InitWithNewPipeAndPassRemote();
+  network::URLLoaderFactoryBuilder factory_builder;
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   auto* web_request_api =
@@ -307,19 +305,17 @@ StreamingSearchPrefetchURLLoader::StreamingSearchPrefetchURLLoader(
     web_request_api->MaybeProxyURLLoaderFactory(
         profile, /*frame=*/nullptr, /*render_process_id=*/0,
         content::ContentBrowserClient::URLLoaderFactoryType::kPrefetch,
-        /*navigation_id=*/absl::nullopt, ukm::kInvalidSourceIdObj,
-        &pending_receiver, /*header_client=*/nullptr,
+        /*navigation_id=*/std::nullopt, ukm::kInvalidSourceIdObj,
+        factory_builder, /*header_client=*/nullptr,
         /*navigation_response_task_runner=*/nullptr,
         /*request_initiator=*/url::Origin());
   }
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
-  profile->GetDefaultStoragePartition()
-      ->GetURLLoaderFactoryForBrowserProcess()
-      ->Clone(std::move(pending_receiver));
-  url_loader_factory_ = network::SharedURLLoaderFactory::Create(
-      std::make_unique<network::WrapperPendingSharedURLLoaderFactory>(
-          std::move(pending_remote)));
+  url_loader_factory_ =
+      std::move(factory_builder)
+          .Finish(profile->GetDefaultStoragePartition()
+                      ->GetURLLoaderFactoryForBrowserProcess());
 
   // Create a network service URL loader with passed in params.
   url_loader_factory_->CreateLoaderAndStart(
@@ -498,7 +494,7 @@ void StreamingSearchPrefetchURLLoader::OnReceiveEarlyHints(
 void StreamingSearchPrefetchURLLoader::OnReceiveResponse(
     network::mojom::URLResponseHeadPtr head,
     mojo::ScopedDataPipeConsumerHandle body,
-    absl::optional<mojo_base::BigBuffer> cached_metadata) {
+    std::optional<mojo_base::BigBuffer> cached_metadata) {
   bool can_be_served = CanServePrefetchRequest(head->headers, body);
 
   if (is_activated_) {
@@ -518,7 +514,7 @@ void StreamingSearchPrefetchURLLoader::OnReceiveResponse(
     DCHECK(!streaming_prefetch_request_);
     DCHECK(forwarding_client_);
     forwarding_client_->OnReceiveResponse(std::move(head), std::move(body),
-                                          absl::nullopt);
+                                          std::nullopt);
     return;
   }
 
@@ -557,7 +553,7 @@ void StreamingSearchPrefetchURLLoader::OnReceiveResponse(
 
   if (forwarding_client_) {
     forwarding_client_->OnReceiveResponse(std::move(head), std::move(body),
-                                          absl::nullopt);
+                                          std::nullopt);
     return;
   }
 
@@ -679,7 +675,7 @@ void StreamingSearchPrefetchURLLoader::OnStartLoadingResponseBodyFromData() {
                           weak_factory_.GetWeakPtr()));
   CHECK(resource_response_);
   forwarding_client_->OnReceiveResponse(
-      resource_response_->Clone(), std::move(consumer_handle), absl::nullopt);
+      resource_response_->Clone(), std::move(consumer_handle), std::nullopt);
 
   PushData();
 }
@@ -814,7 +810,7 @@ void StreamingSearchPrefetchURLLoader::FollowRedirect(
     const std::vector<std::string>& removed_headers,
     const net::HttpRequestHeaders& modified_headers,
     const net::HttpRequestHeaders& modified_cors_exempt_headers,
-    const absl::optional<GURL>& new_url) {
+    const std::optional<GURL>& new_url) {
   if (is_in_fallback_) {
     DCHECK(network_url_loader_);
     network_url_loader_->FollowRedirect(removed_headers, modified_headers,

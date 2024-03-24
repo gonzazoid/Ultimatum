@@ -6,6 +6,7 @@
 
 #include <stdint.h>
 
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -17,9 +18,8 @@
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "components/system_cpu/core_times.h"
+#include "components/system_cpu/cpu_sample.h"
 #include "components/system_cpu/host_processor_info_scanner.h"
-#include "components/system_cpu/pressure_sample.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace system_cpu {
 
@@ -34,7 +34,7 @@ class CpuProbeMac::BlockingTaskRunnerHelper final {
   BlockingTaskRunnerHelper(const BlockingTaskRunnerHelper&) = delete;
   BlockingTaskRunnerHelper& operator=(const BlockingTaskRunnerHelper&) = delete;
 
-  absl::optional<PressureSample> Update();
+  std::optional<CpuSample> Update();
 
  private:
   // Called when a core is seen the first time.
@@ -57,7 +57,7 @@ CpuProbeMac::BlockingTaskRunnerHelper::~BlockingTaskRunnerHelper() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
-absl::optional<PressureSample> CpuProbeMac::BlockingTaskRunnerHelper::Update() {
+std::optional<CpuSample> CpuProbeMac::BlockingTaskRunnerHelper::Update() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   processor_info_scanner_.Update();
@@ -89,10 +89,9 @@ absl::optional<PressureSample> CpuProbeMac::BlockingTaskRunnerHelper::Update() {
   }
 
   if (utilization_cores > 0) {
-    return PressureSample{.cpu_utilization =
-                              utilization_sum / utilization_cores};
+    return CpuSample{.cpu_utilization = utilization_sum / utilization_cores};
   } else {
-    return absl::nullopt;
+    return std::nullopt;
   }
 }
 

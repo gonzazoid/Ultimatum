@@ -5,6 +5,7 @@
 #include "net/cert/internal/trust_store_win.h"
 
 #include <memory>
+#include <string_view>
 
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
@@ -34,7 +35,7 @@ namespace net {
 namespace {
 
 ::testing::AssertionResult ParseCertFromFile(
-    base::StringPiece file_name,
+    std::string_view file_name,
     std::shared_ptr<const bssl::ParsedCertificate>* out_cert) {
   const scoped_refptr<X509Certificate> cert =
       ImportCertFromFile(net::GetTestCertsDirectory(), file_name);
@@ -343,8 +344,7 @@ TEST_P(TrustStoreWinTest, GetTrustDisallowedCerts) {
 
 MATCHER_P(ParsedCertEq, expected_cert, "") {
   return arg && expected_cert &&
-         base::ranges::equal(arg->der_cert().AsSpan(),
-                             expected_cert->der_cert().AsSpan());
+         base::ranges::equal(arg->der_cert(), expected_cert->der_cert());
 }
 
 TEST_P(TrustStoreWinTest, GetIssuersInitializationError) {

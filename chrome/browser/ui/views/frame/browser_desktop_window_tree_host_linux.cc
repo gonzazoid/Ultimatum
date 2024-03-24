@@ -208,7 +208,8 @@ void BrowserDesktopWindowTreeHostLinux::UpdateFrameHints() {
     input_bounds.Inset(insets_dip - view->GetInputInsets());
     input_bounds = gfx::ScaleToEnclosingRect(input_bounds, scale);
     window->SetInputRegion(
-        showing_frame ? std::optional<gfx::Rect>(input_bounds) : std::nullopt);
+        showing_frame ? std::optional<std::vector<gfx::Rect>>({input_bounds})
+                      : std::nullopt);
   }
 
   if (ui::OzonePlatform::GetInstance()->IsWindowCompositingSupported()) {
@@ -358,6 +359,14 @@ void BrowserDesktopWindowTreeHostLinux::OnWindowTiledStateChanged(
                new_tiled_edges.bottom || new_tiled_edges.right;
   browser_frame_->set_tiled(tiled && !maximized);
   UpdateFrameHints();
+  if (SupportsClientFrameShadow()) {
+    // Trigger a re-layout as the insets will change even if the bounds don't.
+    ScheduleRelayout();
+    if (GetWidget()->non_client_view()) {
+      // This is needed for the decorated regions, borders etc. to be repainted.
+      GetWidget()->non_client_view()->SchedulePaint();
+    }
+  }
 }
 
 void BrowserDesktopWindowTreeHostLinux::OnNativeThemeUpdated(

@@ -6,6 +6,7 @@
 
 #include "base/files/scoped_temp_dir.h"
 #include "base/metrics/metrics_hashes.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/test/history_service_test_util.h"
@@ -17,6 +18,7 @@
 #include "components/segmentation_platform/internal/segmentation_platform_service_impl.h"
 #include "components/segmentation_platform/internal/segmentation_platform_service_test_base.h"
 #include "components/segmentation_platform/internal/signals/ukm_observer.h"
+#include "components/segmentation_platform/public/features.h"
 #include "components/segmentation_platform/public/local_state_helper.h"
 #include "components/ukm/test_ukm_recorder.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
@@ -127,7 +129,7 @@ class TestServicesForPlatform : public SegmentationPlatformServiceTestBase {
   }
 
   void SaveSegmentResult(SegmentId segment_id,
-                         absl::optional<proto::PredictionResult> result) {
+                         std::optional<proto::PredictionResult> result) {
     const std::string key = base::NumberToString(static_cast<int>(segment_id));
     auto& segment_info = segment_db_entries_[key];
     // Assume that test already created the segment info, this method only
@@ -158,6 +160,8 @@ class UkmDataManagerImplTest : public testing::Test {
   ~UkmDataManagerImplTest() override = default;
 
   void SetUp() override {
+    feature_list_.InitAndEnableFeature(
+        features::kSegmentationPlatformSignalDbCache);
     SegmentationPlatformService::RegisterLocalStatePrefs(prefs_.registry());
     LocalStateHelper::GetInstance().Initialize(&prefs_);
     ukm_recorder_ = std::make_unique<ukm::TestUkmRecorder>();
@@ -200,6 +204,7 @@ class UkmDataManagerImplTest : public testing::Test {
   base::test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::SYSTEM_TIME};
 
+  base::test::ScopedFeatureList feature_list_;
   std::unique_ptr<UkmObserver> ukm_observer_;
   std::unique_ptr<ukm::TestUkmRecorder> ukm_recorder_;
   raw_ptr<MockUkmDatabase> ukm_database_;

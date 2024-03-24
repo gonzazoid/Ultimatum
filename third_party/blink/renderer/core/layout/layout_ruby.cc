@@ -41,13 +41,12 @@ namespace blink {
 // === generic helper functions to avoid excessive code duplication ===
 
 // static
-LayoutRubyColumn* LayoutRubyAsInline::LastRubyColumn(const LayoutObject& ruby) {
+LayoutRubyColumn* LayoutRuby::LastRubyColumn(const LayoutObject& ruby) {
   return To<LayoutRubyColumn>(ruby.SlowLastChild());
 }
 
 // static
-LayoutRubyColumn* LayoutRubyAsInline::FindRubyColumnParent(
-    LayoutObject* child) {
+LayoutRubyColumn* LayoutRuby::FindRubyColumnParent(LayoutObject* child) {
   while (child && !child->IsRubyColumn()) {
     child = child->Parent();
   }
@@ -56,32 +55,32 @@ LayoutRubyColumn* LayoutRubyAsInline::FindRubyColumnParent(
 
 // === ruby as inline object ===
 
-LayoutRubyAsInline::LayoutRubyAsInline(Element* element)
+LayoutRuby::LayoutRuby(Element* element)
     : LayoutInline(element),
       ruby_container_(RuntimeEnabledFeatures::RubySimplePairingEnabled()
                           ? MakeGarbageCollected<RubyContainer>(*this)
                           : nullptr) {
+  DCHECK(!RuntimeEnabledFeatures::RubyLineBreakableEnabled());
   if (element) {
     UseCounter::Count(GetDocument(), WebFeature::kRenderRuby);
   }
 }
 
-LayoutRubyAsInline::~LayoutRubyAsInline() = default;
+LayoutRuby::~LayoutRuby() = default;
 
-void LayoutRubyAsInline::Trace(Visitor* visitor) const {
+void LayoutRuby::Trace(Visitor* visitor) const {
   visitor->Trace(ruby_container_);
   LayoutInline::Trace(visitor);
 }
 
-void LayoutRubyAsInline::StyleDidChange(StyleDifference diff,
-                                        const ComputedStyle* old_style) {
+void LayoutRuby::StyleDidChange(StyleDifference diff,
+                                const ComputedStyle* old_style) {
   NOT_DESTROYED();
   LayoutInline::StyleDidChange(diff, old_style);
   PropagateStyleToAnonymousChildren();
 }
 
-void LayoutRubyAsInline::AddChild(LayoutObject* child,
-                                  LayoutObject* before_child) {
+void LayoutRuby::AddChild(LayoutObject* child, LayoutObject* before_child) {
   NOT_DESTROYED();
   // If the child is a ruby column, just add it normally.
   if (child->IsRubyColumn()) {
@@ -124,7 +123,7 @@ void LayoutRubyAsInline::AddChild(LayoutObject* child,
   last_column->AddChild(child);
 }
 
-void LayoutRubyAsInline::RemoveChild(LayoutObject* child) {
+void LayoutRuby::RemoveChild(LayoutObject* child) {
   NOT_DESTROYED();
   // If the child's parent is *this (must be a ruby column), just use the normal
   // remove method.
@@ -145,7 +144,7 @@ void LayoutRubyAsInline::RemoveChild(LayoutObject* child) {
   column->RemoveChild(child);
 }
 
-void LayoutRubyAsInline::DidRemoveChildFromColumn(LayoutObject& child) {
+void LayoutRuby::DidRemoveChildFromColumn(LayoutObject& child) {
   ruby_container_->DidRemoveChildFromColumn(child);
 }
 

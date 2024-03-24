@@ -125,7 +125,7 @@ class HoldingSpaceScrollView : public views::ScrollView,
       this};
 };
 
-BEGIN_METADATA(HoldingSpaceScrollView, views::ScrollView)
+BEGIN_METADATA(HoldingSpaceScrollView)
 END_METADATA
 
 }  // namespace
@@ -181,7 +181,7 @@ void HoldingSpaceItemViewsSection::Init() {
 
   // The `container_`'s children should be announced "List item X of Y", where
   // X is the 1-based child index and Y is the count of children.
-  container_->GetViewAccessibility().OverrideRole(ax::mojom::Role::kList);
+  container_->GetViewAccessibility().SetRole(ax::mojom::Role::kList);
 
   // Placeholder.
   auto placeholder = CreatePlaceholder();
@@ -548,7 +548,7 @@ void HoldingSpaceItemViewsSection::OnAnimateOutCompleted(
     MaybeAnimateIn();
 }
 
-BEGIN_METADATA(HoldingSpaceItemViewsSection, views::View)
+BEGIN_METADATA(HoldingSpaceItemViewsSection)
 END_METADATA
 
 }  // namespace ash

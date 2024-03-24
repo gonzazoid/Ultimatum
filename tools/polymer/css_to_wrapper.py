@@ -54,11 +54,12 @@ const template = html`
 document.head.appendChild(template.content);"""
 
 # Template for Lit component CSS styles.
-_LIT_STYLE_TEMPLATE = """import {css} from '%(scheme)s//resources/lit/v3_0/lit.rollup.js';
+_LIT_STYLE_TEMPLATE = """import {css, CSSResultGroup} from '%(scheme)s//resources/lit/v3_0/lit.rollup.js';
 %(imports)s
 
+let instance: CSSResultGroup|null = null;
 export function getCss() {
-  return css`%(content)s`;
+  return instance || (instance = [...[%(deps)s], css`%(content)s`]);
 }"""
 
 _LIT_VARS_TEMPLATE = """import {css} from '%(scheme)s//resources/lit/v3_0/lit.rollup.js';
@@ -74,6 +75,13 @@ _TEMPLATE_MAP = {
     'vars': _POLYMER_VARS_TEMPLATE,
     'vars-lit': _LIT_VARS_TEMPLATE,
 }
+
+# A suffix used for style files that are copies of Polymer styles ported into
+# Lit. It is treated specially below so that the Polymer file acts as a source
+# of truth, to avoid duplication while both files styles need to be available.
+# TODO(crbug.com/40943652): Remove special handling when having the same styles
+# available in both Polymer and Lit is no longer needed.
+_LIT_SUFFIX = "_lit.css"
 
 
 def _parse_style_line(line, metadata):
@@ -137,7 +145,15 @@ def _extract_metadata(css_file):
                   'scheme': metadata['scheme'],
                   'type': type,
               }
-            elif type == 'style-lit' or type == 'vars' or type == 'vars-lit':
+            elif type == 'style-lit':
+              metadata = {
+                  'imports': [],
+                  'include': None,
+                  'metadata_end_line': -1,
+                  'scheme': metadata['scheme'],
+                  'type': type,
+              }
+            elif type == 'vars' or type == 'vars-lit':
               metadata = {
                   'imports': [],
                   'metadata_end_line': -1,
@@ -145,10 +161,9 @@ def _extract_metadata(css_file):
                   'type': type,
               }
 
-        elif metadata['type'] == 'style':
+        elif metadata['type'] == 'style' or metadata['type'] == 'style-lit':
           _parse_style_line(line, metadata)
-        elif metadata['type'] == 'style-lit' or metadata['type'] == 'vars' or \
-            metadata['type'] == 'vars-lit':
+        elif metadata['type'] == 'vars' or metadata['type'] == 'vars-lit':
           _parse_import_line(line, metadata)
 
         if metadata['scheme'] == 'default':
@@ -213,14 +228,56 @@ def main(argv):
   def _urls_to_imports(urls):
     return '\n'.join(map(lambda i: f'import \'{i}\';', urls))
 
+  def _dash_case_to_title_case(string):
+    return string.replace('-', ' ').title().replace(' ', '')
+
+  def _urls_to_imports_lit(metadata):
+    if metadata['include'] is None:
+      # Case where no dependencies to other styles exist.
+      return '\n'.join(map(lambda i: f'import \'{i}\';', metadata['imports']))
+
+    # Case where dependencies to other styles exist. Need to generate different
+    # imports for such dependencies
+
+    imports = []
+    style_deps = metadata['include'].split()
+
+    for dep in metadata['imports']:
+      # Convert 'foo/bar/some_style.css.js' to a'some-style' identifier.
+      style_id = path.split(dep)[1].replace('_', '-').replace('.css.js', '')
+      if style_id in style_deps:
+        # Convert 'some-style' to 'SomeStyle'.
+        alias = _dash_case_to_title_case(style_id)
+        imports.append(f'import {{getCss as get{alias}}} from \'{dep}\';')
+      else:
+        imports.append(f'import \'{dep}\';')
+    return '\n'.join(imports)
+
+  def _deps_to_function_calls(style_deps):
+    # Convert 'some-style' to 'getSomeStyle()'.
+    return ','.join(
+        map(lambda d: 'get' + _dash_case_to_title_case(d) + '()', style_deps))
+
   for in_file in args.in_files:
     # Extract metadata from the original file, as the special metadata comments
     # only exist there.
     metadata = _extract_metadata(path.join(in_folder, in_file))
 
-    # Extract the CSS content from either the original or the minified files.
-    content = _extract_content(path.join(wrapper_in_folder, in_file), metadata,
-                               args.minify)
+    content = ''
+
+    if in_file.endswith(_LIT_SUFFIX):
+      # Treat the _LIT_SUFFIX in a special way, so that the CSS content is
+      # actually extracted from the equivalent Polymer file instead.
+      polymer_in_file = in_file.replace(_LIT_SUFFIX, '.css')
+      assert polymer_in_file in args.in_files
+      polymer_metadata = _extract_metadata(path.join(in_folder,
+                                                     polymer_in_file))
+      content = _extract_content(path.join(wrapper_in_folder, polymer_in_file),
+                                 polymer_metadata, args.minify)
+    else:
+      # Extract the CSS content from either the original or the minified files.
+      content = _extract_content(path.join(wrapper_in_folder, in_file),
+                                 metadata, args.minify)
 
     # Extract the URL scheme that should be used for absolute URL imports.
     scheme = None
@@ -243,8 +300,15 @@ def main(argv):
           'id': metadata['id'],
           'scheme': scheme,
       }
-    elif metadata['type'] == 'style-lit' or metadata['type'] == 'vars' or \
-        metadata['type'] == 'vars-lit':
+    elif metadata['type'] == 'style-lit':
+      substitutions = {
+          'imports': _urls_to_imports_lit(metadata),
+          'deps': '' if metadata['include'] is None else \
+              _deps_to_function_calls(metadata['include'].split()),
+          'content': content,
+          'scheme': scheme,
+      }
+    elif metadata['type'] == 'vars' or metadata['type'] == 'vars-lit':
       substitutions = {
           'imports': _urls_to_imports(metadata['imports']),
           'content': content,

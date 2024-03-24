@@ -9,7 +9,9 @@ import static org.chromium.chrome.modules.readaloud.PlaybackListener.State.PLAYI
 import static org.chromium.chrome.modules.readaloud.PlaybackListener.State.STOPPED;
 
 import android.app.Activity;
+import android.content.Intent;
 
+import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
@@ -18,6 +20,7 @@ import org.chromium.base.ApplicationStatus;
 import org.chromium.base.Log;
 import org.chromium.base.Promise;
 import org.chromium.base.ResettersForTesting;
+import org.chromium.base.UserData;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.supplier.OneShotCallback;
@@ -25,6 +28,8 @@ import org.chromium.chrome.browser.browser_controls.BrowserControlsSizer;
 import org.chromium.chrome.browser.device.DeviceConditions;
 import org.chromium.chrome.browser.language.AppLocaleUtils;
 import org.chromium.chrome.browser.layouts.LayoutManager;
+import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
+import org.chromium.chrome.browser.lifecycle.OnUserLeaveHintObserver;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabSelectionType;
@@ -39,14 +44,20 @@ import org.chromium.chrome.modules.readaloud.PlaybackListener;
 import org.chromium.chrome.modules.readaloud.Player;
 import org.chromium.chrome.modules.readaloud.ReadAloudPlaybackHooks;
 import org.chromium.chrome.modules.readaloud.ReadAloudPlaybackHooksProvider;
+import org.chromium.chrome.modules.readaloud.contentjs.Extractor;
 import org.chromium.chrome.modules.readaloud.contentjs.Highlighter;
 import org.chromium.chrome.modules.readaloud.contentjs.Highlighter.Mode;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
+import org.chromium.components.browser_ui.widget.InsetObserver;
+import org.chromium.components.browser_ui.widget.InsetObserverSupplier;
 import org.chromium.components.embedder_support.util.UrlConstants;
 import org.chromium.components.prefs.PrefService;
 import org.chromium.components.user_prefs.UserPrefs;
 import org.chromium.content_public.browser.GlobalRenderFrameHostId;
+import org.chromium.content_public.browser.NavigationHandle;
 import org.chromium.content_public.browser.WebContents;
+import org.chromium.ui.base.ActivityWindowAndroid;
+import org.chromium.ui.base.WindowAndroid;
 import org.chromium.url.GURL;
 
 import java.util.HashMap;
@@ -62,9 +73,11 @@ public class ReadAloudController
         implements Player.Observer,
                 Player.Delegate,
                 PlaybackListener,
-                ApplicationStatus.ApplicationStateListener {
+                ApplicationStatus.ApplicationStateListener,
+                InsetObserver.WindowInsetObserver,
+                OnUserLeaveHintObserver {
     private static final String TAG = "ReadAloudController";
-
+    private static final Class<RestoreState> USER_DATA_KEY = RestoreState.class;
     private final Activity mActivity;
     private final ObservableSupplier<Profile> mProfileSupplier;
     private final ObservableSupplierImpl<String> mReadabilitySupplier =
@@ -74,14 +87,19 @@ public class ReadAloudController
     private final Map<String, Boolean> mTimepointsSupportedMap = new HashMap<>();
     private final HashSet<String> mPendingRequests = new HashSet<>();
     private final TabModel mTabModel;
+    private final TabModel mIncognitoTabModel;
     @Nullable private Player mPlayerCoordinator;
     private final ObservableSupplier<LayoutManager> mLayoutManagerSupplier;
+    private final TapToSeekHandler mTapToSeekHandler;
 
     private TabModelTabObserver mTabObserver;
+    private TabModelTabObserver mIncognitoTabObserver;
+
+    private boolean mPausedForIncognito;
 
     private final BottomSheetController mBottomSheetController;
     private final BrowserControlsSizer mBrowserControlsSizer;
-
+    private final ActivityLifecycleDispatcher mActivityLifecycleDispatcher;
     private ReadAloudReadabilityHooks mReadabilityHooks;
 
     @Nullable private static ReadAloudReadabilityHooks sReadabilityHooksForTesting;
@@ -89,6 +107,7 @@ public class ReadAloudController
     @Nullable private static ReadAloudPlaybackHooks sPlaybackHooksForTesting;
     @Nullable private Highlighter mHighlighter;
     @Nullable private Highlighter.Config mHighlighterConfig;
+    @Nullable private Extractor mExtractor;
 
     // Information tied to a playback. When playback is reset it should be set to null together
     //  with the mCurrentlyPlayingTab and mGlobalRenderFrameId
@@ -97,14 +116,35 @@ public class ReadAloudController
     @Nullable private GlobalRenderFrameHostId mGlobalRenderFrameId;
     // Current tab playback data, or null if there is no playback.
     @Nullable private PlaybackData mCurrentPlaybackData;
+    private long mDateModified;
 
-    // Playback for voice previews.
+    // Playback for voice previews
     @Nullable private Playback mVoicePreviewPlayback;
+
+    // TODO(b/322052505): Remove this and just observe mProfileSupplier.
+    @Nullable private Profile mProfile;
+
+    private boolean mOnUserLeaveHint;
+
+    /**
+     * ReadAloud entrypoint defined in readaloud/enums.xml.
+     *
+     * <p>Do not reorder or remove items, only add new items before NUM_ENTRIES.
+     */
+    @IntDef({Entrypoint.OVERFLOW_MENU, Entrypoint.MAGIC_TOOLBAR, Entrypoint.RESTORED_PLAYBACK})
+    public @interface Entrypoint {
+        int OVERFLOW_MENU = 0;
+        int MAGIC_TOOLBAR = 1;
+        int RESTORED_PLAYBACK = 2;
+
+        // Be sure to also update enums.xml when updating these values.
+        int NUM_ENTRIES = 3;
+    }
 
     // Information about a tab playback necessary for resuming later. Does not
     // include language or voice which should come from current tab state or
     // settings respectively.
-    private class RestoreState {
+    private class RestoreState implements UserData {
         // Tab to play.
         private final Tab mTab;
         // Paragraph index to resume from.
@@ -113,6 +153,9 @@ public class ReadAloudController
         private final long mOffsetNanos;
         // True if audio should start playing immediately when this state is restored.
         private final boolean mPlaying;
+        // Value of dateModified tag or 0
+        private final long mDateModified;
+        private final PlaybackData mData;
 
         /**
          * Constructor.
@@ -120,8 +163,13 @@ public class ReadAloudController
          * @param tab Tab to play.
          * @param data Current PlaybackData which may be null if playback hasn't started yet.
          */
-        RestoreState(Tab tab, @Nullable PlaybackData data) {
-            this(tab, data, /* useOffsetInParagraph= */ true, /* shouldPlayOverride= */ null);
+        RestoreState(Tab tab, @Nullable PlaybackData data, long dateModified) {
+            this(
+                    tab,
+                    data,
+                    /* useOffsetInParagraph= */ true,
+                    /* shouldPlayOverride= */ null,
+                    dateModified);
         }
 
         /**
@@ -134,8 +182,11 @@ public class ReadAloudController
                 Tab tab,
                 @Nullable PlaybackData data,
                 boolean useOffsetInParagraph,
-                @Nullable Boolean shouldPlayOverride) {
+                @Nullable Boolean shouldPlayOverride,
+                long dateModified) {
             mTab = tab;
+            mData = data;
+            mDateModified = dateModified;
             if (data == null) {
                 mParagraphIndex = 0;
                 mOffsetNanos = 0L;
@@ -151,9 +202,22 @@ public class ReadAloudController
             }
         }
 
+        Tab getTab() {
+            return mTab;
+        }
+
+        long getDateModified() {
+            return mDateModified;
+        }
+
+        @Nullable
+        PlaybackData getPlaybackData() {
+            return mData;
+        }
         /** Apply the saved playback state. */
         void restore() {
-            createTabPlayback(mTab)
+            maybeInitializePlaybackHooks();
+            createTabPlayback(mTab, mDateModified, Entrypoint.RESTORED_PLAYBACK)
                     .then(
                             playback -> {
                                 if (mPlaying) {
@@ -190,6 +254,7 @@ public class ReadAloudController
     private final ObservableSupplierImpl<List<PlaybackVoice>> mCurrentLanguageVoices;
     // Selected voice ID.
     private final ObservableSupplierImpl<String> mSelectedVoiceId;
+    private final ActivityWindowAndroid mActivityWindowAndroid;
 
     private long mTranslationObserverHandle;
     private final TranslationObserver mTranslationObserver =
@@ -222,13 +287,16 @@ public class ReadAloudController
                 public void onSuccess(String url, boolean isReadable, boolean timepointsSupported) {
                     Log.d(TAG, "onSuccess called for %s", url);
                     ReadAloudMetrics.recordIsPageReadable(isReadable);
+                    ReadAloudMetrics.recordServerReadabilityResult(isReadable);
                     ReadAloudMetrics.recordIsPageReadabilitySuccessful(true);
 
-                    // isPlaybackEnabled() should only be checked if isReadable == true.
-                    isReadable = isReadable && ReadAloudFeatures.isPlaybackEnabled();
+                    // Register _KnownReadable trial before checking more playback conditions
                     if (isReadable) {
                         ReadAloudFeatures.activateKnownReadableTrial();
                     }
+
+                    // isPlaybackEnabled() should only be checked if isReadable == true.
+                    isReadable = isReadable && ReadAloudFeatures.isPlaybackEnabled();
 
                     mReadabilityMap.put(url, isReadable);
                     mTimepointsSupportedMap.put(url, timepointsSupported);
@@ -258,14 +326,18 @@ public class ReadAloudController
             Activity activity,
             ObservableSupplier<Profile> profileSupplier,
             TabModel tabModel,
+            TabModel incognitoTabModel,
             BottomSheetController bottomSheetController,
             BrowserControlsSizer browserControlsSizer,
-            ObservableSupplier<LayoutManager> layoutManagerSupplier) {
+            ObservableSupplier<LayoutManager> layoutManagerSupplier,
+            ActivityWindowAndroid activityWindowAndroid,
+            ActivityLifecycleDispatcher activityLifecycleDispatcher) {
         ReadAloudFeatures.init();
         mActivity = activity;
         mProfileSupplier = profileSupplier;
         new OneShotCallback<Profile>(mProfileSupplier, this::onProfileAvailable);
         mTabModel = tabModel;
+        mIncognitoTabModel = incognitoTabModel;
         mBottomSheetController = bottomSheetController;
         mCurrentLanguageVoices = new ObservableSupplierImpl<>();
         mSelectedVoiceId = new ObservableSupplierImpl<>();
@@ -273,36 +345,84 @@ public class ReadAloudController
         mLayoutManagerSupplier = layoutManagerSupplier;
         mHighlightingEnabled = new ObservableSupplierImpl<>(false);
         ApplicationStatus.registerApplicationStateListener(this);
+        mActivityWindowAndroid = activityWindowAndroid;
+        mActivityLifecycleDispatcher = activityLifecycleDispatcher;
+        mActivityLifecycleDispatcher.register(this);
+        mTapToSeekHandler = new TapToSeekHandler(mTabModel.getCurrentTabSupplier());
     }
 
     public ObservableSupplier<String> getReadabilitySupplier() {
         return mReadabilitySupplier;
     }
 
-    private void onProfileAvailable(Profile profile) {
+    @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
+    public void onProfileAvailable(Profile profile) {
+        mProfile = profile;
         mReadabilityHooks =
                 sReadabilityHooksForTesting != null
                         ? sReadabilityHooksForTesting
                         : new ReadAloudReadabilityHooksImpl(mActivity, profile);
         if (mReadabilityHooks.isEnabled()) {
+            boolean isAllowed = ReadAloudFeatures.isAllowed(mProfileSupplier.get());
+            ReadAloudMetrics.recordIsUserEligible(isAllowed);
+            if (!isAllowed) {
+                ReadAloudMetrics.recordIneligibilityReason(
+                        ReadAloudFeatures.getIneligibilityReason());
+            }
             mHighlightingEnabled.addObserver(
                     ReadAloudController.this::onHighlightingEnabledChanged);
             mHighlightingEnabled.set(ReadAloudPrefs.isHighlightingEnabled(getPrefService()));
             ReadAloudMetrics.recordHighlightingEnabledOnStartup(mHighlightingEnabled.get());
             mTabObserver =
                     new TabModelTabObserver(mTabModel) {
+
+                        @Override
+                        public void onLoadStarted(Tab tab, boolean toDifferentDocument) {
+                            Log.d(TAG, "onLoadStarted");
+                            if (tab != null
+                                    && tab.getUrl() != null
+                                    && tab.getUrl().isValid()
+                                    && toDifferentDocument) {
+                                maybeCheckReadability(tab.getUrl());
+                                maybeHandleTabReload(tab, tab.getUrl());
+                                maybeStopPlayback(tab);
+                            }
+                        }
+
+                        @Override
+                        public void onDidRedirectNavigation(
+                                Tab tab, NavigationHandle navigationHandle) {
+                            Log.d(TAG, "onDidRedirectNavigation");
+                            if (navigationHandle.getUrl() != null
+                                    && navigationHandle.getUrl().isValid()) {
+                                maybeCheckReadability(navigationHandle.getUrl());
+                            }
+                        }
+
                         @Override
                         public void onPageLoadStarted(Tab tab, GURL url) {
                             Log.d(TAG, "onPageLoad called for %s", url.getPossiblyInvalidSpec());
                             maybeCheckReadability(url);
                             maybeHandleTabReload(tab, url);
                             maybeStopPlayback(tab);
-                            boolean isAllowed = ReadAloudFeatures.isAllowed(mProfileSupplier.get());
-                            ReadAloudMetrics.recordIsUserEligible(isAllowed);
-                            if (!isAllowed) {
-                                ReadAloudMetrics.recordIneligibilityReason(
-                                        ReadAloudFeatures.getIneligibilityReason());
+                        }
+
+                        @Override
+                        public void onActivityAttachmentChanged(
+                                Tab tab, @Nullable WindowAndroid window) {
+                            super.onActivityAttachmentChanged(tab, window);
+                            Log.d(TAG, "onActivityAttachmentChanged");
+                            if (mCurrentlyPlayingTab != null
+                                    && mCurrentlyPlayingTab.getId() == tab.getId()) {
+                                Log.d(TAG, "Saving state");
+                                RestoreState state =
+                                        new RestoreState(
+                                                mCurrentlyPlayingTab,
+                                                mCurrentPlaybackData,
+                                                mDateModified);
+                                tab.getUserDataHost().setUserData(USER_DATA_KEY, state);
                             }
+                            maybeStopPlayback(tab);
                         }
 
                         @Override
@@ -314,19 +434,80 @@ public class ReadAloudController
                                         "onTabSelected called for "
                                                 + tab.getUrl().getPossiblyInvalidSpec());
                                 maybeCheckReadability(tab.getUrl());
+
+                                if (mPausedForIncognito) {
+                                    mPausedForIncognito = false;
+                                    if (mPlayback != null) {
+                                        mPlayerCoordinator.restorePlayers();
+                                    }
+                                }
+                                RestoreState restored =
+                                        tab.getUserDataHost().getUserData(USER_DATA_KEY) != null
+                                                ? tab.getUserDataHost().getUserData(USER_DATA_KEY)
+                                                : null;
+                                if (restored != null
+                                        && restored.getTab().getUrl().equals(tab.getUrl())) {
+                                    Log.d(
+                                            TAG,
+                                            "Restore state: swapping tab from the old activity with"
+                                                    + " this one");
+                                    RestoreState updatedRestored =
+                                            new RestoreState(
+                                                    tab,
+                                                    restored.getPlaybackData(),
+                                                    restored.getDateModified());
+                                    updatedRestored.restore();
+                                    tab.getUserDataHost().removeUserData(USER_DATA_KEY);
+                                }
                             }
                         }
 
                         @Override
                         public void willCloseTab(Tab tab) {
+                            Log.d(TAG, "WillCloseTab");
                             maybeStopPlayback(tab);
                         }
                     };
+
+            mIncognitoTabObserver =
+                    new TabModelTabObserver(mIncognitoTabModel) {
+                        @Override
+                        protected void onTabSelected(Tab tab) {
+                            super.onTabSelected(tab);
+                            if (tab == null || !tab.isIncognito()) {
+                                return;
+                            }
+
+                            if (mPlayback != null && !mPausedForIncognito) {
+                                mPlayback.pause();
+                                mPlayerCoordinator.hidePlayers();
+                                mPausedForIncognito = true;
+                            }
+                        }
+                    };
+
+            InsetObserver insetObserver =
+                    InsetObserverSupplier.getValueOrNullFrom(mActivityWindowAndroid);
+            if (insetObserver != null) {
+                insetObserver.addObserver(this);
+            }
         }
     }
 
     @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
     public void maybeCheckReadability(GURL url) {
+        if (!isAvailable()) {
+            return;
+        }
+
+        if (mReadabilityHooks == null) {
+            return;
+        }
+
+        if (mProfile == null || !mProfile.isNativeInitialized()) {
+            return;
+        }
+
         if (!isURLReadAloudSupported(url)) {
             ReadAloudMetrics.recordIsPageReadable(false);
             return;
@@ -335,17 +516,15 @@ public class ReadAloudController
         String urlSpec = stripUserData(url).getSpec();
         // TODO: 2 different URLs can have the same sanitized URL
         mSanitizedToFullUrlMap.put(url.getSpec(), urlSpec);
-        if (mReadabilityMap.containsKey(urlSpec) || mPendingRequests.contains(urlSpec)) {
+        if (mReadabilityMap.containsKey(urlSpec)) {
+            ReadAloudMetrics.recordIsPageReadable(mReadabilityMap.get(urlSpec));
             return;
         }
 
-        if (!isAvailable()) {
+        if (mPendingRequests.contains(urlSpec)) {
             return;
         }
 
-        if (mReadabilityHooks == null) {
-            return;
-        }
 
         mPendingRequests.add(urlSpec);
         mReadabilityHooks.isPageReadable(urlSpec, mReadabilityCallback);
@@ -371,20 +550,38 @@ public class ReadAloudController
     }
 
     /**
-     * Checks if Read Aloud is supported which is true iff: user is not in the
-     * incognito mode and user opted into "Make searches and browsing better".
+     * Checks if Read Aloud is supported which is true iff: user is not in the incognito mode and
+     * user opted into "Make searches and browsing better". If the ReadAloudInMultiWindow flag is
+     * disabled, this will return false if the activity is in multi window mode.
      */
     public boolean isAvailable() {
-        return ReadAloudFeatures.isAllowed(mProfileSupplier.get());
+        return ReadAloudFeatures.isAllowed(mProfileSupplier.get())
+                && !ReadAloudFeatures.isInMultiWindowAndDisabled(mActivity);
     }
 
     /** Returns true if the web contents within current Tab is readable. */
     public boolean isReadable(Tab tab) {
-        if (isAvailable() && tab.getUrl().isValid()) {
+        // If we don't have a valid Profile, playback won't work.
+        // TODO(crbug.com/1518203): Remove when valid profile is guaranteed.
+        if (mProfile == null || !mProfile.isNativeInitialized()) {
+            return false;
+        }
+
+        if (isTabLanguageSupported(tab) && isAvailable() && tab.getUrl().isValid()) {
             Boolean isReadable = mReadabilityMap.get(stripUserData(tab.getUrl()).getSpec());
             return isReadable == null ? false : isReadable;
         }
         return false;
+    }
+
+    /** Returns true if the tab's current language is supported by the available voices. */
+    private boolean isTabLanguageSupported(Tab tab) {
+        if (mReadabilityHooks == null) {
+            return false;
+        }
+
+        String playbackLanguage = getLanguageForNewPlayback(tab);
+        return mReadabilityHooks.getCompatibleLanguages().contains(playbackLanguage);
     }
 
     /**
@@ -393,10 +590,28 @@ public class ReadAloudController
      *
      * @param tab Tab to play.
      */
-    public void playTab(Tab tab) {
-        createTabPlayback(tab)
+    public void playTab(Tab tab, @Entrypoint int entrypoint) {
+        if (!isReadable(tab)) {
+            ReadAloudMetrics.recordPlaybackWithoutReadabilityCheck(
+                    entrypoint, Entrypoint.NUM_ENTRIES);
+        }
+        extractDateModified(tab)
+                .then(
+                        timestamp -> {
+                            ReadAloudMetrics.recordHasDateModified(true);
+                            playTabWithDateModified(tab, timestamp, entrypoint);
+                        },
+                        exception -> {
+                            ReadAloudMetrics.recordHasDateModified(false);
+                            playTabWithDateModified(tab, 0L, entrypoint);
+                        });
+    }
+
+    private void playTabWithDateModified(Tab tab, long dateModified, @Entrypoint int entrypoint) {
+        createTabPlayback(tab, dateModified, entrypoint)
                 .then(
                         playback -> {
+                            mDateModified = dateModified;
                             mPlayerCoordinator.playbackReady(playback, PLAYING);
                             playback.play();
                             ReadAloudMetrics.recordPlaybackStarted();
@@ -406,8 +621,16 @@ public class ReadAloudController
                         });
     }
 
-    private Promise<Playback> createTabPlayback(Tab tab) {
+    private Promise<Long> extractDateModified(Tab tab) {
         assert tab.getUrl().isValid();
+        maybeInitializePlaybackHooks();
+        if (mExtractor == null) {
+            mExtractor = mPlaybackHooks.createExtractor();
+        }
+        return mExtractor.getDateModified(tab);
+    }
+
+    private void maybeInitializePlaybackHooks() {
         if (mPlaybackHooks == null) {
             mPlaybackHooks =
                     sPlaybackHooksForTesting != null
@@ -416,6 +639,11 @@ public class ReadAloudController
             mPlayerCoordinator = mPlaybackHooks.createPlayer(/* delegate= */ this);
             mPlayerCoordinator.addObserver(this);
         }
+    }
+
+    private Promise<Playback> createTabPlayback(
+            Tab tab, long dateModified, @Entrypoint int entrypoint) {
+        assert tab.getUrl().isValid();
         // only start a new playback if different URL or no active playback for that url
         if (mCurrentlyPlayingTab != null && tab.getUrl().equals(mCurrentlyPlayingTab.getUrl())) {
             var promise = new Promise<Playback>();
@@ -426,16 +654,25 @@ public class ReadAloudController
         resetCurrentPlayback();
         mCurrentlyPlayingTab = tab;
         mTranslationObserverHandle =
-                TranslateBridge.addTranslationObserver(
-                        mCurrentlyPlayingTab.getWebContents(), mTranslationObserver);
+                mCurrentlyPlayingTab.getWebContents() != null
+                        ? TranslateBridge.addTranslationObserver(
+                                mCurrentlyPlayingTab.getWebContents(), mTranslationObserver)
+                        : 0L;
+
         if (!mPlaybackHooks.voicesInitialized()) {
             mPlaybackHooks.initVoices();
         }
 
-        String playbackLanguage = getLanguageForNewPlayback(tab);
+        // Notify player UI that playback is happening soon and show UI in case there's an error
+        // coming.
+        mPlayerCoordinator.playTabRequested();
+
+        final String playbackLanguage = getLanguageForNewPlayback(tab);
+        boolean isTranslated = isTranslated(tab);
         var voices = mPlaybackHooks.getVoicesFor(playbackLanguage);
         // TODO: Don't show entrypoints for unsupported languages
         if (voices == null || voices.isEmpty()) {
+            onCreatePlaybackFailed(entrypoint);
             var promise = new Promise<Playback>();
             promise.reject(new Exception("Unsupported language"));
             return promise;
@@ -444,32 +681,36 @@ public class ReadAloudController
         PlaybackArgs args =
                 new PlaybackArgs(
                         stripUserData(tab.getUrl()).getSpec(),
-                        playbackLanguage,
+                        isTranslated ? playbackLanguage : null,
                         mPlaybackHooks.getPlaybackVoiceList(
                                 ReadAloudPrefs.getVoices(getPrefService())),
-                        /* dateModifiedMsSinceEpoch= */ 0);
+                        /* dateModifiedMsSinceEpoch= */ dateModified);
         Log.d(TAG, "Creating playback with args: %s", args);
 
         Promise<Playback> promise = createPlayback(args);
         promise.then(
                 playback -> {
-                    Log.d(TAG, "Playback created");
                     ReadAloudMetrics.recordIsTabPlaybackCreationSuccessful(true);
+                    ReadAloudMetrics.recordTabCreationSuccess(entrypoint, Entrypoint.NUM_ENTRIES);
                     maybeSetUpHighlighter(playback.getMetadata());
-
+                    updateVoiceMenu(
+                            isTranslated
+                                    ? playbackLanguage
+                                    : getLanguage(playback.getMetadata().languageCode()));
                     mPlayback = playback;
                     mPlayback.addListener(ReadAloudController.this);
                 },
                 exception -> {
                     Log.e(TAG, exception.getMessage());
-                    ReadAloudMetrics.recordIsTabPlaybackCreationSuccessful(false);
-                    mPlayerCoordinator.playbackFailed();
+                    onCreatePlaybackFailed(entrypoint);
                 });
-
-        // Notify player UI that playback is happening soon.
-        mPlayerCoordinator.playTabRequested();
-        updateVoiceMenu(playbackLanguage);
         return promise;
+    }
+
+    private void onCreatePlaybackFailed(@Entrypoint int entrypoint) {
+        ReadAloudMetrics.recordIsTabPlaybackCreationSuccessful(false);
+        ReadAloudMetrics.recordTabCreationFailure(entrypoint, Entrypoint.NUM_ENTRIES);
+        mPlayerCoordinator.playbackFailed();
     }
 
     /**
@@ -492,6 +733,7 @@ public class ReadAloudController
             mPlayback.removeListener(this);
             mPlayback.release();
             mPlayback = null;
+            mPlayerCoordinator.recordPlaybackDuration();
         }
         if (mTranslationObserverHandle != 0L) {
             assert mCurrentlyPlayingTab != null;
@@ -502,6 +744,8 @@ public class ReadAloudController
         mCurrentlyPlayingTab = null;
         mGlobalRenderFrameId = null;
         mCurrentPlaybackData = null;
+        mPausedForIncognito = false;
+        mDateModified = 0L;
     }
 
     /** Cleanup: unregister listeners. */
@@ -523,6 +767,12 @@ public class ReadAloudController
         resetCurrentPlayback();
         mStateToRestoreOnBringingToForeground = null;
         ReadAloudFeatures.shutdown();
+        InsetObserver insetObserver =
+                InsetObserverSupplier.getValueOrNullFrom(mActivityWindowAndroid);
+        if (insetObserver != null) {
+            insetObserver.removeObserver(this);
+        }
+        mActivityLifecycleDispatcher.unregister(this);
     }
 
     private void maybeSetUpHighlighter(Playback.Metadata metadata) {
@@ -589,6 +839,13 @@ public class ReadAloudController
         }
     }
 
+    /** Pause audio if playing. */
+    public void pause() {
+        if (mPlayback != null && mCurrentPlaybackData.state() == PLAYING) {
+            mPlayback.pause();
+        }
+    }
+
     private void maybeHandleTabReload(Tab tab, GURL newUrl) {
         if (mHighlighter != null
                 && tab.getUrl() != null
@@ -611,7 +868,9 @@ public class ReadAloudController
     }
 
     private String getLanguageForNewPlayback(Tab tab) {
-        String language = TranslateBridge.getCurrentLanguage(tab);
+        WebContents webContents = tab.getWebContents();
+        String language =
+                webContents == null ? null : TranslateBridge.getCurrentLanguage(webContents);
         if (language == null || language.isEmpty() || language.equals("und")) {
             language = AppLocaleUtils.getAppLanguagePref();
         }
@@ -622,8 +881,20 @@ public class ReadAloudController
         }
 
         // If language string is a locale like "en-US", strip the "-US" part.
+        return getLanguage(language);
+    }
+
+    /** A utinilty function doing null checks. */
+    boolean isTranslated(Tab tab) {
+        return tab.getWebContents() == null
+                ? false
+                : TranslateBridge.isPageTranslated(tab.getWebContents());
+    }
+
+    /** Is language string includes locale, strip it */
+    private String getLanguage(String language) {
         if (language.contains("-")) {
-            language = language.split("-")[0];
+            return language.split("-")[0];
         }
         return language;
     }
@@ -643,6 +914,17 @@ public class ReadAloudController
         mSelectedVoiceId.set(selectedVoiceId);
     }
 
+    /**
+     * Pause if the given intent is for processing text.
+     *
+     * @param intent Intent being sent by Chrome.
+     */
+    public void maybePauseForOutgoingIntent(@Nullable Intent intent) {
+        if (intent != null && intent.getAction().equals(Intent.ACTION_PROCESS_TEXT)) {
+            pause();
+        }
+    }
+
     // Player.Delegate
     @Override
     public BottomSheetController getBottomSheetController() {
@@ -654,8 +936,7 @@ public class ReadAloudController
         if (mCurrentlyPlayingTab == null) {
             return false;
         }
-        return timepointsSupported(mCurrentlyPlayingTab)
-                && !TranslateBridge.isPageTranslated(mCurrentlyPlayingTab.getWebContents());
+        return timepointsSupported(mCurrentlyPlayingTab) && !isTranslated(mCurrentlyPlayingTab);
     }
 
     @Override
@@ -692,7 +973,8 @@ public class ReadAloudController
         mSelectedVoiceId.set(voice.getVoiceId());
 
         if (mCurrentlyPlayingTab != null && mPlayback != null) {
-            RestoreState state = new RestoreState(mCurrentlyPlayingTab, mCurrentPlaybackData);
+            RestoreState state =
+                    new RestoreState(mCurrentlyPlayingTab, mCurrentPlaybackData, mDateModified);
             resetCurrentPlayback();
             // This should re-request playback with the same playback state and paragraph
             // and the new voice.
@@ -706,7 +988,7 @@ public class ReadAloudController
         // cleaned up. May be null if the most recent playback was a voice preview.
         if (mCurrentlyPlayingTab != null) {
             mStateToRestoreOnVoiceMenuClose =
-                    new RestoreState(mCurrentlyPlayingTab, mCurrentPlaybackData);
+                    new RestoreState(mCurrentlyPlayingTab, mCurrentPlaybackData, mDateModified);
             resetCurrentPlayback();
         }
 
@@ -753,11 +1035,35 @@ public class ReadAloudController
 
     private Promise<Playback> createPlayback(PlaybackArgs args) {
         final var promise = new Promise<Playback>();
+        if (mProfile == null || !mProfile.isNativeInitialized()) {
+            promise.reject(new Exception("missing profile"));
+            return promise;
+        }
         mPlaybackHooks.createPlayback(
                 args,
                 new ReadAloudPlaybackHooks.CreatePlaybackCallback() {
                     @Override
                     public void onSuccess(Playback playback) {
+                        // Check if in multi-window mode and not supporting multi-window
+                        // This failure will also trigger when the user goes into multi-window mode
+                        // with a playback since we will attempt to restore
+                        if (ReadAloudFeatures.isInMultiWindowAndDisabled(mActivity)) {
+                            playback.release();
+                            promise.reject(new Exception("In multi window mode"));
+                            return;
+                        }
+                        // If we rely on the backend to detect page language, ensure it is supported
+                        if (args.getLanguage() == null
+                                && !mReadabilityHooks
+                                        .getCompatibleLanguages()
+                                        .contains(
+                                                getLanguage(
+                                                        playback.getMetadata().languageCode()))) {
+                            playback.release();
+                            promise.reject(new Exception("Unsupported language"));
+                            return;
+                        }
+
                         promise.fulfill(playback);
                     }
 
@@ -767,6 +1073,11 @@ public class ReadAloudController
                     }
                 });
         return promise;
+    }
+
+    @Override
+    public ActivityLifecycleDispatcher getActivityLifecycleDispatcher() {
+        return mActivityLifecycleDispatcher;
     }
 
     @Override
@@ -819,10 +1130,20 @@ public class ReadAloudController
         }
     }
 
+    // InsetObserver.WindowInsetObserver
+    @Override
+    public void onKeyboardInsetChanged(int inset) {
+        if (inset > 0) {
+            maybeHidePlayer();
+        } else {
+            maybeShowPlayer();
+        }
+    }
+
     /** Show mini player if there is an active playback. */
     public void maybeShowPlayer() {
         if (mPlayback != null) {
-            mPlayerCoordinator.restoreMiniPlayer();
+            mPlayerCoordinator.restorePlayers();
         }
     }
 
@@ -850,24 +1171,58 @@ public class ReadAloudController
 
     @Override
     public void onApplicationStateChange(@ApplicationState int newState) {
+
+        boolean isScreenOnAndUnlocked =
+                DeviceConditions.isCurrentlyScreenOnAndUnlocked(mActivity.getApplicationContext());
         // stop any playback if user left Chrome while screen is on and unlocked
         if (newState == ApplicationState.HAS_STOPPED_ACTIVITIES
-                && DeviceConditions.isCurrentlyScreenOnAndUnlocked(
-                        mActivity.getApplicationContext())) {
+                && (isScreenOnAndUnlocked || mOnUserLeaveHint)) {
             if (mCurrentlyPlayingTab != null) {
                 mStateToRestoreOnBringingToForeground =
                         new RestoreState(
                                 mCurrentlyPlayingTab,
                                 mCurrentPlaybackData,
                                 /* useOffsetInParagraph= */ true,
-                                /* shouldPlayOverride= */ false);
+                                /* shouldPlayOverride= */ false,
+                                mDateModified);
             }
             resetCurrentPlayback();
+            mOnUserLeaveHint = false;
         } else if (newState == ApplicationState.HAS_RUNNING_ACTIVITIES
                 && mStateToRestoreOnBringingToForeground != null) {
             mStateToRestoreOnBringingToForeground.restore();
             mStateToRestoreOnBringingToForeground = null;
+            mOnUserLeaveHint = false;
         }
+        if (mPlayerCoordinator != null) {
+
+            if (newState == ApplicationState.HAS_STOPPED_ACTIVITIES && !isScreenOnAndUnlocked) {
+                mPlayerCoordinator.onScreenStatusChanged(/* isLocked= */ true);
+            } else if (newState == ApplicationState.HAS_RUNNING_ACTIVITIES
+                    && isScreenOnAndUnlocked) {
+                mPlayerCoordinator.onScreenStatusChanged(/* isLocked= */ false);
+            }
+        }
+    }
+
+    // OnUserLeaveHintObserver
+    @Override
+    public void onUserLeaveHint() {
+        Log.d(TAG, "on user leave hint");
+        mOnUserLeaveHint = true;
+    }
+
+    /**
+     * Triggered with ContextualSearch's onSelectionChange. Sends the selected webpage content and
+     * playback to TapToSeekHandler to find the selected word in the playback and seek to it.
+     *
+     * @param content Selected word and surrounding content
+     * @param beginOffset index of where the selected word starts within the content
+     * @param endOffset index of where the selected word ends within the content
+     */
+    public void tapToSeek(String content, int beginOffset, int endOffset) {
+        mTapToSeekHandler.tapToSeek(
+                content, beginOffset, endOffset, mPlayback, mCurrentlyPlayingTab);
     }
 
     // Tests.
@@ -881,6 +1236,10 @@ public class ReadAloudController
 
     public TabModelTabObserver getTabModelTabObserverforTests() {
         return mTabObserver;
+    }
+
+    public TabModelTabObserver getIncognitoTabModelTabObserverforTests() {
+        return mIncognitoTabObserver;
     }
 
     public TranslationObserver getTranslationObserverForTest() {

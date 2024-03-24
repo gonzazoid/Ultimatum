@@ -29,6 +29,10 @@ BASE_FEATURE(kSidePanelCompanion,
 BASE_FEATURE(kSidePanelCompanion2,
              "SidePanelCompanion2",
              base::FEATURE_DISABLED_BY_DEFAULT);
+// Enables the companion on ChromeOS.
+BASE_FEATURE(kSidePanelCompanionChromeOS,
+             "SidePanelCompanionChromeOS",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 // Dynamically enables the search companion if the user has experiments
 // enabled.
 BASE_FEATURE(kCompanionEnabledByObservingExpsNavigations,
@@ -69,10 +73,10 @@ bool ShouldOverrideCheckingUserPermissionsForCompanion() {
   return command_line->HasSwitch(kDisableCheckUserPermissionsForCompanion);
 }
 
-absl::optional<bool> ShouldForceOverrideCompanionPinState() {
+std::optional<bool> ShouldForceOverrideCompanionPinState() {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   if (!command_line->HasSwitch(kForceCompanionPinnedState)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   std::string pinned_state =
@@ -86,7 +90,7 @@ absl::optional<bool> ShouldForceOverrideCompanionPinState() {
 
   NOTREACHED() << "Invalid Companion pin state command line switch value: "
                << pinned_state;
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 }  // namespace switches

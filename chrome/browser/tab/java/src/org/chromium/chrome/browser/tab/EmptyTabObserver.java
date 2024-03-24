@@ -6,6 +6,10 @@ package org.chromium.chrome.browser.tab;
 
 import android.graphics.Bitmap;
 
+import androidx.annotation.Nullable;
+
+import org.chromium.base.Token;
+import org.chromium.chrome.browser.tab.Tab.LoadUrlResult;
 import org.chromium.components.find_in_page.FindMatchRectsDetails;
 import org.chromium.components.find_in_page.FindNotificationDetails;
 import org.chromium.content_public.browser.LoadUrlParams;
@@ -40,7 +44,7 @@ public class EmptyTabObserver implements TabObserver {
     public void onContentChanged(Tab tab) {}
 
     @Override
-    public void onLoadUrl(Tab tab, LoadUrlParams params, int loadType) {}
+    public void onLoadUrl(Tab tab, LoadUrlParams params, LoadUrlResult loadUrlResult) {}
 
     @Override
     public void onPageLoadStarted(Tab tab, GURL url) {}
@@ -157,4 +161,7 @@ public class EmptyTabObserver implements TabObserver {
 
     @Override
     public void onRootIdChanged(Tab tab, int newRootId) {}
+
+    @Override
+    public void onTabGroupIdChanged(Tab tab, @Nullable Token tabGroupId) {}
 }

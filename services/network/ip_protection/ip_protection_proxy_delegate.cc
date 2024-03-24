@@ -8,6 +8,7 @@
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/strings/strcat.h"
 #include "net/base/features.h"
 #include "net/base/proxy_chain.h"
@@ -24,11 +25,43 @@
 
 namespace network {
 
+namespace {
+
+// An enumeration of the `chain_id` values supplied in the GetProxyInfo RPC
+// response, for use with `UmaHistogramEnumeration`. These values are persisted
+// to logs. Entries should not be renumbered and numeric values should never be
+// reused.
+enum class IpProtectionProxyChainId {
+  kUnknown = 0,
+  kChain1 = 1,
+  kChain2 = 2,
+  kChain3 = 3,
+  kMaxValue = kChain3,
+};
+
+IpProtectionProxyChainId ChainIdToEnum(int chain_id) {
+  static_assert(net::ProxyChain::kMaxIpProtectionChainId ==
+                    static_cast<int>(IpProtectionProxyChainId::kMaxValue),
+                "maximum `chain_id` must match between `net::ProxyChain` and "
+                "`network::IpProtectionProxyChainId`");
+  CHECK(chain_id >= static_cast<int>(IpProtectionProxyChainId::kUnknown) &&
+        chain_id <= static_cast<int>(IpProtectionProxyChainId::kMaxValue));
+  return static_cast<IpProtectionProxyChainId>(chain_id);
+}
+
+}  // namespace
+
 IpProtectionProxyDelegate::IpProtectionProxyDelegate(
     NetworkServiceProxyAllowList* network_service_proxy_allow_list,
-    std::unique_ptr<IpProtectionConfigCache> ipp_config_cache)
+    std::unique_ptr<IpProtectionConfigCache> ipp_config_cache,
+    bool is_ip_protection_enabled)
     : network_service_proxy_allow_list_(network_service_proxy_allow_list),
-      ipp_config_cache_(std::move(ipp_config_cache)) {}
+      ipp_config_cache_(std::move(ipp_config_cache)),
+      is_ip_protection_enabled_(is_ip_protection_enabled) {
+  CHECK(network_service_proxy_allow_list_);
+  CHECK(network_service_proxy_allow_list_->IsEnabled());
+  CHECK(ipp_config_cache_);
+}
 
 IpProtectionProxyDelegate::~IpProtectionProxyDelegate() = default;
 
@@ -45,9 +78,9 @@ void IpProtectionProxyDelegate::OnResolveProxy(
     const net::ProxyRetryInfoMap& proxy_retry_info,
     net::ProxyInfo* result) {
   auto dvlog = [&](std::string message) {
-    absl::optional<net::SchemefulSite> top_frame_site =
+    std::optional<net::SchemefulSite> top_frame_site =
         network_anonymization_key.GetTopFrameSite();
-    DVLOG(3) << "NSPD::OnResolveProxy(" << url << ", "
+    DVLOG(3) << "IPPD::OnResolveProxy(" << url << ", "
              << (top_frame_site.has_value() ? top_frame_site.value()
                                             : net::SchemefulSite())
              << ") - " << message;
@@ -59,39 +92,32 @@ void IpProtectionProxyDelegate::OnResolveProxy(
   // - The token cache does not have tokens.
   // - No proxy list is available.
   // - `kEnableIpProtection` is `false`.
+  // - `is_ip_protection_enabled_` is `false` (in other words, the user has
+  //   disabled IP Protection via user settings).
   // - `kIpPrivacyDirectOnly` is `true`.
-  if (!network_service_proxy_allow_list_) {
-    dvlog("no proxy allow list");
-    return;
-  }
-  if (!network_service_proxy_allow_list_->IsEnabled()) {
-    dvlog("proxy allow list not enabled");
-    return;
-  }
-  if (!network_service_proxy_allow_list_->Matches(url,
-                                                  network_anonymization_key)) {
-    dvlog("proxy allow list did not match");
+  const ProtectionEligibility eligibility =
+      CheckEligibility(url, network_anonymization_key);
+  base::UmaHistogramEnumeration(
+      "NetworkService.IpProtection.RequestIsEligibleForProtection",
+      eligibility);
+  if (eligibility != ProtectionEligibility::kEligible) {
     return;
   }
   result->set_is_mdl_match(true);
+
   if (!base::FeatureList::IsEnabled(net::features::kEnableIpProtectionProxy)) {
-    dvlog("ip protection proxy not enabled");
+    dvlog("ip protection proxy cannot be enabled");
     return;
   }
-  if (!ipp_config_cache_) {
-    dvlog("no cache");
+
+  if (!is_ip_protection_enabled_) {
+    dvlog("ip protection proxy is not currently enabled");
     return;
   }
-  if (!ipp_config_cache_->AreAuthTokensAvailable()) {
-    dvlog("no auth token available from cache");
-    return;
-  }
-  if (!ipp_config_cache_->IsProxyListAvailable()) {
-    // NOTE: When this `vlog()` is removed, there's no need to distinguish
-    // the case where a proxy list has not been downloaded, and the case
-    // where a proxy list is empty. The `IsProxyListAvailable()` method can
-    // be removed at that time.
-    dvlog("no proxy list available from cache");
+  const bool available = CheckAvailability(url, network_anonymization_key);
+  base::UmaHistogramBoolean(
+      "NetworkService.IpProtection.ProtectionIsAvailableForRequest", available);
+  if (!available) {
     return;
   }
 
@@ -120,7 +146,7 @@ void IpProtectionProxyDelegate::OnResolveProxy(
     // proxy chain as being for IP Protection when `kIpPrivacyDirectOnly` is
     // true. When it is false, we only care about traffic that actually went
     // through the IP Protection proxies, so don't set this flag.
-    direct_proxy_chain = std::move(direct_proxy_chain).ForIpProtection();
+    direct_proxy_chain = net::ProxyChain::ForIpProtection({});
   }
   proxy_list.AddProxyChain(std::move(direct_proxy_chain));
 
@@ -133,12 +159,74 @@ void IpProtectionProxyDelegate::OnResolveProxy(
   return;
 }
 
+IpProtectionProxyDelegate::ProtectionEligibility
+IpProtectionProxyDelegate::CheckEligibility(
+    const GURL& url,
+    const net::NetworkAnonymizationKey& network_anonymization_key) const {
+  auto dvlog = [&](std::string message) {
+    absl::optional<net::SchemefulSite> top_frame_site =
+        network_anonymization_key.GetTopFrameSite();
+    DVLOG(3) << "IPPD::CheckEligibility(" << url << ", "
+             << (top_frame_site.has_value() ? top_frame_site.value()
+                                            : net::SchemefulSite())
+             << ") - " << message;
+  };
+  if (!network_service_proxy_allow_list_->IsPopulated()) {
+    dvlog("proxy allow list not populated");
+    return ProtectionEligibility::kUnknown;
+  }
+  if (!network_service_proxy_allow_list_->Matches(url,
+                                                  network_anonymization_key)) {
+    dvlog("proxy allow list did not match");
+    return ProtectionEligibility::kIneligible;
+  }
+  dvlog("proxy allow list matched");
+  return ProtectionEligibility::kEligible;
+}
+
+bool IpProtectionProxyDelegate::CheckAvailability(
+    const GURL& url,
+    const net::NetworkAnonymizationKey& network_anonymization_key) const {
+  auto dvlog = [&](std::string message) {
+    absl::optional<net::SchemefulSite> top_frame_site =
+        network_anonymization_key.GetTopFrameSite();
+    DVLOG(3) << "IPPD::CheckAvailability(" << url << ", "
+             << (top_frame_site.has_value() ? top_frame_site.value()
+                                            : net::SchemefulSite())
+             << ") - " << message;
+  };
+  const bool auth_tokens_are_available =
+      ipp_config_cache_->AreAuthTokensAvailable();
+  base::UmaHistogramBoolean(
+      "NetworkService.IpProtection.AreAuthTokensAvailable",
+      auth_tokens_are_available);
+  const bool proxy_list_is_available =
+      ipp_config_cache_->IsProxyListAvailable();
+  base::UmaHistogramBoolean("NetworkService.IpProtection.IsProxyListAvailable",
+                            proxy_list_is_available);
+  if (!auth_tokens_are_available) {
+    dvlog("no auth token available from cache");
+    return false;
+  }
+  if (!proxy_list_is_available) {
+    // NOTE: When this `vlog()` and histogram are removed, there's no need to
+    // distinguish the case where a proxy list has not been downloaded, and the
+    // case where a proxy list is empty. The `IsProxyListAvailable()` method can
+    // be removed at that time.
+    dvlog("no proxy list available from cache");
+    return false;
+  }
+  return true;
+}
+
 void IpProtectionProxyDelegate::OnFallback(const net::ProxyChain& bad_chain,
                                            int net_error) {
   // If the bad proxy was an IP Protection proxy, refresh the list of IP
   // protection proxies immediately.
   if (bad_chain.is_for_ip_protection()) {
-    CHECK(ipp_config_cache_);
+    base::UmaHistogramEnumeration(
+        "NetworkService.IpProtection.ProxyChainFallback",
+        ChainIdToEnum(bad_chain.ip_protection_chain_id()));
     ipp_config_cache_->RequestRefreshProxyList();
   }
 }
@@ -160,8 +248,7 @@ void IpProtectionProxyDelegate::OnBeforeTunnelRequest(
                                  base::StrCat({"Preshared ", proxy_b_psk}));
       }
     }
-    CHECK(ipp_config_cache_);
-    absl::optional<network::mojom::BlindSignedAuthTokenPtr> token =
+    std::optional<network::mojom::BlindSignedAuthTokenPtr> token =
         ipp_config_cache_->GetAuthToken(chain_index);
     if (token) {
       vlog("adding auth token");
@@ -189,7 +276,6 @@ void IpProtectionProxyDelegate::SetProxyResolutionService(
 
 void IpProtectionProxyDelegate::VerifyIpProtectionConfigGetterForTesting(
     VerifyIpProtectionConfigGetterForTestingCallback callback) {
-  CHECK(ipp_config_cache_);
   auto* ipp_token_cache_manager_impl =
       static_cast<IpProtectionTokenCacheManagerImpl*>(
           ipp_config_cache_
@@ -248,6 +334,28 @@ void IpProtectionProxyDelegate::VerifyIpProtectionConfigGetterForTesting(
   ipp_token_cache_manager_impl->CallTryGetAuthTokensForTesting();  // IN-TEST
 }
 
+void IpProtectionProxyDelegate::SetIpProtectionEnabled(bool enabled) {
+  is_ip_protection_enabled_ = enabled;
+  // TODO(https://crbug.com/1521138): Tear down all existing proxied
+  // HTTP/SPDY/QUIC sessions if the settings goes from being enabled to being
+  // disabled. For HTTP and SPDY we could just simulate an IP address change and
+  // tear down all connections rather easily, but for QUIC it's more complicated
+  // because with network change session migration the connections might still
+  // persist. More investigation is needed here.
+  // TODO(https://crbug.com/1521138): Propagate this change to the config cache,
+  // proxy list manager, and token cache manager to cancel further requests or
+  // reschedule them. Note that as currently implemented, the token cache
+  // manager will already stop requesting tokens soon after IP Protection is
+  // disabled via the try again after time returned by the next TryGetAuthToken
+  // call, but the GetProxyConfig calls will continue and receive failures until
+  // the feature is re-enabled.
+}
+
+void IpProtectionProxyDelegate::IsIpProtectionEnabledForTesting(
+    IsIpProtectionEnabledForTestingCallback callback) {
+  std::move(callback).Run(is_ip_protection_enabled_);
+}
+
 void IpProtectionProxyDelegate::OnIpProtectionConfigAvailableForTesting(
     VerifyIpProtectionConfigGetterForTestingCallback callback) {
   auto* ipp_token_cache_manager_impl =
@@ -256,10 +364,10 @@ void IpProtectionProxyDelegate::OnIpProtectionConfigAvailableForTesting(
               ->GetIpProtectionTokenCacheManagerForTesting(  // IN-TEST
                   network::mojom::IpProtectionProxyLayer::kProxyA));
 
-  absl::optional<network::mojom::BlindSignedAuthTokenPtr> result =
+  std::optional<network::mojom::BlindSignedAuthTokenPtr> result =
       ipp_config_cache_->GetAuthToken(0);  // kProxyA.
   if (result.has_value()) {
-    std::move(callback).Run(std::move(result).value(), absl::nullopt);
+    std::move(callback).Run(std::move(result).value(), std::nullopt);
     return;
   }
   base::Time try_auth_tokens_after =
@@ -270,9 +378,6 @@ void IpProtectionProxyDelegate::OnIpProtectionConfigAvailableForTesting(
 
 void IpProtectionProxyDelegate::
     InvalidateIpProtectionConfigCacheTryAgainAfterTime() {
-  if (!ipp_config_cache_) {
-    return;
-  }
   ipp_config_cache_->InvalidateTryAgainAfterTime();
 }
 

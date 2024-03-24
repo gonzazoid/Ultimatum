@@ -141,7 +141,7 @@ class SplitButtonView::SplitButton : public views::Button {
   base::RepeatingClosure hovered_pressed_callback_;
 };
 
-BEGIN_METADATA(SplitButtonView, SplitButton, views::Button)
+BEGIN_METADATA(SplitButtonView, SplitButton)
 END_METADATA
 
 // -----------------------------------------------------------------------------
@@ -156,8 +156,6 @@ SplitButtonView::SplitButtonView(SplitButtonType type,
   SetMirrored(false);
   SetOrientation(is_portrait_mode ? views::BoxLayout::Orientation::kVertical
                                   : views::BoxLayout::Orientation::kHorizontal);
-  SetPreferredSize(is_portrait_mode ? kMultitaskButtonPortraitSize
-                                    : kMultitaskButtonLandscapeSize);
 
   auto on_hover_pressed = base::BindRepeating(
       &SplitButtonView::OnButtonHoveredOrPressed, base::Unretained(this));

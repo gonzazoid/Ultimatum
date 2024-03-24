@@ -42,6 +42,7 @@
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/core/animation/scroll_timeline.h"
 #include "third_party/blink/renderer/core/css/properties/longhands.h"
+#include "third_party/blink/renderer/core/editing/frame_selection.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/frame/visual_viewport.h"
@@ -525,8 +526,7 @@ void ScrollableArea::ScrollToScrollStartTarget(
   params->behavior = mojom::blink::ScrollBehavior::kInstant;
   params->type = mojom::blink::ScrollType::kScrollStart;
   ScrollIntoView(
-      scroll_start_target->AbsoluteBoundingBoxRectForScrollIntoView(),
-      PhysicalBoxStrut(), params);
+      scroll_start_target->AbsoluteBoundingBoxRectForScrollIntoView(), params);
 }
 
 void ScrollableArea::ScrollToScrollStartTargets(
@@ -652,7 +652,6 @@ void ScrollableArea::UserScrollHelper(
 
 PhysicalRect ScrollableArea::ScrollIntoView(
     const PhysicalRect& rect_in_absolute,
-    const PhysicalBoxStrut& scroll_margin,
     const mojom::blink::ScrollIntoViewParamsPtr& params) {
   // TODO(bokan): This should really be implemented here but ScrollAlignment is
   // in Core which is a dependency violation.
@@ -713,6 +712,9 @@ void ScrollableArea::ScrollOffsetChanged(const ScrollOffset& offset,
   if (offset_changed && GetLayoutBox() && GetLayoutBox()->GetFrameView()) {
     GetLayoutBox()->GetFrameView()->GetLayoutShiftTracker().NotifyScroll(
         scroll_type, delta);
+    // FrameSelection caches visual selection information which needs to be
+    // invalidated after scrolling.
+    GetLayoutBox()->GetFrameView()->GetFrame().Selection().MarkCacheDirty();
   }
 
   GetScrollAnimator().SetCurrentOffset(offset);
@@ -1300,8 +1302,7 @@ bool ScrollableArea::PerformSnapping(
     const cc::SnapSelectionStrategy& strategy,
     mojom::blink::ScrollBehavior scroll_behavior,
     base::ScopedClosureRunner on_finish) {
-  absl::optional<gfx::PointF> snap_point =
-      GetSnapPositionAndSetTarget(strategy);
+  std::optional<gfx::PointF> snap_point = GetSnapPositionAndSetTarget(strategy);
   if (!snap_point) {
     UpdateSnappedTargetsAndEnqueueSnapChanged();
     return false;

@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include <string>
+#include <string_view>
 
 #include "base/component_export.h"
 #include "base/observer_list.h"
@@ -74,14 +75,14 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) MockIMEInputContextHandler
   void SetAutocorrectRange(const gfx::Range& range,
                            SetAutocorrectRangeDoneCallback callback) override;
   bool ClearGrammarFragments(const gfx::Range& range) override;
-  absl::optional<ui::GrammarFragment> GetGrammarFragmentAtCursor() override;
+  std::optional<ui::GrammarFragment> GetGrammarFragmentAtCursor() override;
   bool AddGrammarFragments(
       const std::vector<ui::GrammarFragment>& fragments) override;
   void DeleteSurroundingText(uint32_t num_char16s_before_cursor,
                              uint32_t num_char16s_after_cursor) override;
   void ReplaceSurroundingText(uint32_t length_before_selection,
                               uint32_t length_after_selection,
-                              base::StringPiece16 replacement_text) override;
+                              std::u16string_view replacement_text) override;
   SurroundingTextInfo GetSurroundingTextInfo() override;
   void SendKeyEvent(ui::KeyEvent* event) override;
   ui::InputMethod* GetInputMethod() override;

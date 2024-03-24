@@ -42,7 +42,9 @@ class MockInputController : public ui::InputController {
                          const base::TimeDelta& interval) override {}
   void GetAutoRepeatRate(base::TimeDelta* delay,
                          base::TimeDelta* interval) override {}
-  void SetCurrentLayoutByName(const std::string& layout_name) override {}
+  void SetCurrentLayoutByName(
+      const std::string& layout_name,
+      base::OnceCallback<void(bool)> callback) override {}
   void SetKeyboardKeyBitsMapping(
       base::flat_map<int, std::vector<uint64_t>> key_bits_mapping) override {}
   std::vector<uint64_t> GetKeyboardKeyBits(int id) override {
@@ -124,6 +126,7 @@ class MockInputController : public ui::InputController {
                              bool right) override {}
   void SetPointingStickPrimaryButtonRight(std::optional<int> device_id,
                                           bool right) override {}
+  void BlockModifiersOnDevices(std::vector<int> device_ids) override {}
 };
 
 ui::KeyEvent KeyPress(ui::KeyboardCode key_code) {

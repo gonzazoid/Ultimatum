@@ -198,7 +198,7 @@ bool ParseBackgroundOrMaskPosition(
     bool important,
     CSSParserTokenRange& range,
     const CSSParserContext& context,
-    absl::optional<WebFeature> three_value_position,
+    std::optional<WebFeature> three_value_position,
     HeapVector<CSSPropertyValue, 64>& properties) {
   const CSSValue* result_x = nullptr;
   const CSSValue* result_y = nullptr;
@@ -478,13 +478,13 @@ const CSSValue* AnimationRange::CSSValueFromComputedStyleInternal(
     const ComputedStyle& style,
     const LayoutObject*,
     bool allow_visited_style) const {
-  const Vector<absl::optional<TimelineOffset>>& range_start_list =
+  const Vector<std::optional<TimelineOffset>>& range_start_list =
       style.Animations() ? style.Animations()->RangeStartList()
-                         : Vector<absl::optional<TimelineOffset>>{
+                         : Vector<std::optional<TimelineOffset>>{
                                CSSAnimationData::InitialRangeStart()};
-  const Vector<absl::optional<TimelineOffset>>& range_end_list =
+  const Vector<std::optional<TimelineOffset>>& range_end_list =
       style.Animations() ? style.Animations()->RangeEndList()
-                         : Vector<absl::optional<TimelineOffset>>{
+                         : Vector<std::optional<TimelineOffset>>{
                                CSSAnimationData::InitialRangeEnd()};
 
   if (range_start_list.size() != range_end_list.size()) {
@@ -499,8 +499,8 @@ const CSSValue* AnimationRange::CSSValueFromComputedStyleInternal(
   auto* outer_list = CSSValueList::CreateCommaSeparated();
 
   for (wtf_size_t i = 0; i < range_start_list.size(); ++i) {
-    const absl::optional<TimelineOffset>& start = range_start_list[i];
-    const absl::optional<TimelineOffset>& end = range_end_list[i];
+    const std::optional<TimelineOffset>& start = range_start_list[i];
+    const std::optional<TimelineOffset>& end = range_end_list[i];
 
     auto* inner_list = CSSValueList::CreateSpaceSeparated();
     inner_list->Append(
@@ -3073,6 +3073,47 @@ const CSSValue* PlaceSelf::CSSValueFromComputedStyleInternal(
       placeSelfShorthand(), style, layout_object, allow_visited_style);
 }
 
+bool PositionTry::ParseShorthand(
+    bool important,
+    CSSParserTokenRange& range,
+    const CSSParserContext& context,
+    const CSSParserLocalContext& local_context,
+    HeapVector<CSSPropertyValue, 64>& properties) const {
+  const CSSValue* order = css_parsing_utils::ParseLonghand(
+      CSSPropertyID::kPositionTryOrder, CSSPropertyID::kPositionTry, context,
+      range);
+  if (!order) {
+    order = To<Longhand>(&GetCSSPropertyPositionTryOrder())->InitialValue();
+  }
+  AddProperty(CSSPropertyID::kPositionTryOrder, CSSPropertyID::kPositionTry,
+              *order, important,
+              css_parsing_utils::IsImplicitProperty::kNotImplicit, properties);
+
+  if (const CSSValue* options = css_parsing_utils::ParseLonghand(
+          CSSPropertyID::kPositionTryOptions, CSSPropertyID::kPositionTry,
+          context, range)) {
+    css_parsing_utils::AddProperty(
+        CSSPropertyID::kPositionTryOptions, CSSPropertyID::kPositionTry,
+        *options, important,
+        css_parsing_utils::IsImplicitProperty::kNotImplicit, properties);
+    return range.AtEnd();
+  }
+  return false;
+}
+
+const CSSValue* PositionTry::CSSValueFromComputedStyleInternal(
+    const ComputedStyle& style,
+    const LayoutObject* layout_object,
+    bool allow_visited_style) const {
+  CSSValueList* list = CSSValueList::CreateSpaceSeparated();
+  if (EPositionTryOrder order = style.PositionTryOrder();
+      order != ComputedStyleInitialValues::InitialPositionTryOrder()) {
+    list->Append(*CSSIdentifierValue::Create(order));
+  }
+  list->Append(*CSSIdentifierValue::Create(style.PositionTryOrder()));
+  return list;
+}
+
 bool ScrollMarginBlock::ParseShorthand(
     bool important,
     CSSParserTokenRange& range,
@@ -3305,15 +3346,15 @@ static CSSValue* CSSValueForTimelineShorthand(
   }
   if (name_vector.empty()) {
     list->Append(*ComputedStyleUtils::SingleValueForTimelineShorthand(
-        /* name */ nullptr, TimelineAxis::kBlock, /* inset */ absl::nullopt,
+        /* name */ nullptr, TimelineAxis::kBlock, /* inset */ std::nullopt,
         style));
     return list;
   }
   for (wtf_size_t i = 0; i < name_vector.size(); ++i) {
     list->Append(*ComputedStyleUtils::SingleValueForTimelineShorthand(
         name_vector[i].Get(), axis_vector[i],
-        inset_vector ? absl::optional<TimelineInset>((*inset_vector)[i])
-                     : absl::optional<TimelineInset>(),
+        inset_vector ? std::optional<TimelineInset>((*inset_vector)[i])
+                     : std::optional<TimelineInset>(),
         style));
   }
 
@@ -3806,7 +3847,7 @@ bool MaskPosition::ParseShorthand(
       maskPositionShorthand(), important, range, context,
       local_context.UseAliasParsing()
           ? WebFeature::kThreeValuedPositionBackground
-          : absl::optional<WebFeature>(),
+          : std::optional<WebFeature>(),
       properties);
 }
 
@@ -3869,30 +3910,28 @@ bool TextSpacing::ParseShorthand(
   // grammar, instead uses the `autospace` and `spacing-trim` productions.
   // https://drafts.csswg.org/css-text-4/#text-spacing-property
   //
-  // Try `normal | none` first.
+  // Try `none` first.
   if (const CSSIdentifierValue* ident =
-          css_parsing_utils::ConsumeIdent<CSSValueID::kNone,
-                                          CSSValueID::kNormal>(range);
+          css_parsing_utils::ConsumeIdent<CSSValueID::kNone>(range);
       ident && range.AtEnd()) {
-    switch (ident->GetValueID()) {
-      case CSSValueID::kNone:
-        autospace = CSSIdentifierValue::Create(CSSValueID::kNoAutospace);
-        spacing_trim = CSSIdentifierValue::Create(CSSValueID::kSpaceAll);
-        break;
-      case CSSValueID::kNormal:
-        autospace = CSSIdentifierValue::Create(CSSValueID::kNormal);
-        spacing_trim = CSSIdentifierValue::Create(CSSValueID::kSpaceFirst);
-        break;
-      default:
-        NOTREACHED_NORETURN();
-    }
+    autospace = CSSIdentifierValue::Create(CSSValueID::kNoAutospace);
+    spacing_trim = CSSIdentifierValue::Create(CSSValueID::kSpaceAll);
   }
 
   // Try `<autospace> || <spacing-trim>`.
   if (!autospace) {
     range = original_range;
 
+    wtf_size_t num_values = 0;
     while (!range.AtEnd()) {
+      if (++num_values > 2) {
+        return false;
+      }
+      if (css_parsing_utils::ConsumeIdent<CSSValueID::kNormal>(range)) {
+        // `normal` can be either `text-autospace`, `text-spacing-trim`, or
+        // both. Keep parsing without setting the value.
+        continue;
+      }
       if (!autospace &&
           (autospace = css_parsing_utils::ConsumeAutospace(range))) {
         continue;
@@ -3903,14 +3942,15 @@ bool TextSpacing::ParseShorthand(
       }
       return false;
     }
-    if (!autospace && !spacing_trim) {
+
+    if (!num_values) {
       return false;
     }
     if (!autospace) {
       autospace = CSSIdentifierValue::Create(CSSValueID::kNormal);
     }
     if (!spacing_trim) {
-      spacing_trim = CSSIdentifierValue::Create(CSSValueID::kSpaceFirst);
+      spacing_trim = CSSIdentifierValue::Create(CSSValueID::kNormal);
     }
   }
 
@@ -3957,8 +3997,8 @@ const CSSValue* TextSpacing::CSSValueFromComputedStyleInternal(
     return autospace_value;
   }
   CSSValueList* list = CSSValueList::CreateSpaceSeparated();
-  list->Append(*autospace_value);
   list->Append(*spacing_trim_value);
+  list->Append(*autospace_value);
   return list;
 }
 

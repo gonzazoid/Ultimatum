@@ -199,8 +199,7 @@ class OffsetMappingTest : public RenderingTest {
     return GetOffsetMapping().GetMappingUnitForPosition(position);
   }
 
-  absl::optional<unsigned> GetTextContentOffset(
-      const Position& position) const {
+  std::optional<unsigned> GetTextContentOffset(const Position& position) const {
     return GetOffsetMapping().GetTextContentOffset(position);
   }
 
@@ -829,7 +828,7 @@ TEST_F(OffsetMappingTest, FirstLetter) {
   SetupHtml("t",
             "<style>div:first-letter{color:red}</style>"
             "<div id=t>foo</div>");
-  Element* div = GetDocument().getElementById(AtomicString("t"));
+  Element* div = GetElementById("t");
   const Node* foo_node = div->firstChild();
   const OffsetMapping& result = GetOffsetMapping();
 
@@ -859,7 +858,7 @@ TEST_F(OffsetMappingTest, FirstLetterWithLeadingSpace) {
   SetupHtml("t",
             "<style>div:first-letter{color:red}</style>"
             "<div id=t>  foo</div>");
-  Element* div = GetDocument().getElementById(AtomicString("t"));
+  Element* div = GetElementById("t");
   const Node* foo_node = div->firstChild();
   const OffsetMapping& result = GetOffsetMapping();
 
@@ -895,7 +894,7 @@ TEST_F(OffsetMappingTest, FirstLetterWithoutRemainingText) {
   SetupHtml("t",
             "<style>div:first-letter{color:red}</style>"
             "<div id=t>  f</div>");
-  Element* div = GetDocument().getElementById(AtomicString("t"));
+  Element* div = GetElementById("t");
   const Node* text_node = div->firstChild();
   const OffsetMapping& result = GetOffsetMapping();
 
@@ -925,7 +924,7 @@ TEST_F(OffsetMappingTest, FirstLetterWithoutRemainingText) {
 TEST_F(OffsetMappingTest, FirstLetterInDifferentBlock) {
   SetupHtml("t",
             "<style>:first-letter{float:right}</style><div id=t>foo</div>");
-  Element* div = GetDocument().getElementById(AtomicString("t"));
+  Element* div = GetElementById("t");
   const Node* text_node = div->firstChild();
 
   auto* mapping0 = OffsetMapping::GetFor(Position(text_node, 0));
@@ -988,7 +987,7 @@ TEST_F(OffsetMappingTest, FirstLetterInDifferentBlock) {
 
 TEST_F(OffsetMappingTest, WhiteSpaceTextNodeWithoutLayoutText) {
   SetupHtml("t", "<div id=t> <span>foo</span></div>");
-  Element* div = GetDocument().getElementById(AtomicString("t"));
+  Element* div = GetElementById("t");
   const Node* text_node = div->firstChild();
 
   EXPECT_TRUE(EndOfLastNonCollapsedContent(Position(text_node, 1u)).IsNull());
@@ -1263,7 +1262,7 @@ TEST_F(OffsetMappingTest, SoftHyphen) {
 TEST_F(OffsetMappingTest, PreWrapAndReusing) {
   // Note: "white-space: break-space" yields same result.
   SetupHtml("t", "<p id='t' style='white-space: pre-wrap'>abc</p>");
-  Element& target = *GetDocument().getElementById(AtomicString("t"));
+  Element& target = *GetElementById("t");
 
   // Change to <p id=t>abc xyz</p>
   Text& text = *Text::Create(GetDocument(), " xyz");

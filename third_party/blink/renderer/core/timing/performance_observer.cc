@@ -65,7 +65,8 @@ PerformanceEntryType PerformanceObserver::supportedEntryTypeMask(
       PerformanceEntry::kLongTask | PerformanceEntry::kPaint |
       PerformanceEntry::kEvent | PerformanceEntry::kFirstInput |
       PerformanceEntry::kElement | PerformanceEntry::kLayoutShift |
-      PerformanceEntry::kLargestContentfulPaint;
+      PerformanceEntry::kLargestContentfulPaint |
+      PerformanceEntry::kVisibilityState;
 
   auto* execution_context = ExecutionContext::From(script_state);
 
@@ -80,9 +81,6 @@ PerformanceEntryType PerformanceObserver::supportedEntryTypeMask(
   if (RuntimeEnabledFeatures::SoftNavigationHeuristicsEnabled(
           execution_context)) {
     mask |= PerformanceEntry::kSoftNavigation;
-  }
-  if (RuntimeEnabledFeatures::VisibilityStateEntryEnabled(execution_context)) {
-    mask |= PerformanceEntry::kVisibilityState;
   }
   if (RuntimeEnabledFeatures::LongAnimationFrameTimingEnabled(
           execution_context)) {
@@ -353,7 +351,7 @@ bool PerformanceObserver::HasPendingActivity() const {
   return is_registered_;
 }
 
-void PerformanceObserver::Deliver(absl::optional<int> dropped_entries_count) {
+void PerformanceObserver::Deliver(std::optional<int> dropped_entries_count) {
   if (!GetExecutionContext())
     return;
   DCHECK(!GetExecutionContext()->IsContextPaused());

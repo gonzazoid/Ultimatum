@@ -9,12 +9,13 @@
 #include "build/build_config.h"
 #include "components/autofill/core/browser/autofill_ablation_study.h"
 #include "components/autofill/core/browser/autofill_compose_delegate.h"
+#include "components/autofill/core/browser/autofill_plus_address_delegate.h"
 #include "components/autofill/core/browser/payments/credit_card_access_manager.h"
 #include "components/autofill/core/browser/payments/mandatory_reauth_manager.h"
+#include "components/autofill/core/browser/payments/payments_window_manager.h"
 #include "components/autofill/core/browser/payments/virtual_card_enrollment_manager.h"
 #include "components/autofill/core/browser/ui/payments/bubble_show_options.h"
 #include "components/autofill/core/browser/ui/suggestion.h"
-#include "components/plus_addresses/plus_address_types.h"
 #include "components/version_info/channel.h"
 
 namespace autofill {
@@ -77,14 +78,13 @@ AutofillComposeDelegate* AutofillClient::GetComposeDelegate() {
   return nullptr;
 }
 
-plus_addresses::PlusAddressService* AutofillClient::GetPlusAddressService() {
+AutofillPlusAddressDelegate* AutofillClient::GetPlusAddressDelegate() {
   return nullptr;
 }
 
 void AutofillClient::OfferPlusAddressCreation(
     const url::Origin& main_frame_origin,
-    plus_addresses::PlusAddressCallback callback) {
-}
+    PlusAddressCallback callback) {}
 
 MerchantPromoCodeManager* AutofillClient::GetMerchantPromoCodeManager() {
   return nullptr;
@@ -103,6 +103,10 @@ CreditCardRiskBasedAuthenticator* AutofillClient::GetRiskBasedAuthenticator() {
 }
 
 payments::PaymentsAutofillClient* AutofillClient::GetPaymentsAutofillClient() {
+  return nullptr;
+}
+
+payments::PaymentsWindowManager* AutofillClient::GetPaymentsWindowManager() {
   return nullptr;
 }
 
@@ -160,20 +164,6 @@ void AutofillClient::ShowMandatoryReauthOptInConfirmation() {}
 
 #if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 void AutofillClient::HideVirtualCardEnrollBubbleAndIconIfVisible() {
-}
-
-void AutofillClient::ConfirmMigrateLocalCardToCloud(
-    const LegalMessageLines& legal_message_lines,
-    const std::string& user_email,
-    const std::vector<MigratableCreditCard>& migratable_credit_cards,
-    LocalCardMigrationCallback start_migrating_cards_callback) {
-}
-
-void AutofillClient::ShowLocalCardMigrationResults(
-    const bool has_server_error,
-    const std::u16string& tip_message,
-    const std::vector<MigratableCreditCard>& migratable_credit_cards,
-    MigrationDeleteCardCallback delete_local_card_callback) {
 }
 
 void AutofillClient::ShowWebauthnOfferDialog(
@@ -245,9 +235,6 @@ void AutofillClient::ConfirmUploadIbanToCloud(
     bool should_show_prompt,
     SaveIbanPromptCallback callback) {}
 
-void AutofillClient::CreditCardUploadCompleted(bool card_saved) {
-}
-
 void AutofillClient::ShowUnmaskPrompt(
     const CreditCard& card,
     const CardUnmaskPromptOptions& card_unmask_prompt_options,
@@ -294,6 +281,11 @@ const AutofillAblationStudy& AutofillClient::GetAblationStudy() const {
 }
 
 void AutofillClient::OpenPromoCodeOfferDetailsURL(const GURL& url) {
+  NOTIMPLEMENTED();
+}
+
+void AutofillClient::TriggerUserPerceptionOfAutofillSurvey(
+    const std::map<std::string, std::string>& field_filling_stats_data) {
   NOTIMPLEMENTED();
 }
 

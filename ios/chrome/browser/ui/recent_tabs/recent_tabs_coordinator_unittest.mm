@@ -10,6 +10,7 @@
 
 #import "base/apple/foundation_util.h"
 #import "base/functional/bind.h"
+#import "base/memory/raw_ptr.h"
 #import "base/test/ios/wait_util.h"
 #import "components/sessions/core/serialized_navigation_entry_test_helper.h"
 #import "components/signin/public/identity_manager/identity_manager.h"
@@ -25,9 +26,9 @@
 #import "components/sync_user_events/global_id_mapper.h"
 #import "ios/chrome/app/application_delegate/app_state.h"
 #import "ios/chrome/app/application_delegate/fake_startup_information.h"
-#import "ios/chrome/browser/favicon/favicon_service_factory.h"
-#import "ios/chrome/browser/favicon/ios_chrome_favicon_loader_factory.h"
-#import "ios/chrome/browser/favicon/ios_chrome_large_icon_service_factory.h"
+#import "ios/chrome/browser/favicon/model/favicon_service_factory.h"
+#import "ios/chrome/browser/favicon/model/ios_chrome_favicon_loader_factory.h"
+#import "ios/chrome/browser/favicon/model/ios_chrome_large_icon_service_factory.h"
 #import "ios/chrome/browser/history/model/history_service_factory.h"
 #import "ios/chrome/browser/sessions/ios_chrome_tab_restore_service_factory.h"
 #import "ios/chrome/browser/shared/coordinator/scene/scene_state.h"
@@ -39,6 +40,7 @@
 #import "ios/chrome/browser/shared/public/commands/application_commands.h"
 #import "ios/chrome/browser/shared/public/commands/browsing_data_commands.h"
 #import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/settings_commands.h"
 #import "ios/chrome/browser/signin/model/authentication_service.h"
 #import "ios/chrome/browser/signin/model/authentication_service_factory.h"
 #import "ios/chrome/browser/signin/model/fake_authentication_service_delegate.h"
@@ -254,8 +256,8 @@ class RecentTabsTableCoordinatorTest : public BlockCleanupTest {
                            browser:browser_.get()];
     mock_application_commands_handler_ =
         [OCMockObject mockForProtocol:@protocol(ApplicationCommands)];
-    mock_application_settings_commands_handler_ =
-        [OCMockObject mockForProtocol:@protocol(ApplicationSettingsCommands)];
+    mock_settings_commands_handler_ =
+        [OCMockObject mockForProtocol:@protocol(SettingsCommands)];
     mock_browsing_data_commands_handler_ =
         [OCMockObject mockForProtocol:@protocol(BrowsingDataCommands)];
 
@@ -263,8 +265,8 @@ class RecentTabsTableCoordinatorTest : public BlockCleanupTest {
         startDispatchingToTarget:mock_application_commands_handler_
                      forProtocol:@protocol(ApplicationCommands)];
     [browser_->GetCommandDispatcher()
-        startDispatchingToTarget:mock_application_settings_commands_handler_
-                     forProtocol:@protocol(ApplicationSettingsCommands)];
+        startDispatchingToTarget:mock_settings_commands_handler_
+                     forProtocol:@protocol(SettingsCommands)];
     [browser_->GetCommandDispatcher()
         startDispatchingToTarget:mock_browsing_data_commands_handler_
                      forProtocol:@protocol(BrowsingDataCommands)];
@@ -294,7 +296,7 @@ class RecentTabsTableCoordinatorTest : public BlockCleanupTest {
   ScopedKeyWindow scoped_key_window_;
   UIViewController* base_view_controller_;
 
-  syncer::TestSyncService* sync_service_;
+  raw_ptr<syncer::TestSyncService> sync_service_;
   sync_sessions::SyncedSession sync_session_;
   std::vector<raw_ptr<const sync_sessions::SyncedSession, VectorExperimental>>
       sessions_;
@@ -305,7 +307,7 @@ class RecentTabsTableCoordinatorTest : public BlockCleanupTest {
   // Must be declared *after* `chrome_browser_state_` so it can outlive it.
   RecentTabsCoordinator* coordinator_;
   id<ApplicationCommands> mock_application_commands_handler_;
-  id<ApplicationSettingsCommands> mock_application_settings_commands_handler_;
+  id<SettingsCommands> mock_settings_commands_handler_;
   id<BrowsingDataCommands> mock_browsing_data_commands_handler_;
 };
 

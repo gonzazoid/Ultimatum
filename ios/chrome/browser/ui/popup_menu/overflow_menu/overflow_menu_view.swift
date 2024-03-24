@@ -4,7 +4,6 @@
 
 import SwiftUI
 
-@available(iOS 15, *)
 struct OverflowMenuView: View {
   @ObservedObject var model: OverflowMenuModel
 
@@ -26,7 +25,6 @@ struct OverflowMenuView: View {
         OverflowMenuDestinationList(
           destinations: $model.destinations,
           width: geometry.size.width,
-          extraTopMargin: OverflowMenuListStyle.destinationListGrabberHeight,
           metricsHandler: metricsHandler,
           uiConfiguration: uiConfiguration, namespace: namespace
         )

@@ -110,3 +110,24 @@ if (use_fuzzing_engine) {
     depth = 1
   }
 }
+
+if (build_with_chromium && use_blink) {
+  source_set("renderer_fuzzing") {
+    testonly = true
+    sources = [
+      "renderer_fuzzing/renderer_fuzzing.cc",
+      "renderer_fuzzing/renderer_fuzzing.h",
+    ]
+    deps = [
+      "//base",
+      "//third_party/blink/public:blink",
+    ]
+  }
+}
+
+# A wrapper that knows how to execute a single fuzztest within a binary
+# containing many fuzztests.
+source_set("individual_fuzztest_wrapper") {
+  sources = [ "//testing/libfuzzer/fuzztest_wrapper.cpp" ]
+  deps = [ "//base" ]
+}

@@ -9,6 +9,7 @@
 #include "chrome/browser/ui/views/autofill/popup/popup_row_content_view.h"
 #include "chrome/browser/ui/views/autofill/popup/popup_row_view.h"
 #include "chrome/browser/ui/views/autofill/popup/popup_row_with_button_view.h"
+#include "chrome/browser/ui/views/autofill/popup/popup_view_utils.h"
 #include "components/autofill/core/browser/filling_product.h"
 #include "components/autofill/core/browser/metrics/autofill_metrics.h"
 #include "components/autofill/core/browser/ui/suggestion.h"
@@ -48,7 +49,8 @@ constexpr auto kPopupItemTypesUsingLeadingIcons =
          PopupItemId::kPasswordAccountStorageEmpty,
          PopupItemId::kPasswordAccountStorageOptIn,
          PopupItemId::kPasswordAccountStorageReSignin,
-         PopupItemId::kPasswordAccountStorageOptInAndGenerate});
+         PopupItemId::kPasswordAccountStorageOptInAndGenerate,
+         PopupItemId::kViewPasswordDetails});
 
 // Max width for the username and masked password.
 constexpr int kAutofillPopupUsernameMaxWidth = 272;
@@ -100,8 +102,13 @@ std::unique_ptr<PopupRowContentView> CreateFooterPopupRowContentView(
       views::MenuConfig::instance().touchable_menu_height);
 
   std::unique_ptr<views::Label> main_text_label =
-      popup_cell_utils::CreateMainTextLabel(suggestion.main_text,
-                                            views::style::STYLE_SECONDARY);
+      popup_cell_utils::CreateMainTextLabel(
+          suggestion.main_text, ShouldApplyNewAutofillPopupStyle()
+                                    ? views::style::TextStyle::STYLE_BODY_3
+                                    : views::style::TextStyle::STYLE_SECONDARY);
+  if (ShouldApplyNewAutofillPopupStyle()) {
+    main_text_label->SetEnabledColorId(ui::kColorLabelForegroundSecondary);
+  }
   main_text_label->SetEnabled(!suggestion.is_loading);
   view->TrackLabel(view->AddChildView(std::move(main_text_label)));
 
@@ -168,8 +175,8 @@ std::unique_ptr<PopupRowContentView> CreatePasswordPopupRowContentView(
 
   // Add the actual views.
   std::unique_ptr<views::Label> main_text_label =
-      popup_cell_utils::CreateMainTextLabel(
-          suggestion.main_text, views::style::TextStyle::STYLE_PRIMARY);
+      popup_cell_utils::CreateMainTextLabel(suggestion.main_text,
+                                            GetPrimaryTextStyle());
   main_text_label->SetMaximumWidthSingleLine(kAutofillPopupUsernameMaxWidth);
 
   popup_cell_utils::AddSuggestionContentToView(
@@ -209,9 +216,8 @@ std::unique_ptr<PopupRowContentView> CreatePopupRowContentView(
     FillingProduct main_filling_product) {
   auto view = std::make_unique<PopupRowContentView>();
   std::unique_ptr<views::Label> main_text_label =
-      popup_cell_utils::CreateMainTextLabel(
-          suggestion.main_text,
-          GetMainTextStyleForPopupItemId(suggestion.popup_item_id));
+      popup_cell_utils::CreateMainTextLabel(suggestion.main_text,
+                                            GetPrimaryTextStyle());
   popup_cell_utils::FormatLabel(
       *main_text_label, suggestion.main_text, main_filling_product,
       popup_cell_utils::GetMaxPopupAddressProfileWidth());
@@ -235,9 +241,8 @@ std::unique_ptr<PopupRowWithButtonView> CreateAutocompleteRowWithDeleteButton(
 
   const Suggestion& kSuggestion = controller->GetSuggestionAt(line_number);
   std::unique_ptr<views::Label> main_text_label =
-      popup_cell_utils::CreateMainTextLabel(
-          kSuggestion.main_text,
-          GetMainTextStyleForPopupItemId(kSuggestion.popup_item_id));
+      popup_cell_utils::CreateMainTextLabel(kSuggestion.main_text,
+                                            GetPrimaryTextStyle());
   popup_cell_utils::FormatLabel(
       *main_text_label, kSuggestion.main_text,
       controller->GetMainFillingProduct(),
@@ -325,9 +330,7 @@ std::unique_ptr<PopupRowView> CreatePopupRowView(
     case PopupItemId::kMixedFormMessage:
     case PopupItemId::kInsecureContextPaymentDisabledMessage:
       NOTREACHED_NORETURN();
-    case PopupItemId::kUsernameEntry:
     case PopupItemId::kPasswordEntry:
-    case PopupItemId::kAccountStorageUsernameEntry:
     case PopupItemId::kAccountStoragePasswordEntry:
       return std::make_unique<PopupRowView>(
           a11y_selection_delegate, selection_delegate, controller, line_number,

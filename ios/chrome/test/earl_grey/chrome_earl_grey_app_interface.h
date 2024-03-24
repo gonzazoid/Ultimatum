@@ -712,19 +712,17 @@
 // Copies a chrome:// URL that doesn't require internet connection.
 + (void)copyURLToPasteBoard;
 
-#pragma mark - Default Search Engine Choice Screen Utilities
-
-// Returns YES if the search engine choice screen will be shown.
-+ (BOOL)IsSearchEngineChoiceScreenEnabledFre;
-
 #pragma mark - First Run Utilities
 
 // Writes the First Run Sentinel file, used to record that First Run has
 // completed.
 + (void)writeFirstRunSentinel;
 
-// Remove the FirstRun sentinel file.
+// Removes the FirstRun sentinel file.
 + (void)removeFirstRunSentinel;
+
+// Whether the first run sentinel exists.
++ (bool)hasFirstRunSentinel;
 
 @end
 

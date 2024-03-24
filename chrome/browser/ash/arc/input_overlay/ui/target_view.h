@@ -17,8 +17,9 @@ class DisplayOverlayController;
 // View shows target circle, crossed line and touch point in button placement
 // mode.
 class TargetView : public views::View {
+  METADATA_HEADER(TargetView, views::View)
+
  public:
-  METADATA_HEADER(TargetView);
   TargetView(DisplayOverlayController* controller, ActionType action_type);
 
   TargetView(const TargetView&) = delete;
@@ -38,6 +39,8 @@ class TargetView : public views::View {
   int GetCircleRadius() const;
   // The target circle ring radius excluding the ring thickness.
   int GetCircleRingRadius() const;
+  // The padding that `center_` can't access.
+  int GetPadding() const;
 
   // Clamps `center_` so that the target circle can show completely and
   // constraint the action position.
@@ -57,6 +60,7 @@ class TargetView : public views::View {
   bool OnMousePressed(const ui::MouseEvent& event) override;
   void OnMouseReleased(const ui::MouseEvent& event) override;
   void OnPaintBackground(gfx::Canvas* canvas) override;
+  void OnThemeChanged() override;
 
   const raw_ptr<DisplayOverlayController> controller_;
   const ActionType action_type_;

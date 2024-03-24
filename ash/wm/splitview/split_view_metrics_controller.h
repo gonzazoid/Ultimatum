@@ -9,6 +9,7 @@
 #include <set>
 #include <vector>
 
+#include "ash/constants/ash_pref_names.h"
 #include "ash/wm/desks/desks_controller.h"
 #include "ash/wm/splitview/split_view_observer.h"
 #include "ash/wm/window_state_observer.h"
@@ -99,7 +100,6 @@ class SplitViewMetricsController : public SplitViewObserver,
   SplitViewMetricsController(const SplitViewMetricsController&) = delete;
   SplitViewMetricsController& operator=(const SplitViewMetricsController&) =
       delete;
-
   ~SplitViewMetricsController() override;
 
   // SplitViewObserver:
@@ -266,7 +266,7 @@ class SplitViewMetricsController : public SplitViewObserver,
   // stage, so their window states cannot be observed when are inserted into
   // `observed_windows_` list. This set contains the windows recovered by window
   // restored whose window states have not been observed yet.
-  std::set<aura::Window*> no_state_observed_windows_;
+  std::set<raw_ptr<aura::Window, SetExperimental>> no_state_observed_windows_;
 
   // Start time of clamshell and tablet split view. When stop recording, the
   // start time will be set to `base::TimeTicks::Max()`. This is also used as an

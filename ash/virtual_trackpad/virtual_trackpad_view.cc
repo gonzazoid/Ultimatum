@@ -91,9 +91,9 @@ std::unique_ptr<views::LabelButton> CreateFingerButton(
 
 // Captures mouse events and formats them before sending them to the event sink.
 class TrackpadInternalSurfaceView : public views::View {
- public:
-  METADATA_HEADER(TrackpadInternalSurfaceView);
+  METADATA_HEADER(TrackpadInternalSurfaceView, views::View)
 
+ public:
   TrackpadInternalSurfaceView() = default;
   TrackpadInternalSurfaceView(const TrackpadInternalSurfaceView&) = delete;
   TrackpadInternalSurfaceView& operator=(const TrackpadInternalSurfaceView&) =
@@ -210,7 +210,7 @@ class TrackpadInternalSurfaceView : public views::View {
   int fingers_ = kDefaultFingers;
 };
 
-BEGIN_METADATA(TrackpadInternalSurfaceView, views::View)
+BEGIN_METADATA(TrackpadInternalSurfaceView)
 END_METADATA
 
 // -----------------------------------------------------------------------------
@@ -312,8 +312,8 @@ void VirtualTrackpadView::Toggle() {
       std::move(targeter));
 }
 
-void VirtualTrackpadView::Layout() {
-  views::View::Layout();
+void VirtualTrackpadView::Layout(PassKey) {
+  LayoutSuperclass<views::View>(this);
 
   // The height of the finger buttons container stays the same while the width
   // matches the parent width.
@@ -374,7 +374,7 @@ views::View* VirtualTrackpadView::GetTrackpadViewForTesting() {
   return trackpad_view_;
 }
 
-BEGIN_METADATA(VirtualTrackpadView, views::View)
+BEGIN_METADATA(VirtualTrackpadView)
 END_METADATA
 
 }  // namespace ash

@@ -14,7 +14,7 @@
     width: 100%;
   }
 
-  #flex-parent {
+  #flexParent {
     height: 100%;
     width: 100%;
     display: flex;
@@ -70,10 +70,24 @@
     color: var(--previous-highlight-color);
     background-color: transparent;
   }
+
+  img {
+    max-width: 100%;
+  }
+
 </style>
-<div id="flex-parent" on-keydown="onKeyDown_">
+<div id="flexParent" on-keydown="onKeyDown_">
   <div id="toolbar-container" hidden="[[!isWebUIToolbarVisible_]]">
-    <read-anything-toolbar id="toolbar"></read-anything-toolbar>
+    <read-anything-toolbar
+      paused="[[paused]]"
+      selected-voice="[[selectedVoice]]"
+      available-voices="[[availableVoices]]"
+      preview-voice-playing="[[previewVoicePlaying]]"
+      on-select-voice="onSelectVoice_"
+      on-preview-voice="onPreviewVoice_"
+      on-voice-menu-close="onVoiceMenuClose_"
+      id="toolbar">
+    </read-anything-toolbar>
   </div>
   <div id="container-parent" class="sp-card sp-scroller"
        hidden="[[!hasContent_]]">
@@ -81,10 +95,10 @@
   </div>
   <div id="empty-state-container" hidden="[[hasContent_]]">
     <sp-empty-state
-        image-path="[[emptyStateImagePath_]]"
-        dark-image-path="[[emptyStateDarkImagePath_]]"
-        heading="[[emptyStateHeading_]]"
-        body="[[emptyStateSubheading_]]">
+      image-path="[[emptyStateImagePath_]]"
+      dark-image-path="[[emptyStateDarkImagePath_]]"
+      heading="[[emptyStateHeading_]]"
+      body="[[emptyStateSubheading_]]">
     </sp-empty-state>
   </div>
 </div>

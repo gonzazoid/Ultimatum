@@ -12,8 +12,11 @@
 #include <optional>
 #include <vector>
 
+#include "base/memory/stack_allocated.h"
+#include "base/values.h"
 #include "content/browser/devtools/devtools_device_request_prompt_info.h"
 #include "content/browser/devtools/devtools_throttle_handle.h"
+#include "content/browser/interest_group/devtools_enums.h"
 #include "content/browser/preloading/prefetch/prefetch_status.h"
 #include "content/browser/preloading/prerender/prerender_final_status.h"
 #include "content/browser/renderer_host/back_forward_cache_impl.h"
@@ -45,6 +48,10 @@ class SSLInfo;
 class X509Certificate;
 struct WebTransportError;
 }  // namespace net
+
+namespace network {
+class URLLoaderFactoryBuilder;
+}  // namespace network
 
 namespace download {
 struct DownloadCreateInfo;
@@ -108,50 +115,44 @@ bool ApplyUserAgentMetadataOverrides(
     FrameTreeNode* frame_tree_node,
     std::optional<blink::UserAgentMetadata>* override_out);
 
-bool WillCreateURLLoaderFactory(
-    RenderFrameHostImpl* rfh,
-    bool is_navigation,
-    bool is_download,
-    mojo::PendingReceiver<network::mojom::URLLoaderFactory>*
-        target_factory_receiver,
-    network::mojom::URLLoaderFactoryOverridePtr* factory_override);
+class WillCreateURLLoaderFactoryParams final {
+  STACK_ALLOCATED();
 
-bool WillCreateURLLoaderFactoryForServiceWorker(
-    RenderProcessHost* rph,
-    int routing_id,
-    network::mojom::URLLoaderFactoryOverridePtr* factory_override);
+ public:
+  static WillCreateURLLoaderFactoryParams ForFrame(RenderFrameHostImpl* rfh);
 
-bool WillCreateURLLoaderFactoryForServiceWorkerMainScript(
-    const ServiceWorkerContextWrapper* context_wrapper,
-    int64_t version_id,
-    mojo::PendingReceiver<network::mojom::URLLoaderFactory>*
-        loader_factory_receiver);
+  static WillCreateURLLoaderFactoryParams ForServiceWorker(
+      RenderProcessHost& rph,
+      int routing_id);
 
-bool WillCreateURLLoaderFactoryForSharedWorker(
-    SharedWorkerHost* host,
-    network::mojom::URLLoaderFactoryOverridePtr* factory_override);
+  static std::optional<WillCreateURLLoaderFactoryParams>
+  ForServiceWorkerMainScript(const ServiceWorkerContextWrapper* context_wrapper,
+                             std::optional<int64_t> version_id);
 
-bool WillCreateURLLoaderFactoryForWorkerMainScript(
-    DevToolsAgentHostImpl* host,
-    const base::UnguessableToken& worker_token,
-    network::mojom::URLLoaderFactoryOverridePtr* factory_override);
+  static std::optional<WillCreateURLLoaderFactoryParams> ForSharedWorker(
+      SharedWorkerHost* host);
 
-bool WillCreateURLLoaderFactory(
-    RenderFrameHostImpl* rfh,
-    bool is_navigation,
-    bool is_download,
-    std::unique_ptr<network::mojom::URLLoaderFactory>* factory);
+  static WillCreateURLLoaderFactoryParams ForWorkerMainScript(
+      DevToolsAgentHostImpl* agent_host,
+      const base::UnguessableToken& worker_token);
 
-bool WillCreateURLLoaderFactoryInternal(
-    DevToolsAgentHostImpl* agent_host,
-    const base::UnguessableToken& devtools_token,
-    int process_id,
-    StoragePartition* storage_partition,
-    bool is_navigation,
-    bool is_download,
-    mojo::PendingReceiver<network::mojom::URLLoaderFactory>*
-        target_factory_receiver,
-    network::mojom::URLLoaderFactoryOverridePtr* factory_override);
+  // Calls devtools hooks so that they can add interceptors.
+  bool Run(bool is_navigation,
+           bool is_download,
+           network::URLLoaderFactoryBuilder& factory_builder,
+           network::mojom::URLLoaderFactoryOverridePtr* factory_override);
+
+ private:
+  WillCreateURLLoaderFactoryParams(DevToolsAgentHostImpl* agent_host,
+                                   const base::UnguessableToken& devtools_token,
+                                   int process_id,
+                                   StoragePartition* storage_partition);
+
+  const raw_ptr<DevToolsAgentHostImpl> agent_host_;
+  const base::UnguessableToken devtools_token_;
+  const int process_id_;
+  const raw_ptr<StoragePartition> storage_partition_;
+};
 
 void OnPrefetchRequestWillBeSent(
     FrameTreeNode* frame_tree_node,
@@ -228,6 +229,21 @@ void OnAuctionWorkletNetworkRequestComplete(
     int frame_tree_node_id,
     const std::string& request_id,
     const network::URLLoaderCompletionStatus& status);
+
+bool NeedInterestGroupAuctionEvents(int frame_tree_node_id);
+
+void OnInterestGroupAuctionEventOccurred(
+    int frame_tree_node_id,
+    base::Time event_time,
+    content::InterestGroupAuctionEventType type,
+    const std::string& unique_auction_id,
+    base::optional_ref<const std::string> parent_auction_id,
+    const base::Value::Dict& auction_config);
+void OnInterestGroupAuctionNetworkRequestCreated(
+    int frame_tree_node_id,
+    content::InterestGroupAuctionFetchType type,
+    const std::string& request_id,
+    const std::vector<std::string>& devtools_auction_ids);
 
 bool ShouldBypassCSP(const NavigationRequest& nav_request);
 

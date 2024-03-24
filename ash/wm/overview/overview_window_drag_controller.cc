@@ -482,8 +482,7 @@ void OverviewWindowDragController::ActivateDraggedWindow() {
   } else if (auto* split_view_overview_session =
                  RootWindowController::ForWindow(item_->GetWindow())
                      ->split_view_overview_session();
-             split_view_overview_session &&
-             split_view_overview_session->auto_snap_controller()) {
+             split_view_overview_session) {
     // If `SplitViewOverviewSession` is active, let it handle the autosnap.
     overview_session_->SelectWindow(event_source_item_);
     item_ = nullptr;
@@ -938,10 +937,14 @@ void OverviewWindowDragController::UpdateDragIndicatorsAndOverviewGrid(
 
 aura::Window* OverviewWindowDragController::GetRootWindowBeingDraggedIn()
     const {
-  return is_touch_dragging_
-             ? item_->root_window()
-             : Shell::GetRootWindowForDisplayId(
-                   Shell::Get()->cursor_manager()->GetDisplay().id());
+  if (is_touch_dragging_) {
+    return item_->root_window();
+  }
+
+  auto* screen = display::Screen::GetScreen();
+  CHECK(screen);
+  auto display = screen->GetDisplayNearestPoint(screen->GetCursorScreenPoint());
+  return Shell::GetRootWindowForDisplayId(display.id());
 }
 
 SnapPosition OverviewWindowDragController::GetSnapPosition(

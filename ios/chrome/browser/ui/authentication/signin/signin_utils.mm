@@ -11,6 +11,7 @@
 #import "components/policy/policy_constants.h"
 #import "components/prefs/pref_service.h"
 #import "components/signin/ios/browser/features.h"
+#import "components/signin/public/identity_manager/tribool.h"
 #import "components/sync/base/features.h"
 #import "components/sync/service/sync_service.h"
 #import "components/sync/service/sync_user_settings.h"
@@ -266,7 +267,7 @@ IdentitySigninState GetPrimaryIdentitySigninState(
       AuthenticationServiceFactory::GetForBrowserState(browser_state);
   syncer::SyncService* syncService =
       SyncServiceFactory::GetForBrowserState(browser_state);
-  // TODO(crbug.com/1462552): After phase 3 migration of kSync users, Remove
+  // TODO(crbug.com/40066949): After phase 3 migration of kSync users, Remove
   // this usage.
   if (auth_service->HasPrimaryIdentity(signin::ConsentLevel::kSync) &&
       syncService->GetUserSettings()->IsInitialSyncFeatureSetupComplete()) {
@@ -276,6 +277,18 @@ IdentitySigninState GetPrimaryIdentitySigninState(
   } else {
     return IdentitySigninStateSignedOut;
   }
+}
+
+Tribool TriboolFromCapabilityResult(SystemIdentityCapabilityResult result) {
+  switch (result) {
+    case SystemIdentityCapabilityResult::kTrue:
+      return Tribool::kTrue;
+    case SystemIdentityCapabilityResult::kFalse:
+      return Tribool::kFalse;
+    case SystemIdentityCapabilityResult::kUnknown:
+      return Tribool::kUnknown;
+  }
+  NOTREACHED_NORETURN();
 }
 
 }  // namespace signin

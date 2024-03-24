@@ -274,7 +274,7 @@ class ScrollView::Viewport : public View {
   raw_ptr<ScrollView> scroll_view_;
 };
 
-BEGIN_METADATA(ScrollView, Viewport, View)
+BEGIN_METADATA(ScrollView, Viewport)
 ADD_READONLY_PROPERTY_METADATA(bool, IsContentsViewport)
 END_METADATA
 
@@ -285,8 +285,10 @@ ScrollView::ScrollView()
                      : ScrollWithLayers::kDisabled) {}
 
 ScrollView::ScrollView(ScrollWithLayers scroll_with_layers)
-    : horiz_sb_(AddChildView(PlatformStyle::CreateScrollBar(true))),
-      vert_sb_(AddChildView(PlatformStyle::CreateScrollBar(false))),
+    : horiz_sb_(AddChildView(
+          PlatformStyle::CreateScrollBar(ScrollBar::Orientation::kHorizontal))),
+      vert_sb_(AddChildView(
+          PlatformStyle::CreateScrollBar(ScrollBar::Orientation::kVertical))),
       corner_view_(std::make_unique<ScrollCornerView>()),
       scroll_with_layers_enabled_(scroll_with_layers ==
                                   ScrollWithLayers::kEnabled) {
@@ -421,23 +423,23 @@ void ScrollView::SetViewportRoundedCornerRadius(
   contents_viewport_->layer()->SetRoundedCornerRadius(radii);
 }
 
-void ScrollView::SetBackgroundColor(const absl::optional<SkColor>& color) {
+void ScrollView::SetBackgroundColor(const std::optional<SkColor>& color) {
   if (background_color_ == color && !background_color_id_) {
     return;
   }
   background_color_ = color;
-  background_color_id_ = absl::nullopt;
+  background_color_id_ = std::nullopt;
   UpdateBackground();
   OnPropertyChanged(&background_color_, kPropertyEffectsPaint);
 }
 
 void ScrollView::SetBackgroundThemeColorId(
-    const absl::optional<ui::ColorId>& color_id) {
+    const std::optional<ui::ColorId>& color_id) {
   if (background_color_id_ == color_id && !background_color_) {
     return;
   }
   background_color_id_ = color_id;
-  background_color_ = absl::nullopt;
+  background_color_ = std::nullopt;
   UpdateBackground();
   OnPropertyChanged(&background_color_id_, kPropertyEffectsPaint);
 }
@@ -639,7 +641,7 @@ int ScrollView::GetHeightForWidth(int width) const {
   return std::clamp(height, min_height_, max_height_);
 }
 
-void ScrollView::Layout() {
+void ScrollView::Layout(PassKey) {
   // When either scrollbar is disabled, it should not matter
   // if its OverlapsContent matches other bar's.
   if (horizontal_scroll_bar_mode_ == ScrollBarMode::kEnabled &&
@@ -655,7 +657,7 @@ void ScrollView::Layout() {
   }
 
   if (views::FocusRing::Get(this)) {
-    views::FocusRing::Get(this)->Layout();
+    views::FocusRing::Get(this)->DeprecatedLayoutImmediately();
   }
 
   gfx::Rect available_rect = GetContentsBounds();
@@ -699,14 +701,14 @@ void ScrollView::Layout() {
   gfx::Size viewport_size = viewport_bounds.size();
 
   // Assume both a vertical and horizontal scrollbar exist before calling
-  // contents_->Layout(). This is because some contents_ will set their own size
-  // to the contents_viewport_'s bounds. Failing to pre-allocate space for
-  // the scrollbars will [non-intuitively] cause scrollbars to appear in
-  // ComputeScrollBarsVisibility. This solution is also not perfect - if
-  // scrollbars turn out *not* to be necessary, the contents will have slightly
-  // less horizontal/vertical space than it otherwise would have had access to.
-  // Unfortunately, there's no way to determine this without introducing a
-  // circular dependency.
+  // contents_->DeprecatedLayoutImmediately(). This is because some contents_
+  // will set their own size to the contents_viewport_'s bounds. Failing to
+  // pre-allocate space for the scrollbars will [non-intuitively] cause
+  // scrollbars to appear in ComputeScrollBarsVisibility. This solution is also
+  // not perfect - if scrollbars turn out *not* to be necessary, the contents
+  // will have slightly less horizontal/vertical space than it otherwise would
+  // have had access to. Unfortunately, there's no way to determine this without
+  // introducing a circular dependency.
   const int horiz_sb_layout_height = GetScrollBarLayoutHeight();
   const int vert_sb_layout_width = GetScrollBarLayoutWidth();
   viewport_bounds.set_width(viewport_bounds.width() - vert_sb_layout_width);
@@ -718,7 +720,7 @@ void ScrollView::Layout() {
   // Give |contents_| a chance to update its bounds if it depends on the
   // viewport.
   if (contents_) {
-    contents_->Layout();
+    contents_->DeprecatedLayoutImmediately();
   }
 
   bool should_layout_contents = false;
@@ -784,7 +786,7 @@ void ScrollView::Layout() {
   // Update to the real client size with the visible scrollbars.
   contents_viewport_->SetBoundsRect(viewport_bounds);
   if (should_layout_contents && contents_) {
-    contents_->Layout();
+    contents_->DeprecatedLayoutImmediately();
   }
 
   // Even when |contents_| needs to scroll, it can still be narrower or wider
@@ -824,7 +826,7 @@ void ScrollView::Layout() {
   header_viewport_->SetBounds(contents_x, contents_y, viewport_bounds.width(),
                               header_height);
   if (header_) {
-    header_->Layout();
+    header_->DeprecatedLayoutImmediately();
   }
 
   ConstrainScrollToBounds(header_viewport_, header_,
@@ -1029,7 +1031,8 @@ void ScrollView::ScrollToPosition(ScrollBar* source, int position) {
 int ScrollView::GetScrollIncrement(ScrollBar* source,
                                    bool is_page,
                                    bool is_positive) {
-  bool is_horizontal = source->IsHorizontal();
+  bool is_horizontal =
+      source->GetOrientation() == ScrollBar::Orientation::kHorizontal;
   if (is_page) {
     return is_horizontal ? contents_viewport_->width()
                          : contents_viewport_->height();
@@ -1307,7 +1310,7 @@ void ScrollView::UpdateBackground() {
     return;
   }
 
-  const absl::optional<SkColor> background_color = GetBackgroundColor();
+  const std::optional<SkColor> background_color = GetBackgroundColor();
 
   auto create_background = [background_color]() {
     return background_color ? CreateSolidBackground(background_color.value())
@@ -1332,13 +1335,13 @@ void ScrollView::UpdateBackground() {
   }
 }
 
-absl::optional<SkColor> ScrollView::GetBackgroundColor() const {
+std::optional<SkColor> ScrollView::GetBackgroundColor() const {
   return background_color_id_
              ? GetColorProvider()->GetColor(background_color_id_.value())
              : background_color_;
 }
 
-absl::optional<ui::ColorId> ScrollView::GetBackgroundThemeColorId() const {
+std::optional<ui::ColorId> ScrollView::GetBackgroundThemeColorId() const {
   return background_color_id_;
 }
 
@@ -1390,8 +1393,8 @@ BEGIN_METADATA(ScrollView)
 ADD_READONLY_PROPERTY_METADATA(int, MinHeight)
 ADD_READONLY_PROPERTY_METADATA(int, MaxHeight)
 ADD_PROPERTY_METADATA(bool, AllowKeyboardScrolling)
-ADD_PROPERTY_METADATA(absl::optional<SkColor>, BackgroundColor)
-ADD_PROPERTY_METADATA(absl::optional<ui::ColorId>, BackgroundThemeColorId)
+ADD_PROPERTY_METADATA(std::optional<SkColor>, BackgroundColor)
+ADD_PROPERTY_METADATA(std::optional<ui::ColorId>, BackgroundThemeColorId)
 ADD_PROPERTY_METADATA(bool, DrawOverflowIndicator)
 ADD_PROPERTY_METADATA(bool, HasFocusIndicator)
 ADD_PROPERTY_METADATA(ScrollView::ScrollBarMode, HorizontalScrollBarMode)

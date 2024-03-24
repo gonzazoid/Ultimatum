@@ -12,7 +12,9 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_selections.h"
 #include "chrome/browser/search_engine_choice/search_engine_choice_dialog_service.h"
+#include "chrome/browser/search_engine_choice/search_engine_choice_service_factory.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
+#include "components/search_engines/search_engine_choice/search_engine_choice_service.h"
 #include "components/search_engines/search_engine_choice_utils.h"
 #include "components/search_engines/search_engines_pref_names.h"
 #include "components/search_engines/template_url_service.h"
@@ -39,12 +41,6 @@ search_engines::SearchEngineChoiceScreenConditions ComputeProfileEligibility(
         kFeatureSuppressed;
   }
 
-  if (!SearchEngineChoiceDialogServiceFactory::IsSelectedChoiceProfile(
-          profile, /*try_claim=*/false)) {
-    return search_engines::SearchEngineChoiceScreenConditions::
-        kProfileOutOfScope;
-  }
-
   bool is_regular_or_guest_profile =
       profile.IsRegularProfile() || profile.IsGuestSession();
 #if BUILDFLAG(IS_CHROMEOS)
@@ -52,15 +48,21 @@ search_engines::SearchEngineChoiceScreenConditions ComputeProfileEligibility(
       !chromeos::IsKioskSession() && !profiles::IsChromeAppKioskSession();
 #endif
 
+  search_engines::SearchEngineChoiceService* search_engine_choice_service =
+      search_engines::SearchEngineChoiceServiceFactory::GetForProfile(&profile);
   TemplateURLService* template_url_service =
       TemplateURLServiceFactory::GetForProfile(&profile);
+  if (!template_url_service) {
+    // Some unit tests using `BrowserWithTestWindowTest` create browser windows
+    // without fully instantiating profiles.
+    CHECK_IS_TEST();
+    return search_engines::SearchEngineChoiceScreenConditions::
+        kUnsupportedBrowserType;
+  }
 
-  return search_engines::GetStaticChoiceScreenConditions(
+  return search_engine_choice_service->GetStaticChoiceScreenConditions(
       CHECK_DEREF(g_browser_process->policy_service()),
-      /*profile_properties=*/
-      {.is_regular_profile = is_regular_or_guest_profile,
-       .pref_service = profile.GetPrefs()},
-      CHECK_DEREF(template_url_service));
+      is_regular_or_guest_profile, *template_url_service);
 }
 
 bool IsProfileEligibleForChoiceScreen(Profile& profile) {
@@ -81,10 +83,11 @@ SearchEngineChoiceDialogServiceFactory::SearchEngineChoiceDialogServiceFactory()
     : ProfileKeyedServiceFactory(
           "SearchEngineChoiceDialogServiceFactory",
           ProfileSelections::Builder()
-              .WithRegular(ProfileSelection::kOriginalOnly)
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
               .WithAshInternals(ProfileSelection::kNone)
               .WithGuest(ProfileSelection::kOffTheRecordOnly)
               .Build()) {
+  DependsOn(search_engines::SearchEngineChoiceServiceFactory::GetInstance());
   DependsOn(TemplateURLServiceFactory::GetInstance());
 }
 
@@ -114,15 +117,6 @@ SearchEngineChoiceDialogServiceFactory::ScopedChromeBuildOverrideForTesting(
 }
 
 // static
-bool SearchEngineChoiceDialogServiceFactory::IsSelectedChoiceProfile(
-    Profile& profile,
-    bool try_claim) {
-  // TODO(b/309936758): Remove this method and deprecate
-  // prefs::kSearchEnginesChoiceProfile
-  return true;
-}
-
-// static
 bool SearchEngineChoiceDialogServiceFactory::
     IsProfileEligibleForChoiceScreenForTesting(Profile& profile) {
   CHECK_IS_TEST();
@@ -141,7 +135,10 @@ SearchEngineChoiceDialogServiceFactory::BuildServiceInstanceForBrowserContext(
   }
 
   auto& profile = CHECK_DEREF(Profile::FromBrowserContext(context));
-  search_engines::PreprocessPrefsForReprompt(CHECK_DEREF(profile.GetPrefs()));
+  search_engines::SearchEngineChoiceService& search_engine_choice_service =
+      CHECK_DEREF(
+          search_engines::SearchEngineChoiceServiceFactory::GetForProfile(
+              &profile));
 
   if (!IsProfileEligibleForChoiceScreen(profile)) {
     DVLOG(1) << "Profile not eligible, removing tag for profile "
@@ -153,6 +150,6 @@ SearchEngineChoiceDialogServiceFactory::BuildServiceInstanceForBrowserContext(
   TemplateURLService& template_url_service =
       CHECK_DEREF(TemplateURLServiceFactory::GetForProfile(&profile));
   return std::make_unique<SearchEngineChoiceDialogService>(
-      profile, template_url_service);
+      profile, search_engine_choice_service, template_url_service);
 #endif
 }

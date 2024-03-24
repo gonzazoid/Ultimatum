@@ -3,12 +3,13 @@
 // found in the LICENSE file.
 
 import {Key} from './key_code.js';
+import {TestImportManager} from './testing/test_import_manager.js';
 
 /**
  * @fileoverview Wraps automation and accessibility_private callbacks
  * in Promises.
  */
-const AutomationNode = chrome.automation.AutomationNode;
+const AutomationNode = chrome.automation?.AutomationNode;
 
 export class AsyncUtil {
   /** @return {!Promise<!AutomationNode>} */
@@ -32,3 +33,5 @@ export class AsyncUtil {
                 keyCode, resolve));
   }
 }
+
+TestImportManager.exportForTesting(AsyncUtil);

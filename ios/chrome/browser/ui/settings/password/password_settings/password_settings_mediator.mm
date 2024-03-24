@@ -399,7 +399,7 @@ bool IsCredentialNotInAccountStore(const CredentialUIEntry& credential) {
 }
 
 - (AccountStorageSwitchState)computeAccountStorageSwitchState {
-  // TODO(crbug.com/1462858): Delete the usage of IsSyncFeatureEnabled() after
+  // TODO(crbug.com/40067025): Delete the usage of IsSyncFeatureEnabled() after
   // Phase 2 on iOS is launched. See ConsentLevel::kSync documentation for
   // details.
   if (_syncService->GetAccountInfo().IsEmpty() ||
@@ -429,10 +429,10 @@ bool IsCredentialNotInAccountStore(const CredentialUIEntry& credential) {
     return;
   }
 
-  [self.consumer
-      setLocalPasswordsCount:[self computeLocalPasswordsCount]
-         withUserEligibility:password_manager::features_util::
-                                 IsOptedInForAccountStorage(_syncService)];
+  [self.consumer setLocalPasswordsCount:[self computeLocalPasswordsCount]
+                    withUserEligibility:password_manager::features_util::
+                                            IsOptedInForAccountStorage(
+                                                _prefService, _syncService)];
 }
 
 // Returns the amount of local passwords.

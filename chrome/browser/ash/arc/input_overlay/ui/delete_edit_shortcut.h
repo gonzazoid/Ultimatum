@@ -13,7 +13,11 @@
 
 namespace views {
 class NonClientFrameView;
-}
+}  // namespace views
+
+namespace ash {
+class IconButton;
+}  // namespace ash
 
 namespace arc::input_overlay {
 
@@ -30,8 +34,9 @@ class DisplayOverlayController;
 // ||icon||
 // +------+
 class DeleteEditShortcut : public views::BubbleDialogDelegateView {
+  METADATA_HEADER(DeleteEditShortcut, views::BubbleDialogDelegateView)
+
  public:
-  METADATA_HEADER(DeleteEditShortcut);
   DeleteEditShortcut(DisplayOverlayController* controller,
                      ActionViewListItem* anchor_view);
   DeleteEditShortcut(const DeleteEditShortcut&) = delete;
@@ -42,6 +47,10 @@ class DeleteEditShortcut : public views::BubbleDialogDelegateView {
 
  private:
   friend class DeleteEditShortcutTest;
+
+  // Updates tooltip text for both `edit_button_` and `delete_button_`. A11y
+  // name is updated as well.
+  void UpdateTooltipText(ActionViewListItem* anchor_view);
 
   // Handle button functions.
   void OnEditButtonPressed();
@@ -57,6 +66,9 @@ class DeleteEditShortcut : public views::BubbleDialogDelegateView {
 
   // DisplayOverlayController owns this class, no need to deallocate.
   const raw_ptr<DisplayOverlayController> controller_ = nullptr;
+
+  raw_ptr<ash::IconButton> edit_button_;
+  raw_ptr<ash::IconButton> delete_button_;
 };
 
 }  // namespace arc::input_overlay

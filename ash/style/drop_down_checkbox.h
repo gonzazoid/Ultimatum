@@ -27,9 +27,9 @@ namespace ash {
 // `ui::ListModel` with `std::u16string` type.
 class ASH_EXPORT DropDownCheckbox : public views::Button,
                                     public views::WidgetObserver {
- public:
-  METADATA_HEADER(DropDownCheckbox);
+  METADATA_HEADER(DropDownCheckbox, views::Button)
 
+ public:
   using ItemModel = ui::ListModel<std::u16string>;
   using SelectedIndices = ui::ListSelectionModel::SelectedIndices;
   using SelectedItems = std::vector<std::u16string>;
@@ -54,7 +54,7 @@ class ASH_EXPORT DropDownCheckbox : public views::Button,
   void OnBlur() override;
   void AddedToWidget() override;
   void RemovedFromWidget() override;
-  void Layout() override;
+  void Layout(PassKey) override;
 
   // WidgetObserver:
   void OnWidgetBoundsChanged(views::Widget* widget,

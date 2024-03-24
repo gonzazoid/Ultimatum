@@ -23,6 +23,7 @@ import org.junit.runner.RunWith;
 
 import org.chromium.base.Callback;
 import org.chromium.base.FeatureList;
+import org.chromium.base.TimeUtils;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.test.params.ParameterAnnotations;
 import org.chromium.base.test.params.ParameterProvider;
@@ -247,7 +248,7 @@ public class WebApkUpdateManagerTest {
         }
 
         @Override
-        protected void scheduleUpdate() {
+        protected void scheduleUpdate(int shellVersion) {
             if (mCompleteCallback != null) mCompleteCallback.notifyCalled();
         }
 
@@ -265,6 +266,7 @@ public class WebApkUpdateManagerTest {
         public WebappIcon splashIcon;
         public String name;
         public String shortName;
+        public boolean hasCustomName;
         public String manifestId;
         public String appKey;
         public Map<String, String> iconUrlToMurmur2HashMap;
@@ -356,6 +358,7 @@ public class WebApkUpdateManagerTest {
                                     creationData.splashIcon,
                                     creationData.name,
                                     creationData.shortName,
+                                    creationData.hasCustomName,
                                     creationData.displayMode,
                                     creationData.orientation,
                                     0,
@@ -379,7 +382,8 @@ public class WebApkUpdateManagerTest {
                                     /* isSplashProvidedByWebApk= */ false,
                                     /* shareData= */ null,
                                     creationData.shortcuts,
-                                    /* webApkVersionCode= */ 1);
+                                    /* webApkVersionCode= */ 1,
+                                    /* lastUpdateTime= */ TimeUtils.currentTimeMillis());
                     updateManager.updateIfNeeded(storage, intentDataProvider);
                 });
         waiter.waitForCallback(0);
@@ -1033,5 +1037,27 @@ public class WebApkUpdateManagerTest {
         histograms = HistogramWatcher.newBuilder().expectIntRecord(HISTOGRAM, 50).build();
         TestWebApkUpdateManager.logIconDiffs(CHECKERED_2X2, WHITE_2X2);
         histograms.assertExpected();
+    }
+
+    /*
+     * Test update when old WebAPK contains a custom name.
+     */
+    @Test
+    @MediumTest
+    @Feature({"WebApk"})
+    public void testUpdateWithCustomName() throws Exception {
+        CreationData creationData = defaultCreationData();
+        creationData.name = "custom name";
+        creationData.shortName = "custom short name";
+        creationData.hasCustomName = true;
+        creationData.shellVersion = -1;
+
+        WebappTestPage.navigateToServiceWorkerPageWithManifest(
+                mTestServer, mTab, WEBAPK_MANIFEST_URL);
+
+        Assert.assertTrue(checkUpdateNeeded(creationData, /* acceptDialogIfAppears= */ false));
+
+        assertUpdateReasonsEqual(WebApkUpdateReason.OLD_SHELL_APK);
+        Assert.assertFalse(mIconOrNameUpdateDialogShown);
     }
 }

@@ -173,6 +173,8 @@ struct FormFieldData {
   using RoleAttribute = mojom::FormFieldData_RoleAttribute;
   using LabelSource = mojom::FormFieldData_LabelSource;
 
+  struct FillData;
+
   // Returns true if many members of fields |a| and |b| are identical.
   //
   // "Many" is intended to be "all", but currently the following members are not
@@ -207,9 +209,15 @@ struct FormFieldData {
   FormFieldData& operator=(FormFieldData&&);
   ~FormFieldData();
 
-  // An identifier that is unique across all fields in all frames.
+  // Uniquely identifies the DOM element that this field represents.
+  //
+  // It does *not* uniquely identify this FormFieldData object (there is no such
+  // kind of identifier because FormFieldData is a value type). In particular,
+  // they're not guaranteed to be unique FormData::fields; see FormData::fields
+  // for details.
+  //
   // Must not be leaked to renderer process. See FieldGlobalId for details.
-  FieldGlobalId global_id() const { return {host_frame, unique_renderer_id}; }
+  FieldGlobalId global_id() const { return {host_frame, renderer_id}; }
 
   // An identifier of the renderer form that contained this field.
   // This may be different from the browser form that contains this field in the
@@ -220,8 +228,6 @@ struct FormFieldData {
 
   // TODO(crbug/1211834): This function is deprecated. Use
   // FormFieldData::DeepEqual() instead.
-  // Returns true if both fields are identical, ignoring value- and
-  // parsing related members.
   bool SameFieldAs(const FormFieldData& field) const;
 
   // Returns true for all of textfield-looking types: text, password,
@@ -299,13 +305,13 @@ struct FormFieldData {
   // comparison in SameFieldAs().
   LocalFrameToken host_frame;
 
-  // An identifier of the field that is unique among the field from the same
-  // frame. In the browser process, it should only be used in conjunction with
-  // |host_frame| to identify a field; see global_id(). It is not persistent
-  // between page loads and therefore not used in comparison in SameFieldAs().
-  FieldRendererId unique_renderer_id;
+  // Uniquely identifies the DOM element that this field represents among the
+  // field DOM elements in the same frame.
+  // In the browser process, use global_id() instead.
+  // See global_id() for details on the properties and pitfalls.
+  FieldRendererId renderer_id;
 
-  // Unique renderer ID of the enclosing form in the same frame.
+  // Renderer ID of the owning form in the same frame.
   FormRendererId host_form_id;
 
   // The signature of the field's renderer form, that is, the signature of the
@@ -413,8 +419,40 @@ struct FormFieldData {
   bool force_override = false;
 };
 
-// TODO(crbug.com/1482526): Eliminate references to this function where
-// possible.
+// Structure containing necessary information to be sent from the browser to the
+// renderer in order to fill a field.
+// See documentation of FormFieldData for more info.
+struct FormFieldData::FillData {
+  FillData();
+  explicit FillData(const FormFieldData& field);
+
+  ~FillData();
+
+  // The field value to be set by the renderer.
+  std::u16string value;
+
+  // Uniquely identifies the DOM element that this field represents among the
+  // field DOM elements in the same frame.
+  FieldRendererId renderer_id;
+
+  // The unique identifier of the section (e.g. billing vs. shipping address)
+  // of this field.
+  // TODO(crbug.com/1441410): Remove when `kAutofillUndo` launches.
+  Section section;
+
+  // Whether the renderer should mark the field as autofilled or not. In most
+  // filling cases this will be true. However for the case of UndoAutofill we
+  // might wanna revert a field state into not autofilled, in which case this
+  // would be false.
+  bool is_autofilled = false;
+
+  // When sent from browser to renderer, this bit indicates whether a field
+  // should be filled even though it is already considered autofilled OR
+  // user modified.
+  // TODO(crbug.com/1502814): Remove.
+  bool force_override = false;
+};
+
 std::string_view FormControlTypeToString(FormControlType type);
 
 // Consider using the FormControlType enum instead.

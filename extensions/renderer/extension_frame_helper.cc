@@ -16,7 +16,7 @@
 #include "extensions/common/api/messaging/port_id.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension_features.h"
-#include "extensions/common/extension_messages.h"
+#include "extensions/common/extension_id.h"
 #include "extensions/common/manifest_handlers/background_info.h"
 #include "extensions/renderer/api/messaging/native_renderer_messaging_service.h"
 #include "extensions/renderer/console.h"
@@ -58,7 +58,7 @@ bool RenderFrameMatches(const ExtensionFrameHelper* frame_helper,
                         mojom::ViewType match_view_type,
                         int match_window_id,
                         int match_tab_id,
-                        const std::string& match_extension_id) {
+                        const ExtensionId& match_extension_id) {
   if (match_view_type != mojom::ViewType::kInvalid &&
       frame_helper->view_type() != match_view_type)
     return false;
@@ -157,7 +157,7 @@ ExtensionFrameHelper::~ExtensionFrameHelper() {
 
 // static
 std::vector<content::RenderFrame*> ExtensionFrameHelper::GetExtensionFrames(
-    const std::string& extension_id,
+    const ExtensionId& extension_id,
     int browser_window_id,
     int tab_id,
     mojom::ViewType view_type) {
@@ -173,7 +173,7 @@ std::vector<content::RenderFrame*> ExtensionFrameHelper::GetExtensionFrames(
 // static
 v8::Local<v8::Array> ExtensionFrameHelper::GetV8MainFrames(
     v8::Local<v8::Context> context,
-    const std::string& extension_id,
+    const ExtensionId& extension_id,
     int browser_window_id,
     int tab_id,
     mojom::ViewType view_type) {
@@ -209,7 +209,7 @@ v8::Local<v8::Array> ExtensionFrameHelper::GetV8MainFrames(
 
 // static
 content::RenderFrame* ExtensionFrameHelper::GetBackgroundPageFrame(
-    const std::string& extension_id) {
+    const ExtensionId& extension_id) {
   for (const ExtensionFrameHelper* helper : g_frame_helpers.Get()) {
     if (RenderFrameMatches(helper, mojom::ViewType::kExtensionBackgroundPage,
                            extension_misc::kUnknownWindowId,
@@ -226,7 +226,7 @@ content::RenderFrame* ExtensionFrameHelper::GetBackgroundPageFrame(
 
 v8::Local<v8::Value> ExtensionFrameHelper::GetV8BackgroundPageMainFrame(
     v8::Isolate* isolate,
-    const std::string& extension_id) {
+    const ExtensionId& extension_id) {
   content::RenderFrame* main_frame = GetBackgroundPageFrame(extension_id);
   blink::WebLocalFrame* web_frame =
       main_frame ? main_frame->GetWebFrame() : nullptr;
@@ -442,68 +442,6 @@ void ExtensionFrameHelper::WillReleaseScriptContext(
       render_frame()->GetWebFrame(), context, world_id);
 }
 
-#if BUILDFLAG(ENABLE_EXTENSIONS_LEGACY_IPC)
-bool ExtensionFrameHelper::OnMessageReceived(const IPC::Message& message) {
-  bool handled = true;
-  IPC_BEGIN_MESSAGE_MAP(ExtensionFrameHelper, message)
-    IPC_MESSAGE_HANDLER(ExtensionMsg_ValidateMessagePort,
-                        OnExtensionValidateMessagePort)
-    IPC_MESSAGE_HANDLER(ExtensionMsg_DispatchOnConnect,
-                        OnExtensionDispatchOnConnect)
-    IPC_MESSAGE_HANDLER(ExtensionMsg_DeliverMessage, OnExtensionDeliverMessage)
-    IPC_MESSAGE_HANDLER(ExtensionMsg_DispatchOnDisconnect,
-                        OnExtensionDispatchOnDisconnect)
-    IPC_MESSAGE_UNHANDLED(handled = false)
-  IPC_END_MESSAGE_MAP()
-  return handled;
-}
-
-void ExtensionFrameHelper::OnExtensionValidateMessagePort(int worker_thread_id,
-                                                          const PortId& id) {
-  DCHECK_EQ(kMainThreadId, worker_thread_id);
-  extension_dispatcher_->bindings_system()
-      ->messaging_service()
-      ->ValidateMessagePort(
-          extension_dispatcher_->script_context_set_iterator(), id,
-          render_frame());
-}
-
-void ExtensionFrameHelper::OnExtensionDispatchOnConnect(
-    int worker_thread_id,
-    const ExtensionMsg_OnConnectData& connect_data) {
-  DCHECK_EQ(kMainThreadId, worker_thread_id);
-  extension_dispatcher_->bindings_system()
-      ->messaging_service()
-      ->DispatchOnConnect(extension_dispatcher_->script_context_set_iterator(),
-                          connect_data.target_port_id,
-                          connect_data.channel_type, connect_data.channel_name,
-                          connect_data.tab_source,
-                          connect_data.external_connection_info, {}, {},
-                          render_frame(), base::DoNothing());
-}
-
-void ExtensionFrameHelper::OnExtensionDeliverMessage(int worker_thread_id,
-                                                     const PortId& target_id,
-                                                     const Message& message) {
-  DCHECK_EQ(kMainThreadId, worker_thread_id);
-  extension_dispatcher_->bindings_system()->messaging_service()->DeliverMessage(
-      extension_dispatcher_->script_context_set_iterator(), target_id, message,
-      render_frame());
-}
-
-void ExtensionFrameHelper::OnExtensionDispatchOnDisconnect(
-    int worker_thread_id,
-    const PortId& id,
-    const std::string& error_message) {
-  DCHECK_EQ(kMainThreadId, worker_thread_id);
-  extension_dispatcher_->bindings_system()
-      ->messaging_service()
-      ->DispatchOnDisconnect(
-          extension_dispatcher_->script_context_set_iterator(), id,
-          error_message, render_frame());
-}
-#endif
-
 void ExtensionFrameHelper::SetTabId(int32_t tab_id) {
   CHECK_EQ(tab_id_, -1);
   CHECK_GE(tab_id, 0);
@@ -516,7 +454,7 @@ void ExtensionFrameHelper::NotifyRenderViewType(mojom::ViewType type) {
   view_type_ = type;
 }
 
-void ExtensionFrameHelper::MessageInvoke(const std::string& extension_id,
+void ExtensionFrameHelper::MessageInvoke(const ExtensionId& extension_id,
                                          const std::string& module_name,
                                          const std::string& function_name,
                                          base::Value::List args) {
@@ -587,7 +525,7 @@ void ExtensionFrameHelper::SetSpatialNavigationEnabled(bool enabled) {
 
 void ExtensionFrameHelper::ExecuteDeclarativeScript(
     int32_t tab_id,
-    const std::string& extension_id,
+    const ExtensionId& extension_id,
     const std::string& script_id,
     const GURL& url) {
   // TODO(https://crbug.com/1186220): URL-checking isn't the best approach to
@@ -613,9 +551,6 @@ void ExtensionFrameHelper::DispatchOnConnect(
     mojo::PendingAssociatedReceiver<extensions::mojom::MessagePort> port,
     mojo::PendingAssociatedRemote<extensions::mojom::MessagePortHost> port_host,
     DispatchOnConnectCallback callback) {
-#if BUILDFLAG(ENABLE_EXTENSIONS_LEGACY_IPC)
-  CHECK(false);
-#else
   extension_dispatcher_->bindings_system()
       ->messaging_service()
       ->DispatchOnConnect(extension_dispatcher_->script_context_set_iterator(),
@@ -623,7 +558,6 @@ void ExtensionFrameHelper::DispatchOnConnect(
                           *external_connection_info, std::move(port),
                           std::move(port_host), render_frame(),
                           std::move(callback));
-#endif
 }
 
 void ExtensionFrameHelper::NotifyDidCreateScriptContext(int32_t world_id) {

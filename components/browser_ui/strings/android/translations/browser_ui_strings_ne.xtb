@@ -5,6 +5,7 @@
 <translation id="1036348656032585052">अफ गर्नुहोस्</translation>
 <translation id="1044891598689252897">साइटहरू सामान्य रूपमा चल्ने छन्</translation>
 <translation id="1073417869336441572">हामीलाई तपाईंले किन तेस्रो पक्षीय कुकीहरू प्रयोग गर्ने अनुमति दिनुभयो भन्ने कुराका बारेमा बताएर Chrome को गुणस्तर सुधार गर्न सघाउनुहोस् <ph name="BEGIN_LINK" />प्रतिक्रिया पठाउनुहोस्<ph name="END_LINK" /></translation>
+<translation id="1113435009358629918">मूल्य घटेको जानकारी दिने कार्ड लुकाउनुहोस्</translation>
 <translation id="1178581264944972037">पज गर्नुहोस्</translation>
 <translation id="1181037720776840403">हटाउनुहोस्</translation>
 <translation id="1192844206376121885">तपाईंले यसो गर्नुभयो भने <ph name="ORIGIN" /> ले भण्डारण गरेका सबै डेटा तथा कुकीहरू मेटिने छन्।</translation>
@@ -21,7 +22,6 @@
 <translation id="1383876407941801731">खोज्नुहोस्</translation>
 <translation id="1384959399684842514">डाउनलोड रोकिएको छ</translation>
 <translation id="1415402041810619267">URL छोटो बनाइयो</translation>
-<translation id="1426410128494586442">हो</translation>
 <translation id="1448064542941920355">जुमको स्तर घटाउनुहोस्</translation>
 <translation id="146867109637325312">{COUNT,plural, =1{<ph name="SITE_COUNT" /> साइट}other{<ph name="SITE_COUNT" /> वटा साइट}}</translation>
 <translation id="1510341833810331442">साइटहरूलाई तपाईंको डिभाइसमा जानकारी सेभ गर्ने अनुमति दिइएको छैन</translation>
@@ -66,6 +66,7 @@
 <translation id="2228071138934252756"><ph name="APP_NAME" /> लाई आफ्नो क्यामेरा प्रयोग गर्न दिन <ph name="BEGIN_LINK" />Android का सेटिङ<ph name="END_LINK" />मा गई क्यामेरा पनि अन गर्नुहोस्।</translation>
 <translation id="2235344399760031203">तेस्रो पक्षीय कुकीहरूमाथि रोक लगाइएको छ</translation>
 <translation id="2238944249568001759">तपाईंले पछिल्लो पटक हेर्नुभएको ट्याबका आधारमा सिफारिस गरिएका खोजहरू</translation>
+<translation id="2241587408274973373">"नयाँ ट्याब" पेजका कार्डहरू</translation>
 <translation id="2241634353105152135">एकपटक मात्र</translation>
 <translation id="2253414712144136228"><ph name="NAME_OF_LIST_ITEM" /> हटाउनुहोस्</translation>
 <translation id="2253989982043948086">{NUM_SELECTED,plural, =1{एउटा साइट ब्लक गरिएको छ}other{# वटा साइट ब्लक गरिएका छन्}}</translation>
@@ -92,6 +93,7 @@
 <translation id="2498359688066513246">मद्दत र प्रतिक्रिया</translation>
 <translation id="2501278716633472235">पछाडि जानुहोस्</translation>
 <translation id="2546283357679194313">कुकीहरू र साइट डाटा</translation>
+<translation id="2550801787432930915">मूल्य घटेको जानकारी दिने कार्ड</translation>
 <translation id="2569468611847789653">{COOKIE_COUNT,plural, =1{१ कुकीमाथि रोक लगाइयो}other{# कुकीहरूमाथि रोक लगाइयो}}</translation>
 <translation id="2570922361219980984">यो डिभाइसको स्थानमाथिको पहुँच पनि निष्क्रिय छ। <ph name="BEGIN_LINK" />Android का सेटिङहरू<ph name="END_LINK" /> मा गई यसलाई अन गर्नुहोस्।</translation>
 <translation id="257931822824936280">विस्तृत गरिएको - संक्षिप्त पार्न क्लिक गर्नुहोस्</translation>
@@ -119,8 +121,8 @@
 <translation id="2968755619301702150">प्रमाणपत्र दर्शक</translation>
 <translation id="2979365474350987274">तेस्रो पक्षीय कुकीहरू सीमित गरिएका छन्</translation>
 <translation id="3008272652534848354">अनुमतिहरू रिसेट गर्नुहोस्</translation>
-<translation id="3013291976881901233">MIDI यन्त्रहरू</translation>
 <translation id="301521992641321250">स्वतः रोक लगाइयो</translation>
+<translation id="3025010840409371499"><ph name="RECENCY" /> <ph name="SEPARATOR" /> <ph name="HOST_NAME" /></translation>
 <translation id="3069226013421428034">निश्चित साइटमा तेस्रो पक्षको खातामार्फत साइन इन गर्न दिनुहोस्।</translation>
 <translation id="3082992102194421695">{COUNT,plural, =1{भोलि म्याद सकिन्छ}other{# दिनमा म्याद सकिन्छ}}</translation>
 <translation id="310297983047869047">अघिल्लो स्लाइड</translation>
@@ -190,7 +192,7 @@
 <translation id="4169549551965910670">USB डिभाइसमा कनेक्ट गर्नुहोस्</translation>
 <translation id="4194328954146351878">साइटहरूलाई NFC डिभाइसमा भएका जानकारी हेर्ने र ती जानकारी परिवर्तन गर्ने अनुमति दिनुअघि मलाई सोधियोस् (सिफारिस गरिएको)</translation>
 <translation id="4200726100658658164">लोकेसन सेटिङ खोल्नुहोस्</translation>
-<translation id="4212246570487010370">ब्राउजिङ जारी राख्नुहोस्</translation>
+<translation id="4206661981211220935"><ph name="RECENCY" /> <ph name="SEPARATOR" /> <ph name="FROM_DEVICE" /> बाट</translation>
 <translation id="4226663524361240545">सूचनाहरूले गर्दा यन्त्र कम्पन गर्न सक्छ</translation>
 <translation id="4259722352634471385">नेभिगेशन रोकियो: <ph name="URL" /></translation>
 <translation id="4278390842282768270">अनुमति प्राप्त</translation>
@@ -211,6 +213,7 @@
 <translation id="4566417217121906555">माइक्रोफोन म्युट गर्नुहोस्</translation>
 <translation id="4570913071927164677">विवरणहरू</translation>
 <translation id="4598549027014564149">इन्कोग्निटो मोडमा ब्राउज गर्दा साइटहरूले सम्बन्धित साइटहरूलगायत सबै साइटहरूमा तपाईंले ब्राउजर प्रयोग गरी गर्नुभएको क्रियाकलाप हेर्न तपाईंका कुकीहरू प्रयोग गर्न सक्दैनन्। तपाईंले ब्राउजर प्रयोग गरी गर्नुभएको क्रियाकलाप विज्ञापनहरू पर्सनलाइज गर्नेलगायतका अन्य कार्यहरू गर्न प्रयोग गरिँदैन। केही साइटका सुविधाहरूले काम नगर्न सक्छन्।</translation>
+<translation id="4619615317237390068">अन्य यन्त्रहरूका ट्याबहरू</translation>
 <translation id="4644713492825682049">मेटाउनुहोस् र रिसेट गर्नुहोस्</translation>
 <translation id="4645575059429386691">तपाईँको अविभावक द्वारा प्रबन्ध गरिएको</translation>
 <translation id="4670064810192446073">भर्चुअल रियालिटी</translation>
@@ -328,6 +331,7 @@
 <translation id="6405650995156823521"><ph name="FIRST_PART" /> • <ph name="SECOND_PART" /></translation>
 <translation id="6439114592976064011">साइटहरूलाई भर्चुअल रियालिटी चल्ने तपाईंको यन्त्र र त्यसमा भएको डेटा प्रयोग गर्न रोक लगाउनुहोस्</translation>
 <translation id="6447842834002726250">कुकीहरू</translation>
+<translation id="6452138246455930388">तपाईंको खुला ट्याब <ph name="DOMAIN_NAME" /> मा भएको <ph name="PRODUCT_NAME" /> को मूल्य <ph name="OLD_PRICE" /> बाट घटेर <ph name="NEW_PRICE" /> पुगेको छ</translation>
 <translation id="6500423977866688905">विन्डो सानो भएका बेला मोबाइल भ्यूमा हेर्ने अनुरोध गर्नुहोस्</translation>
 <translation id="6527303717912515753">साझा गर्नुहोस्</translation>
 <translation id="652937045869844725">तेस्रो पक्षीय कुकीहरू प्रयोग गर्ने अनुमति दिनुहोस्। यसको अर्थ सुरक्षाको स्तर कम हुन्छ तर साइटका सुविधाहरूले काम गर्न सक्छन्</translation>
@@ -351,6 +355,7 @@
 <translation id="6790428901817661496">प्ले गर्नुहोस्</translation>
 <translation id="6818926723028410516">वस्तुहरू छनाैट गर्नुहोस्</translation>
 <translation id="6864395892908308021">यस यन्त्रले NFC पढ्न सक्दैन</translation>
+<translation id="6867014948848323204"><ph name="FROM_DEVICE" /> बाट</translation>
 <translation id="6912998170423641340">साइटहरूलाई क्लिपबोर्डका पाठ तथा फोटो पढ्नबाट रोक लगाउनुहोस्</translation>
 <translation id="6945221475159498467">चयन गर्नुहोस्</translation>
 <translation id="6950072572526089586">तपाईंले खोल्ने साइटले अपेक्षा गरेअनुसार काम गर्न (उदाहरणका लागि, तपाईंलाई कुनै साइटमा साइन इन अवस्थामै राखिराख्न वा तपाईंको सपिङ कार्टमा भएका सामग्रीहरू सेभ गर्न) सकोस् भन्नाका लागि तपाईंको हालको गतिविधिका बारेमा जानकारी सेभ गर्न सक्छ। साइटहरूले प्रायः जसो तपाईंको डिभाइसमा यो जानकारी केही समयका लागि सेभ गर्छन्।</translation>
@@ -363,7 +368,6 @@
 <translation id="7053983685419859001">रोक्नुहोस्</translation>
 <translation id="7066151586745993502">{NUM_SELECTED,plural, =1{१ चयन गरियो}other{# चयन गरिए}}</translation>
 <translation id="7087918508125750058"><ph name="ITEM_COUNT" /> चयन गरिए।  विकल्पहरू स्क्रिनको शीर्षभागको नजिकै उपलब्ध छन्</translation>
-<translation id="7137403271056944713">MIDI डिभाइस कन्ट्रोल/रिप्रोग्राम</translation>
 <translation id="7141896414559753902">साइटहरूलाई पपअपहरू देखाउन र रिडिरेक्ट गर्नबाट रोक्नुहोस् (सिफारिस गरिएको)</translation>
 <translation id="7176368934862295254"><ph name="KILOBYTES" /> के.बि.</translation>
 <translation id="7180611975245234373">ताजा गर्नुहोस्</translation>
@@ -399,9 +403,11 @@
 <translation id="7667547420449112975">The Wonderful Wizard of Oz</translation>
 <translation id="7684642910516280563">कुनै साइटलाई तेस्रो पक्षीय कुकीहरू प्रयोग गर्ने अनुमति नदिनुहोस्</translation>
 <translation id="7719367874908701697">पृष्ठ जुम</translation>
+<translation id="7759147511335618829">MIDI डिभाइस कन्ट्रोल र रिप्रोग्राम</translation>
 <translation id="7781829728241885113">हिजो</translation>
 <translation id="7791543448312431591">थप्नुहोस्</translation>
-<translation id="780301667611848630">भयो, धन्यवाद</translation>
+<translation id="7801888679188438140">{TILE_COUNT,plural, =1{यो ट्याब प्रयोग गरेर जारी राख्नुहोस्}other{यी ट्याबहरू प्रयोग गरेर जारी राख्नुहोस्}}</translation>
+<translation id="780301667611848630">पर्दैन, धन्यवाद</translation>
 <translation id="7804248752222191302">कुनै साइटले तपाईंको क्यामेरा प्रयोग गर्दै छ</translation>
 <translation id="7807060072011926525">Google ले प्रदान गरेको</translation>
 <translation id="7822573154188733812">Chrome ले साइटहरूलाई तपाईंले ब्राउज गरिरहेका बेला तपाईंलाई ट्र्याक गर्ने प्रयोजनका लागि तेस्रो पक्षीय कुकीहरू प्रयोग गर्न दिँदैन। <ph name="BEGIN_LINK" />ट्र्याकिङबाट सुरक्षित राख्ने सुविधा व्यवस्थापन गर्न<ph name="END_LINK" /> सेटिङमा जानुहोस्।</translation>
@@ -477,6 +483,7 @@
 <translation id="8803526663383843427">अन भएका बेला</translation>
 <translation id="8805385115381080995">कुनै साइटले तपाईंलाई तपाईं वास्तविक व्यक्ति हो भन्ने कुरा पुष्टि गर्न लगाउने सम्भावना कम भएकाले अझ छिटो ब्राउज गर्न सकिन्छ</translation>
 <translation id="8816026460808729765">साइटहरूलाई सेन्सरहरूमाथि पहुँच राख्न नदिनुहोस्</translation>
+<translation id="8843699287283948910">अन्य डिभाइसहरूमा यी ट्याबहरू नदेखिने बनाउनुहोस्</translation>
 <translation id="8847988622838149491">USB</translation>
 <translation id="8874790741333031443">केही बेरका लागि तेस्रो पक्षीय कुकीहरू प्रयोग गर्ने अनुमति दिनुहोस्। यसो गर्दा ब्राउजिङको सुरक्षाको स्तर कम हुन्छ तर साइटका सुविधाहरूले गर्नु पर्ने जसरी काम गर्न सक्छन्।</translation>
 <translation id="8889294078294184559">तपाईंले ब्राउज गरिरहँदा साइटहरूले तपाईंले यसअघि खोलेको साइटका मद्दतले तपाईं वास्तविक व्यक्ति हो कि होइन भन्ने कुरा पुष्टि गर्न Chrome को सहायता लिन सक्छन्</translation>

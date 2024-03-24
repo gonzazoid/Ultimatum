@@ -6,6 +6,7 @@
 #define NET_SOCKET_CONNECT_JOB_H_
 
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 
@@ -29,7 +30,6 @@
 #include "net/socket/ssl_client_socket.h"
 #include "net/ssl/ssl_config.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_versions.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net {
 
@@ -46,7 +46,7 @@ class NetLog;
 class NetLogWithSource;
 class NetworkQualityEstimator;
 class ProxyDelegate;
-class QuicStreamFactory;
+class QuicSessionPool;
 class SocketPerformanceWatcherFactory;
 class SocketTag;
 class SpdySessionPool;
@@ -60,6 +60,8 @@ class WebSocketEndpointLockManager;
 // ConnectJobs that wrap other ConnectJobs typically have different values for
 // those.
 struct NET_EXPORT_PRIVATE CommonConnectJobParams {
+  // TODO(https://crbug.com/1505765): Look into passing in HttpNetworkSession
+  // instead.
   CommonConnectJobParams(
       ClientSocketFactory* client_socket_factory,
       HostResolver* host_resolver,
@@ -67,7 +69,7 @@ struct NET_EXPORT_PRIVATE CommonConnectJobParams {
       HttpAuthHandlerFactory* http_auth_handler_factory,
       SpdySessionPool* spdy_session_pool,
       const quic::ParsedQuicVersionVector* quic_supported_versions,
-      QuicStreamFactory* quic_stream_factory,
+      QuicSessionPool* quic_session_pool,
       ProxyDelegate* proxy_delegate,
       const HttpUserAgentSettings* http_user_agent_settings,
       SSLClientContext* ssl_client_context,
@@ -78,7 +80,8 @@ struct NET_EXPORT_PRIVATE CommonConnectJobParams {
       HttpServerProperties* http_server_properties,
       const NextProtoVector* alpn_protos,
       const SSLConfig::ApplicationSettings* application_settings,
-      const bool* ignore_certificate_errors);
+      const bool* ignore_certificate_errors,
+      const bool* enable_early_data);
   CommonConnectJobParams(const CommonConnectJobParams& other);
   ~CommonConnectJobParams();
 
@@ -90,7 +93,7 @@ struct NET_EXPORT_PRIVATE CommonConnectJobParams {
   raw_ptr<HttpAuthHandlerFactory> http_auth_handler_factory;
   raw_ptr<SpdySessionPool> spdy_session_pool;
   raw_ptr<const quic::ParsedQuicVersionVector> quic_supported_versions;
-  raw_ptr<QuicStreamFactory> quic_stream_factory;
+  raw_ptr<QuicSessionPool> quic_session_pool;
   raw_ptr<ProxyDelegate> proxy_delegate;
   raw_ptr<const HttpUserAgentSettings> http_user_agent_settings;
   raw_ptr<SSLClientContext> ssl_client_context;
@@ -106,6 +109,7 @@ struct NET_EXPORT_PRIVATE CommonConnectJobParams {
   raw_ptr<const NextProtoVector> alpn_protos;
   raw_ptr<const SSLConfig::ApplicationSettings> application_settings;
   raw_ptr<const bool> ignore_certificate_errors;
+  raw_ptr<const bool> enable_early_data;
 };
 
 // When a host resolution completes, OnHostResolutionCallback() is invoked. If
@@ -250,9 +254,9 @@ class NET_EXPORT_PRIVATE ConnectJob {
   // Returns the `HostResolverEndpointResult` structure corresponding to the
   // chosen route. Should only be called on a successful connect. If the
   // `ConnectJob` does not make DNS queries, or does not use the SVCB/HTTPS
-  // record, it may return `absl::nullopt`, to avoid callers getting confused by
+  // record, it may return `std::nullopt`, to avoid callers getting confused by
   // an empty `IPEndPoint` list.
-  virtual absl::optional<HostResolverEndpointResult>
+  virtual std::optional<HostResolverEndpointResult>
   GetHostResolverEndpointResult() const;
 
   const LoadTimingInfo::ConnectTiming& connect_timing() const {
@@ -295,7 +299,7 @@ class NET_EXPORT_PRIVATE ConnectJob {
   }
 
   void SetSocket(std::unique_ptr<StreamSocket> socket,
-                 absl::optional<std::set<std::string>> dns_aliases);
+                 std::optional<std::set<std::string>> dns_aliases);
   void NotifyDelegateOfCompletion(int rv);
   void NotifyDelegateOfProxyAuth(const HttpResponseInfo& response,
                                  HttpAuthController* auth_controller,

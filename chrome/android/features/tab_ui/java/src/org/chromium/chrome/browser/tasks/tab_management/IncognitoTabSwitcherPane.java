@@ -16,6 +16,7 @@ import org.chromium.base.supplier.Supplier;
 import org.chromium.chrome.browser.hub.DelegateButtonData;
 import org.chromium.chrome.browser.hub.FullButtonData;
 import org.chromium.chrome.browser.hub.HubColorScheme;
+import org.chromium.chrome.browser.hub.HubFieldTrial;
 import org.chromium.chrome.browser.hub.Pane;
 import org.chromium.chrome.browser.hub.PaneHubController;
 import org.chromium.chrome.browser.hub.PaneId;
@@ -26,8 +27,10 @@ import org.chromium.chrome.browser.tabmodel.IncognitoTabModel;
 import org.chromium.chrome.browser.tabmodel.IncognitoTabModelObserver;
 import org.chromium.chrome.browser.tabmodel.TabList;
 import org.chromium.chrome.browser.tabmodel.TabModelFilter;
+import org.chromium.chrome.browser.tabmodel.TabModelUtils;
 import org.chromium.chrome.tab_ui.R;
-import org.chromium.components.browser_ui.widget.MenuOrKeyboardActionController;
+
+import java.util.function.DoubleConsumer;
 
 /** A {@link Pane} representing the incognito tab switcher. */
 public class IncognitoTabSwitcherPane extends TabSwitcherPaneBase {
@@ -61,7 +64,7 @@ public class IncognitoTabSwitcherPane extends TabSwitcherPaneBase {
                     TabModelFilter incognitoTabModelFilter = mIncognitoTabModelFilterSupplier.get();
                     @Nullable
                     TabSwitcherPaneCoordinator coordinator = getTabSwitcherPaneCoordinator();
-                    if (!isVisible()
+                    if (!getIsVisibleSupplier().get()
                             || coordinator == null
                             || !incognitoTabModelFilter.isCurrentlySelectedFilter()) {
                         return;
@@ -71,7 +74,7 @@ public class IncognitoTabSwitcherPane extends TabSwitcherPaneBase {
                     coordinator.setInitialScrollIndexOffset();
                     coordinator.requestAccessibilityFocusOnCurrentTab();
 
-                    mNewTabButtonDataSupplier.set(mEnabledNewTabButtonData);
+                    setNewTabButtonEnabledState(/* enabled= */ true);
                 }
 
                 @Override
@@ -92,24 +95,19 @@ public class IncognitoTabSwitcherPane extends TabSwitcherPaneBase {
     /**
      * @param context The activity context.
      * @param factory The factory used to construct {@link TabSwitcherPaneCoordinator}s.
-     * @param incognitoTabModelFilter The incognito tab model filter.
+     * @param incognitoTabModelFilterSupplier The incognito tab model filter.
      * @param newTabButtonClickListener The {@link OnClickListener} for the new tab button.
-     * @param menuOrKeyboardActionController Allows access to menu or keyboard actions.
      * @param incognitoReauthControllerSupplier Supplier for the incognito reauth controller.
+     * @param onToolbarAlphaChange Observer to notify when alpha changes during animations.
      */
     IncognitoTabSwitcherPane(
             @NonNull Context context,
             @NonNull TabSwitcherPaneCoordinatorFactory factory,
             @NonNull Supplier<TabModelFilter> incognitoTabModelFilterSupplier,
             @NonNull OnClickListener newTabButtonClickListener,
-            @NonNull MenuOrKeyboardActionController menuOrKeyboardActionController,
-            @Nullable
-                    OneshotSupplier<IncognitoReauthController> incognitoReauthControllerSupplier) {
-        super(
-                context,
-                factory,
-                menuOrKeyboardActionController,
-                /* isIncognito= */ true);
+            @Nullable OneshotSupplier<IncognitoReauthController> incognitoReauthControllerSupplier,
+            @NonNull DoubleConsumer onToolbarAlphaChange) {
+        super(context, factory, /* isIncognito= */ true, onToolbarAlphaChange);
 
         mIncognitoTabModelFilterSupplier = incognitoTabModelFilterSupplier;
 
@@ -117,8 +115,8 @@ public class IncognitoTabSwitcherPane extends TabSwitcherPaneBase {
         // just say "Incognito".
         mReferenceButtonData =
                 new ResourceButtonData(
-                        R.string.accessibility_tab_switcher,
-                        R.string.accessibility_tab_switcher,
+                        R.string.accessibility_tab_switcher_incognito_stack,
+                        R.string.accessibility_tab_switcher_incognito_stack,
                         R.drawable.incognito_small);
 
         ResourceButtonData newTabButtonData =
@@ -140,9 +138,9 @@ public class IncognitoTabSwitcherPane extends TabSwitcherPaneBase {
                                 incognitoReauthController.addIncognitoReauthCallback(
                                         mIncognitoReauthCallback);
                             }));
-            mNewTabButtonDataSupplier.set(mDisabledNewTabButtonData);
+            setNewTabButtonEnabledState(/* enabled= */ false);
         } else {
-            mNewTabButtonDataSupplier.set(mEnabledNewTabButtonData);
+            setNewTabButtonEnabledState(/* enabled= */ true);
         }
     }
 
@@ -188,24 +186,44 @@ public class IncognitoTabSwitcherPane extends TabSwitcherPaneBase {
     }
 
     @Override
+    public int getCurrentTabId() {
+        return TabModelUtils.getCurrentTabId(mIncognitoTabModelFilterSupplier.get().getTabModel());
+    }
+
+    @Override
     public boolean resetWithTabList(@Nullable TabList tabList, boolean quickMode) {
         @Nullable TabSwitcherPaneCoordinator coordinator = getTabSwitcherPaneCoordinator();
         if (coordinator == null) return false;
 
+        @Nullable TabModelFilter filter = mIncognitoTabModelFilterSupplier.get();
+        if (filter == null || !filter.isTabModelRestored()) {
+            // The tab list is trying to show without the filter being ready. This happens when
+            // first trying to show a the pane. If this happens an attempt to show will be made
+            // when the filter's restoreCompleted() method is invoked in TabSwitcherPaneMediator.
+            // Start a timer to measure how long it takes for tab state to be initialized and for
+            // this UI to show i.e. isTabModelRestored becomes true. This timer will emit a
+            // histogram when we successfully show. This timer is cancelled if: 1) the pane becomes
+            // invisible in TabSwitcherPaneBase#notifyLoadHint, or 2) the filter becomes ready and
+            // nothing gets shown.
+            startWaitForTabStateInitializedTimer();
+            return false;
+        }
+
         boolean isNotVisibleOrSelected =
-                !isVisible() || !mIncognitoTabModelFilterSupplier.get().isCurrentlySelectedFilter();
+                !getIsVisibleSupplier().get() || !filter.isCurrentlySelectedFilter();
         boolean incognitoReauthShowing =
                 mIncognitoReauthController != null
                         && mIncognitoReauthController.isIncognitoReauthPending();
 
         if (isNotVisibleOrSelected || incognitoReauthShowing) {
             coordinator.resetWithTabList(null);
+            cancelWaitForTabStateInitializedTimer();
         } else {
             coordinator.resetWithTabList(tabList);
+            finishWaitForTabStateInitializedTimer();
         }
 
-        mNewTabButtonDataSupplier.set(
-                incognitoReauthShowing ? mDisabledNewTabButtonData : mEnabledNewTabButtonData);
+        setNewTabButtonEnabledState(/* enabled= */ !incognitoReauthShowing);
         return true;
     }
 
@@ -225,5 +243,15 @@ public class IncognitoTabSwitcherPane extends TabSwitcherPaneBase {
         TabModelFilter incognitoTabModelFilter = mIncognitoTabModelFilterSupplier.get();
         assert incognitoTabModelFilter != null;
         return (IncognitoTabModel) incognitoTabModelFilter.getTabModel();
+    }
+
+    private void setNewTabButtonEnabledState(boolean enabled) {
+        if (enabled) {
+            mNewTabButtonDataSupplier.set(mEnabledNewTabButtonData);
+        } else {
+            // The FAB may overlap the reauth buttons. So just remove it by nulling instead.
+            mNewTabButtonDataSupplier.set(
+                    HubFieldTrial.usesFloatActionButton() ? null : mDisabledNewTabButtonData);
+        }
     }
 }

@@ -42,10 +42,10 @@
 #include "cc/input/overscroll_behavior.h"
 #include "cc/trees/layer_tree_host.h"
 #include "cc/trees/paint_holding_reason.h"
-#include "services/device/public/mojom/device_posture_provider.mojom-blink.h"
 #include "services/viz/public/mojom/hit_test/input_target_client.mojom-blink.h"
 #include "third_party/blink/public/common/input/web_coalesced_input_event.h"
 #include "third_party/blink/public/common/input/web_gesture_device.h"
+#include "third_party/blink/public/mojom/device_posture/device_posture_provider.mojom-blink.h"
 #include "third_party/blink/public/mojom/drag/drag.mojom-blink.h"
 #include "third_party/blink/public/mojom/input/input_handler.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/input/stylus_writing_gesture.mojom-blink.h"
@@ -263,8 +263,8 @@ class CORE_EXPORT WebFrameWidgetImpl
   GetLastVirtualKeyboardVisibilityRequest() override;
   bool ShouldSuppressKeyboardForFocusedElement() override;
   void GetEditContextBoundsInWindow(
-      absl::optional<gfx::Rect>* control_bounds,
-      absl::optional<gfx::Rect>* selection_bounds) override;
+      std::optional<gfx::Rect>* control_bounds,
+      std::optional<gfx::Rect>* selection_bounds) override;
   int32_t ComputeWebTextInputNextPreviousFlags() override;
   void ResetVirtualKeyboardVisibilityRequest() override;
   bool GetSelectionBoundsInWindow(gfx::Rect* focus,
@@ -318,7 +318,7 @@ class CORE_EXPORT WebFrameWidgetImpl
                               int relative_cursor_pos) override;
   void ImeFinishComposingTextForPlugin(bool keep_selection) override;
   float GetCompositingScaleFactor() override;
-  const cc::LayerTreeDebugState& GetLayerTreeDebugState() override;
+  const cc::LayerTreeDebugState* GetLayerTreeDebugState() override;
   void SetLayerTreeDebugState(const cc::LayerTreeDebugState& state) override;
   void SetMayThrottleIfUndrawnFrames(
       bool may_throttle_if_undrawn_frames) override;
@@ -450,11 +450,12 @@ class CORE_EXPORT WebFrameWidgetImpl
                        const gfx::Point& location) override;
   void SetViewportIntersection(
       mojom::blink::ViewportIntersectionStatePtr intersection_state,
-      const absl::optional<VisualProperties>& visual_properties) override;
+      const std::optional<VisualProperties>& visual_properties) override;
   void DragSourceEndedAt(const gfx::PointF& point_in_viewport,
                          const gfx::PointF& screen_point,
                          ui::mojom::blink::DragOperation,
                          base::OnceClosure callback) override;
+  void OnStartStylusWriting(OnStartStylusWritingCallback callback) override;
 
   // mojom::blink::FrameWidgetInputHandler overrides:
   void HandleStylusWritingGestureAction(
@@ -470,7 +471,7 @@ class CORE_EXPORT WebFrameWidgetImpl
 
   void SetResizable(bool);
 
-  absl::optional<gfx::Point> GetAndResetContextMenuLocation();
+  std::optional<gfx::Point> GetAndResetContextMenuLocation();
 
   void BindWidgetCompositor(
       mojo::PendingReceiver<mojom::blink::WidgetCompositor> receiver) override;
@@ -539,7 +540,7 @@ class CORE_EXPORT WebFrameWidgetImpl
   // compositing. This is is max texture size for GPU compositing and a browser
   // chosen limit in software mode.
   // Returns null if the compositing stack has not been initialized yet.
-  absl::optional<int> GetMaxRenderBufferBounds() const;
+  std::optional<int> GetMaxRenderBufferBounds() const;
 
   // Prevents any updates to the input for the layer tree, and the layer tree
   // itself, and the layer tree from becoming visible.
@@ -661,7 +662,7 @@ class CORE_EXPORT WebFrameWidgetImpl
   void UpdateCompositorViewportRect(
       const gfx::Rect& compositor_viewport_pixel_rect);
   void OverrideDevicePostureForEmulation(
-      device::mojom::blink::DevicePostureType device_posture_param);
+      mojom::blink::DevicePostureType device_posture_param);
   void DisableDevicePostureOverrideForEmulation();
   void SetWindowSegments(const std::vector<gfx::Rect>& window_segments);
   viz::FrameSinkId GetFrameSinkIdAtPoint(const gfx::PointF& point,
@@ -697,6 +698,9 @@ class CORE_EXPORT WebFrameWidgetImpl
   bool WillBeDestroyed() const;
 
   bool IsScrollGestureActive() const;
+
+  // Request a new `viz::LocalSurfaceId` on the compositor thread.
+  void RequestNewLocalSurfaceId();
 
  protected:
   // WidgetBaseClient overrides:
@@ -770,7 +774,7 @@ class CORE_EXPORT WebFrameWidgetImpl
   void DidUpdateSurfaceAndScreen(
       const display::ScreenInfos& previous_original_screen_infos) override;
   gfx::Rect ViewportVisibleRect() override;
-  absl::optional<display::mojom::blink::ScreenOrientation>
+  std::optional<display::mojom::blink::ScreenOrientation>
   ScreenOrientationOverride() override;
   void WasHidden() override;
   void RunPaintBenchmark(int repeat_count,
@@ -798,7 +802,6 @@ class CORE_EXPORT WebFrameWidgetImpl
                       uint32_t key_modifiers,
                       base::OnceClosure callback) override;
   void DragSourceSystemDragEnded() override;
-  void OnStartStylusWriting(OnStartStylusWritingCallback callback) override;
   void SetBackgroundOpaque(bool opaque) override;
   void SetActive(bool active) override;
   // For both mainframe and childframe change the text direction of the
@@ -895,6 +898,7 @@ class CORE_EXPORT WebFrameWidgetImpl
   void SendOverscrollEventFromImplSide(const gfx::Vector2dF& overscroll_delta,
                                        cc::ElementId scroll_latched_element_id);
   void SendEndOfScrollEvents(bool affects_outer_viewport,
+                             bool affects_inner_viewport,
                              cc::ElementId scroll_latched_element_id);
   void SendSnapChangingEventIfNeeded(
       const cc::CompositorCommitData& commit_data);
@@ -1035,7 +1039,7 @@ class CORE_EXPORT WebFrameWidgetImpl
 
   // The size of the widget in viewport coordinates. This is slightly different
   // than the WebViewImpl::size_ since isn't set in auto resize mode.
-  absl::optional<gfx::Size> size_;
+  std::optional<gfx::Size> size_;
 
   // The amount the top-most widget has been resized by the virtual keyboard,
   // in physical pixels.
@@ -1081,11 +1085,11 @@ class CORE_EXPORT WebFrameWidgetImpl
 
   // Different consumers in the browser process makes different assumptions, so
   // must always send the first IPC regardless of value.
-  absl::optional<bool> has_touch_handlers_;
+  std::optional<bool> has_touch_handlers_;
 
   Vector<mojom::blink::EditCommandPtr> edit_commands_;
 
-  absl::optional<gfx::Point> host_context_menu_location_;
+  std::optional<gfx::Point> host_context_menu_location_;
   uint32_t last_capture_sequence_number_ = 0u;
 
   // Indicates whether tab-initiated fullscreen was granted.
@@ -1095,11 +1099,11 @@ class CORE_EXPORT WebFrameWidgetImpl
   bool swipe_to_move_cursor_activated_ = false;
 
   // Set when a measurement begins, reset when the measurement is taken.
-  absl::optional<base::TimeTicks> update_layers_start_time_;
+  std::optional<base::TimeTicks> update_layers_start_time_;
 
   // Metrics for gathering time for commit of compositor frame.
-  absl::optional<base::TimeTicks> commit_compositor_frame_start_time_;
-  absl::optional<base::TimeTicks> next_commit_compositor_frame_start_time_;
+  std::optional<base::TimeTicks> commit_compositor_frame_start_time_;
+  std::optional<base::TimeTicks> next_commit_compositor_frame_start_time_;
 
   // Present when emulation is enabled, only on a main frame's WebFrameWidget.
   // Used to override values given from the browser such as ScreenInfo,
@@ -1155,7 +1159,7 @@ class CORE_EXPORT WebFrameWidgetImpl
     bool should_dispatch_first_layout_after_finished_parsing = false;
     bool should_dispatch_first_layout_after_finished_loading = false;
     // Last background color sent to the browser. Only set for main frames.
-    absl::optional<SkColor> last_background_color;
+    std::optional<SkColor> last_background_color;
     // This bit is used to tell if this is a nested widget (an "inner web
     // contents") like a <webview> or <portal> widget. If false, the widget is
     // the top level widget.

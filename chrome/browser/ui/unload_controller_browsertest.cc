@@ -7,6 +7,7 @@
 #include "base/json/json_reader.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/values.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/policy/policy_test_utils.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
@@ -25,8 +26,13 @@
 #include "components/policy/policy_constants.h"
 #include "components/webapps/common/web_app_id.h"
 #include "content/public/test/browser_test.h"
+#include "third_party/abseil-cpp/absl/cleanup/cleanup.h"
 #include "ui/base/window_open_disposition.h"
 #include "url/gurl.h"
+
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/constants/chromeos_features.h"
+#endif
 
 namespace {
 constexpr char kCalculatorAppUrl[] = "https://calculator.apps.chrome/";
@@ -57,7 +63,11 @@ constexpr bool kShouldPreventClose = false;
 using UnloadControllerPreventCloseTest = PreventCloseTestBase;
 
 IN_PROC_BROWSER_TEST_F(UnloadControllerPreventCloseTest,
-                       PreventCloseEnforedByPolicy) {
+                       PreventCloseEnforcedByPolicy) {
+  const absl::Cleanup policy_cleanup = [this] {
+    SetPolicies(/*web_app_settings=*/"[]", /*web_app_install_force_list=*/"[]");
+  };
+
   InstallPWA(GURL(kCalculatorAppUrl), web_app::kCalculatorAppId);
   SetPoliciesAndWaitUntilInstalled(web_app::kCalculatorAppId,
                                    kPreventCloseEnabledForCalculator,
@@ -71,16 +81,21 @@ IN_PROC_BROWSER_TEST_F(UnloadControllerPreventCloseTest,
   EXPECT_EQ(kShouldPreventClose ? BrowserClosingStatus::kDeniedByPolicy
                                 : BrowserClosingStatus::kPermitted,
             unload_controller.GetBrowserClosingStatus());
-
-  if (kShouldPreventClose) {
-    ClearWebAppSettings();
-    EXPECT_EQ(BrowserClosingStatus::kPermitted,
-              unload_controller.GetBrowserClosingStatus());
-  }
 }
 
 IN_PROC_BROWSER_TEST_F(UnloadControllerPreventCloseTest,
-                       PreventCloseEnforedByPolicyTabbedAppShallBeClosable) {
+                       PreventCloseEnforcedByPolicyTabbedAppShallBeClosable) {
+#if BUILDFLAG(IS_CHROMEOS)
+  if (chromeos::features::IsCrosShortstandEnabled()) {
+    GTEST_SKIP()
+        << "Cannot launch web apps in a tab when Shortstand is enabled.";
+  }
+#endif
+
+  const absl::Cleanup policy_cleanup = [this] {
+    SetPolicies(/*web_app_settings=*/"[]", /*web_app_install_force_list=*/"[]");
+  };
+
   InstallPWA(GURL(kCalculatorAppUrl), web_app::kCalculatorAppId);
   SetPoliciesAndWaitUntilInstalled(web_app::kCalculatorAppId,
                                    kPreventCloseEnabledForCalculator,

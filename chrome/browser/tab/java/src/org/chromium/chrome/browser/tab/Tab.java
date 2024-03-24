@@ -10,12 +10,15 @@ import android.view.View;
 import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 
+import org.chromium.base.Token;
 import org.chromium.base.UserDataHost;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.ui.native_page.NativePage;
 import org.chromium.components.embedder_support.view.ContentView;
 import org.chromium.content_public.browser.LoadUrlParams;
+import org.chromium.content_public.browser.NavigationHandle;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.url.GURL;
@@ -37,6 +40,22 @@ public interface Tab extends TabLifecycle {
     public @interface TabLoadStatus {
         int PAGE_LOAD_FAILED = 0;
         int DEFAULT_PAGE_LOAD = 1;
+    }
+
+    /** The result of the loadUrl. */
+    public static class LoadUrlResult {
+        /** Tab load status. */
+        public final @TabLoadStatus int tabLoadStatus;
+
+        /** NavigationHandle for the loaded url. */
+        public final @Nullable NavigationHandle navigationHandle;
+
+        @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
+        public LoadUrlResult(
+                @TabLoadStatus int tabLoadStatus, @Nullable NavigationHandle navigationHandle) {
+            this.tabLoadStatus = tabLoadStatus;
+            this.navigationHandle = navigationHandle;
+        }
     }
 
     /**
@@ -213,12 +232,13 @@ public interface Tab extends TabLifecycle {
 
     /**
      * Causes this tab to navigate to the specified URL.
+     *
      * @param params parameters describing the url load. Note that it is important to set correct
-     *         page transition as it is used for ranking URLs in the history so the omnibox
-     *         can report suggestions correctly.
-     * @return PAGE_LOAD_FAILED if the URL could not be loaded, otherwise DEFAULT_PAGE_LOAD.
+     *     page transition as it is used for ranking URLs in the history so the omnibox can report
+     *     suggestions correctly.
+     * @return a {@link LoadUrlResult} for this load.
      */
-    int loadUrl(LoadUrlParams params);
+    LoadUrlResult loadUrl(LoadUrlParams params);
 
     /**
      * Loads the tab if it's not loaded (e.g. because it was killed in background).
@@ -293,13 +313,35 @@ public interface Tab extends TabLifecycle {
      */
     int getParentId();
 
+    // TODO(crbug/1524345): deprecate RootId once TabGroupId has finished replacing it.
     /**
-     * @return root identifier for the {@link Tab}
+     * Returns the root identifier for the {@link Tab}. This method will be replaced by {@link
+     * getTabGroupId()} as part of https://crbug.com/1523745.
      */
     int getRootId();
 
-    /** Set the root identifier for the {@link Tab} */
+    /**
+     * Set the root identifier for the {@link Tab}. This method will be replaced by {@link
+     * setTabGroupId()} as part of https://crbug.com/1523745.
+     *
+     * @param rootId The root identifier to use.
+     */
     void setRootId(int rootId);
+
+    /**
+     * Returns the tab group ID of the {@link Tab} or null if not part of a group. Note that during
+     * migration from root ID the TabGroupId may be null until tab state is initialized.
+     */
+    @Nullable
+    Token getTabGroupId();
+
+    /**
+     * Sets the tab group ID of the {@link Tab}.
+     *
+     * @param tabGroupId The {@link Token} to use as the tab group ID or null if not part of a tab
+     *     group.
+     */
+    void setTabGroupId(@Nullable Token tabGroupId);
 
     /**
      * @return user agent type for the {@link Tab}

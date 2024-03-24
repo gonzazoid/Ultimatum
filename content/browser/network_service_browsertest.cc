@@ -308,7 +308,7 @@ IN_PROC_BROWSER_TEST_F(NetworkServiceBrowserTest,
       network::mojom::URLLoaderFactoryParams::New();
   params->process_id = network::mojom::kBrowserProcessId;
   params->automatically_assign_isolation_info = true;
-  params->is_corb_enabled = false;
+  params->is_orb_enabled = false;
   params->is_trusted = true;
   mojo::Remote<network::mojom::URLLoaderFactory> loader_factory;
   network_context->CreateURLLoaderFactory(
@@ -1889,6 +1889,30 @@ IN_PROC_BROWSER_TEST_F(NetworkServiceCookieEncryptionBrowserTest,
 
   ASSERT_EQ(net::OK, LoadBasicRequest(network_context.get(), test_url));
 }
+
+#if BUILDFLAG(IS_WIN)
+class NetworkServiceCodeIntegrityTest : public NetworkServiceBrowserTest {
+ public:
+  NetworkServiceCodeIntegrityTest() {
+    scoped_feature_list_.InitWithFeatures(
+        {sandbox::policy::features::kNetworkServiceCodeIntegrity,
+         sandbox::policy::features::kNetworkServiceSandbox},
+        {});
+    ForceOutOfProcessNetworkService();
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+// This test verifies that the NetworkServiceCodeIntegrity feature works when
+// used in conjunction with the network service sandbox on Windows.
+IN_PROC_BROWSER_TEST_F(NetworkServiceCodeIntegrityTest, Enabled) {
+  // Verify pages load.
+  EXPECT_TRUE(
+      NavigateToURL(shell(), embedded_test_server()->GetURL("/empty.html")));
+}
+#endif  // BUILDFLAG(IS_WIN)
 
 }  // namespace
 

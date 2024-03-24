@@ -50,11 +50,13 @@ class _Speedometer3Story(press_story.PressStory):
                page_set,
                should_filter_suites,
                filtered_suite_names=None,
-               iterations=None):
+               iterations=None,
+               enable_details=False):
     super(_Speedometer3Story, self).__init__(page_set)
     self._should_filter_suites = should_filter_suites
     self._filtered_suite_names = filtered_suite_names
     self._iterations = iterations
+    self._enable_details = enable_details
 
   @staticmethod
   def GetSuites(suite_regex):
@@ -64,14 +66,13 @@ class _Speedometer3Story(press_story.PressStory):
     return [name for name in _SPEEDOMETER_SUITES if exp.search(name)]
 
   def RunNavigateSteps(self, action_runner):
+    DEFAULT_ITERATIONS = 10
+
     url = self.file_path_url_with_scheme if self.is_file else self.url
-    if not self._iterations:
-      self._iterations = 10
-      # A single iteration on android takes ~75 seconds, the benchmark times out
-      # when running for 10 iterations.
-      if action_runner.tab.browser.platform.GetOSName() == 'android':
-        self._iterations = 3
-    url = "%s?iterationCount=%s" % (url, self._iterations)
+
+    iterations = (self._iterations
+                  if self._iterations is not None else DEFAULT_ITERATIONS)
+    url = "%s?iterationCount=%s" % (url, iterations)
     action_runner.Navigate(
         url, script_to_evaluate_on_commit=self.script_to_evaluate_on_commit)
 
@@ -124,7 +125,22 @@ class _Speedometer3Story(press_story.PressStory):
         "score": "unitless_biggerIsBetter",
     }
     for name, metric in metrics.items():
+      if not self._IsSpeedometerMetricEnabled(name):
+        continue
       self.AddMeasurement(name, UNIT_LOOKUP[metric["unit"]], metric["values"])
+
+  def _IsSpeedometerMetricEnabled(self, name):
+    if self._enable_details:
+      return True
+    # Skip nested metrics:
+    if "/" in name:
+      return False
+    # Skip top-level iteration metrics:
+    if name.startswith("Iteration-"):
+      return False
+    if name == "Geomean":
+      return False
+    return True
 
 
 class Speedometer30Story(_Speedometer3Story):

@@ -15,20 +15,9 @@ namespace autofill {
 class PersonalDataManagerObserver {
  public:
   // Notifies the observer that the PersonalDataManager changed in some way.
+  // When multiple reads or writes are pending, `OnPersonalDataChanged()` is
+  // only called once after all of them have finished.
   virtual void OnPersonalDataChanged() {}
-
-  // Notifies the observer that the sync state changed, it doesn't necessarily
-  // mean that the data changed, but the sync state may affect its
-  // interpretation, e.g. differentiation of pure local or syncable profile.
-  virtual void OnPersonalDataSyncStateChanged() {}
-
-  // Notifies the observer that the PersonalDataManager has no more tasks to
-  // handle.
-  virtual void OnPersonalDataFinishedProfileTasks() {}
-
-  // Called when (part of) the browsing history is cleared.
-  virtual void OnBrowsingHistoryCleared(
-      const history::DeletionInfo& deletion_info) {}
 
  protected:
   virtual ~PersonalDataManagerObserver() {}

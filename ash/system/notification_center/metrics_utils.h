@@ -61,7 +61,9 @@ enum NotificationTypeDetailed : int {
   PHONEHUB_PRIORITY_ZERO = 41,
   PHONEHUB_PRIORITY_ONE = 42,
   PHONEHUB_PRIORITY_TWO = 43,
-  kMaxValue = PHONEHUB_PRIORITY_TWO,
+  CHROME_APP_PRIORITY_OTHER = 44,
+  CROSTINI = 45,
+  kMaxValue = CROSTINI,
 };
 
 // These are the types of notification view that we are interested in recording
@@ -176,6 +178,15 @@ void LogExpandButtonClickAction(ExpandButtonClickAction action);
 
 // Logs the type of group notification added to the system.
 void LogGroupNotificationAddedType(GroupNotificationType type);
+
+// Logs when a pinned notification was shown without having provided a
+// `vector_small_image`.
+void LogPinnedNotificationShownWithoutIcon(
+    NotificationCatalogName catalog_name);
+
+// Logs when a pinned notification was shown without having provided a `title`.
+void LogPinnedNotificationShownWithoutTitle(
+    NotificationCatalogName catalog_name);
 
 }  // namespace metrics_utils
 

@@ -98,7 +98,7 @@ void AutofillProviderAndroidBridgeImpl::OnServerPredictionsAvailable() {
 }
 
 void AutofillProviderAndroidBridgeImpl::OnFocusChanged(
-    const absl::optional<FieldInfo>& field) {
+    const std::optional<FieldInfo>& field) {
   JNIEnv* env = AttachCurrentThread();
   ScopedJavaLocalRef<jobject> obj = java_ref_.get(env);
   if (obj.is_null()) {
@@ -206,6 +206,16 @@ void AutofillProviderAndroidBridgeImpl::OnDidFillAutofillFormData() {
   }
 
   Java_AutofillProvider_onDidFillAutofillFormData(env, obj);
+}
+
+void AutofillProviderAndroidBridgeImpl::CancelSession() {
+  JNIEnv* env = AttachCurrentThread();
+  ScopedJavaLocalRef<jobject> obj = java_ref_.get(env);
+  if (obj.is_null()) {
+    return;
+  }
+
+  Java_AutofillProvider_cancelSession(env, obj);
 }
 
 void AutofillProviderAndroidBridgeImpl::Reset() {

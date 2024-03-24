@@ -16,7 +16,7 @@
           "can_use_on_swarming_builders": true,
           "dimensions": {
             "cpu": "x86",
-            "os": "Ubuntu-18.04",
+            "os": "Ubuntu-22.04",
             "pool": "chrome.tests"
           },
           "expiration": 7200,
@@ -39,7 +39,7 @@
           "can_use_on_swarming_builders": true,
           "dimensions": {
             "cpu": "x86",
-            "os": "Ubuntu-18.04",
+            "os": "Ubuntu-22.04",
             "pool": "chrome.tests"
           },
           "expiration": 7200,
@@ -62,7 +62,7 @@
           "can_use_on_swarming_builders": true,
           "dimensions": {
             "cpu": "x86",
-            "os": "Ubuntu-18.04",
+            "os": "Ubuntu-22.04",
             "pool": "chrome.tests"
           },
           "expiration": 7200,
@@ -845,7 +845,7 @@
           "can_use_on_swarming_builders": true,
           "dimensions": {
             "cpu": "x86",
-            "os": "Ubuntu-18.04",
+            "os": "Ubuntu-22.04",
             "pool": "chrome.tests"
           },
           "expiration": 7200,
@@ -868,7 +868,7 @@
           "can_use_on_swarming_builders": true,
           "dimensions": {
             "cpu": "x86",
-            "os": "Ubuntu-18.04",
+            "os": "Ubuntu-22.04",
             "pool": "chrome.tests"
           },
           "expiration": 7200,
@@ -891,7 +891,7 @@
           "can_use_on_swarming_builders": true,
           "dimensions": {
             "cpu": "x86",
-            "os": "Ubuntu-18.04",
+            "os": "Ubuntu-22.04",
             "pool": "chrome.tests"
           },
           "expiration": 7200,
@@ -922,7 +922,7 @@
           "can_use_on_swarming_builders": true,
           "dimensions": {
             "cpu": "x86-64",
-            "os": "Ubuntu-18.04",
+            "os": "Ubuntu-22.04",
             "pool": "chrome.tests"
           },
           "expiration": 7200,
@@ -954,7 +954,7 @@
           "can_use_on_swarming_builders": true,
           "dimensions": {
             "cpu": "x86-64",
-            "os": "Ubuntu-18.04",
+            "os": "Ubuntu-22.04",
             "pool": "chrome.tests"
           },
           "expiration": 7200,
@@ -986,7 +986,7 @@
           "can_use_on_swarming_builders": true,
           "dimensions": {
             "cpu": "x86-64",
-            "os": "Ubuntu-18.04",
+            "os": "Ubuntu-22.04",
             "pool": "chrome.tests"
           },
           "expiration": 7200,
@@ -1018,7 +1018,7 @@
           "can_use_on_swarming_builders": true,
           "dimensions": {
             "cpu": "x86-64",
-            "os": "Ubuntu-18.04",
+            "os": "Ubuntu-22.04",
             "pool": "chrome.tests"
           },
           "expiration": 7200,
@@ -1138,7 +1138,7 @@
           "can_use_on_swarming_builders": true,
           "dimensions": {
             "cpu": "x86-64",
-            "os": "Ubuntu-18.04",
+            "os": "Ubuntu-22.04",
             "pool": "chrome.tests"
           },
           "expiration": 7200,
@@ -1429,7 +1429,7 @@
           "dimensions": {
             "cpu": "x86-64",
             "gpu": "1002:6821-4.0.20-3.2.8",
-            "os": "Mac-12.6.1",
+            "os": "Mac-12",
             "pool": "chrome.tests.perf",
             "synthetic_product_name": "MacBookPro11,5_x86-64-i7-4870HQ_AMD Radeon R8 M370X 4.0.20 [3.2.8]_Intel Haswell Iris Pro Graphics 5200 4.0.20 [3.2.8]_16384_APPLE SSD SM0512G"
           },
@@ -1437,7 +1437,7 @@
           "hard_timeout": 21600,
           "io_timeout": 21600,
           "service_account": "chrome-tester@chops-service-accounts.iam.gserviceaccount.com",
-          "shards": 26
+          "shards": 23
         },
         "test": "performance_test_suite",
         "trigger_script": {
@@ -1474,7 +1474,7 @@
           "dimensions": {
             "cpu": "x86-64",
             "gpu": "1002:6821-4.0.20-3.2.8",
-            "os": "Mac-12.6.1",
+            "os": "Mac-12",
             "pool": "chrome.tests.perf",
             "synthetic_product_name": "MacBookPro11,5_x86-64-i7-4870HQ_AMD Radeon R8 M370X 4.0.20 [3.2.8]_Intel Haswell Iris Pro Graphics 5200 4.0.20 [3.2.8]_16384_APPLE SSD SM0512G"
           },
@@ -1531,7 +1531,7 @@
           "dimensions": {
             "cpu": "x86-64",
             "gpu": "8086:1626",
-            "os": "Mac-12.6.1",
+            "os": "Mac-12",
             "pool": "chrome.tests.perf",
             "synthetic_product_name": "MacBookAir7,2_x86-64-i5-5350U_Intel Broadwell HD Graphics 6000_8192_APPLE SSD SM0128G"
           },
@@ -1539,7 +1539,7 @@
           "hard_timeout": 21600,
           "io_timeout": 21600,
           "service_account": "chrome-tester@chops-service-accounts.iam.gserviceaccount.com",
-          "shards": 20
+          "shards": 23
         },
         "test": "performance_test_suite",
         "trigger_script": {
@@ -1576,7 +1576,7 @@
           "dimensions": {
             "cpu": "x86-64",
             "gpu": "8086:1626",
-            "os": "Mac-12.6.1",
+            "os": "Mac-12",
             "pool": "chrome.tests.perf",
             "synthetic_product_name": "MacBookAir7,2_x86-64-i5-5350U_Intel Broadwell HD Graphics 6000_8192_APPLE SSD SM0128G"
           },

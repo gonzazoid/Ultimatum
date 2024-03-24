@@ -14,10 +14,12 @@
 #include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/system/sys_info.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
+#include "base/version_info/version_info.h"
 #include "chrome/browser/ash/login/demo_mode/demo_mode_dimensions.h"
 #include "chrome/browser/ash/login/demo_mode/demo_setup_controller.h"
 #include "chrome/browser/ash/ownership/owner_settings_service_ash.h"
@@ -325,7 +327,6 @@ void EnrollmentHandler::OnRegistrationStateChanged(CloudPolicyClient* client) {
   if (enrollment_step_ != STEP_REGISTRATION || !client_->is_registered()) {
     LOG(FATAL) << "Registration state changed to " << client_->is_registered()
                << " in step " << enrollment_step_ << ".";
-    return;
   }
 
   device_mode_ = client_->device_mode();
@@ -618,13 +619,14 @@ void EnrollmentHandler::SetFirmwareManagementParametersData() {
 }
 
 void EnrollmentHandler::OnFirmwareManagementParametersDataSet(
-    std::optional<user_data_auth::SetFirmwareManagementParametersReply> reply) {
+    std::optional<device_management::SetFirmwareManagementParametersReply>
+        reply) {
   DCHECK_EQ(STEP_SET_FWMP_DATA, enrollment_step_);
   if (!reply.has_value()) {
     LOG(ERROR) << "Failed to update firmware management parameters in TPM due "
                   "to DBus error.";
-  } else if (reply->error() !=
-             user_data_auth::CryptohomeErrorCode::CRYPTOHOME_ERROR_NOT_SET) {
+  } else if (reply->error() != device_management::DeviceManagementErrorCode::
+                                   DEVICE_MANAGEMENT_ERROR_NOT_SET) {
     LOG(ERROR) << "Failed to update firmware management parameters in TPM, "
                   "error code: "
                << static_cast<int>(reply->error());
@@ -693,10 +695,28 @@ void EnrollmentHandler::StartStoreRobotAuth() {
   device_account_initializer_->StoreToken();
 }
 
+void EnrollmentHandler::StoreVersion() {
+  DCHECK_EQ(STEP_STORE_VERSION, enrollment_step_);
+  PrefService* prefs = g_browser_process->local_state();
+  prefs->SetString(prefs::kEnrollmentVersionOS,
+                   base::SysInfo::OperatingSystemVersion());
+  prefs->SetString(prefs::kEnrollmentVersionBrowser,
+                   version_info::GetVersionNumber());
+  prefs->CommitPendingWrite();
+
+  SetStep(STEP_STORE_POLICY);
+  StartStoreDevicePolicy();
+}
+
+void EnrollmentHandler::StartStoreDevicePolicy() {
+  DCHECK_EQ(STEP_STORE_POLICY, enrollment_step_);
+  store_->InstallInitialPolicy(*policy_);
+}
+
 void EnrollmentHandler::OnDeviceAccountTokenStored() {
   DCHECK_EQ(STEP_STORE_ROBOT_AUTH, enrollment_step_);
-  SetStep(STEP_STORE_POLICY);
-  store_->InstallInitialPolicy(*policy_);
+  SetStep(STEP_STORE_VERSION);
+  StoreVersion();
 }
 
 void EnrollmentHandler::Stop() {

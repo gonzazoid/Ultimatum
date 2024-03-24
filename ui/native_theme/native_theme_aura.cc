@@ -76,7 +76,7 @@ NativeTheme* NativeTheme::GetInstanceForNativeUi() {
       /*use_overlay_scrollbars=*/false,
       /*should_only_use_dark_colors=*/false,
       /*system_theme=*/ui::SystemTheme::kDefault,
-      /*theme_to_update=*/NativeTheme::GetInstanceForWeb());
+      /*configure_web_instance=*/true);
   return s_native_theme.get();
 }
 
@@ -95,10 +95,8 @@ NativeTheme* NativeTheme::GetInstanceForDarkUI() {
 NativeThemeAura::NativeThemeAura(bool use_overlay_scrollbars,
                                  bool should_only_use_dark_colors,
                                  ui::SystemTheme system_theme,
-                                 NativeTheme* theme_to_update)
-    : NativeThemeBase(should_only_use_dark_colors,
-                      system_theme,
-                      theme_to_update),
+                                 bool configure_web_instance)
+    : NativeThemeBase(should_only_use_dark_colors, system_theme),
       use_overlay_scrollbars_(use_overlay_scrollbars) {
 // We don't draw scrollbar buttons.
 #if BUILDFLAG(IS_CHROMEOS)
@@ -115,6 +113,10 @@ NativeThemeAura::NativeThemeAura(bool use_overlay_scrollbars,
   static_assert(kHovered == 1, "states unexpectedly changed");
   static_assert(kNormal == 2, "states unexpectedly changed");
   static_assert(kPressed == 3, "states unexpectedly changed");
+
+  if (configure_web_instance) {
+    ConfigureWebInstance();
+  }
 }
 
 NativeThemeAura::~NativeThemeAura() {}
@@ -136,6 +138,15 @@ SkColor4f NativeThemeAura::FocusRingColorForBaseColor(
 #else
   return base_color;
 #endif  // BUILDFLAG(IS_APPLE)
+}
+
+void NativeThemeAura::ConfigureWebInstance() {
+  // Add the web native theme as an observer to stay in sync with color scheme
+  // changes.
+  color_scheme_observer_ =
+      std::make_unique<NativeTheme::ColorSchemeNativeThemeObserver>(
+          NativeTheme::GetInstanceForWeb());
+  AddObserver(color_scheme_observer_.get());
 }
 
 void NativeThemeAura::PaintMenuPopupBackground(
@@ -186,7 +197,7 @@ void NativeThemeAura::PaintArrowButton(
     Part direction,
     State state,
     ColorScheme color_scheme,
-    const ScrollbarArrowExtraParams& arrow) const {
+    const ScrollbarArrowExtraParams& extra_params) const {
   SkColor bg_color =
       GetControlColor(kScrollbarArrowBackground, color_scheme, color_provider);
   // Aura-win uses slightly different arrow colors.
@@ -214,20 +225,21 @@ void NativeThemeAura::PaintArrowButton(
     case kNumStates:
       break;
   }
-  if (arrow.thumb_color.has_value() &&
-      arrow.thumb_color.value() == gfx::kPlaceholderColor) {
-     // TODO(crbug.com/1473075): Remove this and the below checks for placeholderColor.
-     DLOG(ERROR) << "thumb_color with a placeholderColor value encountered";
+  if (extra_params.thumb_color.has_value() &&
+      extra_params.thumb_color.value() == gfx::kPlaceholderColor) {
+    // TODO(crbug.com/1473075): Remove this and the below checks for
+    // placeholderColor.
+    DLOG(ERROR) << "thumb_color with a placeholderColor value encountered";
   }
-  if (arrow.thumb_color.has_value() &&
-      arrow.thumb_color.value() != gfx::kPlaceholderColor) {
+  if (extra_params.thumb_color.has_value() &&
+      extra_params.thumb_color.value() != gfx::kPlaceholderColor) {
     // TODO(crbug.com/891944): Adjust thumb_color based on `state`.
-    arrow_color = arrow.thumb_color.value();
+    arrow_color = extra_params.thumb_color.value();
   }
-  if (arrow.track_color.has_value() &&
-      arrow.track_color.value() != gfx::kPlaceholderColor) {
+  if (extra_params.track_color.has_value() &&
+      extra_params.track_color.value() != gfx::kPlaceholderColor) {
     // TODO(crbug.com/891944): Adjust track_color based on `state`.
-    bg_color = arrow.track_color.value();
+    bg_color = extra_params.track_color.value();
   }
   DCHECK_NE(arrow_color, gfx::kPlaceholderColor);
 
@@ -235,7 +247,7 @@ void NativeThemeAura::PaintArrowButton(
   flags.setColor(bg_color);
 
   if (base::FeatureList::IsEnabled(kNewScrollbarArrowRadius) &&
-      !arrow.needs_rounded_corner) {
+      !extra_params.needs_rounded_corner) {
     canvas->drawIRect(gfx::RectToSkIRect(rect), flags);
   } else {
     // TODO(crbug.com/1493088): Also draw rounded corner for left and right
@@ -244,15 +256,15 @@ void NativeThemeAura::PaintArrowButton(
     SkScalar lower_left_radius = 0;
     SkScalar upper_right_radius = 0;
     SkScalar lower_right_radius = 0;
-    float zoom = arrow.zoom ? arrow.zoom : 1.0;
+    float zoom = extra_params.zoom ? extra_params.zoom : 1.0;
     if (direction == kScrollbarUpArrow) {
-      if (arrow.right_to_left) {
+      if (extra_params.right_to_left) {
         upper_left_radius = kScrollbarArrowRadius * zoom;
       } else {
         upper_right_radius = kScrollbarArrowRadius * zoom;
       }
     } else if (direction == kScrollbarDownArrow) {
-      if (arrow.right_to_left) {
+      if (extra_params.right_to_left) {
         lower_left_radius = kScrollbarArrowRadius * zoom;
       } else {
         lower_right_radius = kScrollbarArrowRadius * zoom;

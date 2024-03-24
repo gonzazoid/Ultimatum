@@ -38,9 +38,9 @@ class ASH_EXPORT NotificationListView
       public message_center::NotificationViewController,
       public message_center::MessageView::Observer,
       public views::AnimationDelegateViews {
- public:
-  METADATA_HEADER(NotificationListView);
+  METADATA_HEADER(NotificationListView, views::View)
 
+ public:
   // |message_center_view| can be null in unit tests.
   explicit NotificationListView(NotificationCenterView* message_center_view);
   NotificationListView(const NotificationListView& other) = delete;
@@ -121,7 +121,7 @@ class ASH_EXPORT NotificationListView
   // views::View:
   void ChildPreferredSizeChanged(views::View* child) override;
   void PreferredSizeChanged() override;
-  void Layout() override;
+  void Layout(PassKey) override;
   gfx::Size CalculatePreferredSize() const override;
 
   // message_center::NotificationViewController:

@@ -108,12 +108,12 @@ class StructTraits<media::mojom::VideoBitrateAllocationDataView,
   static std::vector<uint32_t> bitrates(
       const media::VideoBitrateAllocation& bitrate_allocation);
 
-  static absl::optional<uint32_t> variable_bitrate_peak(
+  static std::optional<uint32_t> variable_bitrate_peak(
       const media::VideoBitrateAllocation& bitrate_allocation) {
     if (bitrate_allocation.GetMode() == media::Bitrate::Mode::kConstant) {
-      return absl::nullopt;
+      return std::nullopt;
     } else {
-      return absl::optional<uint32_t>(
+      return std::optional<uint32_t>(
           bitrate_allocation.GetSumBitrate().peak_bps());
     }
   }
@@ -213,6 +213,9 @@ class StructTraits<media::mojom::BitstreamBufferMetadataDataView,
   static base::TimeDelta timestamp(const media::BitstreamBufferMetadata& bbm) {
     return bbm.timestamp;
   }
+  static bool end_of_picture(const media::BitstreamBufferMetadata& bbm) {
+    return bbm.end_of_picture;
+  }
   static int32_t qp(const media::BitstreamBufferMetadata& bbm) {
     return bbm.qp;
   }
@@ -220,11 +223,11 @@ class StructTraits<media::mojom::BitstreamBufferMetadataDataView,
       const media::BitstreamBufferMetadata& bbm) {
     return bbm;
   }
-  static absl::optional<gfx::Size> encoded_size(
+  static std::optional<gfx::Size> encoded_size(
       const media::BitstreamBufferMetadata& bbm) {
     return bbm.encoded_size;
   }
-  static absl::optional<gfx::ColorSpace> encoded_color_space(
+  static std::optional<gfx::ColorSpace> encoded_color_space(
       const media::BitstreamBufferMetadata& bbm) {
     return bbm.encoded_color_space;
   }
@@ -293,9 +296,6 @@ class StructTraits<media::mojom::Vp9MetadataDataView, media::Vp9Metadata> {
   }
   static bool reference_lower_spatial_layers(const media::Vp9Metadata& vp9) {
     return vp9.reference_lower_spatial_layers;
-  }
-  static bool end_of_picture(const media::Vp9Metadata& vp9) {
-    return vp9.end_of_picture;
   }
   static uint8_t temporal_idx(const media::Vp9Metadata& vp9) {
     return vp9.temporal_idx;

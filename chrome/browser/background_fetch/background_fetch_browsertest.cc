@@ -194,10 +194,9 @@ class OfflineContentProviderObserver final
   }
 
   void OnItemRemoved(const ContentId& id) override {}
-  void OnItemUpdated(
-      const OfflineItem& item,
-      const absl::optional<offline_items_collection::UpdateDelta>& update_delta)
-      override {
+  void OnItemUpdated(const OfflineItem& item,
+                     const std::optional<offline_items_collection::UpdateDelta>&
+                         update_delta) override {
     if (item.state != offline_items_collection::OfflineItemState::IN_PROGRESS &&
         item.state != offline_items_collection::OfflineItemState::PENDING &&
         item.state != offline_items_collection::OfflineItemState::PAUSED &&
@@ -597,8 +596,9 @@ IN_PROC_BROWSER_TEST_F(BackgroundFetchBrowserTest,
   EXPECT_FALSE(offline_item.is_off_the_record);
 }
 
+// Flaky on multiple platforms (b/323879025)/
 IN_PROC_BROWSER_TEST_F(BackgroundFetchBrowserTest,
-                       OfflineItemCollection_VerifyIconReceived) {
+                       DISABLED_OfflineItemCollection_VerifyIconReceived) {
   // Starts a Background Fetch for a single to-be-downloaded file and waits for
   // the fetch to be registered with the offline items collection. We then
   // verify that the expected icon is associated with the newly added offline

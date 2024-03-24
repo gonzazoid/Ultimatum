@@ -76,7 +76,8 @@ class ChromeMetricsServiceClient
 
   // Factory function.
   static std::unique_ptr<ChromeMetricsServiceClient> Create(
-      metrics::MetricsStateManager* state_manager);
+      metrics::MetricsStateManager* state_manager,
+      variations::SyntheticTrialRegistry* synthetic_trial_registry);
 
   // Registers local state prefs used by this class.
   static void RegisterPrefs(PrefRegistrySimple* registry);
@@ -90,6 +91,7 @@ class ChromeMetricsServiceClient
   variations::SyntheticTrialRegistry* GetSyntheticTrialRegistry() override;
   metrics::MetricsService* GetMetricsService() override;
   ukm::UkmService* GetUkmService() override;
+  IdentifiabilityStudyState* GetIdentifiabilityStudyState() override;
   metrics::structured::StructuredMetricsService* GetStructuredMetricsService()
       override;
   void SetMetricsClientId(const std::string& client_id) override;
@@ -128,8 +130,8 @@ class ChromeMetricsServiceClient
   bool ShouldUploadMetricsForUserId(const uint64_t user_id) override;
   void InitPerUserMetrics() override;
   void UpdateCurrentUserMetricsConsent(bool user_metrics_consent) override;
-  absl::optional<bool> GetCurrentUserMetricsConsent() const override;
-  absl::optional<std::string> GetCurrentUserId() const override;
+  std::optional<bool> GetCurrentUserMetricsConsent() const override;
+  std::optional<std::string> GetCurrentUserId() const override;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   // ukm::HistoryDeleteObserver:
@@ -161,7 +163,8 @@ class ChromeMetricsServiceClient
 
  protected:
   explicit ChromeMetricsServiceClient(
-      metrics::MetricsStateManager* state_manager);
+      metrics::MetricsStateManager* state_manager,
+      variations::SyntheticTrialRegistry* synthetic_trial_registry);
 
   // Completes the two-phase initialization of ChromeMetricsServiceClient.
   void Initialize();
@@ -218,6 +221,9 @@ class ChromeMetricsServiceClient
   void ResetClientStateWhenMsbbOrAppConsentIsRevoked(
       ukm::UkmConsentState previous_consent_state);
 
+  // Creates the Structured Metrics Service based on the platform.
+  void CreateStructuredMetricsService();
+
   SEQUENCE_CHECKER(sequence_checker_);
 
   // Chrome's privacy budget identifiability study state.
@@ -227,7 +233,7 @@ class ChromeMetricsServiceClient
   const raw_ptr<metrics::MetricsStateManager> metrics_state_manager_;
 
   // The synthetic trial registry shared by metrics_service_ and ukm_service_.
-  std::unique_ptr<variations::SyntheticTrialRegistry> synthetic_trial_registry_;
+  const raw_ptr<variations::SyntheticTrialRegistry> synthetic_trial_registry_;
 
   // Metrics service observer for synthetic trials.
   metrics::PersistentSyntheticTrialObserver synthetic_trial_observer_;

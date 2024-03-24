@@ -39,7 +39,6 @@
 #include "components/performance_manager/public/performance_manager.h"
 #include "components/performance_manager/public/user_tuning/prefs.h"
 #include "components/prefs/pref_service.h"
-#include "components/user_education/test/feature_promo_test_util.h"
 #include "components/user_education/views/help_bubble_view.h"
 #include "content/public/test/browser_test.h"
 #include "net/dns/mock_host_resolver.h"
@@ -452,16 +451,16 @@ IN_PROC_BROWSER_TEST_F(MemorySaverChipInteractiveTest,
       WaitForHide(MemorySaverBubbleView::kMemorySaverDialogBodyElementId),
       Do(base::BindLambdaForTesting([=]() {
         PrefService* const pref_service = browser()->profile()->GetPrefs();
-        const base::Value::List& discard_exception = pref_service->GetList(
-            performance_manager::user_tuning::prefs::kTabDiscardingExceptions);
+        const base::Value::Dict& discard_exception =
+            pref_service->GetDict(performance_manager::user_tuning::prefs::
+                                      kTabDiscardingExceptionsWithTime);
         EXPECT_EQ(1u, discard_exception.size());
         std::string current_site_host = browser()
                                             ->tab_strip_model()
                                             ->GetActiveWebContents()
                                             ->GetURL()
                                             .host();
-        std::string added_exception = discard_exception.front().GetString();
-        EXPECT_EQ(current_site_host, added_exception);
+        EXPECT_TRUE(discard_exception.contains(current_site_host));
       })),
       FlushEvents(),
       // Dialog's cancel button should now allow users to navigate to the
@@ -471,7 +470,7 @@ IN_PROC_BROWSER_TEST_F(MemorySaverChipInteractiveTest,
       CheckViewProperty(
           MemorySaverBubbleView::kMemorySaverDialogCancelButton,
           &views::LabelButton::GetText,
-          l10n_util::GetStringUTF16(IDS_MEMORY_SAVER_DIALOG_BODY_LINK_TEXT)),
+          l10n_util::GetStringUTF16(IDS_MEMORY_SAVER_DIALOG_SETTINGS_BUTTON)),
       PressButton(MemorySaverBubbleView::kMemorySaverDialogCancelButton),
       WaitForHide(MemorySaverBubbleView::kMemorySaverDialogBodyElementId),
       Check(base::BindLambdaForTesting(
@@ -502,7 +501,7 @@ IN_PROC_BROWSER_TEST_F(MemorySaverChipInteractiveTest,
       CheckViewProperty(
           MemorySaverBubbleView::kMemorySaverDialogCancelButton,
           &views::LabelButton::GetText,
-          l10n_util::GetStringUTF16(IDS_MEMORY_SAVER_DIALOG_BODY_LINK_TEXT)),
+          l10n_util::GetStringUTF16(IDS_MEMORY_SAVER_DIALOG_SETTINGS_BUTTON)),
       PressButton(kMemorySaverChipElementId),
       WaitForHide(MemorySaverBubbleView::kMemorySaverDialogBodyElementId),
       // Second tab's cancel button should allow users to exclude the site
@@ -523,108 +522,12 @@ IN_PROC_BROWSER_TEST_F(MemorySaverChipInteractiveTest,
       CheckViewProperty(
           MemorySaverBubbleView::kMemorySaverDialogCancelButton,
           &views::LabelButton::GetText,
-          l10n_util::GetStringUTF16(IDS_MEMORY_SAVER_DIALOG_BODY_LINK_TEXT)));
+          l10n_util::GetStringUTF16(IDS_MEMORY_SAVER_DIALOG_SETTINGS_BUTTON)));
 }
-
-struct FaviconScreenShotTestConfig {
-  performance_manager::features::DiscardTabTreatmentOptions treatment_option;
-  std::string screenshot_name;
-  std::string cl_number;
-};
-
-class MemorySaverFaviconTreatmentTest
-    : public MemorySaverInteractiveTestMixin<InteractiveBrowserTest>,
-      public testing::WithParamInterface<FaviconScreenShotTestConfig> {
- public:
-  MemorySaverFaviconTreatmentTest() = default;
-  ~MemorySaverFaviconTreatmentTest() override = default;
-
-  void SetUp() override {
-    scoped_feature_list_.InitAndEnableFeatureWithParameters(
-        performance_manager::features::kDiscardedTabTreatment,
-        {{"discard_tab_treatment_option", base::NumberToString(static_cast<int>(
-                                              GetParam().treatment_option))}});
-
-    MemorySaverInteractiveTestMixin<InteractiveBrowserTest>::SetUp();
-  }
-
-  void SetUpOnMainThread() override {
-    MemorySaverInteractiveTestMixin::SetUpOnMainThread();
-    SetMemorySaverModeEnabled(true);
-  }
-  TabStrip* GetTabStrip() {
-    return BrowserView::GetBrowserViewForBrowser(browser())->tabstrip();
-  }
-
-  TabIcon* GetTabIcon(int tab_index) {
-    return GetTabStrip()->tab_at(tab_index)->GetTabIconForTesting();
-  }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-};
-
-IN_PROC_BROWSER_TEST_P(MemorySaverFaviconTreatmentTest,
-                       FaviconTreatmentOnDiscard) {
-  constexpr char kFirstTabFavicon[] = "first_tab_favicon";
-
-  RunTestSequence(
-      SetOnIncompatibleAction(OnIncompatibleAction::kSkipTest,
-                              kSkipPixelTestsReason),
-      InstrumentTab(kFirstTabContents, 0),
-      NavigateWebContents(kFirstTabContents, GetURL()),
-      AddInstrumentedTab(kSecondTabContents, GURL(chrome::kChromeUINewTabURL)),
-      Do(base::BindLambdaForTesting(
-          [=]() { GetTabStrip()->StopAnimating(true); })),
-      TryDiscardTab(0), CheckTabIsDiscarded(0, true),
-      NameView(kFirstTabFavicon, base::BindLambdaForTesting([&]() {
-                 return views::AsViewClass<views::View>(GetTabIcon(0));
-               })),
-      WaitForEvent(kFirstTabFavicon, kDiscardAnimationFinishes), FlushEvents(),
-      Screenshot(kFirstTabFavicon, GetParam().screenshot_name,
-                 GetParam().cl_number));
-}
-
-std::vector<FaviconScreenShotTestConfig> MemorySaverTestConfig() {
-  return {{performance_manager::features::DiscardTabTreatmentOptions::
-               kFadeFullsizedFavicon,
-           "FadeFullSizedFaviconOnDiscard", "4786929"},
-          {performance_manager::features::DiscardTabTreatmentOptions::
-               kFadeSmallFaviconWithRing,
-           "FadeSmallFaviconOnDiscard", "4786929"}};
-}
-
-INSTANTIATE_TEST_SUITE_P(All,
-                         MemorySaverFaviconTreatmentTest,
-                         testing::ValuesIn(MemorySaverTestConfig()));
-
-// Tests the new memory savings reporting improvements on the memory saver
-// dialog.
-class MemorySaverMemorySavingsReportingImprovementsTest
-    : public MemorySaverInteractiveTestMixin<InteractiveBrowserTest> {
- public:
-  MemorySaverMemorySavingsReportingImprovementsTest() = default;
-  ~MemorySaverMemorySavingsReportingImprovementsTest() override = default;
-
-  void SetUp() override {
-    scoped_feature_list_.InitAndEnableFeature(
-        performance_manager::features::kMemorySavingsReportingImprovements);
-
-    MemorySaverInteractiveTestMixin<InteractiveBrowserTest>::SetUp();
-  }
-
-  void SetUpOnMainThread() override {
-    MemorySaverInteractiveTestMixin::SetUpOnMainThread();
-    SetMemorySaverModeEnabled(true);
-  }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-};
 
 // The memory saver chip dialog renders a gauge style visualization that
 // must be rendered correctly.
-IN_PROC_BROWSER_TEST_F(MemorySaverMemorySavingsReportingImprovementsTest,
+IN_PROC_BROWSER_TEST_F(MemorySaverChipInteractiveTest,
                        RenderVisualizationInDialog) {
   RunTestSequence(
       SetOnIncompatibleAction(OnIncompatibleAction::kSkipTest,
@@ -646,5 +549,44 @@ IN_PROC_BROWSER_TEST_F(MemorySaverMemorySavingsReportingImprovementsTest,
       WaitForShow(
           MemorySaverBubbleView::kMemorySaverDialogResourceViewElementId),
       Screenshot(MemorySaverBubbleView::kMemorySaverDialogResourceViewElementId,
-                 "MemorySaverResourceView", "4546555"));
+                 "MemorySaverResourceView", "5280502"));
+}
+
+class MemorySaverFaviconTreatmentTest
+    : public MemorySaverInteractiveTestMixin<InteractiveBrowserTest> {
+ public:
+  MemorySaverFaviconTreatmentTest() = default;
+  ~MemorySaverFaviconTreatmentTest() override = default;
+
+  void SetUpOnMainThread() override {
+    MemorySaverInteractiveTestMixin::SetUpOnMainThread();
+    SetMemorySaverModeEnabled(true);
+  }
+  TabStrip* GetTabStrip() {
+    return BrowserView::GetBrowserViewForBrowser(browser())->tabstrip();
+  }
+
+  TabIcon* GetTabIcon(int tab_index) {
+    return GetTabStrip()->tab_at(tab_index)->GetTabIconForTesting();
+  }
+};
+
+IN_PROC_BROWSER_TEST_F(MemorySaverFaviconTreatmentTest,
+                       FaviconTreatmentOnDiscard) {
+  constexpr char kFirstTabFavicon[] = "first_tab_favicon";
+
+  RunTestSequence(
+      SetOnIncompatibleAction(OnIncompatibleAction::kSkipTest,
+                              kSkipPixelTestsReason),
+      InstrumentTab(kFirstTabContents, 0),
+      NavigateWebContents(kFirstTabContents, GetURL()),
+      AddInstrumentedTab(kSecondTabContents, GURL(chrome::kChromeUINewTabURL)),
+      Do(base::BindLambdaForTesting(
+          [=]() { GetTabStrip()->StopAnimating(true); })),
+      TryDiscardTab(0), CheckTabIsDiscarded(0, true),
+      NameView(kFirstTabFavicon, base::BindLambdaForTesting([&]() {
+                 return views::AsViewClass<views::View>(GetTabIcon(0));
+               })),
+      WaitForEvent(kFirstTabFavicon, kDiscardAnimationFinishes), FlushEvents(),
+      Screenshot(kFirstTabFavicon, "FadeSmallFaviconOnDiscard", "4786929"));
 }

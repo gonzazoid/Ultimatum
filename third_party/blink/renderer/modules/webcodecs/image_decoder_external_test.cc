@@ -256,6 +256,7 @@ TEST_F(ImageDecoderTest, DecodeGifZeroDuration) {
     EXPECT_EQ(frame->duration(), 0u);
     EXPECT_EQ(frame->displayWidth(), 16u);
     EXPECT_EQ(frame->displayHeight(), 16u);
+    EXPECT_EQ(frame->frame()->ColorSpace(), gfx::ColorSpace::CreateSRGB());
   }
 
   {
@@ -271,6 +272,7 @@ TEST_F(ImageDecoderTest, DecodeGifZeroDuration) {
     EXPECT_EQ(frame->duration(), 0u);
     EXPECT_EQ(frame->displayWidth(), 16u);
     EXPECT_EQ(frame->displayHeight(), 16u);
+    EXPECT_EQ(frame->frame()->ColorSpace(), gfx::ColorSpace::CreateSRGB());
   }
 
   // Decoding past the end should result in a rejected promise.
@@ -319,6 +321,7 @@ TEST_F(ImageDecoderTest, DecodeGif) {
     EXPECT_EQ(frame->duration(), 100000u);
     EXPECT_EQ(frame->displayWidth(), 100u);
     EXPECT_EQ(frame->displayHeight(), 100u);
+    EXPECT_EQ(frame->frame()->ColorSpace(), gfx::ColorSpace::CreateSRGB());
   }
 
   {
@@ -334,6 +337,7 @@ TEST_F(ImageDecoderTest, DecodeGif) {
     EXPECT_EQ(frame->duration(), 100000u);
     EXPECT_EQ(frame->displayWidth(), 100u);
     EXPECT_EQ(frame->displayHeight(), 100u);
+    EXPECT_EQ(frame->frame()->ColorSpace(), gfx::ColorSpace::CreateSRGB());
   }
 
   // Decoding past the end should result in a rejected promise.
@@ -543,11 +547,8 @@ TEST_F(ImageDecoderTest, DecoderReadableStream) {
 
   const uint8_t* data_ptr = reinterpret_cast<const uint8_t*>(data->Data());
 
-  v8::Local<v8::Value> v8_data_array;
-  ASSERT_TRUE(ToV8Traits<DOMUint8Array>::ToV8(
-                  v8_scope.GetScriptState(),
-                  DOMUint8Array::Create(data_ptr, chunk_size))
-                  .ToLocal(&v8_data_array));
+  v8::Local<v8::Value> v8_data_array = ToV8Traits<DOMUint8Array>::ToV8(
+      v8_scope.GetScriptState(), DOMUint8Array::Create(data_ptr, chunk_size));
   ASSERT_FALSE(v8_scope.GetExceptionState().HadException());
 
   underlying_source->Enqueue(ScriptValue(v8_scope.GetIsolate(), v8_data_array));
@@ -565,11 +566,9 @@ TEST_F(ImageDecoderTest, DecoderReadableStream) {
   decoder->tracks().selectedTrack()->setSelected(false);
 
   // Enqueue remaining data.
-  ASSERT_TRUE(ToV8Traits<DOMUint8Array>::ToV8(
-                  v8_scope.GetScriptState(),
-                  DOMUint8Array::Create(data_ptr + chunk_size,
-                                        data->size() - chunk_size))
-                  .ToLocal(&v8_data_array));
+  v8_data_array = ToV8Traits<DOMUint8Array>::ToV8(
+      v8_scope.GetScriptState(),
+      DOMUint8Array::Create(data_ptr + chunk_size, data->size() - chunk_size));
   ASSERT_FALSE(v8_scope.GetExceptionState().HadException());
 
   underlying_source->Enqueue(ScriptValue(v8_scope.GetIsolate(), v8_data_array));
@@ -621,6 +620,7 @@ TEST_F(ImageDecoderTest, DecoderReadableStream) {
     EXPECT_EQ(*frame->duration(), 100000u);
     EXPECT_EQ(frame->displayWidth(), 100u);
     EXPECT_EQ(frame->displayHeight(), 100u);
+    EXPECT_EQ(frame->frame()->ColorSpace(), gfx::ColorSpace::CreateSRGB());
   }
 }
 
@@ -649,10 +649,8 @@ TEST_F(ImageDecoderTest, DecoderReadableStreamAvif) {
 
   // Enqueue a single byte and ensure nothing breaks.
   const uint8_t* data_ptr = reinterpret_cast<const uint8_t*>(data->Data());
-  v8::Local<v8::Value> v8_data_array;
-  ASSERT_TRUE(ToV8Traits<DOMUint8Array>::ToV8(
-                  v8_scope.GetScriptState(), DOMUint8Array::Create(data_ptr, 1))
-                  .ToLocal(&v8_data_array));
+  v8::Local<v8::Value> v8_data_array = ToV8Traits<DOMUint8Array>::ToV8(
+      v8_scope.GetScriptState(), DOMUint8Array::Create(data_ptr, 1));
   ASSERT_FALSE(v8_scope.GetExceptionState().HadException());
 
   underlying_source->Enqueue(ScriptValue(v8_scope.GetIsolate(), v8_data_array));
@@ -673,10 +671,9 @@ TEST_F(ImageDecoderTest, DecoderReadableStreamAvif) {
   EXPECT_FALSE(decode_tester.IsRejected());
 
   // Append the rest of the data.
-  ASSERT_TRUE(ToV8Traits<DOMUint8Array>::ToV8(
-                  v8_scope.GetScriptState(),
-                  DOMUint8Array::Create(data_ptr + 1, data->size() - 1))
-                  .ToLocal(&v8_data_array));
+  v8_data_array = ToV8Traits<DOMUint8Array>::ToV8(
+      v8_scope.GetScriptState(),
+      DOMUint8Array::Create(data_ptr + 1, data->size() - 1));
   ASSERT_FALSE(v8_scope.GetExceptionState().HadException());
 
   underlying_source->Enqueue(ScriptValue(v8_scope.GetIsolate(), v8_data_array));
@@ -697,6 +694,7 @@ TEST_F(ImageDecoderTest, DecoderReadableStreamAvif) {
   EXPECT_EQ(*frame->duration(), 100000u);
   EXPECT_EQ(frame->displayWidth(), 159u);
   EXPECT_EQ(frame->displayHeight(), 159u);
+  EXPECT_EQ(frame->frame()->ColorSpace(), gfx::ColorSpace::CreateSRGB());
 #else
   EXPECT_FALSE(decode_tester.IsFulfilled());
 #endif
@@ -728,11 +726,8 @@ TEST_F(ImageDecoderTest, ReadableStreamAvifStillYuvDecoding) {
   // Append all data, but don't mark the stream as complete yet.
   const uint8_t* data_ptr = reinterpret_cast<const uint8_t*>(data->Data());
 
-  v8::Local<v8::Value> v8_data_array;
-  ASSERT_TRUE(ToV8Traits<DOMUint8Array>::ToV8(
-                  v8_scope.GetScriptState(),
-                  DOMUint8Array::Create(data_ptr, data->size()))
-                  .ToLocal(&v8_data_array));
+  v8::Local<v8::Value> v8_data_array = ToV8Traits<DOMUint8Array>::ToV8(
+      v8_scope.GetScriptState(), DOMUint8Array::Create(data_ptr, data->size()));
   ASSERT_FALSE(v8_scope.GetExceptionState().HadException());
 
   underlying_source->Enqueue(ScriptValue(v8_scope.GetIsolate(), v8_data_array));
@@ -771,9 +766,14 @@ TEST_F(ImageDecoderTest, ReadableStreamAvifStillYuvDecoding) {
     auto* frame = result->image();
     EXPECT_EQ(frame->format(), "I420");
     EXPECT_EQ(frame->timestamp(), 0u);
-    EXPECT_EQ(frame->duration(), absl::nullopt);
+    EXPECT_EQ(frame->duration(), std::nullopt);
     EXPECT_EQ(frame->displayWidth(), 3u);
     EXPECT_EQ(frame->displayHeight(), 3u);
+    EXPECT_EQ(frame->frame()->ColorSpace(),
+              gfx::ColorSpace(gfx::ColorSpace::PrimaryID::BT709,
+                              gfx::ColorSpace::TransferID::SRGB,
+                              gfx::ColorSpace::MatrixID::BT709,
+                              gfx::ColorSpace::RangeID::LIMITED));
 #else
     EXPECT_FALSE(tester.IsFulfilled());
 #endif
@@ -848,11 +848,9 @@ TEST_F(ImageDecoderTest, DecodeClosedDuringReadableStream) {
 
   const uint8_t* data_ptr = reinterpret_cast<const uint8_t*>(data->Data());
 
-  v8::Local<v8::Value> v8_data_array;
-  ASSERT_TRUE(ToV8Traits<DOMUint8Array>::ToV8(
-                  v8_scope.GetScriptState(),
-                  DOMUint8Array::Create(data_ptr, data->size() / 2))
-                  .ToLocal(&v8_data_array));
+  v8::Local<v8::Value> v8_data_array = ToV8Traits<DOMUint8Array>::ToV8(
+      v8_scope.GetScriptState(),
+      DOMUint8Array::Create(data_ptr, data->size() / 2));
   ASSERT_FALSE(v8_scope.GetExceptionState().HadException());
 
   underlying_source->Enqueue(ScriptValue(v8_scope.GetIsolate(), v8_data_array));
@@ -900,11 +898,9 @@ TEST_F(ImageDecoderTest, DecodeInvalidFileViaReadableStream) {
 
   const uint8_t* data_ptr = reinterpret_cast<const uint8_t*>(data->Data());
 
-  v8::Local<v8::Value> v8_data_array;
-  ASSERT_TRUE(ToV8Traits<DOMUint8Array>::ToV8(
-                  v8_scope.GetScriptState(),
-                  DOMUint8Array::Create(data_ptr, data->size() / 2))
-                  .ToLocal(&v8_data_array));
+  v8::Local<v8::Value> v8_data_array = ToV8Traits<DOMUint8Array>::ToV8(
+      v8_scope.GetScriptState(),
+      DOMUint8Array::Create(data_ptr, data->size() / 2));
   ASSERT_FALSE(v8_scope.GetExceptionState().HadException());
 
   underlying_source->Enqueue(ScriptValue(v8_scope.GetIsolate(), v8_data_array));
@@ -973,9 +969,10 @@ TEST_F(ImageDecoderTest, DecodeYuv) {
     auto* frame = result->image();
     EXPECT_EQ(frame->format(), "I420");
     EXPECT_EQ(frame->timestamp(), 0u);
-    EXPECT_EQ(frame->duration(), absl::nullopt);
+    EXPECT_EQ(frame->duration(), std::nullopt);
     EXPECT_EQ(frame->displayWidth(), 99u);
     EXPECT_EQ(frame->displayHeight(), 99u);
+    EXPECT_EQ(frame->frame()->ColorSpace(), gfx::ColorSpace::CreateJpeg());
   }
 }
 

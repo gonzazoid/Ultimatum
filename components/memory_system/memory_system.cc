@@ -76,10 +76,10 @@ struct MemorySystem::Impl {
   ~Impl();
 
   void Initialize(
-      const absl::optional<GwpAsanParameters>& gwp_asan_parameters,
-      const absl::optional<ProfilingClientParameters>&
+      const std::optional<GwpAsanParameters>& gwp_asan_parameters,
+      const std::optional<ProfilingClientParameters>&
           profiling_client_parameters,
-      const absl::optional<DispatcherParameters>& dispatcher_parameters);
+      const std::optional<DispatcherParameters>& dispatcher_parameters);
 
  private:
   // Initialization functions for the various subsystems.
@@ -185,10 +185,9 @@ MemorySystem::Impl::~Impl() {
 }
 
 void MemorySystem::Impl::Initialize(
-    const absl::optional<GwpAsanParameters>& gwp_asan_parameters,
-    const absl::optional<ProfilingClientParameters>&
-        profiling_client_parameters,
-    const absl::optional<DispatcherParameters>& dispatcher_parameters) {
+    const std::optional<GwpAsanParameters>& gwp_asan_parameters,
+    const std::optional<ProfilingClientParameters>& profiling_client_parameters,
+    const std::optional<DispatcherParameters>& dispatcher_parameters) {
   if (!IsAllocatorShimInitialized()) {
     return;
   }
@@ -227,14 +226,6 @@ void MemorySystem::Impl::InitializeGwpASan(
     const GwpAsanParameters& gwp_asan_parameters,
     InitializationData& initialization_data) {
 #if BUILDFLAG(ENABLE_GWP_ASAN)
-  // GWP-ASAN requires crashpad to gather alloc/dealloc stack traces, which is
-  // not always enabled on ChromeOS.
-#if BUILDFLAG(IS_CHROMEOS)
-  if (!crash_reporter::IsCrashpadEnabled()) {
-    return;
-  }
-#endif
-
 #if BUILDFLAG(ENABLE_GWP_ASAN_MALLOC)
   gwp_asan::EnableForMalloc(gwp_asan_parameters.boost_sampling,
                             gwp_asan_parameters.process_type.c_str());
@@ -349,10 +340,9 @@ MemorySystem::MemorySystem() : impl_(std::make_unique<Impl>()) {}
 MemorySystem::~MemorySystem() = default;
 
 void MemorySystem::Initialize(
-    const absl::optional<GwpAsanParameters>& gwp_asan_parameters,
-    const absl::optional<ProfilingClientParameters>&
-        profiling_client_parameters,
-    const absl::optional<DispatcherParameters>& dispatcher_parameters) {
+    const std::optional<GwpAsanParameters>& gwp_asan_parameters,
+    const std::optional<ProfilingClientParameters>& profiling_client_parameters,
+    const std::optional<DispatcherParameters>& dispatcher_parameters) {
   impl_->Initialize(gwp_asan_parameters, profiling_client_parameters,
                     dispatcher_parameters);
 }

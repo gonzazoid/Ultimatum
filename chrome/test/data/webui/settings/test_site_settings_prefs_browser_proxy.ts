@@ -5,11 +5,13 @@
 // clang-format off
 import {assert} from 'chrome://resources/js/assert.js';
 import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
-import {StorageAccessSiteException, AppProtocolEntry, ChooserType, ContentSetting, ContentSettingsTypes, HandlerEntry, OriginFileSystemGrants, ProtocolEntry, RawChooserException, RawSiteException, RecentSitePermissions, SiteGroup, SiteSettingSource, SiteSettingsPrefsBrowserProxy, ZoomLevelEntry} from 'chrome://settings/lazy_load.js';
+import type {StorageAccessSiteException, AppProtocolEntry, ChooserType, HandlerEntry, OriginFileSystemGrants, ProtocolEntry, RawChooserException, RawSiteException, RecentSitePermissions, SiteGroup, SiteSettingsPrefsBrowserProxy, ZoomLevelEntry} from 'chrome://settings/lazy_load.js';
+import {ContentSetting, ContentSettingsTypes, SiteSettingSource} from 'chrome://settings/lazy_load.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 
-import {createOriginInfo, createSiteGroup,createSiteSettingsPrefs, getContentSettingsTypeFromChooserType, SiteSettingsPref} from './test_util.js';
+import type {SiteSettingsPref} from './test_util.js';
+import {createOriginInfo, createSiteGroup,createSiteSettingsPrefs, getContentSettingsTypeFromChooserType} from './test_util.js';
 // clang-format on
 
 /**
@@ -94,8 +96,10 @@ export class TestSiteSettingsPrefsBrowserProxy extends TestBrowserProxy
       ContentSettingsTypes.IDLE_DETECTION,
       ContentSettingsTypes.IMAGES,
       ContentSettingsTypes.JAVASCRIPT,
+      ContentSettingsTypes.JAVASCRIPT_JIT,
       ContentSettingsTypes.LOCAL_FONTS,
       ContentSettingsTypes.MIC,
+      ContentSettingsTypes.MIDI_DEVICES,
       ContentSettingsTypes.MIXEDSCRIPT,
       ContentSettingsTypes.NOTIFICATIONS,
       ContentSettingsTypes.PAYMENT_HANDLER,
@@ -108,12 +112,6 @@ export class TestSiteSettingsPrefsBrowserProxy extends TestBrowserProxy
       ContentSettingsTypes.VR,
       ContentSettingsTypes.WINDOW_MANAGEMENT,
     ];
-
-    if (loadTimeData.getBoolean('blockMidiByDefault')) {
-      this.categoryList_.push(ContentSettingsTypes.MIDI);
-    } else {
-      this.categoryList_.push(ContentSettingsTypes.MIDI_DEVICES);
-    }
 
     if (loadTimeData.getBoolean('enableWebPrintingContentSetting')) {
       this.categoryList_.push(ContentSettingsTypes.WEB_PRINTING);

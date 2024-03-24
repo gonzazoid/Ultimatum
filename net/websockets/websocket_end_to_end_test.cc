@@ -11,6 +11,7 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -75,7 +76,6 @@
 #include "net/websockets/websocket_event_interface.h"
 #include "net/websockets/websocket_handshake_response_info.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -151,7 +151,7 @@ class ConnectTestingEventInterface : public WebSocketEventInterface {
 
   void OnFailChannel(const std::string& message,
                      int net_error,
-                     absl::optional<int> response_code) override;
+                     std::optional<int> response_code) override;
 
   void OnStartOpeningHandshake(
       std::unique_ptr<WebSocketHandshakeRequestInfo> request) override;
@@ -167,7 +167,7 @@ class ConnectTestingEventInterface : public WebSocketEventInterface {
                      scoped_refptr<HttpResponseHeaders> response_headers,
                      const IPEndPoint& remote_endpoint,
                      base::OnceCallback<void(const AuthCredentials*)> callback,
-                     absl::optional<AuthCredentials>* credentials) override;
+                     std::optional<AuthCredentials>* credentials) override;
 
  private:
   void QuitNestedEventLoop();
@@ -225,7 +225,7 @@ void ConnectTestingEventInterface::OnDropChannel(bool was_clean,
 void ConnectTestingEventInterface::OnFailChannel(
     const std::string& message,
     int net_error,
-    absl::optional<int> response_code) {
+    std::optional<int> response_code) {
   failed_ = true;
   failure_message_ = message;
   QuitNestedEventLoop();
@@ -251,8 +251,8 @@ int ConnectTestingEventInterface::OnAuthRequired(
     scoped_refptr<HttpResponseHeaders> response_headers,
     const IPEndPoint& remote_endpoint,
     base::OnceCallback<void(const AuthCredentials*)> callback,
-    absl::optional<AuthCredentials>* credentials) {
-  *credentials = absl::nullopt;
+    std::optional<AuthCredentials>* credentials) {
+  *credentials = std::nullopt;
   return OK;
 }
 
@@ -468,7 +468,8 @@ TEST_F(WebSocketEndToEndTest, MAYBE_HttpsProxyUsed) {
   const TestProxyDelegateWithProxyInfo::ResolvedProxyInfo& info =
       proxy_delegate_->resolved_proxy_info();
   EXPECT_EQ(ws_url, info.url);
-  EXPECT_TRUE(info.proxy_info.is_http());
+  EXPECT_EQ(info.proxy_info.ToDebugString(),
+            base::StrCat({"PROXY ", proxy_server.host_port_pair().ToString()}));
 }
 
 std::unique_ptr<HttpResponse> ProxyPacHandler(const HttpRequest& request) {
@@ -542,7 +543,6 @@ TEST_F(WebSocketEndToEndTest, MAYBE_ProxyPacUsed) {
   EXPECT_TRUE(ConnectAndWait(ws_url));
   const auto& info = proxy_delegate_->resolved_proxy_info();
   EXPECT_EQ(ws_url, info.url);
-  EXPECT_TRUE(info.proxy_info.is_http());
   EXPECT_EQ(info.proxy_info.ToDebugString(),
             base::StrCat({"PROXY ", proxy_server.host_port_pair().ToString()}));
 }

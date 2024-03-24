@@ -622,7 +622,7 @@ void GLDisplayEGL::Shutdown() {
   egl_android_native_fence_sync_supported_ = false;
 
 #if BUILDFLAG(IS_APPLE)
-  CleanupMetalSharedEvent();
+  CleanupMetalSharedEventStorage();
 #endif
 }
 
@@ -773,7 +773,7 @@ bool GLDisplayEGL::InitializeDisplay(bool supports_angle,
 
       // The platform may need to unset its platform specific display env in
       // case of vulkan if the platform doesn't support Vulkan surface.
-      absl::optional<base::ScopedEnvironmentVariableOverride> unset_display;
+      std::optional<base::ScopedEnvironmentVariableOverride> unset_display;
       if (display_type == ANGLE_VULKAN) {
         unset_display = GLDisplayEglUtil::GetInstance()
                             ->MaybeGetScopedDisplayUnsetForVulkan();
@@ -903,6 +903,10 @@ void GLDisplayEGL::InitializeCommon(bool for_testing) {
           gpu_switching_observer_.get());
     }
   }
+
+#if BUILDFLAG(IS_APPLE)
+  InitMetalSharedEventStorage();
+#endif
 }
 #endif  // defined(USE_EGL)
 

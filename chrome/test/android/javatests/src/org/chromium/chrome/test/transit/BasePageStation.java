@@ -4,21 +4,20 @@
 
 package org.chromium.chrome.test.transit;
 
-import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.click;
 import static androidx.test.espresso.action.ViewActions.longClick;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
 
-import android.view.View;
-
-import org.hamcrest.Matcher;
+import static org.chromium.base.test.transit.ViewElement.unscopedViewElement;
 
 import org.chromium.base.test.transit.Elements;
 import org.chromium.base.test.transit.StationFacility;
 import org.chromium.base.test.transit.TransitStation;
 import org.chromium.base.test.transit.Trip;
+import org.chromium.base.test.transit.ViewElement;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.ChromeTabbedActivity;
+import org.chromium.chrome.browser.hub.PaneId;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 
 /**
@@ -27,7 +26,10 @@ import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
  * <p>Use the derived {@link PageStation} or {@link EntryPageStation}.
  */
 public abstract class BasePageStation extends TransitStation {
-    public static final Matcher<View> TAB_SWITCHER_BUTTON = withId(R.id.tab_switcher_button);
+    // TODO(crbug.com/1524512): This should be owned, but the tab_switcher_button exists in the
+    // tab switcher, even though the tab switcher's toolbar is drawn over it.
+    public static final ViewElement TAB_SWITCHER_BUTTON =
+            unscopedViewElement(withId(R.id.tab_switcher_button));
 
     protected final ChromeTabbedActivityTestRule mChromeTabbedActivityTestRule;
     protected final boolean mIncognito;
@@ -40,23 +42,22 @@ public abstract class BasePageStation extends TransitStation {
 
     @Override
     public void declareElements(Elements.Builder elements) {
-        elements.declareUnownedView(TAB_SWITCHER_BUTTON);
+        elements.declareView(TAB_SWITCHER_BUTTON);
     }
 
     /** Long presses the tab switcher button to open the action menu. */
     public TabSwitcherActionMenuFacility openTabSwitcherActionMenu() {
-        recheckEnterConditions();
+        recheckActiveConditions();
 
         TabSwitcherActionMenuFacility menu =
                 new TabSwitcherActionMenuFacility(this, mChromeTabbedActivityTestRule);
-        return StationFacility.enterSync(
-                menu, (e) -> onView(TAB_SWITCHER_BUTTON).perform(longClick()));
+        return StationFacility.enterSync(menu, (e) -> TAB_SWITCHER_BUTTON.perform(longClick()));
     }
 
-    public AppMenuFacility openAppMenu() {
-        recheckEnterConditions();
+    public PageAppMenuFacility openAppMenu() {
+        recheckActiveConditions();
 
-        AppMenuFacility menu = new AppMenuFacility(this, mChromeTabbedActivityTestRule);
+        PageAppMenuFacility menu = new PageAppMenuFacility(this, mChromeTabbedActivityTestRule);
 
         // TODO(crbug.com/1489724): Put a real trigger, the app menu doesn't currently show on the
         // screen.
@@ -64,21 +65,33 @@ public abstract class BasePageStation extends TransitStation {
     }
 
     /** Opens the tab switcher by pressing the toolbar tab switcher button. */
-    public TabSwitcherStation openTabSwitcher() {
-        recheckEnterConditions();
+    public <T extends TabSwitcherStation> T openTabSwitcher(Class<T> expectedDestination) {
+        recheckActiveConditions();
 
-        TabSwitcherStation destination = new TabSwitcherStation(mChromeTabbedActivityTestRule);
-        return Trip.travelSync(
-                this, destination, (e) -> onView(TAB_SWITCHER_BUTTON).perform(click()));
+        T destination;
+        if (mIncognito) {
+            destination =
+                    expectedDestination.cast(
+                            new IncognitoTabSwitcherStation(mChromeTabbedActivityTestRule));
+        } else {
+            destination =
+                    expectedDestination.cast(
+                            new RegularTabSwitcherStation(mChromeTabbedActivityTestRule));
+        }
+        return Trip.travelSync(this, destination, (e) -> TAB_SWITCHER_BUTTON.perform(click()));
     }
 
     /** Opens the hub by pressing the toolbar tab switcher button. */
-    public HubStation openHub() {
-        recheckEnterConditions();
+    public <T extends HubBaseStation> T openHub(Class<T> expectedDestination) {
+        recheckActiveConditions();
 
-        HubStation destination = new HubStation(mChromeTabbedActivityTestRule);
-        return Trip.travelSync(
-                this, destination, (e) -> onView(TAB_SWITCHER_BUTTON).perform(click()));
+        T destination =
+                expectedDestination.cast(
+                        HubStationUtils.createHubStation(
+                                mIncognito ? PaneId.INCOGNITO_TAB_SWITCHER : PaneId.TAB_SWITCHER,
+                                mChromeTabbedActivityTestRule));
+
+        return Trip.travelSync(this, destination, (e) -> TAB_SWITCHER_BUTTON.perform(click()));
     }
 
     protected ChromeTabbedActivity getChromeTabbedActivity() {

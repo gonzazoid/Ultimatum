@@ -30,6 +30,7 @@
 #include "third_party/blink/renderer/core/dom/document.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "base/auto_reset.h"
@@ -58,7 +59,6 @@
 #include "services/network/public/cpp/web_sandbox_flags.h"
 #include "services/network/public/mojom/trust_tokens.mojom-blink.h"
 #include "services/network/public/mojom/web_sandbox_flags.mojom-blink.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/permissions_policy/document_policy_features.h"
@@ -76,6 +76,7 @@
 #include "third_party/blink/public/platform/web_content_settings_client.h"
 #include "third_party/blink/public/platform/web_theme_engine.h"
 #include "third_party/blink/public/web/web_print_page_description.h"
+#include "third_party/blink/renderer/bindings/core/v8/frozen_array.h"
 #include "third_party/blink/renderer/bindings/core/v8/isolated_world_csp.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
@@ -101,6 +102,7 @@
 #include "third_party/blink/renderer/core/css/css_property_value_set.h"
 #include "third_party/blink/renderer/core/css/css_style_declaration.h"
 #include "third_party/blink/renderer/core/css/css_style_sheet.h"
+#include "third_party/blink/renderer/core/css/cssom/caret_position.h"
 #include "third_party/blink/renderer/core/css/cssom/computed_style_property_map.h"
 #include "third_party/blink/renderer/core/css/element_rule_collector.h"
 #include "third_party/blink/renderer/core/css/font_face_set_document.h"
@@ -131,6 +133,7 @@
 #include "third_party/blink/renderer/core/dom/document_data.h"
 #include "third_party/blink/renderer/core/dom/document_fragment.h"
 #include "third_party/blink/renderer/core/dom/document_init.h"
+#include "third_party/blink/renderer/core/dom/document_lifecycle.h"
 #include "third_party/blink/renderer/core/dom/document_parser_timing.h"
 #include "third_party/blink/renderer/core/dom/document_part_root.h"
 #include "third_party/blink/renderer/core/dom/document_type.h"
@@ -161,11 +164,13 @@
 #include "third_party/blink/renderer/core/dom/processing_instruction.h"
 #include "third_party/blink/renderer/core/dom/scripted_animation_controller.h"
 #include "third_party/blink/renderer/core/dom/scripted_idle_task_controller.h"
+#include "third_party/blink/renderer/core/dom/shadow_including_tree_order_traversal.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
 #include "third_party/blink/renderer/core/dom/slot_assignment.h"
 #include "third_party/blink/renderer/core/dom/slot_assignment_engine.h"
 #include "third_party/blink/renderer/core/dom/slot_assignment_recalc_forbidden_scope.h"
 #include "third_party/blink/renderer/core/dom/static_node_list.h"
+#include "third_party/blink/renderer/core/dom/text_diff_range.h"
 #include "third_party/blink/renderer/core/dom/transform_source.h"
 #include "third_party/blink/renderer/core/dom/tree_walker.h"
 #include "third_party/blink/renderer/core/dom/visited_link_state.h"
@@ -185,6 +190,7 @@
 #include "third_party/blink/renderer/core/events/page_transition_event.h"
 #include "third_party/blink/renderer/core/events/visual_viewport_resize_event.h"
 #include "third_party/blink/renderer/core/events/visual_viewport_scroll_event.h"
+#include "third_party/blink/renderer/core/events/visual_viewport_scrollend_event.h"
 #include "third_party/blink/renderer/core/execution_context/window_agent.h"
 #include "third_party/blink/renderer/core/fragment_directive/fragment_directive.h"
 #include "third_party/blink/renderer/core/fragment_directive/text_fragment_handler.h"
@@ -208,8 +214,6 @@
 #include "third_party/blink/renderer/core/frame/visual_viewport.h"
 #include "third_party/blink/renderer/core/html/anchor_element_observer_for_service_worker.h"
 #include "third_party/blink/renderer/core/html/canvas/canvas_font_cache.h"
-#include "third_party/blink/renderer/core/html/canvas/canvas_rendering_context.h"
-#include "third_party/blink/renderer/core/html/canvas/html_canvas_element.h"
 #include "third_party/blink/renderer/core/html/collection_type.h"
 #include "third_party/blink/renderer/core/html/custom/custom_element.h"
 #include "third_party/blink/renderer/core/html/custom/custom_element_definition.h"
@@ -242,6 +246,7 @@
 #include "third_party/blink/renderer/core/html/lazy_load_image_observer.h"
 #include "third_party/blink/renderer/core/html/nesting_level_incrementer.h"
 #include "third_party/blink/renderer/core/html/parser/html_document_parser.h"
+#include "third_party/blink/renderer/core/html/parser/html_document_parser_fastpath.h"
 #include "third_party/blink/renderer/core/html/parser/html_parser_idioms.h"
 #include "third_party/blink/renderer/core/html/parser/text_resource_decoder.h"
 #include "third_party/blink/renderer/core/html/parser/text_resource_decoder_builder.h"
@@ -294,7 +299,6 @@
 #include "third_party/blink/renderer/core/page/pointer_lock_controller.h"
 #include "third_party/blink/renderer/core/page/scrolling/fragment_anchor.h"
 #include "third_party/blink/renderer/core/page/scrolling/root_scroller_controller.h"
-#include "third_party/blink/renderer/core/page/scrolling/scrolling_coordinator.h"
 #include "third_party/blink/renderer/core/page/scrolling/snap_coordinator.h"
 #include "third_party/blink/renderer/core/page/scrolling/top_document_root_scroller_controller.h"
 #include "third_party/blink/renderer/core/page/spatial_navigation_controller.h"
@@ -309,6 +313,7 @@
 #include "third_party/blink/renderer/core/resize_observer/resize_observer.h"
 #include "third_party/blink/renderer/core/resize_observer/resize_observer_controller.h"
 #include "third_party/blink/renderer/core/resize_observer/resize_observer_entry.h"
+#include "third_party/blink/renderer/core/resize_observer/resize_observer_size.h"
 #include "third_party/blink/renderer/core/script/detect_javascript_frameworks.h"
 #include "third_party/blink/renderer/core/script/script_runner.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme.h"
@@ -372,10 +377,6 @@
 #include "third_party/blink/renderer/platform/wtf/text/character_names.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_buffer.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_encoding_registry.h"
-
-#if defined(USE_INNER_HTML_PARSER_FAST_PATH)
-#include "third_party/blink/renderer/core/html/parser/html_document_parser_fastpath.h"
-#endif
 
 #ifndef NDEBUG
 using WeakDocumentSet = blink::HeapHashSet<blink::WeakMember<blink::Document>>;
@@ -666,11 +667,23 @@ const ListedElement::List& Document::UnassociatedListedElementsList::Get(
     const Node& root = owner.GetTreeScope().RootNode();
     DCHECK(list_.empty());
 
-    // TODO(crbug.com/1243730): We do not consider shadow trees for now.
-    for (HTMLElement& element : Traversal<HTMLElement>::StartsAfter(root)) {
-      ListedElement* listed_element = ListedElement::From(element);
-      if (listed_element && !listed_element->Form()) {
-        list_.push_back(listed_element);
+    if (base::FeatureList::IsEnabled(
+            features::kAutofillIncludeShadowDomInUnassociatedListedElements)) {
+      for (Node& current :
+           ShadowIncludingTreeOrderTraversal::DescendantsOf(root)) {
+        if (HTMLElement* element = DynamicTo<HTMLElement>(current)) {
+          if (ListedElement* listed_element = ListedElement::From(*element);
+              listed_element && !listed_element->Form()) {
+            list_.push_back(listed_element);
+          }
+        }
+      }
+    } else {
+      for (HTMLElement& element : Traversal<HTMLElement>::StartsAfter(root)) {
+        ListedElement* listed_element = ListedElement::From(element);
+        if (listed_element && !listed_element->Form()) {
+          list_.push_back(listed_element);
+        }
       }
     }
     dirty_ = false;
@@ -684,6 +697,45 @@ const ListedElement::List& Document::UnassociatedListedElements() const {
 
 void Document::MarkUnassociatedListedElementsDirty() {
   unassociated_listed_elements_.MarkDirty();
+}
+
+void Document::TopLevelFormsList::MarkDirty() {
+  dirty_ = true;
+  list_.clear();
+}
+
+void Document::TopLevelFormsList::Trace(Visitor* visitor) const {
+  visitor->Trace(list_);
+}
+
+const HeapVector<Member<HTMLFormElement>>& Document::TopLevelFormsList::Get(
+    Document& owner) {
+  if (dirty_) {
+    // Use BFS to avoid unnecessarily visiting the descendants of form elements.
+    HeapDeque<Member<Node>> nodes_to_visit;
+    nodes_to_visit.push_back(&owner.GetTreeScope().RootNode());
+    while (!nodes_to_visit.empty()) {
+      Node* current = nodes_to_visit.TakeFirst();
+      if (HTMLFormElement* form = DynamicTo<HTMLFormElement>(*current)) {
+        list_.push_back(form);
+      } else {
+        for (Node& child :
+             ShadowIncludingTreeOrderTraversal::ChildrenOf(*current)) {
+          nodes_to_visit.push_back(&child);
+        }
+      }
+    }
+    dirty_ = false;
+  }
+  return list_;
+}
+
+const HeapVector<Member<HTMLFormElement>>& Document::GetTopLevelForms() {
+  return top_level_forms_.Get(*this);
+}
+
+void Document::MarkTopLevelFormsDirty() {
+  top_level_forms_.MarkDirty();
 }
 
 ExplicitlySetAttrElementsMap* Document::GetExplicitlySetAttrElementsMap(
@@ -708,6 +760,31 @@ void Document::MoveElementExplicitlySetAttrElementsMapToNewDocument(
     new_document.element_explicitly_set_attr_elements_map_.insert(element,
                                                                   it->value);
     element_explicitly_set_attr_elements_map_.erase(it);
+  }
+}
+
+CachedAttrAssociatedElementsMap* Document::GetCachedAttrAssociatedElementsMap(
+    Element* element) {
+  DCHECK(element);
+  DCHECK(element->GetDocument() == this);
+  auto add_result =
+      element_cached_attr_associated_elements_map_.insert(element, nullptr);
+  if (add_result.is_new_entry) {
+    add_result.stored_value->value =
+        MakeGarbageCollected<CachedAttrAssociatedElementsMap>();
+  }
+  return add_result.stored_value->value.Get();
+}
+
+void Document::MoveElementCachedAttrAssociatedElementsMapToNewDocument(
+    Element* element,
+    Document& new_document) {
+  DCHECK(element);
+  auto it = element_cached_attr_associated_elements_map_.find(element);
+  if (it != element_cached_attr_associated_elements_map_.end()) {
+    new_document.element_cached_attr_associated_elements_map_.insert(element,
+                                                                     it->value);
+    element_cached_attr_associated_elements_map_.erase(it);
   }
 }
 
@@ -939,18 +1016,29 @@ Document::~Document() {
 
 Range* Document::CreateRangeAdjustedToTreeScope(const TreeScope& tree_scope,
                                                 const Position& position) {
+  const Position& adjusted_position =
+      PositionAdjustedToTreeScope(tree_scope, position);
+  return MakeGarbageCollected<Range>(tree_scope.GetDocument(),
+                                     adjusted_position, adjusted_position);
+}
+
+CaretPosition* Document::CreateCaretPosition(const Position& position) {
+  return MakeGarbageCollected<CaretPosition>(
+      position.AnchorNode(), position.ComputeOffsetInContainerNode());
+}
+
+const Position Document::PositionAdjustedToTreeScope(
+    const TreeScope& tree_scope,
+    const Position& position) {
   DCHECK(position.IsNotNull());
   // Note: Since |Position::ComputeContainerNode()| returns |nullptr| if
   // |position| is |BeforeAnchor| or |AfterAnchor|.
   Node* const anchor_node = position.AnchorNode();
   if (anchor_node->GetTreeScope() == tree_scope) {
-    return MakeGarbageCollected<Range>(tree_scope.GetDocument(), position,
-                                       position);
+    return position;
   }
   Node* const shadow_host = tree_scope.AncestorInThisScope(anchor_node);
-  return MakeGarbageCollected<Range>(tree_scope.GetDocument(),
-                                     Position::BeforeNode(*shadow_host),
-                                     Position::BeforeNode(*shadow_host));
+  return Position::BeforeNode(*shadow_host);
 }
 
 SelectorQueryCache& Document::GetSelectorQueryCache() {
@@ -1393,9 +1481,11 @@ Node* Document::importNode(Node* imported_node,
   NodeCloningData data;
   if (deep) {
     data.Put(CloneOption::kIncludeDescendants);
-    auto* fragment = DynamicTo<DocumentFragment>(imported_node);
-    if (fragment && fragment->IsTemplateContent()) {
-      data.Put(CloneOption::kIncludeShadowRoots);
+    if (!RuntimeEnabledFeatures::ShadowRootClonableEnabled()) {
+      auto* fragment = DynamicTo<DocumentFragment>(imported_node);
+      if (fragment && fragment->IsTemplateContent()) {
+        data.Put(CloneOption::kIncludeAllShadowRoots);
+      }
     }
   }
   return imported_node->Clone(*this, data, /*append_to*/ nullptr);
@@ -1592,24 +1682,40 @@ void Document::SetContent(const String& content) {
 
 using AllowState = blink::Document::DeclarativeShadowRootAllowState;
 void Document::SetContentFromDOMParser(const String& content) {
-#if defined(USE_INNER_HTML_PARSER_FAST_PATH)
   if (RuntimeEnabledFeatures::DOMParserUsesHTMLFastPathParserEnabled() &&
       contentType() == "text/html" && IsA<HTMLDocument>(this)) {
     auto* body = MakeGarbageCollected<HTMLBodyElement>(*this);
-    const bool include_shadow_roots =
-        declarative_shadow_root_allow_state_ == AllowState::kAllow;
-    if (TryParsingHTMLFragment(content, *this, *body, *body,
-                               kAllowScriptingContent, include_shadow_roots,
-                               nullptr)) {
+    HTMLFragmentParsingBehaviorSet parser_behavior(
+        {HTMLFragmentParsingBehavior::kStripInitialWhitespaceForBody});
+    if (declarative_shadow_root_allow_state_ == AllowState::kAllow) {
+      parser_behavior.Put(HTMLFragmentParsingBehavior::kIncludeShadowRoots);
+    }
+    const bool success = TryParsingHTMLFragment(content, *this, *body, *body,
+                                                kAllowScriptingContent,
+                                                parser_behavior, nullptr);
+    if (success) {
+      // When DCHECK is enabled, use SetContent() and verify fast-path
+      // content matches. This effectively means the results of the fast-path
+      // parser aren't used with DCHECK enabled, but it provides a way to
+      // catch problems.
+#if DCHECK_IS_ON()
+      SetContent(content);
+      DCHECK(this->body());
+      DCHECK_EQ(CreateMarkup(body), CreateMarkup(this->body()))
+          << " supplied value " << content;
+      DCHECK(body->isEqualNode(this->body()));
+#else
       auto* html = MakeGarbageCollected<HTMLHtmlElement>(*this);
       auto* head = MakeGarbageCollected<HTMLHeadElement>(*this);
       html->AppendChild(head);
-      html->AppendChild(body);
       AppendChild(html);
+      // Append `body` last so that the newly created children of `body` only
+      // get one InsertedInto().
+      html->AppendChild(body);
+#endif
       return;
     }
   }
-#endif
   SetContent(content);
 }
 
@@ -1661,6 +1767,21 @@ Range* Document::caretRangeFromPoint(int x, int y) {
   Position range_compliant_position =
       position_with_affinity.GetPosition().ParentAnchoredEquivalent();
   return CreateRangeAdjustedToTreeScope(*this, range_compliant_position);
+}
+
+CaretPosition* Document::caretPositionFromPoint(float x, float y) {
+  if (!GetLayoutView()) {
+    return nullptr;
+  }
+
+  HitTestResult result = HitTestInDocument(this, x, y);
+  PositionWithAffinity position_with_affinity = result.GetPosition();
+  if (position_with_affinity.IsNull()) {
+    return nullptr;
+  }
+
+  return CreateCaretPosition(
+      position_with_affinity.GetPosition().ParentAnchoredEquivalent());
 }
 
 Element* Document::scrollingElement() {
@@ -1873,14 +1994,11 @@ uint32_t Document::softNavigations() const {
   if (!window) {
     return 0;
   }
-  LocalFrame* frame = window->GetFrame();
-  if (!frame || !frame->IsMainFrame()) {
-    return 0;
+  if (SoftNavigationHeuristics* heuristics =
+          SoftNavigationHeuristics::From(*window)) {
+    return heuristics->SoftNavigationCount();
   }
-  SoftNavigationHeuristics* heuristics =
-      SoftNavigationHeuristics::From(*window);
-  DCHECK(heuristics);
-  return heuristics->SoftNavigationCount();
+  return 0;
 }
 
 bool Document::hidden() const {
@@ -2746,7 +2864,8 @@ void Document::AttachCompositorTimeline(cc::AnimationTimeline* timeline) const {
 
 void Document::ClearFocusedElementIfNeeded() {
   if (clear_focused_element_timer_.IsActive() || !focused_element_ ||
-      focused_element_->IsFocusable()) {
+      focused_element_->IsFocusable(
+          Element::UpdateBehavior::kNoneForClearingFocus)) {
     return;
   }
   clear_focused_element_timer_.StartOneShot(base::TimeDelta(), FROM_HERE);
@@ -3068,8 +3187,6 @@ void Document::Shutdown() {
     }
   }
 
-  computed_node_mapping_.clear();
-
   DetachLayoutTree();
   layout_view_ = nullptr;
   DCHECK(!View()->IsAttached());
@@ -3104,6 +3221,13 @@ void Document::Shutdown() {
   mime_handler_view_before_unload_event_listener_ = nullptr;
 
   resource_coordinator_.reset();
+
+  // Because the document view transition supplement can get destroyed before
+  // the execution context notification, we should clean up the transition
+  // object here.
+  if (auto* transition = ViewTransitionUtils::GetTransition(*this)) {
+    transition->SkipTransition();
+  }
 
   // This is required, as our LocalFrame might delete itself as soon as it
   // detaches us. However, this violates Node::detachLayoutTree() semantics, as
@@ -3590,8 +3714,16 @@ void Document::CancelParsing() {
   // open() or write() after an active parser is aborted. See
   // https://github.com/whatwg/html/issues/4723 for discussion about
   // standardizing this behavior.
-  if (parser_ && parser_->IsParsing())
+  if (parser_ && parser_->IsParsing()) {
     ignore_opens_and_writes_for_abort_ = true;
+    if (GetFrame()) {
+      // Only register the sticky feature when the parser was parsing and then
+      // was cancelled.
+      GetFrame()->GetFrameScheduler()->RegisterStickyFeature(
+          SchedulingPolicy::Feature::kParserAborted,
+          {SchedulingPolicy::DisableBackForwardCache()});
+    }
+  }
   DetachParser();
   SetParsingState(kFinishedParsing);
   SetReadyState(kComplete);
@@ -4172,8 +4304,14 @@ bool Document::DispatchBeforeUnloadEvent(ChromeClient* chrome_client,
 void Document::DispatchUnloadEvents(UnloadEventTimingInfo* unload_timing_info) {
   PluginScriptForbiddenScope forbid_plugin_destructor_scripting;
   PageDismissalScope in_page_dismissal;
-  if (parser_)
+  if (parser_) {
     parser_->StopParsing();
+  }
+
+  if (IsPrerendering()) {
+    // We do not dispatch unload event while prerendering.
+    return;
+  }
 
   if (load_event_progress_ == kLoadEventNotRun ||
       // TODO(dcheng): We should consider if we can make this conditional check
@@ -4547,18 +4685,24 @@ KURL Document::FallbackBaseURL() const {
     if (fallback_base_url_.IsValid()) {
       return fallback_base_url_;
     }
-    // We only use the parent document's base URL in legacy behavior. There are
-    // cases where fallback_base_url_for_srcdoc_ may not be set in the new base
-    // URL inheritance mode (e.g., browser-initiated navigations as in
-    // NavigationBrowserTest.BlockedSrcDocBrowserInitiated), but we should avoid
-    // trying to look at the parent document's current value in those cases. In
-    // legacy behavior, we still use the parent document's base URL (unless
-    // ParentDocument() is null, such as for detached documents).
-    // TODO(https://crbug.com/1408782): handle cases where
-    // NewBaseUrlInheritanceBehavior is enabled, but legacy session-history is
-    // missing initiator_base_url information.
-    if (!blink::features::IsNewBaseUrlInheritanceBehaviorEnabled() &&
-        ParentDocument()) {
+    // The fallback base URL can be missing in some cases (e.g., for
+    // browser-initiated navigations like
+    // NavigationBrowserTest.BlockedSrcDocBrowserInitiated, or for cases where
+    // the srcdoc's initiator origin does not match the parent origin, which
+    // should be removed in https://crbug.com/1169736).
+    //
+    // In these cases, use the parent frame's base URL, because the srcdoc value
+    // and origin both come from the parent frame.
+    // In NewBaseUrlInheritanceBehavior mode, make this stricter by only using
+    // the parent frame if it is same-origin.
+    // TODO(https://crbug.com/1169736): Enforce that the parent is same-origin,
+    // which should already be true.
+    if (blink::features::IsNewBaseUrlInheritanceBehaviorEnabled()) {
+      if (same_origin_parent) {
+        return same_origin_parent->BaseURL();
+      }
+    } else if (ParentDocument()) {
+      // In legacy mode, use the parent without checking the origin.
       // TODO(https://crbug.com/751329, https://crbug.com/1336904): Referring to
       // ParentDocument() is not correct.
       return ParentDocument()->BaseURL();
@@ -4728,8 +4872,8 @@ CSSStyleSheet& Document::ElementSheet() {
   return *elem_sheet_;
 }
 
-bool Document::InPostLifecycleSteps() const {
-  return View() && View()->InPostLifecycleSteps();
+bool Document::InvalidationDisallowed() const {
+  return View() && View()->InvalidationDisallowed();
 }
 
 void Document::MaybeHandleHttpRefresh(const String& content,
@@ -4786,7 +4930,7 @@ bool Document::IsHttpRefreshScheduledWithin(base::TimeDelta interval) {
 }
 
 bool Document::HasDocumentPictureInPictureWindow() const {
-  return PictureInPictureController::HasDocumentPictureInPictureWindow(*this);
+  return PictureInPictureController::GetDocumentPictureInPictureWindow(*this);
 }
 
 network::mojom::ReferrerPolicy Document::GetReferrerPolicy() const {
@@ -5141,8 +5285,6 @@ void Document::MarkViewportUnitsDirty() {
 }
 
 void Document::DynamicViewportUnitsChanged() {
-  if (!RuntimeEnabledFeatures::CSSViewportUnits4Enabled())
-    return;
   MediaQueryAffectingValueChanged(MediaValueChange::kDynamicViewport);
   if (media_query_matcher_)
     media_query_matcher_->DynamicViewportChanged();
@@ -5273,7 +5415,7 @@ bool Document::SetFocusedElement(Element* new_focused_element,
   // Remove focus from the existing focus node (if any)
   if (old_focused_element) {
     old_focused_element->SetFocused(false, params.type);
-    old_focused_element->SetHasFocusWithinUpToAncestor(false, ancestor);
+    old_focused_element->SetHasFocusWithinUpToAncestor(false, ancestor, true);
 
     DisplayLockUtilities::ElementLostFocus(old_focused_element);
 
@@ -5349,7 +5491,7 @@ bool Document::SetFocusedElement(Element* new_focused_element,
     if (focused_element_ == nullptr) {
       return false;
     }
-    focused_element_->SetHasFocusWithinUpToAncestor(true, ancestor);
+    focused_element_->SetHasFocusWithinUpToAncestor(true, ancestor, true);
     DisplayLockUtilities::ElementGainedFocus(focused_element_.Get());
 
     // Element::setFocused for frames can dispatch events.
@@ -5717,13 +5859,11 @@ void Document::NodeWillBeRemoved(Node& n) {
 }
 
 void Document::NotifyUpdateCharacterData(CharacterData* character_data,
-                                         unsigned offset,
-                                         unsigned old_length,
-                                         unsigned new_length) {
+                                         const TextDiffRange& diff) {
   synchronous_mutation_observer_set_.ForEachObserver(
       [&](SynchronousMutationObserver* observer) {
-        observer->DidUpdateCharacterData(character_data, offset, old_length,
-                                         new_length);
+        observer->DidUpdateCharacterData(character_data, diff.offset,
+                                         diff.old_size, diff.new_size);
       });
 }
 
@@ -5746,13 +5886,13 @@ void Document::NotifyAttributeChanged(const Element& element,
                                       const QualifiedName& name,
                                       const AtomicString& old_value,
                                       const AtomicString& new_value) {
-  if (LocalFrameView* frame_view = View()) {
-    if (FragmentAnchor* anchor = frame_view->GetFragmentAnchor()) {
-      // There are other attributes (not to mention style changes) that could
-      // potentially make more content available to to the fragment anchor but
-      // this is a best effort heuristic, based on commonly seen patterns in the
-      // wild, so isn't meant to be comprehensive.
-      if (name == html_names::kHiddenAttr) {
+  // There are other attributes (not to mention style changes) that could
+  // potentially make more content available to the fragment anchor but
+  // this is a best effort heuristic, based on commonly seen patterns in the
+  // wild, so isn't meant to be comprehensive.
+  if (name == html_names::kHiddenAttr) {
+    if (LocalFrameView* frame_view = View()) {
+      if (FragmentAnchor* anchor = frame_view->GetFragmentAnchor()) {
         anchor->NewContentMayBeAvailable();
       }
     }
@@ -5923,6 +6063,13 @@ void Document::EnqueueVisualViewportScrollEvent() {
   scripted_animation_controller_->EnqueuePerFrameEvent(event);
 }
 
+void Document::EnqueueVisualViewportScrollEndEvent() {
+  VisualViewportScrollEndEvent* event =
+      MakeGarbageCollected<VisualViewportScrollEndEvent>();
+  event->SetTarget(domWindow()->visualViewport());
+  scripted_animation_controller_->EnqueuePerFrameEvent(event);
+}
+
 void Document::EnqueueVisualViewportResizeEvent() {
   VisualViewportResizeEvent* event =
       MakeGarbageCollected<VisualViewportResizeEvent>();
@@ -5976,6 +6123,13 @@ void Document::AddMutationEventListenerTypeIfEnabled(
     return;
   }
   AddListenerType(listener_type);
+}
+
+bool Document::HasListenerType(ListenerType listener_type) const {
+  DCHECK(!execution_context_ ||
+         RuntimeEnabledFeatures::MutationEventsEnabled(execution_context_) ||
+         !(listener_types_ & kDOMMutationEventListener));
+  return (listener_types_ & listener_type);
 }
 
 void Document::AddListenerTypeIfNeeded(const AtomicString& event_type,
@@ -6306,7 +6460,7 @@ void Document::setDomain(const String& raw_domain,
   }
 }
 
-absl::optional<base::Time> Document::lastModifiedTime() const {
+std::optional<base::Time> Document::lastModifiedTime() const {
   AtomicString http_last_modified = override_last_modified_;
   if (http_last_modified.empty()) {
     if (DocumentLoader* document_loader = Loader()) {
@@ -6317,7 +6471,7 @@ absl::optional<base::Time> Document::lastModifiedTime() const {
   if (!http_last_modified.empty()) {
     return ParseDate(http_last_modified);
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 // https://html.spec.whatwg.org/C#dom-document-lastmodified
@@ -6565,6 +6719,15 @@ ScriptPromise Document::requestStorageAccessFor(ScriptState* script_state,
 }
 
 ScriptPromise Document::requestStorageAccess(ScriptState* script_state) {
+  // Requesting storage access via `requestStorageAccess()` idl always requests
+  // unpartitioned cookie access.
+  return RequestStorageAccessImpl(script_state,
+                                  /*request_unpartitioned_cookie_access=*/true);
+}
+
+ScriptPromise Document::RequestStorageAccessImpl(
+    ScriptState* script_state,
+    bool request_unpartitioned_cookie_access) {
   if (!GetFrame()) {
     FireRequestStorageAccessHistogram(RequestStorageResult::REJECTED_NO_ORIGIN);
 
@@ -6669,13 +6832,15 @@ ScriptPromise Document::requestStorageAccess(ScriptState* script_state) {
           std::move(descriptor),
           LocalFrame::HasTransientUserActivation(GetFrame()),
           WTF::BindOnce(&Document::ProcessStorageAccessPermissionState,
-                        WrapPersistent(this), WrapPersistent(resolver)));
+                        WrapPersistent(this), WrapPersistent(resolver),
+                        request_unpartitioned_cookie_access));
 
   return promise;
 }
 
 void Document::ProcessStorageAccessPermissionState(
     ScriptPromiseResolver* resolver,
+    bool request_unpartitioned_cookie_access,
     mojom::blink::PermissionStatus status) {
   DCHECK(resolver);
 
@@ -6683,11 +6848,18 @@ void Document::ProcessStorageAccessPermissionState(
   DCHECK(script_state);
   ScriptState::Scope scope(script_state);
 
+  // document could be no longer alive.
+  if (!dom_window_) {
+    resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
+        script_state->GetIsolate(), DOMExceptionCode::kNotAllowedError,
+        "document shutdown"));
+    return;
+  }
+
   if (status == mojom::blink::PermissionStatus::GRANTED) {
     FireRequestStorageAccessHistogram(
         RequestStorageResult::APPROVED_NEW_OR_EXISTING_GRANT);
-    // document could be no longer alive.
-    if (dom_window_) {
+    if (request_unpartitioned_cookie_access) {
       dom_window_->SetHasStorageAccess();
     }
     resolver->Resolve();
@@ -7749,7 +7921,7 @@ void Document::UpdateThemeColorCache() {
   }
 }
 
-absl::optional<Color> Document::ThemeColor() {
+std::optional<Color> Document::ThemeColor() {
   // Returns the color of the first meta[name=theme-color] element in
   // tree order that matches and is valid.
   // https://html.spec.whatwg.org/multipage/semantics.html#meta-theme-color
@@ -7766,7 +7938,7 @@ absl::optional<Color> Document::ThemeColor() {
       return color;
     }
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 void Document::UpdateAppTitle() {
@@ -7914,6 +8086,9 @@ ukm::SourceId Document::UkmSourceID() const {
 }
 
 FontMatchingMetrics* Document::GetFontMatchingMetrics() {
+  if (Lifecycle().GetState() >= DocumentLifecycle::LifecycleState::kStopping) {
+    return nullptr;
+  }
   if (font_matching_metrics_)
     return font_matching_metrics_.get();
   font_matching_metrics_ = std::make_unique<FontMatchingMetrics>(
@@ -8098,7 +8273,7 @@ void Document::ScheduleForTopLayerRemoval(Element* element,
     return;
   }
 
-  absl::optional<TopLayerReason> existing_pending_removal = absl::nullopt;
+  std::optional<TopLayerReason> existing_pending_removal = std::nullopt;
   for (const auto& pending_removal : top_layer_elements_pending_removal_) {
     if (pending_removal->element == element) {
       existing_pending_removal = pending_removal->reason;
@@ -8151,14 +8326,14 @@ void Document::RemoveFromTopLayerImmediately(Element* element) {
   probe::TopLayerElementsChanged(this);
 }
 
-absl::optional<Document::TopLayerReason>
-Document::IsScheduledForTopLayerRemoval(Element* element) const {
+std::optional<Document::TopLayerReason> Document::IsScheduledForTopLayerRemoval(
+    Element* element) const {
   for (const auto& entry : top_layer_elements_pending_removal_) {
     if (entry->element == element) {
       return entry->reason;
     }
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 HTMLDialogElement* Document::ActiveModalDialog() const {
@@ -8818,8 +8993,9 @@ bool ShouldInvalidateNodeListCachesForAttr<kNumNodeListInvalidationTypes>(
 bool Document::ShouldInvalidateNodeListCaches(
     const QualifiedName* attr_name) const {
   if (attr_name) {
-    return ShouldInvalidateNodeListCachesForAttr<
-        kDoNotInvalidateOnAttributeChanges + 1>(node_lists_, *attr_name);
+    return node_lists_.NeedsInvalidateOnAttributeChange() &&
+           ShouldInvalidateNodeListCachesForAttr<
+               kDoNotInvalidateOnAttributeChanges + 1>(node_lists_, *attr_name);
   }
 
   // If the invalidation is not for an attribute, invalidation is needed if
@@ -8970,18 +9146,19 @@ void Document::Trace(Visitor* visitor) const {
   visitor->Trace(slot_assignment_engine_);
   visitor->Trace(viewport_data_);
   visitor->Trace(lazy_load_image_observer_);
-  visitor->Trace(computed_node_mapping_);
   visitor->Trace(mime_handler_view_before_unload_event_listener_);
   visitor->Trace(cookie_jar_);
   visitor->Trace(synchronous_mutation_observer_set_);
   visitor->Trace(fragment_directive_);
   visitor->Trace(element_explicitly_set_attr_elements_map_);
+  visitor->Trace(element_cached_attr_associated_elements_map_);
   visitor->Trace(display_lock_document_state_);
   visitor->Trace(render_blocking_resource_manager_);
   visitor->Trace(find_in_page_active_match_node_);
   visitor->Trace(data_);
   visitor->Trace(meta_theme_color_elements_);
   visitor->Trace(unassociated_listed_elements_);
+  visitor->Trace(top_level_forms_);
   visitor->Trace(intrinsic_size_observer_);
   visitor->Trace(lazy_loaded_auto_sized_img_observer_);
   visitor->Trace(anchor_element_interaction_tracker_);
@@ -9102,14 +9279,13 @@ bool Document::ChildrenCanHaveStyle() const {
   return false;
 }
 
-ComputedAccessibleNode* Document::GetOrCreateComputedAccessibleNode(
-    AXID ax_id) {
-  DCHECK(ax_id) << "Invalid ax_id";
-  if (!base::Contains(computed_node_mapping_, ax_id)) {
-    auto* node = MakeGarbageCollected<ComputedAccessibleNode>(ax_id, this);
-    computed_node_mapping_.insert(ax_id, node);
+ComputedAccessibleNode* Document::GetOrCreateComputedAccessibleNode(AXID axid) {
+  DCHECK(axid) << "Invalid ax_id";
+  if (AXObjectCache* cache = ExistingAXObjectCache()) {
+    return cache->GetOrCreateComputedAccessibleNode(axid);
   }
-  return computed_node_mapping_.at(ax_id);
+
+  return nullptr;
 }
 
 void Document::SetShowBeforeUnloadDialog(bool show_dialog) {
@@ -9163,8 +9339,12 @@ bool Document::InDarkMode() {
 
 const ui::ColorProvider* Document::GetColorProviderForPainting(
     mojom::blink::ColorScheme color_scheme) const {
-  return GetPage()->GetColorProviderForPainting(
-      color_scheme, in_forced_colors_mode_);
+  if (!GetPage()) {
+    return nullptr;
+  }
+
+  return GetPage()->GetColorProviderForPainting(color_scheme,
+                                                in_forced_colors_mode_);
 }
 
 void Document::CountUse(mojom::WebFeature feature) const {
@@ -9371,7 +9551,7 @@ void Document::ResetAgent(Agent& agent) {
 }
 
 bool Document::SupportsLegacyDOMMutations() {
-  if (!RuntimeEnabledFeatures::MutationEventsEnabled()) {
+  if (!RuntimeEnabledFeatures::MutationEventsEnabled(GetExecutionContext())) {
     return false;
   }
   if (!legacy_dom_mutations_supported_.has_value()) {

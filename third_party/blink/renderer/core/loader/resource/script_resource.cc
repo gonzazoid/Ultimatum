@@ -61,17 +61,26 @@ namespace blink {
 
 namespace {
 
-// Returns true if the given request context is a script-like destination
-// defined in the Fetch spec:
-// https://fetch.spec.whatwg.org/#request-destination-script-like
+// Returns true if the given request context is a valid destination for
+// scripts or modules. This includes:
+// - script-like https://fetch.spec.whatwg.org/#request-destination-script-like
+// - json
+// - style
+// These contextes to the destinations that the request performed by
+// https://html.spec.whatwg.org/#fetch-a-single-module-script can have.
 bool IsRequestContextSupported(
     mojom::blink::RequestContextType request_context) {
   // TODO(nhiroki): Support "audioworklet" and "paintworklet" destinations.
   switch (request_context) {
+    // script-like
     case mojom::blink::RequestContextType::SCRIPT:
     case mojom::blink::RequestContextType::WORKER:
     case mojom::blink::RequestContextType::SERVICE_WORKER:
     case mojom::blink::RequestContextType::SHARED_WORKER:
+    // json
+    case mojom::blink::RequestContextType::JSON:
+    // style
+    case mojom::blink::RequestContextType::STYLE:
       return true;
     default:
       break;
@@ -86,6 +95,7 @@ ScriptResource* ScriptResource::Fetch(
     FetchParameters& params,
     ResourceFetcher* fetcher,
     ResourceClient* client,
+    v8::Isolate* isolate,
     StreamingAllowed streaming_allowed,
     v8_compile_hints::V8CrowdsourcedCompileHintsProducer*
         v8_compile_hints_producer,
@@ -94,7 +104,8 @@ ScriptResource* ScriptResource::Fetch(
   DCHECK(IsRequestContextSupported(
       params.GetResourceRequest().GetRequestContext()));
   auto* resource = To<ScriptResource>(fetcher->RequestResource(
-      params, ScriptResourceFactory(streaming_allowed, params.GetScriptType()),
+      params,
+      ScriptResourceFactory(isolate, streaming_allowed, params.GetScriptType()),
       client));
   resource->v8_compile_hints_producer_ = v8_compile_hints_producer;
   resource->v8_compile_hints_consumer_ = v8_compile_hints_consumer;
@@ -102,6 +113,7 @@ ScriptResource* ScriptResource::Fetch(
 }
 
 ScriptResource* ScriptResource::CreateForTest(
+    v8::Isolate* isolate,
     const KURL& url,
     const WTF::TextEncoding& encoding,
     mojom::blink::ScriptType script_type) {
@@ -110,20 +122,24 @@ ScriptResource* ScriptResource::CreateForTest(
   ResourceLoaderOptions options(nullptr /* world */);
   TextResourceDecoderOptions decoder_options(
       TextResourceDecoderOptions::kPlainTextContent, encoding);
-  return MakeGarbageCollected<ScriptResource>(request, options, decoder_options,
-                                              kNoStreaming, script_type);
+  return MakeGarbageCollected<ScriptResource>(
+      request, options, decoder_options, isolate, kNoStreaming, script_type);
 }
 
 ScriptResource::ScriptResource(
     const ResourceRequest& resource_request,
     const ResourceLoaderOptions& options,
     const TextResourceDecoderOptions& decoder_options,
+    v8::Isolate* isolate,
     StreamingAllowed streaming_allowed,
     mojom::blink::ScriptType initial_request_script_type)
     : TextResource(resource_request,
                    ResourceType::kScript,
                    options,
                    decoder_options),
+      // Only storing the isolate for the main thread is safe.
+      // See variable definition for details.
+      isolate_if_main_thread_(IsMainThread() ? isolate : nullptr),
       consume_cache_state_(ConsumeCacheState::kWaitingForCache),
       initial_request_script_type_(initial_request_script_type),
       stream_text_decoder_(
@@ -149,6 +165,9 @@ ScriptResource::ScriptResource(
     DisableOffThreadConsumeCache();
   } else if (initial_request_script_type == mojom::blink::ScriptType::kModule) {
     // TODO(leszeks): Enable off-thread cache consumption for modules.
+    DisableOffThreadConsumeCache();
+  } else if (!isolate_if_main_thread_) {
+    // If we have a null isolate disable off thread cache consumption.
     DisableOffThreadConsumeCache();
   }
 }
@@ -227,7 +246,9 @@ void ScriptResource::SetSerializedCachedMetadata(mojo_base::BigBuffer data) {
           // ScriptCacheConsumer result will be ignored if the cached metadata
           // check fails later.
           CachedMetadataHandler::kAllowUnchecked)) {
+    CHECK(isolate_if_main_thread_);
     cache_consumer_ = MakeGarbageCollected<ScriptCacheConsumer>(
+        isolate_if_main_thread_,
         V8CodeCache::GetCachedMetadata(CacheHandler(),
                                        CachedMetadataHandler::kAllowUnchecked),
         Url(), InspectorId());

@@ -30,21 +30,20 @@ include_rules = [
   "+chrome/services/machine_learning/public",
   "+chrome/services/media_gallery_util/public",
   "+chrome/services/printing/public",
-  "+chrome/services/qrcode_generator/public",
   "+chrome/services/sharing/public",
   "+chrome/services/removable_storage_writer/public",
   "+chrome/services/util_win/public",
   "+chrome/updater/app/server/win/updater_legacy_idl.h",
   "+chromeos",
   "+components/about_ui",
+  "+components/access_code_cast",
   "+components/account_id",
+  "+components/account_manager_core",
   "+components/allocation_recorder",
   "+components/app_constants/constants.h",
-  "+components/federated_learning",
+  "+components/affiliations",
   # TODO(b/129295708): Remove after move is complete.
   "+components/arc",
-  "+components/access_code_cast",
-  "+components/account_manager_core",
   "+components/app_restore",
   "+components/assist_ranker",
   "+components/autofill/android",
@@ -106,7 +105,6 @@ include_rules = [
   "+components/contextual_search/core/browser",
   "+components/cookie_config",
   "+components/country_codes",
-  "+components/crash/content/app",
   "+components/crash/content/browser",
   "+components/crash/core/app",
   "+components/crash/core/browser",
@@ -147,6 +145,7 @@ include_rules = [
   "+components/favicon/content",
   "+components/favicon/core",
   "+components/feature_engagement",
+  "+components/federated_learning",
   "+components/feed",
   "+components/feedback",
   "+components/file_access",
@@ -275,6 +274,7 @@ include_rules = [
   "+components/privacy_sandbox",
   "+components/profile_metrics",
   "+components/proxy_config",
+  "+components/qr_code_generator",
   "+components/query_parser",
   "+components/query_tiles",
   "+components/quirks",
@@ -501,12 +501,14 @@ include_rules = [
   "+storage/browser",
   "+storage/common",
 
+  # Ensure flags are usable anywhere.
+  "+chrome/browser/flags",
+
   # chrome/browser/ui/views/ is an implementation, not a public interface.
   # Parent directories should not depend on it directly.
   # TODO(crbug.com/1112591): Remove the exceptions below.
   "-chrome/browser/ui/views",
   "+chrome/browser/ui/views/ash/chrome_browser_main_extra_parts_ash.h",
-  "+chrome/browser/ui/views/bubble/bubble_contents_wrapper_service_factory.h",
   "+chrome/browser/ui/views/chrome_browser_main_extra_parts_views.h",
   "+chrome/browser/ui/views/chrome_browser_main_extra_parts_views_lacros.h",
   "+chrome/browser/ui/views/chrome_browser_main_extra_parts_views_linux.h",
@@ -515,6 +517,7 @@ include_rules = [
   "+chrome/browser/ui/views/frame/browser_view.h",
   "+chrome/browser/ui/views/frame/picture_in_picture_browser_frame_view.h",
   "+chrome/browser/ui/views/notifications/request_pin_view_chromeos.h",
+  "+chrome/browser/ui/views/webui/webui_contents_wrapper_service_factory.h",
 
   # Ensure that only the public interface of performance_manager gets used.
   "-chrome/browser/performance_manager",
@@ -540,7 +543,6 @@ include_rules = [
   "+third_party/protobuf/src/google/protobuf",
   "+third_party/re2",
   "+third_party/smhasher",
-  "+third_party/sqlite",
   "+third_party/zlib",
 
   # No inclusion of WebKit from the browser, other than the ones in
@@ -580,6 +582,9 @@ specific_include_rules = {
   "input_method_engine.cc": [
     # For GetVirtualKeyboardController.
     "+ash/keyboard/ui/keyboard_ui_controller.h",
+  ],
+  "chrome_back_forward_cache_browsertest.cc": [
+    "+pdf/pdf_features.h",
   ],
   "chrome_browsing_data_remover_delegate_unittest.cc": [
     "+services/network/network_context.h",

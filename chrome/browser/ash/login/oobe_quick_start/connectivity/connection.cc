@@ -56,7 +56,7 @@ Connection::Factory::~Factory() = default;
 
 std::unique_ptr<Connection> Connection::Factory::Create(
     NearbyConnection* nearby_connection,
-    SessionContext session_context,
+    SessionContext* session_context,
     mojo::SharedRemote<mojom::QuickStartDecoder> quick_start_decoder,
     ConnectionClosedCallback on_connection_closed,
     ConnectionAuthenticatedCallback on_connection_authenticated) {
@@ -67,7 +67,7 @@ std::unique_ptr<Connection> Connection::Factory::Create(
 
 Connection::Connection(
     NearbyConnection* nearby_connection,
-    SessionContext session_context,
+    SessionContext* session_context,
     mojo::SharedRemote<mojom::QuickStartDecoder> quick_start_decoder,
     ConnectionClosedCallback on_connection_closed,
     ConnectionAuthenticatedCallback on_connection_authenticated)
@@ -115,11 +115,6 @@ void Connection::Close(
     // NearbyConnection immediately after.
     SendMessageWithoutResponse(requests::BuildBootstrapStateCancelMessage(),
                                QuickStartResponseType::kBootstrapStateCancel);
-  } else if (authenticated_ && reason ==
-                                   TargetDeviceConnectionBroker::
-                                       ConnectionClosedReason::kComplete) {
-    SendMessageWithoutResponse(requests::BuildBootstrapStateCompleteMessage(),
-                               QuickStartResponseType::kBootstrapStateComplete);
   }
 
   connection_state_ = State::kClosing;
@@ -136,7 +131,7 @@ void Connection::Close(
 void Connection::RequestWifiCredentials(
     RequestWifiCredentialsCallback callback) {
   SessionContext::SharedSecret secondary_shared_secret =
-      session_context_.secondary_shared_secret();
+      session_context_->secondary_shared_secret();
   std::string shared_secret_str(secondary_shared_secret.begin(),
                                 secondary_shared_secret.end());
   auto convert_result = base::BindOnce(
@@ -152,15 +147,15 @@ void Connection::RequestWifiCredentials(
       std::move(callback));
   SendMessageAndDecodeResponse(
       requests::BuildRequestWifiCredentialsMessage(
-          session_context_.session_id(), shared_secret_str),
+          session_context_->session_id(), shared_secret_str),
       QuickStartResponseType::kWifiCredentials, std::move(convert_result));
 }
 
 void Connection::NotifySourceOfUpdate(NotifySourceOfUpdateCallback callback) {
   SessionContext::SharedSecret secondary_shared_secret =
-      session_context_.secondary_shared_secret();
+      session_context_->secondary_shared_secret();
   SendMessageAndDecodeResponse(
-      requests::BuildNotifySourceOfUpdateMessage(session_context_.session_id(),
+      requests::BuildNotifySourceOfUpdateMessage(session_context_->session_id(),
                                                  secondary_shared_secret),
       QuickStartResponseType::kNotifySourceOfUpdate,
       base::BindOnce(&Connection::OnNotifySourceOfUpdateResponse,
@@ -355,7 +350,7 @@ void Connection::InitiateHandshake(const std::string& authentication_token,
                                    HandshakeSuccessCallback callback) {
   SendBytesAndReadResponse(
       handshake::BuildHandshakeMessage(authentication_token,
-                                       session_context_.shared_secret()),
+                                       session_context_->shared_secret()),
       QuickStartResponseType::kHandshake,
       base::BindOnce(&Connection::OnHandshakeResponse,
                      weak_ptr_factory_.GetWeakPtr(), authentication_token,
@@ -378,7 +373,7 @@ void Connection::OnHandshakeResponse(
   }
   handshake::VerifyHandshakeMessageStatus status =
       handshake::VerifyHandshakeMessage(*response_bytes, authentication_token,
-                                        session_context_.shared_secret());
+                                        session_context_->shared_secret());
   bool success = status == handshake::VerifyHandshakeMessageStatus::kSuccess;
   quick_start_metrics_.RecordHandshakeResult(
       /*success=*/success, handshake::MapHandshakeStatusToErrorCode(status));
@@ -455,7 +450,12 @@ void Connection::OnUserVerificationPacketDecoded(
 }
 
 base::Value::Dict Connection::GetPrepareForUpdateInfo() {
-  return session_context_.GetPrepareForUpdateInfo();
+  return session_context_->GetPrepareForUpdateInfo();
+}
+
+void Connection::NotifyPhoneSetupComplete() {
+  SendMessageWithoutResponse(requests::BuildBootstrapStateCompleteMessage(),
+                             QuickStartResponseType::kBootstrapStateComplete);
 }
 
 void Connection::DecodeQuickStartMessage(
@@ -532,7 +532,14 @@ void Connection::OnResponseReceived(
             response_type),
         /*succeeded=*/true, std::nullopt);
   }
-  std::move(callback).Run(std::move(response_bytes));
+
+  // NearbyConnection will invoke its read callback if there is one pending when
+  // it is destroyed. In these instances we didn't actually receive a response
+  // so we need to ensure the connection is still open before invoking
+  // |callback| here.
+  if (connection_state_ == Connection::State::kOpen) {
+    std::move(callback).Run(std::move(response_bytes));
+  }
 }
 
 }  // namespace ash::quick_start

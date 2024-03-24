@@ -107,6 +107,10 @@
 #include "ui/compositor/layer.h"
 #endif
 
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chromeos/constants/chromeos_features.h"
+#endif
+
 using content::NavigationController;
 using content::RenderWidgetHost;
 using content::WebContents;
@@ -346,7 +350,7 @@ class SessionRestoreImpl : public BrowserListObserver {
           use_new_window ? 0 : browser->tab_strip_model()->active_index() + 1;
       web_contents = chrome::AddRestoredTab(
           browser, tab.navigations, tab_index, selected_index,
-          tab.extension_app_id, absl::nullopt,
+          tab.extension_app_id, std::nullopt,
           disposition == WindowOpenDisposition::NEW_FOREGROUND_TAB,  // selected
           tab.pinned, base::TimeTicks(), nullptr, tab.user_agent_override,
           tab.extra_data, true /* from_session_restore */);
@@ -601,6 +605,10 @@ class SessionRestoreImpl : public BrowserListObserver {
 #endif  // BUIDLFLAG(IS_CHROMEOS)
   }
 
+  // Creates browsers for `windows` and returns the last tabbed browser or the
+  // one needs to be activated. If there is no tabbed browser (e.g. only PWAs
+  // open in the last session, see b/40275406) returns the last app browesr in
+  // `windows`.
   Browser* ProcessSessionWindows(
       std::vector<std::unique_ptr<sessions::SessionWindow>>* windows,
       SessionID active_window_id,
@@ -629,6 +637,10 @@ class SessionRestoreImpl : public BrowserListObserver {
     // if no TYPE_NORMAL browser exists.
     Browser* last_normal_browser = nullptr;
     bool has_normal_browser = false;
+
+    // After the for loop this contains the last TYPE_APP browser, or nullptr
+    // if no TYPE_APP browser exists.
+    Browser* last_app_browser = nullptr;
 
     // After the for loop, this contains the browser to activate, if one of the
     // windows has the same id as specified in active_window_id.
@@ -683,6 +695,11 @@ class SessionRestoreImpl : public BrowserListObserver {
         has_normal_browser = true;
         last_normal_browser = browser;
         browser->SetWindowUserTitle((*i)->user_title);
+      }
+
+      // Track TYPE_APP browsers.
+      if ((*i)->type == sessions::SessionWindow::TYPE_APP) {
+        last_app_browser = browser;
       }
 
       // 3. Determine whether the currently active tab should be closed.
@@ -763,7 +780,7 @@ class SessionRestoreImpl : public BrowserListObserver {
     profile_->GetDefaultStoragePartition()
         ->GetDOMStorageContext()
         ->StartScavengingUnusedSessionStorage();
-    return last_normal_browser;
+    return last_normal_browser ? last_normal_browser : last_app_browser;
   }
 
   // Record an app launch event (if appropriate) for a tab which is about to
@@ -868,7 +885,7 @@ class SessionRestoreImpl : public BrowserListObserver {
     }
 
     // Relabel group IDs to prevent duplicating groups. See crbug.com/1202102.
-    absl::optional<tab_groups::TabGroupId> new_group;
+    std::optional<tab_groups::TabGroupId> new_group;
     if (tab.group) {
       auto it = new_group_ids->find(*tab.group);
       if (it == new_group_ids->end()) {
@@ -968,7 +985,17 @@ class SessionRestoreImpl : public BrowserListObserver {
 #endif
 
     params.initial_show_state = show_state;
+
+    // Do not restore workspace if lacros and Desk Profiles are enabled, i.e. it
+    // uses the profile from the current desk, and should always stay within
+    // that desk.
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+    params.initial_workspace =
+        chromeos::features::IsDeskProfilesEnabled() ? std::string() : workspace;
+#else
     params.initial_workspace = workspace;
+#endif
+
     params.initial_visible_on_all_workspaces_state = visible_on_all_workspaces;
     params.creation_source = Browser::CreationSource::kSessionRestore;
     Browser* browser = Browser::Create(params);

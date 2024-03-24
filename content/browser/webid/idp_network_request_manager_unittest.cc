@@ -713,7 +713,7 @@ TEST_F(IdpNetworkRequestManagerTest, ParseConfigBrandingInvalidColor) {
 }
 
 TEST_F(IdpNetworkRequestManagerTest,
-       ParseConfigIgnoreInsufficientContrastTextColor) {
+       ParseConfigWithInsufficientContrastTextColor) {
   const char test_json[] = R"({
   "branding" : {
     "background_color": "#000000",
@@ -729,11 +729,11 @@ TEST_F(IdpNetworkRequestManagerTest,
   EXPECT_EQ(ParseStatus::kSuccess, fetch_status.parse_status);
   EXPECT_EQ(net::HTTP_OK, fetch_status.response_code);
   EXPECT_EQ(SkColorSetRGB(0, 0, 0), idp_metadata.brand_background_color);
-  EXPECT_EQ(std::nullopt, idp_metadata.brand_text_color);
+  EXPECT_EQ(SkColorSetRGB(1, 1, 1), idp_metadata.brand_text_color);
 }
 
 TEST_F(IdpNetworkRequestManagerTest,
-       ParseConfigBrandingIgnoreCustomTextColorNoCustomBackgroundColor) {
+       ParseConfigBrandingWithTextColorAndNoBackgroundColor) {
   const char test_json[] = R"({
   "branding" : {
     "color": "blue"
@@ -748,7 +748,7 @@ TEST_F(IdpNetworkRequestManagerTest,
   EXPECT_EQ(ParseStatus::kSuccess, fetch_status.parse_status);
   EXPECT_EQ(net::HTTP_OK, fetch_status.response_code);
   EXPECT_EQ(std::nullopt, idp_metadata.brand_background_color);
-  EXPECT_EQ(std::nullopt, idp_metadata.brand_text_color);
+  EXPECT_EQ(SkColorSetRGB(0, 0, 255), idp_metadata.brand_text_color);
 }
 
 TEST_F(IdpNetworkRequestManagerTest, ParseConfigBrandingSelectBestSize) {
@@ -845,7 +845,7 @@ TEST_F(IdpNetworkRequestManagerTest, ParseConfigBrandingMinSize) {
 TEST_F(IdpNetworkRequestManagerTest,
        ParseConfigSupportsOtherAccountButtonMode) {
   base::test::ScopedFeatureList list;
-  list.InitAndEnableFeature(features::kFedCmAddAccount);
+  list.InitAndEnableFeature(features::kFedCmUseOtherAccount);
 
   const char test_json[] = R"({
   "modes": {
@@ -869,7 +869,7 @@ TEST_F(IdpNetworkRequestManagerTest,
 TEST_F(IdpNetworkRequestManagerTest,
        ParseConfigSupportsOtherAccountWidgetMode) {
   base::test::ScopedFeatureList list;
-  list.InitAndEnableFeature(features::kFedCmAddAccount);
+  list.InitAndEnableFeature(features::kFedCmUseOtherAccount);
 
   const char test_json[] = R"({
   "modes": {
@@ -893,7 +893,7 @@ TEST_F(IdpNetworkRequestManagerTest,
 TEST_F(IdpNetworkRequestManagerTest,
        ParseConfigSupportsOtherAccountDifferentMode) {
   base::test::ScopedFeatureList list;
-  list.InitAndEnableFeature(features::kFedCmAddAccount);
+  list.InitAndEnableFeature(features::kFedCmUseOtherAccount);
 
   const char test_json[] = R"({
   "modes": {
@@ -916,7 +916,7 @@ TEST_F(IdpNetworkRequestManagerTest,
 
 TEST_F(IdpNetworkRequestManagerTest, ParseConfigSupportsOtherAccountBothModes) {
   base::test::ScopedFeatureList list;
-  list.InitAndEnableFeature(features::kFedCmAddAccount);
+  list.InitAndEnableFeature(features::kFedCmUseOtherAccount);
 
   const char test_json[] = R"({
   "modes": {
@@ -942,7 +942,7 @@ TEST_F(IdpNetworkRequestManagerTest, ParseConfigSupportsOtherAccountBothModes) {
 
 TEST_F(IdpNetworkRequestManagerTest, ParseConfigUseOtherAccountDisabled) {
   base::test::ScopedFeatureList list;
-  list.InitAndDisableFeature(features::kFedCmAddAccount);
+  list.InitAndDisableFeature(features::kFedCmUseOtherAccount);
 
   const char test_json[] = R"({
   "modes": {
@@ -1563,7 +1563,8 @@ TEST_F(IdpNetworkRequestManagerTest,
             token_response_type());
   EXPECT_TRUE(error_dialog_type());
   EXPECT_EQ(ErrorDialogType::kInvalidRequestWithoutUrl, *error_dialog_type());
-  EXPECT_FALSE(error_url_type());
+  ASSERT_TRUE(error_url_type());
+  EXPECT_EQ(ErrorUrlType::kCrossSite, *error_url_type());
 }
 
 TEST_F(IdpNetworkRequestManagerTest, IdAssertionRequestErrorWithEmptyUrl) {
@@ -1590,7 +1591,7 @@ TEST_F(IdpNetworkRequestManagerTest, IdAssertionRequestErrorWithEmptyUrl) {
   EXPECT_FALSE(error_url_type());
 }
 
-TEST_F(IdpNetworkRequestManagerTest, IdAssertionRequestServerError) {
+TEST_F(IdpNetworkRequestManagerTest, IdAssertionResponse200NonParsable) {
   base::test::ScopedFeatureList list;
   list.InitAndEnableFeature(features::kFedCmError);
 
@@ -1600,12 +1601,53 @@ TEST_F(IdpNetworkRequestManagerTest, IdAssertionRequestServerError) {
       "account", "request", net::HTTP_OK, "application/json", R"({}})");
 
   EXPECT_TRUE(token_result.error);
+  EXPECT_EQ("", token_result.error->code);
+  EXPECT_EQ(GURL(), token_result.error->url);
+  EXPECT_EQ(TokenResponseType::kTokenNotReceivedAndErrorNotReceived,
+            token_response_type());
+  EXPECT_TRUE(error_dialog_type());
+  EXPECT_EQ(ErrorDialogType::kGenericEmptyWithoutUrl, *error_dialog_type());
+  EXPECT_FALSE(error_url_type());
+}
+
+TEST_F(IdpNetworkRequestManagerTest, IdAssertionResponse500NonParsable) {
+  base::test::ScopedFeatureList list;
+  list.InitAndEnableFeature(features::kFedCmError);
+
+  FetchStatus fetch_status;
+  TokenResult token_result;
+  std::tie(fetch_status, token_result) = SendTokenRequestAndWaitForResponse(
+      "account", "request", net::HTTP_INTERNAL_SERVER_ERROR, "application/json",
+      R"({}})");
+
+  EXPECT_TRUE(token_result.error);
   EXPECT_EQ("server_error", token_result.error->code);
   EXPECT_EQ(GURL(), token_result.error->url);
   EXPECT_EQ(TokenResponseType::kTokenNotReceivedAndErrorNotReceived,
             token_response_type());
   EXPECT_TRUE(error_dialog_type());
   EXPECT_EQ(ErrorDialogType::kServerErrorWithoutUrl, *error_dialog_type());
+  EXPECT_FALSE(error_url_type());
+}
+
+TEST_F(IdpNetworkRequestManagerTest, IdAssertionResponse503NonParsable) {
+  base::test::ScopedFeatureList list;
+  list.InitAndEnableFeature(features::kFedCmError);
+
+  FetchStatus fetch_status;
+  TokenResult token_result;
+  std::tie(fetch_status, token_result) = SendTokenRequestAndWaitForResponse(
+      "account", "request", net::HTTP_SERVICE_UNAVAILABLE, "application/json",
+      R"({}})");
+
+  EXPECT_TRUE(token_result.error);
+  EXPECT_EQ("temporarily_unavailable", token_result.error->code);
+  EXPECT_EQ(GURL(), token_result.error->url);
+  EXPECT_EQ(TokenResponseType::kTokenNotReceivedAndErrorNotReceived,
+            token_response_type());
+  EXPECT_TRUE(error_dialog_type());
+  EXPECT_EQ(ErrorDialogType::kTemporarilyUnavailableWithoutUrl,
+            *error_dialog_type());
   EXPECT_FALSE(error_url_type());
 }
 

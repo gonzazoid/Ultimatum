@@ -469,7 +469,7 @@ void ChromeShelfController::SetAppStatus(const std::string& app_id,
     const ash::ShelfID shelf_id = ash::ShelfID(app_id);
     std::unique_ptr<ash::ShelfItem> new_item =
         shelf_item_factory_->CreateShelfItemForApp(
-            shelf_id, status, ash::TYPE_APP, /*title=*/base::EmptyString16());
+            shelf_id, status, ash::TYPE_APP, /*title=*/std::u16string());
     InsertAppItem(std::move(new_item),
                   std::make_unique<AppShortcutShelfItemController>(shelf_id),
                   model_->item_count());
@@ -1496,7 +1496,7 @@ bool ChromeShelfController::EnsureAppPinnedInModelAtIndex(
   std::unique_ptr<ash::ShelfItem> item =
       shelf_item_factory_->CreateShelfItemForApp(
           ash::ShelfID(app_id), ash::STATUS_CLOSED, ash::TYPE_PINNED_APP,
-          /*title=*/base::EmptyString16());
+          /*title=*/std::u16string());
   InsertAppItem(std::move(item), std::move(item_delegate), target_index);
   return true;
 }
@@ -1525,12 +1525,15 @@ void ChromeShelfController::UpdatePinnedByPolicyForItemAtIndex(
 void ChromeShelfController::UpdateForcedPinStateForItemAtIndex(
     int model_index) {
   ash::ShelfItem item = model_->items()[model_index];
-  auto app_type = apps::AppServiceProxyFactory::GetForProfile(profile())
-                      ->AppRegistryCache()
-                      .GetAppType(item.id.app_id);
+  bool pin_state_forced_by_type = true;
 
-  const bool pin_state_forced_by_type =
-      !IsAppPinEditable(app_type, item.id.app_id, profile());
+  if (item.type == ash::TYPE_PINNED_APP || item.type == ash::TYPE_APP) {
+    auto app_type = apps::AppServiceProxyFactory::GetForProfile(profile())
+                        ->AppRegistryCache()
+                        .GetAppType(item.id.app_id);
+    pin_state_forced_by_type =
+        !IsAppPinEditable(app_type, item.id.app_id, profile());
+  }
   if (item.pin_state_forced_by_type != pin_state_forced_by_type) {
     item.pin_state_forced_by_type = pin_state_forced_by_type;
     model_->Set(model_index, item);

@@ -118,11 +118,11 @@ WebString WebDocument::GetReferrer() const {
   return ConstUnwrap<Document>()->referrer();
 }
 
-absl::optional<SkColor> WebDocument::ThemeColor() {
-  absl::optional<Color> color = Unwrap<Document>()->ThemeColor();
+std::optional<SkColor> WebDocument::ThemeColor() {
+  std::optional<Color> color = Unwrap<Document>()->ThemeColor();
   if (color)
     return color->Rgb();
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 WebURL WebDocument::OpenSearchDescriptionURL() const {
@@ -216,6 +216,17 @@ WebVector<WebFormElement> WebDocument::Forms() const {
     form_elements.emplace_back(blink::To<HTMLFormElement>(element));
   }
   return form_elements;
+}
+
+WebVector<WebFormElement> WebDocument::GetTopLevelForms() const {
+  Vector<WebFormElement> web_forms;
+  HeapVector<Member<HTMLFormElement>> forms =
+      const_cast<Document*>(ConstUnwrap<Document>())->GetTopLevelForms();
+  web_forms.reserve(forms.size());
+  for (auto& form : forms) {
+    web_forms.push_back(form.Get());
+  }
+  return web_forms;
 }
 
 WebURL WebDocument::CompleteURL(const WebString& partial_url) const {

@@ -4,10 +4,11 @@
 
 load("//lib/branches.star", "branches")
 load("//lib/builder_config.star", "builder_config")
-load("//lib/builders.star", "cpu", "os", "reclient", "xcode")
+load("//lib/builders.star", "cpu", "os", "reclient")
 load("//lib/ci.star", "ci")
 load("//lib/consoles.star", "consoles")
 load("//lib/gn_args.star", "gn_args")
+load("//lib/xcode.star", "xcode")
 load("//project.star", "settings")
 load("//lib/builder_health_indicators.star", "health_spec")
 
@@ -314,6 +315,7 @@ coverage_builder(
             build_config = builder_config.build_config.RELEASE,
             target_arch = builder_config.target_arch.INTEL,
             target_bits = 64,
+            target_platform = builder_config.target_platform.CHROMEOS,
         ),
         build_gs_bucket = "chromium-fyi-archive",
     ),
@@ -352,6 +354,7 @@ coverage_builder(
             build_config = builder_config.build_config.RELEASE,
             target_arch = builder_config.target_arch.INTEL,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         build_gs_bucket = "chromium-fyi-archive",
     ),
@@ -429,7 +432,6 @@ coverage_builder(
             "mojo_fuzzer",
             "libfuzzer",
             "dcheck_off",
-            "disable_nacl",
             "reclient",
             "chromeos_codecs",
             "pdf_xfa",
@@ -457,6 +459,7 @@ coverage_builder(
             apply_configs = ["mb"],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
         build_gs_bucket = "chromium-fyi-archive",
     ),
@@ -497,6 +500,7 @@ coverage_builder(
             apply_configs = ["mb"],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.CHROMEOS,
         ),
         build_gs_bucket = "chromium-fyi-archive",
     ),
@@ -535,6 +539,7 @@ coverage_builder(
             apply_configs = ["mb"],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.MAC,
         ),
         build_gs_bucket = "chromium-fyi-archive",
     ),
@@ -575,6 +580,7 @@ coverage_builder(
             apply_configs = ["mb"],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.WIN,
         ),
         build_gs_bucket = "chromium-fyi-archive",
     ),

@@ -5,6 +5,7 @@
 #include "components/reporting/client/report_queue_impl.h"
 
 #include <memory>
+#include <optional>
 #include <queue>
 #include <string>
 #include <utility>
@@ -36,7 +37,6 @@
 #include "components/reporting/storage/storage_module_interface.h"
 #include "components/reporting/util/status.h"
 #include "components/reporting/util/statusor.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace reporting {
 namespace {
@@ -76,7 +76,7 @@ void AddRecordToStorage(scoped_refptr<StorageModuleInterface> storage,
                         std::string dm_token,
                         Destination destination,
                         int64_t reserved_space,
-                        absl::optional<SourceInfo> source_info,
+                        std::optional<SourceInfo> source_info,
                         ReportQueue::RecordProducer record_producer,
                         StorageModuleInterface::EnqueueCallback callback) {
   // Generate record data.
@@ -219,7 +219,10 @@ void ReportQueueImpl::AddProducedRecord(RecordProducer record_producer,
                      config_->is_event_allowed_cb(), config_->dm_token(),
                      config_->destination(), config_->reserved_space(),
                      config_->source_info(), std::move(record_producer),
-                     std::move(callback)));
+                     // EnqueueCallback must be run on the current thread, we
+                     // need to bind to make sure it's posted to correct thread
+                     // from the ThreadPool.
+                     base::BindPostTaskToCurrentDefault(std::move(callback))));
 }
 
 void ReportQueueImpl::Flush(Priority priority, FlushCallback callback) {

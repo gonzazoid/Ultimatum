@@ -90,8 +90,8 @@ PaintPropertyChangeType TransformPaintPropertyNode::State::ComputeChange(
       scroll != other.scroll ||
       scroll_translation_for_fixed != other.scroll_translation_for_fixed ||
       !base::ValuesEquivalent(sticky_constraint, other.sticky_constraint) ||
-      !base::ValuesEquivalent(anchor_position_scrollers_data,
-                              other.anchor_position_scrollers_data) ||
+      !base::ValuesEquivalent(anchor_position_scroll_data,
+                              other.anchor_position_scroll_data) ||
       visible_frame_element_id != other.visible_frame_element_id) {
     return PaintPropertyChangeType::kChangedOnlyValues;
   }
@@ -145,27 +145,6 @@ bool TransformPaintPropertyNodeOrAlias::Changed(
       return false;
     if (node->NodeChanged() >= change)
       return true;
-  }
-
-  // |this| is not a descendant of |relative_to_node|. We have seen no changed
-  // flag from |this| to the root. Now check |relative_to_node| to the root.
-  return relative_to_node.Changed(change, TransformPaintPropertyNode::Root());
-}
-
-bool TransformPaintPropertyNodeOrAlias::ChangedExceptScroll(
-    PaintPropertyChangeType change,
-    const TransformPaintPropertyNodeOrAlias& relative_to_node) const {
-  for (const auto* node = this; node; node = node->Parent()) {
-    if (node == &relative_to_node) {
-      return false;
-    }
-    if (!node->IsParentAlias() &&
-        static_cast<const TransformPaintPropertyNode*>(node)->ScrollNode()) {
-      continue;
-    }
-    if (node->NodeChanged() >= change) {
-      return true;
-    }
   }
 
   // |this| is not a descendant of |relative_to_node|. We have seen no changed

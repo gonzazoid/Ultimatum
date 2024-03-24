@@ -12,11 +12,12 @@
 #include "build/build_config.h"
 #include "components/performance_manager/public/graph/process_node.h"
 #include "components/performance_manager/resource_attribution/cpu_measurement_monitor.h"
+#include "components/performance_manager/resource_attribution/performance_manager_aliases.h"
 #include "components/performance_manager/resource_attribution/query_scheduler.h"
 #include "content/public/browser/browser_child_process_host.h"
 #include "content/public/common/process_type.h"
 
-namespace performance_manager::resource_attribution {
+namespace resource_attribution {
 
 namespace {
 
@@ -27,7 +28,7 @@ class CPUMeasurementDelegateImpl final : public CPUMeasurementDelegate {
   explicit CPUMeasurementDelegateImpl(const ProcessNode* process_node);
   ~CPUMeasurementDelegateImpl() final = default;
 
-  base::TimeDelta GetCumulativeCPUUsage() final;
+  std::optional<base::TimeDelta> GetCumulativeCPUUsage() final;
 
  private:
   std::unique_ptr<base::ProcessMetrics> process_metrics_;
@@ -44,8 +45,19 @@ CPUMeasurementDelegateImpl::CPUMeasurementDelegateImpl(
 #endif
 }
 
-base::TimeDelta CPUMeasurementDelegateImpl::GetCumulativeCPUUsage() {
-  return process_metrics_->GetCumulativeCPUUsage();
+std::optional<base::TimeDelta>
+CPUMeasurementDelegateImpl::GetCumulativeCPUUsage() {
+  base::TimeDelta cpu_usage;
+#if BUILDFLAG(IS_WIN)
+  cpu_usage = process_metrics_->GetPreciseCumulativeCPUUsage();
+#else
+  cpu_usage = process_metrics_->GetCumulativeCPUUsage();
+#endif
+  // Most platforms return a zero TimeDelta on error, Linux returns a negative.
+  if (!cpu_usage.is_positive()) {
+    return std::nullopt;
+  }
+  return cpu_usage;
 }
 
 // The default production factory for CPUMeasurementDelegateImpl objects.
@@ -103,4 +115,4 @@ CPUMeasurementDelegate::Factory* CPUMeasurementDelegate::GetDefaultFactory() {
   return default_factory.get();
 }
 
-}  // namespace performance_manager::resource_attribution
+}  // namespace resource_attribution

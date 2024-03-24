@@ -15,19 +15,24 @@
 #include "content/browser/preloading/prefetch/prefetch_container.h"
 #include "content/browser/preloading/prefetch/prefetch_params.h"
 #include "content/browser/preloading/prefetch/prefetch_service.h"
+#include "content/browser/preloading/preloading.h"
+#include "content/browser/preloading/preloading_attempt_impl.h"
 #include "content/browser/preloading/preloading_data_impl.h"
 #include "content/browser/preloading/preloading_trigger_type_impl.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/prefetch_metrics.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
+#include "content/public/common/content_client.h"
 #include "net/http/http_no_vary_search_data.h"
 #include "services/network/public/cpp/features.h"
 #include "services/network/public/mojom/no_vary_search.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
+#include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom.h"
 #include "url/origin.h"
 
 namespace content {
@@ -284,6 +289,12 @@ void PrefetchDocumentManager::PrefetchUrl(
     return;
   }
 
+  // Log that a prefetch is occurring. Paths that reach this point go through
+  // speculation rules in some form or another.
+  GetContentClient()->browser()->LogWebFeatureForCurrentPage(
+      &render_frame_host(),
+      blink::mojom::WebFeature::kSpeculationRulesPrefetch);
+
   std::optional<net::HttpNoVarySearchData> no_vary_search_expected;
   if (mojo_no_vary_search_expected) {
     no_vary_search_expected =
@@ -295,13 +306,29 @@ void PrefetchDocumentManager::PrefetchUrl(
     return;
   }
 
+  auto* web_contents = WebContents::FromRenderFrameHost(&render_frame_host());
+  auto* preloading_data =
+      PreloadingData::GetOrCreateForWebContents(web_contents);
+
+  PreloadingURLMatchCallback matcher =
+      PreloadingDataImpl::GetPrefetchServiceMatcher(
+          prefetch_service, PrefetchContainer::Key(document_token_, url));
+
+  auto* attempt =
+      static_cast<PreloadingAttemptImpl*>(preloading_data->AddPreloadingAttempt(
+          GetPredictorForPreloadingTriggerType(prefetch_type.trigger_type()),
+          PreloadingType::kPrefetch, std::move(matcher),
+          web_contents->GetPrimaryMainFrame()->GetPageUkmSourceId()));
+
+  attempt->SetSpeculationEagerness(prefetch_type.GetEagerness());
+
+  // `PreloadingPrediction` is added in `PreloadingDecider`.
+
   // Create a new |PrefetchContainer| and take ownership of it
   auto container = std::make_unique<PrefetchContainer>(
-      render_frame_host().GetGlobalId(), document_token_, url, prefetch_type,
-      referrer, std::move(no_vary_search_expected),
-      weak_method_factory_.GetWeakPtr(),
-      PreloadingDataImpl::GetPrefetchServiceMatcher(
-          prefetch_service, PrefetchContainer::Key(document_token_, url)));
+      static_cast<RenderFrameHostImpl&>(render_frame_host()), document_token_,
+      url, prefetch_type, referrer, std::move(no_vary_search_expected),
+      weak_method_factory_.GetWeakPtr(), attempt->GetWeakPtr());
   container->SetDevToolsObserver(std::move(devtools_observer));
   DVLOG(1) << *container << ": created";
   all_prefetches_[url] = container->GetWeakPtr();

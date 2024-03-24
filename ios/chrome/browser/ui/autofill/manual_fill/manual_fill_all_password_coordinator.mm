@@ -8,8 +8,8 @@
 #import "components/keyed_service/core/service_access_type.h"
 #import "components/password_manager/core/browser/password_store/password_store_interface.h"
 #import "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
-#import "ios/chrome/browser/favicon/favicon_loader.h"
-#import "ios/chrome/browser/favicon/ios_chrome_favicon_loader_factory.h"
+#import "ios/chrome/browser/favicon/model/favicon_loader.h"
+#import "ios/chrome/browser/favicon/model/ios_chrome_favicon_loader_factory.h"
 #import "ios/chrome/browser/net/model/crurl.h"
 #import "ios/chrome/browser/passwords/model/ios_chrome_account_password_store_factory.h"
 #import "ios/chrome/browser/passwords/model/ios_chrome_affiliation_service_factory.h"
@@ -74,12 +74,12 @@
       self.browser->GetWebStateList()->GetActiveWebState();
   syncer::SyncService* syncService =
       SyncServiceFactory::GetForBrowserState(self.browser->GetBrowserState());
-  self.passwordMediator = [[ManualFillPasswordMediator alloc]
-       initWithFaviconLoader:faviconLoader
-                    webState:webState
-                 syncService:syncService
-                         URL:GURL::EmptyGURL()
-      invokedOnPasswordField:NO];
+  self.passwordMediator =
+      [[ManualFillPasswordMediator alloc] initWithFaviconLoader:faviconLoader
+                                                       webState:webState
+                                                    syncService:syncService
+                                                            URL:GURL()
+                                       invokedOnObfuscatedField:NO];
 
   ChromeBrowserState* browserState = self.browser->GetBrowserState();
   _savedPasswordsPresenter =

@@ -20,12 +20,12 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
+#include "components/affiliations/core/browser/affiliation_utils.h"
 #include "components/autofill/core/browser/autofill_client.h"
 #include "components/autofill/core/browser/field_types.h"
 #include "components/autofill/core/browser/logging/log_manager.h"
 #include "components/autofill/core/browser/ui/popup_item_ids.h"
 #include "components/autofill/core/common/password_generation_util.h"
-#include "components/password_manager/core/browser/affiliation/affiliation_utils.h"
 #include "components/password_manager/core/browser/features/password_features.h"
 #include "components/password_manager/core/browser/features/password_manager_features_util.h"
 #include "components/password_manager/core/browser/password_bubble_experiment.h"
@@ -37,6 +37,7 @@
 #include "components/password_manager/core/browser/password_manager_client.h"
 #include "components/password_manager/core/browser/password_manager_driver.h"
 #include "components/password_manager/core/browser/password_manager_metrics_util.h"
+#include "components/password_manager/core/browser/password_store/password_store_interface.h"
 #include "components/password_manager/core/common/password_manager_features.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
 #include "components/prefs/pref_service.h"
@@ -46,6 +47,9 @@
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/build_info.h"
+#include "components/password_manager/core/browser/password_sync_util.h"
+
+using password_manager::sync_util::IsSyncFeatureEnabledIncludingPasswords;
 #endif
 
 using autofill::password_generation::PasswordGenerationType;
@@ -68,6 +72,18 @@ std::tuple<int, base::Time, int> GetPriorityProperties(
 bool IsBetterMatch(const PasswordForm* lhs, const PasswordForm* rhs) {
   return GetPriorityProperties(lhs) > GetPriorityProperties(rhs);
 }
+
+#if BUILDFLAG(IS_ANDROID)
+bool UsesSplitStoresAndUPMForLocal(PrefService* pref_service) {
+  return pref_service &&
+         static_cast<
+             password_manager::prefs::UseUpmLocalAndSeparateStoresState>(
+             pref_service->GetInteger(
+                 password_manager::prefs::
+                     kPasswordsUseUPMLocalAndSeparateStores)) ==
+             password_manager::prefs::UseUpmLocalAndSeparateStoresState::kOn;
+}
+#endif
 
 }  // namespace
 
@@ -147,6 +163,22 @@ void UserTriggeredManualGenerationFromContextMenu(
             }
           },
           base::Unretained(password_manager_client)));
+}
+
+bool IsAbleToSavePasswords(password_manager::PasswordManagerClient* client) {
+#if BUILDFLAG(IS_ANDROID)
+  if (UsesSplitStoresAndUPMForLocal(client->GetPrefs()) &&
+      IsSyncFeatureEnabledIncludingPasswords(client->GetSyncService())) {
+    // After store split on Android, AccountPasswordStore is a default store for
+    // saving passwords when sync is enabled. If either of conditions above is
+    // not satisfied fallback to ProfilePasswordStore.
+    return client->GetAccountPasswordStore() &&
+           client->GetAccountPasswordStore()->IsAbleToSavePasswords();
+  }
+#endif
+  // TODO(b/324054761): Check AccountPasswordStore store when needed.
+  return client->GetProfilePasswordStore() &&
+         client->GetProfilePasswordStore()->IsAbleToSavePasswords();
 }
 
 base::StringPiece GetSignonRealmWithProtocolExcluded(const PasswordForm& form) {
@@ -317,7 +349,7 @@ PasswordForm MakeNormalizedBlocklistedForm(
   result.signon_realm = std::move(digest.signon_realm);
   // In case |digest| corresponds to an Android credential copy the origin as
   // is, otherwise clear out the path by calling GetOrigin().
-  if (password_manager::FacetURI::FromPotentiallyInvalidSpec(digest.url.spec())
+  if (affiliations::FacetURI::FromPotentiallyInvalidSpec(digest.url.spec())
           .IsValidAndroidFacetURI()) {
     result.url = std::move(digest.url);
   } else {

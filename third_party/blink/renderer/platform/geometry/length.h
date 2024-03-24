@@ -25,10 +25,12 @@
 
 #include <cmath>
 #include <cstring>
+#include <optional>
 
 #include "base/check_op.h"
+#include "base/functional/function_ref.h"
+#include "base/memory/stack_allocated.h"
 #include "base/notreached.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/platform/geometry/layout_unit.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
@@ -202,7 +204,7 @@ class PLATFORM_EXPORT Length {
   static Length Percent(NUMBER_TYPE number) {
     return Length(number, kPercent);
   }
-  static Length Flex(double value) { return Length(value, kFlex); }
+  static Length Flex(float value) { return Length(value, kFlex); }
 
   // FIXME: Make this private (if possible) or at least rename it
   // (http://crbug.com/432707).
@@ -279,12 +281,11 @@ class PLATFORM_EXPORT Length {
 
   // For the block axis, intrinsic sizes such as `min-content` behave the same
   // as `auto`. https://www.w3.org/TR/css-sizing-3/#valdef-width-min-content
-  bool IsContentOrIntrinsic() const {
-    return GetType() == kMinContent || GetType() == kMaxContent ||
-           GetType() == kFitContent || GetType() == kMinIntrinsic ||
-           GetType() == kContent;
-  }
+  // This includes content-based sizes in calc-size().
+  bool IsContentOrIntrinsic() const;
   bool IsAutoOrContentOrIntrinsic() const {
+    // TODO(https://crbug.com/313072): Add support for 'auto' in 'calc-size()'
+    // here.
     return GetType() == kAuto || IsContentOrIntrinsic();
   }
 
@@ -314,7 +315,6 @@ class PLATFORM_EXPORT Length {
   bool IsDeviceWidth() const { return GetType() == kDeviceWidth; }
   bool IsDeviceHeight() const { return GetType() == kDeviceHeight; }
   bool HasAnchorQueries() const;
-  bool HasAutoAnchorPositioning() const;
 
   Length Blend(const Length& from, double progress, ValueRange range) const {
     DCHECK(IsSpecified());
@@ -344,16 +344,103 @@ class PLATFORM_EXPORT Length {
     return value_;
   }
 
+  class AnchorScope;
+
   class PLATFORM_EXPORT AnchorEvaluator {
    public:
+    // The evaluation of anchor() and anchor-size() functions is affected
+    // by the context they are used in. For example, it is not allowed to
+    // do anchor() queries "cross-axis" (e.g. left:anchor(--a top)),
+    // and anchor-size() queries are only valid in sizing properties.
+    // Queries that violate these rules instead resolve to their fallback
+    // values (or 0px if no fallback value exists).
+    //
+    // The default mode of AnchorEvaluator (kNone) is to return nullopt (i.e.
+    // fallback) for any query. This represents a context where no anchor query
+    // is valid, e.g. a property unrelated to insets or sizing.
+    //
+    // The values kLeft, kRight, kTop and kBottom represent the corresponding
+    // inset properties, and allow anchor() queries [1] (with restrictions),
+    // but not anchor-size() queries.
+    //
+    // The value kSize represents supported sizing properties [2], and allows
+    // anchor-size(), but not anchor().
+    //
+    // The current mode can be set by placing an AnchorScope object on the
+    // stack.
+    //
+    // [1] https://drafts.csswg.org/css-anchor-position-1/#anchor-valid
+    // [2] https://drafts.csswg.org/css-anchor-position-1/#anchor-size-valid
+    enum class Mode {
+      kNone,
+
+      // anchor()
+      kLeft,
+      kRight,
+      kTop,
+      kBottom,
+
+      // anchor-size()
+      kSize
+    };
+
     // Evaluates an anchor() or anchor-size() function given by the
     // CalculationExpressionNode. Returns |nullopt| if the query is invalid
-    // (e.g., no targets or wrong axis.)
-    virtual absl::optional<LayoutUnit> Evaluate(
+    // (e.g., no targets or wrong axis.), in which case the fallback should
+    // be used.
+    virtual std::optional<LayoutUnit> Evaluate(
         const CalculationExpressionNode&) const = 0;
+
+   protected:
+    Mode GetMode() const { return mode_; }
+
+   private:
+    friend class AnchorScope;
+    Mode mode_ = Mode::kNone;
   };
-  float NonNanCalculatedValue(float max_value,
-                              const AnchorEvaluator* = nullptr) const;
+
+  // Temporarily sets the Mode of an AnchorEvaluator.
+  //
+  // This class behaves like base::AutoReset, except it allows `anchor_evalutor`
+  // to be nullptr (in which case the AnchorScope has no effect).
+  //
+  // See AnchorEvaluator::Mode for more information.
+  class PLATFORM_EXPORT AnchorScope {
+    STACK_ALLOCATED();
+
+   public:
+    using Mode = AnchorEvaluator::Mode;
+
+    explicit AnchorScope(Mode mode, AnchorEvaluator* anchor_evaluator)
+        : target_(anchor_evaluator ? &anchor_evaluator->mode_ : nullptr),
+          original_(anchor_evaluator ? anchor_evaluator->mode_ : Mode::kNone) {
+      if (target_) {
+        *target_ = mode;
+      }
+    }
+    ~AnchorScope() {
+      if (target_) {
+        *target_ = original_;
+      }
+    }
+
+   private:
+    Mode* target_;
+    Mode original_;
+  };
+
+  using IntrinsicLengthEvaluator = base::FunctionRef<LayoutUnit(const Length&)>;
+
+  struct EvaluationInput {
+    STACK_ALLOCATED();
+
+   public:
+    const Length::AnchorEvaluator* anchor_evaluator = nullptr;
+    std::optional<float> size_keyword_basis = std::nullopt;
+    std::optional<IntrinsicLengthEvaluator> intrinsic_evaluator = std::nullopt;
+  };
+
+  float NonNanCalculatedValue(float max_value, const EvaluationInput&) const;
 
   Length SubtractFromOneHundredPercent() const;
 

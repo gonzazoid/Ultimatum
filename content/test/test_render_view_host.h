@@ -90,6 +90,7 @@ class TestRenderWidgetHostView : public RenderWidgetHostViewBase,
       const std::string& url,
       const std::vector<std::string>& file_paths,
       blink::mojom::ShareService::ShareCallback callback) override;
+  uint64_t GetNSViewId() const override;
 #endif  // BUILDFLAG(IS_MAC)
 
   // Notified in response to a CommitPending where there is no content for
@@ -119,9 +120,9 @@ class TestRenderWidgetHostView : public RenderWidgetHostViewBase,
                                  const gfx::Rect& bounds) override {}
   void ClearKeyboardTriggeredTooltip() override {}
   gfx::Rect GetBoundsInRootWindow() override;
-  blink::mojom::PointerLockResult LockMouse(bool) override;
-  blink::mojom::PointerLockResult ChangeMouseLock(bool) override;
-  void UnlockMouse() override;
+  blink::mojom::PointerLockResult LockPointer(bool) override;
+  blink::mojom::PointerLockResult ChangePointerLock(bool) override;
+  void UnlockPointer() override;
   const viz::FrameSinkId& GetFrameSinkId() const override;
   const viz::LocalSurfaceId& GetLocalSurfaceId() const override;
   viz::SurfaceId GetCurrentSurfaceId() const override;

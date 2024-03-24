@@ -338,6 +338,15 @@ void AuctionMetricsRecorder::SetNumOwnersWithInterestGroups(
       num_owners_with_interest_groups);
 }
 
+void AuctionMetricsRecorder::SetNumOwnersWithoutInterestGroups(
+    int64_t num_owners_without_interest_groups) {
+  builder_.SetNumOwnersWithoutInterestGroups(
+      GetExponentialBucketMinForCounts1000(num_owners_without_interest_groups));
+  base::UmaHistogramCounts100(
+      "Ads.InterestGroup.Auction.NumOwnersWithoutInterestGroups",
+      num_owners_without_interest_groups);
+}
+
 void AuctionMetricsRecorder::SetNumSellersWithBidders(
     int64_t num_sellers_with_bidders) {
   builder_.SetNumSellersWithBidders(

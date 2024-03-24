@@ -993,7 +993,7 @@ std::string SearchForKeyInStringDictUTF8(
     const std::initializer_list<base::StringPiece>& path) {
   DCHECK_GT(path.size(), 0UL);
 
-  absl::optional<base::Value::Dict> json_obj =
+  std::optional<base::Value::Dict> json_obj =
       base::JSONReader::ReadDict(json_string, base::JSON_ALLOW_TRAILING_COMMAS);
   if (!json_obj) {
     LOGFN(ERROR) << "base::JSONReader::Read failed to translate to JSON";
@@ -1023,7 +1023,7 @@ HRESULT SearchForListInStringDictUTF8(
     std::vector<std::string>* output) {
   DCHECK_GT(path.size(), 0UL);
 
-  absl::optional<base::Value::Dict> json_obj =
+  std::optional<base::Value::Dict> json_obj =
       base::JSONReader::ReadDict(json_string, base::JSON_ALLOW_TRAILING_COMMAS);
   if (!json_obj) {
     LOGFN(ERROR) << "base::JSONReader::Read failed to translate to JSON";
@@ -1221,7 +1221,7 @@ HRESULT GenerateDeviceId(std::string* device_id) {
   }
 
   // Store the base64encoded device id json blob in the output.
-  base::Base64Encode(device_id_str, device_id);
+  *device_id = base::Base64Encode(device_id_str);
   return S_OK;
 }
 

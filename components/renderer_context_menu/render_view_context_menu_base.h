@@ -121,12 +121,11 @@ class RenderViewContextMenuBase : public ui::SimpleMenuModel::Delegate,
   void RemoveMenuItem(int command_id) override;
   void RemoveAdjacentSeparators() override;
   void RemoveSeparatorBeforeMenuItem(int command_id) override;
-  content::RenderViewHost* GetRenderViewHost() const override;
   content::WebContents* GetWebContents() const override;
   content::BrowserContext* GetBrowserContext() const override;
 
   // May return nullptr if the frame was deleted while the menu was open.
-  content::RenderFrameHost* GetRenderFrameHost() const;
+  content::RenderFrameHost* GetRenderFrameHost() const override;
 
  protected:
   friend class RenderViewContextMenuTest;
@@ -196,7 +195,7 @@ class RenderViewContextMenuBase : public ui::SimpleMenuModel::Delegate,
       bool started_from_context_menu);
 
   content::ContextMenuParams params_;
-  const raw_ptr<content::WebContents> source_web_contents_;
+  const raw_ptr<content::WebContents, DanglingUntriaged> source_web_contents_;
   const raw_ptr<content::BrowserContext> browser_context_;
 
   ui::SimpleMenuModel menu_model_;

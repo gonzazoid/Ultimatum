@@ -16,11 +16,13 @@
 #include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/not_fatal_until.h"
 #include "base/notreached.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/strcat.h"
 #include "chrome/browser/password_manager/android/password_manager_android_util.h"
 #include "components/password_manager/core/browser/password_store/password_store_backend_error.h"
+#include "components/password_manager/core/browser/password_store/split_stores_and_local_upm.h"
 #include "components/password_manager/core/browser/password_sync_util.h"
 #include "components/password_manager/core/common/password_manager_features.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
@@ -38,9 +40,7 @@ using sync_util::IsSyncFeatureEnabledIncludingPasswords;
 bool ShouldErrorResultInFallback(PasswordStoreBackendError error) {
   switch (error.recovery_type) {
     case PasswordStoreBackendErrorRecoveryType::kUnrecoverable:
-    case PasswordStoreBackendErrorRecoveryType::kUnspecified:
       return true;
-    case PasswordStoreBackendErrorRecoveryType::kRetriable:
     case PasswordStoreBackendErrorRecoveryType::kRecoverable:
       return false;
   }
@@ -62,12 +62,12 @@ std::string GetFallbackMetricNameForMethod(const MethodName& method_name) {
 }  // namespace
 
 PasswordStoreProxyBackend::PasswordStoreProxyBackend(
-    PasswordStoreBackend* built_in_backend,
-    PasswordStoreBackend* android_backend,
+    std::unique_ptr<PasswordStoreBackend> built_in_backend,
+    std::unique_ptr<PasswordStoreBackend> android_backend,
     PrefService* prefs,
     IsAccountStore is_account_store)
-    : built_in_backend_(built_in_backend),
-      android_backend_(android_backend),
+    : built_in_backend_(std::move(built_in_backend)),
+      android_backend_(std::move(android_backend)),
       prefs_(prefs),
       is_account_store_(is_account_store) {}
 
@@ -111,8 +111,15 @@ void PasswordStoreProxyBackend::Shutdown(base::OnceClosure shutdown_completed) {
       /*num_closures=*/2, std::move(shutdown_completed));
   android_backend_->Shutdown(pending_shutdown_calls);
   built_in_backend_->Shutdown(pending_shutdown_calls);
+  android_backend_.reset();
+  built_in_backend_.reset();
 }
 
+bool PasswordStoreProxyBackend::IsAbleToSavePasswords() {
+  // shadow_backend()->IsAbleToSavePasswords() doesn't matter because it's a
+  // fallback.
+  return main_backend()->IsAbleToSavePasswords();
+}
 void PasswordStoreProxyBackend::GetAllLoginsAsync(LoginsOrErrorReply callback) {
   main_backend()->GetAllLoginsAsync(std::move(callback));
 }
@@ -149,7 +156,7 @@ void PasswordStoreProxyBackend::FillMatchingLoginsAsync(
           backend->FillMatchingLoginsAsync(std::move(reply_callback),
                                            include_psl, forms);
         },
-        base::Unretained(built_in_backend_), include_psl, forms);
+        base::Unretained(built_in_backend_.get()), include_psl, forms);
 
     result_callback = base::BindOnce(
         &PasswordStoreProxyBackend::MaybeFallbackOnOperation<
@@ -171,7 +178,7 @@ void PasswordStoreProxyBackend::GetGroupedMatchingLoginsAsync(
   if (UsesAndroidBackendAsMainBackend()) {
     auto execute_on_built_in_backend =
         base::BindOnce(&PasswordStoreBackend::GetGroupedMatchingLoginsAsync,
-                       base::Unretained(built_in_backend_), form_digest);
+                       base::Unretained(built_in_backend_.get()), form_digest);
 
     result_callback = base::BindOnce(
         &PasswordStoreProxyBackend::MaybeFallbackOnOperation<
@@ -193,7 +200,7 @@ void PasswordStoreProxyBackend::AddLoginAsync(
   if (UsesAndroidBackendAsMainBackend()) {
     auto execute_on_built_in_backend =
         base::BindOnce(&PasswordStoreBackend::AddLoginAsync,
-                       base::Unretained(built_in_backend_), form);
+                       base::Unretained(built_in_backend_.get()), form);
     result_callback = base::BindOnce(
         &PasswordStoreProxyBackend::MaybeFallbackOnOperation<
             PasswordChangesOrError>,
@@ -213,7 +220,7 @@ void PasswordStoreProxyBackend::UpdateLoginAsync(
   if (UsesAndroidBackendAsMainBackend()) {
     auto execute_on_built_in_backend =
         base::BindOnce(&PasswordStoreBackend::UpdateLoginAsync,
-                       base::Unretained(built_in_backend_), form);
+                       base::Unretained(built_in_backend_.get()), form);
     result_callback = base::BindOnce(
         &PasswordStoreProxyBackend::MaybeFallbackOnOperation<
             PasswordChangesOrError>,
@@ -295,7 +302,16 @@ PasswordStoreProxyBackend::CreateSyncControllerDelegate() {
 void PasswordStoreProxyBackend::OnSyncServiceInitialized(
     syncer::SyncService* sync_service) {
   sync_service_ = sync_service;
+  sync_service_->AddObserver(this);
   android_backend_->OnSyncServiceInitialized(sync_service);
+}
+
+void PasswordStoreProxyBackend::RecordAddLoginAsyncCalledFromTheStore() {
+  main_backend()->RecordAddLoginAsyncCalledFromTheStore();
+}
+
+void PasswordStoreProxyBackend::RecordUpdateLoginAsyncCalledFromTheStore() {
+  main_backend()->RecordUpdateLoginAsyncCalledFromTheStore();
 }
 
 base::WeakPtr<PasswordStoreBackend> PasswordStoreProxyBackend::AsWeakPtr() {
@@ -309,9 +325,8 @@ void PasswordStoreProxyBackend::MaybeFallbackOnOperation(
     const MethodName& method_name,
     base::OnceCallback<void(ResultT)> result_callback,
     ResultT result) {
-  if (!is_account_store_ &&
-      password_manager_android_util::UsesSplitStoresAndUPMForLocal(prefs_)) {
-    // The backend for local passwords doesn't support unenrollment and as such
+  if (password_manager::UsesSplitStoresAndUPMForLocal(prefs_)) {
+    // After store split the backend doesn't support unenrollment and as such
     // doesn't support fallbacks.
     std::move(result_callback).Run(std::move(result));
     return;
@@ -329,13 +344,19 @@ void PasswordStoreProxyBackend::MaybeFallbackOnOperation(
 }
 
 PasswordStoreBackend* PasswordStoreProxyBackend::main_backend() {
-  return UsesAndroidBackendAsMainBackend() ? android_backend_
-                                           : built_in_backend_;
+  return UsesAndroidBackendAsMainBackend() ? android_backend_.get()
+                                           : built_in_backend_.get();
 }
 
 PasswordStoreBackend* PasswordStoreProxyBackend::shadow_backend() {
-  return UsesAndroidBackendAsMainBackend() ? built_in_backend_
-                                           : android_backend_;
+  return UsesAndroidBackendAsMainBackend() ? built_in_backend_.get()
+                                           : android_backend_.get();
+}
+
+void PasswordStoreProxyBackend::OnSyncShutdown(
+    syncer::SyncService* sync_service) {
+  sync_service->RemoveObserver(this);
+  sync_service_ = nullptr;
 }
 
 void PasswordStoreProxyBackend::OnRemoteFormChangesReceived(
@@ -351,9 +372,10 @@ void PasswordStoreProxyBackend::OnRemoteFormChangesReceived(
 }
 
 bool PasswordStoreProxyBackend::UsesAndroidBackendAsMainBackend() {
+  CHECK(sync_service_, base::NotFatalUntil::M123);
   if (is_account_store_) {
     // The account store shouldn't be used unless the split happened.
-    CHECK(password_manager_android_util::UsesSplitStoresAndUPMForLocal(prefs_));
+    CHECK(password_manager::UsesSplitStoresAndUPMForLocal(prefs_));
     return UsesAndroidBackendAsMainBackendForAccount();
   }
   return UsesAndroidBackendAsMainBackendForProfile();
@@ -367,7 +389,7 @@ bool PasswordStoreProxyBackend::UsesAndroidBackendAsMainBackendForAccount() {
 
 bool PasswordStoreProxyBackend::UsesAndroidBackendAsMainBackendForProfile() {
   CHECK(!is_account_store_);
-  if (password_manager_android_util::UsesSplitStoresAndUPMForLocal(prefs_)) {
+  if (password_manager::UsesSplitStoresAndUPMForLocal(prefs_)) {
     return true;
   }
 

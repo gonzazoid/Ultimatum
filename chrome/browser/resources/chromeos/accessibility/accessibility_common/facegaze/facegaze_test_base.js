@@ -10,10 +10,16 @@ class Config {
   constructor() {
     /** @type {?chrome.accessibilityPrivate.ScreenPoint} */
     this.mouseLocation = null;
-    /** @type {?Map<FacialGesture, Action>} */
-    this.gestureToAction = null;
+    /** @type {?Map<FacialGesture, MacroName>} */
+    this.gestureToMacroName = null;
     /** @type {?Map<FacialGesture, number>} */
     this.gestureToConfidence = null;
+    /** @type {number} */
+    this.bufferSize = -1;
+    /** @type {boolean} */
+    this.useMouseAcceleration = false;
+    /** @type {?Map<string, number>} */
+    this.speeds = null;
   }
 
   /**
@@ -26,11 +32,11 @@ class Config {
   }
 
   /**
-   * @param {!Map<FacialGesture, Action>} gestureToAction
+   * @param {!Map<FacialGesture, MacroName>} gestureToMacroName
    * @return {!Config}
    */
-  withGestureToAction(gestureToAction) {
-    this.gestureToAction = gestureToAction;
+  withGestureToMacroName(gestureToMacroName) {
+    this.gestureToMacroName = gestureToMacroName;
     return this;
   }
 
@@ -40,6 +46,35 @@ class Config {
    */
   withGestureToConfidence(gestureToConfidence) {
     this.gestureToConfidence = gestureToConfidence;
+    return this;
+  }
+
+  /**
+   * @param {number} bufferSize
+   * @return {!Config}
+   */
+  withBufferSize(bufferSize) {
+    this.bufferSize = bufferSize;
+    return this;
+  }
+
+  /**
+   * @return {!Config}
+   */
+  withMouseAcceleration() {
+    this.useMouseAcceleration = true;
+    return this;
+  }
+
+  /**
+   * @param {number} up
+   * @param {number} down
+   * @param {number} left
+   * @param {number} right
+   * @return {!Config}
+   */
+  withSpeeds(up, down, left, right) {
+    this.speeds = {up, down, left, right};
     return this;
   }
 }
@@ -52,7 +87,8 @@ class MockFaceLandmarkerResult {
      * forehead landmark, which corresponds to index 8.
      * @type {!Array<?Array<?<x: number, y: number, z: number>>>}
      */
-    this.faceLandmarks = [[null, null, null, null, null, null, null, null, []]];
+    this.faceLandmarks =
+        [[null, null, null, null, null, null, null, null, null]];
 
     /** @type {!Array<!Object>} */
     this.faceBlendshapes = [{categories: []}];
@@ -70,7 +106,7 @@ class MockFaceLandmarkerResult {
   }
 
   /**
-   * @param {string} name
+   * @param {MediapipeFacialGesture} name
    * @param {number} confidence
    * @return {!MockFaceLandmarkerResult}
    */
@@ -87,26 +123,42 @@ class MockFaceLandmarkerResult {
 
 /** Base class for FaceGaze tests JavaScript tests. */
 FaceGazeTestBase = class extends E2ETestBase {
+  constructor() {
+    super();
+    this.overrideIntervalFunctions_ = true;
+  }
+
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
     this.mockAccessibilityPrivate = new MockAccessibilityPrivate();
     chrome.accessibilityPrivate = this.mockAccessibilityPrivate;
 
-    // Re-initialize AccessibilityCommon with mock AccessibilityPrivate API.
-    const module =
-        await import('/accessibility_common/accessibility_common_loader.js');
-    await importModule(
-        ['Action', 'FaceGaze'], '/accessibility_common/facegaze/facegaze.js');
-    await importModule(
-        ['FacialGesture'],
-        '/accessibility_common/facegaze/gesture_detector.js');
-    accessibilityCommon = new module.AccessibilityCommon();
+    if (this.overrideIntervalFunctions_) {
+      this.intervalCallbacks_ = {};
+      this.nextCallbackId_ = 1;
+
+      window.setInterval = (callback, timeout) => {
+        const id = this.nextCallbackId_;
+        this.nextCallbackId_++;
+        this.intervalCallbacks_[id] = callback;
+        return id;
+      };
+      window.clearInterval = (id) => {
+        delete this.intervalCallbacks_[id];
+      };
+    }
+
     assertNotNullNorUndefined(accessibilityCommon);
-    assertNotNullNorUndefined(Action);
     assertNotNullNorUndefined(FaceGaze);
     assertNotNullNorUndefined(FacialGesture);
-    accessibilityCommon.faceGaze_ = new FaceGaze();
+    assertNotNullNorUndefined(MediapipeFacialGesture);
+    assertNotNullNorUndefined(FacialGesturesToMediapipeGestures);
+    assertNotNullNorUndefined(MouseController);
+    assertNotNullNorUndefined(MacroName);
+    await new Promise(resolve => {
+      accessibilityCommon.setFeatureLoadCallbackForTest('facegaze', resolve);
+    });
   }
 
   /** @override */
@@ -139,7 +191,7 @@ FaceGazeTestBase = class extends E2ETestBase {
   }
 
   /** @param {!Config} config */
-  configureFaceGaze(config) {
+  async configureFaceGaze(config) {
     const faceGaze = this.getFaceGaze();
     if (config.mouseLocation) {
       // TODO(b/309121742): Set the mouse location using a fake automation
@@ -147,21 +199,57 @@ FaceGazeTestBase = class extends E2ETestBase {
       faceGaze.mouseController_.mouseLocation_ = config.mouseLocation;
     }
 
-    if (config.gestureToAction) {
-      faceGaze.gestureToAction_ = new Map(config.gestureToAction);
+    if (config.gestureToMacroName) {
+      faceGaze.gestureHandler_.gestureToMacroName_ =
+          new Map(config.gestureToMacroName);
     }
 
     if (config.gestureToConfidence) {
-      faceGaze.gestureToConfidence_ = new Map(config.gestureToConfidence);
+      faceGaze.gestureHandler_.gestureToConfidence_ =
+          new Map(config.gestureToConfidence);
     }
+
+    if (config.bufferSize !== -1) {
+      await this.setPref(
+          MouseController.PREF_CURSOR_SMOOTHING, config.bufferSize);
+    }
+
+    if (config.speeds) {
+      await this.setPref(MouseController.PREF_SPD_UP, config.speeds.up);
+      await this.setPref(MouseController.PREF_SPD_DOWN, config.speeds.down);
+      await this.setPref(MouseController.PREF_SPD_LEFT, config.speeds.left);
+      await this.setPref(MouseController.PREF_SPD_RIGHT, config.speeds.right);
+    }
+
+    await this.setPref(
+        MouseController.PREF_CURSOR_USE_ACCELERATION,
+        config.useMouseAcceleration);
+    assertEquals(
+        faceGaze.mouseController_.useMouseAcceleration_,
+        config.useMouseAcceleration);
 
     return new Promise(resolve => {
       faceGaze.setOnInitCallbackForTest(resolve);
     });
   }
 
-  /** @param {!MockFaceLandmarkerResult} result */
-  processFaceLandmarkerResult(result) {
+  triggerMouseControllerInterval() {
+    const intervalId = this.getFaceGaze().mouseController_.mouseInterval_;
+    assertNotEquals(-1, intervalId);
+    assertNotNullNorUndefined(this.intervalCallbacks_[intervalId]);
+    this.intervalCallbacks_[intervalId]();
+  }
+
+  /**
+   * @param {!MockFaceLandmarkerResult} result
+   * @param {boolean} triggerMouseControllerInterval
+   */
+  processFaceLandmarkerResult(result, triggerMouseControllerInterval) {
     this.getFaceGaze().processFaceLandmarkerResult_(result);
+
+    if (triggerMouseControllerInterval) {
+      // Manually trigger the mouse interval one time.
+      this.triggerMouseControllerInterval();
+    }
   }
 };

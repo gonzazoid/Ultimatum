@@ -13,6 +13,8 @@
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
+#include "base/time/time.h"
+#include "base/timer/elapsed_timer.h"
 #include "services/network/public/cpp/request_destination.h"
 #include "services/network/public/cpp/request_mode.h"
 #include "third_party/blink/public/common/service_worker/service_worker_router_rule.h"
@@ -54,6 +56,11 @@ void RecordMatchedSourceType(
     const std::vector<blink::ServiceWorkerRouterSource>& sources) {
   base::UmaHistogramEnumeration(
       "ServiceWorker.RouterEvaluator.MatchedFirstSourceType", sources[0].type);
+}
+
+void RecordEvaluationTime(base::TimeDelta duration) {
+  base::UmaHistogramMicrosecondsTimes(
+      "ServiceWorker.RouterEvaluator.EvaluationTime", duration);
 }
 
 // TODO(crbug.com/1371756): consolidate code with blink::url_pattern.
@@ -233,28 +240,28 @@ bool IsValidSources(
   // Currently, only network source is supported.
   for (const auto& s : sources) {
     switch (s.type) {
-      case blink::ServiceWorkerRouterSource::Type::kNetwork:
+      case network::mojom::ServiceWorkerRouterSourceType::kNetwork:
         if (!s.network_source) {
           RecordSetupError(
               ServiceWorkerRouterEvaluatorErrorEnums::kInvalidSource);
           return false;
         }
         break;
-      case blink::ServiceWorkerRouterSource::Type::kRace:
+      case network::mojom::ServiceWorkerRouterSourceType::kRace:
         if (!s.race_source) {
           RecordSetupError(
               ServiceWorkerRouterEvaluatorErrorEnums::kInvalidSource);
           return false;
         }
         break;
-      case blink::ServiceWorkerRouterSource::Type::kFetchEvent:
+      case network::mojom::ServiceWorkerRouterSourceType::kFetchEvent:
         if (!s.fetch_event_source) {
           RecordSetupError(
               ServiceWorkerRouterEvaluatorErrorEnums::kInvalidSource);
           return false;
         }
         break;
-      case blink::ServiceWorkerRouterSource::Type::kCache:
+      case network::mojom::ServiceWorkerRouterSourceType::kCache:
         if (!s.cache_source) {
           RecordSetupError(
               ServiceWorkerRouterEvaluatorErrorEnums::kInvalidSource);
@@ -607,6 +614,13 @@ void ServiceWorkerRouterEvaluator::Compile() {
       return;
     }
     need_running_status_ |= rule->need_running_status();
+    for (const auto& s : r.sources) {
+      bool has_fetch_event =
+          (s.type ==
+           network::mojom::ServiceWorkerRouterSourceType::kFetchEvent);
+      has_fetch_event_source_ |= has_fetch_event;
+      has_non_fetch_event_source_ |= !has_fetch_event;
+    }
     compiled_rules_.emplace_back(std::move(rule));
   }
   RecordSetupError(ServiceWorkerRouterEvaluatorErrorEnums::kNoError);
@@ -618,9 +632,11 @@ ServiceWorkerRouterEvaluator::EvaluateInternal(
     const network::ResourceRequest& request,
     std::optional<blink::EmbeddedWorkerStatus> running_status) const {
   CHECK(is_valid_);
+  base::ElapsedTimer timer;
   for (const auto& rule : compiled_rules_) {
     if (rule->Match(request, running_status)) {
       VLOG(3) << "matched request url=" << request.url;
+      RecordEvaluationTime(timer.Elapsed());
       RecordMatchedSourceType(rule->sources());
       ServiceWorkerRouterEvaluator::Result result;
       result.id = rule->id();
@@ -629,6 +645,7 @@ ServiceWorkerRouterEvaluator::EvaluateInternal(
     }
   }
   VLOG(3) << "not matched request url=" << request.url;
+  RecordEvaluationTime(timer.Elapsed());
   return std::nullopt;
 }
 
@@ -656,17 +673,17 @@ base::Value ServiceWorkerRouterEvaluator::ToValue() const {
     base::Value::List source;
     for (const auto& s : r.sources) {
       switch (s.type) {
-        case blink::ServiceWorkerRouterSource::Type::kNetwork:
+        case network::mojom::ServiceWorkerRouterSourceType::kNetwork:
           source.Append("network");
           break;
-        case blink::ServiceWorkerRouterSource::Type::kRace:
+        case network::mojom::ServiceWorkerRouterSourceType::kRace:
           // TODO(crbug.com/1371756): we may need to update the name per target.
           source.Append("race-network-and-fetch-handler");
           break;
-        case blink::ServiceWorkerRouterSource::Type::kFetchEvent:
+        case network::mojom::ServiceWorkerRouterSourceType::kFetchEvent:
           source.Append("fetch-event");
           break;
-        case blink::ServiceWorkerRouterSource::Type::kCache:
+        case network::mojom::ServiceWorkerRouterSourceType::kCache:
           if (s.cache_source->cache_name) {
             base::Value::Dict out_s;
             out_s.Set("cache_name", *s.cache_source->cache_name);
@@ -689,6 +706,11 @@ std::string ServiceWorkerRouterEvaluator::ToString() const {
   std::string json;
   base::JSONWriter::Write(ToValue(), &json);
   return json;
+}
+
+void ServiceWorkerRouterEvaluator::RecordRouterRuleCount() const {
+  base::UmaHistogramCounts1000("ServiceWorker.RouterEvaluator.RuleCount",
+                               compiled_rules_.size());
 }
 
 }  // namespace content

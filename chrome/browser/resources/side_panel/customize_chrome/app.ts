@@ -16,18 +16,20 @@ import './themes.js';
 import './wallpaper_search/wallpaper_search.js';
 
 import {ColorChangeUpdater} from 'chrome://resources/cr_components/color_change_listener/colors_css_updater.js';
-import {HelpBubbleMixin, HelpBubbleMixinInterface} from 'chrome://resources/cr_components/help_bubble/help_bubble_mixin.js';
+import type {HelpBubbleMixinInterface} from 'chrome://resources/cr_components/help_bubble/help_bubble_mixin.js';
+import {HelpBubbleMixin} from 'chrome://resources/cr_components/help_bubble/help_bubble_mixin.js';
 import {assert} from 'chrome://resources/js/assert.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './app.html.js';
-import {AppearanceElement} from './appearance.js';
-import {CategoriesElement} from './categories.js';
-import {ChromeColorsElement} from './chrome_colors.js';
-import {BackgroundCollection, CustomizeChromeSection} from './customize_chrome.mojom-webui.js';
+import type {AppearanceElement} from './appearance.js';
+import type {CategoriesElement} from './categories.js';
+import type {ChromeColorsElement} from './chrome_colors.js';
+import type {BackgroundCollection, CustomizeChromePageHandlerInterface} from './customize_chrome.mojom-webui.js';
+import {ChromeWebStoreCategory, ChromeWebStoreCollection, CustomizeChromeSection} from './customize_chrome.mojom-webui.js';
 import {CustomizeChromeApiProxy} from './customize_chrome_api_proxy.js';
-import {ThemesElement} from './themes.js';
+import type {ThemesElement} from './themes.js';
 
 const SECTION_TO_SELECTOR = {
   [CustomizeChromeSection.kAppearance]: '#appearance',
@@ -104,6 +106,12 @@ export class AppElement extends AppElementBase {
   private page_: CustomizeChromePage;
   private selectedCollection_: BackgroundCollection|null;
   private scrollToSectionListenerId_: number|null = null;
+  private pageHandler_: CustomizeChromePageHandlerInterface;
+
+  constructor() {
+    super();
+    this.pageHandler_ = CustomizeChromeApiProxy.getInstance().handler;
+  }
 
   override connectedCallback() {
     super.connectedCallback();
@@ -111,6 +119,10 @@ export class AppElement extends AppElementBase {
         CustomizeChromeApiProxy.getInstance()
             .callbackRouter.scrollToSection.addListener(
                 (section: CustomizeChromeSection) => {
+                  if (section === CustomizeChromeSection.kWallpaperSearch) {
+                    this.onWallpaperSearchSelect_();
+                    return;
+                  }
                   const selector = SECTION_TO_SELECTOR[section];
                   const element = this.shadowRoot!.querySelector(selector);
                   if (!element) {
@@ -175,6 +187,25 @@ export class AppElement extends AppElementBase {
         this.shadowRoot!.querySelector('customize-chrome-wallpaper-search');
     assert(page);
     page.focusOnBackButton();
+  }
+
+  private onCouponsButtonClick_() {
+    this.pageHandler_.openChromeWebStoreCategoryPage(
+        ChromeWebStoreCategory.kShopping);
+  }
+
+  private onWritingButtonClick_() {
+    this.pageHandler_.openChromeWebStoreCollectionPage(
+        ChromeWebStoreCollection.kWrittingEssentials);
+  }
+
+  private onProductivityButtonClick_() {
+    this.pageHandler_.openChromeWebStoreCategoryPage(
+        ChromeWebStoreCategory.kWorkflowPlanning);
+  }
+
+  private onChromeWebStoreLinkClick_() {
+    this.pageHandler_.openChromeWebStoreHomePage();
   }
 }
 

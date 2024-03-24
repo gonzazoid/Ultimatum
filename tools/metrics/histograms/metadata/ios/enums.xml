@@ -52,6 +52,23 @@ chromium-metrics-reviews@google.com.
   <int value="1" label="SecondImpression"/>
 </enum>
 
+<enum name="DocumentDownloadConflictResolution">
+  <int value="0" label="No Conflict"/>
+  <int value="1" label="Previous Download Complete"/>
+  <int value="2" label="Previous Download Cancelled"/>
+  <int value="3" label="Previous Download Not Finished"/>
+</enum>
+
+<enum name="DocumentDownloadState">
+  <int value="0" label="Complete"/>
+  <int value="1" label="Failed"/>
+  <int value="2" label="Failed Not Resumable"/>
+  <int value="3" label="Not Started"/>
+  <int value="4" label="In Progress"/>
+  <int value="5"
+      label="Cancelled (includes termination of tab and application)"/>
+</enum>
+
 <enum name="ExperienceKitCalendarTypes">
   <summary>
     This list corresponds to the calendar providers supported by Experience Kit
@@ -166,6 +183,13 @@ chromium-metrics-reviews@google.com.
   <int value="2" label="Swipe Down"/>
 </enum>
 
+<enum name="IOSDockingPromoAction">
+  <int value="0" label="Toggle appearance"/>
+  <int value="1" label="Primary Action Button (Got It)"/>
+  <int value="2" label="Secondary Action Button (Remind Me Later)"/>
+  <int value="3" label="Dismiss via Swipe"/>
+</enum>
+
 <enum name="IOSEditMenuActions">
   <int value="0" label="Invalid"/>
   <int value="1" label="NativeCut"/>
@@ -263,6 +287,7 @@ chromium-metrics-reviews@google.com.
   <int value="0" label="Invalid Action"/>
   <int value="1" label="Open NTP"/>
   <int value="2" label="Default Browser Settings"/>
+  <int value="3" label="Skipped Default Browser Settings For NTP"/>
 </enum>
 
 <enum name="IOSExternalActionDefaultBrowserPromoUsage">
@@ -318,12 +343,12 @@ chromium-metrics-reviews@google.com.
   <int value="5" label="Set Up List Compacted"/>
   <int value="6" label="Set Up List All Set"/>
   <int value="7" label="Safety Check"/>
-  <int value="8" label="Safety Check Multi Row"/>
-  <int value="9" label="Safety Check Multi Row Overflow"/>
+  <int value="8" label="Obsolete in M123 - Safety Check Multi Row"/>
+  <int value="9" label="Obsolete in M123 - Safety Check Multi Row Overflow"/>
   <int value="10" label="Tab Resumption"/>
   <int value="11" label="Parcel Tracking"/>
-  <int value="12" label="Parcel Tracking See More"/>
-  <int value="13" label="Set Up List Content Notification"/>
+  <int value="12" label="Obsolete in M123 - Parcel Tracking See More"/>
+  <int value="13" label="Set Up List Notifications"/>
   <int value="14" label="Placeholder"/>
 </enum>
 
@@ -551,6 +576,9 @@ chromium-metrics-reviews@google.com.
   <int value="10" label="Omnibox Position"/>
   <int value="11" label="Docking Promo"/>
   <int value="12" label="Docking Promo (Remind Me Later)"/>
+  <int value="13" label="All Tabs default browser promo"/>
+  <int value="14" label="Made for iOS default browser promo"/>
+  <int value="15" label="Stay Safe default browser promo"/>
 </enum>
 
 <enum name="IOSPromosManagerPromoImpressionLimitEvaluationType">
@@ -575,6 +603,25 @@ chromium-metrics-reviews@google.com.
   <int value="4" label="No Active Tabs"/>
   <int value="5" label="Not Android Switcher"/>
   <int value="6" label="Success"/>
+</enum>
+
+<enum name="IOSSaveToDriveOutcomeType">
+  <int value="0" label="Failure - WebState Hidden"/>
+  <int value="1" label="Failure - WebState Destroyed"/>
+  <int value="2" label="Failure - Download Destroyed"/>
+  <int value="3" label="Failure - Canceled (Files Selected)"/>
+  <int value="4" label="Failure - Canceled (Drive Selected)"/>
+  <int value="5" label="Success - Selected Files"/>
+  <int value="6" label="Success - Selected Drive"/>
+  <int value="7" label="Success - Opted to Manage Storage"/>
+</enum>
+
+<enum name="IOSSaveToDriveUploadTaskStateType">
+  <int value="0" label="Not Started"/>
+  <int value="1" label="In Progress"/>
+  <int value="2" label="Cancelled"/>
+  <int value="3" label="Complete"/>
+  <int value="4" label="Failed"/>
 </enum>
 
 <enum name="IOSSaveToPhotosAccountPickerType">
@@ -628,6 +675,9 @@ chromium-metrics-reviews@google.com.
       label="Success - StoreKit opened and app not installed (maybe dismissed
              before full installation)"/>
   <int value="8" label="Success - StoreKit opened and app installed"/>
+  <int value="9" label="Failure - User out-of-storage and DID manage storage"/>
+  <int value="10"
+      label="Failure - User out-of-storage and did NOT manage storage"/>
 </enum>
 
 <enum name="IOSSearchExtensionAction">
@@ -665,7 +715,7 @@ chromium-metrics-reviews@google.com.
   <int value="3" label="Autofill"/>
   <int value="4" label="Follow"/>
   <int value="5" label="All Set"/>
-  <int value="6" label="Content Notification"/>
+  <int value="6" label="Notifications"/>
 </enum>
 
 <enum name="IOSShareExtensionReceivedEntrySource">
@@ -763,12 +813,6 @@ chromium-metrics-reviews@google.com.
   <int value="3" label="Page Control Drag"/>
   <int value="4" label="Item Drag"/>
   <int value="5" label="Voice Over Swipe"/>
-</enum>
-
-<enum name="IOSUserInterfaceStyle">
-  <int value="0" label="Unspecified"/>
-  <int value="1" label="Light"/>
-  <int value="2" label="Dark"/>
 </enum>
 
 <enum name="IOSWebFileInputAttributes">
@@ -942,8 +986,14 @@ chromium-metrics-reviews@google.com.
 </enum>
 
 <enum name="PushNotificationPermissionPromptStatus">
-  <int value="0" label="Accpeted"/>
+  <int value="0" label="Accepted"/>
   <int value="1" label="Declined"/>
+  <int value="2" label="Error"/>
+</enum>
+
+<enum name="PushNotificationPermissionProvisionalStatus">
+  <int value="0" label="Accepted"/>
+  <int value="1" label="Notifications previously authorized or ineligible"/>
   <int value="2" label="Error"/>
 </enum>
 

@@ -75,14 +75,6 @@ class WebSettings {
     kSubtitles
   };
 
-  // Defines the default for 'passive' field used in the AddEventListenerOptions
-  // interface when javascript calls addEventListener.
-  enum class PassiveEventListenerDefault {
-    kFalse,        // Default of false.
-    kTrue,         // Default of true.
-    kForceAllTrue  // Force all values to be true even when specified.
-  };
-
   // Sets value of a setting by its string identifier from Settings.in and
   // string representation of value. An enum's string representation is the
   // string representation of the integer value of the enum.
@@ -118,6 +110,7 @@ class WebSettings {
   virtual void SetRequireTransientActivationForGetDisplayMedia(bool) = 0;
   virtual void SetRequireTransientActivationForShowFileOrDirectoryPicker(
       bool) = 0;
+  virtual void SetRequireTransientActivationForHtmlFullscreen(bool) = 0;
   virtual void SetAutoZoomFocusedEditableToLegibleScale(bool) = 0;
   virtual void SetCaretBrowsingEnabled(bool) = 0;
   virtual void SetClobberUserAgentInitialScaleQuirk(bool) = 0;
@@ -178,6 +171,7 @@ class WebSettings {
   virtual void SetMinimumFontSize(int) = 0;
   virtual void SetMinimumLogicalFontSize(int) = 0;
   virtual void SetHideScrollbars(bool) = 0;
+  virtual void SetPrefersDefaultScrollbarStyles(bool) = 0;
   virtual void SetPasswordEchoDurationInSeconds(double) = 0;
   virtual void SetPasswordEchoEnabled(bool) = 0;
   virtual void SetPluginsEnabled(bool) = 0;
@@ -262,12 +256,12 @@ class WebSettings {
   virtual void SetDoNotUpdateSelectionOnMutatingSelectionRange(bool) = 0;
   virtual void SetLowPriorityIframesThreshold(WebEffectiveConnectionType) = 0;
   virtual void SetLazyLoadEnabled(bool) = 0;
-  virtual void SetLazyFrameLoadingDistanceThresholdPxUnknown(int) = 0;
-  virtual void SetLazyFrameLoadingDistanceThresholdPxOffline(int) = 0;
-  virtual void SetLazyFrameLoadingDistanceThresholdPxSlow2G(int) = 0;
-  virtual void SetLazyFrameLoadingDistanceThresholdPx2G(int) = 0;
-  virtual void SetLazyFrameLoadingDistanceThresholdPx3G(int) = 0;
-  virtual void SetLazyFrameLoadingDistanceThresholdPx4G(int) = 0;
+  virtual void SetLazyLoadingFrameMarginPxUnknown(int) = 0;
+  virtual void SetLazyLoadingFrameMarginPxOffline(int) = 0;
+  virtual void SetLazyLoadingFrameMarginPxSlow2G(int) = 0;
+  virtual void SetLazyLoadingFrameMarginPx2G(int) = 0;
+  virtual void SetLazyLoadingFrameMarginPx3G(int) = 0;
+  virtual void SetLazyLoadingFrameMarginPx4G(int) = 0;
   virtual void SetLazyLoadingImageMarginPxUnknown(int) = 0;
   virtual void SetLazyLoadingImageMarginPxOffline(int) = 0;
   virtual void SetLazyLoadingImageMarginPxSlow2G(int) = 0;
@@ -284,6 +278,8 @@ class WebSettings {
   virtual void SetAccessibilityIncludeSvgGElement(bool) = 0;
   virtual void SetWebXRImmersiveArAllowed(bool) = 0;
   virtual void SetModalContextMenu(bool) = 0;
+  virtual void SetRequireTransientActivationAndAuthorizationForSubAppsAPIs(
+      bool) = 0;
 
  protected:
   ~WebSettings() = default;

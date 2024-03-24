@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "components/browsing_data/content/browsing_data_model.h"
+
 #include <memory>
 #include <string>
 
@@ -11,6 +13,7 @@
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
+#include "base/test/run_until.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_future.h"
 #include "base/test/test_timeouts.h"
@@ -28,7 +31,6 @@
 #include "chrome/test/base/chrome_test_utils.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
-#include "components/browsing_data/content/browsing_data_model.h"
 #include "components/browsing_data/content/browsing_data_model_test_util.h"
 #include "components/browsing_data/content/browsing_data_test_util.h"
 #include "components/browsing_data/content/shared_worker_info.h"
@@ -578,8 +580,9 @@ IN_PROC_BROWSER_TEST_P(BrowsingDataModelBrowserTest,
 
   base::test::TestFuture<OperationResult> future;
   url::Origin testOrigin = url::Origin::Create(GURL("https://a.test"));
-  shared_storage_manager->Set(testOrigin, u"key", u"value",
-                              future.GetCallback());
+  shared_storage_manager->Set(
+      testOrigin, u"key", u"value", future.GetCallback(),
+      storage::SharedStorageDatabase::SetBehavior::kDefault);
   EXPECT_EQ(OperationResult::kSet, future.Get());
 
   std::unique_ptr<BrowsingDataModel> browsing_data_model =
@@ -1255,7 +1258,8 @@ IN_PROC_BROWSER_TEST_P(BrowsingDataModelBrowserTest,
   replacements.SetPathStr("browsing_data/shared_worker.js");
   GURL worker = testOrigin.GetURL().ReplaceComponents(replacements);
   browsing_data::SharedWorkerInfo data_key(
-      worker, /*name=*/"", blink::StorageKey::CreateFirstParty(testOrigin));
+      worker, /*name=*/"", blink::StorageKey::CreateFirstParty(testOrigin),
+      blink::mojom::SharedWorkerSameSiteCookies::kAll);
   ValidateBrowsingDataEntries(
       allowed_browsing_data_model,
       {{kTestHost,
@@ -1671,8 +1675,7 @@ IN_PROC_BROWSER_TEST_P(BrowsingDataModelBrowserTest, CookiesHandledCorrectly) {
   url::Origin testOrigin = https_test_server()->GetOrigin(kTestHost);
   std::unique_ptr<net::CanonicalCookie> data_key = net::CanonicalCookie::Create(
       testOrigin.GetURL(), "foo=bar; Path=/browsing_data", base::Time::Now(),
-      absl::nullopt /* server_time */,
-      absl::nullopt /* cookie_partition_key */);
+      std::nullopt /* server_time */, std::nullopt /* cookie_partition_key */);
   ValidateBrowsingDataEntries(browsing_data_model.get(),
                               {{kTestHost,
                                 *(data_key.get()),
@@ -1688,6 +1691,50 @@ IN_PROC_BROWSER_TEST_P(BrowsingDataModelBrowserTest, CookiesHandledCorrectly) {
   browsing_data_model = BuildBrowsingDataModel();
   ValidateBrowsingDataEntries(browsing_data_model.get(), {});
   ASSERT_EQ(browsing_data_model->size(), 0u);
+  ASSERT_FALSE(HasDataForType("Cookie", web_contents()));
+}
+
+IN_PROC_BROWSER_TEST_P(BrowsingDataModelBrowserTest,
+                       CookiesAccessReportedCorrectly) {
+  if (!IsDeprecateCookiesTreeModelEnabled()) {
+    return;
+  }
+
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser(),
+      https_test_server()->GetURL(kTestHost, "/browsing_data/site_data.html")));
+
+  auto* content_settings =
+      content_settings::PageSpecificContentSettings::GetForFrame(
+          web_contents()->GetPrimaryMainFrame());
+
+  // Validate that the allowed browsing data model is empty.
+  auto* allowed_browsing_data_model =
+      content_settings->allowed_browsing_data_model();
+  ValidateBrowsingDataEntries(allowed_browsing_data_model, {});
+  ASSERT_EQ(allowed_browsing_data_model->size(), 0u);
+
+  SetDataForType("Cookie", web_contents());
+  WaitForModelUpdate(allowed_browsing_data_model, /*expected_size=*/1);
+
+  // Validate that cookie is fetched to browsing data model.
+  url::Origin testOrigin = https_test_server()->GetOrigin(kTestHost);
+  std::unique_ptr<net::CanonicalCookie> data_key = net::CanonicalCookie::Create(
+      testOrigin.GetURL(), "foo=bar; Path=/browsing_data", base::Time::Now(),
+      std::nullopt /* server_time */, std::nullopt /* cookie_partition_key */);
+  ValidateBrowsingDataEntries(allowed_browsing_data_model,
+                              {{kTestHost,
+                                *(data_key.get()),
+                                {{BrowsingDataModel::StorageType::kCookie},
+                                 /*storage_size=*/0,
+                                 /*cookie_count=*/1}}});
+  ASSERT_EQ(allowed_browsing_data_model->size(), 1u);
+
+  // Remove cookie entry.
+  RemoveBrowsingDataForDataOwner(allowed_browsing_data_model, kTestHost);
+  // Validate that the allowed browsing data model is empty.
+  ValidateBrowsingDataEntries(allowed_browsing_data_model, {});
+  ASSERT_EQ(allowed_browsing_data_model->size(), 0u);
   ASSERT_FALSE(HasDataForType("Cookie", web_contents()));
 }
 

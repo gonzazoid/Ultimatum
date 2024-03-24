@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <vector>
@@ -49,6 +50,7 @@ struct CONTENT_EXPORT InterestGroupUpdate {
   std::optional<std::vector<std::string>> trusted_bidding_signals_keys;
   std::optional<blink::InterestGroup::TrustedBiddingSignalsSlotSizeMode>
       trusted_bidding_signals_slot_size_mode;
+  std::optional<int32_t> max_trusted_bidding_signals_url_length;
   std::optional<std::string> user_bidding_signals;
   std::optional<std::vector<blink::InterestGroup::Ad>> ads, ad_components;
   std::optional<base::flat_map<std::string, blink::AdSize>> ad_sizes;

@@ -12,6 +12,7 @@
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "net/dns/mock_host_resolver.h"
 #include "third_party/blink/public/common/features.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
@@ -141,7 +142,7 @@ class DocumentPictureInPicturePixelTest : public UiBrowserTest,
 
     const auto* const test_info =
         testing::UnitTest::GetInstance()->current_test_info();
-    return VerifyPixelUi(pip_frame_view, test_info->test_case_name(),
+    return VerifyPixelUi(pip_frame_view, test_info->test_suite_name(),
                          test_info->name()) != ui::test::ActionResult::kFailed;
   }
 

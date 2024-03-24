@@ -14,7 +14,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "linux-chromeos-rel",
-              "project": "chromium"
+              "project": "chromium-m123"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-chromiumos-archive",
@@ -27,7 +27,8 @@
                 "build_config": "Release",
                 "config": "chromium",
                 "target_arch": "intel",
-                "target_bits": 64
+                "target_bits": 64,
+                "target_platform": "chromeos"
               },
               "legacy_gclient_config": {
                 "apply_configs": [
@@ -44,7 +45,7 @@
         {
           "bucket": "ci",
           "builder": "linux-chromeos-rel",
-          "project": "chromium"
+          "project": "chromium-m123"
         }
       ]
     }

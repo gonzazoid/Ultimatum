@@ -35,7 +35,7 @@ build_webui("build") {
   }
 
   web_component_files = [
-    "base_page.js",
+    "base_page.ts",
     "calibration_component_chip.ts",
     "critical_error_page.ts",
     "hardware_error_page.ts",
@@ -54,24 +54,24 @@ build_webui("build") {
     "reimaging_calibration_run_page.ts",
     "reimaging_calibration_setup_page.ts",
     "reimaging_device_information_page.ts",
-    "reimaging_firmware_update_page.js",
-    "reimaging_provisioning_page.js",
-    "repair_component_chip.js",
-    "shimless_3p_diagnostics.js",
-    "shimless_rma.js",
-    "splash_screen.js",
-    "wrapup_finalize_page.js",
-    "wrapup_repair_complete_page.js",
-    "wrapup_restock_page.js",
-    "wrapup_wait_for_manual_wp_enable_page.js",
+    "reimaging_firmware_update_page.ts",
+    "reimaging_provisioning_page.ts",
+    "repair_component_chip.ts",
+    "shimless_3p_diagnostics.ts",
+    "shimless_rma.ts",
+    "splash_screen.ts",
+    "wrapup_finalize_page.ts",
+    "wrapup_repair_complete_page.ts",
+    "wrapup_restock_page.ts",
+    "wrapup_wait_for_manual_wp_enable_page.ts",
   ]
 
   non_web_component_files = [
-    "data.js",
+    "data.ts",
     "events.ts",
-    "fake_data.js",
+    "fake_data.ts",
     "fake_shimless_rma_service.ts",
-    "mojo_interface_provider.js",
+    "mojo_interface_provider.ts",
     "shimless_rma_util.ts",
   ]
 
@@ -85,7 +85,7 @@ build_webui("build") {
     "//ash/webui/common/resources:build_ts",
     "//third_party/polymer/v3_0:library",
     "//ui/webui/resources/cr_components/color_change_listener:build_ts",
-    "//ui/webui/resources/cr_elements:build_ts",
+    "//ash/webui/common/resources/cr_elements:build_ts",
     "//ui/webui/resources/js:build_ts",
     "//ui/webui/resources/mojo:build_ts",
   ]

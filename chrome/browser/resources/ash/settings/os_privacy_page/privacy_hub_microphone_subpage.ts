@@ -9,13 +9,14 @@
  */
 
 import './privacy_hub_app_permission_row.js';
+import './privacy_hub_system_service_row.js';
 
 import {PermissionType} from 'chrome://resources/cr_components/app_management/app_management.mojom-webui.js';
 import {isPermissionEnabled} from 'chrome://resources/cr_components/app_management/permission_util.js';
 import {PrefsMixin} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
-import {CrToggleElement} from 'chrome://resources/cr_elements/cr_toggle/cr_toggle.js';
-import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {CrToggleElement} from 'chrome://resources/ash/common/cr_elements/cr_toggle/cr_toggle.js';
+import {I18nMixin} from 'chrome://resources/ash/common/cr_elements/i18n_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/ash/common/cr_elements/web_ui_listener_mixin.js';
 import {assert} from 'chrome://resources/js/assert.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
@@ -52,26 +53,30 @@ export class SettingsPrivacyHubMicrophoneSubpage extends
     return {
       /**
        * Apps with microphone permission.
+       * Only contains apps that are displayed in the App Management page.
+       * Does not contain system apps.
        */
       appList_: {
         type: Array,
         value: [],
       },
 
-      /**
-       * The list of microphones connected to the device.
-       */
-      connectedMicrophones_: {
+      systemApps_: {
+        type: Array,
+        value: [],
+      },
+
+      connectedMicrophoneNames_: {
         type: Array,
         value: [],
       },
 
       /**
-       * Indicates whether `connectedMicrophones_` is empty.
+       * Indicates whether `connectedMicrophoneNames_` is empty.
        */
       isMicListEmpty_: {
         type: Boolean,
-        computed: 'computeIsMicListEmpty_(connectedMicrophones_)',
+        computed: 'computeIsMicListEmpty_(connectedMicrophoneNames_)',
       },
 
       /**
@@ -96,11 +101,12 @@ export class SettingsPrivacyHubMicrophoneSubpage extends
   private appList_: App[];
   private appPermissionsObserverReceiver_: AppPermissionsObserverReceiver|null;
   private browserProxy_: PrivacyHubBrowserProxy;
-  private connectedMicrophones_: string[];
+  private connectedMicrophoneNames_: string[];
   private isMicListEmpty_: boolean;
   private microphoneHardwareToggleActive_: boolean;
   private mojoInterfaceProvider_: AppPermissionsHandlerInterface;
   private shouldDisableMicrophoneToggle_: boolean;
+  private systemApps_: App[];
 
   constructor() {
     super();
@@ -129,7 +135,7 @@ export class SettingsPrivacyHubMicrophoneSubpage extends
         'devicechange', () => this.updateMicrophoneList_());
   }
 
-  override async connectedCallback(): Promise<void> {
+  override connectedCallback(): void {
     super.connectedCallback();
 
     this.appPermissionsObserverReceiver_ =
@@ -137,7 +143,7 @@ export class SettingsPrivacyHubMicrophoneSubpage extends
     this.mojoInterfaceProvider_.addObserver(
         this.appPermissionsObserverReceiver_.$.bindNewPipeAndPassRemote());
 
-    await this.updateAppList_();
+    this.updateAppLists_();
   }
 
   override disconnectedCallback(): void {
@@ -149,27 +155,46 @@ export class SettingsPrivacyHubMicrophoneSubpage extends
     this.microphoneHardwareToggleActive_ = enabled;
   }
 
-  private async updateAppList_(): Promise<void> {
+  private async updateAppLists_(): Promise<void> {
     const apps = (await this.mojoInterfaceProvider_.getApps()).apps;
     this.appList_ = apps.filter(hasMicrophonePermission);
+
+    this.systemApps_ =
+        (await this.mojoInterfaceProvider_.getSystemAppsThatUseMicrophone())
+            .apps;
+  }
+
+  private getSystemServicesPermissionText_(): string {
+    const microphoneAllowed =
+        this.getPref<string>('ash.user.microphone_allowed').value;
+    return microphoneAllowed ?
+        this.i18n('privacyHubSystemServicesAllowedText') :
+        this.i18n('privacyHubSystemServicesBlockedText');
+  }
+
+  /**
+   * The function is used for sorting app names alphabetically.
+   */
+  private alphabeticalSort_(first: App, second: App): number {
+    return first.name!.localeCompare(second.name!);
   }
 
   private async updateMicrophoneList_(): Promise<void> {
-    const connectedMicrophones: string[] = [];
+    const connectedMicrophoneNames: string[] = [];
     const devices: MediaDeviceInfo[] =
         await MediaDevicesProxy.getMediaDevices().enumerateDevices();
 
     devices.forEach((device) => {
       if (device.kind === 'audioinput' && device.deviceId !== 'default') {
-        connectedMicrophones.push(device.label);
+        connectedMicrophoneNames.push(device.label);
       }
     });
 
-    this.connectedMicrophones_ = connectedMicrophones;
+    this.connectedMicrophoneNames_ = connectedMicrophoneNames;
   }
 
   private computeIsMicListEmpty_(): boolean {
-    return this.connectedMicrophones_.length === 0;
+    return this.connectedMicrophoneNames_.length === 0;
   }
 
   private computeOnOffText_(): string {
@@ -181,8 +206,9 @@ export class SettingsPrivacyHubMicrophoneSubpage extends
   private computeOnOffSubtext_(): string {
     const microphoneAllowed =
         this.getPref<string>('ash.user.microphone_allowed').value;
-    return microphoneAllowed ? this.i18n('microphoneToggleSubtext') :
-                               this.i18n('blockedForAllText');
+    return microphoneAllowed ?
+        this.i18n('privacyHubMicrophoneSubpageMicrophoneToggleSubtext') :
+        this.i18n('privacyHubMicrophoneAccessBlockedText');
   }
 
   private computeShouldDisableMicrophoneToggle_(): boolean {
@@ -195,7 +221,8 @@ export class SettingsPrivacyHubMicrophoneSubpage extends
         PrivacyHubSensorSubpageUserAction.WEBSITE_PERMISSION_LINK_CLICKED,
         NUMBER_OF_POSSIBLE_USER_ACTIONS);
 
-    window.open('chrome://settings/content/microphone');
+    this.mojoInterfaceProvider_.openBrowserPermissionSettings(
+        PermissionType.kMicrophone);
   }
 
   /**

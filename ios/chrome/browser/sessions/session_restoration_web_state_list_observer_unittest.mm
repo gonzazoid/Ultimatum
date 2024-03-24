@@ -69,9 +69,8 @@ class SessionRestorationWebStateListObserverTest : public PlatformTest {
 
   web::FakeWebState* InsertWebState(
       std::unique_ptr<web::FakeWebState> web_state) {
-    const int insertion_index = web_state_list_.InsertWebState(
-        web_state_list_.count(), std::move(web_state),
-        WebStateList::INSERT_NO_FLAGS, WebStateOpener{});
+    const int insertion_index =
+        web_state_list_.InsertWebState(std::move(web_state));
     return static_cast<web::FakeWebState*>(
         web_state_list_.GetWebStateAt(insertion_index));
   }
@@ -93,7 +92,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Creation) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
   EXPECT_EQ(call_count, 0u);
 }
 
@@ -113,7 +112,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Insert) {
   EXPECT_TRUE(base::Contains(observer.dirty_web_states(), web_state));
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
   EXPECT_EQ(call_count, 1u);
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -123,7 +122,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Insert) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest consider the
@@ -142,7 +141,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Insert_Unrealized) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(base::Contains(observer.inserted_web_states(), web_state_id));
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
   EXPECT_EQ(call_count, 1u);
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -152,7 +151,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Insert_Unrealized) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest consider the
@@ -166,13 +165,12 @@ TEST_F(SessionRestorationWebStateListObserverTest, Insert_Unserializable) {
 
   web::WebState* const web_state =
       InsertWebState(CreateWebState(CreateWebStateAs::kRestoreInProgress));
-  const web::WebStateID web_state_id = web_state->GetUniqueIdentifier();
 
   EXPECT_TRUE(observer.is_web_state_list_dirty());
-  EXPECT_TRUE(observer.dirty_web_states().empty());
-  EXPECT_TRUE(base::Contains(observer.inserted_web_states(), web_state_id));
+  EXPECT_TRUE(base::Contains(observer.dirty_web_states(), web_state));
+  EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
   EXPECT_EQ(call_count, 1u);
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -182,7 +180,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Insert_Unserializable) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest consider the
@@ -204,7 +202,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Insert_MultipleWebStates) {
   EXPECT_TRUE(base::Contains(observer.dirty_web_states(), web_state_2));
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
   EXPECT_EQ(call_count, 1u);  // The callback is only called once!
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -214,7 +212,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Insert_MultipleWebStates) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest consider the
@@ -233,7 +231,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, ClearDirty) {
   EXPECT_TRUE(base::Contains(observer.dirty_web_states(), web_state));
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
   EXPECT_EQ(call_count, 1u);
 
   // Clear the dirty state.
@@ -243,13 +241,13 @@ TEST_F(SessionRestorationWebStateListObserverTest, ClearDirty) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
   EXPECT_EQ(call_count, 1u);  // The callback is not invoked by ClearDirty()!
 }
 
 // Tests that SessionRestorationWebStateListObserverTest consider the
 // WebStateList as dirty when detaching a serializable WebState. The
-// WebState is not listed as up for adoption.
+// WebState is still listed as up for adoption.
 TEST_F(SessionRestorationWebStateListObserverTest, Detach) {
   size_t call_count = 0;
   SessionRestorationWebStateListObserver observer(
@@ -270,8 +268,8 @@ TEST_F(SessionRestorationWebStateListObserverTest, Detach) {
   EXPECT_TRUE(observer.is_web_state_list_dirty());
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
-  EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(base::Contains(observer.discarded_web_states(), web_state_id));
+  EXPECT_TRUE(base::Contains(observer.detached_web_states(), web_state_id));
+  EXPECT_TRUE(observer.closed_web_states().empty());
   EXPECT_EQ(call_count, 1u);
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -281,7 +279,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Detach) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest consider the
@@ -308,7 +306,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Detach_Unrealized) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(base::Contains(observer.detached_web_states(), web_state_id));
-  EXPECT_TRUE(base::Contains(observer.discarded_web_states(), web_state_id));
+  EXPECT_TRUE(observer.closed_web_states().empty());
   EXPECT_EQ(call_count, 1u);
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -318,7 +316,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Detach_Unrealized) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest consider the
@@ -346,7 +344,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Detach_Unserializable) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(base::Contains(observer.detached_web_states(), web_state_id));
-  EXPECT_TRUE(base::Contains(observer.discarded_web_states(), web_state_id));
+  EXPECT_TRUE(observer.closed_web_states().empty());
   EXPECT_EQ(call_count, 1u);
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -356,7 +354,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Detach_Unserializable) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest consider the
@@ -379,8 +377,8 @@ TEST_F(SessionRestorationWebStateListObserverTest, Detach_Dirty) {
   EXPECT_TRUE(observer.is_web_state_list_dirty());
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
-  EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(base::Contains(observer.discarded_web_states(), web_state_id));
+  EXPECT_TRUE(base::Contains(observer.detached_web_states(), web_state_id));
+  EXPECT_TRUE(observer.closed_web_states().empty());
   EXPECT_EQ(call_count, 1u);  // The callback is only called once!
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -390,7 +388,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Detach_Dirty) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest consider the
@@ -403,9 +401,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Detach_DirtyUnrealized) {
       web_state_list(), base::IgnoreArgs<WebStateList*>(base::BindRepeating(
                             &IncrementCounter, &call_count)));
 
-  web::WebState* const web_state =
-      InsertWebState(CreateWebState(CreateWebStateAs::kUnrealized));
-  const web::WebStateID web_state_id = web_state->GetUniqueIdentifier();
+  InsertWebState(CreateWebState(CreateWebStateAs::kUnrealized));
 
   ASSERT_GT(web_state_list()->count(), 0);
   web_state_list()->DetachWebStateAt(/*index*/ 0);
@@ -414,7 +410,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Detach_DirtyUnrealized) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(base::Contains(observer.discarded_web_states(), web_state_id));
+  EXPECT_TRUE(observer.closed_web_states().empty());
   EXPECT_EQ(call_count, 1u);  // The callback is only called once!
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -424,7 +420,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Detach_DirtyUnrealized) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest consider the
@@ -447,8 +443,8 @@ TEST_F(SessionRestorationWebStateListObserverTest, Detach_DirtyUnserializable) {
   EXPECT_TRUE(observer.is_web_state_list_dirty());
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
-  EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(base::Contains(observer.discarded_web_states(), web_state_id));
+  EXPECT_TRUE(base::Contains(observer.detached_web_states(), web_state_id));
+  EXPECT_TRUE(observer.closed_web_states().empty());
   EXPECT_EQ(call_count, 1u);  // The callback is only called once!
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -458,7 +454,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Detach_DirtyUnserializable) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest consider the
@@ -485,7 +481,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Close) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(base::Contains(observer.discarded_web_states(), web_state_id));
+  EXPECT_TRUE(base::Contains(observer.closed_web_states(), web_state_id));
   EXPECT_EQ(call_count, 1u);
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -495,7 +491,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Close) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest consider the
@@ -522,7 +518,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Close_Unrealized) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(base::Contains(observer.discarded_web_states(), web_state_id));
+  EXPECT_TRUE(base::Contains(observer.closed_web_states(), web_state_id));
   EXPECT_EQ(call_count, 1u);
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -532,7 +528,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Close_Unrealized) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest consider the
@@ -560,7 +556,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Close_Unserializable) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(base::Contains(observer.discarded_web_states(), web_state_id));
+  EXPECT_TRUE(base::Contains(observer.closed_web_states(), web_state_id));
   EXPECT_EQ(call_count, 1u);
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -570,7 +566,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Close_Unserializable) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest consider the
@@ -594,7 +590,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Close_Dirty) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(base::Contains(observer.discarded_web_states(), web_state_id));
+  EXPECT_TRUE(base::Contains(observer.closed_web_states(), web_state_id));
   EXPECT_EQ(call_count, 1u);  // The callback is only called once!
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -604,7 +600,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Close_Dirty) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest consider the
@@ -628,7 +624,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Close_DirtyUnrealized) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(base::Contains(observer.discarded_web_states(), web_state_id));
+  EXPECT_TRUE(base::Contains(observer.closed_web_states(), web_state_id));
   EXPECT_EQ(call_count, 1u);  // The callback is only called once!
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -638,7 +634,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Close_DirtyUnrealized) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest consider the
@@ -662,7 +658,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Close_DirtyUnserializable) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(base::Contains(observer.discarded_web_states(), web_state_id));
+  EXPECT_TRUE(base::Contains(observer.closed_web_states(), web_state_id));
   EXPECT_EQ(call_count, 1u);  // The callback is only called once!
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -672,7 +668,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Close_DirtyUnserializable) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest consider the
@@ -698,7 +694,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Move) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
   EXPECT_EQ(call_count, 1u);
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -708,7 +704,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Move) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest consider the
@@ -735,7 +731,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Activate) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
   EXPECT_EQ(call_count, 1u);
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -745,7 +741,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Activate) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest consider the
@@ -775,7 +771,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Replace) {
   EXPECT_TRUE(base::Contains(observer.dirty_web_states(), new_web_state));
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(base::Contains(observer.discarded_web_states(), web_state_id));
+  EXPECT_TRUE(base::Contains(observer.closed_web_states(), web_state_id));
   EXPECT_EQ(call_count, 1u);
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -785,7 +781,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, Replace) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest consider the
@@ -808,7 +804,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, BatchOperation) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
   EXPECT_EQ(call_count, 1u);
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -818,7 +814,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, BatchOperation) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest calls the callback
@@ -844,7 +840,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, WebStateDirty) {
   EXPECT_TRUE(base::Contains(observer.dirty_web_states(), web_state));
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
   EXPECT_EQ(call_count, 1u);
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -854,12 +850,12 @@ TEST_F(SessionRestorationWebStateListObserverTest, WebStateDirty) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
-// Tests that SessionRestorationWebStateListObserverTest does not call the
-// callback when an WebState whose navigation restoration is still in progress
-// becomes dirty.
+// Tests that SessionRestorationWebStateListObserverTest call the callback
+// when an WebState whose navigation restoration is still in progress becomes
+// dirty.
 TEST_F(SessionRestorationWebStateListObserverTest,
        WebStateDirty_Unserializable) {
   size_t call_count = 0;
@@ -878,11 +874,11 @@ TEST_F(SessionRestorationWebStateListObserverTest,
   web_state->OnNavigationFinished(&context);
 
   EXPECT_FALSE(observer.is_web_state_list_dirty());
-  EXPECT_TRUE(observer.dirty_web_states().empty());
+  EXPECT_TRUE(base::Contains(observer.dirty_web_states(), web_state));
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
-  EXPECT_EQ(call_count, 0u);  // Callback is not called!
+  EXPECT_TRUE(observer.closed_web_states().empty());
+  EXPECT_EQ(call_count, 1u);
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
   observer.ClearDirty();
@@ -891,7 +887,7 @@ TEST_F(SessionRestorationWebStateListObserverTest,
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }
 
 // Tests that SessionRestorationWebStateListObserverTest does not call the
@@ -915,7 +911,7 @@ TEST_F(SessionRestorationWebStateListObserverTest, WebStateRealized) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
   EXPECT_EQ(call_count, 0u);  // Callback is not called!
 
   // Check that calling ClearDirty() leaves the observer in a non-dirty state.
@@ -925,5 +921,5 @@ TEST_F(SessionRestorationWebStateListObserverTest, WebStateRealized) {
   EXPECT_TRUE(observer.dirty_web_states().empty());
   EXPECT_TRUE(observer.inserted_web_states().empty());
   EXPECT_TRUE(observer.detached_web_states().empty());
-  EXPECT_TRUE(observer.discarded_web_states().empty());
+  EXPECT_TRUE(observer.closed_web_states().empty());
 }

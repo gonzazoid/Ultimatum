@@ -2,29 +2,29 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.js';
-import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
+import 'chrome://resources/ash/common/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/ash/common/cr_elements/cr_shared_vars.css.js';
 import './shared_style.css.js';
 import './np_list_object.js';
 import './logging_tab.js';
 import './log_object.js';
 import './log_types.js';
-import '//resources/cr_elements/md_select.css.js';
-import '//resources/cr_elements/chromeos/cros_color_overrides.css.js';
+import '//resources/ash/common/cr_elements/md_select.css.js';
+import '//resources/ash/common/cr_elements/cros_color_overrides.css.js';
 import 'chrome://resources/polymer/v3_0/iron-location/iron-location.js';
 import 'chrome://resources/polymer/v3_0/iron-pages/iron-pages.js';
 
-import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/ash/common/cr_elements/web_ui_listener_mixin.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './cross_device_internals.html.js';
 import {NearbyLogsBrowserProxy} from './cross_device_logs_browser_proxy.js';
-import {LogTypesElement} from './log_types.js';
+import type {LogTypesElement} from './log_types.js';
 import {NearbyPrefsBrowserProxy} from './nearby_prefs_browser_proxy.js';
 import {NearbyPresenceBrowserProxy} from './nearby_presence_browser_proxy.js';
 import {NearbyUiTriggerBrowserProxy} from './nearby_ui_trigger_browser_proxy.js';
-import {PushNotificationBrowserProxy} from './push_notification_browser_proxy.js';
-import {ActionValues, FeatureValues, LogMessage, LogProvider, PresenceDevice, SelectOption, Severity} from './types.js';
+import type {LogMessage, LogProvider, PresenceDevice, SelectOption} from './types.js';
+import {ActionValues, FeatureValues, Severity} from './types.js';
 
 /**
  * Converts log message to string format for saved download file.
@@ -79,7 +79,6 @@ class CrossDeviceInternalsElement extends CrossDeviceInternalsElementBase {
           {name: 'Nearby Share', value: FeatureValues.NEARBY_SHARE},
           {name: 'Nearby Connections', value: FeatureValues.NEARBY_CONNECTIONS},
           {name: 'Fast Pair', value: FeatureValues.FAST_PAIR},
-          {name: 'Push Notification', value: FeatureValues.PUSH_NOTIFICATION},
         ],
       },
 
@@ -90,6 +89,10 @@ class CrossDeviceInternalsElement extends CrossDeviceInternalsElementBase {
           {name: 'Stop Scan', value: ActionValues.STOP_SCAN},
           {name: 'Sync Credentials', value: ActionValues.SYNC_CREDENTIALS},
           {name: 'First time flow', value: ActionValues.FIRST_TIME_FLOW},
+          {
+            name: 'Send Update Credentials Message',
+            value: ActionValues.SEND_UPDATE_CREDENTIALS_MESSAGE,
+          },
         ],
       },
 
@@ -118,16 +121,6 @@ class CrossDeviceInternalsElement extends CrossDeviceInternalsElementBase {
       fastPairActionList_: {
         type: Array,
         value: () => [],
-      },
-
-      pushNotificationActionList_: {
-        type: Array,
-        value: [
-          {
-            name: 'Add Push Notification Client',
-            value: ActionValues.ADD_PUSH_NOTIFICATION_CLIENT,
-          },
-        ],
       },
 
       actionsSelectList_: {
@@ -168,7 +161,6 @@ class CrossDeviceInternalsElement extends CrossDeviceInternalsElementBase {
   private nearbyShareActionList_: SelectOption[];
   private nearbyConnectionsActionList_: SelectOption[];
   private fastPairActionList_: SelectOption[];
-  private pushNotificationActionList_: SelectOption[];
   private actionsSelectList_: SelectOption[];
   private logList_: LogMessage[];
   private filteredLogList_: LogMessage[];
@@ -180,8 +172,6 @@ class CrossDeviceInternalsElement extends CrossDeviceInternalsElementBase {
 
   private nearbyPresenceBrowserProxy_: NearbyPresenceBrowserProxy =
       NearbyPresenceBrowserProxy.getInstance();
-  private pushNotificationBrowserProxy_: PushNotificationBrowserProxy =
-      PushNotificationBrowserProxy.getInstance();
   private prefsBrowserProxy_: NearbyPrefsBrowserProxy =
       NearbyPrefsBrowserProxy.getInstance();
   private nearbyUITriggerBrowserProxy_: NearbyUiTriggerBrowserProxy =
@@ -196,7 +186,6 @@ class CrossDeviceInternalsElement extends CrossDeviceInternalsElementBase {
 
     this.nearbyPresenceBrowserProxy_.initialize();
     this.nearbyUITriggerBrowserProxy_.initialize();
-    this.pushNotificationBrowserProxy_.initialize();
     this.addWebUiListener(
         'presence-device-found',
         (device: PresenceDevice) => this.onPresenceDeviceFound_(device));
@@ -243,9 +232,6 @@ class CrossDeviceInternalsElement extends CrossDeviceInternalsElementBase {
         case FeatureValues.FAST_PAIR:
           this.set('actionsSelectList_', this.fastPairActionList_);
           break;
-        case FeatureValues.PUSH_NOTIFICATION:
-          this.set('actionsSelectList_', this.pushNotificationActionList_);
-          break;
       }
     }
   }
@@ -270,8 +256,9 @@ class CrossDeviceInternalsElement extends CrossDeviceInternalsElementBase {
         case ActionValues.RESET_NEARBY_SHARE:
           this.prefsBrowserProxy_.clearNearbyPrefs();
           break;
-        case ActionValues.ADD_PUSH_NOTIFICATION_CLIENT:
-          this.pushNotificationBrowserProxy_.sendAddPushNotificationClient();
+        case ActionValues.SEND_UPDATE_CREDENTIALS_MESSAGE:
+          this.nearbyPresenceBrowserProxy_
+              .sendUpdateCredentialsPushNotificationMessage();
           break;
         case ActionValues.SHOW_RECEIVED_NOTIFICATION:
           this.nearbyUITriggerBrowserProxy_

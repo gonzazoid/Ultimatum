@@ -4,7 +4,7 @@
 
 /* #css_wrapper_metadata_start
  * #type=vars
- * #import=chrome://resources/cr_elements/cr_shared_vars.css.js
+ * #import=chrome://resources/ash/common/cr_elements/cr_shared_vars.css.js
  * #import=chrome://resources/polymer/v3_0/paper-styles/color.js
  * #css_wrapper_metadata_end */
 
@@ -47,8 +47,6 @@ html {
  */
 html:has(body.revamp-wayfinding-enabled) {
   --settings-base-bg-color: var(--cros-sys-surface3);
-
-  --settings-container-padding-top: 8px;
 
   --settings-menu-item-width: 256px;
 

@@ -246,8 +246,14 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
   [ChromeEarlGreyUI focusOmniboxAndType:omniboxInput];
 
   // Swipe one of the historical suggestions, to the left.
-  [[EarlGrey selectElementWithMatcher:PopupRowWithUrl(_URL1)]
-      performAction:grey_swipeSlowInDirection(kGREYDirectionLeft)];
+  if ([ChromeEarlGrey isIPadIdiom]) {
+    [[EarlGrey selectElementWithMatcher:PopupRowWithUrl(_URL1)]
+        performAction:GREYSwipeSlowInDirectionWithStartPoint(kGREYDirectionLeft,
+                                                             0.09, 0.5)];
+  } else {
+    [[EarlGrey selectElementWithMatcher:PopupRowWithUrl(_URL1)]
+        performAction:grey_swipeSlowInDirection(kGREYDirectionLeft)];
+  }
 
   // Delete button is displayed.
   [[EarlGrey selectElementWithMatcher:grey_kindOfClassName(
@@ -325,7 +331,13 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
       assertWithMatcher:grey_nil()];
 }
 
-- (void)testCloseNTPWhenSwitching {
+// TODO(b/325112257): Test fails on device.
+#if !TARGET_IPHONE_SIMULATOR
+#define MAYBE_testCloseNTPWhenSwitching DISABLED_testCloseNTPWhenSwitching
+#else
+#define MAYBE_testCloseNTPWhenSwitching testCloseNTPWhenSwitching
+#endif
+- (void)MAYBE_testCloseNTPWhenSwitching {
   // Open the first page.
   [ChromeEarlGrey loadURL:_URL1];
   [ChromeEarlGrey waitForWebStateContainingText:kPage1];
@@ -349,7 +361,15 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
   [ChromeEarlGrey waitForMainTabCount:1];
 }
 
-- (void)testDontCloseNTPWhenSwitchingWithForwardHistory {
+// TODO(b/325112257): Test fails on device.
+#if !TARGET_IPHONE_SIMULATOR
+#define MAYBE_testDontCloseNTPWhenSwitchingWithForwardHistory \
+  DISABLED_testDontCloseNTPWhenSwitchingWithForwardHistory
+#else
+#define MAYBE_testDontCloseNTPWhenSwitchingWithForwardHistory \
+  testDontCloseNTPWhenSwitchingWithForwardHistory
+#endif
+- (void)MAYBE_testDontCloseNTPWhenSwitchingWithForwardHistory {
   // Open the first page.
   [ChromeEarlGrey loadURL:_URL1];
   [ChromeEarlGrey waitForWebStateContainingText:kPage1];
@@ -416,7 +436,13 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 
 // Tests that having multiple suggestions with corresponding opened tabs display
 // multiple buttons.
-- (void)testMultiplePageOpened {
+// TODO(b/325112257): Test fails on device.
+#if !TARGET_IPHONE_SIMULATOR
+#define MAYBE_testMultiplePageOpened DISABLED_testMultiplePageOpened
+#else
+#define MAYBE_testMultiplePageOpened testMultiplePageOpened
+#endif
+- (void)MAYBE_testMultiplePageOpened {
   // Open the first page.
   [ChromeEarlGrey loadURL:_URL1];
   [ChromeEarlGrey waitForWebStateContainingText:kPage1];
@@ -452,7 +478,15 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 // Test that on iPhones, when the popup is scrolled, the keyboard is dismissed
 // but the omnibox is still expanded and the suggestions are visible.
 // Test with flag kEnableSuggestionsScrollingOnIPad disabled.
-- (void)testScrollingDismissesKeyboardOnPhones {
+// TODO(b/325112257): Test fails on device.
+#if !TARGET_IPHONE_SIMULATOR
+#define MAYBE_testScrollingDismissesKeyboardOnPhones \
+  DISABLED_testScrollingDismissesKeyboardOnPhones
+#else
+#define MAYBE_testScrollingDismissesKeyboardOnPhones \
+  testScrollingDismissesKeyboardOnPhones
+#endif
+- (void)MAYBE_testScrollingDismissesKeyboardOnPhones {
   [[AppLaunchManager sharedManager]
       ensureAppLaunchedWithFeaturesEnabled:{}
                                   disabled:{kEnableSuggestionsScrollingOnIPad}
@@ -500,7 +534,14 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 // Test when the popup is scrolled, the keyboard is dismissed
 // but the omnibox is still expanded and the suggestions are visible.
 // Test with flag kEnableSuggestionsScrollingOnIPad enabled.
-- (void)testScrollingDismissesKeyboard {
+// TODO(b/325112257): Test fails on device.
+#if !TARGET_IPHONE_SIMULATOR
+#define MAYBE_testScrollingDismissesKeyboard \
+  DISABLED_testScrollingDismissesKeyboard
+#else
+#define MAYBE_testScrollingDismissesKeyboard testScrollingDismissesKeyboard
+#endif
+- (void)MAYBE_testScrollingDismissesKeyboard {
   [[AppLaunchManager sharedManager]
       ensureAppLaunchedWithFeaturesEnabled:{kEnableSuggestionsScrollingOnIPad}
                                   disabled:{}

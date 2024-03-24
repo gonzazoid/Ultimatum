@@ -5,10 +5,8 @@
 #ifndef BASE_ALLOCATOR_PARTITION_ALLOCATOR_SRC_PARTITION_ALLOC_POINTERS_RAW_PTR_H_
 #define BASE_ALLOCATOR_PARTITION_ALLOCATOR_SRC_PARTITION_ALLOC_POINTERS_RAW_PTR_H_
 
-#include <stddef.h>
-#include <stdint.h>
-
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <type_traits>
 #include <utility>
@@ -23,6 +21,7 @@
 #include "partition_alloc/partition_alloc_buildflags.h"
 #include "partition_alloc/partition_alloc_config.h"
 #include "partition_alloc/partition_alloc_forward.h"
+#include "partition_alloc/pointers/instance_tracer.h"
 #include "partition_alloc/raw_ptr_buildflags.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -249,7 +248,7 @@ template <RawPtrTraits Traits>
 using UnderlyingImplForTraits = internal::RawPtrNoOpImpl;
 #endif
 
-constexpr bool IsPtrArithmeticAllowed(RawPtrTraits Traits) {
+constexpr bool IsPtrArithmeticAllowed([[maybe_unused]] RawPtrTraits Traits) {
 #if BUILDFLAG(ENABLE_POINTER_ARITHMETIC_TRAIT_CHECK)
   return partition_alloc::internal::ContainsFlags(
       Traits, RawPtrTraits::kAllowPtrArithmetic);
@@ -348,18 +347,22 @@ class PA_TRIVIAL_ABI PA_GSL_POINTER raw_ptr {
 #if BUILDFLAG(ENABLE_BACKUP_REF_PTR_SUPPORT) || \
     BUILDFLAG(USE_ASAN_UNOWNED_PTR) || BUILDFLAG(USE_HOOKABLE_RAW_PTR)
   PA_ALWAYS_INLINE constexpr raw_ptr(const raw_ptr& p) noexcept
-      : wrapped_ptr_(Impl::Duplicate(p.wrapped_ptr_)) {}
+      : wrapped_ptr_(Impl::Duplicate(p.wrapped_ptr_)) {
+    Impl::Trace(tracer_.owner_id(), p.wrapped_ptr_);
+  }
+
   PA_ALWAYS_INLINE constexpr raw_ptr& operator=(const raw_ptr& p) noexcept {
     // Duplicate before releasing, in case the pointer is assigned to itself.
     //
     // Unlike the move version of this operator, don't add |this != &p| branch,
-    // for performance reasons. Even though Duplicate() is not cheap, we
-    // practically never assign a raw_ptr<T> to itself. We suspect that a
-    // cumulative cost of a conditional branch, even if always correctly
-    // predicted, would exceed that.
+    // for performance reasons. Self-assignment is rare, so unconditionally
+    // calling `Duplicate()` is almost certainly cheaper than adding an
+    // additional branch, even if always correctly predicted.
     T* new_ptr = Impl::Duplicate(p.wrapped_ptr_);
     Impl::ReleaseWrappedPtr(wrapped_ptr_);
+    Impl::Untrace(tracer_.owner_id());
     wrapped_ptr_ = new_ptr;
+    Impl::Trace(tracer_.owner_id(), wrapped_ptr_);
     return *this;
   }
 #else
@@ -376,8 +379,10 @@ class PA_TRIVIAL_ABI PA_GSL_POINTER raw_ptr {
     BUILDFLAG(RAW_PTR_ZERO_ON_MOVE)
   PA_ALWAYS_INLINE constexpr raw_ptr(raw_ptr&& p) noexcept {
     wrapped_ptr_ = p.wrapped_ptr_;
+    Impl::Trace(tracer_.owner_id(), wrapped_ptr_);
     if constexpr (kZeroOnMove) {
       p.wrapped_ptr_ = nullptr;
+      Impl::Untrace(p.tracer_.owner_id());
     }
   }
   PA_ALWAYS_INLINE constexpr raw_ptr& operator=(raw_ptr&& p) noexcept {
@@ -385,9 +390,12 @@ class PA_TRIVIAL_ABI PA_GSL_POINTER raw_ptr {
     // for correctness.
     if (PA_LIKELY(this != &p)) {
       Impl::ReleaseWrappedPtr(wrapped_ptr_);
+      Impl::Untrace(tracer_.owner_id());
       wrapped_ptr_ = p.wrapped_ptr_;
+      Impl::Trace(tracer_.owner_id(), wrapped_ptr_);
       if constexpr (kZeroOnMove) {
         p.wrapped_ptr_ = nullptr;
+        Impl::Untrace(p.tracer_.owner_id());
       }
     }
     return *this;
@@ -407,6 +415,7 @@ class PA_TRIVIAL_ABI PA_GSL_POINTER raw_ptr {
     BUILDFLAG(RAW_PTR_ZERO_ON_DESTRUCT)
   PA_ALWAYS_INLINE PA_CONSTEXPR_DTOR ~raw_ptr() noexcept {
     Impl::ReleaseWrappedPtr(wrapped_ptr_);
+    Impl::Untrace(tracer_.owner_id());
     // Work around external issues where raw_ptr is used after destruction.
     if constexpr (kZeroOnDestruct) {
       wrapped_ptr_ = nullptr;
@@ -429,6 +438,7 @@ class PA_TRIVIAL_ABI PA_GSL_POINTER raw_ptr {
       : wrapped_ptr_(Impl::WrapRawPtrForDuplication(
             raw_ptr_traits::ImplForTraits<raw_ptr<T, PassedTraits>::Traits>::
                 UnsafelyUnwrapPtrForDuplication(p.wrapped_ptr_))) {
+    Impl::Trace(tracer_.owner_id(), wrapped_ptr_);
     // Limit cross-kind conversions only to cases where `kMayDangle` gets added,
     // because that's needed for ExtractAsDangling() and Unretained(Ref)Wrapper.
     // Use a static_assert, instead of disabling via SFINAE, so that the
@@ -454,9 +464,11 @@ class PA_TRIVIAL_ABI PA_GSL_POINTER raw_ptr {
                              RawPtrTraits::kMayDangle));
 
     Impl::ReleaseWrappedPtr(wrapped_ptr_);
+    Impl::Untrace(tracer_.owner_id());
     wrapped_ptr_ = Impl::WrapRawPtrForDuplication(
         raw_ptr_traits::ImplForTraits<raw_ptr<T, PassedTraits>::Traits>::
             UnsafelyUnwrapPtrForDuplication(p.wrapped_ptr_));
+    Impl::Trace(tracer_.owner_id(), wrapped_ptr_);
     return *this;
   }
 
@@ -470,7 +482,9 @@ class PA_TRIVIAL_ABI PA_GSL_POINTER raw_ptr {
   // Deliberately implicit, because raw_ptr is supposed to resemble raw ptr.
   // NOLINTNEXTLINE(google-explicit-constructor)
   PA_ALWAYS_INLINE constexpr raw_ptr(T* p) noexcept
-      : wrapped_ptr_(Impl::WrapRawPtr(p)) {}
+      : wrapped_ptr_(Impl::WrapRawPtr(p)) {
+    Impl::Trace(tracer_.owner_id(), wrapped_ptr_);
+  }
 
   // Deliberately implicit in order to support implicit upcast.
   template <typename U,
@@ -480,7 +494,9 @@ class PA_TRIVIAL_ABI PA_GSL_POINTER raw_ptr {
   // NOLINTNEXTLINE(google-explicit-constructor)
   PA_ALWAYS_INLINE constexpr raw_ptr(const raw_ptr<U, Traits>& ptr) noexcept
       : wrapped_ptr_(
-            Impl::Duplicate(Impl::template Upcast<T, U>(ptr.wrapped_ptr_))) {}
+            Impl::Duplicate(Impl::template Upcast<T, U>(ptr.wrapped_ptr_))) {
+    Impl::Trace(tracer_.owner_id(), wrapped_ptr_);
+  }
   // Deliberately implicit in order to support implicit upcast.
   template <typename U,
             typename = std::enable_if_t<
@@ -489,19 +505,24 @@ class PA_TRIVIAL_ABI PA_GSL_POINTER raw_ptr {
   // NOLINTNEXTLINE(google-explicit-constructor)
   PA_ALWAYS_INLINE constexpr raw_ptr(raw_ptr<U, Traits>&& ptr) noexcept
       : wrapped_ptr_(Impl::template Upcast<T, U>(ptr.wrapped_ptr_)) {
+    Impl::Trace(tracer_.owner_id(), wrapped_ptr_);
     if constexpr (kZeroOnMove) {
       ptr.wrapped_ptr_ = nullptr;
+      Impl::Untrace(ptr.tracer_.owner_id());
     }
   }
 
   PA_ALWAYS_INLINE constexpr raw_ptr& operator=(std::nullptr_t) noexcept {
     Impl::ReleaseWrappedPtr(wrapped_ptr_);
+    Impl::Untrace(tracer_.owner_id());
     wrapped_ptr_ = nullptr;
     return *this;
   }
   PA_ALWAYS_INLINE constexpr raw_ptr& operator=(T* p) noexcept {
     Impl::ReleaseWrappedPtr(wrapped_ptr_);
+    Impl::Untrace(tracer_.owner_id());
     wrapped_ptr_ = Impl::WrapRawPtr(p);
+    Impl::Trace(tracer_.owner_id(), wrapped_ptr_);
     return *this;
   }
 
@@ -521,8 +542,10 @@ class PA_TRIVIAL_ABI PA_GSL_POINTER raw_ptr {
     }
 #endif
     Impl::ReleaseWrappedPtr(wrapped_ptr_);
+    Impl::Untrace(tracer_.owner_id());
     wrapped_ptr_ =
         Impl::Duplicate(Impl::template Upcast<T, U>(ptr.wrapped_ptr_));
+    Impl::Trace(tracer_.owner_id(), wrapped_ptr_);
     return *this;
   }
   template <typename U,
@@ -540,9 +563,12 @@ class PA_TRIVIAL_ABI PA_GSL_POINTER raw_ptr {
     }
 #endif
     Impl::ReleaseWrappedPtr(wrapped_ptr_);
+    Impl::Untrace(tracer_.owner_id());
     wrapped_ptr_ = Impl::template Upcast<T, U>(ptr.wrapped_ptr_);
+    Impl::Trace(tracer_.owner_id(), wrapped_ptr_);
     if constexpr (kZeroOnMove) {
       ptr.wrapped_ptr_ = nullptr;
+      Impl::Untrace(ptr.tracer_.owner_id());
     }
     return *this;
   }
@@ -919,6 +945,7 @@ class PA_TRIVIAL_ABI PA_GSL_POINTER raw_ptr {
   }
 
   T* wrapped_ptr_;
+  PA_NO_UNIQUE_ADDRESS internal::InstanceTracer tracer_;
 
   template <typename U, base::RawPtrTraits R>
   friend class raw_ptr;
@@ -1020,12 +1047,13 @@ using base::raw_ptr;
 //
 // When using it, please provide a justification about what guarantees that it
 // will never be dereferenced after becoming dangling.
-constexpr auto DisableDanglingPtrDetection = base::RawPtrTraits::kMayDangle;
+constexpr inline auto DisableDanglingPtrDetection =
+    base::RawPtrTraits::kMayDangle;
 
 // See `docs/dangling_ptr.md`
 // Annotates known dangling raw_ptr. Those haven't been triaged yet. All the
 // occurrences are meant to be removed. See https://crbug.com/1291138.
-constexpr auto DanglingUntriaged = base::RawPtrTraits::kMayDangle;
+constexpr inline auto DanglingUntriaged = base::RawPtrTraits::kMayDangle;
 
 // Unlike DanglingUntriaged, this annotates raw_ptrs that are known to
 // dangle only occasionally on the CQ.
@@ -1034,18 +1062,20 @@ constexpr auto DanglingUntriaged = base::RawPtrTraits::kMayDangle;
 // https://docs.google.com/spreadsheets/d/1k12PQOG4y1-UEV9xDfP1F8FSk4cVFywafEYHmzFubJ8/
 //
 // This is not meant to be added manually. You can ignore this flag.
-constexpr auto FlakyDanglingUntriaged = base::RawPtrTraits::kMayDangle;
+constexpr inline auto FlakyDanglingUntriaged = base::RawPtrTraits::kMayDangle;
 
 // Dangling raw_ptr that is more likely to cause UAF: its memory was freed in
 // one task, and the raw_ptr was released in a different one.
 //
 // This is not meant to be added manually. You can ignore this flag.
-constexpr auto AcrossTasksDanglingUntriaged = base::RawPtrTraits::kMayDangle;
+constexpr inline auto AcrossTasksDanglingUntriaged =
+    base::RawPtrTraits::kMayDangle;
 
 // The use of pointer arithmetic with raw_ptr is strongly discouraged and
 // disabled by default. Usually a container like span<> should be used
 // instead of the raw_ptr.
-constexpr auto AllowPtrArithmetic = base::RawPtrTraits::kAllowPtrArithmetic;
+constexpr inline auto AllowPtrArithmetic =
+    base::RawPtrTraits::kAllowPtrArithmetic;
 
 // The use of uninitialized pointers is strongly discouraged. raw_ptrs will
 // be initialized to nullptr by default in all cases when building against
@@ -1057,7 +1087,8 @@ constexpr auto AllowPtrArithmetic = base::RawPtrTraits::kAllowPtrArithmetic;
 // Note that opting out may not always be effective, given that algorithms
 // like BackupRefPtr require nullptr initializaion for correctness and thus
 // silently enforce it.
-constexpr auto AllowUninitialized = base::RawPtrTraits::kAllowUninitialized;
+constexpr inline auto AllowUninitialized =
+    base::RawPtrTraits::kAllowUninitialized;
 
 // This flag is used to tag a subset of dangling pointers. Similarly to
 // DanglingUntriaged, those pointers are known to be dangling. However, we also
@@ -1066,22 +1097,32 @@ constexpr auto AllowUninitialized = base::RawPtrTraits::kAllowUninitialized;
 // pressure on the BRP quarantine.
 //
 // This is not meant to be added manually. You can ignore this flag.
-constexpr auto LeakedDanglingUntriaged = base::RawPtrTraits::kMayDangle;
+constexpr inline auto LeakedDanglingUntriaged = base::RawPtrTraits::kMayDangle;
 
 // Temporary annotation for new pointers added during the renderer rewrite.
 // TODO(crbug.com/1444624): Find pre-existing dangling pointers and remove
 // this annotation.
 //
 // DO NOT ADD new occurrences of this.
-constexpr auto ExperimentalRenderer = base::RawPtrTraits::kMayDangle;
+constexpr inline auto ExperimentalRenderer = base::RawPtrTraits::kMayDangle;
 
 // Temporary introduced alias in the context of rewriting std::vector<T*> into
 // std::vector<raw_ptr<T>> and in order to temporarily bypass the dangling ptr
 // checks on the CQ. This alias will be removed gradually after the cl lands and
 // will be replaced by DanglingUntriaged where necessary.
-// Update: The alias now temporarily disables BRP. This is due to performance
-// issues. BRP will be re-enabled once the issues are identified and handled.
 constexpr inline auto VectorExperimental = base::RawPtrTraits::kMayDangle;
+
+// Temporary alias introduced in the context of rewriting std::set<T*> into
+// std::set<raw_ptr<T>> and in order to temporarily bypass the dangling ptr
+// checks on the CQ. This alias will be removed gradually after the rewrite cl
+// lands and will be replaced by DanglingUntriaged where necessary.
+constexpr inline auto SetExperimental = base::RawPtrTraits::kMayDangle;
+
+// Temporary alias introduced in the context of rewriting more containers and in
+// order to temporarily bypass the dangling ptr checks on the CQ. This alias
+// will be removed gradually after the rewrite cl lands and will be replaced by
+// DanglingUntriaged where necessary.
+constexpr inline auto CtnExperimental = base::RawPtrTraits::kMayDangle;
 
 // Temporary workaround needed when using vector<raw_ptr<T, VectorExperimental>
 // in Mocked method signatures as the macros don't allow commas within.
@@ -1120,6 +1161,15 @@ struct less<raw_ptr<T, Traits>> {
   bool operator()(const raw_ptr<T, Traits>& lhs, T* rhs) const {
     Impl::IncrementLessCountForTest();
     return lhs < rhs;
+  }
+};
+
+template <typename T, base::RawPtrTraits Traits>
+struct hash<raw_ptr<T, Traits>> {
+  typedef raw_ptr<T, Traits> argument_type;
+  typedef std::size_t result_type;
+  result_type operator()(argument_type const& ptr) const {
+    return hash<T*>()(ptr.get());
   }
 };
 

@@ -113,7 +113,7 @@ void UDPReadableStreamWrapper::ErrorStream(int32_t error_code) {
                                        String{"Stream aborted by the remote: " +
                                               net::ErrorToString(error_code)}));
 
-  Controller()->Error(exception);
+  Controller()->Error(exception.V8Value());
 
   std::move(on_close_).Run(exception);
 }
@@ -137,8 +137,8 @@ void UDPReadableStreamWrapper::ErrorStream(int32_t error_code) {
 // services/network/public/mojom/udp_socket.mojom file.
 void UDPReadableStreamWrapper::OnReceived(
     int32_t result,
-    const absl::optional<::net::IPEndPoint>& src_addr,
-    absl::optional<::base::span<const ::uint8_t>> data) {
+    const std::optional<::net::IPEndPoint>& src_addr,
+    std::optional<::base::span<const ::uint8_t>> data) {
   if (result != net::Error::OK) {
     ErrorStream(result);
     return;

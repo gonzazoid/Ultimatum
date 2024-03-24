@@ -10,16 +10,17 @@
 
 import '../icons.html.js';
 import '../settings_shared.css.js';
-import 'chrome://resources/cr_components/localized_link/localized_link.js';
-import 'chrome://resources/cr_elements/cr_radio_button/cr_radio_button.js';
-import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
-import '/shared/settings/controls/settings_radio_group.js';
-import '/shared/settings/controls/settings_slider.js';
-import '/shared/settings/controls/settings_toggle_button.js';
+import 'chrome://resources/ash/common/cr_elements/localized_link/localized_link.js';
+import 'chrome://resources/ash/common/cr_elements/cr_radio_button/cr_radio_button.js';
+import 'chrome://resources/ash/common/cr_elements/cr_shared_vars.css.js';
+import '../controls/settings_radio_group.js';
+import '../controls/settings_slider.js';
+import '../controls/settings_toggle_button.js';
 import './input_device_settings_shared.css.js';
-import 'chrome://resources/cr_elements/cr_slider/cr_slider.js';
+import 'chrome://resources/ash/common/cr_elements/cr_slider/cr_slider.js';
 
-import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {CrLinkRowElement} from 'chrome://resources/ash/common/cr_elements/cr_link_row/cr_link_row.js';
+import {I18nMixin} from 'chrome://resources/ash/common/cr_elements/i18n_mixin.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElementProperties} from 'chrome://resources/polymer/v3_0/polymer/interfaces.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
@@ -192,6 +193,13 @@ export class SettingsPerDeviceMouseSubsectionElement extends
       customizationRestriction: {
         type: Object,
       },
+
+      /**
+         Used to track if the customize button row is clicked.
+       */
+      currentMouseChanged: {
+        type: Boolean,
+      },
     };
   }
 
@@ -209,8 +217,15 @@ export class SettingsPerDeviceMouseSubsectionElement extends
   }
 
   override currentRouteChanged(route: Route): void {
+    // Avoid override currentMouseChanged when on the customization subpage.
+    if (route === routes.CUSTOMIZE_MOUSE_BUTTONS) {
+      return;
+    }
+
     // Does not apply to this page.
     if (route !== routes.PER_DEVICE_MOUSE) {
+      // Reset the boolean when on other pages.
+      this.currentMouseChanged = false;
       return;
     }
 
@@ -218,6 +233,17 @@ export class SettingsPerDeviceMouseSubsectionElement extends
     if (this.mouseIndex === 0) {
       this.attemptDeepLink();
     }
+
+    // Don't attempt to focus any item unless the last navigation was a
+    // 'pop' (backwards) navigation.
+    if (!Router.getInstance().lastRouteChangeWasPopstate()) {
+      return;
+    } else if (this.currentMouseChanged) {
+      this.shadowRoot!
+          .querySelector<CrLinkRowElement>('#customizeMouseButtons')!.focus();
+    }
+
+    this.currentMouseChanged = false;
   }
 
   private mouse: Mouse;
@@ -236,6 +262,7 @@ export class SettingsPerDeviceMouseSubsectionElement extends
   private isLastDevice: boolean;
   private isRevampWayfindingEnabled_: boolean;
   private customizationRestriction: CustomizationRestriction;
+  private currentMouseChanged: boolean;
 
   private showCustomizeButtonRow(): boolean {
     return (this.customizationRestriction !==
@@ -357,6 +384,7 @@ export class SettingsPerDeviceMouseSubsectionElement extends
     Router.getInstance().navigateTo(
         routes.CUSTOMIZE_MOUSE_BUTTONS,
         /* dynamicParams= */ url, /* removeSearch= */ true);
+    this.currentMouseChanged = true;
   }
 
   private getMouseAccelerationDescription(): string {

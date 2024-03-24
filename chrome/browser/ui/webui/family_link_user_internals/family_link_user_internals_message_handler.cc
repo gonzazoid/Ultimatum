@@ -22,9 +22,10 @@
 #include "components/signin/public/identity_manager/tribool.h"
 #include "components/supervised_user/core/browser/child_account_service.h"
 #include "components/supervised_user/core/browser/supervised_user_error_page.h"
+#include "components/supervised_user/core/browser/supervised_user_preferences.h"
 #include "components/supervised_user/core/browser/supervised_user_settings_service.h"
+#include "components/supervised_user/core/browser/supervised_user_utils.h"
 #include "components/supervised_user/core/common/features.h"
-#include "components/supervised_user/core/common/supervised_user_utils.h"
 #include "components/url_formatter/url_fixer.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/storage_partition.h"
@@ -203,8 +204,8 @@ void FamilyLinkUserInternalsMessageHandler::SendBasicInfo() {
       GetSupervisedUserService()->GetURLFilter();
 
   base::Value::List* section_filter = AddSection(&section_list, "Filter");
-  AddSectionEntry(section_filter, "Online checks active",
-                  filter->HasAsyncURLChecker());
+  AddSectionEntry(section_filter, "SafeSites enabled",
+                  supervised_user::IsSafeSitesEnabled(*profile->GetPrefs()));
   AddSectionEntry(
       section_filter, "Default behavior",
       FilteringBehaviorToString(filter->GetDefaultFilteringBehavior()));

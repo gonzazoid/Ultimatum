@@ -21,6 +21,7 @@
 #include "gpu/ipc/common/gpu_memory_buffer_support.h"
 #include "media/base/bitstream_buffer.h"
 #include "media/base/media_log.h"
+#include "media/base/media_switches.h"
 #include "media/base/svc_scalability_mode.h"
 #include "media/base/video_frame.h"
 #include "media/base/video_util.h"
@@ -61,7 +62,7 @@ uint32_t ComputeCheckedPeakBitrate(uint32_t target_bitrate) {
 }
 
 Bitrate CreateBitrate(
-    const absl::optional<Bitrate>& requested_bitrate,
+    const std::optional<Bitrate>& requested_bitrate,
     const gfx::Size& frame_size,
     VideoEncodeAccelerator::SupportedRateControlMode supported_rc_modes) {
   uint32_t default_bitrate = ComputeCheckedDefaultBitrate(frame_size);
@@ -89,7 +90,7 @@ VideoEncodeAccelerator::Config SetUpVeaConfig(
     VideoFrame::StorageType storage_type,
     VideoEncodeAccelerator::SupportedRateControlMode supported_rc_modes,
     VideoEncodeAccelerator::Config::EncoderType required_encoder_type) {
-  absl::optional<uint32_t> initial_framerate;
+  std::optional<uint32_t> initial_framerate;
   if (opts.framerate.has_value())
     initial_framerate = static_cast<uint32_t>(opts.framerate.value());
 
@@ -111,6 +112,11 @@ VideoEncodeAccelerator::Config SetUpVeaConfig(
             VideoEncodeAccelerator::Config::ContentType::kDisplay;
         break;
     }
+  }
+
+  if (opts.latency_mode == VideoEncoder::LatencyMode::Realtime) {
+    config.drop_frame_thresh_percentage =
+        GetDefaultVideoEncoderDropFrameThreshold();
   }
 
   size_t num_temporal_layers = 1;
@@ -431,7 +437,6 @@ void VideoEncodeAcceleratorAdapter::InitializeOnAcceleratorThread(
   profile_ = profile;
   supported_rc_modes_ = supported_rc_modes;
   options_ = options;
-  input_coded_size_ = options.frame_size;
   info_cb_ = std::move(info_cb);
   output_cb_ = std::move(output_cb);
   state_ = State::kWaitingForFirstFrame;
@@ -621,10 +626,9 @@ void VideoEncodeAcceleratorAdapter::ChangeOptionsOnAcceleratorThread(
     return;
   }
 
-  absl::optional<gfx::Size> new_frame_size;
+  std::optional<gfx::Size> new_frame_size;
   if (options.frame_size != options_.frame_size) {
     if (supports_frame_size_change_) {
-      input_coded_size_ = options.frame_size;
       input_pool_.reset();
       gmb_frame_pool_.reset();
       new_frame_size = options.frame_size;
@@ -736,6 +740,8 @@ void VideoEncodeAcceleratorAdapter::RequireBitstreamBuffers(
   DCHECK_CALLED_ON_VALID_SEQUENCE(accelerator_sequence_checker_);
   CHECK(state_ == State::kInitializing || state_ == State::kReconfiguring);
 
+  input_coded_size_ = input_coded_size;
+
   constexpr int kOutputBufferNumber = 2;
   output_buffer_handles_.clear();
   for (int id = 0; id < kOutputBufferNumber; id++) {
@@ -771,7 +777,7 @@ void VideoEncodeAcceleratorAdapter::RequireBitstreamBuffers(
 void VideoEncodeAcceleratorAdapter::BitstreamBufferReady(
     int32_t buffer_id,
     const BitstreamBufferMetadata& metadata) {
-  absl::optional<CodecDescription> desc;
+  std::optional<CodecDescription> desc;
   VideoEncoderOutput result;
   result.key_frame = metadata.key_frame;
   result.timestamp = metadata.timestamp;
@@ -915,11 +921,8 @@ void VideoEncodeAcceleratorAdapter::BitstreamBufferReady(
     }
   }
   DCHECK(erased_active_encode);
-  if (result.size > 0) {
-    // Size = 0 means that frame was dropped by the platform encoder, we don't
-    // need to call the output callback in such cases.
-    output_cb_.Run(std::move(result), std::move(desc));
-  }
+  output_cb_.Run(std::move(result), std::move(desc));
+
   if (active_encodes_.empty() && !flush_support_.value()) {
     // Manually call FlushCompleted(), since |accelerator_| won't do it for us.
     FlushCompleted(true);
@@ -1081,10 +1084,11 @@ VideoEncodeAcceleratorAdapter::PrepareCpuFrame(
     return EncoderStatus(EncoderStatus::Codes::kEncoderFailedEncode);
 
   auto status =
-      ConvertAndScaleFrame(*mapped_src_frame, *shared_frame, resize_buf_);
-  if (!status.is_ok())
+      frame_converter_.ConvertAndScale(*mapped_src_frame, *shared_frame);
+  if (!status.is_ok()) {
     return EncoderStatus(EncoderStatus::Codes::kEncoderFailedEncode)
         .AddCause(std::move(status));
+  }
 
   shared_frame->BackWithSharedMemory(handle->region());
   shared_frame->AddDestructionObserver(
@@ -1126,7 +1130,7 @@ VideoEncodeAcceleratorAdapter::PrepareGpuFrame(
 
   // Don't be scared. ConvertToMemoryMappedFrame() doesn't copy pixel data
   // it just maps GPU buffer owned by |gpu_frame| and presents it as mapped
-  // view in CPU memory. It allows us to use ConvertAndScaleFrame() without
+  // view in CPU memory. It allows us to use ConvertAndScale() without
   // having to tinker with libyuv and GpuMemoryBuffer memory views.
   // |mapped_gpu_frame| doesn't own anything, but unmaps the buffer when freed.
   // This is true because |gpu_frame| is created with
@@ -1139,13 +1143,14 @@ VideoEncodeAcceleratorAdapter::PrepareGpuFrame(
     return EncoderStatus(EncoderStatus::Codes::kEncoderFailedEncode);
 
   auto status =
-      ConvertAndScaleFrame(*mapped_src_frame, *mapped_gpu_frame, resize_buf_);
-  if (!status.is_ok())
+      frame_converter_.ConvertAndScale(*mapped_src_frame, *mapped_gpu_frame);
+  if (!status.is_ok()) {
     return EncoderStatus(EncoderStatus::Codes::kEncoderFailedEncode)
         .AddCause(std::move(status));
+  }
 
   // |mapped_gpu_frame| has the color space respecting the color conversion in
-  // ConvertAndScaleFrame().
+  // ConvertAndScale().
 #if BUILDFLAG(IS_MAC)
   gpu_frame->GetGpuMemoryBuffer()->SetColorSpace(
       mapped_gpu_frame->ColorSpace());

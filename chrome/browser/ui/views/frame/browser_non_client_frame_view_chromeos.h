@@ -69,7 +69,6 @@ class BrowserNonClientFrameViewChromeOS
   SkColor GetFrameColor(BrowserFrameActiveState active_state) const override;
   TabSearchBubbleHost* GetTabSearchBubbleHost() override;
   void UpdateMinimumSize() override;
-  void OnBrowserViewInitViewsComplete() override;
 
   // views::NonClientFrameView:
   gfx::Rect GetBoundsForClientView() const override;
@@ -86,7 +85,7 @@ class BrowserNonClientFrameViewChromeOS
 
   // views::View:
   void OnPaint(gfx::Canvas* canvas) override;
-  void Layout() override;
+  void Layout(PassKey) override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   gfx::Size GetMinimumSize() const override;
   void OnThemeChanged() override;

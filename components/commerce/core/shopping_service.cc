@@ -197,6 +197,16 @@ ShoppingService::ShoppingService(
     discounts_storage_ =
         std::make_unique<DiscountsStorage>(discounts_proto_db, history_service);
   }
+
+  if (subscriptions_manager_) {
+    RemoveDanglingSubscriptions(
+        this, bookmark_model_used_for_sync_,
+        base::BindOnce([](size_t dangling_sub_count) {
+          base::UmaHistogramCounts100(
+              "Commerce.PriceTracking.DanglingUserSubscriptionCountAtStartup",
+              dangling_sub_count);
+        }));
+  }
 }
 
 void ShoppingService::WebWrapperCreated(WebWrapper* web) {}
@@ -232,7 +242,7 @@ void ShoppingService::HandleDidNavigatePrimaryMainFrameForProductInfo(
             service->HandleOptGuideProductInfoResponse(
                 url, web_wrapper.get(),
                 base::BindOnce([](const GURL&,
-                                  const absl::optional<const ProductInfo>&) {}),
+                                  const std::optional<const ProductInfo>&) {}),
                 decision, metadata);
 
             service->PDPMetricsCallback(web_wrapper->IsOffTheRecord(), decision,
@@ -328,7 +338,7 @@ void ShoppingService::TryRunningLocalExtractionForProductInfo(
 void ShoppingService::RunLocalExtractionForProductInfoForShoppingPage(
     base::WeakPtr<WebWrapper> web,
     const GURL& url,
-    absl::optional<bool> is_shopping_page) {
+    std::optional<bool> is_shopping_page) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (!is_shopping_page.has_value() || !is_shopping_page.value()) {
@@ -501,8 +511,7 @@ void ShoppingService::PDPMetricsCallback(
                             is_off_the_record, IsShoppingListEligible());
 
   bool supported_country =
-      IsRegionLockedFeatureEnabled(kShoppingList, kShoppingListRegionLaunched,
-                                   country_on_startup_, locale_on_startup_);
+      IsRegionLockedFeatureEnabled(kShoppingList, kShoppingListRegionLaunched);
   metrics::RecordShoppingListIneligibilityReasons(
       pref_service_, account_checker_.get(), is_off_the_record,
       supported_country);
@@ -512,13 +521,13 @@ void ShoppingService::GetProductInfoForUrl(const GURL& url,
                                            ProductInfoCallback callback) {
   if (!opt_guide_ || !IsProductInfoApiEnabled()) {
     base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
-        FROM_HERE, base::BindOnce(std::move(callback), url, absl::nullopt));
+        FROM_HERE, base::BindOnce(std::move(callback), url, std::nullopt));
     return;
   }
 
   const ProductInfo* cached_info = GetFromProductInfoCache(url);
   if (cached_info) {
-    absl::optional<ProductInfo> info;
+    std::optional<ProductInfo> info;
     // Make a copy based on the cached value.
     info.emplace(*cached_info);
     base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
@@ -533,9 +542,9 @@ void ShoppingService::GetProductInfoForUrl(const GURL& url,
                      std::move(callback)));
 }
 
-absl::optional<ProductInfo> ShoppingService::GetAvailableProductInfoForUrl(
+std::optional<ProductInfo> ShoppingService::GetAvailableProductInfoForUrl(
     const GURL& url) {
-  absl::optional<ProductInfo> optional_info;
+  std::optional<ProductInfo> optional_info;
 
   const ProductInfo* cached_info = GetFromProductInfoCache(url);
   if (cached_info)
@@ -647,7 +656,7 @@ void ShoppingService::GetMerchantInfoForUrl(const GURL& url,
                                             MerchantInfoCallback callback) {
   if (!opt_guide_ || !IsMerchantViewerEnabled()) {
     base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
-        FROM_HERE, base::BindOnce(std::move(callback), url, absl::nullopt));
+        FROM_HERE, base::BindOnce(std::move(callback), url, std::nullopt));
     return;
   }
 
@@ -663,7 +672,7 @@ void ShoppingService::GetPriceInsightsInfoForUrl(
     PriceInsightsInfoCallback callback) {
   if (!opt_guide_ || !IsPriceInsightsInfoApiEnabled()) {
     base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
-        FROM_HERE, base::BindOnce(std::move(callback), url, absl::nullopt));
+        FROM_HERE, base::BindOnce(std::move(callback), url, std::nullopt));
     return;
   }
 
@@ -689,7 +698,7 @@ void ShoppingService::IsShoppingPage(const GURL& url,
                                      IsShoppingPageCallback callback) {
   if (!opt_guide_) {
     base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
-        FROM_HERE, base::BindOnce(std::move(callback), url, absl::nullopt));
+        FROM_HERE, base::BindOnce(std::move(callback), url, std::nullopt));
     return;
   }
 
@@ -699,10 +708,17 @@ void ShoppingService::IsShoppingPage(const GURL& url,
                      weak_ptr_factory_.GetWeakPtr(), url, std::move(callback)));
 }
 
+bool ShoppingService::IsRegionLockedFeatureEnabled(
+    const base::Feature& feature,
+    const base::Feature& region_specific_feature) {
+  return commerce::IsRegionLockedFeatureEnabled(
+      feature, region_specific_feature, country_on_startup_,
+      locale_on_startup_);
+}
+
 bool ShoppingService::IsProductInfoApiEnabled() {
-  return IsRegionLockedFeatureEnabled(
-             kShoppingList, kShoppingListRegionLaunched, country_on_startup_,
-             locale_on_startup_) ||
+  return IsRegionLockedFeatureEnabled(kShoppingList,
+                                      kShoppingListRegionLaunched) ||
          (base::FeatureList::IsEnabled(ntp_features::kNtpChromeCartModule) &&
           IsEnabledForCountryAndLocale(ntp_features::kNtpChromeCartModule,
                                        country_on_startup_,
@@ -711,26 +727,22 @@ bool ShoppingService::IsProductInfoApiEnabled() {
 
 bool ShoppingService::IsPDPMetricsRecordingEnabled() {
   return IsRegionLockedFeatureEnabled(kShoppingPDPMetrics,
-                                      kShoppingPDPMetricsRegionLaunched,
-                                      country_on_startup_, locale_on_startup_);
+                                      kShoppingPDPMetricsRegionLaunched);
 }
 
 bool ShoppingService::IsMerchantViewerEnabled() {
   return IsRegionLockedFeatureEnabled(kCommerceMerchantViewer,
-                                      kCommerceMerchantViewerRegionLaunched,
-                                      country_on_startup_, locale_on_startup_);
+                                      kCommerceMerchantViewerRegionLaunched);
 }
 
 bool ShoppingService::IsCommercePriceTrackingEnabled() {
   return IsRegionLockedFeatureEnabled(kCommercePriceTracking,
-                                      kCommercePriceTrackingRegionLaunched,
-                                      country_on_startup_, locale_on_startup_);
+                                      kCommercePriceTrackingRegionLaunched);
 }
 
 bool ShoppingService::IsPriceInsightsEligible() {
   if (!IsRegionLockedFeatureEnabled(kPriceInsights,
-                                    kPriceInsightsRegionLaunched,
-                                    country_on_startup_, locale_on_startup_)) {
+                                    kPriceInsightsRegionLaunched)) {
     return false;
   }
   return account_checker_ &&
@@ -739,14 +751,12 @@ bool ShoppingService::IsPriceInsightsEligible() {
 
 bool ShoppingService::IsPriceInsightsInfoApiEnabled() {
   return IsRegionLockedFeatureEnabled(kPriceInsights,
-                                      kPriceInsightsRegionLaunched,
-                                      country_on_startup_, locale_on_startup_);
+                                      kPriceInsightsRegionLaunched);
 }
 
 bool ShoppingService::IsDiscountEligibleToShowOnNavigation() {
   if (!IsRegionLockedFeatureEnabled(kEnableDiscountInfoApi,
-                                    kEnableDiscountInfoApiRegionLaunched,
-                                    country_on_startup_, locale_on_startup_)) {
+                                    kEnableDiscountInfoApiRegionLaunched)) {
     return false;
   }
   return account_checker_ && account_checker_->IsSignedIn() &&
@@ -755,8 +765,7 @@ bool ShoppingService::IsDiscountEligibleToShowOnNavigation() {
 
 bool ShoppingService::IsParcelTrackingEligible() {
   if (!IsRegionLockedFeatureEnabled(kParcelTracking,
-                                    kParcelTrackingRegionLaunched,
-                                    country_on_startup_, locale_on_startup_)) {
+                                    kParcelTrackingRegionLaunched)) {
     return false;
   }
   return account_checker_ && account_checker_->IsSignedIn();
@@ -764,14 +773,12 @@ bool ShoppingService::IsParcelTrackingEligible() {
 
 bool ShoppingService::IsShoppingPageTypesApiEnabled() {
   return IsRegionLockedFeatureEnabled(kShoppingPageTypes,
-                                      kShoppingPageTypesRegionLaunched,
-                                      country_on_startup_, locale_on_startup_);
+                                      kShoppingPageTypesRegionLaunched);
 }
 
 bool ShoppingService::IsDiscountInfoApiEnabled() {
   return IsRegionLockedFeatureEnabled(kEnableDiscountInfoApi,
-                                      kEnableDiscountInfoApiRegionLaunched,
-                                      country_on_startup_, locale_on_startup_);
+                                      kEnableDiscountInfoApiRegionLaunched);
 }
 
 void ShoppingService::HandleOptGuideProductInfoResponse(
@@ -783,7 +790,7 @@ void ShoppingService::HandleOptGuideProductInfoResponse(
   // If optimization guide returns negative, return a negative signal with an
   // empty data object.
   if (decision != optimization_guide::OptimizationGuideDecision::kTrue) {
-    std::move(callback).Run(url, absl::nullopt);
+    std::move(callback).Run(url, std::nullopt);
 
     // If doing local PDP detection, we might still want to run this.
     if (base::FeatureList::IsEnabled(kCommerceLocalPDPDetection)) {
@@ -798,7 +805,7 @@ void ShoppingService::HandleOptGuideProductInfoResponse(
 
   std::unique_ptr<ProductInfo> info = OptGuideResultToProductInfo(metadata);
 
-  absl::optional<ProductInfo> optional_info;
+  std::optional<ProductInfo> optional_info;
   // The product info is considered valid only if it has a country code.
   if (info && !info->country_code.empty()) {
     optional_info.emplace(*info);
@@ -822,7 +829,7 @@ std::unique_ptr<ProductInfo> ShoppingService::OptGuideResultToProductInfo(
   if (!metadata.any_metadata().has_value())
     return nullptr;
 
-  absl::optional<commerce::PriceTrackingData> parsed_any =
+  std::optional<commerce::PriceTrackingData> parsed_any =
       optimization_guide::ParsedAnyMetadata<commerce::PriceTrackingData>(
           metadata.any_metadata().value());
   commerce::PriceTrackingData price_data = parsed_any.value();
@@ -917,7 +924,7 @@ void ShoppingService::OnProductInfoUpdatedOnDemand(
   std::unique_ptr<ProductInfo> info =
       OptGuideResultToProductInfo(decision.metadata);
 
-  absl::optional<ProductInfo> optional_info;
+  std::optional<ProductInfo> optional_info;
   if (info) {
     optional_info.emplace(*info);
     UpdateProductInfoCache(url, false, std::move(info));
@@ -1010,14 +1017,14 @@ void ShoppingService::HandleOptGuideMerchantInfoResponse(
   // If optimization guide returns negative, return a negative signal with an
   // empty data object.
   if (decision != optimization_guide::OptimizationGuideDecision::kTrue) {
-    std::move(callback).Run(url, absl::nullopt);
+    std::move(callback).Run(url, std::nullopt);
     return;
   }
 
-  absl::optional<MerchantInfo> info;
+  std::optional<MerchantInfo> info;
 
   if (metadata.any_metadata().has_value()) {
-    absl::optional<commerce::MerchantTrustSignalsV2> parsed_any =
+    std::optional<commerce::MerchantTrustSignalsV2> parsed_any =
         optimization_guide::ParsedAnyMetadata<commerce::MerchantTrustSignalsV2>(
             metadata.any_metadata().value());
     commerce::MerchantTrustSignalsV2 merchant_data = parsed_any.value();
@@ -1072,7 +1079,7 @@ void ShoppingService::HandleOptGuidePriceInsightsInfoResponse(
     std::unique_ptr<PriceInsightsInfo> info =
         OptGuideResultToPriceInsightsInfo(metadata);
     if (info) {
-      absl::optional<PriceInsightsInfo> optional_info;
+      std::optional<PriceInsightsInfo> optional_info;
       optional_info.emplace(*info);
 
       auto it = price_insights_info_cache_.find(url.spec());
@@ -1090,11 +1097,11 @@ void ShoppingService::HandleOptGuidePriceInsightsInfoResponse(
   auto it = price_insights_info_cache_.find(url.spec());
   if (kPriceInsightsUseCache.Get() && it != price_insights_info_cache_.end() &&
       it->second->info) {
-    absl::optional<PriceInsightsInfo> optional_info;
+    std::optional<PriceInsightsInfo> optional_info;
     optional_info.emplace(*(it->second->info));
     std::move(callback).Run(url, std::move(optional_info));
   } else {
-    std::move(callback).Run(url, absl::nullopt);
+    std::move(callback).Run(url, std::nullopt);
   }
 }
 
@@ -1105,7 +1112,7 @@ ShoppingService::OptGuideResultToPriceInsightsInfo(
     return nullptr;
   }
 
-  absl::optional<commerce::PriceInsightsData> parsed_any =
+  std::optional<commerce::PriceInsightsData> parsed_any =
       optimization_guide::ParsedAnyMetadata<commerce::PriceInsightsData>(
           metadata.any_metadata().value());
   commerce::PriceInsightsData insights_data = parsed_any.value();
@@ -1199,7 +1206,7 @@ void ShoppingService::HandleDidNavigatePrimaryMainFrameForPriceInsightsInfo(
             service->HandleOptGuidePriceInsightsInfoResponse(
                 url,
                 base::BindOnce([](const GURL&,
-                                  const absl::optional<PriceInsightsInfo>&) {}),
+                                  const std::optional<PriceInsightsInfo>&) {}),
                 decision, metadata);
           },
           weak_ptr_factory_.GetWeakPtr(), web->GetLastCommittedURL(),
@@ -1224,11 +1231,11 @@ void ShoppingService::HandleOptGuideShoppingPageTypesResponse(
     const optimization_guide::OptimizationMetadata& metadata) {
   if (decision != optimization_guide::OptimizationGuideDecision::kTrue ||
       !metadata.any_metadata().has_value()) {
-    std::move(callback).Run(url, absl::nullopt);
+    std::move(callback).Run(url, std::nullopt);
     return;
   }
   bool is_shopping_page = false;
-  absl::optional<commerce::ShoppingPageTypes> parsed_any =
+  std::optional<commerce::ShoppingPageTypes> parsed_any =
       optimization_guide::ParsedAnyMetadata<commerce::ShoppingPageTypes>(
           metadata.any_metadata().value());
   commerce::ShoppingPageTypes data = parsed_any.value();
@@ -1278,7 +1285,7 @@ std::vector<DiscountInfo> ShoppingService::OptGuideResultToDiscountInfos(
     return discount_infos;
   }
 
-  absl::optional<commerce::DiscountsData> parsed_any =
+  std::optional<commerce::DiscountsData> parsed_any =
       optimization_guide::ParsedAnyMetadata<commerce::DiscountsData>(
           metadata.any_metadata().value());
   commerce::DiscountsData discounts_data = parsed_any.value();
@@ -1505,8 +1512,8 @@ bool ShoppingService::IsShoppingListEligible(AccountChecker* account_checker,
                                              PrefService* prefs,
                                              const std::string& country_code,
                                              const std::string& locale) {
-  if (!IsRegionLockedFeatureEnabled(kShoppingList, kShoppingListRegionLaunched,
-                                    country_code, locale)) {
+  if (!commerce::IsRegionLockedFeatureEnabled(
+          kShoppingList, kShoppingListRegionLaunched, country_code, locale)) {
     return false;
   }
 

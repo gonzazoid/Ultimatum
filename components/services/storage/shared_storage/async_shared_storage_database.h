@@ -65,7 +65,7 @@ class AsyncSharedStorageDatabase {
   virtual void Destroy(base::OnceCallback<void(bool)> callback) = 0;
 
   // `TrimMemory()`, `Get()`, `Set()`, `Append()`, `Delete()`, `Clear()`,
-  // `Length()`, `Keys()`, `Entries()`, `PurgeMatchingOrigins()`,
+  // `Length()`, `Keys()`, `Entries()`, `BytesUsed()`, `PurgeMatchingOrigins()`,
   // `PurgeStale()`, `FetchOrigins()`, `MakeBudgetWithdrawal()`,
   // `GetRemainingBudget()`, `GetCreationTime()`, `GetMetadata()`,
   // `GetEntriesForDevTools()`, and `ResetBudgetForDevTools() are all async
@@ -78,7 +78,7 @@ class AsyncSharedStorageDatabase {
   // initialize, as there is an alternate code path to handle this case that
   // skips accessing `database_` (as it will be null) and hence performing the
   // intending operation, logs the occurrence of the missing database to UMA,
-  // and runs the callback with a trivial instance of its expected result type).
+  // and runs the callback with a trivial instance of its expected result type.
 
   // Releases all non-essential memory associated with this database connection.
   // `callback` runs once the operation is finished.
@@ -86,7 +86,7 @@ class AsyncSharedStorageDatabase {
 
   // Retrieves the `value` for `context_origin` and `key`. `callback` is called
   // with a struct bundling a string `value` in its data field if one is found,
-  // `absl::nullopt` otherwise, and a OperationResult to indicate whether the
+  // `std::nullopt` otherwise, and a OperationResult to indicate whether the
   // transaction was free of database errors.
   //
   // `key` must be of length at most
@@ -173,6 +173,12 @@ class AsyncSharedStorageDatabase {
       mojo::PendingRemote<blink::mojom::SharedStorageEntriesListener>
           pending_listener,
       base::OnceCallback<void(OperationResult)> callback) = 0;
+
+  // The parameter of `callback` reports the number of bytes used by
+  // `context_origin` in unexpired entries, 0 if the origin has no unexpired
+  // entries, or -1 on operation failure.
+  virtual void BytesUsed(url::Origin context_origin,
+                         base::OnceCallback<void(int)> callback) = 0;
 
   // Clears all origins that match `storage_key_matcher` run on the owning
   // StoragePartition's `SpecialStoragePolicy` and have any key with

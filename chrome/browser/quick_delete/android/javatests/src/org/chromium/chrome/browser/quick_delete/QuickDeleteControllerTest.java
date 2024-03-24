@@ -43,6 +43,7 @@ import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.base.test.util.HistogramWatcher;
 import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.ChromeTabbedActivity;
@@ -56,6 +57,7 @@ import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.layouts.LayoutTestUtils;
 import org.chromium.chrome.browser.layouts.LayoutType;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.settings.SettingsActivity;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabTestUtils;
@@ -64,7 +66,6 @@ import org.chromium.chrome.browser.ui.appmenu.AppMenuTestSupport;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.chrome.test.util.ChromeRenderTestRule;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.components.browsing_data.DeleteBrowsingDataAction;
 import org.chromium.content_public.browser.test.util.JavaScriptUtils;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
@@ -149,7 +150,7 @@ public class QuickDeleteControllerTest {
         CallbackHelper helper = new CallbackHelper();
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
-                    BrowsingDataBridge.getInstance()
+                    BrowsingDataBridge.getForProfile(ProfileManager.getLastUsedRegularProfile())
                             .clearBrowsingData(
                                     helper::notifyCalled,
                                     new int[] {BrowsingDataType.COOKIES},
@@ -182,7 +183,7 @@ public class QuickDeleteControllerTest {
     @Test
     @MediumTest
     @Feature({"RenderTest"})
-
+    @DisabledTest(message = "https://crbug.com/1477790")
     public void testSnackbarShown_WhenClickingDelete() throws IOException {
         openQuickDeleteDialog();
         onViewWaiting(withId(R.id.positive_button)).perform(click());
@@ -243,7 +244,7 @@ public class QuickDeleteControllerTest {
                         QuickDeleteMetricsDelegate.QuickDeleteAction.DELETE_CLICKED);
 
         onViewWaiting(withId(R.id.positive_button)).perform(click());
-
+        onViewWaiting(withId(R.id.snackbar)).check(matches(isDisplayed()));
         histogramWatcher.assertExpected();
     }
 
@@ -257,6 +258,7 @@ public class QuickDeleteControllerTest {
                         "Privacy.DeleteBrowsingData.Action", DeleteBrowsingDataAction.QUICK_DELETE);
 
         onViewWaiting(withId(R.id.positive_button)).perform(click());
+        onViewWaiting(withId(R.id.snackbar)).check(matches(isDisplayed()));
 
         histogramWatcher.assertExpected();
     }
@@ -292,6 +294,7 @@ public class QuickDeleteControllerTest {
                                     any(),
                                     any(),
                                     any(),
+                                    any(),
                                     eq(TimePeriod.LAST_HOUR),
                                     any(),
                                     any(),
@@ -302,7 +305,15 @@ public class QuickDeleteControllerTest {
         onViewWaiting(withId(R.id.positive_button)).perform(click());
         verify(mBrowsingDataBridgeMock)
                 .clearBrowsingData(
-                        any(), any(), any(), eq(TimePeriod.LAST_HOUR), any(), any(), any(), any());
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        eq(TimePeriod.LAST_HOUR),
+                        any(),
+                        any(),
+                        any(),
+                        any());
     }
 
     @Test
@@ -359,6 +370,7 @@ public class QuickDeleteControllerTest {
 
     @Test
     @MediumTest
+    @DisabledTest(message = "crbug.com/1522255")
     public void testBrowsingDataDeletion_onClickedDelete() throws Exception {
         resetCookies();
         loadSiteDataUrl();

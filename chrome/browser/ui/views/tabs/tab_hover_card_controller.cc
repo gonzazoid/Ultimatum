@@ -288,8 +288,7 @@ TabHoverCardController::~TabHoverCardController() = default;
 
 // static
 bool TabHoverCardController::AreHoverCardImagesEnabled() {
-  if (base::FeatureList::IsEnabled(features::kTabHoverCardImages) ||
-      base::FeatureList::IsEnabled(features::kTabHoverCardImageSettings)) {
+  if (base::FeatureList::IsEnabled(features::kTabHoverCardImages)) {
     PrefService* pref_service = g_browser_process->local_state();
     return pref_service->GetBoolean(prefs::kHoverCardImagesEnabled);
   }
@@ -501,9 +500,7 @@ void TabHoverCardController::HideHoverCard() {
 void TabHoverCardController::OnViewIsDeleting(views::View* observed_view) {
   if (hover_card_ == observed_view) {
     if (hover_card_tab_memory_usage_enabled_) {
-      performance_manager::user_tuning::UserPerformanceTuningManager::
-          GetInstance()
-              ->RemoveObserver(this);
+      TabResourceUsageCollector::Get()->RemoveObserver(this);
     }
     delayed_show_timer_.Stop();
     hover_card_observation_.Reset();
@@ -544,7 +541,7 @@ void TabHoverCardController::OnViewVisibilityChanged(
   }
 }
 
-void TabHoverCardController::OnMemoryMetricsRefreshed() {
+void TabHoverCardController::OnTabResourceMetricsRefreshed() {
   if (hover_card_ != nullptr && target_tab_ != nullptr) {
     UpdateHoverCard(target_tab_,
                     TabSlotController::HoverCardUpdateType::kTabDataChanged);
@@ -582,9 +579,7 @@ void TabHoverCardController::CreateHoverCard(Tab* tab) {
   }
 
   if (hover_card_tab_memory_usage_enabled_) {
-    performance_manager::user_tuning::UserPerformanceTuningManager::
-        GetInstance()
-            ->AddObserver(this);
+    TabResourceUsageCollector::Get()->AddObserver(this);
   }
 }
 

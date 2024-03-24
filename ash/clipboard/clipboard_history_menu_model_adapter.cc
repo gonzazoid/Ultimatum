@@ -79,10 +79,6 @@ bool IsFooterRequired(
     crosapi::mojom::ClipboardHistoryControllerShowSource show_source,
     const std::optional<base::Time>& menu_last_time_shown,
     const std::optional<base::Time>& nudge_last_time_shown) {
-  if (!features::IsClipboardHistoryFooterEnabled()) {
-    return false;
-  }
-
   // A footer is always required when the menu is shown via Ctrl+V long press.
   using crosapi::mojom::ClipboardHistoryControllerShowSource;
   if (show_source == ClipboardHistoryControllerShowSource::kControlVLongpress) {
@@ -530,7 +526,7 @@ void ClipboardHistoryMenuModelAdapter::RemoveMenuItemWithCommandId(
       item_view_to_delete->GetViewAccessibility();
 
   // Polish the a11y announcement for deletion operation.
-  view_accessibility.OverrideDescription(
+  view_accessibility.SetDescription(
       l10n_util::GetStringUTF16(IDS_CLIPBOARD_HISTORY_ITEM_DELETION));
 
   // Enable a11y announcement for the view to be deleted.

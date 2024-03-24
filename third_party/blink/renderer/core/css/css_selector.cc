@@ -202,8 +202,12 @@ inline unsigned CSSSelector::SpecificityForOneSelector() const {
         case kPseudoViewTransitionGroup:
         case kPseudoViewTransitionImagePair:
         case kPseudoViewTransitionOld:
-        case kPseudoViewTransitionNew:
-          return Argument().IsNull() ? 0 : kClassLikeSpecificity;
+        case kPseudoViewTransitionNew: {
+          CHECK(!IdentList().empty());
+          return (IdentList().size() == 1u && IdentList()[0].IsNull())
+                     ? 0
+                     : kClassLikeSpecificity;
+        }
         default:
           break;
       }
@@ -393,12 +397,15 @@ PseudoId CSSSelector::GetPseudoId(PseudoType type) {
     case kPseudoRightPage:
     case kPseudoRoot:
     case kPseudoScope:
+    case kPseudoSelectAuthorButton:
+    case kPseudoSelectAuthorDatalist:
     case kPseudoSelectorFragmentAnchor:
     case kPseudoSingleButton:
     case kPseudoSlotted:
     case kPseudoSpatialNavigationFocus:
     case kPseudoStart:
     case kPseudoState:
+    case kPseudoStateDeprecatedSyntax:
     case kPseudoTarget:
     case kPseudoTrue:
     case kPseudoUnknown:
@@ -453,6 +460,9 @@ const static NameToPseudoStruct kPseudoTypeWithoutArgumentsMap[] = {
     {"-internal-multi-select-focus", CSSSelector::kPseudoMultiSelectFocus},
     {"-internal-popover-in-top-layer", CSSSelector::kPseudoPopoverInTopLayer},
     {"-internal-relative-anchor", CSSSelector::kPseudoRelativeAnchor},
+    {"-internal-select-author-button", CSSSelector::kPseudoSelectAuthorButton},
+    {"-internal-select-author-datalist",
+     CSSSelector::kPseudoSelectAuthorDatalist},
     {"-internal-selector-fragment-anchor",
      CSSSelector::kPseudoSelectorFragmentAnchor},
     {"-internal-shadow-host-has-appearance",
@@ -573,6 +583,7 @@ const static NameToPseudoStruct kPseudoTypeWithArgumentsMap[] = {
     {"nth-of-type", CSSSelector::kPseudoNthOfType},
     {"part", CSSSelector::kPseudoPart},
     {"slotted", CSSSelector::kPseudoSlotted},
+    {"state", CSSSelector::kPseudoState},
     {"view-transition-group", CSSSelector::kPseudoViewTransitionGroup},
     {"view-transition-image-pair", CSSSelector::kPseudoViewTransitionImagePair},
     {"view-transition-new", CSSSelector::kPseudoViewTransitionNew},
@@ -614,23 +625,18 @@ CSSSelector::PseudoType CSSSelector::NameToPseudoType(
     return CSSSelector::kPseudoUnknown;
   }
 
-  if (match->type == CSSSelector::kPseudoDir &&
-      !RuntimeEnabledFeatures::CSSPseudoDirEnabled()) {
-    return CSSSelector::kPseudoUnknown;
-  }
-
   if (match->type == CSSSelector::kPseudoPaused &&
       !RuntimeEnabledFeatures::CSSPseudoPlayingPausedEnabled()) {
     return CSSSelector::kPseudoUnknown;
   }
 
-  if (match->type == CSSSelector::kPseudoPictureInPicture &&
-      !RuntimeEnabledFeatures::CSSPictureInPictureEnabled()) {
+  if (match->type == CSSSelector::kPseudoPlaying &&
+      !RuntimeEnabledFeatures::CSSPseudoPlayingPausedEnabled()) {
     return CSSSelector::kPseudoUnknown;
   }
 
-  if (match->type == CSSSelector::kPseudoPlaying &&
-      !RuntimeEnabledFeatures::CSSPseudoPlayingPausedEnabled()) {
+  if (match->type == CSSSelector::kPseudoState &&
+      !RuntimeEnabledFeatures::CSSCustomStateNewSyntaxEnabled()) {
     return CSSSelector::kPseudoUnknown;
   }
 
@@ -658,7 +664,7 @@ CSSSelector::PseudoType CSSSelector::NameToPseudoType(
 
   if ((match->type == CSSSelector::kPseudoOpen ||
        match->type == CSSSelector::kPseudoClosed) &&
-      !RuntimeEnabledFeatures::HTMLSelectListElementEnabled()) {
+      !RuntimeEnabledFeatures::CSSPseudoOpenClosedEnabled()) {
     return CSSSelector::kPseudoUnknown;
   }
 
@@ -721,7 +727,7 @@ void CSSSelector::UpdatePseudoType(const AtomicString& value,
   PseudoType pseudo_type = CSSSelectorParser::ParsePseudoType(
       lower_value, has_arguments, context.GetDocument());
   SetPseudoType(pseudo_type);
-  SetValue(pseudo_type == kPseudoState ? value : lower_value);
+  SetValue(pseudo_type == kPseudoStateDeprecatedSyntax ? value : lower_value);
 
   switch (GetPseudoType()) {
     case kPseudoAfter:
@@ -857,10 +863,13 @@ void CSSSelector::UpdatePseudoType(const AtomicString& value,
     case kPseudoRequired:
     case kPseudoRoot:
     case kPseudoScope:
+    case kPseudoSelectAuthorButton:
+    case kPseudoSelectAuthorDatalist:
     case kPseudoSelectorFragmentAnchor:
     case kPseudoSingleButton:
     case kPseudoStart:
     case kPseudoState:
+    case kPseudoStateDeprecatedSyntax:
     case kPseudoTarget:
     case kPseudoTrue:
     case kPseudoUnknown:
@@ -960,7 +969,7 @@ bool CSSSelector::SerializeSimpleSelector(StringBuilder& builder) const {
   } else if (match_ == kPseudoClass || match_ == kPagePseudoClass) {
     if (GetPseudoType() == kPseudoUnparsed) {
       builder.Append(Value());
-    } else if (GetPseudoType() != kPseudoState &&
+    } else if (GetPseudoType() != kPseudoStateDeprecatedSyntax &&
                GetPseudoType() != kPseudoParent &&
                GetPseudoType() != kPseudoTrue) {
       builder.Append(':');
@@ -1007,6 +1016,7 @@ bool CSSSelector::SerializeSimpleSelector(StringBuilder& builder) const {
       }
       case kPseudoDir:
       case kPseudoLang:
+      case kPseudoState:
         builder.Append('(');
         SerializeIdentifier(Argument(), builder);
         builder.Append(')');
@@ -1015,7 +1025,7 @@ bool CSSSelector::SerializeSimpleSelector(StringBuilder& builder) const {
       case kPseudoNot:
         DCHECK(SelectorList());
         break;
-      case kPseudoState:
+      case kPseudoStateDeprecatedSyntax:
         builder.Append(':');
         SerializeIdentifier(SerializingValue(), builder);
         break;
@@ -1066,13 +1076,30 @@ bool CSSSelector::SerializeSimpleSelector(StringBuilder& builder) const {
         builder.Append(')');
         break;
       }
-      case kPseudoHighlight:
+      case kPseudoHighlight: {
+        builder.Append('(');
+        builder.Append(Argument());
+        builder.Append(')');
+        break;
+      }
       case kPseudoViewTransitionGroup:
       case kPseudoViewTransitionImagePair:
       case kPseudoViewTransitionNew:
       case kPseudoViewTransitionOld: {
         builder.Append('(');
-        builder.Append(Argument());
+        bool first = true;
+        for (const AtomicString& name_or_class : IdentList()) {
+          if (!first) {
+            builder.Append('.');
+          }
+
+          first = false;
+          if (name_or_class == UniversalSelectorAtom()) {
+            builder.Append(g_star_atom);
+          } else {
+            SerializeIdentifier(name_or_class, builder);
+          }
+        }
         builder.Append(')');
         break;
       }

@@ -100,7 +100,6 @@ class CreditCardSaveManager {
   // The parameters should outlive the CreditCardSaveManager.
   CreditCardSaveManager(
       AutofillClient* client,
-      payments::PaymentsNetworkInterface* payments_network_interface,
       const std::string& app_locale,
       PersonalDataManager* personal_data_manager);
 
@@ -234,7 +233,8 @@ class CreditCardSaveManager {
   // contain countries.
   void SetProfilesForCreditCardUpload(
       const CreditCard& card,
-      payments::PaymentsNetworkInterface::UploadRequestDetails* upload_request);
+      payments::PaymentsNetworkInterface::UploadCardRequestDetails*
+          upload_request);
 
   // Analyzes the decisions made while importing address profile and credit card
   // data in preparation for upload credit card save, in order to determine what
@@ -348,10 +348,6 @@ class CreditCardSaveManager {
 
   const raw_ptr<AutofillClient> client_;
 
-  // Handles Payments service requests. Weak ref. In Chrome, it's owned by
-  // ChromeAutofillClient and ChromeAutofillClientIOS.
-  raw_ptr<payments::PaymentsNetworkInterface> payments_network_interface_;
-
   std::string app_locale_;
 
   // The personal data manager, used to save and load personal data to/from the
@@ -364,7 +360,7 @@ class CreditCardSaveManager {
   CreditCard card_save_candidate_;
 
   // Collected information about a pending upload request.
-  payments::PaymentsNetworkInterface::UploadRequestDetails upload_request_;
+  payments::PaymentsNetworkInterface::UploadCardRequestDetails upload_request_;
 
   // A bitmask of |AutofillMetrics::CardUploadDecisionMetric| representing the
   // decisions made when determining if credit card upload save should be

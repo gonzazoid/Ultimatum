@@ -59,6 +59,12 @@ class ModelExecutionFeaturesControllerTest : public testing::Test {
     RunUntilIdle();
   }
 
+  prefs::FeatureOptInState GetFeaturePrefValue(
+      proto::ModelExecutionFeature feature) {
+    return static_cast<prefs::FeatureOptInState>(
+        pref_service_->GetInteger(prefs::GetSettingEnabledPrefName(feature)));
+  }
+
   ModelExecutionFeaturesController* model_execution_features_controller() {
     return model_execution_features_controller_.get();
   }
@@ -72,6 +78,8 @@ class ModelExecutionFeaturesControllerTest : public testing::Test {
     base::RunLoop().RunUntilIdle();
   }
   base::HistogramTester* histogram_tester() { return &histogram_tester_; }
+
+  PrefService* pref_service() { return pref_service_.get(); }
 
  private:
   base::test::TaskEnvironment task_environment_;
@@ -185,6 +193,122 @@ TEST_F(ModelExecutionFeaturesControllerTest,
       proto::ModelExecutionFeature::MODEL_EXECUTION_FEATURE_COMPOSE));
   EXPECT_FALSE(model_execution_features_controller()->IsSettingVisible(
       proto::ModelExecutionFeature::MODEL_EXECUTION_FEATURE_TAB_ORGANIZATION));
+}
+
+TEST_F(ModelExecutionFeaturesControllerTest,
+       MainToggleEnablesAllVisibleFeatures) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeatures(
+      {features::internal::kComposeSettingsVisibility,
+       features::internal::kTabOrganizationSettingsVisibility},
+      {});
+  CreateModelExecutionFeaturesController();
+  EnableSignIn();
+  EXPECT_TRUE(model_execution_features_controller()->IsSettingVisible(
+      proto::ModelExecutionFeature::MODEL_EXECUTION_FEATURE_COMPOSE));
+  EXPECT_TRUE(model_execution_features_controller()->IsSettingVisible(
+      proto::ModelExecutionFeature::MODEL_EXECUTION_FEATURE_TAB_ORGANIZATION));
+  EXPECT_FALSE(model_execution_features_controller()->IsSettingVisible(
+      proto::ModelExecutionFeature::MODEL_EXECUTION_FEATURE_WALLPAPER_SEARCH));
+
+  // Enabling the main toggle enables visible features.
+  pref_service()->SetInteger(
+      prefs::kModelExecutionMainToggleSettingState,
+      static_cast<int>(optimization_guide::prefs::FeatureOptInState::kEnabled));
+  EXPECT_TRUE(
+      model_execution_features_controller()
+          ->ShouldFeatureBeCurrentlyEnabledForUser(
+              proto::ModelExecutionFeature::MODEL_EXECUTION_FEATURE_COMPOSE));
+  EXPECT_TRUE(model_execution_features_controller()
+                  ->ShouldFeatureBeCurrentlyEnabledForUser(
+                      proto::ModelExecutionFeature::
+                          MODEL_EXECUTION_FEATURE_TAB_ORGANIZATION));
+  EXPECT_FALSE(model_execution_features_controller()
+                   ->ShouldFeatureBeCurrentlyEnabledForUser(
+                       proto::ModelExecutionFeature::
+                           MODEL_EXECUTION_FEATURE_WALLPAPER_SEARCH));
+  // Only the visible feature prefs should be enabled.
+  EXPECT_EQ(prefs::FeatureOptInState::kEnabled,
+            GetFeaturePrefValue(
+                proto::ModelExecutionFeature::MODEL_EXECUTION_FEATURE_COMPOSE));
+  EXPECT_EQ(prefs::FeatureOptInState::kEnabled,
+            GetFeaturePrefValue(proto::ModelExecutionFeature::
+                                    MODEL_EXECUTION_FEATURE_TAB_ORGANIZATION));
+  EXPECT_EQ(prefs::FeatureOptInState::kNotInitialized,
+            GetFeaturePrefValue(proto::ModelExecutionFeature::
+                                    MODEL_EXECUTION_FEATURE_WALLPAPER_SEARCH));
+
+  // Disabling the main toggle disables all features.
+  pref_service()->SetInteger(
+      prefs::kModelExecutionMainToggleSettingState,
+      static_cast<int>(
+          optimization_guide::prefs::FeatureOptInState::kDisabled));
+  EXPECT_FALSE(
+      model_execution_features_controller()
+          ->ShouldFeatureBeCurrentlyEnabledForUser(
+              proto::ModelExecutionFeature::MODEL_EXECUTION_FEATURE_COMPOSE));
+  EXPECT_FALSE(model_execution_features_controller()
+                   ->ShouldFeatureBeCurrentlyEnabledForUser(
+                       proto::ModelExecutionFeature::
+                           MODEL_EXECUTION_FEATURE_TAB_ORGANIZATION));
+  EXPECT_FALSE(model_execution_features_controller()
+                   ->ShouldFeatureBeCurrentlyEnabledForUser(
+                       proto::ModelExecutionFeature::
+                           MODEL_EXECUTION_FEATURE_WALLPAPER_SEARCH));
+  // Only the visible feature prefs should be disabled.
+  EXPECT_EQ(prefs::FeatureOptInState::kDisabled,
+            GetFeaturePrefValue(
+                proto::ModelExecutionFeature::MODEL_EXECUTION_FEATURE_COMPOSE));
+  EXPECT_EQ(prefs::FeatureOptInState::kDisabled,
+            GetFeaturePrefValue(proto::ModelExecutionFeature::
+                                    MODEL_EXECUTION_FEATURE_TAB_ORGANIZATION));
+  EXPECT_EQ(prefs::FeatureOptInState::kNotInitialized,
+            GetFeaturePrefValue(proto::ModelExecutionFeature::
+                                    MODEL_EXECUTION_FEATURE_WALLPAPER_SEARCH));
+}
+
+TEST_F(ModelExecutionFeaturesControllerTest, GraduatedFeatureIsNotVisible) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeatures(
+      /*enabled_features=*/
+      {features::internal::kComposeGraduatedFromSettings,
+       features::internal::kWallpaperSearchSettingsVisibility},
+      /*disabled_features=*/
+      {features::internal::kComposeSettingsVisibility});
+  CreateModelExecutionFeaturesController();
+
+  EnableSignIn();
+  // IsSettingVisible
+  EXPECT_FALSE(model_execution_features_controller()->IsSettingVisible(
+      proto::ModelExecutionFeature::MODEL_EXECUTION_FEATURE_COMPOSE));
+  EXPECT_FALSE(model_execution_features_controller()->IsSettingVisible(
+      proto::ModelExecutionFeature::MODEL_EXECUTION_FEATURE_TAB_ORGANIZATION));
+  EXPECT_TRUE(model_execution_features_controller()->IsSettingVisible(
+      proto::ModelExecutionFeature::MODEL_EXECUTION_FEATURE_WALLPAPER_SEARCH));
+  // ShouldFeatureBeCurrentlyEnabledForUser
+  EXPECT_TRUE(
+      model_execution_features_controller()
+          ->ShouldFeatureBeCurrentlyEnabledForUser(
+              proto::ModelExecutionFeature::MODEL_EXECUTION_FEATURE_COMPOSE));
+  EXPECT_FALSE(model_execution_features_controller()
+                   ->ShouldFeatureBeCurrentlyEnabledForUser(
+                       proto::ModelExecutionFeature::
+                           MODEL_EXECUTION_FEATURE_TAB_ORGANIZATION));
+  EXPECT_FALSE(model_execution_features_controller()
+                   ->ShouldFeatureBeCurrentlyEnabledForUser(
+                       proto::ModelExecutionFeature::
+                           MODEL_EXECUTION_FEATURE_WALLPAPER_SEARCH));
+  histogram_tester()->ExpectUniqueSample(
+      "OptimizationGuide.ModelExecution.FeatureEnabledAtStartup.Compose", false,
+      1);
+  histogram_tester()->ExpectUniqueSample(
+      "OptimizationGuide.ModelExecution.FeatureEnabledAtStartup."
+      "TabOrganization",
+      false, 1);
+  histogram_tester()->ExpectUniqueSample(
+      "OptimizationGuide.ModelExecution.FeatureEnabledAtStartup."
+      "WallpaperSearch",
+      false, 1);
 }
 
 }  // namespace optimization_guide

@@ -6,9 +6,9 @@
 
 #import "base/apple/foundation_util.h"
 #import "base/ios/ios_util.h"
-#import "ios/chrome/browser/promos_manager/constants.h"
-#import "ios/chrome/browser/promos_manager/features.h"
-#import "ios/chrome/browser/promos_manager/promos_manager.h"
+#import "ios/chrome/browser/promos_manager/model/constants.h"
+#import "ios/chrome/browser/promos_manager/model/features.h"
+#import "ios/chrome/browser/promos_manager/model/promos_manager.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/ui/whats_new/constants.h"
 
@@ -67,6 +67,12 @@ const char* WhatsNewTypeToString(WhatsNewType type) {
       return "ChromeActions";
     case WhatsNewType::kMiniMaps:
       return "MiniMaps";
+    case WhatsNewType::kLensSearch:
+      return "LensSearch";
+    case WhatsNewType::kBottomOmnibox:
+      return "BottomOmnibox";
+    case WhatsNewType::kESB:
+      return "ESB";
     case WhatsNewType::kError:
       return nil;
   };

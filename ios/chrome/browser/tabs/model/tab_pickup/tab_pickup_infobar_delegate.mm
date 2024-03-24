@@ -8,12 +8,13 @@
 #import "components/infobars/core/infobar_delegate.h"
 #import "components/sync_sessions/open_tabs_ui_delegate.h"
 #import "components/sync_sessions/session_sync_service.h"
-#import "ios/chrome/browser/favicon/favicon_loader.h"
-#import "ios/chrome/browser/favicon/ios_chrome_favicon_loader_factory.h"
+#import "ios/chrome/browser/favicon/model/favicon_loader.h"
+#import "ios/chrome/browser/favicon/model/ios_chrome_favicon_loader_factory.h"
 #import "ios/chrome/browser/metrics/model/new_tab_page_uma.h"
 #import "ios/chrome/browser/sessions/session_util.h"
 #import "ios/chrome/browser/shared/model/browser/browser.h"
 #import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
 #import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
 #import "ios/chrome/browser/shared/model/web_state_list/web_state_opener.h"
 #import "ios/chrome/browser/sync/model/session_sync_service_factory.h"
@@ -81,8 +82,10 @@ void TabPickupInfobarDelegate::OpenDistantTab() {
                                   time_since_last_use, base::Minutes(1),
                                   base::Days(24), 50);
 
-    new_tab_page_uma::RecordAction(
-        browser_state->IsOffTheRecord(), web_state_list->GetActiveWebState(),
+    bool is_ntp = web_state_list->GetActiveWebState()->GetVisibleURL() ==
+                  kChromeUINewTabURL;
+    new_tab_page_uma::RecordNTPAction(
+        browser_state->IsOffTheRecord(), is_ntp,
         new_tab_page_uma::ACTION_OPENED_FOREIGN_SESSION);
 
     std::unique_ptr<web::WebState> web_state =
@@ -90,9 +93,9 @@ void TabPickupInfobarDelegate::OpenDistantTab() {
             browser_state, session_tab->current_navigation_index,
             session_tab->navigations);
     web_state_list->InsertWebState(
-        web_state_list->count(), std::move(web_state),
-        (WebStateList::INSERT_FORCE_INDEX | WebStateList::INSERT_ACTIVATE),
-        WebStateOpener());
+        std::move(web_state),
+        WebStateList::InsertionParams::AtIndex(web_state_list->count())
+            .Activate());
   }
 }
 

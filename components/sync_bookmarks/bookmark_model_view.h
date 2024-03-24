@@ -54,9 +54,9 @@ class BookmarkModelView {
   // account permanent folders can be deleted).
   virtual void RemoveAllSyncableNodes() = 0;
 
-  // TODO(crbug.com/1494120): Remove this API once proper UUIDs are adopted for
-  // account bookmarks.
-  virtual bool HasWellKnownPermanentNodeUuids() const = 0;
+  // Uses `uuid` to find a node that is relevant in the context of this view.
+  virtual const bookmarks::BookmarkNode* GetNodeByUuid(
+      const base::Uuid& uuid) const = 0;
 
   // See bookmarks::BookmarkModel for documentation, as all functions below
   // mimic the same API.
@@ -75,22 +75,21 @@ class BookmarkModelView {
   void SetTitle(const bookmarks::BookmarkNode* node,
                 const std::u16string& title);
   void SetURL(const bookmarks::BookmarkNode* node, const GURL& url);
-  const bookmarks::BookmarkNode* GetNodeByUuid(const base::Uuid& uuid) const;
   const bookmarks::BookmarkNode* AddFolder(
       const bookmarks::BookmarkNode* parent,
       size_t index,
       const std::u16string& title,
       const bookmarks::BookmarkNode::MetaInfoMap* meta_info,
-      absl::optional<base::Time> creation_time,
-      absl::optional<base::Uuid> uuid);
+      std::optional<base::Time> creation_time,
+      std::optional<base::Uuid> uuid);
   const bookmarks::BookmarkNode* AddURL(
       const bookmarks::BookmarkNode* parent,
       size_t index,
       const std::u16string& title,
       const GURL& url,
       const bookmarks::BookmarkNode::MetaInfoMap* meta_info,
-      absl::optional<base::Time> creation_time,
-      absl::optional<base::Uuid> uuid);
+      std::optional<base::Time> creation_time,
+      std::optional<base::Uuid> uuid);
   void ReorderChildren(
       const bookmarks::BookmarkNode* parent,
       const std::vector<const bookmarks::BookmarkNode*>& ordered_nodes);
@@ -130,7 +129,8 @@ class BookmarkModelViewUsingLocalOrSyncableNodes : public BookmarkModelView {
   const bookmarks::BookmarkNode* mobile_node() const override;
   void EnsurePermanentNodesExist() override;
   void RemoveAllSyncableNodes() override;
-  bool HasWellKnownPermanentNodeUuids() const override;
+  const bookmarks::BookmarkNode* GetNodeByUuid(
+      const base::Uuid& uuid) const override;
 };
 
 class BookmarkModelViewUsingAccountNodes : public BookmarkModelView {
@@ -147,7 +147,8 @@ class BookmarkModelViewUsingAccountNodes : public BookmarkModelView {
   const bookmarks::BookmarkNode* mobile_node() const override;
   void EnsurePermanentNodesExist() override;
   void RemoveAllSyncableNodes() override;
-  bool HasWellKnownPermanentNodeUuids() const override;
+  const bookmarks::BookmarkNode* GetNodeByUuid(
+      const base::Uuid& uuid) const override;
 };
 
 }  // namespace sync_bookmarks

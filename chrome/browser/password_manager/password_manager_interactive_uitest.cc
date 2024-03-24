@@ -6,11 +6,10 @@
 
 #include "base/functional/bind.h"
 #include "base/location.h"
-#include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/test_timeouts.h"
+#include "base/test/run_until.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/password_manager/chrome_password_manager_client.h"
@@ -40,18 +39,6 @@
 #endif  // BUILDFLAG(ENABLE_DICE_SUPPORT)
 
 namespace {
-
-#if BUILDFLAG(ENABLE_DICE_SUPPORT)
-// Wait until |condition| returns true.
-void WaitForCondition(base::RepeatingCallback<bool()> condition) {
-  while (!condition.Run()) {
-    base::RunLoop run_loop;
-    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
-        FROM_HERE, run_loop.QuitClosure(), TestTimeouts::tiny_timeout());
-    run_loop.Run();
-  }
-}
-#endif  // BUILDFLAG(ENABLE_DICE_SUPPORT)
 
 constexpr autofill::FieldRendererId kElementId(1000);
 
@@ -355,9 +342,10 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerInteractiveTest,
 
   // Instruct Chrome to show the password dropdown.
   autofill::FormData form;
-  driver->ShowPasswordSuggestions(kElementId, form, 0, 0,
-                                  base::i18n::LEFT_TO_RIGHT, std::u16string(),
-                                  0, element_bounds);
+  driver->ShowPasswordSuggestions(autofill::PasswordSuggestionRequest(
+      kElementId, form,
+      autofill::AutofillSuggestionTriggerSource::kFormControlElementClicked, 0,
+      0, base::i18n::LEFT_TO_RIGHT, std::u16string(), 0, element_bounds));
   autofill::ChromeAutofillClient* autofill_client =
       autofill::ChromeAutofillClient::FromWebContentsForTesting(WebContents());
   autofill::AutofillPopupController* controller =
@@ -380,9 +368,10 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerInteractiveTest,
   EXPECT_FALSE(autofill_client->popup_controller_for_testing());
   WaitForPasswordStore();
   // Reshow the dropdown.
-  driver->ShowPasswordSuggestions(kElementId, form, 0, 0,
-                                  base::i18n::LEFT_TO_RIGHT, std::u16string(),
-                                  0, element_bounds);
+  driver->ShowPasswordSuggestions(autofill::PasswordSuggestionRequest(
+      kElementId, form,
+      autofill::AutofillSuggestionTriggerSource::kFormControlElementClicked, 0,
+      0, base::i18n::LEFT_TO_RIGHT, std::u16string(), 0, element_bounds));
   controller = autofill_client->popup_controller_for_testing().get();
   ASSERT_TRUE(controller);
   EXPECT_EQ(3, controller->GetLineCount());
@@ -400,9 +389,10 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerInteractiveTest,
   EXPECT_FALSE(autofill_client->popup_controller_for_testing());
   WaitForPasswordStore();
   // Reshow the dropdown won't work because there is nothing to suggest.
-  driver->ShowPasswordSuggestions(kElementId, form, 0, 0,
-                                  base::i18n::LEFT_TO_RIGHT, std::u16string(),
-                                  0, element_bounds);
+  driver->ShowPasswordSuggestions(autofill::PasswordSuggestionRequest(
+      kElementId, form,
+      autofill::AutofillSuggestionTriggerSource::kFormControlElementClicked, 0,
+      0, base::i18n::LEFT_TO_RIGHT, std::u16string(), 0, element_bounds));
   EXPECT_FALSE(autofill_client->popup_controller_for_testing());
 
   WaitForElementValue("username_field", "");
@@ -620,9 +610,9 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerInteractiveTestWithSigninInterception,
   const PasswordManager* password_manager =
       ChromePasswordManagerClient::FromWebContents(WebContents())
           ->GetPasswordManager();
-  WaitForCondition(
-      base::BindRepeating(&PasswordManager::IsFormManagerPendingPasswordUpdate,
-                          base::Unretained(password_manager)));
+  EXPECT_TRUE(base::test::RunUntil([&]() {
+    return password_manager->IsFormManagerPendingPasswordUpdate();
+  }));
 
   // Start the navigation.
   PasswordsNavigationObserver navigation_observer(WebContents());

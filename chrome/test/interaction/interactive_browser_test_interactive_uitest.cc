@@ -2,10 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "chrome/common/webui_url_constants.h"
-#include "chrome/test/interaction/interactive_browser_test.h"
-
 #include <memory>
+#include <optional>
 
 #include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
@@ -21,9 +19,10 @@
 #include "chrome/browser/ui/views/side_panel/side_panel_entry.h"
 #include "chrome/browser/ui/views/toolbar/browser_app_menu_button.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
+#include "chrome/common/webui_url_constants.h"
+#include "chrome/test/interaction/interactive_browser_test.h"
 #include "content/public/browser/page_navigator.h"
 #include "content/public/test/browser_test.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/interaction/element_identifier.h"
 #include "ui/base/interaction/element_tracker.h"
 #include "ui/base/interaction/interaction_sequence.h"
@@ -388,9 +387,9 @@ IN_PROC_BROWSER_TEST_F(InteractiveBrowserTestUiTest,
   RunTestSequenceInContext(
       incognito_browser->window()->GetElementContext(),
       // Instrument the tabs but do not force them to load.
-      InstrumentTab(kIncognitoPageId, absl::nullopt, CurrentBrowser(),
+      InstrumentTab(kIncognitoPageId, std::nullopt, CurrentBrowser(),
                     /* wait_for_ready =*/false),
-      InstrumentTab(kBrowserPageId, absl::nullopt, browser(),
+      InstrumentTab(kBrowserPageId, std::nullopt, browser(),
                     /* wait_for_ready =*/false),
       // Wait for the pages to load. Manually specify that the incognito page
       // must be in the default context (otherwise, this verb defaults to being
@@ -455,8 +454,9 @@ namespace {
 // Simple bubble containing a WebView. Allows us to simulate swapping out one
 // WebContents for another.
 class WebBubbleView : public views::BubbleDialogDelegateView {
+  METADATA_HEADER(WebBubbleView, views::BubbleDialogDelegateView)
+
  public:
-  METADATA_HEADER(WebBubbleView);
   ~WebBubbleView() override = default;
 
   // Creates a bubble with a WebView and loads `url` in the view.
@@ -497,7 +497,7 @@ class WebBubbleView : public views::BubbleDialogDelegateView {
   std::unique_ptr<content::WebContents> owned_web_contents_;
 };
 
-BEGIN_METADATA(WebBubbleView, views::BubbleDialogDelegateView)
+BEGIN_METADATA(WebBubbleView)
 END_METADATA
 
 }  // namespace

@@ -12,8 +12,6 @@
   }
 
   #apnTooltip {
-    --paper-tooltip-background: var(--cros-tooltip-background-color);
-    --paper-tooltip-text-color: var(--cros-tooltip-label-color);
     text-align: center;
   }
 
@@ -160,10 +158,10 @@
           device-state="[[getDeviceState_(subpageType_, deviceStates)]]">
       </settings-internet-subpage-menu>
       <template is="dom-if"
-          if="[[isProviderLocked_(subpageType_)]]">
+          if="[[isProviderLocked_]]" restamp>
         <!-- Carrier locked network. -->
         <div class="settings-box first">
-          <div class="settings-box-text">
+          <div id="cellularSubtitle" class="settings-box-text">
             <localized-link
                 localized-string="[[i18nAdvanced('cellularSubpageSubtitle')]]">
             </localized-link>

@@ -31,10 +31,10 @@
 #ifndef THIRD_PARTY_BLINK_PUBLIC_COMMON_CONTEXT_MENU_DATA_CONTEXT_MENU_DATA_H_
 #define THIRD_PARTY_BLINK_PUBLIC_COMMON_CONTEXT_MENU_DATA_CONTEXT_MENU_DATA_H_
 
+#include <optional>
 #include <vector>
 
 #include "services/network/public/mojom/referrer_policy.mojom-shared.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/context_menu_data/menu_item_info.h"
 #include "third_party/blink/public/common/input/web_menu_source_type.h"
 #include "third_party/blink/public/common/navigation/impression.h"
@@ -100,7 +100,7 @@ struct ContextMenuData {
 
   // If the node is a link, the impression declared by the link's conversion
   // measurement attributes.
-  absl::optional<Impression> impression;
+  std::optional<Impression> impression;
 
   // The raw text of the selection in context.
   std::string selected_text;
@@ -171,8 +171,6 @@ struct ContextMenuData {
   // Indicates whether the context menu is invoked on a non-form,
   // non-form-control element that is contenteditable. Thus, it is mutually
   // exclusive with `form_control_type`.
-  // TODO(crbug.com/1427131): Only true if AutofillUseDomNodeIdForRendererId
-  // is enabled.
   bool is_content_editable_for_autofill = false;
 
   // Identifies the element the context menu was invoked on if either

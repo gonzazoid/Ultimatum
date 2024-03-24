@@ -52,6 +52,9 @@ chromium-metrics-reviews@google.com.
   <int value="5"
       label="Returned result as not enabled because model execution
              capability was disabled for the user account"/>
+  <int value="6"
+      label="Returned result as enabled because the feature has graduated
+             from experimental AI settings"/>
 </enum>
 
 <enum name="FeaturesSettingsVisibilityResult">
@@ -66,6 +69,7 @@ chromium-metrics-reviews@google.com.
   <int value="6"
       label="Not visible because model execution capability was disabled for
              the user account"/>
+  <int value="7" label="Not visible because the feature is already graduated"/>
 </enum>
 
 <enum name="HintCacheStoreEntryType">
@@ -98,6 +102,14 @@ chromium-metrics-reviews@google.com.
   <int value="7" label="Service Crash"/>
   <int value="8" label="GPU blocked"/>
   <int value="9" label="Failed to load library"/>
+</enum>
+
+<enum name="OnDeviceTextSafetyModelMetadataValidity">
+  <int value="0" label="Unknown"/>
+  <int value="1" label="No metadata"/>
+  <int value="2" label="Wrong metadata type"/>
+  <int value="3" label="No feature configs"/>
+  <int value="4" label="Valid"/>
 </enum>
 
 <enum name="OptimizationGuideAccessTokenResult">
@@ -304,6 +316,21 @@ chromium-metrics-reviews@google.com.
   <int value="10" label="Used on-device, but output contained PII">
     On-device model was used, but was cancelled because it surfaced PII.
   </int>
+  <int value="11" label="Used on-device, but output contained repeats">
+    On-device was used, but the output was rejected because it had repeats.
+  </int>
+  <int value="12"
+      label="Used on-device, but completed output did not have required safety
+             scores">
+    On-device was used, but the output was rejected because the completed
+    response did not have safety scores.
+  </int>
+  <int value="13"
+      label="Used on-device and got output, but the detected output language
+             is not supported by the safety model">
+    Used on-device and got output, but the detected output language is not
+    supported by the safety model
+  </int>
 </enum>
 
 <enum name="OptimizationGuideOnDeviceModelEligibilityReason">
@@ -329,6 +356,18 @@ chromium-metrics-reviews@google.com.
   </int>
   <int value="8" label="Safety model not available">
     The on-device safety model is required but not available.
+  </int>
+  <int value="9" label="Safety config not available for feature">
+    The on-device safety model was available but did not contain a config for
+    the feature.
+  </int>
+  <int value="10" label="Language detection model not available for feature">
+    The on-device safety model is available, but it requires specific output
+    languages and the language detection model is unavailable.
+  </int>
+  <int value="11" label="On-device execution is not enabled for this feature">
+    The feature is enabled, and on-device execution is available, but it is not
+    enabled for this feature.
   </int>
 </enum>
 
@@ -590,6 +629,14 @@ chromium-metrics-reviews@google.com.
   <int value="1" label="Success"/>
   <int value="2" label="Invalid protobuf"/>
   <int value="3" label="Base64 decoding error"/>
+</enum>
+
+<enum name="OptimizationGuideTextSafetyInferenceResult">
+  <int value="0" label="Success"/>
+  <int value="1" label="Encoding failed"/>
+  <int value="2" label="Model creation failed"/>
+  <int value="3" label="Model execution failed"/>
+  <int value="4" label="Regression failed"/>
 </enum>
 
 <enum name="OptimizationGuideUserFeedback">

@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "components/signin/core/browser/account_reconcilor.h"
+
 #include <cstring>
 #include <map>
 #include <memory>
@@ -10,6 +12,7 @@
 #include <vector>
 
 #include "base/containers/contains.h"
+#include "base/feature_list.h"
 #include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
@@ -25,7 +28,6 @@
 #include "components/content_settings/core/browser/content_settings_observer.h"
 #include "components/content_settings/core/common/content_settings_pattern.h"
 #include "components/prefs/pref_service.h"
-#include "components/signin/core/browser/account_reconcilor.h"
 #include "components/signin/core/browser/mirror_account_reconcilor_delegate.h"
 #include "components/signin/public/base/account_consistency_method.h"
 #include "components/signin/public/base/consent_level.h"
@@ -42,7 +44,6 @@
 #include "components/signin/public/identity_manager/primary_account_mutator.h"
 #include "components/signin/public/identity_manager/set_accounts_in_cookie_result.h"
 #include "components/supervised_user/core/common/buildflags.h"
-#include "components/supervised_user/core/common/features.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "google_apis/gaia/core_account_id.h"
 #include "google_apis/gaia/gaia_constants.h"
@@ -1427,36 +1428,20 @@ TEST_F(AccountReconcilorDiceTest, DeleteCookie) {
 
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
 class AccountReconcilorDiceTestForSupervisedUsers
-    : public AccountReconcilorDiceTest,
-      public ::testing::WithParamInterface<bool> {
+    : public AccountReconcilorDiceTest {
  public:
   AccountReconcilorDiceTestForSupervisedUsers() {
-    std::vector<base::test::FeatureRef> enabled_features = {};
-    std::vector<base::test::FeatureRef> disabled_features = {
-        switches::kUnoDesktop};
-    if (is_signout_disallowed_on_cookies_cleared()) {
-      enabled_features.push_back(
-          supervised_user::kClearingCookiesKeepsSupervisedUsersSignedIn);
-    } else {
-      disabled_features.push_back(
-          supervised_user::kClearingCookiesKeepsSupervisedUsersSignedIn);
-    }
-    feature_list_.InitWithFeatures(enabled_features, disabled_features);
+    feature_list_.InitWithFeatures(
+        /*enabled_features=*/{}, /*disabled_features=*/{switches::kUnoDesktop});
   }
 
   ~AccountReconcilorDiceTestForSupervisedUsers() override = default;
-
-  bool is_signout_disallowed_on_cookies_cleared() const { return GetParam(); }
 
  private:
   base::test::ScopedFeatureList feature_list_;
 };
 
-INSTANTIATE_TEST_SUITE_P(AccountReconcilorDiceTestForSupervisedUsers,
-                         AccountReconcilorDiceTestForSupervisedUsers,
-                         ::testing::Bool());
-
-TEST_P(AccountReconcilorDiceTestForSupervisedUsers,
+TEST_F(AccountReconcilorDiceTestForSupervisedUsers,
        DeleteCookieForNonSyncingSupervisedUsers) {
   auto* identity_manager = identity_test_env()->identity_manager();
   signin::SetListAccountsResponseOneAccount(kFakeEmail, kFakeGaiaId,
@@ -1477,15 +1462,14 @@ TEST_P(AccountReconcilorDiceTestForSupervisedUsers,
   AccountReconcilor* reconcilor = GetMockReconcilor();
   reconcilor->OnAccountsCookieDeletedByUserAction();
 
-  EXPECT_EQ(
-      is_signout_disallowed_on_cookies_cleared(),
+  EXPECT_TRUE(
       identity_manager->HasAccountWithRefreshToken(account_info.account_id));
   EXPECT_FALSE(
       identity_manager->HasAccountWithRefreshTokenInPersistentErrorState(
           account_info.account_id));
 }
 
-TEST_P(AccountReconcilorDiceTestForSupervisedUsers,
+TEST_F(AccountReconcilorDiceTestForSupervisedUsers,
        DeleteCookieForSyncingSupervisedUsers) {
   auto* identity_manager = identity_test_env()->identity_manager();
   signin::SetListAccountsResponseOneAccount(kFakeEmail, kFakeGaiaId,
@@ -1509,9 +1493,9 @@ TEST_P(AccountReconcilorDiceTestForSupervisedUsers,
 
   EXPECT_TRUE(
       identity_manager->HasAccountWithRefreshToken(account_info.account_id));
-  EXPECT_NE(is_signout_disallowed_on_cookies_cleared(),
-            identity_manager->HasAccountWithRefreshTokenInPersistentErrorState(
-                account_info.account_id));
+  EXPECT_FALSE(
+      identity_manager->HasAccountWithRefreshTokenInPersistentErrorState(
+          account_info.account_id));
 }
 #endif  // BUILDFLAG(ENABLE_SUPERVISED_USERS)
 
@@ -1588,6 +1572,40 @@ TEST_P(AccountReconcilorDiceTestWithUnoDesktop, DeleteCookieForSyncingUser) {
       identity_manager->HasAccountWithRefreshTokenInPersistentErrorState(
           account_info.account_id));
 }
+
+const std::vector<AccountReconcilorTestTableParam>
+    kDiceParamsUnoPreChromeSignIn = {
+        // clang-format off
+        // See `kDiceParams` above for detailed params format.
+        {  "",     "A",    IsFirstReconcile::kBoth,  "",  "",   "A"    },
+        {  "AB",   "",     IsFirstReconcile::kBoth,  "",  "" ,  ""     },
+        {  "AB",   "A",    IsFirstReconcile::kBoth,  "",  "A",  "A"    },
+        {  "A",    "B",    IsFirstReconcile::kBoth,  "",  "" ,  "B"    },
+        {  "xA",   "A",    IsFirstReconcile::kBoth,  "",  "",   "A"    },
+        {  "xAB",  "A",    IsFirstReconcile::kBoth,  "",  "",   "A"    },
+
+        // Account marked as invalid in cookies.
+        {  "A",    "xA",   IsFirstReconcile::kBoth,  "",  "",   "xA"   },
+        {  "AB",   "AxB",  IsFirstReconcile::kBoth,  "",  "A",  "AxB"  },
+        {  "xA",   "xA",   IsFirstReconcile::kBoth,  "",  "",   "xA"   },
+        // clang-format on
+};
+class AccountReconcilorTestDiceWithUnoPreChromeSignIn
+    : public AccountReconcilorTestTable {
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_{switches::kUnoDesktop};
+};
+
+// Checks one row of the `kDiceParamsUnoPreChromeSignIn` table above.
+TEST_P(AccountReconcilorTestDiceWithUnoPreChromeSignIn, TableRowTest) {
+  SetAccountConsistency(signin::AccountConsistencyMethod::kDice);
+  RunRowTest(GetParam());
+}
+
+INSTANTIATE_TEST_SUITE_P(,
+                         AccountReconcilorTestDiceWithUnoPreChromeSignIn,
+                         ::testing::ValuesIn(GenerateTestCasesFromParams(
+                             kDiceParamsUnoPreChromeSignIn)));
 
 #endif  // BUILDFLAG(ENABLE_DICE_SUPPORT)
 

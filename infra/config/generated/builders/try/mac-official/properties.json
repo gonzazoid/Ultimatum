@@ -10,7 +10,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "mac-official",
-              "project": "chromium"
+              "project": "chromium-m123"
             },
             "builder_spec": {
               "builder_group": "chromium",
@@ -20,7 +20,8 @@
                   "mb"
                 ],
                 "config": "chromium",
-                "target_bits": 64
+                "target_bits": 64,
+                "target_platform": "mac"
               },
               "legacy_gclient_config": {
                 "apply_configs": [
@@ -36,7 +37,7 @@
         {
           "bucket": "ci",
           "builder": "mac-official",
-          "project": "chromium"
+          "project": "chromium-m123"
         }
       ],
       "targets_spec_directory": "src/infra/config/generated/builders/try/mac-official/targets"

@@ -23,16 +23,17 @@ import android.util.Size;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
+import org.chromium.base.Callback;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.compositor.layouts.content.TabContentManager;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
 import org.chromium.chrome.browser.lifecycle.ConfigurationChangedObserver;
+import org.chromium.chrome.browser.magic_stack.ModuleDelegate;
+import org.chromium.chrome.browser.magic_stack.ModuleDelegate.ModuleType;
 import org.chromium.chrome.browser.tab.EmptyTabObserver;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabObserver;
-import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
-import org.chromium.chrome.browser.tabmodel.TabModelUtils;
 import org.chromium.chrome.browser.tasks.tab_management.TabListFaviconProvider;
 import org.chromium.chrome.browser.tasks.tab_management.ThumbnailProvider;
 import org.chromium.components.browser_ui.widget.displaystyle.DisplayStyleObserver;
@@ -61,11 +62,12 @@ public class SingleTabSwitcherOnNtpMediator implements ConfigurationChangedObser
     private boolean mInitialized;
     private boolean mIsScrollableMvtEnabled;
 
-    private Runnable mSingleTabCardClickedCallback;
+    private Callback<Integer> mSingleTabCardClickedCallback;
     private boolean mIsSurfacePolishEnabled;
     private ThumbnailProvider mThumbnailProvider;
     private Size mThumbnailSize;
     private @Nullable DisplayStyleObserver mDisplayStyleObserver;
+    private @Nullable ModuleDelegate mModuleDelegate;
 
     SingleTabSwitcherOnNtpMediator(
             Context context,
@@ -75,10 +77,11 @@ public class SingleTabSwitcherOnNtpMediator implements ConfigurationChangedObser
             TabListFaviconProvider tabListFaviconProvider,
             Tab mostRecentTab,
             boolean isScrollableMvtEnabled,
-            Runnable singleTabCardClickedCallback,
+            Callback<Integer> singleTabCardClickedCallback,
             @Nullable TabContentManager tabContentManager,
             @Nullable UiConfig uiConfig,
-            boolean isTablet) {
+            boolean isTablet,
+            @Nullable ModuleDelegate moduleDelegate) {
         mContext = context;
         mPropertyModel = propertyModel;
         mResources = mContext.getResources();
@@ -89,6 +92,7 @@ public class SingleTabSwitcherOnNtpMediator implements ConfigurationChangedObser
         mIsSurfacePolishEnabled = tabContentManager != null;
         mUiConfig = uiConfig;
         mIsTablet = isTablet;
+        mModuleDelegate = moduleDelegate;
 
         mMarginNarrowWindowOnTablet =
                 mResources.getDimensionPixelSize(R.dimen.search_box_lateral_margin_polish);
@@ -126,13 +130,8 @@ public class SingleTabSwitcherOnNtpMediator implements ConfigurationChangedObser
         mPropertyModel.set(
                 CLICK_LISTENER,
                 v -> {
-                    TabModel currentTabModel = tabModelSelector.getModel(false);
-                    TabModelUtils.setIndex(
-                            currentTabModel,
-                            TabModelUtils.getTabIndexById(currentTabModel, mMostRecentTab.getId()),
-                            false);
                     if (mSingleTabCardClickedCallback != null) {
-                        mSingleTabCardClickedCallback.run();
+                        mSingleTabCardClickedCallback.onResult(mMostRecentTab.getId());
                         mSingleTabCardClickedCallback = null;
                     }
                 });
@@ -142,6 +141,9 @@ public class SingleTabSwitcherOnNtpMediator implements ConfigurationChangedObser
             mDisplayStyleObserver = this::onDisplayStyleChanged;
             mUiConfig.addObserver(mDisplayStyleObserver);
         }
+
+        mTabListFaviconProvider.initWithNative(
+                tabModelSelector.getModel(/* isIncognito= */ false).getProfile());
     }
 
     private void onDisplayStyleChanged(DisplayStyle newDisplayStyle) {
@@ -194,6 +196,10 @@ public class SingleTabSwitcherOnNtpMediator implements ConfigurationChangedObser
         }
 
         mPropertyModel.set(IS_VISIBLE, true);
+        if (mModuleDelegate != null) {
+            mModuleDelegate.onDataReady(getModuleType(), mPropertyModel);
+        }
+
         if (mResources != null) {
             updateMargins(
                     mResources.getConfiguration().orientation,
@@ -287,7 +293,8 @@ public class SingleTabSwitcherOnNtpMediator implements ConfigurationChangedObser
                             super.onPageLoadFinished(tab, url);
                             mPropertyModel.set(TITLE, tab.getTitle());
                             if (mIsSurfacePolishEnabled) {
-                                mPropertyModel.set(URL, tab.getUrl().getHost());
+                                mPropertyModel.set(
+                                        URL, SingleTabSwitcherMediator.getDomainUrl(tab.getUrl()));
                             }
                             tab.removeObserver(this);
                         }
@@ -296,7 +303,8 @@ public class SingleTabSwitcherOnNtpMediator implements ConfigurationChangedObser
         } else {
             mPropertyModel.set(TITLE, mMostRecentTab.getTitle());
             if (mIsSurfacePolishEnabled) {
-                mPropertyModel.set(URL, mMostRecentTab.getUrl().getHost());
+                mPropertyModel.set(
+                        URL, SingleTabSwitcherMediator.getDomainUrl(mMostRecentTab.getUrl()));
             }
         }
     }
@@ -327,5 +335,10 @@ public class SingleTabSwitcherOnNtpMediator implements ConfigurationChangedObser
 
     int getMarginSmallPortraitForTesting() {
         return mMarginSmallPortrait;
+    }
+
+    @ModuleType
+    int getModuleType() {
+        return ModuleType.SINGLE_TAB;
     }
 }

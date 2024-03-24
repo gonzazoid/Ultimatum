@@ -155,12 +155,13 @@ class CORE_EXPORT CanvasRenderingContext
 
   CanvasRenderingContextHost* Host() const { return host_.Get(); }
 
+  const CanvasResourceProvider* ResourceProvider() const {
+    const CanvasRenderingContextHost* host = Host();
+    return UNLIKELY(host == nullptr) ? nullptr : host->ResourceProvider();
+  }
   CanvasResourceProvider* ResourceProvider() {
     CanvasRenderingContextHost* host = Host();
-    if (UNLIKELY(host == nullptr)) {
-      return nullptr;
-    }
-    return host->ResourceProvider();
+    return UNLIKELY(host == nullptr) ? nullptr : host->ResourceProvider();
   }
 
   virtual SkColorInfo CanvasRenderingContextSkColorInfo() const;
@@ -264,6 +265,7 @@ class CORE_EXPORT CanvasRenderingContext
                               const ComputedStyle& new_style) {}
   virtual String GetIdFromControl(const Element* element) { return String(); }
   virtual void ResetUsageTracking() {}
+  virtual int LayerCount() const { return 0; }
 
   virtual void setFontForTesting(const String&) { NOTREACHED(); }
 

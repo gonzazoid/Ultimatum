@@ -24,9 +24,9 @@ class UnifiedSystemTrayController;
 class ASH_EXPORT FeatureTilesContainerView : public views::View,
                                              public PaginationModelObserver,
                                              public views::FocusChangeListener {
- public:
-  METADATA_HEADER(FeatureTilesContainerView);
+  METADATA_HEADER(FeatureTilesContainerView, views::View)
 
+ public:
   explicit FeatureTilesContainerView(UnifiedSystemTrayController* controller);
 
   FeatureTilesContainerView(const FeatureTilesContainerView&) = delete;
@@ -58,7 +58,7 @@ class ASH_EXPORT FeatureTilesContainerView : public views::View,
   void OnGestureEvent(ui::GestureEvent* event) override;
   void OnScrollEvent(ui::ScrollEvent* event) override;
   bool OnMouseWheel(const ui::MouseWheelEvent& event) override;
-  void Layout() override;
+  void Layout(PassKey) override;
   void AddedToWidget() override;
   void RemovedFromWidget() override;
 

@@ -60,7 +60,7 @@
 #include "chrome/browser/ash/login/ui/signin_ui.h"
 #include "chrome/browser/ash/login/ui/user_adding_screen.h"
 #include "chrome/browser/ash/login/ui/webui_login_view.h"
-#include "chrome/browser/ash/login/users/chrome_user_manager.h"
+#include "chrome/browser/ash/login/users/chrome_user_manager_util.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/ash/policy/core/device_local_account.h"
@@ -115,6 +115,7 @@
 #include "components/prefs/pref_service.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/user_manager/known_user.h"
+#include "components/user_manager/user_manager.h"
 #include "components/user_manager/user_names.h"
 #include "components/user_manager/user_type.h"
 #include "components/vector_icons/vector_icons.h"
@@ -238,7 +239,7 @@ void SetLoginExtensionApiCanLockManagedGuestSessionPref(
   Profile* profile = ProfileHelper::Get()->GetProfileByUser(user);
   DCHECK(profile);
   PrefService* prefs = profile->GetPrefs();
-  prefs->SetBoolean(::prefs::kLoginExtensionApiCanLockManagedGuestSession,
+  prefs->SetBoolean(ash::prefs::kLoginExtensionApiCanLockManagedGuestSession,
                     can_lock_managed_guest_session);
   prefs->CommitPendingWrite();
 }
@@ -251,7 +252,7 @@ std::optional<EncryptionMigrationMode> GetEncryptionMigrationMode(
     return EncryptionMigrationMode::RESUME_MIGRATION;
   }
 
-  if (user_context.GetUserType() == user_manager::USER_TYPE_CHILD) {
+  if (user_context.GetUserType() == user_manager::UserType::kChild) {
     // Force-migrate child users.
     return EncryptionMigrationMode::START_MIGRATION;
   }
@@ -297,8 +298,8 @@ int CountRegularUsers(const user_manager::UserList& users) {
     }
     // Allow offline login from the error screen if user of one of these types
     // has already logged in.
-    if (user->GetType() == user_manager::USER_TYPE_REGULAR ||
-        user->GetType() == user_manager::USER_TYPE_CHILD) {
+    if (user->GetType() == user_manager::UserType::kRegular ||
+        user->GetType() == user_manager::UserType::kChild) {
       regular_users_counter++;
     }
   }
@@ -440,7 +441,7 @@ void ExistingUserController::UpdateLoginDisplay(
   }
 
   if (LoginDisplayHostMojo::Get()) {
-    auto login_users = ExtractLoginUsers(users);
+    auto login_users = chrome_user_manager_util::FindLoginAllowedUsers(users);
     LoginDisplayHostMojo::Get()->SetUsers(login_users);
   }
 }
@@ -524,7 +525,7 @@ void ExistingUserController::Login(const UserContext& user_context,
 
   is_login_in_progress_ = true;
 
-  if (user_context.GetUserType() != user_manager::USER_TYPE_REGULAR &&
+  if (user_context.GetUserType() != user_manager::UserType::kRegular &&
       user_manager::UserManager::Get()->IsUserLoggedIn()) {
     // Multi-login is only allowed for regular users. If we are attempting to
     // do multi-login as another type of user somehow, bail out. Do not
@@ -683,7 +684,7 @@ void ExistingUserController::ShowTPMError() {
 //
 
 void ExistingUserController::OnAuthFailure(const AuthFailure& failure) {
-  guest_mode_url_ = GURL::EmptyGURL();
+  guest_mode_url_ = GURL();
   std::string error = failure.GetErrorString();
 
   PerformLoginFinishedActions(false /* don't start auto login timer */);
@@ -798,7 +799,7 @@ void ExistingUserController::ContinueAuthSuccessAfterResumeAttempt(
   }
 
   if (user_context.CanLockManagedGuestSession()) {
-    CHECK(user_context.GetUserType() == user_manager::USER_TYPE_PUBLIC_ACCOUNT);
+    CHECK(user_context.GetUserType() == user_manager::UserType::kPublicAccount);
     user_manager::User* user =
         user_manager::UserManager::Get()->FindUserAndModify(
             user_context.GetAccountId());
@@ -903,7 +904,7 @@ void ExistingUserController::OnProfilePrepared(Profile* profile,
   auto* profile_connector = profile->GetProfilePolicyConnector();
   bool is_enterprise_managed =
       profile_connector->IsManaged() &&
-      user_context.GetUserType() != user_manager::USER_TYPE_CHILD;
+      user_context.GetUserType() != user_manager::UserType::kChild;
 
   user_manager::KnownUser known_user(g_browser_process->local_state());
   known_user.SetIsEnterpriseManaged(user_context.GetAccountId(),
@@ -1098,34 +1099,6 @@ bool ExistingUserController::password_changed() const {
   return password_changed_;
 }
 
-// static
-user_manager::UserList ExistingUserController::ExtractLoginUsers(
-    const user_manager::UserList& users) {
-  bool show_users_on_signin;
-  CrosSettings::Get()->GetBoolean(kAccountsPrefShowUserNamesOnSignIn,
-                                  &show_users_on_signin);
-  user_manager::UserList filtered_users;
-  for (user_manager::User* user : users) {
-    // Skip kiosk apps for login screen user list. Kiosk apps as pods (aka new
-    // kiosk UI) is currently disabled and it gets the apps directly from
-    // KioskChromeAppManager, ArcKioskAppManager and WebKioskAppManager.
-    if (user->IsKioskType()) {
-      continue;
-    }
-    const bool meets_allowlist_requirements =
-        !user->HasGaiaAccount() ||
-        user_manager::UserManager::Get()->IsGaiaUserAllowed(*user);
-    // Public session accounts are always shown on login screen.
-    const bool meets_show_users_requirements =
-        show_users_on_signin ||
-        user->GetType() == user_manager::USER_TYPE_PUBLIC_ACCOUNT;
-    if (meets_allowlist_requirements && meets_show_users_requirements) {
-      filtered_users.push_back(user);
-    }
-  }
-  return filtered_users;
-}
-
 void ExistingUserController::LoginAuthenticated(
     std::unique_ptr<UserContext> user_context) {
   CHECK(login_performer_);
@@ -1133,7 +1106,7 @@ void ExistingUserController::LoginAuthenticated(
 }
 
 void ExistingUserController::LoginAsGuest() {
-  PerformPreLoginActions(UserContext(user_manager::USER_TYPE_GUEST,
+  PerformPreLoginActions(UserContext(user_manager::UserType::kGuest,
                                      user_manager::GuestAccountId()));
 
   bool allow_guest = user_manager::UserManager::Get()->IsGuestSessionAllowed();
@@ -1163,7 +1136,7 @@ void ExistingUserController::LoginAsPublicSession(
   // possible.
   const user_manager::User* user =
       user_manager::UserManager::Get()->FindUser(user_context.GetAccountId());
-  if (!user || user->GetType() != user_manager::USER_TYPE_PUBLIC_ACCOUNT) {
+  if (!user || user->GetType() != user_manager::UserType::kPublicAccount) {
     VLOG(2) << "Public session user not found";
     PerformLoginFinishedActions(true /* start auto login timer */);
     return;
@@ -1276,7 +1249,7 @@ void ExistingUserController::ConfigureAutoLogin() {
       user_manager::UserManager::Get()->FindUser(
           public_session_auto_login_account_id_);
   if (!public_session_user || public_session_user->GetType() !=
-                                  user_manager::USER_TYPE_PUBLIC_ACCOUNT) {
+                                  user_manager::UserType::kPublicAccount) {
     VLOG(2) << "PublicSession autologin user not found";
     public_session_auto_login_account_id_ = EmptyAccountId();
   }
@@ -1311,7 +1284,7 @@ void ExistingUserController::OnPublicSessionAutoLoginTimerFire() {
   VLOG(2) << "Public session autologin fired";
   SigninSpecifics signin_specifics;
   signin_specifics.is_auto_login = true;
-  Login(UserContext(user_manager::USER_TYPE_PUBLIC_ACCOUNT,
+  Login(UserContext(user_manager::UserType::kPublicAccount,
                     public_session_auto_login_account_id_),
         signin_specifics);
 }
@@ -1543,8 +1516,9 @@ void ExistingUserController::DoCompleteLogin(
   user_manager::KnownUser known_user(g_browser_process->local_state());
   std::string device_id = known_user.GetDeviceId(user_context.GetAccountId());
   if (device_id.empty()) {
-    const bool is_ephemeral = ChromeUserManager::Get()->IsEphemeralAccountId(
-        user_context.GetAccountId());
+    const bool is_ephemeral =
+        user_manager::UserManager::Get()->IsEphemeralAccountId(
+            user_context.GetAccountId());
     device_id = GenerateSigninScopedDeviceId(is_ephemeral);
   }
   user_context.SetDeviceId(device_id);
@@ -1580,7 +1554,7 @@ void ExistingUserController::DoLogin(const UserContext& user_context,
   last_login_attempt_was_auto_login_ = specifics.is_auto_login;
   VLOG(2) << "DoLogin with a user type: " << user_context.GetUserType();
 
-  if (user_context.GetUserType() == user_manager::USER_TYPE_GUEST) {
+  if (user_context.GetUserType() == user_manager::UserType::kGuest) {
     if (!specifics.guest_mode_url.empty()) {
       guest_mode_url_ = GURL(specifics.guest_mode_url);
       if (specifics.guest_mode_url_append_locale) {
@@ -1592,24 +1566,24 @@ void ExistingUserController::DoLogin(const UserContext& user_context,
     return;
   }
 
-  if (user_context.GetUserType() == user_manager::USER_TYPE_PUBLIC_ACCOUNT) {
+  if (user_context.GetUserType() == user_manager::UserType::kPublicAccount) {
     LoginAsPublicSession(user_context);
     return;
   }
 
-  if (user_context.GetUserType() == user_manager::USER_TYPE_KIOSK_APP) {
+  if (user_context.GetUserType() == user_manager::UserType::kKioskApp) {
     LoginAsKioskApp(
         KioskAppId::ForChromeApp(user_context.GetAccountId().GetUserEmail(),
                                  user_context.GetAccountId()));
     return;
   }
 
-  if (user_context.GetUserType() == user_manager::USER_TYPE_ARC_KIOSK_APP) {
+  if (user_context.GetUserType() == user_manager::UserType::kArcKioskApp) {
     LoginAsKioskApp(KioskAppId::ForArcApp(user_context.GetAccountId()));
     return;
   }
 
-  if (user_context.GetUserType() == user_manager::USER_TYPE_WEB_KIOSK_APP) {
+  if (user_context.GetUserType() == user_manager::UserType::kWebKioskApp) {
     LoginAsKioskApp(KioskAppId::ForWebApp(user_context.GetAccountId()));
     return;
   }

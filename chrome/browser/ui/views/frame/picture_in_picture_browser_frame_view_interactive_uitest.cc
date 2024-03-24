@@ -18,6 +18,7 @@
 #include "content/public/browser/document_picture_in_picture_window_controller.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "media/base/media_switches.h"
 #include "net/dns/mock_host_resolver.h"
 #include "third_party/blink/public/common/features.h"
@@ -338,6 +339,18 @@ IN_PROC_BROWSER_TEST_F(PictureInPictureBrowserFrameViewTest,
         occlusion_tracker->GetPictureInPictureWidgetsForTesting();
     EXPECT_EQ(0u, pip_widgets.size());
   }
+}
+
+IN_PROC_BROWSER_TEST_F(PictureInPictureBrowserFrameViewTest,
+                       WindowTitleUsesOpenersTitle) {
+  ASSERT_NO_FATAL_FAILURE(SetUpDocumentPIP());
+
+  // The window title for the document picture-in-picture window should use the
+  // title from the opener page.
+  EXPECT_EQ(
+      u"Document Picture-in-Picture",
+      pip_frame_view()->browser_view()->browser()->GetWindowTitleForCurrentTab(
+          /*include_app_name=*/false));
 }
 
 }  // namespace

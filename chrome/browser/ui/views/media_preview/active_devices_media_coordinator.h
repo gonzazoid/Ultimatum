@@ -10,9 +10,11 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/weak_ptr.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/ui/views/media_preview/media_coordinator.h"
 #include "content/public/browser/web_contents.h"
+#include "ui/views/controls/separator.h"
 
 class ActiveDevicesMediaCoordinator
     : public MediaCaptureDevicesDispatcher::Observer {
@@ -24,6 +26,8 @@ class ActiveDevicesMediaCoordinator
   ActiveDevicesMediaCoordinator& operator=(
       const ActiveDevicesMediaCoordinator&) = delete;
   ~ActiveDevicesMediaCoordinator() override;
+
+  void UpdateDevicePreferenceRanking();
 
  private:
   void UpdateMediaCoordinatorList();
@@ -42,13 +46,13 @@ class ActiveDevicesMediaCoordinator
 
   std::vector<std::string> GetMediaCoordinatorKeys();
 
-  raw_ptr<content::WebContents> web_contents_;
+  base::WeakPtr<content::WebContents> web_contents_;
   MediaCoordinator::ViewType view_type_;
-  raw_ptr<views::View> parent_view_;
   blink::mojom::MediaStreamType stream_type_;
   raw_ptr<views::View> container_;
   base::flat_map<std::string, std::unique_ptr<MediaCoordinator>>
       media_coordinators_;
+  base::flat_map<std::string, raw_ptr<views::Separator>> separators_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_MEDIA_PREVIEW_ACTIVE_DEVICES_MEDIA_COORDINATOR_H_

@@ -94,7 +94,7 @@ class TabSlider::SelectorView : public views::View {
   raw_ptr<TabSliderButton> button_ = nullptr;
 };
 
-BEGIN_METADATA(TabSlider, SelectorView, views::View)
+BEGIN_METADATA(TabSlider, SelectorView)
 END_METADATA
 
 //------------------------------------------------------------------------------
@@ -115,10 +115,7 @@ TabSlider::TabSlider(size_t max_tab_num, const InitParams& params)
 
   Init();
 
-  // Explicitly mark this view as ignored because
-  // `views::kViewIgnoredByLayoutKey` is not supported by `views::TableLayout`.
-  static_cast<views::TableLayout*>(GetLayoutManager())
-      ->SetChildViewIgnoredByLayout(selector_view_, /*ignored=*/true);
+  selector_view_->SetProperty(views::kViewIgnoredByLayoutKey, true);
 
   enabled_changed_subscription_ = AddEnabledChangedCallback(base::BindRepeating(
       &TabSlider::OnEnabledStateChanged, base::Unretained(this)));
@@ -149,8 +146,8 @@ void TabSlider::OnButtonSelected(TabSliderButton* button) {
   selector_view_->MoveToSelectedButton(button);
 }
 
-void TabSlider::Layout() {
-  views::View::Layout();
+void TabSlider::Layout(PassKey) {
+  LayoutSuperclass<views::View>(this);
 
   // Synchronize the selector bounds with selected button's bounds.
   auto it =
@@ -221,7 +218,7 @@ void TabSlider::OnEnabledStateChanged() {
   SchedulePaint();
 }
 
-BEGIN_METADATA(TabSlider, views::View)
+BEGIN_METADATA(TabSlider)
 END_METADATA
 
 }  // namespace ash

@@ -39,8 +39,8 @@ void InsertWebState(Browser* browser) {
   InfoBarManagerImpl::CreateForWebState(web_state.get());
   BreadcrumbManagerTabHelper::CreateForWebState(web_state.get());
   browser->GetWebStateList()->InsertWebState(
-      /*index=*/0, std::move(web_state), WebStateList::INSERT_ACTIVATE,
-      WebStateOpener());
+      std::move(web_state),
+      WebStateList::InsertionParams::Automatic().Activate());
 }
 
 const base::circular_deque<std::string>& GetEvents() {
@@ -168,7 +168,7 @@ TEST_F(BreadcrumbManagerBrowserAgentTest, JavaScriptAlertOverlay) {
       OverlayModality::kWebContentArea);
   queue->AddRequest(
       OverlayRequest::CreateWithConfig<JavaScriptAlertDialogRequest>(
-          browser_->GetWebStateList()->GetWebStateAt(0), GURL::EmptyGURL(),
+          browser_->GetWebStateList()->GetWebStateAt(0), GURL(),
           /*is_main_frame=*/true, @"message"));
   queue->CancelAllRequests();
 
@@ -192,7 +192,7 @@ TEST_F(BreadcrumbManagerBrowserAgentTest, JavaScriptConfirmOverlay) {
       OverlayModality::kWebContentArea);
   queue->AddRequest(
       OverlayRequest::CreateWithConfig<JavaScriptConfirmDialogRequest>(
-          browser_->GetWebStateList()->GetWebStateAt(0), GURL::EmptyGURL(),
+          browser_->GetWebStateList()->GetWebStateAt(0), GURL(),
           /*is_main_frame=*/true, @"message"));
   queue->CancelAllRequests();
 
@@ -216,7 +216,7 @@ TEST_F(BreadcrumbManagerBrowserAgentTest, JavaScriptPromptOverlay) {
       OverlayModality::kWebContentArea);
   queue->AddRequest(
       OverlayRequest::CreateWithConfig<JavaScriptPromptDialogRequest>(
-          browser_->GetWebStateList()->GetWebStateAt(0), GURL::EmptyGURL(),
+          browser_->GetWebStateList()->GetWebStateAt(0), GURL(),
           /*is_main_frame=*/true, @"message",
           /*default_text_field_value=*/nil));
   queue->CancelAllRequests();
@@ -241,7 +241,7 @@ TEST_F(BreadcrumbManagerBrowserAgentTest, HttpAuthOverlay) {
       OverlayModality::kWebContentArea);
   queue->AddRequest(
       OverlayRequest::CreateWithConfig<HTTPAuthOverlayRequestConfig>(
-          GURL::EmptyGURL(), "message", "default text"));
+          GURL(), "message", "default text"));
   queue->CancelAllRequests();
 
   const auto& events = GetEvents();

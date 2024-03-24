@@ -160,7 +160,7 @@ public class FeedSurfaceCoordinator
 
     private boolean mWebFeedHasContent;
     private final ObservableSupplier<Integer> mTabStripHeightSupplier;
-    private final Callback<Integer> mTabStripHeightChangeCallback;
+    private Callback<Integer> mTabStripHeightChangeCallback;
 
     /** Provides the additional capabilities needed for the container view. */
     private class RootView extends FrameLayout {
@@ -427,14 +427,16 @@ public class FeedSurfaceCoordinator
 
         mRootView = new RootView(mActivity);
         mRootView.setPadding(0, mTabStripHeightSupplier.get(), 0, 0);
-        mTabStripHeightChangeCallback =
-                newHeight ->
-                        mRootView.setPadding(
-                                mRootView.getPaddingLeft(),
-                                newHeight,
-                                mRootView.getPaddingRight(),
-                                mRootView.getPaddingBottom());
-        mTabStripHeightSupplier.addObserver(mTabStripHeightChangeCallback);
+        if (ChromeFeatureList.sDynamicTopChrome.isEnabled()) {
+            mTabStripHeightChangeCallback =
+                    newHeight ->
+                            mRootView.setPadding(
+                                    mRootView.getPaddingLeft(),
+                                    newHeight,
+                                    mRootView.getPaddingRight(),
+                                    mRootView.getPaddingBottom());
+            mTabStripHeightSupplier.addObserver(mTabStripHeightChangeCallback);
+        }
         mUiConfig = new UiConfig(mRootView);
         mRecyclerView = setUpView();
         mStreamViewResizer =
@@ -567,7 +569,7 @@ public class FeedSurfaceCoordinator
     public void maybeShowWebFeedAwarenessIph() {
         if (mWebFeedHasContent
                 && FeedFeatures.shouldUseWebFeedAwarenessIPH()
-                && !ChromeFeatureList.isEnabled(ChromeFeatureList.FEED_FOLLOW_UI_UPDATE)) {
+                && !FeedFeatures.isFeedFollowUiUpdateEnabled()) {
             UserEducationHelper helper = new UserEducationHelper(mActivity, mHandler);
             mSectionHeaderView.showWebFeedAwarenessIph(
                     helper, StreamTabId.FOLLOWING, new Scroller());

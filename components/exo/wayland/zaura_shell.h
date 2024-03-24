@@ -33,9 +33,9 @@ class ShellSurfaceBase;
 namespace wayland {
 class SerialTracker;
 
-// version: 64
+// version: 65
 constexpr uint32_t kZAuraShellVersion =
-    ZAURA_TOPLEVEL_STATE_TRUSTED_PINNED_SINCE_VERSION;
+    ZAURA_TOPLEVEL_CONFIGURE_OCCLUSION_STATE_SINCE_VERSION;
 
 // Adds bindings to the Aura Shell. Normally this implies Ash on ChromeOS
 // builds. On non-ChromeOS builds the protocol provides access to Aura windowing
@@ -167,6 +167,7 @@ class AuraToplevel {
                    bool resizing,
                    bool activated,
                    float raster_scale,
+                   aura::Window::OcclusionState occlusion_state,
                    std::optional<chromeos::WindowStateType> restore_state_type);
   virtual void OnOriginChange(const gfx::Point& origin);
   void OnOverviewChange(bool in_overview);
@@ -177,7 +178,7 @@ class AuraToplevel {
   void SetFullscreenMode(uint32_t mode);
   void SetScaleFactor(float scale_factor);
   void SetPersistable(bool persistable);
-  void SetShape(absl::optional<cc::Region> shape);
+  void SetShape(std::optional<cc::Region> shape);
   void AckRotateFocus(uint32_t serial, uint32_t handled);
   void OnRotatePaneFocus(uint32_t serial,
                          ash::FocusCycler::Direction direction,

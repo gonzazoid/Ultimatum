@@ -5,19 +5,20 @@
 #ifndef CHROME_BROWSER_NAVIGATION_PREDICTOR_PRELOADING_MODEL_KEYED_SERVICE_H_
 #define CHROME_BROWSER_NAVIGATION_PREDICTOR_PRELOADING_MODEL_KEYED_SERVICE_H_
 
+#include <optional>
+
 #include "base/functional/callback.h"
 #include "base/task/cancelable_task_tracker.h"
 #include "base/time/time.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/optimization_guide/machine_learning_tflite_buildflags.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class OptimizationGuideKeyedService;
 class PreloadingModelHandler;
 
 class PreloadingModelKeyedService : public KeyedService {
  public:
-  using Result = const absl::optional<float>&;
+  using Result = const std::optional<float>&;
   using ResultCallback = base::OnceCallback<void(Result)>;
   struct Inputs {
     Inputs();
@@ -31,8 +32,8 @@ class PreloadingModelKeyedService : public KeyedService {
     bool is_in_iframe;
     bool is_url_incremented_by_one;
     base::TimeDelta navigation_start_to_link_logged;
-    int path_depth;
-    int path_length;
+    uint8_t path_depth;
+    uint8_t path_length;
     double percent_clickable_area;
     double percent_vertical_distance;
     bool is_same_origin;

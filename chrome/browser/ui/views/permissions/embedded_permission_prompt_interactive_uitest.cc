@@ -19,6 +19,7 @@
 #include "components/permissions/permission_request_manager.h"
 #include "content/public/common/content_features.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "net/dns/mock_host_resolver.h"
 #include "ui/base/interaction/element_identifier.h"
 #include "ui/views/controls/label.h"
@@ -273,7 +274,7 @@ IN_PROC_BROWSER_TEST_F(EmbeddedPermissionPromptInteractiveTest,
   TestAskBlockAllowFlow(
       "microphone", {ContentSettingsType::MEDIASTREAM_MIC},
       std::queue<std::u16string>(
-          {u"Use your microphone",
+          {u"Use your microphones",
            u"You have allowed microphone on a.test:" +
                base::UTF8ToUTF16(GetOrigin().port()),
            u"You previously didn't allow microphone on a.test:" +
@@ -284,7 +285,7 @@ IN_PROC_BROWSER_TEST_F(EmbeddedPermissionPromptInteractiveTest,
                        MAYBE_BasicFlowCamera) {
   TestAskBlockAllowFlow("camera", {ContentSettingsType::MEDIASTREAM_CAMERA},
                         std::queue<std::u16string>(
-                            {u"Use your camera",
+                            {u"Use your cameras",
                              u"You have allowed camera on a.test:" +
                                  base::UTF8ToUTF16(GetOrigin().port()),
                              u"You previously didn't allow camera on a.test:" +
@@ -298,12 +299,12 @@ IN_PROC_BROWSER_TEST_F(EmbeddedPermissionPromptInteractiveTest,
       {ContentSettingsType::MEDIASTREAM_CAMERA,
        ContentSettingsType::MEDIASTREAM_MIC},
       std::queue<std::u16string>(
-          {u"Use your camera",
+          {u"Use your cameras",
            u"You have allowed camera and microphone on a.test:" +
                base::UTF8ToUTF16(GetOrigin().port()),
            u"You previously didn't allow camera and microphone on a.test:" +
                base::UTF8ToUTF16(GetOrigin().port())}),
-      std::queue<std::u16string>({u"Use your microphone"}));
+      std::queue<std::u16string>({u"Use your microphones"}));
 }
 
 IN_PROC_BROWSER_TEST_F(EmbeddedPermissionPromptInteractiveTest,
@@ -312,9 +313,9 @@ IN_PROC_BROWSER_TEST_F(EmbeddedPermissionPromptInteractiveTest,
                   NavigateWebContents(kWebContentsElementId, GetURL()));
 
   TestPartialPermissionsLabel(CONTENT_SETTING_ALLOW, CONTENT_SETTING_ASK,
-                              u"Use your microphone");
+                              u"Use your microphones");
   TestPartialPermissionsLabel(CONTENT_SETTING_ASK, CONTENT_SETTING_ALLOW,
-                              u"Use your camera");
+                              u"Use your cameras");
 
   TestPartialPermissionsLabel(
       CONTENT_SETTING_BLOCK, CONTENT_SETTING_ASK,

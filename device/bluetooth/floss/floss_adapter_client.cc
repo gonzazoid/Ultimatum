@@ -133,6 +133,13 @@ void FlossAdapterClient::GetRemoteVendorProductInfo(
       std::move(callback), adapter::kGetRemoteVendorProductInfo, device);
 }
 
+void FlossAdapterClient::GetRemoteAddressType(
+    ResponseCallback<FlossAdapterClient::BtAddressType> callback,
+    FlossDeviceId device) {
+  CallAdapterMethod<FlossAdapterClient::BtAddressType>(
+      std::move(callback), adapter::kGetRemoteAddressType, device);
+}
+
 void FlossAdapterClient::GetBondState(ResponseCallback<uint32_t> callback,
                                       const FlossDeviceId& device) {
   CallAdapterMethod<uint32_t>(std::move(callback), adapter::kGetBondState,
@@ -331,6 +338,10 @@ void FlossAdapterClient::Init(dbus::Bus* bus,
       dbus::ObjectPath(exported_callback_path_),
       base::BindRepeating(&FlossAdapterClient::OnDiscoverableChanged,
                           weak_ptr_factory_.GetWeakPtr()));
+
+  property_ext_adv_supported_.Init(this, bus_, service_name_, adapter_path_,
+                                   dbus::ObjectPath(exported_callback_path_),
+                                   base::DoNothing());
 
   UpdateDiscoverableTimeout();
 

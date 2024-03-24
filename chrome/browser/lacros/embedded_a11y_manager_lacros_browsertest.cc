@@ -2,7 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "chrome/browser/lacros/embedded_a11y_manager_lacros.h"
+
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/run_loop.h"
@@ -10,7 +13,6 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/component_loader.h"
 #include "chrome/browser/extensions/extension_service.h"
-#include "chrome/browser/lacros/embedded_a11y_manager_lacros.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_test_util.h"
 #include "chrome/browser/profiles/profile_window.h"
@@ -29,7 +31,6 @@
 #include "extensions/browser/extension_system.h"
 #include "extensions/browser/service_worker/service_worker_test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/aura/window.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/views/widget/widget.h"
@@ -303,6 +304,23 @@ IN_PROC_BROWSER_TEST_F(EmbeddedA11yManagerLacrosTest,
   SetDisabledAndWaitForExtensionUnloaded(
       profile, AssistiveTechnologyType::kSwitchAccess,
       extension_misc::kEmbeddedA11yHelperExtensionId);
+}
+
+IN_PROC_BROWSER_TEST_F(EmbeddedA11yManagerLacrosTest,
+                       AddsAndRemovesHelperForReadingMode) {
+  ProfileManager* profile_manager = g_browser_process->profile_manager();
+  const auto& profiles = profile_manager->GetLoadedProfiles();
+  ASSERT_GT(profiles.size(), 0u);
+  Profile* profile = profiles[0];
+
+  auto* embedded_a11y_manager = EmbeddedA11yManagerLacros::GetInstance();
+  embedded_a11y_manager->SetReadingModeEnabled(true);
+  WaitForExtensionLoaded(profile,
+                         extension_misc::kEmbeddedA11yHelperExtensionId);
+
+  embedded_a11y_manager->SetReadingModeEnabled(false);
+  WaitForExtensionUnloaded(profile,
+                           extension_misc::kEmbeddedA11yHelperExtensionId);
 }
 
 IN_PROC_BROWSER_TEST_F(EmbeddedA11yManagerLacrosTest,

@@ -10,7 +10,6 @@
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
 #include "base/values.h"
-#include "cc/base/features.h"
 
 namespace cc {
 
@@ -942,10 +941,6 @@ void SchedulerStateMachine::WillCommit(bool commit_has_no_updates) {
       // need first draw to come through).
       active_tree_is_ready_to_draw_ = false;
     }
-
-    aborted_begin_main_frame_count_ = 0;
-  } else {
-    aborted_begin_main_frame_count_++;
   }
 
   // Update state related to forced draws.
@@ -1022,8 +1017,9 @@ void SchedulerStateMachine::DidDrawInternal(DrawResult draw_result) {
       if (consecutive_cant_draw_count_++ < 3u) {
         needs_redraw_ = true;
       } else {
-        NOTREACHED() << consecutive_cant_draw_count_ << " consecutve draws"
-                     << " with DrawResult::kAbortedCantDraw result";
+        DUMP_WILL_BE_NOTREACHED_NORETURN()
+            << consecutive_cant_draw_count_ << " consecutve draws"
+            << " with DrawResult::kAbortedCantDraw result";
       }
       break;
     case DrawResult::kAbortedDrainingPipeline:
@@ -1366,15 +1362,6 @@ bool SchedulerStateMachine::ShouldTriggerBeginImplFrameDeadlineImmediately()
 
   if (active_tree_needs_first_draw_)
     return true;
-
-  if (base::FeatureList::IsEnabled(
-          features::kResetTimerWhenNoActiveTreeLikely) &&
-      !NewActiveTreeLikely() && !needs_redraw_) {
-    // Trigger deadline early if we don't expect to produce a frame soon so
-    // that display scheduler doesn't wait unnecessarily. This will send a
-    // DidNotProduceFrame ack if there's nothing to draw.
-    return true;
-  }
 
   if (!needs_redraw_)
     return false;

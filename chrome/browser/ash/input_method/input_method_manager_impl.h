@@ -227,7 +227,8 @@ class InputMethodManagerImpl : public InputMethodManager,
   bool IsLoginKeyboard(const std::string& layout) const override;
   std::string GetMigratedInputMethodID(
       const std::string& input_method_id) override;
-  bool MigrateInputMethods(std::vector<std::string>* input_method_ids) override;
+  bool GetMigratedInputMethodIDs(
+      std::vector<std::string>* input_method_ids) override;
   scoped_refptr<InputMethodManager::State> CreateNewState(
       Profile* profile) override;
   scoped_refptr<InputMethodManager::State> GetActiveIMEState() override;
@@ -241,6 +242,9 @@ class InputMethodManagerImpl : public InputMethodManager,
   void CandidateClicked(int index) override;
   void CandidateWindowOpened() override;
   void CandidateWindowClosed() override;
+
+  // Notifies all observers that the input method has been changed.
+  void NotifyInputMethodChanged(bool show_message, bool success);
 
   // AssistiveWindowControllerDelegate overrides:
   void AssistiveWindowButtonClicked(

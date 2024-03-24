@@ -59,6 +59,59 @@ Reviewed in https://crrev.com/c/5171063
 Previously reviewed during security review and the audit is grandparented in.
 """
 
+[[audits.anstyle]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-run", "does-not-implement-crypto"]
+delta = "1.0.4 -> 1.0.6"
+
+[[audits.anyhow]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-run", "does-not-implement-crypto"]
+delta = "1.0.75 -> 1.0.79"
+notes = """
+1.0.75 has been previously audited as \"safe-to-run\",
+\"does-not-implement-crypto\" - see
+https://github.com/google/rust-crate-audits/blob/c2d49cb6e80bb817f569debecf846161dcebd88c/audits.toml#L277-L305
+The \"1.0.75 -> 1.0.79\" delta meets the same criteria.
+
+This is an incremental/delta audit - we don't claim any particular `ub-risk-N`
+level for the baseline or for the final version.  OTOH note that additional
+uses of `unsafe` have been reviewed in https://crrev.com/c/5178771 and the
+**delta**  was evaluated as `ub-risk-3` - no known unsoundness but:
+* Little safety comments to explain why a particular usage of `unsafe`
+  is safe and/or necessary
+* Safety analysis couldn't be done locally, but required considering the
+  whole crate (e.g. checking if the public `Ref.ptr` is mutated anywhere)
+"""
+
+[[audits.autocfg]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "ub-risk-0"
+version = "1.1.0"
+notes = 'Grepped for `\bunsafe\b` - there were no hits'
+
+[[audits.base64]]
+who = "Adam Langley <agl@chromium.org>"
+criteria = ["ub-risk-0", "safe-to-deploy", "does-not-implement-crypto"],
+version = "0.13.1"
+notes = 'Skimmed the uses of `std` to ensure that nothing untoward is happening. Code uses `forbid(unsafe_code)` and, indeed, there are no uses of `unsafe`'
+
+[[audits.bitflags]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-deploy", "does-not-implement-crypto", "ub-risk-1"]
+version = "2.4.2"
+notes = """
+Audit notes:
+
+* I've checked for any discussion in Google-internal cl/546819168 (where audit
+  of version 2.3.3 happened)
+* `src/lib.rs` contains `#![cfg_attr(not(test), forbid(unsafe_code))]`
+* There are 2 cases of `unsafe` in `src/external.rs` but they seem to be
+  correct in a straightforward way - they just propagate the marker trait's
+  impl (e.g. `impl bytemuck::Pod`) from the inner to the outer type
+* Additional discussion and/or notes may be found in https://crrev.com/c/5238056
+"""
+
 [[audits.bytes]]
 who = "agl@chromium.org"
 criteria = ["safe-to-run", "does-not-implement-crypto"]
@@ -74,6 +127,22 @@ Reviewed in https://crrev.com/c/5171063
 Previously reviewed during security review and the audit is grandparented in.
 """
 
+[[audits.clap]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "ub-risk-0"
+version = "4.5.0"
+notes = "No `unsafe`"
+
+[[audits.clap]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-run", "does-not-implement-crypto"]
+delta = "4.4.8 -> 4.4.14"
+
+[[audits.clap]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-run", "does-not-implement-crypto"]
+delta = "4.4.14 -> 4.5.0"
+
 [[audits.clap_builder]]
 who = "danakj@chromium.org"
 criteria = ["safe-to-run", "does-not-implement-crypto"]
@@ -84,6 +153,22 @@ Reviewed in https://crrev.com/c/5171063
 Previously reviewed during security review and the audit is grandparented in.
 """
 
+[[audits.clap_builder]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "ub-risk-0"
+version = "4.5.0"
+notes = "No `unsafe`"
+
+[[audits.clap_builder]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-run", "does-not-implement-crypto"]
+delta = "4.4.8 -> 4.4.14"
+
+[[audits.clap_builder]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-run", "does-not-implement-crypto"]
+delta = "4.4.14 -> 4.5.0"
+
 [[audits.clap_lex]]
 who = "danakj@chromium.org"
 criteria = ["safe-to-run", "does-not-implement-crypto"]
@@ -93,6 +178,11 @@ Reviewed in https://crrev.com/c/5171063
 
 Previously reviewed during security review and the audit is grandparented in.
 """
+
+[[audits.clap_lex]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-run", "does-not-implement-crypto"]
+delta = "0.6.0 -> 0.7.0"
 
 [[audits.codespan-reporting]]
 who = "danakj@chromium.org"
@@ -112,6 +202,24 @@ notes = """
 Reviewed in https://crrev.com/c/5171063
 
 Previously reviewed during security review and the audit is grandparented in.
+"""
+
+[[audits.cxx]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "does-not-implement-crypto"
+version = "1.0.116"
+notes = """
+Grepped for \"crypt\", \"cipher\" - there were no hits
+(except for benign hits in `MODULE.bazel.lock`)
+"""
+
+[[audits.cxx]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "does-not-implement-crypto"
+delta = "1.0.110 -> 1.0.115"
+notes = """
+Grepped for \"crypt\", \"cipher\" - there were no hits
+(except for benign hits in `MODULE.bazel.lock`)
 """
 
 [[audits.cxxbridge]]
@@ -134,6 +242,16 @@ Reviewed in https://crrev.com/c/5171063
 Previously reviewed during security review and the audit is grandparented in.
 """
 
+[[audits.cxxbridge-cmd]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-run", "does-not-implement-crypto"]
+delta = "1.0.110 -> 1.0.115"
+
+[[audits.cxxbridge-cmd]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-run", "does-not-implement-crypto"]
+delta = "1.0.115 -> 1.0.116"
+
 [[audits.cxxbridge-flags]]
 who = "danakj@chromium.org"
 criteria = ["safe-to-run", "does-not-implement-crypto"]
@@ -144,10 +262,33 @@ Reviewed in https://crrev.com/c/5171063
 Previously reviewed during security review and the audit is grandparented in.
 """
 
+[[audits.cxxbridge-flags]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "does-not-implement-crypto"
+version = "1.0.116"
+notes = 'Grepped for \"crypt\", \"cipher\" - there were no hits'
+
+[[audits.cxxbridge-flags]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "does-not-implement-crypto"
+delta = "1.0.110 -> 1.0.115"
+notes = 'Grepped for \"crypt\", \"cipher\" - there were no hits'
+
 [[audits.either]]
 who = "agl@chromium.org"
 criteria = ["safe-to-run", "does-not-implement-crypto"]
 version = "1.9.0"
+
+[[audits.either]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-run", "does-not-implement-crypto"]
+delta = "1.9.0 -> 1.10.0"
+
+[[audits.font-types]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "ub-risk-0"
+version = "0.4.2"
+notes = 'Grepped for `\bunsafe\b` - there were no hits'
 
 [[audits.getrandom]]
 who = "danakj@chromium.org"
@@ -158,6 +299,17 @@ Reviewed in https://crrev.com/c/5171063
 
 Previously reviewed during security review and the audit is grandparented in.
 """
+
+[[audits.getrandom]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "does-not-implement-crypto"
+delta = "0.2.11 -> 0.2.12"
+
+[[audits.heck]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "ub-risk-0"
+version = "0.4.1"
+notes = 'Grepped for `\bunsafe\b` - there were no hits'
 
 [[audits.hex-literal]]
 who = "danakj@chromium.org"
@@ -177,6 +329,27 @@ notes = """
 This is 12K lines of code, plus 6K lines of tests and benchmarks.
 It has minimal use of unsafe and so I have paged though it all with \"::\"
 highlighted and paid attention to which imported functions are being called.
+"""
+
+[[audits.itoa]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "does-not-implement-crypto"
+delta = "1.0.9 -> 1.0.10"
+notes = 'Grepped for \"crypt\", \"cipher\" - there were no hits'
+
+[[audits.libc]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "ub-risk-4"
+version = "0.2.152"
+notes = """
+Discussions related to the `unsafe` audit can be found in
+https://crrev.com/c/5178771.  (This audit covered multiple crates that have
+been rolled when processing a backlog of crate updates - `libc` was one of
+them.)
+
+The audit found an unsound usage of `unsafe` when the `extra_traits` feature of
+the `libc` crate is enabled.  See https://github.com/rust-lang/libc/issues/3560
+for more details.
 """
 
 [[audits.minimal-lexical]]
@@ -211,6 +384,31 @@ Reviewed in https://crrev.com/c/5171063
 Previously reviewed during security review and the audit is grandparented in.
 """
 
+[[audits.proc-macro2]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "does-not-implement-crypto"
+version = "1.0.78"
+notes = "Grepped for \"crypt\", \"cipher\" - there were no hits."
+
+[[audits.proc-macro2]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-run", "does-not-implement-crypto"]
+delta = "1.0.69 -> 1.0.76"
+notes = """
+1.0.69 has been previously audited as \"safe-to-run\",
+\"does-not-implement-crypto\" - see
+https://github.com/google/rust-crate-audits/blob/c2d49cb6e80bb817f569debecf846161dcebd88c/audits.toml#L3939-L3979
+The \"1.0.69 -> 1.0.76\" delta meets the same criteria.
+
+This is an incremental/delta audit - we don't claim any particular `ub-risk-N`
+level for the baseline or for the final version.  OTOH note that additional
+uses of `unsafe` have been reviewed in https://crrev.com/c/5178771 and the
+**delta**  was evaluated as `ub-risk-2`.  There are some new `unsafe` blocks
+but they seem sound - additional `unsafe` audit notes can be found in
+https://crrev.com/c/5178771/comment/32dbab4e_c7402137 and
+https://crrev.com/c/5178771/4/third_party/rust/chromium_crates_io/vendor/proc-macro2-1.0.76/src/wrapper.rs#783
+"""
+
 [[audits.prost]]
 who = "agl@chromium.org"
 criteria = ["safe-to-run", "does-not-implement-crypto"]
@@ -220,6 +418,35 @@ version = "0.12.3"
 who = "agl@chromium.org"
 criteria = ["safe-to-run", "does-not-implement-crypto", "ub-risk-0"]
 version = "0.12.3"
+
+[[audits.qr_code]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-deploy", "does-not-implement-crypto", "ub-risk-0"]
+version = "2.0.0"
+notes = """
+* This crate was imported into Chromium back in May 2023:
+    - CL: https://crrev.com/c/4497329
+    - Google-internal audit notes: go/qr-code-chromium-security-review
+* Certification today is mostly based on the old audit.
+  The only checks performed today are:
+    - `grep`ped for `unsafe` and verified that the only hit comes
+      from `#![forbid(unsafe_code)]`
+"""
+
+[[audits.quote]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "ub-risk-0"
+version = "1.0.33"
+notes = 'Grepped for `\bunsafe\b` - there were no hits'
+
+[[audits.quote]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-deploy", "does-not-implement-crypto", "ub-risk-0"]
+version = "1.0.35"
+notes = """
+Grepped for \"unsafe\", \"crypt\", \"cipher\", \"fs\", \"net\" - there were no hits
+(except for benign \"net\" hit in tests and \"fs\" hit in README.md)
+"""
 
 [[audits.rand]]
 who = "danakj@chromium.org"
@@ -251,6 +478,11 @@ Reviewed in https://crrev.com/c/5171063
 Previously reviewed during security review and the audit is grandparented in.
 """
 
+[[audits.regex]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-run", "does-not-implement-crypto"]
+delta = "1.10.2 -> 1.10.3"
+
 [[audits.regex-automata]]
 who = "danakj@chromium.org"
 criteria = ["safe-to-run", "does-not-implement-crypto"]
@@ -260,6 +492,11 @@ Reviewed in https://crrev.com/c/5171063
 
 Previously reviewed during security review and the audit is grandparented in.
 """
+
+[[audits.regex-automata]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-run", "does-not-implement-crypto"]
+delta = "0.4.3 -> 0.4.5"
 
 [[audits.regex-syntax]]
 who = "danakj@chromium.org"
@@ -321,6 +558,20 @@ Reviewed in https://crrev.com/c/5171063
 Previously reviewed during security review and the audit is grandparented in.
 """
 
+[[audits.rustversion]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "ub-risk-0"
+version = "1.0.14"
+notes = '''
+Grepped for `\bunsafe\b` - the only hits were in a string and in test code:
+
+```
+src/constfn.rs:            "unsafe" => Qualifiers::Unsafe,
+tests/test_const.rs:unsafe fn _unsafe() {}
+tests/test_const.rs:const _UNSAFE: () = unsafe { _unsafe() };
+```
+'''
+
 [[audits.semver]]
 who = "danakj@chromium.org"
 criteria = ["safe-to-run", "does-not-implement-crypto"]
@@ -331,6 +582,29 @@ Reviewed in https://crrev.com/c/5171063
 Previously reviewed during security review and the audit is grandparented in.
 """
 
+[[audits.semver]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-run", "does-not-implement-crypto"]
+delta = "1.0.20 -> 1.0.21"
+
+[[audits.serde_derive]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "ub-risk-0"
+version = "1.0.193"
+notes = 'Grepped for `\bunsafe\b` - there were no hits'
+
+[[audits.serde_derive]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-deploy", "does-not-implement-crypto", "ub-risk-0"]
+version = "1.0.195"
+notes = "Grepped for \"unsafe\", \"crypt\", \"cipher\", \"fs\", \"net\" - there were no hits"
+
+[[audits.serde_derive]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-deploy", "does-not-implement-crypto", "ub-risk-0"]
+version = "1.0.196"
+notes = "Grepped for \"unsafe\", \"crypt\", \"cipher\", \"fs\", \"net\" - there were no hits"
+
 [[audits.serde_json]]
 who = "danakj@chromium.org"
 criteria = ["safe-to-run", "does-not-implement-crypto"]
@@ -340,6 +614,21 @@ Reviewed in https://crrev.com/c/5171063
 
 Previously reviewed during security review and the audit is grandparented in.
 """
+
+[[audits.serde_json]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-run", "does-not-implement-crypto"]
+delta = "1.0.108 -> 1.0.111"
+
+[[audits.serde_json]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-run", "does-not-implement-crypto"]
+delta = "1.0.111 -> 1.0.113"
+
+[[audits.skrifa]]
+who = "drott@chromium.org"
+criteria = ["ub-risk-1", "safe-to-deploy", "does-not-implement-crypto"]
+delta = "0.15.2 -> 0.15.4"
 
 [[audits.small_ctor]]
 who = "danakj@chromium.org"
@@ -364,6 +653,17 @@ Reviewed in https://crrev.com/c/5171063
 
 Previously reviewed during security review and the audit is grandparented in.
 """
+
+[[audits.strsim]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "ub-risk-0"
+version = "0.11.0"
+notes = "No `unsafe`"
+
+[[audits.strsim]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-run", "does-not-implement-crypto"]
+delta = "0.10.0 -> 0.11.0"
 
 [[audits.strum]]
 who = "danakj@chromium.org"
@@ -412,6 +712,32 @@ Reviewed in https://crrev.com/c/5171063
 
 Previously reviewed during security review and the audit is grandparented in.
 """
+
+[[audits.termcolor]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "ub-risk-0"
+version = "1.4.0"
+notes = "No `unsafe`."
+
+[[audits.termcolor]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = ["safe-to-run", "does-not-implement-crypto"]
+delta = "1.4.0 -> 1.4.1"
+
+[[audits.tinyvec]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "ub-risk-0"
+version = "1.6.0"
+notes = """
+Grepped for `unsafe` - the only hits were in comments
+and in `src/lib.rs`'s `#![forbid(unsafe_code)]`.
+"""
+
+[[audits.unicode-linebreak]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "ub-risk-0"
+version = "0.1.5"
+notes = 'Grepped for `\bunsafe\b` - there were no hits'
 
 [[audits.unicode-width]]
 who = "danakj@chromium.org"

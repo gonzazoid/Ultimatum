@@ -224,8 +224,9 @@ Element* RootEditableElementOfSelection(const FrameSelection& frameSelection) {
     return nullptr;
   // To avoid update layout, we attempt to get root editable element from
   // a position where script/user specified.
-  if (Element* editable = RootEditableElementOf(selection.Base()))
+  if (Element* editable = RootEditableElementOf(selection.Anchor())) {
     return editable;
+  }
 
   // This is work around for applications assumes a position before editable
   // element as editable[1]
@@ -630,7 +631,7 @@ bool InputMethodController::FinishComposingText(
         GetFrame()
             .Selection()
             .ComputeVisibleSelectionInDOMTreeDeprecated()
-            .IsBaseFirst();
+            .IsAnchorFirst();
     RevealSelectionScope reveal_selection_scope(GetFrame());
 
     if (is_too_long) {
@@ -1074,26 +1075,28 @@ void InputMethodController::SetComposition(
   }
 
   // Find out what node has the composition now.
-  const Position base =
-      MostForwardCaretPosition(selection.Base(), kCanSkipOverEditingBoundary);
-  Node* base_node = base.AnchorNode();
-  if (!base_node || !base_node->IsTextNode())
+  const Position anchor =
+      MostForwardCaretPosition(selection.Anchor(), kCanSkipOverEditingBoundary);
+  Node* anchor_node = anchor.AnchorNode();
+  if (!anchor_node || !anchor_node->IsTextNode()) {
     return;
+  }
 
-  const Position extent = selection.Extent();
-  Node* extent_node = extent.AnchorNode();
+  const Position focus = selection.Focus();
+  Node* focus_node = focus.AnchorNode();
 
-  unsigned extent_offset = extent.ComputeOffsetInContainerNode();
-  unsigned base_offset = base.ComputeOffsetInContainerNode();
+  unsigned focus_offset = focus.ComputeOffsetInContainerNode();
+  unsigned anchor_offset = anchor.ComputeOffsetInContainerNode();
 
   has_composition_ = true;
   if (!composition_range_)
     composition_range_ = Range::Create(GetDocument());
-  composition_range_->setStart(base_node, base_offset);
-  composition_range_->setEnd(extent_node, extent_offset);
+  composition_range_->setStart(anchor_node, anchor_offset);
+  composition_range_->setEnd(focus_node, focus_offset);
 
-  if (base_node->GetLayoutObject())
-    base_node->GetLayoutObject()->SetShouldDoFullPaintInvalidation();
+  if (anchor_node->GetLayoutObject()) {
+    anchor_node->GetLayoutObject()->SetShouldDoFullPaintInvalidation();
+  }
 
   // TODO(editing-dev): The use of UpdateStyleAndLayout
   // needs to be audited. see http://crbug.com/590369 for more details.
@@ -1827,12 +1830,16 @@ DOMNodeId InputMethodController::NodeIdOfFocusedElement() const {
 }
 
 WebTextInputType InputMethodController::TextInputType() const {
+  if (!IsAvailable()) {
+    return kWebTextInputTypeNone;
+  }
+
   // Since selection can never go inside a <canvas> element, if the user is
   // editing inside a <canvas> with EditContext we need to handle that case
   // directly before looking at the selection position.
   if (GetActiveEditContext()) {
     Element* element = GetDocument().FocusedElement();
-    if (IsA<HTMLCanvasElement>(*element)) {
+    if (IsA<HTMLCanvasElement>(element)) {
       return kWebTextInputTypeContentEditable;
     }
   }
@@ -1848,12 +1855,10 @@ WebTextInputType InputMethodController::TextInputType() const {
   if (!RootEditableElementOfSelection(GetFrame().Selection()))
     return kWebTextInputTypeNone;
 
-  if (!IsAvailable())
-    return kWebTextInputTypeNone;
-
   Element* element = GetDocument().FocusedElement();
-  if (!element)
+  if (!element) {
     return kWebTextInputTypeNone;
+  }
 
   if (auto* input = DynamicTo<HTMLInputElement>(*element)) {
     FormControlType type = input->FormControlType();

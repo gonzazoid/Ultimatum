@@ -46,7 +46,7 @@ namespace {
 constexpr char kConsecutiveDailyVisitsHistogramName[] =
     "Ash.Desks.ConsecutiveDailyVisits";
 
-// Prefix for the desks lifetime histogram.
+// Prefix for the desks lifetime histograms.
 constexpr char kDeskLifetimeHistogramNamePrefix[] = "Ash.Desks.DeskLifetime_";
 
 // The amount of time a user has to stay on a recently activated desk for it to
@@ -498,10 +498,17 @@ void Desk::SetGuid(base::Uuid new_guid) {
   }
 }
 
-void Desk::SetLacrosProfileId(uint64_t lacros_profile_id,
-                              bool skip_prefs_update) {
+void Desk::SetLacrosProfileId(
+    uint64_t lacros_profile_id,
+    std::optional<DeskProfilesSelectProfileSource> source,
+    bool skip_prefs_update) {
   if (lacros_profile_id == lacros_profile_id_) {
     return;
+  }
+
+  if (source) {
+    base::UmaHistogramEnumeration(kDeskProfilesSelectProfileHistogramName,
+                                  *source);
   }
 
   lacros_profile_id_ = lacros_profile_id;
@@ -802,11 +809,21 @@ void Desk::UpdateDeskBackdrops() {
 }
 
 void Desk::RecordLifetimeHistogram(int index) {
-  // Desk index is 1-indexed in histograms.
-  const int desk_index = index + 1;
-  base::UmaHistogramCounts1000(
-      base::StringPrintf("%s%i", kDeskLifetimeHistogramNamePrefix, desk_index),
-      (base::Time::Now() - creation_time_).InHours());
+  // Desk index is 1-indexed in histograms. The histogram is only defined for
+  // the first 8 desks.
+  if (const int desk_index = index + 1; desk_index <= 8) {
+    std::string histogram;
+    if (lacros_profile_id() != 0) {
+      histogram = base::StringPrintf(
+          "%sProfile_%i", kDeskLifetimeHistogramNamePrefix, desk_index);
+    } else {
+      histogram = base::StringPrintf("%s%i", kDeskLifetimeHistogramNamePrefix,
+                                     desk_index);
+    }
+
+    base::UmaHistogramCounts1000(
+        histogram, (base::Time::Now() - creation_time_).InHours());
+  }
 }
 
 bool Desk::IsConsecutiveDailyVisit() const {

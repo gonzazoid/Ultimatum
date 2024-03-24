@@ -140,7 +140,7 @@ class AutocompleteResultTest : public testing::Test {
     AutocompleteMatchType::Type type{AutocompleteMatchType::SEARCH_SUGGEST};
 
     // Suggestion Group ID for this suggestion
-    absl::optional<omnibox::GroupId> suggestion_group_id;
+    std::optional<omnibox::GroupId> suggestion_group_id;
 
     // Inline autocompletion.
     std::string inline_autocompletion;
@@ -366,13 +366,13 @@ void AutocompleteResultTest::SortMatchesAndVerifyOrder(
   }
 }
 
-// Assertion testing for AutocompleteResult::Swap.
-TEST_F(AutocompleteResultTest, Swap) {
+// Assertion testing for AutocompleteResult::SwapMatchesWith.
+TEST_F(AutocompleteResultTest, SwapMatches) {
   AutocompleteResult r1;
   AutocompleteResult r2;
 
   // Swap with empty shouldn't do anything interesting.
-  r1.Swap(&r2);
+  r1.SwapMatchesWith(&r2);
   EXPECT_FALSE(r1.default_match());
   EXPECT_FALSE(r2.default_match());
 
@@ -390,7 +390,7 @@ TEST_F(AutocompleteResultTest, Swap) {
   EXPECT_TRUE(r1.default_match());
   EXPECT_EQ(&*r1.begin(), r1.default_match());
 
-  r1.Swap(&r2);
+  r1.SwapMatchesWith(&r2);
   EXPECT_TRUE(r1.empty());
   EXPECT_FALSE(r1.default_match());
   ASSERT_FALSE(r2.empty());
@@ -2800,15 +2800,14 @@ TEST_F(AutocompleteResultTest, Desktop_TwoColumnRealbox) {
     result.SortAndCull(realbox_zps_input, template_url_service_.get(),
                        triggered_feature_service());
 
-    const std::array<TestData, 8> expected_data{{
+    const std::array<TestData, 5> expected_data{{
+        // Previous search related suggestion chips not permitted when their
+        // `SideType` is not SideType_Secondary.
         {0, 1, 500, false, {}, AutocompleteMatchType::SEARCH_SUGGEST, group1},
         {1, 1, 490, false, {}, AutocompleteMatchType::SEARCH_SUGGEST, group1},
         {2, 1, 480, false, {}, AutocompleteMatchType::SEARCH_SUGGEST, group1},
         {3, 1, 470, false, {}, AutocompleteMatchType::SEARCH_SUGGEST, group2},
         {4, 1, 460, false, {}, AutocompleteMatchType::SEARCH_SUGGEST, group2},
-        {5, 1, 450, false, {}, AutocompleteMatchType::SEARCH_SUGGEST, group3},
-        {6, 1, 440, false, {}, AutocompleteMatchType::SEARCH_SUGGEST, group3},
-        {7, 1, 430, false, {}, AutocompleteMatchType::SEARCH_SUGGEST, group3},
     }};
     AssertResultMatches(result, expected_data.begin(), expected_data.size());
 
@@ -3098,7 +3097,7 @@ TEST_F(AutocompleteResultTest, Android_TrimOmniboxActions) {
           omnibox::ActionInfo info;
           info.set_action_type(omnibox::ActionInfo_ActionType_DIRECTIONS);
           match.actions.push_back(base::MakeRefCounted<OmniboxActionInSuggest>(
-              std::move(info), absl::nullopt));
+              std::move(info), std::nullopt));
         } else {
           match.actions.push_back(
               base::MakeRefCounted<FakeOmniboxAction>(action_id));
@@ -3108,7 +3107,7 @@ TEST_F(AutocompleteResultTest, Android_TrimOmniboxActions) {
     }
 
     AutocompleteResult typed_result;
-    typed_result.CopyFrom(zps_result);
+    typed_result.CopyMatchesFrom(zps_result);
 
     auto check_results =
         [&](AutocompleteResult& result,

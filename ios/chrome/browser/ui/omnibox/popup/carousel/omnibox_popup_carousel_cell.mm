@@ -9,8 +9,8 @@
 #import "base/notreached.h"
 #import "ios/chrome/browser/ui/omnibox/omnibox_ui_features.h"
 #import "ios/chrome/browser/ui/omnibox/popup/carousel/carousel_item.h"
-#import "ios/chrome/browser/ui/omnibox/popup/omnibox_popup_accessibility_identifier_constants.h"
 #import "ios/chrome/browser/ui/omnibox/popup/carousel/omnibox_popup_carousel_control.h"
+#import "ios/chrome/browser/ui/omnibox/popup/omnibox_popup_accessibility_identifier_constants.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
 #import "ui/base/device_form_factor.h"
@@ -21,11 +21,20 @@ namespace {
 const NSUInteger kCarouselCapacity = 10;
 /// Margin of the StackView.
 const CGFloat kStackMargin = 8.0f;
+/// Leading margin of the popout StackView.
+const CGFloat kStackLeadingMargin = 16.0f;
 /// Minimum spacing between items in the StackView.
 const CGFloat kMinStackSpacing = 8.0f;
 /// Width of the gradient applied on the leading and trailing edge of the
 /// carousel.
 const CGFloat kGradientWidth = 20.0f;
+
+UIColor* CarouselBackgroundColor() {
+  if (IsIpadPopoutOmniboxEnabled()) {
+    return [UIColor colorNamed:kPrimaryBackgroundColor];
+  }
+  return [UIColor colorNamed:kGroupedSecondaryBackgroundColor];
+}
 
 /// Horizontal UIScrollView used in OmniboxPopupCarouselCell.
 UIScrollView* CarouselScrollView() {
@@ -33,8 +42,7 @@ UIScrollView* CarouselScrollView() {
   scrollView.translatesAutoresizingMaskIntoConstraints = NO;
   scrollView.showsVerticalScrollIndicator = NO;
   scrollView.showsHorizontalScrollIndicator = NO;
-  scrollView.backgroundColor =
-      [UIColor colorNamed:kGroupedSecondaryBackgroundColor];
+  scrollView.backgroundColor = CarouselBackgroundColor();
   return scrollView;
 }
 
@@ -46,18 +54,17 @@ UIStackView* CarouselStackView() {
   stackView.alignment = UIStackViewAlignmentTop;
   stackView.distribution = UIStackViewDistributionEqualSpacing;
   stackView.spacing = kMinStackSpacing;
-  stackView.backgroundColor =
-      [UIColor colorNamed:kGroupedSecondaryBackgroundColor];
+  stackView.backgroundColor = CarouselBackgroundColor();
   return stackView;
 }
 
 /// CAGradientLayer used in OmniboxPopupCarouselCell on iPad.
 CAGradientLayer* CarouselGradientLayer() {
   CAGradientLayer* maskLayer = [CAGradientLayer layer];
-  UIColor* opaqueColor = [[UIColor colorNamed:kGroupedSecondaryBackgroundColor]
-      colorWithAlphaComponent:1.0];
-  UIColor* transparentColor = [[UIColor
-      colorNamed:kGroupedSecondaryBackgroundColor] colorWithAlphaComponent:0.0];
+  UIColor* opaqueColor =
+      [CarouselBackgroundColor() colorWithAlphaComponent:1.0];
+  UIColor* transparentColor =
+      [CarouselBackgroundColor() colorWithAlphaComponent:0.0];
   maskLayer.colors = @[
     (id)transparentColor.CGColor, (id)opaqueColor.CGColor,
     (id)opaqueColor.CGColor, (id)transparentColor.CGColor
@@ -103,8 +110,7 @@ CAGradientLayer* CarouselGradientLayer() {
     _gradientLayer = CarouselGradientLayer();
     self.isAccessibilityElement = NO;
     self.contentView.isAccessibilityElement = NO;
-    self.backgroundColor =
-        [UIColor colorNamed:kGroupedSecondaryBackgroundColor];
+    self.backgroundColor = CarouselBackgroundColor();
     self.accessibilityIdentifier = kOmniboxCarouselCellAccessibilityIdentifier;
   }
   return self;
@@ -119,7 +125,7 @@ CAGradientLayer* CarouselGradientLayer() {
 }
 
 - (void)layoutSubviews {
-  if (self.shouldApplyLayoutMarginsGuide && !IsIpadPopoutOmniboxEnabled()) {
+  if (self.shouldApplyLayoutMarginsGuide) {
     [self updateGradient];
   }
   if (base::i18n::IsRTL()) {
@@ -134,28 +140,29 @@ CAGradientLayer* CarouselGradientLayer() {
   [self.contentView addSubview:_scrollView];
   [_scrollView addSubview:_suggestionsStackView];
 
-  // When applying margins guide, add gradient at the right edge to indicate a
-  // scrollable view.
-  if (self.shouldApplyLayoutMarginsGuide && !IsIpadPopoutOmniboxEnabled()) {
+  if (self.shouldApplyLayoutMarginsGuide) {
     self.contentView.layer.mask = self.gradientLayer;
   }
 
   AddSameConstraintsWithInsets(
       _suggestionsStackView, _scrollView,
-      NSDirectionalEdgeInsetsMake(kStackMargin, kStackMargin, kStackMargin,
-                                  kStackMargin));
+      NSDirectionalEdgeInsetsMake(
+          kStackMargin,
+          IsIpadPopoutOmniboxEnabled() ? kStackLeadingMargin : kStackMargin,
+          kStackMargin, kStackMargin));
 
   id<LayoutGuideProvider> contentGuide =
       self.shouldApplyLayoutMarginsGuide ? self.contentView.layoutMarginsGuide
                                          : self.contentView;
   AddSameCenterConstraints(_scrollView, contentGuide);
+
   [NSLayoutConstraint activateConstraints:@[
     [contentGuide.heightAnchor
         constraintEqualToAnchor:_scrollView.heightAnchor],
-    [contentGuide.widthAnchor constraintEqualToAnchor:_scrollView.widthAnchor],
     [_scrollView.heightAnchor
         constraintEqualToAnchor:_suggestionsStackView.heightAnchor
-                       constant:kStackMargin * 2]
+                       constant:kStackMargin * 2],
+    [contentGuide.widthAnchor constraintEqualToAnchor:_scrollView.widthAnchor]
   ]];
 }
 
@@ -166,6 +173,9 @@ CAGradientLayer* CarouselGradientLayer() {
 }
 
 - (BOOL)shouldApplyLayoutMarginsGuide {
+  if (IsIpadPopoutOmniboxEnabled()) {
+    return NO;
+  }
   // Apply layoutMarginsGuide in Visual Treatment 1 only on Tablet because there
   // is a minimum layoutMargin of 8 that we don't want on phones.
   return ui::GetDeviceFormFactor() == ui::DEVICE_FORM_FACTOR_TABLET;
@@ -368,6 +378,11 @@ CAGradientLayer* CarouselGradientLayer() {
                       self.contentView.layoutMargins.right + kGradientWidth;
   }
   CGFloat tileWidth = kOmniboxPopupCarouselControlWidth + kMinStackSpacing / 2;
+
+  if (IsIpadPopoutOmniboxEnabled()) {
+    availableWidth = self.bounds.size.width - kStackLeadingMargin;
+    tileWidth = kOmniboxPopupCarouselControlWidth + kMinStackSpacing;
+  }
 
   CGFloat maxVisibleTiles = availableWidth / tileWidth;
   CGFloat nearestHalfTile = maxVisibleTiles - 0.5;

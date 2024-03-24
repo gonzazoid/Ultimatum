@@ -20,6 +20,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/threading/hang_watcher.h"
 #include "base/threading/thread_restrictions.h"
+#import "components/remote_cocoa/app_shim/native_widget_mac_nswindow.h"
 #include "ui/base/l10n/l10n_util_mac.h"
 #include "ui/strings/grit/ui_strings.h"
 
@@ -294,7 +295,7 @@ void SelectFileDialogBridge::Show(
     SelectFileTypeInfoPtr file_types,
     int file_type_index,
     const base::FilePath::StringType& default_extension,
-    PanelEndedCallback initialize_callback) {
+    ShowCallback callback) {
   // Never consider the current WatchHangsInScope as hung. There was most likely
   // one created in ThreadControllerWithMessagePumpImpl::DoWork(). The current
   // hang watching deadline is not valid since the user can take unbounded time
@@ -303,7 +304,7 @@ void SelectFileDialogBridge::Show(
   // reactivate it. You can see the function comments for more details.
   base::HangWatcher::InvalidateActiveExpectations();
 
-  show_callback_ = std::move(initialize_callback);
+  show_callback_ = std::move(callback);
   type_ = type;
   // Note: we need to retain the dialog as |owning_window_| can be null.
   // (See https://crbug.com/29213 .)
@@ -361,6 +362,13 @@ void SelectFileDialogBridge::Show(
       panel_.extensionHidden = YES;
       panel_.canSelectHiddenExtension = YES;
     }
+
+    // The tag autosetter in macOS is not reliable (see
+    // https://crbug.com/1510399). Explicitly set the `showsTagField` property
+    // as a signal to macOS that we will handle all the file tagging; a
+    // side-effect of setting the property to any value is that it turns off
+    // the tag autosetter.
+    panel_.showsTagField = YES;
   } else {
     // This does not use ObjCCast because the underlying object could be a
     // non-exported AppKit type (https://crbug.com/995476).
@@ -401,11 +409,17 @@ void SelectFileDialogBridge::Show(
     panel_.nameFieldStringValue = default_filename;
 
   // Ensure that |callback| (rather than |this|) be retained by the block.
-  auto callback = base::BindRepeating(&SelectFileDialogBridge::OnPanelEnded,
-                                      weak_factory_.GetWeakPtr());
-  [panel_ beginSheetModalForWindow:owning_window_
+  auto ended_callback = base::BindRepeating(
+      &SelectFileDialogBridge::OnPanelEnded, weak_factory_.GetWeakPtr());
+
+  NSWindow* sheet_parent = owning_window_;
+  if (NativeWidgetMacNSWindow* sheet_parent_widget_window =
+          base::apple::ObjCCast<NativeWidgetMacNSWindow>(sheet_parent)) {
+    sheet_parent = [sheet_parent_widget_window preferredSheetParent];
+  }
+  [panel_ beginSheetModalForWindow:sheet_parent
                  completionHandler:^(NSInteger result) {
-                   callback.Run(result != NSModalResponseOK);
+                   ended_callback.Run(result != NSModalResponseOK);
                  }];
 }
 
@@ -556,22 +570,29 @@ void SelectFileDialogBridge::OnPanelEnded(bool did_cancel) {
 
   int index = 0;
   std::vector<base::FilePath> paths;
+  std::vector<std::string> file_tags;
   if (!did_cancel) {
     if (type_ == SelectFileDialogType::kSaveAsFile) {
-      NSURL* url = [panel_ URL];
-      if ([url isFileURL]) {
-        paths.push_back(base::apple::NSStringToFilePath([url path]));
+      NSURL* url = panel_.URL;
+      if (url.isFileURL) {
+        paths.push_back(base::apple::NSURLToFilePath(url));
       }
 
-      NSView* accessoryView = [panel_ accessoryView];
+      NSView* accessoryView = panel_.accessoryView;
       if (accessoryView) {
         NSPopUpButton* popup = [accessoryView viewWithTag:kFileTypePopupTag];
         if (popup) {
           // File type indexes are 1-based.
-          index = [popup indexOfSelectedItem] + 1;
+          index = popup.indexOfSelectedItem + 1;
         }
       } else {
         index = 1;
+      }
+
+      // The tag autosetter was turned off when `showsTagField` was set above.
+      // Retrieve the tags for assignment later.
+      for (NSString* tag in panel_.tagNames) {
+        file_tags.push_back(base::SysNSStringToUTF8(tag));
       }
     } else {
       // This does not use ObjCCast because the underlying object could be a
@@ -603,7 +624,7 @@ void SelectFileDialogBridge::OnPanelEnded(bool did_cancel) {
     }
   }
 
-  std::move(show_callback_).Run(did_cancel, paths, index);
+  std::move(show_callback_).Run(did_cancel, paths, index, file_tags);
 }
 
 // static

@@ -6,11 +6,16 @@
 
 #include <memory>
 
+#include "base/check.h"
+#include "base/containers/flat_set.h"
 #include "base/run_loop.h"
+#include "chrome/browser/pdf/pdf_extension_test_util.h"
 #include "chrome/browser/pdf/pdf_viewer_stream_manager.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_user_data.h"
+#include "content/public/test/browser_test_utils.h"
+#include "testing/gtest/include/gtest/gtest.h"
 
 namespace pdf {
 
@@ -34,6 +39,10 @@ void TestPdfViewerStreamManager::DidFinishNavigation(
     content::NavigationHandle* navigation_handle) {
   PdfViewerStreamManager::DidFinishNavigation(navigation_handle);
 
+  if (!on_pdf_loaded_) {
+    return;
+  }
+
   // Check if the PDF has finished loading after the final PDF navigation. A
   // complete PDF navigation should have a claimed `StreamInfo`.
   auto* claimed_stream_info =
@@ -45,10 +54,55 @@ void TestPdfViewerStreamManager::DidFinishNavigation(
   std::move(on_pdf_loaded_).Run();
 }
 
-void TestPdfViewerStreamManager::WaitUntilPdfLoaded() {
-  base::RunLoop run_loop;
-  on_pdf_loaded_ = run_loop.QuitClosure();
-  run_loop.Run();
+testing::AssertionResult TestPdfViewerStreamManager::WaitUntilPdfLoaded(
+    content::RenderFrameHost* embedder_host) {
+  // If all of the PDF frames haven't navigated, wait.
+  auto* claimed_stream_info = GetClaimedStreamInfo(embedder_host);
+  if (!claimed_stream_info || !claimed_stream_info->DidPdfContentNavigate()) {
+    base::RunLoop run_loop;
+    on_pdf_loaded_ = run_loop.QuitClosure();
+    run_loop.Run();
+  }
+
+  // Wait until the PDF extension and content are loaded.
+  return pdf_extension_test_util::EnsurePDFHasLoaded(embedder_host);
+}
+
+testing::AssertionResult
+TestPdfViewerStreamManager::WaitUntilPdfLoadedInFirstChild() {
+  content::RenderFrameHost* embedder_host =
+      ChildFrameAt(web_contents()->GetPrimaryMainFrame(), 0);
+  CHECK(embedder_host);
+  return WaitUntilPdfLoaded(embedder_host);
+}
+
+TestPdfViewerStreamManagerFactory::TestPdfViewerStreamManagerFactory() {
+  PdfViewerStreamManager::SetFactoryForTesting(this);
+}
+
+TestPdfViewerStreamManagerFactory::~TestPdfViewerStreamManagerFactory() {
+  PdfViewerStreamManager::SetFactoryForTesting(nullptr);
+}
+
+TestPdfViewerStreamManager*
+TestPdfViewerStreamManagerFactory::GetTestPdfViewerStreamManager(
+    content::WebContents* contents) {
+  PdfViewerStreamManager* manager =
+      PdfViewerStreamManager::FromWebContents(contents);
+  CHECK(manager);
+
+  // Check if `manager` was created by `this`. If so, the `manager` is safe to
+  // downcast into a `TestPdfViewerStreamManager`.
+  CHECK(managers_.contains(manager));
+
+  return static_cast<TestPdfViewerStreamManager*>(manager);
+}
+
+void TestPdfViewerStreamManagerFactory::CreatePdfViewerStreamManager(
+    content::WebContents* contents) {
+  PdfViewerStreamManager* manager =
+      TestPdfViewerStreamManager::CreateForWebContents(contents);
+  CHECK(managers_.insert(manager).second);
 }
 
 }  // namespace pdf

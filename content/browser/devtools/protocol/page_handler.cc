@@ -1427,9 +1427,6 @@ Page::BackForwardCacheNotRestoredReason NotRestoredReasonToProtocol(
     case Reason::kEnteredBackForwardCacheBeforeServiceWorkerHostAdded:
       return Page::BackForwardCacheNotRestoredReasonEnum::
           EnteredBackForwardCacheBeforeServiceWorkerHostAdded;
-    case Reason::kNotMostRecentNavigationEntry:
-      return Page::BackForwardCacheNotRestoredReasonEnum::
-          NotMostRecentNavigationEntry;
     case Reason::kServiceWorkerClaim:
       return Page::BackForwardCacheNotRestoredReasonEnum::ServiceWorkerClaim;
     case Reason::kIgnoreEventAndEvict:
@@ -1490,8 +1487,6 @@ Page::BackForwardCacheNotRestoredReason NotRestoredReasonToProtocol(
       return Page::BackForwardCacheNotRestoredReasonEnum::NoResponseHead;
     case Reason::kErrorDocument:
       return Page::BackForwardCacheNotRestoredReasonEnum::ErrorDocument;
-    case Reason::kFencedFramesEmbedder:
-      return Page::BackForwardCacheNotRestoredReasonEnum::FencedFramesEmbedder;
     case Reason::kCookieDisabled:
       return Page::BackForwardCacheNotRestoredReasonEnum::CookieDisabled;
     case Reason::kHTTPAuthRequired:
@@ -1540,9 +1535,6 @@ Page::BackForwardCacheNotRestoredReason BlocklistedFeatureToProtocol(
       return Page::BackForwardCacheNotRestoredReasonEnum::ContainsPlugins;
     case WebSchedulerTrackedFeature::kDocumentLoaded:
       return Page::BackForwardCacheNotRestoredReasonEnum::DocumentLoaded;
-    case WebSchedulerTrackedFeature::kDedicatedWorkerOrWorklet:
-      return Page::BackForwardCacheNotRestoredReasonEnum::
-          DedicatedWorkerOrWorklet;
     case WebSchedulerTrackedFeature::kOutstandingNetworkRequestOthers:
       return Page::BackForwardCacheNotRestoredReasonEnum::
           OutstandingNetworkRequestOthers;
@@ -1633,6 +1625,8 @@ Page::BackForwardCacheNotRestoredReason BlocklistedFeatureToProtocol(
       return Page::BackForwardCacheNotRestoredReasonEnum::LiveMediaStreamTrack;
     case WebSchedulerTrackedFeature::kUnloadHandler:
       return Page::BackForwardCacheNotRestoredReasonEnum::UnloadHandler;
+    case WebSchedulerTrackedFeature::kParserAborted:
+      return Page::BackForwardCacheNotRestoredReasonEnum::ParserAborted;
   }
 }
 
@@ -1775,7 +1769,6 @@ Page::BackForwardCacheNotRestoredReasonType MapNotRestoredReasonToType(
     case Reason::kSessionRestored:
     case Reason::kServiceWorkerPostMessage:
     case Reason::kEnteredBackForwardCacheBeforeServiceWorkerHostAdded:
-    case Reason::kNotMostRecentNavigationEntry:
     case Reason::kServiceWorkerClaim:
     case Reason::kIgnoreEventAndEvict:
     case Reason::kHaveInnerContents:
@@ -1793,7 +1786,6 @@ Page::BackForwardCacheNotRestoredReasonType MapNotRestoredReasonToType(
     case Reason::kServiceWorkerUnregistration:
     case Reason::kNoResponseHead:
     case Reason::kErrorDocument:
-    case Reason::kFencedFramesEmbedder:
     case Reason::kCookieDisabled:
     case Reason::kHTTPAuthRequired:
     case Reason::kCookieFlushed:
@@ -1835,6 +1827,7 @@ Page::BackForwardCacheNotRestoredReasonType MapBlocklistedFeatureToType(
     case WebSchedulerTrackedFeature::kSmartCard:
     case WebSchedulerTrackedFeature::kLiveMediaStreamTrack:
     case WebSchedulerTrackedFeature::kUnloadHandler:
+    case WebSchedulerTrackedFeature::kParserAborted:
       return Page::BackForwardCacheNotRestoredReasonTypeEnum::PageSupportNeeded;
     case WebSchedulerTrackedFeature::kPortal:
     case WebSchedulerTrackedFeature::kWebNfc:
@@ -1851,7 +1844,6 @@ Page::BackForwardCacheNotRestoredReasonType MapBlocklistedFeatureToType(
     case WebSchedulerTrackedFeature::kPictureInPicture:
     case WebSchedulerTrackedFeature::kWebLocks:
     case WebSchedulerTrackedFeature::kWebSocket:
-    case WebSchedulerTrackedFeature::kDedicatedWorkerOrWorklet:
     case WebSchedulerTrackedFeature::kSpeechSynthesis:
     case WebSchedulerTrackedFeature::kKeepaliveRequest:
       return Page::BackForwardCacheNotRestoredReasonTypeEnum::SupportPending;

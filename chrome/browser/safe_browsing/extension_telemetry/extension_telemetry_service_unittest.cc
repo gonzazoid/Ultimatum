@@ -13,7 +13,9 @@
 #include "chrome/browser/extensions/test_extension_system.h"
 #include "chrome/browser/safe_browsing/extension_telemetry/extension_telemetry_uploader.h"
 #include "chrome/browser/safe_browsing/extension_telemetry/tabs_execute_script_signal.h"
+#include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_profile.h"
+#include "components/crx_file/id_util.h"
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/proto/csd.pb.h"
@@ -166,6 +168,7 @@ base::FilePath ExtensionTelemetryServiceTest::CreateExtensionForCommandLineLoad(
       ExtensionBuilder(extension_name)
           .SetLocation(ManifestLocation::kCommandLine)
           .SetPath(path)
+          .SetID(crx_file::id_util::GenerateIdForPath(path))
           .Build();
 
   // Write extension files.
@@ -176,6 +179,14 @@ base::FilePath ExtensionTelemetryServiceTest::CreateExtensionForCommandLineLoad(
       .Serialize(*extension->manifest()->value());
   EXPECT_TRUE(base::PathExists(manifest_path));
 
+  // Set a dummy install time in extension prefs - this mimics the install
+  // timestamp stored from a previous install (eg. when ESB was disabled).
+  // We use this value to check that the telemetry report ignores previous
+  // install times for command-line extensions and instead explicitly sets
+  // it to 0 (to reflect the fact the extension is not really installed).
+  extension_prefs_->UpdateExtensionPref(
+      extension->id(), "last_update_time",
+      base::Value(base::TimeToValue(base::Time::Now())));
   return path;
 }
 
@@ -383,6 +394,29 @@ TEST_F(ExtensionTelemetryServiceTest, GeneratesTelemetryReportWithSignal) {
   // Verify that extension store has been cleared after creating a telemetry
   // report.
   EXPECT_TRUE(IsExtensionStoreEmpty());
+}
+
+TEST_F(ExtensionTelemetryServiceTest,
+       GeneratesTelemetryReportWithDeveloperMode) {
+  // Generate a telemetry report with developer mode disabled.
+  task_environment_.FastForwardBy(
+      telemetry_service_->current_reporting_interval());
+  std::unique_ptr<TelemetryReport> telemetry_report_pb = GetTelemetryReport();
+  ASSERT_NE(telemetry_report_pb, nullptr);
+
+  // Verify developer mode is disabled.
+  EXPECT_FALSE(telemetry_report_pb->developer_mode_enabled());
+
+  // Set developer mode pref to true and generate another telemetry report.
+  profile_.GetPrefs()->SetBoolean(prefs::kExtensionsUIDeveloperMode, true);
+  task_environment_.FastForwardBy(
+      telemetry_service_->current_reporting_interval());
+
+  std::unique_ptr<TelemetryReport> telemetry_report_pb_2 = GetTelemetryReport();
+  ASSERT_NE(telemetry_report_pb_2, nullptr);
+
+  // Verify developer is enabled and collected.
+  EXPECT_TRUE(telemetry_report_pb_2->developer_mode_enabled());
 }
 
 TEST_F(ExtensionTelemetryServiceTest, TestExtensionInfoProtoConstruction) {
@@ -902,23 +936,31 @@ TEST_F(ExtensionTelemetryServiceTest,
   std::unique_ptr<TelemetryReport> telemetry_report_pb = GetTelemetryReport();
   ASSERT_TRUE(telemetry_report_pb);
   ASSERT_EQ(telemetry_report_pb->reports_size(), 1);
+  auto& cmdline_extension = telemetry_report_pb->reports(0).extension();
+  // Verify extension name.
+  EXPECT_EQ(cmdline_extension.name(), "commandline_crx");
+  // Verify that the install timestamp is explicitly set to 0 and is not the
+  // same as the timestamp set in extension prefs from a previous install.
+  EXPECT_EQ(cmdline_extension.install_timestamp_msec(), 0);
+  EXPECT_NE(cmdline_extension.install_timestamp_msec(),
+            extension_prefs_->GetLastUpdateTime(cmdline_extension.id())
+                .InMillisecondsSinceUnixEpoch());
   // Verify that cmdline extension file data stored in prefs matches that in the
   // telemetry report.
   const auto& file_data_dict =
       profile_.GetPrefs()->GetDict(prefs::kExtensionTelemetryFileData);
   ASSERT_EQ(file_data_dict.size(), 1u);
-  auto cmdline_extension_id = telemetry_report_pb->reports(0).extension().id();
-  const base::Value::Dict* cmdline_extension_dict =
-      file_data_dict.FindDict(cmdline_extension_id)
+  const base::Value::Dict* cmdline_extension_file_data_dict =
+      file_data_dict.FindDict(cmdline_extension.id())
           ->FindDict(kFileDataDictPref);
-  ASSERT_TRUE(cmdline_extension_dict);
+  ASSERT_TRUE(cmdline_extension_file_data_dict);
   EXPECT_EQ(telemetry_report_pb->reports(0).extension().manifest_json(),
-            *(cmdline_extension_dict->FindString(kManifestFile)));
+            *(cmdline_extension_file_data_dict->FindString(kManifestFile)));
   EXPECT_EQ(telemetry_report_pb->reports(0).extension().file_infos_size(), 1);
   EXPECT_EQ(telemetry_report_pb->reports(0).extension().file_infos(0).name(),
             kJavaScriptFile);
   EXPECT_EQ(telemetry_report_pb->reports(0).extension().file_infos(0).hash(),
-            *(cmdline_extension_dict->FindString(kJavaScriptFile)));
+            *(cmdline_extension_file_data_dict->FindString(kJavaScriptFile)));
 }
 
 TEST_F(ExtensionTelemetryServiceTest,

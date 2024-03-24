@@ -4,6 +4,7 @@
 
 #include "components/attribution_reporting/test_utils.h"
 
+#include <optional>
 #include <ostream>
 #include <string>
 
@@ -27,14 +28,13 @@
 #include "components/attribution_reporting/trigger_config.h"
 #include "components/attribution_reporting/trigger_registration.h"
 #include "net/base/schemeful_site.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/origin.h"
 
 namespace attribution_reporting {
 
 FiltersDisjunction FiltersForSourceType(
     mojom::SourceType source_type,
-    absl::optional<base::TimeDelta> lookback_window) {
+    std::optional<base::TimeDelta> lookback_window) {
   return {*FilterConfig::Create(
       {
           {
@@ -135,6 +135,10 @@ std::ostream& operator<<(
   base::Value::Dict dict;
   aggregatable_trigger_config.Serialize(dict);
   return out << dict;
+}
+
+std::ostream& operator<<(std::ostream& out, const ParseError&) {
+  return out << "ParseError";
 }
 
 }  // namespace attribution_reporting

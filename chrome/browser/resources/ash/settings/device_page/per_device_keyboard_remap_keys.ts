@@ -11,13 +11,13 @@
 import 'chrome://resources/cr_components/settings_prefs/prefs.js';
 import '../icons.html.js';
 import '../settings_shared.css.js';
-import '/shared/settings/controls/settings_dropdown_menu.js';
+import '../controls/settings_dropdown_menu.js';
 import './input_device_settings_shared.css.js';
 import './fkey_row.js';
 import './keyboard_remap_modifier_key_row.js';
 import './keyboard_six_pack_key_row.js';
 
-import {I18nMixin, I18nMixinInterface} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {I18nMixin, I18nMixinInterface} from 'chrome://resources/ash/common/cr_elements/i18n_mixin.js';
 import {assert} from 'chrome://resources/js/assert.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElementProperties} from 'chrome://resources/polymer/v3_0/polymer/interfaces.js';
@@ -27,17 +27,18 @@ import {RouteObserverMixin, RouteObserverMixinInterface} from '../common/route_o
 import {Route, Router, routes} from '../router.js';
 
 import {getInputDeviceSettingsProvider} from './input_device_mojo_interface_provider.js';
-import {ExtendedFkeysModifier, InputDeviceSettingsFkeyPolicy, InputDeviceSettingsProviderInterface, Keyboard, KeyboardPolicies, MetaKey, ModifierKey, PolicyStatus, SixPackKey, SixPackKeyInfo, SixPackShortcutModifier} from './input_device_settings_types.js';
+import {ExtendedFkeysModifier, InputDeviceSettingsFkeyPolicy, InputDeviceSettingsProviderInterface, InputDeviceSettingsSixPackKeyPolicy, Keyboard, KeyboardPolicies, MetaKey, ModifierKey, PolicyStatus, SixPackKey, SixPackKeyInfo, SixPackShortcutModifier} from './input_device_settings_types.js';
 import {getTemplate} from './per_device_keyboard_remap_keys.html.js';
 
-interface FkeyPrefPolicyFields {
+interface PrefPolicyFields {
   controlledBy?: chrome.settingsPrivate.ControlledBy;
   enforcement?: chrome.settingsPrivate.Enforcement;
-  recommendedValue?: ExtendedFkeysModifier;
+  recommendedValue?: ExtendedFkeysModifier|SixPackShortcutModifier;
 }
 
-function getFkeyPrefPolicyFields(policy?: InputDeviceSettingsFkeyPolicy):
-    FkeyPrefPolicyFields {
+function getPrefPolicyFields(
+    policy?: InputDeviceSettingsFkeyPolicy|
+    InputDeviceSettingsSixPackKeyPolicy): PrefPolicyFields {
   if (policy) {
     const enforcement = policy.policyStatus === PolicyStatus.kManaged ?
         chrome.settingsPrivate.Enforcement.ENFORCED :
@@ -427,6 +428,10 @@ export class SettingsPerDeviceKeyboardRemapKeysElement extends
 
     if (this.isAltClickAndSixPackCustomizationEnabled) {
       this.setSixPackKeyRemappings();
+
+      // Potentially overrides some/all "six pack" settings based on
+      // the keyboard policies.
+      this.setSixPackKeyRemappingsForPolicies();
     }
 
     if (this.shouldShowFkeys()) {
@@ -434,11 +439,11 @@ export class SettingsPerDeviceKeyboardRemapKeysElement extends
       this.set('f12KeyPref.value', searchedKeyboard.settings?.f12);
       this.f11KeyPref = {
         ...this.f11KeyPref,
-        ...getFkeyPrefPolicyFields(this.keyboardPolicies?.extendedFkeysPolicy),
+        ...getPrefPolicyFields(this.keyboardPolicies?.f11KeyPolicy),
       };
       this.f12KeyPref = {
         ...this.f12KeyPref,
-        ...getFkeyPrefPolicyFields(this.keyboardPolicies?.extendedFkeysPolicy),
+        ...getPrefPolicyFields(this.keyboardPolicies?.f12KeyPolicy),
       };
     }
 
@@ -462,6 +467,31 @@ export class SettingsPerDeviceKeyboardRemapKeysElement extends
       return;
     }
     this.initializeKeyboard();
+  }
+
+  setSixPackKeyRemappingsForPolicies(): void {
+    const homeAndEndPrefPolicyFields =
+        getPrefPolicyFields(this.keyboardPolicies?.homeAndEndKeysPolicy);
+    this.homePref = {...this.homePref, ...homeAndEndPrefPolicyFields};
+    this.endPref = {...this.endPref, ...homeAndEndPrefPolicyFields};
+    const pageUpAndPageDownPrefPolicyFields =
+        getPrefPolicyFields(this.keyboardPolicies?.pageUpAndPageDownKeysPolicy);
+    this.pageUpPref = {
+      ...this.pageUpPref,
+      ...pageUpAndPageDownPrefPolicyFields,
+    };
+    this.pageDownPref = {
+      ...this.pageDownPref,
+      ...pageUpAndPageDownPrefPolicyFields,
+    };
+    this.deletePref = {
+      ...this.deletePref,
+      ...getPrefPolicyFields(this.keyboardPolicies?.deleteKeyPolicy),
+    };
+    this.insertPref = {
+      ...this.insertPref,
+      ...getPrefPolicyFields(this.keyboardPolicies?.insertKeyPolicy),
+    };
   }
 
   /**
@@ -616,31 +646,33 @@ export class SettingsPerDeviceKeyboardRemapKeysElement extends
   }
 
   private setSixPackKeyRemappings(): void {
-    Object
-        .entries(
-            (this.keyboard.settings.sixPackKeyRemappings as SixPackKeyInfo))
-        .forEach(([key, modifier]) => {
-          switch (key) {
-            case SixPackKey.DELETE:
-              this.set('deletePref.value', modifier);
-              break;
-            case SixPackKey.INSERT:
-              this.set('insertPref.value', modifier);
-              break;
-            case SixPackKey.HOME:
-              this.set('homePref.value', modifier);
-              break;
-            case SixPackKey.END:
-              this.set('endPref.value', modifier);
-              break;
-            case SixPackKey.PAGE_UP:
-              this.set('pageUpPref.value', modifier);
-              break;
-            case SixPackKey.PAGE_DOWN:
-              this.set('pageDownPref.value', modifier);
-              break;
-          }
-        });
+    const sixPackKeyRemappings: SixPackKeyInfo|undefined =
+        this.keyboard.settings?.sixPackKeyRemappings;
+    if (!sixPackKeyRemappings) {
+      return;
+    }
+    Object.entries(sixPackKeyRemappings).forEach(([key, modifier]) => {
+      switch (key) {
+        case SixPackKey.DELETE:
+          this.set('deletePref.value', modifier);
+          break;
+        case SixPackKey.INSERT:
+          this.set('insertPref.value', modifier);
+          break;
+        case SixPackKey.HOME:
+          this.set('homePref.value', modifier);
+          break;
+        case SixPackKey.END:
+          this.set('endPref.value', modifier);
+          break;
+        case SixPackKey.PAGE_UP:
+          this.set('pageUpPref.value', modifier);
+          break;
+        case SixPackKey.PAGE_DOWN:
+          this.set('pageDownPref.value', modifier);
+          break;
+      }
+    });
   }
 
   private getSixPackKeyRemappings(): SixPackKeyInfo {
@@ -664,13 +696,15 @@ export class SettingsPerDeviceKeyboardRemapKeysElement extends
     if (this.shouldShowFkeys()) {
       this.f11KeyPref = {
         ...this.f11KeyPref,
-        ...getFkeyPrefPolicyFields(this.keyboardPolicies?.extendedFkeysPolicy),
+        ...getPrefPolicyFields(this.keyboardPolicies?.f11KeyPolicy),
       };
       this.f12KeyPref = {
         ...this.f12KeyPref,
-        ...getFkeyPrefPolicyFields(this.keyboardPolicies?.extendedFkeysPolicy),
+        ...getPrefPolicyFields(this.keyboardPolicies?.f12KeyPolicy),
       };
     }
+
+    this.setSixPackKeyRemappingsForPolicies();
   }
 }
 

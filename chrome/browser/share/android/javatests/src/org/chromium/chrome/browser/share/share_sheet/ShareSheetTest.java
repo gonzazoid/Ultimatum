@@ -21,7 +21,6 @@ import android.widget.TextView;
 import androidx.test.filters.SmallTest;
 import androidx.test.platform.app.InstrumentationRegistry;
 
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -36,6 +35,7 @@ import org.chromium.base.test.util.PackageManagerWrapper;
 import org.chromium.base.test.util.Restriction;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.share.ShareHistoryBridge;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
@@ -65,7 +65,6 @@ public class ShareSheetTest {
             new ChromeTabbedActivityTestRule();
 
     private Profile mProfile;
-    private Context mContextToRestore;
     private List<ResolveInfo> mAvailableResolveInfos;
 
     // foo.bar.baz -> baz
@@ -145,21 +144,15 @@ public class ShareSheetTest {
     public void setUp() throws Exception {
         setUpLayoutConstants();
 
-        mContextToRestore = ContextUtils.getApplicationContext();
         ContextUtils.initApplicationContextForTests(
-                new PackageManagerReplacingContext(mContextToRestore, this));
+                new PackageManagerReplacingContext(ContextUtils.getApplicationContext(), this));
 
         MockitoAnnotations.initMocks(this);
         sActivityTestRule.startMainActivityOnBlankPage();
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> {
-                    mProfile = Profile.getLastUsedRegularProfile();
+                    mProfile = ProfileManager.getLastUsedRegularProfile();
                 });
-    }
-
-    @After
-    public void tearDown() throws Exception {
-        ContextUtils.initApplicationContextForTests(mContextToRestore);
     }
 
     // Open the share sheet from the menu and wait for its open animation to

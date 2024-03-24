@@ -5,6 +5,7 @@
 #import <objc/runtime.h>
 
 #import "base/files/file_path.h"
+#import "base/memory/raw_ptr.h"
 #import "base/run_loop.h"
 #import "base/scoped_observation.h"
 #import "base/strings/sys_string_conversions.h"
@@ -156,8 +157,8 @@ class SessionRestorationBrowserAgentTest : public PlatformTest {
 
   void TearDown() override {
     @autoreleasepool {
-      browser_->GetWebStateList()->CloseAllWebStates(
-          WebStateList::CLOSE_NO_FLAGS);
+      CloseAllWebStates(*browser_->GetWebStateList(),
+                        WebStateList::CLOSE_NO_FLAGS);
     }
     PlatformTest::TearDown();
   }
@@ -192,15 +193,12 @@ class SessionRestorationBrowserAgentTest : public PlatformTest {
                                    bool background) {
     std::unique_ptr<web::WebState> web_state = CreateWebState();
 
-    int insertion_flags = WebStateList::INSERT_FORCE_INDEX;
-    if (!background) {
-      insertion_flags |= WebStateList::INSERT_ACTIVATE;
-    }
-    if (pinned) {
-      insertion_flags |= WebStateList::INSERT_PINNED;
-    }
-    browser_->GetWebStateList()->InsertWebState(
-        index, std::move(web_state), insertion_flags, WebStateOpener(parent));
+    const WebStateList::InsertionParams params =
+        WebStateList::InsertionParams::AtIndex(index)
+            .Pinned(pinned)
+            .Activate(!background)
+            .WithOpener(WebStateOpener(parent));
+    browser_->GetWebStateList()->InsertWebState(std::move(web_state), params);
     return browser_->GetWebStateList()->GetWebStateAt(index);
   }
 
@@ -211,7 +209,7 @@ class SessionRestorationBrowserAgentTest : public PlatformTest {
 
   __strong NSString* session_identifier_ = nil;
   TestSessionService* test_session_service_;
-  SessionRestorationBrowserAgent* session_restoration_agent_;
+  raw_ptr<SessionRestorationBrowserAgent> session_restoration_agent_;
   // Used to verify histogram logging.
   base::HistogramTester histogram_tester_;
 };
@@ -401,7 +399,7 @@ TEST_F(SessionRestorationBrowserAgentTest, DISABLED_SaveAndRestoreSession) {
   session_restoration_agent_->SaveSession(/*immediately=*/true);
   [test_session_service_ setPerformIO:NO];
   // close all the webStates
-  browser_->GetWebStateList()->CloseAllWebStates(WebStateList::CLOSE_NO_FLAGS);
+  CloseAllWebStates(*browser_->GetWebStateList(), WebStateList::CLOSE_NO_FLAGS);
 
   const base::FilePath& state_path = chrome_browser_state_->GetStatePath();
   SessionWindowIOS* session_window =
@@ -450,7 +448,7 @@ TEST_F(SessionRestorationBrowserAgentTest, SaveInProgressAndRestoreSession) {
             browser_->GetWebStateList()->GetActiveWebState());
 
   // Close all the webStates
-  browser_->GetWebStateList()->CloseAllWebStates(WebStateList::CLOSE_NO_FLAGS);
+  CloseAllWebStates(*browser_->GetWebStateList(), WebStateList::CLOSE_NO_FLAGS);
 
   const base::FilePath& state_path = chrome_browser_state_->GetStatePath();
   SessionWindowIOS* session_window =
@@ -476,7 +474,7 @@ TEST_F(SessionRestorationBrowserAgentTest, ObserverCalledWithRestore) {
   base::ScopedObservation<SessionRestorationBrowserAgent,
                           SessionRestorationObserver>
       scoped_observation(&observer);
-  scoped_observation.Observe(session_restoration_agent_);
+  scoped_observation.Observe(session_restoration_agent_.get());
 
   SessionWindowIOS* window =
       CreateSessionWindow(SessionInfo<3>{.active_index = 2,
@@ -544,7 +542,7 @@ TEST_F(SessionRestorationBrowserAgentTest,
   InsertNewWebState(/*parent=*/nullptr, /*index=*/1,
                     /*pinned=*/false,
                     /*background=*/true);
-  browser_->GetWebStateList()->CloseAllWebStates(WebStateList::CLOSE_NO_FLAGS);
+  CloseAllWebStates(*browser_->GetWebStateList(), WebStateList::CLOSE_NO_FLAGS);
   EXPECT_EQ(test_session_service_.saveSessionCallsCount, 7);
 }
 

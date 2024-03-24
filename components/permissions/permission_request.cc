@@ -5,7 +5,9 @@
 #include "components/permissions/permission_request.h"
 
 #include <string>
+#include <utility>
 
+#include "base/check.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "build/build_config.h"
@@ -15,6 +17,8 @@
 #include "components/strings/grit/components_strings.h"
 #include "components/url_formatter/elide_url.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/gfx/text_elider.h"
+#include "ui/strings/grit/ui_strings.h"
 
 namespace permissions {
 
@@ -32,10 +36,12 @@ PermissionRequest::PermissionRequest(
 PermissionRequest::PermissionRequest(
     PermissionRequestData request_data,
     PermissionDecidedCallback permission_decided_callback,
-    base::OnceClosure delete_callback)
+    base::OnceClosure delete_callback,
+    bool uses_automatic_embargo)
     : data_(std::move(request_data)),
       permission_decided_callback_(std::move(permission_decided_callback)),
-      delete_callback_(std::move(delete_callback)) {}
+      delete_callback_(std::move(delete_callback)),
+      uses_automatic_embargo_(uses_automatic_embargo) {}
 
 PermissionRequest::~PermissionRequest() {
   DCHECK(delete_callback_.is_null());
@@ -56,8 +62,25 @@ base::WeakPtr<PermissionRequest> PermissionRequest::GetWeakPtr() {
 }
 
 #if BUILDFLAG(IS_ANDROID)
-std::u16string PermissionRequest::GetDialogMessageText() const {
+PermissionRequest::AnnotatedMessageText::AnnotatedMessageText(
+    std::u16string text,
+    std::vector<std::pair<size_t, size_t>> bolded_ranges)
+    : text(text), bolded_ranges(bolded_ranges) {}
+
+PermissionRequest::AnnotatedMessageText::~AnnotatedMessageText() = default;
+
+PermissionRequest::AnnotatedMessageText
+PermissionRequest::GetDialogAnnotatedMessageText(
+    const GURL& embedding_origin) const {
   int message_id = 0;
+  std::u16string requesting_origin_string_formatted =
+      url_formatter::FormatUrlForSecurityDisplay(
+          requesting_origin(),
+          url_formatter::SchemeDisplay::OMIT_CRYPTOGRAPHIC);
+  std::u16string embedding_origin_string_formatted =
+      url_formatter::FormatUrlForSecurityDisplay(
+          embedding_origin, url_formatter::SchemeDisplay::OMIT_CRYPTOGRAPHIC);
+
   switch (request_type()) {
     case RequestType::kAccessibilityEvents:
       message_id = IDS_ACCESSIBILITY_EVENTS_INFOBAR_TEXT;
@@ -85,8 +108,6 @@ std::u16string PermissionRequest::GetDialogMessageText() const {
       message_id = IDS_MEDIA_CAPTURE_AUDIO_ONLY_INFOBAR_TEXT;
       break;
     case RequestType::kMidi:
-      message_id = IDS_MIDI_INFOBAR_TEXT;
-      break;
     case RequestType::kMidiSysex:
       message_id = IDS_MIDI_SYSEX_INFOBAR_TEXT;
       break;
@@ -104,8 +125,27 @@ std::u16string PermissionRequest::GetDialogMessageText() const {
           IDS_PROTECTED_MEDIA_IDENTIFIER_PER_ORIGIN_PROVISIONING_INFOBAR_TEXT;
       break;
     case RequestType::kStorageAccess:
+      // The SA prompt does not currently bold any part of its message.
+      if (base::FeatureList::IsEnabled(
+              permissions::features::kPermissionStorageAccessAPI)) {
+        return AnnotatedMessageText(
+            l10n_util::GetStringFUTF16(
+                IDS_CONCAT_TWO_STRINGS_WITH_PERIODS,
+                l10n_util::GetStringFUTF16(
+                    IDS_STORAGE_ACCESS_PERMISSION_TWO_ORIGIN_PROMPT_TITLE,
+                    requesting_origin_string_formatted),
+                l10n_util::GetStringFUTF16(
+                    IDS_STORAGE_ACCESS_PERMISSION_TWO_ORIGIN_EXPLANATION,
+                    requesting_origin_string_formatted,
+                    embedding_origin_string_formatted)),
+            /*bolded_ranges=*/{});
+      }
+      return AnnotatedMessageText(
+          l10n_util::GetStringFUTF16(IDS_STORAGE_ACCESS_INFOBAR_TEXT,
+                                     requesting_origin_string_formatted,
+                                     embedding_origin_string_formatted),
+          /*bolded_ranges=*/{});
     case RequestType::kTopLevelStorageAccess:
-      // Handled by `PermissionPromptAndroid::GetMessageText` directly.
       NOTREACHED();
       break;
     case RequestType::kVrSession:
@@ -113,10 +153,34 @@ std::u16string PermissionRequest::GetDialogMessageText() const {
       break;
   }
   DCHECK_NE(0, message_id);
-  return l10n_util::GetStringFUTF16(
-      message_id, url_formatter::FormatUrlForSecurityDisplay(
-                      requesting_origin(),
-                      url_formatter::SchemeDisplay::OMIT_CRYPTOGRAPHIC));
+
+  // Only format origins bold iff it's one time allowable (which uses a new
+  // prompt design on Clank)
+  return GetDialogAnnotatedMessageText(
+      requesting_origin_string_formatted, message_id, /*format_origin_bold=*/
+      permissions::PermissionUtil::CanPermissionBeAllowedOnce(
+          GetContentSettingsType()));
+}
+
+// static
+PermissionRequest::AnnotatedMessageText
+PermissionRequest::GetDialogAnnotatedMessageText(
+    std::u16string requesting_origin_formatted_for_display,
+    int message_id,
+    bool format_origin_bold) {
+  std::vector<size_t> offsets;
+  std::u16string text = l10n_util::GetStringFUTF16(
+      message_id, {requesting_origin_formatted_for_display}, &offsets);
+
+  std::vector<std::pair<size_t, size_t>> bolded_ranges;
+  if (format_origin_bold) {
+    for (auto offset : offsets) {
+      bolded_ranges.emplace_back(
+          offset, offset + requesting_origin_formatted_for_display.length());
+    }
+  }
+
+  return AnnotatedMessageText(text, bolded_ranges);
 }
 #endif
 
@@ -138,7 +202,7 @@ IconId PermissionRequest::GetBlockedIconForChip() {
   return permissions::GetBlockedIconId(request_type());
 }
 
-absl::optional<std::u16string> PermissionRequest::GetRequestChipText(
+std::optional<std::u16string> PermissionRequest::GetRequestChipText(
     ChipTextType type) const {
   static base::NoDestructor<std::map<RequestType, std::vector<int>>> kMessageIds(
       {{RequestType::kArSession,
@@ -172,8 +236,6 @@ absl::optional<std::u16string> PermissionRequest::GetRequestChipText(
          IDS_PERMISSIONS_MICROPHONE_ALLOWED_CONFIRMATION_SCREENREADER_ANNOUNCEMENT,
          IDS_PERMISSIONS_MICROPHONE_ALLOWED_ONCE_CONFIRMATION_SCREENREADER_ANNOUNCEMENT,
          IDS_PERMISSIONS_MICROPHONE_NOT_ALLOWED_CONFIRMATION_SCREENREADER_ANNOUNCEMENT}},
-       {RequestType::kMidi,
-        {IDS_MIDI_PERMISSION_CHIP, -1, -1, -1, -1, -1, -1, -1}},
        {RequestType::kMidiSysex,
         {IDS_MIDI_SYSEX_PERMISSION_CHIP, -1, -1, -1, -1, -1, -1, -1}},
        {RequestType::kNotifications,
@@ -197,7 +259,7 @@ absl::optional<std::u16string> PermissionRequest::GetRequestChipText(
   if (messages != kMessageIds->end() && messages->second[type] != -1)
     return l10n_util::GetStringUTF16(messages->second[type]);
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 std::u16string PermissionRequest::GetMessageTextFragment() const {
@@ -240,8 +302,6 @@ std::u16string PermissionRequest::GetMessageTextFragment() const {
       message_id = IDS_MEDIA_CAPTURE_AUDIO_ONLY_PERMISSION_FRAGMENT;
       break;
     case RequestType::kMidi:
-      message_id = IDS_MIDI_PERMISSION_FRAGMENT;
-      break;
     case RequestType::kMidiSysex:
       message_id = IDS_MIDI_SYSEX_PERMISSION_FRAGMENT;
       break;

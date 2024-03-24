@@ -8,7 +8,6 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_property.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
-#include "third_party/blink/renderer/platform/bindings/to_v8.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
@@ -27,7 +26,7 @@ class CORE_EXPORT NavigationTransition final : public ScriptWrappable {
 
   const String& navigationType() const { return navigation_type_; }
   NavigationHistoryEntry* from() { return from_.Get(); }
-  ScriptPromise finished(ScriptState* script_state);
+  ScriptPromiseTyped<IDLUndefined> finished(ScriptState* script_state);
 
   void ResolveFinishedPromise();
   void RejectFinishedPromise(ScriptValue ex);
@@ -35,8 +34,7 @@ class CORE_EXPORT NavigationTransition final : public ScriptWrappable {
   void Trace(Visitor*) const final;
 
  private:
-  using FinishedProperty =
-      ScriptPromiseProperty<ToV8UndefinedGenerator, ScriptValue>;
+  using FinishedProperty = ScriptPromiseProperty<IDLUndefined, IDLAny>;
 
   String navigation_type_;
   Member<NavigationHistoryEntry> from_;

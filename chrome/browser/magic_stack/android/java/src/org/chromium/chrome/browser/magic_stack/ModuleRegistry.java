@@ -15,11 +15,9 @@ import org.chromium.ui.modelutil.SimpleRecyclerViewAdapter;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
-/**
- * A singleton class which is responsible for registering module builders {@link
- * ModuleProviderBuilder}.
- */
+/** A class which is responsible for registering module builders {@link ModuleProviderBuilder}. */
 public class ModuleRegistry {
     /** The callback interface which is called when the view of a module is inflated. */
     public interface OnViewCreatedCallback {
@@ -31,18 +29,11 @@ public class ModuleRegistry {
     /** A map of <ModuleType, ModuleProviderBuilder>. */
     private final Map<Integer, ModuleProviderBuilder> mModuleBuildersMap = new HashMap<>();
 
-    /** Static class that implements the initialization-on-demand holder idiom. */
-    private static class LazyHolder {
-        static final ModuleRegistry INSTANCE = new ModuleRegistry();
-    }
+    private final HomeModulesConfigManager mHomeModulesConfigManager;
 
-    /** Gets the singleton instance for the ModuleRegistry. */
-    public static ModuleRegistry getInstance() {
-        return LazyHolder.INSTANCE;
+    public ModuleRegistry(HomeModulesConfigManager homeModulesConfigManager) {
+        mHomeModulesConfigManager = homeModulesConfigManager;
     }
-
-    /** Private constructor, use GetInstance() instead. */
-    private ModuleRegistry() {}
 
     /**
      * Registers the builder {@link ModuleProviderBuilder} for a given module type.
@@ -52,6 +43,10 @@ public class ModuleRegistry {
      */
     public void registerModule(@ModuleType int moduleType, @NonNull ModuleProviderBuilder builder) {
         mModuleBuildersMap.put(moduleType, builder);
+        if (builder instanceof ModuleConfigChecker) {
+            mHomeModulesConfigManager.registerModuleEligibilityChecker(
+                    moduleType, (ModuleConfigChecker) builder);
+        }
     }
 
     /**
@@ -102,5 +97,10 @@ public class ModuleRegistry {
     /** Destroys the registry. */
     public void destroy() {
         mModuleBuildersMap.clear();
+    }
+
+    /** Returns the set which contains all the module types that are registered. */
+    public @ModuleType Set<Integer> getRegisteredModuleTypes() {
+        return mModuleBuildersMap.keySet();
     }
 }

@@ -4,11 +4,8 @@
 
 import './settings_ui/settings_ui.js';
 
-export {ControlledRadioButtonElement} from '/shared/settings/controls/controlled_radio_button.js';
 export {ExtensionControlledIndicatorElement} from '/shared/settings/controls/extension_controlled_indicator.js';
 export {DEFAULT_CHECKED_VALUE, DEFAULT_UNCHECKED_VALUE} from '/shared/settings/controls/settings_boolean_control_mixin.js';
-export {SettingsDropdownMenuElement} from '/shared/settings/controls/settings_dropdown_menu.js';
-export {SettingsToggleButtonElement} from '/shared/settings/controls/settings_toggle_button.js';
 export {ExtensionControlBrowserProxy, ExtensionControlBrowserProxyImpl} from '/shared/settings/extension_control_browser_proxy.js';
 export {LifetimeBrowserProxy, LifetimeBrowserProxyImpl} from '/shared/settings/lifetime_browser_proxy.js';
 export {ProfileInfo, ProfileInfoBrowserProxy, ProfileInfoBrowserProxyImpl} from '/shared/settings/people_page/profile_info_browser_proxy.js';
@@ -33,8 +30,11 @@ export {CrToolbarSearchFieldElement} from 'chrome://resources/cr_elements/cr_too
 export {OpenWindowProxy, OpenWindowProxyImpl} from 'chrome://resources/js/open_window_proxy.js';
 export {PluralStringProxyImpl as SettingsPluralStringProxyImpl} from 'chrome://resources/js/plural_string_proxy.js';
 export {getTrustedHTML} from 'chrome://resources/js/static_types.js';
-export {SettingsAboutPageElement} from './about_page/about_page.js';
 export {HashNetPageElement} from './hashnet_page/hashnet_page.js';
+export {SettingsAboutPageElement} from './about_page/about_page.js';
+export {ControlledRadioButtonElement} from './controls/controlled_radio_button.js';
+export {SettingsDropdownMenuElement} from './controls/settings_dropdown_menu.js';
+export {SettingsToggleButtonElement} from './controls/settings_toggle_button.js';
 // clang-format off
 // <if expr="_google_chrome">
 export {ABOUT_PAGE_PRIVACY_POLICY_URL} from './about_page/about_page.js';
@@ -87,7 +87,7 @@ export {ExceptionAddDialogTabs, ExceptionTabbedAddDialogElement} from './perform
 export {MAX_TAB_DISCARD_EXCEPTION_RULE_LENGTH, TAB_DISCARD_EXCEPTIONS_MANAGED_PREF, TAB_DISCARD_EXCEPTIONS_PREF} from './performance_page/tab_discard/exception_validation_mixin.js';
 export {PrivacyGuideBrowserProxy, PrivacyGuideBrowserProxyImpl} from './privacy_page/privacy_guide/privacy_guide_browser_proxy.js';
 export {SettingsPrivacyPageElement} from './privacy_page/privacy_page.js';
-export {CanonicalTopic, FledgeState, PrivacySandboxBrowserProxy, PrivacySandboxBrowserProxyImpl, PrivacySandboxInterest, TopicsState} from './privacy_sandbox/privacy_sandbox_browser_proxy.js';
+export {CanonicalTopic, FirstLevelTopicsState, FledgeState, PrivacySandboxBrowserProxy, PrivacySandboxBrowserProxyImpl, PrivacySandboxInterest, TopicsState} from './privacy_sandbox/privacy_sandbox_browser_proxy.js';
 export {RelaunchMixin, RestartType} from './relaunch_mixin.js';
 export {ResetBrowserProxy, ResetBrowserProxyImpl} from './reset_page/reset_browser_proxy.js';
 export {SettingsResetProfileBannerElement} from './reset_page/reset_profile_banner.js';
@@ -113,4 +113,5 @@ export {SettingsMenuElement} from './settings_menu/settings_menu.js';
 export {SettingsSectionElement} from './settings_page/settings_section.js';
 export {SettingsUiElement} from './settings_ui/settings_ui.js';
 export {SiteFaviconElement} from './site_favicon.js';
+export {convertDateToWindowsEpoch} from './time.js';
 export {TooltipMixin, TooltipMixinInterface} from './tooltip_mixin.js';

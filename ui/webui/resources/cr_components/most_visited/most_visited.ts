@@ -11,9 +11,9 @@ import 'chrome://resources/cr_elements/cr_input/cr_input.js';
 import 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
 import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
 
-import {CrActionMenuElement} from 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
-import {CrToastElement} from 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
+import type {CrActionMenuElement} from 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
+import type {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import type {CrToastElement} from 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 import {assert} from 'chrome://resources/js/assert.js';
 import {skColorToRgba} from 'chrome://resources/js/color_utils.js';
@@ -23,13 +23,14 @@ import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {isMac} from 'chrome://resources/js/platform.js';
 import {hasKeyModifiers} from 'chrome://resources/js/util.js';
 import {TextDirection} from 'chrome://resources/mojo/mojo/public/mojom/base/text_direction.mojom-webui.js';
-import {SkColor} from 'chrome://resources/mojo/skia/public/mojom/skcolor.mojom-webui.js';
-import {Url} from 'chrome://resources/mojo/url/mojom/url.mojom-webui.js';
-import {afterNextRender, DomRepeat, DomRepeatEvent, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import type {SkColor} from 'chrome://resources/mojo/skia/public/mojom/skcolor.mojom-webui.js';
+import type {Url} from 'chrome://resources/mojo/url/mojom/url.mojom-webui.js';
+import type {DomRepeat, DomRepeatEvent} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {afterNextRender, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {MostVisitedBrowserProxy} from './browser_proxy.js';
 import {getTemplate} from './most_visited.html.js';
-import {MostVisitedInfo, MostVisitedPageCallbackRouter, MostVisitedPageHandlerRemote, MostVisitedTheme, MostVisitedTile} from './most_visited.mojom-webui.js';
+import type {MostVisitedInfo, MostVisitedPageCallbackRouter, MostVisitedPageHandlerRemote, MostVisitedTheme, MostVisitedTile} from './most_visited.mojom-webui.js';
 import {MostVisitedWindowProxy} from './window_proxy.js';
 
 function resetTilePosition(tile: HTMLElement) {
@@ -250,6 +251,7 @@ export class MostVisitedElement extends MostVisitedElementBase {
   private eventTracker_: EventTracker;
   private boundOnDocumentKeyDown_: (e: KeyboardEvent) => void;
   private preloadingTimer_: undefined|ReturnType<typeof setTimeout>;
+  private preconnectTimer_: undefined|ReturnType<typeof setTimeout>;
 
   private get tileElements_() {
     return Array.from(
@@ -425,9 +427,9 @@ export class MostVisitedElement extends MostVisitedElementBase {
   }
 
   /**
-   * This method is always called when the drag and drop was finished.
-   * If the tiles were reordered successfully, there should be a tile with the
-   * "dropped" class.
+   * This method is always called when the drag and drop was finished (even when
+   * the drop was canceled). If the tiles were reordered successfully, there
+   * should be a tile with the "dropped" class.
    *
    * |reordering_| is not set to false when the tiles are reordered. The callers
    * will need to set it to false. This is necessary to handle a mouse drag
@@ -730,14 +732,6 @@ export class MostVisitedElement extends MostVisitedElementBase {
       if (dropIndex !== -1) {
         this.enableForceHover_(dropIndex);
       }
-
-      this.addEventListener('pointermove', () => {
-        this.clearForceHover_();
-        // When |reordering_| is true, the normal hover style is not shown.
-        // After a drop, the element that has hover is not correct. It will be
-        // after the mouse moves.
-        this.reordering_ = false;
-      }, {once: true});
     };
 
     this.ownerDocument.addEventListener('dragover', dragOver);
@@ -746,6 +740,14 @@ export class MostVisitedElement extends MostVisitedElementBase {
       this.ownerDocument.removeEventListener('dragover', dragOver);
       this.ownerDocument.removeEventListener('drop', drop);
       this.dragEnd_();
+
+      this.addEventListener('pointermove', () => {
+        this.clearForceHover_();
+        // When |reordering_| is true, the normal hover style is not shown.
+        // After a drop, the element that has hover is not correct. It will be
+        // after the mouse moves.
+        this.reordering_ = false;
+      }, {once: true});
     }, {once: true});
   }
 
@@ -853,6 +855,13 @@ export class MostVisitedElement extends MostVisitedElementBase {
       this.preloadingTimer_ = setTimeout(() => {
         this.pageHandler_.prerenderMostVisitedTile(e.model.item, true);
       }, loadTimeData.getInteger('prerenderStartTimeThreshold'));
+    }
+
+    if (loadTimeData.getBoolean('prerenderEnabled') &&
+        loadTimeData.getInteger('preconnectStartTimeThreshold') >= 0) {
+      this.preconnectTimer_ = setTimeout(() => {
+        this.pageHandler_.preconnectMostVisitedTile(e.model.item);
+      }, loadTimeData.getInteger('preconnectStartTimeThreshold'));
     }
   }
 

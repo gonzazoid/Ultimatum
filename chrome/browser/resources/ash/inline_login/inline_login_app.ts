@@ -3,10 +3,10 @@
 // found in the LICENSE file.
 
 import 'chrome://resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
-import 'chrome://resources/cr_elements/cr_button/cr_button.js';
-import 'chrome://resources/cr_elements/icons.html.js';
+import 'chrome://resources/ash/common/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/ash/common/cr_elements/icons.html.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
-import 'chrome://resources/cr_elements/cr_view_manager/cr_view_manager.js';
+import 'chrome://resources/ash/common/cr_elements/cr_view_manager/cr_view_manager.js';
 import 'chrome://chrome-signin/arc_account_picker/arc_account_picker_app.js';
 import './gaia_action_buttons/gaia_action_buttons.js';
 import './signin_blocked_by_policy_page.js';
@@ -15,18 +15,20 @@ import './welcome_page_app.js';
 import './strings.m.js';
 
 import {getAccountAdditionOptionsFromJSON} from 'chrome://chrome-signin/arc_account_picker/arc_util.js';
-import {AuthCompletedCredentials, Authenticator, AuthParams} from 'chrome://chrome-signin/gaia_auth_host/authenticator.js';
-import {CrViewManagerElement} from 'chrome://resources/cr_elements/cr_view_manager/cr_view_manager.js';
-import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import type {AuthCompletedCredentials, AuthParams} from 'chrome://chrome-signin/gaia_auth_host/authenticator.js';
+import {Authenticator} from 'chrome://chrome-signin/gaia_auth_host/authenticator.js';
+import type {CrViewManagerElement} from 'chrome://resources/ash/common/cr_elements/cr_view_manager/cr_view_manager.js';
+import {I18nMixin} from 'chrome://resources/ash/common/cr_elements/i18n_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/ash/common/cr_elements/web_ui_listener_mixin.js';
 import {assert} from 'chrome://resources/js/assert.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {isRTL} from 'chrome://resources/js/util.js';
-import {PaperSpinnerLiteElement} from 'chrome://resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
+import type {PaperSpinnerLiteElement} from 'chrome://resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './inline_login_app.html.js';
-import {InlineLoginBrowserProxy, InlineLoginBrowserProxyImpl} from './inline_login_browser_proxy.js';
+import type {InlineLoginBrowserProxy} from './inline_login_browser_proxy.js';
+import {InlineLoginBrowserProxyImpl} from './inline_login_browser_proxy.js';
 
 /**
  * @fileoverview Inline login WebUI in various signin flows for ChromeOS and
@@ -222,9 +224,6 @@ export class InlineLoginAppElement extends InlineLoginAppElementBase {
     this.addWebUiListener(
         'load-authenticator',
         (data: AuthParams) => this.loadAuthenticator_(data));
-    this.addWebUiListener(
-        'send-lst-fetch-results',
-        (arg: string) => this.sendLstFetchResults_(arg));
     this.addWebUiListener('close-dialog', () => this.closeDialog_());
     this.addWebUiListener(
         'show-signin-error-page',
@@ -320,18 +319,6 @@ export class InlineLoginAppElement extends InlineLoginAppElementBase {
       this.isReauthentication_ = true;
     }
     this.switchToDefaultView_();
-  }
-
-  /**
-   * Sends a message 'lstFetchResults'. This is a specific message sent when
-   * the inline signin is loaded with reason kFetchLstOnly. Handlers of
-   * this message would expect a single argument a base::Dictionary value that
-   * contains the values fetched from the gaia sign in endpoint.
-   * @param arg The string representation of the json data returned by
-   *    the sign in dialog after it has finished the sign in process.
-   */
-  private sendLstFetchResults_(arg: string) {
-    this.browserProxy_.lstFetchResults(arg);
   }
 
   /**

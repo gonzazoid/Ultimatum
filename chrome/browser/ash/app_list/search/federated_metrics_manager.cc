@@ -15,6 +15,7 @@
 #include "chromeos/ash/services/federated/public/cpp/federated_example_util.h"
 #include "chromeos/ash/services/federated/public/mojom/example.mojom.h"
 #include "chromeos/ash/services/federated/public/mojom/federated_service.mojom.h"
+#include "chromeos/ash/services/federated/public/mojom/tables.mojom.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
 namespace app_list::federated {
@@ -25,23 +26,7 @@ using ash::federated::CreateStringList;
 using chromeos::federated::mojom::Example;
 using chromeos::federated::mojom::ExamplePtr;
 using chromeos::federated::mojom::Features;
-
-constexpr char kClientNameVersion1[] = "launcher_query_analytics_v1";
-constexpr char kClientNameVersion2[] = "launcher_query_analytics_v2";
-
-std::string SearchSessionConclusionToString(
-    ash::SearchSessionConclusion conclusion) {
-  switch (conclusion) {
-    case ash::SearchSessionConclusion::kQuit:
-      return "quit";
-    case ash::SearchSessionConclusion::kLaunch:
-      return "launch";
-    case ash::SearchSessionConclusion::kAnswerCardSeen:
-      return "answer_card";
-    default:
-      NOTREACHED();
-  }
-}
+using chromeos::federated::mojom::FederatedExampleTableId;
 
 void LogSearchSessionConclusion(ash::SearchSessionConclusion conclusion) {
   base::UmaHistogramEnumeration(kHistogramSearchSessionConclusion, conclusion);
@@ -192,17 +177,17 @@ void FederatedMetricsManager::LogExample(const std::string& query) {
 
     // Store example for launcher FA version 1.
     ExamplePtr example_1 = CreateExamplePtr(
-        query, SearchSessionConclusionToString(session_result_));
-    federated_service_->ReportExample(kClientNameVersion1,
-                                      std::move(example_1));
+        query, ash::SearchSessionConclusionToString(session_result_));
+    federated_service_->ReportExampleToTable(
+        FederatedExampleTableId::LAUNCHER_QUERY, std::move(example_1));
 
     // Store example for launcher FA version 2.
     // TODO(b/318575870): De-duplicate query collection once support is
     // available on the infrastructure side.
     ExamplePtr example_2 = CreateExamplePtr(
-        query, SearchSessionConclusionToString(session_result_));
-    federated_service_->ReportExample(kClientNameVersion2,
-                                      std::move(example_2));
+        query, ash::SearchSessionConclusionToString(session_result_));
+    federated_service_->ReportExampleToTable(
+        FederatedExampleTableId::LAUNCHER_QUERY_V2, std::move(example_2));
 
     LogReportStatus(ReportStatus::kOk);
     LogQueryLength(query.length());

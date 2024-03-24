@@ -29,12 +29,16 @@ import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.supplier.Supplier;
+import org.chromium.base.task.PostTask;
+import org.chromium.base.task.TaskTraits;
 import org.chromium.chrome.browser.back_press.BackPressManager;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsSizer;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsUtils;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.chrome.browser.page_insights.SheetStateTranslator.PageInsightsSheetState;
 import org.chromium.chrome.browser.page_insights.proto.Config.PageInsightsConfig;
+import org.chromium.chrome.browser.page_insights.proto.IntentParams.PageInsightsIntentParams;
 import org.chromium.chrome.browser.page_insights.proto.PageInsights.Page;
 import org.chromium.chrome.browser.page_insights.proto.PageInsights.PageInsightsMetadata;
 import org.chromium.chrome.browser.profiles.Profile;
@@ -54,16 +58,20 @@ import org.chromium.components.browser_ui.bottomsheet.EmptyBottomSheetObserver;
 import org.chromium.components.browser_ui.bottomsheet.ExpandedSheetHelper;
 import org.chromium.components.browser_ui.bottomsheet.ManagedBottomSheetController;
 import org.chromium.components.browser_ui.widget.gesture.BackPressHandler;
-import org.chromium.components.embedder_support.util.UrlConstants;
+import org.chromium.components.browser_ui.widget.scrim.ScrimCoordinator;
 import org.chromium.content_public.browser.LoadUrlParams;
+import org.chromium.content_public.browser.NavigationController;
+import org.chromium.content_public.browser.NavigationEntry;
 import org.chromium.content_public.browser.NavigationHandle;
+import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.ApplicationViewportInsetSupplier;
 import org.chromium.ui.util.ColorUtils;
 import org.chromium.url.GURL;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.function.BooleanSupplier;
-import java.util.function.Function;
 
 /**
  * PageInsights mediator component listening to various external events to update UI, internal
@@ -86,16 +94,21 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
             "page_insights_can_autotrigger_while_in_motion";
     static final String PAGE_INSIGHTS_CAN_RETURN_TO_PEEK_AFTER_EXPANSION =
             "page_insights_can_return_to_peek_after_expansion";
+    private static final List<Integer> USER_DISMISSAL_REASONS =
+            Arrays.asList(
+                    StateChangeReason.SWIPE,
+                    StateChangeReason.BACK_PRESS,
+                    StateChangeReason.TAP_SCRIM);
 
     private final PageInsightsSheetContent mSheetContent;
     private final ManagedBottomSheetController mSheetController;
     private final Context mContext;
 
     // BottomSheetController for other bottom sheet UIs.
-    private final BottomSheetController mBottomUiController;
+    private final BottomSheetController mOtherBottomSheetController;
 
     // Observers other bottom sheet UI state.
-    private final BottomSheetObserver mBottomUiObserver;
+    private final BottomSheetObserver mOtherBottomSheetObserver;
 
     // Bottom browser controls resizer. Used to resize web contents to move up bottom-aligned
     // elements such as cookie dialog.
@@ -116,7 +129,7 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
     private View mSheetContainer;
 
     private final BooleanSupplier mIsPageInsightsEnabledSupplier;
-    private final Function<NavigationHandle, PageInsightsConfig> mPageInsightsConfigProvider;
+    private final PageInsightsCoordinator.ConfigProvider mPageInsightsConfigProvider;
     private final Handler mHandler;
     private final Runnable mAutoTriggerTimerRunnable = this::onAutoTriggerTimerFinished;
     private final Callback<Boolean> mInMotionCallback = inMotion -> maybeAutoTrigger();
@@ -146,47 +159,44 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
     private final boolean mResizeInSync;
 
     private PageInsightsDataLoader mPageInsightsDataLoader;
-    @Nullable private PageInsightsSurfaceRenderer mSurfaceRenderer;
+    @Nullable private volatile PageInsightsSurfaceRenderer mSurfaceRenderer;
     @Nullable private PageInsightsMetadata mCurrentMetadata;
     @Nullable private PageInsightsConfig mCurrentConfig;
     @Nullable private View mCurrentFeedView;
     @Nullable private View mCurrentChildView;
     private boolean mIsShowingChildView;
     @Nullable private NavigationHandle mCurrentNavigationHandle;
+    @Nullable private Tab mObservedTab;
 
     // Caches the sheet height at the current state. Avoids the repeated call to resize the content
     // if the size hasn't changed since.
     private int mCachedSheetHeight;
 
-    // Whether the sheet was hidden due to another bottom sheet UI, and needs to be restored
-    // when notified when the UI was closed.
-    private boolean mShouldRestore;
-
     // Amount of time to wait before triggering the sheet automatically. Can be overridden
     // for testing.
-    private long mAutoTriggerDelayMs;
+    private int mAutoTriggerDelayMs;
 
-    private int mOldState = SheetState.NONE;
+    private int mOldPihState = PageInsightsSheetState.NONE;
 
     @IntDef({
         AutoTriggerStage.CANCELLED_OR_NOT_STARTED,
         AutoTriggerStage.AWAITING_TIMER,
-        AutoTriggerStage.AWAITING_NAV_HANDLE,
         AutoTriggerStage.FETCHING_DATA,
+        AutoTriggerStage.PREPARING,
         AutoTriggerStage.READY_FOR_AUTO_TRIGGER,
         AutoTriggerStage.AUTO_TRIGGERED
     })
     @interface AutoTriggerStage {
         int CANCELLED_OR_NOT_STARTED = 0;
         int AWAITING_TIMER = 1;
-        // This stage will be skipped if nav handle already available when timer finishes.
-        int AWAITING_NAV_HANDLE = 2;
-        int FETCHING_DATA = 3;
+        int FETCHING_DATA = 2;
+        int PREPARING = 3;
         int READY_FOR_AUTO_TRIGGER = 4;
         int AUTO_TRIGGERED = 5;
     }
 
-    private @AutoTriggerStage int mAutoTriggerStage = AutoTriggerStage.CANCELLED_OR_NOT_STARTED;
+    private volatile @AutoTriggerStage int mAutoTriggerStage =
+            AutoTriggerStage.CANCELLED_OR_NOT_STARTED;
 
     // These values are persisted to logs. Entries should not be renumbered and
     // numeric values should never be reused.
@@ -230,15 +240,16 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
             Supplier<ShareDelegate> shareDelegateSupplier,
             Supplier<Profile> profileSupplier,
             ManagedBottomSheetController bottomSheetController,
-            BottomSheetController bottomUiController,
+            BottomSheetController otherBottomSheetController,
             ExpandedSheetHelper expandedSheetHelper,
             BrowserControlsStateProvider controlsStateProvider,
             BrowserControlsSizer browserControlsSizer,
             @Nullable BackPressManager backPressManager,
             @Nullable ObservableSupplier<Boolean> inMotionSupplier,
             ApplicationViewportInsetSupplier appViewportInsetSupplier,
+            PageInsightsIntentParams intentParams,
             BooleanSupplier isPageInsightsEnabledSupplier,
-            Function<NavigationHandle, PageInsightsConfig> pageInsightsConfigProvider) {
+            PageInsightsCoordinator.ConfigProvider pageInsightsConfigProvider) {
         mContext = context;
         mTabObservable = tabObservable;
         mProfileSupplier = profileSupplier;
@@ -248,13 +259,14 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
         mSheetContent =
                 new PageInsightsSheetContent(
                         mContext,
+                        intentParams,
                         layoutView,
-                        view -> loadMyActivityUrl(tabObservable),
+                        this::loadUrl,
                         this::handleBackPress,
                         mWillHandleBackPressSupplier,
                         mOnBottomSheetTouchHandler);
         mSheetController = bottomSheetController;
-        mBottomUiController = bottomUiController;
+        mOtherBottomSheetController = otherBottomSheetController;
         mExpandedSheetHelper = expandedSheetHelper;
         mHandler = new Handler(Looper.getMainLooper());
         mBrowserControlsSizer = browserControlsSizer;
@@ -277,14 +289,15 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
         if (mInMotionSupplier != null) {
             mInMotionSupplier.addObserver(mInMotionCallback);
         }
-        mBottomUiObserver =
+        mOtherBottomSheetObserver =
                 new EmptyBottomSheetObserver() {
                     @Override
                     public void onSheetStateChanged(@SheetState int newState, int reason) {
-                        onBottomUiStateChanged(newState >= SheetState.PEEK);
+                        // The PEEK state check is performed on the other bottom sheets
+                        onOtherBottomSheetStateChanged(newState >= SheetState.PEEK);
                     }
                 };
-        bottomUiController.addObserver(mBottomUiObserver);
+        otherBottomSheetController.addObserver(mOtherBottomSheetObserver);
         mIsPageInsightsEnabledSupplier = isPageInsightsEnabledSupplier;
         mPageInsightsConfigProvider = pageInsightsConfigProvider;
         mPageInsightsDataLoader = new PageInsightsDataLoader();
@@ -297,29 +310,26 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
                                 this::changeToChildPage,
                                 PageInsightsMediator::logPageInsightsEvent));
         mAutoTriggerDelayMs =
-                ChromeFeatureList.getFieldTrialParamByFeatureAsInt(
-                        ChromeFeatureList.CCT_PAGE_INSIGHTS_HUB,
-                        PAGE_INSIGHTS_CAN_AUTOTRIGGER_AFTER_END,
-                        DEFAULT_TRIGGER_DELAY_MS);
+                intentParams.hasAutoTriggerDelayMs()
+                        ? intentParams.getAutoTriggerDelayMs()
+                        : ChromeFeatureList.getFieldTrialParamByFeatureAsInt(
+                                ChromeFeatureList.CCT_PAGE_INSIGHTS_HUB,
+                                PAGE_INSIGHTS_CAN_AUTOTRIGGER_AFTER_END,
+                                DEFAULT_TRIGGER_DELAY_MS);
         mCanAutoTriggerWhileInMotion =
                 ChromeFeatureList.getFieldTrialParamByFeatureAsBoolean(
                         ChromeFeatureList.CCT_PAGE_INSIGHTS_HUB,
                         PAGE_INSIGHTS_CAN_AUTOTRIGGER_WHILE_IN_MOTION,
                         false);
         mCanReturnToPeekAfterExpansion =
-                ChromeFeatureList.getFieldTrialParamByFeatureAsBoolean(
-                        ChromeFeatureList.CCT_PAGE_INSIGHTS_HUB,
-                        PAGE_INSIGHTS_CAN_RETURN_TO_PEEK_AFTER_EXPANSION,
-                        false);
-        if (tabObservable.get() != null) {
-            onTab(tabObservable.get());
-        } else {
-            tabObservable.addObserver(
-                    tab -> {
-                        if (tab == null) return;
-                        onTab(tab);
-                    });
-        }
+                intentParams.hasCanReturnToPeekAfterExpansion()
+                        ? intentParams.getCanReturnToPeekAfterExpansion()
+                        : ChromeFeatureList.getFieldTrialParamByFeatureAsBoolean(
+                                ChromeFeatureList.CCT_PAGE_INSIGHTS_HUB,
+                                PAGE_INSIGHTS_CAN_RETURN_TO_PEEK_AFTER_EXPANSION,
+                                false);
+        onTab(tabObservable.get());
+        tabObservable.addObserver(this::onTab);
         mBackPressManager = backPressManager;
         if (BackPressManager.isEnabled()) {
             mBackPressHandler = bottomSheetController.getBottomSheetBackPressHandler();
@@ -354,26 +364,32 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
                 mControlsStateProvider.getBrowserControlHiddenRatio());
     }
 
-    void onBottomUiStateChanged(boolean opened) {
+    void onOtherBottomSheetStateChanged(boolean opened) {
         if (opened && shouldHideContent()) {
             mSheetController.hideContent(mSheetContent, true);
-            mShouldRestore = true;
-        } else if (!opened && mShouldRestore) {
-            mSheetController.requestShowContent(mSheetContent, true);
-            mShouldRestore = false;
         }
     }
 
-    private void onTab(Tab tab) {
-        delayStartAutoTrigger(mAutoTriggerDelayMs);
-        tab.addObserver(this);
+    private void onTab(@Nullable Tab tab) {
+        if (tab != null && !tab.hasObserver(this)) {
+            Log.v(TAG, "New tab");
+            onNewTabOrPage();
+            tab.addObserver(this);
+            if (mObservedTab != null && mObservedTab != tab) {
+                mObservedTab.removeObserver(this);
+            }
+            mObservedTab = tab;
+        }
     }
 
     private boolean shouldHideContent() {
         // See if we need to hide the sheet content temporarily while another bottom UI is
         // launched. No need to hide if not in peek/full state or in scrolled-away state,
         // hence not visible.
-        return mSheetController.getSheetState() >= SheetState.PEEK && !isInScrolledAwayState();
+        // TODO - update once COLLAPSED state is supported
+        return mSheetController.getSheetState()
+                        >= SheetStateTranslator.toBottomSheetState(PageInsightsSheetState.PEEK)
+                && !isInScrolledAwayState();
     }
 
     private boolean isInScrolledAwayState() {
@@ -381,7 +397,9 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
     }
 
     private boolean handleBottomSheetTap() {
-        if (mSheetController.getSheetState() == BottomSheetController.SheetState.PEEK) {
+        // TODO - update once COLLAPSED state is supported
+        if (mSheetController.getSheetState()
+                == SheetStateTranslator.toBottomSheetState(PageInsightsSheetState.PEEK)) {
             mSheetController.expandSheet();
             return true;
         }
@@ -389,11 +407,15 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
     }
 
     private boolean shouldInterceptBottomSheetTouchEvents() {
-        return mSheetController.getSheetState() == BottomSheetController.SheetState.PEEK;
+        // TODO - update once COLLAPSED state is supported
+        return mSheetController.getSheetState()
+                == SheetStateTranslator.toBottomSheetState(PageInsightsSheetState.PEEK);
     }
 
     private boolean handleBackPress() {
-        if (mSheetController.getSheetState() != BottomSheetController.SheetState.FULL) {
+        // TODO - update once COLLAPSED state is supported
+        if (mSheetController.getSheetState()
+                != SheetStateTranslator.toBottomSheetState(PageInsightsSheetState.EXPANDED)) {
             return false;
         }
 
@@ -401,12 +423,13 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
             mSheetContent.showFeedPage();
             mIsShowingChildView = false;
         } else if (!mSheetController.collapseSheet(true)) {
-            mSheetController.hideContent(mSheetContent, true);
+            mSheetController.hideContent(mSheetContent, true, StateChangeReason.BACK_PRESS);
         }
         return true;
     }
 
     private void cancelAutoTrigger() {
+        Log.v(TAG, "Cancelling auto-trigger");
         mAutoTriggerStage = AutoTriggerStage.CANCELLED_OR_NOT_STARTED;
         mHandler.removeCallbacks(mAutoTriggerTimerRunnable);
     }
@@ -416,6 +439,17 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
     @Override
     public void onPageLoadStarted(Tab tab, GURL url) {
         Log.v(TAG, "onPageLoadStarted");
+        onNewTabOrPage();
+    }
+
+    @Override
+    public void onDidFinishNavigationInPrimaryMainFrame(
+            Tab tab, NavigationHandle navigationHandle) {
+        Log.v(TAG, "onDidFinishNavigationInPrimaryMainFrame");
+        mCurrentNavigationHandle = navigationHandle;
+    }
+
+    private void onNewTabOrPage() {
         mCurrentNavigationHandle = null;
         mCurrentMetadata = null;
         mCurrentConfig = null;
@@ -429,17 +463,8 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
         delayStartAutoTrigger(mAutoTriggerDelayMs);
     }
 
-    @Override
-    public void onDidFinishNavigationInPrimaryMainFrame(
-            Tab tab, NavigationHandle navigationHandle) {
-        Log.v(TAG, "onDidFinishNavigationInPrimaryMainFrame");
-        mCurrentNavigationHandle = navigationHandle;
-        if (mAutoTriggerStage == AutoTriggerStage.AWAITING_NAV_HANDLE) {
-            maybeFetchDataForAutoTrigger();
-        }
-    }
-
     private void delayStartAutoTrigger(long delayMs) {
+        Log.v(TAG, "Scheduling auto-trigger");
         mAutoTriggerStage = AutoTriggerStage.AWAITING_TIMER;
         if (delayMs > 0) {
             mHandler.postDelayed(mAutoTriggerTimerRunnable, delayMs);
@@ -450,24 +475,28 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
 
     @VisibleForTesting
     void onAutoTriggerTimerFinished() {
+        Log.v(TAG, "Auto-trigger timer finished");
         if (mAutoTriggerStage == AutoTriggerStage.AWAITING_TIMER) {
             maybeFetchDataForAutoTrigger();
         }
     }
 
     private void maybeFetchDataForAutoTrigger() {
-        if (mCurrentNavigationHandle == null) {
-            mAutoTriggerStage = AutoTriggerStage.AWAITING_NAV_HANDLE;
-            return;
-        }
-        PageInsightsConfig config = mPageInsightsConfigProvider.apply(mCurrentNavigationHandle);
-
-        if (!shouldFetchDataForAutoTrigger(config)) {
+        Tab tab = mTabObservable.get();
+        if (tab == null) {
+            Log.e(TAG, "Cancelling auto-trigger because Tab is unexpectedly null.");
             mAutoTriggerStage = AutoTriggerStage.CANCELLED_OR_NOT_STARTED;
             return;
         }
-        if (mTabObservable.get() == null) {
-            Log.e(TAG, "Cancelling auto-trigger because Tab is unexpectedly null.");
+        // mCurrentNavigationHandle may still be null by this point, probably because
+        // onDidFinishNavigationInPrimaryMainFrame was called before PageInsightsMediator
+        // was created. See b/325597773. Auto-triggering without the handle just causes
+        // internal code to provide the most conservative PageInsightsConfig options -
+        // triggering with these options is better than not triggering at all.
+        PageInsightsConfig config =
+                mPageInsightsConfigProvider.get(
+                        mCurrentNavigationHandle, getLastCommittedNavigationEntry(tab));
+        if (!shouldFetchDataForAutoTrigger(config)) {
             mAutoTriggerStage = AutoTriggerStage.CANCELLED_OR_NOT_STARTED;
             return;
         }
@@ -475,22 +504,42 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
         mAutoTriggerStage = AutoTriggerStage.FETCHING_DATA;
         Log.v(TAG, "Fetching data for auto-trigger");
         mPageInsightsDataLoader.loadInsightsData(
-                mTabObservable.get().getUrl(),
-                config.getShouldAttachGaiaToRequest(),
+                tab.getUrl(),
+                /* isUserInitiated= */ false,
+                config,
                 metadata -> {
                     if (mAutoTriggerStage != AutoTriggerStage.FETCHING_DATA) {
                         // Don't proceed if something has changed since we started fetching data.
                         return;
                     }
-                    if (metadata.getAutoPeekConditions().getConfidence() > MINIMUM_CONFIDENCE) {
-                        mCurrentMetadata = metadata;
-                        mCurrentConfig = config;
-                        mAutoTriggerStage = AutoTriggerStage.READY_FOR_AUTO_TRIGGER;
-                        maybeAutoTrigger();
-                    } else {
+                    if (metadata.getAutoPeekConditions().getConfidence() <= MINIMUM_CONFIDENCE) {
                         mAutoTriggerStage = AutoTriggerStage.CANCELLED_OR_NOT_STARTED;
                         Log.v(TAG, "Cancelling auto-trigger as confidence too low");
+                        return;
                     }
+                    mCurrentMetadata = metadata;
+                    mCurrentConfig = config;
+                    prepareForAutoTrigger();
+                });
+    }
+
+    private void prepareForAutoTrigger() {
+        Log.v(TAG, "Preparing for auto-trigger.");
+        mAutoTriggerStage = AutoTriggerStage.PREPARING;
+        PostTask.postTask(
+                // Get surface renderer on background thread as it can be expensive
+                TaskTraits.USER_VISIBLE_MAY_BLOCK,
+                () -> {
+                    if (mAutoTriggerStage != AutoTriggerStage.PREPARING) return;
+                    getSurfaceRenderer();
+                    PostTask.postTask(
+                            TaskTraits.UI_USER_VISIBLE,
+                            () -> {
+                                if (mAutoTriggerStage != AutoTriggerStage.PREPARING) return;
+                                Log.v(TAG, "Ready for auto-trigger.");
+                                mAutoTriggerStage = AutoTriggerStage.READY_FOR_AUTO_TRIGGER;
+                                maybeAutoTrigger();
+                            });
                 });
     }
 
@@ -564,17 +613,21 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
     }
 
     void launch() {
-        if (mTabObservable.get() == null) {
+        Tab tab = mTabObservable.get();
+        if (tab == null) {
             Log.e(TAG, "Can't launch Page Insights because Tab is null.");
             return;
         }
         cancelAutoTrigger();
         mSheetContent.showLoadingIndicator();
         mSheetController.requestShowContent(mSheetContent, true);
-        PageInsightsConfig config = mPageInsightsConfigProvider.apply(mCurrentNavigationHandle);
+        PageInsightsConfig config =
+                mPageInsightsConfigProvider.get(
+                        mCurrentNavigationHandle, getLastCommittedNavigationEntry(tab));
         mPageInsightsDataLoader.loadInsightsData(
-                mTabObservable.get().getUrl(),
-                config.getShouldAttachGaiaToRequest(),
+                tab.getUrl(),
+                /* isUserInitiated= */ true,
+                config,
                 metadata -> {
                     mCurrentMetadata = metadata;
                     mCurrentConfig = config;
@@ -631,10 +684,10 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
         }
     }
 
-    private void loadMyActivityUrl(Supplier<Tab> currTabObserver) {
-        Tab currTab = currTabObserver.get();
-        if (currTab != null) {
-            currTab.loadUrl(new LoadUrlParams(UrlConstants.MY_ACTIVITY_HOME_URL));
+    private void loadUrl(String url) {
+        Tab tab = mTabObservable.get();
+        if (tab != null) {
+            tab.loadUrl(new LoadUrlParams(url));
         }
     }
 
@@ -646,12 +699,14 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
 
     @Override
     public void onSheetStateChanged(@SheetState int newState, @StateChangeReason int reason) {
-        if (newState == SheetState.HIDDEN) {
+        int newPihState = SheetStateTranslator.toPageInsightsSheetState(newState);
+
+        if (newPihState == PageInsightsSheetState.HIDDEN) {
             mWillHandleBackPressSupplier.set(false);
             if (mResizeInSync) mSheetInset.set(0);
             setBottomControlsHeight(mSheetController.getCurrentOffset());
-            handleDismissal(mOldState);
-        } else if (newState == SheetState.PEEK) {
+            handleDismissal(mOldPihState, reason);
+        } else if (newPihState == PageInsightsSheetState.PEEK) {
             mWillHandleBackPressSupplier.set(false);
             if (mResizeInSync) mSheetInset.set(0);
             setBottomControlsHeight(mSheetController.getCurrentOffset());
@@ -661,14 +716,14 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
             logPageInsightsEvent(PageInsightsEvent.STATE_PEEK);
             // We don't log peek state to XSurface here, as its BOTTOM_SHEET_PEEKING event is only
             // intended for when the feature initially auto-peeks.
-        } else if (newState == SheetState.FULL) {
+        } else if (newPihState == PageInsightsSheetState.EXPANDED) {
             mWillHandleBackPressSupplier.set(true);
             setBackgroundColors(/* ratioOfCompletionFromPeekToExpanded= */ 1.0f);
-            if (mOldState == SheetState.PEEK && mCanReturnToPeekAfterExpansion) {
+            if (mOldPihState == PageInsightsSheetState.PEEK && mCanReturnToPeekAfterExpansion) {
                 // Disable swiping to dismiss, so that swiping/scrim-tapping returns to peek state
                 // instead.
                 mSheetContent.setSwipeToDismissEnabled(false);
-            } else if (mOldState != SheetState.FULL) {
+            } else if (mOldPihState != PageInsightsSheetState.EXPANDED) {
                 // Enable swiping to dismiss, and also explicitly disable peek state. If peek state
                 // remains enabled then some lighter swipes can return to it, even with
                 // swipeToDismissEnabled true.
@@ -681,28 +736,33 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
             mWillHandleBackPressSupplier.set(false);
         }
 
-        if (newState != SheetState.NONE && newState != SheetState.SCROLLING) {
-            mOldState = newState;
+        if (newPihState != PageInsightsSheetState.NONE
+                && newPihState != PageInsightsSheetState.SCROLLING) {
+            mOldPihState = newPihState;
         }
     }
 
-    private void handleDismissal(@SheetState int oldState) {
+    private void handleDismissal(
+            @PageInsightsSheetState int oldState, @StateChangeReason int reason) {
         mIsShowingChildView = false;
 
         if (mCurrentFeedView != null) {
             getSurfaceRenderer().unbindView(mCurrentFeedView);
+            mCurrentFeedView = null;
         }
         if (mCurrentChildView != null) {
             getSurfaceRenderer().unbindView(mCurrentChildView);
+            mCurrentChildView = null;
         }
 
-        if (mOldState == SheetState.PEEK) {
-            logPageInsightsEvent(PageInsightsEvent.DISMISS_PEEK);
-            getSurfaceRenderer().onEvent(DISMISSED_FROM_PEEKING_STATE);
-        } else if (mOldState >= SheetState.HALF) {
-            logPageInsightsEvent(PageInsightsEvent.DISMISS_EXPANDED);
+        if (USER_DISMISSAL_REASONS.contains(reason)) {
+            if (oldState == PageInsightsSheetState.PEEK) {
+                logPageInsightsEvent(PageInsightsEvent.DISMISS_PEEK);
+                getSurfaceRenderer().onEvent(DISMISSED_FROM_PEEKING_STATE);
+            } else if (oldState == PageInsightsSheetState.EXPANDED) {
+                logPageInsightsEvent(PageInsightsEvent.DISMISS_EXPANDED);
+            }
         }
-
         getSurfaceRenderer().onSurfaceClosed();
     }
 
@@ -721,13 +781,16 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
 
     @Override
     public void onSheetClosed(@StateChangeReason int reason) {
+        // Keep same logic as the default scrim implementation
+        hideScrim();
         mExpandedSheetHelper.onSheetCollapsed();
     }
 
     @Override
     public void onSheetOffsetChanged(float heightFraction, float offsetPx) {
         float peekHeightRatio = getPeekHeightRatio();
-        if (mSheetController.getSheetState() == SheetState.SCROLLING) {
+        if (mSheetController.getSheetState()
+                == SheetStateTranslator.toBottomSheetState(PageInsightsSheetState.SCROLLING)) {
             if (mResizeInSync) {
                 // Calling |setBottomControlsHeight| to resize WebContents per each offset change
                 // is janky. While the sheet is being dragged, let the app-wide inset supplier
@@ -750,6 +813,13 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
         if (0 <= ratioOfCompletionFromPeekToExpanded
                 && ratioOfCompletionFromPeekToExpanded <= 1.f) {
             setCornerRadiusPx((int) (ratioOfCompletionFromPeekToExpanded * mMaxCornerRadiusPx));
+        }
+
+        // show scrim only when bottom sheet is greater than peek state
+        if (ratioOfCompletionFromPeekToExpanded > 0.f) {
+            showScrim();
+        } else {
+            hideScrim();
         }
     }
 
@@ -786,11 +856,12 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
 
     void destroy() {
         cancelAutoTrigger();
-        mBottomUiController.removeObserver(mBottomUiObserver);
+        mOtherBottomSheetController.removeObserver(mOtherBottomSheetObserver);
         mControlsStateProvider.removeObserver(mBrowserControlsObserver);
         mSheetController.removeObserver(this);
-        if (mTabObservable.get() != null) {
-            mTabObservable.get().removeObserver(this);
+        if (mObservedTab != null) {
+            mObservedTab.removeObserver(this);
+            mObservedTab = null;
         }
         if (mInMotionSupplier != null) {
             mInMotionSupplier.removeObserver(mInMotionCallback);
@@ -800,6 +871,21 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
         }
         if (mPageInsightsDataLoader != null) {
             mPageInsightsDataLoader.cancelCallback();
+        }
+        hideScrim();
+    }
+
+    private void showScrim() {
+        ScrimCoordinator coordinator = mSheetController.getScrimCoordinator();
+        if (coordinator != null && !coordinator.isShowingScrim()) {
+            coordinator.showScrim(mSheetController.createScrimParams());
+        }
+    }
+
+    private void hideScrim() {
+        ScrimCoordinator coordinator = mSheetController.getScrimCoordinator();
+        if (coordinator != null && coordinator.isShowingScrim()) {
+            coordinator.hideScrim(/* animate= */ true);
         }
     }
 
@@ -831,5 +917,19 @@ public class PageInsightsMediator extends EmptyTabObserver implements BottomShee
                                 new PageInsightsSurfaceScopeDependencyProviderImpl(mContext));
         mSurfaceRenderer = surfaceScope.provideSurfaceRenderer();
         return mSurfaceRenderer;
+    }
+
+    @Nullable
+    private static NavigationEntry getLastCommittedNavigationEntry(Tab tab) {
+        WebContents webContents = tab.getWebContents();
+        if (webContents == null) {
+            return null;
+        }
+        NavigationController navigationController = webContents.getNavigationController();
+        if (navigationController == null) {
+            return null;
+        }
+        return navigationController.getEntryAtIndex(
+                navigationController.getLastCommittedEntryIndex());
     }
 }

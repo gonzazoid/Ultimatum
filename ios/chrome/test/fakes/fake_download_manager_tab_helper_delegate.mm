@@ -4,12 +4,16 @@
 
 #import "ios/chrome/test/fakes/fake_download_manager_tab_helper_delegate.h"
 
+#import "base/memory/raw_ptr.h"
+
 using DecidePolicyForDownloadHandler = void (^)(NewDownloadPolicy);
 
 @implementation FakeDownloadManagerTabHelperDelegate {
   std::unique_ptr<web::DownloadTask::State> _state;
-  web::DownloadTask* _decidingPolicyForDownload;
+  raw_ptr<web::DownloadTask> _decidingPolicyForDownload;
+  raw_ptr<web::DownloadTask> _currentDownloadTask;
   DecidePolicyForDownloadHandler _decidePolicyForDownloadHandler;
+  BOOL _shouldObserveFullscreen;
 }
 
 - (web::DownloadTask::State*)state {
@@ -18,6 +22,10 @@ using DecidePolicyForDownloadHandler = void (^)(NewDownloadPolicy);
 
 - (web::DownloadTask*)decidingPolicyForDownload {
   return _decidingPolicyForDownload;
+}
+
+- (web::DownloadTask*)currentDownloadTask {
+  return _currentDownloadTask;
 }
 
 - (BOOL)decidePolicy:(NewDownloadPolicy)policy {
@@ -36,6 +44,7 @@ using DecidePolicyForDownloadHandler = void (^)(NewDownloadPolicy);
   if (webStateIsVisible) {
     _state = std::make_unique<web::DownloadTask::State>(download->GetState());
   }
+  _currentDownloadTask = download;
 }
 
 - (void)downloadManagerTabHelper:(DownloadManagerTabHelper*)tabHelper
@@ -46,17 +55,29 @@ using DecidePolicyForDownloadHandler = void (^)(NewDownloadPolicy);
 }
 
 - (void)downloadManagerTabHelper:(DownloadManagerTabHelper*)tabHelper
-                 didHideDownload:(web::DownloadTask*)download {
+                 didHideDownload:(web::DownloadTask*)download
+                        animated:(BOOL)animated {
   _state = nullptr;
 }
 
 - (void)downloadManagerTabHelper:(DownloadManagerTabHelper*)tabHelper
-                 didShowDownload:(web::DownloadTask*)download {
+                 didShowDownload:(web::DownloadTask*)download
+                        animated:(BOOL)animated {
   _state = std::make_unique<web::DownloadTask::State>(download->GetState());
 }
 
 - (void)downloadManagerTabHelper:(DownloadManagerTabHelper*)tabHelper
-     didAddDownloadToSaveToDrive:(web::DownloadTask*)download {
+               didCancelDownload:(web::DownloadTask*)download {
+  _state = std::make_unique<web::DownloadTask::State>(download->GetState());
+}
+
+- (void)downloadManagerTabHelper:(DownloadManagerTabHelper*)tabHelper
+            wantsToStartDownload:(web::DownloadTask*)download {
+}
+
+- (void)downloadManagerTabHelper:(DownloadManagerTabHelper*)tabHelper
+               adaptToFullscreen:(bool)adaptToFullscreen {
+  _shouldObserveFullscreen = adaptToFullscreen;
 }
 
 @end

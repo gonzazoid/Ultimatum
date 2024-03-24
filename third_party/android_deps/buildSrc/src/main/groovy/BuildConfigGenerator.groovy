@@ -576,8 +576,10 @@ class BuildConfigGenerator extends DefaultTask {
                   info_path = "${libPath}/${BuildConfigGenerator.reducedDepencencyId(dependency.id)}.info"
             """.stripIndent(/* forceGroovyBehavior */ true))
         } else if (dependency.extension == 'group') {
+            String targetType = (targetName.startsWith('androidx') ?
+                    'androidx_java_group' : 'java_group')
             sb.append("""\
-                java_group("${targetName}") {
+                ${targetType}("${targetName}") {
             """.stripIndent(/* forceGroovyBehavior */ true))
         } else {
             throw new IllegalStateException('Dependency type should be JAR or AAR or group')
@@ -784,6 +786,7 @@ class BuildConfigGenerator extends DefaultTask {
                     append('  ]\n')
                 }
                 break
+            case 'com_google_android_gms_play_services_tflite_java':
             case 'com_google_ar_core':
                 // Target .aar file contains .so libraries that need to be extracted,
                 // and android_aar_prebuilt template will fail if it's not set explictly.

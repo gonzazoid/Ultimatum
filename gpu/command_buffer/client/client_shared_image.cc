@@ -75,14 +75,27 @@ void ClientSharedImage::ScopedMapping::OnMemoryDump(
   buffer_->OnMemoryDump(pmd, buffer_dump_guid, tracing_process_id, importance);
 }
 
-ClientSharedImage::ClientSharedImage(const Mailbox& mailbox)
-    : mailbox_(mailbox) {
+ClientSharedImage::ClientSharedImage(
+    const Mailbox& mailbox,
+    const Metadata& metadata,
+    const SyncToken& sync_token,
+    scoped_refptr<SharedImageInterfaceHolder> sii_holder)
+    : mailbox_(mailbox),
+      metadata_(metadata),
+      creation_sync_token_(sync_token),
+      sii_holder_(std::move(sii_holder)) {
   CHECK(!mailbox.IsZero());
 }
 
-ClientSharedImage::ClientSharedImage(const Mailbox& mailbox,
-                                     GpuMemoryBufferHandleInfo handle_info)
+ClientSharedImage::ClientSharedImage(
+    const Mailbox& mailbox,
+    const Metadata& metadata,
+    const SyncToken& sync_token,
+    GpuMemoryBufferHandleInfo handle_info,
+    scoped_refptr<SharedImageInterfaceHolder> sii_holder)
     : mailbox_(mailbox),
+      metadata_(metadata),
+      creation_sync_token_(sync_token),
       gpu_memory_buffer_(
           GpuMemoryBufferSupport().CreateGpuMemoryBufferImplFromHandle(
               std::move(handle_info.handle),
@@ -93,7 +106,8 @@ ClientSharedImage::ClientSharedImage(const Mailbox& mailbox,
               viz::SinglePlaneSharedImageFormatToBufferFormat(
                   handle_info.format),
               handle_info.buffer_usage,
-              base::DoNothing())) {
+              base::DoNothing())),
+      sii_holder_(std::move(sii_holder)) {
   CHECK(!mailbox.IsZero());
 }
 

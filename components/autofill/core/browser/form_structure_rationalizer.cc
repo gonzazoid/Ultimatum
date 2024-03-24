@@ -7,7 +7,7 @@
 #include "base/containers/contains.h"
 #include "base/ranges/algorithm.h"
 #include "components/autofill/core/browser/field_types.h"
-#include "components/autofill/core/browser/form_parsing/credit_card_field.h"
+#include "components/autofill/core/browser/form_parsing/credit_card_field_parser.h"
 #include "components/autofill/core/browser/form_structure_rationalization_engine.h"
 #include "components/autofill/core/browser/logging/log_manager.h"
 #include "components/autofill/core/browser/rationalization_util.h"
@@ -129,8 +129,8 @@ void FormStructureRationalizer::RationalizeAutocompleteAttributes(
           FieldType forced_field_type =
               field->server_type_prediction_is_override() ? field->server_type()
                                                           : NO_SERVER_DATA;
-          CreditCardField::ExpirationDateFormat format =
-              CreditCardField::DetermineExpirationDateFormat(
+          CreditCardFieldParser::ExpirationDateFormat format =
+              CreditCardFieldParser::DetermineExpirationDateFormat(
                   *field, /*fallback_type=*/CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR,
                   /*server_hint=*/server_hint,
                   /*forced_field_type=*/forced_field_type);
@@ -161,12 +161,14 @@ void FormStructureRationalizer::RationalizeAutocompleteAttributes(
           // because it's practically always chosen from the select options.
           // The default for text elements was chosen base on statistics from
           // server side classifications (go/iqwtu).
-          // Keep this in sync with CreditCardField::GetExpirationYearType().
-          FieldType overall_type = CreditCardField::DetermineExpirationYearType(
-              *field,
-              /*fallback_type=*/CREDIT_CARD_EXP_4_DIGIT_YEAR,
-              /*server_hint=*/server_hint,
-              /*forced_field_type=*/forced_field_type);
+          // Keep this in sync with
+          // CreditCardFieldParser::GetExpirationYearType().
+          FieldType overall_type =
+              CreditCardFieldParser::DetermineExpirationYearType(
+                  *field,
+                  /*fallback_type=*/CREDIT_CARD_EXP_4_DIGIT_YEAR,
+                  /*server_hint=*/server_hint,
+                  /*forced_field_type=*/forced_field_type);
           set_html_type(overall_type == CREDIT_CARD_EXP_4_DIGIT_YEAR
                             ? HtmlFieldType::kCreditCardExp4DigitYear
                             : HtmlFieldType::kCreditCardExp2DigitYear);
@@ -180,6 +182,15 @@ void FormStructureRationalizer::RationalizeAutocompleteAttributes(
         break;
       default:
         break;
+    }
+  }
+}
+
+void FormStructureRationalizer::RationalizeContentEditables(
+    LogManager* log_manager) {
+  for (const auto& field : *fields_) {
+    if (field->form_control_type == FormControlType::kContentEditable) {
+      field->SetTypeTo(AutofillType(UNKNOWN_TYPE));
     }
   }
 }
@@ -399,8 +410,8 @@ void FormStructureRationalizer::RationalizeCreditCardFieldPredictions(
         FieldType forced_field_type =
             field->server_type_prediction_is_override() ? server_hint
                                                         : NO_SERVER_DATA;
-        CreditCardField::ExpirationDateFormat format =
-            CreditCardField::DetermineExpirationDateFormat(
+        CreditCardFieldParser::ExpirationDateFormat format =
+            CreditCardFieldParser::DetermineExpirationDateFormat(
                 *field, /*fallback_type=*/CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR,
                 /*server_hint=*/server_hint,
                 /*forced_field_type=*/forced_field_type);
@@ -477,8 +488,8 @@ void FormStructureRationalizer::RationalizeCreditCardNumberOffsets(
   // element.
   auto may_be_group = [](Group group) {
     DCHECK_GE(group.size(), 1u);
-    DCHECK(base::ranges::all_of(
-        group.subspan(0, group.size() - 1), [](const auto& f) {
+    DCHECK(
+        base::ranges::all_of(group.first(group.size() - 1), [](const auto& f) {
           return f->ComputedType().GetStorableType() == CREDIT_CARD_NUMBER;
         }));
     size_t last = group.size() - 1;
@@ -498,7 +509,7 @@ void FormStructureRationalizer::RationalizeCreditCardNumberOffsets(
   // 2. there are at least 2 non-overflow fields.
   auto has_reasonable_length = [](Group group) {
     DCHECK(!group.empty());
-    DCHECK(base::ranges::all_of(group.subspan(0, group.size() - 1),
+    DCHECK(base::ranges::all_of(group.first(group.size() - 1),
                                 [group](const auto& f) {
                                   return f->max_length == group[0]->max_length;
                                 }));

@@ -26,11 +26,7 @@
 #include "gpu/command_buffer/common/mailbox.h"
 #include "gpu/command_buffer/common/sync_token.h"
 #include "ui/gfx/geometry/size.h"
-#include "ui/gfx/gpu_memory_buffer.h"
 
-namespace gfx {
-class GpuMemoryBuffer;
-}
 namespace gpu {
 namespace raster {
 class RasterInterface;
@@ -58,12 +54,7 @@ struct StagingBuffer {
   const viz::SharedImageFormat format;
   base::TimeTicks last_usage;
 
-  // The following fields are initialized by OneCopyRasterBufferProvider.
-  // Storage for the staging buffer.  This can be a GPU native or shared memory
-  // GpuMemoryBuffer.
-  std::unique_ptr<gfx::GpuMemoryBuffer> gpu_memory_buffer;
-
-  // The shared image bound to the GpuMemoryBuffer.
+  // The shared image used by this StagingBuffer instance.
   scoped_refptr<gpu::ClientSharedImage> client_shared_image;
 
   // Sync token for the last RasterInterface operations using the shared image.
@@ -137,7 +128,8 @@ class CC_EXPORT StagingBufferPool final
 
   mutable base::Lock lock_;
   // |lock_| must be acquired when accessing the following members.
-  using StagingBufferSet = std::set<const StagingBuffer*>;
+  using StagingBufferSet =
+      std::set<raw_ptr<const StagingBuffer, SetExperimental>>;
   StagingBufferSet buffers_;
   using StagingBufferDeque =
       base::circular_deque<std::unique_ptr<StagingBuffer>>;

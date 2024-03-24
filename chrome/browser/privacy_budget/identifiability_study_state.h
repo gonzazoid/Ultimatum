@@ -37,6 +37,10 @@ namespace blink {
 class IdentifiableSurface;
 }  // namespace blink
 
+namespace content {
+class RenderProcessHost;
+}  // namespace content
+
 namespace test_utils {
 class InspectableIdentifiabilityStudyState;
 }  // namespace test_utils
@@ -111,6 +115,9 @@ class IdentifiabilityStudyState {
   // Initializes from fields persisted in `pref_service_`.
   void InitFromPrefs();
 
+  // Initializes a new renderer process.
+  void InitializeRenderer(content::RenderProcessHost* render_process_host);
+
   // The largest offset that we can select. At worst `seen_surfaces_` must keep
   // track of this many (+1) surfaces. This value is approximately based on the
   // 90ᵗʰ percentile surface encounter rate as measured in June 2021.
@@ -142,9 +149,11 @@ class IdentifiabilityStudyState {
       base::flat_map<blink::IdentifiableSurface::Type, int>;
 
   // Initializes global study settings based on FeatureLists and FieldTrial
-  // lists. This step is required for enabling the study and must be called
-  // prior to constructing an `IdentifiabilityStudyState` object.
-  static void InitializeGlobalStudySettings();
+  // lists.
+  void InitializeGlobalStudySettings();
+
+  // Determines if the meta experiment must be activated for this client.
+  bool IsMetaExperimentActive();
 
   // Checks that the invariants hold. When DCHECK_IS_ON() this call is
   // expensive. Noop otherwise.
@@ -380,6 +389,12 @@ class IdentifiabilityStudyState {
   //
   // Where kSettings is the PrivacyBudgetSettingsProvider singleton.
   EncounteredSurfaceTracker surface_encounters_;
+
+  // Whether the meta experiment (i.e. reporting the meta surfaces, which
+  // include information only about usage of APIs) is active or not. Note that
+  // this setting is independent from the rest of the Identifiability Study, and
+  // can be enabled / disabled separately.
+  const bool meta_experiment_active_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 };

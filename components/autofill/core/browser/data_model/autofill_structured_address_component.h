@@ -6,6 +6,7 @@
 #define COMPONENTS_AUTOFILL_CORE_BROWSER_DATA_MODEL_AUTOFILL_STRUCTURED_ADDRESS_COMPONENT_H_
 
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -140,7 +141,14 @@ enum MergeMode {
 class AddressComponent {
  public:
   // List of node subcomponents.
-  using SubcomponentsList = std::vector<std::unique_ptr<AddressComponent>>;
+  //
+  // Nodes within the tree-like structure do not directly manage the lifetime
+  // of their child nodes. Instead, the AddressComponentsStore serves as the
+  // central owner and manager of AddressComponent nodes. When the
+  // AddressComponentsStore is being destroyed, the WipeRawPtrsForDestruction
+  // function is used to clear the list of child pointers. This prevents
+  // dangling pointers during the destruction process.
+  using SubcomponentsList = std::vector<AddressComponent*>;
 
   // Constructor for a compound child node.
   AddressComponent(FieldType storage_type,
@@ -162,9 +170,9 @@ class AddressComponent {
   bool operator==(const AddressComponent& right) const = delete;
   bool operator!=(const AddressComponent& right) const = delete;
 
-  // Compares the values and verification statuses with |other| recursively down
-  // the tree. Returns true iff all values and verification statuses of this
-  // node and its subtree and |other| with its subtree are the same.
+  // Compares the values and verification statuses with |other| recursively
+  // down the tree. Returns true iff all values and verification statuses of
+  // this node and its subtree and |other| with its subtree are the same.
   bool SameAs(const AddressComponent& other) const;
 
   // Copies the values and verification statuses from |other| recursively down
@@ -174,10 +182,10 @@ class AddressComponent {
   // Returns the autofill storage type stored in |storage_type_|.
   FieldType GetStorageType() const;
 
-  // Returns either `storage_type_` or a fallback type used to replace
-  // `storage_type_` in case its node does not contain information.
-  // TODO(crbug.com/1464568): Add logic for i18n fallback types.
-  FieldType GetFallbackType() const { return storage_type_; }
+  // Returns the type to be used instead of `field_type` when this type does
+  // not contain information. It is assumed that `field_type` is a supported
+  // type of the node,
+  FieldType GetFallbackType(FieldType field_type) const;
 
   // Returns the string representation of |storage_type_|.
   std::string GetStorageTypeName() const;
@@ -264,6 +272,11 @@ class AddressComponent {
   // form the root node. Returns true if the completion was successful.
   virtual bool CompleteFullTree();
 
+  // Generates values for the tree's synthesized nodes recursively, starting
+  // from the root. Values for synthesized nodes are generated using formatting
+  // expressions.
+  void GenerateTreeSynthesizedNodes();
+
   // Checks if a tree is completable in the sense that there are no conflicting
   // observed or verified types. This means that there is not more than one
   // observed or verified node on any root-to-leaf path in the tree.
@@ -321,8 +334,18 @@ class AddressComponent {
   // Returns a constant vector of pointers to the child nodes of the component.
   const SubcomponentsList& Subcomponents() const { return subcomponents_; }
 
+  // Returns a pointer to the parent node.
+  AddressComponent* Parent() const { return parent_; }
+
+  // Register a new synthesized component in the `synthesized_subcomponents_`
+  // list. Note that similarly as default subcomponents, synthesized
+  // subcomponents are owned by the corresponding `AddressComponentsStore` and
+  // not by `this`
+  void RegisterSynthesizedSubcomponent(AddressComponent* synthesized_component);
+
   // Returns a vector containing sorted normalized tokens of the
-  // value of the component. The tokens are lazily calculated when first needed.
+  // value of the component. The tokens are lazily calculated when first
+  // needed.
   const std::vector<AddressToken> GetSortedTokens() const;
 
   // Recursively unsets all subcomponents.
@@ -350,43 +373,9 @@ class AddressComponent {
   // Returns true if all values of all descendent nodes are empty.
   bool AllDescendantsAreEmpty() const;
 
-#ifdef UNIT_TEST
-  // Initiates the formatting of the values from the subcomponents.
-  void FormatValueFromSubcomponentsForTesting() {
-    FormatValueFromSubcomponents();
-  }
-
-  // Returns the best format string for testing.
-  std::u16string GetFormatStringForTesting() const { return GetFormatString(); }
-
-  // Returns the parse expressions by relevance for testing.
-  std::vector<const re2::RE2*>
-  GetParseRegularExpressionsByRelevanceForTesting() {
-    return GetParseRegularExpressionsByRelevance();
-  }
-
-  // Returns a reference to the root node of the tree for testing.
-  AddressComponent& GetRootNodeForTesting() { return GetRootNode(); }
-
-  // Returns a vector containing the |storage_types_| of all direct
-  // subcomponents.
-  std::vector<FieldType> GetSubcomponentTypesForTesting() const {
-    return GetSubcomponentTypes();
-  }
-
-  // Sets the merge mode for testing purposes.
-  void SetMergeModeForTesting(int merge_mode) { merge_mode_ = merge_mode; }
-
-  // Returns the value used for comparison for testing purposes.
-  std::u16string GetValueForComparisonForTesting(
-      const AddressComponent& other) const {
-    return GetValueForComparison(other);
-  }
-
-  AddressComponent* GetNodeForTypeForTesting(FieldType field_type) {
-    return GetNodeForType(field_type);
-  }
-#endif
+  // Wipes internal pointers to guarantee that no pointers are kept to other
+  // potentially destructed nodes.
+  void WipeRawPtrsForDestruction();
 
  protected:
   // Returns the verification score of this component and its substructure.
@@ -395,6 +384,11 @@ class AddressComponent {
 
   // Returns whether `field_type` is a supported type for the current node.
   bool IsSupportedType(FieldType field_type) const;
+
+  // Returns whether the node's value is read-only. If true, the node's value
+  // can only be set internally via `SetValue` but not from a caller outside of
+  // the AddressComponent tree.
+  virtual bool IsValueReadOnly() const;
 
   // Returns a vector containing the |storage_types_| of all direct
   // subcomponents.
@@ -498,9 +492,15 @@ class AddressComponent {
   // from the component to a leaf node.
   int MaximumNumberOfAssignedAddressComponentsOnNodeToLeafPaths() const;
 
-  // Function to be called by child nodes on construction to register
-  // themselves as child nodes.
-  void RegisterChildNode(std::unique_ptr<AddressComponent> child);
+  // Function to be called by nodes to register new children in their
+  // `subcomponents_` list. Note that children are owned by the corresponding
+  // `AddressComponentsStore` and not by `this`.
+  // `set_as_parent_of_child` is used to prevent the child from setting its
+  // parent pointer to `this` when the child is already a child of another node.
+  // This is the case for the children of synthesized nodes that don't get a new
+  // parent assigned.
+  void RegisterChildNode(AddressComponent* child,
+                         bool set_as_parent_of_child = true);
 
   // Returns the node in the tree that supports `field_type`. This node, if it
   // exists, is unique by definition. Returns nullptr if no such node exists.
@@ -515,6 +515,8 @@ class AddressComponent {
                         FieldTypeSet* supported_types) const;
 
  private:
+  friend class AddressComponentTestApi;
+
   // Unsets the node and all of its children.
   void UnsetAddressComponentAndItsSubcomponents();
 
@@ -525,10 +527,10 @@ class AddressComponent {
   // nodes that are empty (e.g. a new leaf or internal node got recently
   // introduced). Gap filling addresses all those cases.
   // The overall strategy is: For every empty node, try building its value by
-  // parsing its parent. If that's not possible (e.g. info can't be parsed), use
-  // formatting rules to build a value from its children. Note that this process
-  // respects non-empty nodes and the information growth invariant (i.e child
-  // information is always contained on their ancestors).
+  // parsing its parent. If that's not possible (e.g. info can't be parsed),
+  // use formatting rules to build a value from its children. Note that this
+  // process respects non-empty nodes and the information growth invariant (i.e
+  // child information is always contained on their ancestors).
   void FillTreeGaps();
 
   // Determines a value from the subcomponents by using the
@@ -560,7 +562,8 @@ class AddressComponent {
   // subcomponents only. The value assigned to each subcomponent is compatible
   // with the information growth invariant (i.e child information is always
   // contained on their ancestors). If parsing is not successful, the function
-  // does not perform any modifications. Returns true if parsing was successful.
+  // does not perform any modifications. Returns true if parsing was
+  // successful.
   bool ParseValueAndAssignSubcomponentsRespectingSetValues(
       const std::u16string& value,
       const re2::RE2* parse_expression);
@@ -598,6 +601,15 @@ class AddressComponent {
   // A vector of children of the component.
   SubcomponentsList subcomponents_;
 
+  // A vector of synthesized nodes of the component.
+  //
+  // Nodes in the tree might have synthesized nodes linked to it. A synthesized
+  // node, is a node whose value is calculated from its constituents. While
+  // synthesized types are not directly part of the address hierarchy tree, its
+  // constituents are. Synthesized nodes, similarly as normal subcomponents are
+  // stored in the AddressComponentsStore.
+  SubcomponentsList synthesized_subcomponents_;
+
   // A vector that contains the tokens of |value_| after normalization,
   // meaning that it was converted to lower case and diacritics have been
   // removed. |value_| is tokenized by splitting the string by white spaces and
@@ -605,7 +617,10 @@ class AddressComponent {
   std::optional<std::vector<AddressToken>> sorted_normalized_tokens_;
 
   // A pointer to the parent node. It is set to nullptr if the node is the root
-  // node of the AddressComponent tree.
+  // node of the AddressComponent tree. Similarly to the `subcomponents_`, the
+  // parent node is owned by the `AddressComponentsStore`. The pointer is
+  // cleared during the destruction process of the `AddressComponentsStore` to
+  // prevent dangling pointers to other nodes.
   raw_ptr<AddressComponent> parent_ = nullptr;
 
   // Defines if and how two components can be merged.

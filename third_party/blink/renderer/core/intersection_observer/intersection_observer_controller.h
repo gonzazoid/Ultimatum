@@ -40,7 +40,7 @@ class IntersectionObserverController
   bool ComputeIntersections(
       unsigned flags,
       LocalFrameUkmAggregator* metrics_aggregator,
-      absl::optional<base::TimeTicks>& monotonic_time,
+      std::optional<base::TimeTicks>& monotonic_time,
       gfx::Vector2dF accumulated_scroll_delta_since_last_update);
 
   // The second argument indicates whether the Element is a target of any
@@ -63,8 +63,6 @@ class IntersectionObserverController
   unsigned GetTrackedObservationCountForTesting() const {
     return tracked_implicit_root_observations_.size();
   }
-
-  void InvalidateCachedRectsIfPaintPropertiesChanged();
 
  private:
   void PostTaskToDeliverNotifications();

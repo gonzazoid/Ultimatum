@@ -24,6 +24,7 @@
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/tabs/tab_group.h"
 #include "chrome/browser/ui/tabs/tab_group_model.h"
+#include "chrome/browser/ui/tabs/tab_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/extensions/api/tab_groups.h"
 #include "chrome/common/extensions/api/tabs.h"
@@ -33,6 +34,8 @@
 #include "components/tab_groups/tab_group_id.h"
 #include "components/tab_groups/tab_group_visual_data.h"
 #include "ui/gfx/range/range.h"
+
+using tabs::TabModel;
 
 namespace extensions {
 
@@ -44,17 +47,18 @@ bool IndexSupportsGroupMove(TabStripModel* tab_strip,
                             int target_index,
                             std::string* error) {
   // A group can always be moved to the end of the tabstrip.
-  if (target_index >= tab_strip->count() || target_index < 0)
+  if (target_index >= tab_strip->count() || target_index < 0) {
     return true;
+  }
 
   if (tab_strip->IsTabPinned(target_index)) {
     *error = tab_groups_constants::kCannotMoveGroupIntoMiddleOfPinnedTabsError;
     return false;
   }
 
-  absl::optional<tab_groups::TabGroupId> target_group =
+  std::optional<tab_groups::TabGroupId> target_group =
       tab_strip->GetTabGroupForTab(target_index);
-  absl::optional<tab_groups::TabGroupId> adjacent_group =
+  std::optional<tab_groups::TabGroupId> adjacent_group =
       tab_strip->GetTabGroupForTab(target_index - 1);
 
   if (target_group.has_value() && target_group == adjacent_group) {
@@ -68,7 +72,7 @@ bool IndexSupportsGroupMove(TabStripModel* tab_strip,
 }  // namespace
 
 ExtensionFunction::ResponseAction TabGroupsGetFunction::Run() {
-  absl::optional<api::tab_groups::Get::Params> params =
+  std::optional<api::tab_groups::Get::Params> params =
       api::tab_groups::Get::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   int group_id = params->group_id;
@@ -89,7 +93,7 @@ ExtensionFunction::ResponseAction TabGroupsGetFunction::Run() {
 }
 
 ExtensionFunction::ResponseAction TabGroupsQueryFunction::Run() {
-  absl::optional<api::tab_groups::Query::Params> params =
+  std::optional<api::tab_groups::Query::Params> params =
       api::tab_groups::Query::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
@@ -159,7 +163,7 @@ ExtensionFunction::ResponseAction TabGroupsQueryFunction::Run() {
 }
 
 ExtensionFunction::ResponseAction TabGroupsUpdateFunction::Run() {
-  absl::optional<api::tab_groups::Update::Params> params =
+  std::optional<api::tab_groups::Update::Params> params =
       api::tab_groups::Update::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
@@ -214,7 +218,7 @@ ExtensionFunction::ResponseAction TabGroupsUpdateFunction::Run() {
 }
 
 ExtensionFunction::ResponseAction TabGroupsMoveFunction::Run() {
-  absl::optional<api::tab_groups::Move::Params> params =
+  std::optional<api::tab_groups::Move::Params> params =
       api::tab_groups::Move::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
@@ -224,8 +228,11 @@ ExtensionFunction::ResponseAction TabGroupsMoveFunction::Run() {
 
   tab_groups::TabGroupId group = tab_groups::TabGroupId::CreateEmpty();
   std::string error;
-  if (!MoveGroup(group_id, new_index, window_id, &group, &error))
+  const bool group_moved =
+      MoveGroup(group_id, new_index, window_id, &group, &error);
+  if (!group_moved) {
     return RespondNow(Error(std::move(error)));
+  }
 
   if (!has_callback())
     return RespondNow(NoArguments());
@@ -236,7 +243,7 @@ ExtensionFunction::ResponseAction TabGroupsMoveFunction::Run() {
 
 bool TabGroupsMoveFunction::MoveGroup(int group_id,
                                       int new_index,
-                                      const absl::optional<int>& window_id,
+                                      const std::optional<int>& window_id,
                                       tab_groups::TabGroupId* group,
                                       std::string* error) {
   Browser* source_browser = nullptr;
@@ -261,8 +268,9 @@ bool TabGroupsMoveFunction::MoveGroup(int group_id,
 
   gfx::Range tabs =
       source_tab_strip->group_model()->GetTabGroup(*group)->ListTabs();
-  if (tabs.length() == 0)
+  if (tabs.length() == 0) {
     return false;
+  }
 
   if (window_id) {
     Browser* target_browser = nullptr;
@@ -302,23 +310,25 @@ bool TabGroupsMoveFunction::MoveGroup(int group_id,
       return false;
     }
 
-    if (new_index > target_tab_strip->count() || new_index < 0)
+    if (new_index > target_tab_strip->count() || new_index < 0) {
       new_index = target_tab_strip->count();
+    }
 
-    if (!IndexSupportsGroupMove(target_tab_strip, new_index, error))
+    if (!IndexSupportsGroupMove(target_tab_strip, new_index, error)) {
       return false;
+    }
 
     target_tab_strip->group_model()->AddTabGroup(*group, *visual_data);
 
     for (size_t i = 0; i < tabs.length(); ++i) {
       // Detach tabs from the same index each time, since each detached tab is
       // removed from the model, and groups are always contiguous.
-      std::unique_ptr<content::WebContents> web_contents =
-          source_tab_strip->DetachWebContentsAtForInsertion(tabs.start());
+      std::unique_ptr<TabModel> detached_tab =
+          source_tab_strip->DetachTabAtForInsertion(tabs.start());
 
       // Attach tabs in consecutive indices, to insert them in the same order.
-      target_tab_strip->InsertWebContentsAt(new_index + i,
-                                            std::move(web_contents),
+      target_tab_strip->InsertDetachedTabAt(new_index + i,
+                                            std::move(detached_tab),
                                             AddTabTypes::ADD_NONE, *group);
     }
 
@@ -330,25 +340,27 @@ bool TabGroupsMoveFunction::MoveGroup(int group_id,
   // When moving to the right, adjust the target index for the size of the
   // group, since the group itself may occupy several indices to the right.
   const int start_index = tabs.start();
-  if (new_index > start_index)
-    new_index += tabs.length() - 1;
+  const int new_index_before_group_is_removed =
+      new_index > start_index ? new_index + tabs.length() : new_index;
 
-  // Unlike when moving between windows, IndexSupportsGroupMove should be called
-  // before clamping the index to count()-1 instead of after. Since the current
-  // group being moved could occupy index count()-1, IndexSupportsGroupMove
-  // could return a false negative for the current group.
-  if (!IndexSupportsGroupMove(source_tab_strip, new_index, error))
+  if (!IndexSupportsGroupMove(source_tab_strip,
+                              new_index_before_group_is_removed, error)) {
     return false;
+  }
 
   // Unlike when moving between windows, the index should be clamped to
-  // count()-1 instead of count(). Since the current tab(s) being moved are
-  // within the same tabstrip, they can't be added beyond the end of the
-  // occupied indices, but rather just shifted among them.
-  if (new_index >= source_tab_strip->count() || new_index < 0)
-    new_index = source_tab_strip->count() - 1;
+  // count() - (#num of tabs in group being moved). Since the current tab(s)
+  // being moved are within the same tabstrip, they can't be added beyond the
+  // end of the occupied indices, but rather just shifted among them.
+  const int size_after_group_removed =
+      source_tab_strip->count() - tabs.length();
+  if (new_index >= size_after_group_removed || new_index < 0) {
+    new_index = size_after_group_removed;
+  }
 
-  if (new_index == start_index)
+  if (new_index == start_index) {
     return true;
+  }
 
   source_tab_strip->MoveGroupTo(*group, new_index);
 

@@ -15,7 +15,7 @@
     --cr-toolbar-padding-top: 8px;
   }
 
-  os-toolbar {
+  settings-toolbar {
     /* TODO(hsuregan): update for dark mode when needed. */
     min-height: 56px;
     /* Needs to be higher than #cr-container-show-top's z-index so that the
@@ -45,7 +45,7 @@
   }
 
   :host-context(body.revamp-wayfinding-enabled) #container {
-    padding-top: var(--settings-container-padding-top);
+    padding-top: 8px;
   }
 
   #left,
@@ -58,6 +58,8 @@
     height: 100%;
     position: sticky;
     top: 0;
+    /* Specify z-index so menu item tooltips overlay #center content. */
+    z-index: 100;
   }
 
   #left os-settings-menu {
@@ -78,6 +80,15 @@
 
   #center {
     flex-basis: var(--settings-main-basis);
+  }
+
+  :host-context(body.revamp-wayfinding-enabled) #center  {
+    height: 100%;
+  }
+
+  /* Take up all remaining vertical space. */
+  :host-context(body.revamp-wayfinding-enabled) #center > os-settings-main {
+    min-height: 100%;
   }
 
   /* The breakpoint of 980px was decided on by the rounded sum of
@@ -114,13 +125,13 @@
     query-matches="{{isNarrow}}">
 </iron-media-query>
 <template is="dom-if" if="[[showToolbar_]]">
-  <os-toolbar on-os-toolbar-menu-tap="onMenuButtonClick_"
+  <settings-toolbar on-settings-toolbar-menu-tap="onMenuButtonClick_"
       spinner-active="[[toolbarSpinnerActive_]]"
       role="banner"
       narrow="[[isNarrow]]"
       narrow-threshold="980"
       show-menu="[[isNarrow]]">
-  </os-toolbar>
+  </settings-toolbar>
 </template>
 <template is="dom-if" if="[[showNavMenu_]]">
   <cr-drawer id="drawer" on-close="onMenuClose_" heading="$i18n{settings}"
@@ -139,6 +150,7 @@
     <div slot="body">
       <template is="dom-if" id="drawerTemplate">
         <os-settings-menu
+            is-drawer-menu
             page-availability="[[pageAvailability_]]"
             on-iron-activate="onMenuItemSelected_"
             advanced-opened="{{advancedOpenedInMenu_}}">

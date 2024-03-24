@@ -2430,15 +2430,15 @@ IN_PROC_BROWSER_TEST_F(WebContentsImplBrowserTest,
   run_loop.Run();
 }
 
-class MouseLockDelegate : public WebContentsDelegate {
+class PointerLockDelegate : public WebContentsDelegate {
  public:
   // WebContentsDelegate:
-  void RequestToLockMouse(WebContents* web_contents,
+  void RequestPointerLock(WebContents* web_contents,
                           bool user_gesture,
                           bool last_unlocked_by_target) override {
-    request_to_lock_mouse_called_ = true;
+    request_pointer_lock_called_ = true;
   }
-  bool request_to_lock_mouse_called_ = false;
+  bool request_pointer_lock_called_ = false;
 };
 
 // TODO(crbug.com/898641): This test is flaky.
@@ -2446,7 +2446,7 @@ IN_PROC_BROWSER_TEST_F(WebContentsImplBrowserTest,
                        DISABLED_RenderWidgetDeletedWhileMouseLockPending) {
   ASSERT_TRUE(embedded_test_server()->Start());
 
-  std::unique_ptr<MouseLockDelegate> delegate(new MouseLockDelegate());
+  std::unique_ptr<PointerLockDelegate> delegate(new PointerLockDelegate());
   shell()->web_contents()->SetDelegate(delegate.get());
   ASSERT_TRUE(shell()->web_contents()->GetDelegate() == delegate.get());
 
@@ -2457,7 +2457,7 @@ IN_PROC_BROWSER_TEST_F(WebContentsImplBrowserTest,
   ASSERT_TRUE(ExecJs(shell(),
                      "window.domAutomationController.send(document.body."
                      "requestPointerLock());"));
-  EXPECT_TRUE(delegate.get()->request_to_lock_mouse_called_);
+  EXPECT_TRUE(delegate.get()->request_pointer_lock_called_);
 
   // Make sure that the renderer didn't get the pointer lock, since the
   // WebContentsDelegate didn't approve the notification.
@@ -2465,11 +2465,11 @@ IN_PROC_BROWSER_TEST_F(WebContentsImplBrowserTest,
 
   // Try to request the pointer lock again. Since there's a pending request in
   // WebContentsDelelgate, the WebContents shouldn't ask again.
-  delegate.get()->request_to_lock_mouse_called_ = false;
+  delegate.get()->request_pointer_lock_called_ = false;
   ASSERT_TRUE(ExecJs(shell(),
                      "window.domAutomationController.send(document.body."
                      "requestPointerLock());"));
-  EXPECT_FALSE(delegate.get()->request_to_lock_mouse_called_);
+  EXPECT_FALSE(delegate.get()->request_pointer_lock_called_);
 
   // Force a cross-process navigation so that the RenderWidgetHost is deleted.
   EXPECT_TRUE(NavigateToURL(
@@ -2477,11 +2477,11 @@ IN_PROC_BROWSER_TEST_F(WebContentsImplBrowserTest,
 
   // Make sure the WebContents cleaned up the previous pending request. A new
   // request should be forwarded to the WebContentsDelegate.
-  delegate.get()->request_to_lock_mouse_called_ = false;
+  delegate.get()->request_pointer_lock_called_ = false;
   ASSERT_TRUE(ExecJs(shell(),
                      "window.domAutomationController.send(document.body."
                      "requestPointerLock());"));
-  EXPECT_TRUE(delegate.get()->request_to_lock_mouse_called_);
+  EXPECT_TRUE(delegate.get()->request_pointer_lock_called_);
 }
 
 // Checks that user agent override string is only used when it's overridden.
@@ -2635,8 +2635,6 @@ class WebContentsImplBrowserTestClientHintsEnabled
  public:
   void SetUp() override {
     scoped_feature_list_.Reset();
-    scoped_feature_list_.InitAndEnableFeature(
-        blink::features::kUserAgentClientHint);
     WebContentsImplBrowserTest::SetUp();
   }
 };
@@ -3447,8 +3445,8 @@ IN_PROC_BROWSER_TEST_F(WebContentsImplBrowserTest, TitleUpdateOnRestore) {
   restored_entry->SetTitle(controller.GetLastCommittedEntry()->GetTitle());
 
   // Create a new tab.
-  Shell* new_shell = Shell::CreateNewWindow(
-      controller.GetBrowserContext(), GURL::EmptyGURL(), nullptr, gfx::Size());
+  Shell* new_shell = Shell::CreateNewWindow(controller.GetBrowserContext(),
+                                            GURL(), nullptr, gfx::Size());
   WebContentsImpl* new_contents =
       static_cast<WebContentsImpl*>(new_shell->web_contents());
   // Before the restore is initiated, the WebContents starts with an empty
@@ -3826,7 +3824,7 @@ IN_PROC_BROWSER_TEST_F(WebContentsImplBrowserTest, NotifyFullscreenAcquired) {
   RenderFrameHostImpl* child_frame =
       static_cast<RenderFrameHostImpl*>(ChildFrameAt(main_frame, 0));
 
-  std::set<RenderFrameHostImpl*> fullscreen_frames;
+  std::set<raw_ptr<RenderFrameHostImpl, SetExperimental>> fullscreen_frames;
   EXPECT_EQ(fullscreen_frames, web_contents->fullscreen_frames_);
   EXPECT_FALSE(IsInFullscreen());
 
@@ -3953,7 +3951,7 @@ IN_PROC_BROWSER_TEST_F(WebContentsImplBrowserTest,
   RenderFrameHostImpl* child_frame =
       static_cast<RenderFrameHostImpl*>(ChildFrameAt(main_frame, 0));
 
-  std::set<RenderFrameHostImpl*> nodes;
+  std::set<raw_ptr<RenderFrameHostImpl, SetExperimental>> nodes;
   EXPECT_EQ(nodes, web_contents->fullscreen_frames_);
   EXPECT_FALSE(IsInFullscreen());
 
@@ -4004,7 +4002,7 @@ IN_PROC_BROWSER_TEST_F(WebContentsImplBrowserTest,
   RenderFrameHostImpl* child_frame =
       static_cast<RenderFrameHostImpl*>(ChildFrameAt(main_frame, 0));
 
-  std::set<RenderFrameHostImpl*> fullscreen_frames;
+  std::set<raw_ptr<RenderFrameHostImpl, SetExperimental>> fullscreen_frames;
   EXPECT_EQ(fullscreen_frames, web_contents->fullscreen_frames_);
   EXPECT_FALSE(IsInFullscreen());
 
@@ -4519,10 +4517,9 @@ IN_PROC_BROWSER_TEST_F(WebContentsImplBrowserTest,
 // frame and mouse up is on OOF iframe, the mouse up event is delivered to the
 // main frame as well to clear cached mouse states including autoscroll
 // selection state.
-// TODO(crbug.com/1517238): Disabled due to too many timeouts.
 IN_PROC_BROWSER_TEST_F(
     WebContentsImplBrowserTest,
-    DISABLED_MouseUpInOOPIframeShouldCancelMainFrameAutoscrollSelection) {
+    MouseUpInOOPIframeShouldCancelMainFrameAutoscrollSelection) {
   ASSERT_TRUE(embedded_test_server()->Start());
   WebContentsImpl* web_contents =
       static_cast<WebContentsImpl*>(shell()->web_contents());
@@ -4572,10 +4569,21 @@ IN_PROC_BROWSER_TEST_F(
   // Click the input element and start typing.
   SimulateMouseClickAt(web_contents, 0, blink::WebMouseEvent::Button::kLeft,
                        gfx::Point(input_center_x, input_center_y));
+  RunUntilInputProcessed(web_contents->GetRenderWidgetHostWithPageFocus());
+  EXPECT_TRUE(ExecJs(web_contents,
+                     "var inputElement = document.getElementById('input1');"
+                     "new Promise(function(resolve) {"
+                     "  if (document.activeElement == inputElement)"
+                     "    resolve(true);"
+                     "  inputElement.addEventListener('focus', () => {"
+                     "    resolve(true);"
+                     "  });"
+                     "});"));
   SimulateKeyPress(web_contents, ui::DomKey::FromCharacter('A'),
                    ui::DomCode::US_A, ui::VKEY_A, false, false, false, false);
   SimulateKeyPress(web_contents, ui::DomKey::FromCharacter('B'),
                    ui::DomCode::US_B, ui::VKEY_B, false, false, false, false);
+  RunUntilInputProcessed(web_contents->GetRenderWidgetHostWithPageFocus());
   EXPECT_TRUE(ExecJs(web_contents,
                      "var inputElement = document.getElementById('input1');"
                      "new Promise(function(resolve) {"
@@ -4642,6 +4650,7 @@ IN_PROC_BROWSER_TEST_F(
                    ui::DomCode::US_E, ui::VKEY_E, false, false, false, false);
   SimulateKeyPress(web_contents, ui::DomKey::FromCharacter('F'),
                    ui::DomCode::US_F, ui::VKEY_F, false, false, false, false);
+  RunUntilInputProcessed(web_contents->GetRenderWidgetHostWithPageFocus());
   EXPECT_TRUE(ExecJs(web_contents,
                      "var inputElement = document.getElementById('input1');"
                      "new Promise(function(resolve) {"
@@ -5353,8 +5362,8 @@ IN_PROC_BROWSER_TEST_F(WebContentsImplBrowserTest,
                        IgnoreUnresponsiveRendererDuringPaste) {
   WebContentsImpl* web_contents =
       static_cast<WebContentsImpl*>(shell()->web_contents());
-  ClipboardPasteData clipboard_paste_data =
-      ClipboardPasteData("random pasted text", std::string(), {});
+  ClipboardPasteData clipboard_paste_data;
+  clipboard_paste_data.text = u"random pasted text";
 
   EXPECT_FALSE(web_contents->ShouldIgnoreUnresponsiveRenderer());
   web_contents->IsClipboardPasteAllowedByPolicy(

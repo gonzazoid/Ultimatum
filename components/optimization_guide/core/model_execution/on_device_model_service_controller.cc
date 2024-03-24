@@ -17,6 +17,7 @@
 #include "components/optimization_guide/core/optimization_guide_features.h"
 #include "components/optimization_guide/core/optimization_guide_switches.h"
 #include "components/optimization_guide/core/optimization_guide_util.h"
+#include "components/optimization_guide/proto/model_execution.pb.h"
 #include "mojo/public/cpp/bindings/callback_helpers.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "services/on_device_model/public/cpp/model_assets.h"
@@ -47,6 +48,25 @@ class ScopedEligibilityReasonLogger {
 
   OnDeviceModelEligibilityReason reason_ =
       OnDeviceModelEligibilityReason::kUnknown;
+};
+
+class ScopedTextSafetyModelMetadataValidityLogger {
+ public:
+  ScopedTextSafetyModelMetadataValidityLogger() = default;
+  ~ScopedTextSafetyModelMetadataValidityLogger() {
+    CHECK_NE(TextSafetyModelMetadataValidity::kUnknown, validity_);
+    base::UmaHistogramEnumeration(
+        "OptimizationGuide.ModelExecution."
+        "OnDeviceTextSafetyModelMetadataValidity",
+        validity_);
+  }
+
+  void set_validity(TextSafetyModelMetadataValidity validity) {
+    validity_ = validity;
+  }
+
+  TextSafetyModelMetadataValidity validity_ =
+      TextSafetyModelMetadataValidity::kUnknown;
 };
 
 OnDeviceModelLoadResult ConvertToOnDeviceModelLoadResult(
@@ -98,13 +118,13 @@ void OnDeviceModelServiceController::Init() {
         on_device_component_state_manager_->GetState();
     if (state) {
       SetModelPath(state->GetInstallDirectory(),
-                   state->GetVersion().GetString());
+                   state->GetComponentVersion().GetString());
     }
   }
 }
 
 void OnDeviceModelServiceController::ClearModelPath() {
-  model_paths_ = std::nullopt;
+  model_path_ = std::nullopt;
   model_versions_ = std::nullopt;
   config_interpreter_->ClearState();
   model_remote_.reset();
@@ -116,18 +136,7 @@ void OnDeviceModelServiceController::SetModelPath(
   // Even if model_path didn't change, we want to go through this process anyway
   // because the content in the directory may have changed.
   ClearModelPath();
-
-  on_device_model::ModelAssetPaths model_paths;
-  model_paths.sp_model = model_path.Append(kSpModelFile);
-  model_paths.model = model_path.Append(kModelFile);
-  model_paths.weights = model_path.Append(kWeightsFile);
-  if (safety_model_info_) {
-    model_paths.ts_data =
-        *(safety_model_info_->GetAdditionalFileWithBaseName(kTsDataFile));
-    model_paths.ts_sp_model =
-        *(safety_model_info_->GetAdditionalFileWithBaseName(kTsSpModelFile));
-  }
-  model_paths_ = std::move(model_paths);
+  model_path_ = model_path;
   model_versions_ = GetModelVersions(version);
   config_interpreter_->UpdateConfigWithFileDir(model_path);
 }
@@ -146,18 +155,60 @@ OnDeviceModelServiceController::CreateSession(
     logger.set_reason(OnDeviceModelEligibilityReason::kFeatureNotEnabled);
     return nullptr;
   }
-  if (!model_paths_) {
+  if (!model_path_) {
     logger.set_reason(OnDeviceModelEligibilityReason::kModelNotAvailable);
     return nullptr;
   }
-  if (features::GetOnDeviceModelMustUseSafetyModel() &&
-      !model_paths_->HasSafetyFiles()) {
-    logger.set_reason(OnDeviceModelEligibilityReason::kSafetyModelNotAvailable);
-    return nullptr;
+
+  on_device_model::ModelAssetPaths model_paths;
+  model_paths.sp_model = model_path_->Append(kSpModelFile);
+  model_paths.model = model_path_->Append(kModelFile);
+  model_paths.weights = model_path_->Append(kWeightsFile);
+
+  std::optional<proto::FeatureTextSafetyConfiguration> safety_config;
+  if (features::GetOnDeviceModelMustUseSafetyModel()) {
+    if (!safety_model_info_) {
+      logger.set_reason(
+          OnDeviceModelEligibilityReason::kSafetyModelNotAvailable);
+      return nullptr;
+    }
+
+    safety_config = GetFeatureTextSafetyConfigForFeature(feature);
+    if (!safety_config) {
+      logger.set_reason(
+          OnDeviceModelEligibilityReason::kSafetyConfigNotAvailableForFeature);
+      return nullptr;
+    }
+
+    model_paths.ts_data =
+        *(safety_model_info_->model_info.GetAdditionalFileWithBaseName(
+            kTsDataFile));
+    model_paths.ts_sp_model =
+        *(safety_model_info_->model_info.GetAdditionalFileWithBaseName(
+            kTsSpModelFile));
+
+    if (!safety_config->allowed_languages().empty()) {
+      if (!language_detection_model_path_) {
+        logger.set_reason(OnDeviceModelEligibilityReason::
+                              kLanguageDetectionModelNotAvailable);
+        return nullptr;
+      }
+
+      model_paths.language_detection_model = *language_detection_model_path_;
+    }
   }
+
   if (!config_interpreter_->HasConfigForFeature(feature)) {
     logger.set_reason(
         OnDeviceModelEligibilityReason::kConfigNotAvailableForFeature);
+    return nullptr;
+  }
+
+  if (feature == proto::MODEL_EXECUTION_FEATURE_COMPOSE &&
+      !base::FeatureList::IsEnabled(
+          features::kOptimizationGuideComposeOnDeviceEval)) {
+    logger.set_reason(
+        OnDeviceModelEligibilityReason::kFeatureExecutionNotEnabled);
     return nullptr;
   }
   OnDeviceModelEligibilityReason reason =
@@ -170,10 +221,10 @@ OnDeviceModelServiceController::CreateSession(
 
   return std::make_unique<SessionImpl>(
       base::BindRepeating(&OnDeviceModelServiceController::StartMojoSession,
-                          weak_ptr_factory_.GetWeakPtr()),
+                          weak_ptr_factory_.GetWeakPtr(), model_paths),
       feature, model_versions_, config_interpreter_.get(),
-      weak_ptr_factory_.GetWeakPtr(), std::move(execute_remote_fn),
-      optimization_guide_logger);
+      weak_ptr_factory_.GetWeakPtr(), safety_config,
+      std::move(execute_remote_fn), optimization_guide_logger);
 }
 
 void OnDeviceModelServiceController::GetEstimatedPerformanceClass(
@@ -189,12 +240,13 @@ void OnDeviceModelServiceController::GetEstimatedPerformanceClass(
 }
 
 void OnDeviceModelServiceController::StartMojoSession(
+    on_device_model::ModelAssetPaths model_paths,
     mojo::PendingReceiver<on_device_model::mojom::Session> session) {
   if (!model_remote_) {
     LaunchService();
     base::ThreadPool::PostTaskAndReplyWithResult(
         FROM_HERE, {base::MayBlock()},
-        base::BindOnce(&on_device_model::LoadModelAssets, *model_paths_),
+        base::BindOnce(&on_device_model::LoadModelAssets, model_paths),
         base::BindOnce(&OnDeviceModelServiceController::OnModelAssetsLoaded,
                        weak_ptr_factory_.GetWeakPtr(),
                        model_remote_.BindNewPipeAndPassReceiver()));
@@ -223,37 +275,40 @@ void OnDeviceModelServiceController::OnModelAssetsLoaded(
   int max_tokens = features::GetOnDeviceModelMaxTokensForContext() +
                    features::GetOnDeviceModelMaxTokensForExecute() +
                    features::GetOnDeviceModelMaxTokensForOutput();
+  auto params = on_device_model::mojom::LoadModelParams::New();
+  params->assets = std::move(assets);
+  params->max_tokens = max_tokens;
+  if (safety_model_info_) {
+    params->ts_dimension = safety_model_info_->num_output_categories;
+  }
   service_remote_->LoadModel(
-      on_device_model::mojom::LoadModelParams::New(std::move(assets),
-                                                   max_tokens),
-      std::move(model),
+      std::move(params), std::move(model),
       base::BindOnce(&OnDeviceModelServiceController::OnLoadModelResult,
                      weak_ptr_factory_.GetWeakPtr()));
 }
 
+void OnDeviceModelServiceController::SetLanguageDetectionModel(
+    base::optional_ref<const ModelInfo> model_info) {
+  if (!model_info.has_value()) {
+    language_detection_model_path_.reset();
+    return;
+  }
+
+  language_detection_model_path_ = model_info->GetModelFilePath();
+}
+
 void OnDeviceModelServiceController::MaybeUpdateSafetyModel(
     base::optional_ref<const ModelInfo> model_info) {
-  if (model_info.has_value() && HasRequiredSafetyFiles(*model_info)) {
-    safety_model_info_ = *model_info;
-
-    // Update the paths if this exists to be used in subsequent sessions.
-    if (model_paths_) {
-      model_paths_->ts_data =
-          *(safety_model_info_->GetAdditionalFileWithBaseName(kTsDataFile));
-      model_paths_->ts_sp_model =
-          *(safety_model_info_->GetAdditionalFileWithBaseName(kTsSpModelFile));
-    }
+  if (model_info.has_value() && HasRequiredSafetyFiles(*model_info) &&
+      InitializeSafetyModelInfo(*model_info)) {
     if (model_versions_) {
       model_versions_->set_text_safety_model_version(model_info->GetVersion());
     }
-  } else if (model_paths_) {
-    safety_model_info_ = std::nullopt;
-    // Clear out T&S model paths if we shouldn't use the current safety model
-    // anymore. The current active session will still use the safety model
-    // though, if already using it.
-    model_paths_->ts_data = base::FilePath();
-    model_paths_->ts_sp_model = base::FilePath();
+    return;
   }
+
+  // If we get here, the received model is invalid and we should reset.
+  safety_model_info_.reset();
 }
 
 void OnDeviceModelServiceController::StateChanged(
@@ -263,10 +318,45 @@ void OnDeviceModelServiceController::StateChanged(
   }
 
   if (state) {
-    SetModelPath(state->GetInstallDirectory(), state->GetVersion().GetString());
+    SetModelPath(state->GetInstallDirectory(),
+                 state->GetComponentVersion().GetString());
   } else {
     ClearModelPath();
   }
+}
+
+bool OnDeviceModelServiceController::InitializeSafetyModelInfo(
+    const ModelInfo& model_info) {
+  ScopedTextSafetyModelMetadataValidityLogger logger;
+
+  if (!model_info.GetModelMetadata()) {
+    logger.set_validity(TextSafetyModelMetadataValidity::kNoMetadata);
+    return false;
+  }
+
+  std::optional<proto::TextSafetyModelMetadata> model_metadata =
+      ParsedAnyMetadata<proto::TextSafetyModelMetadata>(
+          *model_info.GetModelMetadata());
+  if (!model_metadata) {
+    logger.set_validity(TextSafetyModelMetadataValidity::kMetadataWrongType);
+    return false;
+  }
+
+  logger.set_validity(TextSafetyModelMetadataValidity::kNoFeatureConfigs);
+
+  base::flat_map<proto::ModelExecutionFeature,
+                 proto::FeatureTextSafetyConfiguration>
+      feature_configs;
+  for (const auto& feature_config :
+       model_metadata->feature_text_safety_configurations()) {
+    logger.set_validity(TextSafetyModelMetadataValidity::kValid);
+    feature_configs[feature_config.feature()] = feature_config;
+  }
+
+  safety_model_info_ = std::make_unique<SafetyModelInfo>(
+      model_info, model_metadata->num_output_categories(),
+      std::move(feature_configs));
+  return true;
 }
 
 void OnDeviceModelServiceController::OnLoadModelResult(
@@ -316,10 +406,37 @@ proto::OnDeviceModelVersions OnDeviceModelServiceController::GetModelVersions(
       component_version);
 
   if (safety_model_info_) {
-    versions.set_text_safety_model_version(safety_model_info_->GetVersion());
+    versions.set_text_safety_model_version(
+        safety_model_info_->model_info.GetVersion());
   }
 
   return versions;
 }
+
+std::optional<proto::FeatureTextSafetyConfiguration>
+OnDeviceModelServiceController::GetFeatureTextSafetyConfigForFeature(
+    proto::ModelExecutionFeature feature) {
+  if (!safety_model_info_) {
+    return std::nullopt;
+  }
+
+  auto it = safety_model_info_->feature_configs.find(feature);
+  if (it == safety_model_info_->feature_configs.end()) {
+    return std::nullopt;
+  }
+
+  return it->second;
+}
+
+OnDeviceModelServiceController::SafetyModelInfo::SafetyModelInfo(
+    const ModelInfo& model_info,
+    uint32_t num_output_categories,
+    base::flat_map<proto::ModelExecutionFeature,
+                   proto::FeatureTextSafetyConfiguration> feature_configs)
+    : model_info(model_info),
+      num_output_categories(num_output_categories),
+      feature_configs(std::move(feature_configs)) {}
+
+OnDeviceModelServiceController::SafetyModelInfo::~SafetyModelInfo() = default;
 
 }  // namespace optimization_guide

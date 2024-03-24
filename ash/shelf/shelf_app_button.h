@@ -12,6 +12,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/models/image_model.h"
 #include "ui/compositor/layer_animation_observer.h"
 #include "ui/gfx/shadow_value.h"
@@ -29,8 +30,9 @@ class ShelfView;
 class ASH_EXPORT ShelfAppButton : public ShelfButton,
                                   public views::InkDropObserver,
                                   public ui::ImplicitAnimationObserver {
+  METADATA_HEADER(ShelfAppButton, ShelfButton)
+
  public:
-  static const char kViewClassName[];
 
   // Used to indicate the current state of the button.
   enum State {
@@ -68,11 +70,9 @@ class ASH_EXPORT ShelfAppButton : public ShelfButton,
 
   ~ShelfAppButton() override;
 
-  // Updates the icon image to display for this entry.
-  void UpdateIconImage();
-
-  // Updates the badge icon image to display for this entry.
-  void UpdateBadgeIconImage();
+  // Updates the icon image and maybe host badge icon image to display for this
+  // entry.
+  void UpdateMainAndMaybeHostBadgeIconImage();
 
   // Retrieve the image to show proxy operations.
   gfx::ImageSkia GetImage() const;
@@ -89,10 +89,10 @@ class ASH_EXPORT ShelfAppButton : public ShelfButton,
   // `icon_scale`. Returns an empty image if the app does not have a badge icon.
   gfx::ImageSkia GetBadgeIconImage(float icon_scale) const;
 
-  // Sets the `icon_image_model_` for this entry. If |is_placeholder_icon| is
-  // true, the |main_image| will be ignored and this entry will be assigned a
-  // placeholder vector icon. This method also SetHostBadgeImage() depending on
-  // `has_host_badge` and then calls into UpdateIconImage().
+  // Sets the `icon_image_model_`, and maybe `host_badge_image_` depending on
+  // `has_host_badge` for this entry. If |is_placeholder_icon| is true, the
+  // |main_image| will be ignored and this entry will be assigned a placeholder
+  // vector icon.
   void SetMainAndMaybeHostBadgeImage(const gfx::ImageSkia& main_image,
                                      bool is_placeholder_icon,
                                      const gfx::ImageSkia& host_badge_image);
@@ -114,13 +114,6 @@ class ASH_EXPORT ShelfAppButton : public ShelfButton,
   gfx::Rect GetIdealIconBounds(const gfx::Size& button_size,
                                float icon_scale) const;
 
-  // Returns the ideal host badge icon bounds within the shelf button cntents
-  // view. The badge icon bounds are calculated for assuming the provided
-  // `main_app_icon_bounds`, and `icon_scale`.
-  gfx::Rect GetIdealHostBadgeContainerBounds(
-      const gfx::Rect& main_app_icon_bounds,
-      float icon_scale);
-
   views::InkDrop* GetInkDropForTesting();
 
   // Called when user started dragging the shelf button.
@@ -136,12 +129,11 @@ class ASH_EXPORT ShelfAppButton : public ShelfButton,
   bool ShouldEnterPushedState(const ui::Event& event) override;
 
   // views::View overrides:
-  const char* GetClassName() const override;
   bool OnMousePressed(const ui::MouseEvent& event) override;
   void OnMouseReleased(const ui::MouseEvent& event) override;
   void OnMouseCaptureLost() override;
   bool OnMouseDragged(const ui::MouseEvent& event) override;
-  void Layout() override;
+  void Layout(PassKey) override;
   void ChildPreferredSizeChanged(views::View* child) override;
   void OnThemeChanged() override;
 
@@ -185,6 +177,8 @@ class ASH_EXPORT ShelfAppButton : public ShelfButton,
   ProgressIndicator* GetProgressIndicatorForTest() const;
 
  protected:
+  gfx::ImageSkia GetHostBadgeImageForTest() { return host_badge_image_; }
+
   // ui::EventHandler:
   void OnGestureEvent(ui::GestureEvent* event) override;
 
@@ -197,6 +191,7 @@ class ASH_EXPORT ShelfAppButton : public ShelfButton,
  private:
   class AppNotificationIndicatorView;
   class AppStatusIndicatorView;
+  friend class ShelfViewWebAppShortcutTest;
 
   // views::View:
   bool HandleAccessibleAction(const ui::AXActionData& action_data) override;
@@ -216,6 +211,8 @@ class ASH_EXPORT ShelfAppButton : public ShelfButton,
   void OnRippleTimer();
 
   // Calculates the preferred size of the icon for the provided `icon_scale`.
+  // This is the actual size of the main app icon that is painted in the grid.
+  // with the adjusted scale.
   gfx::Size GetPreferredIconSize(const ui::ImageModel& image_model,
                                  float icon_scale) const;
 
@@ -223,7 +220,8 @@ class ASH_EXPORT ShelfAppButton : public ShelfButton,
   // normal size.
   void ScaleAppIcon(bool scale_up);
 
-  // Calculates the icon bounds for an icon scaled by |icon_scale|.
+  // Calculates the expected icon bounds for an icon view scaled by
+  // |icon_scale|.
   gfx::Rect GetIconViewBounds(const gfx::Rect& button_bounds,
                               float icon_scale,
                               bool ignore_shadow_insets) const;
@@ -254,8 +252,17 @@ class ASH_EXPORT ShelfAppButton : public ShelfButton,
   // Sets the host badge image to display for this entry
   void SetHostBadgeImage(const gfx::ImageSkia& host_badge_image);
 
+  // Whether the image view has a placeholder icon in place. The placeholder
+  // icon is represented as a VectorIcon in the ImageModel. Depending on the
+  // case, the icon may use the `icon_image_model` or the
+  // `fallback_icon_image_model` (ie, when an animation in for the promise app
+  // is happening) for this calceulation.
+  bool ImageModelHasPlaceholderIcon() const;
+
   // Returns the preferred icon size for promise icons depending on this
-  // button's `app_state_`.
+  // button's `app_state_`. Different from `GetPreferredIconSize()` since
+  // `GetIconDimensionByAppState()` is used to adjust padding for the promise
+  // ring.
   float GetIconDimensionByAppState() const;
 
   // Called when the app button completes animating in from a promise app state.
@@ -263,10 +270,6 @@ class ASH_EXPORT ShelfAppButton : public ShelfButton,
 
   // The icon part of a button can be animated independently of the rest.
   raw_ptr<views::ImageView> icon_view_ = nullptr;
-
-  // The host badge icon part of a button, can be animated independently of the
-  // rest.
-  raw_ptr<views::ImageView> host_badge_icon_view_ = nullptr;
 
   // The ShelfView showing this ShelfAppButton. Owned by RootWindowController.
   const raw_ptr<ShelfView> shelf_view_;

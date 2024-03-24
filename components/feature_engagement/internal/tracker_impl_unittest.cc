@@ -34,8 +34,10 @@
 #include "components/feature_engagement/internal/stats.h"
 #include "components/feature_engagement/internal/test/test_time_provider.h"
 #include "components/feature_engagement/internal/time_provider.h"
+#include "components/feature_engagement/public/configuration.h"
 #include "components/feature_engagement/public/feature_constants.h"
 #include "components/feature_engagement/public/feature_list.h"
+#include "components/feature_engagement/public/session_controller.h"
 #include "components/feature_engagement/test/scoped_iph_feature_list.h"
 #include "components/feature_engagement/test/test_tracker.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -55,6 +57,9 @@ BASE_FEATURE(kTrackerTestFeatureBaz,
 BASE_FEATURE(kTrackerTestFeatureQux,
              "test_qux",
              base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kTrackerTestFeatureEvent,
+             "test_event",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 BASE_FEATURE(kTrackerTestFeatureSnooze,
              "test_snooze",
              base::FEATURE_DISABLED_BY_DEFAULT);
@@ -66,7 +71,8 @@ void RegisterFeatureConfig(EditableConfiguration* configuration,
                            const base::Feature& feature,
                            bool valid,
                            bool tracking_only,
-                           bool snooze_params) {
+                           bool snooze_params,
+                           const char* additional_event_name = nullptr) {
   FeatureConfig config;
   config.valid = valid;
   config.used.name = feature.name + std::string("_used");
@@ -77,6 +83,15 @@ void RegisterFeatureConfig(EditableConfiguration* configuration,
   if (snooze_params) {
     config.snooze_params.snooze_interval = 7u;
     config.snooze_params.max_limit = 3u;
+  }
+  if (additional_event_name) {
+    EventConfig event_config;
+    event_config.name = additional_event_name;
+    event_config.comparator.type = GREATER_THAN_OR_EQUAL;
+    event_config.comparator.value = 2U;
+    event_config.window = 7U;
+    event_config.storage = 7U;
+    config.event_configs.emplace(std::move(event_config));
   }
   configuration->SetConfiguration(&feature, config);
 }
@@ -187,9 +202,9 @@ class TestTrackerAvailabilityModel : public AvailabilityModel {
 
   void SetIsReady(bool ready) { ready_ = ready; }
 
-  absl::optional<uint32_t> GetAvailability(
+  std::optional<uint32_t> GetAvailability(
       const base::Feature& feature) const override {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
  private:
@@ -249,6 +264,21 @@ class TestTrackerEventExporter : public TrackerEventExporter {
   base::WeakPtrFactory<TestTrackerEventExporter> weak_ptr_factory_{this};
 };
 
+class TestSessionController : public SessionController {
+ public:
+  TestSessionController() : should_reset_for_next_call_(false) {}
+  ~TestSessionController() override = default;
+
+  bool ShouldResetSession() override { return should_reset_for_next_call_; }
+
+  void SetShouldResetForNextCall(bool should_reset_for_next_call) {
+    should_reset_for_next_call_ = should_reset_for_next_call;
+  }
+
+ private:
+  bool should_reset_for_next_call_;
+};
+
 class TrackerImplTest : public ::testing::Test {
  public:
   TrackerImplTest() = default;
@@ -273,6 +303,9 @@ class TrackerImplTest : public ::testing::Test {
     RegisterFeatureConfig(configuration.get(), kTrackerTestFeatureQux,
                           false /* is_valid */, false /* tracking_only */,
                           false /* snooze_params */);
+    RegisterFeatureConfig(configuration.get(), kTrackerTestFeatureEvent,
+                          /*valid=*/true, /*tracking_only=*/false,
+                          /*snooze_params=*/false, "test_event_event");
     RegisterFeatureConfig(configuration.get(), kTrackerTestFeatureSnooze,
                           true /* is_valid */, false /* tracking_only */,
                           true /* snooze_params */);
@@ -304,11 +337,14 @@ class TrackerImplTest : public ::testing::Test {
 
     event_exporter_ = std::make_unique<TestTrackerEventExporter>();
 
+    auto session_controller = std::make_unique<TestSessionController>();
+    session_controller_ = session_controller.get();
+
     tracker_ = std::make_unique<TrackerImpl>(
         std::move(event_model), std::move(availability_model),
         std::move(configuration), std::move(display_lock_controller),
         std::move(condition_validator), std::move(time_provider),
-        event_exporter_->AsWeakPtr());
+        event_exporter_->AsWeakPtr(), std::move(session_controller));
   }
 
   void VerifyEventTrigger(std::string event_name, uint32_t count) {
@@ -522,6 +558,7 @@ class TrackerImplTest : public ::testing::Test {
   raw_ptr<TestTrackerDisplayLockController> display_lock_controller_;
   raw_ptr<EditableConfiguration> configuration_;
   std::unique_ptr<TestTrackerEventExporter> event_exporter_;
+  raw_ptr<TestSessionController> session_controller_;
   base::HistogramTester histogram_tester_;
   raw_ptr<ConditionValidator> condition_validator_;
   raw_ptr<TestTimeProvider> time_provider_;
@@ -974,6 +1011,37 @@ TEST_F(TrackerImplTest, TestTriggering) {
   VerifyHistograms(true, 1, 3, 0, true, 1, 2, 0, false, 0, 0, 0, true, 0, 4, 0);
 }
 
+TEST_F(TrackerImplTest, TestTriggeringWithSessionController) {
+  // Ensure all initialization is finished.
+  StoringInitializedCallback callback;
+  tracker_->AddOnInitializedCallback(base::BindOnce(
+      &StoringInitializedCallback::OnInitialized, base::Unretained(&callback)));
+  base::RunLoop().RunUntilIdle();
+  base::UserActionTester user_action_tester;
+
+  // The first time a feature triggers it should be shown.
+  EXPECT_TRUE(tracker_->ShouldTriggerHelpUI(kTrackerTestFeatureFoo));
+  VerifyEventTriggerEvents(kTrackerTestFeatureFoo, 1u);
+  VerifyGroupEventTriggerEvents(kTrackerTestGroupOne, 1u);
+  EXPECT_FALSE(tracker_->ShouldTriggerHelpUI(kTrackerTestFeatureFoo));
+  VerifyEventTriggerEvents(kTrackerTestFeatureFoo, 1u);
+  VerifyGroupEventTriggerEvents(kTrackerTestGroupOne, 1u);
+
+  // Dismiss the feature.
+  tracker_->Dismissed(kTrackerTestFeatureFoo);
+
+  // Make the next `ShouldTriggerHelpUI` call trigger the session reset.
+  session_controller_->SetShouldResetForNextCall(true);
+
+  // The same feature can be shown again, and blocks a different feature.
+  EXPECT_TRUE(tracker_->ShouldTriggerHelpUI(kTrackerTestFeatureFoo));
+  VerifyEventTriggerEvents(kTrackerTestFeatureFoo, 2u);
+  VerifyGroupEventTriggerEvents(kTrackerTestGroupOne, 2u);
+  EXPECT_FALSE(tracker_->ShouldTriggerHelpUI(kTrackerTestFeatureBar));
+  VerifyEventTriggerEvents(kTrackerTestFeatureBar, 0);
+  VerifyGroupEventTriggerEvents(kTrackerTestGroupOne, 2u);
+}
+
 TEST_F(TrackerImplTest, TestTrackingOnlyTriggering) {
   // Ensure all initialization is finished.
   StoringInitializedCallback callback;
@@ -1217,6 +1285,33 @@ TEST_F(TrackerImplTest, TestNotifyUsedEvent) {
                    "InProductHelp.NotifyUsedEvent.test_bar"));
   EXPECT_EQ(0, user_action_tester.GetActionCount(
                    "InProductHelp.NotifyEvent.test_bar"));
+
+  Event event = event_store_->GetEvent("test_foo_used");
+  EXPECT_EQ(1, event.events_size());
+}
+
+TEST_F(TrackerImplTest, TestClearEventData) {
+  StoringInitializedCallback callback;
+  tracker_->AddOnInitializedCallback(base::BindOnce(
+      &StoringInitializedCallback::OnInitialized, base::Unretained(&callback)));
+  base::RunLoop().RunUntilIdle();
+  base::UserActionTester user_action_tester;
+
+  tracker_->NotifyUsedEvent(kTrackerTestFeatureFoo);
+  tracker_->NotifyUsedEvent(kTrackerTestFeatureBaz);
+  tracker_->ClearEventData(kTrackerTestFeatureFoo);
+
+  // Test clearing used events.
+  Event event = event_store_->GetEvent("test_foo_used");
+  EXPECT_EQ(0, event.events_size());
+  event = event_store_->GetEvent("test_baz_used");
+  EXPECT_EQ(1, event.events_size());
+
+  // Test clearing other events.
+  tracker_->NotifyEvent("test_event_event");
+  EXPECT_EQ(1, event_store_->GetEvent("test_event_event").events_size());
+  tracker_->ClearEventData(kTrackerTestFeatureEvent);
+  EXPECT_EQ(0, event_store_->GetEvent("test_event_event").events_size());
 }
 
 #endif  // !BUILDFLAG(IS_ANDROID)

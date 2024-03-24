@@ -17,6 +17,7 @@
 #include "base/test/allow_check_is_test_for_testing.h"
 #include "base/test/test_future.h"
 #include "base/test/test_timeouts.h"
+#include "chromeos/components/kcer/chaps/mock_high_level_chaps_client.h"
 #include "chromeos/components/kcer/kcer.h"
 #include "chromeos/components/kcer/kcer_impl.h"
 #include "chromeos/components/kcer/kcer_nss/test_utils.h"
@@ -90,6 +91,8 @@ enum class Method {
   kGetAvailableTokens,
   kGetTokenInfo,
   kGetKeyInfo,
+  kGetKeyPermissions,
+  kGetCertProvisioningProfileId,
   kSetKeyNickname,
   kSetKeyPermissions,
   kSetCertProvisioningProfileId,
@@ -551,6 +554,8 @@ class KcerFuzzer {
   void RunGetAvailableTokens();
   void RunGetTokenInfo();
   void RunGetKeyInfo();
+  void RunGetKeyPermissions();
+  void RunGetCertProvisioningProfileId();
   void RunSetKeyNickname();
   void RunSetKeyPermissions();
   void RunSetCertProvisioningProfileId();
@@ -588,6 +593,7 @@ class KcerFuzzer {
       base::test::TaskEnvironment::MainThreadType::UI,
       content::BrowserTaskEnvironment::REAL_IO_THREAD};
 
+  MockHighLevelChapsClient chaps_client_;
   base::flat_map<Token, std::unique_ptr<TokenHolder>> available_tokens_;
   std::unique_ptr<Kcer> kcer_;
   // Keeps track of what Kcer is expected to contain.
@@ -628,8 +634,8 @@ void KcerFuzzer::InitializeKcer() {
 }
 
 base::WeakPtr<internal::KcerToken> KcerFuzzer::CreateToken(Token token) {
-  available_tokens_[token] =
-      std::make_unique<TokenHolder>(token, /*initialized=*/true);
+  available_tokens_[token] = std::make_unique<TokenHolder>(
+      token, &chaps_client_, /*initialized=*/true);
   return available_tokens_[token]->GetWeakPtr();
 }
 
@@ -670,6 +676,10 @@ void KcerFuzzer::RunNextMethod() {
       return RunGetTokenInfo();
     case Method::kGetKeyInfo:
       return RunGetKeyInfo();
+    case Method::kGetKeyPermissions:
+      return RunGetKeyPermissions();
+    case Method::kGetCertProvisioningProfileId:
+      return RunGetCertProvisioningProfileId();
     case Method::kSetKeyNickname:
       return RunSetKeyNickname();
     case Method::kSetKeyPermissions:
@@ -1277,13 +1287,11 @@ void KcerFuzzer::RunGetKeyInfo() {
                        key_handle.GetTokenInternal().value()))) {
     ASSERT_FALSE(key_info_waiter.Get().has_value());
     EXPECT_EQ(key_info_waiter.Get().error(), Error::kTokenIsNotAvailable);
-
     return;
   }
 
   if (!expected_key) {
     EXPECT_FALSE(key_info_waiter.Get().has_value());
-
     return;
   }
   ASSERT_TRUE(key_info_waiter.Get().has_value());
@@ -1296,9 +1304,60 @@ void KcerFuzzer::RunGetKeyInfo() {
   if (expected_key->nickname_known) {
     EXPECT_EQ(key_info.nickname, expected_key->nickname);
   }
-  EXPECT_TRUE(KeyPermissionsEqual(key_info.key_permissions,
-                                  expected_key->key_permissions));
-  EXPECT_EQ(key_info.cert_provisioning_profile_id,
+}
+
+void KcerFuzzer::RunGetKeyPermissions() {
+  FuzzKey* expected_key = nullptr;
+  PrivateKeyHandle key_handle = GeneratePrivateKeyHandle(&expected_key);
+
+  base::test::TestFuture<
+      base::expected<std::optional<chaps::KeyPermissions>, Error>>
+      key_permissions_waiter;
+  kcer_->GetKeyPermissions(key_handle, key_permissions_waiter.GetCallback());
+
+  if (available_tokens_.empty() ||
+      (key_handle.GetTokenInternal().has_value() &&
+       !base::Contains(available_tokens_,
+                       key_handle.GetTokenInternal().value()))) {
+    ASSERT_FALSE(key_permissions_waiter.Get().has_value());
+    EXPECT_EQ(key_permissions_waiter.Get().error(),
+              Error::kTokenIsNotAvailable);
+    return;
+  }
+
+  if (!expected_key) {
+    EXPECT_FALSE(key_permissions_waiter.Get().has_value());
+    return;
+  }
+  ASSERT_TRUE(key_permissions_waiter.Get().has_value());
+  EXPECT_TRUE(ExpectKeyPermissionsEqual(key_permissions_waiter.Get().value(),
+                                        expected_key->key_permissions));
+}
+
+void KcerFuzzer::RunGetCertProvisioningProfileId() {
+  FuzzKey* expected_key = nullptr;
+  PrivateKeyHandle key_handle = GeneratePrivateKeyHandle(&expected_key);
+
+  base::test::TestFuture<base::expected<std::optional<std::string>, Error>>
+      cert_prov_waiter;
+  kcer_->GetCertProvisioningProfileId(key_handle,
+                                      cert_prov_waiter.GetCallback());
+
+  if (available_tokens_.empty() ||
+      (key_handle.GetTokenInternal().has_value() &&
+       !base::Contains(available_tokens_,
+                       key_handle.GetTokenInternal().value()))) {
+    ASSERT_FALSE(cert_prov_waiter.Get().has_value());
+    EXPECT_EQ(cert_prov_waiter.Get().error(), Error::kTokenIsNotAvailable);
+    return;
+  }
+
+  if (!expected_key) {
+    EXPECT_FALSE(cert_prov_waiter.Get().has_value());
+    return;
+  }
+  ASSERT_TRUE(cert_prov_waiter.Get().has_value());
+  EXPECT_EQ(cert_prov_waiter.Get().value(),
             expected_key->cert_provisioning_profile_id);
 }
 

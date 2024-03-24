@@ -5,7 +5,9 @@
 #ifndef CHROME_BROWSER_DEVTOOLS_AIDA_CLIENT_H_
 #define CHROME_BROWSER_DEVTOOLS_AIDA_CLIENT_H_
 
+#include <optional>
 #include <string>
+
 #include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/profiles/profile.h"
@@ -14,7 +16,6 @@
 #include "google_apis/gaia/google_service_auth_error.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/simple_url_loader.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 // class Profile;
 namespace network {
@@ -45,6 +46,7 @@ class AidaClient {
       std::string request,
       base::OnceCallback<void(const std::string&)> callback,
       std::unique_ptr<network::SimpleURLLoader> simple_url_loader,
+      base::TimeTicks start_time,
       std::unique_ptr<std::string> response_body);
 
   const raw_ref<Profile> profile_;

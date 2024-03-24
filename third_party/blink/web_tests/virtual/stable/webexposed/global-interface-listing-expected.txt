@@ -520,6 +520,7 @@ interface CSSKeyframeRule : CSSRule
 interface CSSKeyframesRule : CSSRule
     attribute @@toStringTag
     getter cssRules
+    getter length
     getter name
     method @@iterator
     method appendRule
@@ -4354,9 +4355,10 @@ interface HTMLTableSectionElement : HTMLElement
 interface HTMLTemplateElement : HTMLElement
     attribute @@toStringTag
     getter content
-    getter shadowRoot
+    getter shadowRootDelegatesFocus
     getter shadowRootMode
     method constructor
+    setter shadowRootDelegatesFocus
     setter shadowRootMode
 interface HTMLTextAreaElement : HTMLElement
     attribute @@toStringTag
@@ -4681,6 +4683,7 @@ interface IIRFilterNode : AudioNode
     method constructor
     method getFrequencyResponse
 interface IdentityCredential : Credential
+    static method disconnect
     attribute @@toStringTag
     getter isAutoSelected
     getter token
@@ -5623,6 +5626,7 @@ interface NavigateEvent : Event
     method scroll
 interface Navigation : EventTarget
     attribute @@toStringTag
+    getter activation
     getter canGoBack
     getter canGoForward
     getter currentEntry
@@ -5643,6 +5647,12 @@ interface Navigation : EventTarget
     setter onnavigate
     setter onnavigateerror
     setter onnavigatesuccess
+interface NavigationActivation
+    attribute @@toStringTag
+    getter entry
+    getter from
+    getter navigationType
+    method constructor
 interface NavigationCurrentEntryChangeEvent : Event
     attribute @@toStringTag
     getter from
@@ -6042,6 +6052,9 @@ interface OverconstrainedError : DOMException
     attribute @@toStringTag
     getter constraint
     method constructor
+interface PageRevealEvent : Event
+    attribute @@toStringTag
+    method constructor
 interface PageTransitionEvent : Event
     attribute @@toStringTag
     getter persisted
@@ -6206,6 +6219,15 @@ interface PerformanceEventTiming : PerformanceEntry
     getter target
     method constructor
     method toJSON
+interface PerformanceLongAnimationFrameTiming : PerformanceEntry
+    attribute @@toStringTag
+    getter blockingDuration
+    getter firstUIEventTimestamp
+    getter renderStart
+    getter scripts
+    getter styleAndLayoutStart
+    method constructor
+    method toJSON
 interface PerformanceLongTaskTiming : PerformanceEntry
     attribute @@toStringTag
     getter attribution
@@ -6285,6 +6307,20 @@ interface PerformanceResourceTiming : PerformanceEntry
     getter serverTiming
     getter transferSize
     getter workerStart
+    method constructor
+    method toJSON
+interface PerformanceScriptTiming : PerformanceEntry
+    attribute @@toStringTag
+    getter executionStart
+    getter forcedStyleAndLayoutDuration
+    getter invoker
+    getter invokerType
+    getter pauseDuration
+    getter sourceCharPosition
+    getter sourceFunctionName
+    getter sourceURL
+    getter window
+    getter windowAttribution
     method constructor
     method toJSON
 interface PerformanceServerTiming
@@ -11373,6 +11409,7 @@ namespace console
     getter onoffline
     getter ononline
     getter onpagehide
+    getter onpagereveal
     getter onpageshow
     getter onpause
     getter onplay
@@ -11588,6 +11625,7 @@ namespace console
     setter onoffline
     setter ononline
     setter onpagehide
+    setter onpagereveal
     setter onpageshow
     setter onpause
     setter onplay

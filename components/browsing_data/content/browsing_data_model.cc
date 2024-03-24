@@ -65,7 +65,7 @@ struct GetDataOwner {
   template <class T>
   BrowsingDataModel::DataOwner operator()(const T& data_key) const {
     if (delegate_) {
-      absl::optional<BrowsingDataModel::DataOwner> owner =
+      std::optional<BrowsingDataModel::DataOwner> owner =
           delegate_->GetDataOwner(data_key, storage_type_);
       if (owner.has_value()) {
         return *owner;
@@ -294,7 +294,7 @@ void StorageRemoverHelper::Visitor::operator()<browsing_data::SharedWorkerInfo>(
   if (types.Has(BrowsingDataModel::StorageType::kSharedWorker)) {
     helper->storage_partition_->GetSharedWorkerService()->TerminateWorker(
         shared_worker_info.worker, shared_worker_info.name,
-        shared_worker_info.storage_key);
+        shared_worker_info.storage_key, shared_worker_info.same_site_cookies);
   }
 }
 
@@ -347,9 +347,10 @@ template <>
 void StorageRemoverHelper::Visitor::operator()<net::CanonicalCookie>(
     const net::CanonicalCookie& cookie) {
   if (types.Has(BrowsingDataModel::StorageType::kCookie)) {
-    if (helper->delegate_ && helper->delegate_->IsCookieDeletionDisabled(
-                                 net::cookie_util::CookieOriginToURL(
-                                     cookie.Domain(), cookie.IsSecure()))) {
+    if (helper->delegate_ &&
+        helper->delegate_->IsCookieDeletionDisabled(
+            net::cookie_util::CookieOriginToURL(cookie.Domain(),
+                                                cookie.SecureAttribute()))) {
       // TODO(crbug.com/1500256): Expand test coverage for this block.
       return;
     }
@@ -545,10 +546,10 @@ void OnDelegateDataLoaded(
 }
 
 // If `data_key` represents a non-1P partition, returns the site on which it
-// is partitioned, absl::nullopt otherwise.
-absl::optional<net::SchemefulSite> GetThirdPartyPartitioningSite(
+// is partitioned, std::nullopt otherwise.
+std::optional<net::SchemefulSite> GetThirdPartyPartitioningSite(
     const BrowsingDataModel::DataKey& data_key) {
-  absl::optional<net::SchemefulSite> top_level_site = absl::nullopt;
+  std::optional<net::SchemefulSite> top_level_site = std::nullopt;
   absl::visit(
       base::Overloaded{
           [&](const url::Origin&) {},
@@ -631,7 +632,7 @@ bool BrowsingDataModel::BrowsingDataEntryView::Matches(
                      *data_owner);
 }
 
-absl::optional<net::SchemefulSite>
+std::optional<net::SchemefulSite>
 BrowsingDataModel::BrowsingDataEntryView::GetThirdPartyPartitioningSite()
     const {
   // Partition information is only dependent on it's `data_key`.
@@ -783,7 +784,9 @@ void BrowsingDataModel::AddBrowsingData(const DataKey& data_key,
   auto& entry = browsing_data_entries_[data_owner][data_key];
 
   entry.storage_size += storage_size;
-  entry.cookie_count += cookie_count;
+  // Per canonical cookie the count should always be 1, otherwise this count is
+  // irrelevant.
+  entry.cookie_count = cookie_count;
   entry.storage_types.Put(storage_type);
 }
 
@@ -850,22 +853,16 @@ void BrowsingDataModel::RemoveUnpartitionedBrowsingData(
   }
 }
 
-bool BrowsingDataModel::IsBlockedByThirdPartyCookieBlocking(
-    const DataKey& data_key,
-    StorageType type) const {
-  if (GetThirdPartyPartitioningSite(data_key).has_value()) {
-    return false;
-  }
-
+bool BrowsingDataModel::IsStorageTypeCookieLike(
+    StorageType storage_type) const {
   if (delegate_) {
-    auto delegate_response =
-        delegate_->IsBlockedByThirdPartyCookieBlocking(data_key, type);
+    auto delegate_response = delegate_->IsStorageTypeCookieLike(storage_type);
     if (delegate_response.has_value()) {
       return delegate_response.value();
     }
   }
 
-  switch (type) {
+  switch (storage_type) {
     case BrowsingDataModel::StorageType::kTrustTokens:
     case BrowsingDataModel::StorageType::kInterestGroup:
     case BrowsingDataModel::StorageType::kAttributionReporting:
@@ -884,6 +881,24 @@ bool BrowsingDataModel::IsBlockedByThirdPartyCookieBlocking(
   }
 }
 
+bool BrowsingDataModel::IsBlockedByThirdPartyCookieBlocking(
+    const DataKey& data_key,
+    StorageType storage_type) const {
+  if (GetThirdPartyPartitioningSite(data_key).has_value()) {
+    return false;
+  }
+
+  if (delegate_) {
+    auto delegate_response =
+        delegate_->IsBlockedByThirdPartyCookieBlocking(data_key, storage_type);
+    if (delegate_response.has_value()) {
+      return delegate_response.value();
+    }
+  }
+
+  return IsStorageTypeCookieLike(storage_type);
+}
+
 void BrowsingDataModel::PopulateFromDisk(base::OnceClosure finished_callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   bool is_shared_storage_enabled =
@@ -896,8 +911,6 @@ void BrowsingDataModel::PopulateFromDisk(base::OnceClosure finished_callback) {
       attribution_reporting::features::kConversionMeasurement);
   bool is_private_aggregation_enabled =
       base::FeatureList::IsEnabled(blink::features::kPrivateAggregationApi);
-  bool is_migrate_storage_to_bdm_enabled = base::FeatureList::IsEnabled(
-      browsing_data::features::kMigrateStorageToBDM);
   bool is_cookies_tree_model_deprecated = base::FeatureList::IsEnabled(
       browsing_data::features::kDeprecateCookiesTreeModel);
 
@@ -910,17 +923,22 @@ void BrowsingDataModel::PopulateFromDisk(base::OnceClosure finished_callback) {
   // until `finished_callback` has been run. Thus, it's safe to pass raw `this`
   // to backend callbacks.
 
-  // Issued Trust Tokens:
+  // Issued Trust Tokens
   storage_partition_->GetNetworkContext()->GetStoredTrustTokenCounts(
       base::BindOnce(&OnTrustTokenIssuanceInfoLoaded, this, completion));
 
+  // Quota Storage
+  quota_helper_->StartFetching(
+      base::BindOnce(&OnQuotaStorageLoaded, this, completion));
+  storage_partition_->GetDOMStorageContext()->GetLocalStorageUsage(
+      base::BindOnce(&OnLocalStorageLoaded, this, completion));
   // Shared storage origins
   if (is_shared_storage_enabled) {
     storage_partition_->GetSharedStorageManager()->FetchOrigins(
         base::BindOnce(&OnSharedStorageLoaded, this, completion));
   }
 
-  // Shared Dictionaries.
+  // Shared Dictionaries
   if (is_shared_dictionary_enabled) {
     storage_partition_->GetNetworkContext()->GetSharedDictionaryUsageInfo(
         base::BindOnce(&OnSharedDictionaryUsageLoaded, this, completion));
@@ -944,13 +962,7 @@ void BrowsingDataModel::PopulateFromDisk(base::OnceClosure finished_callback) {
         base::BindOnce(&OnPrivateAggregationLoaded, this, completion));
   }
 
-  if (is_migrate_storage_to_bdm_enabled) {
-    quota_helper_->StartFetching(
-        base::BindOnce(&OnQuotaStorageLoaded, this, completion));
-    storage_partition_->GetDOMStorageContext()->GetLocalStorageUsage(
-        base::BindOnce(&OnLocalStorageLoaded, this, completion));
-  }
-
+  // Cookies
   if (is_cookies_tree_model_deprecated) {
     storage_partition_->GetCookieManagerForBrowserProcess()->GetAllCookies(
         base::BindOnce(&OnCookiesLoaded, this, completion));

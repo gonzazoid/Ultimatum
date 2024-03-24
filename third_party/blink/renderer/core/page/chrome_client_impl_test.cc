@@ -71,6 +71,7 @@
 #include "third_party/blink/renderer/core/script/classic_script.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
 #include "third_party/blink/renderer/platform/language.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 // To avoid conflicts with the CreateWindow macro from the Windows SDK...
 #undef CreateWindow
@@ -106,8 +107,8 @@ class ViewCreatingClient : public frame_test_helpers::TestWebFrameClient {
       network::mojom::blink::WebSandboxFlags,
       const SessionStorageNamespaceId&,
       bool& consumed_user_gesture,
-      const absl::optional<Impression>&,
-      const absl::optional<WebPictureInPictureWindowOptions>&,
+      const std::optional<Impression>&,
+      const std::optional<WebPictureInPictureWindowOptions>&,
       const WebURL& creator_base_url) override {
     return web_view_helper_.InitializeWithOpener(Frame());
   }
@@ -125,6 +126,7 @@ class CreateWindowTest : public testing::Test {
         To<ChromeClientImpl>(&web_view_->GetPage()->GetChromeClient());
   }
 
+  test::TaskEnvironment task_environment_;
   ViewCreatingClient web_frame_client_;
   frame_test_helpers::WebViewHelper helper_;
   WebViewImpl* web_view_;
@@ -300,6 +302,7 @@ class PagePopupSuppressionTest : public testing::Test {
   void TearDown() override {}
 
  protected:
+  test::TaskEnvironment task_environment_;
   frame_test_helpers::WebViewHelper helper_;
   WebViewImpl* web_view_;
   Persistent<WebLocalFrameImpl> main_frame_;
@@ -337,6 +340,7 @@ class FileChooserQueueTest : public testing::Test {
         To<ChromeClientImpl>(&web_view_->GetPage()->GetChromeClient());
   }
 
+  test::TaskEnvironment task_environment_;
   frame_test_helpers::WebViewHelper helper_;
   WebViewImpl* web_view_;
   Persistent<ChromeClientImpl> chrome_client_impl_;

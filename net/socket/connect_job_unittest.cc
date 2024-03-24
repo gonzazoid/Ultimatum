@@ -70,7 +70,7 @@ class TestConnectJob : public ConnectJob {
   int ConnectInternal() override {
     SetSocket(std::make_unique<MockTCPClientSocket>(
                   AddressList(), net_log().net_log(), &socket_data_provider_),
-              absl::nullopt /* dns_aliases */);
+              std::nullopt /* dns_aliases */);
     return socket()->Connect(base::BindOnce(
         &TestConnectJob::NotifyDelegateOfCompletion, base::Unretained(this)));
   }
@@ -100,7 +100,7 @@ class ConnectJobTest : public testing::Test {
             /*http_auth_handler_factory=*/nullptr,
             /*spdy_session_pool=*/nullptr,
             /*quic_supported_versions=*/nullptr,
-            /*quic_stream_factory=*/nullptr,
+            /*quic_session_pool=*/nullptr,
             /*proxy_delegate=*/nullptr,
             /*http_user_agent_settings=*/nullptr,
             /*ssl_client_context=*/nullptr,
@@ -111,7 +111,8 @@ class ConnectJobTest : public testing::Test {
             /*http_server_properties*/ nullptr,
             /*alpn_protos=*/nullptr,
             /*application_settings=*/nullptr,
-            /*ignore_certificate_errors=*/nullptr) {}
+            /*ignore_certificate_errors=*/nullptr,
+            /*early_data_enabled=*/nullptr) {}
   ~ConnectJobTest() override = default;
 
  protected:

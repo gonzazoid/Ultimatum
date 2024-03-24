@@ -46,6 +46,7 @@ import org.chromium.chrome.browser.preferences.Pref;
 import org.chromium.chrome.browser.profiles.OTRProfileID;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.profiles.ProfileKey;
+import org.chromium.chrome.browser.profiles.ProfileKeyUtil;
 import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.components.browser_ui.util.ConversionUtils;
 import org.chromium.components.download.DownloadCollectionBridge;
@@ -305,7 +306,8 @@ public class DownloadManagerService implements DownloadServiceDelegate, ProfileM
             mMessageUiController = DownloadMessageUiControllerFactory.create(delegate);
 
             DownloadManagerService.getDownloadManagerService()
-                    .checkForExternallyRemovedDownloads(ProfileKey.getLastUsedRegularProfileKey());
+                    .checkForExternallyRemovedDownloads(
+                            ProfileKeyUtil.getLastUsedRegularProfileKey());
 
             mActivityLaunched = true;
         }
@@ -1073,7 +1075,7 @@ public class DownloadManagerService implements DownloadServiceDelegate, ProfileM
         }
 
         if (BrowserStartupController.getInstance().isFullBrowserStarted()) {
-            Profile profile = Profile.getLastUsedRegularProfile();
+            Profile profile = ProfileManager.getLastUsedRegularProfile();
             if (OTRProfileID.isOffTheRecord(info.getOTRProfileId())) {
                 profile =
                         profile.getOffTheRecordProfile(
@@ -1308,7 +1310,7 @@ public class DownloadManagerService implements DownloadServiceDelegate, ProfileM
      */
     // TODO(shaktisahu): Drive this from a similar observer.
     private void maybeShowMissingSdCardError(List<DownloadItem> list) {
-        PrefService prefService = UserPrefs.get(Profile.getLastUsedRegularProfile());
+        PrefService prefService = UserPrefs.get(ProfileManager.getLastUsedRegularProfile());
         // Only show the missing directory snackbar once.
         if (!prefService.getBoolean(Pref.SHOW_MISSING_SD_CARD_ERROR_ANDROID)) return;
 

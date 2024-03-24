@@ -41,16 +41,28 @@ function sorted(s) {
   return Array.from(s).sort();
 }
 
-// Assert expected reasons and the reported reasons match.
+// Assert expected reasons are all present. Note that the extra reasons are allowed
+// as UAs might block bfcache for their specific reasons.
 function matchReasons(expectedNotRestoredReasonsSet, notRestoredReasonsSet) {
   const missing = setMinus(
     expectedNotRestoredReasonsSet, notRestoredReasonsSet, 'Missing reasons');
   const extra = setMinus(
       notRestoredReasonsSet, expectedNotRestoredReasonsSet, 'Extra reasons');
-  assert_true(missing.size + extra.size == 0, `Expected: ${sorted(expectedNotRestoredReasonsSet)}\n` +
+  assert_true(missing.size == 0, `Expected: ${sorted(expectedNotRestoredReasonsSet)}\n` +
     `Got: ${sorted(notRestoredReasonsSet)}\n` +
     `Missing: ${sorted(missing)}\n` +
     `Extra: ${sorted(extra)}\n`);
+}
+
+// This function takes a set of reasons and extracts reasons out of it and returns a set of strings.
+// For example, if the input is [{"reason": "error-document"}, {"reason": "masked"}],
+// the output is ["error-document", "masked"].
+function extractReason(reasonSet) {
+  let reasonsExtracted = new Set();
+  for (let reason of reasonSet) {
+    reasonsExtracted.add(reason.reason);
+  }
+  return reasonsExtracted;
 }
 
 // A helper function to assert that the page is not restored from BFCache by
@@ -96,7 +108,7 @@ async function assertNotRestoredFromBFCache(
   // Flatten the reasons from the main frame and all the child frames.
   const collectReason = (node) => {
     for (let reason of node.reasons) {
-      notRestoredReasonsSet.add(reason);
+      notRestoredReasonsSet.add(reason.reason);
     }
     for (let child of node.children) {
       collectReason(child);

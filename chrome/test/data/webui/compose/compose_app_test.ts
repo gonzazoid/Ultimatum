@@ -2,16 +2,18 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://compose/app.js';
+import 'chrome-untrusted://compose/app.js';
 
-import {ComposeAppElement, ComposeAppState} from 'chrome://compose/app.js';
-import {CloseReason, ComposeState, ComposeStatus, Length, Tone, UserFeedback} from 'chrome://compose/compose.mojom-webui.js';
-import {ComposeApiProxyImpl} from 'chrome://compose/compose_api_proxy.js';
-import {CrFeedbackOption} from 'chrome://resources/cr_elements/cr_feedback_buttons/cr_feedback_buttons.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
-import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
-import {isVisible, whenCheck} from 'chrome://webui-test/test_util.js';
+import {CrFeedbackOption} from '//resources/cr_elements/cr_feedback_buttons/cr_feedback_buttons.js';
+import {loadTimeData} from '//resources/js/load_time_data.js';
+import type {ComposeAppElement, ComposeAppState} from 'chrome-untrusted://compose/app.js';
+import type {ComposeState} from 'chrome-untrusted://compose/compose.mojom-webui.js';
+import {CloseReason, Length, Tone, UserFeedback} from 'chrome-untrusted://compose/compose.mojom-webui.js';
+import {ComposeApiProxyImpl} from 'chrome-untrusted://compose/compose_api_proxy.js';
+import {ComposeStatus} from 'chrome-untrusted://compose/compose_enums.mojom-webui.js';
+import {assertDeepEquals, assertEquals, assertFalse, assertStringContains, assertTrue} from 'chrome-untrusted://webui-test/chai_assert.js';
+import {flushTasks} from 'chrome-untrusted://webui-test/polymer_test_util.js';
+import {isVisible, whenCheck} from 'chrome-untrusted://webui-test/test_util.js';
 
 import {TestComposeApiProxy} from './test_compose_api_proxy.js';
 
@@ -130,13 +132,13 @@ suite('ComposeApp', () => {
     }
     const appWithTextSelected =
         await initializeNewAppWithTextSelectedState(true);
-    assertTrue(
-        appWithTextSelected.$.acceptButton.textContent!.includes('Replace'));
+    assertStringContains(
+        appWithTextSelected.$.acceptButton.textContent!, 'Replace');
 
     const appWithNoTextSelected =
         await initializeNewAppWithTextSelectedState(false);
-    assertTrue(
-        appWithNoTextSelected.$.acceptButton.textContent!.includes('Insert'));
+    assertStringContains(
+        appWithNoTextSelected.$.acceptButton.textContent!, 'Insert');
   });
 
   test('RefreshesResult', async () => {
@@ -164,8 +166,8 @@ suite('ComposeApp', () => {
     assertTrue(
         isVisible(app.$.resultContainer),
         'App result container should be visible.');
-    assertTrue(
-        app.$.resultContainer.textContent!.includes('Refreshed output.'));
+    assertStringContains(
+        app.$.resultText.$.root.innerText, 'Refreshed output.');
   });
 
   test('UpdatesScrollableBodyAfterResize', async () => {
@@ -305,8 +307,8 @@ suite('ComposeApp', () => {
       },
     });
     assertTrue(isVisible(appWithResult.$.resultContainer));
-    assertTrue(appWithResult.$.resultContainer.textContent!.includes(
-        'here is a result'));
+    assertStringContains(
+        appWithResult.$.resultText.$.root.innerText, 'here is a result');
     assertTrue(appWithResult.$.undoButton.disabled);
 
     // Input with response with undo available.
@@ -321,6 +323,16 @@ suite('ComposeApp', () => {
       },
     });
     assertFalse(appWithUndo.$.undoButton.disabled);
+
+    // Input with positive feedback.
+    const appWithPositiveFeedback = await initializeNewAppWithState({
+      webuiState: JSON.stringify({input: 'some input'}),
+      hasPendingRequest: false,
+      feedback: UserFeedback.kUserFeedbackPositive,
+    });
+    assertEquals(
+        CrFeedbackOption.THUMBS_UP,
+        appWithPositiveFeedback.$.feedbackButtons.selectedOption);
 
     // Already has a response but is loading another one.
     const appWithResultAndLoading = await initializeNewAppWithState({
@@ -463,15 +475,53 @@ suite('ComposeApp', () => {
       await mockResponse('', status);
 
       assertTrue(isVisible(app.$.errorFooter));
-      assertTrue(app.$.errorFooter.textContent!.includes(errorMessage));
+      assertStringContains(app.$.errorFooter.textContent!, errorMessage);
     }
 
-    testError(ComposeStatus.kError, 'errorGeneric');
-    testError(ComposeStatus.kNotSuccessful, 'errorRequestNotSuccessful');
-    testError(ComposeStatus.kTryAgainLater, 'errorTryAgainLater');
-    testError(ComposeStatus.kTryAgain, 'errorTryAgain');
-    testError(ComposeStatus.kPermissionDenied, 'errorPermissionDenied');
-    testError(ComposeStatus.kMisconfiguration, 'errorGeneric');
+    await testError(ComposeStatus.kFiltered, 'errorFiltered');
+    await testError(ComposeStatus.kRequestThrottled, 'errorRequestThrottled');
+    await testError(ComposeStatus.kOffline, 'errorOffline');
+    await testError(ComposeStatus.kClientError, 'errorTryAgain');
+    await testError(ComposeStatus.kMisconfiguration, 'errorTryAgain');
+    await testError(ComposeStatus.kServerError, 'errorTryAgain');
+    await testError(ComposeStatus.kInvalidRequest, 'errorTryAgain');
+    await testError(ComposeStatus.kRetryableError, 'errorTryAgain');
+    await testError(ComposeStatus.kNonRetryableError, 'errorTryAgain');
+    await testError(ComposeStatus.kDisabled, 'errorTryAgain');
+    await testError(ComposeStatus.kCancelled, 'errorTryAgain');
+    await testError(ComposeStatus.kNoResponse, 'errorTryAgain');
+  });
+
+  test('UnsupportedLanguageErrorClickable', async () => {
+    const errorMessage = `some error ${'errorUnsupportedLanguage'}`;
+    loadTimeData.overrideValues({['errorUnsupportedLanguage']: errorMessage});
+
+    mockInput('Here is my input.');
+    app.$.submitButton.click();
+    await testProxy.whenCalled('compose');
+    await mockResponse('', ComposeStatus.kUnsupportedLanguage);
+
+    assertTrue(isVisible(app.$.errorFooter));
+
+    // Click on the "Learn more" link part of the error.
+    (app.$.errorFooter.getElementsByTagName('A')[0] as HTMLElement).click();
+    await testProxy.whenCalled('openComposeLearnMorePage');
+  });
+
+  test('UnsupportedLanguageErrorClickable', async () => {
+    const errorMessage = `some error ${'errorPermissionDenied'}`;
+    loadTimeData.overrideValues({['errorPermissionDenied']: errorMessage});
+
+    mockInput('Here is my input.');
+    app.$.submitButton.click();
+    await testProxy.whenCalled('compose');
+    await mockResponse('', ComposeStatus.kPermissionDenied);
+
+    assertTrue(isVisible(app.$.errorFooter));
+
+    // Click on the "Sign in" link part of the error.
+    (app.$.errorFooter.getElementsByTagName('A')[1] as HTMLElement).click();
+    await testProxy.whenCalled('openSignInPage');
   });
 
   test('AllowsEditingPrompt', async () => {
@@ -497,6 +547,7 @@ suite('ComposeApp', () => {
     // Mock clicking edit in the textarea and verify new textarea shows.
     app.$.textarea.dispatchEvent(
         new CustomEvent('edit-click', {composed: true, bubbles: true}));
+    await testProxy.whenCalled('logEditInput');
     assertTrue(isVisible(app.$.editTextarea));
 
     // Mock updating input and cancelling.
@@ -504,6 +555,7 @@ suite('ComposeApp', () => {
     app.$.editTextarea.value = 'Here is a better input.';
     app.$.editTextarea.dispatchEvent(new CustomEvent('value-changed'));
     app.$.cancelEditButton.click();
+    await testProxy.whenCalled('logCancelEdit');
     assertFalse(isVisible(app.$.editTextarea));
     assertEquals('Initial input.', app.$.textarea.value);
 
@@ -520,7 +572,7 @@ suite('ComposeApp', () => {
     await mockResponse('new response');
     assertEquals('Here is an even better input.', args.input);
     assertTrue(args.edited);
-    assertTrue(app.$.resultContainer.textContent!.includes('new response'));
+    assertStringContains(app.$.resultText.$.root.innerText, 'new response');
   });
 
   test('ComposeWithLengthToneOptionResult', async () => {
@@ -583,23 +635,27 @@ suite('ComposeApp', () => {
         selectedLength: Number(Length.kLonger),
         selectedTone: Number(Tone.kCasual),
       }),
-      feedback: UserFeedback.kUserFeedbackUnspecified,
+      feedback: UserFeedback.kUserFeedbackPositive,
     });
     const appWithUndo = document.createElement('compose-app');
     document.body.appendChild(appWithUndo);
     await testProxy.whenCalled('requestInitialState');
 
-    // CLick undo.
+    // Click undo.
     appWithUndo.$.undoButton.click();
     await testProxy.whenCalled('undo');
+    await flushTasks();
 
     // UI is updated.
     assertEquals('my old input', appWithUndo.$.textarea.value);
     assertTrue(isVisible(appWithUndo.$.resultContainer));
-    assertTrue(appWithUndo.$.resultContainer.textContent!.includes(
-        'some undone result'));
+    assertStringContains(
+        appWithUndo.$.resultText.$.root.innerText, 'some undone result');
     assertEquals(Length.kLonger, Number(appWithUndo.$.lengthMenu.value));
     assertEquals(Tone.kCasual, Number(appWithUndo.$.toneMenu.value));
+    assertEquals(
+        CrFeedbackOption.THUMBS_UP,
+        appWithUndo.$.feedbackButtons.selectedOption);
   });
 
   test('Feedback', async () => {
@@ -615,19 +671,41 @@ suite('ComposeApp', () => {
   });
 
   test('PartialResponseIsShown', async () => {
+    // Make streaming work instantly.
+    app.$.resultText.enableInstantStreamingForTesting();
+
+    // Although streaming happens immediately, it requires a sequence of events.
+    // Wait for those events to complete.
+    const wait = async () => {
+      for (let i = 0; i < 5; i++) {
+        await flushTasks();
+      }
+    };
+
     mockInput('Some fake input.');
     app.$.submitButton.click();
     await testProxy.whenCalled('compose');
 
     // A partial response is shown.
-    await mockPartialResponse('partial response');
-    assertTrue(isVisible(app.$.partialResultText));
-    assertEquals(app.$.partialResultText.innerText.trim(), 'partial response');
+    await mockPartialResponse('partial response here');
+    await wait();
+    assertTrue(
+        isVisible(app.$.resultText.$.partialResultText),
+        'partial result text should be shown');
+    assertEquals(app.$.resultText.$.root.innerText, 'partial response');
 
     // The final response hides the partial response text.
     await mockResponse(
-        'some response', ComposeStatus.kOk, /*onDeviceEvaluationUsed=*/ true);
-    assertFalse(isVisible(app.$.partialResultText));
-    assertTrue(isVisible(app.$.onDeviceUsedFooter));
+        'some response', ComposeStatus.kOk, /*onDeviceEvaluationUsed=*/
+        true);
+    await flushTasks();
+    assertTrue(
+        (app as any).showOnDeviceDogfoodFooter_(),
+        'show footer should be true');
+    await wait();
+    assertTrue(
+        isVisible(app.$.onDeviceUsedFooter),
+        'on-device footer should be shown');
+    assertEquals(app.$.resultText.$.root.innerText.trim(), 'some response');
   });
 });

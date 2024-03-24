@@ -28,7 +28,7 @@ IdentityProviderData::IdentityProviderData(
     const std::vector<IdentityRequestAccount>& accounts,
     const IdentityProviderMetadata& idp_metadata,
     const ClientMetadata& client_metadata,
-    const blink::mojom::RpContext& rp_context,
+    blink::mojom::RpContext rp_context,
     bool request_permission,
     bool has_login_status_mismatch)
     : idp_for_display{idp_for_display},
@@ -60,10 +60,12 @@ void IdentityRequestDialogController::ShowAccountsDialog(
     const std::optional<std::string>& iframe_for_display,
     const std::vector<IdentityProviderData>& identity_provider_data,
     IdentityRequestAccount::SignInMode sign_in_mode,
-    bool show_auto_reauthn_checkbox,
+    blink::mojom::RpMode rp_mode,
+    const std::optional<content::IdentityProviderData>& new_account_idp,
     AccountSelectionCallback on_selected,
     LoginToIdPCallback on_add_account,
-    DismissCallback dismiss_callback) {
+    DismissCallback dismiss_callback,
+    AccountsDisplayedCallback accounts_displayed_callback) {
   if (!is_interception_enabled_) {
     std::move(dismiss_callback).Run(DismissReason::kOther);
   }
@@ -73,7 +75,8 @@ void IdentityRequestDialogController::ShowFailureDialog(
     const std::string& top_frame_for_display,
     const std::optional<std::string>& iframe_for_display,
     const std::string& idp_for_display,
-    const blink::mojom::RpContext& rp_context,
+    blink::mojom::RpContext rp_context,
+    blink::mojom::RpMode rp_mode,
     const IdentityProviderMetadata& idp_metadata,
     DismissCallback dismiss_callback,
     LoginToIdPCallback login_callback) {
@@ -86,7 +89,8 @@ void IdentityRequestDialogController::ShowErrorDialog(
     const std::string& top_frame_for_display,
     const std::optional<std::string>& iframe_for_display,
     const std::string& idp_for_display,
-    const blink::mojom::RpContext& rp_context,
+    blink::mojom::RpContext rp_context,
+    blink::mojom::RpMode rp_mode,
     const IdentityProviderMetadata& idp_metadata,
     const std::optional<IdentityCredentialTokenError>& error,
     DismissCallback dismiss_callback,
@@ -111,6 +115,8 @@ void IdentityRequestDialogController::ShowIdpSigninFailureDialog(
     std::move(dismiss_callback).Run();
   }
 }
+
+void IdentityRequestDialogController::ShowUrl(LinkType type, const GURL& url) {}
 
 WebContents* IdentityRequestDialogController::ShowModalDialog(
     const GURL& url,

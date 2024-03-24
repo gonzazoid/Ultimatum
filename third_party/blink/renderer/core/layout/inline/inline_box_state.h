@@ -5,8 +5,9 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_INLINE_INLINE_BOX_STATE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_INLINE_INLINE_BOX_STATE_H_
 
+#include <optional>
+
 #include "base/dcheck_is_on.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/geometry/logical_rect.h"
 #include "third_party/blink/renderer/core/layout/inline/line_box_fragment_builder.h"
@@ -45,10 +46,15 @@ struct InlineBoxState {
   Member<const ComputedStyle> style;
 
   // Points to style->GetFont(), or |scaled_font| in an SVG <text>.
-  const Font* font;
+  const Font* font = nullptr;
+
   // A storage of SVG scaled font. Do not touch this outside of
-  // InitializeFont().
-  absl::optional<Font> scaled_font;
+  // ResetStyle().
+  //
+  // NOTE: This doesn't use a std::optional to avoid a potentially racy branch
+  // within the Trace method.
+  Font scaled_font;
+  bool has_scaled_font = false;
 
   // SVG scaling factor for this box. We use a font of which size is
   // css-specified-size * scaling_factor.
@@ -96,7 +102,10 @@ struct InlineBoxState {
   InlineBoxState(const InlineBoxState&) = delete;
   InlineBoxState& operator=(const InlineBoxState&) = delete;
 
-  void Trace(Visitor* visitor) const { visitor->Trace(style); }
+  void Trace(Visitor* visitor) const {
+    visitor->Trace(style);
+    visitor->Trace(scaled_font);
+  }
 
   // Reset |style|, |is_svg_text|, |font|, |scaled_font|, |scaling_factor|, and
   // |alignment_type|.

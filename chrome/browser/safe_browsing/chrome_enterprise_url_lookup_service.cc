@@ -89,7 +89,8 @@ bool ChromeEnterpriseRealTimeUrlLookupService::CanSendPageLoadToken() const {
   return false;
 }
 
-bool ChromeEnterpriseRealTimeUrlLookupService::CanCheckSubresourceURL() const {
+bool ChromeEnterpriseRealTimeUrlLookupService::
+    CanIncludeSubframeUrlInReferrerChain() const {
   return false;
 }
 
@@ -107,31 +108,26 @@ bool ChromeEnterpriseRealTimeUrlLookupService::
 
 void ChromeEnterpriseRealTimeUrlLookupService::GetAccessToken(
     const GURL& url,
-    const GURL& last_committed_url,
-    bool is_mainframe,
     RTLookupResponseCallback response_callback,
     scoped_refptr<base::SequencedTaskRunner> callback_task_runner) {
   token_fetcher_->Start(base::BindOnce(
       &ChromeEnterpriseRealTimeUrlLookupService::OnGetAccessToken,
-      weak_factory_.GetWeakPtr(), url, last_committed_url, is_mainframe,
-      std::move(response_callback), std::move(callback_task_runner),
-      base::TimeTicks::Now()));
+      weak_factory_.GetWeakPtr(), url, std::move(response_callback),
+      std::move(callback_task_runner), base::TimeTicks::Now()));
 }
 
 void ChromeEnterpriseRealTimeUrlLookupService::OnGetAccessToken(
     const GURL& url,
-    const GURL& last_committed_url,
-    bool is_mainframe,
     RTLookupResponseCallback response_callback,
     scoped_refptr<base::SequencedTaskRunner> callback_task_runner,
     base::TimeTicks get_token_start_time,
     const std::string& access_token) {
-  SendRequest(url, last_committed_url, is_mainframe, access_token,
-              std::move(response_callback), std::move(callback_task_runner),
+  SendRequest(url, access_token, std::move(response_callback),
+              std::move(callback_task_runner),
               /* is_sampled_report */ false);
 }
 
-absl::optional<std::string>
+std::optional<std::string>
 ChromeEnterpriseRealTimeUrlLookupService::GetDMTokenString() const {
   DCHECK(connectors_service_);
   return connectors_service_->GetDMTokenForRealTimeUrlCheck();
@@ -195,11 +191,11 @@ bool ChromeEnterpriseRealTimeUrlLookupService::ShouldIncludeCredentials()
   return false;
 }
 
-absl::optional<base::Time> ChromeEnterpriseRealTimeUrlLookupService::
+std::optional<base::Time> ChromeEnterpriseRealTimeUrlLookupService::
     GetMinAllowedTimestampForReferrerChains() const {
   // Enterprise URL lookup is enabled at startup and managed by the admin, so
   // all referrer URLs should be included in the referrer chain.
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 bool ChromeEnterpriseRealTimeUrlLookupService::CanSendRTSampleRequest() const {

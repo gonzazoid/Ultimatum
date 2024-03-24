@@ -65,6 +65,10 @@ const char kFullMemoryCrashReport[] = "full-memory-crash-report";
 // to BEST_EFFORT are not logged.
 const char kLogBestEffortTasks[] = "log-best-effort-tasks";
 
+// Handle to the shared memory segment a child process should use to transmit
+// histograms back to the browser process.
+const char kMetricsSharedMemoryHandle[] = "metrics-shmem-handle";
+
 // Suppresses all error dialogs when present.
 const char kNoErrorDialogs[]                = "noerrdialogs";
 
@@ -170,13 +174,6 @@ const char kHostVersionCode[] = "host-version-code";
 const char kPackageName[] = "package-name";
 const char kPackageVersionName[] = "package-version-name";
 const char kPackageVersionCode[] = "package-version-code";
-#endif
-
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-// TODO(crbug.com/1176772): Remove kEnableCrashpad and IsCrashpadEnabled() when
-// Crashpad is fully enabled on Linux. Indicates that Crashpad should be
-// enabled.
-extern const char kEnableCrashpad[] = "enable-crashpad";
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS)

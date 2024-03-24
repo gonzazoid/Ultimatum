@@ -5,6 +5,7 @@
 #include "chrome/browser/ash/system_web_apps/apps/personalization_app/personalization_app_wallpaper_provider_impl.h"
 
 #include <stdint.h>
+
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -24,6 +25,7 @@
 #include "ash/public/cpp/wallpaper/wallpaper_types.h"
 #include "ash/public/cpp/window_backdrop.h"
 #include "ash/wallpaper/wallpaper_constants.h"
+#include "ash/wallpaper/wallpaper_utils/sea_pen_metadata_utils.h"
 #include "ash/wallpaper/wallpaper_utils/wallpaper_online_variant_utils.h"
 #include "ash/wallpaper/wallpaper_utils/wallpaper_resizer.h"
 #include "ash/webui/personalization_app/mojom/personalization_app.mojom.h"
@@ -33,6 +35,7 @@
 #include "base/debug/dump_without_crashing.h"
 #include "base/files/file_path.h"
 #include "base/functional/bind.h"
+#include "base/json/json_reader.h"
 #include "base/notreached.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/unguessable_token.h"
@@ -430,15 +433,7 @@ void PersonalizationAppWallpaperProviderImpl::OnWallpaperResized() {
               info->layout, info->type, key,
               /*description_title=*/std::string(),
               /*description_content=*/std::string()));
-      // Do not show file extension in user-visible selected details text.
-      const std::string file_name = base::FilePath(info->user_file_path)
-                                        .BaseName()
-                                        .RemoveExtension()
-                                        .value();
-      std::vector<std::string> attribution = {file_name};
-      NotifyAttributionChanged(
-          ash::personalization_app::mojom::CurrentAttribution::New(
-              std::move(attribution), key));
+      FindSeaPenWallpaperAttribution(base::FilePath(info->user_file_path));
       return;
     }
     case ash::WallpaperType::kCount:
@@ -1093,6 +1088,50 @@ void PersonalizationAppWallpaperProviderImpl::FindImageMetadataInCollection(
   // resetting the previous fetcher last because the current method is bound
   // to a callback owned by the previous fetcher.
   wallpaper_attribution_info_fetcher_ = std::move(fetcher);
+}
+
+void PersonalizationAppWallpaperProviderImpl::FindSeaPenWallpaperAttribution(
+    const base::FilePath& user_file_path) {
+  auto* wallpaper_controller = WallpaperController::Get();
+  DCHECK(wallpaper_controller);
+
+  wallpaper_controller->GetSeaPenMetadata(
+      GetAccountId(profile_), user_file_path,
+      base::BindOnce(&PersonalizationAppWallpaperProviderImpl::
+                         SendSeaPenWallpaperAttribution,
+                     weak_ptr_factory_.GetWeakPtr(), user_file_path));
+}
+
+void PersonalizationAppWallpaperProviderImpl::SendSeaPenWallpaperAttribution(
+    const base::FilePath& user_file_path,
+    std::optional<base::Value::Dict> sea_pen_metadata) {
+  if (!sea_pen_metadata.has_value()) {
+    DVLOG(1) << __func__ << " the extracted metadata is not in JSON format";
+    NotifyAttributionChanged(
+        ash::personalization_app::mojom::CurrentAttribution::New(
+            std::vector<std::string>(), user_file_path.value()));
+    return;
+  }
+
+  auto sea_pen_image_info =
+      ash::SeaPenQueryDictToRecentImageInfo(std::move(*sea_pen_metadata));
+  if (!sea_pen_image_info) {
+    NotifyAttributionChanged(
+        ash::personalization_app::mojom::CurrentAttribution::New(
+            std::vector<std::string>(), user_file_path.value()));
+    return;
+  }
+
+  std::vector<std::string> attribution;
+  attribution.push_back(sea_pen_image_info->user_visible_query->text);
+  std::string template_title =
+      sea_pen_image_info->user_visible_query->template_title;
+  if (!template_title.empty()) {
+    attribution.push_back(template_title);
+  }
+  NotifyAttributionChanged(
+      ash::personalization_app::mojom::CurrentAttribution::New(
+          attribution, user_file_path.value()));
 }
 
 void PersonalizationAppWallpaperProviderImpl::SendGooglePhotosAttribution(

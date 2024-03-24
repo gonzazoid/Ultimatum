@@ -5,7 +5,8 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_OUT_OF_FLOW_LAYOUT_PART_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_OUT_OF_FLOW_LAYOUT_PART_H_
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/absolute_utils.h"
 #include "third_party/blink/renderer/core/layout/block_node.h"
@@ -126,20 +127,14 @@ class CORE_EXPORT OutOfFlowLayoutPart {
   // This stores the information needed to update a multicol child inside an
   // existing multicol fragment. This is used during nested fragmentation of an
   // OOF positioned element.
+  //
+  // TODO(layout-dev): Remove? This class now only holds a break token pointer,
+  // so things can most likely be simplified.
   struct MulticolChildInfo {
     DISALLOW_NEW();
 
    public:
-    // The mutable link of a multicol child.
-    PhysicalFragmentLink* mutable_link;
-
-    // The multicol break token that stores a reference to |mutable_link|'s
-    // break token in its list of child break tokens.
     Member<const BlockBreakToken> parent_break_token;
-
-    explicit MulticolChildInfo(PhysicalFragmentLink* mutable_link,
-                               BlockBreakToken* parent_break_token = nullptr)
-        : mutable_link(mutable_link), parent_break_token(parent_break_token) {}
 
     void Trace(Visitor* visitor) const;
   };
@@ -207,7 +202,7 @@ class CORE_EXPORT OutOfFlowLayoutPart {
     // replaced in the final layout pass.
     Member<const LayoutResult> initial_layout_result;
     // The |block_estimate| is wrt. the candidate's writing mode.
-    absl::optional<LayoutUnit> block_estimate;
+    std::optional<LayoutUnit> block_estimate;
     LogicalOofDimensions node_dimensions;
 
     // The offset from the OOF to the top of the fragmentation context root.
@@ -216,7 +211,7 @@ class CORE_EXPORT OutOfFlowLayoutPart {
 
     // These fields are set only if this |OffsetInfo| is calculated from a
     // position fallback style, either from a @try rule or auto-generated.
-    absl::optional<wtf_size_t> fallback_index;
+    std::optional<wtf_size_t> fallback_index;
     Vector<NonOverflowingScrollRange> non_overflowing_ranges;
 
     bool inline_size_depends_on_min_max_sizes = false;
@@ -254,7 +249,7 @@ class CORE_EXPORT OutOfFlowLayoutPart {
     void Trace(Visitor* visitor) const;
   };
 
-  static absl::optional<LogicalSize> InitialContainingBlockFixedSize(
+  static std::optional<LogicalSize> InitialContainingBlockFixedSize(
       BlockNode container);
 
  private:
@@ -303,7 +298,24 @@ class CORE_EXPORT OutOfFlowLayoutPart {
       bool outer_context_has_fixedpos_container = false,
       HeapVector<MulticolChildInfo>* multicol_children = nullptr);
 
-  NodeInfo SetupNodeInfo(const LogicalOofPositionedNode& oof_node);
+  void CreateAnchorEvaluator(
+      std::optional<AnchorEvaluatorImpl>& anchor_evaluator_storage,
+      const ContainingBlockInfo& container_info,
+      const PhysicalSize& available_size,
+      WritingDirectionMode self_writing_direction,
+      const ScopedCSSName* default_anchor_specifier,
+      const LayoutBox& candidate_layout_box,
+      const LogicalAnchorQueryMap* anchor_queries,
+      const LayoutObject* implicit_anchor);
+
+  const ContainingBlockInfo ApplyInsetArea(
+      const InsetArea& inset_area,
+      const ContainingBlockInfo& container_info,
+      const LogicalOofPositionedNode& candidate,
+      const LogicalAnchorQueryMap* anchor_queries);
+
+  NodeInfo SetupNodeInfo(const LogicalOofPositionedNode& oof_node,
+                         const LogicalAnchorQueryMap* anchor_queries);
 
   const LayoutResult* LayoutOOFNode(
       NodeToLayout& oof_node_to_layout,
@@ -319,9 +331,10 @@ class CORE_EXPORT OutOfFlowLayoutPart {
   // Calculates offsets with the given ComputedStyle. Returns nullopt if
   // |try_fit_available_space| is true and the layout result does not fit the
   // available space.
-  absl::optional<OffsetInfo> TryCalculateOffset(
+  std::optional<OffsetInfo> TryCalculateOffset(
       const NodeInfo& node_info,
       const ComputedStyle& style,
+      AnchorEvaluatorImpl*,
       const LogicalAnchorQueryMap* anchor_queries,
       const LayoutObject* implicit_anchor,
       bool try_fit_available_space,
@@ -355,6 +368,7 @@ class CORE_EXPORT OutOfFlowLayoutPart {
       HeapVector<NodeToLayout>& pending_descendants,
       wtf_size_t index,
       LogicalOffset fragmentainer_progression,
+      LayoutUnit* monolithic_overflow,
       bool* has_actual_break_inside,
       HeapVector<NodeToLayout>* fragmented_descendants);
   void AddOOFToFragmentainer(NodeToLayout& descendant,
@@ -365,26 +379,13 @@ class CORE_EXPORT OutOfFlowLayoutPart {
                              bool* has_actual_break_inside,
                              SimplifiedOofLayoutAlgorithm* algorithm,
                              HeapVector<NodeToLayout>* fragmented_descendants);
-  void ReplaceFragmentainer(wtf_size_t index,
-                            LogicalOffset offset,
-                            bool create_new_fragment,
-                            SimplifiedOofLayoutAlgorithm* algorithm);
-  LogicalOffset UpdatedFragmentainerOffset(
-      LogicalOffset offset,
-      wtf_size_t index,
-      LogicalOffset fragmentainer_progression,
-      bool create_new_fragment);
   ConstraintSpace GetFragmentainerConstraintSpace(wtf_size_t index);
   void ComputeStartFragmentIndexAndRelativeOffset(
       WritingMode default_writing_mode,
       LayoutUnit block_estimate,
-      absl::optional<LayoutUnit> clipped_container_block_offset,
+      std::optional<LayoutUnit> clipped_container_block_offset,
       wtf_size_t* start_index,
       LogicalOffset* offset) const;
-
-  void ReplaceFragment(const LayoutResult* new_result,
-                       const PhysicalBoxFragment& old_fragment,
-                       wtf_size_t index);
 
   // This saves the static-position for an OOF-positioned object into its
   // paint-layer.
@@ -421,10 +422,6 @@ class CORE_EXPORT OutOfFlowLayoutPart {
   // will affect column balancing, if any, without actually adding the OOFs to
   // the associated columns.
   ColumnBalancingInfo* column_balancing_info_ = nullptr;
-  // The block size of the multi-column (before adjustment for spanners, etc.)
-  // This is used to calculate the column size of any newly added proxy
-  // fragments when handling fragmentation for abspos elements.
-  LayoutUnit original_column_block_size_ = kIndefiniteSize;
   // The consumed block size of previous fragmentainers. This is accumulated and
   // used as we add OOF elements to fragmentainers.
   LayoutUnit fragmentainer_consumed_block_size_;

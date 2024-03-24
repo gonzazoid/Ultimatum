@@ -6,23 +6,37 @@
 
 #include "third_party/blink/renderer/core/layout/inline/fragment_item.h"
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_inline_text.h"
-#include "third_party/blink/renderer/core/paint/text_painter.h"
+#include "third_party/blink/renderer/core/layout/text_decoration_offset.h"
 #include "third_party/blink/renderer/core/paint/paint_info.h"
+#include "third_party/blink/renderer/core/paint/text_painter.h"
+#include "third_party/blink/renderer/core/paint/text_shadow_painter.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context_state_saver.h"
 
 namespace blink {
 
+namespace {
+
+Color LineColorForPhase(TextDecorationInfo& decoration_info,
+                        TextShadowPaintPhase phase) {
+  if (phase == TextShadowPaintPhase::kShadow) {
+    return Color::kBlack;
+  }
+  return decoration_info.LineColor();
+}
+
+}  // namespace
+
 TextDecorationPainter::TextDecorationPainter(
     TextPainter& text_painter,
-    const FragmentItem& text_item,
+    const InlinePaintContext* inline_context,
     const PaintInfo& paint_info,
     const ComputedStyle& style,
     const TextPaintStyle& text_style,
     const LineRelativeRect& decoration_rect,
     HighlightPainter::SelectionPaintState* selection)
     : text_painter_(text_painter),
-      text_item_(text_item),
+      inline_context_(inline_context),
       paint_info_(paint_info),
       style_(style),
       text_style_(text_style),
@@ -36,31 +50,32 @@ TextDecorationPainter::~TextDecorationPainter() {
 }
 
 void TextDecorationPainter::UpdateDecorationInfo(
-    absl::optional<TextDecorationInfo>& result,
+    std::optional<TextDecorationInfo>& result,
+    const FragmentItem& text_item,
     const ComputedStyle& style,
-    absl::optional<LineRelativeRect> decoration_rect_override,
+    std::optional<LineRelativeRect> decoration_rect_override,
     const AppliedTextDecoration* decoration_override) {
   result.reset();
 
   if ((!style.HasAppliedTextDecorations() && !decoration_override) ||
       // Ellipsis should not have text decorations. This is not defined, but
       // 4 impls do this: <https://github.com/w3c/csswg-drafts/issues/6531>
-      text_item_.IsEllipsis()) {
+      text_item.IsEllipsis()) {
     return;
   }
 
-  absl::optional<AppliedTextDecoration> effective_selection_decoration =
+  std::optional<AppliedTextDecoration> effective_selection_decoration =
       UNLIKELY(phase_ == kSelection)
           ? selection_->GetSelectionStyle().selection_text_decoration
-          : absl::nullopt;
+          : std::nullopt;
 
-  if (text_item_.IsSvgText() && paint_info_.IsRenderingResourceSubtree()) {
+  if (text_item.IsSvgText() && paint_info_.IsRenderingResourceSubtree()) {
     // Need to recompute a scaled font and a scaling factor because they
     // depend on the scaling factor of an element referring to the text.
     float scaling_factor = 1;
     Font scaled_font;
     LayoutSVGInlineText::ComputeNewScaledFontForStyle(
-        *text_item_.GetLayoutObject(), scaling_factor, scaled_font);
+        *text_item.GetLayoutObject(), scaling_factor, scaled_font);
     DCHECK(scaling_factor);
     // Adjust the origin of the decoration because
     // TextPainter::PaintDecorationsExceptLineThrough() will change the
@@ -69,52 +84,141 @@ void TextDecorationPainter::UpdateDecorationInfo(
     // In svg/text/text-decorations-in-scaled-pattern.svg, the size of
     // ScaledFont() is zero, and the top position is unreliable. So we
     // adjust the baseline position, then shift it for scaled_font.
-    top +=
-        text_item_.ScaledFont().PrimaryFont()->GetFontMetrics().FixedAscent();
-    top *= scaling_factor / text_item_.SvgScalingFactor();
+    top += text_item.ScaledFont().PrimaryFont()->GetFontMetrics().FixedAscent();
+    top *= scaling_factor / text_item.SvgScalingFactor();
     top -= scaled_font.PrimaryFont()->GetFontMetrics().FixedAscent();
     result.emplace(LineRelativeOffset{decoration_rect_.offset.line_left, top},
-                   decoration_rect_.InlineSize(), style,
-                   text_painter_.InlineContext(),
+                   decoration_rect_.InlineSize(), style, inline_context_,
                    effective_selection_decoration, decoration_override,
-                   &scaled_font, MinimumThickness1(false), scaling_factor);
+                   &scaled_font, MinimumThickness1(false),
+                   text_item.SvgScalingFactor() / scaling_factor);
   } else {
     LineRelativeRect decoration_rect =
         decoration_rect_override.value_or(decoration_rect_);
     result.emplace(decoration_rect.offset, decoration_rect.InlineSize(), style,
-                   text_painter_.InlineContext(),
-                   effective_selection_decoration, decoration_override,
-                   &text_item_.ScaledFont(),
-                   MinimumThickness1(!text_item_.IsSvgText()));
+                   inline_context_, effective_selection_decoration,
+                   decoration_override, &text_item.ScaledFont(),
+                   MinimumThickness1(!text_item.IsSvgText()));
   }
 }
 
-void TextDecorationPainter::Begin(Phase phase) {
+gfx::RectF TextDecorationPainter::ExpandRectForSVGDecorations(
+    const LineRelativeRect& rect) {
+  // Until SVG text has correct InkOverflow, we need to hack it.
+  gfx::RectF clip_rect{rect};
+  clip_rect.set_y(clip_rect.y() - clip_rect.height());
+  clip_rect.set_height(3 * clip_rect.height());
+  return clip_rect;
+}
+
+void TextDecorationPainter::Begin(const FragmentItem& text_item, Phase phase) {
   DCHECK(step_ == kBegin);
 
   phase_ = phase;
-  UpdateDecorationInfo(decoration_info_, style_);
+  UpdateDecorationInfo(decoration_info_, text_item, style_);
   clip_rect_.reset();
 
   if (decoration_info_ && UNLIKELY(selection_)) {
-    clip_rect_.emplace(selection_->LineRelativeSelectionRect());
-
-    // Whether it’s best to clip to selection rect on both axes or only inline
-    // depends on the situation, but the latter can improve the appearance of
-    // decorations. For example, we often paint overlines entirely past the
-    // top edge of selection rect, and wavy underlines have similar problems.
-    //
-    // Sadly there’s no way to clip to a rect of infinite height, so for now,
-    // let’s clip to selection rect plus its height both above and below. This
-    // should be enough to avoid clipping most decorations in the wild.
-    //
-    // TODO(dazabani@igalia.com): take text-underline-offset and other
-    // text-decoration properties into account?
-    clip_rect_->set_y(clip_rect_->y() - clip_rect_->height());
-    clip_rect_->set_height(3.0 * clip_rect_->height());
+    if (UNLIKELY(text_item.IsSvgText())) {
+      clip_rect_.emplace(
+          ExpandRectForSVGDecorations(selection_->LineRelativeSelectionRect()));
+    } else {
+      const LineRelativeRect selection_rect =
+          selection_->LineRelativeSelectionRect();
+      const PhysicalRect& ink_overflow_rect = text_item.InkOverflowRect();
+      clip_rect_.emplace(selection_rect.offset.line_left, ink_overflow_rect.Y(),
+                         selection_rect.size.inline_size,
+                         ink_overflow_rect.Height());
+    }
   }
 
   step_ = kExcept;
+}
+
+void TextDecorationPainter::PaintUnderOrOverLineDecorations(
+    TextDecorationInfo& decoration_info,
+    const TextFragmentPaintInfo& fragment_paint_info,
+    const TextPaintStyle& text_style,
+    TextDecorationLine lines_to_paint) {
+  if (paint_info_.IsRenderingResourceSubtree()) {
+    paint_info_.context.Scale(1, decoration_info.ScalingFactor());
+  }
+  const TextDecorationOffset decoration_offset(style_);
+
+  PaintWithTextShadow(
+      [&](TextShadowPaintPhase phase) {
+        for (wtf_size_t i = 0; i < decoration_info.AppliedDecorationCount();
+             i++) {
+          decoration_info.SetDecorationIndex(i);
+          paint_info_.context.SetStrokeThickness(
+              decoration_info.ResolvedThickness());
+
+          if (decoration_info.HasSpellingOrGrammerError() &&
+              EnumHasFlags(lines_to_paint,
+                           TextDecorationLine::kSpellingError |
+                               TextDecorationLine::kGrammarError)) {
+            decoration_info.SetSpellingOrGrammarErrorLineData(
+                decoration_offset);
+            // We ignore "text-decoration-skip-ink: auto" for spelling and
+            // grammar error markers.
+            text_painter_.PaintDecorationLine(
+                decoration_info, LineColorForPhase(decoration_info, phase),
+                nullptr);
+            continue;
+          }
+
+          if (decoration_info.HasUnderline() && decoration_info.FontData() &&
+              EnumHasFlags(lines_to_paint, TextDecorationLine::kUnderline)) {
+            decoration_info.SetUnderlineLineData(decoration_offset);
+            text_painter_.PaintDecorationLine(
+                decoration_info, LineColorForPhase(decoration_info, phase),
+                &fragment_paint_info);
+          }
+
+          if (decoration_info.HasOverline() && decoration_info.FontData() &&
+              EnumHasFlags(lines_to_paint, TextDecorationLine::kOverline)) {
+            decoration_info.SetOverlineLineData(decoration_offset);
+            text_painter_.PaintDecorationLine(
+                decoration_info, LineColorForPhase(decoration_info, phase),
+                &fragment_paint_info);
+          }
+        }
+      },
+      paint_info_.context, text_style);
+}
+
+void TextDecorationPainter::PaintLineThroughDecorations(
+    TextDecorationInfo& decoration_info,
+    const TextPaintStyle& text_style) {
+  if (paint_info_.IsRenderingResourceSubtree()) {
+    paint_info_.context.Scale(1, decoration_info.ScalingFactor());
+  }
+
+  PaintWithTextShadow(
+      [&](TextShadowPaintPhase phase) {
+        for (wtf_size_t applied_decoration_index = 0;
+             applied_decoration_index <
+             decoration_info.AppliedDecorationCount();
+             ++applied_decoration_index) {
+          const AppliedTextDecoration& decoration =
+              decoration_info.AppliedDecoration(applied_decoration_index);
+          TextDecorationLine lines = decoration.Lines();
+          if (EnumHasFlags(lines, TextDecorationLine::kLineThrough)) {
+            decoration_info.SetDecorationIndex(applied_decoration_index);
+            paint_info_.context.SetStrokeThickness(
+                decoration_info.ResolvedThickness());
+
+            decoration_info.SetLineThroughLineData();
+
+            // No skip: ink for line-through,
+            // compare https://github.com/w3c/csswg-drafts/issues/711
+            text_painter_.PaintDecorationLine(
+                decoration_info, LineColorForPhase(decoration_info, phase),
+                nullptr);
+          }
+        }
+      },
+      paint_info_.context, text_style);
 }
 
 void TextDecorationPainter::PaintExceptLineThrough(
@@ -125,12 +229,10 @@ void TextDecorationPainter::PaintExceptLineThrough(
   // only decoration was a ‘line-through’.
   if (decoration_info_ &&
       decoration_info_->HasAnyLine(~TextDecorationLine::kLineThrough)) {
-    GraphicsContextStateSaver state_saver(paint_info_.context, false);
+    GraphicsContextStateSaver state_saver(paint_info_.context);
     ClipIfNeeded(state_saver);
-
-    text_painter_.PaintDecorationsExceptLineThrough(
-        fragment_paint_info, text_item_, paint_info_, style_, text_style_,
-        *decoration_info_, ~TextDecorationLine::kNone);
+    PaintUnderOrOverLineDecorations(*decoration_info_, fragment_paint_info,
+                                    text_style_, ~TextDecorationLine::kNone);
   }
 
   step_ = kOnly;
@@ -143,14 +245,36 @@ void TextDecorationPainter::PaintOnlyLineThrough() {
   // are no ‘line-through’ decorations.
   if (decoration_info_ &&
       decoration_info_->HasAnyLine(TextDecorationLine::kLineThrough)) {
-    GraphicsContextStateSaver state_saver(paint_info_.context, false);
+    GraphicsContextStateSaver state_saver(paint_info_.context);
     ClipIfNeeded(state_saver);
-
-    text_painter_.PaintDecorationsOnlyLineThrough(
-        text_item_, paint_info_, style_, text_style_, *decoration_info_);
+    PaintLineThroughDecorations(*decoration_info_, text_style_);
   }
 
   step_ = kBegin;
+}
+
+void TextDecorationPainter::PaintExceptLineThrough(
+    TextDecorationInfo& decoration_info,
+    const TextPaintStyle& text_style,
+    const TextFragmentPaintInfo& fragment_paint_info,
+    TextDecorationLine lines_to_paint) {
+  if (!decoration_info.HasAnyLine(lines_to_paint &
+                                  ~TextDecorationLine::kLineThrough)) {
+    return;
+  }
+  GraphicsContextStateSaver state_saver(paint_info_.context);
+  PaintUnderOrOverLineDecorations(decoration_info, fragment_paint_info,
+                                  text_style, lines_to_paint);
+}
+
+void TextDecorationPainter::PaintOnlyLineThrough(
+    TextDecorationInfo& decoration_info,
+    const TextPaintStyle& text_style) {
+  if (!decoration_info.HasAnyLine(TextDecorationLine::kLineThrough)) {
+    return;
+  }
+  GraphicsContextStateSaver state_saver(paint_info_.context);
+  PaintLineThroughDecorations(decoration_info, text_style);
 }
 
 void TextDecorationPainter::ClipIfNeeded(
@@ -158,7 +282,7 @@ void TextDecorationPainter::ClipIfNeeded(
   DCHECK(step_ != kBegin);
 
   if (clip_rect_) {
-    state_saver.Save();
+    state_saver.SaveIfNeeded();
     if (phase_ == kSelection)
       paint_info_.context.Clip(*clip_rect_);
     else

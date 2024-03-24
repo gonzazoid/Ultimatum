@@ -92,7 +92,7 @@ public class BrowserControlsManager implements ActivityStateListener, BrowserCon
 
     private final ObserverList<BrowserControlsStateProvider.Observer> mControlsObservers =
             new ObserverList<>();
-    private FullscreenHtmlApiHandler mHtmlApiHandler;
+    private FullscreenHtmlApiHandlerBase mHtmlApiHandler;
     @Nullable private Tab mTab;
 
     /** The animator for the Android browser controls. */
@@ -181,7 +181,8 @@ public class BrowserControlsManager implements ActivityStateListener, BrowserCon
         mControlsPosition = controlsPosition;
         mControlsAtMinHeight.set(false);
         mHtmlApiHandler =
-                new FullscreenHtmlApiHandler(activity, mControlsAtMinHeight, exitFullscreenOnStop);
+                FullscreenHtmlApiHandlerFactory.createInstance(
+                        activity, mControlsAtMinHeight, exitFullscreenOnStop);
         mBrowserVisibilityDelegate =
                 new BrowserStateBrowserControlsVisibilityDelegate(
                         mHtmlApiHandler.getPersistentFullscreenModeSupplier());
@@ -537,6 +538,7 @@ public class BrowserControlsManager implements ActivityStateListener, BrowserCon
         mHidingTokenHolder.releaseToken(token);
     }
 
+    @SuppressWarnings("NoDynamicStringsInTraceEventCheck")
     private boolean shouldShowAndroidControls() {
         if (mControlContainer == null) return false;
         if (mHidingTokenHolder.hasTokens()) {
@@ -555,6 +557,7 @@ public class BrowserControlsManager implements ActivityStateListener, BrowserCon
             FrameLayout.LayoutParams layoutParams =
                     (FrameLayout.LayoutParams) child.getLayoutParams();
             if (Gravity.TOP == (layoutParams.gravity & Gravity.FILL_VERTICAL)) {
+                TraceEvent.instant("BCM::showAndroidControls" + child.getId());
                 showControls = true;
                 break;
             }

@@ -1114,6 +1114,7 @@
     "browser",
     "window-controls-overlay",
     "tabbed",
+    "picture-in-picture",
 
     // (display-state:) media feature
     // normal
@@ -1379,7 +1380,7 @@
     "lch",
     "oklch",
     // "color",
-    "-internal-light-dark",
+    "light-dark",
 
     // color spaces
     // "srgb", included in color-interpolation
@@ -1465,6 +1466,12 @@
     "max",
     "clamp",
 
+    // proposed math function
+    // https://github.com/w3c/csswg-drafts/issues/626
+    "calc-size",
+    // value that goes within calc-size()
+    "any",
+
     // Trigonometic functions
     "sin",
     "cos",
@@ -1548,6 +1555,9 @@
     "var",
     "-internal-variable-value",
     "env",
+
+    // CSS Functions
+    "arg",
 
     // break-before, break-after, break-inside
     "avoid-page",
@@ -1665,10 +1675,11 @@
     "numbers",
     "words",
 
-    // ([video]-dynamic-range) media feature
+    // ([video]-dynamic-range) media feature, and dynamic-range-limit property
     "standard",
     "high",
     "constrained-high",
+    "dynamic-range-limit-mix",
 
     // Layered @import rule
     "layer",
@@ -1693,8 +1704,6 @@
 
     // anchor positioning
     "anchor",
-    // auto,
-    "auto-same",
     // top,
     // left,
     // right,
@@ -1774,5 +1783,28 @@
     "x-self-end",
     "y-self-start",
     "y-self-end",
+
+    // resize
+    // none
+    // both
+    // horizontal
+    // vertical
+    // block
+    // inline
+    // auto (legacy version of -internal-textarea-auto)
+    "-internal-textarea-auto",
+
+    // position-try-order
+    // normal
+    "most-width",
+    "most-height",
+    "most-block-size",
+    "most-inline-size",
+
+    // position-try-options
+    // none
+    "flip-block",
+    "flip-inline",
+    "flip-start",
   ],
 }

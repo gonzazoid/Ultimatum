@@ -2,10 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/ash/common/cr_elements/cr_button/cr_button.js';
 import './strings.m.js';
 
-import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
 import {ColorChangeUpdater} from 'chrome://resources/cr_components/color_change_listener/colors_css_updater.js';
 import {assert} from 'chrome://resources/js/assert.js';
 
@@ -14,9 +13,6 @@ import {OfficeFallbackBrowserProxy} from './office_fallback_browser_proxy.js';
 import {getTemplate} from './office_fallback_dialog.html.js';
 
 window.addEventListener('load', () => {
-  const jellyEnabled = loadTimeData.getBoolean('isJellyEnabled');
-  const theme = jellyEnabled ? 'refresh23' : 'legacy';
-  document.documentElement.setAttribute('theme', theme);
   ColorChangeUpdater.forDocument().start();
 });
 

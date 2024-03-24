@@ -122,13 +122,11 @@ void DownloadDidFinishWithSize(
 
   if (_resumeData) {
     DCHECK(!_startDownloadBlock);
-    if (@available(iOS 15, *)) {
-      __weak __typeof(self) weakSelf = self;
-      [_delegate resumeDownloadNativeTask:_resumeData
-                        completionHandler:^(WKDownload* download) {
-                          [weakSelf onResumedDownload:download];
-                        }];
-    }
+    __weak __typeof(self) weakSelf = self;
+    [_delegate resumeDownloadNativeTask:_resumeData
+                      completionHandler:^(WKDownload* download) {
+                        [weakSelf onResumedDownload:download];
+                      }];
     return;
   }
 
@@ -175,6 +173,9 @@ void DownloadDidFinishWithSize(
     [self startObservingDownloadProgress];
     handler(_urlForDownload);
   } else {
+    if (_startDownloadBlock) {
+      _startDownloadBlock(nil);
+    }
     _startDownloadBlock = handler;
     if (![_delegate onDownloadNativeTaskBridgeReadyForDownload:self]) {
       [self cancel];

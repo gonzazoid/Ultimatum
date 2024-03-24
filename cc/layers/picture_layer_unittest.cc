@@ -21,7 +21,6 @@
 #include "cc/test/fake_picture_layer.h"
 #include "cc/test/fake_picture_layer_impl.h"
 #include "cc/test/fake_proxy.h"
-#include "cc/test/fake_recording_source.h"
 #include "cc/test/layer_test_common.h"
 #include "cc/test/property_tree_test_utils.h"
 #include "cc/test/skia_common.h"
@@ -81,7 +80,7 @@ TEST(PictureLayerTest, NoTilesIfEmptyBounds) {
                           host->GetThreadUnsafeCommitState());
   EXPECT_FALSE(layer_impl->CanHaveTilings());
   EXPECT_TRUE(layer_impl->bounds() == gfx::Size(0, 0));
-  EXPECT_EQ(gfx::Size(), layer_impl->raster_source()->GetSize());
+  EXPECT_EQ(gfx::Size(), layer_impl->raster_source()->size());
   EXPECT_FALSE(layer_impl->raster_source()->HasRecordings());
 }
 
@@ -318,6 +317,9 @@ TEST(PictureLayerTest, NonMonotonicSourceFrameNumber) {
 
   animation_host->SetMutatorHostClient(nullptr);
   animation_host2->SetMutatorHostClient(nullptr);
+
+  host_client1.SetLayerTreeHost(nullptr);
+  host_client2.SetLayerTreeHost(nullptr);
 }
 
 // Verify that PictureLayer::DropRecordingSourceContentIfInvalid does not
@@ -380,8 +382,7 @@ TEST(PictureLayerTest, ChangingHostsWithCollidingFrames) {
 
   // Make the layer not update.
   layer->SetHideLayerAndSubtree(true);
-  EXPECT_EQ(gfx::Size(500, 500),
-            layer->GetRecordingSourceForTesting()->GetSize());
+  EXPECT_EQ(gfx::Size(500, 500), layer->GetRecordingSourceForTesting()->size());
 
   // Change its bounds while it's in a state that can't update.
   layer->SetBounds(gfx::Size(600, 600));
@@ -393,7 +394,10 @@ TEST(PictureLayerTest, ChangingHostsWithCollidingFrames) {
 
   // This layer should also drop its recording source because it was resized
   // and not recorded.
-  EXPECT_EQ(gfx::Size(), layer->GetRecordingSourceForTesting()->GetSize());
+  EXPECT_EQ(gfx::Size(), layer->GetRecordingSourceForTesting()->size());
+
+  host_client1.SetLayerTreeHost(nullptr);
+  host_client2.SetLayerTreeHost(nullptr);
 }
 
 TEST(PictureLayerTest, RecordingScaleIsCorrectlySet) {
@@ -418,12 +422,7 @@ TEST(PictureLayerTest, RecordingScaleIsCorrectlySet) {
                                  std::round(390 * recording_scale), 1, 1),
                        non_solid_flags);
 
-  std::unique_ptr<FakeRecordingSource> recording_source_owned =
-      FakeRecordingSource::CreateFilledRecordingSource(layer_bounds);
-  FakeRecordingSource* recording_source = recording_source_owned.get();
-  scoped_refptr<FakePictureLayer> layer =
-      FakePictureLayer::CreateWithRecordingSource(
-          &client, std::move(recording_source_owned));
+  scoped_refptr<FakePictureLayer> layer = FakePictureLayer::Create(&client);
   layer->SetBounds(layer_bounds);
 
   FakeLayerTreeHostClient host_client;
@@ -441,7 +440,7 @@ TEST(PictureLayerTest, RecordingScaleIsCorrectlySet) {
   // Solid color analysis will return true since the layer tree host has the
   // recording scale set to its default value of 1. The non solid pixel is
   // out of bounds for the unscaled layer size in this particular case.
-  EXPECT_TRUE(recording_source->is_solid_color());
+  EXPECT_TRUE(layer->GetRecordingSourceForTesting()->is_solid_color());
 
   host->SetRecordingScaleFactor(recording_scale);
   layer->SetNeedsDisplayRect(invalidation_bounds);
@@ -449,7 +448,7 @@ TEST(PictureLayerTest, RecordingScaleIsCorrectlySet) {
 
   // Once the recording scale is set and propagated to the recording source,
   // the solid color analysis should work as expected and return false.
-  EXPECT_FALSE(recording_source->is_solid_color());
+  EXPECT_FALSE(layer->GetRecordingSourceForTesting()->is_solid_color());
 }
 
 }  // namespace

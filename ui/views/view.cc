@@ -5,28 +5,33 @@
 #include "ui/views/view.h"
 
 #include <algorithm>
+#include <iomanip>
 #include <memory>
+#include <optional>
 #include <utility>
 
+#include "base/auto_reset.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
 #include "base/containers/adapters.h"
 #include "base/containers/contains.h"
+#include "base/debug/crash_logging.h"
 #include "base/debug/dump_without_crashing.h"
 #include "base/feature_list.h"
 #include "base/functional/callback_helpers.h"
 #include "base/i18n/rtl.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
+#include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/observer_list.h"
 #include "base/ranges/algorithm.h"
 #include "base/scoped_observation.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/trace_event/base_tracing.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkRect.h"
 #include "ui/accessibility/ax_action_data.h"
 #include "ui/accessibility/ax_enums.mojom.h"
@@ -62,7 +67,7 @@
 #include "ui/views/accessibility/accessibility_paint_checks.h"
 #include "ui/views/accessibility/ax_event_manager.h"
 #include "ui/views/accessibility/view_accessibility.h"
-#include "ui/views/action_view_interface.h"
+#include "ui/views/actions/action_view_interface.h"
 #include "ui/views/background.h"
 #include "ui/views/border.h"
 #include "ui/views/buildflags.h"
@@ -237,6 +242,11 @@ View::View() {
 }
 
 View::~View() {
+  if (layouts_since_last_paint_) {
+    UMA_HISTOGRAM_COUNTS_100("Views.UnnecessaryLayouts",
+                             layouts_since_last_paint_);
+  }
+
   for (ViewObserver& observer : observers_) {
     observer.OnViewHierarchyWillBeDeleted(this);
   }
@@ -372,10 +382,10 @@ View::Views::const_iterator View::FindChild(const View* view) const {
   return base::ranges::find(children_, view);
 }
 
-absl::optional<size_t> View::GetIndexOf(const View* view) const {
+std::optional<size_t> View::GetIndexOf(const View* view) const {
   const auto i = FindChild(view);
-  return i == children_.cend() ? absl::nullopt
-                               : absl::make_optional(static_cast<size_t>(
+  return i == children_.cend() ? std::nullopt
+                               : std::make_optional(static_cast<size_t>(
                                      std::distance(children_.cbegin(), i)));
 }
 
@@ -391,7 +401,7 @@ void View::SetBoundsRect(const gfx::Rect& bounds) {
       needs_layout_ = false;
       TRACE_EVENT1("views", "View::Layout(set_bounds)", "class",
                    GetClassName());
-      Layout();
+      LayoutImmediately();
     }
     return;
   }
@@ -440,7 +450,7 @@ void View::SetBoundsRect(const gfx::Rect& bounds) {
     needs_layout_ = false;
     TRACE_EVENT1("views", "View::Layout(bounds_changed)", "class",
                  GetClassName());
-    Layout();
+    LayoutImmediately();
   }
 
   if (GetNeedsNotificationWhenVisibleBoundsChange())
@@ -559,7 +569,7 @@ int View::GetBaseline() const {
   return -1;
 }
 
-void View::SetPreferredSize(absl::optional<gfx::Size> size) {
+void View::SetPreferredSize(std::optional<gfx::Size> size) {
   if (preferred_size_ == size)
     return;
 
@@ -860,31 +870,39 @@ int View::GetMirroredXWithWidthInView(int x, int w) const {
 
 // Layout ----------------------------------------------------------------------
 
-void View::Layout() {
+void View::DeprecatedLayoutImmediately() {
+  LayoutImmediately();
+}
+
+void View::Layout(PassKey) {
   needs_layout_ = false;
 
   // If we have a layout manager, let it handle the layout for us.
   if (HasLayoutManager())
     GetLayoutManager()->Layout(this);
 
-  // Make sure to propagate the Layout() call to any children that haven't
-  // received it yet through the layout manager and need to be laid out. This
-  // is needed for the case when the child requires a layout but its bounds
-  // weren't changed by the layout manager. If there is no layout manager, we
-  // just propagate the Layout() call down the hierarchy, so whoever receives
-  // the call can take appropriate action.
+  // Make sure to propagate layout to any children that haven't received it yet
+  // through the layout manager and need to be laid out. This is needed for the
+  // case when the child requires a layout but its bounds weren't changed by the
+  // layout manager. If there is no layout manager, we just propagate layout
+  // down the hierarchy, so whoever receives the call can take appropriate
+  // action.
   internal::ScopedChildrenLock lock(this);
   for (views::View* child : children_) {
     if (child->needs_layout_ || !HasLayoutManager()) {
       TRACE_EVENT1("views", "View::LayoutChildren", "class",
                    child->GetClassName());
       child->needs_layout_ = false;
-      child->Layout();
+      child->LayoutImmediately();
     }
   }
 }
 
 void View::InvalidateLayout() {
+  // We should never need to invalidate during a layout call; this tracks
+  // how many times that is happening.
+  ++invalidates_during_layout_;
+
   // Always invalidate up. This is needed to handle the case of us already being
   // valid, but not our parent.
   needs_layout_ = true;
@@ -1180,8 +1198,20 @@ void View::SchedulePaintInRect(const gfx::Rect& rect) {
   SchedulePaintInRectImpl(rect);
 }
 
+// The following is temporary. It is present to help diagnose a potential UaF.
+std::string IntToHex(uint32_t value) {
+  std::stringstream stream;
+  stream << std::hex << std::setw(8) << std::setfill('0') << value;
+  return stream.str();
+}
+
 void View::Paint(const PaintInfo& parent_paint_info) {
-  CHECK_EQ(life_cycle_state_, LifeCycleState::kAlive);
+  CHECK_EQ(life_cycle_state_, LifeCycleState::kAlive)
+      // TODO (crbug/323752682): Add additional information to help identify
+      // where a potential failure lies. Remove once cause is found and fixed.
+      << "life_cycle_state_: 0x"
+      << IntToHex(static_cast<uint32_t>(life_cycle_state_))
+      << " Classname: " << GetClassName();
 
   if (!ShouldPaint())
     return;
@@ -1234,6 +1264,11 @@ void View::Paint(const PaintInfo& parent_paint_info) {
   }
 
   TRACE_EVENT1("views", "View::Paint", "class", GetClassName());
+  if (layouts_since_last_paint_) {
+    UMA_HISTOGRAM_COUNTS_100("Views.UnnecessaryLayouts",
+                             layouts_since_last_paint_ - 1);
+    layouts_since_last_paint_ = 0;
+  }
 
   // If the view is backed by a layer, it should paint with itself as the origin
   // rather than relative to its parent.
@@ -1940,12 +1975,12 @@ void View::GetAccessibleNodeData(ui::AXNodeData* node_data) {
 }
 
 void View::SetAccessibilityProperties(
-    absl::optional<ax::mojom::Role> role,
-    absl::optional<std::u16string> name,
-    absl::optional<std::u16string> description,
-    absl::optional<std::u16string> role_description,
-    absl::optional<ax::mojom::NameFrom> name_from,
-    absl::optional<ax::mojom::DescriptionFrom> description_from) {
+    std::optional<ax::mojom::Role> role,
+    std::optional<std::u16string> name,
+    std::optional<std::u16string> description,
+    std::optional<std::u16string> role_description,
+    std::optional<ax::mojom::NameFrom> name_from,
+    std::optional<ax::mojom::DescriptionFrom> description_from) {
   base::AutoReset<bool> initializing(&pause_accessibility_events_, true);
   if (role.has_value()) {
     if (role_description.has_value()) {
@@ -3279,7 +3314,7 @@ bool View::ConvertPointFromAncestor(const View* ancestor,
                                     gfx::Point* point) const {
   gfx::Transform trans;
   bool result = GetTransformRelativeTo(ancestor, &trans);
-  if (const absl::optional<gfx::PointF> transformed_point =
+  if (const std::optional<gfx::PointF> transformed_point =
           trans.InverseMapPoint(gfx::PointF(*point))) {
     *point = gfx::ToFlooredPoint(transformed_point.value());
   }
@@ -3363,9 +3398,25 @@ bool View::UpdateParentLayers() {
 
 void View::OrphanLayers() {
   if (layer()) {
-    ui::Layer* parent = layer()->parent();
-    if (parent) {
+    if (ui::Layer* parent = layer()->parent()) {
       for (ui::Layer* layer : GetLayersInOrder()) {
+        // TODO(http://b/319941708): Please remove the below crash keys once the
+        // the crash is fixed. It seems one of the layers returned by
+        // `GetLayersInOrder()` is not a sibling of this view's `layer()` (i.e.
+        // the parent is different).
+        SCOPED_CRASH_KEY_BOOL("OrphanLayers", "layer_valid", !!layer);
+        SCOPED_CRASH_KEY_BOOL("OrphanLayers", "layer_is_sibling",
+                              layer->parent() == parent);
+        SCOPED_CRASH_KEY_STRING256("OrphanLayers", "this_layer_name",
+                                   this->layer()->name());
+        SCOPED_CRASH_KEY_STRING256("OrphanLayers", "parent_layer_name",
+                                   parent->name());
+        SCOPED_CRASH_KEY_STRING256("OrphanLayers", "sibling_layer_name",
+                                   layer->name());
+        SCOPED_CRASH_KEY_STRING256("OrphanLayers", "widget_name",
+                                   GetWidget() ? GetWidget()->GetName() : "");
+        SCOPED_CRASH_KEY_STRING256("OrphanLayers", "view_class_name",
+                                   GetClassName());
         parent->Remove(layer);
       }
     }
@@ -3407,6 +3458,30 @@ void View::CreateMaskLayer() {
 bool View::HasLayoutManager() const {
   return ((default_fill_layout_.has_value() && !children_.empty()) ||
           layout_manager_);
+}
+
+void View::LayoutImmediately() {
+  TRACE_EVENT("ui", "View::LayoutImmediately", [&](perfetto::EventContext ctx) {
+    auto* event = ctx.event<perfetto::protos::pbzero::ChromeTrackEvent>();
+    auto* data = event->set_view_class_name();
+    data->set_name(GetClassName());
+  });
+  invalidates_during_layout_ = 0;
+  ++layouts_since_last_paint_;
+  base::AutoReset allow_layout(&layout_allowed_, true);
+
+  ++current_layout_call_depth_;
+  ++max_layout_call_depth_;
+
+  Layout(PassKey());
+  UMA_HISTOGRAM_COUNTS_100("Views.InvalidatesDuringLayout",
+                           invalidates_during_layout_);
+  --current_layout_call_depth_;
+  if (current_layout_call_depth_ == 0) {
+    UMA_HISTOGRAM_EXACT_LINEAR("Views.LayoutCallDepth", max_layout_call_depth_,
+                               6);
+    max_layout_call_depth_ = 0;
+  }
 }
 
 // Input -----------------------------------------------------------------------
@@ -3705,6 +3780,15 @@ int View::DefaultFillLayout::GetPreferredHeightForWidth(const View* host,
 
 std::unique_ptr<ActionViewInterface> View::GetActionViewInterface() {
   return std::make_unique<BaseActionViewInterface>(this);
+}
+
+base::CallbackListSubscription View::RegisterNotifyViewControllerCallback(
+    base::RepeatingClosureList::CallbackType callback) {
+  return notify_view_controller_callback_list_.Add(std::move(callback));
+}
+
+void View::NotifyViewControllerCallback() {
+  notify_view_controller_callback_list_.Notify();
 }
 
 BaseActionViewInterface::BaseActionViewInterface(View* action_view)

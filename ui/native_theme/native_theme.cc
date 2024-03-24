@@ -5,6 +5,7 @@
 #include "ui/native_theme/native_theme.h"
 
 #include <cstring>
+#include <optional>
 
 #include "base/command_line.h"
 #include "base/containers/fixed_flat_map.h"
@@ -13,7 +14,6 @@
 #include "base/observer_list.h"
 #include "base/timer/elapsed_timer.h"
 #include "build/build_config.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/ui_base_switches.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_metrics.h"
@@ -179,21 +179,14 @@ float NativeTheme::AdjustBorderRadiusByZoom(Part part,
 }
 
 NativeTheme::NativeTheme(bool should_use_dark_colors,
-                         ui::SystemTheme system_theme,
-                         NativeTheme* theme_to_update)
-    : color_scheme_observer_(theme_to_update),
-      should_use_dark_colors_(should_use_dark_colors || IsForcedDarkMode()),
+                         ui::SystemTheme system_theme)
+    : should_use_dark_colors_(should_use_dark_colors || IsForcedDarkMode()),
       system_theme_(system_theme),
       forced_colors_(IsForcedHighContrast()),
       prefers_reduced_transparency_(false),
       inverted_colors_(false),
       preferred_color_scheme_(CalculatePreferredColorScheme()),
-      preferred_contrast_(CalculatePreferredContrast()) {
-  if (theme_to_update && !IsForcedDarkMode() && !IsForcedHighContrast() &&
-      base::SequencedTaskRunner::HasCurrentDefault()) {
-    theme_observation_.Observe(this);
-  }
-}
+      preferred_contrast_(CalculatePreferredContrast()) {}
 
 NativeTheme::~NativeTheme() = default;
 
@@ -272,7 +265,7 @@ NativeTheme::PreferredContrast NativeTheme::CalculatePreferredContrast() const {
                                 : PreferredContrast::kNoPreference;
 }
 
-absl::optional<CaptionStyle> NativeTheme::GetSystemCaptionStyle() const {
+std::optional<CaptionStyle> NativeTheme::GetSystemCaptionStyle() const {
   return CaptionStyle::FromSystemSettings();
 }
 
@@ -281,13 +274,13 @@ NativeTheme::GetSystemColors() const {
   return system_colors_;
 }
 
-absl::optional<SkColor> NativeTheme::GetSystemThemeColor(
+std::optional<SkColor> NativeTheme::GetSystemThemeColor(
     SystemThemeColor theme_color) const {
   auto color = system_colors_.find(theme_color);
   if (color != system_colors_.end())
     return color->second;
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 bool NativeTheme::HasDifferentSystemColors(

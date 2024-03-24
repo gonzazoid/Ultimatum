@@ -7,6 +7,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <vector>
 
@@ -16,7 +17,6 @@
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "components/history/core/browser/history_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class GURL;
 
@@ -86,9 +86,11 @@ class ExpireHistoryBackend {
   // Deletes everything associated with each URL in the list until `end_time`.
   void DeleteURLs(const std::vector<GURL>& url, base::Time end_time);
 
-  // Removes all visits to restrict_urls (or all URLs if empty) in the given
+  // Removes all visits to restrict_urls (or all URLs if empty) and
+  // restrict_app_id (or all entries if absent) in the given
   // time range, updating the URLs accordingly.
   void ExpireHistoryBetween(const std::set<GURL>& restrict_urls,
+                            std::optional<std::string> restrict_app_id,
                             base::Time begin_time,
                             base::Time end_time,
                             bool user_initiated);
@@ -239,7 +241,7 @@ class ExpireHistoryBackend {
   void BroadcastNotifications(DeleteEffects* effects,
                               DeletionType type,
                               const DeletionTimeRange& time_range,
-                              absl::optional<std::set<GURL>> restrict_urls,
+                              std::optional<std::set<GURL>> restrict_urls,
                               DeletionInfo::Reason deletion_reason);
 
   // Schedules a call to DoExpireIteration.

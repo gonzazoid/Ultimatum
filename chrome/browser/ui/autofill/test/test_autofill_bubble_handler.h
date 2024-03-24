@@ -62,11 +62,22 @@ class TestAutofillBubbleHandler : public AutofillBubbleHandler {
       content::WebContents* web_contents,
       VirtualCardEnrollBubbleController* controller,
       bool is_user_gesture) override;
+  AutofillBubbleBase* ShowVirtualCardEnrollConfirmationBubble(
+      content::WebContents* web_contents,
+      VirtualCardEnrollBubbleController* controller) override;
   AutofillBubbleBase* ShowMandatoryReauthBubble(
       content::WebContents* web_contents,
       MandatoryReauthBubbleController* controller,
       bool is_user_gesture,
       MandatoryReauthBubbleType bubble_type) override;
+
+  AutofillBubbleBase* ShowSaveCardConfirmationBubble(
+      content::WebContents* web_contents,
+      SaveCardBubbleController* controller) override;
+
+  int SaveCardConfirmationBubbleShownCount() {
+    return save_card_confirmation_bubble_shown_count_;
+  }
 
  private:
   std::unique_ptr<TestAutofillBubble> local_card_migration_bubble_view_;
@@ -78,7 +89,12 @@ class TestAutofillBubbleHandler : public AutofillBubbleHandler {
   std::unique_ptr<TestAutofillBubble> edit_address_profile_bubble_view_;
   std::unique_ptr<TestAutofillBubble> virtual_card_manual_fallback_bubble_view_;
   std::unique_ptr<TestAutofillBubble> virtual_card_enroll_bubble_view_;
+  std::unique_ptr<TestAutofillBubble>
+      virtual_card_enroll_confirmation_bubble_view_;
   std::unique_ptr<TestAutofillBubble> mandatory_reauth_bubble_view_;
+  std::unique_ptr<TestAutofillBubble> save_card_confirmation_bubble_view_;
+
+  int save_card_confirmation_bubble_shown_count_ = 0;
 };
 
 }  // namespace autofill

@@ -311,7 +311,7 @@ class COMPOSITOR_EXPORT Compositor : public base::PowerSuspendObserver,
   // |display_private_| when possible, for use with variable refresh rates. An
   // absent value indicates that VRR is not enabled.
   void SetMaxVrrInterval(
-      const absl::optional<base::TimeDelta>& max_vrr_interval);
+      const std::optional<base::TimeDelta>& max_vrr_interval);
 
   // Sets the widget for the compositor to render into.
   void SetAcceleratedWidget(gfx::AcceleratedWidget widget);
@@ -400,7 +400,7 @@ class COMPOSITOR_EXPORT Compositor : public base::PowerSuspendObserver,
   void OnDeferCommitsChanged(
       bool,
       cc::PaintHoldingReason,
-      absl::optional<cc::PaintHoldingCommitTrigger>) override {}
+      std::optional<cc::PaintHoldingCommitTrigger>) override {}
   void OnCommitRequested() override {}
   void WillUpdateLayers() override {}
   void DidUpdateLayers() override;
@@ -509,6 +509,8 @@ class COMPOSITOR_EXPORT Compositor : public base::PowerSuspendObserver,
     return !throughput_tracker_map_.empty();
   }
 
+  const cc::LayerTreeHost* host_for_testing() const { return host_.get(); }
+
  private:
   friend class base::RefCounted<Compositor>;
   friend class TotalAnimationThroughputReporter;
@@ -572,7 +574,7 @@ class COMPOSITOR_EXPORT Compositor : public base::PowerSuspendObserver,
   base::TimeTicks vsync_timebase_;
   base::TimeDelta vsync_interval_ = viz::BeginFrameArgs::DefaultInterval();
   bool has_vsync_params_ = false;
-  absl::optional<base::TimeDelta> max_vrr_interval_ = absl::nullopt;
+  std::optional<base::TimeDelta> max_vrr_interval_ = std::nullopt;
 
   const bool use_external_begin_frame_control_;
   const bool force_software_compositor_;

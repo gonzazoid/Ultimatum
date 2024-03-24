@@ -7,8 +7,10 @@ import 'chrome://resources/polymer/v3_0/iron-test-helpers/mock-interactions.js';
 
 import {CustomizeButtonsSubsectionElement, KeyCombinationInputDialogElement} from 'chrome://os-settings/lazy_load.js';
 import {fakeGraphicsTabletButtonActions, fakeGraphicsTablets} from 'chrome://os-settings/os_settings.js';
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
-import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import {CrButtonElement} from 'chrome://resources/ash/common/cr_elements/cr_button/cr_button.js';
+import {CrDialogElement} from 'chrome://resources/ash/common/cr_elements/cr_dialog/cr_dialog.js';
+import {CrIconButtonElement} from 'chrome://resources/ash/common/cr_elements/cr_icon_button/cr_icon_button.js';
+import {CrInputElement} from 'chrome://resources/ash/common/cr_elements/cr_input/cr_input.js';
 import {assert} from 'chrome://resources/js/assert.js';
 import {assertDeepEquals, assertEquals, assertFalse, assertNotEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
@@ -16,6 +18,7 @@ import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 suite('<customize-buttons-subsection>', () => {
   let customizeButtonsSubsection: CustomizeButtonsSubsectionElement;
   let buttonRemappingChangedEventCount: number = 0;
+  let reorderButtonEventCount: number = 0;
   setup(() => {
     assert(window.trustedTypes);
     document.body.innerHTML = window.trustedTypes.emptyHTML;
@@ -26,6 +29,7 @@ suite('<customize-buttons-subsection>', () => {
       return;
     }
     buttonRemappingChangedEventCount = 0;
+    reorderButtonEventCount = 0;
     customizeButtonsSubsection.remove();
     await flushTasks();
   });
@@ -37,32 +41,58 @@ suite('<customize-buttons-subsection>', () => {
         'button-remapping-changed', function() {
           buttonRemappingChangedEventCount++;
         });
+    customizeButtonsSubsection.addEventListener('reorder-button', function() {
+      reorderButtonEventCount++;
+    });
     customizeButtonsSubsection.set(
-        'actionList', fakeGraphicsTabletButtonActions);
+        'actionList', [...fakeGraphicsTabletButtonActions]);
     customizeButtonsSubsection.set(
         'buttonRemappingList',
-        fakeGraphicsTablets[0]!.settings!.penButtonRemappings);
+        [...fakeGraphicsTablets[0]!.settings!.penButtonRemappings]);
     document.body.appendChild(customizeButtonsSubsection);
     return await flushTasks();
   }
+
+  test(
+      'Drag move icon via keyboard triggers reorder button event', async () => {
+        await initializeCustomizeButtonsSubsection();
+        assertTrue(!!customizeButtonsSubsection);
+        assertTrue(!!customizeButtonsSubsection.get('buttonRemappingList'));
+
+        // Drag move icon via keyboard triggers reorder button event.
+        const moveIcon =
+            customizeButtonsSubsection.shadowRoot!.querySelector('#row-0')!
+                .shadowRoot!.querySelector<CrIconButtonElement>(
+                    '#reorderButton');
+        assertTrue(!!moveIcon);
+        assertEquals(reorderButtonEventCount, 0);
+        moveIcon.dispatchEvent(new KeyboardEvent('keydown', {
+          ctrlKey: true,
+          key: 'ArrowDown',
+        }));
+
+        await flushTasks();
+        assertEquals(reorderButtonEventCount, 1);
+      });
 
   test('Initialize customize buttons subsection', async () => {
     await initializeCustomizeButtonsSubsection();
     assertTrue(!!customizeButtonsSubsection);
     assertTrue(!!customizeButtonsSubsection.get('buttonRemappingList'));
 
-    // Verify that renaming dialog will pop out when setting
-    // shouldShowRenamingDialog_ to true.
-    customizeButtonsSubsection.set('shouldShowRenamingDialog_', true);
-    customizeButtonsSubsection.set(
-        'selectedButton_',
-        fakeGraphicsTablets[0]!.settings!.penButtonRemappings[0]);
-    customizeButtonsSubsection.set(
-        'buttonRemappingList',
-        fakeGraphicsTablets[0]!.settings!.penButtonRemappings);
+    // Verify that renaming dialog will pop out when click the edit button.
+    const editButton =
+        customizeButtonsSubsection.shadowRoot!.querySelector('#row-0')!
+            .shadowRoot!.querySelector<CrIconButtonElement>('#renameButton');
+    assertTrue(!!editButton);
+    const dialog =
+        customizeButtonsSubsection.shadowRoot!.querySelector<CrDialogElement>(
+            '#renamingDialog');
+    assertTrue(!!dialog);
+
+    editButton.click();
     await flushTasks();
-    assertTrue(!!customizeButtonsSubsection.shadowRoot!.querySelector(
-        '#renamingDialog'));
+    assertTrue(dialog.open);
 
     // Verify that the renaming dialog update the button name after clicking
     // 'save' button.
@@ -108,9 +138,7 @@ suite('<customize-buttons-subsection>', () => {
     saveButton.click();
     await flushTasks();
     assertEquals(buttonRemappingChangedEventCount, 1);
-    assertFalse(customizeButtonsSubsection.get('shouldShowRenamingDialog_'));
-    assertFalse(!!customizeButtonsSubsection.shadowRoot!.querySelector(
-        '#renamingDialog'));
+    assertFalse(dialog.open);
   });
 
   test('open key combination dialog', async () => {

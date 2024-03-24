@@ -129,7 +129,7 @@ class ImageDocumentTest : public testing::Test {
   std::unique_ptr<DummyPageHolder> dummy_page_holder_;
   float page_zoom_factor_ = 0.0f;
   float viewport_scaling_factor_ = 0.0f;
-  absl::optional<bool> force_zero_layout_height_;
+  std::optional<bool> force_zero_layout_height_;
 };
 
 void ImageDocumentTest::CreateDocumentWithoutLoadingImage(int view_width,
@@ -157,7 +157,7 @@ void ImageDocumentTest::CreateDocumentWithoutLoadingImage(int view_width,
       is_animated ? AnimatedWebpImage() : JpegImage();
   WebNavigationParams::FillStaticResponse(
       params.get(), is_animated ? "image/webp" : "image/jpeg", "UTF-8",
-      base::make_span(reinterpret_cast<const char*>(data.data()), data.size()));
+      base::as_chars(base::span(data)));
   dummy_page_holder_->GetFrame().Loader().CommitNavigation(std::move(params),
                                                            nullptr);
 }

@@ -6,11 +6,13 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <utility>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/html/forms/html_input_element.h"
+#include "third_party/blink/renderer/core/layout/block_child_iterator.h"
+#include "third_party/blink/renderer/core/layout/block_layout_algorithm_utils.h"
 #include "third_party/blink/renderer/core/layout/box_fragment_builder.h"
 #include "third_party/blink/renderer/core/layout/column_spanner_path.h"
 #include "third_party/blink/renderer/core/layout/constraint_space.h"
@@ -21,16 +23,15 @@
 #include "third_party/blink/renderer/core/layout/inline/inline_cursor.h"
 #include "third_party/blink/renderer/core/layout/inline/inline_node.h"
 #include "third_party/blink/renderer/core/layout/inline/physical_line_box_fragment.h"
+#include "third_party/blink/renderer/core/layout/inline/ruby_utils.h"
 #include "third_party/blink/renderer/core/layout/layout_multi_column_flow_thread.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
 #include "third_party/blink/renderer/core/layout/layout_result.h"
 #include "third_party/blink/renderer/core/layout/legacy_layout_tree_walking.h"
+#include "third_party/blink/renderer/core/layout/length_utils.h"
 #include "third_party/blink/renderer/core/layout/list/unpositioned_list_marker.h"
 #include "third_party/blink/renderer/core/layout/logical_box_fragment.h"
 #include "third_party/blink/renderer/core/layout/logical_fragment.h"
-#include "third_party/blink/renderer/core/layout/block_child_iterator.h"
-#include "third_party/blink/renderer/core/layout/block_layout_algorithm_utils.h"
-#include "third_party/blink/renderer/core/layout/length_utils.h"
 #include "third_party/blink/renderer/core/layout/out_of_flow_layout_part.h"
 #include "third_party/blink/renderer/core/layout/physical_box_fragment.h"
 #include "third_party/blink/renderer/core/layout/positioned_float.h"
@@ -450,7 +451,7 @@ MinMaxSizesResult BlockLayoutAlgorithm::ComputeMinMaxSizes(
 LogicalOffset BlockLayoutAlgorithm::CalculateLogicalOffset(
     const LogicalFragment& fragment,
     LayoutUnit child_bfc_line_offset,
-    const absl::optional<LayoutUnit>& child_bfc_block_offset) {
+    const std::optional<LayoutUnit>& child_bfc_block_offset) {
   LayoutUnit inline_size = container_builder_.InlineSize();
   TextDirection direction = GetConstraintSpace().Direction();
 
@@ -565,7 +566,7 @@ NOINLINE const LayoutResult* BlockLayoutAlgorithm::RelayoutIgnoringLineClamp() {
   algorithm_ignoring_line_clamp.ignore_line_clamp_ = true;
   BoxFragmentBuilder& new_builder =
       algorithm_ignoring_line_clamp.container_builder_;
-  new_builder.SetBoxType(container_builder_.BoxType());
+  new_builder.SetBoxType(container_builder_.GetBoxType());
   return algorithm_ignoring_line_clamp.Layout();
 }
 
@@ -1554,7 +1555,7 @@ LayoutResult::EStatus BlockLayoutAlgorithm::HandleNewFormattingContext(
       DCHECK(!constraint_space.AncestorHasClearancePastAdjoiningFloats());
       ResolveBfcBlockOffset(previous_inflow_position,
                             non_adjoining_bfc_offset_estimate,
-                            /* forced_bfc_block_offset */ absl::nullopt);
+                            /* forced_bfc_block_offset */ std::nullopt);
 
       if ((bfc_offset_already_resolved || has_adjoining_floats) &&
           old_offset != *container_builder_.BfcBlockOffset()) {
@@ -1884,7 +1885,7 @@ LayoutResult::EStatus BlockLayoutAlgorithm::HandleInflow(
       HasClearancePastAdjoiningFloats(
           container_builder_.GetAdjoiningObjectTypes(), child.Style(), Style());
 
-  absl::optional<LayoutUnit> forced_bfc_block_offset;
+  std::optional<LayoutUnit> forced_bfc_block_offset;
   bool is_pushed_by_floats = false;
 
   // If we can separate the previous margin strut from what is to follow, do
@@ -1945,7 +1946,7 @@ LayoutResult::EStatus BlockLayoutAlgorithm::FinishInflow(
     PreviousInflowPosition* previous_inflow_position,
     InlineChildLayoutContext* inline_child_layout_context,
     const InlineBreakToken** previous_inline_break_token) {
-  absl::optional<LayoutUnit> child_bfc_block_offset =
+  std::optional<LayoutUnit> child_bfc_block_offset =
       layout_result->BfcBlockOffset();
 
   bool is_self_collapsing = layout_result->IsSelfCollapsing();
@@ -1990,8 +1991,9 @@ LayoutResult::EStatus BlockLayoutAlgorithm::FinishInflow(
     DCHECK(!GetConstraintSpace().AncestorHasClearancePastAdjoiningFloats());
 
     if (!ResolveBfcBlockOffset(previous_inflow_position, bfc_block_offset,
-                               /* forced_bfc_block_offset */ absl::nullopt))
+                               /* forced_bfc_block_offset */ std::nullopt)) {
       return LayoutResult::kBfcBlockOffsetResolved;
+    }
   }
 
   // We have special behavior for a self-collapsing child which gets pushed
@@ -2145,7 +2147,7 @@ LayoutResult::EStatus BlockLayoutAlgorithm::FinishInflow(
     DCHECK_EQ(layout_result->IsSelfCollapsing(), is_self_collapsing);
   }
 
-  const absl::optional<LayoutUnit> line_box_bfc_block_offset =
+  const std::optional<LayoutUnit> line_box_bfc_block_offset =
       layout_result->LineBoxBfcBlockOffset();
 
   if (GetConstraintSpace().HasBlockFragmentation()) {
@@ -2365,7 +2367,7 @@ PreviousInflowPosition BlockLayoutAlgorithm::ComputeInflowPosition(
     const PreviousInflowPosition& previous_inflow_position,
     const LayoutInputNode child,
     const InflowChildData& child_data,
-    const absl::optional<LayoutUnit>& child_bfc_block_offset,
+    const std::optional<LayoutUnit>& child_bfc_block_offset,
     const LogicalOffset& logical_offset,
     const LayoutResult& layout_result,
     const LogicalFragment& fragment,
@@ -2768,7 +2770,7 @@ BoxStrut BlockLayoutAlgorithm::CalculateMargins(
     return margins;
   }
 
-  absl::optional<LayoutUnit> child_inline_size;
+  std::optional<LayoutUnit> child_inline_size;
   auto ChildInlineSize = [&]() -> LayoutUnit {
     if (!child_inline_size) {
       ConstraintSpaceBuilder builder(GetConstraintSpace(),
@@ -2821,7 +2823,7 @@ ConstraintSpace BlockLayoutAlgorithm::CreateConstraintSpaceForChild(
     const InflowChildData& child_data,
     const LogicalSize child_available_size,
     bool is_new_fc,
-    const absl::optional<LayoutUnit> child_bfc_block_offset,
+    const std::optional<LayoutUnit> child_bfc_block_offset,
     bool has_clearance_past_adjoining_floats,
     LayoutUnit block_start_annotation_space) {
   const ComputedStyle& child_style = child.Style();
@@ -3074,7 +3076,7 @@ void BlockLayoutAlgorithm::PropagateBaselineFromBlockChild(
 bool BlockLayoutAlgorithm::ResolveBfcBlockOffset(
     PreviousInflowPosition* previous_inflow_position,
     LayoutUnit bfc_block_offset,
-    absl::optional<LayoutUnit> forced_bfc_block_offset) {
+    std::optional<LayoutUnit> forced_bfc_block_offset) {
   // Clearance may have been resolved (along with BFC block-offset) in a
   // previous layout pass, so check the constraint space for pre-applied
   // clearance. This is important in order to identify possible class C break
@@ -3138,17 +3140,17 @@ bool BlockLayoutAlgorithm::NeedsAbortOnBfcBlockOffsetChange() const {
          GetConstraintSpace().ExpectedBfcBlockOffset();
 }
 
-absl::optional<LayoutUnit>
+std::optional<LayoutUnit>
 BlockLayoutAlgorithm::CalculateQuirkyBodyMarginBlockSum(
     const MarginStrut& end_margin_strut) {
   if (!Node().IsQuirkyAndFillsViewport())
-    return absl::nullopt;
+    return std::nullopt;
 
   if (!Style().LogicalHeight().IsAuto())
-    return absl::nullopt;
+    return std::nullopt;
 
   if (GetConstraintSpace().IsNewFormattingContext()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   DCHECK(Node().IsBody());
@@ -3285,7 +3287,7 @@ void BlockLayoutAlgorithm::HandleRubyText(BlockNode ruby_text_child) {
   const auto& ruby_text_fragment =
       To<PhysicalBoxFragment>(result->GetPhysicalFragment());
   const LogicalRect ruby_text_box = ruby_text_fragment.ConvertChildToLogical(
-      ruby_text_fragment.ComputeRubyEmHeightBox());
+      ComputeRubyEmHeightBox(ruby_text_fragment));
 
   // Find the ruby-base fragment.
   const PhysicalBoxFragment* ruby_base_fragment = nullptr;
@@ -3311,7 +3313,7 @@ void BlockLayoutAlgorithm::HandleRubyText(BlockNode ruby_text_child) {
       first_line_top = ruby_base_block_offset +
                        ruby_base_fragment
                            ->ConvertChildToLogical(
-                               ruby_base_fragment->ComputeRubyEmHeightBox())
+                               ComputeRubyEmHeightBox(*ruby_base_fragment))
                            .offset.block_offset;
     }
     ruby_text_box_top = first_line_top - last_line_ruby_text_bottom;
@@ -3333,7 +3335,7 @@ void BlockLayoutAlgorithm::HandleRubyText(BlockNode ruby_text_child) {
       last_line_bottom = ruby_base_block_offset +
                          ruby_base_fragment
                              ->ConvertChildToLogical(
-                                 ruby_base_fragment->ComputeRubyEmHeightBox())
+                                 ComputeRubyEmHeightBox(*ruby_base_fragment))
                              .BlockEndOffset();
       base_logical_bottom = ruby_base_block_offset + base_block_size;
     }

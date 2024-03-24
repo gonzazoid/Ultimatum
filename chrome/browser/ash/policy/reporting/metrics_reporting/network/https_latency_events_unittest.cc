@@ -10,7 +10,6 @@
 #include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
-#include "chrome/browser/ash/login/users/chrome_user_manager.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/policy/reporting/metrics_reporting/metric_reporting_manager.h"
 #include "chrome/browser/ash/policy/reporting/metrics_reporting/network/fake_network_diagnostics_util.h"
@@ -18,8 +17,10 @@
 #include "chrome/browser/ash/settings/scoped_testing_cros_settings.h"
 #include "chrome/browser/ash/settings/stub_cros_settings_provider.h"
 #include "chrome/browser/chromeos/reporting/metric_default_utils.h"
+#include "chrome/browser/policy/messaging_layer/public/report_client_test_util.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/ash/components/dbus/debug_daemon/debug_daemon_client.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/mojo_service_manager/fake_mojo_service_manager.h"
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "chromeos/ash/components/settings/cros_settings_names.h"
@@ -123,6 +124,11 @@ class HttpsLatencyEventsTest : public ::testing::Test {
   ~HttpsLatencyEventsTest() override = default;
 
   void SetUp() override {
+    // Reporting test environment needs to be created before other
+    // initializations.
+    reporting_test_enviroment_ =
+        reporting::ReportingClient::TestEnvironment::CreateWithStorageModule();
+
     ::ash::LoginState::Initialize();
     ::ash::DebugDaemonClient::InitializeFake();
     ::ash::cros_healthd::FakeCrosHealthd::Initialize();
@@ -138,7 +144,7 @@ class HttpsLatencyEventsTest : public ::testing::Test {
     profile_builder.SetProfileName(account_id.GetUserEmail());
     profile_ = profile_builder.Build();
     user_manager_->AddUserWithAffiliationAndTypeAndProfile(
-        account_id, affiliated, user_manager::USER_TYPE_REGULAR,
+        account_id, affiliated, user_manager::UserType::kRegular,
         profile_.get());
     user_manager_->LoginUser(account_id, /*set_profile_created_flag=*/false);
   }
@@ -165,6 +171,8 @@ class HttpsLatencyEventsTest : public ::testing::Test {
     ::ash::cros_healthd::FakeCrosHealthd::Shutdown();
     ::ash::DebugDaemonClient::Shutdown();
     ::ash::LoginState::Shutdown();
+
+    reporting_test_enviroment_.reset();
   }
 
   void EnableDeviceNetworkStatusPolicy() {
@@ -179,6 +187,9 @@ class HttpsLatencyEventsTest : public ::testing::Test {
 
   content::BrowserTaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
+  std::unique_ptr<reporting::ReportingClient::TestEnvironment>
+      reporting_test_enviroment_;
+
   ::ash::mojo_service_manager::FakeMojoServiceManager fake_service_manager_;
 
   ash::ScopedStubInstallAttributes scoped_stub_install_attributes_;

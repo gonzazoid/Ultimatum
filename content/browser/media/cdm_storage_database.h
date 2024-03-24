@@ -42,15 +42,17 @@ class CONTENT_EXPORT CdmStorageDatabase {
                  const std::string& file_name,
                  const std::vector<uint8_t>& data);
 
-  uint64_t GetSizeForFile(const blink::StorageKey& storage_key,
-                          const media::CdmType& cdm_type,
-                          const std::string& file_name);
+  absl::optional<uint64_t> GetSizeForFile(const blink::StorageKey& storage_key,
+                                          const media::CdmType& cdm_type,
+                                          const std::string& file_name);
 
-  uint64_t GetSizeForStorageKey(const blink::StorageKey& storage_key,
-                                const base::Time begin,
-                                const base::Time end);
+  absl::optional<uint64_t> GetSizeForStorageKey(
+      const blink::StorageKey& storage_key,
+      const base::Time begin,
+      const base::Time end);
 
-  uint64_t GetSizeForTimeFrame(const base::Time begin, const base::Time end);
+  absl::optional<uint64_t> GetSizeForTimeFrame(const base::Time begin,
+                                               const base::Time end);
 
   bool DeleteFile(const blink::StorageKey& storage_key,
                   const media::CdmType& cdm_type,
@@ -63,6 +65,8 @@ class CONTENT_EXPORT CdmStorageDatabase {
   bool DeleteDataForTimeFrame(const base::Time begin, const base::Time end);
 
   bool ClearDatabase();
+
+  void CloseDatabaseForTesting();
 
   // On a delete operation, check if database is empty. If empty, then clear the
   // database.

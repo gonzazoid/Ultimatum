@@ -891,7 +891,8 @@ void PasswordSaveManagerImpl::UploadVotesAndMetrics(
         pending_credentials_.type == PasswordForm::Type::kGenerated,
         pending_credentials_.username_value.empty(),
         client_->GetPasswordFeatureManager()
-            ->ComputePasswordAccountStorageUsageLevel());
+            ->ComputePasswordAccountStorageUsageLevel(),
+        client_->GetUkmSourceId());
     // Don't send votes if there was no observed form.
     if (observed_form && votes_uploader_) {
       votes_uploader_->SendVotesOnSave(*observed_form, parsed_submitted_form,
@@ -975,10 +976,7 @@ bool PasswordSaveManagerImpl::AccountStoreIsDefault() const {
 bool PasswordSaveManagerImpl::ShouldStoreGeneratedPasswordsInAccountStore()
     const {
   if (account_store_form_saver_ &&
-      client_->GetPasswordFeatureManager()
-              ->ComputePasswordAccountStorageUsageLevel() ==
-          features_util::PasswordAccountStorageUsageLevel::
-              kUsingAccountStorage) {
+      client_->GetPasswordFeatureManager()->IsOptedInForAccountStorage()) {
     return true;
   }
   return false;

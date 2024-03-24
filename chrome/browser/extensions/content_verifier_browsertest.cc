@@ -25,15 +25,16 @@
 #include "chrome/browser/extensions/extension_browsertest.h"
 #include "chrome/browser/extensions/extension_management_test_util.h"
 #include "chrome/browser/extensions/extension_service.h"
+#include "chrome/browser/policy/policy_test_utils.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/crx_file/id_util.h"
 #include "components/policy/core/browser/browser_policy_connector.h"
 #include "components/policy/core/common/mock_configuration_policy_provider.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
-#include "extensions/browser/content_verifier.h"
+#include "extensions/browser/content_verifier/content_verifier.h"
+#include "extensions/browser/content_verifier/content_verify_job.h"
 #include "extensions/browser/content_verifier/test_utils.h"
-#include "extensions/browser/content_verify_job.h"
 #include "extensions/browser/crx_file_info.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registry.h"
@@ -77,7 +78,7 @@ class MockUpdateService : public UpdateService {
 };
 
 void ExtensionUpdateComplete(base::OnceClosure callback,
-                             const absl::optional<CrxInstallError>& error) {
+                             const std::optional<CrxInstallError>& error) {
   // Expect success (no CrxInstallError). Assert on an error to put the error
   // message into the test log to aid debugging.
   ASSERT_FALSE(error.has_value()) << error->message();
@@ -106,7 +107,7 @@ class ContentVerifierTest : public ExtensionBrowserTest {
 
   void TearDown() override {
     ExtensionBrowserTest::TearDown();
-    ChromeContentVerifierDelegate::SetDefaultModeForTesting(absl::nullopt);
+    ChromeContentVerifierDelegate::SetDefaultModeForTesting(std::nullopt);
   }
 
   bool ShouldEnableContentVerification() override { return true; }
@@ -925,6 +926,8 @@ class ContentVerifierPolicyTest : public ContentVerifierTest {
 // force installed extension. So we set that up in the PRE test here.
 IN_PROC_BROWSER_TEST_F(ContentVerifierPolicyTest,
                        PRE_PolicyCorruptedOnStartup) {
+  // Mark as enterprise managed.
+  policy::ScopedDomainEnterpriseManagement scoped_domain;
   ExtensionRegistry* registry = ExtensionRegistry::Get(profile());
   TestExtensionRegistryObserver registry_observer(registry, id_);
 
@@ -953,7 +956,9 @@ IN_PROC_BROWSER_TEST_F(ContentVerifierPolicyTest,
 #endif
 IN_PROC_BROWSER_TEST_F(ContentVerifierPolicyTest,
                        MAYBE_PolicyCorruptedOnStartup) {
-  // Depdending on timing, the extension may have already been reinstalled
+  // Mark as enterprise managed.
+  policy::ScopedDomainEnterpriseManagement scoped_domain;
+  // Depending on timing, the extension may have already been reinstalled
   // between SetUpInProcessBrowserTestFixture and now (usually not during local
   // testing on a developer machine, but sometimes on a heavily loaded system
   // such as the build waterfall / trybots). If the reinstall didn't already
@@ -971,6 +976,8 @@ IN_PROC_BROWSER_TEST_F(ContentVerifierPolicyTest,
 }
 
 IN_PROC_BROWSER_TEST_F(ContentVerifierPolicyTest, Backoff) {
+  // Mark as enterprise managed.
+  policy::ScopedDomainEnterpriseManagement scoped_domain;
   ExtensionRegistry* registry = ExtensionRegistry::Get(profile());
   ExtensionSystem* system = ExtensionSystem::Get(profile());
   ContentVerifier* verifier = system->content_verifier();
@@ -1018,6 +1025,8 @@ IN_PROC_BROWSER_TEST_F(ContentVerifierPolicyTest, Backoff) {
 // corrupted policy extensions. For example: if network is unavailable,
 // CheckForExternalUpdates() will fail.
 IN_PROC_BROWSER_TEST_F(ContentVerifierPolicyTest, FailedUpdateRetries) {
+  // Mark as enterprise managed.
+  policy::ScopedDomainEnterpriseManagement scoped_domain;
   ExtensionRegistry* registry = ExtensionRegistry::Get(profile());
   ExtensionSystem* system = ExtensionSystem::Get(profile());
   ContentVerifier* verifier = system->content_verifier();

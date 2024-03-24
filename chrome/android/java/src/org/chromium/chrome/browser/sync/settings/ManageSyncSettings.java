@@ -75,7 +75,7 @@ import java.util.stream.Collectors;
  * This fragment is accessible from the main settings view.
  */
 public class ManageSyncSettings extends ChromeBaseSettingsFragment
-        implements PassphraseDialogFragment.Listener,
+        implements PassphraseDialogFragment.Delegate,
                 PassphraseCreationDialogFragment.Listener,
                 PassphraseTypeDialogFragment.Listener,
                 Preference.OnPreferenceChangeListener,
@@ -619,8 +619,6 @@ public class ManageSyncSettings extends ChromeBaseSettingsFragment
             if (type == UserSelectableType.PAYMENTS
                     && !ChromeFeatureList.isEnabled(
                             ChromeFeatureList.SYNC_DECOUPLE_ADDRESS_PAYMENT_SETTINGS)) {
-                // TODO(crbug.com/1459963): Consider overriding the delegate's
-                // isPreferenceControlledByCustodian() instead.
                 pref.setEnabled(
                         !syncEverything
                                 && !mSyncService.isTypeManagedByCustodian(type)

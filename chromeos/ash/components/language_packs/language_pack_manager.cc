@@ -5,10 +5,13 @@
 #include "chromeos/ash/components/language_packs/language_pack_manager.h"
 
 #include <optional>
+#include <string>
 #include <string_view>
+#include <utility>
 
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
+#include "base/check_is_test.h"
 #include "base/containers/contains.h"
 #include "base/containers/flat_map.h"
 #include "base/feature_list.h"
@@ -16,10 +19,13 @@
 #include "base/functional/callback.h"
 #include "base/functional/callback_helpers.h"
 #include "base/hash/hash.h"
+#include "base/location.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
+#include "base/sequence_checker.h"
 #include "base/strings/string_split.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromeos/ash/components/dbus/dlcservice/dlcservice.pb.h"
 #include "chromeos/ash/components/dbus/dlcservice/dlcservice_client.h"
 #include "chromeos/ash/components/language_packs/handwriting.h"
@@ -58,12 +64,67 @@ std::optional<std::string> GetDlcIdForBasePack(const std::string& feature_id) {
   return it->second;
 }
 
+// Run a callback later in the current `SingleThreadedTaskRunner`.
+void RunCallbackLater(base::OnceClosure task) {
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                              std::move(task));
+}
+
 void InstallDlc(const std::string& dlc_id,
-                DlcserviceClient::InstallCallback install_callback) {
-  dlcservice::InstallRequest install_request;
-  install_request.set_id(dlc_id);
-  DlcserviceClient::Get()->Install(install_request, std::move(install_callback),
-                                   base::DoNothing());
+                DlcserviceClient::InstallCallback callback) {
+  DlcserviceClient* client = DlcserviceClient::Get();
+  if (client) {
+    dlcservice::InstallRequest install_request;
+    install_request.set_id(dlc_id);
+    client->Install(install_request, std::move(callback), base::DoNothing());
+  } else {
+    CHECK_IS_TEST();
+    DlcserviceClient::InstallResult result;
+    result.error = dlcservice::kErrorInternal;
+
+    RunCallbackLater(base::BindOnce(std::move(callback), std::move(result)));
+  }
+}
+
+void GetDlcState(const std::string& dlc_id,
+                 DlcserviceClient::GetDlcStateCallback callback) {
+  DlcserviceClient* client = DlcserviceClient::Get();
+  if (client) {
+    client->GetDlcState(dlc_id, std::move(callback));
+  } else {
+    CHECK_IS_TEST();
+    dlcservice::DlcState state;
+    state.set_id(dlc_id);
+    state.set_state(dlcservice::DlcState::State::DlcState_State_NOT_INSTALLED);
+    RunCallbackLater(base::BindOnce(
+        std::move(callback), dlcservice::kErrorInternal, std::move(state)));
+  }
+}
+
+void UninstallDlc(const std::string& dlc_id,
+                  DlcserviceClient::UninstallCallback callback) {
+  DlcserviceClient* client = DlcserviceClient::Get();
+  if (client) {
+    client->Uninstall(dlc_id, std::move(callback));
+  } else {
+    CHECK_IS_TEST();
+    RunCallbackLater(
+        base::BindOnce(std::move(callback), dlcservice::kErrorInternal));
+  }
+}
+
+// Warning: These DLCs are guaranteed to be downloaded (is_trusted), but not
+// guaranteed to be installed (state == INSTALLED).
+void GetExistingDlcs(DlcserviceClient::GetExistingDlcsCallback callback) {
+  DlcserviceClient* client = DlcserviceClient::Get();
+  if (client) {
+    client->GetExistingDlcs(std::move(callback));
+  } else {
+    CHECK_IS_TEST();
+    RunCallbackLater(base::BindOnce(std::move(callback),
+                                    dlcservice::kErrorInternal,
+                                    dlcservice::DlcsWithContent()));
+  }
 }
 
 void OnInstallDlcComplete(OnInstallCompleteCallback callback,
@@ -82,6 +143,9 @@ void OnInstallDlcComplete(OnInstallCompleteCallback callback,
           GetDlcErrorTypeForUma(dlc_result.error));
     } else if (feature_id == kTtsFeatureId) {
       base::UmaHistogramEnumeration("ChromeOS.LanguagePacks.InstallError.Tts",
+                                    GetDlcErrorTypeForUma(dlc_result.error));
+    } else if (feature_id == kFontsFeatureId) {
+      base::UmaHistogramEnumeration("ChromeOS.LanguagePacks.InstallError.Fonts",
                                     GetDlcErrorTypeForUma(dlc_result.error));
     }
   }
@@ -115,11 +179,23 @@ void OnUninstallDlcComplete(OnUninstallCompleteCallback callback,
 }
 
 void OnGetDlcState(GetPackStateCallback callback,
-                   std::string_view feature_id,
+                   std::string feature_id,
                    const std::string& locale,
                    const std::string& err,
                    const dlcservice::DlcState& dlc_state) {
   PackResult result;
+  if (dlc_state.is_verified() &&
+      dlc_state.state() == dlcservice::DlcState_State_NOT_INSTALLED) {
+    // Mount the DLC for the client if it already exists on disk.
+    // By pure coincidence, `GetPackStateCallback` is the same as
+    // `OnInstallCompleteCallback`, so we can directly pass in the
+    // client-supplied callback here.
+    InstallDlc(dlc_state.id(),
+               base::BindOnce(&OnInstallDlcComplete, std::move(callback),
+                              std::move(feature_id), std::move(locale)));
+    return;
+  }
+
   // GetDlcState() returns 2 errors:
   // one for the DBus call and one for the actual DLC.
   // If the first error is set we can ignore the DLC state.
@@ -268,40 +344,44 @@ const base::flat_map<PackSpecPair, std::string>& GetAllLanguagePackDlcIds() {
           {{kHandwritingFeatureId, "zh-HK"}, "handwriting-zh-HK"},
 
           // Text-To-Speech.
-          {{kTtsFeatureId, "bn"}, "tts-bn-bd-b"},
-          {{kTtsFeatureId, "cs"}, "tts-cs-cz-b"},
-          {{kTtsFeatureId, "da"}, "tts-da-dk-b"},
-          {{kTtsFeatureId, "de"}, "tts-de-de-b"},
-          {{kTtsFeatureId, "el"}, "tts-el-gr-b"},
-          {{kTtsFeatureId, "en-au"}, "tts-en-au-b"},
-          {{kTtsFeatureId, "en-gb"}, "tts-en-gb-b"},
-          {{kTtsFeatureId, "en-us"}, "tts-en-us-b"},
-          {{kTtsFeatureId, "es-es"}, "tts-es-es-b"},
-          {{kTtsFeatureId, "es-us"}, "tts-es-us-b"},
-          {{kTtsFeatureId, "fi"}, "tts-fi-fi-b"},
-          {{kTtsFeatureId, "fil"}, "tts-fil-ph-b"},
-          {{kTtsFeatureId, "fr"}, "tts-fr-fr-b"},
-          {{kTtsFeatureId, "hi"}, "tts-hi-in-b"},
-          {{kTtsFeatureId, "hu"}, "tts-hu-hu-b"},
-          {{kTtsFeatureId, "id"}, "tts-id-id-b"},
-          {{kTtsFeatureId, "it"}, "tts-it-it-b"},
-          {{kTtsFeatureId, "ja"}, "tts-ja-jp-b"},
-          {{kTtsFeatureId, "km"}, "tts-km-kh-b"},
-          {{kTtsFeatureId, "ko"}, "tts-ko-kr-b"},
-          {{kTtsFeatureId, "nb"}, "tts-nb-no-b"},
-          {{kTtsFeatureId, "ne"}, "tts-ne-np-b"},
-          {{kTtsFeatureId, "nl"}, "tts-nl-nl-b"},
-          {{kTtsFeatureId, "pl"}, "tts-pl-pl-b"},
-          {{kTtsFeatureId, "pt-br"}, "tts-pt-br-b"},
-          {{kTtsFeatureId, "pt-pt"}, "tts-pt-pt-b"},
-          {{kTtsFeatureId, "si"}, "tts-si-lk-b"},
-          {{kTtsFeatureId, "sk"}, "tts-sk-sk-b"},
-          {{kTtsFeatureId, "sv"}, "tts-sv-se-b"},
-          {{kTtsFeatureId, "th"}, "tts-th-th-b"},
-          {{kTtsFeatureId, "tr"}, "tts-tr-tr-b"},
-          {{kTtsFeatureId, "uk"}, "tts-uk-ua-b"},
-          {{kTtsFeatureId, "vi"}, "tts-vi-vn-b"},
-          {{kTtsFeatureId, "yue"}, "tts-yue-hk-b"},
+          {{kTtsFeatureId, "bn"}, "tts-bn-bd-c"},
+          {{kTtsFeatureId, "cs"}, "tts-cs-cz-c"},
+          {{kTtsFeatureId, "da"}, "tts-da-dk-c"},
+          {{kTtsFeatureId, "de"}, "tts-de-de-c"},
+          {{kTtsFeatureId, "el"}, "tts-el-gr-c"},
+          {{kTtsFeatureId, "en-au"}, "tts-en-au-c"},
+          {{kTtsFeatureId, "en-gb"}, "tts-en-gb-c"},
+          {{kTtsFeatureId, "en-us"}, "tts-en-us-c"},
+          {{kTtsFeatureId, "es-es"}, "tts-es-es-c"},
+          {{kTtsFeatureId, "es-us"}, "tts-es-us-c"},
+          {{kTtsFeatureId, "fi"}, "tts-fi-fi-c"},
+          {{kTtsFeatureId, "fil"}, "tts-fil-ph-c"},
+          {{kTtsFeatureId, "fr"}, "tts-fr-fr-c"},
+          {{kTtsFeatureId, "hi"}, "tts-hi-in-c"},
+          {{kTtsFeatureId, "hu"}, "tts-hu-hu-c"},
+          {{kTtsFeatureId, "id"}, "tts-id-id-c"},
+          {{kTtsFeatureId, "it"}, "tts-it-it-c"},
+          {{kTtsFeatureId, "ja"}, "tts-ja-jp-c"},
+          {{kTtsFeatureId, "km"}, "tts-km-kh-c"},
+          {{kTtsFeatureId, "ko"}, "tts-ko-kr-c"},
+          {{kTtsFeatureId, "nb"}, "tts-nb-no-c"},
+          {{kTtsFeatureId, "ne"}, "tts-ne-np-c"},
+          {{kTtsFeatureId, "nl"}, "tts-nl-nl-c"},
+          {{kTtsFeatureId, "pl"}, "tts-pl-pl-c"},
+          {{kTtsFeatureId, "pt-br"}, "tts-pt-br-c"},
+          {{kTtsFeatureId, "pt-pt"}, "tts-pt-pt-c"},
+          {{kTtsFeatureId, "si"}, "tts-si-lk-c"},
+          {{kTtsFeatureId, "sk"}, "tts-sk-sk-c"},
+          {{kTtsFeatureId, "sv"}, "tts-sv-se-c"},
+          {{kTtsFeatureId, "th"}, "tts-th-th-c"},
+          {{kTtsFeatureId, "tr"}, "tts-tr-tr-c"},
+          {{kTtsFeatureId, "uk"}, "tts-uk-ua-c"},
+          {{kTtsFeatureId, "vi"}, "tts-vi-vn-c"},
+          {{kTtsFeatureId, "yue"}, "tts-yue-hk-c"},
+
+          // Fonts.
+          {{kFontsFeatureId, "ja"}, "extrafonts-ja"},
+          {{kFontsFeatureId, "ko"}, "extrafonts-ko"},
       });
 
   return *all_dlc_ids;
@@ -385,9 +465,8 @@ void LanguagePackManager::GetPackState(const std::string& feature_id,
   base::UmaHistogramEnumeration("ChromeOS.LanguagePacks.GetPackState.FeatureId",
                                 GetFeatureIdValueForUma(feature_id));
 
-  DlcserviceClient::Get()->GetDlcState(
-      *dlc_id,
-      base::BindOnce(&OnGetDlcState, std::move(callback), feature_id, locale));
+  GetDlcState(*dlc_id, base::BindOnce(&OnGetDlcState, std::move(callback),
+                                      feature_id, locale));
 }
 
 void LanguagePackManager::RemovePack(const std::string& feature_id,
@@ -404,8 +483,8 @@ void LanguagePackManager::RemovePack(const std::string& feature_id,
     return;
   }
 
-  DlcserviceClient::Get()->Uninstall(
-      *dlc_id, base::BindOnce(&OnUninstallDlcComplete, std::move(callback),
+  UninstallDlc(*dlc_id,
+               base::BindOnce(&OnUninstallDlcComplete, std::move(callback),
                               feature_id, locale));
 }
 
@@ -460,11 +539,11 @@ void LanguagePackManager::CheckAndUpdateDlcsForInputMethods(
     PrefService* pref_service) {
   // The list of input methods have changed. We need to get the list of current
   // DLCs installed on device, which is an asynchronous method.
-  DlcserviceClient::Get()->GetExistingDlcs(
-      base::BindOnce(&OnGetExistingDlcs, pref_service));
+  GetExistingDlcs(base::BindOnce(&OnGetExistingDlcs, pref_service));
 }
 
 void LanguagePackManager::ObservePrefs(PrefService* pref_service) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // This is the main gate for the functionality of observing Prefs.
   // If this flag is false, all of the cascading logic is disabled.
   if (base::FeatureList::IsEnabled(features::kLanguagePacksInSettings)) {
@@ -476,10 +555,12 @@ void LanguagePackManager::ObservePrefs(PrefService* pref_service) {
 }
 
 void LanguagePackManager::AddObserver(Observer* const observer) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   observers_.AddObserver(observer);
 }
 
 void LanguagePackManager::RemoveObserver(Observer* const observer) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   observers_.RemoveObserver(observer);
 }
 
@@ -497,6 +578,7 @@ void LanguagePackManager::NotifyPackStateChanged(
 
 void LanguagePackManager::OnDlcStateChanged(
     const dlcservice::DlcState& dlc_state) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // As of now, we only have Handwriting as a client.
   // We will check the full list once we have more than one DLC.
   const std::optional<std::string> handwriting_locale =
@@ -509,12 +591,20 @@ void LanguagePackManager::OnDlcStateChanged(
 }
 
 LanguagePackManager::LanguagePackManager() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   CHECK(!g_instance);
   g_instance = this;
-  obs_.Observe(DlcserviceClient::Get());
+  DlcserviceClient* client = DlcserviceClient::Get();
+  if (client) {
+    obs_.Observe(client);
+  } else {
+    CHECK_IS_TEST();
+    // No observation.
+  }
 }
 
 LanguagePackManager::~LanguagePackManager() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   CHECK_EQ(g_instance, this);
   pref_change_registrar_.RemoveAll();
   g_instance = nullptr;

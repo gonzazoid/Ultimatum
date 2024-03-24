@@ -11,12 +11,9 @@
 #include "base/scoped_observation.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/web_applications/locks/all_apps_lock.h"
-#include "chrome/browser/web_applications/web_app_registrar.h"
-#include "chrome/browser/web_applications/web_app_registrar_observer.h"
 #include "components/services/app_service/public/cpp/app_registry_cache.h"
 #include "components/services/app_service/public/cpp/app_types.h"
 #include "components/services/app_service/public/cpp/permission.h"
-#include "components/services/app_service/public/cpp/preferred_apps_list_handle.h"
 #include "components/services/app_service/public/cpp/run_on_os_login_types.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -25,17 +22,10 @@
 #include "ui/gfx/native_widget_types.h"
 #include "ui/webui/resources/cr_components/app_management/app_management.mojom.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ui/webui/app_management/app_management_shelf_delegate_chromeos.h"
-#endif
-
 class Profile;
 
-class AppManagementPageHandlerBase
-    : public app_management::mojom::PageHandler,
-      public apps::AppRegistryCache::Observer,
-      public apps::PreferredAppsListHandle::Observer,
-      public web_app::WebAppRegistrarObserver {
+class AppManagementPageHandlerBase : public app_management::mojom::PageHandler,
+                                     public apps::AppRegistryCache::Observer {
  public:
   //  Handles platform specific tasks.
   class Delegate {
@@ -49,19 +39,11 @@ class AppManagementPageHandlerBase
     virtual gfx::NativeWindow GetUninstallAnchorWindow() const = 0;
   };
 
-  AppManagementPageHandlerBase(
-      mojo::PendingReceiver<app_management::mojom::PageHandler> receiver,
-      mojo::PendingRemote<app_management::mojom::Page> page,
-      Profile* profile,
-      Delegate& delegate);
-
   AppManagementPageHandlerBase(const AppManagementPageHandlerBase&) = delete;
   AppManagementPageHandlerBase& operator=(const AppManagementPageHandlerBase&) =
       delete;
 
   ~AppManagementPageHandlerBase() override;
-
-  void OnPinnedChanged(const std::string& app_id, bool pinned);
 
   // app_management::mojom::PageHandler:
   void GetApps(GetAppsCallback callback) override;
@@ -70,56 +52,39 @@ class AppManagementPageHandlerBase
   void GetExtensionAppPermissionMessages(
       const std::string& app_id,
       GetExtensionAppPermissionMessagesCallback callback) override;
-  void SetPinned(const std::string& app_id, bool pinned) override;
   void SetPermission(const std::string& app_id,
                      apps::PermissionPtr permission) override;
-  void SetResizeLocked(const std::string& app_id, bool locked) override;
   void Uninstall(const std::string& app_id) override;
   void OpenNativeSettings(const std::string& app_id) override;
-  void SetPreferredApp(const std::string& app_id,
-                       bool is_preferred_app) override;
-  void GetOverlappingPreferredApps(
-      const std::string& app_id,
-      GetOverlappingPreferredAppsCallback callback) override;
   void UpdateAppSize(const std::string& app_id) override;
-  void SetWindowMode(const std::string& app_id,
-                     apps::WindowMode window_mode) override;
-  void SetRunOnOsLoginMode(
-      const std::string& app_id,
-      apps::RunOnOsLoginMode run_on_os_login_mode) override;
   void SetFileHandlingEnabled(const std::string& app_id, bool enabled) override;
-  void ShowDefaultAppAssociationsUi() override;
-  void OpenStorePage(const std::string& app_id) override;
-  void SetAppLocale(const std::string& app_id,
-                    const std::string& locale_tag) override;
 
-  // web_app::WebAppRegistrarObserver:
-  void OnWebAppFileHandlerApprovalStateChanged(
-      const webapps::AppId& app_id) override;
-  void OnAppRegistrarDestroyed() override;
+ protected:
+  AppManagementPageHandlerBase(
+      mojo::PendingReceiver<app_management::mojom::PageHandler> receiver,
+      mojo::PendingRemote<app_management::mojom::Page> page,
+      Profile* profile,
+      Delegate& delegate);
 
-  // The following observers are used for user link capturing on W/M/L platforms
-  // to observe user link capturing preferences being changed
-  // in the registrar, so as to propagate the changes to the app-settings/ page
-  // to change the UI dynamically.
-#if !BUILDFLAG(IS_CHROMEOS)
-  void OnWebAppUserLinkCapturingPreferencesChanged(const webapps::AppId& app_id,
-                                                   bool is_preferred) override;
-#endif  // !BUILDFLAG(IS_CHROMEOS)
+  // Creates an AppPtr for the given `app_id`. Can be overridden to add
+  // additional platform-specific data to the App. Returns nullptr if the given
+  // app is not installed or should not be shown in App Management.
+  virtual app_management::mojom::AppPtr CreateApp(const std::string& app_id);
+
+  // Notify the WebUI frontend that the app with a given `app_id` has changed on
+  // the backend. Will generate a new AppPtr and send it to the frontend.
+  void NotifyAppChanged(const std::string& app_id);
+
+  Profile* profile() { return profile_; }
 
  private:
-  app_management::mojom::AppPtr CreateUIAppPtr(const apps::AppUpdate& update);
+  app_management::mojom::AppPtr CreateAppFromAppUpdate(
+      const apps::AppUpdate& update);
 
   // apps::AppRegistryCache::Observer overrides:
   void OnAppUpdate(const apps::AppUpdate& update) override;
   void OnAppRegistryCacheWillBeDestroyed(
       apps::AppRegistryCache* cache) override;
-
-  // apps::PreferredAppsListHandle::Observer overrides:
-  void OnPreferredAppChanged(const std::string& app_id,
-                             bool is_preferred_app) override;
-  void OnPreferredAppsListWillBeDestroyed(
-      apps::PreferredAppsListHandle* handle) override;
 
   mojo::Receiver<app_management::mojom::PageHandler> receiver_;
 
@@ -127,23 +92,11 @@ class AppManagementPageHandlerBase
 
   raw_ptr<Profile> profile_;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  AppManagementShelfDelegate shelf_delegate_;
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-
   const raw_ref<Delegate> delegate_;
 
   base::ScopedObservation<apps::AppRegistryCache,
                           apps::AppRegistryCache::Observer>
       app_registry_cache_observer_{this};
-
-  base::ScopedObservation<apps::PreferredAppsListHandle,
-                          apps::PreferredAppsListHandle::Observer>
-      preferred_apps_list_handle_observer_{this};
-
-  base::ScopedObservation<web_app::WebAppRegistrar,
-                          web_app::WebAppRegistrarObserver>
-      registrar_observation_{this};
 
   base::WeakPtrFactory<AppManagementPageHandlerBase> weak_ptr_factory_{this};
 };

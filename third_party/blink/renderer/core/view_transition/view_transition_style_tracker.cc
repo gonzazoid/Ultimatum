@@ -33,6 +33,7 @@
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_paint_order_iterator.h"
 #include "third_party/blink/renderer/core/resize_observer/resize_observer_entry.h"
+#include "third_party/blink/renderer/core/resize_observer/resize_observer_size.h"
 #include "third_party/blink/renderer/core/scroll/scrollable_area.h"
 #include "third_party/blink/renderer/core/style/computed_style_constants.h"
 #include "third_party/blink/renderer/core/style/shape_clip_path_operation.h"
@@ -235,14 +236,14 @@ float ComputeStartForSide(float start,
 // that should be painted. The return value is relative to the element's border
 // box.
 // Returns null if the complete ink overflow rect should be painted.
-absl::optional<gfx::RectF> ComputeCaptureRect(
+std::optional<gfx::RectF> ComputeCaptureRect(
     const int max_capture_size,
     const PhysicalRect& ink_overflow_rect_in_border_box_space,
     const gfx::Transform& element_to_snapshot_root,
     const gfx::Size& snapshot_root_size) {
   if (ink_overflow_rect_in_border_box_space.Width() <= max_capture_size &&
       ink_overflow_rect_in_border_box_space.Height() <= max_capture_size) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // Compute the matrix to map the element's ink overflow rectangle to snapshot
@@ -287,7 +288,7 @@ absl::optional<gfx::RectF> ComputeCaptureRect(
 }
 
 int ComputeMaxCaptureSize(Document& document,
-                          absl::optional<int> max_texture_size,
+                          std::optional<int> max_texture_size,
                           const gfx::Size& snapshot_root_size) {
   // If the max texture size is not known yet, use the size of the snapshot
   // root.
@@ -310,8 +311,9 @@ int ComputeMaxCaptureSize(Document& document,
   const int max_texture_size_in_layout =
       static_cast<int>(std::ceil(*max_texture_size / min_page_scale_factor));
 
-  CHECK_LE(snapshot_root_size.width(), max_texture_size_in_layout);
-  CHECK_LE(snapshot_root_size.height(), max_texture_size_in_layout);
+  LOG_IF(WARNING, snapshot_root_size.width() > max_texture_size_in_layout ||
+                      snapshot_root_size.height() > max_texture_size_in_layout)
+      << "root snapshot does not fit within max texture size";
 
   // While we can render up to the max texture size, that would significantly
   // add to the memory overhead. So limit to up to a viewport worth of
@@ -435,7 +437,7 @@ ViewTransitionStyleTracker::ViewTransitionStyleTracker(
     : document_(document), state_(State::kCaptured), deserialized_(true) {
   device_pixel_ratio_ = transition_state.device_pixel_ratio;
   captured_name_count_ = static_cast<int>(transition_state.elements.size());
-  snapshot_root_size_at_capture_ =
+  snapshot_root_layout_size_at_capture_ =
       transition_state.snapshot_root_size_at_capture;
 
   VectorOf<AtomicString> transition_names;
@@ -476,6 +478,11 @@ ViewTransitionStyleTracker::ViewTransitionStyleTracker(
     }
     element_data->captured_css_properties =
         std::move(css_property_builder).Finish();
+
+    for (const auto& class_name : transition_state_element.class_list) {
+      element_data->class_list.push_back(
+          AtomicString::FromUTF8(class_name.c_str()));
+    }
 
     element_data->CacheStateForOldSnapshot();
 
@@ -689,10 +696,6 @@ bool ViewTransitionStyleTracker::FlattenAndVerifyElements(
 
     transition_names.push_back(name);
     elements.push_back(element);
-
-    if (name.LowerASCII() == "auto") {
-      UseCounter::Count(document_, WebFeature::kViewTransitionNameAuto);
-    }
   }
   return true;
 }
@@ -738,6 +741,8 @@ bool ViewTransitionStyleTracker::Capture() {
     element_data->target_element = element;
     element_data->element_index = next_index++;
     element_data->old_snapshot_id = snapshot_id;
+    element_data->class_list =
+        element->ComputedStyleRef().ViewTransitionClass();
     element_data_map_.insert(name, std::move(element_data));
 
     if (element->IsDocumentElement()) {
@@ -762,8 +767,8 @@ bool ViewTransitionStyleTracker::Capture() {
   set_element_sequence_id_ = 0;
   pending_transition_element_names_.clear();
 
-  DCHECK(!snapshot_root_size_at_capture_.has_value());
-  snapshot_root_size_at_capture_ = GetSnapshotRootSize();
+  DCHECK(!snapshot_root_layout_size_at_capture_.has_value());
+  snapshot_root_layout_size_at_capture_ = GetSnapshotRootSize();
 
   return true;
 }
@@ -806,6 +811,13 @@ VectorOf<Element> ViewTransitionStyleTracker::GetTransitioningElements() const {
     }
   }
   return result;
+}
+
+const Vector<AtomicString>&
+ViewTransitionStyleTracker::GetViewTransitionClassList(
+    const AtomicString& name) const {
+  CHECK(element_data_map_.Contains(name));
+  return element_data_map_.at(name)->class_list;
 }
 
 bool ViewTransitionStyleTracker::Start() {
@@ -862,6 +874,9 @@ bool ViewTransitionStyleTracker::Start() {
     DCHECK(!element_data->target_element);
     element_data->target_element = element;
     element_data->new_snapshot_id = snapshot_id;
+    element_data->class_list =
+        element->ComputedStyleRef().ViewTransitionClass();
+
     // Verify that the element_index assigned in Capture is less than next_index
     // here, just as a sanity check.
     DCHECK_LT(element_data->element_index, next_index);
@@ -1070,11 +1085,26 @@ bool ViewTransitionStyleTracker::RunPostPrePaintSteps() {
     return false;
   }
 
-  const int max_capture_size = ComputeMaxCaptureSize(
+  const int max_capture_size_in_layout = ComputeMaxCaptureSize(
       *document_,
       document_->GetPage()->GetChromeClient().GetMaxRenderBufferBounds(
           *document_->GetFrame()),
-      *snapshot_root_size_at_capture_);
+      *snapshot_root_layout_size_at_capture_);
+
+  if (snapshot_root_layout_size_at_capture_->width() >
+          max_capture_size_in_layout ||
+      snapshot_root_layout_size_at_capture_->height() >
+          max_capture_size_in_layout) {
+    // TODO(crbug.com/1516874): This skips the transition if the root is too
+    // large to fit into a texture but non-root elements clip in this case
+    // instead. It would be better to clip the root like we do child elements,
+    // rather than skipping (and that would comply better with the spec).
+
+    // For main frames the capture size should never be bigger than the
+    // window so we only expect to end up here due to large subframes.
+    CHECK(!document_->GetFrame()->IsOutermostMainFrame());
+    return false;
+  }
 
   bool needs_style_invalidation = false;
 
@@ -1096,7 +1126,7 @@ bool ViewTransitionStyleTracker::RunPostPrePaintSteps() {
 
     ContainerProperties container_properties;
     PhysicalRect visual_overflow_rect_in_layout_space;
-    absl::optional<gfx::RectF> captured_rect_in_layout_space;
+    std::optional<gfx::RectF> captured_rect_in_layout_space;
 
     if (element_data->target_element->IsDocumentElement()) {
       auto layout_view_size = PhysicalSize(GetSnapshotRootSize());
@@ -1107,7 +1137,7 @@ bool ViewTransitionStyleTracker::RunPostPrePaintSteps() {
       visual_overflow_rect_in_layout_space.size = layout_view_size;
     } else {
       ComputeLiveElementGeometry(
-          max_capture_size, *layout_object, container_properties,
+          max_capture_size_in_layout, *layout_object, container_properties,
           visual_overflow_rect_in_layout_space, captured_rect_in_layout_space);
     }
 
@@ -1198,7 +1228,7 @@ void ViewTransitionStyleTracker::ComputeLiveElementGeometry(
     LayoutObject& layout_object,
     ContainerProperties& container_properties,
     PhysicalRect& visual_overflow_rect_in_layout_space,
-    absl::optional<gfx::RectF>& captured_rect_in_layout_space) const {
+    std::optional<gfx::RectF>& captured_rect_in_layout_space) const {
   DCHECK(!layout_object.IsLayoutView());
 
   // TODO(bokan): This doesn't account for the local offset of an inline
@@ -1244,11 +1274,7 @@ void ViewTransitionStyleTracker::ComputeLiveElementGeometry(
                            LayoutUnit(entry_size->inlineSize()));
   } else if (auto* layout_inline = DynamicTo<LayoutInline>(layout_object)) {
     border_box_size_in_css_space =
-        RuntimeEnabledFeatures::ReferenceBoxNoPixelSnappingEnabled()
-            ? layout_inline->PhysicalLinesBoundingBox().size
-            : PhysicalSize(
-                  ToEnclosingRect(layout_inline->PhysicalLinesBoundingBox())
-                      .size());
+        layout_inline->PhysicalLinesBoundingBox().size;
     // Convert to CSS pixels instead of layout pixels.
     border_box_size_in_css_space.Scale(1.f / device_pixel_ratio_);
   }
@@ -1273,7 +1299,7 @@ void ViewTransitionStyleTracker::ComputeLiveElementGeometry(
   // bounds which includes this scale.
   captured_rect_in_layout_space = ComputeCaptureRect(
       max_capture_size, visual_overflow_rect_in_layout_space,
-      snapshot_matrix_in_layout_space, *snapshot_root_size_at_capture_);
+      snapshot_matrix_in_layout_space, *snapshot_root_layout_size_at_capture_);
 
   container_properties = ContainerProperties(border_box_size_in_css_space,
                                              snapshot_matrix_in_css_space);
@@ -1564,9 +1590,9 @@ ViewTransitionState ViewTransitionStyleTracker::GetViewTransitionState() const {
   ViewTransitionState transition_state;
 
   transition_state.device_pixel_ratio = device_pixel_ratio_;
-  DCHECK(snapshot_root_size_at_capture_);
+  DCHECK(snapshot_root_layout_size_at_capture_);
   transition_state.snapshot_root_size_at_capture =
-      *snapshot_root_size_at_capture_;
+      *snapshot_root_layout_size_at_capture_;
 
   for (const auto& entry : element_data_map_) {
     const auto& element_data = entry.value;
@@ -1575,7 +1601,6 @@ ViewTransitionState ViewTransitionStyleTracker::GetViewTransitionState() const {
            "phase";
 
     auto& element = transition_state.elements.emplace_back();
-    // TODO(khushalsagar): What about non utf8 strings?
     element.tag_name = entry.key.Utf8();
     element.border_box_size_in_css_space = gfx::SizeF(
         element_data->container_properties[0].border_box_size_in_css_space);
@@ -1594,12 +1619,36 @@ ViewTransitionState ViewTransitionStyleTracker::GetViewTransitionState() const {
       css_property_builder.Insert(ToTranstionPropertyId(id), value.Utf8());
     }
     element.captured_css_properties = std::move(css_property_builder).Finish();
+    for (const auto& class_name : element_data->class_list) {
+      element.class_list.push_back(class_name.Utf8());
+    }
   }
 
   // TODO(khushalsagar): Need to send offsets to retain positioning of
   // ::view-transition.
 
   return transition_state;
+}
+
+bool ViewTransitionStyleTracker::SnapshotRootDidChangeSize() const {
+  if (!snapshot_root_layout_size_at_capture_.has_value()) {
+    return false;
+  }
+
+  gfx::Size current_size = GetSnapshotRootSize();
+
+  // Allow 1px of diff since the snapshot root can be adjusted by
+  // viewport-resizing UI (e.g. the virtual keyboard insets the viewport but
+  // then outsets the viewport rect to get the snapshot root). These
+  // adjustments can be off by a pixel due to different pixel snapping.
+  if (std::abs(snapshot_root_layout_size_at_capture_->width() -
+               current_size.width()) <= 1 &&
+      std::abs(snapshot_root_layout_size_at_capture_->height() -
+               current_size.height()) <= 1) {
+    return false;
+  }
+
+  return true;
 }
 
 void ViewTransitionStyleTracker::InvalidateStyle() {
@@ -1923,27 +1972,6 @@ PhysicalRect ViewTransitionStyleTracker::ComputeVisualOverflowRect(
     }
   }
   return result;
-}
-
-bool ViewTransitionStyleTracker::SnapshotRootDidChangeSize() const {
-  if (!snapshot_root_size_at_capture_.has_value()) {
-    return false;
-  }
-
-  gfx::Size current_size = GetSnapshotRootSize();
-
-  // Allow 1px of diff since the snapshot root can be adjusted by
-  // viewport-resizing UI (e.g. the virtual keyboard insets the viewport but
-  // then outsets the viewport rect to get the snapshot root). These
-  // adjustments can be off by a pixel due to different pixel snapping.
-  if (std::abs(snapshot_root_size_at_capture_->width() -
-               current_size.width()) <= 1 &&
-      std::abs(snapshot_root_size_at_capture_->height() -
-               current_size.height()) <= 1) {
-    return false;
-  }
-
-  return true;
 }
 
 const char* ViewTransitionStyleTracker::StateToString(State state) {

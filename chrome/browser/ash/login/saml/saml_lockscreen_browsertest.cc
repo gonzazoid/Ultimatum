@@ -4,6 +4,7 @@
 
 #include <array>
 #include <string>
+#include <string_view>
 
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
@@ -46,6 +47,7 @@
 #include "content/public/browser/notification_service.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "content/public/test/test_utils.h"
 #include "google_apis/gaia/gaia_urls.h"
 #include "net/cookies/canonical_cookie.h"
@@ -68,7 +70,7 @@ constexpr char kEthServicePath[] = "/service/eth1";
 
 constexpr char kSAMLIdPCookieName[] = "saml";
 constexpr char kSAMLIdPCookieValue[] = "value";
-constexpr base::StringPiece kAffiliationID = "test id";
+constexpr std::string_view kAffiliationID = "test id";
 
 constexpr char kSAMLLink[] = "link";
 constexpr char kSAMLLinkedPageURLPattern[] =
@@ -529,8 +531,8 @@ IN_PROC_BROWSER_TEST_F(LockscreenWebUiTest, MAYBE_VerifyAgainFlow) {
   ASSERT_TRUE(session_manager::SessionManager::Get()->IsScreenLocked());
 }
 
-// TODO(crbug.com/1414002): Flaky on ChromeOS MSAN.
-#if defined(MEMORY_SANITIZER)
+// TODO(b/276829737): Flaky on ChromeOS.
+#if BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_ShowNetworkDialog DISABLED_ShowNetworkDialog
 #else
 #define MAYBE_ShowNetworkDialog ShowNetworkDialog

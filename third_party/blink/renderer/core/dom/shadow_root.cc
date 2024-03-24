@@ -27,7 +27,6 @@
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
 
 #include "third_party/blink/public/platform/platform.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_get_inner_html_options.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_observable_array_css_style_sheet.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/css/style_change_reason.h"
@@ -71,9 +70,7 @@ ShadowRoot::ShadowRoot(Document& document, ShadowRootType type)
       registered_with_parent_shadow_root_(false),
       delegates_focus_(false),
       slot_assignment_mode_(static_cast<unsigned>(SlotAssignmentMode::kNamed)),
-      needs_dir_auto_attribute_update_(false),
-      has_focusgroup_attribute_on_descendant_(false),
-      unused_(0) {}
+      has_focusgroup_attribute_on_descendant_(false) {}
 
 ShadowRoot::~ShadowRoot() = default;
 
@@ -137,28 +134,13 @@ void ShadowRoot::OnAdoptedStyleSheetDelete(
                                        exception_state);
 }
 
-String ShadowRoot::getInnerHTML(const GetInnerHTMLOptions* options) const {
-  ClosedRootsSet include_closed_roots;
-  if (options->hasClosedRoots()) {
-    for (auto& shadow_root : options->closedRoots()) {
-      include_closed_roots.insert(shadow_root);
-    }
-  }
-  return CreateMarkup(
-      this, kChildrenOnly, kDoNotResolveURLs,
-      options->includeShadowRoots() ? kIncludeShadowRoots : kNoShadowRoots,
-      include_closed_roots);
-}
-
 void ShadowRoot::setInnerHTML(const String& html,
                               ExceptionState& exception_state) {
   if (DocumentFragment* fragment = CreateFragmentForInnerOuterHTML(
           html, &host(), kAllowScriptingContent,
-          Element::IncludeShadowRoots::kDontInclude,
+          Element::ParseDeclarativeShadowRoots::kDontParse,
           Element::ForceHtml::kDontForce, exception_state)) {
     ReplaceChildrenWithFragment(this, fragment, exception_state);
-    if (auto* element = DynamicTo<HTMLElement>(host()))
-      element->AdjustDirectionalityIfNeededAfterShadowRootChanged();
   }
 }
 
@@ -166,12 +148,9 @@ void ShadowRoot::setHTMLUnsafe(const String& html,
                                ExceptionState& exception_state) {
   if (DocumentFragment* fragment = CreateFragmentForInnerOuterHTML(
           html, &host(), kAllowScriptingContent,
-          Element::IncludeShadowRoots::kInclude, Element::ForceHtml::kDontForce,
-          exception_state)) {
+          Element::ParseDeclarativeShadowRoots::kParse,
+          Element::ForceHtml::kDontForce, exception_state)) {
     ReplaceChildrenWithFragment(this, fragment, exception_state);
-    if (auto* element = DynamicTo<HTMLElement>(host())) {
-      element->AdjustDirectionalityIfNeededAfterShadowRootChanged();
-    }
   }
 }
 
@@ -270,8 +249,7 @@ void ShadowRoot::ChildrenChanged(const ChildrenChange& change) {
 
   // In the case of input types like button where the child element is not
   // in a container, we need to explicit adjust directionality.
-  if (RuntimeEnabledFeatures::CSSPseudoDirEnabled() &&
-      RuntimeEnabledFeatures::DirnameMoreInputTypesEnabled()) {
+  if (RuntimeEnabledFeatures::DirnameMoreInputTypesEnabled()) {
     if (TextControlElement* text_element =
             HTMLElement::ElementIfAutoDirectionalityFormAssociatedOrNull(
                 &host())) {

@@ -806,13 +806,13 @@ def make_tov8_function(cg_context):
 
     func_decl = CxxFuncDeclNode(name="ToV8",
                                 arg_decls=["ScriptState* script_state"],
-                                return_type="v8::MaybeLocal<v8::Value>",
+                                return_type="v8::Local<v8::Value>",
                                 const=True,
                                 override=True)
 
     func_def = CxxFuncDefNode(name="ToV8",
                               arg_decls=["ScriptState* script_state"],
-                              return_type="v8::MaybeLocal<v8::Value>",
+                              return_type="v8::Local<v8::Value>",
                               class_name=cg_context.class_name,
                               const=True)
     func_def.set_base_template_vars(cg_context.template_bindings())
@@ -836,7 +836,7 @@ def make_tov8_function(cg_context):
         branches,
         EmptyNode(),
         TextNode("NOTREACHED();"),
-        TextNode("return v8::MaybeLocal<v8::Value>();"),
+        TextNode("return v8::Local<v8::Value>();"),
     ])
 
     return func_decl, func_def
@@ -1048,11 +1048,14 @@ def generate_union(union_identifier):
         PathManager(idl_type.type_definition_object).api_path(ext="h")
         for idl_type in union.flattened_member_types if idl_type.is_interface
     ])
-    (header_forward_decls, header_include_headers, source_forward_decls,
+    (header_forward_decls, header_include_headers,
+     header_stdcpp_include_headers, source_forward_decls,
      source_include_headers) = collect_forward_decls_and_include_headers(
          union.flattened_member_types)
     header_node.accumulator.add_class_decls(header_forward_decls)
     header_node.accumulator.add_include_headers(header_include_headers)
+    header_node.accumulator.add_stdcpp_include_headers(
+        header_stdcpp_include_headers)
     source_node.accumulator.add_class_decls(source_forward_decls)
     source_node.accumulator.add_include_headers(source_include_headers)
 

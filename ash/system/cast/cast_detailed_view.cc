@@ -112,7 +112,7 @@ void CastDetailedView::OnDevicesUpdated(
   }
   // Update UI.
   UpdateReceiverListFromCachedData();
-  Layout();
+  DeprecatedLayoutImmediately();
 }
 
 void CastDetailedView::UpdateReceiverListFromCachedData() {
@@ -154,7 +154,7 @@ void CastDetailedView::UpdateReceiverListFromCachedData() {
   }
 
   scroll_content()->SizeToPreferredSize();
-  scroller()->Layout();
+  scroller()->DeprecatedLayoutImmediately();
 }
 
 void CastDetailedView::AddZeroStateView() {
@@ -289,7 +289,7 @@ std::unique_ptr<PillButton> CastDetailedView::CreateFreezeButton(
   return freeze_button;
 }
 
-BEGIN_METADATA(CastDetailedView, TrayDetailedView)
+BEGIN_METADATA(CastDetailedView)
 END_METADATA
 
 }  // namespace ash

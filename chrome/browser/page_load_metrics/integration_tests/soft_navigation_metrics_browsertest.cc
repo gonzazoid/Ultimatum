@@ -16,6 +16,7 @@
 #include "content/public/browser/render_view_host.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "content/public/test/hit_test_region_observer.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "third_party/blink/public/common/performance/largest_contentful_paint_type.h"
@@ -291,11 +292,11 @@ class SoftNavigationTest : public MetricIntegrationTest,
 
     size_t entry_records_list_size = entry_records_list.size();
     for (size_t i = 0; i < entry_records_list_size; i++) {
-      absl::optional<double> record_startTime =
+      std::optional<double> record_startTime =
           entry_records_list[i].GetDict().FindDouble("startTime");
-      absl::optional<double> record_score =
+      std::optional<double> record_score =
           entry_records_list[i].GetDict().FindDouble("score");
-      absl::optional<double> record_hadRecentInput =
+      std::optional<double> record_hadRecentInput =
           entry_records_list[i].GetDict().FindBool("hadRecentInput");
 
       // Verify that the optional<double> has value.

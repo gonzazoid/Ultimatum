@@ -108,7 +108,7 @@ class SharedStorageManager {
   void OnOperationResult(OperationResult result);
 
   // Retrieves the `value` for `context_origin` and `key`. `callback` is called
-  // with a string `value` if one is found, absl::nullopt otherwise.
+  // with a string `value` if one is found, std::nullopt otherwise.
   //
   // `key` must be of length at most
   // `SharedStorageDatabaseOptions::max_string_length`, with the burden on the
@@ -132,7 +132,7 @@ class SharedStorageManager {
            std::u16string key,
            std::u16string value,
            base::OnceCallback<void(OperationResult)> callback,
-           SetBehavior behavior = SetBehavior::kDefault);
+           SetBehavior behavior);
 
   // Appends `value` to the end of the current `value` for `context_origin` and
   // `key`, if `key` exists. If `key` does not exist, creates an entry for `key`
@@ -192,11 +192,14 @@ class SharedStorageManager {
   // of the Shared Storage API, or else by
   // `browsing_data::SharedStorageHelper::DeleteOrigin()` in order to clear
   // browsing data via the Settings UI.
-  //
-  // TODO(cammie): Add `browsing_data::SharedStorageHelper` and the rest of the
-  // clear browsing data integration.
   void Clear(url::Origin context_origin,
              base::OnceCallback<void(OperationResult)> callback);
+
+  // The parameter of `callback` reports the number of bytes used by
+  // `context_origin` in unexpired entries, 0 if the origin has no unexpired
+  // entries, or -1 on operation failure.
+  void BytesUsed(url::Origin context_origin,
+                 base::OnceCallback<void(int)> callback);
 
   // Clears all StorageKeys that match `storage_key_matcher` run on the owning
   // StoragePartition's `SpecialStoragePolicy` and have `last_used_time` between

@@ -165,11 +165,13 @@ class TestDialogController
       const std::optional<std::string>& iframe_for_display,
       const std::vector<IdentityProviderData>& identity_provider_data,
       IdentityRequestAccount::SignInMode sign_in_mode,
-      bool show_auto_reauthn_checkbox,
+      blink::mojom::RpMode rp_mode,
+      const std::optional<content::IdentityProviderData>& new_account_idp,
       IdentityRequestDialogController::AccountSelectionCallback on_selected,
       IdentityRequestDialogController::LoginToIdPCallback on_add_account,
-      IdentityRequestDialogController::DismissCallback dismiss_callback)
-      override {
+      IdentityRequestDialogController::DismissCallback dismiss_callback,
+      IdentityRequestDialogController::AccountsDisplayedCallback
+          accounts_displayed_callback) override {
     state_->did_show_accounts_dialog = true;
     state_->top_frame_for_display = top_frame_for_display;
     state_->iframe_for_display = iframe_for_display;
@@ -224,7 +226,7 @@ class FederatedAuthRequestImplMultipleFramesTest
         std::make_unique<TestFederatedIdentityModalDialogViewDelegate>();
     mock_identity_registry_ = std::make_unique<NiceMock<MockIdentityRegistry>>(
         web_contents(), test_modal_dialog_view_delegate_->GetWeakPtr(),
-        url::Origin::Create(GURL(kIdpUrl)));
+        GURL(kIdpUrl));
 
     static_cast<TestWebContents*>(web_contents())
         ->NavigateAndCommit(GURL(kTopFrameUrl), ui::PAGE_TRANSITION_LINK);
@@ -277,10 +279,8 @@ class FederatedAuthRequestImplMultipleFramesTest
     auto federated = blink::mojom::IdentityProviderRequestOptions::New();
     federated->config = std::move(config_ptr);
     federated->nonce = kNonce;
-    std::vector<blink::mojom::IdentityProviderPtr> idp_ptrs;
-    blink::mojom::IdentityProviderPtr idp_ptr =
-        blink::mojom::IdentityProvider::NewFederated(std::move(federated));
-    idp_ptrs.push_back(std::move(idp_ptr));
+    std::vector<blink::mojom::IdentityProviderRequestOptionsPtr> idp_ptrs;
+    idp_ptrs.push_back(std::move(federated));
     auto get_params = blink::mojom::IdentityProviderGetParameters::New(
         std::move(idp_ptrs),
         /*rp_context=*/blink::mojom::RpContext::kSignIn,

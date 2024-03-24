@@ -10,11 +10,41 @@
 #include "base/memory/raw_ptr.h"
 #include "base/uuid.h"
 #include "chromeos/ui/base/window_state_type.h"
+#include "components/tab_groups/tab_group_info.h"
 #include "ui/aura/window.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/gfx/geometry/rect.h"
+#include "url/gurl.h"
 
 namespace app_restore {
+
+// Browser specific info. It is used for creating new browsers for saved desks,
+// or displaying browser info in the pine dialog.
+struct COMPONENT_EXPORT(APP_RESTORE) BrowserExtraInfo {
+  BrowserExtraInfo();
+  BrowserExtraInfo(BrowserExtraInfo&&);
+  BrowserExtraInfo(const BrowserExtraInfo&);
+  BrowserExtraInfo& operator=(BrowserExtraInfo&&);
+  BrowserExtraInfo& operator=(const BrowserExtraInfo&);
+  ~BrowserExtraInfo();
+
+  bool operator==(const BrowserExtraInfo& other) const;
+
+  std::vector<GURL> urls;
+  std::optional<int32_t> active_tab_index;
+  std::optional<int32_t> first_non_pinned_tab_index;
+  // True if the browser was `Browser::TYPE_APP` or `Browser::TYPE_APP_POPUP`.
+  // (PWA or SWA).
+  std::optional<bool> app_type_browser;
+  std::optional<std::string> app_name;
+  // Represents tab groups associated with this browser instance if there are
+  // any. This is only used in Desks Storage, tab groups in full restore are
+  // persisted by sessions. This field is not converted to base::Value in base
+  // value conversions.
+  std::vector<tab_groups::TabGroupInfo> tab_group_infos;
+  // Lacros only, the ID of the lacros profile that this browser uses.
+  std::optional<uint64_t> lacros_profile_id;
+};
 
 // This struct is the parameter for the interface SaveWindowInfo, to save the
 // window information.
@@ -22,22 +52,20 @@ struct COMPONENT_EXPORT(APP_RESTORE) WindowInfo {
  public:
   // This struct is the ARC specific window info.
   struct ArcExtraInfo {
-    ArcExtraInfo();
-    ArcExtraInfo(const WindowInfo::ArcExtraInfo&);
-    ArcExtraInfo& operator=(const WindowInfo::ArcExtraInfo&);
-    ~ArcExtraInfo();
-
+    bool operator==(const ArcExtraInfo& other) const = default;
     std::optional<gfx::Size> maximum_size;
     std::optional<gfx::Size> minimum_size;
     std::optional<gfx::Rect> bounds_in_root;
   };
 
   WindowInfo();
-  WindowInfo(const WindowInfo&) = delete;
-  WindowInfo& operator=(const WindowInfo&) = delete;
+  WindowInfo(WindowInfo&&);
+  WindowInfo(const WindowInfo&);
+  WindowInfo& operator=(WindowInfo&&);
+  WindowInfo& operator=(const WindowInfo&);
   ~WindowInfo();
 
-  WindowInfo* Clone();
+  bool operator==(const WindowInfo& other) const;
 
   raw_ptr<aura::Window, DanglingUntriaged> window;
 

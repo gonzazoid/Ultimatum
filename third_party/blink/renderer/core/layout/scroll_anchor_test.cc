@@ -145,7 +145,7 @@ class ScrollAnchorTest : public SimTest {
     scrollbar_drag_point_.reset();
   }
 
-  absl::optional<gfx::PointF> scrollbar_drag_point_;
+  std::optional<gfx::PointF> scrollbar_drag_point_;
 };
 
 // TODO(skobes): Convert this to web-platform-tests when visual viewport API is
@@ -807,7 +807,7 @@ TEST_F(ScrollAnchorTest, SerializeAnchorFailsForShadowDOMElement) {
       <div></div>
       <div></div>)HTML");
   auto* host = GetDocument().getElementById(AtomicString("host"));
-  auto& shadow_root = host->AttachShadowRootInternal(ShadowRootType::kOpen);
+  auto& shadow_root = host->AttachShadowRootForTesting(ShadowRootType::kOpen);
   shadow_root.setInnerHTML(R"HTML(
       <style>
         div { height: 100px; }

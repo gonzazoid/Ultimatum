@@ -20,6 +20,7 @@
 #include "base/containers/contains.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/accessibility/ax_enums.mojom.h"
@@ -69,12 +70,6 @@ class ImeMenuTrayTest : public AshTestBase {
   ~ImeMenuTrayTest() override = default;
 
  protected:
-  void SetUp() override {
-    scoped_feature_list_.InitWithFeatureStates(
-        {{features::kImeTrayHideVoiceButton, true}});
-    AshTestBase::SetUp();
-  }
-
   // Returns true if the IME menu tray is visible.
   bool IsVisible() { return GetTray()->GetVisible(); }
 
@@ -155,9 +150,6 @@ class ImeMenuTrayTest : public AshTestBase {
     }
     return ImeListViewTestApi(GetTray()->ime_list_view_).GetToggleView();
   }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 // Tests that visibility of IME menu tray should be consistent with the
@@ -393,8 +385,8 @@ TEST_F(ImeMenuTrayTest, ImeBubbleAccelerator) {
 // Tests that tapping the emoji button does not crash. http://crbug.com/739630
 TEST_F(ImeMenuTrayTest, TapEmojiButton) {
   int call_count = 0;
-  ui::SetShowEmojiKeyboardCallback(
-      base::BindRepeating([](int* count) { (*count)++; }, (&call_count)));
+  ui::SetShowEmojiKeyboardCallback(base::BindLambdaForTesting(
+      [&](ui::EmojiPickerCategory unused) { ++call_count; }));
 
   Shell::Get()->ime_controller()->ShowImeMenuOnShelf(true);
   Shell::Get()->ime_controller()->SetExtraInputOptionsEnabledState(

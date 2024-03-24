@@ -18,6 +18,7 @@
 #include "ash/shell.h"
 #include "ash/test/ash_test_util.h"
 #include "ash/test/view_drawn_waiter.h"
+#include "base/containers/adapters.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/raw_ptr_exclusion.h"
 #include "base/scoped_observation.h"
@@ -125,37 +126,6 @@ class ClipboardDataWaiter : public ui::ClipboardObserver {
   // for: #addr-of, #constexpr-ctor-field-initializer
   RAW_PTR_EXCLUSION const ui::ClipboardData* clipboard_data_ = nullptr;
   std::unique_ptr<base::RunLoop> run_loop_;
-};
-
-// The helper class to wait for the observed view's bounds update.
-class ViewBoundsWaiter : public views::ViewObserver {
- public:
-  explicit ViewBoundsWaiter(views::View* observed_view)
-      : observed_view_(observed_view) {
-    observed_view_->AddObserver(this);
-  }
-
-  ViewBoundsWaiter(const ViewBoundsWaiter&) = delete;
-  ViewBoundsWaiter& operator=(const ViewBoundsWaiter&) = delete;
-  ~ViewBoundsWaiter() override { observed_view_->RemoveObserver(this); }
-
-  void WaitForMeaningfulBounds() {
-    // No-op if `observed_view_` already has meaningful bounds.
-    if (!observed_view_->bounds().IsEmpty())
-      return;
-
-    run_loop_.Run();
-  }
-
- private:
-  // views::ViewObserver:
-  void OnViewBoundsChanged(views::View* observed_view) override {
-    EXPECT_FALSE(observed_view->bounds().IsEmpty());
-    run_loop_.Quit();
-  }
-
-  const raw_ptr<views::View> observed_view_;
-  base::RunLoop run_loop_;
 };
 
 // Helpers ---------------------------------------------------------------------
@@ -290,11 +260,11 @@ class ClipboardHistoryBrowserTest : public ash::LoginManagerTest {
   }
 
   void Press(ui::KeyboardCode key, int modifiers = ui::EF_NONE) {
-    event_generator_->PressKey(key, modifiers);
+    event_generator_->PressKeyAndModifierKeys(key, modifiers);
   }
 
   void Release(ui::KeyboardCode key, int modifiers = ui::EF_NONE) {
-    event_generator_->ReleaseKey(key, modifiers);
+    event_generator_->ReleaseKeyAndModifierKeys(key, modifiers);
   }
 
   void PressAndRelease(ui::KeyboardCode key, int modifiers = ui::EF_NONE) {
@@ -361,8 +331,8 @@ class ClipboardHistoryBrowserTest : public ash::LoginManagerTest {
 
     // Wait until `delete_button` has meaningful bounds. Note that the bounds
     // are set by the layout manager asynchronously.
-    ViewBoundsWaiter waiter(delete_button);
-    waiter.WaitForMeaningfulBounds();
+    ui_test_utils::ViewBoundsWaiter delete_button_waiter(delete_button);
+    delete_button_waiter.WaitForNonEmptyBounds();
 
     EXPECT_TRUE(delete_button->GetVisible());
     EXPECT_TRUE(item_view->IsSelected());
@@ -387,8 +357,7 @@ class ClipboardHistoryBrowserTest : public ash::LoginManagerTest {
     {
       ui::ScopedClipboardWriter scw(ui::ClipboardBuffer::kCopyPaste);
       scw.WriteText(base::UTF8ToUTF16(text));
-      scw.WriteHTML(base::UTF8ToUTF16(html), /*source_url=*/"",
-                    ui::ClipboardContentType::kSanitized);
+      scw.WriteHTML(base::UTF8ToUTF16(html), /*source_url=*/"");
     }
 
     // ClipboardHistory will post a task to process clipboard data in order to
@@ -720,16 +689,7 @@ IN_PROC_BROWSER_TEST_F(ClipboardHistoryBrowserTest, ReorderOnCopy) {
 }
 
 class ClipboardHistoryPasteTypeBrowserTest
-    : public ClipboardHistoryBrowserTest,
-      public ::testing::WithParamInterface<
-          /*web_contents_paste_enabled=*/bool> {
- public:
-  ClipboardHistoryPasteTypeBrowserTest() {
-    scoped_feature_list_.InitWithFeatureState(
-        ash::features::kClipboardHistoryWebContentsPaste,
-        /*web_contents_paste_enabled=*/GetParam());
-  }
-
+    : public ClipboardHistoryBrowserTest {
  protected:
   // ClipboardHistoryBrowserTest:
   void SetUpOnMainThread() override {
@@ -818,16 +778,11 @@ class ClipboardHistoryPasteTypeBrowserTest
     return std::move(paste_list_value).TakeList();
   }
 
-  base::test::ScopedFeatureList scoped_feature_list_;
   raw_ptr<content::WebContents, DanglingUntriaged> web_contents_ = nullptr;
   int paste_num_ = 1;
 };
 
-INSTANTIATE_TEST_SUITE_P(All,
-                         ClipboardHistoryPasteTypeBrowserTest,
-                         /*web_contents_paste_enabled=*/::testing::Bool());
-
-IN_PROC_BROWSER_TEST_P(ClipboardHistoryPasteTypeBrowserTest,
+IN_PROC_BROWSER_TEST_F(ClipboardHistoryPasteTypeBrowserTest,
                        PlainAndRichTextPastes) {
   using ClipboardHistoryPasteType =
       ash::ClipboardHistoryControllerImpl::ClipboardHistoryPasteType;
@@ -1081,7 +1036,7 @@ IN_PROC_BROWSER_TEST_P(ClipboardHistoryPasteTypeBrowserTest,
 
 // Regression test for crbug.com/1363828 --- verifies that
 // `WebContents::Paste()` works, since that's necessary for the html preview.
-IN_PROC_BROWSER_TEST_P(ClipboardHistoryPasteTypeBrowserTest, PasteCommand) {
+IN_PROC_BROWSER_TEST_F(ClipboardHistoryPasteTypeBrowserTest, PasteCommand) {
   SetClipboardTextAndHtml("A", "<span>A</span>");
   web_contents()->Paste();
   WaitForWebContentsPaste("A", /*paste_plain_text=*/false);
@@ -1162,7 +1117,7 @@ IN_PROC_BROWSER_TEST_F(ClipboardHistoryMultiProfileBrowserTest,
 // The browser test which creates a widget with a textfield during setting-up
 // to help verify the multipaste menu item's response to the gesture tap and
 // the mouse click.
-class ClipboardHistoryTextfieldBrowserTestBase
+class ClipboardHistoryTextfieldBrowserTest
     : public ClipboardHistoryBrowserTest {
  protected:
   // ClipboardHistoryBrowserTest:
@@ -1199,28 +1154,9 @@ class ClipboardHistoryTextfieldBrowserTestBase
   raw_ptr<views::Textfield> textfield_ = nullptr;
 };
 
-class ClipboardHistoryTextfieldBrowserTest
-    : public ClipboardHistoryTextfieldBrowserTestBase,
-      public ::testing::WithParamInterface<
-          /*web_contents_paste_enabled=*/bool> {
- public:
-  ClipboardHistoryTextfieldBrowserTest() {
-    scoped_feature_list_.InitWithFeatureState(
-        ash::features::kClipboardHistoryWebContentsPaste,
-        /*web_contents_paste_enabled=*/GetParam());
-  }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-};
-
-INSTANTIATE_TEST_SUITE_P(All,
-                         ClipboardHistoryTextfieldBrowserTest,
-                         /*web_contents_paste_enabled=*/::testing::Bool());
-
 // Verifies that the clipboard history menu responses to the gesture tap
 // correctly (https://crbug.com/1142088).
-IN_PROC_BROWSER_TEST_P(ClipboardHistoryTextfieldBrowserTest,
+IN_PROC_BROWSER_TEST_F(ClipboardHistoryTextfieldBrowserTest,
                        VerifyResponseToGestures) {
   base::HistogramTester histogram_tester;
 
@@ -1248,7 +1184,7 @@ IN_PROC_BROWSER_TEST_P(ClipboardHistoryTextfieldBrowserTest,
 
 // Verifies that the metric to record the count of the consecutive pastes from
 // the clipboard history menu works as expected.
-IN_PROC_BROWSER_TEST_P(ClipboardHistoryTextfieldBrowserTest,
+IN_PROC_BROWSER_TEST_F(ClipboardHistoryTextfieldBrowserTest,
                        VerifyConsecutivePasteMetric) {
   base::HistogramTester histogram_tester;
 
@@ -1264,7 +1200,7 @@ IN_PROC_BROWSER_TEST_P(ClipboardHistoryTextfieldBrowserTest,
                                       /*expected_bucket_count=*/1);
 }
 
-IN_PROC_BROWSER_TEST_P(ClipboardHistoryTextfieldBrowserTest,
+IN_PROC_BROWSER_TEST_F(ClipboardHistoryTextfieldBrowserTest,
                        ShouldPasteHistoryViaKeyboard) {
   base::HistogramTester histogram_tester;
   // Write some things to the clipboard.
@@ -1334,7 +1270,7 @@ IN_PROC_BROWSER_TEST_P(ClipboardHistoryTextfieldBrowserTest,
       "Ash.ClipboardHistory.ContextMenu.DisplayFormatPasted", 4);
 }
 
-IN_PROC_BROWSER_TEST_P(ClipboardHistoryTextfieldBrowserTest,
+IN_PROC_BROWSER_TEST_F(ClipboardHistoryTextfieldBrowserTest,
                        ShouldPasteHistoryWhileHoldingDownCommandKey) {
   // Write some things to the clipboard.
   SetClipboardText("A");
@@ -1367,7 +1303,7 @@ IN_PROC_BROWSER_TEST_P(ClipboardHistoryTextfieldBrowserTest,
   Release(ui::KeyboardCode::VKEY_COMMAND);
 }
 
-IN_PROC_BROWSER_TEST_P(ClipboardHistoryTextfieldBrowserTest,
+IN_PROC_BROWSER_TEST_F(ClipboardHistoryTextfieldBrowserTest,
                        PasteWithLockedScreen) {
   // Write an item to the clipboard.
   SetClipboardText("A");
@@ -1438,7 +1374,7 @@ class FakeDataTransferPolicyController
 
 // The browser test equipped with the custom policy controller.
 class ClipboardHistoryWithMockDLPBrowserTest
-    : public ClipboardHistoryTextfieldBrowserTestBase {
+    : public ClipboardHistoryTextfieldBrowserTest {
  public:
   ClipboardHistoryWithMockDLPBrowserTest()
       : data_transfer_policy_controller_(
@@ -1932,7 +1868,8 @@ IN_PROC_BROWSER_TEST_P(ClipboardHistoryUrlTitleFetcherBrowserTest, UrlTitles) {
 
   // Show the clipboard history menu and verify that the unvisited URL's item
   // has no title label.
-  event_generator.PressAndReleaseKey(ui::VKEY_V, ui::EF_COMMAND_DOWN);
+  event_generator.PressAndReleaseKeyAndModifierKeys(ui::VKEY_V,
+                                                    ui::EF_COMMAND_DOWN);
   EXPECT_FALSE(GetMenuItemViewForClipboardHistoryItemAtIndex(0u)->GetViewByID(
       ash::clipboard_history_util::kSecondaryDisplayTextLabelID));
   event_generator.PressAndReleaseKey(ui::VKEY_ESCAPE);
@@ -1946,7 +1883,8 @@ IN_PROC_BROWSER_TEST_P(ClipboardHistoryUrlTitleFetcherBrowserTest, UrlTitles) {
 
   // Show the clipboard history menu and verify that the visited URL's item has
   // a title label iff the clipboard history URL titles feature is enabled.
-  event_generator.PressAndReleaseKey(ui::VKEY_V, ui::EF_COMMAND_DOWN);
+  event_generator.PressAndReleaseKeyAndModifierKeys(ui::VKEY_V,
+                                                    ui::EF_COMMAND_DOWN);
   EXPECT_EQ(!!GetMenuItemViewForClipboardHistoryItemAtIndex(0u)->GetViewByID(
                 ash::clipboard_history_util::kSecondaryDisplayTextLabelID),
             IsClipboardHistoryUrlTitlesEnabled());
@@ -1956,13 +1894,11 @@ IN_PROC_BROWSER_TEST_P(ClipboardHistoryUrlTitleFetcherBrowserTest, UrlTitles) {
 // Base class used to test features that only exist when the Ctrl+V longpress
 // feature is enabled.
 class ClipboardHistoryLongpressEnabledBrowserTest
-    : public ClipboardHistoryTextfieldBrowserTestBase {
+    : public ClipboardHistoryTextfieldBrowserTest {
  public:
   ClipboardHistoryLongpressEnabledBrowserTest() {
-    scoped_feature_list_.InitWithFeatures(
-        {ash::features::kClipboardHistoryFooter,
-         ash::features::kClipboardHistoryLongpress},
-        /*disabled_features=*/{});
+    scoped_feature_list_.InitAndEnableFeature(
+        ash::features::kClipboardHistoryLongpress);
   }
 
  private:
@@ -2028,12 +1964,11 @@ IN_PROC_BROWSER_TEST_F(ClipboardHistoryLongpressEnabledBrowserTest,
 // Base class used to test features that only exist when the UI refresh is
 // enabled.
 class ClipboardHistoryRefreshEnabledBrowserTest
-    : public ClipboardHistoryTextfieldBrowserTestBase {
+    : public ClipboardHistoryTextfieldBrowserTest {
  public:
   ClipboardHistoryRefreshEnabledBrowserTest() {
     scoped_feature_list_.InitWithFeatures(
-        {ash::features::kClipboardHistoryFooter,
-         chromeos::features::kClipboardHistoryRefresh,
+        {chromeos::features::kClipboardHistoryRefresh,
          chromeos::features::kJelly},
         /*disabled_features=*/{});
   }

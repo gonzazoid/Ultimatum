@@ -74,17 +74,6 @@ class EntryTokenDeleter {
     return token->ByteSize() == 0;
   }
 
-  bool Delete(ContactInfoSpecifics::IntegerToken* token) {
-    // Delete the supported metadata from the token and delete the complete
-    // metadata message when there are no fields left.
-    if (DeleteMetadata(token->mutable_metadata())) {
-      token->clear_metadata();
-    }
-
-    token->clear_value();
-    return token->ByteSize() == 0;
-  }
-
  private:
   bool DeleteMetadata(ContactInfoSpecifics::TokenMetadata* metadata) {
     metadata->clear_status();
@@ -106,7 +95,7 @@ uint32_t GetProfileValueHash(const AutofillProfile& profile, FieldType type) {
 }  // namespace
 
 // Helper class to simplify setting the value and metadata of
-// ContactInfoSpecifics String- and IntegerTokens from an AutofillProfile.
+// ContactInfoSpecifics StringTokens from an AutofillProfile.
 // Outside of the anonymous namespace to be befriended by `ProfileTokenQuality`.
 class ContactInfoEntryDataSetter {
  public:
@@ -115,11 +104,6 @@ class ContactInfoEntryDataSetter {
 
   void Set(ContactInfoSpecifics::StringToken* token, FieldType type) const {
     token->set_value(base::UTF16ToUTF8(profile_->GetRawInfo(type)));
-    SetMetadata(token->mutable_metadata(), type);
-  }
-
-  void Set(ContactInfoSpecifics::IntegerToken* token, FieldType type) const {
-    token->set_value(profile_->GetRawInfoAsInt(type));
     SetMetadata(token->mutable_metadata(), type);
   }
 
@@ -149,7 +133,7 @@ class ContactInfoEntryDataSetter {
 };
 
 // Helper class to set the info and verification status of an AutofillProfile
-// from ContactInfoSpecifics String- and Integer tokens.
+// from ContactInfoSpecifics StringTokens.
 // Outside of the anonymous namespace to be befriended by `ProfileTokenQuality`.
 class ContactInfoProfileSetter {
  public:
@@ -159,13 +143,6 @@ class ContactInfoProfileSetter {
   void Set(const ContactInfoSpecifics::StringToken& token, FieldType type) {
     profile_->SetRawInfoWithVerificationStatus(
         type, base::UTF8ToUTF16(token.value()),
-        ConvertSpecificsToProfileVerificationStatus(token.metadata().status()));
-    SetObservations(token.metadata(), type);
-  }
-
-  void Set(const ContactInfoSpecifics::IntegerToken& token, FieldType type) {
-    profile_->SetRawInfoAsIntWithVerificationStatus(
-        type, token.value(),
         ConvertSpecificsToProfileVerificationStatus(token.metadata().status()));
     SetObservations(token.metadata(), type);
   }
@@ -221,7 +198,6 @@ sync_pb::ContactInfoSpecifics ContactInfoSpecificsFromAutofillProfile(
 
   ContactInfoEntryDataSetter s(profile);
   // Set name-related values and statuses.
-  s.Set(specifics.mutable_name_honorific(), NAME_HONORIFIC_PREFIX);
   s.Set(specifics.mutable_name_first(), NAME_FIRST);
   s.Set(specifics.mutable_name_middle(), NAME_MIDDLE);
   s.Set(specifics.mutable_name_last(), NAME_LAST);
@@ -229,8 +205,6 @@ sync_pb::ContactInfoSpecifics ContactInfoSpecificsFromAutofillProfile(
   s.Set(specifics.mutable_name_last_conjunction(), NAME_LAST_CONJUNCTION);
   s.Set(specifics.mutable_name_last_second(), NAME_LAST_SECOND);
   s.Set(specifics.mutable_name_full(), NAME_FULL);
-  s.Set(specifics.mutable_name_full_with_honorific(),
-        NAME_FULL_WITH_HONORIFIC_PREFIX);
 
   // Set address-related values and statuses.
   s.Set(specifics.mutable_address_city(), ADDRESS_HOME_CITY);
@@ -284,6 +258,10 @@ sync_pb::ContactInfoSpecifics ContactInfoSpecificsFromAutofillProfile(
     s.Set(specifics.mutable_address_overflow_and_landmark(),
           ADDRESS_HOME_OVERFLOW_AND_LANDMARK);
   }
+  if (base::FeatureList::IsEnabled(features::kAutofillUseINAddressModel)) {
+    s.Set(specifics.mutable_address_street_location_and_locality(),
+          ADDRESS_HOME_STREET_LOCATION_AND_LOCALITY);
+  }
   if (base::FeatureList::IsEnabled(
           features::kAutofillEnableSupportForAdminLevel2)) {
     s.Set(specifics.mutable_address_admin_level_2(), ADDRESS_HOME_ADMIN_LEVEL2);
@@ -293,11 +271,6 @@ sync_pb::ContactInfoSpecifics ContactInfoSpecificsFromAutofillProfile(
   s.Set(specifics.mutable_email_address(), EMAIL_ADDRESS);
   s.Set(specifics.mutable_company_name(), COMPANY_NAME);
   s.Set(specifics.mutable_phone_home_whole_number(), PHONE_HOME_WHOLE_NUMBER);
-
-  // Set birthdate-related values and statuses.
-  s.Set(specifics.mutable_birthdate_day(), BIRTHDATE_DAY);
-  s.Set(specifics.mutable_birthdate_month(), BIRTHDATE_MONTH);
-  s.Set(specifics.mutable_birthdate_year(), BIRTHDATE_4_DIGIT_YEAR);
 
   return specifics;
 }
@@ -364,7 +337,6 @@ std::unique_ptr<AutofillProfile> CreateAutofillProfileFromContactInfoSpecifics(
 
   ContactInfoProfileSetter s(*profile);
   // Set name-related values and statuses.
-  s.Set(specifics.name_honorific(), NAME_HONORIFIC_PREFIX);
   s.Set(specifics.name_first(), NAME_FIRST);
   s.Set(specifics.name_middle(), NAME_MIDDLE);
   s.Set(specifics.name_last(), NAME_LAST);
@@ -372,7 +344,6 @@ std::unique_ptr<AutofillProfile> CreateAutofillProfileFromContactInfoSpecifics(
   s.Set(specifics.name_last_conjunction(), NAME_LAST_CONJUNCTION);
   s.Set(specifics.name_last_second(), NAME_LAST_SECOND);
   s.Set(specifics.name_full(), NAME_FULL);
-  s.Set(specifics.name_full_with_honorific(), NAME_FULL_WITH_HONORIFIC_PREFIX);
 
   // Set address-related values and statuses.
   s.Set(specifics.address_city(), ADDRESS_HOME_CITY);
@@ -419,6 +390,10 @@ std::unique_ptr<AutofillProfile> CreateAutofillProfileFromContactInfoSpecifics(
     s.Set(specifics.address_overflow_and_landmark(),
           ADDRESS_HOME_OVERFLOW_AND_LANDMARK);
   }
+  if (base::FeatureList::IsEnabled(features::kAutofillUseINAddressModel)) {
+    s.Set(specifics.address_street_location_and_locality(),
+          ADDRESS_HOME_STREET_LOCATION_AND_LOCALITY);
+  }
   if (base::FeatureList::IsEnabled(
           features::kAutofillEnableSupportForAdminLevel2)) {
     s.Set(specifics.address_admin_level_2(), ADDRESS_HOME_ADMIN_LEVEL2);
@@ -428,11 +403,6 @@ std::unique_ptr<AutofillProfile> CreateAutofillProfileFromContactInfoSpecifics(
   s.Set(specifics.email_address(), EMAIL_ADDRESS);
   s.Set(specifics.company_name(), COMPANY_NAME);
   s.Set(specifics.phone_home_whole_number(), PHONE_HOME_WHOLE_NUMBER);
-
-  // Set birthdate-related values and statuses.
-  s.Set(specifics.birthdate_day(), BIRTHDATE_DAY);
-  s.Set(specifics.birthdate_month(), BIRTHDATE_MONTH);
-  s.Set(specifics.birthdate_year(), BIRTHDATE_4_DIGIT_YEAR);
 
   profile->FinalizeAfterImport();
   return profile;
@@ -459,9 +429,6 @@ sync_pb::ContactInfoSpecifics TrimContactInfoSpecificsDataForCaching(
 
   EntryTokenDeleter d;
   // Delete name-related values and statuses.
-  if (d.Delete(trimmed_specifics.mutable_name_honorific())) {
-    trimmed_specifics.clear_name_honorific();
-  }
   if (d.Delete(trimmed_specifics.mutable_name_first())) {
     trimmed_specifics.clear_name_first();
   }
@@ -482,9 +449,6 @@ sync_pb::ContactInfoSpecifics TrimContactInfoSpecificsDataForCaching(
   }
   if (d.Delete(trimmed_specifics.mutable_name_full())) {
     trimmed_specifics.clear_name_full();
-  }
-  if (d.Delete(trimmed_specifics.mutable_name_full_with_honorific())) {
-    trimmed_specifics.clear_name_full_with_honorific();
   }
   // Delete address-related values and statuses.;
   if (d.Delete(trimmed_specifics.mutable_address_city())) {
@@ -557,6 +521,10 @@ sync_pb::ContactInfoSpecifics TrimContactInfoSpecificsDataForCaching(
   if (d.Delete(trimmed_specifics.mutable_address_overflow_and_landmark())) {
     trimmed_specifics.clear_address_overflow_and_landmark();
   }
+  if (d.Delete(
+          trimmed_specifics.mutable_address_street_location_and_locality())) {
+    trimmed_specifics.clear_address_street_location_and_locality();
+  }
   // Delete email, phone and company values and statuses.
   if (d.Delete(trimmed_specifics.mutable_email_address())) {
     trimmed_specifics.clear_email_address();
@@ -566,16 +534,6 @@ sync_pb::ContactInfoSpecifics TrimContactInfoSpecificsDataForCaching(
   }
   if (d.Delete(trimmed_specifics.mutable_phone_home_whole_number())) {
     trimmed_specifics.clear_phone_home_whole_number();
-  }
-  // Delete birthdate-related values and statuses.
-  if (d.Delete(trimmed_specifics.mutable_birthdate_day())) {
-    trimmed_specifics.clear_birthdate_day();
-  }
-  if (d.Delete(trimmed_specifics.mutable_birthdate_month())) {
-    trimmed_specifics.clear_birthdate_month();
-  }
-  if (d.Delete(trimmed_specifics.mutable_birthdate_year())) {
-    trimmed_specifics.clear_birthdate_year();
   }
 
   return trimmed_specifics;

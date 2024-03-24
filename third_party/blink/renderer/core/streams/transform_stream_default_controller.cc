@@ -33,7 +33,7 @@ TransformStreamDefaultController::GetDefaultController(
       stream->readable_->GetController());
 }
 
-absl::optional<double> TransformStreamDefaultController::desiredSize() const {
+std::optional<double> TransformStreamDefaultController::desiredSize() const {
   // https://streams.spec.whatwg.org/#ts-default-controller-desired-size
   // 2. Let readableController be
   //    this.[[controlledTransformStream]].[[readable]].
@@ -214,8 +214,7 @@ v8::Local<v8::Value> TransformStreamDefaultController::SetUpFromTransformer(
   // JavaScript. So the execution context should be valid and this call should
   // not crash.
   auto controller_value = ToV8Traits<TransformStreamDefaultController>::ToV8(
-                              script_state, controller)
-                              .ToLocalChecked();
+      script_state, controller);
 
   // The following steps are reordered from the standard for efficiency, but the
   // effect is the same.

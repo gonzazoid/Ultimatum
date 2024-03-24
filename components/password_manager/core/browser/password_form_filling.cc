@@ -11,9 +11,9 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
 #include "build/build_config.h"
+#include "components/affiliations/core/browser/affiliation_utils.h"
 #include "components/autofill/core/common/autofill_util.h"
 #include "components/autofill/core/common/password_form_fill_data.h"
-#include "components/password_manager/core/browser/affiliation/affiliation_utils.h"
 #include "components/password_manager/core/browser/browser_save_password_progress_logger.h"
 #include "components/password_manager/core/browser/features/password_features.h"
 #include "components/password_manager/core/browser/password_feature_manager.h"
@@ -23,16 +23,17 @@
 #include "components/password_manager/core/browser/password_manager_driver.h"
 #include "components/password_manager/core/browser/password_manager_util.h"
 
+namespace password_manager {
+
+namespace {
+
+using affiliations::FacetURI;
 using autofill::PasswordAndMetadata;
 using autofill::PasswordFormFillData;
 using url::Origin;
 using Logger = autofill::SavePasswordProgressLogger;
 using password_manager_util::GetMatchType;
 using GetLoginMatchType = password_manager_util::GetLoginMatchType;
-
-namespace password_manager {
-
-namespace {
 
 // Controls whether we should suppress the account storage promos for websites
 // that are blocked by the user.
@@ -206,7 +207,8 @@ LikelyFormFilling SendFillInformationToRenderer(
 #endif
   } else if (preferred_match &&
              GetMatchType(*preferred_match) == GetLoginMatchType::kAffiliated &&
-             !IsValidAndroidFacetURI(preferred_match->signon_realm)) {
+             !affiliations::IsValidAndroidFacetURI(
+                 preferred_match->signon_realm)) {
     wait_for_username_reason = WaitForUsernameReason::kAffiliatedWebsite;
   } else if (preferred_match &&
              GetMatchType(*preferred_match) == GetLoginMatchType::kPSL) {
@@ -278,7 +280,7 @@ PasswordFormFillData CreatePasswordFormFillData(
     bool wait_for_username) {
   PasswordFormFillData result;
 
-  result.form_renderer_id = form_on_page.form_data.unique_renderer_id;
+  result.form_renderer_id = form_on_page.form_data.renderer_id;
   result.url = form_on_page.url;
   result.wait_for_username = wait_for_username;
 

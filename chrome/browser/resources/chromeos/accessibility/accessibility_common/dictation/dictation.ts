@@ -2,12 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {Context} from './context_checker.js';
+import {Context} from '/common/action_fulfillment/context_checker.js';
+import {Macro} from '/common/action_fulfillment/macros/macro.js';
+import {MacroName} from '/common/action_fulfillment/macros/macro_names.js';
+import {TestImportManager} from '/common/testing/test_import_manager.js';
+
 import {FocusHandler} from './focus_handler.js';
-import {InputController} from './input_controller.js';
+import {InputControllerImpl} from './input_controller_impl.js';
 import {LocaleInfo} from './locale_info.js';
-import {Macro} from './macros/macro.js';
-import {MacroName} from './macros/macro_names.js';
 import {MetricsUtils} from './metrics_utils.js';
 import {SpeechParser} from './parse/speech_parser.js';
 import {HintContext, UIController, UIState} from './ui_controller.js';
@@ -26,7 +28,7 @@ import ToastType = chrome.accessibilityPrivate.ToastType;
  * TODO(b/314204374): Eliminate instances of null.
  */
 export class Dictation {
-  private inputController_: InputController|null = null;
+  private inputController_: InputControllerImpl|null = null;
   private uiController_: UIController|null = null;
   private speechParser_: SpeechParser|null = null;
   /** Whether or not Dictation is active. */
@@ -63,7 +65,7 @@ export class Dictation {
   /** Sets up Dictation's speech recognizer and various listeners. */
   private initialize_(): void {
     this.focusHandler_ = new FocusHandler();
-    this.inputController_ = new InputController(
+    this.inputController_ = new InputControllerImpl(
         () => this.stopDictation_(/*notify=*/ true), this.focusHandler_);
     this.uiController_ = new UIController();
     this.speechParser_ = new SpeechParser(this.inputController_);
@@ -181,7 +183,7 @@ export class Dictation {
     // available. If that scenario is possible, we may have to use
     // `chrome.audio.getDevices` and verify that there's at least one input
     // device.
-    chrome.audio.getMute(StreamType.INPUT, muted => {
+    chrome.audio.getMute(StreamType.INPUT, (muted: boolean) => {
       if (muted) {
         this.stopDictation_(/*notify=*/ true);
         chrome.accessibilityPrivate.showToast(ToastType.DICTATION_MIC_MUTED);
@@ -202,7 +204,8 @@ export class Dictation {
       // TODO(b/314203187): Determine if not null assertion is acceptable.
       chrome.speechRecognitionPrivate.start(
           this.speechRecognitionOptions_!,
-          type => this.onSpeechRecognitionStarted_(type));
+          (type: SpeechRecognitionType) =>
+              this.onSpeechRecognitionStarted_(type));
     } else {
       // We are no longer starting up - perhaps a stop came
       // through during the async callbacks. Ensure cleanup
@@ -506,7 +509,7 @@ export class Dictation {
    */
   static removeAsInputMethod(): void {
     chrome.languageSettingsPrivate.removeInputMethod(
-        InputController.IME_ENGINE_ID);
+        InputControllerImpl.IME_ENGINE_ID);
   }
 
   /** Used to set the NO_FOCUSED_IME_MS timeout for testing purposes only. */
@@ -583,3 +586,5 @@ export namespace Dictation {
     NO_FOCUSED_IME = 'Dictation stopped automatically: No focused IME',
   }
 }
+
+TestImportManager.exportForTesting(Dictation);

@@ -24,15 +24,17 @@ import androidx.test.filters.SmallTest;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestRule;
+import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import org.chromium.base.test.util.CriteriaHelper;
+import org.chromium.base.test.util.Features;
+import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.tasks.tab_management.suggestions.TabSuggestion;
 import org.chromium.chrome.tab_ui.R;
-import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
+import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.ui.modelutil.LayoutViewBuilder;
 import org.chromium.ui.modelutil.MVCListAdapter;
@@ -44,6 +46,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Integration tests for MessageCardProvider component. */
 @DisableFeatures(ChromeFeatureList.TAB_TO_GTS_ANIMATION)
+@RunWith(ChromeJUnit4ClassRunner.class)
 public class MessageCardProviderTest extends BlankUiTestActivityTestCase {
     private static final int SUGGESTED_TAB_COUNT = 2;
 

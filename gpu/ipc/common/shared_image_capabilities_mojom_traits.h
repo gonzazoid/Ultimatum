@@ -32,6 +32,10 @@ struct GPU_EXPORT StructTraits<gpu::mojom::SharedImageCapabilitiesDataView,
     return input.supports_r16_shared_images;
   }
 
+  static bool is_r16f_supported(const gpu::SharedImageCapabilities& input) {
+    return input.is_r16f_supported;
+  }
+
   static bool disable_r8_shared_images(
       const gpu::SharedImageCapabilities& input) {
     return input.disable_r8_shared_images;
@@ -49,6 +53,11 @@ struct GPU_EXPORT StructTraits<gpu::mojom::SharedImageCapabilitiesDataView,
   static bool shared_image_swap_chain(
       const gpu::SharedImageCapabilities& input) {
     return input.shared_image_swap_chain;
+  }
+
+  static std::vector<gfx::BufferUsageAndFormat> texture_target_exception_list(
+      const gpu::SharedImageCapabilities& input) {
+    return input.texture_target_exception_list;
   }
 };
 

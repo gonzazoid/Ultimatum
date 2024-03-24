@@ -39,7 +39,8 @@ struct BlindSignToken;
 // The result of a fetch of tokens from the IP Protection auth token server.
 //
 // These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused.
+// numeric values should never be reused. Keep this in sync with
+// IpProtectionTokenBatchRequestResult in enums.xml.
 enum class IpProtectionTryGetAuthTokensResult {
   // The request was successful and resulted in new tokens.
   kSuccess = 0,
@@ -65,7 +66,11 @@ enum class IpProtectionTryGetAuthTokensResult {
   // account.
   kFailedOAuthTokenPersistent = 9,
 
-  kMaxValue = kFailedOAuthTokenPersistent,
+  // The attempt to request tokens failed because IP Protection was disabled by
+  // the user.
+  kFailedDisabledByUser = 10,
+
+  kMaxValue = kFailedDisabledByUser,
 };
 
 // Fetches IP protection tokens on demand for the network service.
@@ -82,6 +87,7 @@ class IpProtectionConfigProvider
   IpProtectionConfigProvider(
       signin::IdentityManager* identity_manager,
       privacy_sandbox::TrackingProtectionSettings* tracking_protection_settings,
+      PrefService* pref_service,
       Profile* profile);
 
   ~IpProtectionConfigProvider() override;
@@ -101,6 +107,9 @@ class IpProtectionConfigProvider
   void Shutdown() override;
 
   static IpProtectionConfigProvider* Get(Profile* profile);
+
+  static bool CanIpProtectionBeEnabled();
+  bool IsIpProtectionEnabled();
 
   // Add bidirectional pipes to a new network service.
   void AddNetworkService(
@@ -135,6 +144,8 @@ class IpProtectionConfigProvider
   FRIEND_TEST_ALL_PREFIXES(IpProtectionConfigProviderTest, CalculateBackoff);
   FRIEND_TEST_ALL_PREFIXES(IpProtectionConfigProviderBrowserTest,
                            BackoffTimeResetAfterProfileAvailabilityChange);
+  FRIEND_TEST_ALL_PREFIXES(IpProtectionConfigProviderUserSettingBrowserTest,
+                           OnIpProtectionEnabledChanged);
 
   // Set up `ip_protection_config_http_` and `bsa_`, if not already initialized.
   // This accomplishes lazy loading of these components to break dependency
@@ -176,6 +187,10 @@ class IpProtectionConfigProvider
   // to enable OAuth Token inclusion in the GetProxyConfig API call to Phosphor.
   void CallGetProxyConfig(GetProxyListCallback callback,
                           std::optional<std::string> oauth_token);
+  void OnGetProxyConfigCompleted(
+      GetProxyListCallback callback,
+      base::expected<ip_protection::GetProxyConfigResponse, std::string>
+          response);
 
   // `FetchBlindSignedToken()` calls into the `quiche::BlindSignAuth` library to
   // request a blind-signed auth token for use at the IP Protection proxies.
@@ -200,6 +215,9 @@ class IpProtectionConfigProvider
   // is called, but will otherwise be non-null.
   raw_ptr<privacy_sandbox::TrackingProtectionSettings>
       tracking_protection_settings_;
+  // Used to request the state of the IP Protection user setting. Will be set to
+  // nullptr after `Shutdown()` is called.
+  raw_ptr<PrefService> pref_service_;
   // The `Profile` object associated with this
   // `IpProtectionConfigProvider()`. Will be reset to nullptr after
   // `Shutdown()` is called.
@@ -210,14 +228,14 @@ class IpProtectionConfigProvider
   // Finish a call to `TryGetAuthTokens()` by recording the result and invoking
   // its callback.
   void TryGetAuthTokensComplete(
-      absl::optional<std::vector<network::mojom::BlindSignedAuthTokenPtr>>
+      std::optional<std::vector<network::mojom::BlindSignedAuthTokenPtr>>
           bsa_tokens,
       TryGetAuthTokensCallback callback,
       IpProtectionTryGetAuthTokensResult result);
 
   // Calculates the backoff time for the given result, based on
   // `last_try_get_auth_tokens_..` fields, and updates those fields.
-  absl::optional<base::TimeDelta> CalculateBackoff(
+  std::optional<base::TimeDelta> CalculateBackoff(
       IpProtectionTryGetAuthTokensResult result);
 
   // Instruct the `IpProtectionConfigCache()`(s) in the Network Service to
@@ -256,7 +274,7 @@ class IpProtectionConfigProvider
   // (so, from either the main profile or an associated incognito mode profile).
   IpProtectionTryGetAuthTokensResult last_try_get_auth_tokens_result_ =
       IpProtectionTryGetAuthTokensResult::kSuccess;
-  absl::optional<base::TimeDelta> last_try_get_auth_tokens_backoff_;
+  std::optional<base::TimeDelta> last_try_get_auth_tokens_backoff_;
 
   // The `mojo::Receiver` objects allowing the network service to call methods
   // on `this`.

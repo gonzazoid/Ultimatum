@@ -9,13 +9,12 @@
 #include <optional>
 #include <ostream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/files/file_path.h"
-#include "base/strings/string_piece.h"
 
-namespace updater {
-namespace tagging {
+namespace updater::tagging {
 namespace internal {
 
 // Advances the iterator by |distance| and makes sure that it remains valid,
@@ -33,6 +32,17 @@ bool CheckRange(std::vector<uint8_t>::const_iterator it,
 
 }  // namespace internal
 
+// Represents application requirements for admin.
+enum class NeedsAdmin {
+  // The application will install per user.
+  kNo = 0,
+  // The application will install machine-wide.
+  kYes,
+  // The application will install machine-wide if permissions allow, else will
+  // install per-user.
+  kPrefers,
+};
+
 // This struct contains the attributes for a given app parsed from a part of the
 // metainstaller tag. It contains minimal policy and is intended to be a
 // near-direct mapping from tag to memory. See TagArgs, which stores a list of
@@ -41,19 +51,8 @@ bool CheckRange(std::vector<uint8_t>::const_iterator it,
 // An empty string in std::string members indicates that the given attribute did
 // not appear in the tag for this app.
 struct AppArgs {
-  // Represents application requirements for admin.
-  enum class NeedsAdmin {
-    // The application will install per user.
-    kNo = 0,
-    // The application will install machine-wide.
-    kYes,
-    // The application will install machine-wide if permissions allow, else will
-    // install per-user.
-    kPrefers,
-  };
-
   // |app_id| must not be empty and will be made lowercase.
-  explicit AppArgs(base::StringPiece app_id);
+  explicit AppArgs(std::string_view app_id);
 
   ~AppArgs();
   AppArgs(const AppArgs&);
@@ -72,7 +71,12 @@ struct AppArgs {
   std::optional<NeedsAdmin> needs_admin;
 };
 
-std::ostream& operator<<(std::ostream&, const AppArgs::NeedsAdmin&);
+std::ostream& operator<<(std::ostream&, const NeedsAdmin&);
+
+// This struct contains the "runtime mode" parsed from the metainstaller tag.
+struct RuntimeModeArgs {
+  std::optional<NeedsAdmin> needs_admin;
+};
 
 // This struct contains the attributes parsed from a metainstaller tag. An empty
 // string in std::string members indicates that the given attribute did not
@@ -111,6 +115,10 @@ struct TagArgs {
 
   // List of apps to install.
   std::vector<AppArgs> apps;
+
+  // This member is present if the "runtime mode" was provided on the command
+  // line.
+  std::optional<RuntimeModeArgs> runtime_mode;
 
   // The original tag string.
   std::string tag_string;
@@ -176,6 +184,14 @@ enum class ErrorCode {
   // Note: A value of 2 is considered the same as not specifying the usage
   // stats.
   kGlobal_UsageStatsValueIsInvalid,
+
+  // The runtime value must be "true", "persist", or "false". The values
+  // "persist" and "false" are only for backward compatibility in case someone
+  // uses it as an oversight, and are treated the same as "true".
+  kGlobal_RuntimeModeValueIsInvalid,
+
+  // The needsadmin value must be "yes", "no", or "prefers".
+  kRuntimeMode_NeedsAdminValueIsInvalid,
 };
 
 std::ostream& operator<<(std::ostream&, const ErrorCode&);
@@ -241,9 +257,9 @@ std::ostream& operator<<(std::ostream&, const ErrorCode&);
 // - installerdata  Can be any string. Must be specified after appid.
 //
 // Note: This method assumes all attribute names are ASCII.
-ErrorCode Parse(base::StringPiece tag,
-                std::optional<base::StringPiece> app_installer_data_args,
-                TagArgs* args);
+ErrorCode Parse(std::string_view tag,
+                std::optional<std::string_view> app_installer_data_args,
+                TagArgs& args);
 
 std::string ReadTag(std::vector<uint8_t>::const_iterator begin,
                     std::vector<uint8_t>::const_iterator end);
@@ -289,7 +305,6 @@ bool BinaryWriteTag(const base::FilePath& in_file,
                     int padded_length,
                     base::FilePath out_file);
 
-}  // namespace tagging
-}  // namespace updater
+}  // namespace updater::tagging
 
 #endif  // CHROME_UPDATER_TAG_H_

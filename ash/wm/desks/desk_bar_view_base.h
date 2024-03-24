@@ -132,7 +132,7 @@ class ASH_EXPORT DeskBarViewBase : public views::View,
   }
 
   // views::View:
-  void Layout() override;
+  void Layout(PassKey) override;
   bool OnMousePressed(const ui::MouseEvent& event) override;
   void OnGestureEvent(ui::GestureEvent* event) override;
 
@@ -348,6 +348,9 @@ class ASH_EXPORT DeskBarViewBase : public views::View,
   // scroll. Return true if the scroll is triggered. Return false if the scroll
   // is ended.
   bool MaybeScrollByDraggedDesk();
+
+  // Records UMA histograms on desk profile adoption.
+  void RecordDeskProfileAdoption();
 
   const Type type_ = Type::kOverview;
 

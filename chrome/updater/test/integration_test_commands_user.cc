@@ -100,8 +100,8 @@ class IntegrationTestCommandsUser : public IntegrationTestCommands {
     updater::test::SetMachineManaged(is_managed_device);
   }
 
-  void ExpectUninstallPing(ScopedServer* test_server) const override {
-    updater::test::ExpectUninstallPing(updater_scope_, test_server);
+  void ExpectPing(ScopedServer* test_server, int event_type) const override {
+    updater::test::ExpectPing(updater_scope_, test_server, event_type);
   }
 
   void ExpectUpdateCheckRequest(ScopedServer* test_server) const override {
@@ -288,10 +288,11 @@ class IntegrationTestCommandsUser : public IntegrationTestCommands {
       const std::string& app_id,
       AppBundleWebCreateMode app_bundle_web_create_mode,
       int expected_final_state,
-      int expected_error_code) const override {
+      int expected_error_code,
+      bool cancel_when_downloading) const override {
     updater::test::ExpectLegacyUpdate3WebSucceeds(
         updater_scope_, app_id, app_bundle_web_create_mode,
-        expected_final_state, expected_error_code);
+        expected_final_state, expected_error_code, cancel_when_downloading);
   }
 
   void ExpectLegacyProcessLauncherSucceeds() const override {

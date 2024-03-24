@@ -13,7 +13,6 @@ import './clear_browsing_data_dialog/clear_browsing_data_dialog.js';
 import './search_engines_page/search_engines_page.js';
 import './simple_confirmation_dialog.js';
 import './privacy_page/anti_abuse_page.js';
-import './privacy_page/preloading_page.js';
 import './privacy_page/privacy_guide/privacy_guide_description_item.js';
 import './privacy_page/privacy_guide/privacy_guide_dialog.js';
 import './privacy_page/privacy_guide/privacy_guide_page.js';
@@ -21,6 +20,7 @@ import './privacy_sandbox/privacy_sandbox_ad_measurement_subpage.js';
 import './privacy_sandbox/privacy_sandbox_fledge_subpage.js';
 import './privacy_sandbox/privacy_sandbox_interest_item.js';
 import './privacy_sandbox/privacy_sandbox_page.js';
+import './privacy_sandbox/privacy_sandbox_manage_topics_subpage.js';
 import './privacy_sandbox/privacy_sandbox_topics_subpage.js';
 import './privacy_page/security_keys_subpage.js';
 import './privacy_page/security_keys_phones_subpage.js';
@@ -85,17 +85,9 @@ export {CaptionsBrowserProxy, CaptionsBrowserProxyImpl, LiveCaptionLanguageList}
 // </if>
 
 export {FontsBrowserProxy, FontsBrowserProxyImpl, FontsData} from '/shared/settings/appearance_page/fonts_browser_proxy.js';
-export {ControlledButtonElement} from '/shared/settings/controls/controlled_button.js';
-export {SettingsRadioGroupElement} from '/shared/settings/controls/settings_radio_group.js';
-export {SettingsSliderElement} from '/shared/settings/controls/settings_slider.js';
-export {SettingsToggleButtonElement} from '/shared/settings/controls/settings_toggle_button.js';
-export {SecureDnsResolverType, SettingsSecureDnsElement} from '/shared/settings/privacy_page/secure_dns.js';
-// <if expr="chromeos_ash">
-export {SettingsSecureDnsDialogElement} from '/shared/settings/privacy_page/secure_dns_dialog.js';
-// </if>
-export {SecureDnsInputElement} from '/shared/settings/privacy_page/secure_dns_input.js';
 export {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
 export {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+export {CrExpandButtonElement} from 'chrome://resources/cr_elements/cr_expand_button/cr_expand_button.js';
 export {CrIconButtonElement} from 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
 export {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
 export {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
@@ -106,6 +98,15 @@ export {IronCollapseElement} from 'chrome://resources/polymer/v3_0/iron-collapse
 export {IronListElement} from 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 export {PaperTooltipElement} from 'chrome://resources/polymer/v3_0/paper-tooltip/paper-tooltip.js';
 export {AccessibilityBrowserProxy, AccessibilityBrowserProxyImpl} from './a11y_page/a11y_browser_proxy.js';
+export {ControlledButtonElement} from './controls/controlled_button.js';
+export {SettingsRadioGroupElement} from './controls/settings_radio_group.js';
+export {SettingsSliderElement} from './controls/settings_slider.js';
+export {SettingsToggleButtonElement} from './controls/settings_toggle_button.js';
+export {SecureDnsResolverType, SettingsSecureDnsElement} from './privacy_page/secure_dns.js';
+// <if expr="chromeos_ash">
+export {SettingsSecureDnsDialogElement} from './privacy_page/secure_dns_dialog.js';
+// </if>
+export {SecureDnsInputElement} from './privacy_page/secure_dns_input.js';
 // clang-format off
 // <if expr="is_win or is_linux or is_macosx">
 export {ScreenAiInstallStatus} from './a11y_page/a11y_browser_proxy.js';
@@ -134,7 +135,7 @@ export {Passkey, PasskeysBrowserProxy, PasskeysBrowserProxyImpl} from './autofil
 export {SettingsPasskeysSubpageElement} from './autofill_page/passkeys_subpage.js';
 // </if>
 export {PaymentsManagerImpl, PaymentsManagerProxy} from './autofill_page/payments_manager_proxy.js';
-export {SettingsPaymentsSectionElement} from './autofill_page/payments_section.js';
+export {GOOGLE_PAY_HELP_URL, SettingsPaymentsSectionElement} from './autofill_page/payments_section.js';
 export {SettingsVirtualCardUnenrollDialogElement} from './autofill_page/virtual_card_unenroll_dialog.js';
 export {ClearBrowsingDataBrowserProxy, ClearBrowsingDataBrowserProxyImpl, ClearBrowsingDataResult, UpdateSyncStateEvent} from './clear_browsing_data_dialog/clear_browsing_data_browser_proxy.js';
 export {SettingsClearBrowsingDataDialogElement, TimePeriod, TimePeriodExperiment} from './clear_browsing_data_dialog/clear_browsing_data_dialog.js';
@@ -181,7 +182,6 @@ export {SettingsCollapseRadioButtonElement} from './privacy_page/collapse_radio_
 export {SettingsCookiesPageElement} from './privacy_page/cookies_page.js';
 export {SettingsDoNotTrackToggleElement} from './privacy_page/do_not_track_toggle.js';
 export {SettingsPersonalizationOptionsElement} from './privacy_page/personalization_options.js';
-export {PreloadingPageElement} from './privacy_page/preloading_page.js';
 export {PrivacyGuideStep} from './privacy_page/privacy_guide/constants.js';
 export {PrivacyGuideCompletionFragmentElement} from './privacy_page/privacy_guide/privacy_guide_completion_fragment.js';
 export {PrivacyGuideCookiesFragmentElement} from './privacy_page/privacy_guide/privacy_guide_cookies_fragment.js';

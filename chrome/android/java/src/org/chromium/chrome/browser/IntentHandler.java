@@ -42,6 +42,7 @@ import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.gsa.GSAState;
 import org.chromium.chrome.browser.omnibox.suggestions.AutocompleteControllerProvider;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.renderer_host.ChromeNavigationUIData;
 import org.chromium.chrome.browser.search_engines.TemplateUrlServiceFactory;
 import org.chromium.chrome.browser.tab.Tab;
@@ -231,6 +232,10 @@ public class IntentHandler {
     /** A boolean to indicate whether an intent was launched via ChromeLauncherActivity. */
     public static final String EXTRA_LAUNCHED_VIA_CHROME_LAUNCHER_ACTIVITY =
             "org.chromium.chrome.browser.launched_via_chrome_launcher_activity";
+
+    /** An enum to indicate whether the intent is created by link or tab. */
+    public static final String EXTRA_URL_DRAG_SOURCE =
+            "org.chromium.chrome.browser.url_drag_source";
 
     private static Pair<Integer, String> sPendingReferrer;
     private static int sReferrerId;
@@ -627,7 +632,7 @@ public class IntentHandler {
         }
         String query = results.get(0);
 
-        Profile profile = Profile.getLastUsedRegularProfile();
+        Profile profile = ProfileManager.getLastUsedRegularProfile();
         AutocompleteMatch match;
         try (var controller = AutocompleteControllerProvider.createCloseableController(profile)) {
             match = controller.get().classify(query);
@@ -780,10 +785,11 @@ public class IntentHandler {
      * Returns true if the app should ignore a given intent.
      *
      * @param intent Intent to check.
+     * @param context the context to use for running screen-related checks.
      * @return true if the intent should be ignored.
      */
-    public static boolean shouldIgnoreIntent(Intent intent) {
-        return shouldIgnoreIntent(intent, /* isCustomTab= */ false);
+    public static boolean shouldIgnoreIntent(Intent intent, Context context) {
+        return shouldIgnoreIntent(intent, context, /* isCustomTab= */ false);
     }
 
     /**
@@ -794,6 +800,18 @@ public class IntentHandler {
      * @return true if the intent should be ignored.
      */
     public static boolean shouldIgnoreIntent(Intent intent, boolean isCustomTab) {
+        return shouldIgnoreIntent(intent, /* context= */ null, isCustomTab);
+    }
+
+    /**
+     * Returns true if the app should ignore a given intent.
+     *
+     * @param intent Intent to check.
+     * @param context the context to use for running screen-related checks.
+     * @param isCustomTab True if the Intent will end up in a Custom Tab.
+     * @return true if the intent should be ignored.
+     */
+    public static boolean shouldIgnoreIntent(Intent intent, Context context, boolean isCustomTab) {
         // Although not documented to, many/most methods that retrieve values from an Intent may
         // throw. Because we can't control what packages might send to us, we should catch any
         // Throwable and then fail closed (safe). This is ugly, but resolves top crashers in the
@@ -836,7 +854,7 @@ public class IntentHandler {
 
             // Checking screen on/keyguard last as these calls can be slow.
             // If the screen is off, ignore any intents.
-            if (!isScreenOn()) return true;
+            if (!isScreenOn(context)) return true;
             if (ChromeFeatureList.sBlockIntentsWhileLocked.isEnabled() && isKeyguardLocked()) {
                 return true;
             }
@@ -944,11 +962,13 @@ public class IntentHandler {
         return false;
     }
 
-    private static boolean isScreenOn() {
+    private static boolean isScreenOn(Context context) {
+        if (context == null) {
+            context = ContextUtils.getApplicationContext();
+        }
+
         PowerManager powerManager =
-                (PowerManager)
-                        ContextUtils.getApplicationContext()
-                                .getSystemService(Context.POWER_SERVICE);
+                (PowerManager) (context.getSystemService(Context.POWER_SERVICE));
 
         return powerManager.isInteractive();
     }

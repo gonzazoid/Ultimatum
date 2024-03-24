@@ -61,7 +61,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Profile.Avatar" enum="ProfileAvatar"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>droger@chromium.org</owner>
   <owner>chrome-signin-team@google.com</owner>
   <summary>The frequency of selection of each avatar.</summary>
@@ -74,7 +74,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Profile.BrowserActive.PerProfile" enum="Profile"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>msarda@chromium.org</owner>
   <owner>tangltom@chromium.org</owner>
   <summary>
@@ -101,7 +101,6 @@ chromium-metrics-reviews@google.com.
 
   <owner>msarda@chromium.org</owner>
   <owner>droger@chromium.org</owner>
-  <owner>anthonyvd@chromium.org</owner>
   <summary>
     This histogram tracks which UI screen was used to initiate and confirm the
     deletion of a profile. This does not track when the profile is actually
@@ -112,7 +111,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Profile.DeleteProfileContext" enum="ProfileDeleteContext"
-    expires_after="2024-02-20">
+    expires_after="2024-08-20">
   <owner>alexilin@chromium.org</owner>
   <owner>droger@chromium.org</owner>
   <owner>msalama@chromium.org</owner>
@@ -198,7 +197,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Profile.Incognito.MainFrameNavigationsPerSession"
-    units="navigations" expires_after="2024-05-19">
+    units="navigations" expires_after="2024-07-21">
   <owner>rhalavati@chromium.org</owner>
   <owner>chrome-incognito@google.com</owner>
   <summary>
@@ -210,7 +209,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Profile.Incognito.MovedToBackgroundAfterDuration"
-    units="minutes" expires_after="2024-06-01">
+    units="minutes" expires_after="2024-08-11">
   <owner>arabm@google.com</owner>
   <owner>chrome-incognito@google.com</owner>
   <summary>
@@ -330,7 +329,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Profile.NetUserCount" enum="ProfileNetUserCount"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>rogerta@chromium.org</owner>
   <summary>
     Counts of users added and deleted. Percentages are not meaningful. Please
@@ -353,7 +352,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Profile.NumberOfAccountsPerProfile" units="units"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>msarda@chromium.org</owner>
   <owner>droger@chromium.org</owner>
   <summary>
@@ -369,10 +368,18 @@ chromium-metrics-reviews@google.com.
   <owner>feuunk@chromium.org</owner>
   <summary>
     Counts the number of profiles on a user's machine every 24 hours while
-    Chrome is running.
+    Chrome is running. This is intended to count only profiles that have been
+    used in the last 28 days. As such, it differs Profile.NumberOfProfiles.
 
-    As opposed to Profile.NumberOfProfiles, this counts only profiles that have
-    been used in the last 28 days.
+    However, as of Feb 2024 intention is not reality. Chrome on Android assumes
+    the (sole) profile is active, even if it is not, and Chrome on iOS assumes
+    the (sole) profile is inactive, even if it is active. On desktop platforms
+    the activity detection is believed to work reliably.
+
+    Also of note: ChromeOS has a notion of &quot;users&quot;. A ChromeOS device
+    may have multiple users. Users are an entirely different concept than
+    profiles. ChromeOS may allow a user to have and use multiple profiles
+    someday. As of Feb 2024, it does not.
   </summary>
 </histogram>
 
@@ -404,7 +411,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Profile.NumberOfProfilesAtProfileSwitch" units="profiles"
-    expires_after="2024-05-26">
+    expires_after="2024-07-28">
   <owner>droger@chromium.org</owner>
   <owner>chrome-signin-team@google.com</owner>
   <summary>
@@ -416,7 +423,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Profile.NumberOfSignedInProfiles" units="profiles"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>droger@chromium.org</owner>
   <owner>chrome-signin-team@google.com</owner>
   <summary>
@@ -491,7 +498,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram base="true" name="Profile.State.LastUsed" units="days"
-    expires_after="2024-06-02">
+    expires_after="2024-08-04">
   <owner>droger@chromium.org</owner>
   <owner>chrome-signin-team@google.com</owner>
   <summary>
@@ -501,7 +508,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram base="true" name="Profile.State.SyncEnabled" enum="BooleanEnabled"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>droger@chromium.org</owner>
   <owner>chrome-signin-team@google.com</owner>
   <summary>
@@ -888,7 +895,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ProfilePicker.UserAction" enum="ProfilePickerAction"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>msalama@chromium.org</owner>
   <owner>chrome-signin-team@google.com</owner>
   <summary>

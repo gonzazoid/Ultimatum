@@ -7,6 +7,7 @@
 #include <stddef.h>
 
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -32,6 +33,7 @@
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/browser_app_launcher.h"
 #include "chrome/browser/extensions/browsertest_util.h"
+#include "chrome/browser/extensions/chrome_extension_test_notification_observer.h"
 #include "chrome/browser/extensions/chrome_test_extension_loader.h"
 #include "chrome/browser/extensions/component_loader.h"
 #include "chrome/browser/extensions/crx_installer.h"
@@ -75,12 +77,12 @@
 #include "extensions/browser/uninstall_reason.h"
 #include "extensions/browser/updater/extension_cache_fake.h"
 #include "extensions/common/constants.h"
+#include "extensions/common/extension_id.h"
 #include "extensions/common/extension_set.h"
 #include "extensions/common/file_util.h"
 #include "extensions/common/manifest_constants.h"
 #include "extensions/common/manifest_handlers/background_info.h"
 #include "extensions/common/switches.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/constants/ash_switches.h"
@@ -197,7 +199,7 @@ bool CreateTempDirectoryCopy(const base::FilePath& temp_dir,
 // Modifies `manifest_dict` changing its manifest version to 3.
 bool ModifyManifestForManifestVersion3(base::Value::Dict& manifest_dict) {
   // This should only be used for manifest v2 extension.
-  absl::optional<int> current_manifest_version =
+  std::optional<int> current_manifest_version =
       manifest_dict.FindInt(manifest_keys::kManifestVersion);
   if (!current_manifest_version || *current_manifest_version != 2) {
     ADD_FAILURE() << manifest_dict << " should have a manifest version of 2.";
@@ -227,7 +229,7 @@ bool ModifyExtensionForServiceWorker(const base::FilePath& extension_root,
     return false;
   }
   {
-    absl::optional<bool> background_persistent =
+    std::optional<bool> background_persistent =
         background_dict->FindBool("persistent");
     if (!background_persistent.has_value()) {
       ADD_FAILURE() << extension_root.value()
@@ -484,7 +486,7 @@ const Extension* ExtensionBrowserTest::LoadExtensionAsComponentWithManifest(
 
   extension_service()->component_loader()->set_ignore_allowlist_for_testing(
       true);
-  std::string extension_id =
+  extensions::ExtensionId extension_id =
       extension_service()->component_loader()->Add(manifest, path);
   const Extension* extension =
       extension_registry()->enabled_extensions().GetByID(extension_id);
@@ -583,9 +585,9 @@ base::FilePath ExtensionBrowserTest::PackExtensionWithOptions(
 }
 
 const Extension* ExtensionBrowserTest::UpdateExtensionWaitForIdle(
-    const std::string& id,
+    const extensions::ExtensionId& id,
     const base::FilePath& path,
-    absl::optional<int> expected_change) {
+    std::optional<int> expected_change) {
   return InstallOrUpdateExtension(id, path, INSTALL_UI_TYPE_NONE,
                                   std::move(expected_change),
                                   ManifestLocation::kInternal, browser(),
@@ -594,7 +596,7 @@ const Extension* ExtensionBrowserTest::UpdateExtensionWaitForIdle(
 
 const Extension* ExtensionBrowserTest::InstallExtensionFromWebstore(
     const base::FilePath& path,
-    absl::optional<int> expected_change) {
+    std::optional<int> expected_change) {
   return InstallOrUpdateExtension(
       std::string(), path, INSTALL_UI_TYPE_AUTO_CONFIRM,
       std::move(expected_change), ManifestLocation::kInternal, browser(),
@@ -602,20 +604,20 @@ const Extension* ExtensionBrowserTest::InstallExtensionFromWebstore(
 }
 
 const Extension* ExtensionBrowserTest::InstallOrUpdateExtension(
-    const std::string& id,
+    const extensions::ExtensionId& id,
     const base::FilePath& path,
     InstallUIType ui_type,
-    absl::optional<int> expected_change) {
+    std::optional<int> expected_change) {
   return InstallOrUpdateExtension(id, path, ui_type, std::move(expected_change),
                                   ManifestLocation::kInternal, browser(),
                                   Extension::NO_FLAGS, true, false);
 }
 
 const Extension* ExtensionBrowserTest::InstallOrUpdateExtension(
-    const std::string& id,
+    const extensions::ExtensionId& id,
     const base::FilePath& path,
     InstallUIType ui_type,
-    absl::optional<int> expected_change,
+    std::optional<int> expected_change,
     Browser* browser,
     Extension::InitFromValueFlags creation_flags) {
   return InstallOrUpdateExtension(id, path, ui_type, std::move(expected_change),
@@ -624,10 +626,10 @@ const Extension* ExtensionBrowserTest::InstallOrUpdateExtension(
 }
 
 const Extension* ExtensionBrowserTest::InstallOrUpdateExtension(
-    const std::string& id,
+    const extensions::ExtensionId& id,
     const base::FilePath& path,
     InstallUIType ui_type,
-    absl::optional<int> expected_change,
+    std::optional<int> expected_change,
     ManifestLocation install_source) {
   return InstallOrUpdateExtension(id, path, ui_type, std::move(expected_change),
                                   install_source, browser(),
@@ -635,10 +637,10 @@ const Extension* ExtensionBrowserTest::InstallOrUpdateExtension(
 }
 
 const Extension* ExtensionBrowserTest::InstallOrUpdateExtension(
-    const std::string& id,
+    const extensions::ExtensionId& id,
     const base::FilePath& path,
     InstallUIType ui_type,
-    absl::optional<int> expected_change,
+    std::optional<int> expected_change,
     ManifestLocation install_source,
     Browser* browser,
     Extension::InitFromValueFlags creation_flags,
@@ -648,7 +650,7 @@ const Extension* ExtensionBrowserTest::InstallOrUpdateExtension(
   size_t num_before = registry->enabled_extensions().size();
 
   scoped_refptr<CrxInstaller> installer;
-  absl::optional<CrxInstallError> install_error;
+  std::optional<CrxInstallError> install_error;
   {
     std::unique_ptr<ScopedTestDialogAutoConfirm> prompt_auto_confirm;
     if (ui_type == INSTALL_UI_TYPE_CANCEL) {
@@ -688,11 +690,11 @@ const Extension* ExtensionBrowserTest::InstallOrUpdateExtension(
           CrxInstaller::OffStoreInstallAllowedInTest);
     }
 
-    base::test::TestFuture<absl::optional<CrxInstallError>>
+    base::test::TestFuture<std::optional<CrxInstallError>>
         installer_done_future;
     installer->AddInstallerCallback(
         installer_done_future
-            .GetCallback<const absl::optional<CrxInstallError>&>());
+            .GetCallback<const std::optional<CrxInstallError>&>());
 
     installer->InstallCrx(crx_path);
 
@@ -733,11 +735,11 @@ const Extension* ExtensionBrowserTest::InstallOrUpdateExtension(
 
   // Even though we can already get the Extension from the CrxInstaller,
   // ensure it's also in the list of enabled extensions.
-  return registry->GetExtensionById(installer->extension()->id(),
-                                    ExtensionRegistry::ENABLED);
+  return registry->enabled_extensions().GetByID(installer->extension()->id());
 }
 
-void ExtensionBrowserTest::ReloadExtension(const std::string& extension_id) {
+void ExtensionBrowserTest::ReloadExtension(
+    const extensions::ExtensionId& extension_id) {
   const Extension* extension =
       extension_registry()->GetInstalledExtension(extension_id);
   ASSERT_TRUE(extension);
@@ -753,23 +755,45 @@ void ExtensionBrowserTest::ReloadExtension(const std::string& extension_id) {
   observer_->WaitForExtensionViewsToLoad();
 }
 
-void ExtensionBrowserTest::UnloadExtension(const std::string& extension_id) {
+void ExtensionBrowserTest::UnloadExtension(
+    const extensions::ExtensionId& extension_id) {
   extension_service()->UnloadExtension(extension_id,
                                        UnloadedExtensionReason::DISABLE);
 }
 
-void ExtensionBrowserTest::UninstallExtension(const std::string& extension_id) {
+void ExtensionBrowserTest::UninstallExtension(
+    const extensions::ExtensionId& extension_id) {
   extension_service()->UninstallExtension(
       extension_id, UNINSTALL_REASON_FOR_TESTING, nullptr);
 }
 
-void ExtensionBrowserTest::DisableExtension(const std::string& extension_id) {
+void ExtensionBrowserTest::DisableExtension(
+    const extensions::ExtensionId& extension_id) {
   extension_service()->DisableExtension(extension_id,
                                         disable_reason::DISABLE_USER_ACTION);
 }
 
-void ExtensionBrowserTest::EnableExtension(const std::string& extension_id) {
+void ExtensionBrowserTest::EnableExtension(
+    const extensions::ExtensionId& extension_id) {
   extension_service()->EnableExtension(extension_id);
+}
+
+bool ExtensionBrowserTest::WaitForPageActionVisibilityChangeTo(int count) {
+  return observer_->WaitForPageActionVisibilityChangeTo(count);
+}
+
+bool ExtensionBrowserTest::WaitForExtensionViewsToLoad() {
+  return observer_->WaitForExtensionViewsToLoad();
+}
+
+bool ExtensionBrowserTest::WaitForExtensionIdle(
+    const extensions::ExtensionId& extension_id) {
+  return observer_->WaitForExtensionIdle(extension_id);
+}
+
+bool ExtensionBrowserTest::WaitForExtensionNotIdle(
+    const extensions::ExtensionId& extension_id) {
+  return observer_->WaitForExtensionNotIdle(extension_id);
 }
 
 void ExtensionBrowserTest::OpenWindow(content::WebContents* contents,
@@ -834,7 +858,7 @@ ExtensionHost* ExtensionBrowserTest::FindHostWithPath(ProcessManager* manager,
 }
 
 base::Value ExtensionBrowserTest::ExecuteScriptInBackgroundPage(
-    const std::string& extension_id,
+    const extensions::ExtensionId& extension_id,
     const std::string& script,
     browsertest_util::ScriptUserActivation script_user_activation) {
   return browsertest_util::ExecuteScriptInBackgroundPage(
@@ -842,7 +866,7 @@ base::Value ExtensionBrowserTest::ExecuteScriptInBackgroundPage(
 }
 
 std::string ExtensionBrowserTest::ExecuteScriptInBackgroundPageDeprecated(
-    const std::string& extension_id,
+    const extensions::ExtensionId& extension_id,
     const std::string& script,
     browsertest_util::ScriptUserActivation script_user_activation) {
   return browsertest_util::ExecuteScriptInBackgroundPageDeprecated(
@@ -850,7 +874,7 @@ std::string ExtensionBrowserTest::ExecuteScriptInBackgroundPageDeprecated(
 }
 
 bool ExtensionBrowserTest::ExecuteScriptInBackgroundPageNoWait(
-    const std::string& extension_id,
+    const extensions::ExtensionId& extension_id,
     const std::string& script,
     browsertest_util::ScriptUserActivation script_user_activation) {
   return browsertest_util::ExecuteScriptInBackgroundPageNoWait(
@@ -903,7 +927,7 @@ bool ExtensionBrowserTest::ModifyExtensionIfNeeded(
     return false;
 
   std::string error;
-  absl::optional<base::Value::Dict> manifest_dict =
+  std::optional<base::Value::Dict> manifest_dict =
       file_util::LoadManifest(extension_root, &error);
   if (!manifest_dict) {
     ADD_FAILURE() << extension_root.value()

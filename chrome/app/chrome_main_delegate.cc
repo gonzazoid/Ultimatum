@@ -153,8 +153,6 @@
 
 #if BUILDFLAG(IS_CHROMEOS)
 #include "chromeos/dbus/constants/dbus_paths.h"
-#include "components/crash/core/app/breakpad_linux.h"
-#include "ui/gfx/linux/gbm_util.h"  // nogncheck
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -525,12 +523,12 @@ bool WillExitBeforeBrowserFeatureListInitialization() {
 }
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
-absl::optional<int> HandlePackExtensionSwitches(
+std::optional<int> HandlePackExtensionSwitches(
     const base::CommandLine& command_line) {
   // If the command line specifies --pack-extension, attempt the pack extension
   // startup action and exit.
   if (!command_line.HasSwitch(switches::kPackExtension))
-    return absl::nullopt;
+    return std::nullopt;
 
   // This happens before the default flow for FeatureList initialization, but
   // packing an extension can depend on different base::Features. Thus, we
@@ -557,7 +555,7 @@ absl::optional<int> HandlePackExtensionSwitches(
 #endif  // !BUILDFLAG(ENABLE_EXTENSIONS)
 
 #if BUILDFLAG(ENABLE_PROCESS_SINGLETON)
-absl::optional<int> AcquireProcessSingleton(
+std::optional<int> AcquireProcessSingleton(
     const base::FilePath& user_data_dir) {
   // Take the Chrome process singleton lock. The process can become the
   // Browser process if it succeed to take the lock. Otherwise, the
@@ -597,7 +595,7 @@ absl::optional<int> AcquireProcessSingleton(
       return chrome::RESULT_CODE_PROFILE_IN_USE;
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 #endif
 
@@ -823,23 +821,14 @@ ChromeMainDelegate::~ChromeMainDelegate() {
 ChromeMainDelegate::~ChromeMainDelegate() = default;
 #endif  // !BUILDFLAG(IS_ANDROID)
 
-absl::optional<int> ChromeMainDelegate::PostEarlyInitialization(
+std::optional<int> ChromeMainDelegate::PostEarlyInitialization(
     InvokedIn invoked_in) {
   DUMP_WILL_BE_CHECK(base::ThreadPoolInstance::Get());
   const auto* invoked_in_browser =
       absl::get_if<InvokedInBrowserProcess>(&invoked_in);
   if (!invoked_in_browser) {
-#if BUILDFLAG(IS_CHROMEOS)
-    // At this point, the base::FeatureList has been initialized and the process
-    // should still be single threaded. Additionally, minigbm shouldn't have
-    // been used yet by this process. Therefore, it's a good time to ensure the
-    // Intel media compression environment flag for minigbm is correctly set
-    // (it's possible this environment variable wasn't inherited from the
-    // browser process).
-    ui::EnsureIntelMediaCompressionEnvVarIsSet();
-#endif  // BUILDFLAG(IS_CHROMEOS)
     CommonEarlyInitialization(invoked_in);
-    return absl::nullopt;
+    return std::nullopt;
   }
 
 #if BUILDFLAG(ENABLE_PROCESS_SINGLETON)
@@ -946,14 +935,6 @@ absl::optional<int> ChromeMainDelegate::PostEarlyInitialization(
           ->chrome_feature_list_creator();
   chrome_feature_list_creator->CreateFeatureList();
 
-#if BUILDFLAG(IS_CHROMEOS)
-  // At this point, the base::FeatureList has been initialized and the process
-  // should still be single threaded. Additionally, minigbm shouldn't have been
-  // used yet by this process. Therefore, it's a good time to ensure the Intel
-  // media compression environment flag for minigbm is correctly set.
-  ui::EnsureIntelMediaCompressionEnvVarIsSet();
-#endif  // BUILDFLAG(IS_CHROMEOS)
-
   content::InitializeMojoCore();
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -1053,7 +1034,7 @@ absl::optional<int> ChromeMainDelegate::PostEarlyInitialization(
   // startup.
   RequestUnwindPrerequisitesInstallation(chrome::GetChannel());
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 bool ChromeMainDelegate::ShouldCreateFeatureList(InvokedIn invoked_in) {
@@ -1132,8 +1113,19 @@ void ChromeMainDelegate::CommonEarlyInitialization(InvokedIn invoked_in) {
                          return invoked_in_child.is_zygote_child;
                        }},
       invoked_in);
-  base::HangWatcher::InitializeOnMainThread(
-      hang_watcher_process_type, /*is_zygote_child=*/is_zygote_child);
+
+  const bool emit_crashes =
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC) || \
+    BUILDFLAG(IS_WIN)
+      chrome::GetChannel() == version_info::Channel::CANARY ||
+      chrome::GetChannel() == version_info::Channel::DEV;
+#else
+      false;
+#endif
+
+  base::HangWatcher::InitializeOnMainThread(hang_watcher_process_type,
+                                            /*is_zygote_child=*/is_zygote_child,
+                                            emit_crashes);
 
   base::InitializeCpuReductionExperiment();
   base::sequence_manager::internal::SequenceManagerImpl::InitializeFeatures();
@@ -1205,7 +1197,7 @@ void ChromeMainDelegate::SetupTracing() {
           std::move(tracing_factory), unwinder_type);
 }
 
-absl::optional<int> ChromeMainDelegate::BasicStartupComplete() {
+std::optional<int> ChromeMainDelegate::BasicStartupComplete() {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   ash::BootTimesRecorder::Get()->SaveChromeMainStats();
 #endif
@@ -1272,12 +1264,6 @@ absl::optional<int> ChromeMainDelegate::BasicStartupComplete() {
 
 #if BUILDFLAG(IS_WIN)
   v8_crashpad_support::SetUp();
-#endif
-
-#if BUILDFLAG(IS_CHROMEOS)
-  if (!crash_reporter::IsCrashpadEnabled()) {
-    breakpad::SetFirstChanceExceptionHandler(v8::TryHandleWebAssemblyTrapPosix);
-  }
 #endif
 
 #if BUILDFLAG(IS_POSIX)
@@ -1419,7 +1405,7 @@ absl::optional<int> ChromeMainDelegate::BasicStartupComplete() {
   }
 #endif
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 #if BUILDFLAG(IS_MAC)
@@ -1735,14 +1721,6 @@ void ChromeMainDelegate::PreSandboxStartup() {
     } else {
       base::android::InitJavaExceptionReporterForChildProcess();
     }
-#elif BUILDFLAG(IS_CHROMEOS)
-    if (crash_reporter::IsCrashpadEnabled()) {
-      crash_reporter::InitializeCrashpad(process_type.empty(), process_type);
-      crash_reporter::SetFirstChanceExceptionHandler(
-          v8::TryHandleWebAssemblyTrapPosix);
-    } else {
-      breakpad::InitCrashReporter(process_type);
-    }
 #else
     crash_reporter::InitializeCrashpad(process_type.empty(), process_type);
     crash_reporter::SetFirstChanceExceptionHandler(
@@ -1891,19 +1869,9 @@ void ChromeMainDelegate::ZygoteForked() {
       base::CommandLine::ForCurrentProcess();
   std::string process_type =
       command_line->GetSwitchValueASCII(switches::kProcessType);
-#if BUILDFLAG(IS_CHROMEOS)
-  if (crash_reporter::IsCrashpadEnabled()) {
-    crash_reporter::InitializeCrashpad(false, process_type);
-    crash_reporter::SetFirstChanceExceptionHandler(
-        v8::TryHandleWebAssemblyTrapPosix);
-  } else {
-    breakpad::InitCrashReporter(process_type);
-  }
-#else
   crash_reporter::InitializeCrashpad(false, process_type);
   crash_reporter::SetFirstChanceExceptionHandler(
       v8::TryHandleWebAssemblyTrapPosix);
-#endif
 
   // Reset the command line for the newly spawned process.
   crash_keys::SetCrashKeysFromCommandLine(*command_line);
@@ -1938,16 +1906,15 @@ ChromeMainDelegate::CreateContentUtilityClient() {
   return chrome_content_utility_client_.get();
 }
 
-absl::optional<int> ChromeMainDelegate::PreBrowserMain() {
-  absl::optional<int> exit_code =
-      content::ContentMainDelegate::PreBrowserMain();
+std::optional<int> ChromeMainDelegate::PreBrowserMain() {
+  std::optional<int> exit_code = content::ContentMainDelegate::PreBrowserMain();
   if (exit_code.has_value())
     return exit_code;
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   const base::CommandLine& command_line =
       *base::CommandLine::ForCurrentProcess();
-  absl::optional<int> pack_extension_exit_code =
+  std::optional<int> pack_extension_exit_code =
       HandlePackExtensionSwitches(command_line);
   if (pack_extension_exit_code.has_value())
     return pack_extension_exit_code;  // Got a --pack-extension switch; exit.
@@ -1993,7 +1960,7 @@ absl::optional<int> ChromeMainDelegate::PreBrowserMain() {
 #endif
 
   // Do not interrupt startup.
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 void ChromeMainDelegate::InitializeMemorySystem() {

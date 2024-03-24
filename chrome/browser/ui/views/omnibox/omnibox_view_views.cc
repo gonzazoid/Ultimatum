@@ -477,20 +477,7 @@ bool OmniboxViewViews::IsImeComposing() const {
 }
 
 gfx::Size OmniboxViewViews::GetMinimumSize() const {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  // TODO(crbug.com/1338087): The minimum size of Lacros toolbar is set too wide
-  // to use split view in tablet mode. Temporally making the minimum size of
-  // omnibox smaller for Lacros to align the behavior with Ash. Responsive
-  // Toolbar is supposed to fix this. Remove the temporal solution when
-  // Responsive Toolbar is launched.
-  const int kMinCharacters =
-      display::Screen::GetScreen()->InTabletMode() &&
-              !base::FeatureList::IsEnabled(features::kResponsiveToolbar)
-          ? 8
-          : 20;
-#else
   const int kMinCharacters = 20;
-#endif
   return gfx::Size(
       GetFontList().GetExpectedTextWidth(kMinCharacters) + GetInsets().width(),
       GetPreferredSize().height());
@@ -1370,9 +1357,14 @@ void OmniboxViewViews::OnFocus() {
 
   GetRenderText()->SetElideBehavior(gfx::NO_ELIDE);
 
+#if BUILDFLAG(SUPPORTS_AX_TEXT_OFFSETS)
+  // The text offsets are no longer valid when the elide behavior changes.
+  SetNeedsAccessibleTextOffsetsUpdate();
+#endif  // BUILDFLAG(SUPPORTS_AX_TEXT_OFFSETS)
+
   // Focus changes can affect the visibility of any keyword hint.
   if (location_bar_view_ && model()->is_keyword_hint())
-    location_bar_view_->Layout();
+    location_bar_view_->DeprecatedLayoutImmediately();
 
   if (location_bar_view_)
     location_bar_view_->OnOmniboxFocused();
@@ -1437,6 +1429,11 @@ void OmniboxViewViews::OnBlur() {
   gfx::RenderText* render_text = GetRenderText();
   render_text->SetElideBehavior(gfx::ELIDE_TAIL);
 
+#if BUILDFLAG(SUPPORTS_AX_TEXT_OFFSETS)
+  // The text offsets are no longer valid when the elide behavior changes.
+  SetNeedsAccessibleTextOffsetsUpdate();
+#endif  // BUILDFLAG(SUPPORTS_AX_TEXT_OFFSETS)
+
   // In cases where there's a lot of whitespace in the text being shown, we want
   // the elision marker to be at the right of the text field, so don't elide
   // whitespace to the left of the elision point.
@@ -1447,7 +1444,7 @@ void OmniboxViewViews::OnBlur() {
   // |location_bar_view_| can be null in tests.
   if (location_bar_view_) {
     if (model()->is_keyword_hint())
-      location_bar_view_->Layout();
+      location_bar_view_->DeprecatedLayoutImmediately();
 
     location_bar_view_->OnOmniboxBlurred();
 

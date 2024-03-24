@@ -52,14 +52,14 @@
 // These "other formats" only work within the same process, and can't be copied
 // between Android applications.
 
-using base::android::AttachCurrentThread;
-using base::android::ClearException;
 using base::android::ConvertJavaStringToUTF8;
 using base::android::ConvertUTF8ToJavaString;
 using base::android::JavaByteArrayToByteVector;
 using base::android::ScopedJavaGlobalRef;
 using base::android::ScopedJavaLocalRef;
 using base::android::ToJavaByteArray;
+using jni_zero::AttachCurrentThread;
+using jni_zero::ClearException;
 
 namespace ui {
 
@@ -468,11 +468,11 @@ ClipboardAndroid::~ClipboardAndroid() {
 void ClipboardAndroid::OnPreShutdown() {}
 
 // DataTransferEndpoint is not used on this platform.
-absl::optional<DataTransferEndpoint> ClipboardAndroid::GetSource(
+std::optional<DataTransferEndpoint> ClipboardAndroid::GetSource(
     ClipboardBuffer buffer) const {
   DCHECK(CalledOnValidThread());
   DCHECK_EQ(buffer, ClipboardBuffer::kCopyPaste);
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 const ClipboardSequenceNumberToken& ClipboardAndroid::GetSequenceNumber(
@@ -688,8 +688,7 @@ void ClipboardAndroid::WriteText(base::StringPiece text) {
 
 void ClipboardAndroid::WriteHTML(
     base::StringPiece markup,
-    absl::optional<base::StringPiece> /* source_url */,
-    ClipboardContentType /* content_type */) {
+    std::optional<base::StringPiece> /* source_url */) {
   g_map.Get().Set(ClipboardFormatType::HtmlType(), markup);
 }
 

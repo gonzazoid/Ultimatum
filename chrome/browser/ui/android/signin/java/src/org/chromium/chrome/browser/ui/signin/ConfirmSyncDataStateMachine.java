@@ -13,6 +13,9 @@ import androidx.annotation.Nullable;
 import org.chromium.base.ThreadUtils;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
+import org.chromium.chrome.browser.signin.services.SigninManager;
+import org.chromium.components.signin.SigninFeatureMap;
+import org.chromium.components.signin.SigninFeatures;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -86,6 +89,7 @@ public class ConfirmSyncDataStateMachine
 
     private static final int ACCOUNT_CHECK_TIMEOUT_MS = 30000;
 
+    private final Profile mProfile;
     private final Listener mListener;
     private final @Nullable String mOldAccountName;
     private final String mNewAccountName;
@@ -98,12 +102,15 @@ public class ConfirmSyncDataStateMachine
 
     /**
      * Create and run state machine, displaying the appropriate dialogs.
+     *
+     * @param profile The {@link Profile} associated with the sync data.
+     * @param delegate the delegate responsible of showing dialogs
      * @param oldAccountName the name of the last signed in account or null
      * @param newAccountName the name of the account user is signing in with
      * @param listener the listener to receive the result of this state machine
-     * @param delegate the delegate responsible of showing dialogs
      */
     public ConfirmSyncDataStateMachine(
+            Profile profile,
             ConfirmSyncDataStateMachineDelegate delegate,
             @Nullable String oldAccountName,
             String newAccountName,
@@ -111,6 +118,7 @@ public class ConfirmSyncDataStateMachine
         ThreadUtils.assertOnUiThread();
         assert !TextUtils.isEmpty(newAccountName) : "New account name must be provided.";
 
+        mProfile = profile;
         mDelegate = delegate;
         mOldAccountName = oldAccountName;
         mNewAccountName = newAccountName;
@@ -183,7 +191,7 @@ public class ConfirmSyncDataStateMachine
 
     private void requestNewAccountManagementStatus() {
         IdentityServicesProvider.get()
-                .getSigninManager(Profile.getLastUsedRegularProfile())
+                .getSigninManager(mProfile)
                 .isAccountManaged(mNewAccountName, this::setIsNewAccountManaged);
     }
 
@@ -200,13 +208,19 @@ public class ConfirmSyncDataStateMachine
         assert mNewAccountManaged != null;
         assert mState == State.AFTER_NEW_ACCOUNT_DIALOG;
 
-        if (mNewAccountManaged) {
-            // Show 'logging into managed account' dialog.
+        SigninManager signinManager = IdentityServicesProvider.get().getSigninManager(mProfile);
+        // If ENTERPRISE_POLICY_ON_SIGNIN is enabled, signin will already show the account
+        // management dialog before the confirm sync screen is shown, so we shouldn't show it
+        // again.
+        if (mNewAccountManaged
+                && (!SigninFeatureMap.isEnabled(SigninFeatures.ENTERPRISE_POLICY_ON_SIGNIN)
+                        || !signinManager.getUserAcceptedAccountManagement())) {
+            // Show 'logging into managed account' dialog
             // This will call back into onConfirm on success.
             mDelegate.showSignInToManagedAccountDialog(
                     this,
                     IdentityServicesProvider.get()
-                            .getSigninManager(Profile.getLastUsedRegularProfile())
+                            .getSigninManager(mProfile)
                             .extractDomainName(mNewAccountName));
         } else {
             mDelegate.dismissAllDialogs();

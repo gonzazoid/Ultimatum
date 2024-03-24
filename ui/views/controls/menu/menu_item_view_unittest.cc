@@ -12,6 +12,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/accessibility/ax_action_data.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -454,19 +455,19 @@ TEST_F(MenuItemViewPaintUnitTest, CustomColorAssertionCoverage) {
   ui::ColorId background_color = ui::kColorComboboxBackground;
   ui::ColorId foreground_color = ui::kColorDropdownForeground;
   ui::ColorId selected_color = ui::kColorMenuItemForegroundHighlighted;
-  AddItem(u"No custom colors", absl::nullopt, absl::nullopt, absl::nullopt);
+  AddItem(u"No custom colors", std::nullopt, std::nullopt, std::nullopt);
   AddItem(u"No selected color", background_color, foreground_color,
-          absl::nullopt);
-  AddItem(u"No foreground color", background_color, absl::nullopt,
+          std::nullopt);
+  AddItem(u"No foreground color", background_color, std::nullopt,
           selected_color);
-  AddItem(u"No background color", absl::nullopt, foreground_color,
+  AddItem(u"No background color", std::nullopt, foreground_color,
           selected_color);
-  AddItem(u"No background or foreground", absl::nullopt, absl::nullopt,
+  AddItem(u"No background or foreground", std::nullopt, std::nullopt,
           selected_color);
-  AddItem(u"No background or selected", absl::nullopt, foreground_color,
-          absl::nullopt);
-  AddItem(u"No foreground or selected", background_color, absl::nullopt,
-          absl::nullopt);
+  AddItem(u"No background or selected", std::nullopt, foreground_color,
+          std::nullopt);
+  AddItem(u"No foreground or selected", background_color, std::nullopt,
+          std::nullopt);
   AddItem(u"All colors", background_color, foreground_color, selected_color);
 
   menu_runner()->RunMenuAt(widget(), nullptr, gfx::Rect(),
@@ -633,9 +634,9 @@ class MenuItemViewAccessTest : public MenuItemViewPaintUnitTest {
  private:
   class DisallowMenuDelegate : public test::TestMenuDelegate {
    public:
-    absl::optional<SkColor> GetLabelColor(int command_id) const override {
+    std::optional<SkColor> GetLabelColor(int command_id) const override {
       EXPECT_NE(1, command_id);
-      return absl::nullopt;
+      return std::nullopt;
     }
   };
 };
@@ -645,6 +646,34 @@ class MenuItemViewAccessTest : public MenuItemViewPaintUnitTest {
 // but not before.
 TEST_F(MenuItemViewAccessTest, DontAskForFontsWhenAddingSubmenu) {
   menu_item_view()->AppendSubMenu(1, u"My Submenu");
+}
+
+using MenuItemViewA11yTest = MenuItemViewPaintUnitTest;
+
+// A MenuItemView that has a submenu should open the submenu on kExpand and
+// close the submenu on kCollapse.
+TEST_F(MenuItemViewA11yTest, HandlesExpandCollapseActions) {
+  MenuItemView* submenu_item_view =
+      menu_item_view()->AppendSubMenu(1, u"Submenu");
+  menu_runner()->RunMenuAt(widget(), nullptr, gfx::Rect(),
+                           MenuAnchorPosition::kTopLeft,
+                           ui::MENU_SOURCE_KEYBOARD);
+
+  // Pre-conditions: An expandable submenu item.
+  ASSERT_TRUE(submenu_item_view->HasSubmenu());
+  ASSERT_FALSE(submenu_item_view->SubmenuIsShowing());
+
+  // Send an expand action to the menu item.
+  ui::AXActionData expand_action_data;
+  expand_action_data.action = ax::mojom::Action::kExpand;
+  submenu_item_view->HandleAccessibleAction(expand_action_data);
+  EXPECT_TRUE(submenu_item_view->SubmenuIsShowing());
+
+  // Send a collapse action to the menu item.
+  ui::AXActionData collapse_action_data;
+  collapse_action_data.action = ax::mojom::Action::kCollapse;
+  submenu_item_view->HandleAccessibleAction(collapse_action_data);
+  EXPECT_FALSE(submenu_item_view->SubmenuIsShowing());
 }
 
 }  // namespace views

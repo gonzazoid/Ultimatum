@@ -21,8 +21,8 @@ import {mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/p
 import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
 import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.js';
 import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
-import {OOBE_UI_STATE} from '../../components/display_manager_types.js';
-import {OobeScreensList, ScreenItem} from '../../components/oobe_screens_list.js';
+import {OobeUiState} from '../../components/display_manager_types.js';
+import {OobeScreensList, OobeScreensListData} from '../../components/oobe_screens_list.js';
 
 import {getTemplate} from './choobe.html.js';
 
@@ -47,7 +47,7 @@ enum UserAction {
 }
 
 interface ChoobeScreenData {
-  screens: ScreenItem[];
+  screens: OobeScreensListData;
 }
 
 class ChoobeScreen extends ChoobeScreenElementBase {
@@ -92,8 +92,8 @@ class ChoobeScreen extends ChoobeScreenElementBase {
   }
 
   // eslint-disable-next-line @typescript-eslint/naming-convention
-  override getOobeUIInitialState(): OOBE_UI_STATE {
-    return OOBE_UI_STATE.CHOOBE;
+  override getOobeUIInitialState(): OobeUiState {
+    return OobeUiState.CHOOBE;
   }
 
   private onNextClicked_(): void {

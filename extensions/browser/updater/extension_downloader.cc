@@ -36,6 +36,7 @@
 #include "extensions/browser/updater/extension_downloader_delegate.h"
 #include "extensions/browser/updater/extension_downloader_test_delegate.h"
 #include "extensions/browser/updater/request_queue_impl.h"
+#include "extensions/common/extension_id.h"
 #include "extensions/common/extension_updater_uma.h"
 #include "extensions/common/extension_urls.h"
 #include "extensions/common/verifier_formats.h"
@@ -142,7 +143,7 @@ bool IncrementAuthUserIndex(GURL* url) {
   std::vector<std::string> new_query_parts;
   url::Component query(0, old_query.length());
   url::Component key, value;
-  while (url::ExtractQueryKeyValue(old_query.c_str(), &query, &key, &value)) {
+  while (url::ExtractQueryKeyValue(old_query, &query, &key, &value)) {
     std::string key_string = old_query.substr(key.begin, key.len);
     std::string value_string = old_query.substr(value.begin, value.len);
     if (key_string == kAuthUserQueryKey) {
@@ -164,7 +165,7 @@ bool IncrementAuthUserIndex(GURL* url) {
 }
 
 // This sanitizes update urls used to fetch update manifests for extensions.
-std::optional<GURL> SanitizeUpdateURL(const std::string& extension_id,
+std::optional<GURL> SanitizeUpdateURL(const ExtensionId& extension_id,
                                       const GURL& update_url) {
   if (update_url.is_empty()) {
     // Fill in default update URL.
@@ -809,7 +810,7 @@ void ExtensionDownloader::HandleManifestResults(
   DetermineUpdates(fetch_data->TakeAssociatedTasks(), *results, &to_update,
                    &failures);
   for (auto& update : to_update) {
-    const std::string& extension_id = update.first.id;
+    const ExtensionId& extension_id = update.first.id;
 
     GURL crx_url = update.second->crx_url;
 
@@ -857,7 +858,7 @@ void ExtensionDownloader::HandleManifestResults(
 
 ExtensionDownloader::UpdateAvailability
 ExtensionDownloader::GetUpdateAvailability(
-    const std::string& extension_id,
+    const ExtensionId& extension_id,
     const std::vector<const UpdateManifestResult*>& possible_candidates,
     UpdateManifestResult** update_result_out) const {
   const bool is_extension_pending = delegate_->IsExtensionPending(extension_id);

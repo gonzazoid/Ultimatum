@@ -37,6 +37,7 @@ import org.chromium.chrome.browser.omnibox.styles.OmniboxResourceProvider;
 import org.chromium.chrome.browser.omnibox.suggestions.AutocompleteControllerProvider;
 import org.chromium.chrome.browser.omnibox.suggestions.AutocompleteCoordinator;
 import org.chromium.chrome.browser.omnibox.suggestions.AutocompleteDelegate;
+import org.chromium.chrome.browser.omnibox.suggestions.OmniboxLoadUrlParams;
 import org.chromium.chrome.browser.omnibox.suggestions.OmniboxSuggestionsDropdownScrollListener;
 import org.chromium.chrome.browser.omnibox.suggestions.basic.BasicSuggestionProcessor.BookmarkState;
 import org.chromium.chrome.browser.omnibox.suggestions.history_clusters.HistoryClustersProcessor.OpenHistoryClustersDelegate;
@@ -144,6 +145,9 @@ public class LocationBarCoordinator
      * @param tabModelSelectorSupplier Supplier of the {@link TabModelSelector}.
      * @param forcePhoneStyleOmnibox Whether a "phone-style" (full bleed, unrounded corners) omnibox
      *     suggestions list should be used even when the screen width is >600dp.
+     * @param baseChromeLayout The base view hosting Chrome that certain views (e.g. the omnibox
+     *     suggestion list) will position themselves relative to. If null, the content view will be
+     *     used.
      */
     public LocationBarCoordinator(
             View locationBarLayout,
@@ -180,7 +184,8 @@ public class LocationBarCoordinator
                             omniboxSuggestionsDropdownScrollListener,
             @Nullable OpenHistoryClustersDelegate openHistoryClustersDelegate,
             @Nullable ObservableSupplier<TabModelSelector> tabModelSelectorSupplier,
-            boolean forcePhoneStyleOmnibox) {
+            boolean forcePhoneStyleOmnibox,
+            @Nullable View baseChromeLayout) {
         mLocationBarLayout = (LocationBarLayout) locationBarLayout;
         mWindowDelegate = windowDelegate;
         mWindowAndroid = windowAndroid;
@@ -195,7 +200,8 @@ public class LocationBarCoordinator
                         mWindowDelegate,
                         autocompleteAnchorView,
                         mLocationBarLayout,
-                        forcePhoneStyleOmnibox);
+                        forcePhoneStyleOmnibox,
+                        baseChromeLayout);
 
         mUrlBar = mLocationBarLayout.findViewById(R.id.url_bar);
         // TODO(crbug.com/1151513): Inject LocaleManager instance to LocationBarCoordinator instead
@@ -472,6 +478,18 @@ public class LocationBarCoordinator
         return mUrlCoordinator.getUrlBarData();
     }
 
+    @Override
+    public void addOmniboxSuggestionsDropdownScrollListener(
+            OmniboxSuggestionsDropdownScrollListener listener) {
+        mAutocompleteCoordinator.addOmniboxSuggestionsDropdownScrollListener(listener);
+    }
+
+    @Override
+    public void removeOmniboxSuggestionsDropdownScrollListener(
+            OmniboxSuggestionsDropdownScrollListener listener) {
+        mAutocompleteCoordinator.removeOmniboxSuggestionsDropdownScrollListener(listener);
+    }
+
     // AutocompleteDelegate implementation.
     @Override
     public void onUrlTextChanged() {
@@ -497,15 +515,8 @@ public class LocationBarCoordinator
     }
 
     @Override
-    public void loadUrl(String url, int transition, long inputStart, boolean openInNewTab) {
-        mLocationBarMediator.loadUrl(url, transition, inputStart, openInNewTab);
-    }
-
-    @Override
-    public void loadUrlWithPostData(
-            String url, int transition, long inputStart, String postDataType, byte[] postData) {
-        mLocationBarMediator.loadUrlWithPostData(
-                url, transition, inputStart, postDataType, postData, /* openInNewTab= */ false);
+    public void loadUrl(OmniboxLoadUrlParams omniboxLoadUrlParams) {
+        mLocationBarMediator.loadUrl(omniboxLoadUrlParams);
     }
 
     @Override

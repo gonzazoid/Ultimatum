@@ -4,6 +4,8 @@
 
 #include "ash/wm/splitview/auto_snap_controller.h"
 
+#include <optional>
+
 #include "ash/root_window_controller.h"
 #include "ash/shell.h"
 #include "ash/wm/desks/desks_controller.h"
@@ -11,6 +13,7 @@
 #include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/overview/overview_metrics.h"
 #include "ash/wm/overview/overview_session.h"
+#include "ash/wm/snap_group/snap_group_controller.h"
 #include "ash/wm/splitview/split_view_controller.h"
 #include "ash/wm/splitview/split_view_overview_session.h"
 #include "ash/wm/splitview/split_view_types.h"
@@ -20,6 +23,39 @@
 #include "ui/wm/public/activation_client.h"
 
 namespace ash {
+
+namespace {
+
+// Returns the snap ratio for the given `window` to be auto-snapped on the
+// opposite position of the screen.
+std::optional<float> CalculateAutoSnapRatio(
+    SplitViewController* split_view_controller,
+    aura::Window* window) {
+  if (Shell::Get()->IsInTabletMode()) {
+    return split_view_controller->ComputeAutoSnapRatio(window);
+  }
+
+  auto* window_state = WindowState::Get(window);
+  if (auto* split_view_overview_session =
+          RootWindowController::ForWindow(window)
+              ->split_view_overview_session();
+      split_view_overview_session &&
+      split_view_overview_session->window() != window) {
+    if (!window_state->CanSnap()) {
+      return std::nullopt;
+    }
+
+    const float snap_ratio =
+        1.f - WindowState::Get(split_view_overview_session->window())
+                  ->snap_ratio()
+                  .value_or(chromeos::kDefaultSnapRatio);
+    return std::make_optional<float>(snap_ratio);
+  }
+
+  return window_state->snap_ratio();
+}
+
+}  // namespace
 
 AutoSnapController::AutoSnapController(aura::Window* root_window)
     : root_window_(root_window) {
@@ -110,8 +146,8 @@ bool AutoSnapController::AutoSnapWindowIfNeeded(aura::Window* window) {
     return false;
   }
 
-  if (auto* overview_session =
-          Shell::Get()->overview_controller()->overview_session();
+  OverviewController* overview_controller = OverviewController::Get();
+  if (auto* overview_session = overview_controller->overview_session();
       overview_session && overview_session->is_shutting_down()) {
     // `OverviewSession::Shutdown()` may restore window activation and trigger
     // this; do not auto snap in this case.
@@ -119,50 +155,33 @@ bool AutoSnapController::AutoSnapWindowIfNeeded(aura::Window* window) {
   }
 
   WindowState* window_state = WindowState::Get(window);
-
-  if (auto* split_view_overview_session =
-          RootWindowController::ForWindow(window)
-              ->split_view_overview_session();
-      window_util::IsFasterSplitScreenOrSnapGroupEnabledInClamshell() &&
-      split_view_overview_session &&
-      split_view_overview_session->window() != window) {
-    if (!window_state->CanSnap()) {
-      // TODO(b/302212206): Consider showing a toast if the window can't snap.
-      return false;
-    }
-    // If `IsSnapGroupEnabledInClamshellMode()` is true, snap via
-    // `WindowState::OnWMEvent()` instead of
-    // `SplitViewController::SnapWindow()`.
-    // Snap to the opposite side of `split_view_overview_session->window()`.
-    const float snap_ratio =
-        1.f - WindowState::Get(split_view_overview_session->window())
-                  ->snap_ratio()
-                  .value_or(chromeos::kDefaultSnapRatio);
-    const WindowSnapWMEvent event(
-        split_view_overview_session->GetWindowStateType() ==
-                chromeos::WindowStateType::kPrimarySnapped
-            ? WM_EVENT_SNAP_SECONDARY
-            : WM_EVENT_SNAP_PRIMARY,
-        snap_ratio, WindowSnapActionSource::kAutoSnapInSplitView);
-    window_state->OnWMEvent(&event);
-    OverviewController::Get()->EndOverview(
-        OverviewEndAction::kWindowActivating);
-    return true;
-  }
-
   auto* split_view_controller = SplitViewController::Get(window);
+
   if (!split_view_controller->InSplitViewMode()) {
     // A window may be activated during mid-drag, during which split view is not
     // active yet.
     return false;
   }
 
+  const SplitViewController::State state = split_view_controller->state();
   // If `window` is floated on top of 2 already snapped windows (this can
   // happen after floating a window, starting split view, and activating
   // an unfloated window from overview), don't snap.
   if (window_state->IsFloated() &&
-      split_view_controller->state() ==
-          SplitViewController::State::kBothSnapped) {
+      state == SplitViewController::State::kBothSnapped) {
+    return false;
+  }
+
+  // TODO(michelefan): This logic is currently added to avoid auto snapping on
+  // 3rd window open with an existing snap group. This logic can be removed when
+  // `SnapGroup` owns the divider and split view can be safely ended upon snap
+  // group creation.
+  SnapGroupController* snap_group_controller = SnapGroupController::Get();
+  if (state == SplitViewController::State::kBothSnapped &&
+      snap_group_controller &&
+      snap_group_controller->AreWindowsInSnapGroup(
+          split_view_controller->primary_window(),
+          split_view_controller->secondary_window())) {
     return false;
   }
 
@@ -174,8 +193,8 @@ bool AutoSnapController::AutoSnapWindowIfNeeded(aura::Window* window) {
     return false;
   }
 
-  // Only windows that are in the MRU list and are not already in tablet split
-  // view can be auto-snapped.
+  // Only windows that are in the MRU list and are not already in split view can
+  // be auto-snapped.
   if (split_view_controller->IsWindowInSplitView(window) ||
       !base::Contains(
           Shell::Get()->mru_window_tracker()->BuildMruWindowList(kActiveDesk),
@@ -183,8 +202,6 @@ bool AutoSnapController::AutoSnapWindowIfNeeded(aura::Window* window) {
     return false;
   }
 
-  // We do not auto snap windows in clamshell splitview mode if a new window
-  // is activated when clamshell splitview mode is active.
   if (split_view_controller->InClamshellSplitViewMode()) {
     if (split_view_controller->IsWindowInTransitionalState(window)) {
       // If `window` is the transitional state (i.e. it's going to be snapped
@@ -193,14 +210,17 @@ bool AutoSnapController::AutoSnapWindowIfNeeded(aura::Window* window) {
       // snapped state is applied.
       return false;
     }
-    // If activated `window` is not going to be snapped, we just end overview
-    // mode which will then end splitview mode.
-    Shell::Get()->overview_controller()->EndOverview(
-        OverviewEndAction::kSplitView);
-    return false;
-  }
 
-  CHECK(split_view_controller->InTabletSplitViewMode());
+    // Do not auto snap windows in clamshell splitview mode if a new window
+    // is activated when clamshell splitview mode is active unless in faster
+    // split screen setup session.
+    if (overview_controller->InOverviewSession() &&
+        !overview_controller->overview_session()->IsWindowInOverview(window) &&
+        !window_util::IsInFasterSplitScreenSetupSession(window)) {
+      overview_controller->EndOverview(OverviewEndAction::kSplitView);
+      return false;
+    }
+  }
 
   // Do not snap the window if the activation change is caused by dragging a
   // window.
@@ -221,12 +241,11 @@ bool AutoSnapController::AutoSnapWindowIfNeeded(aura::Window* window) {
     return false;
   }
 
-  std::optional<float> snap_ratio =
-      split_view_controller->ComputeSnapRatio(window);
-
+  std::optional<float> auto_snap_ratio =
+      CalculateAutoSnapRatio(split_view_controller, window);
   // If it's a user positionable window but can't be snapped, end split view
   // mode and show the cannot snap toast.
-  if (!snap_ratio) {
+  if (!auto_snap_ratio) {
     if (window_state->IsUserPositionable()) {
       split_view_controller->EndSplitView(
           SplitViewController::EndReason::kUnsnappableWindowActivated);
@@ -234,7 +253,16 @@ bool AutoSnapController::AutoSnapWindowIfNeeded(aura::Window* window) {
     }
     return false;
   }
-
+  if (!split_view_controller->CanSnapWindow(window, *auto_snap_ratio)) {
+    // If the window can't fit in `auto_snap_ratio`, use its minimum size
+    // instead.
+    // TODO(sophiewen): See if we can do this without recalculating the snap
+    // ratio and divider position.
+    auto_snap_ratio.emplace(static_cast<float>(GetMinimumWindowLength(
+                                window, IsLayoutHorizontal(window))) /
+                            static_cast<float>(GetDividerPositionUpperLimit(
+                                window->GetRootWindow())));
+  }
   // Snap the window on the non-default side of the screen if split view mode
   // is active.
   split_view_controller->SnapWindow(
@@ -243,7 +271,7 @@ bool AutoSnapController::AutoSnapWindowIfNeeded(aura::Window* window) {
           ? SnapPosition::kSecondary
           : SnapPosition::kPrimary,
       WindowSnapActionSource::kAutoSnapInSplitView,
-      /*activate_window=*/false, *snap_ratio);
+      /*activate_window=*/false, *auto_snap_ratio);
   return true;
 }
 

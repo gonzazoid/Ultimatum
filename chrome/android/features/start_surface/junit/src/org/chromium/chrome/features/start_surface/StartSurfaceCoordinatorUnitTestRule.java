@@ -32,6 +32,7 @@ import org.chromium.base.jank_tracker.PlaceholderJankTracker;
 import org.chromium.base.library_loader.LibraryLoader;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.supplier.OneshotSupplierImpl;
+import org.chromium.base.test.util.Features;
 import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.app.tabmodel.ChromeTabModelFilterFactory;
 import org.chromium.chrome.browser.back_press.BackPressManager;
@@ -51,6 +52,7 @@ import org.chromium.chrome.browser.omnibox.OmniboxStub;
 import org.chromium.chrome.browser.omnibox.voice.VoiceRecognitionHandler;
 import org.chromium.chrome.browser.preferences.PrefChangeRegistrar;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.search_engines.TemplateUrlServiceFactory;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProviderJni;
@@ -67,7 +69,6 @@ import org.chromium.chrome.browser.tasks.tab_management.TabGridDialogView;
 import org.chromium.chrome.browser.ui.favicon.FaviconHelper;
 import org.chromium.chrome.browser.ui.favicon.FaviconHelperJni;
 import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
-import org.chromium.chrome.test.util.browser.Features;
 import org.chromium.chrome.test.util.browser.offlinepages.FakeOfflinePageBridge;
 import org.chromium.chrome.test.util.browser.suggestions.SuggestionsDependenciesRule;
 import org.chromium.chrome.test.util.browser.suggestions.mostvisited.FakeMostVisitedSites;
@@ -113,8 +114,8 @@ public class StartSurfaceCoordinatorUnitTestRule implements TestRule {
             List<TabModel> tabModels = new ArrayList<>();
             MockTabModelSelector selector =
                     new MockTabModelSelector(
-                            Profile.getLastUsedRegularProfile(),
-                            Profile.getLastUsedRegularProfile().getPrimaryOTRProfile(true),
+                            ProfileManager.getLastUsedRegularProfile(),
+                            ProfileManager.getLastUsedRegularProfile().getPrimaryOTRProfile(true),
                             0,
                             0,
                             null);
@@ -180,7 +181,7 @@ public class StartSurfaceCoordinatorUnitTestRule implements TestRule {
         Mockito.when(profile.getPrimaryOTRProfile(Mockito.anyBoolean()))
                 .thenReturn(incognitoProfile);
         PrefService prefService = Mockito.mock(PrefService.class);
-        Profile.setLastUsedProfileForTesting(profile);
+        ProfileManager.setLastUsedProfileForTesting(profile);
 
         mSuggestionsDeps.getFactory().offlinePageBridge = new FakeOfflinePageBridge();
         mSuggestionsDeps.getFactory().mostVisitedSites = new FakeMostVisitedSites();
@@ -299,7 +300,8 @@ public class StartSurfaceCoordinatorUnitTestRule implements TestRule {
                         mIncognitoReauthControllerSupplier,
                         null,
                         mProfileSupplier,
-                        tabStripHeightSupplier);
+                        tabStripHeightSupplier,
+                        new OneshotSupplierImpl<>());
 
         Assert.assertFalse(LibraryLoader.getInstance().isLoaded());
         when(mLibraryLoader.isInitialized()).thenReturn(true);

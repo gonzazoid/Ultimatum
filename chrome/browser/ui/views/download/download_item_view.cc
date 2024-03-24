@@ -267,7 +267,7 @@ class DownloadItemView::ContextMenuButton : public views::ImageButton {
   bool suppress_button_release_ = false;
 };
 
-BEGIN_METADATA(DownloadItemView, ContextMenuButton, views::ImageButton)
+BEGIN_METADATA(DownloadItemView, ContextMenuButton)
 END_METADATA
 
 DownloadItemView::DownloadItemView(DownloadUIModel::DownloadUIModelPtr model,
@@ -371,11 +371,11 @@ void DownloadItemView::AddedToWidget() {
   StartLoadIcons();
 }
 
-void DownloadItemView::Layout() {
+void DownloadItemView::Layout(PassKey) {
   // TODO(crbug.com/1005568): Replace Layout()/CalculatePreferredSize() with a
   // LayoutManager.
 
-  View::Layout();
+  LayoutSuperclass<View>(this);
 
   open_button_->SetBoundsRect(GetLocalBounds());
   dropdown_button_->SetPosition(
@@ -834,7 +834,7 @@ void DownloadItemView::UpdateLabels() {
 void DownloadItemView::UpdateButtons() {
   bool prompt_to_scan = false, prompt_to_discard = false;
   bool prompt_to_review = enterprise_connectors::ShouldPromptReviewForDownload(
-      model_->profile(), model_->GetDangerType());
+      model_->profile(), model_->GetDownloadItem());
   if (is_download_warning(mode_)) {
     const auto danger_type = model_->GetDangerType();
     prompt_to_scan =
@@ -927,7 +927,7 @@ void DownloadItemView::UpdateAccessibleAlertAndAnimationsForNormalMode() {
 void DownloadItemView::UpdateAccessibleAlert(
     const std::u16string& accessible_alert_text) {
   views::ViewAccessibility& ax = accessible_alert_->GetViewAccessibility();
-  ax.OverrideRole(ax::mojom::Role::kAlert);
+  ax.SetRole(ax::mojom::Role::kAlert);
   if (!accessible_alert_text.empty())
     ax.OverrideName(accessible_alert_text);
   if (announce_accessible_alert_soon_ || !accessible_alert_timer_.IsRunning()) {
@@ -1213,7 +1213,6 @@ void DownloadItemView::ReviewButtonPressed() {
       ElidedFilename(*file_name_label_), model_->profile(),
       model_->GetDownloadItem(),
       shelf_->browser()->tab_strip_model()->GetActiveWebContents(),
-      model_->GetDangerType(),
       base::BindOnce(&DownloadItemView::ExecuteCommand, base::Unretained(this),
                      DownloadCommands::KEEP),
       base::BindOnce(&DownloadItemView::ExecuteCommand, base::Unretained(this),

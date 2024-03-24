@@ -12,6 +12,7 @@
 #include "ui/gfx/native_widget_types.h"
 
 using Account = content::IdentityRequestAccount;
+using LinkType = content::IdentityRequestDialogController::LinkType;
 using TokenError = content::IdentityCredentialTokenError;
 
 // This class represents the interface used for communicating between the
@@ -29,8 +30,11 @@ class AccountSelectionView {
     virtual void OnDismiss(
         content::IdentityRequestDialogController::DismissReason
             dismiss_reason) = 0;
-    virtual void OnLoginToIdP(const GURL& idp_login_url) = 0;
+    virtual void OnLoginToIdP(const GURL& idp_config_url,
+                              const GURL& idp_login_url) = 0;
     virtual void OnMoreDetails() = 0;
+    // Informs the controller that the accounts dialog has been displayed.
+    virtual void OnAccountsDisplayed() = 0;
     // The web page view containing the focused field.
     virtual gfx::NativeView GetNativeView() = 0;
     // The WebContents for the page.
@@ -67,6 +71,7 @@ class AccountSelectionView {
       const std::optional<std::string>& iframe_for_display,
       const std::vector<content::IdentityProviderData>& identity_provider_data,
       Account::SignInMode sign_in_mode,
+      blink::mojom::RpMode rp_mode,
       bool show_auto_reauthn_checkbox) = 0;
 
   // Shows a failure UI when the accounts fetch is failed such that it is
@@ -76,20 +81,23 @@ class AccountSelectionView {
       const std::string& top_frame_for_display,
       const std::optional<std::string>& iframe_for_display,
       const std::string& idp_for_display,
-      const blink::mojom::RpContext& rp_context,
+      blink::mojom::RpContext rp_context,
+      blink::mojom::RpMode rp_mode,
       const content::IdentityProviderMetadata& idp_metadata) = 0;
 
   virtual void ShowErrorDialog(
       const std::string& top_frame_for_display,
       const std::optional<std::string>& iframe_for_display,
       const std::string& idp_for_display,
-      const blink::mojom::RpContext& rp_context,
+      blink::mojom::RpContext rp_context,
+      blink::mojom::RpMode rp_mode,
       const content::IdentityProviderMetadata& idp_metadata,
       const std::optional<TokenError>& error) = 0;
 
   virtual std::string GetTitle() const = 0;
   virtual std::optional<std::string> GetSubtitle() const = 0;
 
+  virtual void ShowUrl(LinkType type, const GURL& url) = 0;
   virtual content::WebContents* ShowModalDialog(const GURL& url) = 0;
   virtual void CloseModalDialog() = 0;
 

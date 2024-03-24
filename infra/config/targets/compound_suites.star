@@ -356,10 +356,6 @@ targets.legacy_compound_suite(
         "telemetry_perf_unittests_isolated_scripts",
         "vulkan_swiftshader_isolated_scripts",
         "chromium_web_tests_high_dpi_isolated_scripts",
-        # TODO(weizhong): we should eventually run chrome_wpt_tests where
-        # blink_wpt_tests runs on Linux. There should not have any resource
-        # concern on this because those are all CI builders.
-        #"chromium_wpt_tests_isolated_scripts",
     ],
 )
 
@@ -398,7 +394,6 @@ targets.legacy_compound_suite(
         # TODO(crbug.com/1498364): Remove this once the BackgroundResourceFetch
         # feature launches.
         "chromium_web_tests_brfetch_isolated_scripts",
-        "chromium_wpt_tests_isolated_scripts",
     ],
 )
 
@@ -861,10 +856,18 @@ targets.legacy_compound_suite(
 )
 
 targets.legacy_compound_suite(
+    name = "gpu_dawn_telemetry_tests_fxc",
+    basic_suites = [
+        "gpu_dawn_webgpu_cts_fxc",
+        "gpu_dawn_web_platform_webgpu_cts_force_swiftshader",
+    ],
+)
+
+targets.legacy_compound_suite(
     name = "gpu_dawn_telemetry_win_x64_tests",
     basic_suites = [
         "gpu_dawn_webgpu_cts",
-        "gpu_dawn_webgpu_cts_dxc",
+        "gpu_dawn_webgpu_cts_fxc",
         "gpu_dawn_web_platform_webgpu_cts_force_swiftshader",
     ],
 )
@@ -930,7 +933,7 @@ targets.legacy_compound_suite(
         # "gpu_angle_unit_gtests",
         # TODO(crbug.com/1087567, crbug.com/1087590): Enable once there are tests
         # that actually pass.
-        "gpu_common_gtests_validating",
+        "gpu_common_gtests_passthrough",
         # TODO(crbug.com/1087563): Enable once tab_capture_end2end_tests passes
         # on CrOS.
         # "gpu_desktop_specific_gtests",
@@ -1188,8 +1191,23 @@ targets.legacy_compound_suite(
 )
 
 targets.legacy_compound_suite(
-    name = "gpu_pixel_4_and_6_telemetry_tests",
+    name = "gpu_pixel_4_telemetry_tests",
     basic_suites = [
+        "gpu_common_and_optional_telemetry_tests",
+        "gpu_passthrough_telemetry_tests",
+        "gpu_validating_telemetry_tests",
+        "gpu_webcodecs_validating_telemetry_test",
+        "gpu_webgl_conformance_gles_passthrough_telemetry_tests",
+        "gpu_webgl_conformance_validating_telemetry_tests",
+        "gpu_webgl2_conformance_gles_passthrough_telemetry_tests",
+        "gpu_webgl2_conformance_validating_telemetry_tests",
+    ],
+)
+
+targets.legacy_compound_suite(
+    name = "gpu_pixel_6_telemetry_tests",
+    basic_suites = [
+        "gpu_passthrough_graphite_telemetry_tests",
         "gpu_common_and_optional_telemetry_tests",
         "gpu_passthrough_telemetry_tests",
         "gpu_validating_telemetry_tests",
@@ -1334,6 +1352,14 @@ targets.legacy_compound_suite(
     name = "webrtc_chromium_tests_with_baremetal_tests",
     basic_suites = [
         "webrtc_chromium_baremetal_gtests",
+        "webrtc_chromium_gtests",
+    ],
+)
+
+targets.legacy_compound_suite(
+    name = "webrtc_chromium_tests_without_baremetal_tests",
+    basic_suites = [
+        "webrtc_chromium_without_baremetal_gtests",
         "webrtc_chromium_gtests",
     ],
 )

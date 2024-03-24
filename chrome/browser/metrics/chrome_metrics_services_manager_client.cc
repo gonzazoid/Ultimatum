@@ -33,7 +33,9 @@
 #include "components/metrics/metrics_pref_names.h"
 #include "components/metrics/metrics_state_manager.h"
 #include "components/prefs/pref_service.h"
+#include "components/variations/service/limited_entropy_synthetic_trial.h"
 #include "components/variations/service/variations_service.h"
+#include "components/variations/synthetic_trial_registry.h"
 #include "components/variations/variations_associated_data.h"
 #include "components/version_info/version_info.h"
 #include "content/public/browser/browser_thread.h"
@@ -265,19 +267,23 @@ ChromeMetricsServicesManagerClient::GetEnabledStateProviderForTesting() {
 }
 
 std::unique_ptr<variations::VariationsService>
-ChromeMetricsServicesManagerClient::CreateVariationsService() {
+ChromeMetricsServicesManagerClient::CreateVariationsService(
+    variations::SyntheticTrialRegistry* synthetic_trial_registry) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   return variations::VariationsService::Create(
       std::make_unique<ChromeVariationsServiceClient>(), local_state_,
       GetMetricsStateManager(), switches::kDisableBackgroundNetworking,
       chrome_variations::CreateUIStringOverrider(),
-      base::BindOnce(&content::GetNetworkConnectionTracker));
+      base::BindOnce(&content::GetNetworkConnectionTracker),
+      synthetic_trial_registry);
 }
 
 std::unique_ptr<metrics::MetricsServiceClient>
-ChromeMetricsServicesManagerClient::CreateMetricsServiceClient() {
+ChromeMetricsServicesManagerClient::CreateMetricsServiceClient(
+    variations::SyntheticTrialRegistry* synthetic_trial_registry) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  return ChromeMetricsServiceClient::Create(GetMetricsStateManager());
+  return ChromeMetricsServiceClient::Create(GetMetricsStateManager(),
+                                            synthetic_trial_registry);
 }
 
 metrics::MetricsStateManager*
@@ -303,6 +309,12 @@ ChromeMetricsServicesManagerClient::GetMetricsStateManager() {
     auto* init_params = chromeos::BrowserParamsProxy::Get();
     if (init_params->MetricsServiceClientId().has_value())
       client_id = init_params->MetricsServiceClientId().value();
+
+    // Sync the randomization seed from Ash Chrome so that the group assignment
+    // is the same on Lacros.
+    variations::LimitedEntropySyntheticTrial::SetSeedFromAsh(
+        local_state_, init_params->LimitedEntropySyntheticTrialSeed());
+
     // Beginning M120 this should always be there. Note:
     // The LES numbers are kept stable over the lifetime of the session.
     // They get read when the system is statrting up in Ash. So they do not
@@ -313,7 +325,10 @@ ChromeMetricsServicesManagerClient::GetMetricsStateManager() {
       // This needs to be called before `metrics::MetricsStateManager::Create`.
       metrics::EntropyState::SetExternalPrefs(
           local_state_, entropy_source->low_entropy,
-          entropy_source->old_low_entropy, entropy_source->pseudo_low_entropy);
+          entropy_source->old_low_entropy, entropy_source->pseudo_low_entropy,
+          entropy_source->limited_entropy_randomization_source.has_value()
+              ? entropy_source->limited_entropy_randomization_source.value()
+              : std::string_view());
     }
 #endif
 

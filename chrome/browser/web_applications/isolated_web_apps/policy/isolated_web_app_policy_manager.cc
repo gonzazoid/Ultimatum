@@ -5,16 +5,20 @@
 #include "chrome/browser/web_applications/isolated_web_apps/policy/isolated_web_app_policy_manager.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 
+#include "base/barrier_callback.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/task/thread_pool.h"
+#include "base/types/cxx23_to_underlying.h"
 #include "base/types/expected.h"
 #include "base/version.h"
+#include "chrome/browser/web_applications/callback_utils.h"
 #include "chrome/browser/web_applications/isolated_web_apps/install_isolated_web_app_command.h"
 #include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_downloader.h"
 #include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_url_info.h"
@@ -26,47 +30,47 @@
 #include "chrome/common/pref_names.h"
 #include "chromeos/components/mgs/managed_guest_session_utils.h"
 #include "components/prefs/pref_service.h"
+#include "components/web_package/signed_web_bundles/signed_web_bundle_id.h"
 #include "content/public/browser/browser_thread.h"
 #include "net/base/net_errors.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
+
+namespace web_app {
 
 namespace {
 
-void LogIsolatedWebAppInstallResult(
-    std::vector<web_app::internal::BulkIwaInstaller::EphemeralAppInstallResult>
-        result) {
-  for (size_t i = 0; i < result.size(); ++i) {
-    if (result[i] != web_app::internal::BulkIwaInstaller::
-                         EphemeralAppInstallResult::kSuccess) {
-      DLOG(WARNING) << "Could not force-install IWA number " << i + 1
-                    << " failed. Error: " << static_cast<int>(result[i]);
-    }
+template <typename Range, typename Proj = std::identity>
+base::Value::List AsList(const Range& items, Proj proj = {}) {
+  base::Value::List list;
+  for (const auto& item : items) {
+    list.Append(std::invoke(proj, item));
   }
+  return list;
+}
+
+base::File::Error CreateDirectoryWithStatus(const base::FilePath& path) {
+  base::File::Error err = base::File::FILE_OK;
+  base::CreateDirectoryAndGetError(path, &err);
+  return err;
 }
 
 base::File::Error CreateNonExistingDirectory(const base::FilePath& path) {
   if (base::PathExists(path)) {
     return base::File::FILE_ERROR_EXISTS;
   }
-  base::File::Error err = base::File::FILE_OK;
-  base::CreateDirectoryAndGetError(path, &err);
-  return err;
+  return CreateDirectoryWithStatus(path);
 }
 
-std::vector<web_app::IsolatedWebAppExternalInstallOptions> ParseIwaPolicyValues(
+std::vector<IsolatedWebAppExternalInstallOptions> ParseIwaPolicyValues(
     const base::Value::List& iwa_policy_values) {
-  std::vector<web_app::IsolatedWebAppExternalInstallOptions>
-      iwa_install_options;
+  std::vector<IsolatedWebAppExternalInstallOptions> iwa_install_options;
   iwa_install_options.reserve(iwa_policy_values.size());
   for (const auto& policy_entry : iwa_policy_values) {
-    const base::expected<web_app::IsolatedWebAppExternalInstallOptions,
-                         std::string>
-        options =
-            web_app::IsolatedWebAppExternalInstallOptions::FromPolicyPrefValue(
-                policy_entry);
+    const base::expected<IsolatedWebAppExternalInstallOptions, std::string>
+        options = IsolatedWebAppExternalInstallOptions::FromPolicyPrefValue(
+            policy_entry);
     if (options.has_value()) {
       iwa_install_options.push_back(options.value());
     } else {
@@ -78,11 +82,30 @@ std::vector<web_app::IsolatedWebAppExternalInstallOptions> ParseIwaPolicyValues(
   return iwa_install_options;
 }
 
+base::flat_set<web_package::SignedWebBundleId> GetInstalledIwas(
+    const WebAppRegistrar& registrar) {
+  base::flat_set<web_package::SignedWebBundleId> installed_ids;
+  for (const WebApp& web_app : registrar.GetApps()) {
+    if (!web_app.isolation_data().has_value()) {
+      continue;
+    }
+    auto url_info = IsolatedWebAppUrlInfo::Create(web_app.start_url());
+    if (!url_info.has_value()) {
+      LOG(ERROR) << "Unable to calculate IsolatedWebAppUrlInfo from "
+                 << web_app.start_url();
+      continue;
+    }
+
+    installed_ids.insert(url_info->web_bundle_id());
+  }
+
+  return installed_ids;
+}
+
 }  // namespace
 
-namespace web_app {
-
 namespace internal {
+
 BulkIwaInstaller::IwaInstallCommandWrapperImpl::IwaInstallCommandWrapperImpl(
     web_app::WebAppProvider* provider)
     : provider_(provider) {}
@@ -107,14 +130,11 @@ BulkIwaInstaller::BulkIwaInstaller(
     std::vector<IsolatedWebAppExternalInstallOptions> iwa_install_options,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     std::unique_ptr<IwaInstallCommandWrapper> installer,
-    base::OnceCallback<void(std::vector<EphemeralAppInstallResult>)>
-        ephemeral_install_cb)
+    ResultCallback ephemeral_install_cb)
     : ephemeral_iwa_install_options_(std::move(iwa_install_options)),
       current_app_(ephemeral_iwa_install_options_.begin()),
       installation_dir_(context_dir.Append(kEphemeralIwaRootDirectory)),
       url_loader_factory_(std::move(url_loader_factory)),
-      result_vector_(ephemeral_iwa_install_options_.size(),
-                     EphemeralAppInstallResult::kUnknown),
       installer_(std::move(installer)),
       ephemeral_install_cb_(std::move(ephemeral_install_cb)) {}
 BulkIwaInstaller::~BulkIwaInstaller() = default;
@@ -138,7 +158,7 @@ void BulkIwaInstaller::InstallEphemeralApps() {
 void BulkIwaInstaller::CreateIwaEphemeralRootDirectory() {
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, {base::TaskPriority::BEST_EFFORT, base::MayBlock()},
-      base::BindOnce(&CreateNonExistingDirectory, installation_dir_),
+      base::BindOnce(CreateDirectoryWithStatus, installation_dir_),
       base::BindOnce(&BulkIwaInstaller::OnIwaEphemeralRootDirectoryCreated,
                      weak_factory_.GetWeakPtr()));
 }
@@ -171,19 +191,6 @@ void BulkIwaInstaller::DownloadUpdateManifest() {
       trigger:
         "Installation/update of a IWA from the enterprise policy requires "
         "fetching of a IWA Update Manifest"
-      # TODO(cmfcmf): `internal` and `user_data` is duplicated in
-      # `UpdateManifestFetcher::DownloadUpdateManifest`, but the
-      # traffic annotator script complains that it is missing if it is not also
-      # present here.
-      internal {
-        contacts {
-          email: "peletskyi@google.com"
-        }
-      }
-      user_data {
-        type: NONE
-      }
-      last_reviewed: "2023-05-25"
     }
     policy {
       setting: "This feature cannot be disabled in settings."
@@ -211,24 +218,20 @@ void BulkIwaInstaller::ContinueWithTheNextApp() {
   DownloadUpdateManifest();
 }
 
-void BulkIwaInstaller::SetResultAndContinue(EphemeralAppInstallResult result) {
-  const auto index =
-      std::distance(ephemeral_iwa_install_options_.begin(), current_app_);
-  result_vector_.at(index) = result;
+void BulkIwaInstaller::FinishWithResult(EphemeralAppInstallResult result) {
+  result_vector_.emplace_back(current_app_->web_bundle_id(), result);
 
-  // If the error occurs after the directory for an app had been created,
-  // then we should wipe the directory.
-  if (result != EphemeralAppInstallResult::kSuccess) {
-    WipeCurrentIwaDirectory();
-    return;
-  }
-
-  ContinueWithTheNextApp();
+  // We always copy the downloaded files into the profile during installation.
+  // So we don't need the downloaded file any more.
+  WipeIwaDownloadDirectory();
 }
 
 void BulkIwaInstaller::SetResultForAllAndFinish(
     EphemeralAppInstallResult result) {
-  base::ranges::fill(result_vector_, result);
+  result_vector_.clear();
+  for (const auto& options : ephemeral_iwa_install_options_) {
+    result_vector_.emplace_back(options.web_bundle_id(), result);
+  }
   std::move(ephemeral_install_cb_).Run(result_vector_);
 }
 
@@ -239,16 +242,16 @@ void BulkIwaInstaller::OnUpdateManifestParsed(
   if (!update_manifest.has_value()) {
     switch (update_manifest.error()) {
       case UpdateManifestFetcher::Error::kDownloadFailed:
-        SetResultAndContinue(
+        FinishWithResult(
             EphemeralAppInstallResult::kErrorUpdateManifestDownloadFailed);
         break;
       case UpdateManifestFetcher::Error::kInvalidJson:
       case UpdateManifestFetcher::Error::kInvalidManifest:
-        SetResultAndContinue(
+        FinishWithResult(
             EphemeralAppInstallResult::kErrorUpdateManifestParsingFailed);
         break;
       case UpdateManifestFetcher::Error::kNoApplicableVersion:
-        SetResultAndContinue(
+        FinishWithResult(
             EphemeralAppInstallResult::kErrorWebBundleUrlCantBeDetermined);
         break;
     }
@@ -276,8 +279,7 @@ void BulkIwaInstaller::CreateIwaDirectory() {
 void BulkIwaInstaller::OnIwaDirectoryCreated(const base::FilePath& iwa_dir,
                                              base::File::Error error) {
   if (error != base::File::FILE_OK) {
-    SetResultAndContinue(
-        EphemeralAppInstallResult::kErrorCantCreateIwaDirectory);
+    FinishWithResult(EphemeralAppInstallResult::kErrorCantCreateIwaDirectory);
     return;
   }
 
@@ -299,19 +301,6 @@ void BulkIwaInstaller::DownloadWebBundle() {
         "other resources of the IWA."
       trigger:
         "An Isolated Web App is installed from an enterprise policy."
-      # TODO(cmfcmf): `internal` and `user_data` is duplicated in
-      # `IsolatedWebAppDownloader::DownloadSignedWebBundle`, but the
-      # traffic annotator script complains that it is missing if it is not also
-      # present here.
-      internal {
-        contacts {
-          email: "cmfcmf@google.com"
-        }
-      }
-      user_data {
-        type: NONE
-      }
-      last_reviewed: "2023-06-01"
     }
     policy {
       setting: "This feature cannot be disabled in settings."
@@ -341,8 +330,7 @@ void BulkIwaInstaller::OnWebBundleDownloaded(const base::FilePath& path,
   current_bundle_downloader_.reset();
 
   if (net_error != net::OK) {
-    SetResultAndContinue(
-        EphemeralAppInstallResult::kErrorCantDownloadWebBundle);
+    FinishWithResult(EphemeralAppInstallResult::kErrorCantDownloadWebBundle);
     return;
   }
 
@@ -363,47 +351,89 @@ void BulkIwaInstaller::OnIwaInstalled(
     LOG(ERROR) << "Could not install the IWA "
                << current_app_->web_bundle_id().id();
   }
-  SetResultAndContinue(
+  FinishWithResult(
       result.has_value()
           ? EphemeralAppInstallResult::kSuccess
           : EphemeralAppInstallResult::kErrorCantInstallFromWebBundle);
 }
 
-void BulkIwaInstaller::WipeCurrentIwaDirectory() {
+void BulkIwaInstaller::WipeIwaDownloadDirectory() {
   const base::FilePath iwa_path_to_delete(current_app_->app_directory());
   current_app_->reset_app_directory();
 
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, {base::TaskPriority::BEST_EFFORT, base::MayBlock()},
       base::BindOnce(&base::DeletePathRecursively, iwa_path_to_delete),
-      base::BindOnce(&BulkIwaInstaller::OnCurrentIwaDirectoryWiped,
+      base::BindOnce(&BulkIwaInstaller::OnIwaDownloadDirectoryWiped,
                      weak_factory_.GetWeakPtr()));
 }
 
-void BulkIwaInstaller::OnCurrentIwaDirectoryWiped(bool wipe_result) {
+void BulkIwaInstaller::OnIwaDownloadDirectoryWiped(bool wipe_result) {
   if (!wipe_result) {
     LOG(ERROR) << "Could not wipe an IWA directory";
   }
 
   ContinueWithTheNextApp();
 }
+
+BulkIwaUninstaller::BulkIwaUninstaller(web_app::WebAppProvider& provider)
+    : provider_(provider) {}
+
+BulkIwaUninstaller::~BulkIwaUninstaller() = default;
+
+void BulkIwaUninstaller::UninstallApps(
+    const std::vector<web_package::SignedWebBundleId>& web_bundle_ids,
+    ResultCallback callback) {
+  if (web_bundle_ids.empty()) {
+    std::move(callback).Run({});
+    return;
+  }
+
+  auto uninstall_callback = base::BarrierCallback<Result>(
+      web_bundle_ids.size(),
+      base::BindOnce(&BulkIwaUninstaller::OnAppsUninstalled,
+                     weak_factory_.GetWeakPtr(), std::move(callback)));
+
+  for (const auto& web_bundle_id : web_bundle_ids) {
+    auto url_info =
+        IsolatedWebAppUrlInfo::CreateFromSignedWebBundleId(web_bundle_id);
+    provider_->scheduler().RemoveInstallManagementMaybeUninstall(
+        url_info.app_id(),
+        // TODO(b/325885543): This is the wrong management type.
+        WebAppManagement::Type::kCommandLine,
+        webapps::WebappUninstallSource::kIwaEnterprisePolicy,
+        base::BindOnce(
+            [](web_package::SignedWebBundleId web_bundle_id,
+               webapps::UninstallResultCode uninstall_code) -> Result {
+              return {web_bundle_id, uninstall_code};
+            },
+            web_bundle_id)
+            .Then(uninstall_callback));
+  }
+}
+
+void BulkIwaUninstaller::OnAppsUninstalled(
+    ResultCallback callback,
+    std::vector<Result> uninstall_results) {
+  std::move(callback).Run(std::move(uninstall_results));
+}
+
 }  // namespace internal
 
 IsolatedWebAppPolicyManager::IsolatedWebAppPolicyManager(Profile* profile)
-    : profile_(profile), pref_service_(profile_->GetPrefs()) {}
+    : profile_(profile) {}
 IsolatedWebAppPolicyManager::~IsolatedWebAppPolicyManager() = default;
 
 void IsolatedWebAppPolicyManager::Start(base::OnceClosure on_started_callback) {
   CHECK(on_started_callback_.is_null());
   on_started_callback_ = std::move(on_started_callback);
 
-  pref_change_registrar_.Init(pref_service_);
+  pref_change_registrar_.Init(profile_->GetPrefs());
   pref_change_registrar_.Add(
       prefs::kIsolatedWebAppInstallForceList,
-      base::BindRepeating(
-          &IsolatedWebAppPolicyManager::RefreshPolicyInstalledIsolatedWebApps,
-          weak_ptr_factory_.GetWeakPtr()));
-  RefreshPolicyInstalledIsolatedWebApps();
+      base::BindRepeating(&IsolatedWebAppPolicyManager::ProcessPolicy,
+                          weak_ptr_factory_.GetWeakPtr()));
+  ProcessPolicy();
   if (!on_started_callback_.is_null()) {
     std::move(on_started_callback_).Run();
   }
@@ -412,42 +442,163 @@ void IsolatedWebAppPolicyManager::Start(base::OnceClosure on_started_callback) {
 void IsolatedWebAppPolicyManager::SetProvider(base::PassKey<WebAppProvider>,
                                               WebAppProvider& provider) {
   provider_ = &provider;
+  bulk_uninstaller_ = std::make_unique<internal::BulkIwaUninstaller>(provider);
 }
 
-void IsolatedWebAppPolicyManager::RefreshPolicyInstalledIsolatedWebApps() {
+void IsolatedWebAppPolicyManager::ProcessPolicy() {
   CHECK(provider_);
+  // Ensure that only one policy resolution can happen at one time.
+  if (policy_is_being_processed_) {
+    reprocess_policy_needed_ = true;
+    return;
+  }
+
+  policy_is_being_processed_ = true;
+
+  // So far we support only MGS.
+  if (!chromeos::IsManagedGuestSession()) {
+    OnPolicyProcessed();
+    return;
+  }
+
+  provider_->scheduler().ScheduleCallback<AllAppsLock>(
+      "IsolatedWebAppPolicyManager::ProcessPolicy", AllAppsLockDescription(),
+      base::BindOnce(&IsolatedWebAppPolicyManager::DoProcessPolicy,
+                     weak_ptr_factory_.GetWeakPtr()),
+      /*on_complete=*/base::DoNothing());
+}
+
+void IsolatedWebAppPolicyManager::DoProcessPolicy(
+    AllAppsLock& lock,
+    base::Value::Dict& debug_info) {
+  CHECK(provider_);
+  CHECK(to_be_installed_.empty());
+  CHECK(to_be_removed_.empty());
+  CHECK(!bulk_installer_.get());
+
   const base::Value::List& iwa_policy_values =
-      pref_service_->GetList(prefs::kIsolatedWebAppInstallForceList);
-  if (iwa_policy_values.empty()) {
-    return;
-  }
+      profile_->GetPrefs()->GetList(prefs::kIsolatedWebAppInstallForceList);
 
-  if (bulk_installer_) {
-    // Isolated web apps have already been processed.
-    LOG(WARNING) << "Updating of the IWA is not yet supported.";
-    return;
-  }
-
-  std::vector<IsolatedWebAppExternalInstallOptions> all_iwa_install_options =
+  std::vector<IsolatedWebAppExternalInstallOptions> apps_in_policy =
       ParseIwaPolicyValues(iwa_policy_values);
+  debug_info.Set("apps_in_policy",
+                 AsList(apps_in_policy, [](const auto& options) {
+                   return options.web_bundle_id().id();
+                 }));
 
+  base::flat_set<web_package::SignedWebBundleId> installed_apps =
+      GetInstalledIwas(lock.registrar());
+  debug_info.Set("installed_apps",
+                 AsList(installed_apps, &web_package::SignedWebBundleId::id));
+
+  // This currently only installs apps that aren't already installed.
+  // TODO (peletskyi@): As soon as we support version pinning
+  // implement force update.
+  for (const IsolatedWebAppExternalInstallOptions& app : apps_in_policy) {
+    if (!base::Contains(installed_apps, app.web_bundle_id())) {
+      to_be_installed_.push_back(app);
+    }
+  }
+  debug_info.Set("to_be_installed",
+                 AsList(to_be_installed_, [](const auto& options) {
+                   return options.web_bundle_id().id();
+                 }));
+
+  for (const web_package::SignedWebBundleId& installed_app : installed_apps) {
+    if (!base::Contains(apps_in_policy, installed_app,
+                        &IsolatedWebAppExternalInstallOptions::web_bundle_id)) {
+      to_be_removed_.push_back(installed_app);
+    }
+  }
+  debug_info.Set("to_be_removed",
+                 AsList(to_be_removed_, &web_package::SignedWebBundleId::id));
+
+  auto weak_ptr = weak_ptr_factory_.GetWeakPtr();
+  RunChainedCallbacks(
+      // Let's start with uninstalling because:
+      // - we free up space for the potential installs;
+      // - usually there is a strong reason why an admin whats to uninstall an
+      //   app (e.g. security vulnerability). So it is better to uninstall it
+      //   ASAP.
+      base::BindOnce(&IsolatedWebAppPolicyManager::Uninstall, weak_ptr),
+      base::BindOnce(&IsolatedWebAppPolicyManager::Install, weak_ptr),
+      base::BindOnce(&IsolatedWebAppPolicyManager::OnPolicyProcessed,
+                     weak_ptr));
+}
+
+void IsolatedWebAppPolicyManager::Uninstall(
+    base::OnceClosure next_step_callback) {
+  bulk_uninstaller_->UninstallApps(
+      to_be_removed_,
+      base::BindOnce(&IsolatedWebAppPolicyManager::OnUninstalled,
+                     weak_ptr_factory_.GetWeakPtr(),
+                     std::move(next_step_callback)));
+}
+
+void IsolatedWebAppPolicyManager::OnUninstalled(
+    base::OnceClosure next_step_callback,
+    std::vector<web_app::internal::BulkIwaUninstaller::Result>
+        uninstall_results) {
+  for (const auto& [web_bundle_id, uninstall_result] : uninstall_results) {
+    if (uninstall_result != webapps::UninstallResultCode::kSuccess) {
+      DLOG(WARNING) << "Could not uninstall IWA " << web_bundle_id.id()
+                    << ". Error: " << uninstall_result;
+    }
+  }
+
+  to_be_removed_.clear();
+
+  std::move(next_step_callback).Run();
+}
+
+void IsolatedWebAppPolicyManager::Install(
+    base::OnceClosure next_step_callback) {
   std::unique_ptr<internal::BulkIwaInstaller::IwaInstallCommandWrapper>
       installer = std::make_unique<
           internal::BulkIwaInstaller::IwaInstallCommandWrapperImpl>(provider_);
 
   auto url_loader_factory = profile_->GetURLLoaderFactory();
 
-  auto install_complete_callback =
-      base::BindOnce(&LogIsolatedWebAppInstallResult);
-  if (!on_started_callback_.is_null()) {
-    install_complete_callback = std::move(install_complete_callback)
-                                    .Then(std::move(on_started_callback_));
-  }
+  auto install_complete_callback = base::BindOnce(
+      &IsolatedWebAppPolicyManager::OnInstalled, weak_ptr_factory_.GetWeakPtr(),
+      std::move(next_step_callback));
 
   bulk_installer_ = std::make_unique<internal::BulkIwaInstaller>(
-      profile_->GetPath(), all_iwa_install_options, url_loader_factory,
+      profile_->GetPath(), to_be_installed_, url_loader_factory,
       std::move(installer), std::move(install_complete_callback));
   bulk_installer_->InstallEphemeralApps();
+}
+
+void IsolatedWebAppPolicyManager::OnInstalled(
+    base::OnceClosure next_step_callback,
+    std::vector<web_app::internal::BulkIwaInstaller::Result> install_results) {
+  for (const auto& [web_bundle_id, install_result] : install_results) {
+    if (install_result !=
+        internal::BulkIwaInstaller::EphemeralAppInstallResult::kSuccess) {
+      DLOG(WARNING) << "Could not force-install IWA " << web_bundle_id.id()
+                    << ". Error: " << base::to_underlying(install_result);
+    }
+  }
+
+  bulk_installer_.reset();
+  to_be_installed_.clear();
+
+  std::move(next_step_callback).Run();
+}
+
+void IsolatedWebAppPolicyManager::OnPolicyProcessed() {
+  policy_is_being_processed_ = false;
+
+  if (!on_started_callback_.is_null()) {
+    std::move(on_started_callback_).Run();
+  }
+
+  if (reprocess_policy_needed_) {
+    reprocess_policy_needed_ = false;
+    ProcessPolicy();
+  }
+  // TODO (peletskyi): Check policy compliance here as in theory
+  // more race conditions are possible.
 }
 
 }  // namespace web_app

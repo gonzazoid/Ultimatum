@@ -23,7 +23,7 @@ chromium-metrics-reviews@google.com.
 <histograms>
 
 <histogram name="Session.Background.TotalDuration" units="ms"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>asvitkine@chromium.org</owner>
   <owner>src/base/metrics/OWNERS</owner>
   <summary>
@@ -53,7 +53,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Session.IsActive" enum="BooleanActive"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>rogerm@chromium.org</owner>
   <owner>src/base/metrics/OWNERS</owner>
   <summary>
@@ -72,7 +72,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Session.OpenedTabCounts" units="operations"
-    expires_after="2024-06-02">
+    expires_after="2024-08-04">
   <owner>rohitrao@chromium.org</owner>
   <owner>marq@chromium.org</owner>
   <summary>
@@ -106,15 +106,21 @@ chromium-metrics-reviews@google.com.
     Session.TotalDurationMax1Day for the same histogram with a higher maximum
     value. (The one's maximum is 1 hour.)
 
-    Windows/Mac/Linux: A session ends (i) when the user puts another app in the
-    foreground, unless audio is playing. (The Chrome windows can still be shown.
-    What matters is that a different app has focus.) (ii) when Chrome quits.
-    (iii) when the screensaver turns on (again, unless audio is playing). (iv)
-    when the user is inactive for five minutes (again, unless audio is playing).
-    In this case (starting in M-55), that five minutes is not included in the
-    sesson length. (v) when audio stops playing, if the user has been inactive
-    for five minutes or Chrome is not in the foreground. Also, until M69, there
-    was a bug that caused double-counting of some sessions.
+    Windows/Mac/Linux: Sessions only include time a browser window is visible.
+    Time when Chrome is visible but not with a regular browsing window will not
+    count. For example, neither the &quot;profile picker&quot;, which is
+    sometimes shown at startup, nor the first-run experience flow will count as
+    active time in Chrome when calculating Session.TotalDuration.
+
+    Windows/Mac/Linux: An active session ends (i) when the user puts another app
+    in the foreground, unless audio is playing. (The Chrome windows can still be
+    shown. What matters is that a different app has focus.) (ii) when Chrome
+    quits. (iii) when the screensaver turns on (again, unless audio is playing).
+    (iv) when the user is inactive for five minutes (again, unless audio is
+    playing). In this case (starting in M-55), that five minutes is not included
+    in the sesson length. (v) when audio stops playing, if the user has been
+    inactive for five minutes or Chrome is not in the foreground. Also, until
+    M69, there was a bug that caused double-counting of some sessions.
 
     ChromeOS: not implemented. The ChromeOS histogram Platform.DailyUseTime is
     somewhat similar.
@@ -888,7 +894,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Session.WebStates.NativeRestoreHasFetchers"
-    enum="BooleanHasFetchers" expires_after="2024-06-02">
+    enum="BooleanHasFetchers" expires_after="2024-08-04">
   <owner>ajuma@chromium.org</owner>
   <owner>michaeldo@chromium.org</owner>
   <summary>
@@ -920,7 +926,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Session.WebStates.NativeRestoreSessionFromCacheHasData"
-    enum="BooleanHasData" expires_after="2024-06-02">
+    enum="BooleanHasData" expires_after="2024-08-04">
   <owner>ajuma@chromium.org</owner>
   <owner>michaeldo@chromium.org</owner>
   <summary>
@@ -931,7 +937,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Session.WebStates.NativeRestoreSessionHasData"
-    enum="BooleanHasData" expires_after="2024-06-02">
+    enum="BooleanHasData" expires_after="2024-08-04">
   <owner>ajuma@chromium.org</owner>
   <owner>michaeldo@chromium.org</owner>
   <summary>
@@ -1046,8 +1052,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="SessionRestore.ForegroundTabFirstPaint4" units="ms"
-    expires_after="2024-04-28">
-  <owner>chrisha@chromium.org</owner>
+    expires_after="2024-07-14">
+  <owner>joenotcharles@google.com</owner>
   <owner>catan-team@chromium.org</owner>
   <improvement direction="LOWER_IS_BETTER"/>
   <summary>
@@ -1063,13 +1069,16 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="SessionRestore.ForegroundTabFirstPaint4.FinishReason"
-    enum="SessionRestoreFinishReason" expires_after="2022-10-23">
-  <owner>chrisha@chromium.org</owner>
+    enum="SessionRestoreFinishReason" expires_after="2024-07-14">
+  <owner>joenotcharles@google.com</owner>
   <owner>catan-team@chromium.org</owner>
   <summary>
     The reason for which attempt to record
     SessionRestore.ForegroundTabFirstPaint4 was deemed complete. Logged once per
     session restore.
+
+    Warning: this histogram was expired from 2022-10-23 to 2024-02-15; data may
+    be missing.
   </summary>
 </histogram>
 

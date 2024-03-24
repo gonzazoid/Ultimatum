@@ -7,19 +7,21 @@
  * 'crostini-disk-resize' is a dialog for disk management e.g.
  * resizing their disk or converting it from sparse to preallocated.
  */
-import 'chrome://resources/cr_elements/cr_button/cr_button.js';
-import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
-import 'chrome://resources/cr_elements/icons.html.js';
+import 'chrome://resources/ash/common/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/ash/common/cr_elements/cr_dialog/cr_dialog.js';
+import 'chrome://resources/ash/common/cr_elements/icons.html.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import '../settings_shared.css.js';
-import 'chrome://resources/cr_elements/cr_slider/cr_slider.js';
+import 'chrome://resources/ash/common/cr_elements/cr_slider/cr_slider.js';
 
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
-import {CrSliderElement} from 'chrome://resources/cr_elements/cr_slider/cr_slider.js';
+import {CrDialogElement} from 'chrome://resources/ash/common/cr_elements/cr_dialog/cr_dialog.js';
+import {CrSliderElement} from 'chrome://resources/ash/common/cr_elements/cr_slider/cr_slider.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {castExists} from '../assert_extras.js';
 import {TERMINA_VM_TYPE} from '../guest_os/guest_os_browser_proxy.js';
+import {recordSettingChange} from '../metrics_recorder.js';
+import {Setting} from '../mojom-webui/setting.mojom-webui.js';
 
 import {CrostiniBrowserProxy, CrostiniBrowserProxyImpl, SliderTick} from './crostini_browser_proxy.js';
 import {getTemplate} from './crostini_disk_resize_dialog.html.js';
@@ -189,6 +191,7 @@ export class SettingsCrostiniDiskResizeDialogElement extends PolymerElement {
             succeeded => {
               if (succeeded) {
                 this.resizeState_ = ResizeState.DONE;
+                recordSettingChange(Setting.kCrostiniDiskResize);
                 this.$.diskResizeDialog.close();
               } else {
                 this.resizeState_ = ResizeState.ERROR;

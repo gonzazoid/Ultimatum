@@ -2,9 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {CloseReason, ComposeDialogCallbackRouter, ComposeState, OpenMetadata, StyleModifiers, UserFeedback} from 'chrome://compose/compose.mojom-webui.js';
-import {ComposeApiProxy} from 'chrome://compose/compose_api_proxy.js';
-import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
+import type {CloseReason, ComposeState, OpenMetadata, StyleModifiers} from 'chrome-untrusted://compose/compose.mojom-webui.js';
+import {ComposeUntrustedDialogCallbackRouter, UserFeedback} from 'chrome-untrusted://compose/compose.mojom-webui.js';
+import type {ComposeApiProxy} from 'chrome-untrusted://compose/compose_api_proxy.js';
+import {TestBrowserProxy} from 'chrome-untrusted://webui-test/test_browser_proxy.js';
 
 function getDefaultComposeState(): ComposeState {
   return {
@@ -32,19 +33,23 @@ function getDefaultOpenMetadata(): OpenMetadata {
 export class TestComposeApiProxy extends TestBrowserProxy implements
     ComposeApiProxy {
   private openMetadata_: OpenMetadata = getDefaultOpenMetadata();
-  private router_: ComposeDialogCallbackRouter =
-      new ComposeDialogCallbackRouter();
+  private router_: ComposeUntrustedDialogCallbackRouter =
+      new ComposeUntrustedDialogCallbackRouter();
   remote = this.router_.$.bindNewPipeAndPassRemote();
   private undoResponse_: ComposeState|null = null;
 
   constructor() {
     super([
       'acceptComposeResult',
+      'logCancelEdit',
       'closeUi',
       'compose',
       'rewrite',
+      'logEditInput',
       'openBugReportingLink',
+      'openComposeLearnMorePage',
       'openFeedbackSurveyLink',
+      'openSignInPage',
       'requestInitialState',
       'saveWebuiState',
       'setUserFeedback',
@@ -56,6 +61,10 @@ export class TestComposeApiProxy extends TestBrowserProxy implements
   acceptComposeResult(): Promise<boolean> {
     this.methodCalled('acceptComposeResult');
     return Promise.resolve(true);
+  }
+
+  logCancelEdit() {
+    this.methodCalled('logCancelEdit');
   }
 
   completeFirstRun() {}
@@ -76,6 +85,10 @@ export class TestComposeApiProxy extends TestBrowserProxy implements
     this.methodCalled('rewrite', style);
   }
 
+  logEditInput() {
+    this.methodCalled('logEditInput');
+  }
+
   undo(): Promise<(ComposeState | null)> {
     this.methodCalled('undo');
     return Promise.resolve(this.undoResponse_);
@@ -89,10 +102,16 @@ export class TestComposeApiProxy extends TestBrowserProxy implements
     this.methodCalled('openBugReportingLink');
   }
 
-  openComposeLearnMorePage() {}
+  openComposeLearnMorePage() {
+    this.methodCalled('openComposeLearnMorePage');
+  }
 
   openFeedbackSurveyLink() {
     this.methodCalled('openFeedbackSurveyLink');
+  }
+
+  openSignInPage() {
+    this.methodCalled('openSignInPage');
   }
 
   openComposeSettings() {}

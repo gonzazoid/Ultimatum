@@ -68,6 +68,7 @@ struct DidOverscrollParams;
 namespace content {
 
 class CursorManager;
+class DevicePosturePlatformProvider;
 class MouseWheelPhaseHandler;
 class RenderWidgetHostImpl;
 class RenderWidgetHostViewBaseObserver;
@@ -102,9 +103,9 @@ class CONTENT_EXPORT RenderWidgetHostViewBase : public RenderWidgetHostView,
   void WasUnOccluded() override {}
   void WasOccluded() override {}
   std::u16string GetSelectedText() override;
-  bool IsMouseLocked() override;
-  bool GetIsMouseLockedUnadjustedMovementForTesting() override;
-  bool CanBeMouseLocked() override;
+  bool IsPointerLocked() override;
+  bool GetIsPointerLockedUnadjustedMovementForTesting() override;
+  bool CanBePointerLocked() override;
   bool AccessibilityHasFocus() override;
   bool LockKeyboard(std::optional<base::flat_set<ui::DomCode>> codes) override;
   void SetBackgroundColor(SkColor color) override;
@@ -164,6 +165,9 @@ class CONTENT_EXPORT RenderWidgetHostViewBase : public RenderWidgetHostView,
       const gfx::PointF& point) override;
   gfx::PointF TransformRootPointToViewCoordSpace(
       const gfx::PointF& point) override;
+
+  // Returns the value for whether the auto-resize has been enabled or not.
+  bool IsAutoResizeEnabled();
 
   virtual void UpdateIntrinsicSizingInfo(
       blink::mojom::IntrinsicSizingInfoPtr sizing_info);
@@ -259,8 +263,8 @@ class CONTENT_EXPORT RenderWidgetHostViewBase : public RenderWidgetHostView,
                                   const gfx::Rect& node_bounds_in_screen) {}
 
   // StylusInterface overrides
-  // Requests to start stylus writing and returns true if successful.
-  bool RequestStartStylusWriting() override;
+  // Check if stylus writing can be started.
+  bool ShouldInitiateStylusWriting() override;
   // Notify whether the hovered element action is stylus writable or not.
   void NotifyHoverActionStylusWritable(bool stylus_writable) override {}
 
@@ -545,6 +549,8 @@ class CONTENT_EXPORT RenderWidgetHostViewBase : public RenderWidgetHostView,
 
   virtual void SetDisplayFeatureForTesting(
       const DisplayFeature* display_feature) = 0;
+
+  DevicePosturePlatformProvider* GetDevicePosturePlatformProvider();
 
   // Returns the associated RenderWidgetHostImpl.
   RenderWidgetHostImpl* host() const { return host_; }

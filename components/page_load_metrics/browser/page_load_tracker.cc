@@ -266,9 +266,7 @@ internal::PageLoadTrackerPageType CalculatePageType(
              content::FrameType::kFencedFrameRoot) {
     return internal::PageLoadTrackerPageType::kFencedFramesPage;
   }
-  content::WebContentsDelegate* delegate =
-      navigation_handle->GetWebContents()->GetDelegate();
-  return (delegate && delegate->IsInPreviewMode())
+  return navigation_handle->GetWebContents()->IsInPreviewMode()
              ? internal::PageLoadTrackerPageType::kPreviewPrimaryPage
              : internal::PageLoadTrackerPageType::kPrimaryPage;
 }
@@ -806,10 +804,12 @@ void PageLoadTracker::OnCookiesRead(
     const GURL& first_party_url,
     bool blocked_by_policy,
     bool is_ad_tagged,
-    const net::CookieSettingOverrides& cookie_setting_overrides) {
+    const net::CookieSettingOverrides& cookie_setting_overrides,
+    bool is_partitioned_access) {
   for (const auto& observer : observers_) {
     observer->OnCookiesRead(url, first_party_url, blocked_by_policy,
-                            is_ad_tagged, cookie_setting_overrides);
+                            is_ad_tagged, cookie_setting_overrides,
+                            is_partitioned_access);
   }
 }
 
@@ -819,10 +819,12 @@ void PageLoadTracker::OnCookieChange(
     const net::CanonicalCookie& cookie,
     bool blocked_by_policy,
     bool is_ad_tagged,
-    const net::CookieSettingOverrides& cookie_setting_overrides) {
+    const net::CookieSettingOverrides& cookie_setting_overrides,
+    bool is_partitioned_access) {
   for (const auto& observer : observers_) {
     observer->OnCookieChange(url, first_party_url, cookie, blocked_by_policy,
-                             is_ad_tagged, cookie_setting_overrides);
+                             is_ad_tagged, cookie_setting_overrides,
+                             is_partitioned_access);
   }
 }
 
@@ -1219,10 +1221,10 @@ base::TimeTicks PageLoadTracker::GetNavigationStart() const {
   return navigation_start_;
 }
 
-absl::optional<base::TimeDelta>
+std::optional<base::TimeDelta>
 PageLoadTracker::DurationSinceNavigationStartForTime(
-    const absl::optional<base::TimeTicks>& time) const {
-  absl::optional<base::TimeDelta> duration;
+    const std::optional<base::TimeTicks>& time) const {
+  std::optional<base::TimeDelta> duration;
 
   if (!time.has_value()) {
     return duration;
@@ -1233,12 +1235,12 @@ PageLoadTracker::DurationSinceNavigationStartForTime(
   return duration;
 }
 
-absl::optional<base::TimeDelta> PageLoadTracker::GetTimeToFirstBackground()
+std::optional<base::TimeDelta> PageLoadTracker::GetTimeToFirstBackground()
     const {
   return DurationSinceNavigationStartForTime(first_background_time_);
 }
 
-absl::optional<base::TimeDelta> PageLoadTracker::GetTimeToFirstForeground()
+std::optional<base::TimeDelta> PageLoadTracker::GetTimeToFirstForeground()
     const {
   return DurationSinceNavigationStartForTime(first_foreground_time_);
 }
@@ -1264,7 +1266,7 @@ PrerenderingState PageLoadTracker::GetPrerenderingState() const {
   return prerendering_state_;
 }
 
-absl::optional<base::TimeDelta> PageLoadTracker::GetActivationStart() const {
+std::optional<base::TimeDelta> PageLoadTracker::GetActivationStart() const {
   return activation_start_;
 }
 
@@ -1292,12 +1294,12 @@ const UserInitiatedInfo& PageLoadTracker::GetPageEndUserInitiatedInfo() const {
   return page_end_user_initiated_info_;
 }
 
-absl::optional<base::TimeDelta> PageLoadTracker::GetTimeToPageEnd() const {
+std::optional<base::TimeDelta> PageLoadTracker::GetTimeToPageEnd() const {
   if (page_end_reason_ != END_NONE) {
     return DurationSinceNavigationStartForTime(page_end_time_);
   }
   DCHECK(page_end_time_.is_null());
-  return absl::optional<base::TimeDelta>();
+  return std::optional<base::TimeDelta>();
 }
 
 const base::TimeTicks& PageLoadTracker::GetPageEndTime() const {
@@ -1343,7 +1345,7 @@ const mojom::InputTiming& PageLoadTracker::GetPageInputTiming() const {
   return metrics_update_dispatcher_.page_input_timing();
 }
 
-const absl::optional<blink::SubresourceLoadMetrics>&
+const std::optional<blink::SubresourceLoadMetrics>&
 PageLoadTracker::GetSubresourceLoadMetrics() const {
   return metrics_update_dispatcher_.subresource_load_metrics();
 }
@@ -1481,7 +1483,7 @@ void PageLoadTracker::UpdateMetrics(
     mojom::FrameRenderDataUpdatePtr render_data,
     mojom::CpuTimingPtr cpu_timing,
     mojom::InputTimingPtr input_timing_delta,
-    const absl::optional<blink::SubresourceLoadMetrics>&
+    const std::optional<blink::SubresourceLoadMetrics>&
         subresource_load_metrics,
     mojom::SoftNavigationMetricsPtr soft_navigation_metrics) {
   if (parent_tracker_) {

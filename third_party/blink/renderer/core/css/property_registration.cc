@@ -6,16 +6,15 @@
 
 #include "third_party/blink/renderer/bindings/core/v8/v8_property_definition.h"
 #include "third_party/blink/renderer/core/animation/css_interpolation_types_map.h"
-#include "third_party/blink/renderer/core/css/css_custom_property_declaration.h"
 #include "third_party/blink/renderer/core/css/css_identifier_value.h"
 #include "third_party/blink/renderer/core/css/css_string_value.h"
 #include "third_party/blink/renderer/core/css/css_style_sheet.h"
 #include "third_party/blink/renderer/core/css/css_syntax_definition.h"
 #include "third_party/blink/renderer/core/css/css_syntax_string_parser.h"
+#include "third_party/blink/renderer/core/css/css_unparsed_declaration_value.h"
 #include "third_party/blink/renderer/core/css/css_value.h"
 #include "third_party/blink/renderer/core/css/css_value_list.h"
 #include "third_party/blink/renderer/core/css/css_variable_data.h"
-#include "third_party/blink/renderer/core/css/css_variable_reference_value.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser_context.h"
 #include "third_party/blink/renderer/core/css/parser/css_tokenizer.h"
 #include "third_party/blink/renderer/core/css/parser/css_variable_parser.h"
@@ -83,7 +82,7 @@ static bool ComputationallyIndependent(const CSSValue& value) {
   DCHECK(!value.IsCSSWideKeyword());
 
   if (auto* variable_reference_value =
-          DynamicTo<CSSVariableReferenceValue>(value)) {
+          DynamicTo<CSSUnparsedDeclarationValue>(value)) {
     return !variable_reference_value->VariableDataValue()
                 ->NeedsVariableResolution();
   }
@@ -106,7 +105,7 @@ static bool ComputationallyIndependent(const CSSValue& value) {
   return true;
 }
 
-absl::optional<CSSSyntaxDefinition> PropertyRegistration::ConvertSyntax(
+std::optional<CSSSyntaxDefinition> PropertyRegistration::ConvertSyntax(
     const CSSValue* syntax_value) {
   // https://drafts.css-houdini.org/css-properties-values-api-1/#the-syntax-descriptor
   if (!syntax_value) {
@@ -116,7 +115,7 @@ absl::optional<CSSSyntaxDefinition> PropertyRegistration::ConvertSyntax(
       .Parse();
 }
 
-absl::optional<bool> PropertyRegistration::ConvertInherits(
+std::optional<bool> PropertyRegistration::ConvertInherits(
     const CSSValue* inherits_value) {
   // https://drafts.css-houdini.org/css-properties-values-api-1/#inherits-descriptor
   if (!inherits_value) {
@@ -128,16 +127,16 @@ absl::optional<bool> PropertyRegistration::ConvertInherits(
   return inherits_id == CSSValueID::kTrue;
 }
 
-absl::optional<const CSSValue*> PropertyRegistration::ConvertInitial(
+std::optional<const CSSValue*> PropertyRegistration::ConvertInitial(
     const CSSValue* initial_value,
     const CSSSyntaxDefinition& syntax,
     const CSSParserContext& parser_context) {
   // https://drafts.css-houdini.org/css-properties-values-api-1/#initial-value-descriptor
   if (!initial_value) {
-    return syntax.IsUniversal() ? absl::make_optional(nullptr) : absl::nullopt;
+    return syntax.IsUniversal() ? std::make_optional(nullptr) : std::nullopt;
   }
   scoped_refptr<CSSVariableData> initial_variable_data =
-      &To<CSSCustomPropertyDeclaration>(*initial_value).Value();
+      To<CSSUnparsedDeclarationValue>(*initial_value).VariableDataValue();
 
   // Parse initial value, if we have it.
   const CSSValue* initial = nullptr;
@@ -169,18 +168,18 @@ PropertyRegistration* PropertyRegistration::MaybeCreateForDeclaredProperty(
     Document& document,
     const AtomicString& name,
     StyleRuleProperty& rule) {
-  absl::optional<CSSSyntaxDefinition> syntax = ConvertSyntax(rule.GetSyntax());
+  std::optional<CSSSyntaxDefinition> syntax = ConvertSyntax(rule.GetSyntax());
   if (!syntax.has_value()) {
     return nullptr;
   }
-  absl::optional<bool> inherits = ConvertInherits(rule.Inherits());
+  std::optional<bool> inherits = ConvertInherits(rule.Inherits());
   if (!inherits.has_value()) {
     return nullptr;
   }
   const CSSParserContext* parser_context =
       document.ElementSheet().Contents()->ParserContext();
 
-  absl::optional<const CSSValue*> initial =
+  std::optional<const CSSValue*> initial =
       ConvertInitial(rule.GetInitialValue(), *syntax, *parser_context);
   if (!initial.has_value()) {
     return nullptr;
@@ -216,7 +215,7 @@ void PropertyRegistration::registerProperty(
     return;
   }
 
-  absl::optional<CSSSyntaxDefinition> syntax_definition =
+  std::optional<CSSSyntaxDefinition> syntax_definition =
       CSSSyntaxStringParser(property_definition->syntax()).Parse();
   if (!syntax_definition) {
     exception_state.ThrowDOMException(

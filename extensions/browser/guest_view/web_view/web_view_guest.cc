@@ -65,7 +65,6 @@
 #include "extensions/browser/url_loader_factory_manager.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension_features.h"
-#include "extensions/common/extension_messages.h"
 #include "extensions/common/manifest_constants.h"
 #include "extensions/strings/grit/extensions_strings.h"
 #include "ipc/ipc_message_macros.h"
@@ -441,11 +440,7 @@ void WebViewGuest::MaybeRecreateGuestContents(
         blink::mojom::ConsoleMessageLevel::kWarning,
         "A <webview> is being attached to a window other than the window of "
         "its opener <webview>. The window reference the opener <webview> "
-        "obtained from window.open will be invalidated. To debug whether this "
-        "is causing breakage, see "
-        "chrome://flags/#enable-webview-tag-mparch-behavior. The "
-        "ChromeAppsWebViewPermissiveBehaviorAllowed enterprise policy may be "
-        "used to temporarily revert this behavior.");
+        "obtained from window.open will be invalidated.");
   }
 
   ClearOwnedGuestContents();
@@ -1201,7 +1196,7 @@ bool WebViewGuest::HandleKeyboardShortcuts(
   // mouse if necessary.
   if ((event.windows_key_code == ui::VKEY_ESCAPE) &&
       !(event.GetModifiers() & blink::WebInputEvent::kInputModifiers)) {
-    return web_contents()->GotResponseToLockMouseRequest(
+    return web_contents()->GotResponseToPointerLockRequest(
         blink::mojom::PointerLockResult::kUserRejected);
   }
 
@@ -1515,13 +1510,13 @@ bool WebViewGuest::IsFullscreenForTabOrPending(
   return is_guest_fullscreen_;
 }
 
-void WebViewGuest::RequestToLockMouse(WebContents* web_contents,
+void WebViewGuest::RequestPointerLock(WebContents* web_contents,
                                       bool user_gesture,
                                       bool last_unlocked_by_target) {
   web_view_permission_helper_->RequestPointerLockPermission(
       user_gesture, last_unlocked_by_target,
       base::BindOnce(
-          base::IgnoreResult(&WebContents::GotLockMousePermissionResponse),
+          base::IgnoreResult(&WebContents::GotPointerLockPermissionResponse),
           base::Unretained(web_contents)));
 }
 

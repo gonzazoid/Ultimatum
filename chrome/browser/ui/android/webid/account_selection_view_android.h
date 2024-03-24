@@ -27,21 +27,25 @@ class AccountSelectionViewAndroid : public AccountSelectionView {
       const std::optional<std::string>& iframe_for_display,
       const std::vector<content::IdentityProviderData>& identity_provider_data,
       Account::SignInMode sign_in_mode,
+      blink::mojom::RpMode rp_mode,
       bool show_auto_reauthn_checkbox) override;
   void ShowFailureDialog(
       const std::string& top_frame_for_display,
       const std::optional<std::string>& iframe_for_display,
       const std::string& idp_for_display,
-      const blink::mojom::RpContext& rp_context,
+      blink::mojom::RpContext rp_context,
+      blink::mojom::RpMode rp_mode,
       const content::IdentityProviderMetadata& idp_metadata) override;
   void ShowErrorDialog(const std::string& top_frame_for_display,
                        const std::optional<std::string>& iframe_for_display,
                        const std::string& idp_for_display,
-                       const blink::mojom::RpContext& rp_context,
+                       blink::mojom::RpContext rp_context,
+                       blink::mojom::RpMode rp_mode,
                        const content::IdentityProviderMetadata& idp_metadata,
                        const std::optional<TokenError>& error) override;
   std::string GetTitle() const override;
   std::optional<std::string> GetSubtitle() const override;
+  void ShowUrl(LinkType link_type, const GURL& url) override;
   content::WebContents* ShowModalDialog(const GURL& url) override;
   void CloseModalDialog() override;
 
@@ -53,8 +57,10 @@ class AccountSelectionViewAndroid : public AccountSelectionView {
       bool is_sign_in);
   void OnDismiss(JNIEnv* env, jint dismiss_reason);
   void OnLoginToIdP(JNIEnv* env,
+                    const base::android::JavaParamRef<jobject>& idp_config_url,
                     const base::android::JavaParamRef<jobject>& idp_login_url);
   void OnMoreDetails(JNIEnv* env);
+  void OnAccountsDisplayed(JNIEnv* env);
 
  private:
   // Returns either true if the java counterpart of this bridge is initialized

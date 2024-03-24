@@ -187,7 +187,8 @@ InterestGroupManagerImpl::InterestGroupManagerImpl(
       max_active_report_requests_(kMaxActiveReportRequests),
       max_report_queue_length_(kMaxReportQueueLength),
       reporting_interval_(kReportingInterval),
-      max_reporting_round_duration_(kMaxReportingRoundDuration) {}
+      max_reporting_round_duration_(kMaxReportingRoundDuration),
+      ba_key_fetcher_(this) {}
 
 InterestGroupManagerImpl::~InterestGroupManagerImpl() = default;
 
@@ -217,6 +218,8 @@ void InterestGroupManagerImpl::CheckPermissionsAndJoinInterestGroup(
     const net::NetworkIsolationKey& network_isolation_key,
     bool report_result_only,
     network::mojom::URLLoaderFactory& url_loader_factory,
+    scoped_refptr<network::SharedURLLoaderFactory>
+        url_loader_factory_for_keyfetch,
     AreReportingOriginsAttestedCallback attestation_callback,
     blink::mojom::AdAuctionService::JoinInterestGroupCallback callback) {
   url::Origin interest_group_owner = group.owner;
@@ -226,8 +229,8 @@ void InterestGroupManagerImpl::CheckPermissionsAndJoinInterestGroup(
       base::BindOnce(
           &InterestGroupManagerImpl::OnJoinInterestGroupPermissionsChecked,
           base::Unretained(this), std::move(group), joining_url,
-          report_result_only, std::move(attestation_callback),
-          std::move(callback)));
+          report_result_only, std::move(url_loader_factory_for_keyfetch),
+          std::move(attestation_callback), std::move(callback)));
 }
 
 void InterestGroupManagerImpl::CheckPermissionsAndLeaveInterestGroup(
@@ -306,7 +309,10 @@ void InterestGroupManagerImpl::OnClearOriginJoinedInterestGroupsComplete(
     const url::Origin& owner,
     std::vector<std::string> left_interest_group_names) {
   for (const auto& name : left_interest_group_names) {
-    NotifyInterestGroupAccessed(InterestGroupObserver::kClear, owner, name);
+    NotifyInterestGroupAccessed(
+        /*devtools_auction_id=*/std::nullopt, InterestGroupObserver::kClear,
+        owner, name, /*component_seller_origin=*/std::nullopt,
+        /*bid=*/std::nullopt, /*bid_currency=*/std::nullopt);
   }
 }
 
@@ -391,12 +397,14 @@ void InterestGroupManagerImpl::GetAllInterestGroupOwners(
 }
 
 void InterestGroupManagerImpl::GetInterestGroupsForOwner(
+    const std::optional<std::string>& devtools_auction_id,
     const url::Origin& owner,
     base::OnceCallback<void(scoped_refptr<StorageInterestGroups>)> callback) {
   caching_storage_.GetInterestGroupsForOwner(
       owner,
       base::BindOnce(&InterestGroupManagerImpl::OnGetInterestGroupsComplete,
-                     weak_factory_.GetWeakPtr(), std::move(callback)));
+                     weak_factory_.GetWeakPtr(), std::move(callback),
+                     devtools_auction_id));
 }
 
 void InterestGroupManagerImpl::DeleteInterestGroupData(
@@ -483,6 +491,22 @@ void InterestGroupManagerImpl::UpdateInterestGroupPriorityOverrides(
       group_key, std::move(update_priority_signals_overrides));
 }
 
+void InterestGroupManagerImpl::SetBiddingAndAuctionServerKeys(
+    const url::Origin& coordinator,
+    const std::vector<BiddingAndAuctionServerKey>& keys,
+    base::Time expiration) {
+  caching_storage_.SetBiddingAndAuctionServerKeys(coordinator, keys,
+                                                  expiration);
+}
+void InterestGroupManagerImpl::GetBiddingAndAuctionServerKeys(
+    const url::Origin& coordinator,
+    base::OnceCallback<
+        void(std::pair<base::Time, std::vector<BiddingAndAuctionServerKey>>)>
+        callback) {
+  caching_storage_.GetBiddingAndAuctionServerKeys(coordinator,
+                                                  std::move(callback));
+}
+
 void InterestGroupManagerImpl::ClearPermissionsCache() {
   permissions_checker_.ClearCache();
 }
@@ -527,8 +551,10 @@ void InterestGroupManagerImpl::LoadNextInterestGroupAdAuctionData(
   if (!owners.empty()) {
     url::Origin next_owner = std::move(owners.back());
     owners.pop_back();
+    // Since a single B&A blob can be associated with multiple auctions, we
+    // can't link these loads to a specific one.
     GetInterestGroupsForOwner(
-        next_owner,
+        /*devtools_auction_id=*/absl::nullopt, next_owner,
         base::BindOnce(
             &InterestGroupManagerImpl::OnLoadedNextInterestGroupAdAuctionData,
             weak_factory_.GetWeakPtr(), std::move(state), std::move(owners),
@@ -558,11 +584,11 @@ void InterestGroupManagerImpl::OnAdAuctionDataLoadComplete(
 }
 
 void InterestGroupManagerImpl::GetBiddingAndAuctionServerKey(
-    network::mojom::URLLoaderFactory* loader,
+    scoped_refptr<network::SharedURLLoaderFactory> loader,
     std::optional<url::Origin> coordinator,
     base::OnceCallback<void(
         base::expected<BiddingAndAuctionServerKey, std::string>)> callback) {
-  ba_key_fetcher_.GetOrFetchKey(loader, std::move(coordinator),
+  ba_key_fetcher_.GetOrFetchKey(std::move(loader), std::move(coordinator),
                                 std::move(callback));
 }
 
@@ -570,6 +596,8 @@ void InterestGroupManagerImpl::OnJoinInterestGroupPermissionsChecked(
     blink::InterestGroup group,
     const GURL& joining_url,
     bool report_result_only,
+    scoped_refptr<network::SharedURLLoaderFactory>
+        url_loader_factory_for_keyfetch,
     AreReportingOriginsAttestedCallback attestation_callback,
     blink::mojom::AdAuctionService::JoinInterestGroupCallback callback,
     bool can_join) {
@@ -601,6 +629,7 @@ void InterestGroupManagerImpl::OnJoinInterestGroupPermissionsChecked(
     }
     JoinInterestGroup(std::move(group), joining_url);
   }
+  ba_key_fetcher_.MaybePrefetchKeys(url_loader_factory_for_keyfetch);
 }
 
 void InterestGroupManagerImpl::OnLeaveInterestGroupPermissionsChecked(
@@ -674,8 +703,6 @@ void InterestGroupManagerImpl::UpdateInterestGroup(
     const blink::InterestGroupKey& group_key,
     InterestGroupUpdate update,
     base::OnceCallback<void(bool)> callback) {
-  NotifyInterestGroupAccessed(InterestGroupObserver::kUpdate, group_key.owner,
-                              group_key.name);
   caching_storage_.UpdateInterestGroup(
       group_key, std::move(update),
       base::BindOnce(&InterestGroupManagerImpl::OnUpdateComplete,
@@ -688,8 +715,11 @@ void InterestGroupManagerImpl::OnUpdateComplete(
     const std::string& name,
     base::OnceCallback<void(bool)> callback,
     bool success) {
-  NotifyInterestGroupAccessed(InterestGroupObserver::kUpdate, owner_origin,
-                              name);
+  NotifyInterestGroupAccessed(/*devtools_auction_id=*/std::nullopt,
+                              InterestGroupObserver::kUpdate, owner_origin,
+                              name, /*component_seller_origin=*/std::nullopt,
+                              /*bid=*/std::nullopt,
+                              /*bid_currency=*/std::nullopt);
   std::move(callback).Run(success);
 }
 
@@ -701,26 +731,35 @@ void InterestGroupManagerImpl::ReportUpdateFailed(
 
 void InterestGroupManagerImpl::OnGetInterestGroupsComplete(
     base::OnceCallback<void(scoped_refptr<StorageInterestGroups>)> callback,
+    const std::optional<std::string>& devtools_auction_id,
     scoped_refptr<StorageInterestGroups> groups) {
   for (const SingleStorageInterestGroup& group : groups->GetInterestGroups()) {
-    NotifyInterestGroupAccessed(InterestGroupObserver::kLoaded,
-                                group->interest_group.owner,
-                                group->interest_group.name);
+    NotifyInterestGroupAccessed(
+        devtools_auction_id, InterestGroupObserver::kLoaded,
+        group->interest_group.owner, group->interest_group.name,
+        /*component_seller_origin=*/std::nullopt,
+        /*bid=*/std::nullopt, /*bid_currency=*/std::nullopt);
   }
   std::move(callback).Run(std::move(groups));
 }
 
 void InterestGroupManagerImpl::NotifyInterestGroupAccessed(
+    base::optional_ref<const std::string> devtools_auction_id,
     InterestGroupObserver::AccessType type,
     const url::Origin& owner_origin,
-    const std::string& name) {
+    const std::string& name,
+    base::optional_ref<const url::Origin> component_seller_origin,
+    std::optional<double> bid,
+    base::optional_ref<const std::string> bid_currency) {
   // Don't bother getting the time if there are no observers.
   if (observers_.empty()) {
     return;
   }
   base::Time now = base::Time::Now();
   for (InterestGroupObserver& observer : observers_) {
-    observer.OnInterestGroupAccessed(now, type, owner_origin, name);
+    observer.OnInterestGroupAccessed(
+        devtools_auction_id, now, type, owner_origin, name,
+        component_seller_origin, bid, bid_currency);
   }
 }
 
@@ -823,8 +862,15 @@ InterestGroupManagerImpl::CreateNotifyInterestGroupAccessedCallback(
     InterestGroupObserver::AccessType type,
     const url::Origin& owner_origin,
     const std::string& name) {
+  // This is only used for join/leave, so no auction ID associated.
+  DCHECK(type == InterestGroupObserver::kJoin ||
+         type == InterestGroupObserver::kLeave);
   return base::BindOnce(&InterestGroupManagerImpl::NotifyInterestGroupAccessed,
-                        weak_factory_.GetWeakPtr(), type, owner_origin, name);
+                        weak_factory_.GetWeakPtr(),
+                        /*devtools_auction_id=*/std::nullopt, type,
+                        owner_origin, name,
+                        /*component_seller_origin=*/std::nullopt,
+                        /*bid=*/std::nullopt, /*bid_currency=*/std::nullopt);
 }
 
 }  // namespace content

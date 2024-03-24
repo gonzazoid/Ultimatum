@@ -190,7 +190,7 @@ class FrameSizeButton::PieAnimationView : public views::View,
   const raw_ptr<FrameSizeButton> button_;
 };
 
-BEGIN_METADATA(FrameSizeButton, PieAnimationView, views::View)
+BEGIN_METADATA(FrameSizeButton, PieAnimationView)
 END_METADATA
 
 // The class to observe the to-be-snapped window during the waiting-for-snap
@@ -411,13 +411,13 @@ void FrameSizeButton::StateChanged(views::Button::ButtonState old_state) {
   }
 }
 
-void FrameSizeButton::Layout() {
+void FrameSizeButton::Layout(PassKey) {
   // Use the bounds of the inkdrop for the pie animation.
   gfx::Rect bounds = GetLocalBounds();
   bounds.Inset(GetInkdropInsets(bounds.size()));
   pie_animation_view_->SetBoundsRect(bounds);
 
-  views::FrameCaptionButton::Layout();
+  LayoutSuperclass<views::FrameCaptionButton>(this);
 }
 
 void FrameSizeButton::OnDisplayTabletStateChanged(display::TabletState state) {
@@ -577,7 +577,7 @@ void FrameSizeButton::OnLongTapDelayTimerEnded(bool is_mouse,
   }
 }
 
-BEGIN_METADATA(FrameSizeButton, views::FrameCaptionButton)
+BEGIN_METADATA(FrameSizeButton)
 END_METADATA
 
 }  // namespace chromeos

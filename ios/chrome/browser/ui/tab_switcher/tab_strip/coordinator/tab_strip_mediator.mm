@@ -29,7 +29,7 @@
 #import "ios/web/public/navigation/navigation_manager.h"
 #import "ios/web/public/web_state.h"
 #import "ios/web/public/web_state_observer_bridge.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 #import "ui/gfx/image/image.h"
 
 namespace {
@@ -204,9 +204,8 @@ NSArray<TabSwitcherItem*>* CreateItems(WebStateList* web_state_list) {
   webState->GetNavigationManager()->LoadURLWithParams(loadParams);
 
   self.webStateList->InsertWebState(
-      base::checked_cast<int>(self.webStateList->count()), std::move(webState),
-      (WebStateList::INSERT_FORCE_INDEX | WebStateList::INSERT_ACTIVATE),
-      WebStateOpener());
+      std::move(webState),
+      WebStateList::InsertionParams::Automatic().Activate());
   TabSwitcherItem* item;
   if (self.webStateList->GetActiveWebState()) {
     item = [[WebStateTabSwitcherItem alloc]
@@ -243,7 +242,15 @@ NSArray<TabSwitcherItem*>* CreateItems(WebStateList* web_state_list) {
 }
 
 - (void)closeAllItemsExcept:(TabSwitcherItem*)item {
-  // TODO.
+  if (!self.webStateList) {
+    return;
+  }
+  auto indexToKeepSearchCriteria = WebStateSearchCriteria(item.identifier);
+  // Closes all non-pinned items except for `item`.
+  CloseOtherWebStates(
+      self.webStateList,
+      GetWebStateIndex(self.webStateList, indexToKeepSearchCriteria),
+      WebStateList::CLOSE_USER_ACTION);
 }
 
 #pragma mark - CRWWebStateObserver
@@ -290,13 +297,10 @@ NSArray<TabSwitcherItem*>* CreateItems(WebStateList* web_state_list) {
 }
 
 - (void)dragWillBeginForItem:(TabSwitcherItem*)item {
-  base::UmaHistogramEnumeration(kUmaTabStripViewDragDropTabs,
-                                DragDropTabs::kDragBegin);
   _dragItemID = item.identifier;
 }
 
 - (void)dragSessionDidEnd {
-  // TODO(crbug.com/1515507): Record metrics.
   _dragItemID = web::WebStateID();
 }
 
@@ -458,9 +462,8 @@ NSArray<TabSwitcherItem*>* CreateItems(WebStateList* web_state_list) {
   int webStateListIndex = [self webStateListIndexFromItemIndex:index];
 
   _webStateList->InsertWebState(
-      base::checked_cast<int>(webStateListIndex), std::move(webState),
-      (WebStateList::INSERT_FORCE_INDEX | WebStateList::INSERT_ACTIVATE),
-      WebStateOpener());
+      std::move(webState),
+      WebStateList::InsertionParams::AtIndex(webStateListIndex).Activate());
 }
 
 // Converts the collection view's item index to WebStateList index.

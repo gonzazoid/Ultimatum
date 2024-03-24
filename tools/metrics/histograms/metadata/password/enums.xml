@@ -111,6 +111,11 @@ chromium-metrics-reviews@google.com.
   <int value="7" label="Android version not supported"/>
 </enum>
 
+<enum name="BooleanCalled">
+  <int value="0" label="Not called"/>
+  <int value="1" label="Called"/>
+</enum>
+
 <enum name="BooleanFormManager">
   <int value="0" label="Has Form Manager"/>
   <int value="1" label="Lacks Form Manager"/>
@@ -311,6 +316,16 @@ chromium-metrics-reviews@google.com.
   <int value="2" label="User typed or autofilled values"/>
 </enum>
 
+<enum name="LocalUpmActivationError">
+  <int value="0"
+      label="None (activated / migration scheduled / previously activated)"/>
+  <int value="1" label="Unenrolled from UPM"/>
+  <int value="2" label="Initial UPM migration missing"/>
+  <int value="3" label="Login DB file move failed"/>
+  <int value="4" label="Outdated GmsCore"/>
+  <int value="5" label="Flag disabled"/>
+</enum>
+
 <enum name="LoginDatabaseEncryptionStatus">
   <int value="0" label="No issues"/>
   <int value="1"
@@ -392,6 +407,7 @@ chromium-metrics-reviews@google.com.
   <int value="18" label="Search Passwords widget"/>
   <int value="19" label="Add Username bubble"/>
   <int value="20" label="Omnibox Pedal Suggestion"/>
+  <int value="21" label="Default store changed bubble"/>
 </enum>
 
 <enum name="MigrationToOSCryptEnum">
@@ -471,6 +487,18 @@ chromium-metrics-reviews@google.com.
   <int value="16"
       label="Opened automatically / Notifying the user about incoming shared
              passwords"/>
+  <int value="17"
+      label="Opened automatically / Offering to add an username to the saved
+             password"/>
+  <int value="18"
+      label="Opened manually / Offering to add an username to the saved
+             password"/>
+  <int value="19"
+      label="Opened automatically / Offering to relaunch chrome as a result
+             of a keychain issue"/>
+  <int value="20"
+      label="Opened automatically / Notifying the user that their password
+             store setting changed"/>
 </enum>
 
 <enum name="PasswordBubbleFollowupType">
@@ -650,6 +678,7 @@ chromium-metrics-reviews@google.com.
   <int value="14" label="Full note selected"/>
   <int value="15" label="Part of a note copied"/>
   <int value="16" label="Full note copied"/>
+  <int value="17" label="Move password link clicked in details footer"/>
 </enum>
 
 <enum name="PasswordManager.AssistantStoppedBubble.CloseReason">
@@ -674,8 +703,8 @@ chromium-metrics-reviews@google.com.
     Recorded only on Win/Mac/Linux.
   </int>
   <int value="1" label="kExplicitlyTriggeredInSettings">
-    The user explicitly asked to move a password listed in Settings. Recorded
-    only on iOS.
+    The user explicitly asked to move a password listed in Settings. Recorded on
+    iOS/Win/Mac/Linux.
   </int>
   <int value="2" label="kExplicitlyTriggeredForMultiplePasswordsInSettings">
     The user explicitly asked to move multiple passwords at once in Settings.
@@ -689,6 +718,9 @@ chromium-metrics-reviews@google.com.
       label="kExplicitlyTriggeredForSinglePasswordInDetailsInSettings">
     The user explicitly asked to move a password to account store from password
     details page.
+  </int>
+  <int value="5" label="kExplicitlyTriggeredInPasswordsManagementBubble">
+    The user clicked a link in a footer of the manage passwords bubble.
   </int>
 </enum>
 
@@ -1148,12 +1180,14 @@ chromium-metrics-reviews@google.com.
   <int value="9" label="Downstream implementation not available."/>
   <int value="10"
       label="Failed to create FacetId to obtain affiliated matches."/>
+  <int value="11" label="Job cancelled because the sync state changed"/>
 </enum>
 
 <enum name="PasswordStoreAndroidBackendRequestStatus">
   <int value="0" label="Requested"/>
   <int value="1" label="Timeout"/>
   <int value="2" label="Completed"/>
+  <int value="3" label="Cancelled: password sync status changed"/>
 </enum>
 
 <enum name="PasswordStoreBackendErrorType">
@@ -1161,6 +1195,7 @@ chromium-metrics-reviews@google.com.
   <int value="1" label="AuthErrorResolvable"/>
   <int value="2" label="AuthErrorUnresolvable"/>
   <int value="3" label="KeychainError"/>
+  <int value="4" label="kKeyRetrievalRequired"/>
 </enum>
 
 <enum name="PasswordSubmissionEvent">

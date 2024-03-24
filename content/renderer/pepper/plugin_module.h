@@ -12,8 +12,8 @@
 #include <string>
 
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
-#include "base/memory/weak_ptr.h"
 #include "base/native_library.h"
 #include "base/process/process.h"
 #include "base/task/single_thread_task_runner.h"
@@ -58,10 +58,10 @@ struct WebPluginInfo;
 //
 // Note: to get from a PP_Instance to a PepperPluginInstance*, use the
 // ResourceTracker.
-class CONTENT_EXPORT PluginModule : public base::RefCounted<PluginModule>,
-                                    public base::SupportsWeakPtr<PluginModule> {
+class CONTENT_EXPORT PluginModule : public base::RefCounted<PluginModule> {
  public:
-  typedef std::set<PepperPluginInstanceImpl*> PluginInstanceSet;
+  typedef std::set<raw_ptr<PepperPluginInstanceImpl, SetExperimental>>
+      PluginInstanceSet;
 
   // You must call one of the Init functions after the constructor to create a
   // module of the type you desire.

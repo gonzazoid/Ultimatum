@@ -23,15 +23,15 @@
 #include "chrome/browser/accessibility/accessibility_state_utils.h"
 #include "chrome/browser/autofill/personal_data_manager_factory.h"
 #include "chrome/browser/feature_engagement/tracker_factory.h"
-#include "chrome/browser/picture_in_picture/picture_in_picture_window_manager.h"
 #include "chrome/browser/ui/autofill/autofill_popup_view.h"
-#include "components/autofill/content/browser/scoped_autofill_managers_observation.h"
+#include "chrome/browser/ui/autofill/next_idle_time_ticks.h"
+#include "components/autofill/core/browser/autofill_manager.h"
 #include "components/autofill/core/browser/filling_product.h"
 #include "components/autofill/core/browser/metrics/autofill_metrics.h"
 #include "components/autofill/core/browser/personal_data_manager.h"
 #include "components/autofill/core/browser/ui/autofill_popup_delegate.h"
+#include "components/autofill/core/browser/ui/popup_hiding_reasons.h"
 #include "components/autofill/core/browser/ui/popup_item_ids.h"
-#include "components/autofill/core/browser/ui/popup_types.h"
 #include "components/autofill/core/browser/ui/suggestion.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/feature_engagement/public/feature_constants.h"
@@ -53,7 +53,7 @@
 #include "ui/views/accessibility/view_accessibility.h"
 
 #if BUILDFLAG(IS_ANDROID)
-#include "chrome/browser/autofill/manual_filling_controller_impl.h"
+#include "chrome/browser/keyboard_accessory/android/manual_filling_controller_impl.h"
 #include "chrome/browser/password_manager/android/local_passwords_migration_warning_util.h"
 #include "components/password_manager/core/common/password_manager_features.h"
 
@@ -99,8 +99,9 @@ WeakPtr<AutofillPopupControllerImpl> AutofillPopupControllerImpl::GetOrCreate(
     return previous;
   }
 
-  if (previous)
+  if (previous) {
     previous->Hide(PopupHidingReason::kViewDestroyed);
+  }
 #if BUILDFLAG(IS_ANDROID)
   AutofillPopupControllerImpl* controller = new AutofillPopupControllerImpl(
       delegate, web_contents, container_view, element_bounds, text_direction,
@@ -127,7 +128,7 @@ AutofillPopupControllerImpl::AutofillPopupControllerImpl(
              password_manager::metrics_util::PasswordMigrationWarningTriggers)>
         show_pwd_migration_warning_callback,
     std::optional<base::WeakPtr<ExpandablePopupParentControllerImpl>> parent)
-    : content::WebContentsObserver(web_contents),
+    : web_contents_(web_contents->GetWeakPtr()),
       controller_common_(element_bounds, text_direction, container_view),
       delegate_(delegate),
       show_pwd_migration_warning_callback_(
@@ -136,63 +137,48 @@ AutofillPopupControllerImpl::AutofillPopupControllerImpl(
   ClearState();
   delegate->RegisterDeletionCallback(base::BindOnce(
       &AutofillPopupControllerImpl::HideViewAndDie, GetWeakPtr()));
-  PictureInPictureWindowManager* picture_in_picture_window_manager =
-      PictureInPictureWindowManager::GetInstance();
-  CHECK(picture_in_picture_window_manager);
-  picture_in_picture_window_observation_.Observe(
-      picture_in_picture_window_manager);
 }
 
 AutofillPopupControllerImpl::~AutofillPopupControllerImpl() = default;
-
-void AutofillPopupControllerImpl::RenderFrameDeleted(
-    content::RenderFrameHost* rfh) {
-  // If the popup menu has been triggered from within an iframe and that frame
-  // is deleted, hide the popup. This is necessary because the popup may
-  // actually be shown by the AutofillExternalDelegate of an ancestor frame,
-  // which is not notified about `rfh`'s destruction and therefore won't close
-  // the popup.
-  if (key_press_observer_.IsObserving(rfh->GetGlobalId())) {
-    Hide(PopupHidingReason::kRendererEvent);
-  }
-}
-
-void AutofillPopupControllerImpl::DidFinishNavigation(
-    content::NavigationHandle* navigation_handle) {
-  if (key_press_observer_.IsObserving(
-          navigation_handle->GetPreviousRenderFrameHostId()) &&
-      !navigation_handle->IsSameDocument()) {
-    Hide(PopupHidingReason::kNavigation);
-  }
-}
-
-void AutofillPopupControllerImpl::OnVisibilityChanged(
-    content::Visibility visibility) {
-  if (visibility == content::Visibility::HIDDEN) {
-    Hide(PopupHidingReason::kTabGone);
-  }
-}
-
-void AutofillPopupControllerImpl::OnBeforeTextFieldDidChange(
-    AutofillManager& manager,
-    FormGlobalId form,
-    FieldGlobalId field) {
-  // This method is only called for popups with a Compose entry. In this case,
-  // an edit on a field should lead to the popup hiding.
-  Hide(PopupHidingReason::kFieldValueChanged);
-}
 
 void AutofillPopupControllerImpl::Show(
     std::vector<Suggestion> suggestions,
     AutofillSuggestionTriggerSource trigger_source,
     AutoselectFirstSuggestion autoselect_first_suggestion) {
-  if (IsMouseLocked()) {
+  // Autofill popups should only be shown in focused windows because on Windows
+  // the popup may overlap the focused window (see crbug.com/1239760).
+  if (auto* rwhv = web_contents_->GetRenderWidgetHostView();
+      !rwhv || !rwhv->HasFocus()) {
+    return;
+  }
+
+  if (IsPointerLocked()) {
     Hide(PopupHidingReason::kMouseLocked);
     return;
   }
 
-  content::RenderFrameHost* rfh = web_contents()->GetFocusedFrame();
-  if (!rfh) {
+  AutofillPopupHideHelper::HidingParams hiding_params = {
+      // It suffices if the root popup observes changes in form elements.
+      // Currently, this is only relevant for Compose.
+      .hide_on_text_field_change =
+          IsRootPopup() && suggestions.size() == 1 &&
+          suggestions[0].popup_item_id == PopupItemId::kCompose};
+  AutofillPopupHideHelper::HidingCallback hiding_callback = base::BindRepeating(
+      &AutofillPopupControllerImpl::Hide, base::Unretained(this));
+  AutofillPopupHideHelper::PictureInPictureDetectionCallback
+      pip_detection_callback = base::BindRepeating(
+          [](base::WeakPtr<AutofillPopupControllerImpl> controller) {
+            return controller && controller->view_ &&
+                   controller->view_->OverlapsWithPictureInPictureWindow();
+          },
+          GetWeakPtr());
+  // The hide helper is destroyed on hide, so it cannot outlive the popup
+  // controller.
+  popup_hide_helper_ = AutofillPopupHideHelper::CreateAutofillPopupHideHelper(
+      web_contents_.get(), std::move(hiding_params), std::move(hiding_callback),
+      std::move(pip_detection_callback));
+  // If the hide helper is null, then no frame has focus.
+  if (!popup_hide_helper_) {
     Hide(PopupHidingReason::kNoFrameHasFocus);
     return;
   }
@@ -220,7 +206,7 @@ void AutofillPopupControllerImpl::Show(
     }
 
 #if BUILDFLAG(IS_ANDROID)
-    ManualFillingController::GetOrCreate(web_contents())
+    ManualFillingController::GetOrCreate(web_contents_.get())
         ->UpdateSourceAvailability(FillingSource::AUTOFILL,
                                    !suggestions_.empty());
 #endif
@@ -232,25 +218,19 @@ void AutofillPopupControllerImpl::Show(
     // event when suggestions changed.
     FireControlsChangedEvent(true);
   }
-  time_view_shown_ = base::TimeTicks::Now();
+
+  time_view_shown_ = base::FeatureList::IsEnabled(
+                         features::kAutofillPopupImprovedTimingChecksV2)
+                         ? NextIdleTimeTicks::CaptureNextIdleTimeTicksWithDelay(
+                               kIgnoreEarlyClicksOnPopupDuration)
+                         : NextIdleTimeTicks::CaptureNextIdleTimeTicks();
 
   if (IsRootPopup()) {
     // We may already be observing from a previous `Show` call.
     // TODO(crbug.com/1513659): Consider not to recycle views or controllers
     // and only permit a single call to `Show`.
     key_press_observer_.Reset();
-    key_press_observer_.Observe(rfh);
-
-    // It suffices if the root popup observes changes in form elements.
-    // Currently, this is only relevant for Compose.
-    if (suggestions_.size() == 1 &&
-        suggestions_[0].popup_item_id == PopupItemId::kCompose) {
-      autofill_managers_observation_.Reset();
-      autofill_managers_observation_.Observe(
-          web_contents(),
-          ScopedAutofillManagersObservation::InitializationPolicy::
-              kObservePreexistingManagers);
-    }
+    key_press_observer_.Observe(web_contents_->GetFocusedFrame());
 
     delegate_->OnPopupShown();
   }
@@ -332,7 +312,7 @@ void AutofillPopupControllerImpl::Hide(PopupHidingReason reason) {
     delegate_->OnPopupHidden();
   }
   key_press_observer_.Reset();
-  autofill_managers_observation_.Reset();
+  popup_hide_helper_.reset();
   AutofillMetrics::LogAutofillPopupHidingReason(reason);
   HideViewAndDie();
 }
@@ -357,7 +337,7 @@ void AutofillPopupControllerImpl::OnSuggestionsChanged() {
 #if BUILDFLAG(IS_ANDROID)
   // Assume that suggestions are (still) available. If this is wrong, the method
   // |HideViewAndDie| will be called soon after and will hide all suggestions.
-  ManualFillingController::GetOrCreate(web_contents())
+  ManualFillingController::GetOrCreate(web_contents_.get())
       ->UpdateSourceAvailability(FillingSource::AUTOFILL,
                                  /*has_suggestions=*/true);
 #endif
@@ -371,11 +351,26 @@ void AutofillPopupControllerImpl::AcceptSuggestion(int index,
                                                    base::TimeTicks event_time) {
   // Ignore clicks immediately after the popup was shown. This is to prevent
   // users accidentally accepting suggestions (crbug.com/1279268).
-  CHECK(!time_view_shown_.is_null());
+  if (time_view_shown_.value().is_null() && !disable_threshold_for_testing_) {
+    return;
+  }
   CHECK(!event_time.is_null());
-  const base::TimeDelta time_elapsed = event_time - time_view_shown_;
-  if ((time_elapsed < kIgnoreEarlyClicksOnPopupDuration) &&
-      !disable_threshold_for_testing_) {
+  const base::TimeDelta time_elapsed = event_time - time_view_shown_.value();
+  // If `kAutofillPopupImprovedTimingChecksV2` is enabled, then
+  // `time_view_shown_` will remain null for at least
+  // `kIgnoreEarlyClicksOnPopupDuration`. Therefore we do not have to check any
+  // times here.
+  // TODO(crbug.com/1475902): Once `kAutofillPopupImprovedTimingChecksV2` is
+  // launched, clean up most of the timing checks. That is:
+  // - Remove paint checks inside views.
+  // - Remove `event_time` parameters.
+  // - Rename `NextIdleTimeTicks` to `IdleDelayBarrier` or something similar
+  //   that indicates that just contains a boolean signaling whether a certain
+  //   delay has (safely) passed.
+  if (time_elapsed < kIgnoreEarlyClicksOnPopupDuration &&
+      !disable_threshold_for_testing_ &&
+      !base::FeatureList::IsEnabled(
+          features::kAutofillPopupImprovedTimingChecksV2)) {
     base::UmaHistogramCustomTimes(
         "Autofill.Popup.AcceptanceDelayThresholdNotMet", time_elapsed,
         base::Milliseconds(0), kIgnoreEarlyClicksOnPopupDuration,
@@ -391,7 +386,7 @@ void AutofillPopupControllerImpl::AcceptSuggestion(int index,
     return;
   }
 
-  if (IsMouseLocked()) {
+  if (IsPointerLocked()) {
     Hide(PopupHidingReason::kMouseLocked);
     return;
   }
@@ -401,7 +396,8 @@ void AutofillPopupControllerImpl::AcceptSuggestion(int index,
   // reference.
   Suggestion suggestion = suggestions_[index];
 #if BUILDFLAG(IS_ANDROID)
-  auto mf_controller = ManualFillingController::GetOrCreate(web_contents());
+  auto mf_controller =
+      ManualFillingController::GetOrCreate(web_contents_.get());
   // Accepting a suggestion should hide all suggestions. To prevent them from
   // coming up in Multi-Window mode, mark the source as unavailable.
   mf_controller->UpdateSourceAvailability(FillingSource::AUTOFILL,
@@ -417,7 +413,7 @@ void AutofillPopupControllerImpl::AcceptSuggestion(int index,
             ? "autofill_virtual_card_cvc_suggestion_accepted"
             : "autofill_virtual_card_suggestion_accepted";
     feature_engagement::TrackerFactory::GetForBrowserContext(
-        web_contents()->GetBrowserContext())
+        web_contents_->GetBrowserContext())
         ->NotifyEvent(event_name);
   }
 
@@ -425,7 +421,7 @@ void AutofillPopupControllerImpl::AcceptSuggestion(int index,
       feature_engagement::kIPHAutofillExternalAccountProfileSuggestionFeature
           .name) {
     feature_engagement::TrackerFactory::GetForBrowserContext(
-        web_contents()->GetBrowserContext())
+        web_contents_->GetBrowserContext())
         ->NotifyEvent("autofill_external_account_profile_suggestion_accepted");
   }
 
@@ -439,14 +435,13 @@ void AutofillPopupControllerImpl::AcceptSuggestion(int index,
       suggestion, AutofillPopupDelegate::SuggestionPosition{
                       .row = index, .sub_popup_level = GetPopupLevel()});
 #if BUILDFLAG(IS_ANDROID)
-  if ((suggestion.popup_item_id == PopupItemId::kPasswordEntry ||
-       suggestion.popup_item_id == PopupItemId::kUsernameEntry) &&
+  if ((suggestion.popup_item_id == PopupItemId::kPasswordEntry) &&
       base::FeatureList::IsEnabled(
           password_manager::features::
               kUnifiedPasswordManagerLocalPasswordsMigrationWarning)) {
     show_pwd_migration_warning_callback_.Run(
-        web_contents()->GetTopLevelNativeWindow(),
-        Profile::FromBrowserContext(web_contents()->GetBrowserContext()),
+        web_contents_->GetTopLevelNativeWindow(),
+        Profile::FromBrowserContext(web_contents_->GetBrowserContext()),
         password_manager::metrics_util::PasswordMigrationWarningTriggers::
             kKeyboardAcessoryBar);
   }
@@ -463,7 +458,7 @@ gfx::NativeView AutofillPopupControllerImpl::container_view() const {
 }
 
 content::WebContents* AutofillPopupControllerImpl::GetWebContents() const {
-  return web_contents();
+  return web_contents_.get();
 }
 
 const gfx::RectF& AutofillPopupControllerImpl::element_bounds() const {
@@ -490,7 +485,7 @@ AutofillPopupControllerImpl::OpenSubPopup(
     std::vector<Suggestion> suggestions,
     AutoselectFirstSuggestion autoselect_first_suggestion) {
   AutofillPopupControllerImpl* controller = new AutofillPopupControllerImpl(
-      delegate_, web_contents(), controller_common_.container_view,
+      delegate_, web_contents_.get(), controller_common_.container_view,
       anchor_bounds, controller_common_.text_direction, base::DoNothing(),
       /*parent=*/GetWeakPtr());
 
@@ -512,12 +507,6 @@ void AutofillPopupControllerImpl::HideSubPopup() {
 
 bool AutofillPopupControllerImpl::IsRootPopup() const {
   return !parent_controller_;
-}
-
-void AutofillPopupControllerImpl::OnEnterPictureInPicture() {
-  if (view_ && view_->OverlapsWithPictureInPictureWindow()) {
-    Hide(PopupHidingReason::kOverlappingWithPictureInPictureWindow);
-  }
 }
 
 int AutofillPopupControllerImpl::GetLineCount() const {
@@ -568,7 +557,7 @@ bool AutofillPopupControllerImpl::GetRemovalConfirmationText(
     return false;
   }
   PersonalDataManager* pdm = PersonalDataManagerFactory::GetForBrowserContext(
-      web_contents()->GetBrowserContext());
+      web_contents_->GetBrowserContext());
 
   if (const CreditCard* credit_card = pdm->GetCreditCardByGUID(
           absl::get<Suggestion::Guid>(backend_id).value())) {
@@ -609,7 +598,7 @@ bool AutofillPopupControllerImpl::GetRemovalConfirmationText(
 bool AutofillPopupControllerImpl::RemoveSuggestion(
     int list_index,
     AutofillMetrics::SingleEntryRemovalMethod removal_method) {
-  if (IsMouseLocked()) {
+  if (IsPointerLocked()) {
     Hide(PopupHidingReason::kMouseLocked);
     return false;
   }
@@ -625,13 +614,10 @@ bool AutofillPopupControllerImpl::RemoveSuggestion(
     return false;
   }
 
-  PopupItemId suggestion_type = suggestions_[list_index].popup_item_id;
-  if (!delegate_->RemoveSuggestion(
-          suggestions_[list_index].main_text.value,
-          suggestions_[list_index].popup_item_id,
-          suggestions_[list_index].GetPayload<Suggestion::BackendId>())) {
+  if (!delegate_->RemoveSuggestion(suggestions_[list_index])) {
     return false;
   }
+  PopupItemId suggestion_type = suggestions_[list_index].popup_item_id;
   switch (GetFillingProductFromPopupItemId(suggestion_type)) {
     case FillingProduct::kAddress:
       switch (removal_method) {
@@ -684,7 +670,7 @@ bool AutofillPopupControllerImpl::RemoveSuggestion(
 void AutofillPopupControllerImpl::SelectSuggestion(int index) {
   CHECK_LT(index, static_cast<int>(suggestions_.size()));
 
-  if (IsMouseLocked()) {
+  if (IsPointerLocked()) {
     Hide(PopupHidingReason::kMouseLocked);
     return;
   }
@@ -699,10 +685,6 @@ void AutofillPopupControllerImpl::SelectSuggestion(int index) {
 
 void AutofillPopupControllerImpl::UnselectSuggestion() {
   delegate_->ClearPreviewedForm();
-}
-
-PopupType AutofillPopupControllerImpl::GetPopupType() const {
-  return delegate_->GetPopupType();
 }
 
 FillingProduct AutofillPopupControllerImpl::GetMainFillingProduct() const {
@@ -751,7 +733,7 @@ void AutofillPopupControllerImpl::HideViewAndDie() {
   // Mark the popup-like filling sources as unavailable.
   // Note: We don't invoke ManualFillingController::Hide() here, as we might
   // switch between text input fields.
-  ManualFillingController::GetOrCreate(web_contents())
+  ManualFillingController::GetOrCreate(web_contents_.get())
       ->UpdateSourceAvailability(FillingSource::AUTOFILL,
                                  /*has_suggestions=*/false);
 #endif
@@ -777,11 +759,11 @@ void AutofillPopupControllerImpl::HideViewAndDie() {
                      self_deletion_weak_ptr_factory_.GetWeakPtr()));
 }
 
-bool AutofillPopupControllerImpl::IsMouseLocked() const {
+bool AutofillPopupControllerImpl::IsPointerLocked() const {
   content::RenderFrameHost* rfh;
   content::RenderWidgetHostView* rwhv;
-  return web_contents() && (rfh = web_contents()->GetFocusedFrame()) &&
-         (rwhv = rfh->GetView()) && rwhv->IsMouseLocked();
+  return web_contents_ && (rfh = web_contents_->GetFocusedFrame()) &&
+         (rwhv = rfh->GetView()) && rwhv->IsPointerLocked();
 }
 
 base::WeakPtr<AutofillPopupView>
@@ -800,7 +782,7 @@ void AutofillPopupControllerImpl::FireControlsChangedEvent(bool is_show) {
 
   // Retrieve the ax tree id associated with the current web contents.
   ui::AXTreeID tree_id;
-  if (content::RenderFrameHost* rfh = web_contents()->GetFocusedFrame()) {
+  if (content::RenderFrameHost* rfh = web_contents_->GetFocusedFrame()) {
     tree_id = rfh->GetAXTreeID();
   }
 
@@ -845,11 +827,11 @@ void AutofillPopupControllerImpl::FireControlsChangedEvent(bool is_show) {
 
 ui::AXPlatformNode*
 AutofillPopupControllerImpl::GetRootAXPlatformNodeForWebContents() {
-  if (!web_contents()) {
+  if (!web_contents_) {
     return nullptr;
   }
 
-  auto* rwhv = web_contents()->GetRenderWidgetHostView();
+  auto* rwhv = web_contents_->GetRenderWidgetHostView();
   if (!rwhv)
     return nullptr;
 
@@ -869,11 +851,6 @@ AutofillPopupControllerImpl::KeyPressObserver::KeyPressObserver(
 
 AutofillPopupControllerImpl::KeyPressObserver::~KeyPressObserver() {
   Reset();
-}
-
-bool AutofillPopupControllerImpl::KeyPressObserver::IsObserving(
-    content::GlobalRenderFrameHostId rfh) const {
-  return handler_ && rfh_ == rfh;
 }
 
 void AutofillPopupControllerImpl::KeyPressObserver::Observe(

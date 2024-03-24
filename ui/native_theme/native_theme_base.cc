@@ -213,7 +213,7 @@ void NativeThemeBase::Paint(cc::PaintCanvas* canvas,
                             const gfx::Rect& rect,
                             const ExtraParams& extra,
                             ColorScheme color_scheme,
-                            const absl::optional<SkColor>& accent_color) const {
+                            const std::optional<SkColor>& accent_color) const {
   if (rect.IsEmpty())
     return;
 
@@ -221,7 +221,7 @@ void NativeThemeBase::Paint(cc::PaintCanvas* canvas,
   canvas->clipRect(gfx::RectToSkRect(rect));
 
   // Form control accents shouldn't be drawn with any transparency.
-  absl::optional<SkColor> accent_color_opaque;
+  std::optional<SkColor> accent_color_opaque;
   if (accent_color) {
     accent_color_opaque = SkColorSetA(accent_color.value(), SK_AlphaOPAQUE);
   }
@@ -357,9 +357,8 @@ gfx::Rect NativeThemeBase::GetNinePatchAperture(Part part) const {
 NativeThemeBase::NativeThemeBase() : NativeThemeBase(false) {}
 
 NativeThemeBase::NativeThemeBase(bool should_only_use_dark_colors,
-                                 ui::SystemTheme system_theme,
-                                 NativeTheme* theme_to_update)
-    : NativeTheme(should_only_use_dark_colors, system_theme, theme_to_update) {}
+                                 ui::SystemTheme system_theme)
+    : NativeTheme(should_only_use_dark_colors, system_theme) {}
 
 NativeThemeBase::~NativeThemeBase() = default;
 
@@ -370,13 +369,14 @@ void NativeThemeBase::PaintArrowButton(
     Part direction,
     State state,
     ColorScheme color_scheme,
-    const ScrollbarArrowExtraParams& arrow) const {
+    const ScrollbarArrowExtraParams& extra_params) const {
   cc::PaintFlags flags;
 
   // Calculate button color.
   SkScalar track_hsv[3];
-  SkColorToHSV(arrow.track_color.value_or(GetColor(kTrackColor, color_scheme)),
-               track_hsv);
+  SkColorToHSV(
+      extra_params.track_color.value_or(GetColor(kTrackColor, color_scheme)),
+      track_hsv);
   SkColor button_color = SaturateAndBrighten(track_hsv, 0, 0.2f);
   SkColor background_color = button_color;
   if (state == kPressed) {
@@ -448,8 +448,8 @@ void NativeThemeBase::PaintArrowButton(
 
   // TODO(crbug.com/891944): Adjust thumb_color based on `state`.
   const SkColor arrow_color =
-      arrow.thumb_color.has_value()
-          ? arrow.thumb_color.value()
+      extra_params.thumb_color.has_value()
+          ? extra_params.thumb_color.value()
           : GetArrowColor(state, color_scheme, color_provider);
   PaintArrow(canvas, rect, direction, arrow_color);
 }
@@ -616,7 +616,7 @@ void NativeThemeBase::PaintCheckbox(
     const gfx::Rect& rect,
     const ButtonExtraParams& button,
     ColorScheme color_scheme,
-    const absl::optional<SkColor>& accent_color) const {
+    const std::optional<SkColor>& accent_color) const {
   const float border_radius =
       GetBorderRadiusForPart(kCheckbox, rect.width(), rect.height());
 
@@ -677,7 +677,7 @@ SkRect NativeThemeBase::PaintCheckboxRadioCommon(
     bool is_checkbox,
     const SkScalar border_radius,
     ColorScheme color_scheme,
-    const absl::optional<SkColor>& accent_color) const {
+    const std::optional<SkColor>& accent_color) const {
   SkRect skrect = gfx::RectToSkRect(rect);
 
   // Use the largest square that fits inside the provided rectangle.
@@ -758,7 +758,7 @@ void NativeThemeBase::PaintRadio(
     const gfx::Rect& rect,
     const ButtonExtraParams& button,
     ColorScheme color_scheme,
-    const absl::optional<SkColor>& accent_color) const {
+    const std::optional<SkColor>& accent_color) const {
   // Most of a radio button is the same as a checkbox, except the the rounded
   // square is a circle (i.e. border radius >= 100%).
   const float border_radius =
@@ -1002,7 +1002,7 @@ void NativeThemeBase::PaintSliderTrack(
     const gfx::Rect& rect,
     const SliderExtraParams& slider,
     ColorScheme color_scheme,
-    const absl::optional<SkColor>& accent_color) const {
+    const std::optional<SkColor>& accent_color) const {
   // Paint the entire slider track.
   cc::PaintFlags flags;
   flags.setAntiAlias(true);
@@ -1059,7 +1059,7 @@ void NativeThemeBase::PaintSliderThumb(
     const gfx::Rect& rect,
     const SliderExtraParams& slider,
     ColorScheme color_scheme,
-    const absl::optional<SkColor>& accent_color) const {
+    const std::optional<SkColor>& accent_color) const {
   const float radius =
       GetBorderRadiusForPart(kSliderThumb, rect.width(), rect.height());
   SkRect thumb_rect = gfx::RectToSkRect(rect);
@@ -1131,7 +1131,7 @@ void NativeThemeBase::PaintProgressBar(
     const gfx::Rect& rect,
     const ProgressBarExtraParams& progress_bar,
     ColorScheme color_scheme,
-    const absl::optional<SkColor>& accent_color) const {
+    const std::optional<SkColor>& accent_color) const {
   DCHECK(!rect.IsEmpty());
   // Paint the track.
   cc::PaintFlags flags;

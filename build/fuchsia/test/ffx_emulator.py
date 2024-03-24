@@ -9,14 +9,11 @@ import logging
 import os
 import json
 import random
-import subprocess
 
 from contextlib import AbstractContextManager
 
-from common import run_ffx_command, IMAGES_ROOT, SDK_ROOT
+from common import run_ffx_command, IMAGES_ROOT, INTERNAL_IMAGES_ROOT, SDK_ROOT
 from compatible_utils import get_host_arch
-
-_EMU_COMMAND_RETRIES = 3
 
 
 class FfxEmulator(AbstractContextManager):
@@ -60,6 +57,8 @@ class FfxEmulator(AbstractContextManager):
         logging.info('Starting emulator %s', self._node_name)
         prod, board = self._product.split('.', 1)
         image_dir = os.path.join(IMAGES_ROOT, prod, board)
+        if not os.path.isdir(image_dir):
+            image_dir = os.path.join(INTERNAL_IMAGES_ROOT, prod, board)
         emu_command = ['emu', 'start', image_dir, '--name', self._node_name]
         if not self._enable_graphics:
             emu_command.append('-H')
@@ -114,24 +113,15 @@ class FfxEmulator(AbstractContextManager):
             qemu_arm64_meta = data.replace(r'tools/x64', 'tools/arm64')
             with open(qemu_arm64_meta_file, "w+") as f:
                 json.dump(ast.literal_eval(qemu_arm64_meta), f)
+
+        # Always use qemu for arm64 images, no matter it runs on arm64 hosts or
+        # x64 hosts with simulation.
+        if self._product.endswith('arm64'):
             emu_command.extend(['--engine', 'qemu'])
 
-        for i in range(_EMU_COMMAND_RETRIES):
-
-            # If the ffx daemon fails to establish a connection with
-            # the emulator after 85 seconds, that means the emulator
-            # failed to be brought up and a retry is needed.
-            # TODO(fxb/103540): Remove retry when start up issue is fixed.
-            try:
-                if i > 0:
-                    logging.warning(
-                        'Emulator failed to start.')
-                run_ffx_command(cmd=emu_command,
-                                timeout=100,
-                                configs=['emu.start.timeout=90'])
-                break
-            except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
-                run_ffx_command(cmd=('emu', 'stop'))
+        run_ffx_command(cmd=emu_command,
+                        timeout=310,
+                        configs=['emu.start.timeout=300'])
 
         return self._node_name
 

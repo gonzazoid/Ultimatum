@@ -189,7 +189,7 @@ std::string ParseInstanceIDKey(const std::string& key) {
 // outlive the slice.
 // For example: MakeSlice(MakeOutgoingKey(x)) is invalid.
 leveldb::Slice MakeSlice(std::string_view s) {
-  return leveldb::Slice(s.begin(), s.size());
+  return leveldb::Slice(s.data(), s.size());
 }
 
 }  // namespace
@@ -358,7 +358,7 @@ void GCMStoreImpl::Backend::Load(StoreOpenMode open_mode,
                                  LoadCallback callback) {
   std::unique_ptr<LoadResult> result(new LoadResult());
   LoadStatus load_status = OpenStoreAndLoadData(open_mode, result.get());
-  UMA_HISTOGRAM_ENUMERATION("GCM.LoadStatus", load_status, LOAD_STATUS_COUNT);
+
   if (load_status != LOADING_SUCCEEDED) {
     result->Reset();
     result->store_does_not_exist = (load_status == STORE_DOES_NOT_EXIST);

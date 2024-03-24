@@ -66,7 +66,6 @@ class GPU_GLES2_EXPORT SharedImageInterfaceInProcess
       const SharedImageInterfaceInProcess&) = delete;
 
   // SharedImageInterface:
-  ~SharedImageInterfaceInProcess() override;
   scoped_refptr<ClientSharedImage> CreateSharedImage(
       viz::SharedImageFormat format,
       const gfx::Size& size,
@@ -115,7 +114,7 @@ class GPU_GLES2_EXPORT SharedImageInterfaceInProcess
       uint32_t usage,
       base::StringPiece debug_label,
       gfx::GpuMemoryBufferHandle buffer_handle) override;
-  scoped_refptr<ClientSharedImage> CreateSharedImage(
+  SharedImageInterface::SharedImageMapping CreateSharedImage(
       viz::SharedImageFormat format,
       const gfx::Size& size,
       const gfx::ColorSpace& color_space,
@@ -145,6 +144,11 @@ class GPU_GLES2_EXPORT SharedImageInterfaceInProcess
   scoped_refptr<ClientSharedImage> AddReferenceToSharedImage(
       const SyncToken& sync_token,
       const Mailbox& mailbox,
+      viz::SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
       uint32_t usage) override;
   SwapChainSharedImages CreateSwapChain(viz::SharedImageFormat format,
                                         const gfx::Size& size,
@@ -163,12 +167,16 @@ class GPU_GLES2_EXPORT SharedImageInterfaceInProcess
 #endif  // BUILDFLAG(IS_FUCHSIA)
   SyncToken GenUnverifiedSyncToken() override;
   SyncToken GenVerifiedSyncToken() override;
+  void VerifySyncToken(SyncToken& sync_token) override;
   void WaitSyncToken(const SyncToken& sync_token) override;
   void Flush() override;
   scoped_refptr<gfx::NativePixmap> GetNativePixmap(
       const gpu::Mailbox& mailbox) override;
 
   const SharedImageCapabilities& GetCapabilities() override;
+
+ protected:
+  ~SharedImageInterfaceInProcess() override;
 
  private:
   // Parameters needed to be passed in to set up the class on the GPU.

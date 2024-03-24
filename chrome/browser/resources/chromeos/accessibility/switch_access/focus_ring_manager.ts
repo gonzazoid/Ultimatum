@@ -2,7 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {RectUtil} from '../common/rect_util.js';
+import {RectUtil} from '/common/rect_util.js';
+import {TestImportManager} from '/common/testing/test_import_manager.js';
 
 import {MenuManager} from './menu_manager.js';
 import {SAChildNode, SANode} from './nodes/switch_access_node.js';
@@ -67,7 +68,8 @@ export class FocusRingManager {
     // If the primary node is a group, show its first child as the "preview"
     // focus.
     if (node.isGroup()) {
-      const firstChild = node.asRootNode().firstChild;
+      // TODO(b/314203187): Not null asserted, check that this is correct.
+      const firstChild = node.asRootNode()!.firstChild;
       FocusRingManager.instance.setFocusedNodeGroup_(node, firstChild);
       return;
     }
@@ -174,7 +176,8 @@ export class FocusRingManager {
     // Show the preview focus ring unless the menu is open (it has a custom exit
     // button).
     if (!MenuManager.isMenuOpen()) {
-      this.rings_[RingId.PREVIEW].rects = [node.group.location];
+      // TODO(b/314203187): Not null asserted, check that this is correct.
+      this.rings_[RingId.PREVIEW].rects = [node.group!.location];
     }
     this.updateNodesForTesting_(node, node.group);
     this.updateFocusRings_();
@@ -254,3 +257,5 @@ const PREVIEW_COLOR = '#8AB4F880';  // Google Blue 300, 50% opacity
 
 /** The inner color of the primary focus ring. */
 const PRIMARY_COLOR = '#8AB4F8';  // Google Blue 300
+
+TestImportManager.exportForTesting(FocusRingManager, ['RingId', RingId]);

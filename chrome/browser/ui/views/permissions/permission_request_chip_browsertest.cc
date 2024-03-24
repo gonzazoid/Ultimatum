@@ -4,6 +4,7 @@
 
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/ui/browser.h"
@@ -26,6 +27,7 @@
 #include "components/permissions/test/permission_request_observer.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "ui/gfx/animation/animation.h"
 #include "ui/gfx/animation/animation_test_api.h"
 #include "ui/views/test/views_test_utils.h"
@@ -94,8 +96,7 @@ IN_PROC_BROWSER_TEST_F(PermissionRequestChipGestureSensitiveBrowserTest,
   if (!features::IsChromeRefresh2023() &&
       !OmniboxFieldTrial::IsCr23LayoutEnabled()) {
     // CR2023 has a few experimental flavors of LocationIconView positioning.
-    // It does not make sense to test them here.
-    // See LocationBarView::Layout().
+    // It does not make sense to test them here. See LocationBarView::Layout().
     EXPECT_EQ(lbv->location_icon_view()->bounds().x(),
               GetLayoutConstant(LOCATION_BAR_ELEMENT_PADDING));
   }
@@ -353,7 +354,7 @@ class PermissionRequestChipBrowserUiTest : public UiBrowserTest {
 
   bool VerifyUi() override {
     LocationBarView* const location_bar = GetLocationBarView(browser());
-    OmniboxChipButton* const chip = location_bar->GetChipController()->chip();
+    PermissionChipView* const chip = location_bar->GetChipController()->chip();
     if (!chip || !chip->GetVisible() || chip->is_fully_collapsed()) {
       return false;
     }

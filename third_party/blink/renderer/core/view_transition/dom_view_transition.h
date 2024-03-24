@@ -25,12 +25,10 @@ class ViewTransition;
 class CORE_EXPORT DOMViewTransition : public ScriptWrappable,
                                       public ExecutionContextLifecycleObserver {
   DEFINE_WRAPPERTYPEINFO();
-  using PromiseProperty =
-      ScriptPromiseProperty<ToV8UndefinedGenerator, ScriptValue>;
+  using PromiseProperty = ScriptPromiseProperty<IDLUndefined, IDLAny>;
 
  public:
-  // Constructor for navigation-initiated view transition (used only in the new
-  // document).
+  // Constructor for navigation-initiated view transition.
   explicit DOMViewTransition(ExecutionContext&, ViewTransition&);
 
   // Constructor for script-initiated view transition. Also delegated from the
@@ -46,9 +44,9 @@ class CORE_EXPORT DOMViewTransition : public ScriptWrappable,
 
   // IDL implementation. Refer to view_transition.idl for additional comments.
   void skipTransition();
-  ScriptPromise finished(ScriptState*) const;
-  ScriptPromise ready(ScriptState*) const;
-  ScriptPromise updateCallbackDone(ScriptState*) const;
+  ScriptPromiseTyped<IDLUndefined> finished(ScriptState*) const;
+  ScriptPromiseTyped<IDLUndefined> ready(ScriptState*) const;
+  ScriptPromiseTyped<IDLUndefined> updateCallbackDone(ScriptState*) const;
 
   // Called from ViewTransition when the transition is skipped/aborted for any
   // reason.

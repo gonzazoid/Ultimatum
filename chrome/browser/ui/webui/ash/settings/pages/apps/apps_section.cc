@@ -23,7 +23,6 @@
 #include "chrome/browser/ui/webui/ash/settings/pages/system_preferences/startup_section.h"
 #include "chrome/browser/ui/webui/ash/settings/search/search_tag_registry.h"
 #include "chrome/browser/ui/webui/webui_util.h"
-#include "chrome/common/chrome_features.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/os_settings_resources.h"
@@ -203,6 +202,34 @@ const std::vector<SearchConcept>& GetAndroidPlayStoreDisabledSearchConcepts() {
        {IDS_OS_SETTINGS_TAG_ANDROID_TURN_ON_PLAY_STORE_ALT1,
         SearchConcept::kAltTagEnd}},
   });
+  return *tags;
+}
+
+const std::vector<SearchConcept>& GetManageIsolatedWebAppsSearchConcepts() {
+  static const base::NoDestructor<std::vector<SearchConcept>> tags(
+      {{IDS_OS_SETTINGS_TAG_MANAGE_ISOLATED_WEB_APPS,
+        mojom::kManageIsolatedWebAppsSubpagePath,
+        ash::features::IsOsSettingsRevampWayfindingEnabled()
+            ? mojom::SearchResultIcon::kNotifications
+            : mojom::SearchResultIcon::kAppsGrid,
+        mojom::SearchResultDefaultRank::kMedium,
+        mojom::SearchResultType::kSubpage,
+        {.subpage = mojom::Subpage::kManageIsolatedWebApps}}});
+  return *tags;
+}
+
+const std::vector<SearchConcept>& GetTurnOnIsolatedWebAppsSearchConcepts() {
+  static const base::NoDestructor<std::vector<SearchConcept>> tags(
+      {{IDS_OS_SETTINGS_TAG_TURN_ON_ISOLATED_WEB_APPS,
+        mojom::kManageIsolatedWebAppsSubpagePath,
+        ash::features::IsOsSettingsRevampWayfindingEnabled()
+            ? mojom::SearchResultIcon::kNotifications
+            : mojom::SearchResultIcon::kAppsGrid,
+        mojom::SearchResultDefaultRank::kMedium,
+        mojom::SearchResultType::kSetting,
+        {.setting = mojom::Setting::kEnableIsolatedWebAppsOnOff},
+        {IDS_OS_SETTINGS_TAG_TURN_ON_ISOLATED_WEB_APPS_ALT1,
+         SearchConcept::kAltTagEnd}}});
   return *tags;
 }
 
@@ -427,6 +454,11 @@ AppsSection::AppsSection(Profile* profile,
 
     UpdateAndroidSearchTags();
   }
+
+  if (content::IsolatedWebAppsPolicy::AreIsolatedWebAppsEnabled(profile)) {
+    updater.AddSearchTags(GetManageIsolatedWebAppsSearchConcepts());
+    updater.AddSearchTags(GetTurnOnIsolatedWebAppsSearchConcepts());
+  }
 }
 
 AppsSection::~AppsSection() {
@@ -470,11 +502,11 @@ void AppsSection::AddLoadTimeData(content::WebUIDataSource* html_source) {
            : IDS_SETTINGS_APP_NOTIFICATIONS_DO_NOT_DISTURB_TOGGLE_DESCRIPTION},
       {"appNotificationsLinkToBrowserSettingsDescription",
        IDS_SETTINGS_APP_NOTIFICATIONS_LINK_TO_BROWSER_SETTINGS_DESCRIPTION},
+      {"appNotificationsRowSublabel",
+       IDS_OS_SETTINGS_REVAMP_APP_NOTIFICATIONS_LINK_DESCRIPTION},
       {"appNotificationsCountDescription",
-       kIsRevampEnabled
-           ? IDS_OS_SETTINGS_REVAMP_APP_NOTIFICATIONS_LINK_DESCRIPTION
-           : IDS_SETTINGS_APP_NOTIFICATIONS_SUBLABEL_TEXT},
-      {"appNotificationsDoNotDisturbDescription",
+       IDS_SETTINGS_APP_NOTIFICATIONS_SUBLABEL_TEXT},
+      {"appNotificationsDoNotDisturbEnabledDescription",
        IDS_SETTINGS_APP_NOTIFICATIONS_DND_ENABLED_SUBLABEL_TEXT},
       {"appBadgingToggleLabel", IDS_SETTINGS_APP_BADGING_TOGGLE_LABEL},
       {"appBadgingToggleSublabel", IDS_SETTINGS_APP_BADGING_TOGGLE_SUBLABEL},
@@ -483,10 +515,6 @@ void AppsSection::AddLoadTimeData(content::WebUIDataSource* html_source) {
       {"appManagementAppLanguageLabel", IDS_APP_MANAGEMENT_APP_LANGUAGE_LABEL},
   };
   html_source->AddLocalizedStrings(kLocalizedStrings);
-
-  html_source->AddBoolean(
-      "appManagementAppDetailsEnabled",
-      base::FeatureList::IsEnabled(::features::kAppManagementAppDetails));
 
   html_source->AddBoolean("appManagementArcReadOnlyPermissions",
                           arc::IsReadOnlyPermissionsEnabled());
@@ -568,10 +596,14 @@ const char* AppsSection::GetSectionPath() const {
 }
 
 bool AppsSection::LogMetric(mojom::Setting setting, base::Value& value) const {
-  // Unimplemented.
   if (setting == mojom::Setting::kDoNotDisturbOnOff) {
     base::UmaHistogramBoolean("ChromeOS.Settings.Apps.DoNotDisturbOnOff",
                               value.GetBool());
+    return true;
+  }
+  if (setting == mojom::Setting::kAppNotificationOnOff) {
+    base::UmaHistogramBoolean(
+        "ChromeOS.Settings.NotificationPage.PermissionOnOff", value.GetBool());
     return true;
   }
   return false;
@@ -603,6 +635,8 @@ void AppsSection::RegisterHierarchy(HierarchyGenerator* generator) const {
                                    mojom::Subpage::kAppNotifications);
   generator->RegisterNestedSetting(mojom::Setting::kAppBadgingOnOff,
                                    mojom::Subpage::kAppNotifications);
+  generator->RegisterNestedSetting(mojom::Setting::kAppNotificationOnOff,
+                                   mojom::Subpage::kAppNotifications);
 
   // Manage Isolated Web Apps
   generator->RegisterTopLevelSubpage(IDS_SETTINGS_APPS_LINK_TEXT,
@@ -619,6 +653,11 @@ void AppsSection::RegisterHierarchy(HierarchyGenerator* generator) const {
       IDS_SETTINGS_APP_DETAILS_TITLE, mojom::Subpage::kAppDetails,
       mojom::Subpage::kAppManagement, mojom::SearchResultIcon::kAppsGrid,
       mojom::SearchResultDefaultRank::kMedium, mojom::kAppDetailsSubpagePath);
+  generator->RegisterNestedSetting(mojom::Setting::kAppPinToShelfOnOff,
+                                   mojom::Subpage::kAppDetails);
+  generator->RegisterNestedSetting(mojom::Setting::kAppResizeLockOnOff,
+                                   mojom::Subpage::kAppDetails);
+
   generator->RegisterNestedSubpage(
       IDS_SETTINGS_GUEST_OS_SHARED_PATHS, mojom::Subpage::kPluginVmSharedPaths,
       mojom::Subpage::kAppManagement, mojom::SearchResultIcon::kAppsGrid,

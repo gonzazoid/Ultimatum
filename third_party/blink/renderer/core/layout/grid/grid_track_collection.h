@@ -240,7 +240,7 @@ class CORE_EXPORT GridLayoutTrackCollection : public GridTrackCollectionBase {
   GridTrackSizingDirection track_direction_;
 
   // Baselines are only created when there are items with baseline alignment.
-  absl::optional<Baselines> baselines_;
+  std::optional<Baselines> baselines_;
 
   // Initially we only know some of the set sizes - others will be indefinite.
   // To represent this we store a vector of the last indefinite indices for each
@@ -319,7 +319,7 @@ struct CORE_EXPORT GridSet {
           const GridTrackSize& track_definition,
           bool is_available_size_indefinite);
 
-  double FlexFactor() const;
+  float FlexFactor() const;
   LayoutUnit BaseSize() const;
   LayoutUnit GrowthLimit() const;
 

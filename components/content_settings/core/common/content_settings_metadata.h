@@ -7,6 +7,7 @@
 
 #include "base/time/time.h"
 #include "components/content_settings/core/common/content_settings_constraints.h"
+#include "components/content_settings/core/common/content_settings_enums.mojom.h"
 
 namespace mojo {
 template <typename DataViewType, typename T>
@@ -41,6 +42,14 @@ class RuleMetaData {
   SessionModel session_model() const { return session_model_; }
   void set_session_model(SessionModel session_model) {
     session_model_ = session_model;
+  }
+
+  mojom::TpcdMetadataRuleSource tpcd_metadata_rule_source() const {
+    return tpcd_metadata_rule_source_;
+  }
+  void set_tpcd_metadata_rule_source(
+      mojom::TpcdMetadataRuleSource const rule_source) {
+    tpcd_metadata_rule_source_ = rule_source;
   }
 
   base::TimeDelta lifetime() const { return lifetime_; }
@@ -86,6 +95,12 @@ class RuleMetaData {
   SessionModel session_model_ = SessionModel::Durable;
   // The lifetime of the setting. This may be zero iff `expiration_` is zero.
   base::TimeDelta lifetime_;
+  // TPCD Metadata Source (go/measure3pcddtdeployment).
+  // TODO(http://b/324406007): The impl is currently specific to the TPCD
+  // Metadata Source and is expected to be cleaned up with the mitigation
+  // cleanup.
+  mojom::TpcdMetadataRuleSource tpcd_metadata_rule_source_ =
+      mojom::TpcdMetadataRuleSource::SOURCE_UNSPECIFIED;
 };
 
 }  // namespace content_settings

@@ -6,11 +6,13 @@
  * @fileoverview Calculates the menu items for the node menus in the ChromeVox
  * panel.
  */
-import {AutomationPredicate} from '../../../common/automation_predicate.js';
-import {AutomationUtil} from '../../../common/automation_util.js';
-import {constants} from '../../../common/constants.js';
-import {CursorRange} from '../../../common/cursors/range.js';
-import {AutomationTreeWalker} from '../../../common/tree_walker.js';
+import {AutomationPredicate} from '/common/automation_predicate.js';
+import {AutomationUtil} from '/common/automation_util.js';
+import {constants} from '/common/constants.js';
+import {CursorRange} from '/common/cursors/range.js';
+import {TestImportManager} from '/common/testing/test_import_manager.js';
+import {AutomationTreeWalker} from '/common/tree_walker.js';
+
 import {BridgeCallbackId} from '../../common/bridge_callback_manager.js';
 import {BridgeContext} from '../../common/bridge_constants.js';
 import {Msgs} from '../../common/msgs.js';
@@ -154,3 +156,5 @@ export class PanelNodeMenuBackground {
  * @const {number}
  */
 PanelNodeMenuBackground.MAX_NODES_BEFORE_ASYNC = 100;
+
+TestImportManager.exportForTesting(PanelNodeMenuBackground);

@@ -40,6 +40,7 @@
 #include "extensions/browser/updater/update_service.h"
 #include "extensions/common/extension_builder.h"
 #include "extensions/common/extension_features.h"
+#include "extensions/common/extension_id.h"
 #include "extensions/common/extension_urls.h"
 #include "extensions/common/manifest_url_handlers.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -131,18 +132,12 @@ class FakeUpdateClient : public update_client::UpdateClient {
 
   void Stop() override {}
 
-  void SendUninstallPing(const update_client::CrxComponent& crx_component,
-                         int reason,
-                         update_client::Callback callback) override {
+  void SendPing(const update_client::CrxComponent& crx_component,
+                PingParams ping_params,
+                update_client::Callback callback) override {
     uninstall_pings_.emplace_back(crx_component.app_id, crx_component.version,
-                                  reason);
+                                  ping_params.extra_code1);
   }
-
-  void SendInstallPing(const update_client::CrxComponent& crx_component,
-                       bool success,
-                       int error_code,
-                       int extra_code1,
-                       update_client::Callback callback) override {}
 
   void set_delay_update() { delay_update_ = true; }
 
@@ -279,13 +274,13 @@ class FakeExtensionSystem : public MockExtensionSystem {
   ~FakeExtensionSystem() override = default;
 
   struct InstallUpdateRequest {
-    InstallUpdateRequest(const std::string& extension_id,
+    InstallUpdateRequest(const ExtensionId& extension_id,
                          const base::FilePath& temp_dir,
                          bool install_immediately)
         : extension_id(extension_id),
           temp_dir(temp_dir),
           install_immediately(install_immediately) {}
-    std::string extension_id;
+    ExtensionId extension_id;
     base::FilePath temp_dir;
     bool install_immediately;
   };
@@ -299,7 +294,7 @@ class FakeExtensionSystem : public MockExtensionSystem {
   }
 
   // ExtensionSystem override
-  void InstallUpdate(const std::string& extension_id,
+  void InstallUpdate(const ExtensionId& extension_id,
                      const std::string& public_key,
                      const base::FilePath& temp_dir,
                      bool install_immediately,
@@ -313,7 +308,7 @@ class FakeExtensionSystem : public MockExtensionSystem {
   }
 
   void PerformActionBasedOnOmahaAttributes(
-      const std::string& extension_id,
+      const ExtensionId& extension_id,
       const base::Value::Dict& attributes) override {
     ExtensionRegistry* registry = ExtensionRegistry::Get(browser_context());
     scoped_refptr<const Extension> extension =
@@ -334,12 +329,12 @@ class FakeExtensionSystem : public MockExtensionSystem {
     }
   }
 
-  bool FinishDelayedInstallationIfReady(const std::string& extension_id,
+  bool FinishDelayedInstallationIfReady(const ExtensionId& extension_id,
                                         bool install_immediately) override {
     return false;
   }
 
-  AllowlistState GetExtensionAllowlistState(const std::string& extension_id) {
+  AllowlistState GetExtensionAllowlistState(const ExtensionId& extension_id) {
     if (!base::Contains(extension_allowlist_states_, extension_id))
       return ALLOWLIST_UNDEFINED;
 
@@ -583,7 +578,7 @@ TEST_F(UpdateServiceTest, UninstallPings) {
 }
 
 TEST_F(UpdateServiceTest, CheckOmahaMalwareAttributes) {
-  std::string extension_id = crx_file::id_util::GenerateId("id");
+  ExtensionId extension_id = crx_file::id_util::GenerateId("id");
   ExtensionRegistry* registry = ExtensionRegistry::Get(browser_context());
   scoped_refptr<const Extension> extension1 =
       ExtensionBuilder("1").SetVersion("1.2").SetID(extension_id).Build();
@@ -625,7 +620,7 @@ TEST_F(UpdateServiceTest, CheckOmahaMalwareAttributes) {
 }
 
 TEST_F(UpdateServiceTest, CheckOmahaAllowlistAttributes) {
-  std::string extension_id = crx_file::id_util::GenerateId("id");
+  ExtensionId extension_id = crx_file::id_util::GenerateId("id");
   scoped_refptr<const Extension> extension1 =
       ExtensionBuilder("1").SetVersion("1.2").SetID(extension_id).Build();
 
@@ -657,7 +652,7 @@ TEST_F(UpdateServiceTest, CheckOmahaAllowlistAttributes) {
 }
 
 TEST_F(UpdateServiceTest, CheckNoOmahaAttributes) {
-  std::string extension_id = crx_file::id_util::GenerateId("id");
+  ExtensionId extension_id = crx_file::id_util::GenerateId("id");
   ExtensionRegistry* registry = ExtensionRegistry::Get(browser_context());
   scoped_refptr<const Extension> extension1 =
       ExtensionBuilder("1").SetVersion("1.2").SetID(extension_id).Build();

@@ -18,6 +18,7 @@
 #include "components/unexportable_keys/service_error.h"
 #include "components/unexportable_keys/unexportable_key_id.h"
 #include "components/unexportable_keys/unexportable_key_service.h"
+#include "components/variations/net/variations_http_headers.h"
 #include "google_apis/gaia/gaia_urls.h"
 #include "net/base/schemeful_site.h"
 #include "net/http/http_response_headers.h"
@@ -49,9 +50,11 @@ bound_session_credentials::Credential CreateCookieCredential(
 BoundSessionRegistrationFetcherImpl::BoundSessionRegistrationFetcherImpl(
     BoundSessionRegistrationFetcherParam registration_params,
     scoped_refptr<network::SharedURLLoaderFactory> loader_factory,
-    unexportable_keys::UnexportableKeyService& key_service)
+    unexportable_keys::UnexportableKeyService& key_service,
+    bool is_off_the_record_profile)
     : registration_params_(std::move(registration_params)),
       key_service_(key_service),
+      is_off_the_record_profile_(is_off_the_record_profile),
       url_loader_factory_(std::move(loader_factory)) {}
 
 BoundSessionRegistrationFetcherImpl::~BoundSessionRegistrationFetcherImpl() =
@@ -86,7 +89,7 @@ void BoundSessionRegistrationFetcherImpl::OnURLLoaderComplete(
               "BoundSessionRegistrationFetcherImpl::OnURLLoaderComplete",
               perfetto::Flow::FromPointer(this), "net_error", net_error);
 
-  absl::optional<int> http_response_code;
+  std::optional<int> http_response_code;
   if (head && head->headers) {
     http_response_code = head->headers->response_code();
   }
@@ -143,7 +146,7 @@ void BoundSessionRegistrationFetcherImpl::OnURLLoaderComplete(
 
 void BoundSessionRegistrationFetcherImpl::OnRegistrationTokenCreated(
     base::ElapsedTimer generate_registration_token_timer,
-    absl::optional<RegistrationTokenHelper::Result> result) {
+    std::optional<RegistrationTokenHelper::Result> result) {
   TRACE_EVENT("browser",
               "BoundSessionRegistrationFetcherImpl::OnRegistrationTokenCreated",
               perfetto::Flow::FromPointer(this), "success", result.has_value());
@@ -216,8 +219,11 @@ void BoundSessionRegistrationFetcherImpl::StartFetchingRegistration(
 
   std::string content_type = "application/jwt";
 
-  url_loader_ =
-      network::SimpleURLLoader::Create(std::move(request), traffic_annotation);
+  url_loader_ = CreateSimpleURLLoaderWithVariationsHeaderUnknownSignedIn(
+      std::move(request),
+      is_off_the_record_profile_ ? variations::InIncognito::kYes
+                                 : variations::InIncognito::kNo,
+      traffic_annotation);
   url_loader_->AttachStringForUpload(registration_token, content_type);
   url_loader_->SetRetryOptions(
       3, network::SimpleURLLoader::RETRY_ON_NETWORK_CHANGE);
@@ -252,7 +258,7 @@ void BoundSessionRegistrationFetcherImpl::RunCallbackAndRecordMetrics(
   std::move(callback_).Run(
       params_or_error.has_value()
           ? std::move(params_or_error).value()
-          : absl::optional<bound_session_credentials::BoundSessionParams>());
+          : std::optional<bound_session_credentials::BoundSessionParams>());
 }
 
 BoundSessionRegistrationFetcherImpl::RegistrationErrorOr<
@@ -266,7 +272,7 @@ BoundSessionRegistrationFetcherImpl::ParseJsonResponse(
                        base::CompareCase::SENSITIVE)) {
     response_json = response_json.substr(strlen(kXSSIPrefix));
   }
-  absl::optional<base::Value::Dict> maybe_root =
+  std::optional<base::Value::Dict> maybe_root =
       base::JSONReader::ReadDict(response_json);
   if (!maybe_root) {
     return base::unexpected(RegistrationError::kParseJsonFailed);

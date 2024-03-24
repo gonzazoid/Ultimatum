@@ -121,7 +121,7 @@ create a new fuzzing test.
 **Note:** Most of the targets are small. They may perform one or a few API calls
 using the data provided by the fuzzing engine as an argument. However, fuzz
 targets may be more complex if a certain initialization procedure needs to be
-performed. [quic_stream_factory_fuzzer.cc] is a good example of a complex fuzz
+performed. [quic_session_pool_fuzzer.cc] is a good example of a complex fuzz
 target.
 ***
 
@@ -202,12 +202,12 @@ the symbol level by setting the `symbol_level` attribute.
 ### Running the fuzz target
 
 After you create your fuzz target, build it with autoninja and run it locally.
-To make this example concrete, we are going to use the existing 
+To make this example concrete, we are going to use the existing
 `create_fnmatch_query_fuzzer` target.
 
 ```bash
 # Build the fuzz target.
-autoninja -C chrome/browser/ash:create_fnmatch_query_fuzzer
+autoninja -C out/libfuzzer chrome/browser/ash:create_fnmatch_query_fuzzer
 # Run the fuzz target.
 ./out/libfuzzer/create_fnmatch_query_fuzzer
 ```
@@ -425,5 +425,5 @@ fuzzing engine.
 [code coverage report]: efficient_fuzzing.md#Code-coverage
 [upstream documentation]: https://github.com/google/fuzzing/blob/master/docs/split-inputs.md#fuzzed-data-provider
 [libFuzzer's output documentation]: http://llvm.org/docs/LibFuzzer.html#output
-[quic_stream_factory_fuzzer.cc]: https://cs.chromium.org/chromium/src/net/quic/quic_stream_factory_fuzzer.cc
+[quic_session_pool_fuzzer.cc]: https://cs.chromium.org/chromium/src/net/quic/quic_session_pool_fuzzer.cc
 [getting started guide here]: getting_started.md

@@ -10,11 +10,11 @@ import {FakeShortcutInputProvider} from 'chrome://resources/ash/common/shortcut_
 import {KeyEvent} from 'chrome://resources/ash/common/shortcut_input_ui/input_device_settings.mojom-webui.js';
 import {Modifier as ModifierEnum} from 'chrome://resources/ash/common/shortcut_input_ui/shortcut_utils.js';
 import {strictQuery} from 'chrome://resources/ash/common/typescript_utils/strict_query.js';
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
-import {CrDrawerElement} from 'chrome://resources/cr_elements/cr_drawer/cr_drawer.js';
-import {CrIconButtonElement} from 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
-import {CrToolbarSearchFieldElement} from 'chrome://resources/cr_elements/cr_toolbar/cr_toolbar_search_field.js';
+import {CrButtonElement} from 'chrome://resources/ash/common/cr_elements/cr_button/cr_button.js';
+import {CrDialogElement} from 'chrome://resources/ash/common/cr_elements/cr_dialog/cr_dialog.js';
+import {CrDrawerElement} from 'chrome://resources/ash/common/cr_elements/cr_drawer/cr_drawer.js';
+import {CrIconButtonElement} from 'chrome://resources/ash/common/cr_elements/cr_icon_button/cr_icon_button.js';
+import {CrToolbarSearchFieldElement} from 'chrome://resources/ash/common/cr_elements/cr_toolbar/cr_toolbar_search_field.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {stringToMojoString16} from 'chrome://resources/js/mojo_type_util.js';
 import {IronIconElement} from 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
@@ -33,7 +33,7 @@ import {ShortcutCustomizationAppElement} from 'chrome://shortcut-customization/j
 import {setShortcutInputProviderForTesting} from 'chrome://shortcut-customization/js/shortcut_input_mojo_interface_provider.js';
 import {AcceleratorCategory, AcceleratorConfigResult, AcceleratorSource, AcceleratorState, AcceleratorSubcategory, AcceleratorType, LayoutInfo, LayoutStyle, Modifier, MojoAcceleratorConfig, MojoLayoutInfo, TextAcceleratorPartType} from 'chrome://shortcut-customization/js/shortcut_types.js';
 import {getSubcategoryNameStringId} from 'chrome://shortcut-customization/js/shortcut_utils.js';
-import {AcceleratorResultData, EditDialogCompletedActions, Subactions, UserAction} from 'chrome://shortcut-customization/mojom-webui/ash/webui/shortcut_customization_ui/mojom/shortcut_customization.mojom-webui.js';
+import {AcceleratorResultData, EditDialogCompletedActions, Subactions, UserAction} from 'chrome://shortcut-customization/mojom-webui/shortcut_customization.mojom-webui.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {flushTasks, waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
 import {eventToPromise, isVisible} from 'chrome://webui-test/test_util.js';
@@ -82,8 +82,9 @@ suite('shortcutCustomizationAppTest', function() {
     provider.setFakeAcceleratorConfig(fakeAcceleratorConfig);
     provider.setFakeAcceleratorLayoutInfos(fakeLayoutInfo);
     provider.setFakeGetDefaultAcceleratorsForId(fakeDefaultAccelerators);
-    provider.setFakeHasLauncherButton(true);
     provider.setFakeIsCustomizationAllowedByPolicy(true);
+    // The meta key is displayed as the launcher key in this test.
+    provider.setFakeHasLauncherButton(true);
 
     setShortcutProviderForTesting(provider);
     setShortcutInputProviderForTesting(shortcutInputProvider);
@@ -509,7 +510,7 @@ suite('shortcutCustomizationAppTest', function() {
     assertTrue(editElement.hasError);
     const expected_error_message =
         'Shortcut is being used for "TestConflictName". Press a new ' +
-        'shortcut. To replace the original shortcut, press this shortcut ' +
+        'shortcut. To replace the existing shortcut, press this shortcut ' +
         'again.';
     assertEquals(
         expected_error_message,
@@ -886,7 +887,7 @@ suite('shortcutCustomizationAppTest', function() {
         AcceleratorConfigResult.kShiftOnlyNotAllowed;
     const expectedErrorMessage =
         'Shortcut not available. Press a new shortcut using shift and 1 ' +
-        'more modifier key (ctrl, alt, search, or launcher).';
+        'more modifier key (ctrl, alt, or launcher).';
 
     await validateAcceleratorInDialog(
         acceleratorConfigResult, expectedErrorMessage);
@@ -896,7 +897,7 @@ suite('shortcutCustomizationAppTest', function() {
     const acceleratorConfigResult = AcceleratorConfigResult.kMissingModifier;
     const expectedErrorMessage =
         'Shortcut not available. Press a new shortcut using a modifier key ' +
-        '(ctrl, alt, shift, search, or launcher).';
+        '(ctrl, alt, shift, or launcher).';
     await validateAcceleratorInDialog(
         acceleratorConfigResult, expectedErrorMessage);
   });
@@ -904,7 +905,7 @@ suite('shortcutCustomizationAppTest', function() {
   test('ValidateAcceleratorKeyNotAllowed', async () => {
     const acceleratorConfigResult = AcceleratorConfigResult.kKeyNotAllowed;
     const expectedErrorMessage =
-        'Shortcut with top row keys need to include the search key.';
+        'Shortcut with top row keys need to include the launcher key.';
     await validateAcceleratorInDialog(
         acceleratorConfigResult, expectedErrorMessage);
   });
@@ -922,7 +923,16 @@ suite('shortcutCustomizationAppTest', function() {
         AcceleratorConfigResult.kConflictCanOverride;
     const expectedErrorMessage =
         'Shortcut is being used for "BRIGHTNESS_UP". Press a new shortcut. ' +
-        'To replace the original shortcut, press this shortcut again.';
+        'To replace the existing shortcut, press this shortcut again.';
+    await validateAcceleratorInDialog(
+        acceleratorConfigResult, expectedErrorMessage);
+  });
+
+  test('ValidateNonStandardWithSearch', async () => {
+    const acceleratorConfigResult =
+        AcceleratorConfigResult.kNonStandardWithSearch;
+    const expectedErrorMessage =
+        '] is not available with the launcher key. Press a new shortcut.';
     await validateAcceleratorInDialog(
         acceleratorConfigResult, expectedErrorMessage);
   });

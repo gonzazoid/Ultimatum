@@ -25,6 +25,7 @@
 #include "base/containers/fixed_flat_set.h"
 #include "base/cpu.h"
 #include "base/environment.h"
+#include "base/feature_list.h"
 #include "base/files/scoped_file.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
@@ -1638,6 +1639,25 @@ VAImplementation VaapiWrapper::GetImplementationType() {
 }
 
 // static
+int VaapiWrapper::GetMaxNumDecoderInstances() {
+  if (!base::FeatureList::IsEnabled(media::kLimitConcurrentDecoderInstances)) {
+    return std::numeric_limits<int>::max();
+  }
+
+  // Chromebook "grunt", with an AMD Radeon R5 (Stoney Ridge) GPU, b/266003084.
+  constexpr int kAMDStoneyRidgeMaxNumOfInstances = 10;
+  auto va_display_state_handle = VADisplayStateSingleton::GetHandle();
+  if (va_display_state_handle &&
+      base::Contains(va_display_state_handle->vendor_string(), "stoney")) {
+    return kAMDStoneyRidgeMaxNumOfInstances;
+  }
+  // TODO(andrescj): we can relax this once we extract video decoding into its
+  // own process.
+  constexpr int kDefaultMaxNumOfInstances = 16;
+  return kDefaultMaxNumOfInstances;
+}
+
+// static
 scoped_refptr<VaapiWrapper> VaapiWrapper::Create(
     CodecMode mode,
     VAProfile va_profile,
@@ -1665,6 +1685,18 @@ scoped_refptr<VaapiWrapper> VaapiWrapper::Create(
     return nullptr;
   }
 
+  if (mode == kDecode) {
+    static const auto decoder_instances_limit =
+        VaapiWrapper::GetMaxNumDecoderInstances();
+    const bool can_create_decoder =
+        num_decoder_instances_.Increment() < decoder_instances_limit ||
+        !base::FeatureList::IsEnabled(media::kLimitConcurrentDecoderInstances);
+    if (!can_create_decoder) {
+      num_decoder_instances_.Decrement();
+      return nullptr;
+    }
+  }
+
   scoped_refptr<VaapiWrapper> vaapi_wrapper(new VaapiWrapper(
       std::move(va_display_state_handle), mode, enforce_sequence_affinity));
   if (vaapi_wrapper->VaInitialize(report_error_to_uma_cb)) {
@@ -1675,6 +1707,9 @@ scoped_refptr<VaapiWrapper> VaapiWrapper::Create(
              << vaProfileStr(va_profile);
   return nullptr;
 }
+
+// static
+base::AtomicRefCount VaapiWrapper::num_decoder_instances_(0);
 
 // static
 scoped_refptr<VaapiWrapper> VaapiWrapper::CreateForVideoCodec(
@@ -2072,7 +2107,7 @@ VaapiWrapper::CreateContextAndScopedVASurfaces(
     const gfx::Size& size,
     const std::vector<SurfaceUsageHint>& usage_hints,
     size_t num_surfaces,
-    const absl::optional<gfx::Size>& visible_size) {
+    const std::optional<gfx::Size>& visible_size) {
   CHECK(!enforce_sequence_affinity_ ||
         sequence_checker_.CalledOnValidSequence());
   if (va_context_id_ != VA_INVALID_ID) {
@@ -2083,7 +2118,7 @@ VaapiWrapper::CreateContextAndScopedVASurfaces(
 
   std::vector<std::unique_ptr<ScopedVASurface>> scoped_va_surfaces =
       CreateScopedVASurfaces(va_format, size, usage_hints, num_surfaces,
-                             visible_size, /*va_fourcc=*/absl::nullopt);
+                             visible_size, /*va_fourcc=*/std::nullopt);
   if (scoped_va_surfaces.empty())
     return {};
 
@@ -2873,7 +2908,7 @@ uint64_t VaapiWrapper::GetEncodedChunkSize(VABufferID buffer_id,
 
 bool VaapiWrapper::DownloadFromVABuffer(
     VABufferID buffer_id,
-    absl::optional<VASurfaceID> sync_surface_id,
+    std::optional<VASurfaceID> sync_surface_id,
     uint8_t* target_ptr,
     size_t target_size,
     size_t* coded_data_size) NO_THREAD_SAFETY_ANALYSIS {
@@ -2988,8 +3023,8 @@ bool VaapiWrapper::GetMinAV1SegmentSize(VideoCodecProfile profile,
 
 bool VaapiWrapper::BlitSurface(const VASurface& va_surface_src,
                                const VASurface& va_surface_dest,
-                               absl::optional<gfx::Rect> src_rect,
-                               absl::optional<gfx::Rect> dest_rect
+                               std::optional<gfx::Rect> src_rect,
+                               std::optional<gfx::Rect> dest_rect
 #if BUILDFLAG(IS_CHROMEOS_ASH)
                                ,
                                VAProtectedSessionID va_protected_session_id
@@ -3045,7 +3080,7 @@ bool VaapiWrapper::BlitSurface(const VASurface& va_surface_src,
     pipeline_param->output_region = &output_region;
     pipeline_param->output_background_color = 0xff000000;
     pipeline_param->output_color_standard = VAProcColorStandardNone;
-    pipeline_param->filter_flags = VA_FILTER_SCALING_HQ;
+    pipeline_param->filter_flags = VA_FILTER_SCALING_DEFAULT;
     pipeline_param->rotation_state = VA_ROTATION_NONE;
   }
 
@@ -3144,6 +3179,9 @@ VaapiWrapper::~VaapiWrapper() {
   DestroyPendingBuffers();
   DestroyContext();
   Deinitialize();
+  if (mode_ == kDecode) {
+    num_decoder_instances_.Decrement();
+  }
 }
 
 bool VaapiWrapper::Initialize(VAProfile va_profile,
@@ -3315,8 +3353,8 @@ VaapiWrapper::CreateScopedVASurfaces(
     const gfx::Size& size,
     const std::vector<SurfaceUsageHint>& usage_hints,
     size_t num_surfaces,
-    const absl::optional<gfx::Size>& visible_size,
-    const absl::optional<uint32_t>& va_fourcc) {
+    const std::optional<gfx::Size>& visible_size,
+    const std::optional<uint32_t>& va_fourcc) {
   CHECK(!enforce_sequence_affinity_ ||
         sequence_checker_.CalledOnValidSequence());
   if (kInvalidVaRtFormat == va_rt_format) {

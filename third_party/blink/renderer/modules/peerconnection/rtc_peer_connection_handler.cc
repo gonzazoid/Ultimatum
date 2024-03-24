@@ -32,8 +32,6 @@
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_url.h"
-#include "third_party/blink/renderer/bindings/modules/v8/v8_goog_media_constraints.h"
-#include "third_party/blink/renderer/bindings/modules/v8/v8_goog_media_constraints_set.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_rtc_session_description_init.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_union_boolean_constrainbooleanparameters.h"
 #include "third_party/blink/renderer/core/frame/deprecation/deprecation.h"
@@ -72,7 +70,6 @@
 #include "third_party/webrtc/api/data_channel_interface.h"
 #include "third_party/webrtc/api/rtc_event_log_output.h"
 #include "third_party/webrtc/api/units/time_delta.h"
-#include "third_party/webrtc/pc/media_session.h"
 #include "third_party/webrtc/pc/session_description.h"
 
 using webrtc::DataChannelInterface;
@@ -164,58 +161,6 @@ void RunSynchronousOnceClosure(base::OnceClosure closure,
 }
 
 // Converter functions from Blink types to WebRTC types.
-
-HeapVector<Member<const GoogMediaConstraintsSet>> AllMediaConstraintSets(
-    GoogMediaConstraints* media_constraints) {
-  HeapVector<Member<const GoogMediaConstraintsSet>> result;
-  if (media_constraints->hasMandatory()) {
-    result.push_back(media_constraints->mandatory());
-  }
-  if (media_constraints->hasOptional()) {
-    for (const GoogMediaConstraintsSet* optional_constraints_set :
-         media_constraints->optional()) {
-      result.push_back(optional_constraints_set);
-    }
-  }
-  return result;
-}
-
-void CopyConstraintsIntoRtcConfiguration(
-    ExecutionContext* context,
-    GoogMediaConstraints* media_constraints,
-    webrtc::PeerConnectionInterface::RTCConfiguration* configuration) {
-  if (!media_constraints) {
-    return;
-  }
-
-  // Legacy constraints parsing looks at both mandatory and optional constraints
-  // sets (similar to how ScanConstraintsForExactValue() looks at basic and
-  // advanced constraints). The sets are iterated until a value is found.
-  HeapVector<Member<const GoogMediaConstraintsSet>> all_constraints_sets =
-      AllMediaConstraintSets(media_constraints);
-
-  // TODO(crbug.com/804275): Delete when Fuchsia no longer depends on it.
-  absl::optional<bool> dtls_srtp_key_agreement;
-  for (auto& constraints_set : all_constraints_sets) {
-    if (constraints_set->hasDtlsSrtpKeyAgreement()) {
-      dtls_srtp_key_agreement = constraints_set->dtlsSrtpKeyAgreement();
-      break;
-    }
-  }
-  if (dtls_srtp_key_agreement.has_value()) {
-    if (dtls_srtp_key_agreement.value()) {
-      Deprecation::CountDeprecation(
-          context, WebFeature::kRTCConstraintEnableDtlsSrtpTrue);
-    } else {
-      Deprecation::CountDeprecation(
-          context, WebFeature::kRTCConstraintEnableDtlsSrtpFalse);
-    }
-  }
-#if BUILDFLAG(IS_FUCHSIA) && BUILDFLAG(ENABLE_CAST_RECEIVER)
-  // TODO(crbug.com/804275): Delete when Fuchsia no longer needs it.
-  configuration->enable_dtls_srtp = dtls_srtp_key_agreement;
-#endif
-}
 
 // Class mapping responses from calls to libjingle CreateOffer/Answer and
 // the blink::RTCSessionDescriptionRequest.
@@ -490,7 +435,7 @@ class RTCPeerConnectionHandler::WebRtcSetDescriptionObserverImpl
     }
     // Since OnSessionDescriptionsUpdated can fire events, it may cause
     // garbage collection. Ensure that handler_ is still valid.
-    if (handler_) {
+    if (handler_ && !handler_->is_unregistered_) {
       handler_->OnModifyTransceivers(
           states.signaling_state, std::move(states.transceiver_states),
           action_ == PeerConnectionTracker::kActionSetRemoteDescription,
@@ -730,8 +675,8 @@ class RTCPeerConnectionHandler::Observer
     if (handler_) {
       handler_->OnIceCandidateError(
           address,
-          port ? absl::optional<uint16_t>(static_cast<uint16_t>(port))
-               : absl::nullopt,
+          port ? std::optional<uint16_t>(static_cast<uint16_t>(port))
+               : std::nullopt,
           host_candidate, url, error_code, error_text);
     }
   }
@@ -835,19 +780,22 @@ bool RTCPeerConnectionHandler::Initialize(
     ExecutionContext* context,
     const webrtc::PeerConnectionInterface::RTCConfiguration&
         server_configuration,
-    GoogMediaConstraints* media_constraints,
     WebLocalFrame* frame,
     ExceptionState& exception_state) {
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
-  DCHECK(frame);
   DCHECK(dependency_factory_);
-  frame_ = frame;
 
   CHECK(!initialize_called_);
   initialize_called_ = true;
 
   // Prevent garbage collection of client_ during processing.
   auto* client_on_stack = client_.Get();
+  if (!client_on_stack) {
+    return false;
+  }
+
+  DCHECK(frame);
+  frame_ = frame;
   peer_connection_tracker_ = PeerConnectionTracker::From(*frame);
 
   configuration_ = server_configuration;
@@ -868,10 +816,6 @@ bool RTCPeerConnectionHandler::Initialize(
 
   // Apply 40 ms worth of bursting. See webrtc::TaskQueuePacedSender.
   configuration_.pacer_burst_interval = webrtc::TimeDelta::Millis(40);
-
-  // Copy all the relevant constraints into `config`.
-  CopyConstraintsIntoRtcConfiguration(context, media_constraints,
-                                      &configuration_);
 
   configuration_.media_config.video.enable_send_packet_batching =
       base::FeatureList::IsEnabled(features::kWebRtcSendPacketBatch);
@@ -1601,7 +1545,7 @@ RTCPeerConnectionHandler::RemoveTrack(blink::RTCRtpSenderPlatform* web_sender) {
 
   blink::TransceiverStateSurfacer transceiver_state_surfacer(
       task_runner_, signaling_thread());
-  absl::optional<webrtc::RTCError> result;
+  std::optional<webrtc::RTCError> result;
   RunSynchronousOnceClosureOnSignalingThread(
       base::BindOnce(&RTCPeerConnectionHandler::RemoveTrackOnSignalingThread,
                      base::Unretained(this),
@@ -1641,7 +1585,7 @@ RTCPeerConnectionHandler::RemoveTrack(blink::RTCRtpSenderPlatform* web_sender) {
 void RTCPeerConnectionHandler::RemoveTrackOnSignalingThread(
     webrtc::RtpSenderInterface* sender,
     blink::TransceiverStateSurfacer* transceiver_state_surfacer,
-    absl::optional<webrtc::RTCError>* result) {
+    std::optional<webrtc::RTCError>* result) {
   *result = native_peer_connection_->RemoveTrackOrError(
       rtc::scoped_refptr<webrtc::RtpSenderInterface>(sender));
   std::vector<rtc::scoped_refptr<webrtc::RtpTransceiverInterface>> transceivers;
@@ -1657,7 +1601,7 @@ void RTCPeerConnectionHandler::RemoveTrackOnSignalingThread(
     if (!transceiver_for_sender) {
       // If the transceiver doesn't exist, it must have been rolled back while
       // we were performing removeTrack(). Abort this operation.
-      *result = absl::nullopt;
+      *result = std::nullopt;
     } else {
       transceivers = {transceiver_for_sender};
     }
@@ -2058,10 +2002,13 @@ void RTCPeerConnectionHandler::OnIceCandidate(const String& sdp,
                                               int sdp_mline_index,
                                               int component,
                                               int address_family) {
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
   // In order to ensure that the RTCPeerConnection is not garbage collected
   // from under the function, we keep a pointer to it on the stack.
   auto* client_on_stack = client_.Get();
-  DCHECK(task_runner_->RunsTasksInCurrentSequence());
+  if (!client_on_stack) {
+    return;
+  }
   TRACE_EVENT0("webrtc", "RTCPeerConnectionHandler::OnIceCandidateImpl");
   // This line can cause garbage collection.
   auto* platform_candidate = MakeGarbageCollected<RTCIceCandidatePlatform>(
@@ -2076,13 +2023,12 @@ void RTCPeerConnectionHandler::OnIceCandidate(const String& sdp,
   }
 }
 
-void RTCPeerConnectionHandler::OnIceCandidateError(
-    const String& address,
-    absl::optional<uint16_t> port,
-    const String& host_candidate,
-    const String& url,
-    int error_code,
-    const String& error_text) {
+void RTCPeerConnectionHandler::OnIceCandidateError(const String& address,
+                                                   std::optional<uint16_t> port,
+                                                   const String& host_candidate,
+                                                   const String& url,
+                                                   int error_code,
+                                                   const String& error_text) {
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
   TRACE_EVENT0("webrtc", "RTCPeerConnectionHandler::OnIceCandidateError");
   if (peer_connection_tracker_) {
@@ -2173,6 +2119,7 @@ std::unique_ptr<blink::RTCRtpTransceiverImpl>
 RTCPeerConnectionHandler::CreateOrUpdateTransceiver(
     blink::RtpTransceiverState transceiver_state,
     blink::TransceiverStateUpdateMode update_mode) {
+  CHECK(dependency_factory_);
   DCHECK(transceiver_state.is_initialized());
   DCHECK(transceiver_state.sender_state());
   DCHECK(transceiver_state.receiver_state());

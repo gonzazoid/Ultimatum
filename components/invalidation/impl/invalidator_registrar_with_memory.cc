@@ -5,12 +5,14 @@
 #include "components/invalidation/impl/invalidator_registrar_with_memory.h"
 
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "base/feature_list.h"
 #include "base/logging.h"
+#include "base/notreached.h"
 #include "base/observer_list.h"
 #include "base/stl_util.h"
 #include "base/strings/string_util.h"
@@ -18,7 +20,6 @@
 #include "components/invalidation/public/invalidation.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/scoped_user_pref_update.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace invalidation {
 
@@ -30,7 +31,7 @@ constexpr char kDeprecatedSyncInvalidationGCMSenderId[] = "8181035976";
 constexpr char kHandler[] = "handler";
 constexpr char kIsPublic[] = "is_public";
 
-absl::optional<TopicData> FindAnyDuplicatedTopic(
+std::optional<TopicData> FindAnyDuplicatedTopic(
     const std::set<TopicData>& lhs,
     const std::set<TopicData>& rhs) {
   auto intersection =
@@ -38,7 +39,7 @@ absl::optional<TopicData> FindAnyDuplicatedTopic(
   if (!intersection.empty()) {
     return intersection[0];
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 std::string DumpRegisteredHandlers(
@@ -118,7 +119,7 @@ InvalidatorRegistrarWithMemory::InvalidatorRegistrarWithMemory(
     if (it.second.is_dict()) {
       const base::Value::Dict& second_dict = it.second.GetDict();
       const std::string* handler = second_dict.FindString(kHandler);
-      const absl::optional<bool> is_public = second_dict.FindBool(kIsPublic);
+      const std::optional<bool> is_public = second_dict.FindBool(kIsPublic);
       if (!handler || !is_public) {
         continue;
       }
@@ -133,11 +134,18 @@ InvalidatorRegistrarWithMemory::InvalidatorRegistrarWithMemory(
 
 InvalidatorRegistrarWithMemory::~InvalidatorRegistrarWithMemory() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  CHECK(registered_handler_to_topics_map_.empty() && handlers_.empty())
-      << "Registered handlers during destruction: "
-      << DumpRegisteredHandlers(handlers_) << ". Handlers listening to topics: "
-      << DumpRegisteredHandlersToTopics(registered_handler_to_topics_map_)
-      << ".";
+  if (!registered_handler_to_topics_map_.empty() || !handlers_.empty()) {
+    // TODO(crbug.com/1475104) figure out with these logs.
+    // Note: This can't be just a `CHECK(...) << ...` because `CHECK` eats the
+    // message in production builds.
+    LOG(ERROR) << "Registered handlers during destruction: "
+               << DumpRegisteredHandlers(handlers_)
+               << ". Handlers listening to topics: "
+               << DumpRegisteredHandlersToTopics(
+                      registered_handler_to_topics_map_)
+               << ".";
+    NOTREACHED_NORETURN();
+  }
 }
 
 void InvalidatorRegistrarWithMemory::AddObserver(InvalidationHandler* handler) {
@@ -254,6 +262,25 @@ void InvalidatorRegistrarWithMemory::DispatchInvalidationToHandlers(
   }
 }
 
+void InvalidatorRegistrarWithMemory::DispatchSuccessfullySubscribedToHandlers(
+    const Topic& topic) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  // If we have no handlers, there's nothing to do.
+  if (handlers_.empty()) {
+    return;
+  }
+
+  for (const auto& [handler, registered_topics] :
+       registered_handler_to_topics_map_) {
+    for (const auto& registered_topic : registered_topics) {
+      if (topic != registered_topic.name) {
+        continue;
+      }
+      handler->OnSuccessfullySubscribed(topic);
+    }
+  }
+}
+
 void InvalidatorRegistrarWithMemory::UpdateInvalidatorState(
     InvalidatorState state) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -277,7 +304,7 @@ bool InvalidatorRegistrarWithMemory::HasDuplicateTopicRegistration(
       continue;
     }
 
-    if (absl::optional<TopicData> duplicate =
+    if (std::optional<TopicData> duplicate =
             FindAnyDuplicatedTopic(topics, handler_and_topics.second)) {
       DVLOG(1) << "Duplicate registration: trying to register "
                << duplicate->name << " for " << handler

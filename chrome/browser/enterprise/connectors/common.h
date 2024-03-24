@@ -19,6 +19,7 @@
 #include "components/download/public/common/download_danger_type.h"
 #include "components/enterprise/common/proto/connectors.pb.h"
 #include "content/public/browser/download_manager_delegate.h"
+#include "ui/gfx/range/range.h"
 #include "url/gurl.h"
 
 class Profile;
@@ -150,7 +151,7 @@ struct ScanResult : public base::SupportsUserData::Data {
   static const char kKey[];
 
   std::vector<FileMetadata> file_metadata;
-  absl::optional<std::u16string> user_justification;
+  std::optional<std::u16string> user_justification;
 };
 
 // Enum to identify which message to show once scanning is complete. Ordered
@@ -177,10 +178,19 @@ enum class FinalContentAnalysisResult {
 
 // Result for a single request of the RequestHandler classes.
 struct RequestHandlerResult {
+  RequestHandlerResult();
+  ~RequestHandlerResult();
+  RequestHandlerResult(RequestHandlerResult&&);
+  RequestHandlerResult& operator=(RequestHandlerResult&&);
+  RequestHandlerResult(const RequestHandlerResult&);
+  RequestHandlerResult& operator=(const RequestHandlerResult&);
+
   bool complies;
   FinalContentAnalysisResult final_result;
   std::string tag;
   std::string request_token;
+  ContentAnalysisResponse::Result::TriggeredRule::CustomRuleMessage
+      custom_rule_message;
 };
 
 // Calculates the result for the request handler based on the upload result and
@@ -209,6 +219,33 @@ safe_browsing::EventResult CalculateEventResult(
 ContentAnalysisAcknowledgement::FinalAction GetAckFinalAction(
     const ContentAnalysisResponse& response);
 
+// Extracts the message string from the custom rule message field in the content
+// analysis response.
+std::u16string GetCustomRuleString(
+    const ContentAnalysisResponse::Result::TriggeredRule::CustomRuleMessage&
+        custom_rule_message);
+
+// Extracts the ranges and their corresponding links from the custom rule
+// message field in the content analysis response. Used to style the custom rule
+// message in the content analysis dialog. `offset` corresponds to its start
+// index as we are inserting it in another message.
+std::vector<std::pair<gfx::Range, GURL>> GetCustomRuleStyles(
+    const ContentAnalysisResponse::Result::TriggeredRule::CustomRuleMessage&
+        custom_rule_message,
+    size_t offset);
+
+// Simple custom rule message for tests, with one message segment containing the
+// text and associated url.
+ContentAnalysisResponse::Result::TriggeredRule::CustomRuleMessage
+CreateSampleCustomRuleMessage(const std::u16string& msg,
+                              const std::string& url);
+
+// Extracts the custom rule message from `download_item`. The rule for that
+// message needs to have an action (WARN, BLOCK) corresponding to `danger_type`.
+std::optional<ContentAnalysisResponse::Result::TriggeredRule::CustomRuleMessage>
+GetDownloadsCustomRuleMessage(const download::DownloadItem* download_item,
+                              download::DownloadDangerType danger_type);
+
 // User data to persist a save package's final callback allowing/denying
 // completion. This is used since the callback can be called either when
 // scanning completes on a block/allow verdict, when the user cancels the scan,
@@ -235,7 +272,7 @@ bool IncludeDeviceInfo(Profile* profile, bool per_profile);
 // Returns whether the download danger type implies the user should be allowed
 // to review the download.
 bool ShouldPromptReviewForDownload(Profile* profile,
-                                   download::DownloadDangerType danger_type);
+                                   const download::DownloadItem* download_item);
 
 // Shows the review dialog after a user has clicked the "Review" button
 // corresponding to a download.
@@ -243,7 +280,6 @@ void ShowDownloadReviewDialog(const std::u16string& filename,
                               Profile* profile,
                               download::DownloadItem* download_item,
                               content::WebContents* web_contents,
-                              download::DownloadDangerType danger_type,
                               base::OnceClosure keep_closure,
                               base::OnceClosure discard_closure);
 

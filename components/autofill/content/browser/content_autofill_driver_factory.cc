@@ -25,33 +25,6 @@ namespace autofill {
 
 class ScopedAutofillManagersObservation;
 
-namespace {
-
-bool ShouldEnableHeavyFormDataScraping(const version_info::Channel channel) {
-  switch (channel) {
-    case version_info::Channel::CANARY:
-    case version_info::Channel::DEV:
-      return true;
-    case version_info::Channel::STABLE:
-    case version_info::Channel::BETA:
-    case version_info::Channel::UNKNOWN:
-      return false;
-  }
-  NOTREACHED();
-  return false;
-}
-
-}  // namespace
-
-void BrowserDriverInitHook(AutofillClient* client,
-                           const std::string& app_locale,
-                           ContentAutofillDriver* driver) {
-  driver->set_autofill_manager(
-      std::make_unique<BrowserAutofillManager>(driver, client, app_locale));
-  if (client && ShouldEnableHeavyFormDataScraping(client->GetChannel()))
-    driver->GetAutofillAgent()->EnableHeavyFormDataScraping();
-}
-
 // static
 ContentAutofillDriverFactory* ContentAutofillDriverFactory::FromWebContents(
     content::WebContents* contents) {
@@ -65,8 +38,8 @@ ContentAutofillDriverFactory* ContentAutofillDriverFactory::FromWebContents(
 
 // static
 void ContentAutofillDriverFactory::BindAutofillDriver(
-    mojo::PendingAssociatedReceiver<mojom::AutofillDriver> pending_receiver,
-    content::RenderFrameHost* render_frame_host) {
+    content::RenderFrameHost* render_frame_host,
+    mojo::PendingAssociatedReceiver<mojom::AutofillDriver> pending_receiver) {
   DCHECK(render_frame_host);
 
   content::WebContents* web_contents =
@@ -86,23 +59,13 @@ void ContentAutofillDriverFactory::BindAutofillDriver(
 
 ContentAutofillDriverFactory::ContentAutofillDriverFactory(
     content::WebContents* web_contents,
-    AutofillClient* client,
-    DriverInitCallback driver_init_hook)
-    : content::WebContentsObserver(web_contents),
-      client_(client),
-      driver_init_hook_(std::move(driver_init_hook)) {}
+    ContentAutofillClient* client)
+    : content::WebContentsObserver(web_contents), client_(*client) {}
 
 ContentAutofillDriverFactory::~ContentAutofillDriverFactory() {
   for (Observer& observer : observers_) {
     observer.OnContentAutofillDriverFactoryDestroyed(*this);
   }
-}
-
-std::unique_ptr<ContentAutofillDriver>
-ContentAutofillDriverFactory::CreateDriver(content::RenderFrameHost* rfh) {
-  auto driver = std::make_unique<ContentAutofillDriver>(rfh, this);
-  driver_init_hook_.Run(driver.get());
-  return driver;
 }
 
 ContentAutofillDriver* ContentAutofillDriverFactory::DriverForFrame(
@@ -131,12 +94,13 @@ ContentAutofillDriver* ContentAutofillDriverFactory::DriverForFrame(
     //    calls `DriverForFrame(render_frame_host)`.
     // 5. `render_frame_host->~RenderFrameHostImpl()` finishes.
     if (render_frame_host->IsRenderFrameLive()) {
-      driver = CreateDriver(render_frame_host);
+      driver = std::make_unique<ContentAutofillDriver>(render_frame_host, this);
       for (Observer& observer : observers_) {
         observer.OnContentAutofillDriverCreated(*this, *driver);
       }
       DCHECK_EQ(driver_map_.find(render_frame_host)->second.get(),
                 driver.get());
+      client().InitAgent(/*pass_key=*/{}, driver->GetAutofillAgent());
     } else {
       driver_map_.erase(iter);
       DCHECK_EQ(driver_map_.count(render_frame_host), 0u);
@@ -169,43 +133,14 @@ void ContentAutofillDriverFactory::RenderFrameDeleted(
   driver_map_.erase(it);
 }
 
-void ContentAutofillDriverFactory::DidStartNavigation(
-    content::NavigationHandle* navigation_handle) {
-  // TODO(crbug/1117451): Clean up experiment code.
-  if (base::FeatureList::IsEnabled(
-          features::kAutofillProbableFormSubmissionInBrowser) &&
-      navigation_handle->IsRendererInitiated() &&
-      !navigation_handle->WasInitiatedByLinkClick() &&
-      navigation_handle->IsInPrimaryMainFrame()) {
-    content::GlobalRenderFrameHostId id =
-        navigation_handle->GetPreviousRenderFrameHostId();
-    content::RenderFrameHost* render_frame_host =
-        content::RenderFrameHost::FromID(id);
-    if (render_frame_host) {
-      if (auto* driver = DriverForFrame(render_frame_host))
-        driver->ProbablyFormSubmitted({});
-    }
-  }
-}
-
 void ContentAutofillDriverFactory::DidFinishNavigation(
     content::NavigationHandle* navigation_handle) {
-  if (!navigation_handle->HasCommitted()) {
+  if (!navigation_handle->HasCommitted() ||
+      navigation_handle->IsSameDocument()) {
     return;
   }
   auto* driver = DriverForFrame(navigation_handle->GetRenderFrameHost());
   if (!driver) {
-    return;
-  }
-  if (!navigation_handle->IsInPrerenderedMainFrame() &&
-      (navigation_handle->IsInMainFrame() ||
-       navigation_handle->HasSubframeNavigationEntryCommitted())) {
-    if (IsTouchToFillCreditCardSupported()) {
-      client_->HideTouchToFillCreditCard();
-    }
-  }
-
-  if (navigation_handle->IsSameDocument()) {
     return;
   }
 
@@ -213,8 +148,8 @@ void ContentAutofillDriverFactory::DidFinishNavigation(
   // exists (not in Android Webview), and the AutofillOfferManager exists (not
   // in Incognito windows), notifies the navigation event.
   if (navigation_handle->IsInPrimaryMainFrame() &&
-      client()->GetAutofillOfferManager()) {
-    client()->GetAutofillOfferManager()->OnDidNavigateFrame(client());
+      client().GetAutofillOfferManager()) {
+    client().GetAutofillOfferManager()->OnDidNavigateFrame(client());
   }
 
   // When IsServedFromBackForwardCache or IsPrerendererdPageActivation, the form

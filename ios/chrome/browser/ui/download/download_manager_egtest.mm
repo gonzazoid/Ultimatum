@@ -3,9 +3,11 @@
 // found in the LICENSE file.
 
 #import "base/functional/bind.h"
+#import "base/path_service.h"
 #import "base/test/ios/wait_util.h"
 #import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/ui/download/download_manager_constants.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_actions.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
@@ -31,7 +33,7 @@ namespace {
 
 // Matcher for "Download" button on Download Manager UI.
 id<GREYMatcher> DownloadButton() {
-  return ButtonWithAccessibilityLabelId(IDS_IOS_DOWNLOAD_MANAGER_DOWNLOAD);
+  return grey_accessibilityID(kDownloadManagerDownloadAccessibilityIdentifier);
 }
 
 // Provides downloads landing page with download link.
@@ -104,6 +106,10 @@ std::unique_ptr<net::test_server::HttpResponse> GetContentDispositionResponse(
   self.testServer->RegisterRequestHandler(base::BindRepeating(
       &net::test_server::HandlePrefixedRequest, "/download-example",
       base::BindRepeating(&testing::HandleDownload)));
+
+  self.testServer->ServeFilesFromDirectory(
+      base::PathService::CheckedGet(base::DIR_ASSETS)
+          .AppendASCII("ios/testing/data/http_server_files/"));
 
   GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
 }
@@ -272,6 +278,50 @@ std::unique_ptr<net::test_server::HttpResponse> GetContentDispositionResponse(
       assertWithMatcher:grey_notNil()];
 }
 
+// Tests that "Open in..." works if the download ended while waiting in a
+// different tab which also contains a download task.
+- (void)testSwitchTabsAndOpenInDownloads {
+  // Apple is hiding UIActivityViewController's contents from the host app on
+  // iPad.
+  if ([ChromeEarlGrey isIPadIdiom]) {
+    EARL_GREY_TEST_SKIPPED(@"Test skipped on iPad.");
+  }
+
+  // Create a download A task in one tab.
+  [ChromeEarlGrey loadURL:self.testServer->GetURL("/")];
+  [ChromeEarlGrey waitForWebStateContainingText:"Download"];
+  [ChromeEarlGrey tapWebStateElementWithID:@"download"];
+  GREYAssert(WaitForDownloadButton(), @"Download button did not show up");
+
+  // Go to a second tab and start a download B.
+  [ChromeEarlGrey openNewTab];
+  [ChromeEarlGrey loadURL:self.testServer->GetURL("/")];
+  [ChromeEarlGrey waitForWebStateContainingText:"Download"];
+  [ChromeEarlGrey tapWebStateElementWithID:@"download"];
+  GREYAssert(WaitForDownloadButton(), @"Download button did not show up");
+  [[EarlGrey selectElementWithMatcher:DownloadButton()]
+      performAction:grey_tap()];
+
+  // Go back to first tab and wait enough time for download B to complete.
+  [ChromeEarlGrey selectTabAtIndex:0];
+  base::test::ios::SpinRunLoopWithMinDelay(base::Seconds(10));
+
+  // Go back to second tab and tap "Open in..." for download B.
+  [ChromeEarlGrey selectTabAtIndex:1];
+  GREYAssert(WaitForOpenInButton(), @"Open in... button did not show up");
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::OpenInButton()]
+      performAction:grey_tap()];
+
+  [ChromeEarlGrey
+      verifyTextVisibleInActivitySheetWithID:l10n_util::GetNSString(
+                                                 IDS_IOS_OPEN_IN_DOWNLOADS)];
+  // Tests filename label.
+  [[EarlGrey
+      selectElementWithMatcher:grey_allOf(grey_text(@"download-example"),
+                                          grey_sufficientlyVisible(), nil)]
+      assertWithMatcher:grey_notNil()];
+}
+
 // Tests successful blob download. This also checks that a file can be
 // downloaded and saved locally while an anchor tag has the download attribute.
 - (void)testSuccessfulBlobDownload {
@@ -393,6 +443,12 @@ std::unique_ptr<net::test_server::HttpResponse> GetContentDispositionResponse(
   [_helper testVisibleFileNameAndOpenInDownloads];
 }
 
+// Tests that "Open in..." works if the download ended while waiting in a
+// different tab which also contains a download task.
+- (void)testSwitchTabsAndOpenInDownloads {
+  [_helper testSwitchTabsAndOpenInDownloads];
+}
+
 // Tests successful blob download. This also checks that a file can be
 // downloaded and saved locally while an anchor tag has the download attribute.
 - (void)testSuccessfulBlobDownload {
@@ -490,6 +546,12 @@ std::unique_ptr<net::test_server::HttpResponse> GetContentDispositionResponse(
   [_helper testVisibleFileNameAndOpenInDownloads];
 }
 
+// Tests that "Open in..." works if the download ended while waiting in a
+// different tab which also contains a download task.
+- (void)testSwitchTabsAndOpenInDownloads {
+  [_helper testSwitchTabsAndOpenInDownloads];
+}
+
 // Tests successful blob download. This also checks that a file can be
 // downloaded and saved locally while an anchor tag has the download attribute.
 - (void)testSuccessfulBlobDownload {
@@ -500,6 +562,36 @@ std::unique_ptr<net::test_server::HttpResponse> GetContentDispositionResponse(
 // downloaded and saved locally while an anchor tag has the download attribute.
 - (void)testSuccessfulPDFDownload {
   [_helper testSuccessfulPDFDownload];
+}
+
+// Tests that a pdf that is displayed in the web view can be downloaded.
+// Only valid with "Save to drive" enabled.
+- (void)DISABLED_testDownloadDisplayedPDF {
+  [ChromeEarlGrey loadURL:self.testServer->GetURL("/two_pages.pdf")];
+  [ChromeEarlGrey waitForPageToFinishLoading];
+  GREYAssert(WaitForDownloadButton(), @"Download button did not show up");
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::WebViewMatcher()]
+      performAction:grey_scrollToContentEdge(kGREYContentEdgeBottom)];
+
+  GREYAssert(base::test::ios::WaitUntilConditionOrTimeout(
+                 base::test::ios::kWaitForPageLoadTimeout,
+                 ^{
+                   NSError* error = nil;
+                   [[EarlGrey selectElementWithMatcher:DownloadButton()]
+                       assertWithMatcher:grey_interactable()
+                                   error:&error];
+                   return (error != nil);
+                 }),
+             @"Download bar did not hide on scroll");
+
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::WebViewMatcher()]
+      performAction:grey_scrollToContentEdge(kGREYContentEdgeTop)];
+
+  GREYAssert(WaitForDownloadButton(), @"Download button did not show up");
+  [[EarlGrey selectElementWithMatcher:DownloadButton()]
+      performAction:grey_tap()];
+
+  GREYAssert(WaitForOpenInButton(), @"Open in... button did not show up");
 }
 
 // Tests that a file is downloaded successfully even if it is renderable by the

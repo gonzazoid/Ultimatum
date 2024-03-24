@@ -87,13 +87,13 @@ CalculationExpressionAnchorQueryNode::Zoom(double factor) const {
 
 float CalculationExpressionAnchorQueryNode::Evaluate(
     float max_value,
-    const Length::AnchorEvaluator* anchor_evaluator) const {
-  if (anchor_evaluator) {
-    if (const absl::optional<LayoutUnit> value =
-            anchor_evaluator->Evaluate(*this)) {
+    const Length::EvaluationInput& input) const {
+  if (input.anchor_evaluator) {
+    if (const std::optional<LayoutUnit> value =
+            input.anchor_evaluator->Evaluate(*this)) {
       return value->ToFloat();
     }
-    return FloatValueForLength(fallback_, max_value, anchor_evaluator);
+    return FloatValueForLength(fallback_, max_value, input);
   }
   return 0;
 }

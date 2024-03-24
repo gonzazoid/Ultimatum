@@ -53,6 +53,9 @@ import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.shared_preferences.SharedPreferencesManager;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.CommandLineFlags;
+import org.chromium.base.test.util.Features;
+import org.chromium.base.test.util.Features.DisableFeatures;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.base.test.util.HistogramWatcher;
 import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.ChromeInactivityTracker;
@@ -79,9 +82,6 @@ import org.chromium.chrome.browser.ui.fold_transitions.FoldTransitionController;
 import org.chromium.chrome.browser.ui.native_page.FrozenNativePage;
 import org.chromium.chrome.browser.util.ChromeAccessibilityUtil;
 import org.chromium.chrome.features.start_surface.StartSurfaceConfiguration;
-import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.components.embedder_support.util.UrlConstants;
 import org.chromium.components.segmentation_platform.ClassificationResult;
 import org.chromium.components.segmentation_platform.prediction_status.PredictionStatus;
@@ -305,6 +305,17 @@ public class ReturnToChromeUtilUnitTest {
 
         // Verifies returning false if segmentation result is negative (not show).
         result = new ClassificationResult(PredictionStatus.NOT_READY, null);
+        ReturnToChromeUtil.cacheReturnTimeFromSegmentationImpl(result);
+        Assert.assertEquals(
+                -1,
+                ReturnToChromeUtil.getReturnTimeFromSegmentation(
+                        START_SURFACE_RETURN_TIME_SECONDS));
+        Assert.assertFalse(ReturnToChromeUtil.shouldShowTabSwitcher(1, false));
+
+        // Verifies returning false if segmentation result is negative (not show).
+        result =
+                new ClassificationResult(
+                        PredictionStatus.SUCCEEDED, new String[] {"ChromeStartAndroidV2"});
         ReturnToChromeUtil.cacheReturnTimeFromSegmentationImpl(result);
         Assert.assertEquals(
                 -1,
@@ -985,7 +996,7 @@ public class ReturnToChromeUtilUnitTest {
 
         // Verifies if the added Tab matches the tracking URL, call showHomeSurfaceUi().
         mTabModelObserverCaptor.getValue().willAddTab(mTab1, TabLaunchType.FROM_RESTORE);
-        verify(mNewTabPage).showMagicStackWithHomeSurfaceUi(eq(mTab1));
+        verify(mNewTabPage).showMagicStack(eq(mTab1));
         verify(mHomeSurfaceTracker).updateHomeSurfaceAndTrackingTabs(eq(mNtpTab), eq(mTab1));
     }
 
@@ -1078,6 +1089,8 @@ public class ReturnToChromeUtilUnitTest {
     @EnableFeatures({ChromeFeatureList.SURFACE_POLISH})
     @DisableFeatures({ChromeFeatureList.SHOW_SCROLLABLE_MVT_ON_NTP_ANDROID})
     public void testIsScrollableMvtEnabledWhenSurfacePolishEnabled_tablets() {
+        StartSurfaceConfiguration.SURFACE_POLISH_SCROLLABLE_MVT.setForTesting(false);
+
         assertTrue(ChromeFeatureList.sSurfacePolish.isEnabled());
         Assert.assertFalse(
                 ChromeFeatureList.isEnabled(ChromeFeatureList.SHOW_SCROLLABLE_MVT_ON_NTP_ANDROID));
@@ -1097,6 +1110,8 @@ public class ReturnToChromeUtilUnitTest {
         ChromeFeatureList.START_SURFACE_ON_TABLET
     })
     public void testIsScrollableMvtEnabled_SurfacePolishDisabled_ScrollableMvtEnabled_tablets() {
+        StartSurfaceConfiguration.SURFACE_POLISH_SCROLLABLE_MVT.setForTesting(false);
+
         Assert.assertFalse(ChromeFeatureList.sSurfacePolish.isEnabled());
         assertTrue(
                 ChromeFeatureList.isEnabled(ChromeFeatureList.SHOW_SCROLLABLE_MVT_ON_NTP_ANDROID));
@@ -1118,6 +1133,8 @@ public class ReturnToChromeUtilUnitTest {
     })
     @EnableFeatures({ChromeFeatureList.START_SURFACE_ON_TABLET})
     public void testIsScrollableMvtEnabled_SurfacePolishDisabled_ScrollableMvtDisabled_tablets() {
+        StartSurfaceConfiguration.SURFACE_POLISH_SCROLLABLE_MVT.setForTesting(false);
+
         Assert.assertFalse(ChromeFeatureList.sSurfacePolish.isEnabled());
         Assert.assertFalse(
                 ChromeFeatureList.isEnabled(ChromeFeatureList.SHOW_SCROLLABLE_MVT_ON_NTP_ANDROID));
@@ -1135,6 +1152,8 @@ public class ReturnToChromeUtilUnitTest {
     @EnableFeatures({ChromeFeatureList.SURFACE_POLISH})
     @DisableFeatures({ChromeFeatureList.SHOW_SCROLLABLE_MVT_ON_NTP_PHONE_ANDROID})
     public void testIsScrollableMvtEnabledWhenSurfacePolishEnabled_phones() {
+        StartSurfaceConfiguration.SURFACE_POLISH_SCROLLABLE_MVT.setForTesting(false);
+
         assertTrue(ChromeFeatureList.sSurfacePolish.isEnabled());
         Assert.assertFalse(
                 ChromeFeatureList.isEnabled(
@@ -1157,6 +1176,8 @@ public class ReturnToChromeUtilUnitTest {
     @DisableFeatures({ChromeFeatureList.SURFACE_POLISH})
     @EnableFeatures({ChromeFeatureList.SHOW_SCROLLABLE_MVT_ON_NTP_PHONE_ANDROID})
     public void testIsScrollableMvtEnabled_SurfacePolishDisabled_ScrollableMvtEnabled_phones() {
+        StartSurfaceConfiguration.SURFACE_POLISH_SCROLLABLE_MVT.setForTesting(false);
+
         Assert.assertFalse(ChromeFeatureList.sSurfacePolish.isEnabled());
         assertTrue(
                 ChromeFeatureList.isEnabled(
@@ -1177,6 +1198,8 @@ public class ReturnToChromeUtilUnitTest {
         ChromeFeatureList.SHOW_SCROLLABLE_MVT_ON_NTP_PHONE_ANDROID
     })
     public void testIsScrollableMvtEnabled_SurfacePolishDisabled_ScrollableMvtDisabled_phones() {
+        StartSurfaceConfiguration.SURFACE_POLISH_SCROLLABLE_MVT.setForTesting(false);
+
         Assert.assertFalse(ChromeFeatureList.sSurfacePolish.isEnabled());
         Assert.assertFalse(
                 ChromeFeatureList.isEnabled(

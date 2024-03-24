@@ -2,8 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {DrawingUtils, FaceLandmarker, FilesetResolver} from './mediapipe_task_vision/task_vision.js';
-import {FaceLandmarkerResult} from './mediapipe_task_vision/vision.js';
+import {DrawingUtils, FaceLandmarker} from '../third_party/mediapipe/task_vision/task_vision.js';
+import {FaceLandmarkerOptions, FaceLandmarkerResult} from '../third_party/mediapipe/task_vision/vision.js';
+
 import {MouseController} from './mouse_controller.js';
 
 /**
@@ -30,16 +31,40 @@ export class WebCamFaceLandmarker {
   }
 
   private async createFaceLandmarker_(): Promise<void> {
-    const resolver =
-        await FilesetResolver.forVisionTasks('mediapipe_task_vision');
-    this.faceLandmarker_ = await FaceLandmarker.createFromOptions(resolver, {
-      baseOptions: {
-        modelAssetPath: `mediapipe_task_vision/face_landmarker.task`,
-      },
-      outputFaceBlendshapes: true,
-      outputFacialTransformationMatrixes: true,
-      runningMode: 'VIDEO',
-      numFaces: 1,
+    let proceed: Function|undefined;
+    chrome.accessibilityPrivate.installFaceGazeAssets(async assets => {
+      if (!assets) {
+        throw new Error(
+            `Couldn't create FaceLandmarker because FaceGaze assets couldn't be
+              installed.`);
+      }
+
+      // Create a blob to hold the wasm contents.
+      const blob = new Blob([assets.wasm]);
+      const customFileset = {
+        // The wasm loader JS is checked in, so specify the path.
+        // TODO(b/309121742): The current path is incorrect, ensure this file
+        // gets placed into ../third_party/mediapipe_task_vision/.
+        wasmLoaderPath: '../vision_wasm_internal.js',
+        // The wasm is stored in a blob, so pass a URL to the blob.
+        wasmBinaryPath: URL.createObjectURL(blob),
+      };
+
+      // Create the FaceLandmarker and set options.
+      this.faceLandmarker_ = await FaceLandmarker.createFromModelBuffer(
+          customFileset, new Uint8Array(assets.model));
+      const options: FaceLandmarkerOptions = {
+        outputFaceBlendshapes: true,
+        outputFacialTransformationMatrixes: true,
+        runningMode: 'VIDEO',
+        numFaces: 1,
+      };
+      this.faceLandmarker_!.setOptions(options);
+      proceed!();
+    });
+
+    return new Promise(resolve => {
+      proceed = resolve;
     });
   }
 
@@ -62,7 +87,8 @@ export class WebCamFaceLandmarker {
       return;
     }
 
-    const videoElement = document.getElementById('cameraStream');
+    const videoElement =
+        document.getElementById('cameraStream') as HTMLVideoElement;
     const result = this.faceLandmarker_.detectForVideo(
         /*videoFrame=*/ videoElement, /*timestamp=*/ performance.now());
     // Send result to the background page for processing.
@@ -91,13 +117,13 @@ export class WebCamFaceLandmarker {
     for (const landmarks of result.faceLandmarks) {
       this.drawingUtils_.drawConnectors(
           landmarks, FaceLandmarker.FACE_LANDMARKS_CONTOURS,
-          {color: '#C0C0C060', lineWidth: 2});
+          {color: '#F5005760', lineWidth: 2});
     }
 
     // Center point.
     ctx.beginPath();
     ctx.arc(overlay.width / 2, overlay.height / 2, 2, 0, 2 * Math.PI);
-    ctx.strokeStyle = 'blue';
+    ctx.strokeStyle = '#3D5AFE';
     ctx.stroke();
 
     // Forehead point.
@@ -107,7 +133,7 @@ export class WebCamFaceLandmarker {
     const y = foreheadLocation.y;
     ctx.beginPath();
     ctx.arc(x * overlay.width, y * overlay.height, 2, 0, 2 * Math.PI);
-    ctx.strokeStyle = 'red';
+    ctx.strokeStyle = '#FFEA00';
     ctx.stroke();
   }
 }

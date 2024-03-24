@@ -11,6 +11,7 @@
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search/search.h"
+#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_navigator.h"
@@ -22,6 +23,7 @@
 #include "chrome/browser/ui/toolbar/reading_list_sub_menu_model.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/user_education/show_promo_in_page.h"
+#include "chrome/browser/ui/views/bookmarks/bookmark_bar_view.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/location_bar/cookie_controls/cookie_controls_icon_view.h"
 #include "chrome/browser/ui/views/user_education/browser_help_bubble.h"
@@ -72,6 +74,7 @@
 namespace {
 
 const char kTabGroupTutorialMetricPrefix[] = "TabGroup";
+const char kSavedTabGroupTutorialMetricPrefix[] = "SavedTabGroup";
 const char kCustomizeChromeTutorialMetricPrefix[] = "CustomizeChromeSidePanel";
 const char kSideSearchTutorialMetricPrefix[] = "SideSearch";
 const char kPasswordManagerTutorialMetricPrefix[] = "PasswordManager";
@@ -93,6 +96,26 @@ class IfView : public user_education::TutorialDescription::If {
                std::move(if_condition))) {}
 };
 
+class ScopedSavedTabGroupTutorialState
+    : public user_education::ScopedTutorialState {
+ public:
+  explicit ScopedSavedTabGroupTutorialState(ui::ElementContext ctx)
+      : user_education::ScopedTutorialState(ctx),
+        browser_(chrome::FindBrowserWithUiElementContext(ctx)) {
+    CHECK(browser_);
+    browser_->SetForceShowBookmarkBarFlag(
+        Browser::ForceShowBookmarkBarFlag::kTabGroupsTutorialActive);
+  }
+
+  ~ScopedSavedTabGroupTutorialState() override {
+    browser_->ClearForceShowBookmarkBarFlag(
+        Browser::ForceShowBookmarkBarFlag::kTabGroupsTutorialActive);
+  }
+
+ private:
+  raw_ptr<Browser> browser_;
+};
+
 bool HasTabGroups(const BrowserView* browser_view) {
   return !browser_view->browser()
               ->tab_strip_model()
@@ -102,8 +125,6 @@ bool HasTabGroups(const BrowserView* browser_view) {
 }
 
 }  // namespace
-
-const char kSideSearchTutorialId[] = "Side Search Tutorial";
 
 user_education::HelpBubbleDelegate* GetHelpBubbleDelegate() {
   static base::NoDestructor<BrowserHelpBubbleDelegate> delegate;
@@ -135,8 +156,8 @@ void RegisterChromeHelpBubbleFactories(
 void MaybeRegisterChromeFeaturePromos(
     user_education::FeaturePromoRegistry& registry) {
   using user_education::FeaturePromoSpecification;
-  using Metadata = user_education::FeaturePromoSpecification::Metadata;
   using user_education::HelpBubbleArrow;
+  using user_education::Metadata;
 
   // This icon got updated, so select which is used based on whether refresh is
   // enabled. Note that the WebUI refresh state is not taken into account, so
@@ -155,14 +176,15 @@ void MaybeRegisterChromeFeaturePromos(
 
   // TODO(1432894): Use toast or snooze instead of legacy promo.
   // kIPHAutofillExternalAccountProfileSuggestionFeature:
-  registry.RegisterFeature(std::move(
-      FeaturePromoSpecification::CreateForLegacyPromo(
-          &feature_engagement::
-              kIPHAutofillExternalAccountProfileSuggestionFeature,
-          kAutofillSuggestionElementId,
-          IDS_AUTOFILL_IPH_EXTERNAL_ACCOUNT_PROFILE_SUGGESTION)
-          .SetBubbleArrow(HelpBubbleArrow::kLeftCenter)
-          .SetMetadata(115, "vykochko@google.com", "Autofill popup appears.")));
+  registry.RegisterFeature(
+      std::move(FeaturePromoSpecification::CreateForLegacyPromo(
+                    &feature_engagement::
+                        kIPHAutofillExternalAccountProfileSuggestionFeature,
+                    kAutofillSuggestionElementId,
+                    IDS_AUTOFILL_IPH_EXTERNAL_ACCOUNT_PROFILE_SUGGESTION)
+                    .SetBubbleArrow(HelpBubbleArrow::kLeftCenter)
+                    .SetMetadata(115, "vykochko@google.com",
+                                 "Triggered after autofill popup appears.")));
 
   // kIPHAutofillVirtualCardCVCSuggestionFeature:
   registry.RegisterFeature(std::move(
@@ -174,7 +196,7 @@ void MaybeRegisterChromeFeaturePromos(
           FeaturePromoSpecification::AcceleratorInfo())
           .SetBubbleArrow(HelpBubbleArrow::kLeftCenter)
           .SetMetadata(118, "alexandertekle@google.com",
-                       "Autofill popup appears.")));
+                       "Triggered after autofill popup appears.")));
 
   // kIPHAutofillVirtualCardSuggestionFeature:
   registry.RegisterFeature(std::move(
@@ -183,25 +205,17 @@ void MaybeRegisterChromeFeaturePromos(
           kAutofillCreditCardSuggestionEntryElementId,
           IDS_AUTOFILL_VIRTUAL_CARD_SUGGESTION_IPH_BUBBLE_LABEL)
           .SetBubbleArrow(HelpBubbleArrow::kLeftCenter)
-          .SetMetadata(100, "siyua@chromium.org", "Autofill popup appears.")));
+          .SetMetadata(100, "siyua@chromium.org",
+                       "Triggered after autofill popup appears.")));
 
   // kIPHDesktopPwaInstallFeature:
   registry.RegisterFeature(
       std::move(user_education::FeaturePromoSpecification::CreateForLegacyPromo(
                     &feature_engagement::kIPHDesktopPwaInstallFeature,
                     kInstallPwaElementId, IDS_DESKTOP_PWA_INSTALL_PROMO)
-                    .SetMetadata(Metadata(
-                        89, "phillis@chromium.org",
-                        "User navigates to a page with a promotable PWA."))));
-
-  // kIPHDesktopTabGroupsNewGroupFeature:
-  registry.RegisterFeature(
-      std::move(FeaturePromoSpecification::CreateForTutorialPromo(
-                    feature_engagement::kIPHDesktopTabGroupsNewGroupFeature,
-                    kTabStripRegionElementId, IDS_TAB_GROUPS_NEW_GROUP_PROMO,
-                    kTabGroupTutorialId)
-                    .SetBubbleArrow(HelpBubbleArrow::kNone)
-                    .SetBubbleIcon(kLightbulbOutlineIcon)));
+                    .SetMetadata(Metadata(89, "phillis@chromium.org",
+                                          "Triggered after user navigates to a "
+                                          "page with a promotable PWA."))));
 
   // kIPHDesktopCustomizeChromeFeature:
   registry.RegisterFeature(std::move(
@@ -587,9 +601,11 @@ void MaybeRegisterChromeFeaturePromos(
                     .SetBubbleArrow(HelpBubbleArrow::kTopLeft)));
 
   // kIPHTabSearchFeature:
-  registry.RegisterFeature(FeaturePromoSpecification::CreateForLegacyPromo(
-      &feature_engagement::kIPHTabSearchFeature, kTabSearchButtonElementId,
-      IDS_TAB_SEARCH_PROMO));
+  registry.RegisterFeature(std::move(
+      FeaturePromoSpecification::CreateForLegacyPromo(
+          &feature_engagement::kIPHTabSearchFeature, kTabSearchButtonElementId,
+          IDS_TAB_SEARCH_PROMO)
+          .SetBubbleArrow(user_education::HelpBubbleArrow::kTopLeft)));
 
   // Tracking Protection Offboarding IPH
   registry.RegisterFeature(std::move(
@@ -663,12 +679,13 @@ void MaybeRegisterChromeFeaturePromos(
           .SetBubbleArrow(HelpBubbleArrow::kBottomRight)
           .SetBubbleIcon(&vector_icons::kCelebrationIcon)
           .SetMetadata(
-              90, "dfried@google.com", "Test IPH.",
+              90, "dfried@google.com",
+              "This is a test IPH, designed to verify that IPH can attach to "
+              "elements in WebUI in the main browser tab.",
               // These are not required features; they are just an example to
               // ensure that the tester page formats this data correctly.
-              FeaturePromoSpecification::Metadata::FeatureSet{
-                  &feature_engagement::kIPHWebUiHelpBubbleTestFeature,
-                  &feature_engagement::kIPHDesktopTabGroupsNewGroupFeature})));
+              Metadata::FeatureSet{
+                  &feature_engagement::kIPHWebUiHelpBubbleTestFeature})));
 
   // kIPHBatterySaverModeFeature:
   registry.RegisterFeature(std::move(
@@ -826,6 +843,13 @@ void MaybeRegisterChromeTutorials(
 
   {  // Menu item bubble test.
     TutorialDescription test_description;
+    test_description.metadata.additional_description = "Used for testing only.";
+    test_description.metadata.launch_milestone = 116;
+    test_description.metadata.owners = "Frizzle Team";
+    // These features aren't actually required; they are merely here to verify
+    // that Tutorials have their required features shown on the tester page.
+    test_description.metadata.required_features = {
+        &feature_engagement::kIPHWebUiHelpBubbleTestFeature};
     test_description.steps = {
         BubbleStep(kToolbarAppMenuButtonElementId)
             .SetBubbleBodyText(IDS_OK)
@@ -883,6 +907,84 @@ void MaybeRegisterChromeTutorials(
           BubbleStep(kTabStripRegionElementId)
               .SetBubbleTitleText(IDS_TUTORIAL_GENERIC_SUCCESS_TITLE)
               .SetBubbleBodyText(IDS_TUTORIAL_TAB_GROUP_SUCCESS_DESCRIPTION)));
+
+  {  // Saved Tab Group tutorial.
+    auto saved_tab_group_tutorial =
+        TutorialDescription::Create<kSavedTabGroupTutorialMetricPrefix>(
+            IfView(kBrowserViewElementId, base::BindRepeating(&HasTabGroups))
+                .Then(
+                    // Point at the tab group header and say rick-click on
+                    // group name to open the editor bubble.
+                    BubbleStep(kTabGroupHeaderElementId)
+                        .SetBubbleBodyText(
+                            IDS_TUTORIAL_SAVED_TAB_GROUP_OPEN_EDITOR)
+                        .SetBubbleArrow(HelpBubbleArrow::kTopCenter))
+                .Else(
+                    // Point at the tab strip and say right-click a tab and
+                    // choose "Add tab to new group".
+                    BubbleStep(kTabStripRegionElementId)
+                        .SetBubbleBodyText(
+                            IDS_TUTORIAL_SAVED_TAB_GROUP_ADD_TAB_TO_GROUP),
+
+                    // Wait for the tab group to be created.
+                    HiddenStep::WaitForShowEvent(kTabGroupHeaderElementId)),
+
+            // Wait for the editor bubble to appear.
+            HiddenStep::WaitForShowEvent(kTabGroupEditorBubbleId),
+
+            // Point at editor bubble "Name your group, turn on save".
+            BubbleStep(kTabGroupEditorBubbleSaveToggleId)
+                .SetBubbleBodyText(IDS_TUTORIAL_SAVED_TAB_GROUP_NAME_SAVE_GROUP)
+                .SetBubbleArrow(HelpBubbleArrow::kLeftCenter),
+
+            // Wait for save group sync to be enabled.
+            EventStep(kTabGroupSavedCustomEventId).AbortIfVisibilityLost(true),
+
+            // Point at editor bubble "Hide group" to save it for later in the
+            // bookmarks bar.
+            BubbleStep(kTabGroupEditorBubbleCloseGroupButtonId)
+                .SetBubbleBodyText(IDS_TUTORIAL_SAVED_TAB_GROUP_HIDE_GROUP)
+                .SetBubbleArrow(HelpBubbleArrow::kLeftCenter),
+
+            // Wait for the hide group to be pressed.
+            HiddenStep::WaitForActivated(
+                kTabGroupEditorBubbleCloseGroupButtonId),
+
+            // Wait for the bookmarks bar to show.
+            HiddenStep::WaitForShown(kBookmarkBarElementId),
+
+            // Point at bookmark bar with message to open the previously
+            // closed saved tab group.
+            BubbleStep(kSavedTabGroupButtonElementId)
+                .SetBubbleBodyText(IDS_TUTORIAL_SAVED_TAB_GROUP_REOPEN_GROUP)
+                .SetBubbleArrow(HelpBubbleArrow::kTopLeft),
+
+            // Wait for the saved tab groups button in bookmarks bar to be
+            // activated.
+            HiddenStep::WaitForActivated(kSavedTabGroupButtonElementId),
+
+            // Wait for saved tabs groups to be reopened.
+            HiddenStep::WaitForShowEvent(kTabGroupHeaderElementId)
+                .NameElement(kTabGroupHeaderElementName),
+
+            // Point at tab group header and show the success message for the
+            // tutorial.
+            BubbleStep(kTabGroupHeaderElementName)
+                .SetBubbleTitleText(IDS_TUTORIAL_GENERIC_SUCCESS_TITLE)
+                .SetBubbleBodyText(
+                    IDS_TUTORIAL_SAVED_TAB_GROUP_SUCCESS_DESCRIPTION)
+                .SetBubbleArrow(HelpBubbleArrow::kTopCenter));
+    // Attach a temporary state callback to force show bookmarks bar
+    // during the lifetime of the tutorial.
+    saved_tab_group_tutorial.temporary_state_callback = base::BindRepeating(
+        [](ui::ElementContext context)
+            -> std::unique_ptr<user_education::ScopedTutorialState> {
+          return base::WrapUnique(
+              new ScopedSavedTabGroupTutorialState(context));
+        });
+    tutorial_registry.AddTutorial(kSavedTabGroupTutorialId,
+                                  std::move(saved_tab_group_tutorial));
+  }
 
   // Side panel customize chrome
   tutorial_registry.AddTutorial(

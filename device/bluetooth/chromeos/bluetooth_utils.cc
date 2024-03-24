@@ -4,6 +4,8 @@
 
 #include "device/bluetooth/chromeos/bluetooth_utils.h"
 
+#include <optional>
+
 #include "base/containers/contains.h"
 #include "base/containers/fixed_flat_set.h"
 #include "base/feature_list.h"
@@ -17,7 +19,6 @@
 #include "build/chromeos_buildflags.h"
 #include "chromeos/constants/chromeos_features.h"
 #include "device/base/features.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include <string_view>
@@ -205,6 +206,32 @@ bool IsPolyDevice(const device::BluetoothDevice* device) {
 }
 #endif
 
+// Provide heuristics for which transport to use for a dual device
+BluetoothTransport InferDeviceTransport(const device::BluetoothDevice* device) {
+  if (device->GetType() != BLUETOOTH_TRANSPORT_DUAL) {
+    return device->GetType();
+  }
+
+#if BUILDFLAG(IS_CHROMEOS)
+  // Random address type indicates LE device.
+  if (device->GetAddressType() ==
+      BluetoothDevice::AddressType::ADDR_TYPE_RANDOM) {
+    return BLUETOOTH_TRANSPORT_LE;
+  }
+#endif
+
+  // Devices without type/appearance most likely signals that it is truly only
+  // a LE advertisement for a peripheral which is active, but not pairable. Many
+  // popular headphones behave in this exact way. Mark as invalid until they
+  // provide a type/appearance; this means they've become pairable. See
+  // https://crrev.com/c/1656971 for more.
+  if (device->GetDeviceType() == BluetoothDeviceType::UNKNOWN) {
+    return BLUETOOTH_TRANSPORT_INVALID;
+  }
+
+  return BLUETOOTH_TRANSPORT_CLASSIC;
+}
+
 }  // namespace
 
 device::BluetoothAdapter::DeviceList FilterBluetoothDeviceList(
@@ -284,10 +311,7 @@ bool IsUnsupportedDevice(const device::BluetoothDevice* device) {
   }
 #endif
 
-  switch (device->GetType()) {
-    // Device with invalid bluetooth transport is filtered out.
-    case BLUETOOTH_TRANSPORT_INVALID:
-      break;
+  switch (InferDeviceTransport(device)) {
     // For LE devices, check the discoverable flag and UUIDs.
     case BLUETOOTH_TRANSPORT_LE:
       // Hide the LE device that mark itself as non-discoverble.
@@ -314,23 +338,15 @@ bool IsUnsupportedDevice(const device::BluetoothDevice* device) {
         return false;
       }
       break;
-    // For dual mode devices, a device::BluetoothDevice object without a name
-    // and type/appearance most likely signals that it is truly only a LE
-    // advertisement for a peripheral which is active, but not pairable. Many
-    // popular headphones behave in this exact way. Filter them out until they
-    // provide a type/appearance; this means they've become pairable. See
-    // https://crbug.com/1656971 for more.
-    case BLUETOOTH_TRANSPORT_DUAL:
-      if (device->GetName()) {
-        return device->GetDeviceType() == BluetoothDeviceType::UNKNOWN;
-      }
+    // Otherwise, they are invalid, so filter them out.
+    default:
       break;
   }
 
   return true;
 }
 
-void RecordPairingResult(absl::optional<ConnectionFailureReason> failure_reason,
+void RecordPairingResult(std::optional<ConnectionFailureReason> failure_reason,
                          BluetoothTransport transport,
                          base::TimeDelta duration) {
   RecordPairingTransport(transport);
@@ -368,7 +384,7 @@ void RecordPairingResult(absl::optional<ConnectionFailureReason> failure_reason,
 }
 
 void RecordUserInitiatedReconnectionAttemptResult(
-    absl::optional<ConnectionFailureReason> failure_reason,
+    std::optional<ConnectionFailureReason> failure_reason,
     UserInitiatedReconnectionUISurfaces surface) {
   bool success = !failure_reason.has_value();
   std::string base_histogram_name =
@@ -474,7 +490,7 @@ void RecordUiSurfaceDisplayed(BluetoothUiSurface ui_surface) {
 }
 
 void RecordUserInitiatedReconnectionAttemptDuration(
-    absl::optional<ConnectionFailureReason> failure_reason,
+    std::optional<ConnectionFailureReason> failure_reason,
     BluetoothTransport transport,
     base::TimeDelta duration) {
   bool success = !failure_reason.has_value();

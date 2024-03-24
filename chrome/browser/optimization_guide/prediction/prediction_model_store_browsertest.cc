@@ -12,6 +12,7 @@
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/optimization_guide/browser_test_util.h"
+#include "chrome/browser/optimization_guide/chrome_prediction_model_store.h"
 #include "chrome/browser/optimization_guide/optimization_guide_keyed_service.h"
 #include "chrome/browser/optimization_guide/optimization_guide_keyed_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
@@ -79,8 +80,6 @@ class PredictionModelStoreBrowserTestBase : public InProcessBrowserTest {
       const PredictionModelStoreBrowserTestBase&) = delete;
 
   void SetUp() override {
-    InitializeFeatureList();
-
     models_server_ = std::make_unique<net::EmbeddedTestServer>(
         net::EmbeddedTestServer::TYPE_HTTPS);
     net::EmbeddedTestServer::ServerCertificateConfig models_server_cert_config;
@@ -120,7 +119,6 @@ class PredictionModelStoreBrowserTestBase : public InProcessBrowserTest {
                      "/")
             .spec());
     cmd->AppendSwitchASCII("force-variation-ids", "4");
-    cmd->AppendSwitch(switches::kDebugLoggingEnabled);
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     cmd->AppendSwitch(ash::switches::kIgnoreUserProfileMappingForTests);
 #endif
@@ -132,7 +130,7 @@ class PredictionModelStoreBrowserTestBase : public InProcessBrowserTest {
     OptimizationGuideKeyedServiceFactory::GetForProfile(profile)
         ->AddObserverForOptimizationTargetModel(
             proto::OPTIMIZATION_TARGET_PAINFUL_PAGE_LOAD,
-            /*model_metadata=*/absl::nullopt, model_file_observer);
+            /*model_metadata=*/std::nullopt, model_file_observer);
   }
 
   // Registers |model_file_observer| for model updates from the optimization
@@ -168,12 +166,13 @@ class PredictionModelStoreBrowserTestBase : public InProcessBrowserTest {
   }
 
   void set_server_model_cache_key(
-      absl::optional<proto::ModelCacheKey> server_model_cache_key) {
+      std::optional<proto::ModelCacheKey> server_model_cache_key) {
     server_model_cache_key_ = server_model_cache_key;
   }
 
   base::FilePath GetModelStoreBaseDir() {
-    return PredictionModelStore::GetInstance()->GetBaseStoreDirForTesting();
+    return ChromePredictionModelStore::GetInstance()
+        ->GetBaseStoreDirForTesting();
   }
 
   size_t ComputeModelsInStore() {
@@ -231,16 +230,13 @@ class PredictionModelStoreBrowserTestBase : public InProcessBrowserTest {
     return std::move(response);
   }
 
-  // Virtualize for testing different feature configurations.
-  virtual void InitializeFeatureList() = 0;
-
   base::test::ScopedFeatureList scoped_feature_list_;
   GURL model_file_url_;
   std::unique_ptr<net::EmbeddedTestServer> models_server_;
   base::HistogramTester histogram_tester_;
 
   // Server returned ModelCacheKey in the GetModels response.
-  absl::optional<proto::ModelCacheKey> server_model_cache_key_;
+  std::optional<proto::ModelCacheKey> server_model_cache_key_;
 };
 
 class PredictionModelStoreBrowserTest
@@ -253,11 +249,6 @@ class PredictionModelStoreBrowserTest
       delete;
   PredictionModelStoreBrowserTest& operator=(
       const PredictionModelStoreBrowserTest&) = delete;
-
-  void InitializeFeatureList() override {
-    scoped_feature_list_.InitWithFeatures(
-        {{features::kOptimizationGuideInstallWideModelStore}}, {});
-  }
 };
 
 IN_PROC_BROWSER_TEST_F(PredictionModelStoreBrowserTest, TestRegularProfile) {
@@ -627,83 +618,6 @@ IN_PROC_BROWSER_TEST_F(PredictionModelStoreBrowserTest,
             proto::OPTIMIZATION_TARGET_PAINFUL_PAGE_LOAD);
   EXPECT_TRUE(
       model_file_observer_foo.model_info()->GetModelFilePath().IsAbsolute());
-}
-
-class PredictionModelStoreMigrationBrowserTest
-    : public PredictionModelStoreBrowserTestBase {
- public:
-  PredictionModelStoreMigrationBrowserTest() = default;
-  ~PredictionModelStoreMigrationBrowserTest() override = default;
-
-  PredictionModelStoreMigrationBrowserTest(
-      const PredictionModelStoreMigrationBrowserTest&) = delete;
-  PredictionModelStoreMigrationBrowserTest& operator=(
-      const PredictionModelStoreMigrationBrowserTest&) = delete;
-
-  void InitializeFeatureList() override {
-    base::StringPiece test_name =
-        ::testing::UnitTest::GetInstance()->current_test_info()->name();
-
-    if (base::StartsWith(test_name, "PRE_PRE_")) {
-      // First stage of migration. Old model store is active.
-      scoped_feature_list_.InitAndDisableFeature(
-          features::kOptimizationGuideInstallWideModelStore);
-    } else if (base::StartsWith(test_name, "PRE_")) {
-      // Second stage of migration. New model store is active.
-      scoped_feature_list_.InitAndEnableFeature(
-          features::kOptimizationGuideInstallWideModelStore);
-    } else {
-      // Last stage of migration. Old model store is active.
-      scoped_feature_list_.InitAndDisableFeature(
-          features::kOptimizationGuideInstallWideModelStore);
-    }
-  }
-
-  void CheckOldModelStoreDirectory(bool should_exist) {
-    base::ScopedAllowBlockingForTesting allow_blocking;
-    EXPECT_EQ(should_exist,
-              base::DirectoryExists(browser()->profile()->GetPath().Append(
-                  kOldOptimizationGuidePredictionModelDownloads)));
-  }
-};
-
-IN_PROC_BROWSER_TEST_F(PredictionModelStoreMigrationBrowserTest,
-                       PRE_PRE_MigrationOldToNewToOldStore) {
-  EXPECT_FALSE(features::IsInstallWideModelStoreEnabled());
-  ModelFileObserver model_file_observer;
-  RegisterAndWaitForModelUpdate(&model_file_observer);
-
-  // The model will be downloaded by the old model store.
-  histogram_tester_.ExpectUniqueSample(
-      "OptimizationGuide.PredictionModelDownloadManager.DownloadStatus",
-      PredictionModelDownloadStatus::kSuccess, 1);
-  CheckOldModelStoreDirectory(true);
-}
-
-IN_PROC_BROWSER_TEST_F(PredictionModelStoreMigrationBrowserTest,
-                       PRE_MigrationOldToNewToOldStore) {
-  EXPECT_TRUE(features::IsInstallWideModelStoreEnabled());
-  ModelFileObserver model_file_observer;
-  RegisterAndWaitForModelUpdate(&model_file_observer);
-
-  // The model will be downloaded by the new model store.
-  histogram_tester_.ExpectUniqueSample(
-      "OptimizationGuide.PredictionModelDownloadManager.DownloadStatus",
-      PredictionModelDownloadStatus::kSuccess, 1);
-  CheckOldModelStoreDirectory(false);
-}
-
-IN_PROC_BROWSER_TEST_F(PredictionModelStoreMigrationBrowserTest,
-                       MigrationOldToNewToOldStore) {
-  EXPECT_FALSE(features::IsInstallWideModelStoreEnabled());
-  ModelFileObserver model_file_observer;
-  RegisterAndWaitForModelUpdate(&model_file_observer);
-
-  // The model will be downloaded again.
-  histogram_tester_.ExpectUniqueSample(
-      "OptimizationGuide.PredictionModelDownloadManager.DownloadStatus",
-      PredictionModelDownloadStatus::kSuccess, 1);
-  CheckOldModelStoreDirectory(true);
 }
 
 }  // namespace optimization_guide

@@ -75,6 +75,18 @@ constexpr char kNumOriginsHistogram[] =
     "Storage.SharedStorage.Database.FileBacked.NumOrigins";
 constexpr char kIsFileBackedHistogram[] =
     "Storage.SharedStorage.Database.IsFileBacked";
+constexpr char kBytesUsedMaxHistogram[] =
+    "Storage.SharedStorage.Database.FileBacked.BytesUsed.PerOrigin.Max";
+constexpr char kBytesUsedMinHistogram[] =
+    "Storage.SharedStorage.Database.FileBacked.BytesUsed.PerOrigin.Min";
+constexpr char kBytesUsedMedianHistogram[] =
+    "Storage.SharedStorage.Database.FileBacked.BytesUsed.PerOrigin.Median";
+constexpr char kBytesUsedQ1Histogram[] =
+    "Storage.SharedStorage.Database.FileBacked.BytesUsed.PerOrigin.Q1";
+constexpr char kBytesUsedQ3Histogram[] =
+    "Storage.SharedStorage.Database.FileBacked.BytesUsed.PerOrigin.Q3";
+constexpr char kBytesUsedTotalHistogram[] =
+    "Storage.SharedStorage.Database.FileBacked.BytesUsed.Total.KB";
 
 }  // namespace
 
@@ -288,6 +300,14 @@ TEST_F(SharedStorageDatabaseTest, CurrentVersion_LoadFromFile) {
   histogram_tester_.ExpectUniqueSample(kNumEntriesMedianHistogram, 2, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesQ3Histogram, 3, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesMaxHistogram, 4, 1);
+  histogram_tester_.ExpectUniqueSample(
+      kBytesUsedTotalHistogram,
+      (16 + 16 + 28 + 30 + 32 + 40 + 46 + 46 + 4110) / 1024, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMinHistogram, 16, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedQ1Histogram, 28, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMedianHistogram, 32, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedQ3Histogram, 46, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMaxHistogram, 4110, 1);
 
   EXPECT_TRUE(db_->Destroy());
 }
@@ -411,6 +431,14 @@ TEST_F(SharedStorageDatabaseTest, Version1_LoadFromFileNoBudgetTables) {
   histogram_tester_.ExpectUniqueSample(kNumEntriesMedianHistogram, 2, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesQ3Histogram, 3, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesMaxHistogram, 4, 1);
+  histogram_tester_.ExpectUniqueSample(
+      kBytesUsedTotalHistogram,
+      (16 + 16 + 28 + 30 + 32 + 40 + 46 + 46 + 4110) / 1024, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMinHistogram, 16, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedQ1Histogram, 28, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMedianHistogram, 32, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedQ3Histogram, 46, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMaxHistogram, 4110, 1);
 
   EXPECT_TRUE(db_->Destroy());
 }
@@ -449,6 +477,8 @@ TEST_F(SharedStorageDatabaseTest, DestroyTooNew) {
             db_->ResetBudgetForDevTools(kOrigin));
 
   auto metadata = db_->GetMetadata(kOrigin);
+  EXPECT_EQ(-1, metadata.length);
+  EXPECT_EQ(-1, metadata.bytes_used);
   EXPECT_EQ(OperationResult::kInitFailure, metadata.time_result);
   EXPECT_EQ(OperationResult::kInitFailure, metadata.budget_result);
 
@@ -473,6 +503,39 @@ TEST_F(SharedStorageDatabaseTest, DestroyTooOld) {
 
   // Test that it is still OK to Destroy() the database.
   EXPECT_TRUE(db_->Destroy());
+}
+
+TEST_F(SharedStorageDatabaseTest, LoadFromFile_FileOrigin) {
+  db_ = LoadFromFile("shared_storage.v4.filescheme.sql");
+  ASSERT_TRUE(db_);
+  ASSERT_TRUE(db_->is_filebacked());
+
+  // Override the clock and set to the last time in the file that is used to
+  // make a budget withdrawal.
+  db_->OverrideClockForTesting(&clock_);
+  clock_.SetNow(base::Time::FromDeltaSinceWindowsEpoch(
+      base::Microseconds(13269546476192362)));
+
+  url::Origin file_origin = url::Origin::Create(GURL("file://"));
+  EXPECT_EQ(db_->Get(file_origin, u"a").data, u"");
+
+  TestSharedStorageEntriesListener listener(
+      task_environment_.GetMainThreadTaskRunner());
+  EXPECT_EQ(OperationResult::kSuccess,
+            db_->Keys(file_origin, listener.BindNewPipeAndPassRemote()));
+  listener.Flush();
+  EXPECT_THAT(listener.TakeKeys(), ElementsAre(u"a", u"b", u"c"));
+  EXPECT_EQ("", listener.error_message());
+  EXPECT_EQ(1U, listener.BatchCount());
+  listener.VerifyNoError();
+
+  EXPECT_EQ(OperationResult::kSet, db_->Set(file_origin, u"key1", u"value2"));
+  EXPECT_EQ(db_->Get(file_origin, u"key1").data, u"value2");
+  EXPECT_EQ(OperationResult::kSet,
+            db_->Append(file_origin, u"key1", u"value2"));
+  EXPECT_EQ(db_->Get(file_origin, u"key1").data, u"value2value2");
+  EXPECT_EQ(OperationResult::kSuccess, db_->Delete(file_origin, u"key1"));
+  EXPECT_EQ(OperationResult::kNotFound, db_->Get(file_origin, u"key1").result);
 }
 
 class SharedStorageDatabaseParamTest
@@ -841,6 +904,84 @@ TEST_P(SharedStorageDatabaseParamTest, Length) {
   // 2 keys for `kOrigin1` have now expired, so `Length()` will not count them
   // even though they have not been purged yet.
   EXPECT_EQ(1L, db_->Length(kOrigin1));
+}
+
+TEST_P(SharedStorageDatabaseParamTest, BytesUsed) {
+  const url::Origin kOrigin1 =
+      url::Origin::Create(GURL("http://www.example1.test"));
+  EXPECT_EQ(0L, db_->BytesUsed(kOrigin1));
+  EXPECT_EQ(0L, db_->NumBytesUsedIncludeExpiredForTesting(kOrigin1));
+
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key1", u"value1"));
+  EXPECT_EQ(8 + 12, db_->BytesUsed(kOrigin1));
+  EXPECT_EQ(8 + 12, db_->NumBytesUsedIncludeExpiredForTesting(kOrigin1));
+
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"a", u""));
+  EXPECT_EQ(8 + 12 + 2 + 0, db_->BytesUsed(kOrigin1));
+  EXPECT_EQ(8 + 12 + 2 + 0,
+            db_->NumBytesUsedIncludeExpiredForTesting(kOrigin1));
+
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"a", u"b"));
+  EXPECT_EQ(8 + 12 + 2 + 2, db_->BytesUsed(kOrigin1));
+  EXPECT_EQ(8 + 12 + 2 + 2,
+            db_->NumBytesUsedIncludeExpiredForTesting(kOrigin1));
+
+  EXPECT_EQ(OperationResult::kIgnored,
+            db_->Set(kOrigin1, u"a", u"bb", SetBehavior::kIgnoreIfPresent));
+  EXPECT_EQ(8 + 12 + 2 + 2, db_->BytesUsed(kOrigin1));
+  EXPECT_EQ(8 + 12 + 2 + 2,
+            db_->NumBytesUsedIncludeExpiredForTesting(kOrigin1));
+
+  const url::Origin kOrigin2 =
+      url::Origin::Create(GURL("http://www.example2.test"));
+  EXPECT_EQ(0L, db_->BytesUsed(kOrigin2));
+  EXPECT_EQ(0L, db_->NumBytesUsedIncludeExpiredForTesting(kOrigin2));
+
+  EXPECT_EQ(OperationResult::kSet, db_->Append(kOrigin2, u"key1", u"val1"));
+  EXPECT_EQ(8 + 8, db_->BytesUsed(kOrigin2));
+  EXPECT_EQ(8 + 8, db_->NumBytesUsedIncludeExpiredForTesting(kOrigin2));
+  EXPECT_EQ(8 + 12 + 2 + 2, db_->BytesUsed(kOrigin1));
+  EXPECT_EQ(8 + 12 + 2 + 2,
+            db_->NumBytesUsedIncludeExpiredForTesting(kOrigin1));
+
+  EXPECT_EQ(OperationResult::kSet, db_->Append(kOrigin2, u"key1", u"extra"));
+  EXPECT_EQ(8 + 8 + 10, db_->BytesUsed(kOrigin2));
+  EXPECT_EQ(8 + 8 + 10, db_->NumBytesUsedIncludeExpiredForTesting(kOrigin2));
+  EXPECT_EQ(8 + 12 + 2 + 2, db_->BytesUsed(kOrigin1));
+  EXPECT_EQ(8 + 12 + 2 + 2,
+            db_->NumBytesUsedIncludeExpiredForTesting(kOrigin1));
+
+  EXPECT_EQ(OperationResult::kSuccess, db_->Delete(kOrigin2, u"key1"));
+  EXPECT_EQ(0L, db_->BytesUsed(kOrigin2));
+  EXPECT_EQ(0L, db_->NumBytesUsedIncludeExpiredForTesting(kOrigin2));
+  EXPECT_EQ(8 + 12 + 2 + 2, db_->BytesUsed(kOrigin1));
+  EXPECT_EQ(8 + 12 + 2 + 2,
+            db_->NumBytesUsedIncludeExpiredForTesting(kOrigin1));
+
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key3", u"v"));
+  EXPECT_EQ(8 + 12 + 2 + 2 + 8 + 2, db_->BytesUsed(kOrigin1));
+  EXPECT_EQ(8 + 12 + 2 + 2 + 8 + 2,
+            db_->NumBytesUsedIncludeExpiredForTesting(kOrigin1));
+  EXPECT_EQ(0L, db_->BytesUsed(kOrigin2));
+  EXPECT_EQ(0L, db_->NumBytesUsedIncludeExpiredForTesting(kOrigin2));
+
+  // Advance the clock halfway towards expiration of the keys.
+  clock_.Advance(base::Days(kStalenessThresholdDays / 2.0));
+
+  // Update one entry, with no change in number of bytes.
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key1", u"value0"));
+  EXPECT_EQ(8 + 12 + 2 + 2 + 8 + 2, db_->BytesUsed(kOrigin1));
+  EXPECT_EQ(8 + 12 + 2 + 2 + 8 + 2,
+            db_->NumBytesUsedIncludeExpiredForTesting(kOrigin1));
+
+  // Advance the clock to original key expiration time.
+  clock_.Advance(base::Days(kStalenessThresholdDays / 2.0) + base::Seconds(1));
+
+  // 2 keys for `kOrigin1` have now expired, so `BytesUsed()` will not count
+  // them even though they have not been purged yet.
+  EXPECT_EQ(8 + 12, db_->BytesUsed(kOrigin1));
+  EXPECT_EQ(8 + 12 + 2 + 2 + 8 + 2,
+            db_->NumBytesUsedIncludeExpiredForTesting(kOrigin1));
 }
 
 TEST_P(SharedStorageDatabaseParamTest, Keys) {
@@ -1817,14 +1958,6 @@ TEST_P(SharedStorageDatabaseParamTest, MaxStringLength) {
 
 class SharedStorageDatabaseIteratorTest : public SharedStorageDatabaseTest {
  public:
-  void SetUp() override {
-    SharedStorageDatabaseTest::SetUp();
-
-    auto options = SharedStorageOptions::Create()->GetDatabaseOptions();
-    db_ = std::make_unique<SharedStorageDatabase>(
-        file_name_, special_storage_policy_, std::move(options));
-  }
-
   void InitSharedStorageFeature() override {
     scoped_feature_list_.InitAndEnableFeatureWithParameters(
         {blink::features::kSharedStorageAPI},
@@ -1883,6 +2016,14 @@ TEST_F(SharedStorageDatabaseIteratorTest, Keys) {
   histogram_tester_.ExpectUniqueSample(kNumEntriesMedianHistogram, 113.5, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesQ3Histogram, 201, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesMaxHistogram, 201, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedTotalHistogram,
+                                       (364 + 5196) / 1024, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMinHistogram, 364, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedQ1Histogram, 364, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMedianHistogram,
+                                       (364 + 5196) / 2, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedQ3Histogram, 5196, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMaxHistogram, 5196, 1);
 }
 
 TEST_F(SharedStorageDatabaseIteratorTest, Entries) {
@@ -1932,12 +2073,20 @@ TEST_F(SharedStorageDatabaseIteratorTest, Entries) {
   histogram_tester_.ExpectUniqueSample(kNumEntriesMedianHistogram, 113.5, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesQ3Histogram, 201, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesMaxHistogram, 201, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedTotalHistogram,
+                                       (364 + 5196) / 1024, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMinHistogram, 364, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedQ1Histogram, 364, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMedianHistogram,
+                                       (364 + 5196) / 2, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedQ3Histogram, 5196, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMaxHistogram, 5196, 1);
 }
 
 // Tests correct calculation of five-number summary when there is only one
 // origin.
 TEST_F(SharedStorageDatabaseTest, SingleOrigin) {
-  db_ = LoadFromFile("shared_storage.v3.single_origin.sql");
+  db_ = LoadFromFile("shared_storage.v5.single_origin.sql");
   ASSERT_TRUE(db_);
   ASSERT_TRUE(db_->is_filebacked());
 
@@ -1958,12 +2107,18 @@ TEST_F(SharedStorageDatabaseTest, SingleOrigin) {
   histogram_tester_.ExpectUniqueSample(kNumEntriesMedianHistogram, 10, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesQ3Histogram, 10, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesMaxHistogram, 10, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedTotalHistogram, 200 / 1024, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMinHistogram, 200, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedQ1Histogram, 200, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMedianHistogram, 200, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedQ3Histogram, 200, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMaxHistogram, 200, 1);
 }
 
 // Tests correct calculation of five-number summary when number of origins is
 // greater than one and has remainder 1 modulo 4.
 TEST_F(SharedStorageDatabaseTest, FiveOrigins) {
-  db_ = LoadFromFile("shared_storage.v3.empty_values_mapping.5origins.sql");
+  db_ = LoadFromFile("shared_storage.v5.empty_values_mapping.5origins.sql");
   ASSERT_TRUE(db_);
   ASSERT_TRUE(db_->is_filebacked());
 
@@ -1989,12 +2144,21 @@ TEST_F(SharedStorageDatabaseTest, FiveOrigins) {
   histogram_tester_.ExpectUniqueSample(kNumEntriesMedianHistogram, 20, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesQ3Histogram, 145, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesMaxHistogram, 250, 1);
+  histogram_tester_.ExpectUniqueSample(
+      kBytesUsedTotalHistogram, (2500 + 4000 + 2000 + 10000 + 150) / 1024, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMinHistogram, 150, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedQ1Histogram, (150 + 2000) / 2,
+                                       1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMedianHistogram, 2500, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedQ3Histogram,
+                                       (10000 + 4000) / 2, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMaxHistogram, 10000, 1);
 }
 
 // Tests correct calculation of five-number summary when number of origins has
 // remainder 2 modulo 4.
 TEST_F(SharedStorageDatabaseTest, SixOrigins) {
-  db_ = LoadFromFile("shared_storage.v3.empty_values_mapping.6origins.sql");
+  db_ = LoadFromFile("shared_storage.v5.empty_values_mapping.6origins.sql");
   ASSERT_TRUE(db_);
   ASSERT_TRUE(db_->is_filebacked());
 
@@ -2021,12 +2185,21 @@ TEST_F(SharedStorageDatabaseTest, SixOrigins) {
   histogram_tester_.ExpectUniqueSample(kNumEntriesMedianHistogram, 30, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesQ3Histogram, 250, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesMaxHistogram, 1599, 1);
+  histogram_tester_.ExpectUniqueSample(
+      kBytesUsedTotalHistogram,
+      (2500 + 4000 + 2000 + 10000 + 150 + 1599000) / 1024, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMinHistogram, 150, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedQ1Histogram, 2000, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMedianHistogram,
+                                       (2500 + 4000) / 2, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedQ3Histogram, 10000, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMaxHistogram, 1599000, 1);
 }
 
 // Tests correct calculation of five-number summary when number of origins has
 // remainder 3 modulo 4.
 TEST_F(SharedStorageDatabaseTest, SevenOrigins) {
-  db_ = LoadFromFile("shared_storage.v3.empty_values_mapping.7origins.sql");
+  db_ = LoadFromFile("shared_storage.v5.empty_values_mapping.7origins.sql");
   ASSERT_TRUE(db_);
   ASSERT_TRUE(db_->is_filebacked());
 
@@ -2056,12 +2229,20 @@ TEST_F(SharedStorageDatabaseTest, SevenOrigins) {
   histogram_tester_.ExpectUniqueSample(kNumEntriesMedianHistogram, 40, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesQ3Histogram, 1001, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesMaxHistogram, 1599, 1);
+  histogram_tester_.ExpectUniqueSample(
+      kBytesUsedTotalHistogram,
+      (2500 + 4000 + 2000 + 10000 + 150 + 1599000 + 100100) / 1024, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMinHistogram, 150, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedQ1Histogram, 2000, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMedianHistogram, 4000, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedQ3Histogram, 100100, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMaxHistogram, 1599000, 1);
 }
 
 // Tests correct calculation of five-number summary when number of origins has
 // remainder 0 modulo 4.
 TEST_F(SharedStorageDatabaseTest, EightOrigins) {
-  db_ = LoadFromFile("shared_storage.v3.empty_values_mapping.8origins.sql");
+  db_ = LoadFromFile("shared_storage.v5.empty_values_mapping.8origins.sql");
   ASSERT_TRUE(db_);
   ASSERT_TRUE(db_->is_filebacked());
 
@@ -2092,6 +2273,17 @@ TEST_F(SharedStorageDatabaseTest, EightOrigins) {
   histogram_tester_.ExpectUniqueSample(kNumEntriesMedianHistogram, 70, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesQ3Histogram, 625.5, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesMaxHistogram, 1599, 1);
+  histogram_tester_.ExpectUniqueSample(
+      kBytesUsedTotalHistogram,
+      (2500 + 4000 + 2000 + 10000 + 150 + 1599000 + 100100 + 1000) / 1024, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMinHistogram, 150, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedQ1Histogram, (1000 + 2000) / 2,
+                                       1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMedianHistogram,
+                                       (2500 + 4000) / 2, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedQ3Histogram,
+                                       (10000 + 100100) / 2, 1);
+  histogram_tester_.ExpectUniqueSample(kBytesUsedMaxHistogram, 1599000, 1);
 }
 
 }  // namespace storage

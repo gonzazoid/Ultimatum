@@ -21,7 +21,8 @@
 #include "ui/base/ime/ash/component_extension_ime_manager.h"
 #include "ui/base/ime/ash/extension_ime_util.h"
 // For SetHardwareKeyboardLayoutForTesting.
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
 #include "ui/base/ime/ash/fake_input_method_delegate.h"
 #include "ui/base/ime/ash/input_method_delegate.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -649,7 +650,7 @@ std::string InputMethodUtil::GetLanguageDefaultInputMethodId(
   return std::string();
 }
 
-std::string InputMethodUtil::MigrateInputMethod(
+std::string InputMethodUtil::GetMigratedInputMethod(
     const std::string& input_method_id) {
   std::string engine_id = input_method_id;
   // Migrates some Engine IDs from VPD.
@@ -671,12 +672,12 @@ std::string InputMethodUtil::MigrateInputMethod(
   return id;
 }
 
-bool InputMethodUtil::MigrateInputMethods(
+bool InputMethodUtil::GetMigratedInputMethodIDs(
     std::vector<std::string>* input_method_ids) {
   bool rewritten = false;
   std::vector<std::string>& ids = *input_method_ids;
   for (std::string& i : ids) {
-    std::string id = MigrateInputMethod(i);
+    std::string id = GetMigratedInputMethod(i);
     if (id != i) {
       i = id;
       rewritten = true;
@@ -706,7 +707,7 @@ void InputMethodUtil::UpdateHardwareLayoutCache() {
                           base::KEEP_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
   }
   hardware_layouts_ = cached_hardware_layouts_;
-  MigrateInputMethods(&hardware_layouts_);
+  GetMigratedInputMethodIDs(&hardware_layouts_);
 
   bool has_xkb = false;
   for (const auto& hardware_layout : hardware_layouts_) {
@@ -779,7 +780,7 @@ void InputMethodUtil::AppendInputMethods(const InputMethodDescriptors& imes) {
                                  input_method.id());
     }
 
-    const absl::optional<std::string>& handwriting_language =
+    const std::optional<std::string>& handwriting_language =
         input_method.handwriting_language();
     if (handwriting_language.has_value()) {
       MultimapDeduplicatedInsert(handwriting_language_to_ids_,
@@ -810,10 +811,10 @@ InputMethodDescriptor InputMethodUtil::GetFallbackInputMethodDescriptor() {
       extension_ime_util::GetInputMethodIDByEngineID("xkb:us::eng"), "", "US",
       "us",  // layout
       languages,
-      true,                                   // login keyboard.
-      GURL(),                                 // options page, not available.
-      GURL(),                                 // input view page, not available.
-      /*handwriting_language=*/absl::nullopt  // not available.
+      true,                                  // login keyboard.
+      GURL(),                                // options page, not available.
+      GURL(),                                // input view page, not available.
+      /*handwriting_language=*/std::nullopt  // not available.
   );
 }
 

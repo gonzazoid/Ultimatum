@@ -10,6 +10,7 @@
 #include <array>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -30,7 +31,6 @@
 #include "components/policy/core/common/remote_commands/remote_command_job.h"
 #include "components/policy/policy_export.h"
 #include "components/policy/proto/device_management_backend.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 class BrowserContext;
@@ -148,7 +148,7 @@ class POLICY_EXPORT CloudPolicyClient {
     enterprise_management::DeviceRegisterRequest::Type registration_type;
     enterprise_management::DeviceRegisterRequest::Flavor flavor;
 
-    absl::optional<enterprise_management::LicenseType_LicenseTypeEnum>
+    std::optional<enterprise_management::LicenseType_LicenseTypeEnum>
         license_type;
 
     // Lifetime of registration. Used for easier clean up of ephemeral session
@@ -167,7 +167,7 @@ class POLICY_EXPORT CloudPolicyClient {
     // undergoes enrollment and a PSM server-backed state determination was
     // performed before (on Chrome OS, as encoded in the
     // `prefs::kEnrollmentPsmResult` pref).
-    absl::optional<
+    std::optional<
         enterprise_management::DeviceRegisterRequest::PsmExecutionResult>
         psm_execution_result;
 
@@ -175,13 +175,13 @@ class POLICY_EXPORT CloudPolicyClient {
     // PSM protocol determination timestamp. Its value will exist if the device
     // undergoes enrollment and PSM got executed successfully (on ChromeOS, as
     // encoded in `prefs::kEnrollmentPsmDeterminationTime` pref).
-    absl::optional<int64_t> psm_determination_timestamp;
+    std::optional<int64_t> psm_determination_timestamp;
 
     // The following field is relevant only to Chrome OS Demo Mode.
     // Information about demo-specific device attributes and retail context.
     // This value will only exist if the enrollment requisition is
     // kDemoRequisition ("cros-demo-mode").
-    absl::optional<enterprise_management::DemoModeDimensions>
+    std::optional<enterprise_management::DemoModeDimensions>
         demo_mode_dimensions;
   };
 
@@ -199,9 +199,15 @@ class POLICY_EXPORT CloudPolicyClient {
       std::string_view machine_model,
       std::string_view brand_code,
       std::string_view attested_device_id,
-      absl::optional<MacAddress> ethernet_mac_address,
-      absl::optional<MacAddress> dock_mac_address,
+      std::optional<MacAddress> ethernet_mac_address,
+      std::optional<MacAddress> dock_mac_address,
       std::string_view manufacture_date,
+      DeviceManagementService* service,
+      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
+      DeviceDMTokenCallback device_dm_token_callback);
+  // Create CloudPolicyClient for Profile with its `profile_id`.
+  CloudPolicyClient(
+      const std::string& profile_id,
       DeviceManagementService* service,
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
       DeviceDMTokenCallback device_dm_token_callback);
@@ -211,6 +217,10 @@ class POLICY_EXPORT CloudPolicyClient {
       DeviceManagementService* service,
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
       DeviceDMTokenCallback device_dm_token_callback);
+  CloudPolicyClient(
+      DeviceManagementService* service,
+      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory);
+
   CloudPolicyClient(const CloudPolicyClient&) = delete;
   CloudPolicyClient& operator=(const CloudPolicyClient&) = delete;
 
@@ -255,6 +265,15 @@ class POLICY_EXPORT CloudPolicyClient {
                                  const std::string& client_id,
                                  const ClientDataDelegate& client_data_delegate,
                                  bool is_mandatory);
+
+  // Attempts to register the profile with the device management service using a
+  // OIDC response from a third party IdP's authentication. Results in a
+  // registration change or error notification.
+  virtual void RegisterWithOidcResponse(
+      const RegistrationParameters& parameters,
+      const std::string& oauth_token,
+      const std::string& oidc_id_token,
+      const std::string& client_id);
 
   // Sets information about a policy invalidation. Subsequent fetch operations
   // will use the given info, and callers can use fetched_invalidation_version
@@ -629,7 +648,7 @@ class POLICY_EXPORT CloudPolicyClient {
       DeviceManagementService::Job* job,
       DeviceManagementStatus status,
       int net_error,
-      absl::optional<base::Value::Dict> response);
+      std::optional<base::Value::Dict> response);
 
   // Callback for remote command fetch requests.
   void OnRemoteCommandsFetched(RemoteCommandCallback callback,
@@ -685,7 +704,7 @@ class POLICY_EXPORT CloudPolicyClient {
   std::unique_ptr<base::Value::Dict> configuration_seed_;
   DeviceMode device_mode_ = DEVICE_MODE_NOT_SET;
   std::string client_id_;
-  absl::optional<std::string> profile_id_;
+  std::optional<std::string> profile_id_;
   base::Time last_policy_timestamp_;
   int public_key_version_ = -1;
   bool public_key_version_valid_ = false;
@@ -783,9 +802,18 @@ class POLICY_EXPORT CloudPolicyClient {
   void CreateUniqueRequestJob(
       std::unique_ptr<RegistrationJobConfiguration> config);
 
+#if BUILDFLAG(IS_WIN)
+  // Callback to get browser device identifier.
+  void SetBrowserDeviceIdentifier(
+      enterprise_management::PolicyFetchRequest* request,
+      std::unique_ptr<DMServerJobConfiguration> config,
+      std::unique_ptr<enterprise_management::BrowserDeviceIdentifier>
+          identifier);
+#endif
+
   // Used to store a copy of the previously used `dm_token_`. This is used
-  // during re-registration, which gets triggered by a failed policy fetch with
-  // errors `DM_STATUS_SERVICE_DEVICE_NOT_FOUND` and
+  // during re-registration, which gets triggered by a failed policy fetch
+  // with errors `DM_STATUS_SERVICE_DEVICE_NOT_FOUND` and
   // `DM_STATUS_SERVICE_DEVICE_NEEDS_RESET`.
   std::string reregistration_dm_token_;
 

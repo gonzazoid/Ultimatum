@@ -170,7 +170,8 @@ void CanvasRenderingContextHost::CreateCanvasResourceProviderWebGL() {
     // in such mode. It will first try a PassThrough provider and, if that is
     // not possible, it will try a SharedImage with the appropriate flags.
     if ((RenderingContext() && RenderingContext()->UsingSwapChain()) ||
-        RuntimeEnabledFeatures::WebGLImageChromiumEnabled()) {
+        RuntimeEnabledFeatures::WebGLImageChromiumEnabled() ||
+        base::FeatureList::IsEnabled(features::kLowLatencyWebGLImageChromium)) {
       // If either SwapChain is enabled or WebGLImage mode is enabled, we can
       // try a passthrough provider.
       DCHECK(LowLatencyEnabled());
@@ -184,7 +185,9 @@ void CanvasRenderingContextHost::CreateCanvasResourceProviderWebGL() {
       // and if WebGLImageChromium is enabled, add concurrent read write and
       // usage scanout (overlay).
       uint32_t shared_image_usage_flags = gpu::SHARED_IMAGE_USAGE_DISPLAY_READ;
-      if (RuntimeEnabledFeatures::WebGLImageChromiumEnabled()) {
+      if (RuntimeEnabledFeatures::WebGLImageChromiumEnabled() ||
+          base::FeatureList::IsEnabled(
+              features::kLowLatencyWebGLImageChromium)) {
         shared_image_usage_flags |= gpu::SHARED_IMAGE_USAGE_SCANOUT;
         shared_image_usage_flags |=
             gpu::SHARED_IMAGE_USAGE_CONCURRENT_READ_WRITE;
@@ -322,72 +325,6 @@ SkColorInfo CanvasRenderingContextHost::GetRenderingContextSkColorInfo() const {
                      SkColorSpace::MakeSRGB());
 }
 
-ScriptPromise CanvasRenderingContextHost::convertToBlob(
-    ScriptState* script_state,
-    const ImageEncodeOptions* options,
-    ExceptionState& exception_state,
-    const CanvasRenderingContext* const context) {
-  DCHECK(IsOffscreenCanvas());
-  WTF::String object_name = "OffscreenCanvas";
-  std::stringstream error_msg;
-
-  if (IsOffscreenCanvas() && IsNeutered()) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
-                                      "OffscreenCanvas object is detached.");
-    return ScriptPromise();
-  }
-
-  if (!OriginClean()) {
-    error_msg << "Tainted " << object_name << " may not be exported.";
-    exception_state.ThrowSecurityError(error_msg.str().c_str());
-    return ScriptPromise();
-  }
-
-  // It's possible that there are recorded commands that have not been resolved
-  // Finalize frame will be called in GetImage, but if there's no
-  // resourceProvider yet then the IsPaintable check will fail
-  if (RenderingContext()) {
-    RenderingContext()->FinalizeFrame(FlushReason::kToBlob);
-  }
-
-  if (!IsPaintable() || Size().IsEmpty()) {
-    error_msg << "The size of " << object_name << " is zero.";
-    exception_state.ThrowDOMException(DOMExceptionCode::kIndexSizeError,
-                                      error_msg.str().c_str());
-    return ScriptPromise();
-  }
-
-  if (!RenderingContext()) {
-    error_msg << object_name << " has no rendering context.";
-    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
-                                      error_msg.str().c_str());
-    return ScriptPromise();
-  }
-
-  base::TimeTicks start_time = base::TimeTicks::Now();
-  scoped_refptr<StaticBitmapImage> image_bitmap =
-      RenderingContext()->GetImage(FlushReason::kToBlob);
-  if (image_bitmap) {
-    auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
-        script_state, exception_state.GetContext());
-    CanvasAsyncBlobCreator::ToBlobFunctionType function_type =
-        CanvasAsyncBlobCreator::kOffscreenCanvasConvertToBlobPromise;
-    auto* execution_context = ExecutionContext::From(script_state);
-    auto* async_creator = MakeGarbageCollected<CanvasAsyncBlobCreator>(
-        image_bitmap, options, function_type, start_time, execution_context,
-        IdentifiabilityStudySettings::Get()->ShouldSampleType(
-            IdentifiableSurface::Type::kCanvasReadback)
-            ? IdentifiabilityInputDigest(context)
-            : 0,
-        resolver);
-    async_creator->ScheduleAsyncBlobCreation(options->quality());
-    return resolver->Promise();
-  }
-  exception_state.ThrowDOMException(DOMExceptionCode::kNotReadableError,
-                                    "Readback of the source image has failed.");
-  return ScriptPromise();
-}
-
 bool CanvasRenderingContextHost::IsOffscreenCanvas() const {
   return host_type_ == HostType::kOffscreenCanvasHost;
 }
@@ -429,6 +366,12 @@ void CanvasRenderingContextHost::PageVisibilityChanged() {
   if (!page_visible && (IsWebGL() || IsWebGPU())) {
     DiscardResourceProvider();
   }
+}
+
+bool CanvasRenderingContextHost::ContextHasOpenLayers(
+    const CanvasRenderingContext* context) const {
+  return context != nullptr && context->IsRenderingContext2D() &&
+         context->LayerCount() != 0;
 }
 
 }  // namespace blink

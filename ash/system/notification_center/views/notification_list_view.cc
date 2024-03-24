@@ -6,14 +6,17 @@
 
 #include <string>
 
+#include "ash/constants/ash_features.h"
+#include "ash/public/cpp/message_center/arc_notification_constants.h"
 #include "ash/public/cpp/metrics_util.h"
-#include "ash/system/notification_center/views/ash_notification_view.h"
 #include "ash/system/notification_center/message_center_constants.h"
 #include "ash/system/notification_center/message_center_utils.h"
 #include "ash/system/notification_center/message_view_factory.h"
 #include "ash/system/notification_center/metrics_utils.h"
-#include "ash/system/notification_center/views/notification_swipe_control_view.h"
+#include "ash/system/notification_center/notification_style_utils.h"
+#include "ash/system/notification_center/views/ash_notification_view.h"
 #include "ash/system/notification_center/views/notification_center_view.h"
+#include "ash/system/notification_center/views/notification_swipe_control_view.h"
 #include "ash/system/tray/tray_constants.h"
 #include "base/auto_reset.h"
 #include "base/containers/adapters.h"
@@ -31,10 +34,12 @@
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/notification_list.h"
 #include "ui/message_center/notification_view_controller.h"
+#include "ui/message_center/public/cpp/notification_types.h"
 #include "ui/message_center/views/message_view.h"
 #include "ui/views/animation/animation_delegate_views.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/layout/fill_layout.h"
+#include "ui/views/view_utils.h"
 #include "ui/views/widget/widget.h"
 
 using message_center::MessageCenter;
@@ -51,7 +56,8 @@ constexpr base::TimeDelta kClearAllStackedAnimationDuration =
 constexpr base::TimeDelta kClearAllVisibleAnimationDuration =
     base::Milliseconds(160);
 
-constexpr char kMessageViewContainerClassName[] = "MessageViewContainer";
+constexpr char kMessageViewContainerClassName[] =
+    "NotificationListView::MessageViewContainer";
 
 constexpr char kMoveDownAnimationSmoothnessHistogramName[] =
     "Ash.Notification.MoveDown.AnimationSmoothness";
@@ -124,6 +130,17 @@ class NotificationListView::MessageViewContainer : public MessageView::Observer,
     return message_view()->GetBoundsAnimationDuration(*notification);
   }
 
+  void UpdateBackground(int top_radius, int bottom_radius) {
+    message_view_->UpdateCornerRadius(top_radius, bottom_radius);
+
+    if (disable_default_background_) {
+      return;
+    }
+    message_view_->SetBackground(
+        notification_style_utils::CreateNotificationBackground(
+            top_radius, bottom_radius, false, false));
+  }
+
   // Update the border and background corners based on if the notification is
   // at the top or the bottom. If `force_update` is true, ignore previous states
   // and always update the border.
@@ -137,7 +154,7 @@ class NotificationListView::MessageViewContainer : public MessageView::Observer,
     // The entire scroll view has rounded corners.
     const int top_bottom_corner_radius = kMessageCenterScrollViewCornerRadius;
     const int inner_corner_radius = kMessageCenterNotificationInnerCornerRadius;
-    message_view_->UpdateCornerRadius(
+    UpdateBackground(
         is_top ? top_bottom_corner_radius : inner_corner_radius,
         is_bottom ? top_bottom_corner_radius : inner_corner_radius);
   }
@@ -146,9 +163,8 @@ class NotificationListView::MessageViewContainer : public MessageView::Observer,
   void ResetCornerRadius() {
     need_update_corner_radius_ = true;
 
-    message_view_->UpdateCornerRadius(
-        kMessageCenterNotificationInnerCornerRadius,
-        kMessageCenterNotificationInnerCornerRadius);
+    UpdateBackground(kMessageCenterNotificationInnerCornerRadius,
+                     kMessageCenterNotificationInnerCornerRadius);
   }
 
   void SetExpandedBySystem(bool expanded) {
@@ -232,10 +248,6 @@ class NotificationListView::MessageViewContainer : public MessageView::Observer,
     return gfx::Size(list_view_->message_view_width_, target_bounds_.height());
   }
 
-  const char* GetClassName() const override {
-    return kMessageViewContainerClassName;
-  }
-
   // MessageView::Observer:
   void OnSlideChanged(const std::string& notification_id) override {
     control_view_->UpdateButtonsVisibility();
@@ -249,8 +261,7 @@ class NotificationListView::MessageViewContainer : public MessageView::Observer,
 
     const int top_bottom_corner_radius = kMessageCenterScrollViewCornerRadius;
     const int inner_corner_radius = kMessageCenterNotificationInnerCornerRadius;
-    message_view_->UpdateCornerRadius(top_bottom_corner_radius,
-                                      top_bottom_corner_radius);
+    UpdateBackground(top_bottom_corner_radius, top_bottom_corner_radius);
 
     // Also update `above_view_`'s bottom and `below_view_`'s top corner radius
     // when sliding.
@@ -259,16 +270,16 @@ class NotificationListView::MessageViewContainer : public MessageView::Observer,
 
     above_view_ = (index == 0) ? nullptr : AsMVC(list_child_views[index - 1]);
     if (above_view_) {
-      above_view_->message_view()->UpdateCornerRadius(inner_corner_radius,
-                                                      top_bottom_corner_radius);
+      above_view_->UpdateBackground(inner_corner_radius,
+                                    top_bottom_corner_radius);
     }
 
     below_view_ = (index == list_child_views.size() - 1)
                       ? nullptr
                       : AsMVC(list_child_views[index + 1]);
     if (below_view_) {
-      below_view_->message_view()->UpdateCornerRadius(top_bottom_corner_radius,
-                                                      inner_corner_radius);
+      below_view_->UpdateBackground(top_bottom_corner_radius,
+                                    inner_corner_radius);
     }
   }
 
@@ -312,6 +323,21 @@ class NotificationListView::MessageViewContainer : public MessageView::Observer,
     list_view_->OnNotificationSlidOut();
   }
 
+  void OnThemeChanged() override {
+    views::View::OnThemeChanged();
+    // Do not try to update background when the theme changes for notifications
+    // rendered in arc since they handle theme changes separately.
+    if (!features::IsRenderArcNotificationsByChromeEnabled() &&
+        !message_center_utils::IsAshNotificationView(message_view_)) {
+      return;
+    }
+
+    UpdateBackground(is_top_ ? kMessageCenterScrollViewCornerRadius
+                             : kMessageCenterNotificationInnerCornerRadius,
+                     is_bottom_ ? kMessageCenterScrollViewCornerRadius
+                                : kMessageCenterNotificationInnerCornerRadius);
+  }
+
   gfx::Rect start_bounds() const { return start_bounds_; }
   gfx::Rect target_bounds() const { return target_bounds_; }
   bool is_removed() const { return is_removed_; }
@@ -328,6 +354,10 @@ class NotificationListView::MessageViewContainer : public MessageView::Observer,
   }
 
   void set_is_removed() { is_removed_ = true; }
+
+  void set_disable_default_background(bool disable_default_background) {
+    disable_default_background_ = disable_default_background;
+  }
 
   bool is_slid_out() { return is_slid_out_; }
 
@@ -374,12 +404,16 @@ class NotificationListView::MessageViewContainer : public MessageView::Observer,
   // radius of the view when sliding.
   bool need_update_corner_radius_ = true;
 
+  // Indicates if this view should not draw a background, used for custom
+  // notification views which handle their own background.
+  bool disable_default_background_ = false;
+
   const raw_ptr<NotificationListView> list_view_;
   raw_ptr<NotificationSwipeControlView> control_view_;
   raw_ptr<MessageView> message_view_;
 };
 
-BEGIN_METADATA(NotificationListView, MessageViewContainer, views::View)
+BEGIN_METADATA(NotificationListView, MessageViewContainer)
 END_METADATA
 
 NotificationListView::NotificationListView(
@@ -388,24 +422,26 @@ NotificationListView::NotificationListView(
       message_center_view_(message_center_view),
       animation_(std::make_unique<gfx::LinearAnimation>(this)),
       message_view_width_(kTrayMenuWidth - (2 * kMessageCenterPadding)) {
-  message_center_observation_.Observe(MessageCenter::Get());
+  if (!features::IsNotificationCenterControllerEnabled()) {
+    message_center_observation_.Observe(MessageCenter::Get());
+  }
   animation_->SetCurrentValue(1.0);
 }
 
 NotificationListView::~NotificationListView() = default;
 
-// Used when `NotificationCenterController` is disabled.
 void NotificationListView::Init() {
+  CHECK(!features::IsNotificationCenterControllerEnabled());
   Init(message_center_utils::GetSortedNotificationsWithOwnView());
 }
 
-// Used when `NotificationCenterController` is enabled.
 void NotificationListView::Init(
     const std::vector<message_center::Notification*>& notifications) {
   for (auto* notification : notifications) {
     auto message_view_container = std::make_unique<MessageViewContainer>(
         CreateMessageView(*notification), this);
-
+    message_view_container->set_disable_default_background(
+        notification->custom_view_type() == kArcNotificationCustomViewType);
     // The insertion order for notifications is reversed.
     AddChildViewAt(std::move(message_view_container), children().size());
     MessageCenter::Get()->DisplayedNotification(
@@ -571,10 +607,23 @@ bool NotificationListView::IsAnimatingExpandOrCollapseContainer(
     return false;
   }
 
-  DCHECK_EQ(kMessageViewContainerClassName, view->GetClassName())
+  DCHECK(views::IsViewClass<NotificationListView::MessageViewContainer>(view))
       << view->GetClassName() << " is not a " << kMessageViewContainerClassName;
   const MessageViewContainer* message_view_container = AsMVC(view);
   return message_view_container == expand_or_collapsing_container_;
+}
+
+void NotificationListView::OnNotificationSlidOut() {
+  DeleteRemovedNotifications();
+
+  // |message_center_view_| can be null in tests.
+  if (message_center_view_) {
+    message_center_view_->OnNotificationSlidOut();
+  }
+
+  state_ = State::MOVE_DOWN;
+  UpdateBounds();
+  StartAnimation();
 }
 
 void NotificationListView::ChildPreferredSizeChanged(views::View* child) {
@@ -614,7 +663,7 @@ void NotificationListView::PreferredSizeChanged() {
   }
 }
 
-void NotificationListView::Layout() {
+void NotificationListView::Layout(PassKey) {
   for (views::View* child : children()) {
     auto* view = AsMVC(child);
     if (state_ == State::IDLE) {
@@ -665,7 +714,8 @@ void NotificationListView::AnimateResize() {
 message_center::MessageView*
 NotificationListView::GetMessageViewForNotificationId(const std::string& id) {
   auto it = base::ranges::find(children(), id, [](views::View* child) {
-    DCHECK(child->GetClassName() == kMessageViewContainerClassName);
+    DCHECK(
+        views::IsViewClass<NotificationListView::MessageViewContainer>(child));
     return AsMVC(child)->message_view()->notification_id();
   });
 
@@ -808,19 +858,6 @@ void NotificationListView::OnNotificationRemoved(const std::string& id,
   if (!child->is_slid_out()) {
     child->SlideOutAndClose();
   }
-}
-
-void NotificationListView::OnNotificationSlidOut() {
-  DeleteRemovedNotifications();
-
-  // |message_center_view_| can be null in tests.
-  if (message_center_view_) {
-    message_center_view_->OnNotificationSlidOut();
-  }
-
-  state_ = State::MOVE_DOWN;
-  UpdateBounds();
-  StartAnimation();
 }
 
 void NotificationListView::OnNotificationUpdated(const std::string& id) {
@@ -1189,7 +1226,7 @@ double NotificationListView::GetCurrentValue() const {
   return gfx::Tween::CalculateValue(tween, animation_->GetCurrentValue());
 }
 
-BEGIN_METADATA(NotificationListView, views::View);
+BEGIN_METADATA(NotificationListView);
 END_METADATA
 
 }  // namespace ash

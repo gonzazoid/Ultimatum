@@ -5,6 +5,8 @@
 package org.chromium.chrome.browser.bookmarks;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Before;
@@ -18,9 +20,9 @@ import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.Features;
 import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.base.test.util.Features.EnableFeatures;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.components.bookmarks.BookmarkId;
 import org.chromium.components.bookmarks.BookmarkItem;
+import org.chromium.components.sync.SyncFeatureMap;
 import org.chromium.url.GURL;
 
 import java.util.Arrays;
@@ -42,7 +44,7 @@ public class FakeBookmarkModelTest {
     }
 
     @Test
-    @DisableFeatures(ChromeFeatureList.ENABLE_BOOKMARK_FOLDERS_FOR_ACCOUNT_STORAGE)
+    @DisableFeatures(SyncFeatureMap.ENABLE_BOOKMARK_FOLDERS_FOR_ACCOUNT_STORAGE)
     public void testDefaultFolders() {
         List<BookmarkId> expected =
                 Arrays.asList(
@@ -57,13 +59,16 @@ public class FakeBookmarkModelTest {
     }
 
     @Test
-    @EnableFeatures(ChromeFeatureList.ENABLE_BOOKMARK_FOLDERS_FOR_ACCOUNT_STORAGE)
+    @EnableFeatures(SyncFeatureMap.ENABLE_BOOKMARK_FOLDERS_FOR_ACCOUNT_STORAGE)
     public void testDefaultFolders_accountStorageEnabled() {
         List<BookmarkId> expected =
                 Arrays.asList(
                         mBookmarkModel.getOtherFolderId(),
                         mBookmarkModel.getDesktopFolderId(),
                         mBookmarkModel.getMobileFolderId(),
+                        mBookmarkModel.getAccountOtherFolderId(),
+                        mBookmarkModel.getAccountDesktopFolderId(),
+                        mBookmarkModel.getAccountMobileFolderId(),
                         mBookmarkModel.getLocalOrSyncableReadingListFolder(),
                         mBookmarkModel.getAccountReadingListFolder());
         assertEquals(expected, mBookmarkModel.getTopLevelFolderIds());
@@ -82,6 +87,7 @@ public class FakeBookmarkModelTest {
         assertEquals(expected, mBookmarkModel.getChildIds(mBookmarkModel.getOtherFolderId()));
 
         BookmarkItem item = mBookmarkModel.getBookmarkById(id);
+        assertNotNull(item);
         assertTrue(item.isFolder());
     }
 
@@ -96,10 +102,14 @@ public class FakeBookmarkModelTest {
 
         List<BookmarkId> expected = Arrays.asList(id);
         assertEquals(expected, mBookmarkModel.getChildIds(mBookmarkModel.getOtherFolderId()));
+
+        BookmarkItem item = mBookmarkModel.getBookmarkById(id);
+        assertNotNull(item);
+        assertFalse(item.isFolder());
     }
 
     @Test
-    @EnableFeatures(ChromeFeatureList.ENABLE_BOOKMARK_FOLDERS_FOR_ACCOUNT_STORAGE)
+    @EnableFeatures(SyncFeatureMap.ENABLE_BOOKMARK_FOLDERS_FOR_ACCOUNT_STORAGE)
     public void testAddAccountReadingListBokmark() {
         BookmarkId id =
                 mBookmarkModel.addToReadingList(

@@ -53,6 +53,8 @@
 #include "ui/events/keycodes/keyboard_codes.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/gfx/geometry/point.h"
+#include "ui/gfx/geometry/point_f.h"
+#include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/vector2d.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/test/ax_event_counter.h"
@@ -81,7 +83,6 @@ const std::vector<PopupItemId> kClickablePopupItemIds{
     PopupItemId::kAutofillOptions,
     PopupItemId::kDatalistEntry,
     PopupItemId::kScanCreditCard,
-    PopupItemId::kUsernameEntry,
     PopupItemId::kAllSavedPasswordsEntry,
     PopupItemId::kPasswordAccountStorageOptIn,
     PopupItemId::kPasswordAccountStorageReSignin,
@@ -248,6 +249,7 @@ class PopupViewViewsTest : public ChromeViewsTestBase {
   ui::test::EventGenerator& generator() { return *generator_; }
   PopupViewViews& view() { return *view_; }
   views::Widget& widget() { return *widget_; }
+  content::WebContents& web_contents() { return *web_contents_; }
 
   std::pair<std::unique_ptr<NiceMock<MockAutofillPopupController>>,
             PopupViewViews*>
@@ -868,7 +870,7 @@ TEST_F(PopupViewViewsTest, VoiceOverTest) {
   suggestion.labels = {{Suggestion::Text(u"example.com")}};
   suggestion.voice_over = voice_over_value;
   suggestion.additional_label = u"\u2022\u2022\u2022\u2022";
-  suggestion.popup_item_id = PopupItemId::kUsernameEntry;
+  suggestion.popup_item_id = PopupItemId::kPasswordEntry;
 
   // Create autofill menu.
   controller().set_suggestions({suggestion});
@@ -897,15 +899,28 @@ TEST_F(PopupViewViewsTest, ExpandableSuggestionA11yMessageTest) {
   // Verify that the accessibility layer gets the right string to read out.
   ui::AXNodeData node_data;
   GetPopupRowViewAt(0)
-      .GetContentView()
       .GetViewAccessibility()
       .GetAccessibleNodeData(&node_data);
+  EXPECT_EQ(node_data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            base::JoinString(
+                {address_line,
+                 l10n_util::GetStringFUTF16(
+                     IDS_AUTOFILL_EXPANDABLE_SUGGESTION_SUBMENU_HINT,
+                     l10n_util::GetStringUTF16(
+                         IDS_AUTOFILL_EXPANDABLE_SUGGESTION_EXPAND_SHORTCUT))},
+                u". "));
+
+  ui::AXNodeData content_node_data;
+  GetPopupRowViewAt(0)
+      .GetContentView()
+      .GetViewAccessibility()
+      .GetAccessibleNodeData(&content_node_data);
   EXPECT_EQ(
-      node_data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+      content_node_data.GetString16Attribute(ax::mojom::StringAttribute::kName),
       base::JoinString(
           {address_line,
            l10n_util::GetStringUTF16(
-               IDS_AUTOFILL_EXPANDABLE_SUGGESTION_FULL_ADDRESS_A11Y_ADDON),
+               IDS_AUTOFILL_EXPANDABLE_SUGGESTION_FILL_ADDRESS_A11Y_ADDON),
            l10n_util::GetStringFUTF16(
                IDS_AUTOFILL_EXPANDABLE_SUGGESTION_SUBMENU_HINT,
                l10n_util::GetStringUTF16(
@@ -1149,6 +1164,19 @@ TEST_F(PopupViewViewsTest, SubPopupOpensWithAutoselectByRightKey) {
   task_environment()->FastForwardBy(PopupViewViews::kNonMouseOpenSubPopupDelay);
 }
 
+TEST_F(PopupViewViewsTest, SubPopupOpensForNonSelectableContentSelection) {
+  Suggestion suggestion = CreateSuggestionWithChildren({Suggestion(u"Child")});
+  suggestion.is_acceptable = false;
+  controller().set_suggestions({suggestion});
+  CreateAndShowView();
+
+  EXPECT_CALL(controller(), OpenSubPopup);
+
+  view().SetSelectedCell(CellIndex{0, CellType::kContent},
+                         PopupCellSelectionSource::kMouse);
+  task_environment()->FastForwardBy(PopupViewViews::kMouseOpenSubPopupDelay);
+}
+
 // TODO(crbug.com/1489673): Enable once the view shows itself properly.
 #if !BUILDFLAG(IS_MAC)
 // Tests that `GetPopupScreenLocation` returns the bounds and arrow position of
@@ -1169,6 +1197,104 @@ TEST_F(PopupViewViewsTest, GetPopupScreenLocation) {
                             PopupScreenLocation::ArrowPosition::kTopLeft));
 }
 #endif  // !BUILDFLAG(IS_MAC)
+
+// TODO(crbug.com/1523677): Rework into pixel tests and run on all available
+// platforms. The test below is a temporary solution to cover positioning
+// calculations in the popup. The exact numbers were obtained by observing
+// a local run, manually verified and hardcoded in the test with acceptable 15px
+// error, as on different machines the popup geometry/location slightly vary.
+#if BUILDFLAG(IS_LINUX)
+TEST_F(PopupViewViewsTest, PopupPositioning) {
+  constexpr gfx::Size kSmallWindow(300, 300);
+  constexpr gfx::Size kLargeWindow(1000, 1000);
+  constexpr gfx::SizeF kElementSize(100, 25);
+  constexpr gfx::PointF kLargeWindowTopLeftElement(0, 0);
+  constexpr gfx::PointF kLargeWindowBottomLeftElement(0, 975);
+  constexpr gfx::PointF kLargeWindowCenterElement(500, 500);
+  constexpr gfx::PointF kLargeWindowTopRightElement(900, 0);
+  constexpr gfx::PointF kLargeWindowBottomRightElement(900, 975);
+  constexpr gfx::PointF kSmallWindowTopLeftElement(0, 0);
+  constexpr gfx::PointF kSmallWindowLeftElement(0, 140);
+  constexpr gfx::PointF kSmallWindowTopElement(150, 0);
+  constexpr gfx::PointF kSmallWindowBottomElement(150, 275);
+  constexpr gfx::PointF kSmallWindowBottomRightElement(200, 275);
+  const std::vector<PopupItemId> kSmallPopupSuggestions(
+      2, PopupItemId::kAutocompleteEntry);
+  const std::vector<PopupItemId> kLargePopupSuggestions(
+      10, PopupItemId::kAutocompleteEntry);
+
+  struct TestCase {
+    const gfx::Size web_contents_bounds;
+    const gfx::PointF element_position;
+    const std::vector<PopupItemId> suggestions;
+    const gfx::Rect expected_popup_bounds;
+  } test_cases[]{
+      {kLargeWindow,
+       kLargeWindowTopLeftElement,
+       kSmallPopupSuggestions,
+       {25, 26, 164, 138}},
+      {kLargeWindow,
+       kLargeWindowBottomLeftElement,
+       kSmallPopupSuggestions,
+       {25, 840, 164, 134}},
+      {kLargeWindow,
+       kLargeWindowCenterElement,
+       kSmallPopupSuggestions,
+       {525, 526, 164, 138}},
+      {kLargeWindow,
+       kLargeWindowTopRightElement,
+       kSmallPopupSuggestions,
+       {832, 26, 164, 138}},
+      {kLargeWindow,
+       kLargeWindowBottomRightElement,
+       kSmallPopupSuggestions,
+       {832, 840, 164, 134}},
+      {kSmallWindow,
+       kSmallWindowTopLeftElement,
+       kSmallPopupSuggestions,
+       {25, 26, 164, 138}},
+      {kSmallWindow,
+       kSmallWindowTopLeftElement,
+       kLargePopupSuggestions,
+       {100, -10, 183, 308}},
+      {kSmallWindow,
+       kSmallWindowLeftElement,
+       kLargePopupSuggestions,
+       {100, -2, 183, 308}},
+      {kSmallWindow,
+       kSmallWindowTopElement,
+       kLargePopupSuggestions,
+       {117, 26, 179, 288}},
+      {kSmallWindow,
+       kSmallWindowBottomElement,
+       kLargePopupSuggestions,
+       {117, -10, 179, 284}},
+      {kSmallWindow,
+       kSmallWindowBottomRightElement,
+       kLargePopupSuggestions,
+       {17, 6, 183, 308}},
+  };
+
+  for (TestCase& test_case : test_cases) {
+    web_contents().Resize(gfx::Rect(test_case.web_contents_bounds));
+    controller().set_element_bounds(
+        gfx::RectF(test_case.element_position, kElementSize) +
+        web_contents().GetContainerBounds().OffsetFromOrigin());
+    CreateAndShowView(test_case.suggestions);
+
+    const gfx::Rect& expected = test_case.expected_popup_bounds;
+    const gfx::Rect& actual = widget().GetWindowBoundsInScreen();
+    // The exact position and size varies on different machines (e.g. because of
+    // different available fonts) and this comparison relaxation is to mitigate
+    // slightly different dimensions.
+    const int kPxError = 15;
+    EXPECT_NEAR(expected.x(), actual.x(), kPxError);
+    EXPECT_NEAR(expected.y(), actual.y(), kPxError);
+    EXPECT_NEAR(expected.width(), actual.width(), kPxError);
+    EXPECT_NEAR(expected.height(), actual.height(), kPxError);
+  }
+}
+#endif  // BUILDFLAG(IS_LINUX)
 
 TEST_F(PopupViewViewsTest, StandaloneCvcSuggestion_ElementId) {
   Suggestion suggestion(u"dummy_main_text");

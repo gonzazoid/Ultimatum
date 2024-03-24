@@ -613,8 +613,8 @@ class CORE_EXPORT StyleEngine final : public GarbageCollected<StyleEngine>,
   void UpdateStyleForNonEligibleContainer(Element& container);
   // Updates the style of `element`, and descendants if needed.
   // The provided `try_set` represents the declaration block from a @try rule.
-  void UpdateStyleForPositionFallback(Element& element,
-                                      const CSSPropertyValueSet* try_set);
+  void UpdateStyleForOutOfFlow(Element& element,
+                               const CSSPropertyValueSet* try_set);
   StyleRulePositionFallback* GetPositionFallbackRule(const ScopedCSSName&);
   void RecalcStyle();
 
@@ -834,7 +834,7 @@ class CORE_EXPORT StyleEngine final : public GarbageCollected<StyleEngine>,
 
   void RecalcStyle(StyleRecalcChange, const StyleRecalcContext&);
   void RecalcStyleForContainer(Element& container, StyleRecalcChange change);
-  void RecalcHighlightStylesForContainer(Element& container);
+  bool RecalcHighlightStylesForContainer(Element& container);
   void RecalcPositionFallbackStyleForPseudoElement(
       PseudoElement& pseudo_element,
       const StyleRecalcChange,

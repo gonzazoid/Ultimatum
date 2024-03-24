@@ -266,6 +266,32 @@ class NET_EXPORT CookieInclusionStatus {
     kMaxValue = kLaxCrossLaxSecure
   };
 
+  // Types of reasons why a cookie should-have-been-blocked by 3pcd got
+  // exempted and included.
+  enum class ExemptionReason {
+    // The default exemption reason. The cookie with this reason could either be
+    // included, or blocked due to 3pcd-unrelated reasons.
+    kNone = 0,
+    // For user explicit settings, including User bypass.
+    kUserSetting = 1,
+    // For 3PCD metadata .
+    k3PCDMetadata = 2,
+    // For 3PCD 1P and 3P deprecation trial.
+    k3PCDDeprecationTrial = 3,
+    // For 3PCD heuristics.
+    k3PCDHeuristics = 4,
+    // For Enterprise Policy : CookieAllowedForUrls and BlockThirdPartyCookies.
+    kEnterprisePolicy = 5,
+    kStorageAccess = 6,
+    kTopLevelStorageAccess = 7,
+    // For CorsException in the ABA contexts, which the inner iframe is
+    // same-site with the top-level site but has cross-site ancestor(s).
+    kCorsOptIn = 8,
+
+    // Keep last.
+    kMaxValue = kCorsOptIn
+  };
+
   using ExclusionReasonBitset =
       std::bitset<ExclusionReason::NUM_EXCLUSION_REASONS>;
   using WarningReasonBitset = std::bitset<WarningReason::NUM_WARNING_REASONS>;
@@ -276,8 +302,12 @@ class NET_EXPORT CookieInclusionStatus {
   // Make a status that contains the given exclusion reason.
   explicit CookieInclusionStatus(ExclusionReason reason);
   // Makes a status that contains the given exclusion reason and warning.
+  // TODO(shuuran): only called in tests, use `MakeFromReasonsForTesting`
+  // instead.
   CookieInclusionStatus(ExclusionReason reason, WarningReason warning);
   // Makes a status that contains the given warning.
+  // TODO(shuuran): only called in tests, use `MakeFromReasonsForTesting`
+  // instead.
   explicit CookieInclusionStatus(WarningReason warning);
 
   // Copyable.
@@ -307,6 +337,12 @@ class NET_EXPORT CookieInclusionStatus {
 
   // Remove multiple exclusion reasons.
   void RemoveExclusionReasons(const std::vector<ExclusionReason>& reasons);
+
+  // Only updates exemption reason if the cookie was not already excluded and
+  // doesn't already have an exemption reason.
+  void MaybeSetExemptionReason(ExemptionReason reason);
+
+  ExemptionReason exemption_reason() const { return exemption_reason_; }
 
   // If the cookie would have been excluded for reasons other than
   // SameSite-related reasons, don't bother warning about it (clear the
@@ -365,16 +401,21 @@ class NET_EXPORT CookieInclusionStatus {
   bool HasExactlyWarningReasonsForTesting(
       std::vector<WarningReason> reasons) const;
 
-  // Validates mojo data, since mojo does not support bitsets.
+  // Validates mojo data, since mojo does not support bitsets. ExemptionReason
+  // is omitted intendedly.
   // TODO(crbug.com/1310444): Improve serialization validation comments
   // and check for mutually exclusive values.
   static bool ValidateExclusionAndWarningFromWire(uint32_t exclusion_reasons,
                                                   uint32_t warning_reasons);
 
-  // Makes a status that contains the given exclusion reasons and warning.
+  // Makes a status that contains the given reasons. If 'use_literal' is true,
+  // this method permits status to have reason combinations that cannot occur
+  // under normal circumstances; otherwise it can cause a CHECK failure.
   static CookieInclusionStatus MakeFromReasonsForTesting(
-      std::vector<ExclusionReason> reasons,
-      std::vector<WarningReason> warnings = std::vector<WarningReason>());
+      std::vector<ExclusionReason> exclusions,
+      std::vector<WarningReason> warnings = std::vector<WarningReason>(),
+      ExemptionReason exemption = ExemptionReason::kNone,
+      bool use_literal = false);
 
   // Returns true if the cookie was excluded because of user preferences.
   // HasOnlyExclusionReason(EXCLUDE_USER_PREFERENCES) will not return true for
@@ -385,9 +426,16 @@ class NET_EXPORT CookieInclusionStatus {
   void ResetForTesting() {
     exclusion_reasons_.reset();
     warning_reasons_.reset();
+    exemption_reason_ = ExemptionReason::kNone;
   }
 
  private:
+  // Makes a status that contains the exact given exclusion reason and warning
+  // and exemption.
+  CookieInclusionStatus(std::vector<ExclusionReason> exclusions,
+                        std::vector<WarningReason> warnings,
+                        ExemptionReason exemption);
+
   // Returns the `exclusion_reasons_` with the given `reasons` unset.
   ExclusionReasonBitset ExclusionReasonsWithout(
       const std::vector<ExclusionReason>& reasons) const;
@@ -402,6 +450,9 @@ class NET_EXPORT CookieInclusionStatus {
 
   // A bit vector of the applicable warning reasons.
   WarningReasonBitset warning_reasons_;
+
+  // A cookie can only have at most one exemption reason.
+  ExemptionReason exemption_reason_ = ExemptionReason::kNone;
 };
 
 NET_EXPORT inline std::ostream& operator<<(std::ostream& os,

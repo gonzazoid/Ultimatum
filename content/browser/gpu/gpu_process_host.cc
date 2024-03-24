@@ -43,9 +43,12 @@
 #include "content/browser/gpu/gpu_main_thread_factory.h"
 #include "content/browser/gpu/gpu_memory_buffer_manager_singleton.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
+#include "content/browser/service_worker/service_worker_host.h"
 #include "content/browser/storage_partition_impl.h"
 #include "content/browser/worker_host/dedicated_worker_host.h"
 #include "content/browser/worker_host/dedicated_worker_service_impl.h"
+#include "content/browser/worker_host/shared_worker_host.h"
+#include "content/browser/worker_host/shared_worker_service_impl.h"
 #include "content/common/child_process.mojom.h"
 #include "content/common/features.h"
 #include "content/common/in_process_child_thread_params.h"
@@ -135,6 +138,7 @@ static_assert(RESULT_CODE_HUNG == static_cast<int>(gpu::RESULT_CODE_HUNG),
 namespace {
 
 // UMA histogram names.
+constexpr char kFallbackEventCause[] = "GPU.FallbackEventCause";
 constexpr char kProcessLifetimeEventsHardwareAccelerated[] =
     "GPU.ProcessLifetimeEvents.HardwareAccelerated";
 constexpr char kProcessLifetimeEventsSwiftShader[] =
@@ -148,6 +152,7 @@ const char* GetProcessLifetimeUmaName(gpu::GpuMode gpu_mode) {
       NOTREACHED();
       return nullptr;
     case gpu::GpuMode::HARDWARE_GL:
+    case gpu::GpuMode::HARDWARE_GRAPHITE:
     case gpu::GpuMode::HARDWARE_VULKAN:
       return kProcessLifetimeEventsHardwareAccelerated;
     case gpu::GpuMode::SWIFTSHADER:
@@ -314,6 +319,14 @@ static const char* const kSwitchNames[] = {
     switches::kLacrosUseChromeosProtectedMedia,
     switches::kLacrosUseChromeosProtectedAv1,
 #endif
+};
+
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class GPUFallbackEventCauseType {
+  kFailureToInit = 0,
+  kCrashLimit = 1,
+  kMaxValue = kCrashLimit,
 };
 
 // These values are persisted to logs. Entries should not be renumbered and
@@ -1034,8 +1047,11 @@ void GpuProcessHost::DidInitialize(
 
 void GpuProcessHost::DidFailInitialize() {
   did_fail_initialize_ = true;
-  if (kind_ == GPU_PROCESS_KIND_SANDBOXED)
+  if (kind_ == GPU_PROCESS_KIND_SANDBOXED) {
+    base::UmaHistogramEnumeration(kFallbackEventCause,
+                                  GPUFallbackEventCauseType::kFailureToInit);
     GpuDataManagerImpl::GetInstance()->FallBackToNextGpuMode();
+  }
 }
 
 void GpuProcessHost::DidCreateContextSuccessfully() {
@@ -1110,10 +1126,70 @@ std::string GpuProcessHost::GetIsolationKey(
     auto isolation_key =
         dedicated_worker_host->GetNetworkIsolationKey().ToCacheKeyString();
     return isolation_key ? *isolation_key : "";
+  } else if (token.Is<blink::SharedWorkerToken>()) {
+    // Return an empty isolation key if the process host or the worker host is
+    // gone. This may happen if the worker is destroyed (or being destroyed) in
+    // between when we are trying to get the isolation key.
+    RenderProcessHost* render_process_host =
+        RenderProcessHost::FromID(process_id);
+    if (!render_process_host ||
+        !render_process_host->IsInitializedAndNotDead()) {
+      return "";
+    }
+    auto* storage_partition = static_cast<StoragePartitionImpl*>(
+        render_process_host->GetStoragePartition());
+    auto* worker_service = static_cast<SharedWorkerServiceImpl*>(
+        storage_partition->GetSharedWorkerService());
+    SharedWorkerHost* shared_worker_host =
+        worker_service->GetSharedWorkerHostFromToken(
+            token.GetAs<blink::SharedWorkerToken>());
+    if (!shared_worker_host) {
+      return "";
+    }
+
+    auto isolation_key =
+        shared_worker_host->GetNetworkIsolationKey().ToCacheKeyString();
+    return isolation_key ? *isolation_key : "";
+  } else if (token.Is<blink::ServiceWorkerToken>()) {
+    // Return an empty isolation key if the process host or the worker host is
+    // gone. This may happen if the worker is destroyed (or being destroyed) in
+    // between when we are trying to get the isolation key.
+    RenderProcessHost* render_process_host =
+        RenderProcessHost::FromID(process_id);
+    if (!render_process_host ||
+        !render_process_host->IsInitializedAndNotDead()) {
+      return "";
+    }
+    ServiceWorkerContextWrapper* service_worker_context =
+        static_cast<StoragePartitionImpl*>(
+            render_process_host->GetStoragePartition())
+            ->GetServiceWorkerContext();
+    if (!service_worker_context) {
+      return "";
+    }
+    for (const auto& kv :
+         service_worker_context->GetRunningServiceWorkerInfos()) {
+      int64_t version_id = kv.first;
+      ServiceWorkerVersion* version =
+          service_worker_context->GetLiveVersion(version_id);
+      if (!version) {
+        continue;
+      }
+      ServiceWorkerHost* service_worker_host = version->worker_host();
+      if (!service_worker_host) {
+        continue;
+      }
+      if (service_worker_host->token() !=
+          token.GetAs<blink::ServiceWorkerToken>()) {
+        continue;
+      }
+      auto isolation_key =
+          service_worker_host->GetNetworkIsolationKey().ToCacheKeyString();
+      return isolation_key ? *isolation_key : "";
+    }
   }
 
-  NOTREACHED();
-  return "";
+  NOTREACHED_NORETURN();
 }
 
 void GpuProcessHost::BlockDomainsFrom3DAPIs(const std::set<GURL>& urls,
@@ -1379,6 +1455,8 @@ void GpuProcessHost::RecordProcessCrash() {
   // GPU process crashed too many times, fallback on a different GPU process
   // mode.
   if (recent_crash_count_ >= GetFallbackCrashLimit() && !disable_crash_limit) {
+    base::UmaHistogramEnumeration(kFallbackEventCause,
+                                  GPUFallbackEventCauseType::kCrashLimit);
     GpuDataManagerImpl::GetInstance()->FallBackToNextGpuMode();
   }
 }

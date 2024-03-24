@@ -291,7 +291,7 @@ bool KeyboardShortcutView::AcceleratorPressed(
   return true;
 }
 
-void KeyboardShortcutView::Layout() {
+void KeyboardShortcutView::Layout(PassKey) {
   gfx::Rect content_bounds(GetContentsBounds());
   if (content_bounds.IsEmpty()) {
     return;
@@ -665,7 +665,7 @@ void KeyboardShortcutView::UpdateActiveAndInactiveFrameColor() {
   window->SetProperty(chromeos::kFrameInactiveColorKey, background_color);
 }
 
-BEGIN_METADATA(KeyboardShortcutView, views::WidgetDelegateView)
+BEGIN_METADATA(KeyboardShortcutView)
 END_METADATA
 
 }  // namespace keyboard_shortcut_viewer

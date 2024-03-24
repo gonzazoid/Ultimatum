@@ -4,6 +4,7 @@
 
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -133,13 +134,18 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest,
   // Create an in-progress download and a completed download.
   Profile* const profile = ProfileManager::GetActiveUserProfile();
   crosapi::mojom::DownloadStatusPtr in_progress_download =
-      CreateInProgressDownloadStatus(profile, /*received_bytes=*/0,
-                                     /*target_bytes=*/1024);
+      CreateInProgressDownloadStatus(profile,
+                                     /*received_bytes=*/0,
+                                     /*total_bytes=*/1024);
   in_progress_download->cancellable = true;
   Update(in_progress_download->Clone());
   crosapi::mojom::DownloadStatusPtr completed_download =
       CreateDownloadStatus(profile, crosapi::mojom::DownloadState::kComplete,
-                           /*received_bytes=*/1024, /*target_bytes=*/1024);
+                           crosapi::mojom::DownloadProgress::New(
+                               /*loop=*/false,
+                               /*received_bytes=*/1024,
+                               /*total_bytes=*/1024,
+                               /*visible=*/false));
   Update(completed_download->Clone());
   test_api().Show();
 
@@ -150,7 +156,21 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest,
   // Cache download chips. NOTE: Chips are displayed in reverse order of their
   // underlying holding space item creation.
   const views::View* const completed_download_chip = download_chips.at(0);
+  ASSERT_TRUE(completed_download_chip);
   const views::View* const in_progress_download_chip = download_chips.at(1);
+  ASSERT_TRUE(in_progress_download_chip);
+
+  // The image of `completed_download_chip` should show.
+  const views::View* const completed_chip_image_view =
+      completed_download_chip->GetViewByID(kHoldingSpaceItemImageId);
+  ASSERT_TRUE(completed_chip_image_view);
+  EXPECT_TRUE(completed_chip_image_view->GetVisible());
+
+  // The image of `in_progress_download_chip` should be hidden.
+  const views::View* const in_progress_chip_image_view =
+      in_progress_download_chip->GetViewByID(kHoldingSpaceItemImageId);
+  ASSERT_TRUE(in_progress_chip_image_view);
+  EXPECT_FALSE(in_progress_chip_image_view->GetVisible());
 
   // Right click the `completed_download_chip`. Because the underlying download
   // is completed, the context menu should not contain a "Cancel" command.
@@ -228,13 +248,16 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest,
   // Create an in-progress download and a completed download.
   Profile* const profile = ProfileManager::GetActiveUserProfile();
   crosapi::mojom::DownloadStatusPtr in_progress_download =
-      CreateInProgressDownloadStatus(profile, /*received_bytes=*/0,
-                                     /*target_bytes=*/1024);
+      CreateInProgressDownloadStatus(profile,
+                                     /*received_bytes=*/0,
+                                     /*total_bytes=*/1024);
   in_progress_download->cancellable = true;
   Update(in_progress_download->Clone());
-  crosapi::mojom::DownloadStatusPtr completed_download =
-      CreateDownloadStatus(profile, crosapi::mojom::DownloadState::kComplete,
-                           /*received_bytes=*/1024, /*target_bytes=*/1024);
+  crosapi::mojom::DownloadStatusPtr completed_download = CreateDownloadStatus(
+      profile, crosapi::mojom::DownloadState::kComplete,
+      crosapi::mojom::DownloadProgress::New(
+          /*loop=*/false,
+          /*received_bytes=*/1024, /*total_bytes=*/1024, /*visible=*/false));
   Update(completed_download->Clone());
   test_api().Show();
 
@@ -329,10 +352,13 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest,
                        ClickCompletedDownloadChip) {
   // Add a completed download.
   crosapi::mojom::DownloadStatusPtr download =
-      CreateInProgressDownloadStatus(ProfileManager::GetActiveUserProfile(),
-                                     /*received_bytes=*/1024,
-                                     /*target_bytes=*/1024);
-  download->state = crosapi::mojom::DownloadState::kComplete;
+      CreateDownloadStatus(ProfileManager::GetActiveUserProfile(),
+                           crosapi::mojom::DownloadState::kComplete,
+                           crosapi::mojom::DownloadProgress::New(
+                               /*loop=*/false,
+                               /*received_bytes=*/1024,
+                               /*total_bytes=*/1024,
+                               /*visible=*/false));
   Update(download->Clone());
   test_api().Show();
 
@@ -375,7 +401,7 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest,
   crosapi::mojom::DownloadStatusPtr download =
       CreateInProgressDownloadStatus(ProfileManager::GetActiveUserProfile(),
                                      /*received_bytes=*/0,
-                                     /*target_bytes=*/1024);
+                                     /*total_bytes=*/1024);
   Update(download->Clone());
   test_api().Show();
 
@@ -405,8 +431,9 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest,
 IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest, CompleteDownload) {
   Profile* const active_profile = ProfileManager::GetActiveUserProfile();
   crosapi::mojom::DownloadStatusPtr download =
-      CreateInProgressDownloadStatus(active_profile, /*received_bytes=*/0,
-                                     /*target_bytes=*/1024);
+      CreateInProgressDownloadStatus(active_profile,
+                                     /*received_bytes=*/0,
+                                     /*total_bytes=*/1024);
   Update(download->Clone());
   test_api().Show();
 
@@ -443,7 +470,8 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest, CompleteDownload) {
 
   // Update the received bytes count to half of the total bytes count and
   // then check the progress value.
-  download->received_bytes = download->total_bytes.value() / 2.f;
+  crosapi::mojom::DownloadProgressPtr& progress = download->progress;
+  progress->received_bytes = progress->total_bytes / 2.f;
   Update(download->Clone());
   EXPECT_NEAR(item->progress().GetValue().value(), 0.5f,
               std::numeric_limits<float>::epsilon());
@@ -458,7 +486,7 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest, CompleteDownload) {
 
   // Complete `download`. Verify that the download chip associated to `download`
   // still exists.
-  download->received_bytes = download->total_bytes;
+  progress->received_bytes = progress->total_bytes;
   download->state = crosapi::mojom::DownloadState::kComplete;
   Update(download->Clone());
   EXPECT_EQ(item->progress().GetValue(), 1.f);
@@ -482,8 +510,9 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest, CompleteDownload) {
 
   // Add a new in-progress download with the duplicate download guid.
   crosapi::mojom::DownloadStatusPtr duplicate_download =
-      CreateInProgressDownloadStatus(active_profile, /*received_bytes=*/0,
-                                     /*target_bytes=*/1024);
+      CreateInProgressDownloadStatus(active_profile,
+                                     /*received_bytes=*/0,
+                                     /*total_bytes=*/1024);
   duplicate_download->guid = download->guid;
   Update(duplicate_download->Clone());
 
@@ -493,10 +522,54 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest, CompleteDownload) {
 }
 
 IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest,
-                       InterruptDownload) {
+                       IndeterminateDownload) {
+  // Create a download with an unknown total bytes count.
   crosapi::mojom::DownloadStatusPtr download = CreateInProgressDownloadStatus(
-      ProfileManager::GetActiveUserProfile(), /*received_bytes=*/0,
-      /*target_bytes=*/1024);
+      ProfileManager::GetActiveUserProfile(), /*received_bytes=*/0);
+  Update(download->Clone());
+  test_api().Show();
+
+  // Verify the existence of a single download chip.
+  ASSERT_EQ(test_api().GetDownloadChips().size(), 1u);
+
+  // Complete the download and check the existence of the download chip.
+  download->state = crosapi::mojom::DownloadState::kComplete;
+  Update(download->Clone());
+  EXPECT_EQ(test_api().GetDownloadChips().size(), 1u);
+}
+
+IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest,
+                       InProgressDownloadWithHiddenProgress) {
+  // Create an in-progress download with an invisible progress. In reality, this
+  // could happen when a download is blocked.
+  crosapi::mojom::DownloadStatusPtr download =
+      CreateInProgressDownloadStatus(ProfileManager::GetActiveUserProfile(),
+                                     /*received_bytes=*/0,
+                                     /*total_bytes=*/1024);
+  download->progress->visible = false;
+  Update(download->Clone());
+  test_api().Show();
+
+  // Verify the existence of a single download chip.
+  const std::vector<views::View*> chips = test_api().GetDownloadChips();
+  ASSERT_EQ(chips.size(), 1u);
+  views::View* in_progress_download_chip = chips[0];
+  ASSERT_TRUE(in_progress_download_chip);
+
+  // The image of `in_progress_download_chip` should show because `download`
+  // suggests that the progress is hidden.
+  const views::View* const image_view =
+      in_progress_download_chip->GetViewByID(kHoldingSpaceItemImageId);
+  ASSERT_TRUE(image_view);
+  EXPECT_TRUE(image_view->GetVisible());
+}
+
+IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest,
+                       InterruptDownload) {
+  crosapi::mojom::DownloadStatusPtr download =
+      CreateInProgressDownloadStatus(ProfileManager::GetActiveUserProfile(),
+                                     /*received_bytes=*/0,
+                                     /*total_bytes=*/1024);
   Update(download->Clone());
   test_api().Show();
 
@@ -511,9 +584,10 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest,
 
 IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest,
                        PauseAndResumeDownloadViaContextMenu) {
-  crosapi::mojom::DownloadStatusPtr download = CreateInProgressDownloadStatus(
-      ProfileManager::GetActiveUserProfile(), /*received_bytes=*/0,
-      /*target_bytes=*/1024);
+  crosapi::mojom::DownloadStatusPtr download =
+      CreateInProgressDownloadStatus(ProfileManager::GetActiveUserProfile(),
+                                     /*received_bytes=*/0,
+                                     /*total_bytes=*/1024);
   download->pausable = true;
   Update(download->Clone());
   test_api().Show();
@@ -568,9 +642,10 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest,
 
 IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest,
                        PauseAndResumeDownloadViaSecondaryAction) {
-  crosapi::mojom::DownloadStatusPtr download = CreateInProgressDownloadStatus(
-      ProfileManager::GetActiveUserProfile(), /*received_bytes=*/0,
-      /*target_bytes=*/1024);
+  crosapi::mojom::DownloadStatusPtr download =
+      CreateInProgressDownloadStatus(ProfileManager::GetActiveUserProfile(),
+                                     /*received_bytes=*/0,
+                                     /*total_bytes=*/1024);
   download->pausable = true;
   Update(download->Clone());
   test_api().Show();
@@ -630,9 +705,10 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest,
 }
 
 IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest, SecondaryLabel) {
-  crosapi::mojom::DownloadStatusPtr download = CreateInProgressDownloadStatus(
-      ProfileManager::GetActiveUserProfile(), /*received_bytes=*/0,
-      /*target_bytes=*/1024);
+  crosapi::mojom::DownloadStatusPtr download =
+      CreateInProgressDownloadStatus(ProfileManager::GetActiveUserProfile(),
+                                     /*received_bytes=*/0,
+                                     /*total_bytes=*/1024);
   Update(download->Clone());
   test_api().Show();
 
@@ -662,9 +738,10 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest, SecondaryLabel) {
 // during download.
 IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest,
                        ServiceSuspendedDuringDownload) {
-  crosapi::mojom::DownloadStatusPtr download = CreateInProgressDownloadStatus(
-      ProfileManager::GetActiveUserProfile(), /*received_bytes=*/0,
-      /*target_bytes=*/1024);
+  crosapi::mojom::DownloadStatusPtr download =
+      CreateInProgressDownloadStatus(ProfileManager::GetActiveUserProfile(),
+                                     /*received_bytes=*/0,
+                                     /*total_bytes=*/1024);
   Update(download->Clone());
   test_api().Show();
 
@@ -698,6 +775,63 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest,
   download_chips = test_api().GetDownloadChips();
   ASSERT_EQ(download_chips.size(), 1u);
   EXPECT_NE(test_api().GetHoldingSpaceItemId(download_chips[0]), item_id);
+}
+
+// Verifies viewing a download's details in browser via context menu.
+IN_PROC_BROWSER_TEST_F(HoldingSpaceDisplayClientBrowserTest,
+                       ViewDownloadDetailsInBrowser) {
+  // Create an in-progress download that can be canceled and paused.
+  crosapi::mojom::DownloadStatusPtr download =
+      CreateInProgressDownloadStatus(ProfileManager::GetActiveUserProfile(),
+                                     /*received_bytes=*/0,
+                                     /*total_bytes=*/1024);
+  download->cancellable = true;
+  download->pausable = true;
+  download->resumable = false;
+  Update(download->Clone());
+  test_api().Show();
+
+  // Verify the existence of a single download chip.
+  std::vector<views::View*> download_chips = test_api().GetDownloadChips();
+  ASSERT_EQ(download_chips.size(), 1u);
+
+  // Right click the download chip. Because `download` is cancelable and
+  // pausable, the context menu should not contain "View details in browser".
+  RightClick(download_chips[0]);
+  EXPECT_FALSE(SelectMenuItemWithCommandId(
+      HoldingSpaceCommandId::kViewItemDetailsInBrowser));
+
+  // Close the context menu.
+  PressAndReleaseKey(ui::KeyboardCode::VKEY_ESCAPE);
+
+  // Update `download` to disable canceling, pausing or resuming. In reality,
+  // this could happen when a dangerous download is blocked.
+  download->cancellable = false;
+  download->pausable = false;
+  Update(download->Clone());
+
+  // Right click the download chip. Verify that the context menu contains a
+  // "View details in browser" command.
+  download_chips = test_api().GetDownloadChips();
+  ASSERT_EQ(download_chips.size(), 1u);
+  RightClick(download_chips[0]);
+  EXPECT_TRUE(SelectMenuItemWithCommandId(
+      HoldingSpaceCommandId::kViewItemDetailsInBrowser));
+
+  // Press ENTER to execute the "View details in browser" command. Then check
+  // that the download is shown in browser.
+  base::RunLoop run_loop;
+  EXPECT_CALL(download_status_updater_client(),
+              ShowInBrowser(download->guid, _))
+      .WillOnce(
+          [&](const std::string& guid,
+              crosapi::MockDownloadStatusUpdaterClient::ShowInBrowserCallback
+                  callback) {
+            std::move(callback).Run(/*handled=*/true);
+            run_loop.Quit();
+          });
+  PressAndReleaseKey(ui::VKEY_RETURN);
+  run_loop.Run();
 }
 
 }  // namespace ash::download_status

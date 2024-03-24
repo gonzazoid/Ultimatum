@@ -42,8 +42,8 @@
 #include "net/base/net_errors.h"
 #include "net/cert/x509_certificate.h"
 #include "net/cert/x509_util_nss.h"
-#include "third_party/boringssl/src/pki/input.h"
-#include "third_party/boringssl/src/pki/parser.h"
+#include "third_party/boringssl/src/include/openssl/bytestring.h"
+#include "third_party/boringssl/src/include/openssl/span.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/shell_dialogs/selected_file_info.h"
 
@@ -81,6 +81,21 @@ enum {
   IMPORT_SERVER_FILE_SELECTED,
   IMPORT_CA_FILE_SELECTED,
 };
+
+#if BUILDFLAG(IS_CHROMEOS)
+// Before this experiment on ChromeOS it was possible to import a PKCS#12 file
+// (a client certificate with a key pair for it) on the
+// chrome://settings/certificates using the "Import" button and then export it
+// as a new PKCS#12 file. All the other certificates (imported using the "Import
+// and Bind" button, imported from extensions and policies) could not be
+// exported as PKCS#12 (primarily to protect their private keys). This
+// experiment, when enabled, prevents export of certificates with their private
+// keys for all certificates. Just the certificates without private keys can
+// still be exported on the "View > Details" dialog.
+BASE_FEATURE(kDeprecatePrivateKeyExport,
+             "DeprecatePrivateKeyExport",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+#endif
 
 std::string OrgNameToId(const std::string& org) {
   return "org-" + org;
@@ -165,14 +180,10 @@ bool CouldBePFX(std::string_view data) {
 
   // If the SEQUENCE is definite length, it can be parsed through the version
   // tag using DER parser, since INTEGER must be definite length, even in BER.
-  bssl::der::Parser parser((bssl::der::Input(data)));
-  bssl::der::Parser sequence_parser;
-  if (!parser.ReadSequence(&sequence_parser))
-    return false;
-  if (!sequence_parser.SkipTag(bssl::der::kInteger)) {
-    return false;
-  }
-  return true;
+  CBS cbs = bssl::StringAsBytes(data);
+  CBS sequence, version;
+  return CBS_get_asn1(&cbs, &sequence, CBS_ASN1_SEQUENCE) &&
+         CBS_get_asn1(&sequence, &version, CBS_ASN1_INTEGER);
 }
 
 }  // namespace
@@ -1078,6 +1089,13 @@ void CertificatesHandler::PopulateTree(const std::string& tab_name,
       std::string id =
           base::NumberToString(cert_info_id_map_.Add(std::move(org_cert)));
 
+      bool is_extractable = !cert_info->hardware_backed();
+#if BUILDFLAG(IS_CHROMEOS)
+      if (base::FeatureList::IsEnabled(kDeprecatePrivateKeyExport)) {
+        is_extractable = false;
+      }
+#endif
+
       auto cert_dict =
           base::Value::Dict()
               .Set(kCertificatesHandlerKeyField, id)
@@ -1095,8 +1113,7 @@ void CertificatesHandler::PopulateTree(const std::string& tab_name,
               // TODO(hshi): This should be determined by testing for PKCS #11
               // CKA_EXTRACTABLE attribute. We may need to use the NSS function
               // PK11_ReadRawAttribute to do that.
-              .Set(kCertificatesHandlerExtractableField,
-                   !cert_info->hardware_backed());
+              .Set(kCertificatesHandlerExtractableField, is_extractable);
       // TODO(mattm): Other columns.
       subnodes.Append(std::move(cert_dict));
 

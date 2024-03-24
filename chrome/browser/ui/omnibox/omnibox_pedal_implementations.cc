@@ -23,6 +23,7 @@
 #include "components/omnibox/common/omnibox_features.h"
 #include "components/omnibox/resources/grit/omnibox_pedal_synonyms.h"
 #include "components/prefs/pref_service.h"
+#include "components/search/search.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/vector_icons/vector_icons.h"
 
@@ -1875,6 +1876,15 @@ class OmniboxPedalManageChromeThemes : public OmniboxPedal {
     }
   }
 
+  bool IsReadyToTrigger(
+      const AutocompleteInput& input,
+      const AutocompleteProviderClient& client) const override {
+    // The URL for this pedal is specific to Google/Chrome. Avoid confusion
+    // with user's default engine & new tab page when another is selected.
+    return search::DefaultSearchProviderIsGoogle(
+        client.GetTemplateURLService());
+  }
+
  protected:
   ~OmniboxPedalManageChromeThemes() override = default;
 };
@@ -2084,13 +2094,13 @@ GetPedalImplementations(bool incognito, bool guest, bool testing) {
   // platform is different from other desktop platforms.
   add(new OmniboxPedalShareThisPage());
   add(new OmniboxPedalManageChromeAccessibility());
+  add(new OmniboxPedalSetChromeAsDefaultBrowser());
 #else   // !BUILDFLAG(IS_CHROMEOS)
   add(new OmniboxPedalManageChromeOSAccessibility());
 #endif  // !BUILDFLAG(IS_CHROMEOS)
   add(new OmniboxPedalCustomizeChromeFonts());
   add(new OmniboxPedalManageChromeThemes());
   add(new OmniboxPedalCustomizeSearchEngines());
-  add(new OmniboxPedalSetChromeAsDefaultBrowser());
 #endif  // BUILDFLAG(IS_ANDROID)
 
   return pedals;

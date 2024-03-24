@@ -16,10 +16,7 @@ source_set("prefs") {
 }
 
 source_set("pref_names") {
-  sources = [
-    "pref_names.cc",
-    "pref_names.h",
-  ]
+  sources = [ "pref_names.h" ]
 }
 
 source_set("browser_prefs") {
@@ -71,7 +68,6 @@ source_set("browser_prefs") {
     "//components/signin/public/identity_manager",
     "//components/strings",
     "//components/supervised_user/core/browser",
-    "//components/supervised_user/core/browser:supervised_user_preferences",
     "//components/supervised_user/core/common",
     "//components/supervised_user/core/common:buildflags",
     "//components/sync",
@@ -83,6 +79,7 @@ source_set("browser_prefs") {
     "//components/variations/service",
     "//components/web_resource",
     "//ios/chrome/app:variations_app_state_agent",
+    "//ios/chrome/browser/drive/model:policy",
     "//ios/chrome/browser/first_run/model",
     "//ios/chrome/browser/geolocation/model",
     "//ios/chrome/browser/memory/model",
@@ -97,9 +94,11 @@ source_set("browser_prefs") {
     "//ios/chrome/browser/prerender/model:prerender_pref",
     "//ios/chrome/browser/push_notification/model:push_notification_service",
     "//ios/chrome/browser/safety_check/model:constants",
+    "//ios/chrome/browser/shared/model/application_context",
     "//ios/chrome/browser/shared/model/browser_state",
     "//ios/chrome/browser/shared/public/features",
     "//ios/chrome/browser/signin/model",
+    "//ios/chrome/browser/tips_notifications/model:client",
     "//ios/chrome/browser/ui/app_store_rating",
     "//ios/chrome/browser/ui/authentication",
     "//ios/chrome/browser/ui/authentication/history_sync",
@@ -117,6 +116,7 @@ source_set("browser_prefs") {
     "//ios/chrome/browser/upgrade/model:public",
     "//ios/chrome/browser/voice/model:prefs",
     "//ios/chrome/browser/web/model",
+    "//ios/chrome/browser/web/model/annotations",
     "//ios/chrome/browser/web/model/font_size",
     "//ios/components/cookie_util:constants",
     "//ios/web/common:features",

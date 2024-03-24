@@ -41,7 +41,7 @@ JNI_ZERO_COMPONENT_BUILD_EXPORT std::atomic<jclass>
 #ifndef this_is_a_package_prefix_org_jni_1zero_samples_SampleForTests_clazz_defined
 #define this_is_a_package_prefix_org_jni_1zero_samples_SampleForTests_clazz_defined
 inline jclass this_is_a_package_prefix_org_jni_1zero_samples_SampleForTests_clazz(JNIEnv* env) {
-  return base::android::LazyGetClass(env,
+  return jni_zero::LazyGetClass(env,
       kClassPath_this_is_a_package_prefix_org_jni_1zero_samples_SampleForTests,
       &g_this_is_a_package_prefix_org_jni_1zero_samples_SampleForTests_clazz);
 }
@@ -54,7 +54,7 @@ JNI_ZERO_COMPONENT_BUILD_EXPORT std::atomic<jclass>
 inline jclass
     this_is_a_package_prefix_org_jni_1zero_samples_SampleForTests_00024InnerStructA_clazz(JNIEnv*
     env) {
-  return base::android::LazyGetClass(env,
+  return jni_zero::LazyGetClass(env,
       kClassPath_this_is_a_package_prefix_org_jni_1zero_samples_SampleForTests_00024InnerStructA,
       &g_this_is_a_package_prefix_org_jni_1zero_samples_SampleForTests_00024InnerStructA_clazz);
 }
@@ -67,19 +67,27 @@ JNI_ZERO_COMPONENT_BUILD_EXPORT std::atomic<jclass>
 inline jclass
     this_is_a_package_prefix_org_jni_1zero_samples_SampleForTests_00024InnerStructB_clazz(JNIEnv*
     env) {
-  return base::android::LazyGetClass(env,
+  return jni_zero::LazyGetClass(env,
       kClassPath_this_is_a_package_prefix_org_jni_1zero_samples_SampleForTests_00024InnerStructB,
       &g_this_is_a_package_prefix_org_jni_1zero_samples_SampleForTests_00024InnerStructB_clazz);
 }
 #endif
 
 
+namespace jni_zero {
+
+// Forward declare used conversion functions to avoid a compiler warning that
+// triggers if a conversion specialization exists within the including .cc file.
+
+}  // namespace jni_zero
+
+
 // Step 2: Constants (optional).
 
 
 // Step 3: Method stubs.
-namespace base {
-namespace android {
+namespace jni_zero {
+namespace samples {
 
 JNI_BOUNDARY_EXPORT void
     Java_this_is_a_package_prefix_org_jni_1zero_GEN_1JNI_this_1is_1a_1package_1prefix_1org_1jni_11zero_1samples_1SampleForTests_1addStructB(
@@ -244,7 +252,7 @@ static jni_zero::ScopedJavaLocalRef<jobject> Java_SampleForTests_Constructor(JNI
 
   jni_zero::JniJavaCallContextChecked call_context;
   call_context.Init<
-      base::android::MethodID::TYPE_INSTANCE>(
+      jni_zero::MethodID::TYPE_INSTANCE>(
           env,
           clazz,
           "<init>",
@@ -267,7 +275,7 @@ static void Java_SampleForTests_addStructA(JNIEnv* env, const jni_zero::JavaRef<
 
   jni_zero::JniJavaCallContextChecked call_context;
   call_context.Init<
-      base::android::MethodID::TYPE_INSTANCE>(
+      jni_zero::MethodID::TYPE_INSTANCE>(
           env,
           clazz,
           "addStructA",
@@ -288,7 +296,7 @@ static jni_zero::ScopedJavaLocalRef<jclass> Java_SampleForTests_getClass(JNIEnv*
 
   jni_zero::JniJavaCallContextChecked call_context;
   call_context.Init<
-      base::android::MethodID::TYPE_INSTANCE>(
+      jni_zero::MethodID::TYPE_INSTANCE>(
           env,
           clazz,
           "getClass",
@@ -310,7 +318,7 @@ static jni_zero::ScopedJavaLocalRef<jobject> Java_SampleForTests_getInnerEnum(JN
 
   jni_zero::JniJavaCallContextChecked call_context;
   call_context.Init<
-      base::android::MethodID::TYPE_STATIC>(
+      jni_zero::MethodID::TYPE_STATIC>(
           env,
           clazz,
           "getInnerEnum",
@@ -333,7 +341,7 @@ static jni_zero::ScopedJavaLocalRef<jobject> Java_SampleForTests_getInnerEnum(JN
 
   jni_zero::JniJavaCallContextChecked call_context;
   call_context.Init<
-      base::android::MethodID::TYPE_STATIC>(
+      jni_zero::MethodID::TYPE_STATIC>(
           env,
           clazz,
           "getInnerEnum",
@@ -355,7 +363,7 @@ static jni_zero::ScopedJavaLocalRef<jobject> Java_SampleForTests_getInnerInterfa
 
   jni_zero::JniJavaCallContextChecked call_context;
   call_context.Init<
-      base::android::MethodID::TYPE_STATIC>(
+      jni_zero::MethodID::TYPE_STATIC>(
           env,
           clazz,
           "getInnerInterface",
@@ -378,7 +386,7 @@ static jni_zero::ScopedJavaLocalRef<jthrowable> Java_SampleForTests_getThrowable
 
   jni_zero::JniJavaCallContextChecked call_context;
   call_context.Init<
-      base::android::MethodID::TYPE_INSTANCE>(
+      jni_zero::MethodID::TYPE_INSTANCE>(
           env,
           clazz,
           "getThrowable",
@@ -401,7 +409,7 @@ static void Java_SampleForTests_iterateAndDoSomething(JNIEnv* env, const jni_zer
 
   jni_zero::JniJavaCallContextChecked call_context;
   call_context.Init<
-      base::android::MethodID::TYPE_INSTANCE>(
+      jni_zero::MethodID::TYPE_INSTANCE>(
           env,
           clazz,
           "iterateAndDoSomething",
@@ -423,7 +431,7 @@ static jint Java_SampleForTests_javaMethod(JNIEnv* env, const jni_zero::JavaRef<
 
   jni_zero::JniJavaCallContextChecked call_context;
   call_context.Init<
-      base::android::MethodID::TYPE_INSTANCE>(
+      jni_zero::MethodID::TYPE_INSTANCE>(
           env,
           clazz,
           "javaMethod",
@@ -449,7 +457,7 @@ static void Java_SampleForTests_javaMethodWithAnnotatedParam(JNIEnv* env, const
 
   jni_zero::JniJavaCallContextChecked call_context;
   call_context.Init<
-      base::android::MethodID::TYPE_INSTANCE>(
+      jni_zero::MethodID::TYPE_INSTANCE>(
           env,
           clazz,
           "javaMethodWithAnnotatedParam",
@@ -470,7 +478,7 @@ static void Java_SampleForTests_methodThatThrowsException(JNIEnv* env, const
 
   jni_zero::JniJavaCallContextUnchecked call_context;
   call_context.Init<
-      base::android::MethodID::TYPE_INSTANCE>(
+      jni_zero::MethodID::TYPE_INSTANCE>(
           env,
           clazz,
           "methodThatThrowsException",
@@ -492,7 +500,7 @@ static void Java_SampleForTests_methodWithGenericParams(JNIEnv* env, const
 
   jni_zero::JniJavaCallContextChecked call_context;
   call_context.Init<
-      base::android::MethodID::TYPE_INSTANCE>(
+      jni_zero::MethodID::TYPE_INSTANCE>(
           env,
           clazz,
           "methodWithGenericParams",
@@ -513,7 +521,7 @@ static void Java_SampleForTests_packagePrivateJavaMethod(JNIEnv* env, const
 
   jni_zero::JniJavaCallContextChecked call_context;
   call_context.Init<
-      base::android::MethodID::TYPE_INSTANCE>(
+      jni_zero::MethodID::TYPE_INSTANCE>(
           env,
           clazz,
           "packagePrivateJavaMethod",
@@ -533,7 +541,7 @@ static jboolean Java_SampleForTests_staticJavaMethod(JNIEnv* env) {
 
   jni_zero::JniJavaCallContextChecked call_context;
   call_context.Init<
-      base::android::MethodID::TYPE_STATIC>(
+      jni_zero::MethodID::TYPE_STATIC>(
           env,
           clazz,
           "staticJavaMethod",
@@ -559,7 +567,7 @@ static jni_zero::ScopedJavaLocalRef<jobject> Java_InnerStructA_create(JNIEnv* en
 
   jni_zero::JniJavaCallContextChecked call_context;
   call_context.Init<
-      base::android::MethodID::TYPE_STATIC>(
+      jni_zero::MethodID::TYPE_STATIC>(
           env,
           clazz,
           "create",
@@ -583,7 +591,7 @@ static jlong Java_InnerStructB_getKey(JNIEnv* env, const jni_zero::JavaRef<jobje
 
   jni_zero::JniJavaCallContextChecked call_context;
   call_context.Init<
-      base::android::MethodID::TYPE_INSTANCE>(
+      jni_zero::MethodID::TYPE_INSTANCE>(
           env,
           clazz,
           "getKey",
@@ -608,7 +616,7 @@ static jni_zero::ScopedJavaLocalRef<jstring> Java_InnerStructB_getValue(JNIEnv* 
 
   jni_zero::JniJavaCallContextChecked call_context;
   call_context.Init<
-      base::android::MethodID::TYPE_INSTANCE>(
+      jni_zero::MethodID::TYPE_INSTANCE>(
           env,
           clazz,
           "getValue",
@@ -621,7 +629,7 @@ static jni_zero::ScopedJavaLocalRef<jstring> Java_InnerStructB_getValue(JNIEnv* 
   return jni_zero::ScopedJavaLocalRef<jstring>(env, ret);
 }
 
-}  // namespace android
-}  // namespace base
+}  // namespace samples
+}  // namespace jni_zero
 
 #endif  // this_is_a_package_prefix_org_jni_zero_samples_SampleForTests_JNI

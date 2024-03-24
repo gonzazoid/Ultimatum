@@ -7,6 +7,7 @@
 #include "chrome/browser/page_load_metrics/observers/lcp_critical_path_predictor_page_load_metrics_observer.h"
 #include "content/public/browser/render_frame_host.h"
 #include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/common/loader/lcp_critical_path_predictor_util.h"
 
 namespace {
 
@@ -40,7 +41,7 @@ LCPCriticalPathPredictorHost::~LCPCriticalPathPredictorHost() = default;
 
 void LCPCriticalPathPredictorHost::SetLcpElementLocator(
     const std::string& lcp_element_locator,
-    absl::optional<uint32_t> predicted_lcp_index) {
+    std::optional<uint32_t> predicted_lcp_index) {
   // `LcpCriticalPathPredictorPageLoadMetricsObserver::OnCommit()` stores
   // `LcpCriticalPathPredictorPageLoadMetricsObserver` in `PageData` as a weak
   // pointer. This weak pointer can be deleted at any time.
@@ -56,7 +57,7 @@ void LCPCriticalPathPredictorHost::SetLcpElementLocator(
 
 void LCPCriticalPathPredictorHost::SetLcpInfluencerScriptUrls(
     const std::vector<GURL>& lcp_influencer_scripts) {
-  if (!base::FeatureList::IsEnabled(blink::features::kLCPScriptObserver)) {
+  if (!blink::LcppScriptObserverEnabled()) {
     return;
   }
   if (auto* page_data =
@@ -65,6 +66,22 @@ void LCPCriticalPathPredictorHost::SetLcpInfluencerScriptUrls(
     if (auto* plmo =
             page_data->GetLcpCriticalPathPredictorPageLoadMetricsObserver()) {
       plmo->SetLcpInfluencerScriptUrls(lcp_influencer_scripts);
+    }
+  }
+}
+
+void LCPCriticalPathPredictorHost::SetPreconnectOrigins(
+    const std::vector<GURL>& origins) {
+  if (!base::FeatureList::IsEnabled(
+          blink::features::kLCPPAutoPreconnectLcpOrigin)) {
+    return;
+  }
+  if (auto* page_data =
+          LcpCriticalPathPredictorPageLoadMetricsObserver::PageData::GetForPage(
+              render_frame_host().GetPage())) {
+    if (auto* plmo =
+            page_data->GetLcpCriticalPathPredictorPageLoadMetricsObserver()) {
+      plmo->SetPreconnectOrigins(origins);
     }
   }
 }

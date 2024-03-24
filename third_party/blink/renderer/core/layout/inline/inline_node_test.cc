@@ -627,10 +627,7 @@ TEST_F(InlineNodeTest, AssociatedItemsWithControlItem) {
   SetBodyInnerHTML(
       "<pre id=t style='-webkit-rtl-ordering:visual'>ab\nde</pre>");
   auto* const layout_text =
-      To<LayoutText>(GetDocument()
-                         .getElementById(AtomicString("t"))
-                         ->firstChild()
-                         ->GetLayoutObject());
+      To<LayoutText>(GetElementById("t")->firstChild()->GetLayoutObject());
   ASSERT_TRUE(layout_text->HasValidInlineItems());
   Vector<const InlineItem*> items;
   for (const InlineItem& item : layout_text->InlineItems()) {
@@ -688,8 +685,8 @@ struct StyleChangeData {
     kAll = kText | kParentAndAbove,
   };
   unsigned needs_collect_inlines;
-  absl::optional<bool> is_line_dirty;
-  absl::optional<bool> invalidate_ink_overflow;
+  std::optional<bool> is_line_dirty;
+  std::optional<bool> invalidate_ink_overflow;
 } style_change_data[] = {
     // Changing color, text-decoration, outline, etc. should not re-run
     // |CollectInlines()|.

@@ -23,7 +23,8 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_HTML_HTML_ELEMENT_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_HTML_ELEMENT_H_
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_boolean_string_unrestricteddouble.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/element.h"
@@ -93,6 +94,12 @@ enum class HidePopoverTransitionBehavior {
   // higher priority elements are entering the top layer, or when the popover
   // element is being removed from the document.
   kNoEventsNoWaiting,
+};
+
+enum class TopLayerElementType {
+  kPopover,
+  kDialog,
+  kFullscreen,
 };
 
 class CORE_EXPORT HTMLElement : public Element {
@@ -214,14 +221,11 @@ class CORE_EXPORT HTMLElement : public Element {
   virtual FormAssociated* ToFormAssociatedOrNull() { return nullptr; }
   bool IsFormAssociatedCustomElement() const;
 
-  static void AdjustCandidateDirectionalityForSlot(
-      HeapHashSet<Member<Node>> candidate_set);
   void UpdateDescendantDirectionality(TextDirection direction);
   void UpdateDirectionalityAfterInputTypeChange(const AtomicString& old_value,
                                                 const AtomicString& new_value);
-  void AdjustDirectionalityIfNeededAfterShadowRootChanged();
   void AdjustDirectionAutoAfterRecalcAssignedNodes();
-  bool CalculateAndAdjustAutoDirectionality(Node* stay_within);
+  bool CalculateAndAdjustAutoDirectionality();
 
   V8UnionBooleanOrStringOrUnrestrictedDouble* hidden() const;
   void setHidden(const V8UnionBooleanOrStringOrUnrestrictedDouble*);
@@ -261,14 +265,15 @@ class CORE_EXPORT HTMLElement : public Element {
                            ExceptionState* exception_state);
   void PopoverHideFinishIfNeeded(bool immediate);
   static const HTMLElement* FindTopmostPopoverAncestor(
-      HTMLElement& new_popover,
+      Element& new_popover_or_top_layer_element,
       HeapVector<Member<HTMLElement>>& stack_to_check,
-      Element* new_popovers_invoker);
+      Element* new_popovers_invoker,
+      TopLayerElementType top_layer_element_type =
+          TopLayerElementType::kPopover);
+  static const HTMLElement* TopLayerElementPopoverAncestor(
+      Element& top_layer_element,
+      TopLayerElementType top_layer_element_type);
 
-  // Retrieves the element pointed to by this element's 'anchor' content
-  // attribute, if that element exists.
-  Element* anchorElement();
-  void setAnchorElement(Element*);
   static void HandlePopoverLightDismiss(const Event& event, const Node& node);
   void InvokePopover(Element& invoker);
   void SetPopoverFocusOnShow();
@@ -303,6 +308,13 @@ class CORE_EXPORT HTMLElement : public Element {
   // before `<dialog>` invocation steps.
   // See: crbug.com/1490919, https://open-ui.org/components/invokers.explainer/
   virtual bool HandleInvokeInternal(HTMLElement& invoker, AtomicString& action);
+
+  // This allows developers to enable or disable browser-provided writing
+  // suggestions. If the attribute is not explicitly set on an element, it
+  // inherits its value from ancestor elements; otherwise, it defaults to
+  // "true". Spec: https://github.com/whatwg/html/pull/10018.
+  AtomicString writingSuggestions() const;
+  void setWritingSuggestions(const AtomicString& value);
 
  protected:
   bool SupportsFocus(UpdateBehavior update_behavior =
@@ -353,8 +365,6 @@ class CORE_EXPORT HTMLElement : public Element {
       MutableCSSPropertyValueSet*) override;
   unsigned ParseBorderWidthAttribute(const AtomicString&) const;
 
-  void ChildrenChanged(const ChildrenChange&) override;
-
   InsertionNotificationRequest InsertedInto(ContainerNode&) override;
   void RemovedFrom(ContainerNode& insertion_point) override;
   void DidMoveToNewDocument(Document& old_document) override;
@@ -374,10 +384,6 @@ class CORE_EXPORT HTMLElement : public Element {
 
   DocumentFragment* TextToFragment(const String&, ExceptionState&);
 
-  void AdjustDirectionalityIfNeededAfterChildAttributeChanged(Element* child);
-
-  void AdjustDirectionalityIfNeededAfterInsert(Node& node);
-
   TranslateAttributeMode GetTranslateAttributeMode() const;
 
   void HandleKeypressEvent(KeyboardEvent&);
@@ -395,9 +401,6 @@ class CORE_EXPORT HTMLElement : public Element {
   void OnLangAttrChanged(const AttributeModificationParams&);
   void OnNonceAttrChanged(const AttributeModificationParams&);
   void OnPopoverChanged(const AttributeModificationParams&);
-
-  // Delegate ParseAttribute to base class
-  void ReparseAttribute(const AttributeModificationParams&);
 
   int AdjustedOffsetForZoom(LayoutUnit);
   int OffsetTopOrLeft(bool top);

@@ -25,6 +25,8 @@
 #include "ash/system/focus_mode/focus_mode_countdown_view.h"
 #include "ash/system/focus_mode/focus_mode_task_view.h"
 #include "ash/system/focus_mode/focus_mode_util.h"
+#include "ash/system/model/clock_model.h"
+#include "ash/system/model/system_tray_model.h"
 #include "ash/system/palette/palette_tray.h"
 #include "ash/system/time/time_view_utils.h"
 #include "ash/system/tray/hover_highlight_view.h"
@@ -81,6 +83,7 @@ constexpr int kTimerSettingViewTextHeight = 32;
 constexpr int kTimerSettingViewBetweenChildSpacing = 8;
 constexpr auto kTimerAdjustmentButtonSize = gfx::Size(63, 36);
 constexpr auto kTimerCountdownViewInsets = gfx::Insets::TLBR(0, 24, 12, 16);
+constexpr int kTimerTextfieldCornerRadius = 8;
 
 // Task view constants.
 constexpr auto kTaskViewContainerInsets = gfx::Insets::TLBR(4, 24, 22, 24);
@@ -353,9 +356,11 @@ FocusModeDetailedView::FocusModeDetailedView(DetailedViewDelegate* delegate)
 
   focus_mode_controller->AddObserver(this);
   task_view_container_->AddObserver(this);
+  Shell::Get()->system_tray_model()->clock()->AddObserver(this);
 }
 
 FocusModeDetailedView::~FocusModeDetailedView() {
+  Shell::Get()->system_tray_model()->clock()->RemoveObserver(this);
   task_view_container_->RemoveObserver(this);
   FocusModeController::Get()->RemoveObserver(this);
 }
@@ -374,6 +379,22 @@ void FocusModeDetailedView::OnViewBoundsChanged(views::View* observed_view) {
   PerformTaskContainerViewResizeAnimation(task_view_container_->layer(),
                                           old_height);
   OnTaskViewAnimate(shift_height);
+}
+
+void FocusModeDetailedView::OnDateFormatChanged() {
+  UpdateEndTimeLabel();
+}
+
+void FocusModeDetailedView::OnSystemClockTimeUpdated() {
+  UpdateEndTimeLabel();
+}
+
+void FocusModeDetailedView::OnSystemClockCanSetTimeChanged(bool can_set_time) {
+  UpdateEndTimeLabel();
+}
+
+void FocusModeDetailedView::Refresh() {
+  UpdateEndTimeLabel();
 }
 
 void FocusModeDetailedView::AddedToWidget() {
@@ -469,8 +490,10 @@ void FocusModeDetailedView::CreateToggleView() {
 
   toggle_view_->AddRightView(
       std::make_unique<PillButton>(
-          base::BindRepeating(&FocusModeController::ToggleFocusMode,
-                              base::Unretained(focus_mode_controller)),
+          base::BindRepeating(
+              &FocusModeController::ToggleFocusMode,
+              base::Unretained(focus_mode_controller),
+              focus_mode_histogram_names::ToggleSource::kFocusPanel),
           l10n_util::GetStringUTF16(
               in_focus_session
                   ? IDS_ASH_STATUS_TRAY_FOCUS_MODE_TOGGLE_END_BUTTON
@@ -571,6 +594,8 @@ void FocusModeDetailedView::CreateTimerView() {
   // b/302038651.
   timer_textfield_ = textfield_container->AddChildView(
       std::make_unique<SystemTextfield>(SystemTextfield::Type::kLarge));
+  timer_textfield_->SetHorizontalAlignment(
+      gfx::HorizontalAlignment::ALIGN_CENTER);
   timer_textfield_->SetFontList(
       TypographyProvider::Get()->ResolveTypographyToken(
           TypographyToken::kCrosDisplay6Regular));
@@ -578,6 +603,18 @@ void FocusModeDetailedView::CreateTimerView() {
       std::make_unique<TimerTextfieldController>(timer_textfield_, this);
   timer_textfield_->SetAccessibleName(l10n_util::GetStringUTF16(
       IDS_ASH_STATUS_TRAY_FOCUS_MODE_TIMER_TEXTFIELD));
+  timer_textfield_->SetActiveStateChangedCallback(base::BindRepeating(
+      &FocusModeDetailedView::HandleTextfieldActivationChange,
+      weak_factory_.GetWeakPtr()));
+  auto* focus_ring = views::FocusRing::Get(timer_textfield_);
+  DCHECK(focus_ring);
+  // Override the default focus ring gap of `SystemTextfield` to let it not
+  // intersect with `end_time_label_`.
+  focus_ring->SetHaloInset(0);
+  // Override the rounded highlight path set in `SystemTextfield` to keep it the
+  // same as the corner radius for the task textfield.
+  views::InstallRoundRectHighlightPathGenerator(timer_textfield_, gfx::Insets(),
+                                                kTimerTextfieldCornerRadius);
 
   views::Label* minutes_label = textfield_container->AddChildView(
       std::make_unique<views::Label>(l10n_util::GetStringUTF16(
@@ -642,9 +679,28 @@ void FocusModeDetailedView::UpdateTimerView(bool in_focus_session) {
     timer_countdown_view_->UpdateUI(
         FocusModeController::Get()->current_session()->GetSnapshot(
             base::Time::Now()));
-    UpdateEndTimeLabelUI();
   } else {
     UpdateTimerSettingViewUI();
+  }
+}
+
+void FocusModeDetailedView::HandleTextfieldActivationChange() {
+  if (!timer_textfield_->IsActive() && timer_textfield_->HasFocus()) {
+    auto* focus_manager = timer_textfield_->GetWidget()->GetFocusManager();
+    focus_manager->ClearFocus();
+    focus_manager->SetStoredFocusView(nullptr);
+
+    // TODO(b/322863087): Remove the call of `UpdateBackground` for
+    // timer_textfield_ after the bug resolved. The reason for calling it can be
+    // found from the description of the bug.
+    timer_textfield_->UpdateBackground();
+
+    // Once we clear the focus for the `timer_textfield_`, we need to call the
+    // function below manually to update the UI according to the latest session
+    // duration, since the `OnViewBlurred` for the textfield controller doesn't
+    // automatically call it to avoid the bug b/315358227.
+    SetInactiveSessionDuration(base::Minutes(
+        focus_mode_util::GetTimerTextfieldInputInMinutes(timer_textfield_)));
   }
 }
 
@@ -802,11 +858,11 @@ void FocusModeDetailedView::OnClockMinutePassed() {
   }
 
   // When a clock minute passes outside of a focus session, we want to update
-  // the subheading to display the correct session end time and restart the
+  // `end_time_label_` to display the correct session end time and restart the
   // clock timer. If we are in a focus session, then
   // `FocusModeController::GetEndTime()` will tell us the time at which the
   // session will end.
-  UpdateTimerSettingViewUI();
+  UpdateEndTimeLabel();
 }
 
 void FocusModeDetailedView::StartClockTimer() {
@@ -865,12 +921,18 @@ void FocusModeDetailedView::SetInactiveSessionDuration(
   UpdateTimerSettingViewUI();
 }
 
-void FocusModeDetailedView::UpdateEndTimeLabelUI() {
-  end_time_label_->SetText(focus_mode_util::GetFormattedEndTimeString(
-      FocusModeController::Get()->GetActualEndTime()));
+void FocusModeDetailedView::UpdateEndTimeLabel() {
+  FocusModeController* focus_mode_controller = FocusModeController::Get();
+  if (focus_mode_controller->in_focus_session()) {
+    toggle_view_->SetSubText(focus_mode_util::GetFormattedEndTimeString(
+        focus_mode_controller->GetActualEndTime()));
+  } else {
+    end_time_label_->SetText(focus_mode_util::GetFormattedEndTimeString(
+        focus_mode_controller->session_duration() + base::Time::Now()));
+  }
 }
 
-BEGIN_METADATA(FocusModeDetailedView, TrayDetailedView)
+BEGIN_METADATA(FocusModeDetailedView)
 END_METADATA
 
 }  // namespace ash

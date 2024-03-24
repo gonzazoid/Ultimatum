@@ -11,6 +11,8 @@ import org.jni_zero.NativeMethods;
 import org.chromium.base.Callback;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.profiles.ProfileKey;
+import org.chromium.chrome.browser.profiles.ProfileKeyUtil;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.components.background_task_scheduler.NativeBackgroundTask;
 import org.chromium.components.background_task_scheduler.TaskInfo;
 import org.chromium.components.background_task_scheduler.TaskParameters;
@@ -54,13 +56,13 @@ public final class ProxyNativeTask extends NativeBackgroundTask {
                     .startBackgroundTaskWithFullBrowser(
                             mNativeProxyNativeTask,
                             ProxyNativeTask.this,
-                            Profile.getLastUsedRegularProfile());
+                            ProfileManager.getLastUsedRegularProfile());
         } else {
             ProxyNativeTaskJni.get()
                     .startBackgroundTaskInReducedMode(
                             mNativeProxyNativeTask,
                             ProxyNativeTask.this,
-                            ProfileKey.getLastUsedRegularProfileKey());
+                            ProfileKeyUtil.getLastUsedRegularProfileKey());
             BrowserStartupController.getInstance()
                     .addStartupCompletedObserver(
                             new BrowserStartupController.StartupCallback() {
@@ -71,7 +73,7 @@ public final class ProxyNativeTask extends NativeBackgroundTask {
                                             .onFullBrowserLoaded(
                                                     mNativeProxyNativeTask,
                                                     ProxyNativeTask.this,
-                                                    Profile.getLastUsedRegularProfile());
+                                                    ProfileManager.getLastUsedRegularProfile());
                                 }
 
                                 @Override

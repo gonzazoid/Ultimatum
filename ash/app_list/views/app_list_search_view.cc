@@ -89,8 +89,8 @@ AppListSearchView::AppListSearchView(
   // Set up scroll bars.
   scroll_view_->SetHorizontalScrollBarMode(
       views::ScrollView::ScrollBarMode::kDisabled);
-  auto vertical_scroll =
-      std::make_unique<RoundedScrollBar>(/*horizontal=*/false);
+  auto vertical_scroll = std::make_unique<RoundedScrollBar>(
+      views::ScrollBar::Orientation::kVertical);
   vertical_scroll->SetInsets(kVerticalScrollInsets);
   scroll_view_->SetVerticalScrollBar(std::move(vertical_scroll));
 
@@ -259,7 +259,7 @@ void AppListSearchView::OnSearchResultContainerResultsChanged() {
     base::UmaHistogramBoolean("Ash.SearchResultUpdateAnimationShortened",
                               aggregate_animation_info.use_short_animations);
   }
-  Layout();
+  DeprecatedLayoutImmediately();
 
   last_search_result_count_ = result_count;
   last_result_metadata_.swap(search_result_metadata);
@@ -522,7 +522,7 @@ ui::Layer* AppListSearchView::GetPageAnimationLayer() const {
   return scroll_view_->contents()->layer();
 }
 
-BEGIN_METADATA(AppListSearchView, views::View)
+BEGIN_METADATA(AppListSearchView)
 END_METADATA
 
 }  // namespace ash

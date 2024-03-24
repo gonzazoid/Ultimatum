@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/files/file_path.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
@@ -14,6 +15,7 @@
 #include "components/optimization_guide/core/model_execution/on_device_model_service_controller.h"
 #include "components/optimization_guide/core/optimization_guide_constants.h"
 #include "components/optimization_guide/core/optimization_guide_logger.h"
+#include "components/optimization_guide/core/optimization_guide_model_executor.h"
 #include "components/optimization_guide/core/optimization_guide_util.h"
 #include "components/optimization_guide/core/test_model_info_builder.h"
 #include "components/optimization_guide/core/test_optimization_guide_model_provider.h"
@@ -57,6 +59,10 @@ class FakeServiceController : public OnDeviceModelServiceController {
 
   bool received_safety_info() const { return received_safety_info_; }
 
+  std::optional<base::FilePath> language_detection_model_path() {
+    return OnDeviceModelServiceController::language_detection_model_path();
+  }
+
  private:
   ~FakeServiceController() override = default;
 
@@ -67,15 +73,29 @@ class FakeModelProvider : public TestOptimizationGuideModelProvider {
  public:
   void AddObserverForOptimizationTargetModel(
       proto::OptimizationTarget optimization_target,
-      const absl::optional<optimization_guide::proto::Any>& model_metadata,
+      const std::optional<optimization_guide::proto::Any>& model_metadata,
       OptimizationTargetModelObserver* observer) override {
-    CHECK_EQ(optimization_target, proto::OPTIMIZATION_TARGET_TEXT_SAFETY);
-    was_registered_ = true;
+    switch (optimization_target) {
+      case proto::OPTIMIZATION_TARGET_TEXT_SAFETY:
+        registered_for_text_safety_ = true;
+        break;
+
+      case proto::OPTIMIZATION_TARGET_LANGUAGE_DETECTION:
+        registered_for_language_detection_ = true;
+        break;
+
+      default:
+        NOTREACHED();
+    }
   }
-  bool was_registered() const { return was_registered_; }
+
+  bool was_registered() const {
+    return registered_for_text_safety_ && registered_for_language_detection_;
+  }
 
  private:
-  bool was_registered_ = false;
+  bool registered_for_text_safety_ = false;
+  bool registered_for_language_detection_ = false;
 };
 
 class ModelExecutionManagerTest : public testing::Test {
@@ -200,8 +220,8 @@ TEST_F(ModelExecutionManagerTest, ExecuteModelWithUserSignIn) {
                             ->mutable_compose()
                             ->has_response_data());
             EXPECT_EQ(log_entry->log_ai_data_request()
-                          ->mutable_model_execution_info()
-                          ->server_execution_id(),
+                          ->model_execution_info()
+                          .execution_id(),
                       "test_id");
             run_loop->Quit();
           },
@@ -227,13 +247,12 @@ TEST_F(ModelExecutionManagerTest, ExecuteModelWithServerError) {
   session->ExecuteModel(
       request, base::BindRepeating(
                    [](base::RunLoop* run_loop,
-                      OptimizationGuideModelStreamingExecutionResult result,
-                      std::unique_ptr<ModelQualityLogEntry> log_entry) {
-                     EXPECT_FALSE(result.has_value());
+                      OptimizationGuideModelStreamingExecutionResult result) {
+                     EXPECT_FALSE(result.response.has_value());
                      EXPECT_EQ(OptimizationGuideModelExecutionError::
-                                   ModelExecutionError::kRetryableError,
-                               result.error().error());
-                     EXPECT_EQ(log_entry, nullptr);
+                                   ModelExecutionError::kDisabled,
+                               result.response.error().error());
+                     EXPECT_EQ(result.log_entry, nullptr);
                      run_loop->Quit();
                    },
                    &run_loop));
@@ -243,16 +262,14 @@ TEST_F(ModelExecutionManagerTest, ExecuteModelWithServerError) {
   std::string serialized_response;
   proto::ExecuteResponse execute_response;
   execute_response.mutable_error_response()->set_error_state(
-      proto::ErrorState::ERROR_STATE_INTERNAL_SERVER_ERROR_RETRY);
+      proto::ErrorState::ERROR_STATE_DISABLED);
   execute_response.SerializeToString(&serialized_response);
   EXPECT_TRUE(SimulateResponse(serialized_response, net::HTTP_OK));
 
   run_loop.Run();
   histogram_tester.ExpectUniqueSample(
       "OptimizationGuide.ModelExecution.ServerError.Compose",
-      OptimizationGuideModelExecutionError::ModelExecutionError::
-          kRetryableError,
-      1);
+      OptimizationGuideModelExecutionError::ModelExecutionError::kDisabled, 1);
   histogram_tester.ExpectUniqueSample(
       "OptimizationGuide.ModelExecution.Result.Compose", false, 1);
 }
@@ -271,17 +288,16 @@ TEST_F(ModelExecutionManagerTest,
   session->ExecuteModel(
       request, base::BindRepeating(
                    [](base::RunLoop* run_loop,
-                      OptimizationGuideModelStreamingExecutionResult result,
-                      std::unique_ptr<ModelQualityLogEntry> log_entry) {
-                     EXPECT_FALSE(result.has_value());
+                      OptimizationGuideModelStreamingExecutionResult result) {
+                     EXPECT_FALSE(result.response.has_value());
                      EXPECT_EQ(OptimizationGuideModelExecutionError::
                                    ModelExecutionError::kUnsupportedLanguage,
-                               result.error().error());
-                     EXPECT_NE(log_entry, nullptr);
+                               result.response.error().error());
+                     EXPECT_NE(result.log_entry, nullptr);
                      // Check that correct error state is recordered.
                      EXPECT_EQ(
                          proto::ErrorState::ERROR_STATE_UNSUPPORTED_LANGUAGE,
-                         log_entry->log_ai_data_request()
+                         result.log_entry->log_ai_data_request()
                              ->mutable_model_execution_info()
                              ->mutable_error_response()
                              ->error_state());
@@ -321,19 +337,18 @@ TEST_F(ModelExecutionManagerTest, ExecuteModelWithPassthroughSession) {
   session->ExecuteModel(
       request, base::BindRepeating(
                    [](base::RunLoop* run_loop,
-                      OptimizationGuideModelStreamingExecutionResult result,
-                      std::unique_ptr<ModelQualityLogEntry> log_entry) {
-                     EXPECT_TRUE(result.has_value());
+                      OptimizationGuideModelStreamingExecutionResult result) {
+                     EXPECT_TRUE(result.response.has_value());
                      EXPECT_EQ("foo response",
                                ParsedAnyMetadata<proto::ComposeResponse>(
-                                   result->response)
+                                   result.response->response)
                                    ->output());
-                     EXPECT_TRUE(result->is_complete);
-                     EXPECT_NE(log_entry, nullptr);
-                     EXPECT_TRUE(log_entry->log_ai_data_request()
+                     EXPECT_TRUE(result.response->is_complete);
+                     EXPECT_NE(result.log_entry, nullptr);
+                     EXPECT_TRUE(result.log_entry->log_ai_data_request()
                                      ->mutable_compose()
                                      ->has_request_data());
-                     EXPECT_TRUE(log_entry->log_ai_data_request()
+                     EXPECT_TRUE(result.log_entry->log_ai_data_request()
                                      ->mutable_compose()
                                      ->has_response_data());
                      run_loop->Quit();
@@ -367,8 +382,7 @@ TEST_F(ModelExecutionManagerTest, LogsContextToExecutionTimeHistogram) {
     session->ExecuteModel(
         request, base::BindRepeating(
                      [](base::RunLoop* run_loop,
-                        OptimizationGuideModelStreamingExecutionResult result,
-                        std::unique_ptr<ModelQualityLogEntry> log_entry) {
+                        OptimizationGuideModelStreamingExecutionResult result) {
                        run_loop->Quit();
                      },
                      &run_loop));
@@ -423,8 +437,7 @@ TEST_F(ModelExecutionManagerTest,
       proto::ComposeRequest(),
       base::BindRepeating(
           [](base::RunLoop* run_loop,
-             OptimizationGuideModelStreamingExecutionResult result,
-             std::unique_ptr<ModelQualityLogEntry> log_entry) {
+             OptimizationGuideModelStreamingExecutionResult result) {
             run_loop->Quit();
           },
           &run_loop));
@@ -452,8 +465,7 @@ TEST_F(ModelExecutionManagerTest,
       proto::ComposeRequest(),
       base::BindRepeating(
           [](base::RunLoop* run_loop,
-             OptimizationGuideModelStreamingExecutionResult result,
-             std::unique_ptr<ModelQualityLogEntry> log_entry) {
+             OptimizationGuideModelStreamingExecutionResult result) {
             run_loop->Quit();
           },
           &run_loop));
@@ -480,8 +492,7 @@ TEST_F(ModelExecutionManagerTest,
   session->ExecuteModel(
       request, base::BindRepeating(
                    [](base::RunLoop* run_loop,
-                      OptimizationGuideModelStreamingExecutionResult result,
-                      std::unique_ptr<ModelQualityLogEntry> log_entry) {
+                      OptimizationGuideModelStreamingExecutionResult result) {
                      run_loop->Quit();
                    },
                    &run_loop));
@@ -535,8 +546,8 @@ TEST_F(ModelExecutionManagerTest, TestMultipleParallelRequests) {
                             ->mutable_compose()
                             ->has_response_data());
             EXPECT_EQ(log_entry->log_ai_data_request()
-                          ->mutable_model_execution_info()
-                          ->server_execution_id(),
+                          ->model_execution_info()
+                          .execution_id(),
                       "test_id");
             run_loop->Quit();
           },
@@ -593,6 +604,17 @@ TEST_F(ModelExecutionManagerSafetyEnabledTest, NotifiesServiceController) {
       proto::OPTIMIZATION_TARGET_TEXT_SAFETY, *model_info);
 
   EXPECT_TRUE(service_controller()->received_safety_info());
+}
+
+TEST_F(ModelExecutionManagerSafetyEnabledTest, UpdateLanguageDetection) {
+  const base::FilePath kTestPath{FILE_PATH_LITERAL("foo")};
+  std::unique_ptr<ModelInfo> model_info = TestModelInfoBuilder()
+                                              .SetVersion(123)
+                                              .SetModelFilePath(kTestPath)
+                                              .Build();
+  model_execution_manager()->OnModelUpdated(
+      proto::OPTIMIZATION_TARGET_LANGUAGE_DETECTION, *model_info);
+  EXPECT_EQ(kTestPath, service_controller()->language_detection_model_path());
 }
 
 }  // namespace

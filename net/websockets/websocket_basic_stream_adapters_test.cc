@@ -33,6 +33,7 @@
 #include "net/base/privacy_mode.h"
 #include "net/base/proxy_chain.h"
 #include "net/base/request_priority.h"
+#include "net/base/session_usage.h"
 #include "net/base/test_completion_callback.h"
 #include "net/cert/cert_verify_result.h"
 #include "net/dns/public/host_resolver_results.h"
@@ -131,17 +132,15 @@ class WebSocketClientSocketHandleAdapterTest : public TestWithTaskEnvironment {
   ~WebSocketClientSocketHandleAdapterTest() override = default;
 
   bool InitClientSocketHandle(ClientSocketHandle* connection) {
-    auto ssl_config_for_origin = std::make_unique<SSLConfig>();
-    ssl_config_for_origin->alpn_protos = {kProtoHTTP11};
     scoped_refptr<ClientSocketPool::SocketParams> socks_params =
         base::MakeRefCounted<ClientSocketPool::SocketParams>(
-            std::move(ssl_config_for_origin));
+            /*allowed_bad_certs=*/std::vector<SSLConfig::CertAndStatus>());
     TestCompletionCallback callback;
     int rv = connection->Init(
         ClientSocketPool::GroupId(
             url::SchemeHostPort(url::kHttpsScheme, "www.example.org", 443),
             PrivacyMode::PRIVACY_MODE_DISABLED, NetworkAnonymizationKey(),
-            SecureDnsPolicy::kAllow),
+            SecureDnsPolicy::kAllow, /*disable_cert_network_fetches=*/false),
         socks_params, /*proxy_annotation_tag=*/TRAFFIC_ANNOTATION_FOR_TESTS,
         MEDIUM, SocketTag(), ClientSocketPool::RespectLimits::ENABLED,
         callback.callback(), ClientSocketPool::ProxyAuthCallback(),
@@ -355,12 +354,13 @@ class WebSocketSpdyStreamAdapterTest : public TestWithTaskEnvironment {
   WebSocketSpdyStreamAdapterTest()
       : url_("wss://www.example.org/"),
         key_(HostPortPair::FromURL(url_),
-             ProxyChain::Direct(),
              PRIVACY_MODE_DISABLED,
-             SpdySessionKey::IsProxySession::kFalse,
+             ProxyChain::Direct(),
+             SessionUsage::kDestination,
              SocketTag(),
              NetworkAnonymizationKey(),
-             SecureDnsPolicy::kAllow),
+             SecureDnsPolicy::kAllow,
+             /*disable_cert_verification_network_fetches=*/false),
         session_(SpdySessionDependencies::SpdyCreateSession(&session_deps_)),
         ssl_(SYNCHRONOUS, OK) {}
 
@@ -1268,6 +1268,7 @@ class WebSocketQuicStreamAdapterTest
         &transport_security_state_, &ssl_config_service_,
         /*server_info=*/nullptr,
         QuicSessionKey("mail.example.org", 80, PRIVACY_MODE_DISABLED,
+                       ProxyChain::Direct(), SessionUsage::kDestination,
                        SocketTag(), NetworkAnonymizationKey(),
                        SecureDnsPolicy::kAllow,
                        /*require_dns_https_alpn=*/false),
@@ -1602,7 +1603,7 @@ TEST_P(WebSocketQuicStreamAdapterTest, Read) {
 
   ASSERT_EQ(ERR_IO_PENDING, rv);
 
-  mock_quic_data_.GetSequencedSocketData()->Resume();
+  mock_quic_data_.Resume();
   base::RunLoop().RunUntilIdle();
 
   rv = read_callback.WaitForResult();
@@ -1684,7 +1685,7 @@ TEST_P(WebSocketQuicStreamAdapterTest, ReadIntoSmallBuffer) {
 
   ASSERT_EQ(ERR_IO_PENDING, rv);
 
-  mock_quic_data_.GetSequencedSocketData()->Resume();
+  mock_quic_data_.Resume();
   base::RunLoop().RunUntilIdle();
 
   rv = read_callback.WaitForResult();

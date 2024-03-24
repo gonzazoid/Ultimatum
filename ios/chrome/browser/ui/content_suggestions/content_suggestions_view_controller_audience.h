@@ -7,7 +7,7 @@
 
 enum class ContentSuggestionsModuleType;
 enum class SafetyCheckItemType;
-@class SetUpListItemViewData;
+@class SetUpListItemView;
 
 // Audience for the ContentSuggestions, getting information from it.
 @protocol ContentSuggestionsViewControllerAudience
@@ -33,6 +33,10 @@ enum class SafetyCheckItemType;
 // anymore.
 - (void)neverShowModuleType:(ContentSuggestionsModuleType)type;
 
+// Indicates that the user has tapped the context menu item to enable
+// notifications for a module.
+- (void)enableNotifications:(ContentSuggestionsModuleType)type;
+
 // Notifies the audience that the Magic Stack edit button was tapped.
 - (void)didTapMagicStackEditButton;
 
@@ -41,6 +45,9 @@ enum class SafetyCheckItemType;
 
 // Called when a Safety Check item is selected by the user.
 - (void)didSelectSafetyCheckItem:(SafetyCheckItemType)type;
+
+// Indicates that the user has tapped the given `view`.
+- (void)didTapSetUpListItemView:(SetUpListItemView*)view;
 
 @end
 

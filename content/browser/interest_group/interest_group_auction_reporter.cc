@@ -163,6 +163,7 @@ InterestGroupAuctionReporter::InterestGroupAuctionReporter(
     LogPrivateAggregationRequestsCallback
         log_private_aggregation_requests_callback,
     std::unique_ptr<blink::AuctionConfig> auction_config,
+    const std::string& devtools_auction_id,
     const url::Origin& main_frame_origin,
     const url::Origin& frame_origin,
     network::mojom::ClientSecurityStatePtr client_security_state,
@@ -186,6 +187,7 @@ InterestGroupAuctionReporter::InterestGroupAuctionReporter(
       log_private_aggregation_requests_callback_(
           std::move(log_private_aggregation_requests_callback)),
       auction_config_(std::move(auction_config)),
+      devtools_auction_id_(devtools_auction_id),
       main_frame_origin_(main_frame_origin),
       frame_origin_(frame_origin),
       client_security_state_(std::move(client_security_state)),
@@ -209,7 +211,7 @@ InterestGroupAuctionReporter::InterestGroupAuctionReporter(
           url_loader_factory_,
           browser_context,
           /*direct_seller_is_seller=*/
-          !component_seller_winning_bid_info.has_value(),
+          !component_seller_winning_bid_info_.has_value(),
           private_aggregation_manager_,
           main_frame_origin_,
           winning_bid_info_.storage_interest_group->interest_group.owner,
@@ -238,9 +240,15 @@ void InterestGroupAuctionReporter::Start(base::OnceClosure callback) {
 
   DCHECK(!callback_);
 
-  // If there's no component seller, set the component seller mapping as empty,
-  // so it's available as soon as possible.
-  if (!component_seller_winning_bid_info_) {
+  // If this is a single level auction, and there was no server-side component
+  // seller, set the component seller mapping as empty, so it's available as
+  // soon as possible.
+  bool has_component_seller_reporting =
+      component_seller_winning_bid_info_.has_value() ||
+      (top_level_seller_winning_bid_info_.saved_response.has_value() &&
+       top_level_seller_winning_bid_info_.saved_response
+           ->component_seller_reporting.has_value());
+  if (!has_component_seller_reporting) {
     fenced_frame_reporter_->OnUrlMappingReady(
         blink::FencedFrame::ReportingDestination::kComponentSeller,
         /*reporting_url_declarer_origin=*/std::nullopt,
@@ -261,14 +269,40 @@ void InterestGroupAuctionReporter::InitializeFromServerResponse(
     blink::FencedFrame::ReportingDestination seller_destination) {
   reporter_worklet_state_ = ReporterState::kAllWorkletsCompleted;
 
-  if (response.seller_reporting) {
-    const BiddingAndAuctionResponse::ReportingURLs& seller_reporting =
-        *response.seller_reporting;
-    // Ignore return value - there's nothing we can do at this point if the
-    // server did something wrong beyond logging the error.
-    AddReportResultResult(
-        auction_config_->seller, seller_reporting.reporting_url,
-        seller_reporting.beacon_urls, seller_destination, errors_);
+  if (seller_destination == blink::FencedFrame::ReportingDestination::kSeller) {
+    if (response.top_level_seller_reporting) {
+      const BiddingAndAuctionResponse::ReportingURLs& seller_reporting =
+          *response.top_level_seller_reporting;
+      // Ignore return value - there's nothing we can do at this point if the
+      // server did something wrong beyond logging the error.
+      AddReportResultResult(
+          auction_config_->seller, seller_reporting.reporting_url,
+          seller_reporting.beacon_urls, seller_destination, errors_);
+    }
+    // Support for server-orchestrated multi-level auctions. They will also have
+    // component_seller_reporting.
+    if (response.component_seller_reporting) {
+      const BiddingAndAuctionResponse::ReportingURLs& seller_reporting =
+          *response.component_seller_reporting;
+      // Ignore return value - there's nothing we can do at this point if the
+      // server did something wrong beyond logging the error.
+      AddReportResultResult(
+          auction_config_->seller, seller_reporting.reporting_url,
+          seller_reporting.beacon_urls,
+          blink::FencedFrame::ReportingDestination::kComponentSeller, errors_);
+    }
+  } else {
+    DCHECK_EQ(blink::FencedFrame::ReportingDestination::kComponentSeller,
+              seller_destination);
+    if (response.component_seller_reporting) {
+      const BiddingAndAuctionResponse::ReportingURLs& seller_reporting =
+          *response.component_seller_reporting;
+      // Ignore return value - there's nothing we can do at this point if the
+      // server did something wrong beyond logging the error.
+      AddReportResultResult(
+          auction_config_->seller, seller_reporting.reporting_url,
+          seller_reporting.beacon_urls, seller_destination, errors_);
+    }
   }
   if (response.buyer_reporting) {
     const BiddingAndAuctionResponse::ReportingURLs& buyer_reporting =
@@ -362,6 +396,16 @@ double InterestGroupAuctionReporter::RoundStochasticallyToKBits(double value,
   return std::ldexp(noised_truncated_scaled_value, value_exp - k);
 }
 
+/* static */
+std::optional<double> InterestGroupAuctionReporter::RoundStochasticallyToKBits(
+    std::optional<double> maybe_value,
+    unsigned k) {
+  if (!maybe_value.has_value()) {
+    return std::nullopt;
+  }
+  return RoundStochasticallyToKBits(*maybe_value, k);
+}
+
 void InterestGroupAuctionReporter::RequestSellerWorklet(
     const SellerWinningBidInfo* seller_info,
     const std::optional<std::string>& top_seller_signals) {
@@ -390,7 +434,7 @@ void InterestGroupAuctionReporter::RequestSellerWorklet(
   // `seller_worklet_handle_` will prevent the callbacks from being invoked, if
   // `this` is destroyed while still waiting on the callbacks.
   auction_worklet_manager_->RequestSellerWorklet(
-      *seller_info->auction_config->decision_logic_url,
+      devtools_auction_id_, *seller_info->auction_config->decision_logic_url,
       seller_info->auction_config->trusted_scoring_signals_url,
       seller_info->auction_config->seller_experiment_group_id,
       base::BindOnce(&InterestGroupAuctionReporter::OnSellerWorkletReceived,
@@ -448,9 +492,7 @@ void InterestGroupAuctionReporter::OnSellerWorkletReceived(
             /*modified_bid=*/
             RoundStochasticallyToKBits(
                 seller_info->component_auction_modified_bid_params->bid,
-                kFledgeBidReportingBits.Get()),
-            /*has_modified_bid=*/
-            seller_info->component_auction_modified_bid_params->has_bid);
+                kFledgeBidReportingBits.Get()));
   }
 
   double bid = seller_info->bid;
@@ -513,9 +555,7 @@ void InterestGroupAuctionReporter::OnSellerWorkletReceived(
                                  kFledgeBidReportingBits.Get()),
       highest_scoring_other_bid_currency,
       std::move(browser_signals_component_auction_report_result_params),
-      seller_info->scoring_signals_data_version.value_or(0),
-      seller_info->scoring_signals_data_version.has_value(),
-      seller_info->trace_id,
+      seller_info->scoring_signals_data_version, seller_info->trace_id,
       base::BindOnce(
           &InterestGroupAuctionReporter::OnSellerReportResultComplete,
           weak_ptr_factory_.GetWeakPtr(), base::Unretained(seller_info),
@@ -677,7 +717,7 @@ void InterestGroupAuctionReporter::RequestBidderWorklet(
   // `bidder_worklet_handle_` will prevent the callbacks from being invoked, if
   // `this` is destroyed while still waiting on the callbacks.
   auction_worklet_manager_->RequestBidderWorklet(
-      interest_group.bidding_url.value_or(GURL()),
+      devtools_auction_id_, interest_group.bidding_url.value_or(GURL()),
       interest_group.bidding_wasm_helper_url,
       interest_group.trusted_bidding_signals_url,
       /*needs_cors_for_additional_bid=*/
@@ -1004,18 +1044,23 @@ void InterestGroupAuctionReporter::OnNavigateToWinningAd(
 
   const blink::InterestGroup& winning_group =
       winning_bid_info_.storage_interest_group->interest_group;
-  if (!winning_bid_info_.provided_as_additional_bid) {
+  InterestGroupManagerImpl::InterestGroupObserver::AccessType win_type =
+      InterestGroupManagerImpl::InterestGroupObserver::kWin;
+  if (winning_bid_info_.provided_as_additional_bid) {
+    win_type =
+        InterestGroupManagerImpl::InterestGroupObserver::kAdditionalBidWin;
+  } else {
     interest_group_manager_->RecordInterestGroupWin(
         blink::InterestGroupKey(winning_group.owner, winning_group.name),
         winning_bid_info_.ad_metadata);
-    interest_group_manager_->NotifyInterestGroupAccessed(
-        InterestGroupManagerImpl::InterestGroupObserver::kWin,
-        winning_group.owner, winning_group.name);
-  } else {
-    interest_group_manager_->NotifyInterestGroupAccessed(
-        InterestGroupManagerImpl::InterestGroupObserver::kAdditionalBidWin,
-        winning_group.owner, winning_group.name);
   }
+  interest_group_manager_->NotifyInterestGroupAccessed(
+      devtools_auction_id_, win_type, winning_group.owner, winning_group.name,
+      component_seller_winning_bid_info_.has_value()
+          ? base::optional_ref<const url::Origin>(
+                component_seller_winning_bid_info_->auction_config->seller)
+          : base::optional_ref<const url::Origin>(),
+      /*bid=*/std::nullopt, /*bid_currency=*/std::nullopt);
 
   interest_group_manager_->RegisterAdKeysAsJoined(
       std::move(k_anon_keys_to_join_));

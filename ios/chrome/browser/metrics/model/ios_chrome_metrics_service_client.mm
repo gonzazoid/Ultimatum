@@ -59,6 +59,7 @@
 #import "components/sync/service/sync_service.h"
 #import "components/sync_device_info/device_count_metrics_provider.h"
 #import "components/ukm/ukm_service.h"
+#import "components/variations/synthetic_trial_registry.h"
 #import "components/variations/variations_associated_data.h"
 #import "components/version_info/version_info.h"
 #import "google_apis/google_api_keys.h"
@@ -71,6 +72,7 @@
 #import "ios/chrome/browser/metrics/model/ios_feed_activity_metrics_provider.h"
 #import "ios/chrome/browser/metrics/model/ios_feed_enabled_metrics_provider.h"
 #import "ios/chrome/browser/metrics/model/ios_profile_session_metrics_provider.h"
+#import "ios/chrome/browser/metrics/model/ios_push_notifications_metrics_provider.h"
 #import "ios/chrome/browser/metrics/model/mobile_session_shutdown_metrics_provider.h"
 #import "ios/chrome/browser/shared/model/application_context/application_context.h"
 #import "ios/chrome/browser/shared/model/browser/browser.h"
@@ -80,6 +82,7 @@
 #import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state_manager.h"
 #import "ios/chrome/browser/shared/model/paths/paths.h"
 #import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/signin/model/identity_manager_factory.h"
 #import "ios/chrome/browser/sync/model/device_info_sync_service_factory.h"
 #import "ios/chrome/browser/sync/model/sync_service_factory.h"
 #import "ios/chrome/browser/tabs/model/tab_parenting_global_observer.h"
@@ -142,8 +145,10 @@ std::unique_ptr<metrics::FileMetricsProvider> CreateFileMetricsProvider(
 const char kUKMFieldTrialSuffix[] = "UKM";
 
 IOSChromeMetricsServiceClient::IOSChromeMetricsServiceClient(
-    metrics::MetricsStateManager* state_manager)
+    metrics::MetricsStateManager* state_manager,
+    variations::SyntheticTrialRegistry* synthetic_trial_registry)
     : metrics_state_manager_(state_manager),
+      synthetic_trial_registry_(synthetic_trial_registry),
       stability_metrics_provider_(nullptr),
       weak_ptr_factory_(this) {
   DCHECK(thread_checker_.CalledOnValidThread());
@@ -157,11 +162,13 @@ IOSChromeMetricsServiceClient::~IOSChromeMetricsServiceClient() {
 // static
 std::unique_ptr<IOSChromeMetricsServiceClient>
 IOSChromeMetricsServiceClient::Create(
-    metrics::MetricsStateManager* state_manager) {
+    metrics::MetricsStateManager* state_manager,
+    variations::SyntheticTrialRegistry* synthetic_trial_registry) {
   // Perform two-phase initialization so that `client->metrics_service_` only
   // receives pointers to fully constructed objects.
   std::unique_ptr<IOSChromeMetricsServiceClient> client(
-      new IOSChromeMetricsServiceClient(state_manager));
+      new IOSChromeMetricsServiceClient(state_manager,
+                                        synthetic_trial_registry));
   client->Initialize();
 
   return client;
@@ -264,10 +271,6 @@ void IOSChromeMetricsServiceClient::WebStateDidStopLoading(
 void IOSChromeMetricsServiceClient::Initialize() {
   PrefService* local_state = GetApplicationContext()->GetLocalState();
 
-  synthetic_trial_registry_ =
-      std::make_unique<variations::SyntheticTrialRegistry>(
-          IsExternalExperimentAllowlistEnabled());
-
   synthetic_trial_observation_.Observe(synthetic_trial_registry_.get());
 
   metrics_service_ = std::make_unique<metrics::MetricsService>(
@@ -346,12 +349,15 @@ void IOSChromeMetricsServiceClient::RegisterMetricsServiceProviders() {
   metrics_service_->RegisterMetricsProvider(
       std::make_unique<translate::TranslateRankerMetricsProvider>());
 
+  // TODO(crbug.com/325255648):The demographics metrics provider should be
+  // registered for each browser state.
   metrics_service_->RegisterMetricsProvider(
       std::make_unique<metrics::DemographicMetricsProvider>(
           std::make_unique<metrics::ChromeBrowserStateClient>(),
           metrics::MetricsLogUploader::MetricServiceType::UMA));
 
-  // TODO(crbug.com/1491396): Avoid using GetLastUsedBrowserState().
+  // TODO(crbug.com/40285060): Avoid using GetLastUsedBrowserState(). This code
+  // should initialize providers for all browser states.
   ChromeBrowserState* browser_state = GetApplicationContext()
                                           ->GetChromeBrowserStateManager()
                                           ->GetLastUsedBrowserState();
@@ -366,6 +372,10 @@ void IOSChromeMetricsServiceClient::RegisterMetricsServiceProviders() {
   metrics_service_->RegisterMetricsProvider(
       std::make_unique<IOSFeedEnabledMetricsProvider>(
           browser_state->GetPrefs()));
+
+  metrics_service_->RegisterMetricsProvider(
+      std::make_unique<IOSPushNotificationsMetricsProvider>(
+          IdentityManagerFactory::GetForBrowserState(browser_state)));
 }
 
 void IOSChromeMetricsServiceClient::RegisterUKMProviders() {

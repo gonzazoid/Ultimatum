@@ -86,6 +86,11 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kAllowPageWithIDBConnectionInBFCache);
 // back/forward cache.
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kAllowPageWithIDBTransactionInBFCache);
 
+// Feature for allowing page into back/forward cache when datapipe has been
+// drained as bytes consumer for fetch requests.
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
+    kAllowDatapipeDrainedAsBytesConsumerInBFCache);
+
 // If enabled, allows MediaStreamVideoSource objects to be restarted by a
 // successful source switch. Normally, switching the source would only allowed
 // on streams that are in started state. However, changing the source also first
@@ -101,6 +106,9 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kAllowSyncXHRInPageDismissal);
 // enabled as part of the FLEDGE origin trial.
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kAllowURNsInIframes);
 
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
+    kDisplayWarningDeprecateURNIframesUseFencedFrames);
+
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kAnchorElementInteraction);
 
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kAnchorElementMouseMotionEstimator);
@@ -110,11 +118,14 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kAndroidExtendedKeyboardShortcuts);
 
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kAudioWorkletThreadRealtimePriority);
 
-BLINK_COMMON_EXPORT
-BASE_DECLARE_FEATURE(kAutofillSendUnidentifiedKeyAfterFill);
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
+    kAutofillIncludeFormElementsInShadowDom);
+
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
+    kAutofillIncludeShadowDomInUnassociatedListedElements);
 
 BLINK_COMMON_EXPORT
-BASE_DECLARE_FEATURE(kAutofillUseDomNodeIdForRendererId);
+BASE_DECLARE_FEATURE(kAutofillSendUnidentifiedKeyAfterFill);
 
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kAutomaticLazyFrameLoadingToAds);
 BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
@@ -153,6 +164,8 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kBackForwardCacheWithKeepaliveRequest);
 
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kBackgroundResourceFetch);
+
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kBakedGamutMapping);
 
 // Used to configure a per-origin allowlist of performance.mark events that are
 // permitted to be included in slow reports traces. See crbug.com/1181774.
@@ -226,6 +239,9 @@ BLINK_COMMON_EXPORT extern const base::FeatureParam<std::string>
     kBrowsingTopicsPrioritizedTopicsList;
 constexpr int kBrowsingTopicsTaxonomyVersionDefault = 2;
 
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
+    kIncrementLocalSurfaceIdForMainframeSameDocNavigation);
+
 // Suppresses console errors for CORS problems which report an associated
 // inspector issue anyway.
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kCORSErrorsIssueOnly);
@@ -243,6 +259,10 @@ BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kCanvas2DHibernation);
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kCanvasCompressHibernatedImage);
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kCanvasFreeMemoryWhenHidden);
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
+    kCanvas2DHibernationReleaseTransferMemory);
+
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kCaptureJSExecutionLocation);
 
 // If enabled, the HTMLDocumentParser will only check its budget after parsing a
 // commonly slow token or for one out of 10 fast tokens. Note that this feature
@@ -262,10 +282,6 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kClientHintsSaveData);
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kClientHintsViewportWidth);
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kClientHintsViewportWidth_DEPRECATED);
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kClientHintsXRFormFactor);
-
-// Allows reading unsanitized content from the clipboard. Currently,
-// it is only applicable to HTML format. See crbug.com/1268679.
-BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kClipboardUnsanitizedContent);
 
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kCompressParkableStrings);
 BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
@@ -329,6 +345,20 @@ BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
     kDelayAsyncScriptExecutionWhenLcpFoundInHtml;
 BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
     kDelayAsyncScriptExecutionDelayByDefaultParam;
+enum class AsyncScriptExperimentalSchedulingTarget {
+  kAds,
+  kNonAds,
+  kBoth,
+};
+BLINK_COMMON_EXPORT extern const base::FeatureParam<
+    AsyncScriptExperimentalSchedulingTarget>
+    kDelayAsyncScriptExecutionTargetParam;
+BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
+    kDelayAsyncScriptExecutionOptOutLowFetchPriorityHintParam;
+BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
+    kDelayAsyncScriptExecutionOptOutAutoFetchPriorityHintParam;
+BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
+    kDelayAsyncScriptExecutionOptOutHighFetchPriorityHintParam;
 
 // If enabled, the ResourceLoadScheculer will take the current network state
 // into consideration, when it plans to delay a low-priority throttleable
@@ -382,6 +412,8 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kDispatchBeforeUnloadOnFreeze);
 
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kDisplayLocking);
 
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kDrawingBufferWithoutGpuMemoryBuffer);
+
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kDropInputEventsBeforeFirstPaint);
 
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kDroppedTouchSequenceIncludesTouchEnd);
@@ -389,28 +421,30 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kDroppedTouchSequenceIncludesTouchEnd);
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
     kEagerCacheStorageSetupForServiceWorkers);
 
-// Early exit when the style or class attribute of an element is set to the same
-// value as before.
-BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kEarlyExitOnNoopClassOrStyleChange);
-
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kEditingNG);
 
 // Enables establishing the GPU channel asnchronously when requesting a new
 // layer tree frame sink.
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kEstablishGpuChannelAsync);
 
-BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kEventTimingMatchPresentationIndex);
+// Exposes Event Timing interactionId of keypress/keyboard events under
+// composition.
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
+    kEventTimingKeypressAndCompositionInteractionId);
+
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kDeprecateUnload);
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kDeprecateUnloadByAllowList);
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kDeprecateUnloadByUserAndOrigin);
 BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
     kDeprecateUnloadPercent;
 BLINK_COMMON_EXPORT extern const base::FeatureParam<int> kDeprecateUnloadBucket;
 BLINK_COMMON_EXPORT extern const base::FeatureParam<std::string>
     kDeprecateUnloadAllowlist;
-// This feature (EventTimingReportAllEarlyEntriesOnPaintedPresentation) is
-// having an effect only when EventTimingMatchPresentationIndex is turned on.
+
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kEnableMojoJSProtectedMemory);
+
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
-    kEventTimingReportAllEarlyEntriesOnPaintedPresentation);
+    kEventTimingFallbackToModalDialogStart);
 
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kExcludeLowEntropyImagesFromLCP);
 BLINK_COMMON_EXPORT extern const base::FeatureParam<double>
@@ -429,7 +463,10 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
     kFencedFramesAutomaticBeaconCredentials);
 
-BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kFencedFramesLocalUnpartitionedDataAccess);
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
+    kFencedFramesLocalUnpartitionedDataAccess);
+
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kFetchDestinationJsonCssModules);
 
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kFileHandlingIcons);
 
@@ -446,6 +483,8 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
 // Uses the kFilterName* values in ui_base_features.h as the 'filter' feature
 // param.
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kFilteringScrollPrediction);
+BLINK_COMMON_EXPORT extern const base::FeatureParam<std::string>
+    kFilteringScrollPredictionFilterParam;
 
 // (b/283408783): When enabled, first gesture scrolls on web pages that have
 // touch handlers registered will go through the normal queueing process if
@@ -463,7 +502,7 @@ BLINK_COMMON_EXPORT extern const base::FeatureParam<std::string>
 // URLs.
 BLINK_COMMON_EXPORT extern const base::FeatureParam<std::string>
     kFledgeBiddingAndAuctionKeyConfig;
-// Configures FLEDGE to consider k-anononymity. If both
+// Configures FLEDGE to consider k-anonymity. If both
 // kFledgeConsiderKAnonymity and kFledgeEnforceKAnonymity are on it will be
 // enforced; if only kFledgeConsiderKAnonymity is on it will be simulated.
 //
@@ -475,6 +514,9 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kFledgePassKAnonStatusToReportWin);
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kFledgePassRecencyToGenerateBid);
 
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kFledgeSampleDebugReports);
+
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kFledgeSplitTrustedSignalsFetchingURL);
+
 BLINK_COMMON_EXPORT extern const base::FeatureParam<base::TimeDelta>
     kFledgeDebugReportLockout;
 // Prevent ad techs who accidentally call the API repeatedly for all users,
@@ -494,8 +536,18 @@ BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
 // putting an ad tech in a restricted cooldown period.
 BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
     kFledgeDebugReportSamplingRestrictedCooldownRandomMax;
+// Sets the time when to enable filtering debug reports. It's the time delta
+// since windows epoch. Lockout and cooldown collected before this time will be
+// ignored. This avoids locking out ad techs who used forDebuggingOnly API
+// before filtering was enabled. Set to zero to disable filtering debug reports.
+BLINK_COMMON_EXPORT extern const base::FeatureParam<base::TimeDelta>
+    kFledgeEnableFilteringDebugReportStartingFrom;
 
-BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kFledgeDebugReportFilterAfterSampling);
+// If kFledgeCustomMaxAuctionAdComponents is enabled, the limit on number of
+// component ads will be taken from `kFledgeCustomMaxAuctionAdComponentsValue`
+// (up to kMaxAdAuctionAdComponentsConfigLimit) rather than default.
+BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
+    kFledgeCustomMaxAuctionAdComponentsValue;
 
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kForceWebContentsDarkMode);
 BLINK_COMMON_EXPORT extern const base::FeatureParam<ForceDarkInversionMethod>
@@ -614,8 +666,6 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kKalmanHeuristics);
 // the current direction.
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kKalmanDirectionCutOff);
 
-BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kLCPAnimatedImagesReporting);
-
 // When enabled, LCP critical path predictor will optimize the subsequent visits
 // to websites using performance hints collected in the past page loads.
 // It enables boosting a loading priority of the possible LCP element.
@@ -623,10 +673,10 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kLCPAnimatedImagesReporting);
 // boost.
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kLCPCriticalPathPredictor);
 
-// If true, LCP critical path predictor mechanism doesn't change the fetch
+// If false, LCP critical path predictor mechanism doesn't change the fetch
 // priority but still the rest will work.
 BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
-    kLCPCriticalPathPredictorDryRun;
+    kLCPCriticalPathAdjustImageLoadPriority;
 
 // The maximum element locator length for LCPP.
 BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
@@ -652,10 +702,6 @@ enum class LcppResourceLoadPriority {
 BLINK_COMMON_EXPORT extern const base::FeatureParam<LcppResourceLoadPriority>
     kLCPCriticalPathPredictorImageLoadPriority;
 
-// The ResourceLoadPriority for scripts that are expected to be LCP influencers.
-BLINK_COMMON_EXPORT extern const base::FeatureParam<LcppResourceLoadPriority>
-    kLCPCriticalPathPredictorInfluencerScriptLoadPriority;
-
 // Enables LCPP ElementLocator performance improvements
 BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
     kLCPCriticalPathPredictorEnableElementLocatorPerformanceImprovements;
@@ -668,6 +714,14 @@ BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
 // the LCP element.
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kLCPScriptObserver);
 
+// The ResourceLoadPriority for scripts that are expected to be LCP influencers.
+BLINK_COMMON_EXPORT extern const base::FeatureParam<LcppResourceLoadPriority>
+    kLCPScriptObserverScriptLoadPriority;
+
+// The ResourceLoadPriority for images that are expected to LCP elements.
+BLINK_COMMON_EXPORT extern const base::FeatureParam<LcppResourceLoadPriority>
+    kLCPScriptObserverImageLoadPriority;
+
 // The maximum URL count for LCPP.
 BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
     kLCPScriptObserverMaxUrlCountPerOrigin;
@@ -675,6 +729,22 @@ BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
 // The maximum URL length allowed for LCPP.
 BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
     kLCPScriptObserverMaxUrlLength;
+
+// Enable ResourceLoadPriority changes for all HTMLImageElement loaded images.
+BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
+    kLCPScriptObserverAdjustImageLoadPriority;
+
+// If enabled, LCP image origin is predicted and preconnected automatically.
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kLCPPAutoPreconnectLcpOrigin);
+
+// Origins are automatically preconnected if frequencies are above this
+// threshold.
+BLINK_COMMON_EXPORT extern const base::FeatureParam<double>
+    kLCPPAutoPreconnectFrequencyThreshold;
+
+// The maximum number of origins to be preconnected
+BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
+    kkLCPPAutoPreconnectMaxPreconnectOriginsCount;
 
 // If enabled, fetched font URLs are observed to predict font usage in the
 // future navigation.
@@ -738,8 +808,6 @@ BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
 BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
     kHttpDiskCachePrewarmingTriggerOnPointerDownOrHover;
 
-BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kLCPVideoFirstFrame);
-
 // Kill-switch for new parsing behaviour of the X-Content-Type-Options header.
 // (Should be removed after the new behaviour has been launched.)
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kLegacyParsingOfXContentTypeOptions);
@@ -759,6 +827,8 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
     kLogUnexpectedIPCPostedToBackForwardCachedDocuments);
 
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kLowLatencyCanvas2dImageChromium);
+
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kLowLatencyWebGLImageChromium);
 
 // If enabled, async scripts will be run on a lower priority task queue.
 // See https://crbug.com/1348467.
@@ -789,6 +859,23 @@ BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
 // enabled for this to work.
 BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
     kLowPriorityAsyncScriptExecutionDisableWhenLcpNotInHtmlParam;
+enum class AsyncScriptPrioritisationType {
+  kHigh,
+  kLow,
+  kBestEffort,
+};
+BLINK_COMMON_EXPORT extern const base::FeatureParam<
+    AsyncScriptPrioritisationType>
+    kLowPriorityAsyncScriptExecutionLowerTaskPriorityParam;
+BLINK_COMMON_EXPORT extern const base::FeatureParam<
+    AsyncScriptExperimentalSchedulingTarget>
+    kLowPriorityAsyncScriptExecutionTargetParam;
+BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
+    kLowPriorityAsyncScriptExecutionOptOutLowFetchPriorityHintParam;
+BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
+    kLowPriorityAsyncScriptExecutionOptOutAutoFetchPriorityHintParam;
+BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
+    kLowPriorityAsyncScriptExecutionOptOutHighFetchPriorityHintParam;
 
 // If enabled, async scripts will be loaded with a lower fetch priority.
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kLowPriorityScriptLoading);
@@ -812,6 +899,9 @@ BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
 // reference.
 BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
     kMemoryCacheStrongReferenceResourceSizeThresholdParam;
+// Whether the ResourceFetcher should store strong references too.
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
+    kResourceFetcherStoresStrongReferences);
 // Exclude images from the saved strong references for resources.
 // See https://crbug.com/1409349.
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
@@ -824,10 +914,6 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
 // See https://crbug.com/1409349.
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
     kMemoryCacheStrongReferenceFilterCrossOriginScripts);
-// Save only one unloaded page's resources in the memory cache.
-// See https://crbug.com/1409349.
-BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
-    kMemoryCacheStrongReferenceSingleUnload);
 
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kMixedContentAutoupgrade);
 
@@ -1077,9 +1163,6 @@ BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
 BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
     kMaxFCPDelayMsForRenderBlockingFonts;
 
-// Report rectangles around lines of text in the currently focused editable
-// element.
-BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kReportVisibleLineBounds);
 // Enables resampling input events on main thread.
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kResamplingInputEvents);
 // Enables resampling GestureScroll events on compositor thread.
@@ -1103,7 +1186,8 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kSafelistFTPToRegisterProtocolHandler);
 // registerProtocolHandler. This feature is disabled by default
 // Payto URI Scheme explanation https://datatracker.ietf.org/doc/html/rfc8905
 // https://html.spec.whatwg.org/multipage/system-state.html#safelisted-scheme
-BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kSafelistPaytoToRegisterProtocolHandler);
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
+    kSafelistPaytoToRegisterProtocolHandler);
 
 // These control a major serialization change to include information about
 // exposed interfaces in trailer data, to allow emergency fixes.
@@ -1136,6 +1220,9 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kScopeMemoryCachePerContext);
 // paused instead of all pages.
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kPausePagesPerBrowsingContextGroup);
 
+// Whether the HUD display is shown for paused pages.
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kShowHudDisplayForPausedPages);
+
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kScriptStreaming);
 
 // If enabled, parser-blocking scripts are loaded asynchronously. The target
@@ -1157,6 +1244,8 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kSerializeAccessibilityPostLifecycle);
 
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kServiceWorkerUpdateDelay);
+
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kServiceWorkerClientIdAlignedWithSpec);
 
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kSetLowPriorityForBeacon);
 
@@ -1217,6 +1306,14 @@ BLINK_COMMON_EXPORT extern const base::FeatureParam<base::TimeDelta>
 // main frame has fenced frame depth 1, etc).
 BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
     kSharedStorageMaxAllowedFencedFrameDepthForSelectURL;
+// If enabled, sends additional details in the error message for the
+// rejected promise when shared storage is disabled, for local troubleshooting
+// and use in testing.
+//
+// NOTE: To preserve user privacy, this feature param MUST remain false by
+// default.
+BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
+    kSharedStorageExposeDebugMessageForSettingsStatus;
 
 // If enabled, limits the number of times per origin per pageload that
 // `sharedStorage.selectURL()` is allowed to be invoked.
@@ -1231,10 +1328,25 @@ BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
 BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
     kSharedStorageSelectURLBitBudgetPerSitePerPageLoad;
 
+// If enabled, the shared storage worklet threads (on the same renderer process)
+// will share the same backing thread; otherwise, each will own a dedicated
+// backing thread.
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
+    kSharedStorageWorkletSharedBackingThreadImplementation);
+
 // Additional Shared Storage API features shipped in M118.
 // TODO(crbug.com/1218540): Merge this flag with `kSharedStorageAPI` once
 // shipped.
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kSharedStorageAPIM118);
+
+// Additional Shared Storage API features shipped in M123.
+// TODO(crbug.com/1218540): Merge this flag with `kSharedStorageAPI` once
+// shipped.
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kSharedStorageAPIM123);
+
+// Enables WAL (write-ahead-logging) mode for the Shared Storage API SQLite
+// database backend.
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kSharedStorageAPIEnableWALForDatabase);
 
 // TODO(accessibility): This flag is set to accommodate JAWS on Windows so they
 // can adjust to us not simulating click events on a focus action. It is in the
@@ -1307,6 +1419,8 @@ BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
     kSpeculativeServiceWorkerWarmUpOnPointerdown;
 BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
     kSpeculativeServiceWorkerWarmUpFromLoadingPredictor;
+BLINK_COMMON_EXPORT extern const base::FeatureParam<bool>
+    kSpeculativeServiceWorkerWarmUpOnIdleTimeout;
 
 // Make the browser decide when to turn on the capture indicator (red button)
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
@@ -1316,8 +1430,6 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kStopInBackground);
 
 // Stylus gestures for editable web content.
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kStylusRichGestures);
-// Stylus handwriting recognition to text input feature.
-BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kStylusWritingToInput);
 // Apply touch adjustment for stylus pointer events. This feature allows
 // enabling functions like writing into a nearby input element.
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kStylusPointerAdjustment);
@@ -1346,8 +1458,6 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kThreadedPreloadScanner);
 // below.
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
     kThrottleDisplayNoneAndVisibilityHiddenCrossOriginIframes);
-
-BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kThrottleForegroundTimers);
 
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kThrottleInstallingServiceWorker);
 BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
@@ -1422,8 +1532,6 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
 
 // Combine WebRTC Network and Worker threads. More info at crbug.com/1373439.
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kWebRtcCombinedNetworkAndWorkerThread);
-// If enabled, expose non-standard stats in the WebRTC getStats API.
-BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kWebRtcExposeNonStandardStats);
 #if BUILDFLAG(RTC_USE_H264) && BUILDFLAG(ENABLE_FFMPEG_VIDEO_DECODERS)
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kWebRtcH264WithOpenH264FFmpeg);
 #endif  // BUILDFLAG(RTC_USE_H264) && BUILDFLAG(ENABLE_FFMPEG_VIDEO_DECODERS)
@@ -1467,6 +1575,10 @@ BLINK_COMMON_EXPORT bool
 IsAllowPageWithIDBConnectionAndTransactionInBFCacheEnabled();
 
 BLINK_COMMON_EXPORT bool IsAllowURNsInIframeEnabled();
+
+BLINK_COMMON_EXPORT bool DisplayWarningDeprecateURNIframesUseFencedFrames();
+
+BLINK_COMMON_EXPORT bool IsEnableMojoJSProtectedMemoryEnabled();
 
 BLINK_COMMON_EXPORT bool IsFencedFramesEnabled();
 
@@ -1518,6 +1630,10 @@ BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
 
 // Don't require FCP for the page to turn interactive. Useful for testing.
 BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(kInteractiveDetectorIgnoreFcp);
+
+// Optimize loading 1x1 transparent placeholder images.
+BLINK_COMMON_EXPORT BASE_DECLARE_FEATURE(
+    kSimplifyLoadingTransparentPlaceholderImage);
 
 }  // namespace features
 }  // namespace blink

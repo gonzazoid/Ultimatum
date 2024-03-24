@@ -4,6 +4,8 @@
 
 #include "chrome/common/google_url_loader_throttle.h"
 
+#include <optional>
+
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback.h"
@@ -19,7 +21,6 @@
 #include "services/network/public/mojom/fetch_api.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "services/network/public/mojom/x_frame_options.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "extensions/common/extension_urls.h"
@@ -282,6 +283,11 @@ void GoogleURLLoaderThrottle::WillProcessResponse(
     RecordBoundSessionStatusMetrics(is_deferred_for_bound_session_,
                                     is_main_frame_navigation_);
   }
+  if (deferred_request_resume_trigger_) {
+    UMA_HISTOGRAM_ENUMERATION(
+        "Signin.BoundSessionCredentials.DeferredRequestUnblockTrigger.Success",
+        deferred_request_resume_trigger_.value());
+  }
 #endif  // BUILDFLAG(ENABLE_BOUND_SESSION_CREDENTIALS)
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
@@ -313,21 +319,29 @@ void GoogleURLLoaderThrottle::WillOnCompleteWithError(
     RecordBoundSessionStatusMetrics(is_deferred_for_bound_session_,
                                     is_main_frame_navigation_);
   }
+  if (deferred_request_resume_trigger_) {
+    UMA_HISTOGRAM_ENUMERATION(
+        "Signin.BoundSessionCredentials.DeferredRequestUnblockTrigger.Failure",
+        *deferred_request_resume_trigger_);
+  }
 }
 
 void GoogleURLLoaderThrottle::OnDeferRequestForBoundSessionCompleted(
-    BoundSessionRequestThrottledHandler::UnblockAction unblock_action) {
+    BoundSessionRequestThrottledHandler::UnblockAction unblock_action,
+    chrome::mojom::ResumeBlockedRequestsTrigger resume_trigger) {
   // Use `PostTask` to avoid resuming the request before it has been deferred
   // then the request will hang. This can happen if
-  // `BoundSessionRequestThrottledHandler::HandleRequestBlockedOnCookie()` calls
-  // the callback synchronously.
+  // `BoundSessionRequestThrottledHandler::HandleRequestBlockedOnCookie()`
+  // calls the callback synchronously.
   base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&GoogleURLLoaderThrottle::ResumeOrCancelRequest,
-                                weak_factory_.GetWeakPtr(), unblock_action));
+                                weak_factory_.GetWeakPtr(), unblock_action,
+                                resume_trigger));
 }
 
 void GoogleURLLoaderThrottle::ResumeOrCancelRequest(
-    BoundSessionRequestThrottledHandler::UnblockAction unblock_action) {
+    BoundSessionRequestThrottledHandler::UnblockAction unblock_action,
+    chrome::mojom::ResumeBlockedRequestsTrigger resume_trigger) {
   CHECK(is_deferred_for_bound_session_);
   CHECK(bound_session_request_throttled_start_time_.has_value());
   base::TimeDelta duration =
@@ -339,7 +353,8 @@ void GoogleURLLoaderThrottle::ResumeOrCancelRequest(
         "Signin.BoundSessionCredentials.DeferredNavigationRequestDelay",
         duration);
   }
-  bound_session_request_throttled_start_time_ = absl::nullopt;
+  bound_session_request_throttled_start_time_ = std::nullopt;
+  deferred_request_resume_trigger_ = resume_trigger;
 
   switch (unblock_action) {
     case BoundSessionRequestThrottledHandler::UnblockAction::kResume:

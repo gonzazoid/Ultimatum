@@ -87,7 +87,7 @@ static float ComputeDecorationThickness(
     return auto_underline_thickness;
 
   if (text_decoration_thickness.IsFromFont()) {
-    absl::optional<float> font_underline_thickness =
+    std::optional<float> font_underline_thickness =
         font_data->GetFontMetrics().UnderlineThickness();
 
     if (!font_underline_thickness)
@@ -268,7 +268,7 @@ TextDecorationInfo::TextDecorationInfo(
     LayoutUnit width,
     const ComputedStyle& target_style,
     const InlinePaintContext* inline_context,
-    const absl::optional<AppliedTextDecoration> selection_text_decoration,
+    const std::optional<AppliedTextDecoration> selection_text_decoration,
     const AppliedTextDecoration* decoration_override,
     const Font* font_override,
     MinimumThickness1 minimum_thickness1,
@@ -517,7 +517,7 @@ void TextDecorationInfo::SetSpellingOrGrammarErrorLineData(
 }
 
 bool TextDecorationInfo::ShouldAntialias() const {
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   if (line_data_.line == TextDecorationLine::kSpellingError ||
       line_data_.line == TextDecorationLine::kGrammarError) {
     return true;
@@ -528,7 +528,7 @@ bool TextDecorationInfo::ShouldAntialias() const {
 
 ETextDecorationStyle TextDecorationInfo::DecorationStyle() const {
   if (IsSpellingOrGrammarError()) {
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
     return ETextDecorationStyle::kDotted;
 #else
     return ETextDecorationStyle::kWavy;
@@ -578,7 +578,7 @@ float TextDecorationInfo::ComputeThickness() const {
   const AppliedTextDecoration& decoration = *applied_text_decoration_;
   if (HasSpellingOrGrammerError()) {
     // Spelling and grammar error thickness doesn't depend on the font size.
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
     return 2.f * decorating_box_style_->EffectiveZoom();
 #else
     return 1.f * decorating_box_style_->EffectiveZoom();
@@ -629,7 +629,7 @@ void TextDecorationInfo::ComputeWavyLineData(
     DISALLOW_NEW();
   };
 
-  DEFINE_STATIC_LOCAL(absl::optional<WavyCache>, wavy_cache, (absl::nullopt));
+  DEFINE_STATIC_LOCAL(std::optional<WavyCache>, wavy_cache, (std::nullopt));
 
   if (wavy_cache && wavy_cache->key.resolved_thickness == ResolvedThickness() &&
       wavy_cache->key.effective_zoom ==
@@ -720,7 +720,7 @@ cc::PaintRecord TextDecorationInfo::WavyTileRecord() const {
 }
 
 void TextDecorationInfo::SetHighlightOverrideColor(
-    const absl::optional<Color>& color) {
+    const std::optional<Color>& color) {
   highlight_override_ = color;
 }
 

@@ -55,6 +55,8 @@ import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.DisableIf;
 import org.chromium.base.test.util.Feature;
+import org.chromium.base.test.util.Features.DisableFeatures;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.base.test.util.HistogramWatcher;
 import org.chromium.base.test.util.UserActionTester;
 import org.chromium.build.BuildConfig;
@@ -65,17 +67,15 @@ import org.chromium.chrome.browser.prefetch.settings.PreloadPagesSettingsBridge;
 import org.chromium.chrome.browser.prefetch.settings.PreloadPagesState;
 import org.chromium.chrome.browser.privacy.settings.PrivacySettings;
 import org.chromium.chrome.browser.privacy_guide.PrivacyGuideFragment.FragmentType;
-import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.safe_browsing.SafeBrowsingBridge;
 import org.chromium.chrome.browser.safe_browsing.SafeBrowsingState;
 import org.chromium.chrome.browser.settings.SettingsActivityTestRule;
 import org.chromium.chrome.browser.signin.services.UnifiedConsentServiceBridge;
-import org.chromium.chrome.browser.sync.SyncServiceFactory;
 import org.chromium.chrome.test.ChromeBrowserTestRule;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.util.ChromeRenderTestRule;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
+import org.chromium.chrome.test.util.browser.sync.SyncTestUtil;
 import org.chromium.components.content_settings.CookieControlsMode;
 import org.chromium.components.content_settings.PrefNames;
 import org.chromium.components.embedder_support.util.UrlConstants;
@@ -217,7 +217,7 @@ public class PrivacyGuideFragmentTest {
         runOnUiThreadBlocking(
                 () ->
                         UnifiedConsentServiceBridge.setUrlKeyedAnonymizedDataCollectionEnabled(
-                                Profile.getLastUsedRegularProfile(), isMSBBon));
+                                ProfileManager.getLastUsedRegularProfile(), isMSBBon));
     }
 
     private void setHistorySyncState(boolean isHistorySyncOn) {
@@ -229,7 +229,9 @@ public class PrivacyGuideFragmentTest {
         }
 
         runOnUiThreadBlocking(
-                () -> SyncServiceFactory.get().setSelectedTypes(false, selectedTypes));
+                () ->
+                        SyncTestUtil.getSyncServiceForLastUsedProfile()
+                                .setSelectedTypes(false, selectedTypes));
     }
 
     private void setSafeBrowsingState(@SafeBrowsingState int safeBrowsingState) {
@@ -239,14 +241,14 @@ public class PrivacyGuideFragmentTest {
     private void setCookieControlsMode(@CookieControlsMode int cookieControlsMode) {
         runOnUiThreadBlocking(
                 () ->
-                        UserPrefs.get(Profile.getLastUsedRegularProfile())
+                        UserPrefs.get(ProfileManager.getLastUsedRegularProfile())
                                 .setInteger(PrefNames.COOKIE_CONTROLS_MODE, cookieControlsMode));
     }
 
     private void setSearchSuggestionsStatePG3(boolean isSearchSuggestionsOn) {
         runOnUiThreadBlocking(
                 () ->
-                        UserPrefs.get(Profile.getLastUsedRegularProfile())
+                        UserPrefs.get(ProfileManager.getLastUsedRegularProfile())
                                 .setBoolean(Pref.SEARCH_SUGGEST_ENABLED, isSearchSuggestionsOn));
     }
 

@@ -7,15 +7,22 @@
 #import <UIKit/UIKit.h>
 
 #import "base/ios/block_types.h"
+#import "base/memory/raw_ptr.h"
 #import "base/metrics/histogram_functions.h"
 #import "base/metrics/histogram_macros.h"
+#import "base/metrics/user_metrics.h"
+#import "base/metrics/user_metrics_action.h"
 #import "base/strings/sys_string_conversions.h"
 #import "components/prefs/pref_service.h"
 #import "components/signin/public/base/signin_metrics.h"
 #import "components/strings/grit/components_strings.h"
+#import "ios/chrome/browser/drive/model/manage_storage_url_util.h"
 #import "ios/chrome/browser/photos/model/photos_metrics.h"
 #import "ios/chrome/browser/photos/model/photos_service.h"
 #import "ios/chrome/browser/shared/model/prefs/pref_names.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/manage_storage_alert_commands.h"
+#import "ios/chrome/browser/shared/public/commands/open_new_tab_command.h"
 #import "ios/chrome/browser/signin/model/authentication_service.h"
 #import "ios/chrome/browser/signin/model/chrome_account_manager_service.h"
 #import "ios/chrome/browser/signin/model/system_identity.h"
@@ -79,15 +86,16 @@ NSString* const kGooglePhotosAppURLScheme = @"googlephotos";
 @end
 
 @implementation SaveToPhotosMediator {
-  PhotosService* _photosService;
-  PrefService* _prefService;
-  ChromeAccountManagerService* _accountManagerService;
-  signin::IdentityManager* _identityManager;
+  raw_ptr<PhotosService> _photosService;
+  raw_ptr<PrefService> _prefService;
+  raw_ptr<ChromeAccountManagerService> _accountManagerService;
+  raw_ptr<signin::IdentityManager> _identityManager;
+  id<ManageStorageAlertCommands> _manageStorageAlertHandler;
+  id<ApplicationCommands> _applicationHandler;
   NSString* _imageName;
   NSData* _imageData;
   BOOL _userTappedSuccessSnackbarButton;
   base::TimeTicks _uploadStart;
-  BOOL _showingAccountPicker;
   BOOL _successSnackbarAppeared;
   BOOL _successSnackbarDisappeared;
   BOOL _uploadCompletedSuccessfully;
@@ -95,21 +103,29 @@ NSString* const kGooglePhotosAppURLScheme = @"googlephotos";
 
 #pragma mark - Initialization
 
-- (instancetype)
-    initWithPhotosService:(PhotosService*)photosService
-              prefService:(PrefService*)prefService
-    accountManagerService:(ChromeAccountManagerService*)accountManagerService
-          identityManager:(signin::IdentityManager*)identityManager {
+- (instancetype)initWithPhotosService:(PhotosService*)photosService
+                          prefService:(PrefService*)prefService
+                accountManagerService:
+                    (ChromeAccountManagerService*)accountManagerService
+                      identityManager:(signin::IdentityManager*)identityManager
+            manageStorageAlertHandler:
+                (id<ManageStorageAlertCommands>)manageStorageAlertHandler
+                   applicationHandler:
+                       (id<ApplicationCommands>)applicationHandler {
   self = [super init];
   if (self) {
+    CHECK(photosService);
+    CHECK(prefService);
+    CHECK(accountManagerService);
+    CHECK(identityManager);
+    CHECK(manageStorageAlertHandler);
+    CHECK(applicationHandler);
     _photosService = photosService;
     _prefService = prefService;
     _accountManagerService = accountManagerService;
     _identityManager = identityManager;
-    CHECK(_photosService);
-    CHECK(_prefService);
-    CHECK(_accountManagerService);
-    CHECK(_identityManager);
+    _manageStorageAlertHandler = manageStorageAlertHandler;
+    _applicationHandler = applicationHandler;
   }
   return self;
 }
@@ -168,6 +184,7 @@ NSString* const kGooglePhotosAppURLScheme = @"googlephotos";
   _identity = identity;
 
   [self.delegate startValidationSpinnerForAccountPicker];
+  [self.delegate hideAccountPicker];
   [self tryUploadImage];
 }
 
@@ -176,14 +193,12 @@ NSString* const kGooglePhotosAppURLScheme = @"googlephotos";
     base::UmaHistogramEnumeration(kSaveToPhotosAccountPickerActionsHistogram,
                                   SaveToPhotosAccountPickerActions::kCancelled);
     [self.delegate hideAccountPicker];
-    _showingAccountPicker = NO;
     return;
   }
 
   // If `_identity` is not nil while the account picker is presented, that means
   // the user has already tapped "Save" for a given identity.
   _photosService->CancelUpload();
-  [self.delegate stopValidationSpinnerForAccountPicker];
   _identity = nil;
 }
 
@@ -193,12 +208,7 @@ NSString* const kGooglePhotosAppURLScheme = @"googlephotos";
         kSaveToPhotosActionsHistogram,
         SaveToPhotosActions::kFailureUserCancelledWithAccountPicker);
     [self.delegate hideSaveToPhotos];
-    return;
   }
-
-  // If `_identity` is not nil at this point, then an image has been uploaded
-  // with this identity successfully.
-  [self showSnackbarWithSuccessMessageAndOpenButton];
 }
 
 - (void)storeKitWantsToHide {
@@ -221,6 +231,29 @@ NSString* const kGooglePhotosAppURLScheme = @"googlephotos";
   _imageName = nil;
   _imageData = nil;
   _identity = nil;
+}
+
+- (void)showManageStorageForIdentity:(id<SystemIdentity>)identity {
+  base::RecordAction(
+      base::UserMetricsAction("MobileSaveToPhotosManageStorage"));
+  // The uploading identity's user email is used to switch to the uploading
+  // account before loading the "Manage Storage" web page.
+  GURL manageStorageURL = GenerateManageDriveStorageUrl(
+      base::SysNSStringToUTF8(identity.userEmail));
+  OpenNewTabCommand* newTabCommand =
+      [OpenNewTabCommand commandWithURLFromChrome:manageStorageURL];
+  [_applicationHandler openURLInNewTab:newTabCommand];
+  base::UmaHistogramEnumeration(
+      kSaveToPhotosActionsHistogram,
+      SaveToPhotosActions::kFailureOutOfStorageDidManageStorage);
+  [self.delegate hideSaveToPhotos];
+}
+
+- (void)manageStorageAlertDidCancel {
+  base::UmaHistogramEnumeration(
+      kSaveToPhotosActionsHistogram,
+      SaveToPhotosActions::kFailureOutOfStorageDidNotManageStorage);
+  [self.delegate hideSaveToPhotos];
 }
 
 #pragma mark - Private
@@ -277,7 +310,6 @@ NSString* const kGooglePhotosAppURLScheme = @"googlephotos";
       IDS_IOS_SAVE_TO_PHOTOS_ACCOUNT_PICKER_ASK_EVERY_TIME);
   [self.delegate showAccountPickerWithConfiguration:configuration
                                    selectedIdentity:defaultIdentity];
-  _showingAccountPicker = YES;
 }
 
 // Once the destination account is known, tries to upload the image using the
@@ -317,6 +349,13 @@ NSString* const kGooglePhotosAppURLScheme = @"googlephotos";
                               std::move(uploadCompletionCallback));
 }
 
+// After upload failed with `failureIdentity`, this can be called to retry an
+// upload with the same identity.
+- (void)retryUploadImageWithIdentity:(id<SystemIdentity>)failureIdentity {
+  self.identity = failureIdentity;
+  [self tryUploadImage];
+}
+
 // Called when the Photos service reports upload completion.
 - (void)photosServiceFinishedUploadWithResult:
     (PhotosService::UploadResult)result {
@@ -337,12 +376,17 @@ NSString* const kGooglePhotosAppURLScheme = @"googlephotos";
     }
     base::UmaHistogramEnumeration(kSaveToPhotosUploadFailureTypeHistogram,
                                   result.failure_type);
+    // If the user is out of storage, offer to manage their storage.
+    if (result.failure_type ==
+        PhotosServiceUploadFailureType::kUploadPhoto2NotEnoughStorage) {
+      [_manageStorageAlertHandler
+          showManageStorageAlertForIdentity:failureIdentity];
+      return;
+    }
+    // Otherwise let the user "Try Again" with the same account.
     __weak __typeof(self) weakSelf = self;
-    [self.delegate stopValidationSpinnerForAccountPicker];
     [self showTryAgainOrCancelAlertWithTryAgainBlock:^{
-      weakSelf.identity = failureIdentity;
-      [weakSelf.delegate startValidationSpinnerForAccountPicker];
-      [weakSelf tryUploadImage];
+      [weakSelf retryUploadImageWithIdentity:failureIdentity];
     }];
     return;
   }
@@ -350,17 +394,6 @@ NSString* const kGooglePhotosAppURLScheme = @"googlephotos";
   base::UmaHistogramTimes(kSaveToPhotosUploadSuccessLatencyHistogram,
                           base::TimeTicks::Now() - _uploadStart);
   _uploadCompletedSuccessfully = YES;
-
-  // Option 1: user did not skip the account picker so it is on the screen now,
-  // and it can be hidden.
-  if (_showingAccountPicker) {
-    [self.delegate hideAccountPicker];
-    _showingAccountPicker = NO;
-    return;
-  }
-
-  // Option 2: user did skip the account picker and so it is not on the screen
-  // now.
 
   if (!_successSnackbarAppeared) {
     // If the success snackbar did not appear for some reason (no progress has
@@ -387,12 +420,7 @@ NSString* const kGooglePhotosAppURLScheme = @"googlephotos";
 
 - (void)photosServiceReportedUploadProgress:
     (const PhotosService::UploadProgress&)progress {
-  if (_showingAccountPicker) {
-    // If the account picker is presented, do nothing here.
-    return;
-  }
-
-  // Otherwise, if all of the image data has been uploaded, show success early.
+  // If all of the image data has been uploaded, show success early.
   if (progress.total_bytes_sent == progress.total_bytes_expected_to_send) {
     [self showSnackbarWithSuccessMessageAndOpenButton];
   }
@@ -412,7 +440,6 @@ NSString* const kGooglePhotosAppURLScheme = @"googlephotos";
   NSString* tryAgainTitle = l10n_util::GetNSString(
       IDS_IOS_SAVE_TO_PHOTOS_THIS_FILE_COULD_NOT_BE_UPLOADED_TRY_AGAIN);
   __weak __typeof(self.delegate) weakDelegate = self.delegate;
-  BOOL showingAccountPicker = _showingAccountPicker;
   [self.delegate
       showTryAgainOrCancelAlertWithTitle:title
                                  message:message
@@ -420,19 +447,10 @@ NSString* const kGooglePhotosAppURLScheme = @"googlephotos";
                           tryAgainAction:tryAgain
                              cancelTitle:cancelTitle
                             cancelAction:^{
-                              if (showingAccountPicker) {
-                                // Do nothing if the account picker is
-                                // presented. The alert will be dismissed and
-                                // the account picker will remain presented to
-                                // let the user pick another account if they
-                                // want to.
-                                return;
-                              }
-
                               base::UmaHistogramEnumeration(
                                   kSaveToPhotosActionsHistogram,
                                   SaveToPhotosActions::
-                                      kFailureUserCancelledWithAlert);
+                                      kFailureUserCancelledWithTryAgainAlert);
                               [weakDelegate hideSaveToPhotos];
                             }];
 }

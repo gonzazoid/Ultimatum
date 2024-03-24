@@ -56,6 +56,12 @@
 #include "ui/gfx/switches.h"
 #include "ui/views/controls/webview/webview.h"
 
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/constants/chromeos_features.h"
+#include "chromeos/constants/pref_names.h"
+#include "components/prefs/pref_service.h"
+#endif
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/constants/ash_switches.h"
 #endif
@@ -109,6 +115,27 @@ bool GetExtensionInfo(content::WebContents* wc,
   // Set type to other for extensions if not matched previously.
   *type = DevToolsAgentHost::kTypeOther;
   return true;
+}
+
+policy::DeveloperToolsPolicyHandler::Availability GetDevToolsAvailability(
+    Profile* profile) {
+  using Availability = policy::DeveloperToolsPolicyHandler::Availability;
+  Availability availability =
+      policy::DeveloperToolsPolicyHandler::GetEffectiveAvailability(profile);
+#if BUILDFLAG(IS_CHROMEOS)
+  // On ChromeOS disable dev tools for captive portal signin windows to prevent
+  // them from being used for general navigation.
+  if (chromeos::features::IsCaptivePortalPopupWindowEnabled() &&
+      availability != Availability::kDisallowed) {
+    const PrefService::Preference* const captive_portal_pref =
+        profile->GetPrefs()->FindPreference(
+            chromeos::prefs::kCaptivePortalSignin);
+    if (captive_portal_pref && captive_portal_pref->GetValue()->GetBool()) {
+      availability = Availability::kDisallowed;
+    }
+  }
+#endif
+  return availability;
 }
 
 ChromeDevToolsManagerDelegate* g_instance;
@@ -167,6 +194,28 @@ void ChromeDevToolsManagerDelegate::Inspect(
                                      DevToolsOpenedByAction::kInspectLink);
 }
 
+void ChromeDevToolsManagerDelegate::Activate(
+    content::DevToolsAgentHost* agent_host) {
+  auto* web_contents = agent_host->GetWebContents();
+  if (!web_contents) {
+    return;
+  }
+
+  // Brings the tab to foreground. We need to do this in case the devtools
+  // window is undocked and this is being called from another tab that is in
+  // the foreground.
+  web_contents->GetDelegate()->ActivateContents(web_contents);
+
+  // Brings a undocked devtools window to the foreground.
+  DevToolsWindow* devtools_window =
+      DevToolsWindow::GetInstanceForInspectedWebContents(
+          agent_host->GetWebContents());
+  if (!devtools_window) {
+    return;
+  }
+  devtools_window->ActivateWindow();
+}
+
 void ChromeDevToolsManagerDelegate::HandleCommand(
     content::DevToolsAgentHostClientChannel* channel,
     base::span<const uint8_t> message,
@@ -223,7 +272,7 @@ bool ChromeDevToolsManagerDelegate::AllowInspectingRenderFrameHost(
 
   if (auto* web_app_provider =
           web_app::WebAppProvider::GetForWebApps(profile)) {
-    absl::optional<webapps::AppId> app_id =
+    std::optional<webapps::AppId> app_id =
         web_app_provider->registrar_unsafe().FindAppWithUrlInScope(
             rfh->GetMainFrame()->GetLastCommittedURL());
     if (app_id) {
@@ -269,8 +318,14 @@ bool ChromeDevToolsManagerDelegate::AllowInspection(
     Profile* profile,
     const extensions::Extension* extension) {
   using Availability = policy::DeveloperToolsPolicyHandler::Availability;
-  Availability availability =
-      policy::DeveloperToolsPolicyHandler::GetEffectiveAvailability(profile);
+  Availability availability;
+  if (extension) {
+    availability =
+        policy::DeveloperToolsPolicyHandler::GetEffectiveAvailability(profile);
+  } else {
+    // Perform additional checks for browser windows (extension == null).
+    availability = GetDevToolsAvailability(profile);
+  }
   switch (availability) {
     case Availability::kDisallowed:
       return false;

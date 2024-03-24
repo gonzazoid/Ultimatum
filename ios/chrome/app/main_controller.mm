@@ -11,6 +11,7 @@
 #import "base/feature_list.h"
 #import "base/functional/callback.h"
 #import "base/ios/ios_util.h"
+#import "base/memory/raw_ptr.h"
 #import "base/metrics/histogram_functions.h"
 #import "base/metrics/histogram_macros.h"
 #import "base/path_service.h"
@@ -86,11 +87,12 @@
 #import "ios/chrome/browser/metrics/model/window_configuration_recorder.h"
 #import "ios/chrome/browser/omaha/model/omaha_service.h"
 #import "ios/chrome/browser/passwords/model/password_manager_util_ios.h"
-#import "ios/chrome/browser/promos_manager/promos_manager_factory.h"
+#import "ios/chrome/browser/promos_manager/model/promos_manager_factory.h"
 #import "ios/chrome/browser/screenshot/model/screenshot_metrics_recorder.h"
 #import "ios/chrome/browser/search_engines/model/extension_search_engine_data_updater.h"
 #import "ios/chrome/browser/search_engines/model/search_engines_util.h"
 #import "ios/chrome/browser/search_engines/model/template_url_service_factory.h"
+#import "ios/chrome/browser/sessions/features.h"
 #import "ios/chrome/browser/sessions/session_restoration_service.h"
 #import "ios/chrome/browser/sessions/session_restoration_service_factory.h"
 #import "ios/chrome/browser/sessions/session_util.h"
@@ -121,9 +123,10 @@
 #import "ios/chrome/browser/ui/appearance/appearance_customization.h"
 #import "ios/chrome/browser/ui/first_run/first_run_util.h"
 #import "ios/chrome/browser/ui/main/browser_view_wrangler.h"
-#import "ios/chrome/browser/ui/webui/chrome_web_ui_ios_controller_factory.h"
 #import "ios/chrome/browser/url_loading/model/url_loading_params.h"
 #import "ios/chrome/browser/web/model/certificate_policy_app_agent.h"
+#import "ios/chrome/browser/web_state_list/model/web_usage_enabler/web_usage_enabler_browser_agent.h"
+#import "ios/chrome/browser/webui/ui_bundled/chrome_web_ui_ios_controller_factory.h"
 #import "ios/chrome/common/app_group/app_group_constants.h"
 #import "ios/chrome/common/app_group/app_group_field_trial_version.h"
 #import "ios/chrome/common/app_group/app_group_utils.h"
@@ -135,7 +138,7 @@
 #import "ios/public/provider/chrome/browser/ui_utils/ui_utils_api.h"
 #import "ios/public/provider/chrome/browser/user_feedback/user_feedback_api.h"
 #import "ios/web/public/webui/web_ui_ios_controller_factory.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 #import "services/network/public/cpp/shared_url_loader_factory.h"
 
 #if BUILDFLAG(IOS_CREDENTIAL_PROVIDER_ENABLED)
@@ -148,10 +151,6 @@
 #if BUILDFLAG(IOS_ENABLE_SANDBOX_DUMP)
 #import "ios/chrome/app/dump_documents_statistics.h"
 #endif  // BUILDFLAG(IOS_ENABLE_SANDBOX_DUMP)
-
-// To get access to web::features::kEnableSessionSerializationOptimizations.
-// TODO(crbug.com/1504753): remove once the feature is fully launched.
-#import "ios/web/common/features.h"
 
 namespace {
 
@@ -275,7 +274,7 @@ class MainControllerAuthenticationServiceDelegate
   void ClearBrowsingData(ProceduralBlock completion) override;
 
  private:
-  ChromeBrowserState* browser_state_ = nullptr;
+  raw_ptr<ChromeBrowserState> browser_state_ = nullptr;
   __weak id<BrowsingDataCommands> dispatcher_ = nil;
 };
 
@@ -430,10 +429,8 @@ void MainControllerAuthenticationServiceDelegate::ClearBrowsingData(
 - (void)startUpBrowserBasicInitialization {
   _appLaunchTime = IOSChromeMain::StartTime();
   _isColdStart = YES;
-  if (@available(iOS 15, *)) {
-    UMA_HISTOGRAM_BOOLEAN("IOS.Process.ActivePrewarm",
-                          base::ios::IsApplicationPreWarmed());
-  }
+  UMA_HISTOGRAM_BOOLEAN("IOS.Process.ActivePrewarm",
+                        base::ios::IsApplicationPreWarmed());
 
   [SetupDebugging setUpDebuggingOptions];
 
@@ -472,6 +469,8 @@ void MainControllerAuthenticationServiceDelegate::ClearBrowsingData(
   // Start recording field trial info.
   [[PreviousSessionInfo sharedInstance] beginRecordingFieldTrials];
 
+  // TODO(crbug.com/325254941):  Remove this use of GetLastUsedBrowserState(),
+  // and instead initialize every loaded browser state.
   ChromeBrowserState* chromeBrowserState = GetApplicationContext()
                                                ->GetChromeBrowserStateManager()
                                                ->GetLastUsedBrowserState();
@@ -479,6 +478,7 @@ void MainControllerAuthenticationServiceDelegate::ClearBrowsingData(
 
   // Initialize and set the main browser state.
   [self initializeBrowserState:chromeBrowserState];
+  // TODO(crbug.com/324417250): Remove mainBrowserState from appState.
   self.appState.mainBrowserState = chromeBrowserState;
 
   // Give tests a chance to prepare for testing.
@@ -493,6 +493,8 @@ void MainControllerAuthenticationServiceDelegate::ClearBrowsingData(
   // background to perform background refresh. There is no downside to doing
   // this during background initialization when the app is launched into the
   // foreground.
+  // TODO(crbug.com/325254941): Move this into -initializeBrowserState:, which
+  // will initialze all browser states.
   AuthenticationServiceFactory::CreateAndInitializeForBrowserState(
       chromeBrowserState,
       std::make_unique<MainControllerAuthenticationServiceDelegate>(
@@ -560,7 +562,7 @@ void MainControllerAuthenticationServiceDelegate::ClearBrowsingData(
 - (void)performBrowserBackgroundInitialisation:(ProceduralBlock)completion {
   // Migrate the session storage based on the feature.
   const SessionRestorationServiceFactory::StorageFormat requested_format =
-      web::features::UseSessionSerializationOptimizations()
+      session::features::UseSessionSerializationOptimizations()
           ? SessionRestorationServiceFactory::kOptimized
           : SessionRestorationServiceFactory::kLegacy;
 
@@ -594,6 +596,8 @@ void MainControllerAuthenticationServiceDelegate::ClearBrowsingData(
 
   RegisterComponentsForUpdate();
 
+  // TODO(crbug.com/325255635): Don't get a singular browser state; perform
+  // pre-window init on all browser states.
   ChromeBrowserState* chromeBrowserState = self.appState.mainBrowserState;
   DCHECK(chromeBrowserState);
 
@@ -612,13 +616,6 @@ void MainControllerAuthenticationServiceDelegate::ClearBrowsingData(
   // Send "Chrome Opened" event to the feature_engagement::Tracker on cold
   // start.
   tracker->NotifyEvent(feature_engagement::events::kChromeOpened);
-
-  // Send "default_browser_video_promo_conditions_met" event to the
-  // feature_engagement::Tracker on cold start.
-  if (HasAppLaunchedOnColdStartAndRecordsLaunch()) {
-    tracker->NotifyEvent(
-        feature_engagement::events::kDefaultBrowserVideoPromoConditionsMet);
-  }
 
   _spotlightManager =
       [SpotlightManager spotlightManagerWithBrowserState:chromeBrowserState];
@@ -698,9 +695,8 @@ void MainControllerAuthenticationServiceDelegate::ClearBrowsingData(
 
 - (void)initializeBrowserState:(ChromeBrowserState*)browserState {
   DCHECK(!browserState->IsOffTheRecord());
-  search_engines::UpdateSearchEnginesIfNeeded(
-      browserState->GetPrefs(),
-      ios::TemplateURLServiceFactory::GetForBrowserState(browserState));
+  search_engines::UpdateSearchEngineCountryCodeIfNeeded(
+      browserState->GetPrefs());
 }
 
 #pragma mark - AppStateObserver
@@ -1470,10 +1466,16 @@ void MainControllerAuthenticationServiceDelegate::ClearBrowsingData(
       if (willShowActivityIndicator) {
         // User interaction still needs to be disabled as a way to
         // force reload all the web states and to reset NTPs.
-        browserProviderInterface.mainBrowserProvider.userInteractionEnabled =
-            NO;
-        browserProviderInterface.incognitoBrowserProvider
-            .userInteractionEnabled = NO;
+        if (Browser* mainBrowser =
+                browserProviderInterface.mainBrowserProvider.browser) {
+          WebUsageEnablerBrowserAgent::FromBrowser(mainBrowser)
+              ->SetWebUsageEnabled(false);
+        }
+        if (Browser* incognitoBrowser =
+                browserProviderInterface.incognitoBrowserProvider.browser) {
+          WebUsageEnablerBrowserAgent::FromBrowser(incognitoBrowser)
+              ->SetWebUsageEnabled(false);
+        }
 
         if (didShowActivityIndicator &&
             browserProviderInterface.mainBrowserProvider.browser) {
@@ -1484,9 +1486,16 @@ void MainControllerAuthenticationServiceDelegate::ClearBrowsingData(
           [handler hideActivityOverlay];
         }
       }
-      browserProviderInterface.mainBrowserProvider.userInteractionEnabled = YES;
-      browserProviderInterface.incognitoBrowserProvider.userInteractionEnabled =
-          YES;
+      if (Browser* mainBrowser =
+              browserProviderInterface.mainBrowserProvider.browser) {
+        WebUsageEnablerBrowserAgent::FromBrowser(mainBrowser)
+            ->SetWebUsageEnabled(true);
+      }
+      if (Browser* incognitoBrowser =
+              browserProviderInterface.incognitoBrowserProvider.browser) {
+        WebUsageEnablerBrowserAgent::FromBrowser(incognitoBrowser)
+            ->SetWebUsageEnabled(true);
+      }
       [browserProviderInterface.currentBrowserProvider setPrimary:YES];
     }
     // `completionBlock` is run once, not once per scene.

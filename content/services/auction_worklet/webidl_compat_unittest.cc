@@ -38,7 +38,9 @@ class WebIDLCompatTest : public testing::Test {
     base::RunLoop().RunUntilIdle();
     v8_scope_ =
         std::make_unique<AuctionV8Helper::FullIsolateScope>(v8_helper_.get());
-    time_limit_ = v8_helper_->CreateTimeLimit(/*script_timeout=*/std::nullopt);
+    // Using a large timeout because bots are sometimes very slow.
+    time_limit_ =
+        v8_helper_->CreateTimeLimit(/*script_timeout=*/base::Milliseconds(500));
     time_limit_scope_ =
         std::make_unique<AuctionV8Helper::TimeLimitScope>(time_limit_.get());
   }
@@ -104,10 +106,11 @@ class WebIDLCompatTest : public testing::Test {
     bool got_it = false;
     bool result = converter->GetOptionalSequence(
         field, base::BindLambdaForTesting([&]() { got_it = true; }),
-        base::BindLambdaForTesting([&](v8::Local<v8::Value> value) -> bool {
-          out.push_back(value);
-          return true;
-        }));
+        base::BindLambdaForTesting(
+            [&](v8::Local<v8::Value> value) -> IdlConvert::Status {
+              out.push_back(value);
+              return IdlConvert::Status::MakeSuccess();
+            }));
     return got_it && result;
   }
 
@@ -580,6 +583,207 @@ TEST_F(WebIDLCompatTest, StandaloneLong) {
         "undefined:0 Uncaught TypeError: Cannot convert a BigInt value to a "
         "number.",
         res.ConvertToErrorString(v8_helper_->isolate()));
+  }
+}
+
+TEST_F(WebIDLCompatTest, SequenceDetection) {
+  v8::Local<v8::Context> context = v8_helper_->CreateContext();
+  v8::Isolate* isolate = v8_helper_->isolate();
+  v8::Context::Scope ctx(context);
+
+  {
+    // An empty object isn't iterable.
+    const char kScript[] = R"(
+      make = () => {
+        return {};
+      }
+    )";
+    auto in_obj = MakeValueFromScript(context, kScript).As<v8::Object>();
+    v8::Local<v8::Object> iterator_factory;
+
+    IdlConvert::Status status = IdlConvert::CheckForSequence(
+        isolate, "test1 ", {"v1", "scalar"}, in_obj, iterator_factory);
+    // This is just a non-iterable --- so it's success, and `iterator_factory`
+    // is kept empty.
+    EXPECT_TRUE(status.is_success());
+    EXPECT_TRUE(iterator_factory.IsEmpty());
+  }
+
+  {
+    // Having an explicit null for @@iterator is non-iterable, too.
+    const char kScript[] = R"(
+      make = () => {
+        let o = {};
+        o[Symbol.iterator] = null;
+        return o;
+      }
+    )";
+    auto in_obj = MakeValueFromScript(context, kScript).As<v8::Object>();
+    v8::Local<v8::Object> iterator_factory;
+
+    IdlConvert::Status status = IdlConvert::CheckForSequence(
+        isolate, "test2 ", {"v1", "scalar"}, in_obj, iterator_factory);
+    // This is just a non-iterable --- so it's success, and `iterator_factory`
+    // is kept empty.
+    EXPECT_TRUE(status.is_success());
+    EXPECT_TRUE(iterator_factory.IsEmpty());
+  }
+
+  {
+    // If get for @iterator throws an error, however, that's trouble. We can use
+    // a proxy object to inject that.
+    const char kScript[] = R"(
+      make = () => {
+        let o = {};
+        let handler = {
+          get: () => { throw "Nope"; }
+        }
+        return new Proxy(o, handler);
+      }
+    )";
+    auto in_obj = MakeValueFromScript(context, kScript).As<v8::Object>();
+    v8::Local<v8::Object> iterator_factory;
+
+    IdlConvert::Status status = IdlConvert::CheckForSequence(
+        isolate, "test3 ", {"v1", "scalar"}, in_obj, iterator_factory);
+    EXPECT_FALSE(status.is_success());
+    EXPECT_TRUE(iterator_factory.IsEmpty());
+    EXPECT_EQ("https://example.org/:5 Uncaught Nope.",
+              status.ConvertToErrorString(isolate));
+  }
+
+  {
+    // A non-object @iterator is an error.
+    const char kScript[] = R"(
+      make = () => {
+        let o = {};
+        o[Symbol.iterator] = 123;
+        return o;
+      }
+    )";
+    auto in_obj = MakeValueFromScript(context, kScript).As<v8::Object>();
+    v8::Local<v8::Object> iterator_factory;
+
+    IdlConvert::Status status = IdlConvert::CheckForSequence(
+        isolate, "test3 ", {"v1", "scalar"}, in_obj, iterator_factory);
+    EXPECT_FALSE(status.is_success());
+    EXPECT_TRUE(iterator_factory.IsEmpty());
+    EXPECT_EQ("test3 Trouble iterating over v1scalar.",
+              status.ConvertToErrorString(isolate));
+  }
+
+  {
+    // A non-callable @iterator is also an error.
+    const char kScript[] = R"(
+      make = () => {
+        let o = {};
+        o[Symbol.iterator] = {};
+        return o;
+      }
+    )";
+    auto in_obj = MakeValueFromScript(context, kScript).As<v8::Object>();
+    v8::Local<v8::Object> iterator_factory;
+
+    IdlConvert::Status status = IdlConvert::CheckForSequence(
+        isolate, "test4 ", {"v1", "scalar"}, in_obj, iterator_factory);
+    EXPECT_FALSE(status.is_success());
+    EXPECT_TRUE(iterator_factory.IsEmpty());
+    EXPECT_EQ("test4 Trouble iterating over v1scalar.",
+              status.ConvertToErrorString(isolate));
+  }
+
+  {
+    // As far as CheckForSequence, any function for @@iterator is good enough;
+    // the actual iteration will fail, but it's precise enough to resolve the
+    // union properly.
+    const char kScript[] = R"(
+      make = () => {
+        let o = {};
+        o[Symbol.iterator] = function() {};
+        return o;
+      }
+    )";
+    auto in_obj = MakeValueFromScript(context, kScript).As<v8::Object>();
+    v8::Local<v8::Object> iterator_factory;
+
+    IdlConvert::Status status = IdlConvert::CheckForSequence(
+        isolate, "test5 ", {"v1", "scalar"}, in_obj, iterator_factory);
+
+    EXPECT_TRUE(status.is_success());
+    EXPECT_FALSE(iterator_factory.IsEmpty());
+    EXPECT_TRUE(iterator_factory->IsCallable());
+  }
+}
+
+TEST_F(WebIDLCompatTest, StandaloneSequence) {
+  // Sequences are tested more thoroughly as parts of dictionaries for historic
+  // reasons.
+  v8::Local<v8::Context> context = v8_helper_->CreateContext();
+  v8::Isolate* isolate = v8_helper_->isolate();
+  v8::Context::Scope ctx(context);
+
+  {
+    auto in_value = MakeValueFromScript(context, "make = () => [1, 2, 3]");
+    std::vector<double> out;
+    ASSERT_TRUE(in_value->IsObject());
+    v8::Local<v8::Object> in_obj = in_value.As<v8::Object>();
+    v8::Local<v8::Object> iterator_factory;
+
+    IdlConvert::Status status = IdlConvert::CheckForSequence(
+        v8_helper_->isolate(), "test1 ", {"v1", "scalar"}, in_obj,
+        iterator_factory);
+    ASSERT_TRUE(status.is_success());
+    ASSERT_FALSE(iterator_factory.IsEmpty());
+
+    status = IdlConvert::ConvertSequence(
+        v8_helper_.get(), "test1 ", {"v1", "scalar"}, in_obj, iterator_factory,
+        base::BindLambdaForTesting(
+            [&](v8::Local<v8::Value> in) -> IdlConvert::Status {
+              double result = -1;
+              IdlConvert::Status status = IdlConvert::Convert(
+                  isolate, "inner ", {"sequence item"}, in, result);
+              out.push_back(result);
+              return status;
+            }));
+    EXPECT_TRUE(status.is_success());
+    ASSERT_EQ(3u, out.size());
+    EXPECT_THAT(out, ElementsAre(1.0, 2.0, 3.0));
+  }
+
+  {
+    // Sequence where conversion fails in the middle.
+    auto in_value =
+        MakeValueFromScript(context, "make = () => [1, 0.0/0.0, 3]");
+    std::vector<double> out;
+    ASSERT_TRUE(in_value->IsObject());
+    v8::Local<v8::Object> in_obj = in_value.As<v8::Object>();
+    v8::Local<v8::Object> iterator_factory;
+
+    IdlConvert::Status status = IdlConvert::CheckForSequence(
+        v8_helper_->isolate(), "test2 ", {"v1", "scalar"}, in_obj,
+        iterator_factory);
+    ASSERT_TRUE(status.is_success());
+    ASSERT_FALSE(iterator_factory.IsEmpty());
+
+    status = IdlConvert::ConvertSequence(
+        v8_helper_.get(), "test2 ", {"v1", "scalar"}, in_obj, iterator_factory,
+        base::BindLambdaForTesting(
+            [&](v8::Local<v8::Value> in) -> IdlConvert::Status {
+              double result = -1;
+              IdlConvert::Status status = IdlConvert::Convert(
+                  isolate, "inner2 ", {"a sequence item"}, in, result);
+              if (status.is_success()) {
+                out.push_back(result);
+              }
+              return status;
+            }));
+    EXPECT_FALSE(status.is_success());
+    EXPECT_EQ(
+        "inner2 Converting a sequence item to a Number did not produce a "
+        "finite double.",
+        status.ConvertToErrorString(isolate));
+    ASSERT_EQ(1u, out.size());
+    EXPECT_THAT(out, ElementsAre(1.0));
   }
 }
 
@@ -1580,10 +1784,11 @@ TEST_F(WebIDLCompatTest, EmptySequence) {
 
   EXPECT_TRUE(converter->GetOptionalSequence(
       "a", base::BindLambdaForTesting([&]() { saw_a = true; }),
-      base::BindLambdaForTesting([&](v8::Local<v8::Value> item) -> bool {
-        saw_a_item = true;
-        return false;
-      })));
+      base::BindLambdaForTesting(
+          [&](v8::Local<v8::Value> item) -> IdlConvert::Status {
+            saw_a_item = true;
+            return IdlConvert::Status::MakeErrorMessage("Badness");
+          })));
   EXPECT_TRUE(saw_a);
   EXPECT_FALSE(saw_a_item);
 
@@ -1592,10 +1797,11 @@ TEST_F(WebIDLCompatTest, EmptySequence) {
 
   EXPECT_TRUE(converter->GetOptionalSequence(
       "b", base::BindLambdaForTesting([&]() { saw_b = true; }),
-      base::BindLambdaForTesting([&](v8::Local<v8::Value> item) -> bool {
-        saw_b_item = true;
-        return false;
-      })));
+      base::BindLambdaForTesting(
+          [&](v8::Local<v8::Value> item) -> IdlConvert::Status {
+            saw_b_item = true;
+            return IdlConvert::Status::MakeErrorMessage("Badness");
+          })));
   EXPECT_FALSE(saw_b);
   EXPECT_FALSE(saw_b_item);
 }
@@ -1618,20 +1824,19 @@ TEST_F(WebIDLCompatTest, SeqItemError) {
 
   EXPECT_FALSE(converter->GetOptionalSequence(
       "f1", base::BindLambdaForTesting([&]() { saw_field = true; }),
-      base::BindLambdaForTesting([&](v8::Local<v8::Value> item) -> bool {
-        std::string str;
-        EXPECT_TRUE(gin::Converter<std::string>::FromV8(v8_helper_->isolate(),
-                                                        item, &str));
-        if (str == "error") {
-          return false;
-        }
-        out.push_back(item);
-        return true;
-      })));
+      base::BindLambdaForTesting(
+          [&](v8::Local<v8::Value> item) -> IdlConvert::Status {
+            std::string str;
+            EXPECT_TRUE(gin::Converter<std::string>::FromV8(
+                v8_helper_->isolate(), item, &str));
+            if (str == "error") {
+              return IdlConvert::Status::MakeErrorMessage("Helpful error");
+            }
+            out.push_back(item);
+            return IdlConvert::Status::MakeSuccess();
+          })));
   ExpectStringList({"a", "b"}, out);
-  EXPECT_EQ(
-      "<error prefix> Conversion for an item for sequence field 'f1' failed.",
-      converter->ErrorMessage());
+  EXPECT_EQ("Helpful error", converter->ErrorMessage());
   EXPECT_FALSE(converter->FailureIsTimeout());
 }
 
@@ -1654,19 +1859,19 @@ TEST_F(WebIDLCompatTest, SeqItemErrorPropagation) {
 
   EXPECT_FALSE(converter->GetOptionalSequence(
       "f1", base::BindLambdaForTesting([&]() { saw_field = true; }),
-      base::BindLambdaForTesting([&](v8::Local<v8::Value> item) -> bool {
-        DictConverter inner(v8_helper_.get(), *time_limit_scope_,
-                            "'f1' entry: ", item);
-        double entry;
-        bool ok = inner.GetRequired("f", entry);
-        if (ok) {
-          out.push_back(entry);
-          return true;
-        } else {
-          converter->SetStatus(inner.TakeStatus());
-          return false;
-        }
-      })));
+      base::BindLambdaForTesting(
+          [&](v8::Local<v8::Value> item) -> IdlConvert::Status {
+            DictConverter inner(v8_helper_.get(), *time_limit_scope_,
+                                "'f1' entry: ", item);
+            double entry;
+            bool ok = inner.GetRequired("f", entry);
+            if (ok) {
+              out.push_back(entry);
+              return IdlConvert::Status::MakeSuccess();
+            } else {
+              return inner.TakeStatus();
+            }
+          })));
   EXPECT_THAT(out, ElementsAre(1.0, 2.0));
   EXPECT_EQ("https://example.org/:3 Uncaught Ouch.", converter->ErrorMessage());
   v8::MaybeLocal<v8::Value> exception = converter->FailureException();
@@ -1697,19 +1902,19 @@ TEST_F(WebIDLCompatTest, SeqItemTimeoutPropagation) {
 
   EXPECT_FALSE(converter->GetOptionalSequence(
       "f1", base::BindLambdaForTesting([&]() { saw_field = true; }),
-      base::BindLambdaForTesting([&](v8::Local<v8::Value> item) -> bool {
-        DictConverter inner(v8_helper_.get(), *time_limit_scope_,
-                            "'f1' entry: ", item);
-        double entry;
-        bool ok = inner.GetRequired("f", entry);
-        if (ok) {
-          out.push_back(entry);
-          return true;
-        } else {
-          converter->SetStatus(inner.TakeStatus());
-          return false;
-        }
-      })));
+      base::BindLambdaForTesting(
+          [&](v8::Local<v8::Value> item) -> IdlConvert::Status {
+            DictConverter inner(v8_helper_.get(), *time_limit_scope_,
+                                "'f1' entry: ", item);
+            double entry;
+            bool ok = inner.GetRequired("f", entry);
+            if (ok) {
+              out.push_back(entry);
+              return IdlConvert::Status::MakeSuccess();
+            } else {
+              return inner.TakeStatus();
+            }
+          })));
   EXPECT_THAT(out, ElementsAre(1.0, 2.0));
   EXPECT_EQ("'f1' entry: Converting field 'f' to Number timed out.",
             converter->ErrorMessage());
@@ -1785,8 +1990,10 @@ TEST_F(WebIDLCompatTest, SequenceNonIter) {
   auto converter = MakeFromScript(context, kScript);
   v8::LocalVector<v8::Value> out(v8_helper_->isolate());
   EXPECT_FALSE(GetSequence(converter.get(), "a", out));
-  EXPECT_EQ("<error prefix> Trouble iterating over 'a'.",
-            converter->ErrorMessage());
+  EXPECT_EQ(
+      "<error prefix> Trouble iterating over field 'a' as it does not appear "
+      "to be a sequence.",
+      converter->ErrorMessage());
   EXPECT_FALSE(converter->FailureIsTimeout());
 }
 
@@ -1806,7 +2013,7 @@ TEST_F(WebIDLCompatTest, SequenceNonIter2) {
   auto converter = MakeFromScript(context, kScript);
   v8::LocalVector<v8::Value> out(v8_helper_->isolate());
   EXPECT_FALSE(GetSequence(converter.get(), "a", out));
-  EXPECT_EQ("<error prefix> Trouble iterating over 'a'.",
+  EXPECT_EQ("<error prefix> Trouble iterating over field 'a'.",
             converter->ErrorMessage());
   EXPECT_FALSE(converter->FailureIsTimeout());
 }
@@ -1848,7 +2055,7 @@ TEST_F(WebIDLCompatTest, SequenceNonIter4) {
   auto converter = MakeFromScript(context, kScript);
   v8::LocalVector<v8::Value> out(v8_helper_->isolate());
   EXPECT_FALSE(GetSequence(converter.get(), "a", out));
-  EXPECT_EQ("<error prefix> Trouble iterating over 'a'.",
+  EXPECT_EQ("<error prefix> Trouble iterating over field 'a'.",
             converter->ErrorMessage());
   EXPECT_FALSE(converter->FailureIsTimeout());
 }
@@ -1869,7 +2076,7 @@ TEST_F(WebIDLCompatTest, SequenceNonIter5) {
   auto converter = MakeFromScript(context, kScript);
   v8::LocalVector<v8::Value> out(v8_helper_->isolate());
   EXPECT_FALSE(GetSequence(converter.get(), "a", out));
-  EXPECT_EQ("<error prefix> Trouble iterating over 'a'.",
+  EXPECT_EQ("<error prefix> Trouble iterating over field 'a'.",
             converter->ErrorMessage());
   EXPECT_FALSE(converter->FailureIsTimeout());
 }
@@ -2005,7 +2212,7 @@ TEST_F(WebIDLCompatTest, SequenceNonTermIter) {
   auto converter = MakeFromScript(context, kScript);
   v8::LocalVector<v8::Value> out(v8_helper_->isolate());
   EXPECT_FALSE(GetSequence(converter.get(), "a", out));
-  EXPECT_EQ("<error prefix> Timeout iterating over 'a'.",
+  EXPECT_EQ("<error prefix> Timeout iterating over field 'a'.",
             converter->ErrorMessage());
   EXPECT_TRUE(converter->FailureIsTimeout());
 }

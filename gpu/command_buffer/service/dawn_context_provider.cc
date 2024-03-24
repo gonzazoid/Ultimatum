@@ -321,8 +321,15 @@ bool DawnContextProvider::Initialize(
   }
 #endif  // BUILDFLAG(IS_WIN)
 
+  adapter_options.compatibilityMode = false;
   std::vector<dawn::native::Adapter> adapters =
       instance_->EnumerateAdapters(&adapter_options);
+  if (adapters.empty()) {
+    LOG(ERROR) << "No adapters found for non compatibility mode.";
+    adapter_options.compatibilityMode = true;
+    adapters = instance_->EnumerateAdapters(&adapter_options);
+  }
+
   if (adapters.empty()) {
     LOG(ERROR) << "No adapters found.";
     return false;
@@ -447,6 +454,7 @@ bool DawnContextProvider::InitializeGraphiteContext(
 
   if (device_) {
     skgpu::graphite::DawnBackendContext backend_context;
+    backend_context.fInstance = GetInstance();
     backend_context.fDevice = device_;
     backend_context.fQueue = device_.GetQueue();
     graphite_context_ =

@@ -4,7 +4,9 @@
 
 #include "net/cert/asn1_util.h"
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+#include <string_view>
+
 #include "third_party/boringssl/src/pki/input.h"
 #include "third_party/boringssl/src/pki/parse_certificate.h"
 #include "third_party/boringssl/src/pki/parser.h"
@@ -48,25 +50,24 @@ bool SeekToSubject(bssl::der::Input in, bssl::der::Parser* tbs_certificate) {
 
   bool unused;
   if (!tbs_certificate->SkipOptionalTag(
-          bssl::der::kTagConstructed | bssl::der::kTagContextSpecific | 0,
-          &unused)) {
+          CBS_ASN1_CONSTRUCTED | CBS_ASN1_CONTEXT_SPECIFIC | 0, &unused)) {
     return false;
   }
 
   // serialNumber
-  if (!tbs_certificate->SkipTag(bssl::der::kInteger)) {
+  if (!tbs_certificate->SkipTag(CBS_ASN1_INTEGER)) {
     return false;
   }
   // signature
-  if (!tbs_certificate->SkipTag(bssl::der::kSequence)) {
+  if (!tbs_certificate->SkipTag(CBS_ASN1_SEQUENCE)) {
     return false;
   }
   // issuer
-  if (!tbs_certificate->SkipTag(bssl::der::kSequence)) {
+  if (!tbs_certificate->SkipTag(CBS_ASN1_SEQUENCE)) {
     return false;
   }
   // validity
-  if (!tbs_certificate->SkipTag(bssl::der::kSequence)) {
+  if (!tbs_certificate->SkipTag(CBS_ASN1_SEQUENCE)) {
     return false;
   }
   return true;
@@ -79,7 +80,7 @@ bool SeekToSubject(bssl::der::Input in, bssl::der::Parser* tbs_certificate) {
 bool SeekToSPKI(bssl::der::Input in, bssl::der::Parser* tbs_certificate) {
   return SeekToSubject(in, tbs_certificate) &&
          // Skip over Subject.
-         tbs_certificate->SkipTag(bssl::der::kSequence);
+         tbs_certificate->SkipTag(CBS_ASN1_SEQUENCE);
 }
 
 // Parses input |in| which should point to the beginning of a
@@ -107,24 +108,23 @@ bool SeekToExtensions(bssl::der::Input in,
   //      extensions      [3]  EXPLICIT Extensions OPTIONAL }
 
   // subjectPublicKeyInfo
-  if (!tbs_cert_parser.SkipTag(bssl::der::kSequence)) {
+  if (!tbs_cert_parser.SkipTag(CBS_ASN1_SEQUENCE)) {
     return false;
   }
   // issuerUniqueID
-  if (!tbs_cert_parser.SkipOptionalTag(bssl::der::kTagContextSpecific | 1,
+  if (!tbs_cert_parser.SkipOptionalTag(CBS_ASN1_CONTEXT_SPECIFIC | 1,
                                        &present)) {
     return false;
   }
   // subjectUniqueID
-  if (!tbs_cert_parser.SkipOptionalTag(bssl::der::kTagContextSpecific | 2,
+  if (!tbs_cert_parser.SkipOptionalTag(CBS_ASN1_CONTEXT_SPECIFIC | 2,
                                        &present)) {
     return false;
   }
 
-  absl::optional<bssl::der::Input> extensions;
+  std::optional<bssl::der::Input> extensions;
   if (!tbs_cert_parser.ReadOptionalTag(
-          bssl::der::kTagConstructed | bssl::der::kTagContextSpecific | 3,
-          &extensions)) {
+          CBS_ASN1_CONSTRUCTED | CBS_ASN1_CONTEXT_SPECIFIC | 3, &extensions)) {
     return false;
   }
 
@@ -157,7 +157,7 @@ bool SeekToExtensions(bssl::der::Input in,
 // successful. |*out_extension_present| will be true iff the extension was
 // found. In the case where it was found, |*out_extension| will describe the
 // extension, or is undefined on parse error or if the extension is missing.
-bool ExtractExtensionWithOID(base::StringPiece cert,
+bool ExtractExtensionWithOID(std::string_view cert,
                              bssl::der::Input extension_oid,
                              bool* out_extension_present,
                              bssl::ParsedExtension* out_extension) {
@@ -191,8 +191,8 @@ bool ExtractExtensionWithOID(base::StringPiece cert,
 
 }  // namespace
 
-bool ExtractSubjectFromDERCert(base::StringPiece cert,
-                               base::StringPiece* subject_out) {
+bool ExtractSubjectFromDERCert(std::string_view cert,
+                               std::string_view* subject_out) {
   bssl::der::Parser parser;
   if (!SeekToSubject(bssl::der::Input(cert), &parser)) {
     return false;
@@ -204,8 +204,7 @@ bool ExtractSubjectFromDERCert(base::StringPiece cert,
   return true;
 }
 
-bool ExtractSPKIFromDERCert(base::StringPiece cert,
-                            base::StringPiece* spki_out) {
+bool ExtractSPKIFromDERCert(std::string_view cert, std::string_view* spki_out) {
   bssl::der::Parser parser;
   if (!SeekToSPKI(bssl::der::Input(cert), &parser)) {
     return false;
@@ -217,8 +216,8 @@ bool ExtractSPKIFromDERCert(base::StringPiece cert,
   return true;
 }
 
-bool ExtractSubjectPublicKeyFromSPKI(base::StringPiece spki,
-                                     base::StringPiece* spk_out) {
+bool ExtractSubjectPublicKeyFromSPKI(std::string_view spki,
+                                     std::string_view* spk_out) {
   // From RFC 5280, Section 4.1
   //   SubjectPublicKeyInfo  ::=  SEQUENCE  {
   //     algorithm            AlgorithmIdentifier,
@@ -235,20 +234,20 @@ bool ExtractSubjectPublicKeyFromSPKI(base::StringPiece spki,
     return false;
 
   // Step over algorithm field (a SEQUENCE).
-  if (!spki_parser.SkipTag(bssl::der::kSequence)) {
+  if (!spki_parser.SkipTag(CBS_ASN1_SEQUENCE)) {
     return false;
   }
 
   // Extract the subjectPublicKey field.
   bssl::der::Input spk;
-  if (!spki_parser.ReadTag(bssl::der::kBitString, &spk)) {
+  if (!spki_parser.ReadTag(CBS_ASN1_BITSTRING, &spk)) {
     return false;
   }
   *spk_out = spk.AsStringView();
   return true;
 }
 
-bool HasCanSignHttpExchangesDraftExtension(base::StringPiece cert) {
+bool HasCanSignHttpExchangesDraftExtension(std::string_view cert) {
   // kCanSignHttpExchangesDraftOid is the DER encoding of the OID for
   // canSignHttpExchangesDraft defined in:
   // https://wicg.github.io/webpackage/draft-yasskin-http-origin-signed-responses.html
@@ -270,9 +269,9 @@ bool HasCanSignHttpExchangesDraftExtension(base::StringPiece cert) {
 }
 
 bool ExtractSignatureAlgorithmsFromDERCert(
-    base::StringPiece cert,
-    base::StringPiece* cert_signature_algorithm_sequence,
-    base::StringPiece* tbs_signature_algorithm_sequence) {
+    std::string_view cert,
+    std::string_view* cert_signature_algorithm_sequence,
+    std::string_view* tbs_signature_algorithm_sequence) {
   // From RFC 5280, section 4.1
   //    Certificate  ::=  SEQUENCE  {
   //      tbsCertificate       TBSCertificate,
@@ -300,13 +299,12 @@ bool ExtractSignatureAlgorithmsFromDERCert(
 
   bool unused;
   if (!tbs_certificate.SkipOptionalTag(
-          bssl::der::kTagConstructed | bssl::der::kTagContextSpecific | 0,
-          &unused)) {
+          CBS_ASN1_CONSTRUCTED | CBS_ASN1_CONTEXT_SPECIFIC | 0, &unused)) {
     return false;
   }
 
   // serialNumber
-  if (!tbs_certificate.SkipTag(bssl::der::kInteger)) {
+  if (!tbs_certificate.SkipTag(CBS_ASN1_INTEGER)) {
     return false;
   }
   // signature
@@ -323,14 +321,14 @@ bool ExtractSignatureAlgorithmsFromDERCert(
   return true;
 }
 
-bool ExtractExtensionFromDERCert(base::StringPiece cert,
-                                 base::StringPiece extension_oid,
+bool ExtractExtensionFromDERCert(std::string_view cert,
+                                 std::string_view extension_oid,
                                  bool* out_extension_present,
                                  bool* out_extension_critical,
-                                 base::StringPiece* out_contents) {
+                                 std::string_view* out_contents) {
   *out_extension_present = false;
   *out_extension_critical = false;
-  *out_contents = base::StringPiece();
+  *out_contents = std::string_view();
 
   bssl::ParsedExtension extension;
   if (!ExtractExtensionWithOID(cert, bssl::der::Input(extension_oid),

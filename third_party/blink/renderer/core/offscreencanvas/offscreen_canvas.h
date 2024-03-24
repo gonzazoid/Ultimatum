@@ -29,6 +29,7 @@ namespace blink {
 class CanvasContextCreationAttributesCore;
 class CanvasResourceProvider;
 class ImageBitmap;
+class ImageEncodeOptions;
 class
     OffscreenCanvasRenderingContext2DOrWebGLRenderingContextOrWebGL2RenderingContextOrImageBitmapRenderingContextOrGPUCanvasContext;
 typedef OffscreenCanvasRenderingContext2DOrWebGLRenderingContextOrWebGL2RenderingContextOrImageBitmapRenderingContextOrGPUCanvasContext
@@ -65,9 +66,11 @@ class CORE_EXPORT OffscreenCanvas final
   // API Methods
   ImageBitmap* transferToImageBitmap(ScriptState*, ExceptionState&);
 
-  ScriptPromise convertToBlob(ScriptState* script_state,
-                              const ImageEncodeOptions* options,
-                              ExceptionState& exception_state);
+  // For deferred canvases this will have the side effect of drawing recorded
+  // commands in order to finalize the frame.
+  ScriptPromiseTyped<Blob> convertToBlob(ScriptState* script_state,
+                                         const ImageEncodeOptions* options,
+                                         ExceptionState& exception_state);
 
   void SetSize(gfx::Size) override;
   void RecordTransfer();
@@ -158,7 +161,7 @@ class CORE_EXPORT OffscreenCanvas final
   // ImageBitmapSource implementation
   gfx::Size BitmapSourceSize() const final;
   ScriptPromise CreateImageBitmap(ScriptState*,
-                                  absl::optional<gfx::Rect>,
+                                  std::optional<gfx::Rect>,
                                   const ImageBitmapOptions*,
                                   ExceptionState&) final;
 

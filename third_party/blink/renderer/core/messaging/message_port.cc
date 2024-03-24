@@ -140,16 +140,17 @@ void MessagePort::postMessage(ScriptState* script_state,
   if (auto* tracker = ThreadScheduler::Current()->GetTaskAttributionTracker();
       initially_entangled_port_ && tracker &&
       script_state->World().IsMainWorld()) {
-    scheduler::TaskAttributionInfo* task = tracker->RunningTask(script_state);
+    scheduler::TaskAttributionInfo* task =
+        tracker->RunningTask(script_state->GetIsolate());
     if (task) {
       // Since `initially_entangled_port_` is not nullptr, neither should be
       // `post_message_task_container_`.
       CHECK(post_message_task_container_);
       post_message_task_container_->AddPostMessageTask(task);
       msg.parent_task_id =
-          absl::optional<scheduler::TaskAttributionId>(task->Id());
+          std::optional<scheduler::TaskAttributionId>(task->Id());
     } else {
-      msg.parent_task_id = absl::nullopt;
+      msg.parent_task_id = std::nullopt;
     }
   }
 
@@ -470,7 +471,7 @@ void MessagePort::PostMessageTaskContainer::AddPostMessageTask(
 
 scheduler::TaskAttributionInfo*
 MessagePort::PostMessageTaskContainer::GetAndDecrementPostMessageTask(
-    absl::optional<scheduler::TaskAttributionId> id) {
+    std::optional<scheduler::TaskAttributionId> id) {
   if (!id) {
     return nullptr;
   }

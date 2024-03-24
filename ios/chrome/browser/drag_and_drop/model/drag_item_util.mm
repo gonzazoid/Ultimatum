@@ -8,7 +8,7 @@
 #import "ios/chrome/browser/window_activities/model/window_activity_helpers.h"
 #import "ios/web/public/browser_state.h"
 #import "ios/web/public/web_state.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 
 @implementation TabInfo
 - (instancetype)initWithTabID:(web::WebStateID)tabID incognito:(BOOL)incognito {
@@ -34,7 +34,9 @@
 @end
 
 UIDragItem* CreateTabDragItem(web::WebState* web_state) {
-  DCHECK(web_state);
+  if (!web_state) {
+    return nil;
+  }
   NSURL* url = net::NSURLWithGURL(web_state->GetVisibleURL());
   NSItemProvider* item_provider = [[NSItemProvider alloc] initWithObject:url];
   UIDragItem* drag_item =

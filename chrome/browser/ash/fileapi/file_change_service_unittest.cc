@@ -15,13 +15,11 @@
 #include "chrome/browser/ash/fileapi/file_change_service_factory.h"
 #include "chrome/browser/ash/fileapi/file_change_service_observer.h"
 #include "chrome/browser/ash/fileapi/file_system_backend.h"
-#include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/file_system_access/chrome_file_system_access_permission_context.h"
 #include "chrome/browser/file_system_access/file_system_access_permission_context_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
 #include "chrome/test/base/testing_profile_manager.h"
-#include "components/user_manager/scoped_user_manager.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "mojo/public/cpp/system/data_pipe_producer.h"
 #include "mojo/public/cpp/system/string_data_source.h"
@@ -233,31 +231,23 @@ class TempFileSystem {
 
 class FileChangeServiceTest : public BrowserWithTestWindowTest {
  public:
-  FileChangeServiceTest()
-      : fake_user_manager_(new FakeChromeUserManager),
-        user_manager_enabler_(base::WrapUnique(fake_user_manager_.get())) {}
+  FileChangeServiceTest() = default;
 
   FileChangeServiceTest(const FileChangeServiceTest& other) = delete;
   FileChangeServiceTest& operator=(const FileChangeServiceTest& other) = delete;
   ~FileChangeServiceTest() override = default;
 
   // Creates and returns a new profile for the specified `name`.
-  TestingProfile* CreateProfileWithName(const std::string& name) {
-    const AccountId account_id(AccountId::FromUserEmail(name));
-    fake_user_manager_->AddUser(account_id);
-    fake_user_manager_->LoginUser(account_id);
-    return profile_manager()->CreateTestingProfile(name);
+  TestingProfile* CreateLoggedInUserProfile(const std::string& name) {
+    LogIn(name);
+    return CreateProfile(name);
   }
 
  private:
   // BrowserWithTestWindowTest:
-  TestingProfile* CreateProfile() override {
-    constexpr char kPrimaryProfileName[] = "primary_profile@test";
-    return CreateProfileWithName(kPrimaryProfileName);
+  std::string GetDefaultProfileName() override {
+    return "promary_profile@test";
   }
-
-  raw_ptr<FakeChromeUserManager, DanglingUntriaged> fake_user_manager_;
-  user_manager::ScopedUserManager user_manager_enabler_;
 };
 
 }  // namespace
@@ -276,7 +266,7 @@ TEST_F(FileChangeServiceTest, CreatesServiceInstancesPerProfile) {
 
   // `FileChangeService` should be created as needed for additional profiles.
   constexpr char kSecondaryProfileName[] = "secondary_profile@test";
-  auto* secondary_profile = CreateProfileWithName(kSecondaryProfileName);
+  auto* secondary_profile = CreateLoggedInUserProfile(kSecondaryProfileName);
   auto* secondary_profile_service = factory->GetService(secondary_profile);
   ASSERT_TRUE(secondary_profile_service);
 

@@ -48,13 +48,6 @@ void AddMaterialNewTabPageColorMixer(ui::ColorProvider* provider,
       ui::kColorSysSurfaceVariant};
   mixer[kColorNewTabPageMostVisitedForeground] = {ui::kColorSysOnSurfaceSubtle};
 
-  if (base::FeatureList::IsEnabled(
-          ntp_features::kNtpComprehensiveThemeRealbox)) {
-    mixer[kColorRealboxBackground] = {ui::kColorSysBase};
-    mixer[kColorRealboxBackgroundHovered] = {ui::kColorSysStateHoverOnSubtle};
-    mixer[kColorRealboxForeground] = {ui::kColorSysOnSurfaceSubtle};
-  }
-
   mixer[kColorNewTabPageHistoryClustersModuleItemBackground] = {
       ui::kColorSysBaseContainerElevated};
 
@@ -74,10 +67,12 @@ void AddMaterialNewTabPageColorMixer(ui::ColorProvider* provider,
   mixer[kColorNewTabPagePrimaryForeground] = {ui::kColorSysOnSurface};
   mixer[kColorNewTabPageSecondaryForeground] = {ui::kColorSysOnSurfaceSubtle};
 
+  mixer[kColorNewTabPageWallpaperSearchButtonBackground] = {
+      ui::kColorSysSecondary};
+  mixer[kColorNewTabPageWallpaperSearchButtonForeground] = {
+      ui::kColorSysOnSecondary};
   if (base::FeatureList::IsEnabled(ntp_features::kRealboxCr23Theming) ||
       base::FeatureList::IsEnabled(ntp_features::kRealboxCr23All)) {
-    // TODO(https://crbug.com/1509456): Clean up kNtpComprehensiveThemeRealbox flag.
-
     // Steady state theme colors.
     mixer[kColorRealboxBackground] = {kColorToolbarBackgroundSubtleEmphasis};
     mixer[kColorRealboxBackgroundHovered] = {

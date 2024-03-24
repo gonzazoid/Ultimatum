@@ -171,7 +171,12 @@ crypto_test_data = [
   "src/crypto/hpke/hpke_test_vectors.txt",
   "src/crypto/keccak/keccak_tests.txt",
   "src/crypto/kyber/kyber_tests.txt",
+  "src/crypto/pkcs8/test/bad1.p12",
+  "src/crypto/pkcs8/test/bad2.p12",
+  "src/crypto/pkcs8/test/bad3.p12",
   "src/crypto/pkcs8/test/empty_password.p12",
+  "src/crypto/pkcs8/test/empty_password_ber.p12",
+  "src/crypto/pkcs8/test/empty_password_ber_nested.p12",
   "src/crypto/pkcs8/test/no_encryption.p12",
   "src/crypto/pkcs8/test/nss.p12",
   "src/crypto/pkcs8/test/null_password.p12",
@@ -1314,6 +1319,8 @@ pki_test_data = [
   "src/pki/testdata/path_builder_unittest/multi-root-D-by-D.pem",
   "src/pki/testdata/path_builder_unittest/multi-root-E-by-E.pem",
   "src/pki/testdata/path_builder_unittest/multi-root-F-by-E.pem",
+  "src/pki/testdata/path_builder_unittest/precertificate/precertificate.pem",
+  "src/pki/testdata/path_builder_unittest/precertificate/root.pem",
   "src/pki/testdata/path_builder_unittest/self_issued_prioritization/generate-certs.py",
   "src/pki/testdata/path_builder_unittest/self_issued_prioritization/keys/Root1.key",
   "src/pki/testdata/path_builder_unittest/self_issued_prioritization/keys/Root2.key",
@@ -2156,6 +2163,8 @@ pki_test_data = [
   "src/pki/testdata/verify_signed_data_unittest/rsa-pss-sha256.pem",
   "src/pki/testdata/verify_signed_data_unittest/rsa-using-ec-key.pem",
   "src/pki/testdata/verify_signed_data_unittest/rsa2048-pkcs1-sha512.pem",
+  "src/pki/testdata/verify_unittest/google-leaf.der",
+  "src/pki/testdata/verify_unittest/self-issued.pem",
 ]
 
 ssl_test_sources = [
@@ -2169,6 +2178,7 @@ pki_test_sources = [
   "src/crypto/test/gtest_main.cc",
   "src/pki/cert_issuer_source_static_unittest.cc",
   "src/pki/certificate_policies_unittest.cc",
+  "src/pki/certificate_unittest.cc",
   "src/pki/crl_unittest.cc",
   "src/pki/encode_values_unittest.cc",
   "src/pki/extended_key_usage_unittest.cc",

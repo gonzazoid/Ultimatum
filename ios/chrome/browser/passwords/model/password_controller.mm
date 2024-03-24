@@ -16,6 +16,7 @@
 
 #import "base/apple/foundation_util.h"
 #import "base/functional/bind.h"
+#import "base/memory/raw_ptr.h"
 #import "base/metrics/histogram_functions.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/strings/utf_string_conversions.h"
@@ -102,7 +103,6 @@ using password_manager::PasswordFormManagerForUI;
 using password_manager::PasswordGenerationFrameHelper;
 using password_manager::PasswordManager;
 using password_manager::PasswordManagerClient;
-using password_manager::metrics_util::LogPasswordDropdownShown;
 using password_manager::metrics_util::PasswordDropdownState;
 using safe_browsing::PasswordReuseDetectionManagerClient;
 using web::WebState;
@@ -148,7 +148,7 @@ constexpr int kNotifyAutoSigninDuration = 3;  // seconds
 
   // The WebState this instance is observing. Will be null after
   // -webStateDestroyed: has been called.
-  WebState* _webState;
+  raw_ptr<WebState> _webState;
 
   // Bridge to observe WebState from Objective-C.
   std::unique_ptr<web::WebStateObserverBridge> _webStateObserverBridge;
@@ -446,7 +446,7 @@ constexpr int kNotifyAutoSigninDuration = 3;  // seconds
   syncer::SyncService* syncService =
       SyncServiceFactory::GetForBrowserState(self.browserState);
   const std::optional<std::string> accountToStorePassword =
-      password_manager::sync_util::GetAccountForSaving(syncService);
+      password_manager::sync_util::GetAccountForSaving(prefs, syncService);
   const password_manager::features_util::PasswordAccountStorageUserState
       accountStorageUserState = password_manager::features_util::
           ComputePasswordAccountStorageUserState(prefs, syncService);

@@ -26,9 +26,9 @@ class TrackpadInternalSurfaceView;
 // trackpad view.
 // TODO(b/288286805): Handle 2 finger scrolls.
 class VirtualTrackpadView : public views::View {
- public:
-  METADATA_HEADER(VirtualTrackpadView);
+  METADATA_HEADER(VirtualTrackpadView, views::View)
 
+ public:
   VirtualTrackpadView();
   VirtualTrackpadView(const VirtualTrackpadView&) = delete;
   VirtualTrackpadView& operator=(const VirtualTrackpadView&) = delete;
@@ -39,7 +39,7 @@ class VirtualTrackpadView : public views::View {
   static void Toggle();
 
   // views::View:
-  void Layout() override;
+  void Layout(PassKey) override;
 
   static ASH_EXPORT views::Widget* GetWidgetForTesting();
 

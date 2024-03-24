@@ -51,7 +51,7 @@ TEST_P(HighlightPainterTest, FastSpellingGrammarPaintCase) {
     PhysicalRect physical_rect{};
     const FragmentItem& text_item = *cursor.CurrentItem();
     const ComputedStyle& style = text_item.Style();
-    absl::optional<HighlightPainter::SelectionPaintState> maybe_selection;
+    std::optional<HighlightPainter::SelectionPaintState> maybe_selection;
     HighlightPainter::SelectionPaintState* selection = nullptr;
     if (text_item.GetLayoutObject()->IsSelected()) {
       maybe_selection.emplace(cursor, physical_offset);
@@ -72,15 +72,14 @@ TEST_P(HighlightPainterTest, FastSpellingGrammarPaintCase) {
         LineRelativeRect::CreateFromLineBox(physical_rect, true);
     TextPainter text_painter(
         graphics_context, text_item.ScaledFont(), rect,
-        LineRelativeOffset::CreateFromBoxOrigin(physical_offset),
-        &inline_context, true);
-    TextDecorationPainter decoration_painter(text_painter, text_item,
+        LineRelativeOffset::CreateFromBoxOrigin(physical_offset), true);
+    TextDecorationPainter decoration_painter(text_painter, &inline_context,
                                              paint_info, style, text_style,
                                              rotated_rect, selection);
     HighlightPainter highlight_painter(
         cursor.Current()->TextPaintInfo(cursor.Items()), text_painter,
         decoration_painter, paint_info, cursor, text_item, {}, physical_offset,
-        style, text_style, selection, false);
+        style, text_style, selection);
 
     EXPECT_EQ(highlight_painter.PaintCase(), expected)
         << "(line " << line << ")";

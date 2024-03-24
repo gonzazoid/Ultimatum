@@ -194,7 +194,7 @@ void ChromeBrowsingDataModelDelegate::RemoveDataKey(
 #endif  // !BUILDFLAG(IS_ANDROID)
 }
 
-absl::optional<BrowsingDataModel::DataOwner>
+std::optional<BrowsingDataModel::DataOwner>
 ChromeBrowsingDataModelDelegate::GetDataOwner(
     const BrowsingDataModel::DataKey& data_key,
     BrowsingDataModel::StorageType storage_type) const {
@@ -223,18 +223,16 @@ ChromeBrowsingDataModelDelegate::GetDataOwner(
           .host();
 
     default:
-      return absl::nullopt;
+      return std::nullopt;
   }
 }
 
-absl::optional<bool>
-ChromeBrowsingDataModelDelegate::IsBlockedByThirdPartyCookieBlocking(
-    const BrowsingDataModel::DataKey& data_key,
+std::optional<bool> ChromeBrowsingDataModelDelegate::IsStorageTypeCookieLike(
     BrowsingDataModel::StorageType storage_type) const {
   // Values below the first delegate type are handled in the model itself.
   if (static_cast<int>(storage_type) <
       static_cast<int>(StorageType::kFirstType)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   switch (
       static_cast<ChromeBrowsingDataModelDelegate::StorageType>(storage_type)) {
@@ -245,6 +243,15 @@ ChromeBrowsingDataModelDelegate::IsBlockedByThirdPartyCookieBlocking(
     default:
       NOTREACHED_NORETURN();
   }
+}
+
+std::optional<bool>
+ChromeBrowsingDataModelDelegate::IsBlockedByThirdPartyCookieBlocking(
+    const BrowsingDataModel::DataKey& data_key,
+    BrowsingDataModel::StorageType storage_type) const {
+  // TODO(crbug.com/1456641): Implement `GetThirdPartyPartitioningSite()` for
+  // delegate-specific data keys.
+  return IsStorageTypeCookieLike(storage_type);
 }
 
 bool ChromeBrowsingDataModelDelegate::IsCookieDeletionDisabled(

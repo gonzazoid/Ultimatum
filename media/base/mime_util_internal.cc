@@ -111,7 +111,7 @@ const StringToCodecMap& GetStringToCodecMap() {
   return *kStringToCodecMap;
 }
 
-static absl::optional<VideoType> ParseVp9CodecID(
+static std::optional<VideoType> ParseVp9CodecID(
     std::string_view mime_type_lower_case,
     std::string_view codec_id) {
   if (auto result = ParseNewStyleVp9CodecID(codec_id)) {
@@ -126,7 +126,7 @@ static absl::optional<VideoType> ParseVp9CodecID(
     return ParseLegacyVp9CodecID(codec_id);
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 static bool IsValidH264Level(uint8_t level_idc) {
@@ -197,6 +197,8 @@ AudioCodec MimeUtilToAudioCodec(MimeUtil::Codec codec) {
       return AudioCodec::kDTSE;
     case MimeUtil::AC4:
       return AudioCodec::kAC4;
+    case MimeUtil::IAMF:
+      return AudioCodec::kIAMF;
     default:
       break;
   }
@@ -373,6 +375,10 @@ void MimeUtil::AddSupportedMediaFormats() {
   mp4_audio_codecs.emplace(DTSE);
 #endif  // BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
 
+#if BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
+  mp4_audio_codecs.emplace(IAMF);
+#endif  // BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
+
   CodecSet mp4_codecs(mp4_audio_codecs);
   mp4_codecs.insert(mp4_video_codecs.begin(), mp4_video_codecs.end());
 
@@ -458,7 +464,7 @@ void MimeUtil::StripCodecs(std::vector<std::string>* codecs) const {
   }
 }
 
-absl::optional<VideoType> MimeUtil::ParseVideoCodecString(
+std::optional<VideoType> MimeUtil::ParseVideoCodecString(
     std::string_view mime_type,
     std::string_view codec_id,
     bool allow_ambiguous_matches) const {
@@ -473,7 +479,7 @@ absl::optional<VideoType> MimeUtil::ParseVideoCodecString(
     DVLOG(3) << __func__ << " Failed to parse mime/codec pair: "
              << (mime_type.empty() ? "<empty mime>" : mime_type) << "; "
              << codec_id;
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   CHECK_EQ(1U, parsed_results.size());
@@ -481,12 +487,12 @@ absl::optional<VideoType> MimeUtil::ParseVideoCodecString(
   if (!parsed_results[0].video) {
     DVLOG(3) << __func__ << " Codec string " << codec_id
              << " is not a VIDEO codec.";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   if (!allow_ambiguous_matches && parsed_results[0].is_ambiguous) {
     DVLOG(3) << __func__ << " Refusing to return ambiguous codec string match.";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   return parsed_results[0].video;
@@ -678,6 +684,7 @@ bool MimeUtil::IsCodecSupportedOnAndroid(Codec codec,
 #endif
 
     case AC4:
+    case IAMF:
       return false;
   }
 
@@ -898,6 +905,13 @@ bool MimeUtil::ParseCodecHelper(base::StringPiece mime_type_lower_case,
 #if BUILDFLAG(ENABLE_PLATFORM_AC4_AUDIO)
   if (ParseDolbyAc4CodecId(codec_id.data(), nullptr, nullptr, nullptr)) {
     out_result->codec = MimeUtil::AC4;
+    return true;
+  }
+#endif
+
+#if BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
+  if (ParseIamfCodecId(codec_id.data(), nullptr, nullptr)) {
+    out_result->codec = MimeUtil::IAMF;
     return true;
   }
 #endif

@@ -185,9 +185,13 @@ class OopPixelTest : public testing::Test,
     int height = options.resource_size.height();
 
     // Create and allocate a shared image on the raster interface.
+    // This SharedImage will be used as the destination of the raster of
+    // `display_item_list` before having its contents read back (also via the
+    // raster interface).
     auto* ri = raster_context_provider_->RasterInterface();
     auto* sii = raster_context_provider_->SharedImageInterface();
-    uint32_t flags = gpu::SHARED_IMAGE_USAGE_RASTER |
+    uint32_t flags = gpu::SHARED_IMAGE_USAGE_RASTER_READ |
+                     gpu::SHARED_IMAGE_USAGE_RASTER_WRITE |
                      gpu::SHARED_IMAGE_USAGE_OOP_RASTERIZATION;
     auto client_shared_image = sii->CreateSharedImage(
         viz::SinglePlaneFormat::kRGBA_8888, gfx::Size(width, height),
@@ -268,7 +272,10 @@ class OopPixelTest : public testing::Test,
       const RasterOptions& options,
       viz::SharedImageFormat image_format,
       std::optional<gfx::ColorSpace> color_space = std::nullopt) {
-    uint32_t flags = gpu::SHARED_IMAGE_USAGE_RASTER |
+    // These SharedImages serve as both the source of reads and destination of
+    // writes via the raster interface in these tests.
+    uint32_t flags = gpu::SHARED_IMAGE_USAGE_RASTER_READ |
+                     gpu::SHARED_IMAGE_USAGE_RASTER_WRITE |
                      gpu::SHARED_IMAGE_USAGE_OOP_RASTERIZATION;
     auto client_shared_image = sii->CreateSharedImage(
         image_format, options.resource_size,

@@ -30,6 +30,7 @@ import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Criteria;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.DisabledTest;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.base.test.util.HistogramWatcher;
 import org.chromium.base.test.util.MinAndroidSdkLevel;
 import org.chromium.chrome.browser.device.DeviceClassManager;
@@ -46,13 +47,13 @@ import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.chrome.test.batch.BlankCTATabInitialStateRule;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.ui.base.PageTransition;
 import org.chromium.url.JUnitTestGURLs;
 
 import java.util.ArrayList;
+import java.util.concurrent.ExecutionException;
 
 /** Instrumentation tests for ChromeTabbedActivity. */
 @RunWith(ChromeJUnit4ClassRunner.class)
@@ -281,5 +282,134 @@ public class ChromeTabbedActivityTest {
                     Criteria.checkThat(tabModel.getCount(), Matchers.is(2));
                 });
         histogramWatcher.assertExpected();
+    }
+
+    @Test
+    @MediumTest
+    @MinAndroidSdkLevel(VERSION_CODES.S)
+    @EnableFeatures(ChromeFeatureList.TAB_WINDOW_MANAGER_INDEX_REASSIGNMENT_ACTIVITY_FINISHING)
+    public void testHandleMismatchedIndices_ActivityFinishing() throws ExecutionException {
+        HistogramWatcher histogramWatcher =
+                HistogramWatcher.newBuilder()
+                        .expectAnyRecordTimes(
+                                ChromeTabbedActivity
+                                        .HISTOGRAM_MISMATCHED_INDICES_ACTIVITY_CREATION_TIME_DELTA,
+                                1)
+                        .build();
+        // Create two new ChromeTabbedActivity's.
+        ChromeTabbedActivity activity1 = createActivityForMismatchedIndicesTest();
+        ChromeTabbedActivity activity2 = createActivityForMismatchedIndicesTest();
+
+        // Assume that activity1 is going to finish().
+        activity1.finish();
+
+        // Trigger mismatched indices handling, this should destroy activity1's tab persistent store
+        // instance.
+        TestThreadUtils.runOnUiThreadBlocking(
+                () ->
+                        activity2.handleMismatchedIndices(
+                                activity1,
+                                /* isActivityInAppTasks= */ true,
+                                /* isActivityInSameTask= */ false));
+        Assert.assertTrue(
+                "Boolean |mTabPersistentStoreDestroyedEarly| should be true.",
+                activity1
+                        .getTabModelOrchestratorSupplier()
+                        .get()
+                        .getTabPersistentStoreDestroyedEarlyForTesting());
+        histogramWatcher.assertExpected();
+    }
+
+    @Test
+    @MediumTest
+    @MinAndroidSdkLevel(VERSION_CODES.S)
+    @EnableFeatures(ChromeFeatureList.TAB_WINDOW_MANAGER_INDEX_REASSIGNMENT_ACTIVITY_IN_SAME_TASK)
+    public void testHandleMismatchedIndices_ActivityInSameTask() throws ExecutionException {
+        HistogramWatcher histogramWatcher =
+                HistogramWatcher.newBuilder()
+                        .expectAnyRecordTimes(
+                                ChromeTabbedActivity
+                                        .HISTOGRAM_MISMATCHED_INDICES_ACTIVITY_CREATION_TIME_DELTA,
+                                1)
+                        .build();
+
+        // Create two new ChromeTabbedActivity's.
+        ChromeTabbedActivity activity1 = createActivityForMismatchedIndicesTest();
+        ChromeTabbedActivity activity2 = createActivityForMismatchedIndicesTest();
+
+        // Trigger mismatched indices handling assuming that activity1 and activity2 are in the same
+        // task, this should destroy activity1's tab persistent store instance.
+        TestThreadUtils.runOnUiThreadBlocking(
+                () ->
+                        activity2.handleMismatchedIndices(
+                                activity1,
+                                /* isActivityInAppTasks= */ true,
+                                /* isActivityInSameTask= */ true));
+        Assert.assertTrue(
+                "Boolean |mTabPersistentStoreDestroyedEarly| should be true.",
+                activity1
+                        .getTabModelOrchestratorSupplier()
+                        .get()
+                        .getTabPersistentStoreDestroyedEarlyForTesting());
+
+        // activity1 should be subsequently destroyed.
+        ApplicationTestUtils.waitForActivityState(activity1, Stage.DESTROYED);
+
+        histogramWatcher.assertExpected();
+    }
+
+    @Test
+    @MediumTest
+    @MinAndroidSdkLevel(VERSION_CODES.S)
+    @EnableFeatures(
+            ChromeFeatureList.TAB_WINDOW_MANAGER_INDEX_REASSIGNMENT_ACTIVITY_NOT_IN_APP_TASKS)
+    public void testHandleMismatchedIndices_ActivityNotInAppTasks() throws ExecutionException {
+        HistogramWatcher histogramWatcher =
+                HistogramWatcher.newBuilder()
+                        .expectAnyRecordTimes(
+                                ChromeTabbedActivity
+                                        .HISTOGRAM_MISMATCHED_INDICES_ACTIVITY_CREATION_TIME_DELTA,
+                                1)
+                        .build();
+
+        // Create two new ChromeTabbedActivity's.
+        ChromeTabbedActivity activity1 = createActivityForMismatchedIndicesTest();
+        ChromeTabbedActivity activity2 = createActivityForMismatchedIndicesTest();
+
+        // Trigger mismatched indices handling assuming that activity1 is not in AppTasks, this
+        // should destroy activity1's tab persistent store instance.
+        TestThreadUtils.runOnUiThreadBlocking(
+                () ->
+                        activity2.handleMismatchedIndices(
+                                activity1,
+                                /* isActivityInAppTasks= */ false,
+                                /* isActivityInSameTask= */ false));
+        Assert.assertTrue(
+                "Boolean |mTabPersistentStoreDestroyedEarly| should be true.",
+                activity1
+                        .getTabModelOrchestratorSupplier()
+                        .get()
+                        .getTabPersistentStoreDestroyedEarlyForTesting());
+
+        // activity1 should be subsequently destroyed.
+        ApplicationTestUtils.waitForActivityState(activity1, Stage.DESTROYED);
+
+        histogramWatcher.assertExpected();
+    }
+
+    private ChromeTabbedActivity createActivityForMismatchedIndicesTest() {
+        // Launch a new ChromeTabbedActivity intent with the FLAG_ACTIVITY_MULTIPLE_TASK set to
+        // ensure that a new activity is created. Note that generally our logs indicate
+        // FLAG_ACTIVITY_MULTIPLE_TASK is not set on incoming intents, however, this is generally
+        // the only way to get new ChromeTabbedActivity's in a non-error case.
+        Intent intent = new Intent(Intent.ACTION_MAIN);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        intent.addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+        intent.setClass(mActivity, ChromeTabbedActivity.class);
+
+        return ApplicationTestUtils.waitForActivityWithClass(
+                ChromeTabbedActivity.class,
+                Stage.CREATED,
+                () -> mActivity.getApplicationContext().startActivity(intent));
     }
 }

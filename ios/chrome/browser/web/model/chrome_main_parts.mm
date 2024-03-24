@@ -60,7 +60,7 @@
 #import "ios/chrome/browser/open_from_clipboard/model/create_clipboard_recent_content.h"
 #import "ios/chrome/browser/optimization_guide/model/optimization_guide_service_factory.h"
 #import "ios/chrome/browser/policy/model/browser_policy_connector_ios.h"
-#import "ios/chrome/browser/promos_manager/promos_manager.h"
+#import "ios/chrome/browser/promos_manager/model/promos_manager.h"
 #import "ios/chrome/browser/safe_browsing/model/safe_browsing_metrics_collector_factory.h"
 #import "ios/chrome/browser/segmentation_platform/model/ukm_database_client.h"
 #import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
@@ -175,7 +175,7 @@ void IOSChromeMainParts::PreCreateThreads() {
   base::FilePath local_state_path;
   CHECK(base::PathService::Get(ios::FILE_LOCAL_STATE, &local_state_path));
   application_context_.reset(new ApplicationContextImpl(
-      local_state_task_runner.get(), parsed_command_line_,
+      local_state_task_runner.get(), *parsed_command_line_,
       l10n_util::GetLocaleOverride(),
       base::SysNSStringToUTF8(
           [[NSLocale currentLocale] objectForKey:NSLocaleCountryCode])));
@@ -307,6 +307,8 @@ void IOSChromeMainParts::PreMainMessageLoopRun() {
   EnsureBrowserStateKeyedServiceFactoriesBuilt();
   ios::ChromeBrowserStateManager* browser_state_manager =
       application_context_->GetChromeBrowserStateManager();
+  // TODO(crbug.com/325257407): Factor all of the code that uses this to instead
+  // initialize for every browser state.
   ChromeBrowserState* last_used_browser_state =
       browser_state_manager->GetLastUsedBrowserState();
 

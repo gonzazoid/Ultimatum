@@ -9,6 +9,7 @@
 #include "components/content_settings/core/browser/content_settings_rule.h"
 #include "components/content_settings/core/browser/content_settings_utils.h"
 #include "components/content_settings/core/common/content_settings_pattern.h"
+#include "extensions/common/extension_id.h"
 
 namespace content_settings {
 
@@ -29,6 +30,16 @@ std::unique_ptr<RuleIterator> CustomExtensionProvider::GetRuleIterator(
                                                incognito);
 }
 
+std::unique_ptr<content_settings::Rule> CustomExtensionProvider::GetRule(
+    const GURL& primary_url,
+    const GURL& secondary_url,
+    ContentSettingsType content_type,
+    bool off_the_record,
+    const content_settings::PartitionKey& partition_key) const {
+  return extensions_settings_->GetRule(primary_url, secondary_url, content_type,
+                                       off_the_record);
+}
+
 bool CustomExtensionProvider::SetWebsiteSetting(
     const ContentSettingsPattern& primary_pattern,
     const ContentSettingsPattern& secondary_pattern,
@@ -45,7 +56,7 @@ void CustomExtensionProvider::ShutdownOnUIThread() {
 }
 
 void CustomExtensionProvider::OnContentSettingChanged(
-    const std::string& extension_id,
+    const extensions::ExtensionId& extension_id,
     bool incognito) {
   if (incognito_ != incognito)
     return;
@@ -53,7 +64,7 @@ void CustomExtensionProvider::OnContentSettingChanged(
   // changed.
   NotifyObservers(ContentSettingsPattern::Wildcard(),
                   ContentSettingsPattern::Wildcard(),
-                  ContentSettingsType::DEFAULT);
+                  ContentSettingsType::DEFAULT, /*partition_key=*/nullptr);
 }
 
 }  // namespace content_settings

@@ -4,11 +4,17 @@
 
 #include "chrome/browser/ui/webui/ash/settings/pages/privacy/app_permission_handler.h"
 
+#include "ash/public/cpp/new_window_delegate.h"
+#include "ash/webui/projector_app/public/cpp/projector_app_constants.h"
 #include "base/ranges/algorithm.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
+#include "chrome/browser/ash/eche_app/app_id.h"
+#include "chrome/browser/web_applications/web_app_id_constants.h"
+#include "chrome/common/url_constants.h"
 #include "components/services/app_service/public/cpp/permission.h"
 #include "components/services/app_service/public/cpp/types_util.h"
+#include "url/gurl.h"
 
 namespace ash::settings {
 
@@ -38,6 +44,20 @@ app_permission::mojom::AppPtr CreateAppPtr(const apps::AppUpdate& update) {
     }
   }
   return app;
+}
+
+// Returns true if the system app with ID `app_id` uses camera.
+bool SystemAppUsesCamera(const std::string& app_id) {
+  return app_id == web_app::kCameraAppId ||
+         app_id == web_app::kPersonalizationAppId ||
+         app_id == ash::kChromeUIUntrustedProjectorSwaAppId;
+}
+
+// Returns true if the system app with ID `app_id` uses microphone.
+bool SystemAppUsesMicrophone(const std::string& app_id) {
+  return app_id == web_app::kCameraAppId ||
+         app_id == ash::eche_app::kEcheAppId ||
+         app_id == ash::kChromeUIUntrustedProjectorSwaAppId;
 }
 
 }  // namespace
@@ -74,6 +94,46 @@ void AppPermissionHandler::GetApps(
   std::move(callback).Run(GetAppList());
 }
 
+void AppPermissionHandler::GetSystemAppsThatUseCamera(
+    base::OnceCallback<void(std::vector<app_permission::mojom::AppPtr>)>
+        callback) {
+  std::move(callback).Run(GetSystemAppListThatUsesCamera());
+}
+
+void AppPermissionHandler::GetSystemAppsThatUseMicrophone(
+    base::OnceCallback<void(std::vector<app_permission::mojom::AppPtr>)>
+        callback) {
+  std::move(callback).Run(GetSystemAppListThatUsesMicrophone());
+}
+
+void AppPermissionHandler::OpenBrowserPermissionSettings(
+    apps::PermissionType permission_type) {
+  GURL url;
+
+  switch (permission_type) {
+    case apps::PermissionType::kCamera:
+      url = GURL(chrome::kBrowserCameraPermissionsSettingsURL);
+      break;
+    case apps::PermissionType::kLocation:
+      url = GURL(chrome::kBrowserLocationPermissionsSettingsURL);
+      break;
+    case apps::PermissionType::kMicrophone:
+      url = GURL(chrome::kBrowserMicrophonePermissionsSettingsURL);
+      break;
+    case apps::PermissionType::kUnknown:
+    case apps::PermissionType::kNotifications:
+    case apps::PermissionType::kContacts:
+    case apps::PermissionType::kStorage:
+    case apps::PermissionType::kPrinting:
+    case apps::PermissionType::kFileHandling:
+      NOTREACHED_NORETURN();
+  }
+
+  ash::NewWindowDelegate::GetPrimary()->OpenUrl(
+      url, ash::NewWindowDelegate::OpenUrlFrom::kUserInteraction,
+      ash::NewWindowDelegate::Disposition::kSwitchToTab);
+}
+
 void AppPermissionHandler::OpenNativeSettings(const std::string& app_id) {
   app_service_proxy_->OpenNativeSettings(app_id);
 }
@@ -108,6 +168,32 @@ std::vector<app_permission::mojom::AppPtr> AppPermissionHandler::GetAppList() {
         if (update.ShowInManagement().value_or(false) &&
             apps_util::IsInstalled(update.Readiness()) &&
             HasRelevantPermission(update)) {
+          apps.push_back(CreateAppPtr(update));
+        }
+      });
+  return apps;
+}
+
+std::vector<app_permission::mojom::AppPtr>
+AppPermissionHandler::GetSystemAppListThatUsesCamera() {
+  std::vector<app_permission::mojom::AppPtr> apps;
+  app_service_proxy_->AppRegistryCache().ForEachApp(
+      [&apps](const apps::AppUpdate& update) {
+        if (apps_util::IsInstalled(update.Readiness()) &&
+            SystemAppUsesCamera(update.AppId())) {
+          apps.push_back(CreateAppPtr(update));
+        }
+      });
+  return apps;
+}
+
+std::vector<app_permission::mojom::AppPtr>
+AppPermissionHandler::GetSystemAppListThatUsesMicrophone() {
+  std::vector<app_permission::mojom::AppPtr> apps;
+  app_service_proxy_->AppRegistryCache().ForEachApp(
+      [&apps](const apps::AppUpdate& update) {
+        if (apps_util::IsInstalled(update.Readiness()) &&
+            SystemAppUsesMicrophone(update.AppId())) {
           apps.push_back(CreateAppPtr(update));
         }
       });

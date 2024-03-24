@@ -153,6 +153,7 @@ ConfigBase::ConfigBase() noexcept
       desktop_(Desktop::kDefault),
       filter_environment_(false),
       zero_appshim_(false),
+      handle_closer_(0),
       policy_maker_(nullptr),
       policy_(nullptr) {
 }
@@ -407,23 +408,32 @@ void ConfigBase::SetJobMemoryLimit(size_t memory_limit) {
   memory_limit_ = memory_limit;
 }
 
-ResultCode ConfigBase::AddKernelObjectToClose(const wchar_t* handle_type,
-                                              const wchar_t* handle_name) {
+void ConfigBase::AddKernelObjectToClose(HandleToClose handle_info) {
   DCHECK(!configured_);
-  if (!handle_closer_)
-    handle_closer_ = std::make_unique<HandleCloser>();
-  return handle_closer_->AddHandle(handle_type, handle_name);
+  handle_closer_.handle_closer_enabled = true;
+  switch (handle_info) {
+    case HandleToClose::kWindowsShellGlobalCounters:
+      handle_closer_.section_windows_global_shell_counters = true;
+      break;
+    case HandleToClose::kDeviceApi:
+      handle_closer_.file_device_api = true;
+      break;
+    case HandleToClose::kKsecDD:
+      handle_closer_.file_ksecdd = true;
+      break;
+    case HandleToClose::kDisconnectCsrss:
+      handle_closer_.disconnect_csrss = true;
+      break;
+  }
 }
 
-ResultCode ConfigBase::SetDisconnectCsrss() {
+void ConfigBase::SetDisconnectCsrss() {
 // Does not work on 32-bit, and the ASAN runtime falls over with the
 // CreateThread EAT patch used when this is enabled.
 // See https://crbug.com/783296#c27.
 #if defined(_WIN64) && !defined(ADDRESS_SANITIZER)
   is_csrss_connected_ = false;
-  return AddKernelObjectToClose(L"ALPC Port", nullptr);
-#else
-  return SBOX_ALL_OK;
+  AddKernelObjectToClose(HandleToClose::kDisconnectCsrss);
 #endif  // !defined(_WIN64) || defined(ADDRESS_SANITIZER)
 }
 
@@ -647,33 +657,38 @@ ResultCode PolicyBase::ApplyToTarget(std::unique_ptr<TargetProcess> target) {
   if (ret != SBOX_ALL_OK)
     return ret;
 
-  g_shared_delayed_integrity_level = config()->delayed_integrity_level();
+  IntegrityLevel delayed_integrity_level = config()->delayed_integrity_level();
+  static_assert(sizeof(g_shared_delayed_integrity_level) ==
+                sizeof(delayed_integrity_level));
   ret = target->TransferVariable("g_shared_delayed_integrity_level",
+                                 &delayed_integrity_level,
                                  &g_shared_delayed_integrity_level,
                                  sizeof(g_shared_delayed_integrity_level));
-  g_shared_delayed_integrity_level = INTEGRITY_LEVEL_LAST;
   if (SBOX_ALL_OK != ret)
     return ret;
 
   // Add in delayed mitigations and pseudo-mitigations enforced at startup.
-  g_shared_delayed_mitigations =
+  MitigationFlags delayed_mitigations =
       config()->GetDelayedProcessMitigations() |
       FilterPostStartupProcessMitigations(config()->GetProcessMitigations());
-  if (!CanSetProcessMitigationsPostStartup(g_shared_delayed_mitigations))
+  if (!CanSetProcessMitigationsPostStartup(delayed_mitigations)) {
     return SBOX_ERROR_BAD_PARAMS;
+  }
 
-  ret = target->TransferVariable("g_shared_delayed_mitigations",
-                                 &g_shared_delayed_mitigations,
-                                 sizeof(g_shared_delayed_mitigations));
-  g_shared_delayed_mitigations = 0;
+  static_assert(sizeof(g_shared_delayed_mitigations) ==
+                sizeof(delayed_mitigations));
+  ret = target->TransferVariable(
+      "g_shared_delayed_mitigations", &delayed_mitigations,
+      &g_shared_delayed_mitigations, sizeof(g_shared_delayed_mitigations));
   if (SBOX_ALL_OK != ret)
     return ret;
 
-  g_shared_startup_mitigations = config()->GetProcessMitigations();
-  ret = target->TransferVariable("g_shared_startup_mitigations",
-                                 &g_shared_startup_mitigations,
-                                 sizeof(g_shared_startup_mitigations));
-  g_shared_startup_mitigations = 0;
+  MitigationFlags startup_mitigations = config()->GetProcessMitigations();
+  static_assert(sizeof(g_shared_startup_mitigations) ==
+                sizeof(startup_mitigations));
+  ret = target->TransferVariable(
+      "g_shared_startup_mitigations", &startup_mitigations,
+      &g_shared_startup_mitigations, sizeof(g_shared_startup_mitigations));
   if (SBOX_ALL_OK != ret)
     return ret;
 
@@ -745,10 +760,18 @@ ResultCode PolicyBase::SetupAllInterceptions(TargetProcess& target) {
 }
 
 bool PolicyBase::SetupHandleCloser(TargetProcess& target) {
-  auto* handle_closer = config()->handle_closer();
-  if (!handle_closer)
+  const HandleCloserConfig& handle_closer = config()->handle_closer();
+  // Do nothing on an empty list (target's config already initialized to zero).
+  if (!handle_closer.handle_closer_enabled) {
     return true;
-  return handle_closer->InitializeTargetHandles(target);
+  }
+
+  static_assert(sizeof(g_handle_closer_info) == sizeof(handle_closer));
+  ResultCode rc = target.TransferVariable("g_handle_closer_info",
+                                          &handle_closer, &g_handle_closer_info,
+                                          sizeof(g_handle_closer_info));
+
+  return (SBOX_ALL_OK == rc);
 }
 
 std::optional<base::span<const uint8_t>> PolicyBase::delegate_data_span() {
@@ -763,7 +786,7 @@ void PolicyBase::AddDelegateData(base::span<const uint8_t> data) {
   // Can only set this once - as there is only one region sent to the child.
   CHECK(!delegate_data_);
   delegate_data_ =
-      std::make_unique<std::vector<const uint8_t>>(data.begin(), data.end());
+      std::make_unique<std::vector<uint8_t>>(data.begin(), data.end());
 }
 
 }  // namespace sandbox

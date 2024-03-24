@@ -93,6 +93,7 @@
 #include "content/public/test/fenced_frame_test_util.h"
 #include "content/public/test/hit_test_region_observer.h"
 #include "content/public/test/navigation_handle_observer.h"
+#include "content/public/test/no_renderer_crashes_assertion.h"
 #include "content/public/test/prerender_test_util.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "net/base/net_errors.h"
@@ -664,25 +665,6 @@ class PageLoadMetricsBrowserTestAnimatedLCP
     } else {
       ASSERT_GT(value, timestamp);
     }
-  }
-};
-
-class PageLoadMetricsBrowserTestWithAnimatedLCPFlag
-    : public PageLoadMetricsBrowserTestAnimatedLCP {
- public:
-  PageLoadMetricsBrowserTestWithAnimatedLCPFlag() {
-    scoped_feature_list_.Reset();
-    scoped_feature_list_.InitWithFeatures(
-        {blink::features::kLCPAnimatedImagesReporting}, {});
-  }
-};
-
-class PageLoadMetricsBrowserTestWithRuntimeAnimatedLCPFlag
-    : public PageLoadMetricsBrowserTestAnimatedLCP {
- public:
-  void SetUpCommandLine(base::CommandLine* command_line) override {
-    command_line->AppendSwitchASCII(switches::kEnableBlinkFeatures,
-                                    "LCPAnimatedImagesWebExposed");
   }
 };
 
@@ -3652,7 +3634,7 @@ INSTANTIATE_TEST_SUITE_P(
 #endif
 // Tests that an animated image's reported LCP values are smaller than its load
 // times, when the feature flag for animated image reporting is enabled.
-IN_PROC_BROWSER_TEST_F(PageLoadMetricsBrowserTestWithAnimatedLCPFlag,
+IN_PROC_BROWSER_TEST_F(PageLoadMetricsBrowserTestAnimatedLCP,
                        MAYBE_PageLCPAnimatedImage) {
   test_animated_image_lcp(/*smaller=*/true, /*animated=*/true);
 }
@@ -3665,7 +3647,7 @@ IN_PROC_BROWSER_TEST_F(PageLoadMetricsBrowserTestWithAnimatedLCPFlag,
 #else
 #define MAYBE_PageLCPNonAnimatedImage PageLCPNonAnimatedImage
 #endif
-IN_PROC_BROWSER_TEST_F(PageLoadMetricsBrowserTestWithAnimatedLCPFlag,
+IN_PROC_BROWSER_TEST_F(PageLoadMetricsBrowserTestAnimatedLCP,
                        MAYBE_PageLCPNonAnimatedImage) {
   test_animated_image_lcp(/*smaller=*/false, /*animated=*/false);
 }

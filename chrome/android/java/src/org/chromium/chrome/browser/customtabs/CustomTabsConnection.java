@@ -68,11 +68,13 @@ import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.init.ChromeBrowserInitializer;
 import org.chromium.chrome.browser.metrics.UmaSessionStats;
 import org.chromium.chrome.browser.page_insights.proto.Config.PageInsightsConfig;
+import org.chromium.chrome.browser.page_insights.proto.IntentParams.PageInsightsIntentParams;
 import org.chromium.chrome.browser.page_load_metrics.PageLoadMetrics;
 import org.chromium.chrome.browser.prefetch.settings.PreloadPagesSettingsBridge;
 import org.chromium.chrome.browser.prefetch.settings.PreloadPagesState;
 import org.chromium.chrome.browser.privacy.settings.PrivacyPreferencesManagerImpl;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.components.content_settings.CookieControlsMode;
 import org.chromium.components.embedder_support.util.Origin;
@@ -82,6 +84,7 @@ import org.chromium.components.user_prefs.UserPrefs;
 import org.chromium.components.variations.SyntheticTrialAnnotationMode;
 import org.chromium.content_public.browser.BrowserStartupController;
 import org.chromium.content_public.browser.ChildProcessLauncherHelper;
+import org.chromium.content_public.browser.NavigationEntry;
 import org.chromium.content_public.browser.NavigationHandle;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.common.Referrer;
@@ -479,7 +482,7 @@ public class CustomTabsConnection {
                         try (TraceEvent e =
                                 TraceEvent.scoped("WarmupInternalFinishInitialization")) {
                             // (4)
-                            Profile profile = Profile.getLastUsedRegularProfile();
+                            Profile profile = ProfileManager.getLastUsedRegularProfile();
                             WarmupManager.startPreconnectPredictorInitialization(profile);
 
                             // (5) The throttling database uses shared preferences, that can cause
@@ -566,7 +569,7 @@ public class CustomTabsConnection {
         boolean atLeastOneUrl = false;
         if (likelyBundles == null) return false;
         WarmupManager warmupManager = WarmupManager.getInstance();
-        Profile profile = Profile.getLastUsedRegularProfile();
+        Profile profile = ProfileManager.getLastUsedRegularProfile();
         for (Bundle bundle : likelyBundles) {
             Uri uri;
             try {
@@ -662,7 +665,7 @@ public class CustomTabsConnection {
         try (TraceEvent e = TraceEvent.scoped("CustomTabsConnection.mayLaunchUrlOnUiThread")) {
             // doMayLaunchUrlInternal() is always called once the native level initialization is
             // done, at least the initial profile load. However, at that stage the startup callback
-            // may not have run, which causes Profile.getLastUsedRegularProfile() to throw an
+            // may not have run, which causes ProfileManager.getLastUsedRegularProfile() to throw an
             // exception. But the tasks have been posted by then, so reschedule ourselves, only
             // once.
             if (!BrowserStartupController.getInstance().isFullBrowserStarted()) {
@@ -1026,7 +1029,7 @@ public class CustomTabsConnection {
 
         WarmupManager.getInstance()
                 .maybePreconnectUrlAndSubResources(
-                        Profile.getLastUsedRegularProfile(), redirectEndpoint.toString());
+                        ProfileManager.getLastUsedRegularProfile(), redirectEndpoint.toString());
     }
 
     @VisibleForTesting
@@ -1100,7 +1103,7 @@ public class CustomTabsConnection {
         String packageName = mClientManager.getClientPackageNameForSession(session);
         CustomTabsConnectionJni.get()
                 .createAndStartDetachedResourceRequest(
-                        Profile.getLastUsedRegularProfile(),
+                        ProfileManager.getLastUsedRegularProfile(),
                         session,
                         packageName,
                         urlString,
@@ -1147,7 +1150,7 @@ public class CustomTabsConnection {
             // Session is null because we don't need completion notifications.
             CustomTabsConnectionJni.get()
                     .createAndStartDetachedResourceRequest(
-                            Profile.getLastUsedRegularProfile(),
+                            ProfileManager.getLastUsedRegularProfile(),
                             null,
                             null,
                             urlString,
@@ -1787,7 +1790,8 @@ public class CustomTabsConnection {
         if (!DeviceClassManager.enablePrerendering()) {
             return false;
         }
-        if (UserPrefs.get(Profile.getLastUsedRegularProfile()).getInteger(COOKIE_CONTROLS_MODE)
+        if (UserPrefs.get(ProfileManager.getLastUsedRegularProfile())
+                        .getInteger(COOKIE_CONTROLS_MODE)
                 == CookieControlsMode.BLOCK_THIRD_PARTY) {
             return false;
         }
@@ -1815,7 +1819,7 @@ public class CustomTabsConnection {
             Bundle extras,
             int uid) {
         WarmupManager warmupManager = WarmupManager.getInstance();
-        Profile profile = Profile.getLastUsedRegularProfile();
+        Profile profile = ProfileManager.getLastUsedRegularProfile();
 
         // At most one on-going speculation, clears the previous one.
         cancelSpeculation(null);
@@ -1864,6 +1868,13 @@ public class CustomTabsConnection {
      */
     public @Nullable String getTrustedCdnPublisherUrlPackage() {
         return mTrustedPublisherUrlPackage;
+    }
+
+    /**
+     * @return Whether the publisher of the URL from a trusted CDN can be shown.
+     */
+    public boolean isTrustedCdnPublisherUrlPackage(@Nullable String urlPackage) {
+        return urlPackage != null && urlPackage.equals(getTrustedCdnPublisherUrlPackage());
     }
 
     void setTrustedPublisherUrlPackageForTest(@Nullable String packageName) {
@@ -1960,6 +1971,26 @@ public class CustomTabsConnection {
         return false;
     }
 
+    public PageInsightsIntentParams getPageInsightsIntentParams(
+            BrowserServicesIntentDataProvider intentData) {
+        return PageInsightsIntentParams.getDefaultInstance();
+    }
+
+    /** DEPRECATED - do not use. */
+    @Deprecated
+    public PageInsightsConfig getPageInsightsConfig(
+            BrowserServicesIntentDataProvider intentData,
+            @Nullable NavigationHandle navigationHandle,
+            Supplier<Profile> profileSupplier) {
+        // For all params, by default populate the most conservative values.
+        return PageInsightsConfig.newBuilder()
+                .setShouldAutoTrigger(false)
+                .setShouldXsurfaceLog(false)
+                .setIsInitialPage(false)
+                .setServerShouldNotLogOrPersonalize(true)
+                .build();
+    }
+
     /**
      * Returns how the Page Insights feature should be configured for the given params. Only applies
      * if {@link #shouldEnablePageInsightsForIntent(BrowserServicesIntentDataProvider)} returns
@@ -1967,17 +1998,21 @@ public class CustomTabsConnection {
      *
      * @param intentData {@link BrowserServicesIntentDataProvider} built from the Intent that
      *     launched this CCT.
-     * @param navigationHandle the {@link NavigationHandle} for the current page.
+     * @param navigationHandle the {@link NavigationHandle} for the current URL.
+     * @param navigationEntry the {@link NavigationEntry} for the current URL.
      * @param profileSupplier supplier of the current {@link Profile}.
      */
     public PageInsightsConfig getPageInsightsConfig(
             BrowserServicesIntentDataProvider intentData,
             @Nullable NavigationHandle navigationHandle,
+            @Nullable NavigationEntry navigationEntry,
             Supplier<Profile> profileSupplier) {
+        // For all params, by default populate the most conservative values.
         return PageInsightsConfig.newBuilder()
                 .setShouldAutoTrigger(false)
                 .setShouldXsurfaceLog(false)
-                .setShouldAttachGaiaToRequest(false)
+                .setIsInitialPage(false)
+                .setServerShouldNotLogOrPersonalize(true)
                 .build();
     }
 

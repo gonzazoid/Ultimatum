@@ -9,6 +9,16 @@
 
 #import "ios/third_party/earl_grey2/src/CommonLib/GREYConstants.h"
 
+@class GREYElementInteraction;
+@protocol GREYMatcher;
+
+// State of the fake omnibox illustration
+typedef NS_ENUM(NSUInteger, FakeOmniboxState) {
+  kHidden,
+  kEmpty,
+  kFull,
+};
+
 // Test methods that perform actions on the search engine choice UI
 @interface SearchEngineChoiceEarlGreyUI : NSObject
 
@@ -26,6 +36,21 @@
 
 // Checks that the default search engine was correctly set.
 + (void)verifyDefaultSearchEngineSetting:(NSString*)searchEngineName;
+
+// Checks the state of the fake omnibox illustration.
++ (void)verifyFakeOmniboxIllustrationState:(FakeOmniboxState)state;
+
+// Returns GreyMatcher for the custom search engine for the settings table view.
+// The custom search engine URL needs to be 127.0.0.1.
++ (id<GREYMatcher>)settingsCustomSearchEngineAccessibilityLabelWithName:
+    (const char*)name;
+
+// Returns the GREYElementInteraction* for the item in the search engine list
+// with the given `matcher`. It scrolls in `direction` if necessary to ensure
+// that the matched item is sufficiently visible, thus interactable.
+// The custom search engine URL needs to be 127.0.0.1.
++ (GREYElementInteraction*)interactionForSettingsCustomSearchEngineWithName:
+    (const char*)name;
 
 @end
 

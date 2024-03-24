@@ -16,6 +16,7 @@
 #include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_string_value_serializer.h"
+#include "base/logging.h"
 #include "base/path_service.h"
 #include "base/process/launch.h"
 #include "base/strings/strcat.h"
@@ -132,22 +133,22 @@ and then write commands into it:
                                   command_file_path.AsUTF8Unsafe().c_str());
 }
 
-std::optional<autofill::FieldType> StringToFieldType(const std::string& str) {
+std::optional<autofill::FieldType> StringToFieldType(std::string_view str) {
   static auto map = []() {
-    std::map<std::string, autofill::FieldType> map;
+    std::map<std::string_view, autofill::FieldType> map;
     for (autofill::FieldType field_type : autofill::kAllFieldTypes) {
-      map[autofill::AutofillType(field_type).ToString()] = field_type;
+      map[autofill::AutofillType(field_type).ToStringView()] = field_type;
     }
     for (autofill::HtmlFieldType html_field_type :
          autofill::kAllHtmlFieldTypes) {
       autofill::AutofillType field_type(html_field_type);
-      map[field_type.ToString()] = field_type.GetStorableType();
+      map[field_type.ToStringView()] = field_type.GetStorableType();
     }
     return map;
   }();
   auto it = map.find(str);
   if (it == map.end()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return it->second;
 }
@@ -300,7 +301,7 @@ std::optional<std::string> FindPopulateString(
                     << absl::get<base::StringPiece>(key_descriptor)
                     << "' string from container!";
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   return *value;
@@ -317,7 +318,7 @@ std::optional<std::vector<std::string>> FindPopulateStringVector(
                     << absl::get<base::StringPiece>(key_descriptor)
                     << "' strings from container!";
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   std::vector<std::string> strings;
@@ -328,7 +329,7 @@ std::optional<std::vector<std::string>> FindPopulateStringVector(
                       << absl::get<base::StringPiece>(key_descriptor)
                       << "' vector from container!";
       }
-      return absl::nullopt;
+      return std::nullopt;
     }
     strings.push_back(item.GetString());
   }
@@ -452,10 +453,10 @@ std::string FilePathToUTF8(const base::FilePath::StringType& str) {
 std::optional<base::FilePath> GetCommandFilePath() {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   if (command_line && command_line->HasSwitch(kCommandFileFlag)) {
-    return absl::make_optional(
+    return std::make_optional(
         command_line->GetSwitchValuePath(kCommandFileFlag));
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 void PrintInstructions(const char* test_file_name) {
@@ -870,6 +871,7 @@ bool TestRecipeReplayer::ReplayTest(
     const base::FilePath& capture_file_path,
     const base::FilePath& recipe_file_path,
     const std::optional<base::FilePath>& command_file_path) {
+  logging::SetMinLogLevel(logging::LOGGING_WARNING);
   if (!web_page_replay_server_wrapper()->Start(capture_file_path))
     return false;
   if (OverrideAutofillClock(capture_file_path))
@@ -1121,9 +1123,9 @@ bool TestRecipeReplayer::ReplayRecordedActions(
         }
       }
     }
-    LOG(INFO) << "Proceeding with execution with action "
-              << execution_state.index << " of " << execution_state.length
-              << ": " << (*action_list)[execution_state.index];
+    VLOG(1) << "Proceeding with execution with action " << execution_state.index
+            << " of " << execution_state.length << ": "
+            << (*action_list)[execution_state.index];
 
     if (!(*action_list)[execution_state.index].is_dict()) {
       ADD_FAILURE()

@@ -19,11 +19,14 @@ import {ESimManagerRemote} from 'chrome://resources/mojo/chromeos/ash/services/c
 import {CrosNetworkConfigRemote, InhibitReason, MAX_NUM_CUSTOM_APNS, VpnType} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/cros_network_config.mojom-webui.js';
 import {ConnectionStateType, DeviceStateType, NetworkType} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/network_types.mojom-webui.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {assertEquals, assertFalse, assertNotEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {FakeNetworkConfig} from 'chrome://webui-test/chromeos/fake_network_config_mojom.js';
 import {FakePasspointService} from 'chrome://webui-test/chromeos/fake_passpoint_service_mojom.js';
 import {FakeESimManagerRemote} from 'chrome://webui-test/cr_components/chromeos/cellular_setup/fake_esim_manager_remote.js';
 import {waitAfterNextRender, waitBeforeNextRender} from 'chrome://webui-test/polymer_test_util.js';
 import {eventToPromise, isVisible} from 'chrome://webui-test/test_util.js';
+
+import {clearBody} from './utils.js';
 
 suite('InternetPage', function() {
   /** @type {?InternetPageElement} */
@@ -220,7 +223,7 @@ suite('InternetPage', function() {
     hotspotConfig = new FakeHotspotConfig();
     setHotspotConfigForTesting(hotspotConfig);
 
-    PolymerTest.clearBody();
+    clearBody();
   });
 
   teardown(function() {
@@ -790,6 +793,93 @@ suite('InternetPage', function() {
     assertTrue(simLockDialogs.isDialogOpen);
   });
 
+  test('Show carrier lock sub header when locked', async () => {
+    loadTimeData.overrideValues({isCellularCarrierLockEnabled: true});
+    await init();
+
+    const params = new URLSearchParams();
+    params.append('type', OncMojo.getNetworkTypeString(NetworkType.kCellular));
+
+    // Pretend that we initially started on the INTERNET_NETWORKS route with the
+    // params.
+    Router.getInstance().navigateTo(routes.INTERNET_NETWORKS, params);
+    internetPage.currentRouteChanged(routes.INTERNET_NETWORKS, undefined);
+
+    // Update the device state here to trigger an onDeviceStatesChanged_() call.
+    mojoApi_.setDeviceStateForTest({
+      type: NetworkType.kCellular,
+      deviceState: DeviceStateType.kEnabled,
+      inhibitReason: InhibitReason.kNotInhibited,
+      isCarrierLocked: true,
+    });
+    await flushAsync();
+
+    const cellularSubtitle =
+        internetPage.shadowRoot.querySelector('#cellularSubtitle');
+    assertTrue(!!cellularSubtitle);
+  });
+
+  test(
+      'Verify carrier lock sub header not displayed when unlocked',
+      async () => {
+        loadTimeData.overrideValues({isCellularCarrierLockEnabled: true});
+        await init();
+
+        const params = new URLSearchParams();
+        params.append(
+            'type', OncMojo.getNetworkTypeString(NetworkType.kCellular));
+
+        // Pretend that we initially started on the INTERNET_NETWORKS route with
+        // the params.
+        Router.getInstance().navigateTo(routes.INTERNET_NETWORKS, params);
+        internetPage.currentRouteChanged(routes.INTERNET_NETWORKS, undefined);
+
+        // Update the device state here to trigger an onDeviceStatesChanged_()
+        // call.
+        mojoApi_.setDeviceStateForTest({
+          type: NetworkType.kCellular,
+          deviceState: DeviceStateType.kEnabled,
+          inhibitReason: InhibitReason.kNotInhibited,
+          isCarrierLocked: false,
+        });
+        await flushAsync();
+
+        const cellularSubtitle =
+            internetPage.shadowRoot.querySelector('#cellularSubtitle');
+        assertFalse(!!cellularSubtitle);
+      });
+
+  test(
+      'Verify carrier lock sub header not displayed when feature disabled',
+      async () => {
+        loadTimeData.overrideValues({isCellularCarrierLockEnabled: false});
+        await init();
+
+        const params = new URLSearchParams();
+        params.append(
+            'type', OncMojo.getNetworkTypeString(NetworkType.kCellular));
+
+        // Pretend that we initially started on the INTERNET_NETWORKS route with
+        // the params.
+        Router.getInstance().navigateTo(routes.INTERNET_NETWORKS, params);
+        internetPage.currentRouteChanged(routes.INTERNET_NETWORKS, undefined);
+
+        // Update the device state here to trigger an onDeviceStatesChanged_()
+        // call.
+        mojoApi_.setDeviceStateForTest({
+          type: NetworkType.kCellular,
+          deviceState: DeviceStateType.kEnabled,
+          inhibitReason: InhibitReason.kNotInhibited,
+          isCarrierLocked: true,
+        });
+        await flushAsync();
+
+        const cellularSubtitle =
+            internetPage.shadowRoot.querySelector('#cellularSubtitle');
+        assertFalse(!!cellularSubtitle);
+      });
+
+
   test(
       'Show no connection toast if receive show-cellular-setup' +
           'event and not connected to non-cellular network',
@@ -998,14 +1088,12 @@ suite('InternetPage', function() {
         let properties = OncMojo.getDefaultManagedProperties(
             NetworkType.kCellular, 'cellular1', 'cellular');
         // We're setting the list of APNs to the max number
-        properties.typeProperties.cellular = {
-          customApnList:
-              Array.apply(null, {length: MAX_NUM_CUSTOM_APNS}).map(_ => {
-                return {
-                  accessPointName: 'apn',
-                };
-              }),
-        };
+        properties.typeProperties.cellular.customApnList =
+            Array.apply(null, {length: MAX_NUM_CUSTOM_APNS}).map(_ => {
+              return {
+                accessPointName: 'apn',
+              };
+            });
         mojoApi_.setManagedPropertiesForTest(properties);
         await flushAsync();
 
@@ -1016,9 +1104,7 @@ suite('InternetPage', function() {
 
         properties = OncMojo.getDefaultManagedProperties(
             NetworkType.kCellular, 'cellular1', 'cellular');
-        properties.typeProperties.cellular = {
-          customApnList: [],
-        };
+        properties.typeProperties.cellular.customApnList = [];
         mojoApi_.setManagedPropertiesForTest(properties);
         await flushAsync();
         assertFalse(!!getApnTooltip());

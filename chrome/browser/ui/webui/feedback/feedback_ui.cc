@@ -19,7 +19,6 @@
 #include "ui/webui/color_change_listener/color_change_handler.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/constants/ash_features.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
@@ -67,11 +66,6 @@ void AddStringResources(content::WebUIDataSource* source,
 
   source->AddLocalizedStrings(kStrings);
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  // Jelly colors should only be considered enabled when jelly styling is
-  // enabled for Feedback on ChromeOS.
-  source->AddBoolean("isJellyEnabledForOsFeedback",
-                     ash::features::IsJellyEnabledForOsFeedback());
-
   source->AddLocalizedString("mayBeSharedWithPartnerNote",
                              IDS_FEEDBACK_TOOL_MAY_BE_SHARED_NOTE);
   source->AddLocalizedString(
@@ -90,7 +84,7 @@ void CreateAndAddFeedbackHTMLSource(Profile* profile) {
       profile, chrome::kChromeUIFeedbackHost);
   webui::SetupWebUIDataSource(
       source, base::make_span(kFeedbackResources, kFeedbackResourcesSize),
-      IDR_FEEDBACK_HTML_DEFAULT_HTML);
+      IDR_FEEDBACK_FEEDBACK_HTML);
 
   AddStringResources(source, profile);
 }
@@ -108,7 +102,6 @@ bool FeedbackUI::IsFeedbackEnabled(Profile* profile) {
 void FeedbackUI::BindInterface(
     mojo::PendingReceiver<color_change_listener::mojom::PageHandler> receiver) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  DCHECK(ash::features::IsJellyEnabledForOsFeedback());
   color_provider_handler_ = std::make_unique<ui::ColorChangeHandler>(
       web_ui()->GetWebContents(), std::move(receiver));
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)

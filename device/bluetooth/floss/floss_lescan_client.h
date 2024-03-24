@@ -35,6 +35,7 @@ const char kScannerCallbackPath[] =
 #endif
 const char kScannerCallbackInterfaceName[] =
     "org.chromium.bluetooth.ScannerCallback";
+const char kEmptyUuidStr[] = "00000000-0000-0000-0000-000000000000";
 
 // Represents type of a scan.
 enum class ScanType {
@@ -177,8 +178,8 @@ class DEVICE_BLUETOOTH_EXPORT FlossLEScanClient : public FlossDBusClient,
                                  uint8_t scanner_id);
   virtual void StartScan(ResponseCallback<BtifStatus> callback,
                          uint8_t scanner_id,
-                         const absl::optional<ScanSettings>& scan_settings,
-                         const absl::optional<ScanFilter>& filter);
+                         const std::optional<ScanSettings>& scan_settings,
+                         const std::optional<ScanFilter>& filter);
   virtual void StopScan(ResponseCallback<BtifStatus> callback,
                         uint8_t scanner_id);
 
@@ -204,7 +205,7 @@ class DEVICE_BLUETOOTH_EXPORT FlossLEScanClient : public FlossDBusClient,
   std::string service_name_;
 
  private:
-  absl::optional<uint32_t> le_scan_callback_id_;
+  std::optional<uint32_t> le_scan_callback_id_;
 
   ExportedCallbackManager<ScannerClientObserver>
       exported_scanner_callback_manager_{kScannerCallbackInterfaceName};

@@ -13,6 +13,7 @@ import android.os.IBinder;
 import android.os.IInterface;
 import android.os.Looper;
 import android.os.Parcel;
+import android.os.ResultReceiver;
 
 import androidx.annotation.Nullable;
 
@@ -80,6 +81,7 @@ public final class Fido2ApiCall extends GoogleApi<ApiOptions.NoOptions> {
         public final @Nullable String mCallbackDescriptor;
         public final int mRegisterMethodId;
         public final int mSignMethodId;
+        public final int mIsUserVerifyingPlatformAuthenticatorAvailableMethodId;
         public final @Nullable Fido2Api.Calls mMethodInterfaces;
 
         Fido2ApiCallParams(
@@ -88,12 +90,15 @@ public final class Fido2ApiCall extends GoogleApi<ApiOptions.NoOptions> {
                 String callbackDescriptor,
                 int registerMethodId,
                 int signMethodId,
+                int isUserVerifyingPlatformAuthenticatorAvailableMethodId,
                 Fido2Api.Calls methodInterfaces) {
             mApi = api;
             mDescriptor = descriptor;
             mCallbackDescriptor = callbackDescriptor;
             mRegisterMethodId = registerMethodId;
             mSignMethodId = signMethodId;
+            mIsUserVerifyingPlatformAuthenticatorAvailableMethodId =
+                    isUserVerifyingPlatformAuthenticatorAvailableMethodId;
             mMethodInterfaces = methodInterfaces;
         }
     }
@@ -129,11 +134,12 @@ public final class Fido2ApiCall extends GoogleApi<ApiOptions.NoOptions> {
                 @Override
                 public void makeCredential(
                         PublicKeyCredentialCreationOptions options,
-                        Uri uri,
-                        byte[] clientDataHash,
+                        @Nullable Uri uri,
+                        @Nullable byte[] clientDataHash,
+                        ResultReceiver resultReceiver,
                         Parcel parcel)
                         throws NoSuchAlgorithmException {
-                    Fido2Api.appendMakeCredentialOptionsToParcel(options, parcel);
+                    Fido2Api.appendMakeCredentialOptionsToParcel(options, resultReceiver, parcel);
                 }
 
                 @Override
@@ -142,8 +148,10 @@ public final class Fido2ApiCall extends GoogleApi<ApiOptions.NoOptions> {
                         Uri uri,
                         byte[] clientDataHash,
                         byte[] tunnelId,
+                        ResultReceiver resultReceiver,
                         Parcel parcel) {
-                    Fido2Api.appendGetAssertionOptionsToParcel(options, clientDataHash, parcel);
+                    Fido2Api.appendGetAssertionOptionsToParcel(
+                            options, clientDataHash, resultReceiver, parcel);
                 }
             };
 
@@ -162,10 +170,11 @@ public final class Fido2ApiCall extends GoogleApi<ApiOptions.NoOptions> {
                         PublicKeyCredentialCreationOptions options,
                         Uri uri,
                         byte[] clientDataHash,
+                        ResultReceiver resultReceiver,
                         Parcel parcel)
                         throws NoSuchAlgorithmException {
                     Fido2Api.appendBrowserMakeCredentialOptionsToParcel(
-                            options, uri, clientDataHash, parcel);
+                            options, uri, clientDataHash, resultReceiver, parcel);
                 }
 
                 @Override
@@ -174,9 +183,10 @@ public final class Fido2ApiCall extends GoogleApi<ApiOptions.NoOptions> {
                         @Nullable Uri uri,
                         @Nullable byte[] clientDataHash,
                         @Nullable byte[] tunnelId,
+                        ResultReceiver resultReceiver,
                         Parcel parcel) {
                     Fido2Api.appendBrowserGetAssertionOptionsToParcel(
-                            options, uri, clientDataHash, tunnelId, parcel);
+                            options, uri, clientDataHash, tunnelId, resultReceiver, parcel);
                 }
             };
 
@@ -198,6 +208,7 @@ public final class Fido2ApiCall extends GoogleApi<ApiOptions.NoOptions> {
                     APP_CALLBACK_DESCRIPTOR,
                     METHOD_APP_REGISTER,
                     METHOD_APP_SIGN,
+                    METHOD_APP_ISUVPAA,
                     APP_INTERFACES);
 
     static final Fido2ApiCallParams BROWSER_API =
@@ -213,6 +224,7 @@ public final class Fido2ApiCall extends GoogleApi<ApiOptions.NoOptions> {
                     BROWSER_CALLBACK_DESCRIPTOR,
                     METHOD_BROWSER_REGISTER,
                     METHOD_BROWSER_SIGN,
+                    METHOD_BROWSER_ISUVPAA,
                     BROWSER_INTERFACES);
 
     public static final Fido2ApiCallParams FIRST_PARTY_API =
@@ -228,6 +240,7 @@ public final class Fido2ApiCall extends GoogleApi<ApiOptions.NoOptions> {
                     /* callbackDescriptor */ null,
                     /* registerMethodId */ 0,
                     /* signMethodId */ 0,
+                    /* isUserVerifyingPlatformAuthenticatorAvailable */ 0,
                     /* methodInterfaces */ null);
 
     private final String mDescriptor;
@@ -238,7 +251,7 @@ public final class Fido2ApiCall extends GoogleApi<ApiOptions.NoOptions> {
      * @param context the Android {@link Context} for the current process.
      */
     public Fido2ApiCall(Context context) {
-        this(context, BROWSER_API);
+        this(context, WebauthnModeProvider.getInstance().getFido2ApiCallParams());
     }
 
     /**
@@ -497,7 +510,7 @@ public final class Fido2ApiCall extends GoogleApi<ApiOptions.NoOptions> {
         @Override
         public int getMinApkVersion() {
             // This minimum should be moot because it's enforced in `AuthenticatorImpl`.
-            return AuthenticatorImpl.GMSCORE_MIN_VERSION;
+            return GmsCoreUtils.GMSCORE_MIN_VERSION;
         }
 
         public static class Builder

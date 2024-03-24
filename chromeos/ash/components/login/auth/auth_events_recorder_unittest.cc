@@ -8,8 +8,10 @@
 
 #include "base/strings/stringprintf.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/cryptohome/auth_factor.h"
+#include "chromeos/ash/components/login/auth/public/cryptohome_key_constants.h"
 #include "components/crash/core/common/crash_key.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -17,6 +19,45 @@ namespace ash {
 
 namespace {
 
+cryptohome::AuthFactor MakeRecoveryFactor() {
+  cryptohome::AuthFactorRef ref(
+      cryptohome::AuthFactorType::kRecovery,
+      cryptohome::KeyLabel(kCryptohomeRecoveryKeyLabel));
+  return cryptohome::AuthFactor(std::move(ref),
+                                cryptohome::AuthFactorCommonMetadata());
+}
+
+cryptohome::AuthFactor MakeGaiaAuthFactor() {
+  cryptohome::AuthFactorRef ref(cryptohome::AuthFactorType::kPassword,
+                                cryptohome::KeyLabel(kCryptohomeGaiaKeyLabel));
+  return cryptohome::AuthFactor(std::move(ref),
+                                cryptohome::AuthFactorCommonMetadata());
+}
+
+cryptohome::AuthFactor MakeLocalPasswordFactor() {
+  cryptohome::AuthFactorRef ref(
+      cryptohome::AuthFactorType::kPassword,
+      cryptohome::KeyLabel(kCryptohomeLocalPasswordKeyLabel));
+  return cryptohome::AuthFactor(std::move(ref),
+                                cryptohome::AuthFactorCommonMetadata());
+}
+
+cryptohome::AuthFactor MakePinAuthFactor() {
+  cryptohome::AuthFactorRef ref(cryptohome::AuthFactorType::kPin,
+                                cryptohome::KeyLabel(kCryptohomePinLabel));
+  return cryptohome::AuthFactor(std::move(ref),
+                                cryptohome::AuthFactorCommonMetadata());
+}
+
+cryptohome::AuthFactor MakeLegacyAuthFactor(int legacy_key_index) {
+  cryptohome::AuthFactorRef ref(
+      cryptohome::AuthFactorType::kPassword,
+      cryptohome::KeyLabel(base::StringPrintf("legacy-%d", legacy_key_index)));
+  return cryptohome::AuthFactor(std::move(ref),
+                                cryptohome::AuthFactorCommonMetadata());
+}
+
+#if !defined(COMPONENT_BUILD)
 std::string GetSessionStateCrashKeyValue() {
   return crash_reporter::GetCrashKeyValue("session-state");
 }
@@ -39,6 +80,7 @@ std::string GetAuthEventsCrashKeyValue() {
   } while (chunk.length() > 0);
   return result;
 }
+#endif  // !defined(COMPONENT_BUILD)
 
 }  // namespace
 
@@ -53,6 +95,8 @@ class AuthEventsRecorderTest : public ::testing::Test {
   ~AuthEventsRecorderTest() override { recorder_.reset(); }
 
  protected:
+  base::test::SingleThreadTaskEnvironment task_environment_{
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   std::unique_ptr<session_manager::SessionManager> session_manager_;
   std::unique_ptr<ash::AuthEventsRecorder> recorder_;
 };
@@ -229,15 +273,14 @@ TEST_F(AuthEventsRecorderTest, OnExistingUserLoginScreenExitWithNoFailure) {
       "Ash.OSAuth.Lock.NbPasswordAttempts.UntilSuccess", zero_attempts, 1);
 }
 
-TEST_F(AuthEventsRecorderTest, RecordUserAuthFactors) {
+TEST_F(AuthEventsRecorderTest, RecordSessionAuthFactors) {
   base::HistogramTester histogram_tester;
 
-  std::vector<cryptohome::AuthFactorType> factors{
-      cryptohome::AuthFactorType::kPassword, cryptohome::AuthFactorType::kPin,
-      cryptohome::AuthFactorType::kRecovery};
+  SessionAuthFactors factors(
+      {MakeGaiaAuthFactor(), MakePinAuthFactor(), MakeRecoveryFactor()});
   recorder_->OnAuthenticationSurfaceChange(
       AuthEventsRecorder::AuthenticationSurface::kLogin);
-  recorder_->RecordUserAuthFactors(factors);
+  recorder_->RecordSessionAuthFactors(factors);
 
   // The following factors are recorded with `true`.
   histogram_tester.ExpectBucketCount(
@@ -250,6 +293,56 @@ TEST_F(AuthEventsRecorderTest, RecordUserAuthFactors) {
   // The following factors are recorded with `false`.
   histogram_tester.ExpectBucketCount(
       "Ash.OSAuth.Login.ConfiguredAuthFactors.SmartCard", 0, 1);
+  histogram_tester.ExpectBucketCount(
+      "Ash.OSAuth.Login.ConfiguredAuthFactors.LocalPassword", 0, 1);
+}
+
+TEST_F(AuthEventsRecorderTest, RecordSessionAuthFactorsLocalPassword) {
+  base::HistogramTester histogram_tester;
+
+  SessionAuthFactors factors(
+      {MakeLocalPasswordFactor(), MakePinAuthFactor(), MakeRecoveryFactor()});
+  recorder_->OnAuthenticationSurfaceChange(
+      AuthEventsRecorder::AuthenticationSurface::kLogin);
+  recorder_->RecordSessionAuthFactors(factors);
+
+  // The following factors are recorded with `true`.
+  histogram_tester.ExpectBucketCount(
+      "Ash.OSAuth.Login.ConfiguredAuthFactors.LocalPassword", 1, 1);
+  histogram_tester.ExpectBucketCount(
+      "Ash.OSAuth.Login.ConfiguredAuthFactors.CryptohomePin", 1, 1);
+  histogram_tester.ExpectBucketCount(
+      "Ash.OSAuth.Login.ConfiguredAuthFactors.Recovery", 1, 1);
+
+  // The following factors are recorded with `false`.
+  histogram_tester.ExpectBucketCount(
+      "Ash.OSAuth.Login.ConfiguredAuthFactors.SmartCard", 0, 1);
+  histogram_tester.ExpectBucketCount(
+      "Ash.OSAuth.Login.ConfiguredAuthFactors.GaiaPassword", 0, 1);
+}
+
+TEST_F(AuthEventsRecorderTest, RecordSessionAuthFactorsLegacyPassword) {
+  base::HistogramTester histogram_tester;
+
+  SessionAuthFactors factors(
+      {MakeLegacyAuthFactor(1), MakePinAuthFactor(), MakeRecoveryFactor()});
+  recorder_->OnAuthenticationSurfaceChange(
+      AuthEventsRecorder::AuthenticationSurface::kLogin);
+  recorder_->RecordSessionAuthFactors(factors);
+
+  // The following factors are recorded with `true`.
+  histogram_tester.ExpectBucketCount(
+      "Ash.OSAuth.Login.ConfiguredAuthFactors.GaiaPassword", 1, 1);
+  histogram_tester.ExpectBucketCount(
+      "Ash.OSAuth.Login.ConfiguredAuthFactors.CryptohomePin", 1, 1);
+  histogram_tester.ExpectBucketCount(
+      "Ash.OSAuth.Login.ConfiguredAuthFactors.Recovery", 1, 1);
+
+  // The following factors are recorded with `false`.
+  histogram_tester.ExpectBucketCount(
+      "Ash.OSAuth.Login.ConfiguredAuthFactors.SmartCard", 0, 1);
+  histogram_tester.ExpectBucketCount(
+      "Ash.OSAuth.Login.ConfiguredAuthFactors.LocalPassword", 0, 1);
 }
 
 TEST_F(AuthEventsRecorderTest, OnRecoveryDone) {
@@ -279,6 +372,10 @@ TEST_F(AuthEventsRecorderTest, OnRecoveryDone) {
       "Login.CryptohomeRecoveryDuration.Failure", two_seconds, 1);
 }
 
+// These tests fail on the component build because
+// GetSessionStateCrashKeyValue() doesn't pull from the same crashpad instance
+// that is used by AuthEventsRecorder.
+#if !defined(COMPONENT_BUILD)
 TEST_F(AuthEventsRecorderTest, SessionStateCrashKey) {
   session_manager_->SetSessionState(
       session_manager::SessionState::LOGIN_PRIMARY);
@@ -370,5 +467,38 @@ TEST_F(AuthEventsRecorderTest, AuthEventsCrashKeyOnFailureUnlock) {
             "auth_surface_change_Lock,update_lock_screen_view,auth_submit,"
             "auth_complete_failure,");
 }
+
+TEST_F(AuthEventsRecorderTest, PostFactorsAdjustmentTimings) {
+  base::HistogramTester histogram_tester;
+
+  recorder_->StartPostLoginFactorAdjustments();
+  task_environment_.AdvanceClock(base::Milliseconds(10));
+  recorder_->OnEarlyPrefsRead();
+  task_environment_.AdvanceClock(base::Milliseconds(20));
+  recorder_->OnEarlyPrefsParsed();
+  // This time does not have individual bucket, but it falls
+  // into the total bucket.
+  task_environment_.AdvanceClock(base::Milliseconds(40));
+  recorder_->OnFactorUpdateStarted();
+  task_environment_.AdvanceClock(base::Milliseconds(80));
+  recorder_->OnMigrationsCompleted();
+  task_environment_.AdvanceClock(base::Milliseconds(160));
+  recorder_->OnPoliciesApplied();
+  recorder_->FinishPostLoginFactorAdjustments();
+
+  histogram_tester.ExpectTimeBucketCount(
+      "Ash.OSAuth.Login.Times.FactorConfigTotal",
+      base::Milliseconds(10 + 20 + 40 + 80 + 160), 1);
+  histogram_tester.ExpectTimeBucketCount(
+      "Ash.OSAuth.Login.Times.EarlyPrefsRead", base::Milliseconds(10), 1);
+  histogram_tester.ExpectTimeBucketCount(
+      "Ash.OSAuth.Login.Times.EarlyPrefsParse", base::Milliseconds(20), 1);
+  histogram_tester.ExpectTimeBucketCount(
+      "Ash.OSAuth.Login.Times.FactorMigrations", base::Milliseconds(80), 1);
+  histogram_tester.ExpectTimeBucketCount(
+      "Ash.OSAuth.Login.Times.PolicyEnforcement", base::Milliseconds(160), 1);
+}
+
+#endif  // !defined(COMPONENT_BUILD)
 
 }  // namespace ash

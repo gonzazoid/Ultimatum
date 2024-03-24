@@ -34,8 +34,8 @@ const char kGuidInvalid[] = "EDC609ED";
 const base::Time kJune2017 = base::Time::FromSecondsSinceUnixEpoch(1497552271);
 
 // Returns a profile with all fields set.  Contains identical data to the data
-// returned from ConstructCompleteSpecifics().
-AutofillProfile ConstructCompleteProfile(
+// returned from ConstructBaseSpecifics().
+AutofillProfile ConstructBaseProfile(
     AddressCountryCode country_code = AddressCountryCode("ES")) {
   AutofillProfile profile(kGuid, AutofillProfile::Source::kLocalOrSyncable,
                           country_code);
@@ -46,13 +46,6 @@ AutofillProfile ConstructCompleteProfile(
   profile.set_profile_label("profile_label");
 
   // Set testing values and statuses for the name.
-  profile.SetRawInfoWithVerificationStatus(NAME_HONORIFIC_PREFIX, u"Dr.",
-                                           VerificationStatus::kObserved);
-
-  profile.SetRawInfoWithVerificationStatus(NAME_FULL_WITH_HONORIFIC_PREFIX,
-                                           u"Dr. John K. Doe",
-                                           VerificationStatus::kFormatted);
-
   profile.SetRawInfoWithVerificationStatus(NAME_FULL, u"John K. Doe",
                                            VerificationStatus::kUserVerified);
   profile.SetRawInfoWithVerificationStatus(NAME_FIRST, u"John",
@@ -121,16 +114,11 @@ AutofillProfile ConstructCompleteProfile(
                                            VerificationStatus::kParsed);
   profile.set_language_code("en");
 
-  // Set testing values for the birthdate.
-  profile.SetRawInfoAsInt(BIRTHDATE_DAY, 14);
-  profile.SetRawInfoAsInt(BIRTHDATE_MONTH, 3);
-  profile.SetRawInfoAsInt(BIRTHDATE_4_DIGIT_YEAR, 1997);
-
   return profile;
 }
 
 AutofillProfile ConstructCompleteProfileBR() {
-  AutofillProfile profile = ConstructCompleteProfile(AddressCountryCode("BR"));
+  AutofillProfile profile = ConstructBaseProfile(AddressCountryCode("BR"));
   profile.SetRawInfoWithVerificationStatus(ADDRESS_HOME_CITY, u"Belo Horizonte",
                                            VerificationStatus::kObserved);
   profile.SetRawInfoWithVerificationStatus(ADDRESS_HOME_STATE, u"Minas Gerais",
@@ -175,7 +163,7 @@ AutofillProfile ConstructCompleteProfileBR() {
 }
 
 AutofillProfile ConstructCompleteProfileMX() {
-  AutofillProfile profile = ConstructCompleteProfile(AddressCountryCode("MX"));
+  AutofillProfile profile = ConstructBaseProfile(AddressCountryCode("MX"));
   profile.SetRawInfoWithVerificationStatus(
       ADDRESS_HOME_CITY, u"Ciudad de México", VerificationStatus::kObserved);
   profile.SetRawInfoWithVerificationStatus(ADDRESS_HOME_STATE, u"CDMX",
@@ -234,9 +222,37 @@ AutofillProfile ConstructCompleteProfileMX() {
   return profile;
 }
 
+AutofillProfile ConstructCompleteProfileIN() {
+  AutofillProfile profile = ConstructBaseProfile(AddressCountryCode("IN"));
+  profile.SetRawInfoWithVerificationStatus(ADDRESS_HOME_CITY, u"Hyderabad",
+                                           VerificationStatus::kObserved);
+  profile.SetRawInfoWithVerificationStatus(ADDRESS_HOME_STATE, u"Telangana",
+                                           VerificationStatus::kObserved);
+  profile.SetRawInfoWithVerificationStatus(
+      ADDRESS_HOME_STREET_ADDRESS,
+      u"12/110, Flat no. 504, Raja Apartments\n"
+      u"Kondapur, Opp to Ayyappa Swamy temple",
+      VerificationStatus::kFormatted);
+  profile.SetRawInfoWithVerificationStatus(
+      ADDRESS_HOME_STREET_LOCATION, u"12/110, Flat no. 504, Raja Apartments",
+      VerificationStatus::kObserved);
+  profile.SetRawInfoWithVerificationStatus(ADDRESS_HOME_DEPENDENT_LOCALITY,
+                                           u"Kondapur",
+                                           VerificationStatus::kObserved);
+  profile.SetRawInfoWithVerificationStatus(ADDRESS_HOME_LANDMARK,
+                                           u"Opp to Ayyappa Swamy temple",
+                                           VerificationStatus::kObserved);
+  profile.SetRawInfoWithVerificationStatus(
+      ADDRESS_HOME_STREET_LOCATION_AND_LOCALITY,
+      u"12/110, Flat no. 504, Raja Apartments, Kondapur",
+      VerificationStatus::kFormatted);
+
+  return profile;
+}
+
 // Returns AutofillProfileSpecifics with all Autofill profile fields set.
-// Contains identical data to the data returned from ConstructCompleteProfile().
-AutofillProfileSpecifics ConstructCompleteSpecifics() {
+// Contains identical data to the data returned from ConstructBaseProfile().
+AutofillProfileSpecifics ConstructBaseSpecifics() {
   AutofillProfileSpecifics specifics;
 
   specifics.set_guid(kGuid);
@@ -248,16 +264,6 @@ AutofillProfileSpecifics ConstructCompleteSpecifics() {
   specifics.set_profile_label("profile_label");
 
   // Set values and statuses for the names.
-  specifics.add_name_honorific("Dr.");
-  specifics.add_name_honorific_status(
-      AutofillProfileSpecifics::VerificationStatus::
-          AutofillProfileSpecifics_VerificationStatus_OBSERVED);
-
-  specifics.add_name_full_with_honorific("Dr. John K. Doe");
-  specifics.add_name_full_with_honorific_status(
-      AutofillProfileSpecifics::VerificationStatus::
-          AutofillProfileSpecifics_VerificationStatus_FORMATTED);
-
   specifics.add_name_first("John");
   specifics.add_name_first_status(
       AutofillProfileSpecifics::VerificationStatus::
@@ -364,11 +370,6 @@ AutofillProfileSpecifics ConstructCompleteSpecifics() {
 
   specifics.set_address_home_language_code("en");
 
-  // Set values for the birthdate.
-  specifics.set_birthdate_day(14);
-  specifics.set_birthdate_month(3);
-  specifics.set_birthdate_year(1997);
-
   // All of the following types are not part of the default address model, but
   // rather belong to a model customized for a particular country. Nevertheless
   // they should be listed here for completeness. Note that these fields are
@@ -409,6 +410,11 @@ AutofillProfileSpecifics ConstructCompleteSpecifics() {
       sync_pb::
           AutofillProfileSpecifics_VerificationStatus_VERIFICATION_STATUS_UNSPECIFIED);
 
+  specifics.set_address_home_street_location_and_locality("");
+  specifics.set_address_home_street_location_and_locality_status(
+      sync_pb::
+          AutofillProfileSpecifics_VerificationStatus_VERIFICATION_STATUS_UNSPECIFIED);
+
   specifics.set_address_home_apt("");
   specifics.set_address_home_apt_status(
       sync_pb::
@@ -423,7 +429,7 @@ AutofillProfileSpecifics ConstructCompleteSpecifics() {
 }
 
 AutofillProfileSpecifics ConstructCompleteSpecificsBR() {
-  AutofillProfileSpecifics specifics = ConstructCompleteSpecifics();
+  AutofillProfileSpecifics specifics = ConstructBaseSpecifics();
 
   specifics.set_address_home_country("BR");
   specifics.set_address_home_country_status(
@@ -509,7 +515,7 @@ AutofillProfileSpecifics ConstructCompleteSpecificsBR() {
 }
 
 AutofillProfileSpecifics ConstructCompleteSpecificsMX() {
-  AutofillProfileSpecifics specifics = ConstructCompleteSpecifics();
+  AutofillProfileSpecifics specifics = ConstructBaseSpecifics();
 
   specifics.set_address_home_country("MX");
   specifics.set_address_home_country_status(
@@ -604,7 +610,82 @@ AutofillProfileSpecifics ConstructCompleteSpecificsMX() {
   return specifics;
 }
 
-enum class I18nCountryModel { kLegacy = 0, kBR = 1, kMX = 2 };
+AutofillProfileSpecifics ConstructCompleteSpecificsIN() {
+  AutofillProfileSpecifics specifics = ConstructBaseSpecifics();
+
+  specifics.set_address_home_country("IN");
+  specifics.set_address_home_country_status(
+      sync_pb::AutofillProfileSpecifics_VerificationStatus_OBSERVED);
+  specifics.set_address_home_city("Hyderabad");
+  specifics.set_address_home_city_status(
+      sync_pb::AutofillProfileSpecifics_VerificationStatus_OBSERVED);
+  specifics.set_address_home_state("Telangana");
+  specifics.set_address_home_state_status(
+      sync_pb::AutofillProfileSpecifics_VerificationStatus_OBSERVED);
+  specifics.set_address_home_street_location(
+      "12/110, Flat no. 504, Raja Apartments");
+  specifics.set_address_home_street_location_status(
+      sync_pb::AutofillProfileSpecifics_VerificationStatus_OBSERVED);
+  specifics.set_address_home_dependent_locality("Kondapur");
+  specifics.set_address_home_dependent_locality_status(
+      sync_pb::AutofillProfileSpecifics_VerificationStatus_OBSERVED);
+  specifics.set_address_home_landmark("Opp to Ayyappa Swamy temple");
+  specifics.set_address_home_landmark_status(
+      sync_pb::AutofillProfileSpecifics_VerificationStatus_OBSERVED);
+  specifics.set_address_home_street_location_and_locality(
+      "12/110, Flat no. 504, Raja Apartments, Kondapur");
+  specifics.set_address_home_street_location_and_locality_status(
+      sync_pb::AutofillProfileSpecifics_VerificationStatus_FORMATTED);
+
+  specifics.set_address_home_street_address(
+      "12/110, Flat no. 504, Raja Apartments\n"
+      "Kondapur, Opp to Ayyappa Swamy temple");
+  specifics.set_address_home_street_address_status(
+      sync_pb::AutofillProfileSpecifics_VerificationStatus::
+          AutofillProfileSpecifics_VerificationStatus_FORMATTED);
+
+  specifics.set_address_home_line1("12/110, Flat no. 504, Raja Apartments");
+  specifics.set_address_home_line2("Kondapur, Opp to Ayyappa Swamy temple");
+
+  specifics.set_address_home_admin_level_2("");
+  specifics.set_address_home_admin_level_2_status(
+      sync_pb::
+          AutofillProfileSpecifics_VerificationStatus_VERIFICATION_STATUS_UNSPECIFIED);
+
+  specifics.set_address_home_thoroughfare_name("");
+  specifics.set_address_home_thoroughfare_name_status(
+      sync_pb::
+          AutofillProfileSpecifics_VerificationStatus_VERIFICATION_STATUS_UNSPECIFIED);
+
+  specifics.set_address_home_thoroughfare_number("");
+  specifics.set_address_home_thoroughfare_number_status(
+      sync_pb::
+          AutofillProfileSpecifics_VerificationStatus_VERIFICATION_STATUS_UNSPECIFIED);
+
+  specifics.set_address_home_subpremise_name("");
+  specifics.set_address_home_subpremise_name_status(
+      sync_pb::
+          AutofillProfileSpecifics_VerificationStatus_VERIFICATION_STATUS_UNSPECIFIED);
+
+  specifics.set_address_home_apt_num("");
+  specifics.set_address_home_apt_num_status(
+      sync_pb::
+          AutofillProfileSpecifics_VerificationStatus_VERIFICATION_STATUS_UNSPECIFIED);
+
+  specifics.set_address_home_floor("");
+  specifics.set_address_home_floor_status(
+      sync_pb::
+          AutofillProfileSpecifics_VerificationStatus_VERIFICATION_STATUS_UNSPECIFIED);
+
+  specifics.set_address_home_sorting_code("");
+  specifics.set_address_home_sorting_code_status(
+      sync_pb::
+          AutofillProfileSpecifics_VerificationStatus_VERIFICATION_STATUS_UNSPECIFIED);
+
+  return specifics;
+}
+
+enum class I18nCountryModel { kLegacy = 0, kBR = 1, kMX = 2, kIN = 3 };
 
 // The tests are parametrized with a country to assert that all custom address
 // models are supported.
@@ -617,6 +698,7 @@ class AutofillProfileSyncUtilTest
     test_clock_.SetNow(kJune2017);
     features_.InitWithFeatures(
         {features::kAutofillUseI18nAddressModel,
+         features::kAutofillUseINAddressModel,
          features::kAutofillEnableSupportForLandmark,
          features::kAutofillEnableSupportForAddressOverflow,
          features::kAutofillEnableSupportForBetweenStreets,
@@ -630,11 +712,13 @@ class AutofillProfileSyncUtilTest
   AutofillProfile GetAutofillProfileForCountry(I18nCountryModel country_model) {
     switch (country_model) {
       case I18nCountryModel::kLegacy:
-        return ConstructCompleteProfile();
+        return ConstructBaseProfile();
       case I18nCountryModel::kBR:
         return ConstructCompleteProfileBR();
       case I18nCountryModel::kMX:
         return ConstructCompleteProfileMX();
+      case I18nCountryModel::kIN:
+        return ConstructCompleteProfileIN();
     }
   }
 
@@ -642,11 +726,13 @@ class AutofillProfileSyncUtilTest
       I18nCountryModel country_model) {
     switch (country_model) {
       case I18nCountryModel::kLegacy:
-        return ConstructCompleteSpecifics();
+        return ConstructBaseSpecifics();
       case I18nCountryModel::kBR:
         return ConstructCompleteSpecificsBR();
       case I18nCountryModel::kMX:
         return ConstructCompleteSpecificsMX();
+      case I18nCountryModel::kIN:
+        return ConstructCompleteSpecificsIN();
     }
   }
 
@@ -658,15 +744,6 @@ class AutofillProfileSyncUtilTest
 // Ensure that all profile fields are able to be synced up from the client to
 // the server.
 TEST_P(AutofillProfileSyncUtilTest, CreateEntityDataFromAutofillProfile) {
-  base::test::ScopedFeatureList structured_names_feature;
-  // With this feature enabled, the AutofillProfile supports all tokens
-  // and statuses assignable in the specifics. If this feature is
-  // disabled, for some tokens
-  // AutofillProfile::GetRawInfo(AutofillProfile::SetRawInfo()) is not the
-  // identify function. The same is true for the verification status.
-  structured_names_feature.InitAndEnableFeature(
-      features::kAutofillEnableSupportForHonorificPrefixes);
-
   AutofillProfile profile = GetAutofillProfileForCountry(GetParam());
   AutofillProfileSpecifics specifics =
       GetAutofillProfileSpecificsForCountry(GetParam());
@@ -842,7 +919,8 @@ INSTANTIATE_TEST_SUITE_P(AutofillI18nModels,
                          AutofillProfileSyncUtilTest,
                          testing::Values(I18nCountryModel::kLegacy,
                                          I18nCountryModel::kBR,
-                                         I18nCountryModel::kMX));
+                                         I18nCountryModel::kMX,
+                                         I18nCountryModel::kIN));
 
 }  // namespace
 }  // namespace autofill

@@ -5,6 +5,7 @@
 #include "chrome/browser/ash/extensions/file_manager/private_api_mount.h"
 
 #include <memory>
+#include <string_view>
 #include <utility>
 
 #include "base/feature_list.h"
@@ -22,6 +23,8 @@
 #include "chrome/browser/ash/file_manager/file_tasks_notifier.h"
 #include "chrome/browser/ash/file_manager/fileapi_util.h"
 #include "chrome/browser/ash/file_manager/volume_manager.h"
+#include "chrome/browser/ash/fileapi/file_system_backend.h"
+#include "chrome/browser/ash/fusebox/fusebox_server.h"
 #include "chrome/browser/ash/smb_client/smb_service.h"
 #include "chrome/browser/ash/smb_client/smb_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
@@ -39,7 +42,7 @@
 namespace extensions {
 namespace {
 
-std::string Redact(const base::StringPiece path) {
+std::string Redact(const std::string_view path) {
   return LOG_IS_ON(INFO) ? base::StrCat({"'", path, "'"}) : "(redacted)";
 }
 
@@ -68,21 +71,21 @@ ExtensionFunction::ResponseAction FileManagerPrivateAddMountFunction::Run() {
   }
   set_log_on_completion(true);
 
-  path_ = file_manager::util::GetLocalPathFromURL(render_frame_host(), profile,
-                                                  GURL(params->file_url));
+  const scoped_refptr<storage::FileSystemContext> file_system_context =
+      file_manager::util::GetFileSystemContextForRenderFrameHost(
+          profile, render_frame_host());
+  const storage::FileSystemURL fs_url(
+      file_system_context->CrackURLInFirstPartyContext(GURL(params->file_url)));
+  path_ = ash::FileSystemBackend::CanHandleURL(fs_url)
+              ? (fs_url.TypeImpliesPathIsReal()
+                     ? fs_url.path()
+                     : fusebox::Server::SubstituteFuseboxFilePath(fs_url))
+              : base::FilePath();
 
   if (auto* notifier =
           file_manager::file_tasks::FileTasksNotifier::GetForProfile(profile)) {
-    const scoped_refptr<storage::FileSystemContext> file_system_context =
-        file_manager::util::GetFileSystemContextForRenderFrameHost(
-            profile, render_frame_host());
-
     std::vector<storage::FileSystemURL> urls;
-    const storage::FileSystemURL url =
-        file_system_context->CrackURLInFirstPartyContext(
-            GURL(params->file_url));
-    urls.push_back(url);
-
+    urls.push_back(std::move(fs_url));
     notifier->NotifyFileTasks(urls);
   }
 
@@ -155,8 +158,17 @@ FileManagerPrivateCancelMountingFunction::Run() {
 
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  base::FilePath path = file_manager::util::GetLocalPathFromURL(
-      render_frame_host(), profile, GURL(params->file_url));
+  const scoped_refptr<storage::FileSystemContext> file_system_context =
+      file_manager::util::GetFileSystemContextForRenderFrameHost(
+          profile, render_frame_host());
+  const storage::FileSystemURL fs_url(
+      file_system_context->CrackURLInFirstPartyContext(GURL(params->file_url)));
+  base::FilePath path =
+      ash::FileSystemBackend::CanHandleURL(fs_url)
+          ? (fs_url.TypeImpliesPathIsReal()
+                 ? fs_url.path()
+                 : fusebox::Server::SubstituteFuseboxFilePath(fs_url))
+          : base::FilePath();
 
   DiskMountManager* const disk_mount_manager = DiskMountManager::GetInstance();
   DCHECK(disk_mount_manager);

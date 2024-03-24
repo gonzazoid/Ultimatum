@@ -252,7 +252,6 @@ void AccelerometerProviderMojo::UpdateStateWithECLidAngleDriverSupported() {
     default:
       LOG(FATAL) << "Unexpected state: "
                  << static_cast<int32_t>(initialization_state_);
-      break;
   }
 
   if (initialization_state_ == MojoState::ANGL_LID)
@@ -287,7 +286,6 @@ void AccelerometerProviderMojo::UpdateStateWithLidAccelerometer() {
     default:
       LOG(FATAL) << "Unexpected state: "
                  << static_cast<int32_t>(initialization_state_);
-      break;
   }
 }
 
@@ -318,7 +316,6 @@ void AccelerometerProviderMojo::UpdateStateWithBaseAccelerometer() {
     default:
       LOG(FATAL) << "Unexpected state: "
                  << static_cast<int32_t>(initialization_state_);
-      break;
   }
 }
 
@@ -588,7 +585,7 @@ void AccelerometerProviderMojo::CreateAccelerometerSamplesObserver(int32_t id) {
     return;
   }
 
-  accelerometer.samples_observer = std::make_unique<AccelGryoSamplesObserver>(
+  accelerometer.samples_observer = std::make_unique<AccelGyroSamplesObserver>(
       id, std::move(accelerometer.remote), accelerometer.scale.value(),
       base::BindRepeating(&AccelerometerProviderMojo::OnSampleUpdatedCallback,
                           this));

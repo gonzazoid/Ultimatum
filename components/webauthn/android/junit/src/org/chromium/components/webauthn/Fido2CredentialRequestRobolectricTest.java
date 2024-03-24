@@ -16,8 +16,11 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import android.app.Activity;
 import android.app.PendingIntent;
+import android.content.Context;
+import android.credentials.CredentialManager;
 import android.net.Uri;
 import android.os.Build;
+import android.os.ResultReceiver;
 
 import androidx.test.filters.SmallTest;
 
@@ -34,6 +37,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.robolectric.annotation.Config;
+import org.robolectric.shadow.api.Shadow;
+import org.robolectric.shadows.ShadowApplication;
 
 import org.chromium.base.Callback;
 import org.chromium.base.FeatureList;
@@ -46,6 +52,7 @@ import org.chromium.blink.mojom.PublicKeyCredentialRequestOptions;
 import org.chromium.blink.mojom.ResidentKeyRequirement;
 import org.chromium.components.webauthn.cred_man.CredManHelper;
 import org.chromium.components.webauthn.cred_man.CredManSupportProvider;
+import org.chromium.components.webauthn.cred_man.ShadowCredentialManager;
 import org.chromium.content_public.browser.RenderFrameHost;
 import org.chromium.content_public.browser.RenderFrameHost.WebAuthSecurityChecksResults;
 import org.chromium.device.DeviceFeatureList;
@@ -60,6 +67,11 @@ import java.util.Collections;
 import java.util.List;
 
 @RunWith(BaseRobolectricTestRunner.class)
+@Config(
+        manifest = Config.NONE,
+        shadows = {
+            ShadowCredentialManager.class,
+        })
 public class Fido2CredentialRequestRobolectricTest {
     private Fido2CredentialRequest mRequest;
     private PublicKeyCredentialCreationOptions mCreationOptions;
@@ -87,6 +99,10 @@ public class Fido2CredentialRequestRobolectricTest {
         FeatureList.setTestValues(testValues);
 
         MockitoAnnotations.initMocks(this);
+
+        ShadowApplication shadowApp = ShadowApplication.getInstance();
+        shadowApp.setSystemService(
+                Context.CREDENTIAL_SERVICE, Shadow.newInstanceOf(CredentialManager.class));
 
         GURL gurl =
                 new GURL(
@@ -203,8 +219,6 @@ public class Fido2CredentialRequestRobolectricTest {
 
         FeatureList.TestValues testValues = new FeatureList.TestValues();
         testValues.addFeatureFlagOverride(DeviceFeatureList.WEBAUTHN_ANDROID_CRED_MAN, false);
-        testValues.addFeatureFlagOverride(
-                DeviceFeatureList.WEBAUTHN_ANDROID_CRED_MAN_FOR_HYBRID, true);
         FeatureList.setTestValues(testValues);
 
         final byte[] clientDataHash = new byte[] {1, 2, 3};
@@ -419,8 +433,6 @@ public class Fido2CredentialRequestRobolectricTest {
 
         FeatureList.TestValues testValues = new FeatureList.TestValues();
         testValues.addFeatureFlagOverride(DeviceFeatureList.WEBAUTHN_ANDROID_CRED_MAN, false);
-        testValues.addFeatureFlagOverride(
-                DeviceFeatureList.WEBAUTHN_ANDROID_CRED_MAN_FOR_HYBRID, true);
         FeatureList.setTestValues(testValues);
 
         mRequest.setIsHybridRequest(true);
@@ -1007,6 +1019,7 @@ public class Fido2CredentialRequestRobolectricTest {
                 PublicKeyCredentialCreationOptions options,
                 Uri uri,
                 byte[] clientDataHash,
+                ResultReceiver resultReceiver,
                 OnSuccessListener<PendingIntent> successCallback,
                 OnFailureListener failureCallback)
                 throws NoSuchAlgorithmException {
@@ -1025,6 +1038,7 @@ public class Fido2CredentialRequestRobolectricTest {
                 PublicKeyCredentialRequestOptions options,
                 Uri uri,
                 byte[] clientDataHash,
+                ResultReceiver resultReceiver,
                 OnSuccessListener<PendingIntent> successCallback,
                 OnFailureListener failureCallback) {
             mGetAssertionCalled = true;

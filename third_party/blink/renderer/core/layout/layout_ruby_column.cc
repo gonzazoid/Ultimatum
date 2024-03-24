@@ -25,6 +25,7 @@ void UpdateRubyBaseStyle(const LayoutObject* child,
 }  // namespace
 
 LayoutRubyColumn::LayoutRubyColumn() : LayoutNGBlockFlow(nullptr) {
+  DCHECK(!RuntimeEnabledFeatures::RubyLineBreakableEnabled());
   SetInline(true);
   SetIsAtomicInlineLevel(true);
 }
@@ -172,7 +173,7 @@ void LayoutRubyColumn::RemoveChild(LayoutObject* child) {
   if (RuntimeEnabledFeatures::RubySimplePairingEnabled()) {
     if (!DocumentBeingDestroyed()) {
       DCHECK(child->IsRubyBase() || child->IsRubyText());
-      if (auto* inline_ruby = DynamicTo<LayoutRubyAsInline>(Parent())) {
+      if (auto* inline_ruby = DynamicTo<LayoutRuby>(Parent())) {
         inline_ruby->DidRemoveChildFromColumn(*child);
       } else {
         To<LayoutRubyAsBlock>(Parent())->DidRemoveChildFromColumn(*child);

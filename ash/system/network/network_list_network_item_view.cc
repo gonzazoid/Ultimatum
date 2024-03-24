@@ -184,9 +184,15 @@ gfx::ImageSkia GetNetworkImageForNetwork(
     const NetworkStatePropertiesPtr& network_properties) {
   gfx::ImageSkia network_image;
 
-  if (IsCellularNetworkUnActivated(network_properties) &&
-      Shell::Get()->session_controller()->login_status() ==
-          LoginStatus::NOT_LOGGED_IN) {
+  if (NetworkTypeMatchesType(network_properties->type,
+                             NetworkType::kCellular) &&
+      features::IsCellularCarrierLockEnabled() &&
+      IsCellularNetworkCarrierLocked(network_properties)) {
+    network_image = network_icon::GetImageForCarrierLockedNetwork(
+        color_provider, network_icon::ICON_TYPE_LIST);
+  } else if (IsCellularNetworkUnActivated(network_properties) &&
+             Shell::Get()->session_controller()->login_status() ==
+                 LoginStatus::NOT_LOGGED_IN) {
     network_image =
         network_icon::GetImageForPSimPendingActivationWhileLoggedOut(
             color_provider, network_icon::ICON_TYPE_LIST);
@@ -317,8 +323,7 @@ void NetworkListNetworkItemView::UpdateViewForNetwork(
   }
 
   SetAccessibleName(GenerateAccessibilityLabel(label));
-  GetViewAccessibility().OverrideDescription(
-      GenerateAccessibilityDescription());
+  GetViewAccessibility().SetDescription(GenerateAccessibilityDescription());
 }
 
 void NetworkListNetworkItemView::NetworkIconChanged() {
@@ -603,7 +608,7 @@ NetworkListNetworkItemView::GenerateAccessibilityDescriptionForTether(
       base::FormatPercent(battery_percentage));
 }
 
-BEGIN_METADATA(NetworkListNetworkItemView, NetworkListItemView)
+BEGIN_METADATA(NetworkListNetworkItemView)
 END_METADATA
 
 }  // namespace ash

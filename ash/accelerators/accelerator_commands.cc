@@ -446,7 +446,7 @@ bool CanCreateNewIncognitoWindow() {
   // For non-guest mode, consume the key and defer the decision to the browser.
   std::optional<user_manager::UserType> user_type =
       Shell::Get()->session_controller()->GetUserType();
-  return user_type && *user_type != user_manager::USER_TYPE_GUEST;
+  return user_type && *user_type != user_manager::UserType::kGuest;
 }
 
 bool CanCycleInputMethod() {
@@ -626,6 +626,11 @@ bool CanToggleOverview() {
       return false;
   }
   return true;
+}
+
+bool CanTogglePicker() {
+  CHECK(Shell::HasInstance());
+  return features::IsPickerUpdateEnabled() && Shell::Get()->picker_controller();
 }
 
 bool CanTogglePrivacyScreen() {
@@ -1105,11 +1110,7 @@ void ShiftPrimaryDisplay() {
 }
 
 void ShowEmojiPicker(const base::TimeTicks accelerator_timestamp) {
-  if (auto* picker_controller = Shell::Get()->picker_controller()) {
-    picker_controller->ToggleWidget(accelerator_timestamp);
-  } else {
-    ui::ShowEmojiPanel();
-  }
+  ui::ShowEmojiPanel();
 }
 
 void ShowKeyboardShortcutViewer() {
@@ -1308,6 +1309,13 @@ void ToggleClipboardHistory(bool is_plain_text_paste) {
   DCHECK(Shell::Get()->clipboard_history_controller());
   Shell::Get()->clipboard_history_controller()->ToggleMenuShownByAccelerator(
       is_plain_text_paste);
+}
+
+void TogglePicker(base::TimeTicks accelerator_timestamp) {
+  CHECK(Shell::Get()->picker_controller());
+  if (auto* picker_controller = Shell::Get()->picker_controller()) {
+    picker_controller->ToggleWidget(accelerator_timestamp);
+  }
 }
 
 void EnableOrToggleDictation() {

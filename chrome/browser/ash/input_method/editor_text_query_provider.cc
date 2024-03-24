@@ -65,6 +65,7 @@ orca::mojom::TextQueryErrorCode ConvertErrorCode(
     case manta::MantaStatusCode::kInvalidInput:
       return orca::mojom::TextQueryErrorCode::kInvalidArgument;
     case manta::MantaStatusCode::kResourceExhausted:
+    case manta::MantaStatusCode::kPerUserQuotaExceeded:
       return orca::mojom::TextQueryErrorCode::kResourceExhausted;
     case manta::MantaStatusCode::kBackendFailure:
       return orca::mojom::TextQueryErrorCode::kBackendFailure;
@@ -104,15 +105,29 @@ std::vector<orca::mojom::TextQueryResultPtr> ParseSuccessResponse(
   return results;
 }
 
+std::optional<size_t> GetLengthOfLongestResponse(
+    const std::vector<orca::mojom::TextQueryResultPtr>& responses) {
+  if (responses.size() == 0) {
+    return std::nullopt;
+  }
+  size_t max_response_length = 0;
+  for (const auto& response : responses) {
+    if (response->text.length() > max_response_length) {
+      max_response_length = response->text.length();
+    }
+  }
+  return max_response_length;
+}
+
 }  // namespace
 
 TextQueryProviderForOrca::TextQueryProviderForOrca(
     mojo::PendingAssociatedReceiver<orca::mojom::TextQueryProvider> receiver,
     Profile* profile,
-    EditorSwitch* editor_switch)
+    EditorMetricsRecorder* metrics_recorder)
     : text_query_provider_receiver_(this, std::move(receiver)),
       orca_provider_(CreateProvider(profile)),
-      editor_switch_(editor_switch) {}
+      metrics_recorder_(metrics_recorder) {}
 
 TextQueryProviderForOrca::~TextQueryProviderForOrca() = default;
 
@@ -132,22 +147,39 @@ void TextQueryProviderForOrca::Process(orca::mojom::TextQueryRequestPtr request,
   orca_provider_->Call(
       CreateProviderRequest(std::move(request)),
       base::BindOnce(
-          [](const std::string& request_id, EditorMode editor_mode,
-             ProcessCallback process_callback,
-             base::Value::Dict dict, manta::MantaStatus status) {
-            std::move(process_callback)
-                .Run(status.status_code == manta::MantaStatusCode::kOk
-                         ? orca::mojom::TextQueryResponse::NewResults(
-                               ParseSuccessResponse(request_id, dict))
-                         : orca::mojom::TextQueryResponse::NewError(
-                               ConvertErrorResponse(status)));
+          [](const std::string& request_id,
+             EditorMetricsRecorder* metrics_recorder,
+             ProcessCallback process_callback, base::Value::Dict dict,
+             manta::MantaStatus status) {
+            if (status.status_code == manta::MantaStatusCode::kOk) {
+              auto responses = ParseSuccessResponse(request_id, dict);
+              int number_of_responses = responses.size();
+              std::optional<size_t> max_response_length =
+                  GetLengthOfLongestResponse(responses);
 
-            LogEditorState(status.status_code == manta::MantaStatusCode::kOk
-                               ? EditorStates::kSuccessResponse
-                               : EditorStates::kErrorResponse,
-                           editor_mode);
+              std::move(process_callback)
+                  .Run(orca::mojom::TextQueryResponse::NewResults(
+                      std::move(responses)));
+
+              metrics_recorder->LogEditorState(EditorStates::kSuccessResponse);
+              metrics_recorder->LogNumberOfResponsesFromServer(
+                  number_of_responses);
+              if (max_response_length.has_value()) {
+                metrics_recorder->LogLengthOfLongestResponseFromServer(
+                    *max_response_length);
+              }
+              return;
+            }
+
+            auto error_response = ConvertErrorResponse(status);
+            orca::mojom::TextQueryErrorCode error_code = error_response->code;
+            std::move(process_callback)
+                .Run(orca::mojom::TextQueryResponse::NewError(
+                    std::move(error_response)));
+            metrics_recorder->LogEditorState(EditorStates::kErrorResponse);
+            metrics_recorder->LogEditorState(ToEditorStatesMetric(error_code));
           },
-          base::NumberToString(request_id_), editor_switch_->GetEditorMode(),
+          base::NumberToString(request_id_), metrics_recorder_,
           std::move(callback)));
 }
 

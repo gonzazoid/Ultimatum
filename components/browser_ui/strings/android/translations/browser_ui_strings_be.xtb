@@ -5,6 +5,7 @@
 <translation id="1036348656032585052">Выключыць</translation>
 <translation id="1044891598689252897">Сайты будуць працаваць нармальна</translation>
 <translation id="1073417869336441572">Дапамажыце нам палепшыць Chrome – раскажыце, чаму вы дазволілі староннія файлы cookie. <ph name="BEGIN_LINK" />Адправіць водгук<ph name="END_LINK" /></translation>
+<translation id="1113435009358629918">Схаваць картку з апавяшчэннем пра зніжэнне цаны</translation>
 <translation id="1178581264944972037">Прыпыніць</translation>
 <translation id="1181037720776840403">Выдаліць</translation>
 <translation id="1192844206376121885">Будуць выдалены ўсе даныя і файлы cookie, захаваныя сайтам <ph name="ORIGIN" />.</translation>
@@ -21,7 +22,6 @@
 <translation id="1383876407941801731">Пошук</translation>
 <translation id="1384959399684842514">Спампоўка прыпынена</translation>
 <translation id="1415402041810619267">URL-адрас абрэзаны</translation>
-<translation id="1426410128494586442">Так</translation>
 <translation id="1448064542941920355">Паменшыць маштаб</translation>
 <translation id="146867109637325312">{COUNT,plural, =1{<ph name="SITE_COUNT" /> сайт}one{<ph name="SITE_COUNT" /> сайт}few{<ph name="SITE_COUNT" /> сайты}many{<ph name="SITE_COUNT" /> сайтаў}other{<ph name="SITE_COUNT" /> сайта}}</translation>
 <translation id="1510341833810331442">Сайтам не дазволена захоўваць даныя на вашай прыладзе</translation>
@@ -66,6 +66,7 @@
 <translation id="2228071138934252756">Каб праграма "<ph name="APP_NAME" />" атрымала доступ да камеры, уключыце камеру таксама ў <ph name="BEGIN_LINK" />Наладах Android<ph name="END_LINK" />.</translation>
 <translation id="2235344399760031203">Староннія файлы cookie заблакіраваны</translation>
 <translation id="2238944249568001759">Пошукавыя запыты, прапанаваныя на падставе змесціва апошняй укладкі</translation>
+<translation id="2241587408274973373">Карткі старонкі новай укладкі</translation>
 <translation id="2241634353105152135">Толькі адзін раз</translation>
 <translation id="2253414712144136228">Выдаліць: <ph name="NAME_OF_LIST_ITEM" /></translation>
 <translation id="2253989982043948086">{NUM_SELECTED,plural, =1{Файлы cookie заблакіраваны на 1 сайце}one{Файлы cookie заблакіраваны на # сайце}few{Файлы cookie заблакіраваны на # сайтах}many{Файлы cookie заблакіраваны на # сайтах}other{Файлы cookie заблакіраваны на # сайта}}</translation>
@@ -92,6 +93,7 @@
 <translation id="2498359688066513246">Даведка і водгукі</translation>
 <translation id="2501278716633472235">Назад</translation>
 <translation id="2546283357679194313">Файлы сookie і даныя сайтаў</translation>
+<translation id="2550801787432930915">Картка з апавяшчэннем пра зніжэнне цаны</translation>
 <translation id="2569468611847789653">{COOKIE_COUNT,plural, =1{1 файл cookie заблакіраваны}one{# файл cookie заблакіраваны}few{# файлы cookie заблакіраваны}many{# файлаў cookie заблакіраваны}other{# файла cookie заблакіраваны}}</translation>
 <translation id="2570922361219980984">Доступ да месцазнаходжання для гэтай прылады таксама выключаны. Уключыце яго ў <ph name="BEGIN_LINK" />Наладах Android<ph name="END_LINK" />.</translation>
 <translation id="257931822824936280">Разгорнута. Націсніце, каб згарнуць.</translation>
@@ -119,8 +121,8 @@
 <translation id="2968755619301702150">Звесткі пра сертыфікат</translation>
 <translation id="2979365474350987274">Выкарыстанне старонніх файлаў cookie абмежавана</translation>
 <translation id="3008272652534848354">Скінуць дазволы</translation>
-<translation id="3013291976881901233">Прылады MIDI</translation>
 <translation id="301521992641321250">Заблакіравана аўтаматычна</translation>
+<translation id="3025010840409371499"><ph name="RECENCY" /> <ph name="SEPARATOR" /> <ph name="HOST_NAME" /></translation>
 <translation id="3069226013421428034">Дазволіць уваход праз староннія сэрвісы для канкрэтнага сайта.</translation>
 <translation id="3082992102194421695">{COUNT,plural, =1{Тэрмін дзеяння заканчваецца заўтра}one{Тэрмін дзеяння заканчваецца праз # дзень}few{Тэрмін дзеяння заканчваецца праз # дні}many{Тэрмін дзеяння заканчваецца праз # дзён}other{Тэрмін дзеяння заканчваецца праз # дня}}</translation>
 <translation id="310297983047869047">Папярэдні слайд</translation>
@@ -190,7 +192,7 @@
 <translation id="4169549551965910670">Выканана падключэнне да прылады USB</translation>
 <translation id="4194328954146351878">Пытацца, перш чым дазваляць сайтам праглядаць і змяняць інфармацыю на прыладах NFC (рэкамендуецца)</translation>
 <translation id="4200726100658658164">Адкрыць налады месцазнаходжання</translation>
-<translation id="4212246570487010370">Працягвайце прагляд</translation>
+<translation id="4206661981211220935"><ph name="RECENCY" /> <ph name="SEPARATOR" /> Прылада: <ph name="FROM_DEVICE" /></translation>
 <translation id="4226663524361240545">Апавяшчэнні могуць уключаць вібрацыю прылады</translation>
 <translation id="4259722352634471385">Пераход па наступным адрасе заблакіраваны: <ph name="URL" /></translation>
 <translation id="4278390842282768270">Дазволена</translation>
@@ -211,6 +213,7 @@
 <translation id="4566417217121906555">Выключыць мікрафон</translation>
 <translation id="4570913071927164677">Падрабязныя звесткі</translation>
 <translation id="4598549027014564149">Калі ўключаны рэжым інкогніта, сайты не могуць выкарыстоўваць файлы cookie для адсочвання вашых дзеянняў у браўзеры на сайтах, нават звязаных. Вашы дзеянні ў браўзеры не выкарыстоўваюцца для паказу персаналізаванай рэкламы і падобных мэт. На некаторых сайтах можа не працаваць частка функцый.</translation>
+<translation id="4619615317237390068">Укладкі з іншых прылад</translation>
 <translation id="4644713492825682049">Выдаліць і скінуць</translation>
 <translation id="4645575059429386691">Пад кіраваннем бацькоў</translation>
 <translation id="4670064810192446073">Віртуальная рэальнасць</translation>
@@ -328,6 +331,7 @@
 <translation id="6405650995156823521"><ph name="FIRST_PART" /> • <ph name="SECOND_PART" /></translation>
 <translation id="6439114592976064011">Забараніць сайтам выкарыстоўваць даныя і прылады віртуальнай рэальнасці</translation>
 <translation id="6447842834002726250">Файлы cookie</translation>
+<translation id="6452138246455930388">На адкрытай укладцы цана знізілася з <ph name="OLD_PRICE" /> да <ph name="NEW_PRICE" />, <ph name="PRODUCT_NAME" />, <ph name="DOMAIN_NAME" /></translation>
 <translation id="6500423977866688905">Калі акно выцягнутае, запытайце версію для мабільных прылад</translation>
 <translation id="6527303717912515753">Абагуліць</translation>
 <translation id="652937045869844725">Паспрабуйце дазволіць староннія файлы cookie – гэта знізіць вашу абароненасць, але павысіць імавернасць таго, што функцыі сайта будуць працаваць</translation>
@@ -351,6 +355,7 @@
 <translation id="6790428901817661496">Прайграць</translation>
 <translation id="6818926723028410516">Выберыце элементы</translation>
 <translation id="6864395892908308021">Гэта прылада не падтрымлівае функцыю NFC</translation>
+<translation id="6867014948848323204">Прылада: <ph name="FROM_DEVICE" /></translation>
 <translation id="6912998170423641340">Заблакіраваць сайтам доступ да чытання тэксту і відарысаў з буфера абмену</translation>
 <translation id="6945221475159498467">Выбраць</translation>
 <translation id="6950072572526089586">Каб працаваць належным чынам, сайты, якія вы наведваеце, могуць захоўваць даныя пра вашы дзеянні, напрыклад інфармацыю пра дададзеныя ў кошык тавары або пра тое, што вы ўвайшлі ва ўліковы запіс. Часцей за ўсё гэта інфармацыя часова захоўваецца на прыладзе.</translation>
@@ -363,7 +368,6 @@
 <translation id="7053983685419859001">Заблакіраваць</translation>
 <translation id="7066151586745993502">{NUM_SELECTED,plural, =1{Выбраны 1 элемент}one{Выбраны # элемент}few{Выбрана # элементы}many{Выбрана # элементаў}other{Выбрана # элемента}}</translation>
 <translation id="7087918508125750058">Выбрана: <ph name="ITEM_COUNT" />.  Параметры знаходзяцца ўверсе экрана</translation>
-<translation id="7137403271056944713">Кіраванне/перапраграмаванне MIDI</translation>
 <translation id="7141896414559753902">Заблакіраваць сайтам паказ выплыўных вокнаў і перанакіраванні (рэкамендуецца)</translation>
 <translation id="7176368934862295254"><ph name="KILOBYTES" /> КБ</translation>
 <translation id="7180611975245234373">Абнавіць</translation>
@@ -399,8 +403,10 @@
 <translation id="7667547420449112975">Чараўнік краіны Оз</translation>
 <translation id="7684642910516280563">Забараніце сайту выкарыстоўваць староннія файлы cookie</translation>
 <translation id="7719367874908701697">Маштаб старонкі</translation>
+<translation id="7759147511335618829">Кіраванне/перапраграмаванне MIDI</translation>
 <translation id="7781829728241885113">Учора</translation>
 <translation id="7791543448312431591">Дадаць</translation>
+<translation id="7801888679188438140">{TILE_COUNT,plural, =1{Працягвайце працу з гэтай укладкай}one{Працягвайце працу з гэтымі ўкладкамі}few{Працягвайце працу з гэтымі ўкладкамі}many{Працягвайце працу з гэтымі ўкладкамі}other{Працягвайце працу з гэтымі ўкладкамі}}</translation>
 <translation id="780301667611848630">Не, дзякуй</translation>
 <translation id="7804248752222191302">Сайт выкарыстоўвае камеру</translation>
 <translation id="7807060072011926525">Ад кампаніі Google</translation>
@@ -477,6 +483,7 @@
 <translation id="8803526663383843427">Калі функцыя ўключана</translation>
 <translation id="8805385115381080995">Прагляд старонак робіцца хутчэйшым, бо сайты з меншай імавернасцю будуць прасіць вас пацвердзіць, што вы сапраўды чалавек</translation>
 <translation id="8816026460808729765">Забараніць сайтам доступ да датчыкаў</translation>
+<translation id="8843699287283948910">Схаваць укладкі з іншых прылад</translation>
 <translation id="8847988622838149491">USB</translation>
 <translation id="8874790741333031443">Паспрабуйце часова дазволіць староннія файлы cookie – гэта знізіць вашу абароненасць падчас прагляду вэб-сайтаў, але павысіць імавернасць таго, што функцыі сайта будуць працаваць карэктна.</translation>
 <translation id="8889294078294184559">Гэта дазваляе іншым сайтам, якія вы наведваеце, запытваць гэты даныя ў Chrome, каб правяраць, ці сапраўды вы чалавек.</translation>

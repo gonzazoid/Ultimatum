@@ -189,7 +189,7 @@ class DropDownCheckbox::MenuView : public views::View {
   raw_ptr<CheckboxMenuOptionGroup> menu_item_group_;
 };
 
-BEGIN_METADATA(DropDownCheckbox, MenuView, views::View)
+BEGIN_METADATA(DropDownCheckbox, MenuView)
 END_METADATA
 
 //------------------------------------------------------------------------------
@@ -275,8 +275,8 @@ DropDownCheckbox::DropDownCheckbox(const std::u16string& title,
   model_->AddObserver(selection_model_.get());
 
   // Set up layout.
-  auto* const layout = SetLayoutManager(std::make_unique<views::FlexLayout>());
-  layout->SetInteriorMargin(kDropDownCheckboxBorderInsets);
+  SetLayoutManager(std::make_unique<views::FlexLayout>())
+      ->SetInteriorMargin(kDropDownCheckboxBorderInsets);
   // Allow `title_` to shrink and elide, so that `drop_down_arrow_` on the
   // right always remains visible.
   title_->SetProperty(
@@ -299,8 +299,8 @@ DropDownCheckbox::DropDownCheckbox(const std::u16string& title,
   views::InstallRoundRectHighlightPathGenerator(
       this, gfx::Insets(), kDropDownCheckboxRoundedCorners);
   StyleUtil::SetUpInkDropForButton(this);
-  layout->SetChildViewIgnoredByLayout(views::FocusRing::Get(this),
-                                      /*ignored=*/true);
+  views::FocusRing::Get(this)->SetProperty(views::kViewIgnoredByLayoutKey,
+                                           /*ignored=*/true);
 
   event_handler_ = std::make_unique<EventHandler>(this);
 
@@ -357,9 +357,9 @@ void DropDownCheckbox::RemovedFromWidget() {
   widget_observer_.Reset();
 }
 
-void DropDownCheckbox::Layout() {
-  views::Button::Layout();
-  views::FocusRing::Get(this)->Layout();
+void DropDownCheckbox::Layout(PassKey) {
+  LayoutSuperclass<views::Button>(this);
+  views::FocusRing::Get(this)->DeprecatedLayoutImmediately();
 }
 
 void DropDownCheckbox::OnWidgetBoundsChanged(views::Widget* widget,
@@ -482,7 +482,7 @@ void DropDownCheckbox::OnPerformAction() {
   }
 }
 
-BEGIN_METADATA(DropDownCheckbox, views::Button)
+BEGIN_METADATA(DropDownCheckbox)
 END_METADATA
 
 }  // namespace ash

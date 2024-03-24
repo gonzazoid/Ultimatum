@@ -5,8 +5,8 @@
 // clang-format off
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {SettingsUnusedSitePermissionsElement, ContentSettingsTypes, SafetyHubBrowserProxyImpl, SafetyHubEvent} from 'chrome://settings/lazy_load.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import type {SettingsUnusedSitePermissionsElement} from 'chrome://settings/lazy_load.js';
+import {ContentSettingsTypes, SafetyHubBrowserProxyImpl, SafetyHubEvent} from 'chrome://settings/lazy_load.js';
 
 import {TestSafetyHubBrowserProxy} from './test_safety_hub_browser_proxy.js';
 
@@ -24,7 +24,7 @@ suite('CrSettingsUnusedSitePermissionsInteractiveUITest', function() {
     ContentSettingsTypes.GEOLOCATION,
     ContentSettingsTypes.MIC,
     ContentSettingsTypes.CAMERA,
-    ContentSettingsTypes.MIDI,
+    ContentSettingsTypes.MIDI_DEVICES,
   ];
 
   const mockData = [1, 2, 3, 4].map(
@@ -55,9 +55,6 @@ suite('CrSettingsUnusedSitePermissionsInteractiveUITest', function() {
   }
 
   setup(async function() {
-    loadTimeData.overrideValues({
-      blockMidiByDefault: true,
-    });
     browserProxy = new TestSafetyHubBrowserProxy();
     browserProxy.setUnusedSitePermissions(mockData);
     SafetyHubBrowserProxyImpl.setInstance(browserProxy);
@@ -95,8 +92,9 @@ suite('CrSettingsUnusedSitePermissionsInteractiveUITest', function() {
    */
   test('Undo Got It Click Refocus', async function() {
     // Click "Got it" button.
-    const button = testElement.shadowRoot!.querySelector(
-                       '.bulk-action-button') as HTMLElement;
+    const button = testElement.shadowRoot!.querySelector<HTMLElement>(
+        '.bulk-action-button');
+    assertTrue(!!button);
     button.click();
 
     const focusPromise = waitForFocusEventOnExpandButton();

@@ -48,14 +48,16 @@ class LayoutBR : public LayoutText {
     return true;
   }
 
-  String OriginalText() const override;
   int CaretMinOffset() const override;
   int CaretMaxOffset() const override;
 
   PositionWithAffinity PositionForPoint(const PhysicalOffset&) const final;
 
   Position PositionForCaretOffset(unsigned) const final;
-  absl::optional<unsigned> CaretOffsetForPosition(const Position&) const final;
+  std::optional<unsigned> CaretOffsetForPosition(const Position&) const final;
+
+ private:
+  unsigned NonCollapsedCaretMaxOffset() const override;
 };
 
 template <>

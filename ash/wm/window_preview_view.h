@@ -24,9 +24,9 @@ class ASH_EXPORT WindowPreviewView
     : public views::View,
       public aura::client::TransientWindowClientObserver,
       public aura::WindowObserver {
- public:
-  METADATA_HEADER(WindowPreviewView);
+  METADATA_HEADER(WindowPreviewView, views::View)
 
+ public:
   explicit WindowPreviewView(aura::Window* window);
 
   WindowPreviewView(const WindowPreviewView&) = delete;
@@ -40,7 +40,7 @@ class ASH_EXPORT WindowPreviewView
 
   // views::View:
   gfx::Size CalculatePreferredSize() const override;
-  void Layout() override;
+  void Layout(PassKey) override;
 
   // aura::client::TransientWindowClientObserver:
   void OnTransientChildWindowAdded(aura::Window* parent,

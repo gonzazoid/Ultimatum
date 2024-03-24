@@ -17,6 +17,7 @@
 #include "third_party/blink/renderer/core/css/parser/sizes_attribute_parser.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/scripted_idle_task_controller.h"
+#include "third_party/blink/renderer/core/execution_context/agent.h"
 #include "third_party/blink/renderer/core/frame/frame_console.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
@@ -328,7 +329,7 @@ void PreloadHelper::PreconnectIfNeeded(
 // served from the cache correctly. Until
 // https://github.com/w3c/preload/issues/97 is resolved and implemented we need
 // to disable these preloads.
-absl::optional<ResourceType> PreloadHelper::GetResourceTypeFromAsAttribute(
+std::optional<ResourceType> PreloadHelper::GetResourceTypeFromAsAttribute(
     const String& as) {
   DCHECK_EQ(as.DeprecatedLower(), as);
   if (as == "image")
@@ -343,7 +344,7 @@ absl::optional<ResourceType> PreloadHelper::GetResourceTypeFromAsAttribute(
     return ResourceType::kFont;
   if (as == "fetch")
     return ResourceType::kRaw;
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 // |base_url| is used in Link HTTP Header based preloads to resolve relative
@@ -361,7 +362,7 @@ void PreloadHelper::PreloadIfNeeded(
   if (!document.Loader() || !params.rel.IsLinkPreload())
     return;
 
-  absl::optional<ResourceType> resource_type =
+  std::optional<ResourceType> resource_type =
       PreloadHelper::GetResourceTypeFromAsAttribute(params.as);
 
   MediaValuesCached* media_values = nullptr;
@@ -413,7 +414,7 @@ void PreloadHelper::PreloadIfNeeded(
 
   if (caller == kLinkCalledFromHeader)
     UseCounter::Count(document, WebFeature::kLinkHeaderPreload);
-  if (resource_type == absl::nullopt) {
+  if (resource_type == std::nullopt) {
     String message;
     if (IsValidButUnsupportedAsAttribute(params.as)) {
       message = String("<link rel=preload> uses an unsupported `as` value");
@@ -782,7 +783,7 @@ void PreloadHelper::LoadLinksFromHeader(
     if (alternate_resource_info && params.rel.IsLinkPreload()) {
       DCHECK(document);
       KURL url = params.href;
-      absl::optional<ResourceType> resource_type =
+      std::optional<ResourceType> resource_type =
           PreloadHelper::GetResourceTypeFromAsAttribute(params.as);
       if (resource_type == ResourceType::kImage &&
           !params.image_srcset.empty()) {
@@ -935,8 +936,9 @@ Resource* PreloadHelper::StartPreload(ResourceType type,
       params.SetRequestContext(mojom::blink::RequestContextType::SCRIPT);
       params.SetRequestDestination(network::mojom::RequestDestination::kScript);
       resource = ScriptResource::Fetch(
-          params, resource_fetcher, nullptr, ScriptResource::kAllowStreaming,
-          v8_compile_hints_producer, v8_compile_hints_consumer);
+          params, resource_fetcher, nullptr, document.GetAgent().isolate(),
+          ScriptResource::kAllowStreaming, v8_compile_hints_producer,
+          v8_compile_hints_consumer);
       break;
     }
     case ResourceType::kCSSStyleSheet:

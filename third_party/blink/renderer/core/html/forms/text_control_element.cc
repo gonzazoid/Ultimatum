@@ -187,9 +187,9 @@ String TextControlElement::StrippedPlaceholder() const {
 }
 
 bool TextControlElement::PlaceholderShouldBeVisible() const {
-  return SupportsPlaceholder() && InnerEditorValue().empty() &&
-         FastHasAttribute(html_names::kPlaceholderAttr) &&
-         SuggestedValue().empty();
+  return SuggestedValue().empty() && SupportsPlaceholder() &&
+         InnerEditorValue().empty() &&
+         FastHasAttribute(html_names::kPlaceholderAttr);
 }
 
 HTMLElement* TextControlElement::PlaceholderElement() const {
@@ -208,8 +208,7 @@ void TextControlElement::UpdatePlaceholderVisibility() {
   bool place_holder_was_visible = IsPlaceholderVisible();
   HTMLElement* placeholder = PlaceholderElement();
   if (!placeholder) {
-    UpdatePlaceholderText();
-    placeholder = PlaceholderElement();
+    placeholder = UpdatePlaceholderText();
   }
   SetPlaceholderVisibility(PlaceholderShouldBeVisible());
 
@@ -590,7 +589,7 @@ void TextControlElement::ComputeSelection(
         InnerEditorElement(), selection.ComputeStartPosition());
   }
   if (flags & kEnd) {
-    if (flags & kStart && (selection.Base() == selection.Extent())) {
+    if (flags & kStart && (selection.Anchor() == selection.Focus())) {
       computed_selection.end = computed_selection.start;
     } else {
       computed_selection.end = IndexForPosition(InnerEditorElement(),
@@ -599,7 +598,7 @@ void TextControlElement::ComputeSelection(
   }
   if (flags & kDirection && frame->Selection().IsDirectional()) {
     computed_selection.direction =
-        (selection.Base() == selection.ComputeStartPosition())
+        (selection.Anchor() == selection.ComputeStartPosition())
             ? kSelectionHasForwardDirection
             : kSelectionHasBackwardDirection;
   }
@@ -1043,15 +1042,15 @@ void TextControlElement::SetSuggestedValue(const String& value) {
   // A null value indicates that the inner editor value should be shown, and a
   // non-null one indicates it should be hidden so that the suggested value can
   // be shown.
-  if (!value.IsNull() && !InnerEditorValue().empty()) {
-    InnerEditorElement()->SetVisibility(false);
-  } else if (value.IsNull() && InnerEditorElement()) {
-    InnerEditorElement()->SetVisibility(true);
+  if (auto* editor = InnerEditorElement()) {
+    if (!value.IsNull() && !InnerEditorValue().empty()) {
+      editor->SetVisibility(false);
+    } else if (value.IsNull()) {
+      editor->SetVisibility(true);
+    }
   }
 
-  UpdatePlaceholderText();
-
-  HTMLElement* placeholder = PlaceholderElement();
+  HTMLElement* placeholder = UpdatePlaceholderText();
   if (!placeholder)
     return;
 

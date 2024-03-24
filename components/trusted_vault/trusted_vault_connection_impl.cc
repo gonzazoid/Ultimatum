@@ -10,6 +10,7 @@
 #include "base/base64url.h"
 #include "base/containers/span.h"
 #include "base/files/important_file_writer.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/time/time.h"
 #include "components/signin/public/identity_manager/account_info.h"
@@ -20,6 +21,7 @@
 #include "components/trusted_vault/trusted_vault_access_token_fetcher.h"
 #include "components/trusted_vault/trusted_vault_connection.h"
 #include "components/trusted_vault/trusted_vault_crypto.h"
+#include "components/trusted_vault/trusted_vault_histograms.h"
 #include "components/trusted_vault/trusted_vault_request.h"
 #include "components/trusted_vault/trusted_vault_server_constants.h"
 #include "net/base/url_util.h"
@@ -29,18 +31,25 @@ namespace trusted_vault {
 
 namespace {
 
+TrustedVaultRequest::RecordFetchStatusCallback MakeFetchStatusCallback(
+    SecurityDomainId security_domain_id,
+    TrustedVaultURLFetchReasonForUMA reason) {
+  return base::BindRepeating(&RecordTrustedVaultURLFetchResponse,
+                             security_domain_id, reason);
+}
+
 // Returns security domain epoch if valid (>0) and nullopt otherwise.
-absl::optional<int> GetLastKeyVersionFromJoinSecurityDomainsResponse(
+std::optional<int> GetLastKeyVersionFromJoinSecurityDomainsResponse(
     const trusted_vault_pb::JoinSecurityDomainsResponse response) {
   if (response.security_domain().current_epoch() > 0) {
     return response.security_domain().current_epoch();
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 // Returns security domain epoch if input is a valid response for already exists
 // error case and nullopt otherwise.
-absl::optional<int> GetLastKeyVersionFromAlreadyExistsResponse(
+std::optional<int> GetLastKeyVersionFromAlreadyExistsResponse(
     const std::string& response_body) {
   trusted_vault_pb::RPCStatus rpc_status;
   rpc_status.ParseFromString(response_body);
@@ -54,7 +63,7 @@ absl::optional<int> GetLastKeyVersionFromAlreadyExistsResponse(
     return GetLastKeyVersionFromJoinSecurityDomainsResponse(
         error_detail.already_exists_response());
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 std::vector<TrustedVaultKeyAndVersion> GetTrustedVaultKeysWithVersions(
@@ -120,10 +129,10 @@ trusted_vault_pb::JoinSecurityDomainsRequest CreateJoinSecurityDomainsRequest(
     int last_trusted_vault_key_version,
     const SecureBoxPublicKey& public_key,
     AuthenticationFactorType authentication_factor_type,
-    absl::optional<int> authentication_factor_type_hint) {
+    std::optional<int> authentication_factor_type_hint) {
   trusted_vault_pb::JoinSecurityDomainsRequest request;
   request.mutable_security_domain()->set_name(
-      GetSecurityDomainName(security_domain));
+      GetSecurityDomainPath(security_domain));
   *request.mutable_security_domain_member() =
       CreateSecurityDomainMember(public_key, authentication_factor_type);
   for (const TrustedVaultKeyAndVersion& trusted_vault_key_and_version :
@@ -195,7 +204,7 @@ void ProcessJoinSecurityDomainsResponse(
       return;
   }
 
-  absl::optional<int> last_key_version;
+  std::optional<int> last_key_version;
   if (http_status == TrustedVaultRequest::HttpStatus::kConflict) {
     last_key_version =
         GetLastKeyVersionFromAlreadyExistsResponse(response_body);
@@ -226,7 +235,7 @@ void ProcessDownloadKeysResponse(
   DownloadKeysResponseHandler::ProcessedResponse processed_response =
       response_handler->ProcessResponse(http_status, response_body);
   std::move(callback).Run(processed_response.status,
-                          processed_response.new_keys,
+                          processed_response.downloaded_keys,
                           processed_response.last_key_version);
 }
 
@@ -294,11 +303,13 @@ class DownloadAuthenticationFactorsRegistrationStateRequest
         next_page_token ? net::AppendQueryParameter(base_url_, "page_token",
                                                     *next_page_token)
                         : base_url_,
-        /*serialized_request_proto=*/absl::nullopt,
+        /*serialized_request_proto=*/std::nullopt,
         /*max_retry_duration=*/base::Seconds(0), url_loader_factory_,
         access_token_fetcher_->Clone(),
-        TrustedVaultURLFetchReasonForUMA::
-            kDownloadAuthenticationFactorsRegistrationState);
+        MakeFetchStatusCallback(
+            security_domain_,
+            TrustedVaultURLFetchReasonForUMA::
+                kDownloadAuthenticationFactorsRegistrationState));
 
     // Unretained: this object owns `request_`. When `request_` is deleted, so
     // is the `SimpleURLLoader` and thus any callback is canceled.
@@ -323,7 +334,7 @@ class DownloadAuthenticationFactorsRegistrationStateRequest
     }
 
     const std::string security_domain_name =
-        GetSecurityDomainName(security_domain_);
+        GetSecurityDomainPath(security_domain_);
     for (const auto& member : response.security_domain_members()) {
       bool is_member_of_domain = false;
       for (const auto& membership : member.memberships()) {
@@ -362,7 +373,7 @@ class DownloadAuthenticationFactorsRegistrationStateRequest
       DownloadAuthenticationFactorsRegistrationStateResult result) {
     base::UmaHistogramEnumeration(
         "TrustedVault.DownloadAuthenticationFactorsRegistrationState." +
-            GetSecurityDomainNameForHistograms(security_domain_),
+            GetSecurityDomainNameForUma(security_domain_),
         result);
     std::move(callback_).Run(result);
   }
@@ -417,7 +428,7 @@ TrustedVaultConnectionImpl::RegisterAuthenticationFactor(
     int last_trusted_vault_key_version,
     const SecureBoxPublicKey& authentication_factor_public_key,
     AuthenticationFactorType authentication_factor_type,
-    absl::optional<int> authentication_factor_type_hint,
+    std::optional<int> authentication_factor_type_hint,
     RegisterAuthenticationFactorCallback callback) {
   return SendJoinSecurityDomainsRequest(
       account_info, trusted_vault_keys, last_trusted_vault_key_version,
@@ -436,7 +447,7 @@ TrustedVaultConnectionImpl::RegisterDeviceWithoutKeys(
       account_info, /*trusted_vault_keys=*/{GetConstantTrustedVaultKey()},
       /*last_trusted_vault_key_version=*/kUnknownConstantKeyVersion,
       device_public_key, AuthenticationFactorType::kPhysicalDevice,
-      /*authentication_factor_type_hint=*/absl::nullopt,
+      /*authentication_factor_type_hint=*/std::nullopt,
       base::BindOnce(&RunRegisterDeviceWithoutKeysCallback,
                      std::move(callback)));
 }
@@ -454,10 +465,11 @@ TrustedVaultConnectionImpl::DownloadNewKeys(
       GetGetSecurityDomainMemberURL(
           trusted_vault_service_url_,
           device_key_pair->public_key().ExportToBytes()),
-      /*serialized_request_proto=*/absl::nullopt,
+      /*serialized_request_proto=*/std::nullopt,
       /*max_retry_duration=*/base::Seconds(0), GetOrCreateURLLoaderFactory(),
       access_token_fetcher_->Clone(),
-      TrustedVaultURLFetchReasonForUMA::kDownloadKeys);
+      MakeFetchStatusCallback(security_domain_,
+                              TrustedVaultURLFetchReasonForUMA::kDownloadKeys));
 
   request->FetchAccessTokenAndSendRequest(
       base::BindOnce(&ProcessDownloadKeysResponse,
@@ -477,10 +489,12 @@ TrustedVaultConnectionImpl::DownloadIsRecoverabilityDegraded(
   auto request = std::make_unique<TrustedVaultRequest>(
       account_info.account_id, TrustedVaultRequest::HttpMethod::kGet,
       GetGetSecurityDomainURL(trusted_vault_service_url_, security_domain_),
-      /*serialized_request_proto=*/absl::nullopt,
+      /*serialized_request_proto=*/std::nullopt,
       /*max_retry_duration=*/base::Seconds(0), GetOrCreateURLLoaderFactory(),
       access_token_fetcher_->Clone(),
-      TrustedVaultURLFetchReasonForUMA::kDownloadIsRecoverabilityDegraded);
+      MakeFetchStatusCallback(
+          security_domain_,
+          TrustedVaultURLFetchReasonForUMA::kDownloadIsRecoverabilityDegraded));
 
   request->FetchAccessTokenAndSendRequest(base::BindOnce(
       &ProcessDownloadIsRecoverabilityDegradedResponse, std::move(callback)));
@@ -507,7 +521,7 @@ TrustedVaultConnectionImpl::SendJoinSecurityDomainsRequest(
     int last_trusted_vault_key_version,
     const SecureBoxPublicKey& authentication_factor_public_key,
     AuthenticationFactorType authentication_factor_type,
-    absl::optional<int> authentication_factor_type_hint,
+    std::optional<int> authentication_factor_type_hint,
     JoinSecurityDomainsCallback callback) {
   auto request = std::make_unique<TrustedVaultRequest>(
       account_info.account_id, TrustedVaultRequest::HttpMethod::kPost,
@@ -520,8 +534,10 @@ TrustedVaultConnectionImpl::SendJoinSecurityDomainsRequest(
           .SerializeAsString(),
       kMaxJoinSecurityDomainRetryDuration, GetOrCreateURLLoaderFactory(),
       access_token_fetcher_->Clone(),
-      GetURLFetchReasonForUMAForJoinSecurityDomainsRequest(
-          authentication_factor_type));
+      MakeFetchStatusCallback(
+          security_domain_,
+          GetURLFetchReasonForUMAForJoinSecurityDomainsRequest(
+              authentication_factor_type)));
 
   request->FetchAccessTokenAndSendRequest(
       base::BindOnce(&ProcessJoinSecurityDomainsResponse, std::move(callback)));

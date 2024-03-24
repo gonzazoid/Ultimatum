@@ -29,6 +29,7 @@
 
 #include <iosfwd>
 #include <memory>
+#include "third_party/abseil-cpp/absl/base/attributes.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier.h"
@@ -130,14 +131,15 @@ class PLATFORM_EXPORT KURL {
   bool CanSetPathname() const { return IsHierarchical(); }
   bool IsHierarchical() const;
 
-  // The returned `String` is guaranteed to consist of only ASCII characters,
-  // but may be 8-bit or 16-bit.
-  const String& GetString() const { return string_; }
+  // The returned `AtomicString` is guaranteed to consist of only ASCII
+  // characters, but may be 8-bit or 16-bit.
+  const AtomicString& GetString() const { return string_; }
 
   String ElidedString() const;
 
   String Protocol() const;
   String Host() const;
+  StringView HostView() const ABSL_ATTRIBUTE_LIFETIME_BOUND;
 
   // Returns 0 when there is no port or the default port was specified, or the
   // URL is invalid.

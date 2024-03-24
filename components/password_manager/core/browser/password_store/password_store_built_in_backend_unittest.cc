@@ -19,9 +19,9 @@
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
+#include "components/affiliations/core/browser/fake_affiliation_service.h"
 #include "components/os_crypt/sync/os_crypt_mocker.h"
 #include "components/password_manager/core/browser/affiliation/affiliated_match_helper.h"
-#include "components/password_manager/core/browser/affiliation/fake_affiliation_service.h"
 #include "components/password_manager/core/browser/affiliation/mock_affiliated_match_helper.h"
 #include "components/password_manager/core/browser/features/password_features.h"
 #include "components/password_manager/core/browser/password_form.h"
@@ -749,7 +749,7 @@ TEST_F(PasswordStoreBuiltInBackendTest,
 }
 
 TEST_F(PasswordStoreBuiltInBackendTest, GetLoginsWithAffiliations) {
-  FakeAffiliationService fake_affiliation_service;
+  affiliations::FakeAffiliationService fake_affiliation_service;
   MockAffiliatedMatchHelper mock_affiliated_match_helper(
       &fake_affiliation_service);
   PasswordStoreBackend* backend =
@@ -795,7 +795,7 @@ TEST_F(PasswordStoreBuiltInBackendTest, GetLoginsWithAffiliations) {
 
 TEST_F(PasswordStoreBuiltInBackendTest,
        GetAllLoginsWithAffiliationAndBrandingInformation) {
-  FakeAffiliationService fake_affiliation_service;
+  affiliations::FakeAffiliationService fake_affiliation_service;
   MockAffiliatedMatchHelper mock_affiliated_match_helper(
       &fake_affiliation_service);
   PasswordStoreBackend* backend =
@@ -841,6 +841,13 @@ TEST_F(PasswordStoreBuiltInBackendTest,
 
   backend->GetAllLoginsWithAffiliationAndBrandingAsync(mock_reply.Get());
   RunUntilIdle();
+}
+
+TEST_F(PasswordStoreBuiltInBackendTest, NotAbleSavePasswordsWhenDatabaseIsBad) {
+  PasswordStoreBackend* bad_backend =
+      Initialize(std::make_unique<BadLoginDatabase>());
+
+  EXPECT_FALSE(bad_backend->IsAbleToSavePasswords());
 }
 
 }  // namespace password_manager

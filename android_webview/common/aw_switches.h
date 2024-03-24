@@ -25,6 +25,8 @@ extern const char kWebViewDisableAppRecovery[];
 extern const char kWebViewEnableAppRecovery[];
 extern const char kWebViewEnableTrustTokensComponent[];
 extern const char kWebViewTpcdMetadaComponent[];
+extern const char kWebViewFpsComponent[];
+extern const char kWebViewForceDisable3pcs[];
 
 }  // namespace switches
 

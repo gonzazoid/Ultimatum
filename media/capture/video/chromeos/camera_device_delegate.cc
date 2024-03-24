@@ -447,7 +447,7 @@ void CameraDeviceDelegate::TakePhoto(
     return;
   }
 
-  TakePhotoImpl(cros::mojom::Effect::NO_EFFECT);
+  TakePhotoImpl(cros::mojom::Effect::kNoEffect);
 }
 
 void CameraDeviceDelegate::GetPhotoState(
@@ -666,7 +666,7 @@ void CameraDeviceDelegate::ReconfigureStreams(
   if (request_manager_) {
     request_manager_->StopPreview(
         base::BindOnce(&CameraDeviceDelegate::OnFlushed, GetWeakPtr(),
-                       ShouldUseBlobVideoSnapshot(), absl::nullopt));
+                       ShouldUseBlobVideoSnapshot(), std::nullopt));
   }
 }
 
@@ -701,7 +701,7 @@ bool CameraDeviceDelegate::MaybeReconfigureForPhotoStream(
                        std::move(new_blob_resolution)));
   } else {
     request_manager_->StopPreview(base::BindOnce(
-        &CameraDeviceDelegate::OnFlushed, GetWeakPtr(), true, absl::nullopt));
+        &CameraDeviceDelegate::OnFlushed, GetWeakPtr(), true, std::nullopt));
   }
   return true;
 }
@@ -710,7 +710,7 @@ void CameraDeviceDelegate::TakePhotoImpl(cros::mojom::Effect effect) {
   DCHECK(ipc_task_runner_->BelongsToCurrentThread());
 
   StreamType request_stream_type =
-      (effect == cros::mojom::Effect::PORTRAIT_MODE)
+      (effect == cros::mojom::Effect::kPortraitMode)
           ? StreamType::kPortraitJpegOutput
           : StreamType::kJpegOutput;
   auto construct_request_cb =
@@ -726,7 +726,7 @@ void CameraDeviceDelegate::TakePhotoImpl(cros::mojom::Effect effect) {
     // video recording.
     bool should_skip_3a = ShouldUseBlobVideoSnapshot() && camera_app_device &&
                           camera_app_device->GetCaptureIntent() ==
-                              cros::mojom::CaptureIntent::VIDEO_RECORD;
+                              cros::mojom::CaptureIntent::kVideoRecord;
     if (should_skip_3a) {
       std::move(construct_request_cb).Run();
     } else {
@@ -740,7 +740,7 @@ void CameraDeviceDelegate::TakePhotoImpl(cros::mojom::Effect effect) {
   if (current_blob_resolution_.IsEmpty() &&
       on_reconfigured_callbacks_.empty()) {
     request_manager_->StopPreview(base::BindOnce(
-        &CameraDeviceDelegate::OnFlushed, GetWeakPtr(), true, absl::nullopt));
+        &CameraDeviceDelegate::OnFlushed, GetWeakPtr(), true, std::nullopt));
   }
   auto on_reconfigured_callback = base::BindOnce(
       [](base::WeakPtr<Camera3AController> controller,
@@ -777,7 +777,7 @@ void CameraDeviceDelegate::OnMojoConnectionError() {
 
 void CameraDeviceDelegate::OnFlushed(
     bool require_photo,
-    absl::optional<gfx::Size> new_blob_resolution,
+    std::optional<gfx::Size> new_blob_resolution,
     int32_t result) {
   DCHECK(ipc_task_runner_->BelongsToCurrentThread());
   if (result) {
@@ -944,24 +944,24 @@ void CameraDeviceDelegate::OnInitialized(int32_t result) {
     }
     auto capture_intent = camera_app_device->GetCaptureIntent();
     switch (capture_intent) {
-      case cros::mojom::CaptureIntent::DEFAULT:
+      case cros::mojom::CaptureIntent::kDefault:
         return false;
-      case cros::mojom::CaptureIntent::STILL_CAPTURE:
-      case cros::mojom::CaptureIntent::PORTRAIT_CAPTURE:
+      case cros::mojom::CaptureIntent::kStillCapture:
+      case cros::mojom::CaptureIntent::kPortraitCapture:
         return true;
-      case cros::mojom::CaptureIntent::VIDEO_RECORD:
+      case cros::mojom::CaptureIntent::kVideoRecord:
         return ShouldUseBlobVideoSnapshot();
       default:
         NOTREACHED() << "Unknown capture intent: " << capture_intent;
         return false;
     }
   }();
-  ConfigureStreams(require_photo, absl::nullopt);
+  ConfigureStreams(require_photo, std::nullopt);
 }
 
 void CameraDeviceDelegate::ConfigureStreams(
     bool require_photo,
-    absl::optional<gfx::Size> new_blob_resolution) {
+    std::optional<gfx::Size> new_blob_resolution) {
   DCHECK(ipc_task_runner_->BelongsToCurrentThread());
   DCHECK_EQ(device_context_->GetState(),
             CameraDeviceContext::State::kInitialized);
@@ -985,7 +985,7 @@ void CameraDeviceDelegate::ConfigureStreams(
         usage = cros::mojom::GRALLOC_USAGE_HW_COMPOSER;
         if (camera_app_device &&
             camera_app_device->GetCaptureIntent() ==
-                cros::mojom::CaptureIntent::VIDEO_RECORD &&
+                cros::mojom::CaptureIntent::kVideoRecord &&
             !camera_app_device->IsMultipleStreamsEnabled()) {
           usage |= cros::mojom::GRALLOC_USAGE_HW_VIDEO_ENCODER;
         }
@@ -1048,7 +1048,7 @@ void CameraDeviceDelegate::ConfigureStreams(
     stream_config->streams.push_back(std::move(still_capture_stream));
 
     if (camera_app_device && camera_app_device->GetCaptureIntent() ==
-                                 cros::mojom::CaptureIntent::PORTRAIT_CAPTURE) {
+                                 cros::mojom::CaptureIntent::kPortraitCapture) {
       auto portrait_mode_stream = cros::mojom::Camera3Stream::New();
       portrait_mode_stream->id =
           static_cast<uint64_t>(StreamType::kPortraitJpegOutput);
@@ -1153,7 +1153,7 @@ void CameraDeviceDelegate::ConstructDefaultRequestSettings(
     // template here so the underlying camera HAL can set 3A tuning accordingly.
     auto request_template =
         camera_app_device && camera_app_device->GetCaptureIntent() ==
-                                 cros::mojom::CaptureIntent::VIDEO_RECORD
+                                 cros::mojom::CaptureIntent::kVideoRecord
             ? cros::mojom::Camera3RequestTemplate::CAMERA3_TEMPLATE_VIDEO_RECORD
             : cros::mojom::Camera3RequestTemplate::CAMERA3_TEMPLATE_PREVIEW;
     device_ops_->ConstructDefaultRequestSettings(
@@ -1164,7 +1164,7 @@ void CameraDeviceDelegate::ConstructDefaultRequestSettings(
   } else if (stream_type == StreamType::kJpegOutput) {
     auto request_template =
         camera_app_device && camera_app_device->GetCaptureIntent() ==
-                                 cros::mojom::CaptureIntent::VIDEO_RECORD
+                                 cros::mojom::CaptureIntent::kVideoRecord
             ? cros::mojom::Camera3RequestTemplate::
                   CAMERA3_TEMPLATE_VIDEO_SNAPSHOT
             : cros::mojom::Camera3RequestTemplate::
@@ -1227,7 +1227,7 @@ void CameraDeviceDelegate::OnConstructedDefaultPreviewRequestSettings(
 
   request_manager_->StartPreview(std::move(settings));
   if (!take_photo_callbacks_.empty()) {
-    TakePhotoImpl(cros::mojom::Effect::NO_EFFECT);
+    TakePhotoImpl(cros::mojom::Effect::kNoEffect);
   }
 }
 
@@ -1268,7 +1268,7 @@ void CameraDeviceDelegate::OnConstructedDefaultPortraitModeRequestSettings(
 }
 
 gfx::Size CameraDeviceDelegate::GetBlobResolution(
-    absl::optional<gfx::Size> new_blob_resolution) {
+    std::optional<gfx::Size> new_blob_resolution) {
   DCHECK(ipc_task_runner_->BelongsToCurrentThread());
 
   std::vector<gfx::Size> blob_resolutions;
@@ -1331,10 +1331,10 @@ void CameraDeviceDelegate::ProcessCaptureRequest(
           device_descriptor_.device_id);
   auto take_portrait_photo_callbacks =
       camera_app_device ? camera_app_device->ConsumePortraitModeCallbacks()
-                        : absl::nullopt;
+                        : std::nullopt;
   if (take_portrait_photo_callbacks.has_value()) {
     take_portrait_photo_callbacks_ = std::move(take_portrait_photo_callbacks);
-    TakePhotoImpl(cros::mojom::Effect::PORTRAIT_MODE);
+    TakePhotoImpl(cros::mojom::Effect::kPortraitMode);
   }
 
   device_ops_->ProcessCaptureRequest(std::move(request), std::move(callback));
@@ -1400,7 +1400,7 @@ bool CameraDeviceDelegate::SetPointsOfInterest(
 
 mojom::RangePtr CameraDeviceDelegate::GetControlRangeByVendorTagName(
     const std::string& range_name,
-    const absl::optional<int32_t>& current) {
+    const std::optional<int32_t>& current) {
   const VendorTagInfo* info =
       camera_hal_delegate_->GetVendorTagInfoByName(range_name);
   if (info == nullptr) {
@@ -1444,7 +1444,7 @@ void CameraDeviceDelegate::OnResultMetadataAvailable(
   auto get_vendor_int =
       [&](const std::string& name,
           const cros::mojom::CameraMetadataPtr& result_metadata,
-          absl::optional<int32_t>* returned_value) {
+          std::optional<int32_t>* returned_value) {
         returned_value->reset();
         const VendorTagInfo* info =
             camera_hal_delegate_->GetVendorTagInfoByName(name);
@@ -1842,7 +1842,7 @@ std::pair<int32_t, int32_t> CameraDeviceDelegate::GetFrameRateRange() {
       CameraAppDeviceBridgeImpl::GetInstance()->GetWeakCameraAppDevice(
           device_descriptor_.device_id);
   auto specified_fps_range =
-      camera_app_device ? camera_app_device->GetFpsRange() : absl::nullopt;
+      camera_app_device ? camera_app_device->GetFpsRange() : std::nullopt;
   if (specified_fps_range) {
     return std::make_pair(specified_fps_range->GetMin(),
                           specified_fps_range->GetMax());
@@ -1854,7 +1854,7 @@ std::pair<int32_t, int32_t> CameraDeviceDelegate::GetFrameRateRange() {
   bool prefer_constant_frame_rate =
       base::FeatureList::IsEnabled(ash::features::kPreferConstantFrameRate) ||
       (camera_app_device && camera_app_device->GetCaptureIntent() ==
-                                cros::mojom::CaptureIntent::VIDEO_RECORD);
+                                cros::mojom::CaptureIntent::kVideoRecord);
   return GetTargetFrameRateRange(static_metadata_, requested_frame_rate,
                                  prefer_constant_frame_rate);
 }

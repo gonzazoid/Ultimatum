@@ -13,6 +13,7 @@
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/tracing_controller.h"
 #include "content/public/common/content_switches.h"
+#include "content/public/test/browser_test_utils.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/http_request.h"
 #include "net/test/embedded_test_server/http_response.h"
@@ -327,7 +328,7 @@ void MetricIntegrationTest::ExpectMetricInLastUKMUpdateTraceEventNear(
 
   base::Value::Dict arg_dict;
   last_update_event->GetArgAsDict("ukm_page_load_timing_update", &arg_dict);
-  absl::optional<double> metric_value = arg_dict.FindDouble(metric_name);
+  std::optional<double> metric_value = arg_dict.FindDouble(metric_name);
   ASSERT_TRUE(metric_value.has_value());
 
   EXPECT_NEAR(expected_value, *metric_value, epsilon);

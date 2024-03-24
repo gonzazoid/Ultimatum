@@ -157,7 +157,8 @@
 #endif
 
 #if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
-#include "chrome/browser/screen_ai/screen_ai_install_state.h"
+#include "chrome/browser/accessibility/pdf_ocr_controller.h"
+#include "chrome/browser/accessibility/pdf_ocr_controller_factory.h"
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -569,12 +570,7 @@ class PdfPluginContextMenuBrowserTest : public PDFExtensionTestBase {
 
     WebContents* web_contents = GetActiveWebContents();
 
-    // `test_pdf_viewer_stream_manager` is used only if `UseOopif()` is true.
-    pdf::TestPdfViewerStreamManager* test_pdf_viewer_stream_manager = nullptr;
-    if (UseOopif()) {
-      test_pdf_viewer_stream_manager =
-          pdf::TestPdfViewerStreamManager::CreateForWebContents(web_contents);
-    } else {
+    if (!UseOopif()) {
       // Prepare to load a pdf plugin inside.
       TestMimeHandlerViewGuest::RegisterTestGuestViewType(
           test_guest_view_manager_);
@@ -588,7 +584,8 @@ class PdfPluginContextMenuBrowserTest : public PDFExtensionTestBase {
     // frame.
     content::RenderFrameHost* frame;
     if (UseOopif()) {
-      test_pdf_viewer_stream_manager->WaitUntilPdfLoaded();
+      ASSERT_TRUE(GetTestPdfViewerStreamManager(web_contents)
+                      ->WaitUntilPdfLoadedInFirstChild());
       frame = pdf_extension_test_util::GetOnlyPdfExtensionHost(web_contents);
     } else {
       auto* guest_view =
@@ -1065,7 +1062,7 @@ IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
     base::RunLoop run_loop;
 
     ASSERT_TRUE(provider->registrar_unsafe().CanUserUninstallWebApp(app_id));
-    provider->scheduler().UninstallWebApp(
+    provider->scheduler().RemoveUserUninstallableManagements(
         app_id, webapps::WebappUninstallSource::kAppMenu,
         base::BindLambdaForTesting([&](webapps::UninstallResultCode code) {
           EXPECT_EQ(code, webapps::UninstallResultCode::kSuccess);
@@ -1222,8 +1219,8 @@ IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
 // Executing the emoji panel item with no associated browser should not crash.
 IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        ContextMenuForEmojiPanel_NullBrowserCrash) {
-  ui::SetShowEmojiKeyboardCallback(
-      base::BindRepeating(ui::ShowTabletModeEmojiPanel));
+  ui::SetShowEmojiKeyboardCallback(base::BindLambdaForTesting(
+      [](ui::EmojiPickerCategory unused) { ui::ShowTabletModeEmojiPanel(); }));
   std::unique_ptr<content::WebContents> detached_web_contents =
       content::WebContents::Create(
           content::WebContents::CreateParams(browser()->profile()));
@@ -1251,7 +1248,8 @@ IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
 IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        ContextMenuForEmojiPanel_NoCallback) {
   // Reset the emoji callback.
-  ui::SetShowEmojiKeyboardCallback(base::RepeatingClosure());
+  ui::SetShowEmojiKeyboardCallback(
+      base::RepeatingCallback<void(ui::EmojiPickerCategory)>());
 
   content::ContextMenuParams params;
   params.is_editable = true;
@@ -2847,6 +2845,12 @@ IN_PROC_BROWSER_TEST_P(PdfPluginContextMenuBrowserTestWithOopifOverride,
 
 IN_PROC_BROWSER_TEST_P(PdfPluginContextMenuBrowserTestWithOopifOverride,
                        IframedPdfHasNoPageItems) {
+  if (UseOopif()) {
+    // Create the manager first, since the following HTML page doesn't wait for
+    // the PDF navigation to complete.
+    CreateTestPdfViewerStreamManager();
+  }
+
   TestContextMenuOfPdfInsideWebPage(FILE_PATH_LITERAL("test-iframe-pdf.html"));
 }
 
@@ -2906,8 +2910,8 @@ class PdfOcrContextMenuBrowserTest
     accessibility_state_utils::OverrideIsScreenReaderEnabledForTesting(
         IsScreenReaderEnabled());
     if (IsComponentReady()) {
-      screen_ai::ScreenAIInstallState::GetInstance()
-          ->SetComponentReadyForTesting();
+      screen_ai::PdfOcrControllerFactory::GetForProfile(browser()->profile())
+          ->set_ocr_ready_for_testing();
     }
   }
 

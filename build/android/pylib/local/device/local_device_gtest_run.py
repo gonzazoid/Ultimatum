@@ -146,9 +146,39 @@ def _GetLLVMProfilePath(device_coverage_dir, suite, coverage_index):
   Returns:
     The path pattern for environment variable 'LLVM_PROFILE_FILE'.
   """
+  # "%2m" is used to expand to 2 raw profiles at runtime.
+  # "%c" enables continuous mode. See crbug.com/1468343, crbug.com/1518474
+  # For more details, refer to:
+  #   https://clang.llvm.org/docs/SourceBasedCodeCoverage.html
   return posixpath.join(device_coverage_dir,
                         '_'.join([suite,
-                                  str(coverage_index), '%2m.profraw']))
+                                  str(coverage_index), '%2m%c.profraw']))
+
+
+def _GroupPreTests(tests):
+  pre_tests = dict()
+  other_tests = []
+  for test in tests:
+    test_name_start = max(test.find('.') + 1, 0)
+    test_name = test[test_name_start:]
+    if test_name_start > 0 and test_name.startswith(_GTEST_PRETEST_PREFIX):
+      test_suite = test[:test_name_start - 1]
+      trim_test = test
+      trim_tests = [test]
+
+      while test_name.startswith(_GTEST_PRETEST_PREFIX):
+        test_name = test_name[len(_GTEST_PRETEST_PREFIX):]
+        trim_test = '%s.%s' % (test_suite, test_name)
+        trim_tests.append(trim_test)
+
+      # The trim test should exist at first place. For example, if a test has
+      # been disabled, there is no need to run PRE_ test with this test.
+      if trim_test in tests and (not trim_test in pre_tests or len(
+          pre_tests[trim_test]) < len(trim_tests)):
+        pre_tests[trim_test] = trim_tests
+    else:
+      other_tests.append(test)
+  return pre_tests, other_tests
 
 
 class _ApkDelegate:
@@ -531,10 +561,6 @@ class LocalDeviceGtestRun(local_device_test_run.LocalDeviceTestRun):
     # Delete suspect testcase from tests.
     tests = [test for test in tests if not test in self._crashes]
 
-    # Sort tests by hash.
-    # TODO(crbug.com/1257820): Add sorting logic back to _PartitionTests.
-    tests = self._SortTests(tests)
-
     max_shard_size = self._test_instance.test_launcher_batch_limit
 
     shards.extend(self._PartitionTests(tests, device_count, max_shard_size))
@@ -608,28 +634,36 @@ class LocalDeviceGtestRun(local_device_test_run.LocalDeviceTestRun):
     return tests
 
   #override
-  def _GroupTests(self, tests):
-    pre_tests = dict()
-    other_tests = []
-    for test in tests:
-      test_name_start = max(test.find('.') + 1, 0)
-      test_name = test[test_name_start:]
-      if test_name_start == 0 or not test_name.startswith(
+  def _AppendPreTestsForRetry(self, failed_tests, tests):
+    if not self._test_instance.run_pre_tests:
+      return failed_tests
+
+    pre_tests, _ = _GroupPreTests(tests)
+    trim_failed_tests = set()
+    for failed_test in failed_tests:
+      failed_test_name_start = max(failed_test.find('.') + 1, 0)
+      failed_test_name = failed_test[failed_test_name_start:]
+
+      if failed_test_name_start > 0 and failed_test_name.startswith(
           _GTEST_PRETEST_PREFIX):
-        other_tests.append(test)
-      else:
-        test_suite = test[:test_name_start - 1]
-        trim_test = test
-        trim_tests = [test]
+        failed_test_suite = failed_test[:failed_test_name_start - 1]
+        while failed_test_name.startswith(_GTEST_PRETEST_PREFIX):
+          failed_test_name = failed_test_name[len(_GTEST_PRETEST_PREFIX):]
+        failed_test = '%s.%s' % (failed_test_suite, failed_test_name)
+      trim_failed_tests.add(failed_test)
 
-        while test_name.startswith(_GTEST_PRETEST_PREFIX):
-          test_name = test_name[len(_GTEST_PRETEST_PREFIX):]
-          trim_test = '%s.%s' % (test_suite, test_name)
-          trim_tests.append(trim_test)
+    all_tests = []
+    for trim_failed_test in trim_failed_tests:
+      if trim_failed_test in tests:
+        if trim_failed_test in pre_tests:
+          all_tests.extend(pre_tests[trim_failed_test])
+        else:
+          all_tests.append(trim_failed_test)
+    return all_tests
 
-        if not trim_test in pre_tests or len(
-            pre_tests[trim_test]) < len(trim_tests):
-          pre_tests[trim_test] = trim_tests
+  #override
+  def _GroupTests(self, tests):
+    pre_tests, other_tests = _GroupPreTests(tests)
 
     all_tests = []
     for other_test in other_tests:

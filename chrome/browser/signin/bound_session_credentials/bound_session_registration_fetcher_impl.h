@@ -5,9 +5,8 @@
 #ifndef CHROME_BROWSER_SIGNIN_BOUND_SESSION_CREDENTIALS_BOUND_SESSION_REGISTRATION_FETCHER_IMPL_H_
 #define CHROME_BROWSER_SIGNIN_BOUND_SESSION_CREDENTIALS_BOUND_SESSION_REGISTRATION_FETCHER_IMPL_H_
 
-#include "chrome/browser/signin/bound_session_credentials/bound_session_registration_fetcher.h"
-
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/functional/callback.h"
@@ -16,12 +15,12 @@
 #include "base/timer/elapsed_timer.h"
 #include "base/types/expected.h"
 #include "chrome/browser/signin/bound_session_credentials/bound_session_cookie_refresh_service.h"
+#include "chrome/browser/signin/bound_session_credentials/bound_session_registration_fetcher.h"
 #include "chrome/browser/signin/bound_session_credentials/bound_session_registration_fetcher_param.h"
 #include "chrome/browser/signin/bound_session_credentials/registration_token_helper.h"
 #include "components/unexportable_keys/service_error.h"
 #include "components/unexportable_keys/unexportable_key_id.h"
 #include "services/network/public/cpp/simple_url_loader.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace network {
@@ -54,7 +53,8 @@ class BoundSessionRegistrationFetcherImpl
   BoundSessionRegistrationFetcherImpl(
       BoundSessionRegistrationFetcherParam registration_params,
       scoped_refptr<network::SharedURLLoaderFactory> loader_factory,
-      unexportable_keys::UnexportableKeyService& key_service);
+      unexportable_keys::UnexportableKeyService& key_service,
+      bool is_off_the_record_profile);
 
   BoundSessionRegistrationFetcherImpl(
       BoundSessionRegistrationFetcherImpl&& other) = delete;
@@ -84,7 +84,7 @@ class BoundSessionRegistrationFetcherImpl
   void OnURLLoaderComplete(std::unique_ptr<std::string> response_body);
   void OnRegistrationTokenCreated(
       base::ElapsedTimer generate_registration_token_timer,
-      absl::optional<RegistrationTokenHelper::Result> result);
+      std::optional<RegistrationTokenHelper::Result> result);
 
   void StartFetchingRegistration(const std::string& registration_token);
 
@@ -100,11 +100,12 @@ class BoundSessionRegistrationFetcherImpl
 
   BoundSessionRegistrationFetcherParam registration_params_;
   const raw_ref<unexportable_keys::UnexportableKeyService> key_service_;
+  const bool is_off_the_record_profile_;
   std::string wrapped_key_str_;
 
   // Non-null after a fetch has started.
   std::unique_ptr<network::SimpleURLLoader> url_loader_;
-  absl::optional<base::ElapsedTimer> registration_duration_;
+  std::optional<base::ElapsedTimer> registration_duration_;
   const scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
   std::unique_ptr<RegistrationTokenHelper> registration_token_helper_;
 

@@ -5,21 +5,23 @@
 #ifndef COMPONENTS_METRICS_STRUCTURED_TEST_TEST_EVENT_STORAGE_H_
 #define COMPONENTS_METRICS_STRUCTURED_TEST_TEST_EVENT_STORAGE_H_
 
-#include "components/metrics/structured/event_storage.h"
+#include "components/metrics/structured/lib/event_storage.h"
 #include "components/metrics/structured/proto/event_storage.pb.h"
+#include "third_party/metrics_proto/structured_data.pb.h"
 
 namespace metrics::structured {
 
 // Simple in-memory event storage for unit and some browser tests.
-class TestEventStorage final : public EventStorage {
+class TestEventStorage final : public EventStorage<StructuredEventProto> {
  public:
   TestEventStorage();
 
   ~TestEventStorage() override;
 
   // EventStorage:
-  void AddEvent(StructuredEventProto&& event) override;
-  void MoveEvents(ChromeUserMetricsExtension& uma_proto) override;
+  void AddEvent(StructuredEventProto event) override;
+  ::google::protobuf::RepeatedPtrField<StructuredEventProto> TakeEvents()
+      override;
   int RecordedEventsCount() const override;
   void Purge() override;
   void AddBatchEvents(

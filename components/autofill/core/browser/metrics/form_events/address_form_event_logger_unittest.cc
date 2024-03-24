@@ -35,9 +35,13 @@ class CategoryResolvedKeyMetricsTest
 
   // Creates an arbitrary address form and triggers AutofillManager's
   // OnFormSeen() event.
+  // TODO(crbug.com/1007974): Replace this with a modern form creation function.
   FormData CreateAndSeeForm() {
     FormData form = CreateEmptyForm();
     form.fields.resize(3);
+    for (FormFieldData& field : form.fields) {
+      field.renderer_id = autofill_test_environment_.NextFieldRendererId();
+    }
     autofill_manager().AddSeenForm(
         form, {NAME_FULL, ADDRESS_HOME_STREET_ADDRESS, EMAIL_ADDRESS});
     SeeForm(form);

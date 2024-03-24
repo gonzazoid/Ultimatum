@@ -84,6 +84,10 @@ void FakePasswordStoreBackend::Shutdown(base::OnceClosure shutdown_completed) {
   GetTaskRunner()->PostTask(FROM_HERE, std::move(shutdown_completed));
 }
 
+bool FakePasswordStoreBackend::IsAbleToSavePasswords() {
+  return true;
+}
+
 void FakePasswordStoreBackend::GetAllLoginsAsync(LoginsOrErrorReply callback) {
   GetTaskRunner()->PostTaskAndReplyWithResult(
       FROM_HERE,
@@ -169,7 +173,15 @@ void FakePasswordStoreBackend::RemoveLoginsByURLAndTimeAsync(
     base::Time delete_end,
     base::OnceCallback<void(bool)> sync_completion,
     PasswordChangesOrErrorReply callback) {
-  NOTIMPLEMENTED();
+  auto cb = sync_completion ? std::move(callback).Then(base::BindOnce(
+                                  std::move(sync_completion), true))
+                            : std::move(callback);
+  GetTaskRunner()->PostTaskAndReplyWithResult(
+      FROM_HERE,
+      base::BindOnce(
+          &FakePasswordStoreBackend::RemoveLoginsByURLAndTimeInternal,
+          base::Unretained(this), url_filter, delete_begin, delete_end),
+      std::move(cb));
 }
 
 void FakePasswordStoreBackend::RemoveLoginsCreatedBetweenAsync(
@@ -209,6 +221,10 @@ void FakePasswordStoreBackend::OnSyncServiceInitialized(
     syncer::SyncService* sync_service) {
   NOTIMPLEMENTED();
 }
+
+void FakePasswordStoreBackend::RecordAddLoginAsyncCalledFromTheStore() {}
+
+void FakePasswordStoreBackend::RecordUpdateLoginAsyncCalledFromTheStore() {}
 
 base::WeakPtr<PasswordStoreBackend> FakePasswordStoreBackend::AsWeakPtr() {
   return weak_ptr_factory_.GetWeakPtr();
@@ -365,17 +381,28 @@ PasswordStoreChangeList FakePasswordStoreBackend::RemoveLoginInternal(
 }
 
 PasswordStoreChangeList
-FakePasswordStoreBackend::RemoveLoginsCreatedBetweenInternal(
+FakePasswordStoreBackend::RemoveLoginsByURLAndTimeInternal(
+    const base::RepeatingCallback<bool(const GURL&)>& url_filter,
     base::Time delete_begin,
     base::Time delete_end) {
   std::vector<PasswordForm> all_logins = GetAllLoginsInternal();
   PasswordStoreChangeList list;
   for (const auto& form : all_logins) {
-    if (delete_begin <= form.date_created && form.date_created < delete_end) {
+    if (url_filter.Run(form.url) && delete_begin <= form.date_created &&
+        form.date_created < delete_end) {
       base::ranges::move(RemoveLoginInternal(form), std::back_inserter(list));
     }
   }
   return list;
+}
+
+PasswordStoreChangeList
+FakePasswordStoreBackend::RemoveLoginsCreatedBetweenInternal(
+    base::Time delete_begin,
+    base::Time delete_end) {
+  return RemoveLoginsByURLAndTimeInternal(
+      base::BindRepeating([](const GURL&) { return true; }), delete_begin,
+      delete_end);
 }
 
 }  // namespace password_manager

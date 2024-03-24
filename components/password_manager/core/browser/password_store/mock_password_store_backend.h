@@ -31,6 +31,7 @@ class MockPasswordStoreBackend : public PasswordStoreBackend {
                base::OnceCallback<void(bool)> completion),
               (override));
   MOCK_METHOD(void, Shutdown, (base::OnceClosure), (override));
+  MOCK_METHOD(bool, IsAbleToSavePasswords, (), (override));
   MOCK_METHOD(void,
               GetAllLoginsAsync,
               (LoginsOrErrorReply callback),
@@ -97,6 +98,8 @@ class MockPasswordStoreBackend : public PasswordStoreBackend {
               OnSyncServiceInitialized,
               (syncer::SyncService*),
               (override));
+  MOCK_METHOD(void, RecordAddLoginAsyncCalledFromTheStore, (), (override));
+  MOCK_METHOD(void, RecordUpdateLoginAsyncCalledFromTheStore, (), (override));
 
   base::WeakPtr<PasswordStoreBackend> AsWeakPtr() override;
 

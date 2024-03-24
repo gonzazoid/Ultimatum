@@ -16,8 +16,8 @@ namespace features {
 // alongside the definition of their values in the .cc file.
 
 // Alphabetical:
+BASE_DECLARE_FEATURE(kWebViewBackForwardCache);
 BASE_DECLARE_FEATURE(kWebViewBrotliSupport);
-BASE_DECLARE_FEATURE(kWebViewConnectionlessSafeBrowsing);
 BASE_DECLARE_FEATURE(kWebViewCheckPakFileDescriptors);
 BASE_DECLARE_FEATURE(kWebViewClearFunctorInBackground);
 BASE_DECLARE_FEATURE(kWebViewDisplayCutout);
@@ -29,9 +29,13 @@ BASE_DECLARE_FEATURE(kWebViewForceDarkModeMatchTheme);
 BASE_DECLARE_FEATURE(kWebViewHitTestInBlinkOnTouchStart);
 BASE_DECLARE_FEATURE(kWebViewImageDrag);
 BASE_DECLARE_FEATURE(kWebViewInjectPlatformJsApis);
+// Feature parameter for `network::features::kMaskedDomainList` which is
+// defined in //services/network.
+extern const base::FeatureParam<int> kWebViewIpProtectionExclusionCriteria;
 BASE_DECLARE_FEATURE(kWebViewJavaJsBridgeMojo);
 BASE_DECLARE_FEATURE(kWebViewMediaIntegrityApi);
 BASE_DECLARE_FEATURE(kWebViewMixedContentAutoupgrades);
+BASE_DECLARE_FEATURE(kWebViewMuteAudio);
 BASE_DECLARE_FEATURE(kWebViewOriginTrials);
 BASE_DECLARE_FEATURE(kWebViewRecordAppDataDirectorySize);
 BASE_DECLARE_FEATURE(kWebViewRestrictSensitiveContent);
@@ -41,6 +45,7 @@ BASE_DECLARE_FEATURE(kWebViewSuppressDifferentOriginSubframeJSDialogs);
 BASE_DECLARE_FEATURE(kWebViewTestFeature);
 BASE_DECLARE_FEATURE(kWebViewUseMetricsUploadService);
 BASE_DECLARE_FEATURE(kWebViewUseMetricsUploadServiceOnlySdkRuntime);
+BASE_DECLARE_FEATURE(kWebViewPrerender2);
 BASE_DECLARE_FEATURE(kWebViewPropagateNetworkChangeSignals);
 BASE_DECLARE_FEATURE(kWebViewUnreducedProductVersion);
 BASE_DECLARE_FEATURE(kWebViewWideColorGamutSupport);

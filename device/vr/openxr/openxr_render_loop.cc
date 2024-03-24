@@ -4,6 +4,8 @@
 
 #include "device/vr/openxr/openxr_render_loop.h"
 
+#include <optional>
+
 #include "base/containers/contains.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
@@ -21,18 +23,11 @@
 #include "gpu/command_buffer/client/context_support.h"
 #include "gpu/command_buffer/client/gles2_interface.h"
 #include "mojo/public/cpp/bindings/message.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/openxr/src/include/openxr/openxr.h"
 #include "ui/gfx/geometry/angle_conversions.h"
 #include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/geometry/transform_util.h"
 #include "ui/gfx/gpu_fence.h"
-
-#if BUILDFLAG(IS_WIN)
-#include <d3d11_4.h>
-
-#include "device/vr/windows/d3d11_texture_helper.h"
-#endif
 
 namespace {
 // Number of frames to use for sliding averages for pose timings,
@@ -107,16 +102,24 @@ void OpenXrRenderLoop::ExitPresent(ExitXrPresentReason reason) {
   overlay_visible_ = false;
   overlay_receiver_.reset();
 
-#if BUILDFLAG(IS_WIN)
-  texture_helper_.SetSourceAndOverlayVisible(false, false);
-#endif
+  graphics_binding_->SetOverlayAndWebXrVisibility(false, false);
 
   // Don't call StopRuntime until this thread has finished the rest of the work.
   // This is to prevent the OpenXrApiWrapper from being deleted before its
   // cleanup work has finished.
-  task_runner()->PostTask(
-      FROM_HERE,
-      base::BindOnce(&OpenXrRenderLoop::StopRuntime, base::Unretained(this)));
+  // If we're called as a result of the OpenXrApiWrapper being destroyed, we may
+  // not have a task_runner anymore. Note that this appears to predominantly be
+  // the case on Android, where the task_runner() is destroyed before
+  // `StopRuntime` is called (which can lead to us being called), as Windows
+  // appears to stop/destroy the task runner after calling `StopRuntime`.
+  // Our `StopRuntime` method itself is resilient to multiple/re-entrant calls,
+  // so simply validate the task runner rather than something more involved to
+  // prevent that.
+  if (task_runner()) {
+    task_runner()->PostTask(
+        FROM_HERE,
+        base::BindOnce(&OpenXrRenderLoop::StopRuntime, base::Unretained(this)));
+  }
 }
 
 void OpenXrRenderLoop::GetFrameData(
@@ -271,11 +274,8 @@ void OpenXrRenderLoop::SubmitFrameWithTextureHandle(
     return;
   }
 
-  base::win::ScopedHandle scoped_handle = texture_handle.is_valid()
-                                              ? texture_handle.TakeHandle()
-                                              : base::win::ScopedHandle();
-  texture_helper_.SetSourceTexture(std::move(scoped_handle), sync_token,
-                                   left_webxr_bounds_, right_webxr_bounds_);
+  graphics_binding_->SetWebXrTexture(std::move(texture_handle), sync_token,
+                                     left_webxr_bounds_, right_webxr_bounds_);
 
   // Regardless of success - try to composite what we have.
   MaybeCompositeAndSubmit();
@@ -289,6 +289,7 @@ void OpenXrRenderLoop::CleanUp() {
   presentation_receiver_.reset();
   frame_data_receiver_.reset();
   overlay_receiver_.reset();
+  environment_receiver_.reset();
   StopRuntime();
 }
 
@@ -397,9 +398,8 @@ void OpenXrRenderLoop::StartRuntimeFinish(
       FROM_HERE, base::BindOnce(std::move(callback), true, std::move(session)));
   is_presenting_ = true;
 
-#if BUILDFLAG(IS_WIN)
-  texture_helper_.SetSourceAndOverlayVisible(webxr_visible_, overlay_visible_);
-#endif
+  graphics_binding_->SetOverlayAndWebXrVisibility(overlay_visible_,
+                                                  webxr_visible_);
 }
 
 void OpenXrRenderLoop::MaybeCompositeAndSubmit() {
@@ -421,8 +421,6 @@ void OpenXrRenderLoop::MaybeCompositeAndSubmit() {
     return;
   }
 
-  // TODO(https://crbug.com/1454950): Unify OpenXr Rendering paths.
-#if BUILDFLAG(IS_WIN)
   bool copy_successful = false;
   bool has_webxr_content = pending_frame_->webxr_submitted_ && webxr_visible_;
   bool has_overlay_content =
@@ -432,14 +430,10 @@ void OpenXrRenderLoop::MaybeCompositeAndSubmit() {
   // Tell texture helper to composite, then grab the output texture, and submit.
   // If we submitted, set up the next frame, and send outstanding pose requests.
   if (can_submit) {
-    copy_successful = texture_helper_.UpdateBackbufferSizes() &&
-                      texture_helper_.CompositeToBackBuffer();
+    copy_successful = graphics_binding_->Render(context_provider_);
   } else {
-    texture_helper_.CleanupNoSubmit();
+    graphics_binding_->CleanupWithoutSubmit();
   }
-#elif BUILDFLAG(IS_ANDROID)
-  bool copy_successful = true;
-#endif
 
   // A copy can only be successful if we actually tried to submit.
   if (copy_successful) {
@@ -519,13 +513,6 @@ void OpenXrRenderLoop::SubmitFrameMissing(int16_t frame_index,
     pending_frame_->waiting_for_webxr_ = false;
   }
   webxr_has_pose_ = false;
-#if (BUILDFLAG(IS_ANDROID))
-  // We haven't finished the rendering path on Android yet so are just calling
-  // this to ensure that the page stays un-stuck while we aren't actually
-  // rendering anything.
-  // TODO(alcooper): Clean this up.
-  pending_frame_->webxr_submitted_ = true;
-#endif
   MaybeCompositeAndSubmit();
 }
 
@@ -540,7 +527,8 @@ void OpenXrRenderLoop::UpdateLayerBounds(int16_t frame_id,
   left_webxr_bounds_ = left_bounds;
   right_webxr_bounds_ = right_bounds;
 
-  // Swap top/bottom to account for differences between D3D and GL coordinates.
+  // Swap top/bottom to account for differences between mojom and GL
+  // coordinates.
   left_webxr_bounds_.set_y(
       1 - (left_webxr_bounds_.y() + left_webxr_bounds_.height()));
   right_webxr_bounds_.set_y(
@@ -572,14 +560,12 @@ void OpenXrRenderLoop::SubmitOverlayTexture(
 
   pending_frame_->waiting_for_overlay_ = false;
 
-#if BUILDFLAG(IS_WIN)
-  texture_helper_.SetOverlayTexture(texture_handle.TakeHandle(), sync_token,
-                                    left_bounds, right_bounds);
+  graphics_binding_->SetOverlayTexture(std::move(texture_handle), sync_token,
+                                       left_bounds, right_bounds);
   pending_frame_->overlay_submitted_ = true;
 
   // Regardless of success - try to composite what we have.
   MaybeCompositeAndSubmit();
-#endif
 }
 
 void OpenXrRenderLoop::RequestNextOverlayPose(
@@ -612,10 +598,8 @@ void OpenXrRenderLoop::SetOverlayAndWebXRVisibility(bool overlay_visible,
         pending_frame_->waiting_for_overlay_ && overlay_visible;
   }
 
-  // Update texture helper.
-#if BUILDFLAG(IS_WIN)
-  texture_helper_.SetSourceAndOverlayVisible(webxr_visible, overlay_visible);
-#endif
+  graphics_binding_->SetOverlayAndWebXrVisibility(overlay_visible,
+                                                  webxr_visible);
 
   // Maybe composite and submit if we have a pending that is now valid to
   // submit.
@@ -696,12 +680,13 @@ mojom::XRFrameDataPtr OpenXrRenderLoop::GetNextFrameData() {
     OpenXRSceneUnderstandingManager* scene_understanding_manager =
         openxr_->GetOrCreateSceneUnderstandingManager(*extension_helper_);
     if (scene_understanding_manager) {
+      scene_understanding_manager->OnFrameUpdate(
+          openxr_->GetPredictedDisplayTime());
       device::Pose mojo_from_viewer(*frame_data->mojo_from_viewer->position,
                                     *frame_data->mojo_from_viewer->orientation);
       // Get results for hit test subscriptions.
       frame_data->hit_test_subscription_results =
-          scene_understanding_manager->ProcessHitTestResultsForFrame(
-              openxr_->GetPredictedDisplayTime(),
+          scene_understanding_manager->GetHitTestResults(
               mojo_from_viewer.ToTransform(), frame_data->input_state.value());
     }
   }
@@ -719,13 +704,9 @@ void OpenXrRenderLoop::StartRuntime(
   DCHECK(instance_ != XR_NULL_HANDLE);
   DCHECK(!openxr_);
 
-  // TODO(https://crbug.com/1454938): Make the Windows Graphics Binding own the
-  // texture helper rather than need it passed in.
-#if BUILDFLAG(IS_WIN)
-  graphics_binding_ = platform_helper_->GetGraphicsBinding(&texture_helper_);
-#elif BUILDFLAG(IS_ANDROID)
+  // Since we own the graphics_binding_ Unretained is safe here. Since this
+  // callback needs to return a value, it cannot be bound to a weak ptr.
   graphics_binding_ = platform_helper_->GetGraphicsBinding();
-#endif
 
   if (!graphics_binding_) {
     DVLOG(1) << "Could not create graphics binding";
@@ -799,16 +780,10 @@ void OpenXrRenderLoop::OnOpenXrSessionStarted(
 }
 
 void OpenXrRenderLoop::StopRuntime() {
-  // Has to reset input_helper_ before reset openxr_. If we destroy openxr_
-  // first, input_helper_destructor will try to call the actual openxr runtime
-  // rather than the mock in tests.
   openxr_ = nullptr;
   // Need to destroy the graphics binding *after* the OpenXrApiWrapper, which
   // depends on it; but *before* the texture helper on which it depends.
   graphics_binding_.reset();
-#if BUILDFLAG(IS_WIN)
-  texture_helper_.Reset();
-#endif
   context_provider_.reset();
 }
 
@@ -890,7 +865,6 @@ void OpenXrRenderLoop::OnWebXrTokenSignaled(
                                gpu::SyncToken());
 #elif BUILDFLAG(IS_ANDROID)
   MarkFrameSubmitted(frame_index);
-  graphics_binding_->Render();
   MaybeCompositeAndSubmit();
 #endif
 
@@ -945,13 +919,19 @@ void OpenXrRenderLoop::SubscribeToHitTest(
     return;
   }
 
-  HitTestSubscriptionId subscription_id =
+  std::optional<HitTestSubscriptionId> maybe_subscription_id =
       scene_understanding_manager->SubscribeToHitTest(
           std::move(native_origin_information), entity_types, std::move(ray));
 
-  DVLOG(2) << __func__ << ": subscription_id=" << subscription_id;
+  if (!maybe_subscription_id) {
+    std::move(callback).Run(
+        device::mojom::SubscribeToHitTestResult::FAILURE_GENERIC, 0);
+    return;
+  }
+
+  DVLOG(2) << __func__ << ": subscription_id=" << *maybe_subscription_id;
   std::move(callback).Run(device::mojom::SubscribeToHitTestResult::SUCCESS,
-                          subscription_id.GetUnsafeValue());
+                          maybe_subscription_id->GetUnsafeValue());
 }
 
 void OpenXrRenderLoop::SubscribeToHitTestForTransientInput(
@@ -972,13 +952,19 @@ void OpenXrRenderLoop::SubscribeToHitTestForTransientInput(
     return;
   }
 
-  HitTestSubscriptionId subscription_id =
+  std::optional<HitTestSubscriptionId> maybe_subscription_id =
       scene_understanding_manager->SubscribeToHitTestForTransientInput(
           profile_name, entity_types, std::move(ray));
 
-  DVLOG(2) << __func__ << ": subscription_id=" << subscription_id;
+  if (!maybe_subscription_id) {
+    std::move(callback).Run(
+        device::mojom::SubscribeToHitTestResult::FAILURE_GENERIC, 0);
+    return;
+  }
+
+  DVLOG(2) << __func__ << ": subscription_id=" << *maybe_subscription_id;
   std::move(callback).Run(device::mojom::SubscribeToHitTestResult::SUCCESS,
-                          subscription_id.GetUnsafeValue());
+                          maybe_subscription_id->GetUnsafeValue());
 }
 
 void OpenXrRenderLoop::UnsubscribeFromHitTest(uint64_t subscription_id) {
@@ -1020,11 +1006,6 @@ void OpenXrRenderLoop::DetachAnchor(uint64_t anchor_id) {
     return;
   }
   anchor_manager->DetachAnchor(AnchorId(anchor_id));
-}
-
-gpu::gles2::GLES2Interface* OpenXrRenderLoop::GetContextGL() {
-  DCHECK(context_provider_);
-  return context_provider_->ContextGL();
 }
 
 void OpenXrRenderLoop::StartContextProviderIfNeeded(

@@ -16,6 +16,7 @@
 #include "base/process/process.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
+#include "components/services/screen_ai/buildflags/buildflags.h"
 #include "components/services/screen_ai/proto/main_content_extractor_proto_convertor.h"
 #include "components/services/screen_ai/proto/visual_annotator_proto_convertor.h"
 #include "components/services/screen_ai/public/cpp/utilities.h"
@@ -27,12 +28,18 @@
 #include "ui/accessibility/ax_tree_id.h"
 #include "ui/gfx/geometry/rect_f.h"
 
+#if BUILDFLAG(USE_FAKE_SCREEN_AI)
+#include "components/services/screen_ai/screen_ai_library_wrapper_fake.h"
+#else
+#include "components/services/screen_ai/screen_ai_library_wrapper_impl.h"
+#endif
+
 namespace screen_ai {
 
 namespace {
 
 ui::AXTreeUpdate ConvertVisualAnnotationToTreeUpdate(
-    const absl::optional<chrome_screen_ai::VisualAnnotation>& annotation_proto,
+    const std::optional<chrome_screen_ai::VisualAnnotation>& annotation_proto,
     const gfx::Rect& image_rect) {
   if (!annotation_proto) {
     VLOG(0) << "Screen AI library could not process snapshot or no OCR data.";
@@ -44,19 +51,19 @@ ui::AXTreeUpdate ConvertVisualAnnotationToTreeUpdate(
 
 }  // namespace
 
-// The only instance of `PreloadedModelData`, valid through the call to any of
-// the library initialization functions.
-PreloadedModelData* g_preloaded_model_data_instance = nullptr;
+// The library accepts simple pointers to model data retrieval functions, hence
+// callback functions with linked object are not safe to pass.
+// Since library initialization functions are called in a single thread process,
+// we choose the active model data instance before calling the library
+// initializer and release it when initialization is completed.
+PreloadedModelData* g_active_model_data_instance = nullptr;
 
 // Keeps the content of model files, and replies to calls for copying them.
 class PreloadedModelData {
  public:
   PreloadedModelData(const PreloadedModelData&) = delete;
   PreloadedModelData& operator=(const PreloadedModelData&) = delete;
-  ~PreloadedModelData() {
-    CHECK_NE(g_preloaded_model_data_instance, nullptr);
-    g_preloaded_model_data_instance = nullptr;
-  }
+  ~PreloadedModelData() { CHECK_NE(g_active_model_data_instance, this); }
 
   static std::unique_ptr<PreloadedModelData> Create(
       base::flat_map<base::FilePath, base::File> model_files) {
@@ -66,11 +73,10 @@ class PreloadedModelData {
 
   // Returns 0 if file is not found.
   static uint32_t GetDataSize(const char* relative_file_path) {
-    CHECK(g_preloaded_model_data_instance);
-    return base::Contains(g_preloaded_model_data_instance->data_,
+    CHECK(g_active_model_data_instance);
+    return base::Contains(g_active_model_data_instance->data_,
                           relative_file_path)
-               ? g_preloaded_model_data_instance->data_[relative_file_path]
-                     .size()
+               ? g_active_model_data_instance->data_[relative_file_path].size()
                : 0;
   }
 
@@ -78,23 +84,26 @@ class PreloadedModelData {
   static void CopyData(const char* relative_file_path,
                        uint32_t buffer_size,
                        char* buffer) {
-    CHECK(g_preloaded_model_data_instance);
-    CHECK(base::Contains(g_preloaded_model_data_instance->data_,
+    CHECK(g_active_model_data_instance);
+    CHECK(base::Contains(g_active_model_data_instance->data_,
                          relative_file_path));
     const std::vector<char>& data =
-        g_preloaded_model_data_instance->data_[relative_file_path];
+        g_active_model_data_instance->data_[relative_file_path];
     CHECK_GE(buffer_size, data.size());
     memcpy(buffer, data.data(), data.size());
   }
 
-  std::map<std::string, std::vector<char>> data_;
+  void SetAsActive(bool assign) {
+    if (assign) {
+      g_active_model_data_instance = this;
+    } else {
+      g_active_model_data_instance = nullptr;
+    }
+  }
 
  private:
   explicit PreloadedModelData(
       base::flat_map<base::FilePath, base::File> model_files) {
-    CHECK_EQ(g_preloaded_model_data_instance, nullptr);
-    g_preloaded_model_data_instance = this;
-
     for (auto& model_file : model_files) {
       std::vector<char> buffer;
       int64_t length = model_file.second.GetLength();
@@ -113,6 +122,8 @@ class PreloadedModelData {
       data_[model_file.first.MaybeAsASCII()] = std::move(buffer);
     }
   }
+
+  std::map<std::string, std::vector<char>> data_;
 };
 
 ScreenAIService::ScreenAIService(
@@ -125,7 +136,12 @@ ScreenAIService::~ScreenAIService() = default;
 
 void ScreenAIService::LoadLibrary(const base::FilePath& library_path) {
   DCHECK(!content::BrowserThread::CurrentlyOn(content::BrowserThread::UI));
-  library_ = std::make_unique<ScreenAILibraryWrapper>();
+
+#if BUILDFLAG(USE_FAKE_SCREEN_AI)
+  library_ = std::make_unique<ScreenAILibraryWrapperFake>();
+#else
+  library_ = std::make_unique<ScreenAILibraryWrapperImpl>();
+#endif
 
   bool load_sucessful = library_->Load(library_path);
   base::UmaHistogramBoolean("Accessibility.ScreenAI.Library.Initialized",
@@ -187,7 +203,9 @@ void ScreenAIService::InitializeMainContentExtractionInternal(
   // `model_data` contains the content of the model files and its accessors are
   // passed to the library. It should be kept in memory until after library
   // initialization.
+  model_data->SetAsActive(true);
   bool init_successful = library_->InitMainContentExtraction();
+  model_data->SetAsActive(false);
   base::UmaHistogramBoolean(
       "Accessibility.ScreenAI.MainContentExtraction.Initialized",
       init_successful);
@@ -234,7 +252,10 @@ void ScreenAIService::InitializeOCRInternal(
   // `model_data` contains the content of the model files and its accessors are
   // passed to the library. It should be kept in memory until after library
   // initialization.
+  model_data->SetAsActive(true);
   bool init_successful = library_->InitOCR();
+  model_data->SetAsActive(false);
+
   base::UmaHistogramBoolean("Accessibility.ScreenAI.OCR.Initialized",
                             init_successful);
 
@@ -283,7 +304,7 @@ void ScreenAIService::ExtractSemanticLayout(
     ExtractSemanticLayoutCallback callback) {
   DCHECK(screen_ai_annotator_client_.is_bound());
 
-  absl::optional<chrome_screen_ai::VisualAnnotation> annotation_proto =
+  std::optional<chrome_screen_ai::VisualAnnotation> annotation_proto =
       library_->ExtractLayout(image);
 
   // The original caller is always replied to, and an AXTreeIDUnknown is sent to
@@ -313,7 +334,7 @@ void ScreenAIService::ExtractSemanticLayout(
   screen_ai_annotator_client_->HandleAXTreeUpdate(update);
 }
 
-absl::optional<chrome_screen_ai::VisualAnnotation>
+std::optional<chrome_screen_ai::VisualAnnotation>
 ScreenAIService::PerformOcrAndRecordMetrics(const SkBitmap& image,
                                             bool a11y_tree_request) {
   base::TimeTicks start_time = base::TimeTicks::Now();
@@ -358,7 +379,7 @@ ScreenAIService::PerformOcrAndRecordMetrics(const SkBitmap& image,
 void ScreenAIService::PerformOcrAndReturnAnnotation(
     const SkBitmap& image,
     PerformOcrAndReturnAnnotationCallback callback) {
-  absl::optional<chrome_screen_ai::VisualAnnotation> annotation_proto =
+  std::optional<chrome_screen_ai::VisualAnnotation> annotation_proto =
       PerformOcrAndRecordMetrics(image, /*a11y_tree_request=*/false);
 
   if (annotation_proto) {
@@ -372,7 +393,7 @@ void ScreenAIService::PerformOcrAndReturnAnnotation(
 void ScreenAIService::PerformOcrAndReturnAXTreeUpdate(
     const SkBitmap& image,
     PerformOcrAndReturnAXTreeUpdateCallback callback) {
-  absl::optional<chrome_screen_ai::VisualAnnotation> annotation_proto =
+  std::optional<chrome_screen_ai::VisualAnnotation> annotation_proto =
       PerformOcrAndRecordMetrics(image, /*a11y_tree_request=*/true);
   ui::AXTreeUpdate update = ConvertVisualAnnotationToTreeUpdate(
       annotation_proto, gfx::Rect(image.width(), image.height()));
@@ -397,7 +418,7 @@ void ScreenAIService::ExtractMainContent(const ui::AXTreeUpdate& snapshot,
   std::string serialized_snapshot = SnapshotToViewHierarchy(snapshot);
 
   base::TimeTicks start_time = base::TimeTicks::Now();
-  absl::optional<std::vector<int32_t>> content_node_ids =
+  std::optional<std::vector<int32_t>> content_node_ids =
       library_->ExtractMainContent(serialized_snapshot);
   base::TimeDelta elapsed_time = base::TimeTicks::Now() - start_time;
 

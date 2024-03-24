@@ -4,6 +4,7 @@
 
 #include "components/performance_manager/public/resource_attribution/frame_context.h"
 
+#include <optional>
 #include <sstream>
 #include <utility>
 
@@ -15,12 +16,12 @@
 #include "components/performance_manager/public/graph/graph.h"
 #include "components/performance_manager/public/performance_manager.h"
 #include "components/performance_manager/public/render_process_host_id.h"
+#include "components/performance_manager/resource_attribution/performance_manager_aliases.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/global_routing_id.h"
 #include "content/public/browser/render_frame_host.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace performance_manager::resource_attribution {
+namespace resource_attribution {
 
 namespace {
 
@@ -46,7 +47,7 @@ FrameContext::FrameContext(FrameContext&& other) = default;
 FrameContext& FrameContext::operator=(FrameContext&& other) = default;
 
 // static
-absl::optional<FrameContext> FrameContext::FromRenderFrameHost(
+std::optional<FrameContext> FrameContext::FromRenderFrameHost(
     content::RenderFrameHost* host) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   CHECK(host);
@@ -63,7 +64,7 @@ absl::optional<FrameContext> FrameContext::FromRenderFrameHost(
     // RenderFrameHost, and the caller had a valid RenderFrameHost on the UI
     // thread, so the WeakPtr is guaranteed to be valid at this point. Therefore
     // MaybeValid() can only be false in the first case.
-    return absl::nullopt;
+    return std::nullopt;
   }
   return FrameContext(host->GetGlobalId(), std::move(frame_node));
 }
@@ -97,10 +98,10 @@ FrameContext FrameContext::FromFrameNode(const FrameNode* node) {
 }
 
 // static
-absl::optional<FrameContext> FrameContext::FromWeakFrameNode(
+std::optional<FrameContext> FrameContext::FromWeakFrameNode(
     base::WeakPtr<FrameNode> node) {
   if (!node) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return FromFrameNode(node.get());
 }
@@ -123,4 +124,4 @@ std::string FrameContext::ToString() const {
   return s.str();
 }
 
-}  // namespace performance_manager::resource_attribution
+}  // namespace resource_attribution

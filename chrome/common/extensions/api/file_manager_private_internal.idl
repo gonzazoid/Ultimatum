@@ -96,9 +96,6 @@ namespace fileManagerPrivateInternal {
     [supportsPromises] static void computeChecksum(
         DOMString url,
         ComputeChecksumCallback callback);
-    [supportsPromises] static void getMimeType(
-        DOMString url,
-        GetMimeTypeCallback callback);
     [supportsPromises] static void getContentMimeType(
         DOMString blobUUID,
         GetContentMimeTypeCallback callback);
@@ -184,7 +181,7 @@ namespace fileManagerPrivateInternal {
         DOMString[] urls, boolean add,
                                           optional SimpleCallback callback);
     [supportsPromises] static void startIOTask(
-        fileManagerPrivate.IOTaskType type,
+        fileManagerPrivate.IoTaskType type,
         DOMString[] urls,
         IOTaskParams params,
         optional IOTaskIdCallback callback);

@@ -29,6 +29,7 @@
 #include "ash/wm/window_util.h"
 #include "ash/wm/wm_event.h"
 #include "ash/wm/workspace/backdrop_controller.h"
+#include "base/containers/adapters.h"
 #include "base/containers/contains.h"
 #include "base/memory/raw_ptr.h"
 #include "ui/aura/client/aura_constants.h"
@@ -250,11 +251,13 @@ void WorkspaceLayoutManager::OnKeyboardDisplacingBoundsChanged(
       const gfx::Point origin(window_bounds.x(), window_bounds.y() - shift);
       SetChildBounds(window, gfx::Rect(origin, window_bounds.size()));
     }
-  } else if (window_state->HasRestoreBounds()) {
+  } else if (window_state->IsNormalStateType() &&
+             window_state->HasRestoreBounds()) {
     // Keyboard hidden, restore original bounds if they exist. If the user has
     // resized or dragged the window in the meantime, WorkspaceWindowResizer
     // will have cleared the restore bounds and this code will not accidentally
-    // override user intent.
+    // override user intent. Only do this for normal window states that use the
+    // restore bounds.
     window_state->SetAndClearRestoreBounds();
   }
 }
@@ -527,8 +530,12 @@ void WorkspaceLayoutManager::AdjustAllWindowsBoundsForWorkAreaChange(
   // We also do this when developers running Aura on a desktop manually resize
   // the host window.
   // We also need to do this when the work area insets changes.
-  for (aura::Window* window : windows_)
+  // Update the windows from top-most to bottom-most so when windows get bigger
+  // they occlude windows below them first.
+  auto ordered_windows = window_util::SortWindowsBottomToTop(windows_);
+  for (aura::Window* window : base::Reversed(ordered_windows)) {
     WindowState::Get(window)->OnWMEvent(event);
+  }
 }
 
 void WorkspaceLayoutManager::UpdateShelfVisibility() {
@@ -584,7 +591,7 @@ void WorkspaceLayoutManager::MaybeUpdateA11yFloatingPanelOrPipBounds() const {
         ->accessibility_controller()
         ->UpdateFloatingPanelBoundsIfNeeded();
   }
-  for (auto* window : windows_) {
+  for (aura::Window* window : windows_) {
     WindowState* window_state = WindowState::Get(window);
     if (window_state->IsPip()) {
       Shell::Get()->pip_controller()->UpdatePipBounds();

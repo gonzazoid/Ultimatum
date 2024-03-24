@@ -35,6 +35,7 @@
 #include "media/base/media_switches.h"
 #include "media/base/media_util.h"
 #include "media/base/platform_features.h"
+#include "media/base/svc_scalability_mode.h"
 #include "media/base/video_bitrate_allocation.h"
 #include "media/base/video_frame.h"
 #include "media/base/video_util.h"
@@ -257,6 +258,17 @@ bool ConvertKbpsToBps(uint32_t bitrate_kbps, uint32_t* bitrate_bps) {
   *bitrate_bps = bitrate_kbps * 1000;
   return true;
 }
+
+uint8_t GetDropFrameThreshold(const webrtc::VideoCodec& codec_settings) {
+  // This drop frame threshold is same as WebRTC.
+  // https://source.chromium.org/chromium/chromium/src/+/main:third_party/webrtc/modules/video_coding/codecs/vp9/libvpx_vp9_encoder.cc
+  if (codec_settings.GetFrameDropEnabled() &&
+      base::FeatureList::IsEnabled(
+          media::kWebRTCHardwareVideoEncoderFrameDrop)) {
+    return 30;
+  }
+  return 0;
+}
 }  // namespace
 
 namespace WTF {
@@ -346,7 +358,7 @@ bool CreateSpatialLayersConfig(
     std::vector<media::VideoEncodeAccelerator::Config::SpatialLayer>*
         spatial_layers,
     media::SVCInterLayerPredMode* inter_layer_pred) {
-  absl::optional<webrtc::ScalabilityMode> scalability_mode =
+  std::optional<webrtc::ScalabilityMode> scalability_mode =
       codec_settings.GetScalabilityMode();
 
   if (codec_settings.codecType == webrtc::kVideoCodecVP9 &&
@@ -452,6 +464,14 @@ bool CreateSpatialLayersConfig(
           *inter_layer_pred = CopyFromWebRtcInterLayerPredMode(
               codec_settings.VP9().interLayerPred);
         }
+      }
+      break;
+    case webrtc::kVideoCodecAV1:
+      // No hardware encoder supports for AV1 either temporal layer or spatial
+      // layer encoding.
+      if (scalability_mode.value_or(webrtc::ScalabilityMode::kL1T1) !=
+          webrtc::ScalabilityMode::kL1T1) {
+        return false;
       }
       break;
     default:
@@ -589,7 +609,7 @@ class RTCVideoEncoder::Impl : public media::VideoEncodeAccelerator::Client {
        scoped_refptr<media::MojoVideoEncoderMetricsProviderFactory>
            encoder_metrics_provider_factory,
        webrtc::VideoCodecType video_codec_type,
-       absl::optional<webrtc::ScalabilityMode> scalability_mode,
+       std::optional<webrtc::ScalabilityMode> scalability_mode,
        webrtc::VideoContentType video_content_type,
        UpdateEncoderInfoCallback update_encoder_info_callback,
        base::RepeatingClosure execute_software_fallback,
@@ -755,7 +775,7 @@ class RTCVideoEncoder::Impl : public media::VideoEncodeAccelerator::Client {
   const webrtc::VideoCodecType video_codec_type_;
 
   // The scalability mode, as reported to WebRTC.
-  const absl::optional<webrtc::ScalabilityMode> scalability_mode_;
+  const std::optional<webrtc::ScalabilityMode> scalability_mode_;
 
   // The content type, as reported to WebRTC (screenshare vs realtime video).
   const webrtc::VideoContentType video_content_type_;
@@ -806,7 +826,7 @@ RTCVideoEncoder::Impl::Impl(
     scoped_refptr<media::MojoVideoEncoderMetricsProviderFactory>
         encoder_metrics_provider_factory,
     webrtc::VideoCodecType video_codec_type,
-    absl::optional<webrtc::ScalabilityMode> scalability_mode,
+    std::optional<webrtc::ScalabilityMode> scalability_mode,
     webrtc::VideoContentType video_content_type,
     UpdateEncoderInfoCallback update_encoder_info_callback,
     base::RepeatingClosure execute_software_fallback,
@@ -855,14 +875,6 @@ void RTCVideoEncoder::Impl::CreateAndInitializeVEA(
     preferred_pixel_formats_ = {webrtc::VideoFrameBuffer::Type::kNV12};
   }
 
-  // When we don't have built in H264 software encoding, allow usage of any
-  // software encoders provided by the platform.
-#if !BUILDFLAG(ENABLE_OPENH264) && BUILDFLAG(RTC_USE_H264)
-  if (profile >= media::H264PROFILE_MIN && profile <= media::H264PROFILE_MAX) {
-    vea_config.required_encoder_type =
-        media::VideoEncodeAccelerator::Config::EncoderType::kNoPreference;
-  }
-#endif
   encoder_metrics_provider_ =
       encoder_metrics_provider_factory_->CreateVideoEncoderMetricsProvider();
   encoder_metrics_provider_->Initialize(
@@ -916,7 +928,6 @@ void RTCVideoEncoder::Impl::Enqueue(FrameChunk frame_chunk) {
   if (base::FeatureList::IsEnabled(
           features::kVideoEncoderLimitsFramesInEncoder) &&
       frames_in_encoder_count_ >= kMaxFramesInEncoder) {
-    CHECK_EQ(frames_in_encoder_count_, kMaxFramesInEncoder);
     DVLOG(1) << "VAE drops the input frame to reduce latency";
     base::AutoLock lock(lock_);
     if (encoded_image_callback_) {
@@ -1021,7 +1032,7 @@ void RTCVideoEncoder::Impl::RequestEncodingParametersChange(
   }
   DCHECK_EQ(allocation.GetSumBps(), parameters.bitrate.get_sum_bps());
   video_encoder_->RequestEncodingParametersChange(allocation, framerate,
-                                                  absl::nullopt);
+                                                  std::nullopt);
 }
 
 void RTCVideoEncoder::Impl::RecordTimestampMatchUMA() const {
@@ -1100,7 +1111,7 @@ void RTCVideoEncoder::Impl::BitstreamBufferReady(
                "bitstream_buffer_id", bitstream_buffer_id);
   DVLOG(3) << __func__ << " bitstream_buffer_id=" << bitstream_buffer_id
            << ", payload_size=" << metadata.payload_size_bytes
-           << ", end_of_picture=" << metadata.end_of_picture()
+           << ", end_of_picture=" << metadata.end_of_picture
            << ", key_frame=" << metadata.key_frame
            << ", timestamp ms=" << metadata.timestamp.InMicroseconds();
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -1112,6 +1123,36 @@ void RTCVideoEncoder::Impl::BitstreamBufferReady(
                            base::NumberToString(bitstream_buffer_id)});
     return;
   }
+
+  DCHECK_NE(output_buffers_in_encoder_count_, 0u);
+  output_buffers_in_encoder_count_--;
+
+  // Decrease |frames_in_encoder_count_| on the first frame so that
+  // UseOutputBitstreamBuffer() is not called until next frame if no frame but
+  // the current frame is in VideoEncodeAccelerator.
+  if (metadata.spatial_idx().value_or(0) == 0) {
+    DCHECK_NE(0u, frames_in_encoder_count_);
+    frames_in_encoder_count_--;
+  }
+
+  // An encoder drops a frame.
+  if (metadata.dropped_frame()) {
+    BitstreamBufferAvailable(bitstream_buffer_id);
+    // Invoke OnDroppedFrame() only in the end of picture. How to call
+    // OnDroppedFrame() in spatial layers is not defined in the webrtc encoder
+    // API. We call once in spatial layers. This point will be fixed in a
+    // new WebRTC encoder API.
+    if (metadata.end_of_picture) {
+      base::AutoLock lock(lock_);
+      if (!encoded_image_callback_) {
+        return;
+      }
+      encoded_image_callback_->OnDroppedFrame(
+          webrtc::EncodedImageCallback::DropReason::kDroppedByEncoder);
+    }
+    return;
+  }
+
   scoped_refptr<RefCountedWritableSharedMemoryMapping> output_mapping =
       output_buffers_[bitstream_buffer_id].second;
   if (metadata.payload_size_bytes >
@@ -1122,30 +1163,21 @@ void RTCVideoEncoder::Impl::BitstreamBufferReady(
     return;
   }
 
-  DCHECK_NE(output_buffers_in_encoder_count_, 0u);
-  output_buffers_in_encoder_count_--;
-
-  // Decrease |frames_in_encoder_count_| on the first frame.
-  if (metadata.spatial_idx().value_or(0) == 0) {
-    DCHECK_NE(0u, frames_in_encoder_count_);
-    frames_in_encoder_count_--;
-  }
-
-  if (metadata.end_of_picture()) {
+  if (metadata.end_of_picture) {
     CHECK(encoder_metrics_provider_);
     encoder_metrics_provider_->IncrementEncodedFrameCount();
   }
 
   // Find RTP and capture timestamps by going through |pending_timestamps_|.
   // Derive it from current time otherwise.
-  absl::optional<uint32_t> rtp_timestamp;
-  absl::optional<int64_t> capture_timestamp_ms;
-  absl::optional<ActiveSpatialLayers> expected_active_spatial_layers;
+  std::optional<uint32_t> rtp_timestamp;
+  std::optional<int64_t> capture_timestamp_ms;
+  std::optional<ActiveSpatialLayers> expected_active_spatial_layers;
   if (!failed_timestamp_match_) {
     // Pop timestamps until we have a match.
     while (!submitted_frames_.empty()) {
       auto& front_frame = submitted_frames_.front();
-      const bool end_of_picture = metadata.end_of_picture();
+      const bool end_of_picture = metadata.end_of_picture;
       if (front_frame.media_timestamp_ == metadata.timestamp) {
         rtp_timestamp = front_frame.rtp_timestamp_;
         capture_timestamp_ms = front_frame.capture_time_ms_;
@@ -1175,12 +1207,11 @@ void RTCVideoEncoder::Impl::BitstreamBufferReady(
         }
         break;
       }
-      // Timestamp does not match front of the pending frames list.
-      if (end_of_picture)
-        submitted_frames_.pop_front();
+      submitted_frames_.pop_front();
     }
     DCHECK(rtp_timestamp.has_value());
   }
+
   if (!rtp_timestamp.has_value() || !capture_timestamp_ms.has_value()) {
     failed_timestamp_match_ = true;
     submitted_frames_.clear();
@@ -1349,7 +1380,7 @@ void RTCVideoEncoder::Impl::BitstreamBufferReady(
         }
         vp9.flexible_mode = true;
         vp9.gof_idx = 0;
-        info.end_of_picture = metadata.vp9->end_of_picture;
+        info.end_of_picture = metadata.end_of_picture;
       } else {
         // Simple stream, neither temporal nor spatial layer stream.
         vp9.flexible_mode = false;
@@ -1529,7 +1560,7 @@ void RTCVideoEncoder::Impl::EncodeOneFrame(FrameChunk frame_chunk) {
                                               input_frame_coded_size_);
         input_buffers_[index] = std::make_unique<base::MappedReadOnlyRegion>(
             base::ReadOnlySharedMemoryRegion::Create(input_frame_buffer_size));
-        if (!input_buffers_[index]) {
+        if (!input_buffers_[index]->IsValid()) {
           NotifyErrorStatus({media::EncoderStatus::Codes::kSystemAPICallError,
                              "Failed to create input buffer"});
           return;
@@ -1939,6 +1970,17 @@ int32_t RTCVideoEncoder::InitEncode(
   vea_config_->content_type = vea_content_type;
   vea_config_->spatial_layers = spatial_layers;
   vea_config_->inter_layer_pred = inter_layer_pred;
+  vea_config_->drop_frame_thresh_percentage =
+      GetDropFrameThreshold(*codec_settings);
+  // When we don't have built in H264 software encoding, allow usage of any
+  // software encoders provided by the platform.
+#if !BUILDFLAG(ENABLE_OPENH264) && BUILDFLAG(RTC_USE_H264)
+  if (profile_ >= media::H264PROFILE_MIN &&
+      profile_ <= media::H264PROFILE_MAX) {
+    vea_config_->required_encoder_type =
+        media::VideoEncodeAccelerator::Config::EncoderType::kNoPreference;
+  }
+#endif
 
   if (!base::FeatureList::IsEnabled(
           features::kWebRtcInitializeEncoderOnFirstFrame)) {

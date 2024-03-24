@@ -6,23 +6,22 @@
 #define COMPONENTS_TRUSTED_VAULT_TRUSTED_VAULT_SERVER_CONSTANTS_H_
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/containers/fixed_flat_set.h"
 #include "base/containers/span.h"
 #include "base/strings/string_piece.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace trusted_vault {
 
 inline constexpr int kUnknownConstantKeyVersion = 0;
 
-inline constexpr char kSyncSecurityDomainName[] =
-    "users/me/securitydomains/chromesync";
-inline constexpr char kPasskeysSecurityDomainName[] =
-    "users/me/securitydomains/hw_protected";
+inline constexpr char kSecurityDomainPathPrefix[] = "users/me/securitydomains/";
+inline constexpr char kSyncSecurityDomainName[] = "chromesync";
+inline constexpr char kPasskeysSecurityDomainName[] = "hw_protected";
 inline constexpr char kSecurityDomainMemberNamePrefix[] = "users/me/members/";
 inline constexpr char kJoinSecurityDomainsErrorDetailTypeURL[] =
     "type.googleapis.com/"
@@ -60,7 +59,7 @@ GURL GetJoinSecurityDomainURL(const GURL& server_url,
 
 // Computes full URL, including alternate proto param.
 GURL GetGetSecurityDomainMembersURLForTesting(
-    const absl::optional<std::string>& next_page_token,
+    const std::optional<std::string>& next_page_token,
     const GURL& server_url);
 GURL GetFullJoinSecurityDomainsURLForTesting(const GURL& server_url,
                                              SecurityDomainId security_domain);
@@ -70,24 +69,9 @@ GURL GetFullGetSecurityDomainMemberURLForTesting(
 GURL GetFullGetSecurityDomainURLForTesting(const GURL& server_url,
                                            SecurityDomainId security_domain);
 
-std::string GetSecurityDomainName(SecurityDomainId domain);
-absl::optional<SecurityDomainId> GetSecurityDomainByName(
+std::string GetSecurityDomainPath(SecurityDomainId domain);
+std::optional<SecurityDomainId> GetSecurityDomainByName(
     base::StringPiece domain);
-
-// Returns a security domain name suitable for using in histograms. When
-// including this in a histogram, its name in the XML should have
-// "{SecurityDomainId}" where the returned string will be inserted (which
-// will include a leading period). For example:
-//   name="TrustedVault.Foo{SecurityDomainId}"
-// Will match a histogram name like:
-//   TrustedVault.Foo.ChromeSync
-//
-// Then there needs to be a <token> element in the XML entry like:
-//   <token key="SecurityDomainId" variants="SecurityDomainId"/>
-//
-// See
-// https://chromium.googlesource.com/chromium/src.git/+/HEAD/tools/metrics/histograms/README.md#patterned-histograms
-std::string GetSecurityDomainNameForHistograms(SecurityDomainId domain);
 
 }  // namespace trusted_vault
 

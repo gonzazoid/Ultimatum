@@ -52,7 +52,7 @@ class COMPONENT_EXPORT(UI_BASE_CLIPBOARD) ClipboardNonBacked
       ClipboardBuffer buffer = ClipboardBuffer::kCopyPaste);
 
   // Clipboard overrides:
-  absl::optional<DataTransferEndpoint> GetSource(
+  std::optional<DataTransferEndpoint> GetSource(
       ClipboardBuffer buffer) const override;
   const ClipboardSequenceNumberToken& GetSequenceNumber(
       ClipboardBuffer buffer) const override;
@@ -64,6 +64,8 @@ class COMPONENT_EXPORT(UI_BASE_CLIPBOARD) ClipboardNonBacked
   friend class Clipboard;
   friend class ClipboardNonBackedTestBase;
   friend class headless::HeadlessClipboard;
+  FRIEND_TEST_ALL_PREFIXES(ClipboardNonBackedTest, PlainText);
+  FRIEND_TEST_ALL_PREFIXES(ClipboardNonBackedTest, BookmarkURL);
   FRIEND_TEST_ALL_PREFIXES(ClipboardNonBackedTest, TextURIList);
   FRIEND_TEST_ALL_PREFIXES(ClipboardNonBackedTest, ImageEncoding);
   FRIEND_TEST_ALL_PREFIXES(ClipboardNonBackedTest, EncodeImageOnce);
@@ -130,8 +132,7 @@ class COMPONENT_EXPORT(UI_BASE_CLIPBOARD) ClipboardNonBacked
       std::unique_ptr<DataTransferEndpoint> data_src) override;
   void WriteText(base::StringPiece text) override;
   void WriteHTML(base::StringPiece markup,
-                 absl::optional<base::StringPiece> source_url,
-                 ClipboardContentType content_type) override;
+                 std::optional<base::StringPiece> source_url) override;
   void WriteSvg(base::StringPiece markup) override;
   void WriteRTF(base::StringPiece rtf) override;
   void WriteFilenames(std::vector<ui::FileInfo> filenames) override;

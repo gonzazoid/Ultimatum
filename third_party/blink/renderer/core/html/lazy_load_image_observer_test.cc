@@ -4,10 +4,10 @@
 
 #include "third_party/blink/renderer/core/html/lazy_load_image_observer.h"
 
+#include <optional>
 #include <tuple>
 
 #include "base/test/metrics/histogram_tester.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
@@ -192,7 +192,7 @@ TEST_P(LazyLoadImagesParamsTest, NearViewport) {
 
   SimSubresourceRequest eager_resource("https://example.com/eager.png",
                                        "image/png");
-  absl::optional<SimSubresourceRequest> lazy_resource, auto_resource,
+  std::optional<SimSubresourceRequest> lazy_resource, auto_resource,
       unset_resource;
   lazy_resource.emplace("https://example.com/lazy.png", "image/png");
   auto_resource.emplace("https://example.com/auto.png", "image/png");
@@ -276,7 +276,7 @@ TEST_P(LazyLoadImagesParamsTest, FarFromViewport) {
 
   SimSubresourceRequest eager_resource("https://example.com/eager.png",
                                        "image/png");
-  absl::optional<SimSubresourceRequest> lazy_resource, auto_resource,
+  std::optional<SimSubresourceRequest> lazy_resource, auto_resource,
       unset_resource;
   lazy_resource.emplace("https://example.com/lazy.png", "image/png");
   auto_resource.emplace("https://example.com/auto.png", "image/png");
@@ -381,8 +381,7 @@ class LazyLoadImagesTest : public SimTest {
 
     Settings& settings = WebView().GetPage()->GetSettings();
     settings.SetLazyLoadingImageMarginPx4G(kLoadingDistanceThreshold);
-    settings.SetLazyFrameLoadingDistanceThresholdPx4G(
-        kLoadingDistanceThreshold);
+    settings.SetLazyLoadingFrameMarginPx4G(kLoadingDistanceThreshold);
   }
 
   String MakeMainResourceString(const char* image_attributes) {
@@ -677,11 +676,8 @@ TEST_F(LazyLoadImagesTest, ImageInsideLazyLoadedFrame) {
   SimSubresourceRequest lazy_resource("https://example.com/lazy.png",
                                       "image/png");
 
-  // Scroll down so that all the images in the iframe are near the viewport.
-  // TODO(crbug.com/1503290): Change this back to 250 once scroll margin is
-  // fixed to walk through same-origin iframes.
   GetDocument().View()->LayoutViewport()->SetScrollOffset(
-      ScrollOffset(0, 500), mojom::blink::ScrollType::kProgrammatic);
+      ScrollOffset(0, 250), mojom::blink::ScrollType::kProgrammatic);
 
   Compositor().BeginFrame();
   test::RunPendingTasks();

@@ -62,7 +62,7 @@ scoped_refptr<StaticBitmapImage> MakeAccelerated(
 
   cc::PaintFlags paint;
   paint.setBlendMode(SkBlendMode::kSrc);
-  provider->Canvas()->drawImage(paint_image, 0, 0, SkSamplingOptions(), &paint);
+  provider->Canvas().drawImage(paint_image, 0, 0, SkSamplingOptions(), &paint);
   return provider->Snapshot(FlushReason::kNon2DCanvas);
 }
 
@@ -73,8 +73,7 @@ ImageLayerBridge::ImageLayerBridge(OpacityMode opacity_mode)
   layer_ = cc::TextureLayer::CreateForMailbox(this);
   layer_->SetIsDrawable(true);
   layer_->SetHitTestable(true);
-  layer_->SetNearestNeighbor(filter_quality_ ==
-                             cc::PaintFlags::FilterQuality::kNone);
+  layer_->SetNearestNeighbor(false);
   if (opacity_mode_ == kOpaque) {
     layer_->SetContentsOpaque(true);
     layer_->SetBlendBackgroundColor(false);
@@ -116,6 +115,16 @@ void ImageLayerBridge::SetImage(scoped_refptr<StaticBitmapImage> image) {
     }
   }
   has_presented_since_last_set_image_ = false;
+}
+
+void ImageLayerBridge::SetFilterQuality(
+    cc::PaintFlags::FilterQuality filter_quality) {
+  if (disposed_) {
+    return;
+  }
+
+  layer_->SetNearestNeighbor(filter_quality ==
+                             cc::PaintFlags::FilterQuality::kNone);
 }
 
 void ImageLayerBridge::SetUV(const gfx::PointF& left_top,

@@ -4,6 +4,7 @@
 
 #import "ios/chrome/browser/ui/popup_menu/popup_menu_help_coordinator.h"
 
+#import "base/memory/raw_ptr.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/task/sequenced_task_runner.h"
 #import "base/time/time.h"
@@ -65,7 +66,7 @@ base::TimeDelta kPromoDisplayDelayForTests = base::Seconds(1);
 @end
 
 @implementation PopupMenuHelpCoordinator {
-  segmentation_platform::DeviceSwitcherResultDispatcher*
+  raw_ptr<segmentation_platform::DeviceSwitcherResultDispatcher>
       _deviceSwitcherResultDispatcher;
 }
 
@@ -203,7 +204,8 @@ base::TimeDelta kPromoDisplayDelayForTests = base::Seconds(1);
                                 SnoozeAction:
                                     (feature_engagement::Tracker::SnoozeAction)
                                         snoozeAction {
-  if (IPHDismissalReasonType == IPHDismissalReasonType::kTappedAnchorView) {
+  if (IPHDismissalReasonType == IPHDismissalReasonType::kTappedAnchorView ||
+      IPHDismissalReasonType == IPHDismissalReasonType::kTimedOut) {
     self.inSessionWithHistoryMenuItemIPH = YES;
   }
   [self trackerIPHDidDismissWithSnoozeAction:snoozeAction];

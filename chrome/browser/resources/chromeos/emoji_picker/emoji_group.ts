@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import 'chrome://resources/ash/common/cr_elements/cr_icon_button/cr_icon_button.js';
 import 'chrome://resources/polymer/v3_0/paper-tooltip/paper-tooltip.js';
 import './emoji_variants.js';
 
@@ -13,7 +13,7 @@ import {beforeNextRender, PolymerElement} from 'chrome://resources/polymer/v3_0/
 import {VISUAL_CONTENT_WIDTH} from './constants.js';
 import {getTemplate} from './emoji_group.html.js';
 import {EmojiImageComponent} from './emoji_image.js';
-import {EmojiPickerApiProxyImpl} from './emoji_picker_api_proxy.js';
+import {EmojiPickerApiProxy} from './emoji_picker_api_proxy.js';
 import {createCustomEvent, EMOJI_CLEAR_RECENTS_CLICK, EMOJI_IMG_BUTTON_CLICK, EMOJI_TEXT_BUTTON_CLICK, EMOJI_VARIANTS_SHOWN, EmojiClearRecentClickEvent, EmojiTextButtonClickEvent} from './events.js';
 import {CategoryEnum, EmojiVariants, Gender, PreferenceMapping, Tone} from './types.js';
 
@@ -196,7 +196,7 @@ export class EmojiGroupComponent extends PolymerElement {
   }
 
   private onHelpClick(): void {
-    EmojiPickerApiProxyImpl.getInstance().openHelpCentreArticle();
+    EmojiPickerApiProxy.getInstance().openHelpCentreArticle();
   }
 
   /**
@@ -248,11 +248,14 @@ export class EmojiGroupComponent extends PolymerElement {
   }
 
   /**
-   * Returns HTML class attribute of an emoji button.
+   * Returns whether the emoji has variants or not.
+   * Does not use `this`.
    */
-  private getEmojiButtonClassName(emoji: EmojiVariants): string {
-    return emoji.alternates && emoji.alternates.length > 0 ? 'has-variants' :
-                                                             '';
+  private hasVariants(emoji: EmojiVariants): boolean {
+    // TODO: b/322909764 - The type of `EmojiVariants.alternates` cannot be
+    // null/undefined, so the `!== undefined` check should be redundant. Either
+    // add undefined to the type, or remove the below check.
+    return emoji.alternates !== undefined && emoji.alternates.length > 0;
   }
 
   /**
@@ -365,9 +368,13 @@ export class EmojiGroupComponent extends PolymerElement {
     return category === CategoryEnum.GIF;
   }
 
-  private hasVariants(data: EmojiVariants[]): boolean {
-    return data.some(
-        t => !(t.alternates === undefined || t.alternates.length === 0));
+  /**
+   * Returns whether any emoji in the array has variants or not.
+   */
+  private hasAnyVariants(data: EmojiVariants[]): boolean {
+    // `hasVariants` does not use `this`, so there is no need to bind `this`
+    // here.
+    return data.some(this.hasVariants);
   }
 
   /**

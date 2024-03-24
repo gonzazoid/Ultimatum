@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
@@ -26,7 +27,6 @@
 #include "components/sessions/core/session_id.h"
 #include "components/sync_device_info/device_info.h"
 #include "third_party/abseil-cpp/absl/container/inlined_vector.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/page_transition_types.h"
 #include "url/gurl.h"
 
@@ -68,6 +68,9 @@ constexpr VisitedLinkID kInvalidVisitedLinkID = 0;
 
 // Structure to hold the mapping between each visit's id and its source.
 typedef std::map<VisitID, VisitSource> VisitSourceMap;
+
+// Constant used to represent that no app_id is used for matching.
+inline constexpr std::optional<std::string> kNoAppIdFilter = absl::nullopt;
 
 // VisitRow -------------------------------------------------------------------
 
@@ -181,7 +184,10 @@ class VisitRow {
   // many-to-one relationship with the VisitedLinkDatabase. As such, more than
   // one visit may correspond to the same VisitedLinkID.
   VisitedLinkID visited_link_id = kInvalidVisitedLinkID;
-
+  // The package name of the app if this visit takes place in Custom Tab opened
+  // by an app. This is set only on Android if the Custom Tab knows which app
+  // launched it; otherwise remains null.
+  std::optional<std::string> app_id = std::nullopt;
   // We allow the implicit copy constructor and operator=.
 };
 
@@ -383,8 +389,8 @@ struct QueryOptions {
   // Allows the caller to specify the matching algorithm for text queries.
   // query_parser::MatchingAlgorithm matching_algorithm =
   // query_parser::MatchingAlgorithm::DEFAULT;
-  absl::optional<query_parser::MatchingAlgorithm> matching_algorithm =
-      absl::nullopt;
+  std::optional<query_parser::MatchingAlgorithm> matching_algorithm =
+      std::nullopt;
 
   // Whether the history query should only search through hostnames.
   // When this is true, the matching_algorithm field is ignored.
@@ -398,6 +404,9 @@ struct QueryOptions {
   // Whether to prioritize most recent or oldest visits when `max_count` is
   // reached. Will affect visit order as well.
   VisitOrder visit_order = RECENT_FIRST;
+
+  // If nullopt, search doesn't take app_id into consideration.
+  std::optional<std::string> app_id = std::nullopt;
 
   // Helpers to get the effective parameters values, since a value of 0 means
   // "unspecified".
@@ -590,9 +599,9 @@ struct DomainMetricSet {
 
   DomainMetricSet& operator=(const DomainMetricSet&);
 
-  absl::optional<DomainMetricCountType> one_day_metric;
-  absl::optional<DomainMetricCountType> seven_day_metric;
-  absl::optional<DomainMetricCountType> twenty_eight_day_metric;
+  std::optional<DomainMetricCountType> one_day_metric;
+  std::optional<DomainMetricCountType> seven_day_metric;
+  std::optional<DomainMetricCountType> twenty_eight_day_metric;
 
   // The end time of the spanning periods. All 3 metrics should have the same
   // end time.
@@ -658,6 +667,7 @@ struct ExpireHistoryArgs {
   std::set<GURL> urls;
   base::Time begin_time;
   base::Time end_time;
+  std::optional<std::string> restrict_app_id;
 };
 
 // Represents the time range of a history deletion. If `IsValid()` is false,
@@ -727,13 +737,13 @@ class DeletionInfo {
                bool is_from_expiration,
                URLRows deleted_rows,
                std::set<GURL> favicon_urls,
-               absl::optional<std::set<GURL>> restrict_urls);
+               std::optional<std::set<GURL>> restrict_urls);
   DeletionInfo(const DeletionTimeRange& time_range,
                bool is_from_expiration,
                Reason deletion_reason,
                URLRows deleted_rows,
                std::set<GURL> favicon_urls,
-               absl::optional<std::set<GURL>> restrict_urls);
+               std::optional<std::set<GURL>> restrict_urls);
 
   DeletionInfo(const DeletionInfo&) = delete;
   DeletionInfo& operator=(const DeletionInfo&) = delete;
@@ -752,7 +762,7 @@ class DeletionInfo {
   const DeletionTimeRange& time_range() const { return time_range_; }
 
   // Restricts deletions within `time_range()`.
-  const absl::optional<std::set<GURL>>& restrict_urls() const {
+  const std::optional<std::set<GURL>>& restrict_urls() const {
     return restrict_urls_;
   }
 
@@ -790,7 +800,7 @@ class DeletionInfo {
   Reason deletion_reason_;
   URLRows deleted_rows_;
   std::set<GURL> favicon_urls_;
-  absl::optional<std::set<GURL>> restrict_urls_;
+  std::optional<std::set<GURL>> restrict_urls_;
   OriginCountAndLastVisitMap deleted_urls_origin_map_;
 };
 
@@ -1100,6 +1110,7 @@ struct Cluster {
     kSearch,
     kContentDerivedEntity,
     kHostname,
+    kUngroupedVisits,
   };
 
   Cluster();
@@ -1108,8 +1119,8 @@ struct Cluster {
           const base::flat_map<std::u16string, ClusterKeywordData>&
               keyword_to_data_map = {},
           bool should_show_on_prominent_ui_surfaces = true,
-          absl::optional<std::u16string> label = absl::nullopt,
-          absl::optional<std::u16string> raw_label = absl::nullopt,
+          std::optional<std::u16string> label = std::nullopt,
+          std::optional<std::u16string> raw_label = std::nullopt,
           query_parser::Snippet::MatchPositions label_match_positions = {},
           std::vector<std::string> related_searches = {},
           float search_match_score = 0);
@@ -1134,13 +1145,14 @@ struct Cluster {
 
   // A suitable label for the cluster. Will be nullopt if no suitable label
   // could be determined.
-  absl::optional<std::u16string> label;
+  std::optional<std::u16string> label;
 
   // The value of label with any leading or trailing quotation indicators
   // removed.
-  absl::optional<std::u16string> raw_label;
+  std::optional<std::u16string> raw_label;
 
   // Where the label came from. Determines in which ways we can use `raw_label`.
+  // This value may also be used by code to determine the type of the cluster.
   LabelSource label_source = LabelSource::kUnknown;
 
   // The positions within the label that match the search query, if it exists.
@@ -1189,17 +1201,17 @@ struct HistoryAddPageArgs {
   // The default constructor is equivalent to:
   //
   //   HistoryAddPageArgs(
-  //       GURL(), base::Time(), nullptr, 0, absl::nullopt, GURL(),
+  //       GURL(), base::Time(), nullptr, 0, std::nullopt, GURL(),
   //       RedirectList(), ui::PAGE_TRANSITION_LINK,
   //       false, SOURCE_BROWSED, false, true,
-  //       absl::nullopt, absl::nullopt, absl::nullopt, absl::nullopt,
-  //       absl::nullopt)
+  //       std::nullopt, std::nullopt, std::nullopt, std::nullopt,
+  //       std::nullopt, std::nullopt)
   HistoryAddPageArgs();
   HistoryAddPageArgs(const GURL& url,
                      base::Time time,
                      ContextID context_id,
                      int nav_entry_id,
-                     absl::optional<int64_t> local_navigation_id,
+                     std::optional<int64_t> local_navigation_id,
                      const GURL& referrer,
                      const RedirectList& redirects,
                      ui::PageTransition transition,
@@ -1207,12 +1219,13 @@ struct HistoryAddPageArgs {
                      VisitSource source,
                      bool did_replace_entry,
                      bool consider_for_ntp_most_visited,
-                     absl::optional<std::u16string> title = absl::nullopt,
-                     absl::optional<GURL> top_level_url = absl::nullopt,
-                     absl::optional<Opener> opener = absl::nullopt,
-                     absl::optional<int64_t> bookmark_id = absl::nullopt,
-                     absl::optional<VisitContextAnnotations::OnVisitFields>
-                         context_annotations = absl::nullopt);
+                     std::optional<std::u16string> title = std::nullopt,
+                     std::optional<GURL> top_level_url = std::nullopt,
+                     std::optional<Opener> opener = std::nullopt,
+                     std::optional<int64_t> bookmark_id = std::nullopt,
+                     std::optional<std::string> app_id = std::nullopt,
+                     std::optional<VisitContextAnnotations::OnVisitFields>
+                         context_annotations = std::nullopt);
   HistoryAddPageArgs(const HistoryAddPageArgs& other);
   ~HistoryAddPageArgs();
 
@@ -1220,7 +1233,7 @@ struct HistoryAddPageArgs {
   base::Time time;
   ContextID context_id;
   int nav_entry_id;
-  absl::optional<int64_t> local_navigation_id;
+  std::optional<int64_t> local_navigation_id;
   GURL referrer;
   RedirectList redirects;
   ui::PageTransition transition;
@@ -1232,13 +1245,14 @@ struct HistoryAddPageArgs {
   // doesn't guarantee it's relevant for Most Visited, since other requirements
   // exist (e.g. certain page transition types).
   bool consider_for_ntp_most_visited;
-  absl::optional<std::u16string> title;
+  std::optional<std::u16string> title;
   // `top_level_url` is a GURL representing the top-level frame that this
   // navigation originated from.
-  absl::optional<GURL> top_level_url;
-  absl::optional<Opener> opener;
-  absl::optional<int64_t> bookmark_id;
-  absl::optional<VisitContextAnnotations::OnVisitFields> context_annotations;
+  std::optional<GURL> top_level_url;
+  std::optional<Opener> opener;
+  std::optional<int64_t> bookmark_id;
+  std::optional<std::string> app_id;
+  std::optional<VisitContextAnnotations::OnVisitFields> context_annotations;
 };
 
 }  // namespace history

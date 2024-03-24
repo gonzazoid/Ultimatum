@@ -7,6 +7,7 @@
 #include "base/command_line.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/strcat.h"
+#include "base/trace_event/trace_event.h"
 #include "components/optimization_guide/core/access_token_helper.h"
 #include "components/optimization_guide/core/model_quality/feature_type_map.h"
 #include "components/optimization_guide/core/model_quality/model_quality_log_entry.h"
@@ -37,9 +38,17 @@ void RecordUploadStatusHistogram(proto::ModelExecutionFeature feature,
                                  ModelQualityLogsUploadStatus status) {
   base::UmaHistogramEnumeration(
       base::StrCat(
-          {"OptimizationGuide.ModelQualityLogsUploadService.UploadStatus.",
+          {"OptimizationGuide.ModelQualityLogsUploaderService.UploadStatus.",
            GetStringNameForModelExecutionFeature(feature)}),
       status);
+}
+
+void RecordUserFeedbackHistogram(proto::ModelExecutionFeature feature,
+                                 proto::UserFeedback user_feedback) {
+  base::UmaHistogramEnumeration(
+      base::StrCat({"OptimizationGuide.ModelQuality.UserFeedback.",
+                    GetStringNameForModelExecutionFeature(feature)}),
+      static_cast<ModelQualityUserFeedback>(user_feedback));
 }
 
 // Returns the URL endpoint for the model quality service along with the needed
@@ -62,31 +71,36 @@ void RecordUserFeedbackHistogram(ModelQualityLogEntry* log_entry) {
       proto::ModelExecutionFeature::MODEL_EXECUTION_FEATURE_UNSPECIFIED;
   switch (log_entry->log_ai_data_request()->feature_case()) {
     case proto::LogAiDataRequest::FeatureCase::kCompose:
+      feature = proto::ModelExecutionFeature::MODEL_EXECUTION_FEATURE_COMPOSE;
       user_feedback =
           log_entry->quality_data<ComposeFeatureTypeMap>()->user_feedback();
-      feature = proto::ModelExecutionFeature::MODEL_EXECUTION_FEATURE_COMPOSE;
       break;
     case proto::LogAiDataRequest::FeatureCase::kTabOrganization:
-      user_feedback = log_entry->quality_data<TabOrganizationFeatureTypeMap>()
-                          ->mutable_organizations(0)
-                          ->user_feedback();
       feature = proto::ModelExecutionFeature::
           MODEL_EXECUTION_FEATURE_TAB_ORGANIZATION;
+      // If there is no tab organization, we don't have any user_feedback.
+      if (log_entry->quality_data<TabOrganizationFeatureTypeMap>()
+              ->organizations_size() != 0) {
+        // We assume there is only one tab organizations when we upload the
+        // model quality data for this version.
+        // TODO(b/323300127): Fix this to consider logging feedback for all
+        // organizations.
+        user_feedback = log_entry->quality_data<TabOrganizationFeatureTypeMap>()
+                            ->mutable_organizations(0)
+                            ->user_feedback();
+      }
       break;
     case proto::LogAiDataRequest::FeatureCase::kWallpaperSearch:
-      user_feedback = log_entry->quality_data<WallpaperSearchFeatureTypeMap>()
-                          ->user_feedback();
       feature = proto::ModelExecutionFeature::
           MODEL_EXECUTION_FEATURE_WALLPAPER_SEARCH;
+      user_feedback = log_entry->quality_data<WallpaperSearchFeatureTypeMap>()
+                          ->user_feedback();
       break;
     default:
       NOTREACHED();
       break;
   }
-  base::UmaHistogramEnumeration(
-      base::StrCat({"OptimizationGuide.ModelQuality.UserFeedback.",
-                    GetStringNameForModelExecutionFeature(feature)}),
-      static_cast<ModelQualityUserFeedback>(user_feedback));
+  RecordUserFeedbackHistogram(feature, user_feedback);
 }
 
 // URL load completion callback.
@@ -95,6 +109,9 @@ void OnURLLoadComplete(
     proto::ModelExecutionFeature feature,
     std::unique_ptr<std::string> response_body) {
   CHECK(active_url_loader) << "loader shouldn't be null\n";
+  TRACE_EVENT1("browser", "ModelQualityLogsUploaderService::OnURLLoadComplete",
+               "feature", GetStringNameForModelExecutionFeature(feature));
+
   auto net_error = active_url_loader->NetError();
   int response_code = -1;
   if (active_url_loader->ResponseInfo() &&
@@ -189,6 +206,10 @@ void ModelQualityLogsUploaderService::UploadModelQualityLogs(
   proto::ModelExecutionFeature feature =
       GetModelExecutionFeature(log_ai_data_request->feature_case());
 
+  TRACE_EVENT1("browser",
+               "ModelQualityLogsUploaderService::UploadModelQualityLogs",
+               "feature", GetStringNameForModelExecutionFeature(feature));
+
   // Don't do anything if logging is disabled for the feature. Nothing to
   // upload.
   if (!features::IsModelQualityLoggingEnabledForFeature(feature)) {
@@ -197,21 +218,19 @@ void ModelQualityLogsUploaderService::UploadModelQualityLogs(
     return;
   }
 
-  // TODO(b/301301447): Set LoggingMetadata fields during upload.
   // Set the client id for logging if non-zero.
-  proto::LoggingMetadata logging_metadata;
+  proto::LoggingMetadata* logging_metadata =
+      log_ai_data_request->mutable_logging_metadata();
   int64_t client_id = GetOrCreateModelQualityClientId(feature, pref_service_);
   if (client_id != 0) {
-    logging_metadata.set_client_id(client_id);
+    logging_metadata->set_client_id(client_id);
   }
 
   proto::PerformanceClass perf_class = GetPerformanceClass(pref_service_);
   if (perf_class != proto::PERFORMANCE_CLASS_UNSPECIFIED) {
-    logging_metadata.mutable_on_device_system_profile()->set_performance_class(
+    logging_metadata->mutable_on_device_system_profile()->set_performance_class(
         perf_class);
   }
-
-  *(log_ai_data_request->mutable_logging_metadata()) = logging_metadata;
 
   std::string serialized_logs;
   log_ai_data_request->SerializeToString(&serialized_logs);

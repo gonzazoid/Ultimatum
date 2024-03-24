@@ -17,9 +17,12 @@
 
 namespace views {
 class ImageButton;
+class LabelButton;
 }  // namespace views
 
 namespace ash {
+
+class SystemTextfield;
 
 namespace api {
 struct Task;
@@ -31,7 +34,7 @@ struct Task;
 // |`GlanceablesTaskViewV2`                                        |
 // |                                                               |
 // | +-----------------+ +---------------------------------------+ |
-// | |'button_'        | |'contents_view_'                       | |
+// | |'check_button_'  | |'contents_view_'                       | |
 // | |                 | | +-----------------------------------+ | |
 // | |                 | | |'tasks_title_view_'                | | |
 // | |                 | | +-----------------------------------+ | |
@@ -41,9 +44,9 @@ struct Task;
 // | +-----------------+ +---------------------------------------+ |
 // +---------------------------------------------------------------+
 class ASH_EXPORT GlanceablesTaskViewV2 : public views::FlexLayoutView {
- public:
-  METADATA_HEADER(GlanceablesTaskViewV2);
+  METADATA_HEADER(GlanceablesTaskViewV2, views::FlexLayoutView)
 
+ public:
   using MarkAsCompletedCallback =
       base::RepeatingCallback<void(const std::string& task_id, bool completed)>;
   using SaveCallback = base::RepeatingCallback<void(
@@ -53,11 +56,12 @@ class ASH_EXPORT GlanceablesTaskViewV2 : public views::FlexLayoutView {
       api::TasksClient::OnTaskSavedCallback callback)>;
 
   // Modes of `tasks_title_view_` (simple label or text field).
-  enum class TaskTitleViewState { kView, kEdit };
+  enum class TaskTitleViewState { kNotInitialized, kView, kEdit };
 
   GlanceablesTaskViewV2(const api::Task* task,
                         MarkAsCompletedCallback mark_as_completed_callback,
-                        SaveCallback save_callback);
+                        SaveCallback save_callback,
+                        base::RepeatingClosure edit_in_browser_callback);
   GlanceablesTaskViewV2(const GlanceablesTaskViewV2&) = delete;
   GlanceablesTaskViewV2& operator=(const GlanceablesTaskViewV2&) = delete;
   ~GlanceablesTaskViewV2() override;
@@ -72,7 +76,10 @@ class ASH_EXPORT GlanceablesTaskViewV2 : public views::FlexLayoutView {
   class CheckButton;
   class TaskTitleButton;
 
-  // Handles press events on `button_`.
+  // Updates the margins of views in `contents_view_`.
+  void UpdateContentsMargins(TaskTitleViewState state);
+
+  // Handles press events on `check_button_`.
   void CheckButtonPressed();
 
   // Handles press events on `task_title_button_`.
@@ -87,11 +94,13 @@ class ASH_EXPORT GlanceablesTaskViewV2 : public views::FlexLayoutView {
   void OnSaved(const api::Task* task);
 
   // Owned by views hierarchy.
-  raw_ptr<CheckButton> button_ = nullptr;
+  raw_ptr<CheckButton> check_button_ = nullptr;
   raw_ptr<views::FlexLayoutView> contents_view_ = nullptr;
   raw_ptr<views::FlexLayoutView> tasks_title_view_ = nullptr;
   raw_ptr<TaskTitleButton> task_title_button_ = nullptr;
+  raw_ptr<SystemTextfield> task_title_textfield_ = nullptr;
   raw_ptr<views::FlexLayoutView> tasks_details_view_ = nullptr;
+  raw_ptr<views::LabelButton> edit_in_browser_button_ = nullptr;
 
   // ID for the task represented by this view.
   std::string task_id_;
@@ -104,6 +113,9 @@ class ASH_EXPORT GlanceablesTaskViewV2 : public views::FlexLayoutView {
 
   // Saves the task (either creates or updates the existing one).
   const SaveCallback save_callback_;
+
+  // `edit_in_browser_button_` callback that opens the Tasks in browser.
+  const base::RepeatingClosure edit_in_browser_callback_;
 
   base::WeakPtrFactory<GlanceablesTaskViewV2> weak_ptr_factory_{this};
 };

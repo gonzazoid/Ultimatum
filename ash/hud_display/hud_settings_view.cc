@@ -138,9 +138,9 @@ base::RepeatingCallback<void(views::Checkbox*)> GetCCDebugHandleClickCallback(
 
 // views::Checkbox that ignores theme colors.
 class SettingsCheckbox : public views::Checkbox {
- public:
-  METADATA_HEADER(SettingsCheckbox);
+  METADATA_HEADER(SettingsCheckbox, views::Checkbox)
 
+ public:
   SettingsCheckbox(const std::u16string& label, const std::u16string& tooltip)
       : views::Checkbox(label, views::Button::PressedCallback()) {
     SetTooltipText(tooltip);
@@ -156,13 +156,13 @@ class SettingsCheckbox : public views::Checkbox {
   }
 };
 
-BEGIN_METADATA(SettingsCheckbox, views::Checkbox);
+BEGIN_METADATA(SettingsCheckbox)
 END_METADATA
 
 class AnimationSpeedSlider : public views::Slider {
- public:
-  METADATA_HEADER(AnimationSpeedSlider);
+  METADATA_HEADER(AnimationSpeedSlider, views::Slider)
 
+ public:
   AnimationSpeedSlider(const base::flat_set<float>& values,
                        views::SliderListener* listener = nullptr)
       : views::Slider(listener) {
@@ -181,7 +181,7 @@ class AnimationSpeedSlider : public views::Slider {
   void OnPaint(gfx::Canvas* canvas) override;
 };
 
-BEGIN_METADATA(AnimationSpeedSlider, views::Slider)
+BEGIN_METADATA(AnimationSpeedSlider)
 END_METADATA
 
 void AnimationSpeedSlider::OnPaint(gfx::Canvas* canvas) {
@@ -211,9 +211,9 @@ void AnimationSpeedSlider::OnPaint(gfx::Canvas* canvas) {
 
 // Checkbox group for setting UI animation speed.
 class AnimationSpeedControl : public views::SliderListener, public views::View {
- public:
-  METADATA_HEADER(AnimationSpeedControl);
+  METADATA_HEADER(AnimationSpeedControl, views::View)
 
+ public:
   AnimationSpeedControl();
   AnimationSpeedControl(const AnimationSpeedControl&) = delete;
   AnimationSpeedControl& operator=(const AnimationSpeedControl&) = delete;
@@ -227,7 +227,7 @@ class AnimationSpeedControl : public views::SliderListener, public views::View {
                           views::SliderChangeReason reason) override;
 
   // views::View:
-  void Layout() override;
+  void Layout(PassKey) override;
 
  private:
   // Map slider values to animation scale.
@@ -239,7 +239,7 @@ class AnimationSpeedControl : public views::SliderListener, public views::View {
   SliderValuesMap slider_values_;
 };
 
-BEGIN_METADATA(AnimationSpeedControl, views::View)
+BEGIN_METADATA(AnimationSpeedControl)
 END_METADATA
 
 AnimationSpeedControl::AnimationSpeedControl() {
@@ -336,7 +336,7 @@ void AnimationSpeedControl::SliderValueChanged(
   }
 }
 
-void AnimationSpeedControl::Layout() {
+void AnimationSpeedControl::Layout(PassKey) {
   gfx::Size max_size;
   // Make all labels equal size.
   for (const views::View* label : hints_container_->children()) {
@@ -356,7 +356,7 @@ void AnimationSpeedControl::Layout() {
   slider_->SetPreferredSize(slider_size);
   slider_->SetBorder(
       views::CreateEmptyBorder(gfx::Insets::VH(0, max_size.width() / 2)));
-  views::View::Layout();
+  LayoutSuperclass<views::View>(this);
 }
 
 class HUDActionButton : public views::LabelButton {
@@ -433,7 +433,7 @@ END_METADATA
 
 }  // anonymous namespace
 
-BEGIN_METADATA(HUDSettingsView, views::View)
+BEGIN_METADATA(HUDSettingsView)
 END_METADATA
 
 HUDSettingsView::HUDSettingsView(HUDDisplayView* hud_display) {

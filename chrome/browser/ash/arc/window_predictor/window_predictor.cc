@@ -151,8 +151,11 @@ arc::mojom::WindowInfoPtr WindowPredictor::PredictAppWindowInfo(
 
   if (display::Screen::GetScreen()->InTabletMode()) {
     // TODO: Figure out why setting kMaximized doesn't work.
+    // Note that the ghost window state type is default, but the ARC app
+    // window state will be assigned by ARC and not be affected by this state.
     window_info->state =
         static_cast<int32_t>(chromeos::WindowStateType::kDefault);
+    window_info->bounds = disp.work_area();
     return window_info;
   }
 
@@ -175,9 +178,17 @@ arc::mojom::WindowInfoPtr WindowPredictor::PredictAppWindowInfo(
       break;
     case arc::mojom::WindowSizeType::kUnknown:
     default:
-      window_info->state =
-          static_cast<int32_t>(chromeos::WindowStateType::kDefault);
-      window_info->bounds = GetMiddleBounds(disp, GetPhoneSize());
+      if (IsGoogleSeriesPackage(app_info.package_name)) {
+        // Google apps support tablet, launch them in tablet size on chromebook.
+        // This is the short-term workaround, should be removed in the future.
+        window_info->state =
+            static_cast<int32_t>(chromeos::WindowStateType::kNormal);
+        window_info->bounds = GetMiddleBounds(disp, GetTabletSize());
+      } else {
+        window_info->state =
+            static_cast<int32_t>(chromeos::WindowStateType::kDefault);
+        window_info->bounds = GetMiddleBounds(disp, GetPhoneSize());
+      }
   }
 
   return window_info;

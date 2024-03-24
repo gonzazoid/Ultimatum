@@ -18,6 +18,7 @@
 #include "content/public/test/test_utils.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace privacy_sandbox_internals {
@@ -138,7 +139,8 @@ IN_PROC_BROWSER_TEST_F(PrivacySandboxInternalsMojoTest, GetCookieSettings) {
   settings->SetCookieSetting(GURL("https://example.com"),
                              CONTENT_SETTING_ALLOW);
 
-  remote_->GetCookieSettings(
+  remote_->ReadContentSettings(
+      ContentSettingsType::COOKIES,
       base::BindOnce(&PrivacySandboxInternalsMojoTest::ContentSettingsCallback,
                      base::Unretained(this)));
   waiter_.Wait();
@@ -149,9 +151,50 @@ IN_PROC_BROWSER_TEST_F(PrivacySandboxInternalsMojoTest, GetCookieSettings) {
           SizeIs(Ge(1u))));  // Don't check exact size (default list may change)
 }
 
+// TODO(https://crbug.com/1517710): Once ConvertGenerator<T>() is provided by
+// the version of googletest used by Chromium we can type the test param.
+class PrivacySandboxInternalsContentSettingsMojoTest
+    : public PrivacySandboxInternalsMojoTest,
+      public testing::WithParamInterface<int> {
+ public:
+  PrivacySandboxInternalsContentSettingsMojoTest() {
+    EXPECT_THAT(ContentSettingsType::NUM_TYPES,
+                Eq(ContentSettingsType::kMaxValue))
+        << "This test depends on kMaxValue being equal to the total number of "
+           "content settings.";
+    EXPECT_THAT(ContentSettingsType::DEFAULT,
+                Eq(ContentSettingsType::kMinValue))
+        << "This test depends on kMinValue being equal to the DEFAULT content "
+           "setting.";
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(
+    ContentSettingsMojoTests,
+    PrivacySandboxInternalsContentSettingsMojoTest,
+    testing::Range(static_cast<int>(ContentSettingsType::kMinValue),
+                   static_cast<int>(ContentSettingsType::kMaxValue)));
+
+IN_PROC_BROWSER_TEST_P(PrivacySandboxInternalsContentSettingsMojoTest,
+                       ReadContentSettingsEmpty) {
+  ContentSettingsType type = static_cast<ContentSettingsType>(GetParam());
+  LOG(INFO) << "Testing for type " << type;
+  EXPECT_TRUE(IsKnownEnumValue(type));
+  if (type == ContentSettingsType::NUM_TYPES) {
+    return;
+  }
+  remote_->ReadContentSettings(
+      type,
+      base::BindOnce(&PrivacySandboxInternalsMojoTest::ContentSettingsCallback,
+                     base::Unretained(this)));
+  waiter_.Wait();
+  // May or may not have a default value, but the read should succeed either
+  // way.
+  EXPECT_THAT(content_settings_cb_data_, SizeIs(Ge(0u)));
+}
+
 IN_PROC_BROWSER_TEST_F(PrivacySandboxInternalsMojoTest, GetTpcdMetadataGrants) {
   ContentSettingsForOneType tpcd_metadata_grants;
-
   const auto primary_pattern =
       ContentSettingsPattern::FromString("[*.]example.com");
   const auto secondary_pattern = ContentSettingsPattern::FromString("*");
@@ -161,6 +204,8 @@ IN_PROC_BROWSER_TEST_F(PrivacySandboxInternalsMojoTest, GetTpcdMetadataGrants) {
   content_settings::CookieSettings* settings =
       CookieSettingsFactory::GetForProfile(browser()->profile()).get();
   settings->SetContentSettingsFor3pcdMetadataGrants(tpcd_metadata_grants);
+  // TODO: TPCD_METADATA_GRANTS are special and don't show up if read with the
+  // regular method.
   remote_->GetTpcdMetadataGrants(
       base::BindOnce(&PrivacySandboxInternalsMojoTest::ContentSettingsCallback,
                      base::Unretained(this)));
@@ -177,7 +222,8 @@ IN_PROC_BROWSER_TEST_F(PrivacySandboxInternalsMojoTest,
   settings->SetTemporaryCookieGrantForHeuristic(
       GURL("https://accounts.google.com"), GURL("https://example.com"),
       base::Microseconds(1e10));
-  remote_->GetTpcdHeuristicsGrants(
+  remote_->ReadContentSettings(
+      ContentSettingsType::TPCD_HEURISTICS_GRANTS,
       base::BindOnce(&PrivacySandboxInternalsMojoTest::ContentSettingsCallback,
                      base::Unretained(this)));
   waiter_.Wait();
@@ -194,13 +240,14 @@ IN_PROC_BROWSER_TEST_F(PrivacySandboxInternalsMojoTest,
                 Field(&ContentSettingPatternSource::source, "preference")))));
 }
 
-IN_PROC_BROWSER_TEST_F(PrivacySandboxInternalsMojoTest, GetTpcdSupport) {
+IN_PROC_BROWSER_TEST_F(PrivacySandboxInternalsMojoTest, GetTpcdTrial) {
   HostContentSettingsMap* map =
       HostContentSettingsMapFactory::GetForProfile(browser()->profile());
   map->SetContentSettingDefaultScope(
       GURL("https://example.org"), GURL("https://example.net"),
-      ContentSettingsType::TPCD_SUPPORT, CONTENT_SETTING_ALLOW);
-  remote_->GetTpcdSupport(
+      ContentSettingsType::TPCD_TRIAL, CONTENT_SETTING_ALLOW);
+  remote_->ReadContentSettings(
+      ContentSettingsType::TPCD_TRIAL,
       base::BindOnce(&PrivacySandboxInternalsMojoTest::ContentSettingsCallback,
                      base::Unretained(this)));
   waiter_.Wait();
@@ -214,6 +261,29 @@ IN_PROC_BROWSER_TEST_F(PrivacySandboxInternalsMojoTest, GetTpcdSupport) {
                 Field(&ContentSettingPatternSource::secondary_pattern,
                       ContentSettingsPattern::FromString(
                           "https://[*.]example.net")),
+                Field(&ContentSettingPatternSource::source, "preference")))));
+}
+
+IN_PROC_BROWSER_TEST_F(PrivacySandboxInternalsMojoTest, GetTopLevelTpcdTrial) {
+  HostContentSettingsMap* map =
+      HostContentSettingsMapFactory::GetForProfile(browser()->profile());
+  map->SetContentSettingDefaultScope(
+      GURL("https://example.org"), GURL("https://example.net"),
+      ContentSettingsType::TOP_LEVEL_TPCD_TRIAL, CONTENT_SETTING_ALLOW);
+  remote_->ReadContentSettings(
+      ContentSettingsType::TOP_LEVEL_TPCD_TRIAL,
+      base::BindOnce(&PrivacySandboxInternalsMojoTest::ContentSettingsCallback,
+                     base::Unretained(this)));
+  waiter_.Wait();
+  EXPECT_THAT(
+      content_settings_cb_data_,
+      AllOf(SizeIs(Ge(1u)),
+            Contains(AllOf(
+                Field(&ContentSettingPatternSource::primary_pattern,
+                      ContentSettingsPattern::FromString(
+                          "https://example.org:443")),
+                Field(&ContentSettingPatternSource::secondary_pattern,
+                      ContentSettingsPattern::FromString("*")),
                 Field(&ContentSettingPatternSource::source, "preference")))));
 }
 
@@ -248,5 +318,6 @@ IN_PROC_BROWSER_TEST_F(PrivacySandboxInternalsMojoTest,
     EXPECT_THAT(content_settings_pattern_cb_data_, Eq(expected_pattern));
   }
 }
+
 }  // namespace
 }  // namespace privacy_sandbox_internals

@@ -14,6 +14,10 @@
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/ash/app_list/search/essential_search/socs_cookie_fetcher.h"
+#include "components/prefs/pref_change_registrar.h"
+#include "net/base/backoff_entry.h"
+#include "net/cookies/canonical_cookie.h"
+#include "net/cookies/cookie_access_result.h"
 
 class Profile;
 
@@ -26,6 +30,10 @@ namespace app_list {
 class EssentialSearchManager : public ash::SessionObserver,
                                public SocsCookieFetcher::Consumer {
  public:
+  // Backoff policy for socs cookie fetch retry attempts in case cookie fetch
+  // failed or returned invalid data.
+  static const net::BackoffEntry::Policy kFetchSocsCookieRetryBackoffPolicy;
+
   explicit EssentialSearchManager(Profile* primary_profile);
   ~EssentialSearchManager() override;
 
@@ -42,19 +50,55 @@ class EssentialSearchManager : public ash::SessionObserver,
 
   // SocsCookieFetcher::Consumer
   void OnCookieFetched(const std::string& socs_cookie) override;
+  void OnApiCallFailed(SocsCookieFetcher::Status status) override;
+
+  // Returns whether search suggest should be disabled.
+  // Search suggestions will be temporarily disabled until SOCS cookie is
+  // fetched. This affects only managed users on chromeos that have
+  // EssentialSearchEnabled policy set.
+  bool ShouldDisableSearchSuggest() const;
 
  private:
-  void FetchSocsCookie();
+  void MaybeFetchSocsCookie();
 
-  // Used to observe the change in session state.
-  base::ScopedObservation<ash::SessionController, ash::SessionObserver>
-      scoped_observation_{this};
+  // Sets flag that control search suggest.
+  void MaybeDisableSearchSuggest();
+
+  // Callback function to be called after Cookies are retrieved from user's
+  // profile.
+  void OnCookiesRetrieved(const net::CookieAccessResultList& list,
+                          const net::CookieAccessResultList& excluded_list);
+
+  // Callback function to be called after when a SOCS cookie is added to a
+  // user's profile.
+  void OnCookieAddedToUserProfile(net::CookieAccessResult result);
+
+  void RemoveSocsCookie();
+
+  void OnCookieDeleted(uint32_t number_of_cookies_deleted);
+
+  // Refetch after given `delay`.
+  void RefetchAfter(base::TimeDelta delay);
+
+  // Cancel all active requests
+  void CancelPendingRequests();
+
+  // Flag to disable search suggest while fetching SOCS cookie.
+  bool temporary_disable_search_suggest_ = false;
+
+  // Observer for EssentialSearch-related prefs.
+  std::unique_ptr<PrefChangeRegistrar> pref_change_registrar_;
 
   const raw_ptr<Profile> primary_profile_;
 
   std::unique_ptr<SocsCookieFetcher> socs_cookie_fetcher_;
 
+  net::BackoffEntry retry_backoff_;
+
   base::WeakPtrFactory<EssentialSearchManager> weak_ptr_factory_{this};
+
+  base::WeakPtrFactory<EssentialSearchManager> fetch_requests_weak_factory_{
+      this};
 };
 
 }  // namespace app_list

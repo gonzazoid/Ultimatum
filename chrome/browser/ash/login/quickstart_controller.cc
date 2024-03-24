@@ -14,6 +14,7 @@
 #include "chrome/browser/ash/login/oobe_screen.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/login/wizard_context.h"
+#include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/ui/webui/ash/login/consumer_update_screen_handler.h"
 #include "chrome/browser/ui/webui/ash/login/gaia_info_screen_handler.h"
@@ -28,7 +29,10 @@
 #include "chromeos/ash/components/network/network_type_pattern.h"
 #include "chromeos/ash/components/quick_start/logging.h"
 #include "chromeos/ash/components/quick_start/quick_start_metrics.h"
+#include "chromeos/ash/components/quick_start/types.h"
 #include "components/account_id/account_id.h"
+#include "components/session_manager/core/session_manager.h"
+#include "components/session_manager/session_manager_types.h"
 #include "components/user_manager/user_type.h"
 #include "google_apis/gaia/gaia_constants.h"
 #include "google_apis/gaia/gaia_oauth_client.h"
@@ -41,6 +45,23 @@ constexpr int kMaxRetryAttempts = 3;
 
 using bluetooth_config::mojom::BluetoothDevicePropertiesPtr;
 using bluetooth_config::mojom::BluetoothSystemState;
+
+std::string GetBluetoothStateString(BluetoothSystemState system_state) {
+  switch (system_state) {
+    case BluetoothSystemState::kDisabled:
+      return "Bluetooth is turned off.";
+    case BluetoothSystemState::kDisabling:
+      return "Bluetooth is in the process of turning off.";
+    case BluetoothSystemState::kEnabled:
+      return "Bluetooth is turned on.";
+    case BluetoothSystemState::kEnabling:
+      return "Bluetooth is in the process of turning on.";
+    case BluetoothSystemState::kUnavailable:
+      return "Device does not have access to Bluetooth.";
+    default:
+      return "Unknown bluetooth state!";
+  }
+}
 
 std::optional<QuickStartController::EntryPoint> EntryPointFromScreen(
     OobeScreenId screen) {
@@ -109,10 +130,20 @@ gaia::OAuthClientInfo GetClientInfo() {
 QuickStartController::QuickStartController() {
   gaia_client_ = std::make_unique<gaia::GaiaOAuthClient>(
       g_browser_process->shared_url_loader_factory());
-  if (features::IsOobeQuickStartEnabled()) {
-    InitTargetDeviceBootstrapController();
-    StartObservingBluetoothState();
+  // Main feature flag
+  if (!features::IsOobeQuickStartEnabled()) {
+    return;
   }
+
+  // QuickStart may not be available on the login screen.
+  if (session_manager::SessionManager::Get()->session_state() !=
+          session_manager::SessionState::OOBE &&
+      !features::IsOobeQuickStartOnLoginScreenEnabled()) {
+    return;
+  }
+
+  InitTargetDeviceBootstrapController();
+  StartObservingBluetoothState();
 }
 
 QuickStartController::~QuickStartController() {
@@ -147,6 +178,8 @@ void QuickStartController::ForceEnableQuickStart() {
   }
 
   InitTargetDeviceBootstrapController();
+  QS_LOG(INFO) << "Force enabling LocalPasswordsForConsumers!";
+  ash::features::ForceEnableLocalPasswordsForConsumers();
 }
 
 void QuickStartController::DetermineEntryPointVisibility(
@@ -207,6 +240,7 @@ void QuickStartController::InitTargetDeviceBootstrapController() {
     LoginDisplayHost::default_host()
         ->GetWizardContext()
         ->quick_start_setup_ongoing = true;
+    controller_state_ = ControllerState::WAITING_TO_RESUME_AFTER_UPDATE;
   }
 
   StartObservingScreenTransitions();
@@ -234,10 +268,9 @@ void QuickStartController::OnStatusChanged(
     const TargetDeviceBootstrapController::Status& status) {
   using Step = TargetDeviceBootstrapController::Step;
   using ErrorCode = TargetDeviceBootstrapController::ErrorCode;
-  using Pin = TargetDeviceBootstrapController::Pin;
 
-  // TODO(b/298042953): Emit ScreenOpened metrics when automatically resuming
-  // after an update.
+  // TODO(b/298042953): Emit ScreenOpened metrics when automatically
+  // resuming after an update.
   switch (status.step) {
     case Step::ADVERTISING_WITH_QR_CODE:
       controller_state_ = ControllerState::ADVERTISING;
@@ -251,8 +284,8 @@ void QuickStartController::OnStatusChanged(
       UpdateUiState(UiState::CONNECTING_TO_PHONE);
       return;
     case Step::PIN_VERIFICATION:
-      CHECK(absl::holds_alternative<Pin>(status.payload));
-      pin_ = absl::get<Pin>(status.payload);
+      CHECK(absl::holds_alternative<PinString>(status.payload));
+      pin_ = *absl::get<PinString>(status.payload);
       CHECK(pin_.value().length() == 4);
       UpdateUiState(UiState::SHOWING_PIN);
       QuickStartMetrics::RecordScreenOpened(
@@ -281,6 +314,16 @@ void QuickStartController::OnStatusChanged(
     case Step::REQUESTING_GOOGLE_ACCOUNT_INFO:
       return;
     case Step::GOOGLE_ACCOUNT_INFO_RECEIVED:
+      CHECK(absl::holds_alternative<EmailString>(status.payload));
+      // If there aren't any accounts on the phone, the flow is aborted.
+      if (absl::get<EmailString>(status.payload)->empty()) {
+        QS_LOG(ERROR) << "No account on Android phone. No email received.";
+        AbortFlow(AbortFlowReason::ERROR);
+        return;
+      }
+
+      // Populate the 'UserInfo' that is shown on the UI and start the transfer.
+      user_info_.email = *absl::get<EmailString>(status.payload);
       UpdateUiState(UiState::SIGNING_IN);
       bootstrap_controller_->AttemptGoogleAccountTransfer();
       return;
@@ -319,7 +362,10 @@ void QuickStartController::OnStatusChanged(
         QS_LOG(ERROR) << "Missing ErrorCode.";
       }
       AbortFlow(AbortFlowReason::ERROR);
-
+      return;
+    case Step::FLOW_ABORTED:
+      [[fallthrough]];
+    case Step::SETUP_COMPLETE:
       return;
   }
 }
@@ -347,10 +393,7 @@ void QuickStartController::OnOAuthTokenReceived(
     TargetDeviceBootstrapController::GaiaCredentials gaia_creds) {
   gaia_creds_ = gaia_creds;
 
-  // Show the user's email on the UI.
-  user_info_.email = gaia_creds_.email;
-  UpdateUiState(UiState::SIGNING_IN);
-
+  // TODO(b/319631013) - Track BootstrapConfiguration email mismatch via UMA.
   QS_LOG(INFO) << "About to exchange authorization code for tokens.";
   gaia_client_->GetTokensFromAuthCode(GetClientInfo(), gaia_creds_.auth_code,
                                       kMaxRetryAttempts, this);
@@ -417,26 +460,46 @@ void QuickStartController::HandleTransitionToQuickStartScreen() {
   if (!IsSetupOngoing()) {
     // Initially there is no UI step. TargetDeviceBootstrapController
     // then determines whether a loading spinner (for the PIN case),
-    // or the QR code will be shown.
+    // or the QR code will be shown. If bluetooth is not turned on, a dialog
+    // is shown asking the user for their permission first.
     CHECK(!ui_state_.has_value()) << "Found UI state without ongoing setup!";
 
-    // Request advertising to start.
-    controller_state_ = ControllerState::INITIALIZING;
-    LoginDisplayHost::default_host()
-        ->GetWizardContext()
-        ->quick_start_setup_ongoing = true;
-    bootstrap_controller_->StartAdvertisingAndMaybeGetQRCode();
-    CHECK(!entry_point_.has_value()) << "Entry point without ongoing setup";
-
     // Keep track of where the flow originated.
+    CHECK(!entry_point_.has_value()) << "Entry point without ongoing setup";
     const auto entry_point = EntryPointFromScreen(previous_screen_.value());
     CHECK(entry_point.has_value()) << "Unknown entry point!";
     exit_point_ = entry_point_ = entry_point;
+
+    // Set the QuickStart flow as ongoing for the rest of the system.
+    LoginDisplayHost::default_host()
+        ->GetWizardContext()
+        ->quick_start_setup_ongoing = true;
+
+    if (IsBluetoothDisabled()) {
+      controller_state_ = ControllerState::WAITING_FOR_BLUETOOTH_PERMISSION;
+      UpdateUiState(UiState::SHOWING_BLUETOOTH_DIALOG);
+      return;
+    }
+
+    StartAdvertising();
+  } else if (controller_state_ ==
+             ControllerState::WAITING_TO_RESUME_AFTER_UPDATE) {
+    exit_point_ = QuickStartController::EntryPoint::GAIA_INFO_SCREEN;
+
+    if (IsBluetoothDisabled()) {
+      controller_state_ = ControllerState::WAITING_FOR_BLUETOOTH_PERMISSION;
+      UpdateUiState(UiState::SHOWING_BLUETOOTH_DIALOG);
+      return;
+    }
+
+    StartAdvertising();
   } else {
     // If the setup has finished, transitioning to QuickStart should
     // show the last step of the flow.
     if (controller_state_ == ControllerState::SETUP_COMPLETE) {
       UpdateUiState(UiState::SETUP_COMPLETE);
+      SavePhoneInstanceID();
+      bootstrap_controller_->OnSetupComplete();
       return;
     }
 
@@ -502,7 +565,6 @@ void QuickStartController::FinishAccountCreation() {
   CHECK(!gaia_creds_.email.empty());
   CHECK(!gaia_creds_.gaia_id.empty());
 
-  SavePhoneInstanceID();
   UpdateUiState(UiState::CREATING_ACCOUNT);
   controller_state_ = ControllerState::SETUP_COMPLETE;
 
@@ -512,14 +574,14 @@ void QuickStartController::FinishAccountCreation() {
   // The user type is known to be regular. The unicorn flow transitions to the
   // Gaia screen and uses its own mechanism for account creation.
   login::BuildUserContextForGaiaSignIn(
-      /*user_type=*/user_manager::USER_TYPE_REGULAR,
+      /*user_type=*/user_manager::UserType::kRegular,
       /*account_id=*/account_id,
       /*using_saml=*/false,
       /*using_saml_api=*/false,
       /*password=*/"",
       /*password_attributes=*/SamlPasswordAttributes(),
-      /*sync_trusted_vault_keys=*/absl::nullopt,
-      /*challenge_response_key=*/absl::nullopt,
+      /*sync_trusted_vault_keys=*/std::nullopt,
+      /*challenge_response_key=*/std::nullopt,
       /*user_context=*/user_context.get());
 
   // TODO(b/318664950) - Remove once the server starts sending the Gaia ID.
@@ -559,44 +621,56 @@ void QuickStartController::StartObservingBluetoothState() {
 
 void QuickStartController::OnPropertiesUpdated(
     bluetooth_config::mojom::BluetoothSystemPropertiesPtr properties) {
-  bluetooth_system_state_ = properties->system_state;
-}
+  if (bluetooth_system_state_ == properties->system_state) {
+    return;
+  }
 
-bool QuickStartController::ShouldShowBluetoothDialog() {
-  switch (bluetooth_system_state_) {
-    case BluetoothSystemState::kDisabled:
-      QS_LOG(INFO) << "Bluetooth is turned off.";
-      return true;
-    case BluetoothSystemState::kDisabling:
-      QS_LOG(INFO) << "Bluetooth is in the process of turning off.";
-      return false;
-    case BluetoothSystemState::kEnabled:
-      QS_LOG(INFO) << "Bluetooth is turned on.";
-      return false;
-    case BluetoothSystemState::kEnabling:
-      QS_LOG(INFO) << "Bluetooth is in the process of turning on.";
-      return false;
-    case BluetoothSystemState::kUnavailable:
-      QS_LOG(INFO) << "Device does not have access to Bluetooth.";
-      return false;
+  bluetooth_system_state_ = properties->system_state;
+
+  if (!IsSetupOngoing()) {
+    return;
+  }
+
+  QS_LOG(INFO) << "New Bluetooth state: "
+               << GetBluetoothStateString(bluetooth_system_state_);
+  if (controller_state_ == ControllerState::WAITING_FOR_BLUETOOTH_PERMISSION ||
+      controller_state_ == ControllerState::WAITING_FOR_BLUETOOTH_ACTIVATION) {
+    if (bluetooth_system_state_ == BluetoothSystemState::kEnabled) {
+      StartAdvertising();
+    }
   }
 }
 
-void QuickStartController::TurnOnBluetooth() {
-  // TODO(ayag)(b/310566204): rename SetBluetoothHidDetectionActive to be
-  // generic.
-  CHECK(cros_bluetooth_config_remote_);
-  cros_bluetooth_config_remote_->SetBluetoothHidDetectionActive();
+bool QuickStartController::IsBluetoothDisabled() {
+  return bluetooth_system_state_ == BluetoothSystemState::kDisabled;
 }
 
-bluetooth_config::mojom::BluetoothSystemState
-QuickStartController::get_bluetooth_system_state_for_testing() {
-  return bluetooth_system_state_;
+void QuickStartController::OnBluetoothPermissionGranted() {
+  if (controller_state_ != ControllerState::WAITING_FOR_BLUETOOTH_PERMISSION) {
+    return;
+  }
+
+  controller_state_ = ControllerState::WAITING_FOR_BLUETOOTH_ACTIVATION;
+
+  if (IsBluetoothDisabled()) {
+    CHECK(cros_bluetooth_config_remote_);
+    cros_bluetooth_config_remote_->SetBluetoothEnabledWithoutPersistence();
+    // Advertising will start once we are notified that bluetooth is enabled.
+  }
+}
+
+void QuickStartController::StartAdvertising() {
+  QS_LOG(INFO) << "ControllerState::INITIALIZING requesting advertising.";
+  controller_state_ = ControllerState::INITIALIZING;
+  bootstrap_controller_->StartAdvertisingAndMaybeGetQRCode();
 }
 
 std::ostream& operator<<(std::ostream& stream,
                          const QuickStartController::UiState& ui_state) {
   switch (ui_state) {
+    case QuickStartController::UiDelegate::UiState::SHOWING_BLUETOOTH_DIALOG:
+      stream << "[showing Bluetooth dialog]";
+      break;
     case QuickStartController::UiDelegate::UiState::CONNECTING_TO_PHONE:
       stream << "[connecting to phone]";
       break;

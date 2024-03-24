@@ -59,6 +59,12 @@ class TRIVIAL_ABI GSL_OWNER HeapArray {
     return HeapArray(std::unique_ptr<T[]>(new T[size]), size);
   }
 
+  static HeapArray CopiedFrom(base::span<const T> that) {
+    auto result = HeapArray::Uninit(that.size());
+    result.copy_from(that);
+    return result;
+  }
+
   // Constructs an empty array and does not allocate any memory.
   HeapArray()
     requires(std::constructible_from<T>)
@@ -155,6 +161,15 @@ class TRIVIAL_ABI GSL_OWNER HeapArray {
   }
   base::span<const T> last(size_t count) const ABSL_ATTRIBUTE_LIFETIME_BOUND {
     return as_span().last(count);
+  }
+
+  // Leaks the memory in the HeapArray so that it will never be freed, and
+  // consumes the HeapArray, returning an unowning span that points to the
+  // memory.
+  base::span<T> leak() && {
+    HeapArray<T> dropped = std::move(*this);
+    T* leaked = dropped.data_.release();
+    return make_span(leaked, dropped.size_);
   }
 
  private:

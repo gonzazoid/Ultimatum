@@ -308,12 +308,6 @@ void ReportCombinedSubscriptionCountAtEngagementTime(int subscription_count) {
   base::UmaHistogramSparse(
       "ContentSuggestions.Feed.AllFeeds.FollowCount.Engaged2",
       subscription_count);
-  // TODO(b/228342051): The histogram below is being obsoleted because it has a
-  // misleading name. Once the new *.Engaged2 series collects a large enough
-  // sample history, it will be effectively removed/obsoleted.
-  base::UmaHistogramSparse(
-      "ContentSuggestions.Feed.WebFeed.FollowCount.Engaged",
-      subscription_count);
 }
 
 bool IsGoodExplicitInteraction(FeedUserActionType action) {
@@ -415,7 +409,7 @@ void MetricsReporter::TrackTimeSpentInFeed(bool interacted_or_scrolled) {
     persistent_data_.accumulated_time_spent_in_feed +=
         std::min(kTimeSpentInFeedInteractionTimeout,
                  base::TimeTicks::Now() - *time_in_feed_start_);
-    time_in_feed_start_ = absl::nullopt;
+    time_in_feed_start_ = std::nullopt;
   }
 
   if (interacted_or_scrolled) {
@@ -935,7 +929,7 @@ void MetricsReporter::OnLoadStream(
   bool loaded_new_content_from_network =
       result_summary.loaded_new_content_from_network;
   base::TimeDelta stored_content_age = result_summary.stored_content_age;
-  absl::optional<feedstore::Metadata::StreamMetadata> stream_metadata =
+  std::optional<feedstore::Metadata::StreamMetadata> stream_metadata =
       result_summary.stream_metadata;
   ContentOrder content_order = result_summary.content_order;
   VVLOG << "OnLoadStream load_from_store_status=" << load_from_store_status

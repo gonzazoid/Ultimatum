@@ -14,6 +14,7 @@
 
 namespace views {
 class DialogDelegate;
+class Widget;
 }  // namespace views
 
 namespace web_app {
@@ -44,9 +45,9 @@ class IsolatedWebAppInstallerView : public views::View {
   class Delegate {
    public:
     virtual void OnSettingsLinkClicked() = 0;
-    virtual void OnManageProfilesLinkClicked() = 0;
     virtual void OnChildDialogCanceled() = 0;
     virtual void OnChildDialogAccepted() = 0;
+    virtual void OnChildDialogDestroying() = 0;
   };
 
   // Configures the buttons of the given DialogDelegate.
@@ -72,7 +73,7 @@ class IsolatedWebAppInstallerView : public views::View {
   virtual void ShowInstallSuccessScreen(
       const SignedWebBundleMetadata& bundle_metadata) = 0;
 
-  virtual void ShowDialog(
+  virtual views::Widget* ShowDialog(
       const IsolatedWebAppInstallerModel::Dialog& dialog) = 0;
 };
 

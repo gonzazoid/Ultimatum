@@ -17,18 +17,6 @@ config("password_reuse_detection_config") {
   }
 }
 
-source_set("sql_builder") {
-  sources = [
-    "sql_table_builder.cc",
-    "sql_table_builder.h",
-  ]
-  deps = [
-    "//base",
-    "//sql",
-  ]
-  configs += [ "//build/config/compiler:wexit_time_destructors" ]
-}
-
 static_library("browser") {
   sources = [
     "browser_save_password_progress_logger.cc",
@@ -123,12 +111,15 @@ static_library("browser") {
     "password_manager_settings_service.h",
     "password_manager_util.cc",
     "password_manager_util.h",
+    "password_manual_fallback_flow.cc",
+    "password_manual_fallback_flow.h",
     "password_requirements_service.cc",
     "password_requirements_service.h",
-    "password_reuse_detector.cc",
     "password_reuse_detector.h",
     "password_reuse_detector_consumer.cc",
     "password_reuse_detector_consumer.h",
+    "password_reuse_detector_impl.cc",
+    "password_reuse_detector_impl.h",
     "password_reuse_manager.h",
     "password_reuse_manager_impl.cc",
     "password_reuse_manager_impl.h",
@@ -140,6 +131,9 @@ static_library("browser") {
     "password_store_factory_util.cc",
     "password_store_factory_util.h",
     "password_store_signin_notifier.h",
+    "password_suggestion_flow.h",
+    "password_suggestion_generator.cc",
+    "password_suggestion_generator.h",
     "password_sync_util.cc",
     "password_sync_util.h",
     "password_ui_utils.cc",
@@ -163,7 +157,7 @@ static_library("browser") {
     ":metrics_util",
     ":passkey_credential",
     "//base",
-    "//components/password_manager/core/browser/affiliation",
+    "//components/affiliations/core/browser:affiliations",
     "//components/password_manager/core/browser/features:utils",
     "//components/password_manager/core/browser/leak_detection:leak_detection_interface_headers",
     "//components/password_manager/core/browser/password_store:password_store_impl",
@@ -185,6 +179,7 @@ static_library("browser") {
     "//components/device_reauth",
     "//components/favicon/core",
     "//components/os_crypt/sync:os_crypt",
+    "//components/password_manager/core/browser/affiliation:affiliation_match_helper",
     "//components/password_manager/core/browser/features:password_features",
     "//components/password_manager/core/browser/form_parsing",
     "//components/password_manager/core/browser/generation",
@@ -259,11 +254,13 @@ source_set("passkey_credential") {
     "//base",
     "//components/strings:components_strings",
     "//components/sync/protocol",
-    "//third_party/abseil-cpp:absl",
     "//ui/base",
   ]
   if (!is_ios) {
     deps += [ "//components/webauthn/core/browser" ]
+  }
+  if (is_android) {
+    deps += [ "//components/webauthn/android" ]
   }
 }
 
@@ -326,6 +323,7 @@ static_library("hash_password_manager") {
     ":password_hash_data",
     "//base:base",
     "//components/os_crypt/sync",
+    "//components/password_manager/core/browser/features:password_features",
     "//components/password_manager/core/common",
     "//components/prefs",
   ]
@@ -345,6 +343,8 @@ static_library("test_support") {
     "mock_password_manager_settings_service.h",
     "mock_password_reuse_manager.cc",
     "mock_password_reuse_manager.h",
+    "mock_password_suggestion_flow.cc",
+    "mock_password_suggestion_flow.h",
     "mock_webauthn_credentials_delegate.cc",
     "mock_webauthn_credentials_delegate.h",
     "password_manager_test_utils.cc",
@@ -438,14 +438,15 @@ source_set("unit_tests") {
     "password_manager_metrics_util_unittest.cc",
     "password_manager_unittest.cc",
     "password_manager_util_unittest.cc",
+    "password_manual_fallback_flow_unittest.cc",
     "password_requirements_service_unittest.cc",
-    "password_reuse_detector_unittest.cc",
+    "password_reuse_detector_impl_unittest.cc",
     "password_reuse_manager_impl_unittest.cc",
     "password_save_manager_impl_unittest.cc",
+    "password_suggestion_generator_unittest.cc",
     "password_sync_util_unittest.cc",
     "password_ui_utils_unittest.cc",
     "possible_username_data_unittest.cc",
-    "sql_table_builder_unittest.cc",
     "store_metrics_reporter_unittest.cc",
     "sync_credentials_filter_unittest.cc",
     "vote_uploads_test_matchers.h",
@@ -467,9 +468,10 @@ source_set("unit_tests") {
   }
 
   deps = [
-    ":sql_builder",
     ":test_support",
     "//build:branding_buildflags",
+    "//components/affiliations/core/browser:sql_builder",
+    "//components/affiliations/core/browser:test_support",
     "//components/autofill/core/browser",
     "//components/autofill/core/browser:test_support",
     "//components/autofill/core/common",
@@ -477,7 +479,9 @@ source_set("unit_tests") {
     "//components/device_reauth",
     "//components/device_reauth:test_support",
     "//components/favicon/core/test:test_support",
+    "//components/os_crypt/sync:os_crypt",
     "//components/os_crypt/sync:test_support",
+    "//components/password_manager/core/browser/affiliation:affiliation_match_helper",
     "//components/password_manager/core/browser/features:password_features",
     "//components/password_manager/core/browser/form_parsing",
     "//components/password_manager/core/browser/generation",

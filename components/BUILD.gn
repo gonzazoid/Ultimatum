@@ -7,6 +7,7 @@ import("//build/config/chrome_build.gni")
 import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/features.gni")
 import("//build/config/ui.gni")
+import("//components/compose/features.gni")
 import("//components/nacl/features.gni")
 import("//components/optimization_guide/features.gni")
 import("//components/safe_browsing/buildflags.gni")
@@ -177,6 +178,7 @@ test("components_unittests") {
 
   deps = [
     "//base",
+    "//components/affiliations/core/browser:unit_tests",
     "//components/aggregation_service:unit_tests",
     "//components/apdu:unit_tests",
     "//components/assist_ranker:unit_tests",
@@ -216,6 +218,7 @@ test("components_unittests") {
     "//components/encrypted_messages:unit_tests",
     "//components/enterprise:unit_tests",
     "//components/enterprise/common:unit_tests",
+    "//components/facilitated_payments/core/util:unit_tests",
     "//components/favicon/core:unit_tests",
     "//components/favicon_base:unit_tests",
     "//components/feature_engagement:unit_tests",
@@ -370,13 +373,6 @@ test("components_unittests") {
     deps += [ "//components/services/screen_ai:unit_tests" ]
   }
 
-  if (build_with_internal_optimization_guide && is_android) {
-    loadable_module_deps = [
-      "//components/optimization_guide/internal:optimization_guide_internal",
-    ]
-    loadable_modules = [ "$root_out_dir/liboptimization_guide_internal.so" ]
-  }
-
   data_deps = [ "//testing/buildbot/filters:components_unittests_filters" ]
 
   if (toolkit_views) {
@@ -428,6 +424,7 @@ test("components_unittests") {
       "//components/commerce/content/browser:unit_tests",
       "//components/content_capture/browser:unit_tests",
       "//components/content_relationship_verification:unit_tests",
+      "//components/content_settings/browser:unit_tests",
       "//components/contextual_search/core/browser:unit_tests",
       "//components/continuous_search/browser:unit_tests",
       "//components/continuous_search/common:unit_tests",
@@ -449,7 +446,7 @@ test("components_unittests") {
       "//components/heavy_ad_intervention:unit_tests",
       "//components/history/content/browser:unit_tests",
       "//components/history_clusters/core:unit_tests",
-      "//components/history_clusters/ui:unit_tests",
+      "//components/history_embeddings:unit_tests",
       "//components/invalidation/impl:unit_tests",
       "//components/javascript_dialogs:unit_tests",
       "//components/js_injection/common:unit_tests",
@@ -550,7 +547,6 @@ test("components_unittests") {
     deps += [
       "//components/background_sync:unit_tests",
       "//components/blocked_content:unit_tests",
-      "//components/content_settings/browser:unit_tests",
       "//components/content_settings/browser/ui:unit_tests",
       "//components/facilitated_payments/content/renderer:unit_tests",
       "//components/media_router/browser:unit_tests",
@@ -609,10 +605,13 @@ test("components_unittests") {
       "//components/component_updater/android:embedded_component_loader_unittests",
       "//components/crash/android:java",
       "//components/crash/android:unit_tests",
+      "//components/data_sharing/internal:internal_java",
       "//components/download/internal/common:internal_java",
       "//components/embedder_support/android:native_java_unittests_java",
       "//components/embedder_support/android/metrics:test_support_java",
       "//components/embedder_support/android/metrics:unit_tests",
+      "//components/facilitated_payments/content/browser:unit_tests",
+      "//components/facilitated_payments/core/browser:unit_tests",
       "//components/gcm_driver/instance_id:test_support",
       "//components/gcm_driver/instance_id/android:instance_id_driver_java",
       "//components/gcm_driver/instance_id/android:instance_id_driver_test_support_java",
@@ -629,6 +628,8 @@ test("components_unittests") {
       "//components/permissions/android:java",
       "//components/policy/android:native_test_support_java",
       "//components/policy/android:policy_java",
+      "//components/search_engines/android:java",
+      "//components/search_engines/android:test_utils_java",
       "//components/signin/core/browser",
       "//components/signin/public/android:java",
       "//components/signin/public/android:signin_java_test_support",
@@ -705,6 +706,7 @@ test("components_unittests") {
       "//components/desks_storage:unit_tests",
       "//components/guest_os:unit_tests",
       "//components/ownership:unit_tests",
+      "//components/peripherals/logging:unit_tests",
       "//components/user_manager:unit_tests",
       "//components/variations/cros_evaluate_seed:unit_tests",
     ]
@@ -812,9 +814,17 @@ test("components_unittests") {
     ]
   }
 
+  if (enable_compose) {
+    deps += [ "//components/compose/core/browser:unit_tests" ]
+  }
+
   # Only supported on cast-enabled platforms.
   if (enable_cast_receiver) {
     deps += [ "//components/cast_receiver:unit_tests" ]
+  }
+
+  if (is_mac) {
+    deps += [ "//components/remote_cocoa/common:unit_tests" ]
   }
 
   # On LaCrOS, tests use ash - chrome as a window manager, thus the dependency.
@@ -911,20 +921,8 @@ if (use_blink) {
     defines = [ "HAS_OUT_OF_PROC_TEST_RUNNER" ]
 
     sources = [
-      "autofill/content/browser/risk/fingerprint_browsertest.cc",
-      "autofill/content/renderer/a11y_utils_browsertest.cc",
-      "autofill/content/renderer/autofill_agent_browsertest.cc",
-      "autofill/content/renderer/autofill_agent_form_interaction_browsertest.cc",
-      "autofill/content/renderer/form_autofill_issues_browsertest.cc",
-      "autofill/content/renderer/form_autofill_util_browsertest.cc",
-      "autofill/content/renderer/form_cache_browsertest.cc",
-      "autofill/content/renderer/form_tracker_browsertest.cc",
-      "autofill/content/renderer/html_based_username_detector_browsertest.cc",
-      "autofill/content/renderer/password_form_conversion_utils_browsertest.cc",
       "browsing_data/content/browsing_data_helper_browsertest.h",
       "browsing_data/content/cache_storage_helper_browsertest.cc",
-      "browsing_data/content/database_helper_browsertest.cc",
-      "browsing_data/content/indexed_db_helper_browsertest.cc",
       "browsing_data/content/local_storage_helper_browsertest.cc",
       "content_settings/renderer/content_settings_agent_impl_browsertest.cc",
       "continuous_search/renderer/search_result_extractor_browsertest.cc",
@@ -960,7 +958,9 @@ if (use_blink) {
       "//base",
       "//base/test:test_support",
       "//components/autofill/content/browser",
+      "//components/autofill/content/browser:browser_tests",
       "//components/autofill/content/renderer",
+      "//components/autofill/content/renderer:browser_tests",
       "//components/autofill/content/renderer:test_support",
       "//components/autofill/core/browser",
       "//components/browsing_data/content",
@@ -990,6 +990,7 @@ if (use_blink) {
       "//content/public/browser",
       "//content/shell:content_shell_lib",
       "//content/test:browsertest_support",
+      "//content/test:default_content_test_launcher",
       "//content/test:test_support",
       "//device/bluetooth",
       "//google_apis",
@@ -1215,6 +1216,7 @@ if (is_android) {
       "//components/commerce/core/android:junit_tests",
       "//components/content_capture/android/junit:components_content_capture_junit_tests",
       "//components/crash/android:junit",
+      "//components/data_sharing/internal:data_sharing_junit_tests",
       "//components/download/network:junit",
       "//components/embedder_support/android:components_embedder_support_junit_tests",
       "//components/gcm_driver/android:components_gcm_driver_junit_tests",

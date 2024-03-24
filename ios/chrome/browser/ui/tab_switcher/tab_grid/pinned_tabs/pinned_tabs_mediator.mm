@@ -29,7 +29,7 @@
 #import "ios/web/public/navigation/navigation_manager.h"
 #import "ios/web/public/web_state.h"
 #import "ios/web/public/web_state_observer_bridge.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 
 using PinnedState = WebStateSearchCriteria::PinnedState;
 
@@ -137,7 +137,7 @@ web::WebStateID GetActivePinnedTabID(WebStateList* web_state_list) {
     return;
   }
 
-  if (!webStateList->IsWebStatePinnedAt(status.index)) {
+  if (!webStateList->IsWebStatePinnedAt(detachChange.detached_from_index())) {
     [self.consumer selectItemWithID:GetActivePinnedTabID(webStateList)];
     return;
   }
@@ -161,10 +161,9 @@ web::WebStateID GetActivePinnedTabID(WebStateList* web_state_list) {
     case WebStateListChange::Type::kStatusOnly: {
       const WebStateListChangeStatusOnly& selectionOnlyChange =
           change.As<WebStateListChangeStatusOnly>();
-      if (status.pinned_state_change) {
-        [self changePinnedStateForWebState:selectionOnlyChange
-                                               .selected_web_state()
-                                   atIndex:status.index];
+      if (selectionOnlyChange.pinned_state_changed()) {
+        [self changePinnedStateForWebState:selectionOnlyChange.web_state()
+                                   atIndex:selectionOnlyChange.index()];
         break;
       }
       // The activation is handled after this switch statement.
@@ -176,28 +175,27 @@ web::WebStateID GetActivePinnedTabID(WebStateList* web_state_list) {
     case WebStateListChange::Type::kMove: {
       const WebStateListChangeMove& moveChange =
           change.As<WebStateListChangeMove>();
-      if (webStateList->IsWebStatePinnedAt(status.index)) {
+      if (webStateList->IsWebStatePinnedAt(moveChange.moved_to_index())) {
         // PinnedTabsMediator handles only pinned tabs because non pinned tabs
         // are handled in BaseGridMediator.
         [self.consumer
             moveItemWithID:moveChange.moved_web_state()->GetUniqueIdentifier()
-                   toIndex:status.index];
+                   toIndex:moveChange.moved_to_index()];
       }
 
       // The pinned state can be updated when a tab is moved.
-      if (status.pinned_state_change) {
+      if (moveChange.pinned_state_changed()) {
         [self changePinnedStateForWebState:moveChange.moved_web_state()
-                                   atIndex:status.index];
+                                   atIndex:moveChange.moved_to_index()];
       }
       break;
     }
     case WebStateListChange::Type::kReplace: {
-      if (!webStateList->IsWebStatePinnedAt(status.index)) {
-        break;
-      }
-
       const WebStateListChangeReplace& replaceChange =
           change.As<WebStateListChangeReplace>();
+      if (!webStateList->IsWebStatePinnedAt(replaceChange.index())) {
+        break;
+      }
       web::WebState* replacedWebState = replaceChange.replaced_web_state();
       web::WebState* insertedWebState = replaceChange.inserted_web_state();
       TabSwitcherItem* newItem =
@@ -210,18 +208,17 @@ web::WebStateID GetActivePinnedTabID(WebStateList* web_state_list) {
       break;
     }
     case WebStateListChange::Type::kInsert: {
-      if (!webStateList->IsWebStatePinnedAt(status.index)) {
+      const WebStateListChangeInsert& insertChange =
+          change.As<WebStateListChangeInsert>();
+      if (!webStateList->IsWebStatePinnedAt(insertChange.index())) {
         [self.consumer selectItemWithID:GetActivePinnedTabID(webStateList)];
         break;
       }
-
-      const WebStateListChangeInsert& insertChange =
-          change.As<WebStateListChangeInsert>();
       web::WebState* insertedWebState = insertChange.inserted_web_state();
       TabSwitcherItem* item =
           [[PinnedItem alloc] initWithWebState:insertedWebState];
       [self.consumer insertItem:item
-                        atIndex:status.index
+                        atIndex:insertChange.index()
                  selectedItemID:GetActivePinnedTabID(webStateList)];
 
       _scopedWebStateObservation->AddObservation(insertedWebState);
@@ -284,72 +281,6 @@ web::WebStateID GetActivePinnedTabID(WebStateList* web_state_list) {
 - (void)updateConsumerItemForWebState:(web::WebState*)webState {
   TabSwitcherItem* item = [[PinnedItem alloc] initWithWebState:webState];
   [self.consumer replaceItemID:webState->GetUniqueIdentifier() withItem:item];
-}
-
-#pragma mark - TabCollectionCommands
-
-- (void)selectItemWithID:(web::WebStateID)itemID {
-  base::RecordAction(base::UserMetricsAction("MobileTabGridPinnedTabSelected"));
-
-  int index = GetWebStateIndex(self.webStateList,
-                               WebStateSearchCriteria{
-                                   .identifier = itemID,
-                                   .pinned_state = PinnedState::kPinned,
-                               });
-  WebStateList* itemWebStateList = self.webStateList;
-
-  if (index == WebStateList::kInvalidIndex) {
-    return;
-  }
-
-  web::WebState* selectedWebState = itemWebStateList->GetWebStateAt(index);
-
-  base::TimeDelta timeSinceLastActivation =
-      base::Time::Now() - selectedWebState->GetLastActiveTime();
-  base::UmaHistogramCustomTimes(
-      "IOS.TabGrid.TabSelected.TimeSinceLastActivation",
-      timeSinceLastActivation, base::Minutes(1), base::Days(24), 50);
-
-  if (index != itemWebStateList->active_index()) {
-    base::RecordAction(
-        base::UserMetricsAction("MobileTabGridMoveToExistingTab"));
-  }
-
-  itemWebStateList->ActivateWebStateAt(index);
-
-  LogPinnedTabsUsedForDefaultBrowserPromo();
-}
-
-- (void)closeItemWithID:(web::WebStateID)itemID {
-  int index = GetWebStateIndex(self.webStateList,
-                               WebStateSearchCriteria{
-                                   .identifier = itemID,
-                                   .pinned_state = PinnedState::kPinned,
-                               });
-  if (index == WebStateList::kInvalidIndex) {
-    return;
-  }
-
-  self.webStateList->CloseWebStateAt(index, WebStateList::CLOSE_USER_ACTION);
-}
-
-- (void)setPinState:(BOOL)pinState forItemWithID:(web::WebStateID)itemID {
-  SetWebStatePinnedState(self.webStateList, itemID, pinState);
-}
-
-- (void)moveItemWithID:(web::WebStateID)itemID
-               toIndex:(NSUInteger)destinationIndex {
-  int sourceIndex = GetWebStateIndex(self.webStateList,
-                                     WebStateSearchCriteria{
-                                         .identifier = itemID,
-                                         .pinned_state = PinnedState::kPinned,
-                                     });
-  if (sourceIndex != WebStateList::kInvalidIndex) {
-    int destinationWebStateListIndex =
-        [self webStateListIndexFromItemIndex:destinationIndex];
-    self.webStateList->MoveWebStateAt(sourceIndex,
-                                      destinationWebStateListIndex);
-  }
 }
 
 #pragma mark - TabCollectionDragDropHandler
@@ -426,8 +357,9 @@ web::WebStateID GetActivePinnedTabID(WebStateList* web_state_list) {
         // Move tab across Browsers.
         base::UmaHistogramEnumeration(kUmaPinnedViewDragOrigin,
                                       DragItemOrigin::kOtherBrwoser);
-        MoveTabToBrowser(tabInfo.tabID, self.browser, destinationIndex,
-                         WebStateList::INSERT_PINNED);
+        const WebStateList::InsertionParams params =
+            WebStateList::InsertionParams::AtIndex(destinationIndex).Pinned();
+        MoveTabToBrowser(tabInfo.tabID, self.browser, params);
         return;
       }
       base::UmaHistogramEnumeration(kUmaPinnedViewDragOrigin,
@@ -438,7 +370,17 @@ web::WebStateID GetActivePinnedTabID(WebStateList* web_state_list) {
     }
 
     // Reorder tabs.
-    [self moveItemWithID:tabInfo.tabID toIndex:destinationIndex];
+    int sourceIndex = GetWebStateIndex(self.webStateList,
+                                       WebStateSearchCriteria{
+                                           .identifier = tabInfo.tabID,
+                                           .pinned_state = PinnedState::kPinned,
+                                       });
+    if (sourceIndex != WebStateList::kInvalidIndex &&
+        destinationIndex != NSNotFound &&
+        static_cast<int>(destinationIndex) <
+            self.webStateList->pinned_tabs_count()) {
+      self.webStateList->MoveWebStateAt(sourceIndex, destinationIndex);
+    }
     return;
   }
   base::UmaHistogramEnumeration(kUmaPinnedViewDragOrigin,
@@ -522,7 +464,7 @@ web::WebStateID GetActivePinnedTabID(WebStateList* web_state_list) {
 
 // Inserts a new item with the given`newTabURL` at `index`.
 - (void)insertNewItemAtIndex:(NSUInteger)index withURL:(const GURL&)newTabURL {
-  // There are some circumstances where a new tab insertion can be erroniously
+  // There are some circumstances where a new tab insertion can be erroneously
   // triggered while another web state list mutation is happening. To ensure
   // those bugs don't become crashes, check that the web state list is OK to
   // mutate.
@@ -540,28 +482,12 @@ web::WebStateID GetActivePinnedTabID(WebStateList* web_state_list) {
   loadParams.transition_type = ui::PAGE_TRANSITION_TYPED;
   webState->GetNavigationManager()->LoadURLWithParams(loadParams);
 
-  // Insert a new webState using the `INSERT_PINNED` flag and activate it.
+  // Insert a new pinned webState and activate it.
   self.webStateList->InsertWebState(
-      base::checked_cast<int>(index), std::move(webState),
-      (WebStateList::INSERT_PINNED | WebStateList::INSERT_ACTIVATE),
-      WebStateOpener());
-}
-
-// Converts the collection view's item index to WebStateList index.
-// Returns `kInvalidIndex` if `index` is out of range.
-- (int)webStateListIndexFromItemIndex:(NSUInteger)index {
-  if (index == NSNotFound) {
-    return WebStateList::kInvalidIndex;
-  }
-
-  int webStateListIndex = index;
-  int webStateListLastIndex = self.webStateList->pinned_tabs_count() - 1;
-
-  if (webStateListIndex > webStateListLastIndex) {
-    return WebStateList::kInvalidIndex;
-  }
-
-  return webStateListIndex;
+      std::move(webState),
+      WebStateList::InsertionParams::AtIndex(base::checked_cast<int>(index))
+          .Pinned()
+          .Activate());
 }
 
 // Inserts/removes a pinned item to/from the collection.

@@ -10,6 +10,7 @@
 #import "base/auto_reset.h"
 #import "base/check_op.h"
 #import "base/i18n/rtl.h"
+#import "base/memory/raw_ptr.h"
 #import "base/memory/weak_ptr.h"
 #import "base/metrics/user_metrics.h"
 #import "base/metrics/user_metrics_action.h"
@@ -19,6 +20,7 @@
 #import "components/bookmarks/browser/bookmark_node.h"
 #import "components/bookmarks/common/bookmark_features.h"
 #import "components/bookmarks/common/bookmark_metrics.h"
+#import "components/bookmarks/common/storage_type.h"
 #import "components/sync/base/features.h"
 #import "ios/chrome/browser/bookmarks/model/bookmark_model_bridge_observer.h"
 #import "ios/chrome/browser/bookmarks/model/bookmarks_utils.h"
@@ -73,18 +75,20 @@ typedef NS_ENUM(NSInteger, ItemType) {
   base::WeakPtr<BookmarkModel> _accountBookmarkModel;
   // Observer for `_accountBookmarkModel` changes.
   std::unique_ptr<BookmarkModelBridge> _accountModelBridge;
+  // The authentication service.
+  raw_ptr<AuthenticationService> _authService;
   // Observer for signin status changes.
   std::unique_ptr<AuthenticationServiceObserverBridge> _authServiceBridge;
-  syncer::SyncService* _syncService;
+  raw_ptr<syncer::SyncService> _syncService;
   std::unique_ptr<SyncObserverBridge> _syncObserverModelBridge;
   // The browser for this view controller.
   base::WeakPtr<Browser> _browser;
-  ChromeBrowserState* _browserState;
+  raw_ptr<ChromeBrowserState> _browserState;
   // Parent folder to `_folder`. Should never be `nullptr`.
-  const BookmarkNode* _parentFolder;
+  raw_ptr<const BookmarkNode> _parentFolder;
   // If `_folderNode` is `nullptr`, the user is adding a new folder. Otherwise
   // the user is editing an existing folder.
-  const BookmarkNode* _folder;
+  raw_ptr<const BookmarkNode> _folder;
 
   BOOL _edited;
   BOOL _editingExistingFolder;
@@ -140,6 +144,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
     _editingExistingFolder = _folder != nullptr;
     _browser = browser->AsWeakPtr();
     _browserState = browser->GetBrowserState()->GetOriginalChromeBrowserState();
+    _authService = authService;
     _authServiceBridge = std::make_unique<AuthenticationServiceObserverBridge>(
         authService, self);
     _syncService = syncService;
@@ -343,7 +348,8 @@ typedef NS_ENUM(NSInteger, ItemType) {
                                   bookmarksVector,
                                   _localOrSyncableBookmarkModel.get(),
                                   _accountBookmarkModel.get(), _parentFolder,
-                                  _browserState)];
+                                  _browserState, _authService->GetWeakPtr(),
+                                  _syncService)];
       // Move might change the pointer, grab the updated value.
       CHECK_EQ(bookmarksVector.size(), 1u);
       _folder = bookmarksVector[0];

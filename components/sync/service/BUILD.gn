@@ -78,7 +78,6 @@ static_library("service") {
 
   public_deps = [
     "//base",
-    "//components/invalidation/public",
     "//components/sync/base",
     "//components/sync/engine",
     "//components/sync/model",
@@ -96,11 +95,11 @@ static_library("service") {
     "//components/keyed_service/core",
     "//components/metrics",
     "//components/os_crypt/sync",
-    "//components/password_manager/core/browser/features:password_features",
     "//components/policy:generated",
     "//components/policy/core/browser",
     "//components/prefs",
     "//components/signin/public/identity_manager",
+    "//components/strings:components_strings_grit",
     "//components/sync/invalidations",
     "//components/version_info",
     "//components/version_info:generate_version_info",
@@ -109,8 +108,7 @@ static_library("service") {
 
   if (is_android) {
     sources += [
-      "../android/explicit_passphrase_platform_client.cc",
-      "../android/explicit_passphrase_platform_client.h",
+      "../android/sync_feature_map.cc",
       "../android/sync_service_android_bridge.cc",
       "../android/sync_service_android_bridge.h",
     ]

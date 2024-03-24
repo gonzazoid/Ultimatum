@@ -20,13 +20,16 @@ import org.chromium.chrome.browser.compositor.layouts.content.TabContentManager;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
 import org.chromium.chrome.browser.multiwindow.MultiWindowModeStateDispatcher;
 import org.chromium.chrome.browser.profiles.ProfileProvider;
+import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tabmodel.TabCreatorManager;
 import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.browser.tabmodel.TabModelFilter;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.tabmodel.TabModelSelectorObserver;
+import org.chromium.chrome.browser.tabmodel.TabModelUtils;
 import org.chromium.chrome.browser.tasks.pseudotab.PseudoTab;
 import org.chromium.chrome.browser.tasks.pseudotab.PseudoTab.TitleProvider;
+import org.chromium.chrome.browser.tasks.tab_groups.TabGroupModelFilter;
 import org.chromium.chrome.browser.tasks.tab_management.TabListCoordinator.TabListMode;
 import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
 import org.chromium.chrome.tab_ui.R;
@@ -92,7 +95,7 @@ public class TabSwitcherPaneCoordinatorFactory {
         mSnackbarManager = snackbarManager;
         mModalDialogManager = modalDialogManager;
         mMode =
-                TabUiFeatureUtilities.shouldUseListMode(activity)
+                TabUiFeatureUtilities.shouldUseListMode()
                         ? TabListCoordinator.TabListMode.LIST
                         : TabListCoordinator.TabListMode.GRID;
     }
@@ -135,7 +138,8 @@ public class TabSwitcherPaneCoordinatorFactory {
                 isVisibleSupplier,
                 isAnimatingSupplier,
                 onTabClickCallback,
-                mMode);
+                mMode,
+                /* supportsEmptyState= */ !isIncognito);
     }
 
     /** Returns the {@link TabListMode} of the produced {@link TabListCoordinator}s. */
@@ -149,11 +153,19 @@ public class TabSwitcherPaneCoordinatorFactory {
 
     /** Returns the title of a tab or tab group for display in the tab switcher. */
     @VisibleForTesting
-    String getTitle(@NonNull Context context, @NonNull PseudoTab tab) {
-        int numRelatedTabs = PseudoTab.getRelatedTabs(context, tab, mTabModelSelector).size();
-        if (numRelatedTabs == 1) return tab.getTitle();
+    String getTitle(@NonNull Context context, @NonNull PseudoTab pseudoTab) {
+        assert mTabModelSelector.isTabStateInitialized();
+        TabGroupModelFilter filter =
+                (TabGroupModelFilter)
+                        mTabModelSelector
+                                .getTabModelFilterProvider()
+                                .getTabModelFilter(pseudoTab.isIncognito());
+        Tab tab = TabModelUtils.getTabById(filter.getTabModel(), pseudoTab.getId());
+        assert tab != null;
+        if (!filter.isTabInTabGroup(tab)) return tab.getTitle();
 
-        return TabGroupTitleEditor.getDefaultTitle(context, numRelatedTabs);
+        return TabGroupTitleEditor.getDefaultTitle(
+                context, filter.getRelatedTabCountForRootId(tab.getRootId()));
     }
 
     /** Returns a scrim coordinator to use for tab grid dialog on LFF devices. */
@@ -182,19 +194,27 @@ public class TabSwitcherPaneCoordinatorFactory {
     ObservableSupplier<TabModelFilter> createTabModelFilterSupplier(boolean isIncognito) {
         ObservableSupplierImpl<TabModelFilter> tabModelFilterSupplier =
                 new ObservableSupplierImpl<>();
+        // This implementation doesn't wait for isTabStateInitialized because we want to be able to
+        // show the TabSwitcherPane before tab state initialization finishes. Tab state
+        // initialization is an async process; when tab state restoration completes
+        // TabModelObserver#restoreCompleted() is called which is listened for in
+        // TabSwitcherPaneMediator to properly refresh the list in the event the contents changed.
         TabModelSelector selector = mTabModelSelector;
-        if (selector.isTabStateInitialized()) {
+        if (!selector.getModels().isEmpty()) {
             tabModelFilterSupplier.set(
                     selector.getTabModelFilterProvider().getTabModelFilter(isIncognito));
         } else {
             selector.addObserver(
                     new TabModelSelectorObserver() {
                         @Override
-                        public void onTabStateInitialized() {
-                            tabModelFilterSupplier.set(
+                        public void onChange() {
+                            assert !selector.getModels().isEmpty();
+                            TabModelFilter filter =
                                     selector.getTabModelFilterProvider()
-                                            .getTabModelFilter(isIncognito));
+                                            .getTabModelFilter(isIncognito);
+                            assert filter != null;
                             selector.removeObserver(this);
+                            tabModelFilterSupplier.set(filter);
                         }
                     });
         }

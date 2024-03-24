@@ -14,8 +14,9 @@ import org.jni_zero.NativeMethods;
 import org.chromium.base.ResettersForTesting;
 import org.chromium.base.ThreadUtils;
 import org.chromium.chrome.browser.preferences.Pref;
-import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.components.autofill.AutofillProfile;
+import org.chromium.components.autofill.IbanRecordType;
 import org.chromium.components.autofill.VirtualCardEnrollmentState;
 import org.chromium.components.image_fetcher.ImageFetcher;
 import org.chromium.components.prefs.PrefService;
@@ -430,6 +431,105 @@ public class PersonalDataManager {
         }
     }
 
+    /** Autofill IBAN information. */
+    public static class Iban {
+        private String mGuid;
+        private String mNickname;
+        private @IbanRecordType int mRecordType;
+        private String mValue;
+
+        private Iban(String guid, String nickname, @IbanRecordType int recordType, String value) {
+            mGuid = guid;
+            mNickname = nickname;
+            mRecordType = recordType;
+            mValue = value;
+        }
+
+        @CalledByNative("Iban")
+        private static Iban create(
+                String guid, String nickname, @IbanRecordType int recordType, String value) {
+            return new Iban.Builder()
+                    .setGuid(guid)
+                    .setNickname(nickname)
+                    .setRecordType(recordType)
+                    .setValue(value)
+                    .build();
+        }
+
+        @CalledByNative("Iban")
+        public String getGuid() {
+            return mGuid;
+        }
+
+        @CalledByNative("Iban")
+        public String getNickname() {
+            return mNickname;
+        }
+
+        @CalledByNative("Iban")
+        public @IbanRecordType int getRecordType() {
+            return mRecordType;
+        }
+
+        @CalledByNative("Iban")
+        public String getValue() {
+            return mValue;
+        }
+
+        public void updateNickname(String nickname) {
+            mNickname = nickname;
+        }
+
+        public void updateValue(String value) {
+            mValue = value;
+        }
+
+        /** Builder for {@link Iban}. */
+        public static final class Builder {
+            private String mGuid;
+            private String mNickname;
+            private @IbanRecordType int mRecordType;
+            private String mValue;
+
+            public Builder setGuid(String guid) {
+                mGuid = guid;
+                return this;
+            }
+
+            public Builder setNickname(String nickname) {
+                mNickname = nickname;
+                return this;
+            }
+
+            public Builder setRecordType(@IbanRecordType int recordType) {
+                mRecordType = recordType;
+                return this;
+            }
+
+            public Builder setValue(String value) {
+                mValue = value;
+                return this;
+            }
+
+            public Iban build() {
+                assert mValue != null && !mValue.isEmpty() : "IBAN value can't be null or empty.";
+                switch (mRecordType) {
+                    case IbanRecordType.UNKNOWN:
+                        assert mGuid.isEmpty()
+                                : "IBANs with 'UNKNOWN' record type must have an empty GUID.";
+                        break;
+                    case IbanRecordType.LOCAL_IBAN:
+                        assert !mGuid.isEmpty() : "Local IBANs must have a non-empty GUID.";
+                        break;
+                    case IbanRecordType.SERVER_IBAN:
+                        throw new UnsupportedOperationException(
+                                "Server IBANs are not supported yet.");
+                }
+                return new Iban(mGuid, mNickname, mRecordType, mValue);
+            }
+        }
+    }
+
     private static PersonalDataManager sManager;
 
     // Suppress FindBugs warning, since |sManager| is only used on the UI thread.
@@ -605,6 +705,15 @@ public class PersonalDataManager {
                         profile.getGUID());
     }
 
+    /** Gets the number of credit cards for the settings page. */
+    public int getCreditCardCountForSettings() {
+        ThreadUtils.assertOnUiThread();
+        return PersonalDataManagerJni.get()
+                .getCreditCardGUIDsForSettings(
+                        mPersonalDataManagerAndroid, PersonalDataManager.this)
+                .length;
+    }
+
     /**
      * Gets the credit cards to show in the settings page. Returns all the cards without any
      * processing.
@@ -735,6 +844,21 @@ public class PersonalDataManager {
                         profile,
                         profile.getGUID(),
                         /* includeCountry= */ false);
+    }
+
+    public Iban getIban(String guid) {
+        ThreadUtils.assertOnUiThread();
+        return PersonalDataManagerJni.get()
+                .getIbanByGuid(mPersonalDataManagerAndroid, PersonalDataManager.this, guid);
+    }
+
+    public String addOrUpdateLocalIban(Iban iban) {
+        ThreadUtils.assertOnUiThread();
+        assert iban.getRecordType() == IbanRecordType.UNKNOWN
+                        || iban.getRecordType() == IbanRecordType.LOCAL_IBAN
+                : "Add or update local IBANs only.";
+        return PersonalDataManagerJni.get()
+                .addOrUpdateLocalIban(mPersonalDataManagerAndroid, PersonalDataManager.this, iban);
     }
 
     /**
@@ -1007,7 +1131,7 @@ public class PersonalDataManager {
     }
 
     private static PrefService getPrefService() {
-        return UserPrefs.get(Profile.getLastUsedRegularProfile());
+        return UserPrefs.get(ProfileManager.getLastUsedRegularProfile());
     }
 
     private void fetchCreditCardArtImages() {
@@ -1192,5 +1316,11 @@ public class PersonalDataManager {
         void setSyncServiceForTesting(long nativePersonalDataManagerAndroid);
 
         AutofillImageFetcher getOrCreateJavaImageFetcher(long nativePersonalDataManagerAndroid);
+
+        Iban getIbanByGuid(
+                long nativePersonalDataManagerAndroid, PersonalDataManager caller, String guid);
+
+        String addOrUpdateLocalIban(
+                long nativePersonalDataManagerAndroid, PersonalDataManager caller, Iban iban);
     }
 }

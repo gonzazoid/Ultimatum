@@ -19,6 +19,8 @@
 namespace chromeos {
 
 class NonClientFrameViewBase : public views::NonClientFrameView {
+  METADATA_HEADER(NonClientFrameViewBase, views::NonClientFrameView)
+
  public:
   explicit NonClientFrameViewBase(views::Widget* frame);
   NonClientFrameViewBase(const NonClientFrameViewBase&) = delete;
@@ -37,7 +39,7 @@ class NonClientFrameViewBase : public views::NonClientFrameView {
   void SizeConstraintsChanged() override;
   views::View::Views GetChildrenInZOrder() override;
   gfx::Size CalculatePreferredSize() const override;
-  void Layout() override;
+  void Layout(PassKey) override;
   gfx::Size GetMinimumSize() const override;
   gfx::Size GetMaximumSize() const override;
   void OnThemeChanged() override;
@@ -80,15 +82,16 @@ class NonClientFrameViewBase : public views::NonClientFrameView {
 // when painting the HeaderView to its own layer.
 class NonClientFrameViewBase::OverlayView : public views::View,
                                             public views::ViewTargeterDelegate {
+  METADATA_HEADER(OverlayView, views::View)
+
  public:
-  METADATA_HEADER(OverlayView);
   explicit OverlayView(HeaderView* header_view);
   OverlayView(const OverlayView&) = delete;
   OverlayView& operator=(const OverlayView&) = delete;
   ~OverlayView() override;
 
   // views::View:
-  void Layout() override;
+  void Layout(PassKey) override;
 
  private:
   // views::ViewTargeterDelegate:

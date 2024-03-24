@@ -30,6 +30,9 @@ NET_EXPORT BASE_DECLARE_FEATURE(kAvoidH2Reprioritization);
 // origin requests are restricted to contain at most the source origin.
 NET_EXPORT BASE_DECLARE_FEATURE(kCapReferrerToOriginOnCrossOrigin);
 
+// Enables the built-in DNS resolver.
+NET_EXPORT BASE_DECLARE_FEATURE(kAsyncDns);
+
 // Support for altering the parameters used for DNS transaction timeout. See
 // ResolveContext::SecureTransactionTimeout().
 NET_EXPORT BASE_DECLARE_FEATURE(kDnsTransactionDynamicTimeouts);
@@ -86,6 +89,13 @@ NET_EXPORT extern const base::FeatureParam<base::TimeDelta>
 
 // Update protocol using ALPN information in HTTPS DNS records.
 NET_EXPORT BASE_DECLARE_FEATURE(kUseDnsHttpsSvcbAlpn);
+
+// If enabled, HostResolver will use the new HostResolverCache that separately
+// caches by DNS type, unlike the old HostCache that always cached by merged
+// request results. May enable related behavior such as separately sorting DNS
+// results after each transaction rather than sorting collectively after all
+// transactions complete.
+NET_EXPORT BASE_DECLARE_FEATURE(kUseHostResolverCache);
 
 // If the `kUseAlternativePortForGloballyReachableCheck` flag is enabled, the
 // globally reachable check will use the port number specified by
@@ -311,11 +321,11 @@ NET_EXPORT BASE_DECLARE_FEATURE(kCookieDomainRejectNonASCII);
 NET_EXPORT BASE_DECLARE_FEATURE(kThirdPartyStoragePartitioning);
 NET_EXPORT BASE_DECLARE_FEATURE(kSupportPartitionedBlobUrl);
 
-// Feature to enable consideration of 3PCD Support settings.
-NET_EXPORT BASE_DECLARE_FEATURE(kTpcdSupportSettings);
+// Feature to enable consideration of 3PC deprecation trial settings.
+NET_EXPORT BASE_DECLARE_FEATURE(kTpcdTrialSettings);
 
-// Feature to enable consideration of top-level 3PCD Support settings.
-NET_EXPORT BASE_DECLARE_FEATURE(kTopLevelTpcdSupportSettings);
+// Feature to enable consideration of top-level 3PC deprecation trial settings.
+NET_EXPORT BASE_DECLARE_FEATURE(kTopLevelTpcdTrialSettings);
 
 // Whether to enable the use of 3PC based on 3PCD metadata grants delivered via
 // component updater.
@@ -418,17 +428,9 @@ NET_EXPORT extern const base::FeatureParam<std::string>
 // connections that _would_ have been proxied, but were not.
 NET_EXPORT extern const base::FeatureParam<bool> kIpPrivacyDirectOnly;
 
-// Controls whether the BlindSignAuth library used by IP Protection should use
-// the privacy pass token format.
-NET_EXPORT extern const base::FeatureParam<bool> kIpPrivacyBsaEnablePrivacyPass;
-
 // The PSK added to connections to proxyB with `Proxy-Authorization: Preshared
 // $PSK`.
 NET_EXPORT extern const base::FeatureParam<std::string> kIpPrivacyProxyBPsk;
-
-// If true, use the `proxy_chains` provided by Phosphor. Otherwise, use the
-// `first_hop_hostnames` (and thus always single-proxy chains).
-NET_EXPORT extern const base::FeatureParam<bool> kIpPrivacyUseProxyChains;
 
 // If true, pass OAuth token to Phosphor in GetProxyConfig API for IP
 // Protection.
@@ -439,6 +441,12 @@ NET_EXPORT extern const base::FeatureParam<bool>
 // network requests.
 NET_EXPORT extern const base::FeatureParam<bool>
     kIpPrivacyAddHeaderToProxiedRequests;
+
+// Token expirations will have a random time between 5 seconds and this delta
+// subtracted from their expiration, in order to even out the load on the token
+// servers.
+NET_EXPORT extern const base::FeatureParam<base::TimeDelta>
+    kIpPrivacyExpirationFuzz;
 
 // Whether QuicParams::migrate_sessions_on_network_change_v2 defaults to true or
 // false. This is needed as a workaround to set this value to true on Android
@@ -511,6 +519,9 @@ NET_EXPORT BASE_DECLARE_FEATURE(kUseNewAlpsCodepointQUIC);
 // TODO(https://crbug.com/853508): Remove after the bug fix will go well for a
 // while on stable channels.
 NET_EXPORT BASE_DECLARE_FEATURE(kTreatHTTPExpiresHeaderValueZeroAsExpired);
+
+// Enables truncating the response body to the content length.
+NET_EXPORT BASE_DECLARE_FEATURE(kTruncateBodyToContentLength);
 
 }  // namespace net::features
 

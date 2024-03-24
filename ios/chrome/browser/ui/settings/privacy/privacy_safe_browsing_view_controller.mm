@@ -17,7 +17,7 @@
 #import "ios/chrome/browser/ui/settings/privacy/privacy_safe_browsing_view_controller_delegate.h"
 #import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 #import "ui/base/l10n/l10n_util_mac.h"
 
 using ItemArray = NSArray<TableViewItem*>*;
@@ -68,13 +68,18 @@ typedef NS_ENUM(NSInteger, SectionIdentifier) {
 
 #pragma mark - PrivacySafeBrowsingConsumer
 
-- (void)reloadCellsForItems {
+- (void)reconfigureCellsForItems {
   if (!self.tableViewModel) {
     // No need to reconfigure since the model has not been loaded yet.
     return;
   }
-  [self reloadCellsForItems:self.safeBrowsingItems
-           withRowAnimation:UITableViewRowAnimationNone];
+
+  NSMutableArray<NSIndexPath*>* indexPaths = [[NSMutableArray alloc] init];
+  for (TableViewItem* item in self.safeBrowsingItems) {
+    [indexPaths addObject:[self.tableViewModel indexPathForItem:item]];
+  }
+
+  [self.tableView reconfigureRowsAtIndexPaths:indexPaths];
 }
 
 - (void)setSafeBrowsingItems:(ItemArray)safeBrowsingItems {

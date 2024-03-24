@@ -150,8 +150,7 @@ void UnifiedSliderBubbleController::HideBubble(
 void UnifiedSliderBubbleController::DisplayMicrophoneMuteToast() {
   // We will not display the microphone mute toast if no microphone is connected
   // to the device, or if the video conference controls tray is visible.
-  if (features::IsMicMuteNotificationsEnabled() &&
-      CrasAudioHandler::Get()->HasActiveInputDeviceForSimpleUsage() &&
+  if (CrasAudioHandler::Get()->HasActiveInputDeviceForSimpleUsage() &&
       !ShouldVideoConferenceTrayBeShown()) {
     ShowBubble(SLIDER_TYPE_MIC);
   }
@@ -286,7 +285,7 @@ void UnifiedSliderBubbleController::ShowBubble(SliderType slider_type) {
       UnifiedSliderView* slider_view = static_cast<UnifiedSliderView*>(
           bubble_view_->AddChildView(slider_controller_->CreateView()));
       ConfigureSliderViewStyle(slider_view, slider_type);
-      bubble_view_->Layout();
+      bubble_view_->DeprecatedLayoutImmediately();
     }
 
     // If mouse is hovered, do not restart auto close timer.

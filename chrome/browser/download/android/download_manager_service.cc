@@ -5,6 +5,7 @@
 #include "chrome/browser/download/android/download_manager_service.h"
 
 #include <memory>
+#include <optional>
 
 #include "base/android/callback_android.h"
 #include "base/android/jni_string.h"
@@ -36,7 +37,7 @@
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/common/chrome_constants.h"
 #include "components/download/network/android/network_status_listener_android.h"
-#include "components/download/public/common/auto_resumption_handler.h"
+#include "components/download/public/common/android/auto_resumption_handler.h"
 #include "components/download/public/common/download_features.h"
 #include "components/download/public/common/download_item.h"
 #include "components/download/public/common/download_item_impl.h"
@@ -49,7 +50,6 @@
 #include "content/public/browser/download_item_utils.h"
 #include "content/public/browser/download_request_utils.h"
 #include "net/url_request/referrer_policy.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/mime_util/mime_util.h"
 #include "url/android/gurl_android.h"
 #include "url/origin.h"
@@ -147,7 +147,7 @@ ScopedJavaLocalRef<jobject> DownloadManagerService::CreateJavaDownloadInfo(
   base::TimeDelta time_delta;
   bool time_remaining_known = item->TimeRemaining(&time_delta);
   GURL original_url = item->GetOriginalUrl().SchemeIs(url::kDataScheme)
-                          ? GURL::EmptyGURL()
+                          ? GURL()
                           : item->GetOriginalUrl();
   content::BrowserContext* browser_context =
       content::DownloadItemUtils::GetBrowserContext(item);

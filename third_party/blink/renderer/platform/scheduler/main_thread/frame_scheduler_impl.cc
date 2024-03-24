@@ -105,6 +105,19 @@ void UpdatePriority(MainThreadTaskQueue* task_queue) {
   task_queue->SetQueuePriority(frame_scheduler->ComputePriority(task_queue));
 }
 
+TaskPriority GetLowPriorityAsyncScriptTaskPriority() {
+  switch (
+      features::kLowPriorityAsyncScriptExecutionLowerTaskPriorityParam.Get()) {
+    case features::AsyncScriptPrioritisationType::kHigh:
+      return TaskPriority::kHighPriority;
+    case features::AsyncScriptPrioritisationType::kLow:
+      return TaskPriority::kLowPriority;
+    case features::AsyncScriptPrioritisationType::kBestEffort:
+      return TaskPriority::kBestEffortPriority;
+  }
+  NOTREACHED_NORETURN();
+}
+
 }  // namespace
 
 FrameSchedulerImpl::PauseSubresourceLoadingHandleImpl::
@@ -187,6 +200,8 @@ FrameSchedulerImpl::FrameSchedulerImpl(
       subresource_loading_pause_count_(0u),
       back_forward_cache_disabling_feature_tracker_(&tracing_controller_,
                                                     main_thread_scheduler_),
+      low_priority_async_script_task_priority_(
+          GetLowPriorityAsyncScriptTaskPriority()),
       page_frozen_for_tracing_(
           parent_page_scheduler_ ? parent_page_scheduler_->IsFrozen() : true,
           "FrameScheduler.PageFrozen",
@@ -297,8 +312,7 @@ void FrameSchedulerImpl::MoveTaskQueuesToCorrectWakeUpBudgetPool() {
       continue;
 
     auto* new_wake_up_budget_pool = parent_page_scheduler_->GetWakeUpBudgetPool(
-        task_queue, frame_origin_type_, frame_visible_, is_visible_area_large_,
-        had_user_activation_);
+        task_queue, frame_origin_type_, frame_visible_, IsImportant());
     if (task_queue->GetWakeUpBudgetPool() == new_wake_up_budget_pool) {
       continue;
     }
@@ -306,8 +320,7 @@ void FrameSchedulerImpl::MoveTaskQueuesToCorrectWakeUpBudgetPool() {
     parent_page_scheduler_->RemoveQueueFromWakeUpBudgetPool(task_queue,
                                                             &lazy_now);
     parent_page_scheduler_->AddQueueToWakeUpBudgetPool(
-        task_queue, frame_origin_type_, frame_visible_, is_visible_area_large_,
-        had_user_activation_, &lazy_now);
+        task_queue, new_wake_up_budget_pool, &lazy_now);
   }
 }
 
@@ -340,10 +353,6 @@ void FrameSchedulerImpl::SetVisibleAreaLarge(bool is_large) {
   UpdatePolicy();
 }
 
-bool FrameSchedulerImpl::IsVisibleAreaLarge() const {
-  return is_visible_area_large_;
-}
-
 void FrameSchedulerImpl::SetHadUserActivation(bool had_user_activation) {
   DCHECK(parent_page_scheduler_);
   if (had_user_activation_ == had_user_activation) {
@@ -357,10 +366,6 @@ void FrameSchedulerImpl::SetHadUserActivation(bool had_user_activation) {
 
   MoveTaskQueuesToCorrectWakeUpBudgetPool();
   UpdatePolicy();
-}
-
-bool FrameSchedulerImpl::HadUserActivation() const {
-  return had_user_activation_;
 }
 
 void FrameSchedulerImpl::SetCrossOriginToNearestMainFrame(bool cross_origin) {
@@ -395,6 +400,11 @@ bool FrameSchedulerImpl::IsInEmbeddedFrameTree() const {
 
 bool FrameSchedulerImpl::IsCrossOriginToNearestMainFrame() const {
   return frame_origin_type_ == FrameOriginType::kCrossOriginToMainFrame;
+}
+
+void FrameSchedulerImpl::SetAgentClusterId(
+    const base::UnguessableToken& agent_cluster_id) {
+  agent_cluster_id_ = agent_cluster_id;
 }
 
 void FrameSchedulerImpl::TraceUrlChange(const String& url) {
@@ -461,7 +471,7 @@ QueueTraits FrameSchedulerImpl::CreateQueueTraitsForTaskType(TaskType type) {
       return LoadingControlTaskQueueTraits();
     case TaskType::kLowPriorityScriptExecution:
       return LoadingTaskQueueTraits().SetPrioritisationType(
-          QueueTraits::PrioritisationType::kBestEffort);
+          QueueTraits::PrioritisationType::kAsyncScript);
     // Throttling following tasks may break existing web pages, so tentatively
     // these are unthrottled.
     // TODO(nhiroki): Throttle them again after we're convinced that it's safe
@@ -680,6 +690,10 @@ void FrameSchedulerImpl::ResetForNavigation() {
   back_forward_cache_disabling_feature_tracker_.Reset();
 }
 
+bool FrameSchedulerImpl::IsImportant() const {
+  return is_visible_area_large_ || had_user_activation_;
+}
+
 void FrameSchedulerImpl::OnStartedUsingNonStickyFeature(
     SchedulingPolicy::Feature feature,
     const SchedulingPolicy& policy,
@@ -776,8 +790,8 @@ void FrameSchedulerImpl::WriteIntoTrace(perfetto::TracedValue context) const {
   dict.Add("frame_type", frame_type_ == FrameScheduler::FrameType::kMainFrame
                              ? "MainFrame"
                              : "Subframe");
-  dict.Add("is_visible_area_large", IsVisibleAreaLarge());
-  dict.Add("had_user_activation", HadUserActivation());
+  dict.Add("is_visible_area_large", is_visible_area_large_);
+  dict.Add("had_user_activation", had_user_activation_);
   dict.Add("disable_background_timer_throttling",
            !RuntimeEnabledFeatures::TimerThrottlingForBackgroundTabsEnabled());
 
@@ -968,19 +982,19 @@ bool FrameSchedulerImpl::IsOrdinary() const {
 bool FrameSchedulerImpl::ShouldThrottleTaskQueues() const {
   DCHECK(parent_page_scheduler_);
 
-  if (parent_page_scheduler_->ThrottleForegroundTimers())
-    return true;
   if (parent_page_scheduler_->ThrottleUnimportantFrameTimers() &&
-      IsCrossOriginToNearestMainFrame() && frame_visible_ &&
-      !IsVisibleAreaLarge() && !HadUserActivation()) {
+      IsCrossOriginToNearestMainFrame() && frame_visible_ && !IsImportant()) {
     return true;
   }
-  if (!RuntimeEnabledFeatures::TimerThrottlingForBackgroundTabsEnabled())
+  if (!RuntimeEnabledFeatures::TimerThrottlingForBackgroundTabsEnabled()) {
     return false;
-  if (parent_page_scheduler_->IsAudioPlaying())
+  }
+  if (parent_page_scheduler_->IsAudioPlaying()) {
     return false;
-  if (!parent_page_scheduler_->IsPageVisible())
+  }
+  if (!parent_page_scheduler_->IsPageVisible()) {
     return true;
+  }
   return !frame_visible_ && IsCrossOriginToNearestMainFrame();
 }
 
@@ -1019,7 +1033,7 @@ TaskPriority FrameSchedulerImpl::ComputePriority(
   // TODO(shaseley): This should use lower priorities if the frame is
   // deprioritized. Change this once we refactor and add frame policy/priorities
   // and add a range of new priorities less than low.
-  if (absl::optional<WebSchedulingQueueType> queue_type =
+  if (std::optional<WebSchedulingQueueType> queue_type =
           task_queue->GetWebSchedulingQueueType()) {
     bool is_continuation =
         *queue_type == WebSchedulingQueueType::kContinuationQueue;
@@ -1078,6 +1092,11 @@ TaskPriority FrameSchedulerImpl::ComputePriority(
     return parent_page_scheduler_->IsPageVisible()
                ? TaskPriority::kExtremelyHighPriority
                : TaskPriority::kNormalPriority;
+  }
+
+  if (task_queue->GetPrioritisationType() ==
+      MainThreadTaskQueue::QueueTraits::PrioritisationType::kAsyncScript) {
+    return low_priority_async_script_task_priority_;
   }
 
   return TaskPriority::kNormalPriority;
@@ -1140,8 +1159,10 @@ void FrameSchedulerImpl::OnTaskQueueCreated(
     }
 
     parent_page_scheduler_->AddQueueToWakeUpBudgetPool(
-        task_queue, frame_origin_type_, frame_visible_, is_visible_area_large_,
-        had_user_activation_, &lazy_now);
+        task_queue,
+        parent_page_scheduler_->GetWakeUpBudgetPool(
+            task_queue, frame_origin_type_, frame_visible_, IsImportant()),
+        &lazy_now);
 
     if (task_queues_throttled_) {
       MainThreadTaskQueue::ThrottleHandle handle = task_queue->Throttle();

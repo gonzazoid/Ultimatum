@@ -258,6 +258,8 @@ if (is_win || is_mac || is_linux) {
         "update_block_check_win.cc",
         "update_service_internal_impl_qualifying_win.cc",
         "update_usage_stats_task_win.cc",
+        "util/progress_sampler.cc",
+        "util/progress_sampler.h",
         "win/action_handler.cc",
         "win/app_command_runner.cc",
         "win/app_command_runner.h",
@@ -303,9 +305,15 @@ if (is_win || is_mac || is_linux) {
         "//chrome/installer/util:constants",
         "//chrome/installer/util:metainstaller_utils",
         "//chrome/installer/util:work_item",
-        "//chrome/updater/app/server/win:updater_idl_idl",
-        "//chrome/updater/app/server/win:updater_internal_idl_idl",
-        "//chrome/updater/app/server/win:updater_legacy_idl_idl",
+        "//chrome/updater/app/server/win:updater_idl",
+        "//chrome/updater/app/server/win:updater_idl_system",
+        "//chrome/updater/app/server/win:updater_idl_user",
+        "//chrome/updater/app/server/win:updater_internal_idl",
+        "//chrome/updater/app/server/win:updater_internal_idl_system",
+        "//chrome/updater/app/server/win:updater_internal_idl_user",
+        "//chrome/updater/app/server/win:updater_legacy_idl",
+        "//chrome/updater/app/server/win:updater_legacy_idl_system",
+        "//chrome/updater/app/server/win:updater_legacy_idl_user",
         "//chrome/updater/win/ui/resources",
         "//chrome/updater/win/ui/resources:strings",
         "//components/winhttp",
@@ -591,7 +599,7 @@ if (is_win || is_mac || is_linux) {
         "win/win_constants.h",
       ]
 
-      deps += [ "//chrome/updater/app/server/win:updater_idl_idl" ]
+      deps += [ "//chrome/updater/app/server/win:updater_idl" ]
 
       configs -= [ "//build/config/win:winver" ]
       configs += [
@@ -844,6 +852,7 @@ if (is_win || is_mac || is_linux) {
         "policy/win/group_policy_manager_unittest.cc",
         "test/integration_tests_win.cc",
         "test/integration_tests_win.h",
+        "util/progress_sampler_unittest.cc",
         "util/unit_test_util_win.cc",
         "util/unit_test_util_win.h",
         "util/util_win_unittest.cc",
@@ -864,9 +873,9 @@ if (is_win || is_mac || is_linux) {
       ]
 
       deps += [
-        "app/server/win:updater_idl_idl",
-        "app/server/win:updater_internal_idl_idl",
-        "app/server/win:updater_legacy_idl_idl",
+        "app/server/win:updater_idl",
+        "app/server/win:updater_internal_idl",
+        "app/server/win:updater_legacy_idl",
         "win/installer:lib",
         "win/installer:msi_custom_action_sources",
         "win/test:test_executables",

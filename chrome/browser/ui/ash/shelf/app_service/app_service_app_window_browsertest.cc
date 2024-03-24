@@ -14,6 +14,7 @@
 #include "ash/public/cpp/window_properties.h"
 #include "ash/shell.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
@@ -181,10 +182,10 @@ class AppInstanceWaiter : public apps::InstanceRegistry::Observer {
   ~AppInstanceWaiter() override = default;
 
   void Await() {
-    auto instances = registry_.GetInstances(app_id_);
+    auto instances = registry_->GetInstances(app_id_);
     CHECK_LE(instances.size(), 1u);
     if (instances.empty() || (*instances.begin())->State() != state_) {
-      observation_.Observe(&registry_);
+      observation_.Observe(&*registry_);
       run_loop_.Run();
     }
   }
@@ -192,7 +193,7 @@ class AppInstanceWaiter : public apps::InstanceRegistry::Observer {
  private:
   void OnInstanceUpdate(const apps::InstanceUpdate& update) override {
     if (update.AppId() == app_id_ && update.State() == state_) {
-      CHECK_EQ(registry_.GetInstances(app_id_).size(), 1u);
+      CHECK_EQ(registry_->GetInstances(app_id_).size(), 1u);
       run_loop_.Quit();
     }
   }
@@ -201,7 +202,7 @@ class AppInstanceWaiter : public apps::InstanceRegistry::Observer {
     NOTREACHED();
   }
 
-  apps::InstanceRegistry& registry_;
+  const raw_ref<apps::InstanceRegistry> registry_;
   const std::string app_id_;
   const apps::InstanceState state_;
   base::RunLoop run_loop_;
@@ -305,7 +306,7 @@ IN_PROC_BROWSER_TEST_F(AppServiceAppWindowBrowserTest, MultipleWindows) {
   instances = app_service_proxy_->InstanceRegistry().GetInstances(app->id());
   EXPECT_EQ(2u, instances.size());
   aura::Window* window2 = nullptr;
-  for (auto* instance : instances) {
+  for (const apps::Instance* instance : instances) {
     if (instance->Window() != window1) {
       window2 = instance->Window();
     }
@@ -346,7 +347,7 @@ IN_PROC_BROWSER_TEST_F(AppServiceAppWindowBrowserTest,
   std::string app_id1 = extension1->id();
   auto instances = app_service_proxy_->InstanceRegistry().GetInstances(app_id1);
   EXPECT_EQ(1u, instances.size());
-  auto* instance1 = *instances.begin();
+  auto* instance1 = (*instances.begin()).get();
   EXPECT_NE(instance1->Window(), instance1->Window()->GetToplevelWindow());
 
   // The window1 is active.
@@ -362,7 +363,7 @@ IN_PROC_BROWSER_TEST_F(AppServiceAppWindowBrowserTest,
   std::string app_id2 = extension2->id();
   instances = app_service_proxy_->InstanceRegistry().GetInstances(app_id2);
   EXPECT_EQ(1u, instances.size());
-  auto* instance2 = *instances.begin();
+  auto* instance2 = (*instances.begin()).get();
   EXPECT_EQ(instance2->Window(), instance2->Window()->GetToplevelWindow());
 
   // The window1 is inactive.
@@ -400,7 +401,7 @@ IN_PROC_BROWSER_TEST_F(AppServiceAppWindowBrowserTest, AshBrowserWindow) {
   auto instances = app_service_proxy_->InstanceRegistry().GetInstances(
       app_constants::kChromeAppId);
   EXPECT_EQ(1u, instances.size());
-  auto* instance = *instances.begin();
+  auto* instance = (*instances.begin()).get();
   EXPECT_EQ(instance->Window(), instance->Window()->GetToplevelWindow());
 }
 
@@ -432,7 +433,8 @@ class AppServiceAppWindowLacrosBrowserTest
         .Await();
   }
 
-  std::set<const apps::Instance*> GetLacrosInstances() {
+  std::set<raw_ptr<const apps::Instance, SetExperimental>>
+  GetLacrosInstances() {
     return app_service_proxy_->InstanceRegistry().GetInstances(
         app_constants::kLacrosAppId);
   }
@@ -456,7 +458,7 @@ IN_PROC_BROWSER_TEST_F(AppServiceAppWindowLacrosBrowserTest, LacrosWindow) {
   {
     auto instances = GetLacrosInstances();
     ASSERT_EQ(1u, instances.size());
-    auto* instance = *instances.begin();
+    auto* instance = (*instances.begin()).get();
     EXPECT_EQ(instance->Window(), instance->Window()->GetToplevelWindow());
   }
 
@@ -614,7 +616,7 @@ IN_PROC_BROWSER_TEST_F(AppServiceAppWindowWebAppBrowserTest, WebAppsWindow) {
   EXPECT_EQ(1u, instances.size());
   EXPECT_NE((*instances.begin())->Window(),
             (*instances.begin())->Window()->GetToplevelWindow());
-  const auto* instance = *instances.begin();
+  const auto* instance = (*instances.begin()).get();
   EXPECT_EQ(apps::InstanceState::kStarted | apps::InstanceState::kRunning |
                 apps::InstanceState::kActive | apps::InstanceState::kVisible,
             GetAppInstanceState(app_id, instance->Window()));
@@ -646,7 +648,7 @@ IN_PROC_BROWSER_TEST_F(AppServiceAppWindowWebAppBrowserTest,
 
   auto instances = app_service_proxy_->InstanceRegistry().GetInstances(app_id);
   ASSERT_EQ(1u, instances.size());
-  const auto* instance1 = *instances.begin();
+  const auto* instance1 = (*instances.begin()).get();
   EXPECT_EQ(apps::InstanceState::kStarted | apps::InstanceState::kRunning |
                 apps::InstanceState::kActive | apps::InstanceState::kVisible,
             GetAppInstanceState(app_id, instance1->Window()));
@@ -661,8 +663,9 @@ IN_PROC_BROWSER_TEST_F(AppServiceAppWindowWebAppBrowserTest,
   CreateWebAppWindow(app_id);
   instances = app_service_proxy_->InstanceRegistry().GetInstances(app_id);
   ASSERT_EQ(2u, instances.size());
-  const auto* instance2 = *instances.begin() == instance1 ? *instances.rbegin()
-                                                          : *instances.begin();
+  const auto* instance2 = *instances.begin() == instance1
+                              ? (*instances.rbegin()).get()
+                              : (*instances.begin()).get();
 
   ASSERT_EQ(apps::InstanceState::kStarted | apps::InstanceState::kRunning |
                 apps::InstanceState::kActive | apps::InstanceState::kVisible,
@@ -1007,7 +1010,7 @@ IN_PROC_BROWSER_TEST_P(AppServiceAppWindowSystemWebAppBrowserTest,
 
   auto instances = app_service_proxy_->InstanceRegistry().GetInstances(app_id);
   EXPECT_EQ(1u, instances.size());
-  const auto* instance = *instances.begin();
+  const auto* instance = (*instances.begin()).get();
   EXPECT_EQ(apps::InstanceState::kStarted | apps::InstanceState::kRunning |
                 apps::InstanceState::kActive | apps::InstanceState::kVisible,
             GetAppInstanceState(app_id, instance->Window()));

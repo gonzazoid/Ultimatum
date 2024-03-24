@@ -18,6 +18,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -44,7 +45,6 @@
 #include "net/ssl/ssl_config_service.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_packets.h"
 #include "net/url_request/url_request_job_factory.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net {
 
@@ -276,10 +276,6 @@ class NET_EXPORT URLRequestContextBuilder {
 
   void SetSpdyAndQuicEnabled(bool spdy_enabled, bool quic_enabled);
 
-  void set_throttling_enabled(bool throttling_enabled) {
-    throttling_enabled_ = throttling_enabled;
-  }
-
   void set_sct_auditing_delegate(
       std::unique_ptr<SCTAuditingDelegate> sct_auditing_delegate);
   void set_quic_context(std::unique_ptr<QuicContext> quic_context);
@@ -358,7 +354,7 @@ class NET_EXPORT URLRequestContextBuilder {
   // Only implemented for Android (API level > 23).
   void BindToNetwork(
       handles::NetworkHandle network,
-      absl::optional<HostResolver::ManagerOptions> options = absl::nullopt);
+      std::optional<HostResolver::ManagerOptions> options = std::nullopt);
 
   // Creates a mostly self-contained URLRequestContext. May only be called once
   // per URLRequestContextBuilder. After this is called, the Builder can be
@@ -410,10 +406,9 @@ class NET_EXPORT URLRequestContextBuilder {
   std::string user_agent_;
   std::unique_ptr<HttpUserAgentSettings> http_user_agent_settings_;
 
-  absl::optional<std::string> cookie_deprecation_label_;
+  std::optional<std::string> cookie_deprecation_label_;
 
   bool http_cache_enabled_ = true;
-  bool throttling_enabled_ = false;
   bool cookie_store_set_by_client_ = false;
   bool suppress_setting_socket_performance_watcher_factory_for_testing_ = false;
 
@@ -431,8 +426,7 @@ class NET_EXPORT URLRequestContextBuilder {
   raw_ptr<NetLog> net_log_ = nullptr;
   std::unique_ptr<HostResolver> host_resolver_;
   std::string host_mapping_rules_;
-  raw_ptr<HostResolverManager, DanglingUntriaged> host_resolver_manager_ =
-      nullptr;
+  raw_ptr<HostResolverManager> host_resolver_manager_ = nullptr;
   raw_ptr<HostResolver::Factory> host_resolver_factory_ = nullptr;
   std::unique_ptr<ProxyConfigService> proxy_config_service_;
   bool pac_quick_check_enabled_ = true;

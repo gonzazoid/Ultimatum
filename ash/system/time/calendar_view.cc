@@ -376,7 +376,7 @@ class CalendarView::MonthHeaderLabelView : public views::View {
   const raw_ptr<views::Label> month_label_ = nullptr;
 };
 
-BEGIN_METADATA(CalendarView, MonthHeaderLabelView, views::View)
+BEGIN_METADATA(CalendarView, MonthHeaderLabelView)
 END_METADATA
 
 CalendarView::ScrollContentsView::ScrollContentsView(
@@ -441,7 +441,7 @@ void CalendarView::ScrollContentsView::StylusEventHandler::OnTouchEvent(
   }
 }
 
-BEGIN_METADATA(CalendarView, ScrollContentsView, views::View)
+BEGIN_METADATA(CalendarView, ScrollContentsView)
 END_METADATA
 
 CalendarHeaderView::CalendarHeaderView(const std::u16string& month,
@@ -463,7 +463,7 @@ void CalendarHeaderView::UpdateHeaders(const std::u16string& month,
   header_year_->SetText(year);
 }
 
-BEGIN_METADATA(CalendarHeaderView, views::View)
+BEGIN_METADATA(CalendarHeaderView)
 END_METADATA
 
 CalendarView::CalendarView(bool for_glanceables_container)
@@ -502,7 +502,7 @@ CalendarView::CalendarView(bool for_glanceables_container)
 
   // Focusable nodes must have an accessible name and valid role.
   // TODO(crbug.com/1348930): Review the accessible name and role.
-  GetViewAccessibility().OverrideRole(ax::mojom::Role::kPane);
+  GetViewAccessibility().SetRole(ax::mojom::Role::kPane);
   GetViewAccessibility().OverrideName(GetClassName());
 
   views::View* calendar_header_view = nullptr;
@@ -568,7 +568,7 @@ CalendarView::CalendarView(bool for_glanceables_container)
 
   // Focusable nodes must have an accessible name and valid role.
   // TODO(crbug.com/1348930): Review the accessible name and role.
-  content_view_->GetViewAccessibility().OverrideRole(ax::mojom::Role::kPane);
+  content_view_->GetViewAccessibility().SetRole(ax::mojom::Role::kPane);
   content_view_->GetViewAccessibility().OverrideName(GetClassName());
   content_view_->SetFocusBehavior(FocusBehavior::ALWAYS);
 
@@ -711,6 +711,8 @@ void CalendarView::CreateCalendarTitleRow() {
   DCHECK(!settings_button_);
   settings_button_ = new IconButton(
       base::BindRepeating([]() {
+        calendar_metrics::RecordSettingsButtonPressed();
+
         ClockModel* model = Shell::Get()->system_tray_model()->clock();
 
         if (Shell::Get()->session_controller()->ShouldEnableSettings()) {
@@ -728,7 +730,7 @@ void CalendarView::CreateCalendarTitleRow() {
       l10n_util::GetStringUTF16(IDS_ASH_CALENDAR_SETTINGS_TOOLTIP));
   tri_view_->AddView(TriView::Container::END, settings_button_);
 
-  Layout();
+  DeprecatedLayoutImmediately();
 }
 
 views::View* CalendarView::CreateMonthHeaderContainer() {
@@ -863,6 +865,8 @@ void CalendarView::ResetToTodayWithAnimation() {
   if (!should_months_animate_) {
     return;
   }
+  calendar_metrics::RecordResetToTodayPressed();
+
   SetShouldMonthsAnimateAndScrollEnabled(/*enabled=*/false);
 
   auto content_reporter = calendar_metrics::CreateAnimationReporter(
@@ -1433,6 +1437,8 @@ void CalendarView::CloseEventList() {
     return;
   }
 
+  calendar_metrics::RecordEventListClosed();
+
   // Updates `scroll_view_`'s accessible name without the selected date.
   scroll_view_->GetViewAccessibility().OverrideName(l10n_util::GetStringFUTF16(
       IDS_ASH_CALENDAR_BUBBLE_ACCESSIBLE_DESCRIPTION,
@@ -1973,7 +1979,7 @@ void CalendarView::AdjustDateCellVoxBounds() {
   // height, which is `scroll_view_->GetVisibleRect().y()` should also be added.
   // Otherwise the position of the Chrome Vox box is off.
   gfx::Rect bounds = focused_view->GetBoundsInScreen();
-  focused_view->GetViewAccessibility().OverrideBounds(
+  focused_view->GetViewAccessibility().SetBounds(
       gfx::RectF(bounds.x(), bounds.y() + scroll_view_->GetVisibleRect().y(),
                  bounds.width(), bounds.height()));
 }
@@ -2284,6 +2290,8 @@ void CalendarView::RemoveUpNextView() {
 }
 
 void CalendarView::OpenEventListForTodaysDate() {
+  calendar_metrics::RecordEventListForTodayActivated();
+
   const auto upcoming_events = calendar_view_controller_->UpcomingEvents();
   const base::Time upcoming_event_start_time =
       !upcoming_events.empty() ? upcoming_events.back().start_time().date_time()
@@ -2521,7 +2529,7 @@ bool CalendarView::IsUpNextViewVisible() const {
   return up_next_view_ && up_next_view_->GetVisible();
 }
 
-BEGIN_METADATA(CalendarView, GlanceableTrayChildBubble)
+BEGIN_METADATA(CalendarView)
 END_METADATA
 
 }  // namespace ash

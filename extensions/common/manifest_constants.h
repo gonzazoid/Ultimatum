@@ -277,6 +277,9 @@ inline constexpr char kChromeVersionTooLow[] =
 inline constexpr char kCommandActionIncorrectForManifestActionType[] =
     "The action commands in the manifest do not match the manifest's action "
     "type and were ignored.";
+inline constexpr char kDeclarativeNetRequestPathDuplicates[] =
+    "The same ruleset file appears multiple times with different IDs in the "
+    "manifest 'declarative_net_request.rule_resources' key.";
 inline constexpr char kDeclarativeNetRequestPermissionNeeded[] =
     "The extension requires the 'declarativeNetRequest' or the "
     "'declarativeNetRequestWithHostAccess' permission for the '*' manifest "
@@ -378,6 +381,8 @@ inline constexpr char kInvalidExcludeMatches[] =
     "Invalid value for 'content_scripts[*].exclude_matches'.";
 inline constexpr char kInvalidExportPermissions[] =
     "Permissions are not allowed for extensions that export resources.";
+inline constexpr char kInvalidExportAllowlistEmpty[] =
+    "Empty 'export.allowlist' implies any extension can import this module.";
 inline constexpr char kInvalidExportAllowlistString[] =
     "Invalid value for 'export.allowlist[*]'.";
 inline constexpr char kInvalidExtensionOriginPopup[] =
@@ -435,6 +440,9 @@ inline constexpr char16_t kInvalidImportAndExport[] =
 inline constexpr char kInvalidImportId[] = "Invalid value for 'import[*].id'.";
 inline constexpr char kInvalidImportVersion[] =
     "Invalid value for 'import[*].minimum_version'.";
+inline constexpr char kInvalidImportRepeatedImport[] =
+    "There are multiple occurences of the same extension ID in 'import'. Only "
+    "one version will be installed.";
 inline constexpr char kInvalidInputComponents[] =
     "Invalid value for 'input_components'";
 inline constexpr char16_t kInvalidInputComponents16[] =
@@ -584,10 +592,12 @@ inline constexpr char kInvalidThemeImagesMissing[] =
     "An image specified in the theme is missing.";
 inline constexpr char16_t kInvalidThemeTints[] =
     u"Invalid value for theme images - tints must be decimal numbers.";
-inline constexpr char16_t kInvalidTrialTokensNonEmptyList[] =
-    u"Invalid value for 'trial_tokens'. Must be a non-empty list.";
-inline constexpr char16_t kInvalidTrialTokensValue[] =
-    u"Invalid element in 'trial_tokens'. Must be a non-empty string.";
+inline constexpr char kInvalidTrialTokensNonEmptyList[] =
+    "Invalid value for 'trial_tokens'. Must be a non-empty list.";
+inline constexpr char kInvalidTrialTokensValue[] =
+    "Invalid element in 'trial_tokens'. Must be a non-empty string.";
+inline constexpr char kInvalidTrialTokensValueDuplicate[] =
+    "Duplicate element in 'trial_tokens': '%s'.";
 inline constexpr char kInvalidTrialTokensValueTooLong[] =
     "Invalid element in 'trial_tokens'. Token must not be longer than %zu.";
 inline constexpr char kInvalidTrialTokensTooManyTokens[] =

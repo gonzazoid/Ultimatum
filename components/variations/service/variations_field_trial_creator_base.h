@@ -29,6 +29,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial.h"
 #include "base/time/time.h"
+#include "base/version_info/channel.h"
 #include "build/build_config.h"
 #include "components/variations/client_filterable_state.h"
 #include "components/variations/entropy_provider.h"
@@ -47,6 +48,8 @@ class MetricsStateManager;
 }
 
 namespace variations {
+
+class SyntheticTrialRegistry;
 
 // Just maps one set of enum values to another. Nothing to see here.
 Study::Channel ConvertProductChannelToStudyChannel(
@@ -151,8 +154,10 @@ class VariationsFieldTrialCreatorBase {
   // Must not be null.
   // |metrics_state_manager| facilitates signaling that Chrome has not yet
   // exited cleanly. Must not be null.
-  // |platform_field_trials| provides the platform-specific field trial setup
-  // for Chrome. Must not be null.
+  // |synthetic_trial_registry| provides an interface to register synthetic
+  // trials. Must not be null.
+  // |platform_field_trials| provides the
+  // platform-specific field trial setup for Chrome. Must not be null.
   // |safe_seed_manager| should be notified of the combined server and client
   // state that was activated to create the field trials (only when the return
   // value is true). Must not be null.
@@ -171,6 +176,7 @@ class VariationsFieldTrialCreatorBase {
           extra_overrides,
       std::unique_ptr<base::FeatureList> feature_list,
       metrics::MetricsStateManager* metrics_state_manager,
+      SyntheticTrialRegistry* synthetic_trial_registry,
       PlatformFieldTrials* platform_field_trials,
       SafeSeedManagerBase* safe_seed_manager,
       bool add_entropy_source_to_variations_ids);
@@ -216,6 +222,14 @@ class VariationsFieldTrialCreatorBase {
   // Returns whether the map of the cached UI strings to override is empty.
   // To be implemented by subclasses, if they have need for UI strings.
   virtual bool IsOverrideResourceMapEmpty() = 0;
+
+  // Whether the limited entropy randomization source is enabled on this client.
+  // The `trial` param controls the output, which will be false if `trial` is
+  // null or the trial is not enabled. `trial` can be a nullptr when the client
+  // is not eligible for limited entropy randomization (e.g. Android WebView).
+  static bool IsLimitedEntropyRandomizationSourceEnabled(
+      version_info::Channel channel,
+      LimitedEntropySyntheticTrial* trial);
 
  protected:
   // Get the platform we're running on, respecting OverrideVariationsPlatform().
@@ -264,7 +278,8 @@ class VariationsFieldTrialCreatorBase {
   // |safe_seed_manager|.
   bool CreateTrialsFromSeed(const EntropyProviders& entropy_providers,
                             base::FeatureList* feature_list,
-                            SafeSeedManagerBase* safe_seed_manager);
+                            SafeSeedManagerBase* safe_seed_manager,
+                            SyntheticTrialRegistry* synthetic_trial_registry);
 
   // Reads a seed's data and signature from the file at |json_seed_path| and
   // writes them to Local State. Exits Chrome if (A) the file's contents can't
@@ -272,6 +287,17 @@ class VariationsFieldTrialCreatorBase {
   // or |kVariationsSeedSignature|. Also forces Chrome to not run in variations
   // safe mode. Used for variations seed testing.
   void LoadSeedFromJsonFile(const base::FilePath& json_seed_path);
+
+  // Returns whether the conditions to activate the limited entropy synthetic
+  // trial are met.
+  bool ShouldActivateLimitedEntropySyntheticTrial(const VariationsSeed& seed);
+
+  // Registers the group assignment of the limited entropy synthetic trial if
+  // the activation condition are met (as given by
+  // ShouldActivateLimitedEntropySyntheticTrial()).
+  void RegisterLimitedEntropySyntheticTrialIfNeeded(
+      const VariationsSeed& seed,
+      SyntheticTrialRegistry* synthetic_trial_registry);
 
   // Returns the seed store. Virtual for testing.
   virtual VariationsSeedStore* GetSeedStore();

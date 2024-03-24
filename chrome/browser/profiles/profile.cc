@@ -45,6 +45,10 @@
 #include "content/public/browser/web_ui.h"
 #include "extensions/buildflags/buildflags.h"
 
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/constants/pref_names.h"
+#endif
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/constants/ash_switches.h"
 #include "base/command_line.h"
@@ -270,10 +274,6 @@ Profile* Profile::FromWebUI(content::WebUI* web_ui) {
 }
 
 void Profile::AddObserver(ProfileObserver* observer) {
-  // Instrumentation for https://crbug.com/1359689.
-  CHECK(observer);
-  CHECK(!observers_.HasObserver(observer));
-
   observers_.AddObserver(observer);
 }
 
@@ -350,6 +350,9 @@ void Profile::RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
                                 true);
   registry->RegisterIntegerPref(prefs::kProfileIconVersion, 0);
   registry->RegisterBooleanPref(prefs::kAllowDinosaurEasterEgg, true);
+#if BUILDFLAG(IS_CHROMEOS)
+  registry->RegisterBooleanPref(chromeos::prefs::kCaptivePortalSignin, false);
+#endif
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // TODO(dilmah): For OS_CHROMEOS we maintain kApplicationLocale in both
   // local state and user's profile.  For other platforms we maintain
@@ -467,15 +470,10 @@ void Profile::MaybeSendDestroyedNotification() {
     return;
   sent_destroyed_notification_ = true;
 
-  // Instrumentation for https://crbug.com/1359689,
-  auto weak_this = GetWeakPtr();
-
   NotifyWillBeDestroyed();
-  CHECK(weak_this);
 
   for (auto& observer : observers_) {
     observer.OnProfileWillBeDestroyed(this);
-    CHECK(weak_this);
   }
 }
 
@@ -506,7 +504,14 @@ void Profile::Wipe() {
   // Clear the search engine choice prefs.
   // TODO(b/312180262): Consider clearing other preferences as well.
   search_engines::WipeSearchEngineChoicePrefs(
-      CHECK_DEREF(GetPrefs()),
+      // For Guest profiles, the OTR is the one that gets wiped, but the choice
+      // prefs get set on the parent profile.
+      // For other OTR profiles, we don't want to automatically forward to the
+      // original profile, the choice made is still relevant there.
+      // This method is also called for regular profiles, when they are
+      // deleted. We don't really care about resetting the pref in that case,
+      // because the full directory will be deleted anyway.
+      CHECK_DEREF((IsGuestSession() ? GetOriginalProfile() : this)->GetPrefs()),
       search_engines::WipeSearchEngineChoiceReason::kProfileWipe);
 
   GetBrowsingDataRemover()->Remove(

@@ -6,13 +6,16 @@
 
 #include "cc/trees/layer_tree_host.h"
 #include "cc/view_transition/view_transition_request.h"
+#include "third_party/blink/public/mojom/frame/frame.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_view_transition_callback.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_view_transition_options.h"
 #include "third_party/blink/renderer/core/dom/document.h"
+#include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/core/view_transition/dom_view_transition.h"
+#include "third_party/blink/renderer/core/view_transition/page_conceal_event.h"
 #include "third_party/blink/renderer/core/view_transition/view_transition.h"
 #include "third_party/blink/renderer/core/view_transition/view_transition_utils.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
@@ -87,7 +90,7 @@ DOMViewTransition* ViewTransitionSupplement::StartViewTransitionInternal(
     ScriptState* script_state,
     Document& document,
     V8ViewTransitionCallback* callback,
-    const absl::optional<Vector<String>>& types,
+    const std::optional<Vector<String>>& types,
     ExceptionState& exception_state) {
   DCHECK(script_state);
   DCHECK(ThreadScheduler::Current());
@@ -98,7 +101,7 @@ DOMViewTransition* ViewTransitionSupplement::StartViewTransitionInternal(
     // Set the parent task ID if we're not in an extension task (as extensions
     // are not currently supported in TaskAttributionTracker).
     if (tracker && script_state->World().IsMainWorld()) {
-      callback->SetParentTask(tracker->RunningTask(script_state));
+      callback->SetParentTask(tracker->RunningTask(script_state->GetIsolate()));
     }
   }
   return supplement->StartTransition(document, callback, types,
@@ -111,7 +114,7 @@ DOMViewTransition* ViewTransitionSupplement::startViewTransition(
     V8ViewTransitionCallback* callback,
     ExceptionState& exception_state) {
   return StartViewTransitionInternal(script_state, document, callback,
-                                     absl::nullopt, exception_state);
+                                     std::nullopt, exception_state);
 }
 
 DOMViewTransition* ViewTransitionSupplement::startViewTransition(
@@ -122,7 +125,7 @@ DOMViewTransition* ViewTransitionSupplement::startViewTransition(
   CHECK(!options || (options->hasUpdate() && options->hasType()));
   return StartViewTransitionInternal(
       script_state, document, options ? options->update() : nullptr,
-      options ? options->type() : absl::nullopt, exception_state);
+      options ? options->type() : std::nullopt, exception_state);
 }
 
 DOMViewTransition* ViewTransitionSupplement::startViewTransition(
@@ -131,21 +134,24 @@ DOMViewTransition* ViewTransitionSupplement::startViewTransition(
     ExceptionState& exception_state) {
   return StartViewTransitionInternal(
       script_state, document, static_cast<V8ViewTransitionCallback*>(nullptr),
-      absl::nullopt, exception_state);
+      std::nullopt, exception_state);
 }
 
 DOMViewTransition* ViewTransitionSupplement::StartTransition(
     Document& document,
     V8ViewTransitionCallback* callback,
-    const absl::optional<Vector<String>>& types,
+    const std::optional<Vector<String>>& types,
     ExceptionState& exception_state) {
   // Disallow script initiated transitions during a navigation initiated
   // transition.
-  if (transition_ && !transition_->IsCreatedViaScriptAPI())
-    return nullptr;
+  if (transition_ && !transition_->IsCreatedViaScriptAPI()) {
+    return ViewTransition::CreateSkipped(&document, callback)
+        ->GetScriptDelegate();
+  }
 
-  if (transition_)
+  if (transition_) {
     transition_->SkipTransition();
+  }
 
   DCHECK(!transition_)
       << "SkipTransition() should finish existing |transition_|";
@@ -196,14 +202,16 @@ void ViewTransitionSupplement::SetCrossDocumentOptIn(
 // static
 void ViewTransitionSupplement::SnapshotDocumentForNavigation(
     Document& document,
+    mojom::blink::PageConcealEventParamsPtr params,
     ViewTransition::ViewTransitionStateCallback callback) {
   DCHECK(RuntimeEnabledFeatures::ViewTransitionOnNavigationEnabled());
   auto* supplement = From(document);
-  supplement->StartTransition(document, std::move(callback));
+  supplement->StartTransition(document, std::move(params), std::move(callback));
 }
 
 void ViewTransitionSupplement::StartTransition(
     Document& document,
+    mojom::blink::PageConcealEventParamsPtr params,
     ViewTransition::ViewTransitionStateCallback callback) {
   if (transition_) {
     // We should skip a transition if one exists, regardless of how it was
@@ -214,6 +222,10 @@ void ViewTransitionSupplement::StartTransition(
       << "SkipTransition() should finish existing |transition_|";
   transition_ = ViewTransition::CreateForSnapshotForNavigation(
       &document, std::move(callback), this);
+
+  auto* page_conceal_event = MakeGarbageCollected<PageConcealEvent>(
+      document, std::move(params), transition_->GetScriptDelegate());
+  document.domWindow()->DispatchEvent(*page_conceal_event);
 }
 
 // static
@@ -256,7 +268,9 @@ ViewTransition* ViewTransitionSupplement::GetTransition() {
 }
 
 ViewTransitionSupplement::ViewTransitionSupplement(Document& document)
-    : Supplement<Document>(document) {}
+    : Supplement<Document>(document),
+      cross_document_opt_in_(
+          mojom::blink::ViewTransitionSameOriginOptIn::kDisabled) {}
 
 ViewTransitionSupplement::~ViewTransitionSupplement() = default;
 

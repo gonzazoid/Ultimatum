@@ -4,8 +4,10 @@
 
 #include "ash/app_list/views/assistant/assistant_dialog_plate.h"
 
+#include <string_view>
 #include <utility>
 
+#include "ash/ash_element_identifiers.h"
 #include "ash/assistant/model/assistant_interaction_model.h"
 #include "ash/assistant/model/assistant_ui_model.h"
 #include "ash/assistant/ui/assistant_ui_constants.h"
@@ -40,6 +42,7 @@
 #include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/layout/fill_layout.h"
+#include "ui/views/view_class_properties.h"
 
 namespace ash {
 
@@ -68,9 +71,6 @@ class AssistantTextfield : public views::Textfield {
 
  public:
   AssistantTextfield() { SetID(AssistantViewID::kTextQueryField); }
-
-  // views::Textfield overrides:
-  const char* GetClassName() const override { return "AssistantTextfield"; }
 };
 
 BEGIN_METADATA(AssistantTextfield)
@@ -108,6 +108,7 @@ AssistantDialogPlate::AssistantDialogPlate(AssistantViewDelegate* delegate)
                                   ->query_history()
                                   .GetIterator()) {
   SetID(AssistantViewID::kDialogPlate);
+  SetProperty(views::kElementIdentifierKey, kAssistantDialogPlateElementId);
   InitLayout();
 
   assistant_controller_observation_.Observe(AssistantController::Get());
@@ -144,7 +145,7 @@ bool AssistantDialogPlate::HandleKeyEvent(views::Textfield* textfield,
       if (delegate_->IsTabletMode())
         HideKeyboardIfEnabled();
 
-      const base::StringPiece16& trimmed_text = base::TrimWhitespace(
+      std::u16string_view trimmed_text = base::TrimWhitespace(
           textfield_->GetText(), base::TrimPositions::TRIM_ALL);
 
       // Only non-empty trimmed text is consider a valid contents commit.
@@ -518,7 +519,7 @@ InputModality AssistantDialogPlate::input_modality() const {
   return AssistantInteractionController::Get()->GetModel()->input_modality();
 }
 
-BEGIN_METADATA(AssistantDialogPlate, views::View)
+BEGIN_METADATA(AssistantDialogPlate)
 END_METADATA
 
 }  // namespace ash

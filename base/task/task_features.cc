@@ -75,8 +75,10 @@ BASE_FEATURE(kMaxDelayedStarvationTasks,
 const base::FeatureParam<int> kMaxDelayedStarvationTasksParam{
     &kMaxDelayedStarvationTasks, "count", 3};
 
-BASE_FEATURE(kUseNewJobImplementation,
-             "UseNewJobImplementation",
+BASE_FEATURE(kThreadGroupSemaphore,
+             "ThreadGroupSemaphore",
              base::FEATURE_DISABLED_BY_DEFAULT);
+const base::FeatureParam<int> kMaxNumWorkersCreated{
+    &kThreadGroupSemaphore, "max_num_workers_created", 2};
 
 }  // namespace base

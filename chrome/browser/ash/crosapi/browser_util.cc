@@ -3,7 +3,9 @@
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/crosapi/browser_util.h"
+
 #include <string>
+#include <string_view>
 
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
@@ -41,6 +43,7 @@
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
+#include "components/user_manager/known_user.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
 #include "components/version_info/channel.h"
@@ -61,7 +64,7 @@ BASE_FEATURE(kLacrosLaunchAtLoginScreen,
 
 BASE_FEATURE(kLacrosForkZygotesAtLoginScreen,
              "LacrosForkZygotesAtLoginScreen",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 namespace {
 
@@ -86,7 +89,7 @@ constexpr char kLacrosMetadataVersionKey[] = "version";
 // The conversion map for LacrosDataBackwardMigrationMode policy data. The
 // values must match the ones from LacrosDataBackwardMigrationMode.yaml.
 constexpr auto kLacrosDataBackwardMigrationModeMap =
-    base::MakeFixedFlatMap<base::StringPiece, LacrosDataBackwardMigrationMode>({
+    base::MakeFixedFlatMap<std::string_view, LacrosDataBackwardMigrationMode>({
         {kLacrosDataBackwardMigrationModePolicyNone,
          LacrosDataBackwardMigrationMode::kNone},
         {kLacrosDataBackwardMigrationModePolicyKeepNone,
@@ -100,7 +103,7 @@ constexpr auto kLacrosDataBackwardMigrationModeMap =
 // The conversion map for LacrosSelection policy data. The values must match
 // the ones from LacrosSelection.yaml.
 constexpr auto kLacrosSelectionPolicyMap =
-    base::MakeFixedFlatMap<base::StringPiece, LacrosSelectionPolicy>({
+    base::MakeFixedFlatMap<std::string_view, LacrosSelectionPolicy>({
         {"user_choice", LacrosSelectionPolicy::kUserChoice},
         {"rootfs", LacrosSelectionPolicy::kRootfs},
     });
@@ -139,25 +142,51 @@ LacrosAvailability GetCachedLacrosAvailability() {
 }
 
 // Returns appropriate LacrosAvailability.
-LacrosAvailability GetLacrosAvailability(const user_manager::User* user,
-                                         PolicyInitState policy_init_state) {
+std::optional<LacrosAvailability> GetLacrosAvailability(
+    const user_manager::User* user,
+    PolicyInitState policy_init_state) {
+  auto* user_manager = user_manager::UserManager::Get();
+  auto* primary_user = user_manager->GetPrimaryUser();
+
   switch (policy_init_state) {
-    case PolicyInitState::kBeforeInit:
+    case PolicyInitState::kBeforeInit: {
       // If the value is needed before policy initialization, actually,
       // this should be the case where ash process was restarted, and so
       // the calculated value in the previous session should be carried
       // via command line flag.
       // See also LacrosAvailabilityPolicyObserver how it will be propergated.
+
+      // Check whether given `user` is the one for kLoginUser.
+      CHECK(!primary_user);
+      const user_manager::CryptohomeId cryptohome_id(
+          base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
+              ash::switches::kLoginUser));
+      user_manager::KnownUser known_user(user_manager->GetLocalState());
+      const AccountId login_account_id(
+          known_user.GetAccountIdByCryptohomeId(cryptohome_id));
+      if (user->GetAccountId() != login_account_id) {
+        // TODO(b/40286020): Record log once the number of this call is
+        // reduced.
+        return std::nullopt;
+      }
+
       return ash::standalone_browser::
           DetermineLacrosAvailabilityFromPolicyValue(
               user,
               base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
                   ash::standalone_browser::kLacrosAvailabilityPolicySwitch));
-
-    case PolicyInitState::kAfterInit:
+    }
+    case PolicyInitState::kAfterInit: {
       // If policy initialization is done, the calculated value should be
       // cached.
+      CHECK(primary_user);
+      if (primary_user != user) {
+        // TODO(b/40286020): Record log once the number of this call is
+        // reduced.
+        return std::nullopt;
+      }
       return GetCachedLacrosAvailability();
+    }
   }
 }
 
@@ -220,7 +249,7 @@ namespace {
 //   2. From the current ash channel.
 Channel GetStatefulLacrosChannel() {
   static constexpr auto kStabilitySwitchToChannelMap =
-      base::MakeFixedFlatMap<base::StringPiece, Channel>({
+      base::MakeFixedFlatMap<std::string_view, Channel>({
           {kLacrosStabilityChannelCanary, Channel::CANARY},
           {kLacrosStabilityChannelDev, Channel::DEV},
           {kLacrosStabilityChannelBeta, Channel::BETA},
@@ -313,8 +342,12 @@ bool IsLacrosEnabled() {
 
 bool IsLacrosEnabledForMigration(const User* user,
                                  PolicyInitState policy_init_state) {
-  return IsLacrosEnabledInternal(user,
-                                 GetLacrosAvailability(user, policy_init_state),
+  std::optional<LacrosAvailability> lacros_availability =
+      GetLacrosAvailability(user, policy_init_state);
+  if (!lacros_availability.has_value()) {
+    return false;
+  }
+  return IsLacrosEnabledInternal(user, *lacros_availability,
                                  /*check_migration_status=*/false);
 }
 
@@ -360,6 +393,9 @@ bool IsLacrosOnlyBrowserAllowed() {
 
 bool IsLacrosOnlyFlagAllowed() {
   return IsLacrosOnlyBrowserAllowed() &&
+         // Hide lacros_only flag for guest sessions as they do always start
+         // with a fresh and anonymous profile, hence ignoring this setting.
+         !UserManager::Get()->IsLoggedInAsGuest() &&
          (GetCachedLacrosAvailability() == LacrosAvailability::kUserChoice);
 }
 
@@ -492,7 +528,7 @@ void CacheLacrosAvailability(const policy::PolicyMap& map) {
       map.GetValue(policy::key::kLacrosAvailability, base::Value::Type::STRING);
   g_lacros_availability_cache =
       ash::standalone_browser::DetermineLacrosAvailabilityFromPolicyValue(
-          GetPrimaryUser(), value ? value->GetString() : base::StringPiece());
+          GetPrimaryUser(), value ? value->GetString() : std::string_view());
 }
 
 void CacheLacrosDataBackwardMigrationMode(const policy::PolicyMap& map) {
@@ -506,7 +542,7 @@ void CacheLacrosDataBackwardMigrationMode(const policy::PolicyMap& map) {
   const base::Value* value = map.GetValue(
       policy::key::kLacrosDataBackwardMigrationMode, base::Value::Type::STRING);
   g_lacros_data_backward_migration_mode = ParseLacrosDataBackwardMigrationMode(
-      value ? value->GetString() : base::StringPiece());
+      value ? value->GetString() : std::string_view());
 }
 
 void CacheLacrosSelection(const policy::PolicyMap& map) {
@@ -528,7 +564,7 @@ void CacheLacrosSelection(const policy::PolicyMap& map) {
   const base::Value* value =
       map.GetValue(policy::key::kLacrosSelection, base::Value::Type::STRING);
   g_lacros_selection_cache = ParseLacrosSelectionPolicy(
-      value ? value->GetString() : base::StringPiece());
+      value ? value->GetString() : std::string_view());
 }
 
 LacrosSelectionPolicy GetCachedLacrosSelectionPolicy() {
@@ -762,7 +798,7 @@ LacrosLaunchSwitchSource GetLacrosLaunchSwitchSource() {
 }
 
 std::optional<LacrosSelectionPolicy> ParseLacrosSelectionPolicy(
-    base::StringPiece value) {
+    std::string_view value) {
   auto* it = kLacrosSelectionPolicyMap.find(value);
   if (it != kLacrosSelectionPolicyMap.end())
     return it->second;
@@ -772,7 +808,7 @@ std::optional<LacrosSelectionPolicy> ParseLacrosSelectionPolicy(
 }
 
 std::optional<LacrosDataBackwardMigrationMode>
-ParseLacrosDataBackwardMigrationMode(base::StringPiece value) {
+ParseLacrosDataBackwardMigrationMode(std::string_view value) {
   auto* it = kLacrosDataBackwardMigrationModeMap.find(value);
   if (it != kLacrosDataBackwardMigrationModeMap.end())
     return it->second;
@@ -784,7 +820,7 @@ ParseLacrosDataBackwardMigrationMode(base::StringPiece value) {
   return std::nullopt;
 }
 
-base::StringPiece GetLacrosDataBackwardMigrationModeName(
+std::string_view GetLacrosDataBackwardMigrationModeName(
     LacrosDataBackwardMigrationMode value) {
   for (const auto& entry : kLacrosDataBackwardMigrationModeMap) {
     if (entry.second == value)
@@ -792,10 +828,10 @@ base::StringPiece GetLacrosDataBackwardMigrationModeName(
   }
 
   NOTREACHED();
-  return base::StringPiece();
+  return std::string_view();
 }
 
-base::StringPiece GetLacrosSelectionPolicyName(LacrosSelectionPolicy value) {
+std::string_view GetLacrosSelectionPolicyName(LacrosSelectionPolicy value) {
   for (const auto& entry : kLacrosSelectionPolicyMap) {
     if (entry.second == value) {
       return entry.first;
@@ -803,7 +839,7 @@ base::StringPiece GetLacrosSelectionPolicyName(LacrosSelectionPolicy value) {
   }
 
   NOTREACHED();
-  return base::StringPiece();
+  return std::string_view();
 }
 
 bool IsAshBrowserSyncEnabled() {

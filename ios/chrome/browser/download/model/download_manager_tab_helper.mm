@@ -34,7 +34,7 @@ DownloadManagerTabHelper::~DownloadManagerTabHelper() {
 
 #pragma mark - Public methods
 
-void DownloadManagerTabHelper::Download(
+void DownloadManagerTabHelper::SetCurrentDownload(
     std::unique_ptr<web::DownloadTask> task) {
   // If downloads are persistent, they cannot be lost once completed.
   if (!task_ || (task_->GetState() == web::DownloadTask::State::kComplete &&
@@ -60,32 +60,47 @@ void DownloadManagerTabHelper::SetDelegate(
     return;
 
   if (delegate_ && task_ && delegate_started_)
-    [delegate_ downloadManagerTabHelper:this didHideDownload:task_.get()];
+    [delegate_ downloadManagerTabHelper:this
+                        didHideDownload:task_.get()
+                               animated:NO];
 
   delegate_started_ = false;
   delegate_ = delegate;
 }
 
-void DownloadManagerTabHelper::OnDownloadAddedToSaveToDrive(
-    web::DownloadTask* task) {
+void DownloadManagerTabHelper::StartDownload(web::DownloadTask* task) {
   DCHECK_EQ(task, task_.get());
-  [delegate_ downloadManagerTabHelper:this
-          didAddDownloadToSaveToDrive:task_.get()];
+  [delegate_ downloadManagerTabHelper:this wantsToStartDownload:task_.get()];
+}
+
+web::DownloadTask* DownloadManagerTabHelper::GetActiveDownloadTask() {
+  return task_.get();
+}
+
+void DownloadManagerTabHelper::AdaptToFullscreen(bool adapt_to_fullscreen) {
+  if (delegate_ && delegate_started_) {
+    [delegate_ downloadManagerTabHelper:this
+                      adaptToFullscreen:adapt_to_fullscreen];
+  }
 }
 
 #pragma mark - web::WebStateObserver
 
 void DownloadManagerTabHelper::WasShown(web::WebState* web_state) {
-  if (task_ && delegate_) {
+  if (task_ && delegate_ && !delegate_started_) {
     delegate_started_ = true;
-    [delegate_ downloadManagerTabHelper:this didShowDownload:task_.get()];
+    [delegate_ downloadManagerTabHelper:this
+                        didShowDownload:task_.get()
+                               animated:NO];
   }
 }
 
 void DownloadManagerTabHelper::WasHidden(web::WebState* web_state) {
-  if (task_ && delegate_) {
+  if (task_ && delegate_ && delegate_started_) {
     delegate_started_ = false;
-    [delegate_ downloadManagerTabHelper:this didHideDownload:task_.get()];
+    [delegate_ downloadManagerTabHelper:this
+                        didHideDownload:task_.get()
+                               animated:NO];
   }
 }
 
@@ -105,6 +120,10 @@ void DownloadManagerTabHelper::OnDownloadUpdated(web::DownloadTask* task) {
   DCHECK_EQ(task, task_.get());
   switch (task->GetState()) {
     case web::DownloadTask::State::kCancelled:
+      if (delegate_ && delegate_started_) {
+        delegate_started_ = false;
+        [delegate_ downloadManagerTabHelper:this didCancelDownload:task_.get()];
+      }
       task_->RemoveObserver(this);
       task_ = nullptr;
       break;

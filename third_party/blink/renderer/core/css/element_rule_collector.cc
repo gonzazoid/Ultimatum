@@ -45,6 +45,7 @@
 #include "third_party/blink/renderer/core/css/css_style_rule.h"
 #include "third_party/blink/renderer/core/css/css_style_sheet.h"
 #include "third_party/blink/renderer/core/css/css_supports_rule.h"
+#include "third_party/blink/renderer/core/css/resolver/element_resolve_context.h"
 #include "third_party/blink/renderer/core/css/resolver/scoped_style_resolver.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver_stats.h"
@@ -984,7 +985,7 @@ static CSSRule* FindStyleRule(CSSRuleCollection* css_rules,
   }
 
   for (unsigned i = 0; i < css_rules->length(); ++i) {
-    CSSRule* css_rule = css_rules->item(i);
+    CSSRule* css_rule = css_rules->ItemInternal(i);
     if (auto* css_style_rule = DynamicTo<CSSStyleRule>(css_rule)) {
       if (css_style_rule->GetStyleRule() == style_rule) {
         return css_rule;
@@ -1084,8 +1085,10 @@ void ElementRuleCollector::SortAndTransferMatchedRules(
              AdjustLinkMatchType(inside_link_, rule_data->LinkMatchType()),
          .valid_property_filter =
              rule_data->GetValidPropertyFilter(matching_ua_rules_),
+         .signal = rule_data->Selector().GetSignal(),
          .layer_order = matched_rule.LayerOrder(),
-         .is_inline_style = is_vtt_embedded_style});
+         .is_inline_style = is_vtt_embedded_style,
+         .is_invisible = rule_data->Selector().IsInvisible()});
   }
 
   if (tracker) {

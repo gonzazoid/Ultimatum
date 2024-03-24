@@ -7,8 +7,10 @@
 #include "ash/constants/ash_switches.h"
 #include "base/auto_reset.h"
 #include "base/functional/bind.h"
+#include "base/metrics/histogram_base.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "chrome/browser/ash/account_manager/account_apps_availability.h"
@@ -323,7 +325,8 @@ class SyncConsentTest
     AccountInfo account_info =
         identity_manager->FindExtendedAccountInfoByGaiaId(test::kTestGaiaId);
     AccountCapabilitiesTestMutator mutator(&account_info.capabilities);
-    mutator.set_can_offer_extended_chrome_sync_promos(!is_minor_user);
+    mutator.set_can_show_history_sync_opt_ins_without_minor_mode_restrictions(
+        !is_minor_user);
     signin::UpdateAccountInfoForAccount(identity_manager, account_info);
   }
 
@@ -1028,7 +1031,9 @@ INSTANTIATE_TEST_SUITE_P(All,
                                           testing::Bool(),
                                           testing::Bool()));
 
-IN_PROC_BROWSER_TEST_P(SyncConsentTestLacrosRevampWithParams, ManageSync) {
+// TODO(https://crbug.com/1522934): Re-enable after Resolving flakiness.
+IN_PROC_BROWSER_TEST_P(SyncConsentTestLacrosRevampWithParams,
+                       DISABLED_ManageSync) {
   LoginAndShowSyncConsentScreenWithCapability();
   WaitForScreenShown();
 

@@ -214,9 +214,16 @@ enum class WebappUninstallSource {
   // sessions.
   kHealthcareUserInstallCleanup = 21,
 
+  // Isolated Web App Enterprise policy.
+  kIwaEnterprisePolicy = 22,
+
   // Add any new values above this one.
-  kMaxValue = kHealthcareUserInstallCleanup,
+  kMaxValue = kIwaEnterprisePolicy,
 };
+
+std::ostream& operator<<(std::ostream& os, WebappUninstallSource source);
+
+bool IsUserUninstall(WebappUninstallSource source);
 
 // This is the result of the promotability check that is recorded in the
 // Webapp.CheckServiceWorker.Status histogram.

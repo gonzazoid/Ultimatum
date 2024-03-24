@@ -175,6 +175,7 @@ class AutocompleteProvider
     TYPE_OPEN_TAB = 1 << 17,
     TYPE_HISTORY_CLUSTER_PROVIDER = 1 << 18,
     TYPE_CALCULATOR = 1 << 19,
+    TYPE_FEATURED_SEARCH = 1 << 20,
   };
 
   explicit AutocompleteProvider(Type type);
@@ -318,10 +319,6 @@ class AutocompleteProvider
   const char* GetName() const;
 
   typedef std::multimap<char16_t, std::u16string> WordMap;
-
-  // Uses the keyword entry mode in `input` to decide if the user is currently
-  // in keyword mode.
-  static bool InKeywordMode(const AutocompleteInput& input);
 
   // Trims "http:" or "https:" and up to two subsequent slashes from |url|. If
   // |trim_https| is true, trims "https:", otherwise trims "http:". Returns the

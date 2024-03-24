@@ -4,6 +4,7 @@
 
 load("//lib/builders.star", "builder", "cpu", "defaults", "os", "reclient")
 load("//lib/builder_config.star", "builder_config")
+load("//lib/gn_args.star", "gn_args")
 
 luci.bucket(
     name = "ci",
@@ -117,22 +118,17 @@ ci_builder(
             config = "main_builder_mb",
         ),
     ),
-)
-
-# TODO(crbug.com/1412588): Delete this builder when bionic image rolls are
-# disabled.
-ci_builder(
-    name = "linux-rel-dev",
-    description_html = "Test description. <b>Test HTML</b>.",
-    builder_spec = builder_config.builder_spec(
-        gclient_config = builder_config.gclient_config(config = "chromium"),
-        chromium_config = builder_config.chromium_config(
-            config = "chromium",
-            apply_configs = ["mb"],
-            build_config = builder_config.build_config.RELEASE,
-        ),
+    gn_args = gn_args.config(
+        configs = [
+            "android_builder",
+            "release_builder",
+            "reclient",
+            "minimal_symbols",
+            "arm64",
+            "strip_debug_info",
+            "webview_monochrome",
+        ],
     ),
-    os = os.LINUX_BIONIC,
 )
 
 ci_builder(
@@ -143,7 +139,16 @@ ci_builder(
             config = "chromium",
             apply_configs = ["mb"],
             build_config = builder_config.build_config.RELEASE,
+            target_platform = builder_config.target_platform.LINUX,
         ),
+    ),
+    gn_args = gn_args.config(
+        configs = [
+            "gpu_tests",
+            "release_builder",
+            "reclient",
+            "devtools_do_typecheck",
+        ],
     ),
 )
 
@@ -156,7 +161,16 @@ ci_builder(
             config = "chromium",
             apply_configs = ["mb"],
             build_config = builder_config.build_config.RELEASE,
+            target_platform = builder_config.target_platform.LINUX,
         ),
+    ),
+    gn_args = gn_args.config(
+        configs = [
+            "gpu_tests",
+            "release_builder",
+            "reclient",
+            "devtools_do_typecheck",
+        ],
     ),
     builderless = False,
     ssd = True,
@@ -171,7 +185,16 @@ ci_builder(
             config = "chromium",
             apply_configs = ["mb"],
             build_config = builder_config.build_config.RELEASE,
+            target_platform = builder_config.target_platform.LINUX,
         ),
+    ),
+    gn_args = gn_args.config(
+        configs = [
+            "gpu_tests",
+            "release_builder",
+            "reclient",
+            "devtools_do_typecheck",
+        ],
     ),
     builderless = False,
     ssd = True,
@@ -185,7 +208,16 @@ ci_builder(
             config = "chromium",
             apply_configs = ["mb"],
             build_config = builder_config.build_config.RELEASE,
+            target_platform = builder_config.target_platform.MAC,
         ),
+    ),
+    gn_args = gn_args.config(
+        configs = [
+            "gpu_tests",
+            "release_builder",
+            "reclient",
+            "minimal_symbols",
+        ],
     ),
     os = os.MAC_DEFAULT,
 )
@@ -198,7 +230,16 @@ ci_builder(
             config = "chromium",
             apply_configs = ["mb"],
             build_config = builder_config.build_config.RELEASE,
+            target_platform = builder_config.target_platform.MAC,
         ),
+    ),
+    gn_args = gn_args.config(
+        configs = [
+            "gpu_tests",
+            "release_builder",
+            "reclient",
+            "minimal_symbols",
+        ],
     ),
     os = os.MAC_DEFAULT,
     cpu = cpu.ARM64,
@@ -213,7 +254,16 @@ ci_builder(
             config = "chromium",
             apply_configs = ["mb"],
             build_config = builder_config.build_config.RELEASE,
+            target_platform = builder_config.target_platform.WIN,
         ),
+    ),
+    gn_args = gn_args.config(
+        configs = [
+            "gpu_tests",
+            "release_builder",
+            "reclient",
+            "minimal_symbols",
+        ],
     ),
     builderless = False,
     os = os.WINDOWS_10,
@@ -228,7 +278,16 @@ ci_builder(
             config = "chromium",
             apply_configs = ["mb"],
             build_config = builder_config.build_config.RELEASE,
+            target_platform = builder_config.target_platform.WIN,
         ),
+    ),
+    gn_args = gn_args.config(
+        configs = [
+            "gpu_tests",
+            "release_builder",
+            "reclient",
+            "minimal_symbols",
+        ],
     ),
     os = os.WINDOWS_10,
     ssd = 0,
@@ -242,7 +301,16 @@ ci_builder(
             config = "chromium",
             apply_configs = ["mb"],
             build_config = builder_config.build_config.RELEASE,
+            target_platform = builder_config.target_platform.WIN,
         ),
+    ),
+    gn_args = gn_args.config(
+        configs = [
+            "gpu_tests",
+            "release_builder",
+            "reclient",
+            "minimal_symbols",
+        ],
     ),
     os = os.WINDOWS_11,
 )

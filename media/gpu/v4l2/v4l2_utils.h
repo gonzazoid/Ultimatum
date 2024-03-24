@@ -5,18 +5,19 @@
 #ifndef MEDIA_GPU_V4L2_V4L2_UTILS_H_
 #define MEDIA_GPU_V4L2_V4L2_UTILS_H_
 
-#include <string>
-
 #include <linux/videodev2.h>
 #include <sys/mman.h>
+
+#include <optional>
+#include <string>
 
 #include "base/files/scoped_file.h"
 #include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
+#include "media/base/supported_video_decoder_config.h"
 #include "media/base/video_codecs.h"
 #include "mojo/public/cpp/platform/platform_handle.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #ifndef V4L2_PIX_FMT_QC08C
 #define V4L2_PIX_FMT_QC08C \
@@ -112,8 +113,8 @@ VideoCodecProfile V4L2ProfileToVideoCodecProfile(uint32_t v4l2_codec,
 size_t GetNumPlanesOfV4L2PixFmt(uint32_t pix_fmt);
 
 // Composes VideoFrameLayout based on v4l2_format.
-// If error occurs, it returns absl::nullopt.
-absl::optional<VideoFrameLayout> V4L2FormatToVideoFrameLayout(
+// If error occurs, it returns std::nullopt.
+std::optional<VideoFrameLayout> V4L2FormatToVideoFrameLayout(
     const struct v4l2_format& format);
 
 // Enumerates the supported VideoCodecProfiles for a given device (accessed via
@@ -152,6 +153,13 @@ base::TimeDelta TimeValToTimeDelta(const struct timeval& timeval);
 
 // Translates a Chrome |time_delta| to a POSIX struct timeval.
 struct timeval TimeDeltaToTimeVal(base::TimeDelta time_delta);
+
+// Return a set of all the codecs supported by the hardware as well as
+// their capabilities
+std::optional<SupportedVideoDecoderConfigs> GetSupportedV4L2DecoderConfigs();
+
+// Queries the driver to see if it supports stateful decoding.
+bool IsV4L2DecoderStateful();
 
 }  // namespace media
 

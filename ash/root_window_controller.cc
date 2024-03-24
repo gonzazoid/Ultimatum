@@ -70,7 +70,6 @@
 #include "ash/wm/splitview/split_view_utils.h"
 #include "ash/wm/switchable_windows.h"
 #include "ash/wm/system_modal_container_layout_manager.h"
-#include "ash/wm/system_wallpaper_controller.h"
 #include "ash/wm/window_parenting_controller.h"
 #include "ash/wm/window_properties.h"
 #include "ash/wm/window_state.h"
@@ -722,7 +721,6 @@ void RootWindowController::Shutdown(aura::Window* destination_root) {
     ash_host_->PrepareForShutdown();
   }
   window_parenting_controller_.reset();
-  system_wallpaper_.reset();
   security_curtain_widget_controller_.reset();
   lock_screen_action_background_controller_.reset();
   aura::client::SetScreenPositionClient(root_window, nullptr);
@@ -996,13 +994,21 @@ void RootWindowController::StartSplitViewOverviewSession(
     std::optional<OverviewStartAction> action,
     std::optional<OverviewEnterExitType> type,
     WindowSnapActionSource snap_action_source) {
-  if (split_view_overview_session_ ||
-      !OverviewController::Get()->CanEnterOverview()) {
-    // If we can't start overview, we shouldn't start split view overview
-    // either. This can happen when we restore snap state after exiting
-    // overview.
+  if (split_view_overview_session_) {
     return;
   }
+
+  // TODO(michelefan): Remove the `StartOverview()` here, this is currently
+  // added to limit `SplitViewOverviewSession` creation and usage to clamshell
+  // only.
+  if (Shell::Get()->IsInTabletMode()) {
+    OverviewController::Get()->StartOverview(
+        action.value_or(OverviewStartAction::kSplitView),
+        type.value_or(OverviewEnterExitType::kNormal));
+    return;
+  }
+
+  CHECK(OverviewController::Get()->CanEnterOverview());
   split_view_overview_session_ =
       std::make_unique<SplitViewOverviewSession>(window, snap_action_source);
   split_view_overview_session_->Init(action, type);
@@ -1080,7 +1086,6 @@ void RootWindowController::Init(RootWindowType root_window_type) {
   root_window_layout_manager_ = root_window_layout_manager.get();
 
   CreateContainers();
-  CreateSystemWallpaper(root_window_type);
 
   InitLayoutManagers(std::move(root_window_layout_manager));
   InitTouchHuds();
@@ -1099,7 +1104,7 @@ void RootWindowController::Init(RootWindowType root_window_type) {
       std::make_unique<WallpaperWidgetController>(root_window);
 
   wallpaper_widget_controller_->Init(
-      Shell::Get()->session_controller()->IsUserSessionBlocked());
+      shell->session_controller()->IsUserSessionBlocked());
   root_window_layout_manager_->OnWindowResized();
 
   CreateAmbientWidget();
@@ -1461,23 +1466,6 @@ aura::Window* RootWindowController::CreateContainer(int window_id,
   }
   root_window_layout_manager_->AddContainer(window);
   return window;
-}
-
-void RootWindowController::CreateSystemWallpaper(
-    RootWindowType root_window_type) {
-  SkColor color = SK_ColorBLACK;
-  // The splash screen appears on the primary display at boot. If this is a
-  // secondary monitor (either connected at boot or connected later) or if the
-  // browser restarted for a second login then don't use the boot color.
-  const bool is_boot_splash_screen =
-      root_window_type == RootWindowType::PRIMARY &&
-      base::CommandLine::ForCurrentProcess()->HasSwitch(
-          switches::kFirstExecAfterBoot);
-  if (is_boot_splash_screen) {
-    color = kChromeOsBootColor;
-  }
-  system_wallpaper_ =
-      std::make_unique<SystemWallpaperController>(GetRootWindow(), color);
 }
 
 AccessibilityPanelLayoutManager*

@@ -27,6 +27,7 @@ import org.chromium.ui.modelutil.PropertyModel;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 
 /** Bottom sheet content for Read Aloud voices menu. */
 class VoiceMenuSheetContent extends MenuSheetContent {
@@ -51,15 +52,30 @@ class VoiceMenuSheetContent extends MenuSheetContent {
     }
 
     void setVoices(List<PlaybackVoice> voices) {
-        assert voices != null : "Can't populate voice menu with null voice list. Invalid language?";
         mMenu.clearItems();
+        if (voices == null || voices.isEmpty()) {
+            mVoices = new PlaybackVoice[0];
+            return;
+        }
         mVoices = new PlaybackVoice[voices.size()];
 
         int id = 0;
+        String displayLocale = null;
         for (PlaybackVoice voice : voices) {
+            if (id == 0 || isDifferentLocale(voice, voices.get(id - 1))) {
+                displayLocale =
+                        new Locale(voice.getLanguage(), voice.getAccentRegionCode())
+                                .getDisplayName();
+            } else {
+                displayLocale = null;
+            }
             MenuItem item =
                     mMenu.addItem(
-                            id, /* iconId= */ 0, voice.getDisplayName(), MenuItem.Action.RADIO);
+                            id,
+                            /* iconId= */ 0,
+                            voice.getDisplayName(),
+                            displayLocale,
+                            MenuItem.Action.RADIO);
             item.addPlayButton();
             String secondLine = getAttributesString(voice);
             if (secondLine != null) {
@@ -71,7 +87,15 @@ class VoiceMenuSheetContent extends MenuSheetContent {
         }
     }
 
+    private boolean isDifferentLocale(PlaybackVoice current, PlaybackVoice previous) {
+        return (!current.getLanguage().equals(previous.getLanguage())
+                || !current.getAccentRegionCode().equals(previous.getAccentRegionCode()));
+    }
+
     void setVoiceSelection(String voiceId) {
+        if (mVoices.length == 0) {
+            return;
+        }
         Integer maybeId = mVoiceIdToMenuItemId.get(voiceId);
         int id = 0;
 
@@ -169,6 +193,13 @@ class VoiceMenuSheetContent extends MenuSheetContent {
                     case PlaybackVoice.Tone.STEADY -> R.string.readaloud_tone_steady;
                     case PlaybackVoice.Tone.SMOOTH -> R.string.readaloud_tone_smooth;
                     case PlaybackVoice.Tone.RELAXED -> R.string.readaloud_tone_relaxed;
+                    case PlaybackVoice.Tone.WARM -> R.string.readaloud_tone_warm;
+                    case PlaybackVoice.Tone.SERENE -> R.string.readaloud_tone_serene;
+                    case PlaybackVoice.Tone.GENTLE -> R.string.readaloud_tone_gentle;
+                    case PlaybackVoice.Tone.BRIGHT -> R.string.readaloud_tone_bright;
+                    case PlaybackVoice.Tone.BREEZY -> R.string.readaloud_tone_breezy;
+                    case PlaybackVoice.Tone.SOOTHING -> R.string.readaloud_tone_soothing;
+                    case PlaybackVoice.Tone.PEACEFUL -> R.string.readaloud_tone_peaceful;
                     default -> 0;
                 });
     }

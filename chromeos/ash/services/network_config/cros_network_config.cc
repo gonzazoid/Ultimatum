@@ -6,6 +6,7 @@
 
 #include <cmath>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 #include "ash/constants/ash_features.h"
@@ -1655,6 +1656,11 @@ mojom::ManagedPropertiesPtr ManagedPropertiesToMojo(
       cellular->sim_locked = cellular_device &&
                              cellular_device->iccid() == cellular->iccid &&
                              cellular_device->IsSimLocked();
+      if (features::IsCellularCarrierLockEnabled()) {
+        if (cellular->sim_locked) {
+          cellular->sim_lock_type = cellular_device->sim_lock_type();
+        }
+      }
       if (features::IsSuppressTextMessagesEnabled()) {
         UserTextMessageSuppressionState state =
             NetworkHandler::Get()
@@ -2190,24 +2196,54 @@ mojom::NetworkCertificatePtr GetMojoCert(
 
 mojom::TrafficCounterSource ConvertToTrafficCounterSourceEnum(
     const std::string& source) {
-  if (source == shill::kTrafficCounterSourceUnknown)
+  if (source == shill::kTrafficCounterSourceUnknown) {
     return mojom::TrafficCounterSource::kUnknown;
-  if (source == shill::kTrafficCounterSourceChrome)
+  }
+  if (source == shill::kTrafficCounterSourceChrome) {
     return mojom::TrafficCounterSource::kChrome;
-  if (source == shill::kTrafficCounterSourceUser)
+  }
+  if (source == shill::kTrafficCounterSourceUser) {
     return mojom::TrafficCounterSource::kUser;
-  if (source == shill::kTrafficCounterSourceArc)
+  }
+  if (source == shill::kTrafficCounterSourceArc) {
     return mojom::TrafficCounterSource::kArc;
-  if (source == shill::kTrafficCounterSourceCrosvm)
+  }
+  if (source == shill::kTrafficCounterSourceCrosvm) {
     return mojom::TrafficCounterSource::kCrosvm;
-  if (source == shill::kTrafficCounterSourcePluginvm)
+  }
+  if (source == shill::kTrafficCounterSourcePluginvm) {
     return mojom::TrafficCounterSource::kPluginvm;
-  if (source == shill::kTrafficCounterSourceUpdateEngine)
+  }
+  if (source == shill::kTrafficCounterSourceUpdateEngine) {
     return mojom::TrafficCounterSource::kUpdateEngine;
-  if (source == shill::kTrafficCounterSourceVpn)
+  }
+  if (source == shill::kTrafficCounterSourceVpn) {
     return mojom::TrafficCounterSource::kVpn;
-  if (source == shill::kTrafficCounterSourceSystem)
+  }
+  if (source == shill::kTrafficCounterSourceSystem) {
     return mojom::TrafficCounterSource::kSystem;
+  }
+  if (source == shill::kTrafficCounterSourceBorealisVM) {
+    return mojom::TrafficCounterSource::kPluginvm;
+  }
+  if (source == shill::kTrafficCounterSourceBruschettaVM) {
+    return mojom::TrafficCounterSource::kPluginvm;
+  }
+  if (source == shill::kTrafficCounterSourceCrostiniVM) {
+    return mojom::TrafficCounterSource::kPluginvm;
+  }
+  if (source == shill::kTrafficCounterSourceParallelsVM) {
+    return mojom::TrafficCounterSource::kPluginvm;
+  }
+  if (source == shill::kTrafficCounterSourceTethering) {
+    return mojom::TrafficCounterSource::kChrome;
+  }
+  if (source == shill::kTrafficCounterSourceWiFiDirect) {
+    return mojom::TrafficCounterSource::kChrome;
+  }
+  if (source == shill::kTrafficCounterSourceWiFiLOHS) {
+    return mojom::TrafficCounterSource::kChrome;
+  }
   NOTREACHED() << "Unknown traffic counter source: " << source;
   return mojom::TrafficCounterSource::kUnknown;
 }
@@ -2267,7 +2303,7 @@ CrosNetworkConfig::CrosNetworkConfig(
       technology_state_controller_(technology_state_controller) {
   CHECK(network_state_handler);
   if (features::IsCellularCarrierLockEnabled()) {
-    const std::optional<base::StringPiece> serial_number =
+    const std::optional<std::string_view> serial_number =
         system::StatisticsProvider::GetInstance()->GetMachineID();
     if (!serial_number || serial_number->empty()) {
       LOG(WARNING) << "Serial number not set.";
@@ -3365,29 +3401,33 @@ void CrosNetworkConfig::PopulateTrafficCounters(
     // Since rx_bytes may be larger than the maximum value representable by
     // uint32_t, we must check whether it was implicitly converted to a double
     // during D-Bus deserialization.
-    uint64_t rx_bytes;
-    const base::Value* rb = tc_dict.Find("rx_bytes");
-    DCHECK(rb);
-    if (rb->type() == base::Value::Type::INTEGER) {
-      rx_bytes = rb->GetInt();
-    } else if (rb->type() == base::Value::Type::DOUBLE) {
-      rx_bytes = std::floor(rb->GetDouble());
+    uint64_t rx_bytes = 0;
+    if (const base::Value* const rb = tc_dict.Find("rx_bytes")) {
+      if (rb->is_int()) {
+        rx_bytes = rb->GetInt();
+      } else if (rb->is_double()) {
+        rx_bytes = std::floor(rb->GetDouble());
+      } else {
+        LOG(ERROR) << "Unexpected type " << rb->type() << " for rx_bytes";
+      }
     } else {
-      NOTREACHED();
+      LOG(ERROR) << "Missing field: rx_bytes";
     }
 
     // Since tx_bytes may be larger than the maximum value representable by
     // uint32_t, we must check whether it was implicitly converted to a double
     // during D-Bus deserialization.
-    uint64_t tx_bytes;
-    const base::Value* tb = tc_dict.Find("tx_bytes");
-    DCHECK(tb);
-    if (tb->type() == base::Value::Type::INTEGER) {
-      tx_bytes = tb->GetInt();
-    } else if (tb->type() == base::Value::Type::DOUBLE) {
-      tx_bytes = std::floor(tb->GetDouble());
+    uint64_t tx_bytes = 0;
+    if (const base::Value* const tb = tc_dict.Find("tx_bytes")) {
+      if (tb->is_int()) {
+        tx_bytes = tb->GetInt();
+      } else if (tb->is_double()) {
+        tx_bytes = std::floor(tb->GetDouble());
+      } else {
+        LOG(ERROR) << "Unexpected type " << tb->type() << " for tx_bytes";
+      }
     } else {
-      NOTREACHED();
+      LOG(ERROR) << "Missing field: tx_bytes";
     }
 
     counters.push_back(mojom::TrafficCounter::New(

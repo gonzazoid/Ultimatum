@@ -8,6 +8,7 @@
 #import "base/functional/callback_helpers.h"
 #import "base/memory/weak_ptr.h"
 #import "ios/chrome/browser/drive/model/drive_file_uploader.h"
+#import "ios/chrome/browser/drive/model/test_constants.h"
 
 @protocol SystemIdentity;
 
@@ -16,6 +17,15 @@ class TestDriveFileUploader final : public DriveFileUploader {
  public:
   explicit TestDriveFileUploader(id<SystemIdentity> identity);
   ~TestDriveFileUploader() final;
+
+  // Returns values reported by callbacks of `DriveFileUploader` methods.
+  // Unless overridden e.g. using `SetFolderSearchResult()`, a default value
+  // will be returned.
+  DriveFolderResult GetFolderSearchResult() const;
+  DriveFolderResult GetFolderCreationResult() const;
+  std::vector<DriveFileUploadProgress> GetFileUploadProgressElements() const;
+  DriveFileUploadResult GetFileUploadResult() const;
+  DriveStorageQuotaResult GetStorageQuotaResult() const;
 
   // Sets folder search result to be reported by `SearchSaveToDriveFolder()`.
   void SetFolderSearchResult(const DriveFolderResult& result);
@@ -26,8 +36,15 @@ class TestDriveFileUploader final : public DriveFileUploader {
       std::vector<DriveFileUploadProgress> progress_elements);
   // Sets file upload progress result to be reported by `UploadFile()`.
   void SetFileUploadResult(const DriveFileUploadResult& result);
-  // Sets `quit_closure_`.
-  void SetQuitClosure(base::RepeatingClosure quit_closure);
+  // Sets storage quota result to be reported by `FetchStorageQuota()`.
+  void SetStorageQuotaResult(const DriveStorageQuotaResult& result);
+
+  // Set quit closures.
+  void SetSearchFolderQuitClosure(base::RepeatingClosure quit_closure);
+  void SetCreateFolderQuitClosure(base::RepeatingClosure quit_closure);
+  void SetUploadFileProgressQuitClosure(base::RepeatingClosure quit_closure);
+  void SetUploadFileCompletionQuitClosure(base::RepeatingClosure quit_closure);
+  void SetFetchStorageQuotaQuitClosure(base::RepeatingClosure quit_closure);
 
   // Returns `folder_name` passed to `SearchSaveToDriveFolder()`.
   NSString* GetSearchedFolderName() const;
@@ -58,6 +75,8 @@ class TestDriveFileUploader final : public DriveFileUploader {
                   NSString* folder_identifier,
                   DriveFileUploadProgressCallback progress_callback,
                   DriveFileUploadCompletionCallback completion_callback) final;
+  void FetchStorageQuota(
+      DriveStorageQuotaCompletionCallback completion_callback) final;
 
  private:
   // Calls `completion_callback` with `folder_search_result` and calls
@@ -80,9 +99,18 @@ class TestDriveFileUploader final : public DriveFileUploader {
   void ReportFileUploadResult(
       DriveFileUploadCompletionCallback completion_callback,
       DriveFileUploadResult file_upload_result);
+  // Calls `completion_callback` with `storage_quota_result` and calls
+  // `quit_closure_`.
+  void ReportStorageQuotaResult(
+      DriveStorageQuotaCompletionCallback completion_callback,
+      DriveStorageQuotaResult storage_quota_result);
 
-  // Runs `quit_closure_`.
-  void RunQuitClosure();
+  // Run quit closures.
+  void RunSearchFolderQuitClosure();
+  void RunCreateFolderQuitClosure();
+  void RunUploadFileProgressQuitClosure();
+  void RunUploadFileCompletionQuitClosure();
+  void RunFetchStorageQuotaQuitClosure();
 
   id<SystemIdentity> identity_;
 
@@ -94,14 +122,29 @@ class TestDriveFileUploader final : public DriveFileUploader {
   NSString* uploaded_file_mime_type_;
   NSString* uploaded_file_folder_identifier_;
 
-  // Results/progress to be reported by callbacks of DriveFileUploader` methods.
+  // Results/progress to be reported by callbacks of `DriveFileUploader`
+  // methods. If one of these values is not set, a default value will be
+  // reported instead.
   std::optional<DriveFolderResult> folder_search_result_;
   std::optional<DriveFolderResult> folder_creation_result_;
   std::vector<DriveFileUploadProgress> file_upload_progress_elements_;
   std::optional<DriveFileUploadResult> file_upload_result_;
+  std::optional<DriveStorageQuotaResult> storage_quota_result_;
 
-  // Quit closure.
-  base::RepeatingClosure quit_closure_ = base::DoNothing();
+  // Quit closures.
+  base::RepeatingClosure search_folder_quit_closure_ = base::DoNothing();
+  base::RepeatingClosure create_folder_quit_closure_ = base::DoNothing();
+  base::RepeatingClosure upload_file_progress_quit_closure_ = base::DoNothing();
+  base::RepeatingClosure upload_file_completion_quit_closure_ =
+      base::DoNothing();
+  base::RepeatingClosure fetch_storage_quota_quit_closure_ = base::DoNothing();
+
+  // Last value reported by `ReportFileUploadResult()`, if any.
+  std::optional<DriveFileUploadResult> last_reported_file_upload_result_;
+
+  // Behavior e.g. whether to return an error or not.
+  TestDriveFileUploaderBehavior behavior_ =
+      TestDriveFileUploaderBehavior::kSucceed;
 
   // Weak pointer factory, for callbacks. Can be used to cancel any pending
   // tasks by invalidating all weak pointers.

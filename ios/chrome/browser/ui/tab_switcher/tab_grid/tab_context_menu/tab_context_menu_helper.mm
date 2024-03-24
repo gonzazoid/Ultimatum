@@ -76,6 +76,30 @@ using PinnedState = WebStateSearchCriteria::PinnedState;
                                                actionProvider:actionProvider];
 }
 
+- (UIContextMenuConfiguration*)
+    contextMenuConfigurationForTabGroupCell:(TabCell*)cell
+                               menuScenario:(MenuScenarioHistogram)scenario {
+  __weak __typeof(self) weakSelf = self;
+
+  UIContextMenuActionProvider actionProvider =
+      ^(NSArray<UIMenuElement*>* suggestedActions) {
+        TabContextMenuHelper* strongSelf = weakSelf;
+        if (!strongSelf) {
+          // Return an empty menu.
+          return [UIMenu menuWithTitle:@"" children:@[]];
+        }
+
+        NSArray<UIMenuElement*>* menuElements =
+            [strongSelf menuElementsForTabGroupCell:cell menuScenario:scenario];
+        return [UIMenu menuWithTitle:@"" children:menuElements];
+      };
+
+  return
+      [UIContextMenuConfiguration configurationWithIdentifier:nil
+                                              previewProvider:nil
+                                               actionProvider:actionProvider];
+}
+
 - (NSArray<UIMenuElement*>*)menuElementsForTabCell:(TabCell*)cell
                                       menuScenario:
                                           (MenuScenarioHistogram)scenario {
@@ -115,11 +139,34 @@ using PinnedState = WebStateSearchCriteria::PinnedState;
   }
 
   if (base::FeatureList::IsEnabled(kTabGroupsInGrid)) {
-    [menuElements addObject:[actionFactory actionToAddTabToNewGroupWithBlock:^{
-                    [self.contextMenuDelegate
-                        createNewTabGroupWithIdentifier:cell.itemIdentifier
-                                              incognito:self.incognito];
-                  }]];
+    // The `groupTitleAndIdentifiers`is for demo purposes only, it will be
+    // replaced when the group tab model is available.
+    GroupTitleAndIdentifier* firstGroupTitleAndIdentifier =
+        [[GroupTitleAndIdentifier alloc] init];
+    GroupTitleAndIdentifier* secondGroupTitleAndIdentifier =
+        [[GroupTitleAndIdentifier alloc] init];
+
+    firstGroupTitleAndIdentifier.groupTitle = @"Group 1";
+    firstGroupTitleAndIdentifier.groupID = @"Group 1";
+
+    secondGroupTitleAndIdentifier.groupTitle = @"Group 2";
+    secondGroupTitleAndIdentifier.groupID = @"Group 2";
+
+    NSArray<GroupTitleAndIdentifier*>* groupTitleAndIdentifiers =
+        @[ firstGroupTitleAndIdentifier, secondGroupTitleAndIdentifier ];
+    UIMenu* addTabToGroupMenu = [actionFactory
+        menuToAddTabToGroupWithGroupTitleAndIdentifiers:groupTitleAndIdentifiers
+                                                  block:^(NSString* title) {
+                                                    if (!title) {
+                                                      [self.contextMenuDelegate
+                                                          createNewTabGroupWithIdentifier:
+                                                              cell.itemIdentifier
+                                                                                incognito:
+                                                                                    self.incognito];
+                                                    }
+                                                  }];
+
+    [menuElements addObject:addTabToGroupMenu];
   }
 
   if (!IsURLNewTabPage(item.URL)) {
@@ -179,8 +226,7 @@ using PinnedState = WebStateSearchCriteria::PinnedState;
   UIAction* closeTabAction;
   ProceduralBlock closeTabActionBlock = ^{
     [self.contextMenuDelegate closeTabWithIdentifier:cell.itemIdentifier
-                                           incognito:self.incognito
-                                              pinned:pinned];
+                                           incognito:self.incognito];
   };
 
   if (IsPinnedTabsEnabled() && !self.incognito && pinned) {
@@ -192,6 +238,45 @@ using PinnedState = WebStateSearchCriteria::PinnedState;
   }
 
   [menuElements addObject:closeTabAction];
+
+  return menuElements;
+}
+
+- (NSArray<UIMenuElement*>*)menuElementsForTabGroupCell:(TabCell*)cell
+                                           menuScenario:
+                                               (MenuScenarioHistogram)scenario {
+  // Record that this context menu was shown to the user.
+  RecordMenuShown(scenario);
+
+  ActionFactory* actionFactory =
+      [[ActionFactory alloc] initWithScenario:scenario];
+
+  TabItem* item = [self tabItemForIdentifier:cell.itemIdentifier];
+
+  if (!item) {
+    return @[];
+  }
+
+  __weak __typeof(self) weakSelf = self;
+
+  NSMutableArray<UIMenuElement*>* menuElements = [[NSMutableArray alloc] init];
+
+  // TODO(crbug.com/1501837): Add the blocks to every action in the tab group
+  // context menu.
+
+  // `Rename Group` is an entry point to the create group view controller for
+  // now, it will be replaced once the model and the methods are available for
+  // tab groups.
+  [menuElements addObject:[actionFactory actionToRenameTabGroupWithBlock:^{
+                  [weakSelf.contextMenuDelegate
+                      createNewTabGroupWithIdentifier:cell.itemIdentifier
+                                            incognito:weakSelf.incognito];
+                }]];
+
+  [menuElements
+      addObject:[actionFactory actionToAddNewTabInGroupWithBlock:nil]];
+  [menuElements addObject:[actionFactory actionToUngroupTabGroupWithBlock:nil]];
+  [menuElements addObject:[actionFactory actionToCloseTabGroupWithBlock:nil]];
 
   return menuElements;
 }

@@ -6,6 +6,7 @@
 
 #include <pdh.h>
 
+#include <optional>
 #include <utility>
 
 #include "base/cpu.h"
@@ -17,8 +18,7 @@
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/win/scoped_pdh_query.h"
-#include "components/system_cpu/pressure_sample.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/system_cpu/cpu_sample.h"
 
 namespace system_cpu {
 
@@ -45,7 +45,7 @@ class CpuProbeWin::BlockingTaskRunnerHelper final {
   BlockingTaskRunnerHelper(const BlockingTaskRunnerHelper&) = delete;
   BlockingTaskRunnerHelper& operator=(const BlockingTaskRunnerHelper&) = delete;
 
-  absl::optional<PressureSample> Update();
+  std::optional<CpuSample> Update();
 
  private:
   SEQUENCE_CHECKER(sequence_checker_);
@@ -73,7 +73,7 @@ CpuProbeWin::BlockingTaskRunnerHelper::~BlockingTaskRunnerHelper() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
-absl::optional<PressureSample> CpuProbeWin::BlockingTaskRunnerHelper::Update() {
+std::optional<CpuSample> CpuProbeWin::BlockingTaskRunnerHelper::Update() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   PDH_STATUS pdh_status;
@@ -81,7 +81,7 @@ absl::optional<PressureSample> CpuProbeWin::BlockingTaskRunnerHelper::Update() {
   if (!cpu_query_.is_valid()) {
     cpu_query_ = base::win::ScopedPdhQuery::Create();
     if (!cpu_query_.is_valid()) {
-      return absl::nullopt;
+      return std::nullopt;
     }
 
     // When running in a VM, to provide a useful compute pressure signal, we
@@ -111,7 +111,7 @@ absl::optional<PressureSample> CpuProbeWin::BlockingTaskRunnerHelper::Update() {
       cpu_query_.reset();
       LOG(ERROR) << "PdhAddEnglishCounter failed: "
                  << logging::SystemErrorCodeToString(pdh_status);
-      return absl::nullopt;
+      return std::nullopt;
     }
   }
 
@@ -119,12 +119,12 @@ absl::optional<PressureSample> CpuProbeWin::BlockingTaskRunnerHelper::Update() {
   if (pdh_status != ERROR_SUCCESS) {
     LOG(ERROR) << "PdhCollectQueryData failed: "
                << logging::SystemErrorCodeToString(pdh_status);
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   if (!got_baseline_) {
     got_baseline_ = true;
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   PDH_FMT_COUNTERVALUE counter_value;
@@ -133,10 +133,10 @@ absl::optional<PressureSample> CpuProbeWin::BlockingTaskRunnerHelper::Update() {
   if (pdh_status != ERROR_SUCCESS) {
     LOG(ERROR) << "PdhGetFormattedCounterValue failed: "
                << logging::SystemErrorCodeToString(pdh_status);
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  return PressureSample{counter_value.doubleValue / 100.0};
+  return CpuSample{counter_value.doubleValue / 100.0};
 }
 
 // static
@@ -145,9 +145,16 @@ std::unique_ptr<CpuProbeWin> CpuProbeWin::Create() {
 }
 
 CpuProbeWin::CpuProbeWin() {
+  // BlockingTaskRunnerHelper makes heavy use of Pdh* functions than can load
+  // DLL's, which must happen in the foreground to avoid a priority inversion
+  // in the Windows DLL loader lock. Tasks on the helper sequence can be
+  // delayed (BEST_EFFORT priority) but once started must run in the foreground
+  // (MUST_USE_FOREGROUND policy) to avoid being descheduled while another
+  // foreground thread is waiting for the loader lock.
   helper_ = base::SequenceBound<BlockingTaskRunnerHelper>(
       base::ThreadPool::CreateSequencedTaskRunner(
           {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
+           base::ThreadPolicy::MUST_USE_FOREGROUND,
            base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN}));
 }
 

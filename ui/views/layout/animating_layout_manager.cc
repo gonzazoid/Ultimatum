@@ -24,6 +24,7 @@
 #include "ui/views/animation/animation_delegate_views.h"
 #include "ui/views/layout/normalized_geometry.h"
 #include "ui/views/view.h"
+#include "ui/views/view_class_properties.h"
 
 namespace views {
 
@@ -88,13 +89,13 @@ struct AnimatingLayoutManager::LayoutFadeInfo {
   // How the child view is fading.
   LayoutFadeType fade_type;
   // The child view which is fading.
-  raw_ptr<View> child_view = nullptr;
+  raw_ptr<View, DanglingUntriaged> child_view = nullptr;
   // The view previous (leading side) to the fading view which is in both the
   // starting and target layout, or null if none.
-  raw_ptr<View> prev_view = nullptr;
+  raw_ptr<View, DanglingUntriaged> prev_view = nullptr;
   // The view next (trailing side) to the fading view which is in both the
   // starting and target layout, or null if none.
-  raw_ptr<View> next_view = nullptr;
+  raw_ptr<View, DanglingUntriaged> next_view = nullptr;
   // The full-size bounds, normalized to the orientation of the layout manager,
   // that |child_view| starts with, if fading out, or ends with, if fading in.
   NormalizedRect reference_bounds;
@@ -305,7 +306,7 @@ void AnimatingLayoutManager::FadeOut(View* child_view) {
   }
 
   // This handles a case where we are in the middle of an animation where we
-  // would have hidden the target view, but haven't hit Layout() yet, so haven't
+  // would have hidden the target view, but haven't laid out yet, so haven't
   // actually hidden it yet. Because we plan fade-outs off of the current layout
   // if the view the child view is visible it will not get a proper fade-out and
   // will remain visible but not properly laid out. We remedy this by hiding the
@@ -512,7 +513,7 @@ bool AnimatingLayoutManager::OnViewAdded(View* host, View* view) {
   // Handle a case where we add a visible view that shouldn't be visible in the
   // layout. In this case, there is no animation, no invalidation, and we just
   // set the view to not be visible.
-  if (view->GetVisible() && cached_layout_size() && !is_animating_) {
+  if (IsChildIncludedInLayout(view) && cached_layout_size() && !is_animating_) {
     const gfx::Size target_size = GetAvailableTargetLayoutSize();
     ProposedLayout proposed_layout =
         target_layout_manager()->GetProposedLayout(target_size);
@@ -807,10 +808,10 @@ void AnimatingLayoutManager::CalculateFadeInfos() {
   fade_infos_.clear();
 
   struct ChildInfo {
-    absl::optional<size_t> start;
+    std::optional<size_t> start;
     NormalizedRect start_bounds;
     bool start_visible = false;
-    absl::optional<size_t> target;
+    std::optional<size_t> target;
     NormalizedRect target_bounds;
     bool target_visible = false;
   };
@@ -945,7 +946,8 @@ void AnimatingLayoutManager::ResolveFades() {
     View* const child = fade_info.child_view;
     if (fade_info.fade_type == LayoutFadeType::kFadingOut &&
         host_view()->GetIndexOf(child).has_value() &&
-        !IsChildViewIgnoredByLayout(child) && !IsChildIncludedInLayout(child)) {
+        !child->GetProperty(kViewIgnoredByLayoutKey) &&
+        !IsChildIncludedInLayout(child)) {
       SetViewVisibility(child, false);
     }
   }

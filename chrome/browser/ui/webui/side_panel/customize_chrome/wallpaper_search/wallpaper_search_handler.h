@@ -14,13 +14,14 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/raw_ref.h"
 #include "base/memory/weak_ptr.h"
+#include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "base/timer/elapsed_timer.h"
 #include "base/token.h"
+#include "chrome/browser/search/background/wallpaper_search/wallpaper_search_background_manager_observer.h"
 #include "chrome/browser/search/background/wallpaper_search/wallpaper_search_data.h"
 #include "chrome/browser/ui/webui/side_panel/customize_chrome/wallpaper_search/wallpaper_search.mojom.h"
 #include "components/optimization_guide/core/optimization_guide_model_executor.h"
-#include "components/prefs/pref_change_registrar.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -44,8 +45,19 @@ class ImageDecoder;
 using ImageDecodedCallback = base::OnceCallback<void(const gfx::Image&)>;
 }  // namespace image_fetcher
 
+// This matches to the enum of the same name that is used by
+// the histogram "NewTabPage.WallpaperSearch.SessionSetTheme"
+// and must be kept in sync. Do not renumber.
+enum class NtpWallpaperSearchThemeType {
+  kResult = 0,
+  kInspiration = 1,
+  kHistory = 2,
+  kMaxValue = kHistory,
+};
+
 class WallpaperSearchHandler
-    : public side_panel::customize_chrome::mojom::WallpaperSearchHandler {
+    : public side_panel::customize_chrome::mojom::WallpaperSearchHandler,
+      public WallpaperSearchBackgroundManagerObserver {
  public:
   WallpaperSearchHandler(
       mojo::PendingReceiver<
@@ -88,11 +100,15 @@ class WallpaperSearchHandler
   void SetUserFeedback(side_panel::customize_chrome::mojom::UserFeedback
                            selected_option) override;
   void OpenHelpArticle() override;
+  void LaunchHatsSurvey() override;
 #if BUILDFLAG(IS_CHROMEOS)
   void SkipShowFeedbackPageForTesting(bool should_skip_check) {
     skip_show_feedback_page_for_testing_ = should_skip_check;
   }
 #endif  // BUILDFLAG(IS_CHROMEOS)
+
+  // WallpaperSearchBackgroundManagerObserver:
+  void OnHistoryUpdated() override;
 
  private:
   void ShowFeedbackPage();
@@ -130,9 +146,9 @@ class WallpaperSearchHandler
       base::ElapsedTimer timer,
       side_panel::customize_chrome::mojom::ResultDescriptorsPtr descriptors,
       const gfx::Image& image);
+  void LaunchDelayedHatsSurvey();
 
   raw_ptr<Profile> profile_;
-  PrefChangeRegistrar pref_change_registrar_;
   std::unique_ptr<network::SimpleURLLoader> descriptors_simple_url_loader_;
   std::unique_ptr<data_decoder::DataDecoder> data_decoder_;
   const raw_ref<image_fetcher::ImageDecoder> image_decoder_;
@@ -140,6 +156,9 @@ class WallpaperSearchHandler
   std::unique_ptr<network::SimpleURLLoader> image_download_simple_url_loader_;
   const raw_ref<WallpaperSearchBackgroundManager>
       wallpaper_search_background_manager_;
+  base::ScopedObservation<WallpaperSearchBackgroundManager,
+                          WallpaperSearchBackgroundManagerObserver>
+      wallpaper_search_background_manager_observation_{this};
   // We keep all log entries alive until the session closes because whether and
   // which image was selected will only be known then.
   std::vector<
@@ -149,6 +168,9 @@ class WallpaperSearchHandler
   // Theme to be sent to the background manager to be saved to history on
   // destruction of this handler.
   std::unique_ptr<HistoryEntry> history_entry_;
+  // Set inspiration image. This is the token of the last set inspiration image
+  // of this handler instance for metrics.
+  std::optional<base::Token> inspiration_token_;
   // `wallpaper_search_results_` points to entries in `log_entries_`. Therefore,
   // `wallpaper_search_results_` is defined below so that the pointers get
   // destructed before the pointed to objects in `log_entries_`.

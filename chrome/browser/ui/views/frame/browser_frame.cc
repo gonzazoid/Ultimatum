@@ -299,7 +299,7 @@ void BrowserFrame::UserChangedTheme(BrowserThemeChangeType theme_change_type) {
     // theme change notifications.
     Widget::Widgets widgets;
     GetAllOwnedWidgets(GetNativeView(), &widgets);
-    for (auto* widget : widgets) {
+    for (Widget* widget : widgets) {
       widget->ThemeChanged();
     }
   }
@@ -392,6 +392,11 @@ void BrowserFrame::ShowContextMenuForViewImpl(views::View* source,
   // Do not show context menu for Document picture-in-picture browser. Context:
   // http://b/274862709.
   if (browser_view_->browser()->is_type_picture_in_picture()) {
+    return;
+  }
+
+  // Don't show a menu if a tab drag is active. https://crbug.com/1517709
+  if (tab_drag_kind_ != TabDragKind::kNone) {
     return;
   }
 
@@ -593,7 +598,7 @@ void BrowserFrame::OnTouchUiChanged() {
   } else {
     non_client_view()->InvalidateLayout();
   }
-  GetRootView()->Layout();
+  GetRootView()->DeprecatedLayoutImmediately();
 }
 
 bool BrowserFrame::RegenerateFrameOnThemeChange(

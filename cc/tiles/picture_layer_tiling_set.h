@@ -180,7 +180,9 @@ class CC_EXPORT PictureLayerTilingSet {
    private:
     size_t NextTiling() const;
 
-    raw_ptr<const PictureLayerTilingSet> set_;
+    // RAW_PTR_EXCLUSION: Renderer performance: visible in sampling profiler
+    // stacks.
+    RAW_PTR_EXCLUSION const PictureLayerTilingSet* set_;
     float coverage_scale_;
     PictureLayerTiling::CoverageIterator tiling_iter_;
     size_t current_tiling_;
@@ -214,9 +216,9 @@ class CC_EXPORT PictureLayerTilingSet {
       ~AutoClear() { *state_to_clear_ = StateSinceLastTilePriorityUpdate(); }
 
      private:
-      // Not a raw_ptr<...> for performance reasons: on-stack pointer +
-      // based on analysis of sampling profiler data
-      // (cc::PictureLayerTilingSet::UpdateTilePriorities -> creates AutoClear
+      // RAW_PTR_EXCLUSION: Performance reasons: on-stack pointer + based on
+      // analysis of sampling profiler data
+      // (PictureLayerTilingSet::UpdateTilePriorities -> creates AutoClear
       // on stack).
       RAW_PTR_EXCLUSION StateSinceLastTilePriorityUpdate* state_to_clear_;
     };

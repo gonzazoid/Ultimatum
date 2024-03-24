@@ -4,8 +4,10 @@
 
 #include "extensions/browser/process_map.h"
 
+#include <string>
 #include <tuple>
 
+#include "base/containers/contains.h"
 #include "content/public/browser/child_process_security_policy.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/common/url_constants.h"
@@ -14,6 +16,7 @@
 #include "extensions/browser/process_map_factory.h"
 #include "extensions/browser/script_injection_tracker.h"
 #include "extensions/common/extension.h"
+#include "extensions/common/extension_id.h"
 #include "extensions/common/features/feature.h"
 #include "extensions/common/mojom/context_type.mojom.h"
 
@@ -47,29 +50,6 @@ bool IsWebViewProcessForExtension(int process_id,
 
 }  // namespace
 
-// Item
-struct ProcessMap::Item {
-  Item(const std::string& extension_id, int process_id)
-      : extension_id(extension_id), process_id(process_id) {}
-
-  Item(const Item&) = delete;
-  Item& operator=(const Item&) = delete;
-
-  ~Item() = default;
-
-  Item(ProcessMap::Item&&) = default;
-  Item& operator=(ProcessMap::Item&&) = default;
-
-  bool operator<(const ProcessMap::Item& other) const {
-    return std::tie(extension_id, process_id) <
-           std::tie(other.extension_id, other.process_id);
-  }
-
-  std::string extension_id;
-  int process_id = 0;
-};
-
-
 // ProcessMap
 ProcessMap::ProcessMap() = default;
 
@@ -80,45 +60,31 @@ ProcessMap* ProcessMap::Get(content::BrowserContext* browser_context) {
   return ProcessMapFactory::GetForBrowserContext(browser_context);
 }
 
-bool ProcessMap::Insert(const std::string& extension_id, int process_id) {
-  return items_.insert(Item(extension_id, process_id)).second;
+bool ProcessMap::Insert(const ExtensionId& extension_id, int process_id) {
+  return items_.emplace(extension_id, process_id).second;
 }
 
 int ProcessMap::RemoveAllFromProcess(int process_id) {
-  int result = 0;
-  for (auto iter = items_.begin(); iter != items_.end();) {
-    if (iter->process_id == process_id) {
-      items_.erase(iter++);
-      ++result;
-    } else {
-      ++iter;
-    }
-  }
-  return result;
+  return std::erase_if(
+      items_, [&](const auto& item) { return item.second == process_id; });
 }
 
-bool ProcessMap::Contains(const std::string& extension_id,
+bool ProcessMap::Contains(const ExtensionId& extension_id,
                           int process_id) const {
-  for (auto iter = items_.cbegin(); iter != items_.cend(); ++iter) {
-    if (iter->process_id == process_id && iter->extension_id == extension_id)
-      return true;
-  }
-  return false;
+  return items_.contains({extension_id, process_id});
 }
 
 bool ProcessMap::Contains(int process_id) const {
-  for (auto iter = items_.cbegin(); iter != items_.cend(); ++iter) {
-    if (iter->process_id == process_id)
-      return true;
-  }
-  return false;
+  return base::Contains(items_, process_id, &Item::second);
 }
 
-std::set<std::string> ProcessMap::GetExtensionsInProcess(int process_id) const {
-  std::set<std::string> result;
-  for (auto iter = items_.cbegin(); iter != items_.cend(); ++iter) {
-    if (iter->process_id == process_id)
-      result.insert(iter->extension_id);
+std::set<ExtensionId> ProcessMap::GetExtensionsInProcess(
+    int process_id_in) const {
+  std::set<ExtensionId> result;
+  for (const auto& [extension_id, process_id] : items_) {
+    if (process_id == process_id_in) {
+      result.insert(extension_id);
+    }
   }
   return result;
 }

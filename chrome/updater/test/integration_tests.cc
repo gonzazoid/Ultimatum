@@ -51,6 +51,8 @@
 #include "chrome/updater/util/unit_test_util.h"
 #include "chrome/updater/util/util.h"
 #include "components/policy/proto/device_management_backend.pb.h"
+#include "components/update_client/protocol_definition.h"
+#include "components/update_client/update_client.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 
@@ -308,10 +310,11 @@ class IntegrationTest : public ::testing::Test {
       const std::string& app_id,
       AppBundleWebCreateMode app_bundle_web_create_mode,
       int expected_final_state,
-      int expected_error_code) {
+      int expected_error_code,
+      bool cancel_when_downloading = false) {
     test_commands_->ExpectLegacyUpdate3WebSucceeds(
         app_id, app_bundle_web_create_mode, expected_final_state,
-        expected_error_code);
+        expected_error_code, cancel_when_downloading);
   }
 
   void ExpectLegacyProcessLauncherSucceeds() {
@@ -476,8 +479,12 @@ class IntegrationTest : public ::testing::Test {
                                               from_version, to_version);
   }
 
+  void ExpectPing(ScopedServer* test_server, int event_type) {
+    test_commands_->ExpectPing(test_server, event_type);
+  }
+
   void ExpectUninstallPing(ScopedServer* test_server) {
-    test_commands_->ExpectUninstallPing(test_server);
+    ExpectPing(test_server, update_client::protocol_request::kEventUninstall);
   }
 
   void ExpectUpdateSequence(ScopedServer* test_server,
@@ -1369,7 +1376,8 @@ TEST_F(IntegrationTest, LegacyProcessLauncher) {
   ASSERT_NO_FATAL_FAILURE(Uninstall());
 }
 
-TEST_F(IntegrationTest, LegacyAppCommandWeb) {
+TEST_F(IntegrationTest, LegacyAppCommandWeb_NoUsageStats_NoPing) {
+  ScopedServer test_server(test_commands_);
   ASSERT_NO_FATAL_FAILURE(Install());
 
   const char kAppId[] = "test1";
@@ -1380,6 +1388,46 @@ TEST_F(IntegrationTest, LegacyAppCommandWeb) {
   ASSERT_NO_FATAL_FAILURE(
       ExpectLegacyAppCommandWebSucceeds(kAppId, "command1", parameters, 5432));
 
+  ASSERT_NO_FATAL_FAILURE(ExpectUninstallPing(&test_server));
+  ASSERT_NO_FATAL_FAILURE(Uninstall());
+}
+
+TEST_F(IntegrationTest, LegacyAppCommandWeb_UsageStatsEnabled_ExpectPing) {
+  ScopedServer test_server(test_commands_);
+  ASSERT_NO_FATAL_FAILURE(Install());
+
+  const std::string kAppId("test");
+  // Enable usagestats.
+  InstallApp(kAppId, base::Version("0.1"), [&] {
+    ASSERT_EQ(
+        base::win::RegKey(
+            UpdaterScopeToHKeyRoot(GetTestScope()),
+            base::StrCat({CLIENT_STATE_KEY, base::UTF8ToWide(kAppId)}).c_str(),
+            Wow6432(KEY_WRITE))
+            .WriteValue(L"usagestats", 1),
+        ERROR_SUCCESS);
+  });
+
+  base::Version v1("1");
+  ASSERT_NO_FATAL_FAILURE(ExpectUpdateSequence(
+      &test_server, kAppId, "", UpdateService::Priority::kBackground,
+      base::Version("0.1"), v1));
+
+  // Run wake to pick up the usage stats.
+  ASSERT_NO_FATAL_FAILURE(RunWake(0));
+  ASSERT_NO_FATAL_FAILURE(ExpectAppVersion(kAppId, v1));
+
+  // The test runs the appcommand twice, so two pings.
+  ASSERT_NO_FATAL_FAILURE(ExpectPing(
+      &test_server, update_client::protocol_request::kEventAppCommandBegin));
+  ASSERT_NO_FATAL_FAILURE(ExpectPing(
+      &test_server, update_client::protocol_request::kEventAppCommandBegin));
+  base::Value::List parameters;
+  parameters.Append("5432");
+  ASSERT_NO_FATAL_FAILURE(
+      ExpectLegacyAppCommandWebSucceeds(kAppId, "command1", parameters, 5432));
+
+  ASSERT_NO_FATAL_FAILURE(ExpectUninstallPing(&test_server));
   ASSERT_NO_FATAL_FAILURE(Uninstall());
 }
 
@@ -1872,6 +1920,75 @@ TEST_F(IntegrationTest, CrashUsageStatsEnabled) {
 }
 
 #if BUILDFLAG(IS_WIN)
+class IntegrationTestLegacyUpdate3WebNewInstall : public IntegrationTest {
+ public:
+  IntegrationTestLegacyUpdate3WebNewInstall() = default;
+  ~IntegrationTestLegacyUpdate3WebNewInstall() override = default;
+
+ protected:
+  void SetUp() override {
+    if (!::IsUserAnAdmin() && IsSystemInstall(GetTestScope())) {
+      GTEST_SKIP();
+    }
+
+    IntegrationTest::SetUp();
+
+    test_server_ = std::make_unique<ScopedServer>(test_commands_);
+    ASSERT_NO_FATAL_FAILURE(Install());
+  }
+
+  void TearDown() override {
+    ASSERT_NO_FATAL_FAILURE(ExpectUninstallPing(test_server_.get()));
+    ASSERT_NO_FATAL_FAILURE(Uninstall());
+
+    IntegrationTest::TearDown();
+  }
+
+  std::unique_ptr<ScopedServer> test_server_;
+  static constexpr char kAppId[] = "test1";
+};
+
+TEST_F(IntegrationTestLegacyUpdate3WebNewInstall, CheckForInstall) {
+  ASSERT_NO_FATAL_FAILURE(ExpectUpdateCheckSequence(
+      test_server_.get(), kAppId, UpdateService::Priority::kForeground,
+      base::Version(kNullVersion), base::Version("0.1")));
+  ASSERT_NO_FATAL_FAILURE(
+      ExpectLegacyUpdate3WebSucceeds(kAppId, AppBundleWebCreateMode::kCreateApp,
+                                     STATE_UPDATE_AVAILABLE, S_OK));
+}
+
+TEST_F(IntegrationTestLegacyUpdate3WebNewInstall, Install) {
+  const base::Version v1("0.1");
+  ASSERT_NO_FATAL_FAILURE(ExpectUpdateCheckSequence(
+      test_server_.get(), kAppId, UpdateService::Priority::kForeground,
+      base::Version(kNullVersion), v1));
+
+  // "expected_install_data_index" is set in `integration_tests_win.cc`,
+  // `DoUpdate`.
+  ASSERT_NO_FATAL_FAILURE(ExpectInstallSequence(
+      test_server_.get(), kAppId, "expected_install_data_index",
+      UpdateService::Priority::kForeground, base::Version(kNullVersion), v1));
+
+  ASSERT_NO_FATAL_FAILURE(
+      ExpectLegacyUpdate3WebSucceeds(kAppId, AppBundleWebCreateMode::kCreateApp,
+                                     STATE_INSTALL_COMPLETE, S_OK));
+  base::Value::Dict expected_app_state;
+  expected_app_state.Set("app_id", kAppId);
+  expected_app_state.Set("version", v1.GetString());
+
+  // These values are set in `integration_tests_win.cc`, `DoUpdate`, in the call
+  // to `createApp`:
+  expected_app_state.Set("ap", "DoUpdateAP");
+  expected_app_state.Set("brand_code", "BRND");
+
+  expected_app_state.Set("brand_path", "");
+  expected_app_state.Set("ecp", "");
+  base::Value::Dict expected_app_states;
+  expected_app_states.Set(kAppId, std::move(expected_app_state));
+
+  ASSERT_NO_FATAL_FAILURE(GetAppStates(expected_app_states));
+}
+
 class IntegrationTestLegacyUpdate3Web : public IntegrationTest {
  public:
   IntegrationTestLegacyUpdate3Web() = default;
@@ -1958,7 +2075,7 @@ TEST_F(IntegrationTestLegacyUpdate3Web, Install) {
   ASSERT_NO_FATAL_FAILURE(ExpectUpdateCheckSequence(
       test_server_.get(), kAppId, UpdateService::Priority::kForeground,
       base::Version("0.1"), base::Version("0.1")));
-  ASSERT_NO_FATAL_FAILURE(ExpectUpdateSequence(
+  ASSERT_NO_FATAL_FAILURE(ExpectInstallSequence(
       test_server_.get(), kAppId, "", UpdateService::Priority::kForeground,
       base::Version("0.1"), base::Version("0.1")));
   ASSERT_NO_FATAL_FAILURE(
@@ -2795,6 +2912,45 @@ TEST_P(IntegrationInstallerResultsTest, OnDemandTestCases) {
       kMsiAppId, AppBundleWebCreateMode::kCreateInstalledApp,
       should_install_successfully ? STATE_INSTALL_COMPLETE : STATE_ERROR,
       GetParam().error_code));
+  ASSERT_NO_FATAL_FAILURE(Uninstall());
+}
+
+class IntegrationInstallerResultsTestNewInstalls : public IntegrationTestMsi {};
+
+TEST_F(IntegrationInstallerResultsTestNewInstalls, OnDemandCancel) {
+  // Delay download a bit to allow cancellation.
+  test_server_->set_download_delay(base::Seconds(1));
+
+  const base::FilePath crx_relative_path = GetInstallerPath(kMsiCrx);
+
+  ASSERT_NO_FATAL_FAILURE(Install());
+  ASSERT_NO_FATAL_FAILURE(InstallApp(kMsiAppId, base::Version({0, 0, 0, 0})));
+
+  ASSERT_NO_FATAL_FAILURE(ExpectUpdateCheckSequence(
+      test_server_.get(), kMsiAppId, UpdateService::Priority::kForeground,
+      base::Version({0, 0, 0, 0}), kMsiUpdatedVersion));
+
+  ExpectAppsUpdateSequence(
+      UpdaterScope::kSystem, test_server_.get(),
+      /*request_attributes=*/{},
+      {
+          AppUpdateExpectation(
+              "INSTALLER_RESULT=0", kMsiAppId, base::Version({0, 0, 0, 0}),
+              kMsiUpdatedVersion,
+              /*is_install=*/false, /*should_update=*/false,
+              /*allow_rollback=*/false,
+              /*target_version_prefix=*/{}, /*target_channel=*/{},
+              crx_relative_path,
+              /*always_serve_crx=*/true, UpdateService::ErrorCategory::kService,
+              static_cast<int>(update_client::ServiceError::CANCELLED),
+              /*EVENT_INSTALL_COMPLETE=*/2, {}),
+      });
+  ASSERT_NO_FATAL_FAILURE(ExpectUninstallPing(test_server_.get()));
+
+  ASSERT_NO_FATAL_FAILURE(ExpectLegacyUpdate3WebSucceeds(
+      kMsiAppId, AppBundleWebCreateMode::kCreateApp, STATE_ERROR,
+      static_cast<int>(update_client::ServiceError::CANCELLED),
+      /*cancel_when_downloading=*/true));
   ASSERT_NO_FATAL_FAILURE(Uninstall());
 }
 

@@ -73,19 +73,22 @@ class ExternalMemoryAdapter : public DecoderBuffer::ExternalMemory {
 
 }  // namespace
 
-MP4StreamParser::MP4StreamParser(const std::set<int>& audio_object_types,
-                                 bool has_sbr,
-                                 bool has_flac,
-                                 bool has_dv)
+MP4StreamParser::MP4StreamParser(
+    std::optional<base::flat_set<int>> strict_audio_object_types,
+    bool has_sbr,
+    bool has_flac,
+    bool has_iamf,
+    bool has_dv)
     : state_(kWaitingForInit),
       moof_head_(0),
       mdat_tail_(0),
       highest_end_offset_(0),
       has_audio_(false),
       has_video_(false),
-      audio_object_types_(audio_object_types),
+      strict_audio_object_types_(strict_audio_object_types),
       has_sbr_(has_sbr),
       has_flac_(has_flac),
+      has_iamf_(has_iamf),
       has_dv_(has_dv),
       num_empty_samples_skipped_(0),
       num_invalid_conversions_(0),
@@ -433,6 +436,9 @@ bool MP4StreamParser::ParseMoov(BoxReader* reader) {
 #if BUILDFLAG(ENABLE_PLATFORM_MPEG_H_AUDIO)
           audio_format != FOURCC_MHM1 && audio_format != FOURCC_MHA1 &&
 #endif
+#if BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
+          audio_format != FOURCC_IAMF &&
+#endif  // BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
           audio_format != FOURCC_MP4A) {
         MEDIA_LOG(ERROR, media_log_)
             << "Unsupported audio format 0x" << std::hex << entry.format
@@ -447,8 +453,11 @@ bool MP4StreamParser::ParseMoov(BoxReader* reader) {
       base::TimeDelta seek_preroll;
       std::vector<uint8_t> extra_data;
 
-#if BUILDFLAG(USE_PROPRIETARY_CODECS)
+#if BUILDFLAG(USE_PROPRIETARY_CODECS) || BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
       AudioCodecProfile profile = AudioCodecProfile::kUnknown;
+#endif  // BUILDFLAG(USE_PROPRIETARY_CODECS) ||
+        // BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
+#if BUILDFLAG(USE_PROPRIETARY_CODECS)
       std::vector<uint8_t> aac_extra_data;
 #endif  // BUILDFLAG(USE_PROPRIETARY_CODECS)
 
@@ -473,6 +482,29 @@ bool MP4StreamParser::ParseMoov(BoxReader* reader) {
         channel_layout = GuessChannelLayout(entry.channelcount);
         sample_per_second = entry.samplerate;
         extra_data = entry.dfla.stream_info;
+#if BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
+      } else if (audio_format == FOURCC_IAMF) {
+        // ISOBMFF IAMF streams do not use object type indication.
+        // |audio_format| is sufficient for identifying IAMF.
+        if (!has_iamf_) {
+          MEDIA_LOG(ERROR, media_log_) << "IAMF audio stream detected in MP4, "
+                                          "mismatching what is specified in "
+                                          "the mimetype.";
+          return false;
+        }
+
+        codec = AudioCodec::kIAMF;
+        profile = entry.iamf.profile == 0 ? AudioCodecProfile::kIAMF_SIMPLE
+                                          : AudioCodecProfile::kIAMF_BASE;
+        // The correct values for the channel layout and sample rate can
+        // be parsed from the descriptor bitstream prepended to each sample.
+        // They are set to the following values here to create a valid
+        // AudioDecoderConfig.
+        // TODO (crbug.com/1513779): Parse the bitstream to set the correct
+        // values here.
+        channel_layout = CHANNEL_LAYOUT_STEREO;
+        sample_per_second = 48000;
+#endif  // BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
 #if BUILDFLAG(USE_PROPRIETARY_CODECS)
 #if BUILDFLAG(ENABLE_PLATFORM_MPEG_H_AUDIO)
       } else if (audio_format == FOURCC_MHM1 || audio_format == FOURCC_MHA1) {
@@ -510,12 +542,14 @@ bool MP4StreamParser::ParseMoov(BoxReader* reader) {
         }
 #endif  // BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
         DVLOG(1) << "audio_type 0x" << std::hex << static_cast<int>(audio_type);
-        if (audio_object_types_.find(audio_type) == audio_object_types_.end()) {
-          MEDIA_LOG(ERROR, media_log_)
-              << "audio object type 0x" << std::hex
-              << static_cast<int>(audio_type)
-              << " does not match what is specified in the mimetype.";
-          return false;
+        if (strict_audio_object_types_.has_value()) {
+          if (!strict_audio_object_types_->contains(audio_type)) {
+            MEDIA_LOG(ERROR, media_log_)
+                << "audio object type 0x" << std::hex
+                << static_cast<int>(audio_type)
+                << " does not match what is specified in the mimetype.";
+            return false;
+          }
         }
 
         // Check if it is MPEG4 AAC defined in ISO 14496 Part 3 or
@@ -619,6 +653,11 @@ bool MP4StreamParser::ParseMoov(BoxReader* reader) {
         audio_config.set_aac_extra_data(std::move(aac_extra_data));
       }
 #endif  // BUILDFLAG(USE_PROPRIETARY_CODECS)
+#if BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
+      if (codec == AudioCodec::kIAMF) {
+        audio_config.set_profile(profile);
+      }
+#endif  // BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
 
       DVLOG(1) << "audio_track_id=" << audio_track_id
                << " config=" << audio_config.AsHumanReadableString();
@@ -855,6 +894,26 @@ bool MP4StreamParser::PrepareAACBuffer(
 }
 #endif  // BUILDFLAG(USE_PROPRIETARY_CODECS)
 
+#if BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
+bool MP4StreamParser::PrependIADescriptors(
+    const IamfSpecificBox& iamf_box,
+    std::vector<uint8_t>* frame_buf,
+    std::vector<SubsampleEntry>* subsamples) const {
+  // Prepend the IA Descriptors to every IA Sample.
+  frame_buf->insert(frame_buf->begin(), iamf_box.ia_descriptors.begin(),
+                    iamf_box.ia_descriptors.end());
+  if (subsamples->empty()) {
+    subsamples->push_back(
+        SubsampleEntry(iamf_box.ia_descriptors.size(),
+                       frame_buf->size() - iamf_box.ia_descriptors.size()));
+  } else {
+    (*subsamples)[0].clear_bytes += iamf_box.ia_descriptors.size();
+  }
+
+  return true;
+}
+#endif  // BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
+
 ParseResult MP4StreamParser::EnqueueSample(BufferQueueMap* buffers) {
   DCHECK_EQ(state_, kEmittingSamples);
 
@@ -1025,6 +1084,16 @@ ParseResult MP4StreamParser::EnqueueSample(BufferQueueMap* buffers) {
 #else
       return ParseResult::kError;
 #endif  // BUILDFLAG(USE_PROPRIETARY_CODECS)
+    } else {
+#if BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
+      if (runs_->audio_description().format == FOURCC_IAMF) {
+        if (!PrependIADescriptors(runs_->audio_description().iamf, &frame_buf,
+                                  &subsamples)) {
+          MEDIA_LOG(ERROR, media_log_)
+              << "Failed to prepare IA sample for decode";
+        }
+      }
+#endif  // BUILDFLAG(ENABLE_PLATFORM_IAMF_AUDIO)
     }
   }
 

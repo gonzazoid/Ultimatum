@@ -108,7 +108,8 @@ class VisitDatabase {
 
   // Fills all visits in the time range [begin, end) to the given vector. Either
   // time can be is_null(), in which case the times in that direction are
-  // unbounded.
+  // unbounded. If app_id is present, restrict the results to those matching
+  // the app_id only.
   //
   // If `max_results` is non-zero, up to that many results will be returned. If
   // there are more results than that, the oldest ones will be returned. (This
@@ -117,6 +118,7 @@ class VisitDatabase {
   // The results will be in increasing order of date.
   bool GetAllVisitsInRange(base::Time begin_time,
                            base::Time end_time,
+                           std::optional<std::string> app_id,
                            int max_results,
                            VisitVector* visits);
 
@@ -351,6 +353,10 @@ class VisitDatabase {
   // Called by the derived classes to migrate the older visits table which
   // doesn't have the `visited_link_id` column.
   bool MigrateVisitsAddVisitedLinkIdColumn();
+
+  // Called by the derived classes to migrate the older visits table which
+  // doesn't have the `app_id` column.
+  bool MigrateVisitsAddAppId();
 };
 
 // Columns, in order, of the visit table.
@@ -359,7 +365,7 @@ class VisitDatabase {
   "segment_id,visit_duration,incremented_omnibox_typed_score,"      \
   "opener_visit,originator_cache_guid,originator_visit_id,"         \
   "originator_from_visit,originator_opener_visit,is_known_to_sync," \
-  "consider_for_ntp_most_visited,visited_link_id "
+  "consider_for_ntp_most_visited,visited_link_id,app_id "
 
 }  // namespace history
 

@@ -19,8 +19,9 @@ namespace keyboard_shortcut_viewer {
 
 // A view that displays a shortcut metadata.
 class KeyboardShortcutItemView : public views::View {
+  METADATA_HEADER(KeyboardShortcutItemView, views::View)
+
  public:
-  METADATA_HEADER(KeyboardShortcutItemView);
   KeyboardShortcutItemView(const ash::KeyboardShortcutItem& item,
                            ash::ShortcutCategory category);
 
@@ -31,7 +32,7 @@ class KeyboardShortcutItemView : public views::View {
 
   // views::View:
   int GetHeightForWidth(int w) const override;
-  void Layout() override;
+  void Layout(PassKey) override;
 
   views::StyledLabel* description_label_view() {
     return description_label_view_;

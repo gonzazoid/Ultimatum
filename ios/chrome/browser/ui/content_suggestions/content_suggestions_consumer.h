@@ -8,16 +8,16 @@
 #import "base/ios/block_types.h"
 
 enum class ContentSuggestionsModuleType;
-@class MostVisitedTilesConfig;
 @class ContentSuggestionsReturnToRecentTabItem;
 @class ContentSuggestionsWhatsNewItem;
-@class QuerySuggestionConfig;
+@class MostVisitedTilesConfig;
 @class SafetyCheckState;
+@class SetUpListConfig;
 enum class SetUpListItemType;
 @class SetUpListItemViewData;
 @class ShortcutsConfig;
-@class TabResumptionItem;
 @class ParcelTrackingItem;
+@class TabResumptionItem;
 
 // MagicStackOrderChange is used in `updateMagicStackOrder:withStatus:` to
 // indicate what module has changed and how it needs to be updated.
@@ -78,6 +78,7 @@ struct MagicStackOrderChange {
 // Indicates to the consumer to display the SetUpList - a list of
 // tasks that a new user may want to complete.
 - (void)showSetUpListWithItems:(NSArray<SetUpListItemViewData*>*)items;
+- (void)showSetUpListModuleWithConfigs:(NSArray<SetUpListConfig*>*)configs;
 
 // Marks a Set Up List item complete with an animation and updated appearance.
 // Calls the `completion` block when the animation is finished.
@@ -104,9 +105,9 @@ struct MagicStackOrderChange {
 // Hides the tab resumption tile.
 - (void)hideTabResumption;
 
-// Indicates to the consumer to display the parcel tracking module for each
-// given `items` configuration.
-- (void)showParcelTrackingItems:(NSArray<ParcelTrackingItem*>*)items;
+// Indicates to the consumer to display the parcel tracking module with the
+// `item` configuration.
+- (void)showParcelTrackingItem:(ParcelTrackingItem*)item;
 
 @end
 

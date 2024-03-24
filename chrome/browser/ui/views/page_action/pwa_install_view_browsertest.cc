@@ -45,6 +45,7 @@
 #include "components/webapps/browser/uninstall_result_code.h"
 #include "content/public/common/referrer.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/no_renderer_crashes_assertion.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/common/extension.h"
 #include "net/test/embedded_test_server/http_request.h"
@@ -258,7 +259,7 @@ class PwaInstallViewBrowserTest : public extensions::ExtensionBrowserTest {
     base::RunLoop run_loop;
     web_app::WebAppProvider::GetForTest(browser()->profile())
         ->scheduler()
-        .UninstallWebApp(
+        .RemoveUserUninstallableManagements(
             app_id, webapps::WebappUninstallSource::kAppMenu,
             base::BindLambdaForTesting([&](webapps::UninstallResultCode code) {
               EXPECT_TRUE(UninstallSucceeded(code));
@@ -345,10 +346,8 @@ IN_PROC_BROWSER_TEST_F(PwaInstallViewBrowserTest,
   // Use a new tab because installed app may have opened in new window.
   OpenTabResult result = OpenTab(GetInstallableAppURL());
 
-  EXPECT_EQ(
-      result.app_banner_manager->GetInstallableWebAppCheckResultForTesting(),
-      webapps::AppBannerManager::InstallableWebAppCheckResult::
-          kNo_AlreadyInstalled);
+  EXPECT_EQ(result.app_banner_manager->GetInstallableWebAppCheckResult(),
+            webapps::InstallableWebAppCheckResult::kNo_AlreadyInstalled);
   EXPECT_FALSE(pwa_install_view_->GetVisible());
 }
 
@@ -369,10 +368,8 @@ IN_PROC_BROWSER_TEST_F(PwaInstallViewBrowserTest,
   OpenTabResult result = OpenTab(GetNestedInstallableAppURL());
 
   // The nested PWA should now not be installable.
-  EXPECT_EQ(
-      result.app_banner_manager->GetInstallableWebAppCheckResultForTesting(),
-      webapps::AppBannerManager::InstallableWebAppCheckResult::
-          kNo_AlreadyInstalled);
+  EXPECT_EQ(result.app_banner_manager->GetInstallableWebAppCheckResult(),
+            webapps::InstallableWebAppCheckResult::kNo_AlreadyInstalled);
   EXPECT_FALSE(pwa_install_view_->GetVisible());
 }
 
@@ -393,9 +390,8 @@ IN_PROC_BROWSER_TEST_F(PwaInstallViewBrowserTest,
   // Use a new tab because installed app may have opened in new window.
   OpenTabResult result = OpenTab(GetInstallableAppURL());
 
-  EXPECT_EQ(
-      result.app_banner_manager->GetInstallableWebAppCheckResultForTesting(),
-      webapps::AppBannerManager::InstallableWebAppCheckResult::kYes_Promotable);
+  EXPECT_EQ(result.app_banner_manager->GetInstallableWebAppCheckResult(),
+            webapps::InstallableWebAppCheckResult::kYes_Promotable);
   EXPECT_TRUE(pwa_install_view_->GetVisible());
 }
 
@@ -594,10 +590,8 @@ IN_PROC_BROWSER_TEST_F(PwaInstallViewBrowserTest,
   OpenTabResult result = OpenTab(app_url);
 
   // Validate that state is set to already installed.
-  EXPECT_EQ(
-      result.app_banner_manager->GetInstallableWebAppCheckResultForTesting(),
-      webapps::AppBannerManager::InstallableWebAppCheckResult::
-          kNo_AlreadyInstalled);
+  EXPECT_EQ(result.app_banner_manager->GetInstallableWebAppCheckResult(),
+            webapps::InstallableWebAppCheckResult::kNo_AlreadyInstalled);
   EXPECT_FALSE(pwa_install_view_->GetVisible());
 
   // Uninstall app and wait for completion.

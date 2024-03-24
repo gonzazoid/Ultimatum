@@ -794,10 +794,6 @@ class CONTENT_EXPORT NavigationRequest
 
   bool is_credentialless() const { return is_credentialless_; }
 
-  bool is_target_fenced_frame_root_originating_from_opaque_url() const {
-    return is_target_fenced_frame_root_originating_from_opaque_url_;
-  }
-
   // Returns a pointer to the policies copied from the navigation initiator.
   // Returns nullptr if this navigation had no initiator.
   const PolicyContainerPolicies* GetInitiatorPolicyContainerPolicies() const;
@@ -1322,6 +1318,15 @@ class CONTENT_EXPORT NavigationRequest
     previous_render_frame_host_id_ = id;
   }
 
+  // Returns true if URL Loader has been created and hasn't been reset yet for
+  // this navigation.
+  bool HasLoader() const;
+
+  // Notifies that an IPC will be sent to the old Document's renderer to
+  // dispatch the `pageconceal` event. Returns the parameters which should be
+  // used for the event if this is a same-origin navigation.
+  blink::mojom::PageConcealEventParamsPtr WillDispatchPageConceal();
+
  private:
   friend class NavigationRequestTest;
 
@@ -1428,7 +1433,7 @@ class CONTENT_EXPORT NavigationRequest
       GlobalRequestID request_id,
       bool is_download,
       net::NetworkAnonymizationKey network_anonymization_key,
-      std::optional<SubresourceLoaderParams> subresource_loader_params,
+      SubresourceLoaderParams subresource_loader_params,
       EarlyHints early_hints) override;
   void OnRequestFailed(
       const network::URLLoaderCompletionStatus& status) override;
@@ -1446,7 +1451,7 @@ class CONTENT_EXPORT NavigationRequest
   void SelectFrameHostForOnResponseStarted(
       network::mojom::URLLoaderClientEndpointsPtr url_loader_client_endpoints,
       bool is_download,
-      std::optional<SubresourceLoaderParams> subresource_loader_params);
+      SubresourceLoaderParams subresource_loader_params);
   void SelectFrameHostForOnRequestFailedInternal(
       bool exists_in_cache,
       bool skip_throttles,
@@ -2035,6 +2040,8 @@ class CONTENT_EXPORT NavigationRequest
   GetOriginForURLLoaderFactoryUncheckedWithDebugInfo();
   url::Origin GetOriginForURLLoaderFactoryUnchecked();
 
+  void MaybeRecordTraceEventsAndHistograms();
+
   // Never null. The pointee node owns this navigation request instance.
   // This field is not a raw_ptr because of incompatibilities with tracing
   // (TRACE_EVENT*), perfetto::TracedDictionary::Add and gmock/EXPECT_THAT.
@@ -2195,7 +2202,7 @@ class CONTENT_EXPORT NavigationRequest
   // Used in the network service world to pass the subressource loader params
   // to the renderer. Used by ServiceWorker and
   // SignedExchangeSubresourcePrefetch.
-  std::optional<SubresourceLoaderParams> subresource_loader_params_;
+  SubresourceLoaderParams subresource_loader_params_;
 
   // DocumentToken to use for the newly-committed document in a cross-document
   // navigation. Currently set immediately before sending CommitNavigation to
@@ -2294,6 +2301,27 @@ class CONTENT_EXPORT NavigationRequest
 
   // The time this navigation was ready to commit.
   base::TimeTicks ready_to_commit_time_;
+
+  // The time BeginNavigation() was called.
+  base::TimeTicks begin_navigation_time_;
+
+  // The time just after NavigationURLLoader::Start() was called.
+  base::TimeTicks loader_start_time_;
+
+  // The time OnResponseStarted() was called.
+  base::TimeTicks receive_response_time_;
+
+  // The first `fetchStart` time. This is different from the
+  // `first_request_start_time` in `NavigationHandleTiming` since the
+  // `first_fetch_start_time_` is the first time when the browser is
+  // ready to fetch using an HTTP request, whereas the `requestStart` is
+  // when the browser has obtained a connection and is ready to send the
+  // HTTP request.
+  base::TimeTicks first_fetch_start_time_;
+
+  // The time when the final (which might also be the first) headers are
+  // received.
+  base::TimeTicks final_receive_headers_end_time_;
 
   // The time WillStartRequest() was called.
   base::TimeTicks will_start_request_time_;
@@ -2572,24 +2600,12 @@ class CONTENT_EXPORT NavigationRequest
   // TODO(crbug.com/1262022): Make this `const` again once ShadowDOM is gone.
   bool is_embedder_initiated_fenced_frame_navigation_ = false;
 
-  // Indicates that this navigation is to an opaque url (urn:uuid). This value
-  // may only be true when `is_embedder_initiated_fenced_frame_navigation` is
-  // true.
-  const bool is_embedder_initiated_fenced_frame_opaque_url_navigation_ = false;
-
-  // Indicates that the target of this navigation is the root of a fenced frame
-  // tree whose most recent embedder-initiated navigation was to an opaque URL
-  // (urn:uuid). The most recent navigation may be the current
-  // NavigationRequest.
-  const bool is_target_fenced_frame_root_originating_from_opaque_url_ = false;
-
   // On every embedder-initiated navigation of a fenced frame, i.e.
   // `is_embedder_initiated_fenced_frame_navigation_`, we reinitialize
-  // the fenced frame properties with the default `FencedFrameProperties()`
+  // the fenced frame properties with the default `FencedFrameProperties(url)`
   // constructor, which gives the fenced frame a fresh partition nonce.
   //
-  // If the embedder-initiated navigation is to an opaque url (urn:uuid), i.e.
-  // `is_embedder_initiated_fenced_frame_opaque_url_navigation_`, we overwrite
+  // If the embedder-initiated navigation is to a urn:uuid, we overwrite
   // the default properties stored in this `NavigationRequest` with the
   // `FencedFrameProperties` bound to that urn:uuid, in
   // `NavigationRequest::OnFencedFrameURLMappingComplete`.
@@ -2831,6 +2847,13 @@ class CONTENT_EXPORT NavigationRequest
   // before ready to commit time, which is when the regular origin to commit
   // value is available.
   std::optional<url::Origin> tentative_data_origin_to_commit_;
+
+  // `pageconceal` can be fired at different stages of the navigation lifecycle:
+  // - ready to commit if this navigation is associated with a ViewTransition.
+  // - unload old document if there is no ViewTransition opt-in.
+  // This tracks whether the pageconceal event has been fired for this
+  // navigation.
+  bool did_fire_page_conceal_ = false;
 
   base::WeakPtrFactory<NavigationRequest> weak_factory_{this};
 };

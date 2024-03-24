@@ -88,6 +88,8 @@ void EnclaveAuthenticator::MakeCredential(CtapMakeCredentialRequest request,
                                           MakeCredentialOptions options,
                                           MakeCredentialCallback callback) {
   CHECK(!pending_get_assertion_request_ && !pending_make_credential_request_);
+  CHECK_EQ(ui_request_->wrapped_secrets.size(), 1u);
+  CHECK(ui_request_->wrapped_secret_version.has_value());
 
   pending_make_credential_request_ =
       std::make_unique<PendingMakeCredentialRequest>(
@@ -96,7 +98,8 @@ void EnclaveAuthenticator::MakeCredential(CtapMakeCredentialRequest request,
   Transact(network_context_, GetEnclaveIdentity(),
            std::move(ui_request_->access_token),
            BuildMakeCredentialCommand(
-               std::move(pending_make_credential_request_->options.json)),
+               std::move(pending_make_credential_request_->options.json),
+               std::move(ui_request_->wrapped_secrets.back())),
            std::move(ui_request_->signing_callback),
            base::BindOnce(&EnclaveAuthenticator::ProcessMakeCredentialResponse,
                           weak_factory_.GetWeakPtr()));
@@ -117,24 +120,25 @@ void EnclaveAuthenticator::GetAssertion(CtapGetAssertionRequest request,
                *ui_request_->entity,
                std::move(pending_get_assertion_request_->options.json),
                pending_get_assertion_request_->request.client_data_json,
-               std::move(ui_request_->wrapped_keys)),
+               std::move(ui_request_->wrapped_secrets)),
            std::move(ui_request_->signing_callback),
            base::BindOnce(&EnclaveAuthenticator::ProcessGetAssertionResponse,
                           weak_factory_.GetWeakPtr()));
 }
 
 void EnclaveAuthenticator::ProcessMakeCredentialResponse(
-    absl::optional<cbor::Value> response) {
+    std::optional<cbor::Value> response) {
   if (!response) {
     CompleteRequestWithError(CtapDeviceResponseCode::kCtap2ErrOther);
     return;
   }
-  absl::optional<AuthenticatorMakeCredentialResponse> opt_response;
-  absl::optional<sync_pb::WebauthnCredentialSpecifics> opt_entity;
+  std::optional<AuthenticatorMakeCredentialResponse> opt_response;
+  std::optional<sync_pb::WebauthnCredentialSpecifics> opt_entity;
   std::string error_description;
   std::tie(opt_response, opt_entity, error_description) =
       ParseMakeCredentialResponse(std::move(*response),
-                                  pending_make_credential_request_->request);
+                                  pending_make_credential_request_->request,
+                                  *ui_request_->wrapped_secret_version);
   if (!opt_response || !opt_entity) {
     FIDO_LOG(ERROR) << "Error in registration response from server: "
                     << error_description;
@@ -147,7 +151,7 @@ void EnclaveAuthenticator::ProcessMakeCredentialResponse(
 }
 
 void EnclaveAuthenticator::ProcessGetAssertionResponse(
-    absl::optional<cbor::Value> response) {
+    std::optional<cbor::Value> response) {
   if (!response) {
     CompleteRequestWithError(CtapDeviceResponseCode::kCtap2ErrOther);
     return;
@@ -174,13 +178,13 @@ void EnclaveAuthenticator::CompleteRequestWithError(
   }
 
   if (pending_make_credential_request_) {
-    CompleteMakeCredentialRequest(error, absl::nullopt);
+    CompleteMakeCredentialRequest(error, std::nullopt);
   }
 }
 
 void EnclaveAuthenticator::CompleteMakeCredentialRequest(
     CtapDeviceResponseCode status,
-    absl::optional<AuthenticatorMakeCredentialResponse> response) {
+    std::optional<AuthenticatorMakeCredentialResponse> response) {
   // Using PostTask guards against any lifetime concerns for this class and
   // EnclaveWebSocketClient. It is safe to do cleanup after invoking the
   // callback.
@@ -188,7 +192,7 @@ void EnclaveAuthenticator::CompleteMakeCredentialRequest(
       FROM_HERE,
       base::BindOnce(
           [](MakeCredentialCallback callback, CtapDeviceResponseCode status,
-             absl::optional<AuthenticatorMakeCredentialResponse> response) {
+             std::optional<AuthenticatorMakeCredentialResponse> response) {
             std::move(callback).Run(status, std::move(response));
           },
           std::move(pending_make_credential_request_->callback), status,
@@ -230,7 +234,7 @@ const AuthenticatorSupportedOptions& EnclaveAuthenticator::Options() const {
   return *options;
 }
 
-absl::optional<FidoTransportProtocol>
+std::optional<FidoTransportProtocol>
 EnclaveAuthenticator::AuthenticatorTransport() const {
   return FidoTransportProtocol::kInternal;
 }

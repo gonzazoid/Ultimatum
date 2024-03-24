@@ -17,8 +17,8 @@
 #include "third_party/blink/renderer/core/css/css_image_value.h"
 #include "third_party/blink/renderer/core/css/css_test_helpers.h"
 #include "third_party/blink/renderer/core/css/css_value_list.h"
+#include "third_party/blink/renderer/core/css/out_of_flow_data.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser_local_context.h"
-#include "third_party/blink/renderer/core/css/position_fallback_data.h"
 #include "third_party/blink/renderer/core/css/properties/computed_style_utils.h"
 #include "third_party/blink/renderer/core/css/properties/css_property_ref.h"
 #include "third_party/blink/renderer/core/css/properties/longhands.h"
@@ -109,15 +109,15 @@ class StyleResolverTest : public PageTestBase {
     return style.MaxHeight();
   }
 
-  void UpdateStyleForPositionFallback(Element& element,
-                                      ScopedCSSName* name,
-                                      wtf_size_t index) {
+  void UpdateStyleForOutOfFlow(Element& element,
+                               ScopedCSSName* name,
+                               wtf_size_t index) {
     DCHECK(name);
     StyleRulePositionFallback* rule =
         GetStyleEngine().GetPositionFallbackRule(*name);
     if (rule) {
       const CSSPropertyValueSet* set = rule->TryPropertyValueSetAt(index);
-      GetStyleEngine().UpdateStyleForPositionFallback(element, set);
+      GetStyleEngine().UpdateStyleForOutOfFlow(element, set);
     }
   }
 };
@@ -551,7 +551,7 @@ TEST_P(ParameterizedStyleResolverTest, BackgroundImageFetch) {
 
   GetDocument()
       .getElementById(AtomicString("host"))
-      ->AttachShadowRootInternal(ShadowRootType::kOpen);
+      ->AttachShadowRootForTesting(ShadowRootType::kOpen);
   UpdateAllLifecyclePhasesForTest();
 
   auto* none = GetDocument().getElementById(AtomicString("none"));
@@ -984,7 +984,7 @@ TEST_P(ParameterizedStyleResolverTest, EnsureComputedStyleSlotFallback) {
   ShadowRoot& shadow_root =
       GetDocument()
           .getElementById(AtomicString("host"))
-          ->AttachShadowRootInternal(ShadowRootType::kOpen);
+          ->AttachShadowRootForTesting(ShadowRootType::kOpen);
   shadow_root.setInnerHTML(R"HTML(
     <style>
       slot { color: red }
@@ -1009,9 +1009,7 @@ TEST_P(ParameterizedStyleResolverTest, EnsureComputedStyleSlotFallback) {
 }
 
 TEST_P(ParameterizedStyleResolverTest, EnsureComputedStyleOutsideFlatTree) {
-  GetDocument()
-      .documentElement()
-      ->setInnerHTMLWithDeclarativeShadowDOMForTesting(R"HTML(
+  GetDocument().documentElement()->setHTMLUnsafe(R"HTML(
     <div id=host>
       <template shadowrootmode=open>
       </template>
@@ -1161,7 +1159,7 @@ TEST_P(ParameterizedStyleResolverTest, TreeScopedReferences) {
 
   Element* host = GetDocument().getElementById(AtomicString("host"));
   ASSERT_TRUE(host);
-  ShadowRoot& root = host->AttachShadowRootInternal(ShadowRootType::kOpen);
+  ShadowRoot& root = host->AttachShadowRootForTesting(ShadowRootType::kOpen);
   root.setInnerHTML(R"HTML(
     <style>
       ::slotted(span) { animation-name: anim-slotted }
@@ -1175,7 +1173,7 @@ TEST_P(ParameterizedStyleResolverTest, TreeScopedReferences) {
   Element* inner_host = root.getElementById(AtomicString("inner-host"));
   ASSERT_TRUE(inner_host);
   ShadowRoot& inner_root =
-      inner_host->AttachShadowRootInternal(ShadowRootType::kOpen);
+      inner_host->AttachShadowRootForTesting(ShadowRootType::kOpen);
   inner_root.setInnerHTML(R"HTML(
     <style>
       ::slotted(span) { animation-name: anim-inner-slotted }
@@ -1195,19 +1193,22 @@ TEST_P(ParameterizedStyleResolverTest, TreeScopedReferences) {
     GetDocument().GetStyleEngine().GetStyleResolver().MatchAllRules(
         state, collector, false /* include_smil_properties */);
     const auto& properties = match_result.GetMatchedProperties();
-    ASSERT_EQ(properties.size(), 3u);
+    ASSERT_EQ(properties.size(), 4u);
 
     // div { display: block }
     EXPECT_EQ(properties[0].types_.origin, CascadeOrigin::kUserAgent);
 
+    // div { unicode-bidi: isolate; }
+    EXPECT_EQ(properties[1].types_.origin, CascadeOrigin::kUserAgent);
+
     // :host { font-family: myfont }
-    EXPECT_EQ(match_result.ScopeFromTreeOrder(properties[1].types_.tree_order),
+    EXPECT_EQ(match_result.ScopeFromTreeOrder(properties[2].types_.tree_order),
               root.GetTreeScope());
-    EXPECT_EQ(properties[1].types_.origin, CascadeOrigin::kAuthor);
+    EXPECT_EQ(properties[2].types_.origin, CascadeOrigin::kAuthor);
 
     // #host { animation-name: anim }
-    EXPECT_EQ(properties[2].types_.origin, CascadeOrigin::kAuthor);
-    EXPECT_EQ(match_result.ScopeFromTreeOrder(properties[2].types_.tree_order),
+    EXPECT_EQ(properties[3].types_.origin, CascadeOrigin::kAuthor);
+    EXPECT_EQ(match_result.ScopeFromTreeOrder(properties[3].types_.tree_order),
               host->GetTreeScope());
   }
 
@@ -1677,7 +1678,7 @@ TEST_P(ParameterizedStyleResolverTest, NoCascadeLayers) {
                                  EInsideLink::kNotInsideLink);
   MatchAllRules(state, collector);
   const auto& properties = match_result.GetMatchedProperties();
-  ASSERT_EQ(properties.size(), 3u);
+  ASSERT_EQ(properties.size(), 4u);
 
   const uint16_t kImplicitOuterLayerOrder =
       ClampTo<uint16_t>(CascadeLayerMap::kImplicitOuterLayerOrder);
@@ -1687,15 +1688,21 @@ TEST_P(ParameterizedStyleResolverTest, NoCascadeLayers) {
   EXPECT_EQ(kImplicitOuterLayerOrder, properties[0].types_.layer_order);
   EXPECT_EQ(properties[0].types_.origin, CascadeOrigin::kUserAgent);
 
-  // .b { font-size: 16px; }
-  EXPECT_TRUE(properties[1].properties->HasProperty(CSSPropertyID::kFontSize));
+  // div { unicode-bidi: isolate; }
+  EXPECT_TRUE(
+      properties[1].properties->HasProperty(CSSPropertyID::kUnicodeBidi));
   EXPECT_EQ(kImplicitOuterLayerOrder, properties[1].types_.layer_order);
-  EXPECT_EQ(properties[1].types_.origin, CascadeOrigin::kAuthor);
+  EXPECT_EQ(properties[1].types_.origin, CascadeOrigin::kUserAgent);
 
-  // #a { color: green; }
-  EXPECT_TRUE(properties[2].properties->HasProperty(CSSPropertyID::kColor));
+  // .b { font-size: 16px; }
+  EXPECT_TRUE(properties[2].properties->HasProperty(CSSPropertyID::kFontSize));
   EXPECT_EQ(kImplicitOuterLayerOrder, properties[2].types_.layer_order);
   EXPECT_EQ(properties[2].types_.origin, CascadeOrigin::kAuthor);
+
+  // #a { color: green; }
+  EXPECT_TRUE(properties[3].properties->HasProperty(CSSPropertyID::kColor));
+  EXPECT_EQ(kImplicitOuterLayerOrder, properties[3].types_.layer_order);
+  EXPECT_EQ(properties[3].types_.origin, CascadeOrigin::kAuthor);
 }
 
 TEST_P(ParameterizedStyleResolverTest, CascadeLayersInDifferentSheets) {
@@ -1725,7 +1732,7 @@ TEST_P(ParameterizedStyleResolverTest, CascadeLayersInDifferentSheets) {
                                  EInsideLink::kNotInsideLink);
   MatchAllRules(state, collector);
   const auto& properties = match_result.GetMatchedProperties();
-  ASSERT_EQ(properties.size(), 4u);
+  ASSERT_EQ(properties.size(), 5u);
 
   const uint16_t kImplicitOuterLayerOrder =
       ClampTo<uint16_t>(CascadeLayerMap::kImplicitOuterLayerOrder);
@@ -1735,28 +1742,32 @@ TEST_P(ParameterizedStyleResolverTest, CascadeLayersInDifferentSheets) {
   EXPECT_EQ(kImplicitOuterLayerOrder, properties[0].types_.layer_order);
   EXPECT_EQ(properties[0].types_.origin, CascadeOrigin::kUserAgent);
 
+  // div { unicode-bidi: isolate; }
+  EXPECT_TRUE(
+      properties[1].properties->HasProperty(CSSPropertyID::kUnicodeBidi));
+  EXPECT_EQ(kImplicitOuterLayerOrder, properties[1].types_.layer_order);
+  EXPECT_EQ(properties[1].types_.origin, CascadeOrigin::kUserAgent);
+
   // @layer foo { #a { font-size: 16px } }"
-  EXPECT_TRUE(properties[1].properties->HasProperty(CSSPropertyID::kFontSize));
-  EXPECT_EQ(0u, properties[1].types_.layer_order);
-  EXPECT_EQ(properties[1].types_.origin, CascadeOrigin::kAuthor);
+  EXPECT_TRUE(properties[2].properties->HasProperty(CSSPropertyID::kFontSize));
+  EXPECT_EQ(0u, properties[2].types_.layer_order);
+  EXPECT_EQ(properties[2].types_.origin, CascadeOrigin::kAuthor);
 
   // @layer bar { .b { color: green } }"
-  EXPECT_TRUE(properties[2].properties->HasProperty(CSSPropertyID::kColor));
-  EXPECT_EQ(1u, properties[2].types_.layer_order);
-  EXPECT_EQ(properties[2].types_.origin, CascadeOrigin::kAuthor);
+  EXPECT_TRUE(properties[3].properties->HasProperty(CSSPropertyID::kColor));
+  EXPECT_EQ(1u, properties[3].types_.layer_order);
+  EXPECT_EQ(properties[3].types_.origin, CascadeOrigin::kAuthor);
 
   // style="font-family: custom"
   EXPECT_TRUE(
-      properties[3].properties->HasProperty(CSSPropertyID::kFontFamily));
-  EXPECT_TRUE(properties[3].types_.is_inline_style);
-  EXPECT_EQ(properties[3].types_.origin, CascadeOrigin::kAuthor);
+      properties[4].properties->HasProperty(CSSPropertyID::kFontFamily));
+  EXPECT_TRUE(properties[4].types_.is_inline_style);
+  EXPECT_EQ(properties[4].types_.origin, CascadeOrigin::kAuthor);
   // There's no layer order for inline style; it's always above all layers.
 }
 
 TEST_P(ParameterizedStyleResolverTest, CascadeLayersInDifferentTreeScopes) {
-  GetDocument()
-      .documentElement()
-      ->setInnerHTMLWithDeclarativeShadowDOMForTesting(R"HTML(
+  GetDocument().documentElement()->setHTMLUnsafe(R"HTML(
     <style>
       @layer foo {
         #host { color: green; }
@@ -1784,7 +1795,7 @@ TEST_P(ParameterizedStyleResolverTest, CascadeLayersInDifferentTreeScopes) {
                                  EInsideLink::kNotInsideLink);
   MatchAllRules(state, collector);
   const auto& properties = match_result.GetMatchedProperties();
-  ASSERT_EQ(properties.size(), 3u);
+  ASSERT_EQ(properties.size(), 4u);
 
   const uint16_t kImplicitOuterLayerOrder =
       ClampTo<uint16_t>(CascadeLayerMap::kImplicitOuterLayerOrder);
@@ -1794,18 +1805,24 @@ TEST_P(ParameterizedStyleResolverTest, CascadeLayersInDifferentTreeScopes) {
   EXPECT_EQ(kImplicitOuterLayerOrder, properties[0].types_.layer_order);
   EXPECT_EQ(properties[0].types_.origin, CascadeOrigin::kUserAgent);
 
+  // div { unicode-bidi: isolate; }
+  EXPECT_TRUE(
+      properties[1].properties->HasProperty(CSSPropertyID::kUnicodeBidi));
+  EXPECT_EQ(kImplicitOuterLayerOrder, properties[1].types_.layer_order);
+  EXPECT_EQ(properties[1].types_.origin, CascadeOrigin::kUserAgent);
+
   // @layer bar { :host { font-size: 16px } }
-  EXPECT_TRUE(properties[1].properties->HasProperty(CSSPropertyID::kFontSize));
-  EXPECT_EQ(0u, properties[1].types_.layer_order);
-  EXPECT_EQ(properties[1].types_.origin, CascadeOrigin::kAuthor);
+  EXPECT_TRUE(properties[2].properties->HasProperty(CSSPropertyID::kFontSize));
+  EXPECT_EQ(0u, properties[2].types_.layer_order);
+  EXPECT_EQ(properties[2].types_.origin, CascadeOrigin::kAuthor);
   EXPECT_EQ(
-      match_result.ScopeFromTreeOrder(properties[1].types_.tree_order),
+      match_result.ScopeFromTreeOrder(properties[2].types_.tree_order),
       GetDocument().getElementById(AtomicString("host"))->GetShadowRoot());
 
   // @layer foo { #host { color: green } }
-  EXPECT_TRUE(properties[2].properties->HasProperty(CSSPropertyID::kColor));
-  EXPECT_EQ(0u, properties[2].types_.layer_order);
-  EXPECT_EQ(match_result.ScopeFromTreeOrder(properties[2].types_.tree_order),
+  EXPECT_TRUE(properties[3].properties->HasProperty(CSSPropertyID::kColor));
+  EXPECT_EQ(0u, properties[3].types_.layer_order);
+  EXPECT_EQ(match_result.ScopeFromTreeOrder(properties[3].types_.tree_order),
             &GetDocument());
 }
 
@@ -1946,7 +1963,6 @@ TEST_P(ParameterizedStyleResolverTest, BodyPropagationLayoutImageContain) {
 }
 
 TEST_P(ParameterizedStyleResolverTest, IsInertWithAttributeAndDialog) {
-  ScopedInertAttributeForTest enabled_scope(true);
   Document& document = GetDocument();
   NonThrowableExceptionState exception_state;
 
@@ -2791,20 +2807,20 @@ TEST_P(ParameterizedStyleResolverTest, PositionFallbackStylesBasic_Cascade) {
   EXPECT_EQ(Length::Auto(), GetTop(*base_style));
   EXPECT_EQ(Length::Auto(), GetLeft(*base_style));
 
-  UpdateStyleForPositionFallback(*target, fallback_name, 1);
+  UpdateStyleForOutOfFlow(*target, fallback_name, 1);
   const ComputedStyle* try1 = target->GetComputedStyle();
   ASSERT_TRUE(try1);
   EXPECT_EQ(Length::Auto(), GetTop(*try1));
   EXPECT_EQ(Length::Fixed(100), GetLeft(*try1));
 
-  UpdateStyleForPositionFallback(*target, fallback_name, 2);
+  UpdateStyleForOutOfFlow(*target, fallback_name, 2);
   const ComputedStyle* try2 = target->GetComputedStyle();
   ASSERT_TRUE(try2);
   EXPECT_EQ(Length::Fixed(100), GetTop(*try2));
   EXPECT_EQ(Length::Auto(), GetLeft(*try2));
 
   // Shorthand should also work
-  UpdateStyleForPositionFallback(*target, fallback_name, 3);
+  UpdateStyleForOutOfFlow(*target, fallback_name, 3);
   const ComputedStyle* try3 = target->GetComputedStyle();
   ASSERT_TRUE(try3);
   EXPECT_EQ(Length::Fixed(50), GetTop(*try3));
@@ -2813,7 +2829,7 @@ TEST_P(ParameterizedStyleResolverTest, PositionFallbackStylesBasic_Cascade) {
   EXPECT_EQ(Length::Fixed(50), GetRight(*try3));
 
   // Style without fallback when index is out of bounds.
-  UpdateStyleForPositionFallback(*target, fallback_name, 4);
+  UpdateStyleForOutOfFlow(*target, fallback_name, 4);
   const ComputedStyle* try4 = target->GetComputedStyle();
   EXPECT_EQ(Length::Auto(), GetTop(*try4));
   EXPECT_EQ(Length::Auto(), GetLeft(*try4));
@@ -2855,7 +2871,7 @@ TEST_P(ParameterizedStyleResolverTest,
   EXPECT_EQ(Length::Fixed(50), GetRight(*base_style));
 
   // 'inset-inline-start' should resolve to 'bottom'
-  UpdateStyleForPositionFallback(*target, fallback_name, 1);
+  UpdateStyleForOutOfFlow(*target, fallback_name, 1);
   const ComputedStyle* try1 = target->GetComputedStyle();
   ASSERT_TRUE(try1);
   EXPECT_EQ(Length::Fixed(50), GetTop(*try1));
@@ -2864,7 +2880,7 @@ TEST_P(ParameterizedStyleResolverTest,
   EXPECT_EQ(Length::Fixed(50), GetRight(*try1));
 
   // 'inset-block' with two parameters should set 'right' and then 'left'
-  UpdateStyleForPositionFallback(*target, fallback_name, 2);
+  UpdateStyleForOutOfFlow(*target, fallback_name, 2);
   const ComputedStyle* try2 = target->GetComputedStyle();
   ASSERT_TRUE(try2);
   EXPECT_EQ(Length::Fixed(50), GetTop(*try2));
@@ -2873,7 +2889,7 @@ TEST_P(ParameterizedStyleResolverTest,
   EXPECT_EQ(Length::Fixed(100), GetRight(*try2));
 
   // @try index out of bounds
-  UpdateStyleForPositionFallback(*target, fallback_name, 3);
+  UpdateStyleForOutOfFlow(*target, fallback_name, 3);
   const ComputedStyle* try3 = target->GetComputedStyle();
   ASSERT_TRUE(try3);
   EXPECT_EQ(Length::Fixed(50), GetTop(*try3));
@@ -2912,7 +2928,7 @@ TEST_P(ParameterizedStyleResolverTest,
   EXPECT_EQ(Length::Auto(), GetTop(*base_style));
 
   // '2em' should resolve to '40px'
-  UpdateStyleForPositionFallback(*target, fallback_name, 1);
+  UpdateStyleForOutOfFlow(*target, fallback_name, 1);
   const ComputedStyle* try1 = target->GetComputedStyle();
   ASSERT_TRUE(try1);
   EXPECT_EQ(Length::Fixed(40), GetTop(*try1));
@@ -2952,7 +2968,7 @@ TEST_P(ParameterizedStyleResolverTest,
   EXPECT_EQ(Length::Auto(), GetTop(*base_style));
 
   // 'position-fallback' applies to ::before pseudo-element.
-  UpdateStyleForPositionFallback(*before, fallback_name, 1);
+  UpdateStyleForOutOfFlow(*before, fallback_name, 1);
   const ComputedStyle* try1 = before->GetComputedStyle();
   ASSERT_TRUE(try1);
   EXPECT_EQ(Length::Fixed(50), GetTop(*try1));
@@ -2999,7 +3015,7 @@ TEST_P(ParameterizedStyleResolverTest,
   EXPECT_EQ(Length::Fixed(50), GetBottom(*base_style));
   EXPECT_EQ(Length::Fixed(50), GetRight(*base_style));
 
-  UpdateStyleForPositionFallback(*target, fallback_name, 1);
+  UpdateStyleForOutOfFlow(*target, fallback_name, 1);
   const ComputedStyle* try1 = target->GetComputedStyle();
   ASSERT_TRUE(try1);
   EXPECT_EQ(Length::Auto(), GetTop(*try1));
@@ -3007,7 +3023,7 @@ TEST_P(ParameterizedStyleResolverTest,
   EXPECT_EQ(Length::Fixed(50), GetBottom(*try1));
   EXPECT_EQ(Length::Fixed(50), GetRight(*try1));
 
-  UpdateStyleForPositionFallback(*target, fallback_name, 2);
+  UpdateStyleForOutOfFlow(*target, fallback_name, 2);
   const ComputedStyle* try2 = target->GetComputedStyle();
   ASSERT_TRUE(try2);
   EXPECT_EQ(Length::Fixed(50), GetTop(*try2));
@@ -3015,7 +3031,7 @@ TEST_P(ParameterizedStyleResolverTest,
   EXPECT_EQ(Length::Fixed(50), GetBottom(*try2));
   EXPECT_EQ(Length::Fixed(50), GetRight(*try2));
 
-  UpdateStyleForPositionFallback(*target, fallback_name, 3);
+  UpdateStyleForOutOfFlow(*target, fallback_name, 3);
   const ComputedStyle* try3 = target->GetComputedStyle();
   ASSERT_TRUE(try3);
   EXPECT_EQ(Length::Fixed(50), GetTop(*try3));
@@ -3061,7 +3077,7 @@ TEST_P(ParameterizedStyleResolverTest,
     EXPECT_EQ(Length::Auto(), GetTop(*base_style));
     EXPECT_EQ(Length::Auto(), GetLeft(*base_style));
 
-    UpdateStyleForPositionFallback(*target, foo_name, 1);
+    UpdateStyleForOutOfFlow(*target, foo_name, 1);
     const ComputedStyle* fallback = target->GetComputedStyle();
     ASSERT_TRUE(fallback);
     EXPECT_EQ(Length::Fixed(100), GetTop(*fallback));
@@ -3077,7 +3093,7 @@ TEST_P(ParameterizedStyleResolverTest,
     EXPECT_EQ(Length::Auto(), GetTop(*base_style));
     EXPECT_EQ(Length::Auto(), GetLeft(*base_style));
 
-    UpdateStyleForPositionFallback(*target, bar_name, 1);
+    UpdateStyleForOutOfFlow(*target, bar_name, 1);
     const ComputedStyle* fallback = target->GetComputedStyle();
     ASSERT_TRUE(fallback);
     ASSERT_TRUE(fallback);
@@ -3111,26 +3127,26 @@ TEST_P(ParameterizedStyleResolverTest, PositionFallback_PersistentTrySet) {
   ASSERT_TRUE(style);
   EXPECT_EQ(Length::Fixed(100), GetLeft(*style));
   EXPECT_EQ(Length::Auto(), GetTop(*style));
-  EXPECT_TRUE(target->GetPositionFallbackData() &&
-              target->GetPositionFallbackData()->GetTryPropertyValueSet());
+  EXPECT_TRUE(target->GetOutOfFlowData() &&
+              target->GetOutOfFlowData()->GetTryPropertyValueSet());
 
   // The set should be cleared when 'position-fallback' is cleared.
   target->SetInlineStyleProperty(CSSPropertyID::kPositionFallback, "none");
   UpdateAllLifecyclePhasesForTest();
-  EXPECT_FALSE(target->GetPositionFallbackData() &&
-               target->GetPositionFallbackData()->GetTryPropertyValueSet());
+  EXPECT_FALSE(target->GetOutOfFlowData() &&
+               target->GetOutOfFlowData()->GetTryPropertyValueSet());
 
   target->SetInlineStyleProperty(CSSPropertyID::kPositionFallback,
                                  "--fallback");
   UpdateAllLifecyclePhasesForTest();
-  EXPECT_TRUE(target->GetPositionFallbackData() &&
-              target->GetPositionFallbackData()->GetTryPropertyValueSet());
+  EXPECT_TRUE(target->GetOutOfFlowData() &&
+              target->GetOutOfFlowData()->GetTryPropertyValueSet());
 
   // The set should also be cleared when referencing a non-existent fallback.
   target->SetInlineStyleProperty(CSSPropertyID::kPositionFallback, "--unknown");
   UpdateAllLifecyclePhasesForTest();
-  EXPECT_FALSE(target->GetPositionFallbackData() &&
-               target->GetPositionFallbackData()->GetTryPropertyValueSet());
+  EXPECT_FALSE(target->GetOutOfFlowData() &&
+               target->GetOutOfFlowData()->GetTryPropertyValueSet());
 }
 
 TEST_P(ParameterizedStyleResolverTest, PositionFallback_PaintInvalidation) {
@@ -3198,7 +3214,7 @@ TEST_P(ParameterizedStyleResolverTest, TrySet_Basic) {
   )CSS");
   ASSERT_TRUE(try_set);
 
-  div->EnsurePositionFallbackData().SetTryPropertyValueSet(try_set);
+  div->EnsureOutOfFlowData().SetTryPropertyValueSet(try_set);
   const ComputedStyle* try_style = StyleForId("div");
   ASSERT_TRUE(try_style);
   EXPECT_EQ("20px", ComputedValue("left", *try_style));
@@ -3229,7 +3245,7 @@ TEST_P(ParameterizedStyleResolverTest, TrySet_RevertLayer) {
   )CSS");
   ASSERT_TRUE(try_set);
 
-  div->EnsurePositionFallbackData().SetTryPropertyValueSet(try_set);
+  div->EnsureOutOfFlowData().SetTryPropertyValueSet(try_set);
   const ComputedStyle* try_style = StyleForId("div");
   ASSERT_TRUE(try_style);
   EXPECT_EQ("10px", ComputedValue("left", *try_style));
@@ -3260,7 +3276,7 @@ TEST_P(ParameterizedStyleResolverTest, TrySet_Revert) {
   )CSS");
   ASSERT_TRUE(try_set);
 
-  div->EnsurePositionFallbackData().SetTryPropertyValueSet(try_set);
+  div->EnsureOutOfFlowData().SetTryPropertyValueSet(try_set);
   const ComputedStyle* try_style = StyleForId("div");
   ASSERT_TRUE(try_style);
   EXPECT_EQ("auto", ComputedValue("left", *try_style));
@@ -3292,7 +3308,7 @@ TEST_P(ParameterizedStyleResolverTest, TrySet_NonAbsPos) {
   )CSS");
   ASSERT_TRUE(try_set);
 
-  div->EnsurePositionFallbackData().SetTryPropertyValueSet(try_set);
+  div->EnsureOutOfFlowData().SetTryPropertyValueSet(try_set);
   const ComputedStyle* try_style = StyleForId("div");
   ASSERT_TRUE(try_style);
   EXPECT_EQ("10px", ComputedValue("left", *try_style));
@@ -3327,7 +3343,7 @@ TEST_P(ParameterizedStyleResolverTest, TrySet_NonAbsPosDynamic) {
   ASSERT_TRUE(try_set);
 
   div->SetInlineStyleProperty(CSSPropertyID::kPosition, "static");
-  div->EnsurePositionFallbackData().SetTryPropertyValueSet(try_set);
+  div->EnsureOutOfFlowData().SetTryPropertyValueSet(try_set);
   const ComputedStyle* try_style = StyleForId("div");
   ASSERT_TRUE(try_style);
   EXPECT_EQ("10px", ComputedValue("left", *try_style));
@@ -3417,9 +3433,7 @@ TEST_P(StyleResolverTestCQ, ContainerUnitContext) {
 }
 
 TEST_P(ParameterizedStyleResolverTest, ScopedAnchorName) {
-  GetDocument()
-      .documentElement()
-      ->setInnerHTMLWithDeclarativeShadowDOMForTesting(R"HTML(
+  GetDocument().documentElement()->setHTMLUnsafe(R"HTML(
     <div id="outer-anchor" style="anchor-name: --outer"></div>
     <style>#host::part(anchor) { anchor-name: --part; }</style>
     <div id="host">
@@ -3454,9 +3468,7 @@ TEST_P(ParameterizedStyleResolverTest, ScopedAnchorName) {
 }
 
 TEST_P(ParameterizedStyleResolverTest, ScopedAnchorDefault) {
-  GetDocument()
-      .documentElement()
-      ->setInnerHTMLWithDeclarativeShadowDOMForTesting(R"HTML(
+  GetDocument().documentElement()->setHTMLUnsafe(R"HTML(
     <div id="outer-anchor" style="anchor-default: --outer"></div>
     <style>#host::part(anchor) { anchor-default: --part; }</style>
     <div id="host">
@@ -3502,9 +3514,7 @@ static const TreeScope* GetAnchorQueryTreeScope(const Length& length) {
 }
 
 TEST_P(ParameterizedStyleResolverTest, ScopedAnchorFunction) {
-  GetDocument()
-      .documentElement()
-      ->setInnerHTMLWithDeclarativeShadowDOMForTesting(R"HTML(
+  GetDocument().documentElement()->setHTMLUnsafe(R"HTML(
     <style>
       div { position: absolute; }
       #left { left: anchor(--a left); }
@@ -3579,9 +3589,7 @@ TEST_P(ParameterizedStyleResolverTest, ScopedAnchorFunction) {
 }
 
 TEST_P(ParameterizedStyleResolverTest, ScopedAnchorSizeFunction) {
-  GetDocument()
-      .documentElement()
-      ->setInnerHTMLWithDeclarativeShadowDOMForTesting(R"HTML(
+  GetDocument().documentElement()->setHTMLUnsafe(R"HTML(
     <style>
       div { position: absolute; }
       #width { width: anchor-size(--a width); }
@@ -3735,6 +3743,28 @@ TEST_P(ParameterizedStyleResolverTest,
   EXPECT_EQ(pseudo_rules->size(), 1u);
   EXPECT_EQ(pseudo_rules->at(0).first->cssText(),
             "#target::before { content: \"X\"; color: green; }");
+}
+
+TEST_P(ParameterizedStyleResolverTest, ResizeAutoInUANotCounted) {
+  SetBodyInnerHTML(R"HTML(<textarea></textarea>)HTML");
+  EXPECT_FALSE(IsUseCounted(WebFeature::kCSSResizeAuto))
+      << "resize:auto UA rule for textarea should not be counted";
+}
+
+TEST_P(ParameterizedStyleResolverTest, ResizeAutoCounted) {
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      #resize {
+        width: 100px;
+        height: 100px;
+        overflow: scroll;
+        resize: auto;
+      }
+    </style>
+    <div id="resize"></div>
+  )HTML");
+  EXPECT_TRUE(IsUseCounted(WebFeature::kCSSResizeAuto))
+      << "Author style resize:auto applied to div should be counted";
 }
 
 }  // namespace blink

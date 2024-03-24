@@ -88,16 +88,6 @@ To be updated.
 
 ## Debugging Support
 
-### Headful Mode
-
-Passing the `--no-headless` flag to `run_wpt_tests.py` will pause execution
-after running each test headfully.
-You can interact with the paused test page afterwards, including with DevTools:
-
-![Testharness paused](images/web-tests/wptrunner-paused.jpg)
-
-Closing the tab or window will unpause the testharness and run the next test.
-
 ### Text-Based Debuggers
 
 To interactively debug WPTs, prefix the `run_wpt_tests.py` command with
@@ -109,9 +99,21 @@ For other use cases, see [these debugging tips].
 
 ## Known Issues
 
+* Chromium's infrastructure currently tests WPTs against `chrome --headless=old`
+  (i.e., the `//headless` layer, not `//chrome`). This may cause results to
+  differ from [wpt.fyi] or `content_shell --run-web-tests` incorrectly. Notably,
+  `//headless` will not apply features listed in
+  [`fieldtrial_testing_config.json`][1]. See https://crbug.com/1485918 for
+  updates on switching testing to [`chrome --headless=new`][2] for more useful
+  results.
+
 Please [file bugs and feature requests](https://crbug.com/new) against
 [`Blink>Infra` with the `wptrunner`
 label](https://bugs.chromium.org/p/chromium/issues/list?q=component%3ABlink%3EInfra%20label%3Awptrunner&can=2).
 
 [protocol mode]: /content/web_test/browser/test_info_extractor.h
 [debug renderer]: /third_party/blink/tools/debug_renderer
+[wpt.fyi]: https://wpt.fyi/results/?label=experimental&label=master&aligned
+
+[1]: /testing/variations/fieldtrial_testing_config.json
+[2]: https://developer.chrome.com/docs/chromium/new-headless

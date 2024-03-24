@@ -7,6 +7,7 @@
 
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/files/file.h"
@@ -250,8 +251,7 @@ class VolumeManager : public KeyedService,
       bool read_only,
       const std::vector<std::string>& mime_types) override;
   void OnDocumentsProviderRootRemoved(const std::string& authority,
-                                      const std::string& root_id,
-                                      const std::string& document_id) override;
+                                      const std::string& root_id) override;
 
   // ui::ClipboardObserver:
   void OnClipboardDataChanged() override;
@@ -283,9 +283,9 @@ class VolumeManager : public KeyedService,
       return GetKey(a) < GetKey(b);
     }
 
-    static base::StringPiece GetKey(const base::StringPiece a) { return a; }
+    static std::string_view GetKey(const std::string_view a) { return a; }
 
-    static base::StringPiece GetKey(const std::unique_ptr<Volume>& volume) {
+    static std::string_view GetKey(const std::unique_ptr<Volume>& volume) {
       DCHECK(volume);
       return volume->volume_id();
     }
@@ -311,7 +311,7 @@ class VolumeManager : public KeyedService,
                       ash::MountError error = ash::MountError::kSuccess);
 
   // Removes the Volume with the given ID if |error| is |kNone|.
-  void DoUnmountEvent(base::StringPiece volume_id,
+  void DoUnmountEvent(std::string_view volume_id,
                       ash::MountError error = ash::MountError::kSuccess);
 
   // Removes the Volume with the same ID as |volume| if |error| is |kNone|.

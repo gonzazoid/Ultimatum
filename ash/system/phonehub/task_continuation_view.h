@@ -51,8 +51,7 @@ class ASH_EXPORT TaskContinuationView : public views::View,
 
     // views::View:
     gfx::Size CalculatePreferredSize() const override;
-    void Layout() override;
-    const char* GetClassName() const override;
+    void Layout(PassKey) override;
 
     // Clear all existing tasks in the view and in |task_chips_|.
     void Reset();

@@ -4,11 +4,12 @@
 
 #include "third_party/blink/renderer/bindings/core/v8/v8_code_cache.h"
 
+#include <optional>
+
 #include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
 #include "build/build_config.h"
 #include "components/miracle_parameter/common/public/miracle_parameter.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/v8_cache_options.mojom-blink.h"
 #include "third_party/blink/public/web/web_settings.h"
@@ -90,12 +91,14 @@ enum class DetailFlags : uint64_t {
 bool V8CodeCache::HasHotTimestamp(const CachedMetadataHandler* cache_handler) {
   scoped_refptr<CachedMetadata> cached_metadata =
       cache_handler->GetCachedMetadata(
-          V8CodeCache::TagForTimeStamp(cache_handler));
+          V8CodeCache::TagForTimeStamp(cache_handler),
+          CachedMetadataHandler::kAllowUnchecked);
   if (cached_metadata) {
     return TimestampIsRecent(cached_metadata.get());
   }
   cached_metadata = cache_handler->GetCachedMetadata(
-      V8CodeCache::TagForCompileHints(cache_handler));
+      V8CodeCache::TagForCompileHints(cache_handler),
+      CachedMetadataHandler::kAllowUnchecked);
   if (cached_metadata) {
     return TimestampIsRecent(cached_metadata.get());
   }
@@ -379,7 +382,8 @@ static void ProduceCacheInternal(
         cache_handler->SetCachedMetadata(
             code_cache_host, V8CodeCache::TagForCodeCache(cache_handler), data,
             length);
-        base::UmaHistogramTimes("V8.ProduceCodeCache", timer.Elapsed());
+        base::UmaHistogramMicrosecondsTimes("V8.ProduceCodeCacheMicroseconds",
+                                            timer.Elapsed());
       }
 
       TRACE_EVENT_END1(kTraceEventCategoryGroup, trace_name, "data",
@@ -496,7 +500,7 @@ scoped_refptr<CachedMetadata> V8CodeCache::GenerateFullCodeCache(
       [&](perfetto::TracedValue context) {
         inspector_compile_script_event::Data(
             std::move(context), file_name, TextPosition::MinimumPosition(),
-            absl::nullopt, true, false,
+            std::nullopt, true, false,
             ScriptStreamer::NotStreamingReason::kStreamingDisabled);
       });
 

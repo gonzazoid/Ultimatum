@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_POLICY_MESSAGING_LAYER_UPLOAD_RECORD_UPLOAD_REQUEST_BUILDER_H_
 #define CHROME_BROWSER_POLICY_MESSAGING_LAYER_UPLOAD_RECORD_UPLOAD_REQUEST_BUILDER_H_
 
+#include <optional>
 #include <string_view>
 
 #include "base/feature_list.h"
@@ -12,7 +13,6 @@
 #include "build/build_config.h"
 #include "components/reporting/proto/synced/record.pb.h"
 #include "components/reporting/resources/resource_manager.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace reporting {
 
@@ -102,6 +102,7 @@ class UploadEncryptedReportingRequestBuilder {
   // encryption settings and that the config_file_version hasn't been set by
   // `RecordHandlerImpl`.
   explicit UploadEncryptedReportingRequestBuilder(
+      bool is_generation_guid_required,
       bool attach_encryption_settings = false,
       int config_file_version = -1);
   ~UploadEncryptedReportingRequestBuilder();
@@ -118,14 +119,15 @@ class UploadEncryptedReportingRequestBuilder {
 
   // Return the built dictionary. Also set requestId to a random string if it
   // hasn't been set yet.
-  absl::optional<base::Value::Dict> Build();
+  std::optional<base::Value::Dict> Build();
 
   static std::string_view GetEncryptedRecordListPath();
   static std::string_view GetAttachEncryptionSettingsPath();
   static std::string_view GetConfigurationFileVersionPath();
   static std::string_view GetSourcePath();
 
-  absl::optional<base::Value::Dict> result_;
+  const bool is_generation_guid_required_;
+  std::optional<base::Value::Dict> result_;
 };
 
 // Builds a |base::Value::Dict| from a |EncryptedRecord| proto.
@@ -133,10 +135,11 @@ class EncryptedRecordDictionaryBuilder {
  public:
   explicit EncryptedRecordDictionaryBuilder(
       EncryptedRecord record,
-      ScopedReservation& scoped_reservation);
+      ScopedReservation& scoped_reservation,
+      bool is_generation_guid_required);
   ~EncryptedRecordDictionaryBuilder();
 
-  absl::optional<base::Value::Dict> Build();
+  std::optional<base::Value::Dict> Build();
 
   static std::string_view GetEncryptedWrappedRecordPath();
   static std::string_view GetSequenceInformationKeyPath();
@@ -144,31 +147,28 @@ class EncryptedRecordDictionaryBuilder {
   static std::string_view GetCompressionInformationPath();
 
  private:
-  absl::optional<base::Value::Dict> result_;
+  std::optional<base::Value::Dict> result_;
 };
 
 // Builds a |base::Value::Dict| from a |SequenceInformation| proto.
 class SequenceInformationDictionaryBuilder {
  public:
   explicit SequenceInformationDictionaryBuilder(
-      const SequenceInformation& sequence_information);
+      const SequenceInformation& sequence_information,
+      bool is_generation_guid_required);
   ~SequenceInformationDictionaryBuilder();
 
-  absl::optional<base::Value::Dict> Build();
+  std::optional<base::Value::Dict> Build();
 
   static std::string_view GetSequencingIdPath();
   static std::string_view GetGenerationIdPath();
   static std::string_view GetPriorityPath();
 #if BUILDFLAG(IS_CHROMEOS)
   static std::string_view GetGenerationGuidPath();
-
-  // Returns true if a generation guid is required for this device or browser.
-  // Returns false otherwise.
-  static bool GenerationGuidIsRequired();
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
  private:
-  absl::optional<base::Value::Dict> result_;
+  std::optional<base::Value::Dict> result_;
 };
 
 // Builds a |base::Value::Dict| from a |EncryptionInfo| proto.
@@ -178,13 +178,13 @@ class EncryptionInfoDictionaryBuilder {
       const EncryptionInfo& encryption_info);
   ~EncryptionInfoDictionaryBuilder();
 
-  absl::optional<base::Value::Dict> Build();
+  std::optional<base::Value::Dict> Build();
 
   static std::string_view GetEncryptionKeyPath();
   static std::string_view GetPublicKeyIdPath();
 
  private:
-  absl::optional<base::Value::Dict> result_;
+  std::optional<base::Value::Dict> result_;
 };
 
 // Builds a |base::Value::Dict| from a |CompressionInfo| proto.
@@ -194,12 +194,12 @@ class CompressionInformationDictionaryBuilder {
       const CompressionInformation& compression_info);
   ~CompressionInformationDictionaryBuilder();
 
-  absl::optional<base::Value::Dict> Build();
+  std::optional<base::Value::Dict> Build();
 
   static std::string_view GetCompressionAlgorithmPath();
 
  private:
-  absl::optional<base::Value::Dict> result_;
+  std::optional<base::Value::Dict> result_;
 };
 
 }  // namespace reporting

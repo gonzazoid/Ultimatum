@@ -141,8 +141,6 @@ class BookmarkManagerMediator
                                 openFolder(parent.getId());
                             }
                         } else {
-                            // Needs to remove the current node, and update any transitive parents
-                            // that may be showing child counts. Just refresh() for now.
                             int position = getPositionForBookmark(id);
                             // If the position couldn't be found, then do a full refresh. Otherwise
                             // be smart and remove only the index of the removed bookmark.
@@ -150,6 +148,8 @@ class BookmarkManagerMediator
                                 mPendingRefresh.post();
                             } else {
                                 mModelList.removeAt(position);
+                                updateAllLocations();
+
                                 // If the deleted node was selection, unselect it.
                                 if (mSelectionDelegate.isItemSelected(id)) {
                                     mSelectionDelegate.toggleSelectionForItem(id);
@@ -375,6 +375,7 @@ class BookmarkManagerMediator
     private final PendingRunnable mPendingRefresh =
             new PendingRunnable(
                     TaskTraits.UI_DEFAULT, mCallbackController.makeCancelable(this::refresh));
+    private final BookmarkMoveSnackbarManager mBookmarkMoveSnackbarManager;
 
     // Whether this instance has been destroyed.
     private boolean mIsDestroyed;
@@ -409,7 +410,8 @@ class BookmarkManagerMediator
             BookmarkImageFetcher bookmarkImageFetcher,
             ShoppingService shoppingService,
             SnackbarManager snackbarManager,
-            Consumer<OnScrollListener> onScrollListenerConsumer) {
+            Consumer<OnScrollListener> onScrollListenerConsumer,
+            BookmarkMoveSnackbarManager bookmarkMoveSnackbarManager) {
         mContext = context;
         mBookmarkModel = bookmarkModel;
         mBookmarkModel.addObserver(mBookmarkModelObserver);
@@ -439,6 +441,7 @@ class BookmarkManagerMediator
                 new BookmarkPromoHeader(
                         mContext, mProfile.getOriginalProfile(), this::updateHeader);
         mBookmarkUndoController = bookmarkUndoController;
+        mBookmarkMoveSnackbarManager = bookmarkMoveSnackbarManager;
 
         if (BookmarkFeatures.isAndroidImprovedBookmarksEnabled()) {
             mBookmarkQueryHandler =
@@ -511,6 +514,7 @@ class BookmarkManagerMediator
         mCallbackController.destroy();
 
         mBookmarkUiPrefs.removeObserver(mBookmarkUiPrefsObserver);
+        mBookmarkMoveSnackbarManager.destroy();
 
         for (BookmarkUiObserver observer : mUiObservers) {
             observer.onDestroy();
@@ -616,6 +620,10 @@ class BookmarkManagerMediator
     }
 
     public boolean isReorderable(BookmarkListEntry entry) {
+        if (!mCurrentPowerFilter.isEmpty()) {
+            return false;
+        }
+
         return entry != null
                 && entry.getBookmarkItem() != null
                 && entry.getBookmarkItem().isReorderable();
@@ -1336,7 +1344,7 @@ class BookmarkManagerMediator
         listItems.add(buildMenuListItem(R.string.bookmark_item_move, 0, 0, canMove));
         listItems.add(buildMenuListItem(R.string.bookmark_item_delete, 0, 0));
 
-        boolean canReorder = bookmarkItem != null && bookmarkItem.isReorderable();
+        boolean canReorder = isReorderable(entry);
         if (getCurrentUiMode() == BookmarkUiMode.SEARCHING) {
             listItems.add(buildMenuListItem(R.string.bookmark_show_in_folder, 0, 0));
         } else if (getCurrentUiMode() == BookmarkUiMode.FOLDER
@@ -1403,7 +1411,8 @@ class BookmarkManagerMediator
                         RecordUserAction.record("Android.BookmarkPage.ReadingList.MarkAsUnread");
                     } else if (textId == R.string.bookmark_item_move) {
                         if (BookmarkFeatures.isAndroidImprovedBookmarksEnabled()) {
-                            BookmarkUtils.startFolderPickerActivity(mContext, bookmarkId);
+                            mBookmarkMoveSnackbarManager.startFolderPickerAndObserveResult(
+                                    bookmarkId);
                         } else {
                             BookmarkFolderSelectActivity.startFolderSelectActivity(
                                     mContext, bookmarkId);

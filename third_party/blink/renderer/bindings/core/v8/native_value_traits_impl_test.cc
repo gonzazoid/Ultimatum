@@ -9,7 +9,6 @@
 #include "testing/gtest/include/gtest/gtest-death-test.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/bindings/core/v8/idl_types.h"
-#include "third_party/blink/renderer/bindings/core/v8/to_v8_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_internals.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_test_sequence_callback.h"
@@ -336,7 +335,7 @@ TEST(NativeValueTraitsImplTest, IDLBigint) {
     NonThrowableExceptionState exception_state;
     const blink::BigInt& bigint = NativeValueTraits<IDLBigint>::NativeValue(
         scope.GetIsolate(), v8_bigint, exception_state);
-    absl::optional<absl::uint128> val = bigint.ToUInt128();
+    std::optional<absl::uint128> val = bigint.ToUInt128();
     ASSERT_TRUE(val.has_value());
     EXPECT_EQ(*val, 123u);
   }
@@ -355,7 +354,7 @@ TEST(NativeValueTraitsImplTest, IDLBigint) {
     NonThrowableExceptionState exception_state;
     const blink::BigInt& bigint = NativeValueTraits<IDLBigint>::NativeValue(
         scope.GetIsolate(), v8_string, exception_state);
-    absl::optional<absl::uint128> val = bigint.ToUInt128();
+    std::optional<absl::uint128> val = bigint.ToUInt128();
     ASSERT_TRUE(val.has_value());
     EXPECT_EQ(*val, 123u);
   }
@@ -370,7 +369,7 @@ TEST(NativeValueTraitsImplTest, IDLBigint) {
     NonThrowableExceptionState exception_state;
     const blink::BigInt& bigint = NativeValueTraits<IDLBigint>::NativeValue(
         scope.GetIsolate(), v8_object, exception_state);
-    absl::optional<absl::uint128> val = bigint.ToUInt128();
+    std::optional<absl::uint128> val = bigint.ToUInt128();
     ASSERT_TRUE(val.has_value());
     EXPECT_EQ(*val, 123u);
   }

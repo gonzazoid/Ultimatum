@@ -72,6 +72,7 @@
 #include "third_party/blink/renderer/platform/testing/mock_context_lifecycle_notifier.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 #include "third_party/blink/renderer/platform/testing/scoped_mocked_url.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/testing_platform_support_with_mock_scheduler.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 #include "third_party/blink/renderer/platform/testing/url_loader_mock_factory.h"
@@ -128,6 +129,9 @@ class ImageResourceTest : public testing::Test,
     ThreadState::Current()->CollectAllGarbageForTesting(
         ThreadState::StackState::kNoHeapPointers);
   }
+
+ private:
+  test::TaskEnvironment task_environment_;
 };
 
 // Ensure that the image decoder can determine the dimensions of kJpegImage from
@@ -256,7 +260,7 @@ TEST_F(ImageResourceTest, MultipartImage) {
   image_resource->Loader()->DidReceiveResponse(
       WrappedResourceResponse(multipart_response),
       /*body=*/mojo::ScopedDataPipeConsumerHandle(),
-      /*cached_metadata=*/absl::nullopt);
+      /*cached_metadata=*/std::nullopt);
   EXPECT_FALSE(image_resource->ResourceBuffer());
   EXPECT_FALSE(image_resource->GetContent()->HasImage());
   EXPECT_EQ(0, observer->ImageChangedCount());
@@ -344,7 +348,7 @@ TEST_F(ImageResourceTest, BitmapMultipartImage) {
   image_resource->Loader()->DidReceiveResponse(
       WrappedResourceResponse(multipart_response),
       /*body=*/mojo::ScopedDataPipeConsumerHandle(),
-      /*cached_metadata=*/absl::nullopt);
+      /*cached_metadata=*/std::nullopt);
   EXPECT_FALSE(image_resource->GetContent()->HasImage());
 
   const char kBoundary[] = "--boundary\n";
@@ -829,7 +833,7 @@ TEST_F(ImageResourceTest, CancelOnDecodeError) {
   image_resource->Loader()->DidReceiveResponse(
       WrappedResourceResponse(resource_response),
       /*body=*/mojo::ScopedDataPipeConsumerHandle(),
-      /*cached_metadata=*/absl::nullopt);
+      /*cached_metadata=*/std::nullopt);
 
   EXPECT_EQ(0, observer->ImageChangedCount());
 
@@ -859,7 +863,7 @@ TEST_F(ImageResourceTest, DecodeErrorWithEmptyBody) {
   image_resource->Loader()->DidReceiveResponse(
       WrappedResourceResponse(resource_response),
       /*body=*/mojo::ScopedDataPipeConsumerHandle(),
-      /*cached_metadata=*/absl::nullopt);
+      /*cached_metadata=*/std::nullopt);
 
   EXPECT_EQ(ResourceStatus::kPending, image_resource->GetStatus());
   EXPECT_FALSE(observer->ImageNotifyFinishedCalled());
@@ -904,7 +908,7 @@ TEST_F(ImageResourceTest, PartialContentWithoutDimensions) {
   image_resource->Loader()->DidReceiveResponse(
       WrappedResourceResponse(partial_response),
       /*body=*/mojo::ScopedDataPipeConsumerHandle(),
-      /*cached_metadata=*/absl::nullopt);
+      /*cached_metadata=*/std::nullopt);
   image_resource->Loader()->DidReceiveData(
       reinterpret_cast<const char*>(kJpegImage),
       kJpegImageSubrangeWithoutDimensionsLength);
@@ -1149,6 +1153,8 @@ class ImageResourceCounterTest : public testing::Test {
     return InstanceCounters::CounterValue(
         InstanceCounters::kUACSSResourceCounter);
   }
+
+  test::TaskEnvironment task_environment_;
 };
 
 TEST_F(ImageResourceCounterTest, InstanceCounters) {

@@ -26,6 +26,7 @@
 #include "chrome/browser/renderer_context_menu/render_view_context_menu_browsertest_util.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/common/chrome_switches.h"
+#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_widget_host.h"
 #include "content/public/browser/web_contents.h"
@@ -231,19 +232,6 @@ class PDFExtensionPrintingTest
     test_print_backend_->AddValidPrinter(
         printer_name, std::move(default_caps),
         std::make_unique<printing::PrinterBasicInfo>(printer_info));
-  }
-
-  content::WebContents* GetEmbedderWebContents() {
-    content::WebContents* contents = GetActiveWebContents();
-
-    // OOPIF PDF viewer only has a single `WebContents`.
-    if (UseOopif()) {
-      return contents;
-    }
-
-    MimeHandlerViewGuest* guest =
-        pdf_extension_test_util::GetOnlyMimeHandlerView(contents);
-    return guest ? guest->embedder_web_contents() : nullptr;
   }
 
   void SetupPrintViewManagerForJobMonitoring(content::RenderFrameHost* frame) {

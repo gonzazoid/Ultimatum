@@ -131,14 +131,14 @@ bool ShouldShowEmailMenuItem() {
     return false;
   }
   switch (user_session->user_info.type) {
-    case user_manager::USER_TYPE_REGULAR:
-    case user_manager::USER_TYPE_CHILD:
+    case user_manager::UserType::kRegular:
+    case user_manager::UserType::kChild:
       return true;
-    case user_manager::USER_TYPE_GUEST:
-    case user_manager::USER_TYPE_PUBLIC_ACCOUNT:
-    case user_manager::USER_TYPE_KIOSK_APP:
-    case user_manager::USER_TYPE_ARC_KIOSK_APP:
-    case user_manager::USER_TYPE_WEB_KIOSK_APP:
+    case user_manager::UserType::kGuest:
+    case user_manager::UserType::kPublicAccount:
+    case user_manager::UserType::kKioskApp:
+    case user_manager::UserType::kArcKioskApp:
+    case user_manager::UserType::kWebKioskApp:
       return false;
   }
 }
@@ -414,7 +414,9 @@ PowerButton::PowerButton(UnifiedSystemTrayController* tray_controller)
                                    /*highlight_on_focus=*/false);
 }
 
-PowerButton::~PowerButton() = default;
+PowerButton::~PowerButton() {
+  set_context_menu_controller(nullptr);
+}
 
 bool PowerButton::IsMenuShowing() {
   auto* menu_runner = context_menu_->menu_runner_.get();

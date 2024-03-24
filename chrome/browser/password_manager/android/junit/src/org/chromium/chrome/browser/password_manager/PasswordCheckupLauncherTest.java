@@ -35,13 +35,14 @@ import org.robolectric.annotation.Config;
 import org.chromium.base.CollectionUtil;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Batch;
+import org.chromium.base.test.util.Features;
 import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.password_manager.PasswordCheckupClientHelper.PasswordCheckBackendException;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.safety_check.SafetyCheckSettingsFragment;
 import org.chromium.chrome.browser.settings.SettingsActivity;
 import org.chromium.chrome.browser.sync.SyncServiceFactory;
-import org.chromium.chrome.test.util.browser.Features;
 import org.chromium.components.prefs.PrefService;
 import org.chromium.components.signin.AccountManagerFacadeProvider;
 import org.chromium.components.signin.AccountUtils;
@@ -106,7 +107,7 @@ public class PasswordCheckupLauncherTest {
         mJniMocker.mock(UserPrefsJni.TEST_HOOKS, mMockUserPrefsJni);
         mJniMocker.mock(PasswordManagerUtilBridgeJni.TEST_HOOKS, mMockPasswordManagerUtilBridgeJni);
 
-        Profile.setLastUsedProfileForTesting(mProfile);
+        ProfileManager.setLastUsedProfileForTesting(mProfile);
         when(mMockUserPrefsJni.get(mProfile)).thenReturn(mPrefService);
 
         SyncServiceFactory.setInstanceForTesting(mMockSyncService);
@@ -153,7 +154,7 @@ public class PasswordCheckupLauncherTest {
                 .thenReturn(true);
 
         PasswordCheckupLauncher.launchCheckupOnDevice(
-                mMockWindowAndroid, LEAK_DIALOG, TEST_EMAIL_ADDRESS);
+                mProfile, mMockWindowAndroid, LEAK_DIALOG, TEST_EMAIL_ADDRESS);
 
         verify(mMockPendingIntentForAccountCheckup).send();
     }
@@ -165,7 +166,7 @@ public class PasswordCheckupLauncherTest {
                 .thenReturn(true);
 
         PasswordCheckupLauncher.launchCheckupOnDevice(
-                mMockWindowAndroid, LEAK_DIALOG, TEST_NO_EMAIL_ADDRESS);
+                mProfile, mMockWindowAndroid, LEAK_DIALOG, TEST_NO_EMAIL_ADDRESS);
 
         verify(mMockPendingIntentForLocalCheckup).send();
     }
@@ -181,7 +182,7 @@ public class PasswordCheckupLauncherTest {
                 .thenReturn(true);
 
         PasswordCheckupLauncher.launchCheckupOnDevice(
-                mMockWindowAndroid, LEAK_DIALOG, TEST_NO_EMAIL_ADDRESS);
+                mProfile, mMockWindowAndroid, LEAK_DIALOG, TEST_NO_EMAIL_ADDRESS);
 
         verify(mMockPendingIntentForLocalCheckup).send();
     }

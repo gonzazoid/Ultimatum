@@ -4,6 +4,7 @@
 
 #include "services/network/cors/cors_url_loader.h"
 
+#include <optional>
 #include <sstream>
 #include <utility>
 
@@ -22,6 +23,7 @@
 #include "net/log/net_log_values.h"
 #include "services/network/cors/cors_url_loader_factory.h"
 #include "services/network/cors/cors_util.h"
+#include "services/network/cors/preflight_controller.h"
 #include "services/network/masked_domain_list/network_service_resource_block_list.h"
 #include "services/network/network_context.h"
 #include "services/network/network_service_memory_cache.h"
@@ -62,9 +64,7 @@ enum class PreflightRequiredReason {
   kDisallowedHeader
 };
 
-// Returns absl::nullopt when a CORS preflight isn't needed. Otherwise
-// returns the reason why a preflight is needed.
-absl::optional<PreflightRequiredReason> NeedsPreflight(
+std::optional<PreflightRequiredReason> NeedsPrivateNetworkAccessPreflight(
     const ResourceRequest& request) {
   if (request.target_ip_address_space != mojom::IPAddressSpace::kUnknown) {
     // Force a preflight after a private network request was detected. See the
@@ -74,8 +74,13 @@ absl::optional<PreflightRequiredReason> NeedsPreflight(
     return PreflightRequiredReason::kPrivateNetworkAccess;
   }
 
+  return std::nullopt;
+}
+
+std::optional<PreflightRequiredReason> NeedsCorsPreflight(
+    const ResourceRequest& request) {
   if (!IsCorsEnabledRequestMode(request.mode))
-    return absl::nullopt;
+    return std::nullopt;
 
   if (request.mode == mojom::RequestMode::kCorsWithForcedPreflight) {
     return PreflightRequiredReason::kCorsWithForcedPreflightMode;
@@ -83,7 +88,7 @@ absl::optional<PreflightRequiredReason> NeedsPreflight(
 
   if (request.cors_preflight_policy ==
       mojom::CorsPreflightPolicy::kPreventPreflight) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   if (!IsCorsSafelistedMethod(request.method))
@@ -94,7 +99,19 @@ absl::optional<PreflightRequiredReason> NeedsPreflight(
            .empty())
     return PreflightRequiredReason::kDisallowedHeader;
 
-  return absl::nullopt;
+  return std::nullopt;
+}
+
+// Returns std::nullopt when a preflight isn't needed. Otherwise returns the
+// reason why a preflight is needed.
+std::optional<PreflightRequiredReason> NeedsPreflight(
+    const ResourceRequest& request) {
+  std::optional<PreflightRequiredReason> needs_pna_preflight =
+      NeedsPrivateNetworkAccessPreflight(request);
+  if (needs_pna_preflight.has_value()) {
+    return needs_pna_preflight;
+  }
+  return NeedsCorsPreflight(request);
 }
 
 base::Value::Dict NetLogCorsURLLoaderStartParams(
@@ -118,7 +135,7 @@ base::Value::Dict NetLogCorsURLLoaderStartParams(
 }
 
 base::Value::Dict NetLogPreflightRequiredParams(
-    absl::optional<PreflightRequiredReason> preflight_required_reason) {
+    std::optional<PreflightRequiredReason> preflight_required_reason) {
   auto dict = base::Value::Dict().Set("preflight_required",
                                       preflight_required_reason.has_value());
   if (preflight_required_reason) {
@@ -145,7 +162,7 @@ base::Value::Dict NetLogPreflightRequiredParams(
 // Returns net log params for the `CORS_PREFLIGHT_ERROR` event type.
 base::Value::Dict NetLogPreflightErrorParams(
     int net_error,
-    const absl::optional<CorsErrorStatus>& status) {
+    const std::optional<CorsErrorStatus>& status) {
   auto dict =
       base::Value::Dict().Set("error", net::ErrorToShortString(net_error));
   if (status) {
@@ -167,8 +184,8 @@ base::Value::Dict NetLogPreflightErrorParams(
 mojom::FetchResponseType CalculateResponseTainting(
     const GURL& url,
     mojom::RequestMode request_mode,
-    const absl::optional<url::Origin>& origin,
-    const absl::optional<url::Origin>& isolated_world_origin,
+    const std::optional<url::Origin>& origin,
+    const std::optional<url::Origin>& isolated_world_origin,
     bool cors_flag,
     bool tainted_origin,
     const OriginAccessList& origin_access_list) {
@@ -217,10 +234,10 @@ mojom::FetchResponseType CalculateResponseTainting(
 // according to CORS. That is:
 // - the URL has a CORS supported scheme and
 // - the URL does not contain the userinfo production.
-absl::optional<CorsErrorStatus> CheckRedirectLocation(
+std::optional<CorsErrorStatus> CheckRedirectLocation(
     const GURL& url,
     mojom::RequestMode request_mode,
-    const absl::optional<url::Origin>& origin,
+    const std::optional<url::Origin>& origin,
     bool cors_flag,
     bool tainted) {
   // If `actualResponse`’s location URL’s scheme is not an HTTP(S) scheme,
@@ -245,7 +262,7 @@ absl::optional<CorsErrorStatus> CheckRedirectLocation(
   if (cors_flag && url_has_credentials)
     return CorsErrorStatus(mojom::CorsError::kRedirectContainsCredentials);
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 void RecordNetworkLoaderCompletionTime(const char* suffix,
@@ -337,7 +354,7 @@ CorsURLLoader::CorsURLLoader(
   if (request_.url.SchemeIsHash() || request_.url.SchemeIsSigned() || request_.url.SchemeIsRelated())
     is_hash_net_request_ = true;
   if (ignore_isolated_world_origin)
-    request_.isolated_world_origin = absl::nullopt;
+    request_.isolated_world_origin = std::nullopt;
 
   receiver_.set_disconnect_handler(
       base::BindOnce(&CorsURLLoader::OnMojoDisconnect, base::Unretained(this)));
@@ -364,7 +381,7 @@ CorsURLLoader::CorsURLLoader(
     // `HttpNetworkTransaction` builds the request header just before sending it
     // to the server.
     shared_dictionary_storage_->GetDictionary(
-        request_.url,
+        request_.url, request_.destination,
         base::BindOnce(
             [](base::WeakPtr<CorsURLLoader> loader,
                std::unique_ptr<SharedDictionary> shared_dictionary) {
@@ -415,7 +432,7 @@ void CorsURLLoader::FollowRedirect(
     const std::vector<std::string>& removed_headers,
     const net::HttpRequestHeaders& modified_headers,
     const net::HttpRequestHeaders& modified_cors_exempt_headers,
-    const absl::optional<GURL>& new_url) {
+    const std::optional<GURL>& new_url) {
   // If this is a navigation from a renderer, then its a service worker
   // passthrough of a navigation request.  Since this case uses manual
   // redirect mode FollowRedirect() should never be called.
@@ -589,7 +606,7 @@ void CorsURLLoader::OnReceiveEarlyHints(mojom::EarlyHintsPtr early_hints) {
 void CorsURLLoader::OnReceiveResponse(
     mojom::URLResponseHeadPtr response_head,
     mojo::ScopedDataPipeConsumerHandle body,
-    absl::optional<mojo_base::BigBuffer> cached_metadata) {
+    std::optional<mojo_base::BigBuffer> cached_metadata) {
   DCHECK(network_loader_);
   DCHECK(forwarding_client_);
   DCHECK(!deferred_redirect_url_);
@@ -619,8 +636,8 @@ void CorsURLLoader::OnReceiveResponse(
     // registration.
     CHECK_NE(mojom::FetchResponseType::kOpaque, response_tainting_);
     auto writer = shared_dictionary_storage_->MaybeCreateWriter(
-        request_.url, response_head->response_time, *response_head->headers,
-        response_head->was_fetched_via_cache,
+        request_.url, response_head->request_time, response_head->response_time,
+        *response_head->headers, response_head->was_fetched_via_cache,
         base::BindOnce(
             &SharedDictionaryAccessChecker::CheckAllowedToWriteAndReport,
             std::make_unique<SharedDictionaryAccessChecker>(
@@ -703,6 +720,7 @@ void CorsURLLoader::OnReceiveRedirect(const net::RedirectInfo& redirect_info,
 
   if (request_.redirect_mode == mojom::RedirectMode::kManual) {
     CheckTainted(redirect_info);
+    redirect_info_ = redirect_info;
     deferred_redirect_url_ = std::make_unique<GURL>(redirect_info.new_url);
     forwarding_client_->OnReceiveRedirect(redirect_info,
                                           std::move(response_head));
@@ -859,7 +877,7 @@ void CorsURLLoader::StartRequest() {
   // See the first step of the HTTP-no-service-worker fetch algorithm defined in
   // the Private Network Access spec:
   // https://wicg.github.io/private-network-access/#http-no-service-worker-fetch
-  absl::optional<PreflightRequiredReason> needs_preflight =
+  std::optional<PreflightRequiredReason> needs_preflight =
       NeedsPreflight(request_);
   bool preflight_required =
       needs_preflight.has_value() &&
@@ -874,6 +892,16 @@ void CorsURLLoader::StartRequest() {
     StartNetworkRequest();
     return;
   }
+
+  preflight_mode_.Clear();
+  if (fetch_cors_flag_ && NeedsCorsPreflight(request_).has_value()) {
+    preflight_mode_.Put(PreflightController::PreflightType::kCors);
+  }
+  if (NeedsPrivateNetworkAccessPreflight(request_).has_value()) {
+    preflight_mode_.Put(
+        PreflightController::PreflightType::kPrivateNetworkAccess);
+  }
+  CHECK(!preflight_mode_.Empty());
 
   // Since we're doing a preflight, we won't reuse the original request. Cancel
   // it now to free up the socket.
@@ -913,7 +941,8 @@ void CorsURLLoader::StartRequest() {
       tainted_, net::NetworkTrafficAnnotationTag(traffic_annotation_),
       network_loader_factory_, isolation_info_, CloneClientSecurityState(),
       weak_devtools_observer_factory_.GetWeakPtr(), net_log_,
-      context_->acam_preflight_spec_conformant(), std::move(remote_observer));
+      context_->acam_preflight_spec_conformant(), std::move(remote_observer),
+      preflight_mode_);
 }
 
 void CorsURLLoader::ReportCorsErrorToDevTools(const CorsErrorStatus& status,
@@ -929,10 +958,10 @@ void CorsURLLoader::ReportCorbErrorToDevTools() {
   devtools_observer_->OnCorbError(request_.devtools_request_id, request_.url);
 }
 
-absl::optional<URLLoaderCompletionStatus> CorsURLLoader::ConvertPreflightResult(
+std::optional<URLLoaderCompletionStatus> CorsURLLoader::ConvertPreflightResult(
     int net_error,
-    absl::optional<CorsErrorStatus> status) {
-  absl::optional<PreflightRequiredReason> reason = NeedsPreflight(request_);
+    std::optional<CorsErrorStatus> status) {
+  std::optional<PreflightRequiredReason> reason = NeedsPreflight(request_);
   CHECK(reason.has_value());  // Otherwise we should not have sent a preflight.
 
   // Unmitigated success: no error and no warning.
@@ -944,7 +973,7 @@ absl::optional<URLLoaderCompletionStatus> CorsURLLoader::ConvertPreflightResult(
           mojom::PrivateNetworkAccessPreflightResult::kSuccess;
     }
 
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   if (net_error != net::OK) {
@@ -999,7 +1028,7 @@ absl::optional<URLLoaderCompletionStatus> CorsURLLoader::ConvertPreflightResult(
       ReportCorsErrorToDevTools(*status, /*is_warning=*/true);
     }
 
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // Failure.
@@ -1019,12 +1048,12 @@ absl::optional<URLLoaderCompletionStatus> CorsURLLoader::ConvertPreflightResult(
 
 void CorsURLLoader::OnPreflightRequestComplete(
     int net_error,
-    absl::optional<CorsErrorStatus> status,
+    std::optional<CorsErrorStatus> status,
     bool has_authorization_covered_by_wildcard) {
   has_authorization_covered_by_wildcard_ =
       has_authorization_covered_by_wildcard;
 
-  absl::optional<URLLoaderCompletionStatus> completion_status =
+  std::optional<URLLoaderCompletionStatus> completion_status =
       ConvertPreflightResult(net_error, std::move(status));
   if (completion_status) {
     HandleComplete(*std::move(completion_status));
@@ -1053,7 +1082,7 @@ void CorsURLLoader::StartNetworkRequest() {
   network_loader_start_time_ = base::TimeTicks::Now();
 
   // Check whether a fresh entry exists in the in-memory cache.
-  absl::optional<std::string> cache_key;
+  std::optional<std::string> cache_key;
   if (context_->GetMemoryCache() && !has_factory_override_) {
     // Pass `factory_client_security_state_` directly instead of using
     // GetClientSecurityState() so that private network access checks in
@@ -1116,7 +1145,7 @@ void CorsURLLoader::HandleComplete(URLLoaderCompletionStatus status) {
   // ORB "v0.2" (and later) use a network error code. We should always report
   // the error-code style error to DevTools, since it has a less spammy
   // way of displaying them compared to just dumping them on the console.
-  if (devtools_observer_ && (status.should_report_corb_blocking ||
+  if (devtools_observer_ && (status.should_report_orb_blocking ||
                              status.error_code == net::ERR_BLOCKED_BY_ORB)) {
     ReportCorbErrorToDevTools();
   }
@@ -1225,8 +1254,8 @@ bool CorsURLLoader::HasSpecialAccessToDestination() const {
 mojom::FetchResponseType CorsURLLoader::CalculateResponseTaintingForTesting(
     const GURL& url,
     mojom::RequestMode request_mode,
-    const absl::optional<url::Origin>& origin,
-    const absl::optional<url::Origin>& isolated_world_origin,
+    const std::optional<url::Origin>& origin,
+    const std::optional<url::Origin>& isolated_world_origin,
     bool cors_flag,
     bool tainted_origin,
     const OriginAccessList& origin_access_list) {
@@ -1236,10 +1265,10 @@ mojom::FetchResponseType CorsURLLoader::CalculateResponseTaintingForTesting(
 }
 
 // static
-absl::optional<CorsErrorStatus> CorsURLLoader::CheckRedirectLocationForTesting(
+std::optional<CorsErrorStatus> CorsURLLoader::CheckRedirectLocationForTesting(
     const GURL& url,
     mojom::RequestMode request_mode,
-    const absl::optional<url::Origin>& origin,
+    const std::optional<url::Origin>& origin,
     bool cors_flag,
     bool tainted) {
   return CheckRedirectLocation(url, request_mode, origin, cors_flag, tainted);
@@ -1254,7 +1283,7 @@ bool CorsURLLoader::PassesTimingAllowOriginCheck(
 
   // Let values be the result of getting, decoding, and splitting
   // `Timing-Allow-Origin` from response’s header list.
-  absl::optional<std::string> tao_header_value =
+  std::optional<std::string> tao_header_value =
       GetHeaderString(response, kTimingAllowOrigin);
 
   if (tao_header_value && request_.request_initiator) {
@@ -1353,14 +1382,14 @@ CorsURLLoader::TakePrivateNetworkAccessPreflightResult() {
 }
 
 // static
-absl::optional<std::string> CorsURLLoader::GetHeaderString(
+std::optional<std::string> CorsURLLoader::GetHeaderString(
     const mojom::URLResponseHead& response,
     const std::string& header_name) {
   if (!response.headers)
-    return absl::nullopt;
+    return std::nullopt;
   std::string header_value;
   if (!response.headers->GetNormalizedHeader(header_name, &header_value))
-    return absl::nullopt;
+    return std::nullopt;
   return header_value;
 }
 

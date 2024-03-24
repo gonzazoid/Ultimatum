@@ -12,9 +12,11 @@
 #import "ios/chrome/browser/ui/settings/notifications/notifications_view_controller_delegate.h"
 
 class PrefService;
+enum class PushNotificationClientId;
 @protocol NotificationsAlertPresenter;
 @protocol NotificationsConsumer;
 @protocol NotificationsNavigationCommands;
+@protocol TipsNotificationsAlertPresenter;
 
 // Mediator for Notifications UI.
 @interface NotificationsMediator
@@ -36,7 +38,13 @@ class PrefService;
 @property(nonatomic, weak) id<NotificationsNavigationCommands> handler;
 
 // Handler for displaying notification related alerts.
-@property(nonatomic, weak) id<NotificationsAlertPresenter> presenter;
+@property(nonatomic, weak)
+    id<NotificationsAlertPresenter, TipsNotificationsAlertPresenter>
+        presenter;
+
+// Called after a user disallows notification permissions.
+- (void)deniedPermissionsForClientIds:
+    (std::vector<PushNotificationClientId>)clientIds;
 
 @end
 

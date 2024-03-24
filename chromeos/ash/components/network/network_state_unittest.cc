@@ -145,8 +145,7 @@ TEST_F(NetworkStateTest, SsidLatin) {
   EXPECT_TRUE(SetStringProperty(shill::kTypeProperty, shill::kTypeWifi));
 
   std::string wifi_latin1 = "latin-1 \x54\xe9\x6c\xe9\x63\x6f\x6d";  // Télécom
-  std::string wifi_latin1_hex =
-      base::HexEncode(wifi_latin1.c_str(), wifi_latin1.length());
+  std::string wifi_latin1_hex = base::HexEncode(wifi_latin1);
   std::string wifi_latin1_result = "latin-1 T\xc3\xa9\x6c\xc3\xa9\x63om";
   EXPECT_TRUE(SetStringProperty(shill::kWifiHexSsid, wifi_latin1_hex));
   EXPECT_TRUE(SignalInitialPropertiesReceived());
@@ -158,8 +157,7 @@ TEST_F(NetworkStateTest, SsidHex) {
   EXPECT_TRUE(SetStringProperty(shill::kTypeProperty, shill::kTypeWifi));
 
   std::string wifi_hex_result = "This is HEX SSID!";
-  std::string wifi_hex =
-      base::HexEncode(wifi_hex_result.c_str(), wifi_hex_result.length());
+  std::string wifi_hex = base::HexEncode(wifi_hex_result);
   EXPECT_TRUE(SetStringProperty(shill::kWifiHexSsid, wifi_hex));
   EXPECT_TRUE(SignalInitialPropertiesReceived());
   EXPECT_EQ(wifi_hex_result, network_state_->name());
@@ -182,8 +180,7 @@ TEST_F(NetworkStateTest, SsidNonUtf8) {
   std::vector<uint8_t> non_utf8_ssid_bytes;
   non_utf8_ssid_bytes.push_back(static_cast<uint8_t>(non_utf8_ssid.data()[0]));
 
-  std::string wifi_hex =
-      base::HexEncode(non_utf8_ssid.data(), non_utf8_ssid.size());
+  std::string wifi_hex = base::HexEncode(non_utf8_ssid);
   EXPECT_TRUE(SetStringProperty(shill::kWifiHexSsid, wifi_hex));
   EXPECT_TRUE(SignalInitialPropertiesReceived());
   EXPECT_EQ(network_state_->raw_ssid(), non_utf8_ssid_bytes);
@@ -194,8 +191,7 @@ TEST_F(NetworkStateTest, SsidHexMultipleUpdates) {
   EXPECT_TRUE(SetStringProperty(shill::kTypeProperty, shill::kTypeWifi));
 
   std::string wifi_hex_result = "This is HEX SSID!";
-  std::string wifi_hex =
-      base::HexEncode(wifi_hex_result.c_str(), wifi_hex_result.length());
+  std::string wifi_hex = base::HexEncode(wifi_hex_result);
   EXPECT_TRUE(SetStringProperty(shill::kWifiHexSsid, wifi_hex));
   EXPECT_TRUE(SetStringProperty(shill::kWifiHexSsid, wifi_hex));
 }
@@ -206,8 +202,7 @@ TEST_F(NetworkStateTest, CaptivePortalState) {
 
   EXPECT_TRUE(SetStringProperty(shill::kTypeProperty, shill::kTypeWifi));
   EXPECT_TRUE(SetStringProperty(shill::kNameProperty, network_name));
-  std::string hex_ssid =
-      base::HexEncode(network_name.c_str(), network_name.length());
+  std::string hex_ssid = base::HexEncode(network_name);
   EXPECT_TRUE(SetStringProperty(shill::kWifiHexSsid, hex_ssid));
 
   // State != portal or online -> portal_state() == kUnknown
@@ -537,12 +532,6 @@ TEST_F(NetworkStateTest, UpdateCaptivePortalState) {
   SetConnectionState(shill::kStatePortalSuspected);
   UpdateCaptivePortalState(shill_properties);
   EXPECT_EQ(GetShillPortalState(), NetworkState::PortalState::kPortalSuspected);
-
-  shill_properties.Set(shill::kPortalDetectionFailedStatusCodeProperty,
-                       net::HTTP_PROXY_AUTHENTICATION_REQUIRED);
-  UpdateCaptivePortalState(shill_properties);
-  EXPECT_EQ(GetShillPortalState(),
-            NetworkState::PortalState::kProxyAuthRequired);
 
   SetConnectionState(shill::kStateOnline);
   UpdateCaptivePortalState(shill_properties);

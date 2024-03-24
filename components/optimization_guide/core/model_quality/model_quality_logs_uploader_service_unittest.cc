@@ -5,11 +5,11 @@
 #include "components/optimization_guide/core/model_quality/model_quality_logs_uploader_service.h"
 
 #include <memory>
+#include <optional>
 
 #include "base/command_line.h"
-#include "base/memory/scoped_refptr.h"
-
 #include "base/feature_list.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
@@ -33,7 +33,6 @@
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace optimization_guide {
 
@@ -42,6 +41,11 @@ namespace {
 std::unique_ptr<proto::LogAiDataRequest> BuildComposeLogAiDataReuqest() {
   std::unique_ptr<proto::LogAiDataRequest> log_ai_data_request(
       new proto::LogAiDataRequest());
+
+  // Inject logging metadata and make sure it gets written to final log.
+  log_ai_data_request->mutable_logging_metadata()
+      ->mutable_system_profile()
+      ->set_build_timestamp(12345);
 
   proto::ComposeLoggingData compose_logging_data;
 
@@ -163,7 +167,7 @@ class ModelQualityLogsUploaderServiceTest : public testing::Test {
     }
   }
 
-  absl::optional<proto::LogAiDataRequest> GetPendingLogsUploadRequest() {
+  std::optional<proto::LogAiDataRequest> GetPendingLogsUploadRequest() {
     return last_ai_data_request_;
   }
 
@@ -196,7 +200,7 @@ class ModelQualityLogsUploaderServiceTest : public testing::Test {
   network::TestURLLoaderFactory test_url_loader_factory_;
   base::HistogramTester histogram_tester_;
   TestingPrefServiceSimple pref_service_;
-  absl::optional<proto::LogAiDataRequest> last_ai_data_request_;
+  std::optional<proto::LogAiDataRequest> last_ai_data_request_;
   base::test::ScopedFeatureList scoped_feature_list_;
 };
 
@@ -218,6 +222,9 @@ TEST_F(ModelQualityLogsUploaderServiceTest, TestSuccessfulResponse) {
             pending_request->logging_metadata()
                 .on_device_system_profile()
                 .performance_class());
+  EXPECT_EQ(
+      12345,
+      pending_request->logging_metadata().system_profile().build_timestamp());
 
   histogram_tester_.ExpectUniqueSample(
       "OptimizationGuide.ModelQualityLogsUploaderService.NetErrorCode",
@@ -225,7 +232,7 @@ TEST_F(ModelQualityLogsUploaderServiceTest, TestSuccessfulResponse) {
   histogram_tester_.ExpectTotalCount(
       "OptimizationGuide.ModelQualityLogsUploaderService.Status", 1);
   histogram_tester_.ExpectUniqueSample(
-      "OptimizationGuide.ModelQualityLogsUploadService.UploadStatus.Compose",
+      "OptimizationGuide.ModelQualityLogsUploaderService.UploadStatus.Compose",
       ModelQualityLogsUploadStatus::kUploadSuccessful, 1);
 }
 
@@ -252,7 +259,7 @@ TEST_F(ModelQualityLogsUploaderServiceTest, TestMultipleUploads) {
   histogram_tester_.ExpectTotalCount(
       "OptimizationGuide.ModelQualityLogsUploaderService.Status", 2);
   histogram_tester_.ExpectUniqueSample(
-      "OptimizationGuide.ModelQualityLogsUploadService.UploadStatus.Compose",
+      "OptimizationGuide.ModelQualityLogsUploaderService.UploadStatus.Compose",
       ModelQualityLogsUploadStatus::kUploadSuccessful, 2);
 }
 
@@ -268,7 +275,7 @@ TEST_F(ModelQualityLogsUploaderServiceTest, TestUploadWhenLoggingDisabled) {
   // When logging is disabled there should be no pending requests.
   VerifyNumberOfPendingRequests(0);
   histogram_tester_.ExpectUniqueSample(
-      "OptimizationGuide.ModelQualityLogsUploadService.UploadStatus.Compose",
+      "OptimizationGuide.ModelQualityLogsUploaderService.UploadStatus.Compose",
       ModelQualityLogsUploadStatus::kLoggingNotEnabled, 1);
 }
 
@@ -295,7 +302,7 @@ TEST_F(ModelQualityLogsUploaderServiceTest, TestNetErrorResponse) {
       "OptimizationGuide.ModelQualityLogsUploaderService.NetErrorCode", 1);
 
   histogram_tester_.ExpectUniqueSample(
-      "OptimizationGuide.ModelQualityLogsUploadService.UploadStatus.Compose",
+      "OptimizationGuide.ModelQualityLogsUploaderService.UploadStatus.Compose",
       ModelQualityLogsUploadStatus::kNetError, 1);
 }
 
@@ -359,6 +366,32 @@ TEST_F(ModelQualityLogsUploaderServiceTest, TabOrganizationUserFeedbackUMA) {
   histogram_tester_.ExpectBucketCount(
       "OptimizationGuide.ModelQuality.UserFeedback.TabOrganization",
       proto::USER_FEEDBACK_THUMBS_DOWN, 1);
+}
+
+TEST_F(ModelQualityLogsUploaderServiceTest,
+       TabOrganizationUserFeedbackNullCheck) {
+  // Set TabOrganization ModelQualityLogEntry without any quality data tab
+  // organization.
+  std::unique_ptr<proto::LogAiDataRequest> log_ai_data_request_1(
+      new proto::LogAiDataRequest());
+
+  proto::TabOrganizationLoggingData tab_organization_logging_data;
+
+  proto::TabOrganizationRequest tab_request;
+
+  *(tab_organization_logging_data.mutable_request_data()) = tab_request;
+  *(log_ai_data_request_1->mutable_tab_organization()) =
+      tab_organization_logging_data;
+  std::unique_ptr<ModelQualityLogEntry> log_entry_1 =
+      std::make_unique<ModelQualityLogEntry>(std::move(log_ai_data_request_1));
+
+  // Upload logs without quality data set this should mark user_feedback as
+  // unspecified.
+  UploadModelQualityLogsWithLogEntry(std::move(log_entry_1));
+
+  histogram_tester_.ExpectBucketCount(
+      "OptimizationGuide.ModelQuality.UserFeedback.TabOrganization",
+      proto::USER_FEEDBACK_UNSPECIFIED, 1);
 }
 
 TEST_F(ModelQualityLogsUploaderServiceTest, ComposeUserFeedbackUMA) {

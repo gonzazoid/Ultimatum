@@ -26,6 +26,7 @@
 #import "components/variations/synthetic_trials.h"
 #import "ios/chrome/browser/metrics/model/ios_chrome_metrics_service_accessor.h"
 #import "ios/chrome/browser/optimization_guide/model/ios_chrome_hints_manager.h"
+#import "ios/chrome/browser/optimization_guide/model/ios_chrome_prediction_model_store.h"
 #import "ios/chrome/browser/optimization_guide/model/optimization_guide_service_factory.h"
 #import "ios/chrome/browser/optimization_guide/model/tab_url_provider_impl.h"
 #import "ios/chrome/browser/shared/model/application_context/application_context.h"
@@ -42,13 +43,10 @@ void DeleteOldStorePaths(const base::FilePath& profile_path) {
   //
   // Delete the old profile-wide model download store path, since
   // the install-wide model store is enabled now.
-  if (optimization_guide::features::IsInstallWideModelStoreEnabled()) {
-    base::ThreadPool::PostTask(
-        FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
-        base::GetDeletePathRecursivelyCallback(profile_path.Append(
-            optimization_guide::
-                kOldOptimizationGuidePredictionModelDownloads)));
-  }
+  base::ThreadPool::PostTask(
+      FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
+      base::GetDeletePathRecursivelyCallback(profile_path.Append(
+          optimization_guide::kOldOptimizationGuidePredictionModelDownloads)));
 }
 
 }  // namespace
@@ -59,8 +57,6 @@ OptimizationGuideService::OptimizationGuideService(
     bool off_the_record,
     const std::string& application_locale,
     base::WeakPtr<optimization_guide::OptimizationGuideStore> hint_store,
-    base::WeakPtr<optimization_guide::OptimizationGuideStore>
-        prediction_model_and_features_store,
     PrefService* pref_service,
     BrowserList* browser_list,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
@@ -72,11 +68,6 @@ OptimizationGuideService::OptimizationGuideService(
   // In off the record profile, the stores of normal profile should be
   // passed to the constructor. In normal profile, they will be created.
   DCHECK(!off_the_record_ || hint_store);
-  if (off_the_record_ &&
-      optimization_guide::features::IsOptimizationTargetPredictionEnabled()) {
-    DCHECK(prediction_model_and_features_store ||
-           optimization_guide::features::IsInstallWideModelStoreEnabled());
-  }
   base::FilePath models_dir;
   if (!off_the_record_) {
     // Only create a top host provider from the command line if provided.
@@ -95,28 +86,6 @@ OptimizationGuideService::OptimizationGuideService(
                   pref_service)
             : nullptr;
     hint_store = hint_store_ ? hint_store_->AsWeakPtr() : nullptr;
-    if (optimization_guide::features::IsOptimizationTargetPredictionEnabled() &&
-        !optimization_guide::features::IsInstallWideModelStoreEnabled()) {
-      // Do not explicitly hand off the model downloads directory to
-      // off-the-record profiles. Underneath the hood, this variable is only
-      // used in non off-the-record profiles to know where to download the model
-      // files to. Off-the-record profiles read the model locations from the
-      // original profiles they are associated with.
-      models_dir = profile_path.Append(
-          optimization_guide::kOldOptimizationGuidePredictionModelDownloads);
-      prediction_model_and_features_store_ =
-          std::make_unique<optimization_guide::OptimizationGuideStore>(
-              proto_db_provider,
-              profile_path.Append(
-                  optimization_guide::
-                      kOldOptimizationGuidePredictionModelMetadataStore),
-              models_dir,
-              base::ThreadPool::CreateSequencedTaskRunner(
-                  {base::MayBlock(), base::TaskPriority::BEST_EFFORT}),
-              pref_service);
-      prediction_model_and_features_store =
-          prediction_model_and_features_store_->AsWeakPtr();
-    }
   }
   optimization_guide_logger_ = std::make_unique<OptimizationGuideLogger>();
   hints_manager_ = std::make_unique<optimization_guide::IOSChromeHintsManager>(
@@ -127,12 +96,7 @@ OptimizationGuideService::OptimizationGuideService(
   if (optimization_guide::features::IsOptimizationTargetPredictionEnabled()) {
     prediction_manager_ =
         std::make_unique<optimization_guide::PredictionManager>(
-            optimization_guide::features::IsInstallWideModelStoreEnabled()
-                ? nullptr
-                : prediction_model_and_features_store,
-            optimization_guide::features::IsInstallWideModelStoreEnabled()
-                ? optimization_guide::PredictionModelStore::GetInstance()
-                : nullptr,
+            optimization_guide::IOSChromePredictionModelStore::GetInstance(),
             url_loader_factory, pref_service, off_the_record_,
             application_locale, models_dir, optimization_guide_logger_.get(),
             std::move(background_download_service_provider),
@@ -175,8 +139,7 @@ void OptimizationGuideService::DoFinalInit(
         "SyntheticOptimizationGuideRemoteFetching",
         optimization_guide_fetching_enabled ? "Enabled" : "Disabled",
         variations::SyntheticTrialAnnotationMode::kCurrentLog);
-    if (optimization_guide::features::IsInstallWideModelStoreEnabled() &&
-        background_download_service) {
+    if (background_download_service) {
       prediction_manager_->MaybeInitializeModelDownloads(
           background_download_service);
     }
@@ -190,6 +153,14 @@ optimization_guide::HintsManager* OptimizationGuideService::GetHintsManager() {
 optimization_guide::PredictionManager*
 OptimizationGuideService::GetPredictionManager() {
   return prediction_manager_.get();
+}
+
+void OptimizationGuideService::AddHintForTesting(
+    const GURL& url,
+    optimization_guide::proto::OptimizationType optimization_type,
+    const std::optional<optimization_guide::OptimizationMetadata>& metadata) {
+  hints_manager_->AddHintForTesting(url, optimization_type,  // IN-TEST
+                                    metadata);
 }
 
 void OptimizationGuideService::OnNavigationStartOrRedirect(
@@ -256,13 +227,15 @@ void OptimizationGuideService::CanApplyOptimizationOnDemand(
         optimization_types,
     optimization_guide::proto::RequestContext request_context,
     optimization_guide::OnDemandOptimizationGuideDecisionRepeatingCallback
-        callback) {
+        callback,
+    optimization_guide::proto::RequestContextMetadata*
+        request_context_metadata) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(request_context !=
          optimization_guide::proto::RequestContext::CONTEXT_UNSPECIFIED);
 
-  hints_manager_->CanApplyOptimizationOnDemand(urls, optimization_types,
-                                               request_context, callback);
+  hints_manager_->CanApplyOptimizationOnDemand(
+      urls, optimization_types, request_context, callback, nullptr);
 }
 
 void OptimizationGuideService::Shutdown() {

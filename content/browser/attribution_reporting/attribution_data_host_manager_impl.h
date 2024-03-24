@@ -41,6 +41,7 @@ class GURL;
 namespace attribution_reporting {
 class SuitableOrigin;
 
+struct OsRegistrationItem;
 struct SourceRegistration;
 struct TriggerRegistration;
 }  // namespace attribution_reporting
@@ -53,6 +54,7 @@ namespace content {
 
 class AttributionManager;
 
+struct AttributionInputEvent;
 struct GlobalRenderFrameHostId;
 
 // Manages a receiver set of all ongoing `AttributionDataHost`s and forwards
@@ -60,7 +62,7 @@ struct GlobalRenderFrameHostId;
 // requests may continue until after we have detached a frame, all browser
 // process data needed to validate sources/triggers is stored alongside each
 // receiver.
-class CONTENT_EXPORT AttributionDataHostManagerImpl
+class CONTENT_EXPORT AttributionDataHostManagerImpl final
     : public AttributionDataHostManager,
       public blink::mojom::AttributionDataHost {
  public:
@@ -137,10 +139,13 @@ class CONTENT_EXPORT AttributionDataHostManagerImpl
       GURL reporting_url,
       const net::HttpResponseHeaders* headers,
       bool is_final_response) override;
+  base::WeakPtr<AttributionDataHostManager> AsWeakPtr() override;
 
  private:
   class RegistrationContext;
   class NavigationContextForPendingRegistration;
+  class OsRegistrationsBuffer;
+  enum class OsRegistrationsBufferFlushReason;
 
   // Timer that can be used to be notified of sequential events. It uses a
   // single timer. When `Start` is called a timeout is added in a queue. If it
@@ -233,8 +238,22 @@ class CONTENT_EXPORT AttributionDataHostManagerImpl
   void MaybeOnRegistrationsFinished(
       base::flat_set<Registrations>::const_iterator);
 
-  void MaybeSetupDeferredReceivers(int64_t navigation_id);
+  void MaybeStartNavigation(int64_t navigation_id);
+  void MaybeDoneWithNavigation(int64_t navigation_id, bool due_to_timeout);
+
   void MaybeBindDeferredReceivers(int64_t navigation_id, bool due_to_timeout);
+  void ClearRegistrationsDeferUntilNavigation(int64_t navigation_id);
+
+  void MaybeBufferOsRegistrations(
+      int64_t navigation_id,
+      std::vector<attribution_reporting::OsRegistrationItem>,
+      const RegistrationContext&);
+  void MaybeFlushOsRegistrationsBuffer(int64_t navigation_id,
+                                       OsRegistrationsBufferFlushReason);
+  void SubmitOsRegistrations(
+      std::vector<attribution_reporting::OsRegistrationItem>,
+      const RegistrationContext&,
+      std::optional<AttributionInputEvent>);
 
   // In `RegisterNavigationDataHost` which, for a given navigation, will be
   // called before `NotifyNavigationRegistrationStarted`, we receive the number
@@ -338,9 +357,14 @@ class CONTENT_EXPORT AttributionDataHostManagerImpl
   // registrations or via a Fenced Frame Beacon.
   base::flat_set<Registrations> registrations_;
 
-  // Guardrail to ensure a receiver in `deferred_receivers_` always eventually
-  // gets bound.
-  SequentialTimeoutsTimer deferred_receivers_timer_;
+  // The OS allows associating a navigation's input event to a single call. As a
+  // result, we must buffer all registrations tied to a navigation before
+  // submitting them to the OS.
+  base::flat_set<OsRegistrationsBuffer> os_buffers_;
+
+  // Guardrail to ensure that a navigation which can receive registrations is
+  // always eventually considered done.
+  SequentialTimeoutsTimer navigation_registrations_timer_;
 
   data_decoder::DataDecoder data_decoder_;
 

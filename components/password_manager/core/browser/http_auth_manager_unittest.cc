@@ -16,7 +16,6 @@
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/autofill/core/common/form_field_data.h"
-#include "components/password_manager/core/browser/features/password_features.h"
 #include "components/password_manager/core/browser/form_fetcher_impl.h"
 #include "components/password_manager/core/browser/http_auth_manager_impl.h"
 #include "components/password_manager/core/browser/password_form.h"
@@ -102,7 +101,9 @@ ACTION_P(InvokeEmptyConsumerWithForms, store) {
 }
 }  // namespace
 
-class HttpAuthManagerTest : public testing::Test {
+// The boolean param determines the presence of the "account" PasswordStore.
+class HttpAuthManagerTest : public testing::Test,
+                            public testing::WithParamInterface<bool> {
  public:
   HttpAuthManagerTest() = default;
   ~HttpAuthManagerTest() override = default;
@@ -111,8 +112,7 @@ class HttpAuthManagerTest : public testing::Test {
   void SetUp() override {
     store_ = new testing::StrictMock<MockPasswordStoreInterface>;
 
-    if (base::FeatureList::IsEnabled(
-            features::kEnablePasswordsAccountStorage)) {
+    if (GetParam()) {
       account_store_ = new testing::NiceMock<MockPasswordStoreInterface>;
 
       // Most tests don't really need the account store, but it'll still get
@@ -159,7 +159,7 @@ class HttpAuthManagerTest : public testing::Test {
   std::unique_ptr<HttpAuthManagerImpl> httpauth_manager_;
 };
 
-TEST_F(HttpAuthManagerTest, HttpAuthFilling) {
+TEST_P(HttpAuthManagerTest, HttpAuthFilling) {
   EXPECT_CALL(client_, IsFillingEnabled(_)).WillRepeatedly(Return(true));
 
   PasswordForm observed_form;
@@ -188,7 +188,7 @@ TEST_F(HttpAuthManagerTest, HttpAuthFilling) {
   httpauth_manager()->DetachObserver(&observer);
 }
 
-TEST_F(HttpAuthManagerTest, HttpAuthSaving) {
+TEST_P(HttpAuthManagerTest, HttpAuthSaving) {
   for (bool filling_and_saving_enabled : {true, false}) {
     SCOPED_TRACE(testing::Message("filling_and_saving_enabled=")
                  << filling_and_saving_enabled);
@@ -225,7 +225,7 @@ TEST_F(HttpAuthManagerTest, HttpAuthSaving) {
   }
 }
 
-TEST_F(HttpAuthManagerTest, UpdateLastUsedTimeWhenSubmittingSavedCredentials) {
+TEST_P(HttpAuthManagerTest, UpdateLastUsedTimeWhenSubmittingSavedCredentials) {
   EXPECT_CALL(client_, IsSavingAndFillingEnabled).WillRepeatedly(Return(true));
   EXPECT_CALL(client_, IsFillingEnabled).WillRepeatedly(Return(true));
 
@@ -266,7 +266,7 @@ TEST_F(HttpAuthManagerTest, UpdateLastUsedTimeWhenSubmittingSavedCredentials) {
   httpauth_manager()->DetachObserver(&observer);
 }
 
-TEST_F(HttpAuthManagerTest, DontSaveEmptyPasswords) {
+TEST_P(HttpAuthManagerTest, DontSaveEmptyPasswords) {
   EXPECT_CALL(client_, IsSavingAndFillingEnabled).WillRepeatedly(Return(true));
   EXPECT_CALL(client_, IsFillingEnabled).WillRepeatedly(Return(true));
   PasswordForm observed_form;
@@ -295,7 +295,7 @@ TEST_F(HttpAuthManagerTest, DontSaveEmptyPasswords) {
   httpauth_manager()->DetachObserver(&observer);
 }
 
-TEST_F(HttpAuthManagerTest, NavigationWithoutSubmission) {
+TEST_P(HttpAuthManagerTest, NavigationWithoutSubmission) {
   EXPECT_CALL(client_, IsSavingAndFillingEnabled(_))
       .WillRepeatedly(Return(true));
   EXPECT_CALL(client_, IsFillingEnabled).WillRepeatedly(Return(true));
@@ -318,7 +318,7 @@ TEST_F(HttpAuthManagerTest, NavigationWithoutSubmission) {
   httpauth_manager()->DetachObserver(&observer);
 }
 
-TEST_F(HttpAuthManagerTest, NavigationWhenMatchingNotReady) {
+TEST_P(HttpAuthManagerTest, NavigationWhenMatchingNotReady) {
   EXPECT_CALL(client_, IsSavingAndFillingEnabled).WillRepeatedly(Return(true));
   EXPECT_CALL(client_, IsFillingEnabled).WillRepeatedly(Return(true));
   PasswordForm observed_form;
@@ -345,7 +345,7 @@ TEST_F(HttpAuthManagerTest, NavigationWhenMatchingNotReady) {
   httpauth_manager()->DetachObserver(&observer);
 }
 
-TEST_F(HttpAuthManagerTest, FillingDisabled) {
+TEST_P(HttpAuthManagerTest, FillingDisabled) {
   EXPECT_CALL(client_, IsSavingAndFillingEnabled).WillRepeatedly(Return(false));
   EXPECT_CALL(client_, IsFillingEnabled).WillRepeatedly(Return(false));
   PasswordForm observed_form;
@@ -371,5 +371,7 @@ TEST_F(HttpAuthManagerTest, FillingDisabled) {
   httpauth_manager()->OnDidFinishMainFrameNavigation();
   httpauth_manager()->DetachObserver(&observer);
 }
+
+INSTANTIATE_TEST_SUITE_P(, HttpAuthManagerTest, ::testing::Bool());
 
 }  // namespace password_manager

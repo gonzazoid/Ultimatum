@@ -825,7 +825,7 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_EQ(decrypted_keys.cross_user_sharing_private_key().at(0).version(), 0);
   std::vector<uint8_t> raw_private_key(private_key_proto.begin(),
                                        private_key_proto.end());
-  absl::optional<syncer::CrossUserSharingPublicPrivateKeyPair> private_key =
+  std::optional<syncer::CrossUserSharingPublicPrivateKeyPair> private_key =
       syncer::CrossUserSharingPublicPrivateKeyPair::CreateByImport(
           raw_private_key);
   EXPECT_TRUE(private_key.has_value());
@@ -933,7 +933,7 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_EQ(decrypted_keys.cross_user_sharing_private_key().at(0).version(), 0);
   std::vector<uint8_t> raw_private_key(private_key_proto.begin(),
                                        private_key_proto.end());
-  absl::optional<syncer::CrossUserSharingPublicPrivateKeyPair> private_key =
+  std::optional<syncer::CrossUserSharingPublicPrivateKeyPair> private_key =
       syncer::CrossUserSharingPublicPrivateKeyPair::CreateByImport(
           raw_private_key);
   EXPECT_TRUE(private_key.has_value());
@@ -1336,7 +1336,7 @@ IN_PROC_BROWSER_TEST_P(SingleClientNigoriWithWebApiAndDialogUIParamTest,
   // Verify that a notification was displayed.
   const std::string notification_id =
       sync_error_notifier->GetNotificationIdForTesting();
-  absl::optional<message_center::Notification> notification =
+  std::optional<message_center::Notification> notification =
       display_service.GetNotification(notification_id);
   ASSERT_TRUE(notification);
   EXPECT_THAT(notification->title(),
@@ -1350,8 +1350,8 @@ IN_PROC_BROWSER_TEST_P(SingleClientNigoriWithWebApiAndDialogUIParamTest,
   // Mimic the user clickling on the system notification, which opens up a
   // tab where the user can interact with the retrieval flow.
   display_service.SimulateClick(NotificationHandler::Type::TRANSIENT,
-                                notification_id, /*action_index=*/absl::nullopt,
-                                /*reply=*/absl::nullopt);
+                                notification_id, /*action_index=*/std::nullopt,
+                                /*reply=*/std::nullopt);
 
   // Wait until successful completion.
   EXPECT_TRUE(WaitForTrustedVaultReauthCompletion());
@@ -1398,7 +1398,7 @@ IN_PROC_BROWSER_TEST_P(
   // Verify that a notification was displayed.
   const std::string notification_id =
       sync_error_notifier->GetNotificationIdForTesting();
-  absl::optional<message_center::Notification> notification =
+  std::optional<message_center::Notification> notification =
       display_service.GetNotification(notification_id);
   ASSERT_TRUE(notification);
   EXPECT_THAT(notification->title(),
@@ -1412,8 +1412,8 @@ IN_PROC_BROWSER_TEST_P(
   // Mimic the user clickling on the system notification, which opens up a
   // tab where the user can interact with the degraded recoverability flow.
   display_service.SimulateClick(NotificationHandler::Type::TRANSIENT,
-                                notification_id, /*action_index=*/absl::nullopt,
-                                /*reply=*/absl::nullopt);
+                                notification_id, /*action_index=*/std::nullopt,
+                                /*reply=*/std::nullopt);
 
   // Wait until successful completion.
   EXPECT_TRUE(WaitForTrustedVaultReauthCompletion());
@@ -2114,7 +2114,12 @@ IN_PROC_BROWSER_TEST_F(SingleClientNigoriWithWebApiTest,
       /*sample=*/trusted_vault::TrustedVaultDownloadKeysStatus::kSuccess,
       /*expected_bucket_count=*/1);
   histogram_tester.ExpectUniqueSample(
-      "Sync.TrustedVaultURLFetchResponse.DownloadKeys",
+      "TrustedVault.SecurityDomainServiceURLFetchResponse.DownloadKeys",
+      /*sample=*/200,
+      /*expected_bucket_count=*/1);
+  histogram_tester.ExpectUniqueSample(
+      "TrustedVault.SecurityDomainServiceURLFetchResponse.DownloadKeys."
+      "ChromeSync",
       /*sample=*/200,
       /*expected_bucket_count=*/1);
 }
@@ -2239,40 +2244,17 @@ IN_PROC_BROWSER_TEST_F(SingleClientNigoriWithWebApiTest,
 
 // ChromeOS doesn't have unconsented primary accounts.
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
-class SingleClientNigoriWithWebApiAndPasswordsAccountStorageTest
-    : public SingleClientNigoriWithWebApiTest {
- public:
-  SingleClientNigoriWithWebApiAndPasswordsAccountStorageTest() {
-    override_features_.InitWithFeatures(
-        /*enabled_features=*/{password_manager::features::
-                                  kEnablePasswordsAccountStorage},
-        /*disabled_features=*/{switches::kUnoDesktop});
-  }
-
-  ~SingleClientNigoriWithWebApiAndPasswordsAccountStorageTest() override =
-      default;
-
-  // SetupClients() must have been already called.
-  void SetupSyncTransport() {
-    secondary_account_helper::SignInUnconsentedAccount(
-        GetProfile(0), &test_url_loader_factory_, SyncTest::kDefaultUserEmail);
-    ASSERT_TRUE(GetClient(0)->AwaitSyncTransportActive());
-    ASSERT_FALSE(GetSyncService(0)->IsSyncFeatureEnabled());
-  }
-
- private:
-  base::test::ScopedFeatureList override_features_;
-};
-
-IN_PROC_BROWSER_TEST_F(
-    SingleClientNigoriWithWebApiAndPasswordsAccountStorageTest,
-    ShouldAcceptEncryptionKeysFromTheWeb) {
+IN_PROC_BROWSER_TEST_F(SingleClientNigoriWithWebApiTest,
+                       ShouldAcceptEncryptionKeysFromTheWebInTransportMode) {
   // Mimic the account using a trusted vault passphrase.
   SetNigoriInFakeServer(BuildTrustedVaultNigoriSpecifics({kTestEncryptionKey}),
                         GetFakeServer());
 
   ASSERT_TRUE(SetupClients());
-  SetupSyncTransport();
+  secondary_account_helper::SignInUnconsentedAccount(
+      GetProfile(0), &test_url_loader_factory_, SyncTest::kDefaultUserEmail);
+  ASSERT_TRUE(GetClient(0)->AwaitSyncTransportActive());
+  ASSERT_FALSE(GetSyncService(0)->IsSyncFeatureEnabled());
 
   // Chrome isn't trying to sync passwords, because the user hasn't opted in to
   // passwords account storage. So the error shouldn't be surfaced yet.
@@ -2312,8 +2294,8 @@ IN_PROC_BROWSER_TEST_F(
 }
 
 IN_PROC_BROWSER_TEST_F(
-    SingleClientNigoriWithWebApiAndPasswordsAccountStorageTest,
-    ShouldReportDegradedTrustedVaultRecoverability) {
+    SingleClientNigoriWithWebApiTest,
+    ShouldReportDegradedTrustedVaultRecoverabilityInTransportMode) {
   base::HistogramTester histogram_tester;
 
   // Mimic the key being available upon startup but recoverability degraded.
@@ -2332,7 +2314,10 @@ IN_PROC_BROWSER_TEST_F(
       GetSecurityDomainsServer()->GetAllTrustedVaultKeys(),
       /*last_key_version=*/GetSecurityDomainsServer()->GetCurrentEpoch());
 
-  SetupSyncTransport();
+  secondary_account_helper::SignInUnconsentedAccount(
+      GetProfile(0), &test_url_loader_factory_, SyncTest::kDefaultUserEmail);
+  ASSERT_TRUE(GetClient(0)->AwaitSyncTransportActive());
+  ASSERT_FALSE(GetSyncService(0)->IsSyncFeatureEnabled());
 
   // Chrome isn't trying to sync passwords, because the user hasn't opted in to
   // passwords account storage. So the error shouldn't be surfaced yet.

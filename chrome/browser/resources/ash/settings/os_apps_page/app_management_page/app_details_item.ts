@@ -2,14 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_components/localized_link/localized_link.js';
-import 'chrome://resources/cr_elements/policy/cr_tooltip_icon.js';
+import 'chrome://resources/ash/common/cr_elements/localized_link/localized_link.js';
+import 'chrome://resources/ash/common/cr_elements/policy/cr_tooltip_icon.js';
 import './app_management_cros_shared_style.css.js';
 
 import {App} from 'chrome://resources/cr_components/app_management/app_management.mojom-webui.js';
 import {AppManagementUserAction, AppType, InstallReason, InstallSource} from 'chrome://resources/cr_components/app_management/constants.js';
 import {recordAppManagementUserAction} from 'chrome://resources/cr_components/app_management/util.js';
-import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {I18nMixin} from 'chrome://resources/ash/common/cr_elements/i18n_mixin.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
@@ -37,12 +37,6 @@ export class AppManagementAppDetailsItem extends
         type: Object,
       },
 
-      hidden: {
-        type: Boolean,
-        computed: 'isHidden_()',
-        reflectToAttribute: true,
-      },
-
       appId_: {
         type: String,
         observer: 'appIdChanged_',
@@ -57,12 +51,6 @@ export class AppManagementAppDetailsItem extends
     super.connectedCallback();
     this.watch('appId_', state => state.selectedAppId);
     this.updateFromStore();
-  }
-
-  override hidden: boolean;
-
-  private isHidden_(): boolean {
-    return !loadTimeData.getBoolean('appManagementAppDetailsEnabled');
   }
 
   private appIdChanged_(appId: string): void {

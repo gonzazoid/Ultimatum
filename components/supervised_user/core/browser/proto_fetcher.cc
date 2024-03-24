@@ -5,6 +5,7 @@
 #include "components/supervised_user/core/browser/proto_fetcher.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -34,7 +35,6 @@
 #include "services/network/public/cpp/simple_url_loader.h"
 #include "services/network/public/mojom/fetch_api.mojom-shared.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/protobuf/src/google/protobuf/message_lite.h"
 #include "url/gurl.h"
 
@@ -81,22 +81,25 @@ std::string CreateAuthorizationHeader(
 // possible One Platform system params.
 constexpr std::string_view kSystemParameters("alt=proto");
 
-// Creates a requests for kids management api which is independent from the
+// Creates a request url for kids management api which is independent from the
 // current profile (doesn't take Profile* parameter). It also adds query
 // parameter that configures the remote endpoint to respond with a protocol
 // buffer message.
-GURL CreateRequestUrl(const FetcherConfig& config) {
+GURL CreateRequestUrl(const FetcherConfig& config,
+                      const FetcherConfig::PathArgs& args) {
   return GURL(config.service_endpoint.Get())
-      .Resolve(base::StrCat({config.service_path, "?", kSystemParameters}));
+      .Resolve(
+          base::StrCat({config.ServicePath(args), "?", kSystemParameters}));
 }
 
 std::unique_ptr<network::SimpleURLLoader> InitializeSimpleUrlLoader(
     const signin::AccessTokenInfo access_token_info,
     const FetcherConfig& fetcher_config,
-    const absl::optional<std::string>& payload) {
+    const FetcherConfig::PathArgs& args,
+    const std::optional<std::string>& payload) {
   std::unique_ptr<network::ResourceRequest> resource_request =
       std::make_unique<network::ResourceRequest>();
-  resource_request->url = CreateRequestUrl(fetcher_config);
+  resource_request->url = CreateRequestUrl(fetcher_config, args);
   resource_request->method = fetcher_config.GetHttpMethod();
   resource_request->credentials_mode = network::mojom::CredentialsMode::kOmit;
   resource_request->priority = fetcher_config.request_priority;
@@ -227,12 +230,12 @@ base::TimeDelta Stopwatch::Elapsed() const {
 }
 
 Metrics::Metrics(std::string_view basename) : basename_(basename) {}
-/* static */ absl::optional<Metrics> Metrics::FromConfig(
+/* static */ std::optional<Metrics> Metrics::FromConfig(
     const FetcherConfig& config) {
   if (config.histogram_basename.has_value()) {
     return Metrics(*config.histogram_basename);
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 void Metrics::RecordStatus(const ProtoFetcherStatus& status) const {
@@ -338,12 +341,12 @@ std::string Metrics::ToMetricEnumLabel(const ProtoFetcherStatus& status) {
 }
 
 OverallMetrics::OverallMetrics(std::string_view basename) : Metrics(basename) {}
-/* static */ absl::optional<OverallMetrics> OverallMetrics::FromConfig(
+/* static */ std::optional<OverallMetrics> OverallMetrics::FromConfig(
     const FetcherConfig& config) {
   if (config.histogram_basename.has_value()) {
     return OverallMetrics(*config.histogram_basename);
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 // Per-status latency is not defined for OverallMetrics.
@@ -379,9 +382,11 @@ AbstractProtoFetcher::AbstractProtoFetcher(
     signin::IdentityManager& identity_manager,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     std::string_view payload,
-    const FetcherConfig& fetcher_config)
+    const FetcherConfig& fetcher_config,
+    const FetcherConfig::PathArgs& args)
     : payload_(payload),
       config_(fetcher_config),
+      args_(args),
       metrics_(Metrics::FromConfig(fetcher_config)),
       fetcher_(identity_manager,
                fetcher_config.access_token_config,
@@ -423,7 +428,7 @@ void AbstractProtoFetcher::OnAccessTokenFetchComplete(
   }
 
   simple_url_loader_ = InitializeSimpleUrlLoader(access_token.value(), config_,
-                                                 GetRequestPayload());
+                                                 args_, GetRequestPayload());
   simple_url_loader_->DownloadToStringOfUnboundedSizeUntilCrashAndDie(
       url_loader_factory.get(),
       base::BindOnce(
@@ -448,9 +453,9 @@ void AbstractProtoFetcher::OnSimpleUrlLoaderComplete(
   OnResponse(std::move(response_body));
 }
 
-absl::optional<std::string> AbstractProtoFetcher::GetRequestPayload() const {
+std::optional<std::string> AbstractProtoFetcher::GetRequestPayload() const {
   if (config_.method == FetcherConfig::Method::kGet) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return payload_;
 }

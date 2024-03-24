@@ -9,19 +9,23 @@ swift_source_set("swift") {
   sources = [
     "tab_strip_constants.swift",
     "tab_strip_consumer.swift",
+    "tab_strip_decoration_view.swift",
     "tab_strip_layout.swift",
     "tab_strip_new_tab_button.swift",
     "tab_strip_new_tab_button_delegate.swift",
-    "tab_strip_separator_view.swift",
     "tab_strip_view_controller.swift",
     "tab_strip_view_controller_delegate.swift",
   ]
   deps = [
     ":ui",
+    "//ios/chrome/app/strings",
+    "//ios/chrome/browser/shared/public/metrics:metrics_bridge",
     "//ios/chrome/browser/shared/ui/symbols",
     "//ios/chrome/browser/ui/menu",
     "//ios/chrome/browser/ui/tab_switcher",
     "//ios/chrome/common/ui/colors",
+    "//ios/chrome/common/ui/elements",
+    "//ui/base",
   ]
 }
 
@@ -33,12 +37,15 @@ source_set("ui") {
   ]
   deps = [
     "//base",
+    "//ios/chrome/app/strings",
     "//ios/chrome/browser/shared/ui/symbols",
     "//ios/chrome/browser/shared/ui/util",
     "//ios/chrome/browser/shared/ui/util/image",
     "//ios/chrome/common/ui/colors",
     "//ios/chrome/common/ui/elements",
     "//ios/chrome/common/ui/util",
+    "//ios/public/provider/chrome/browser/raccoon:raccoon_api",
     "//ios/third_party/material_components_ios",
+    "//ui/base",
   ]
 }

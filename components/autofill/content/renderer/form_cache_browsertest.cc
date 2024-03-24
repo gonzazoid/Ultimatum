@@ -43,8 +43,7 @@ namespace autofill {
 using CheckStatus = FormFieldData::CheckStatus;
 
 auto HasId(FormRendererId expected_id) {
-  return Field("unique_renderer_id", &FormData::unique_renderer_id,
-               expected_id);
+  return Field("renderer_id", &FormData::renderer_id, expected_id);
 }
 
 auto HasName(std::string_view expected_name) {
@@ -157,8 +156,8 @@ TEST_F(FormCacheBrowserTest, RemovedForms) {
 
   std::vector<FormRendererId> forms_renderer_id;
   for (const FormData& form : forms.updated_forms) {
-    if (form.unique_renderer_id != FormRendererId()) {
-      forms_renderer_id.push_back(form.unique_renderer_id);
+    if (form.renderer_id != FormRendererId()) {
+      forms_renderer_id.push_back(form.renderer_id);
     }
   }
   ASSERT_EQ(forms_renderer_id.size(), 2u);
@@ -447,10 +446,14 @@ void FillAndCheckState(
     value_to_fill->is_autofilled = true;
   }
 
-  form_util::ApplyFormAction(values_to_fill.fields, autofill_initiating_element,
-                             mojom::ActionType::kFill,
-                             mojom::ActionPersistence::kFill,
-                             field_data_manager);
+  std::vector<FormFieldData::FillData> fields_to_fill;
+  fields_to_fill.reserve(values_to_fill.fields.size());
+  for (const FormFieldData& field : values_to_fill.fields) {
+    fields_to_fill.emplace_back(field);
+  }
+  form_util::ApplyFormAction(
+      fields_to_fill, autofill_initiating_element, mojom::ActionType::kFill,
+      mojom::ActionPersistence::kFill, field_data_manager);
 
   for (const FillElementData& field_to_fill : form_to_fill) {
     EXPECT_EQ(field_to_fill.value, field_to_fill.element.Value().Utf16());
@@ -523,7 +526,11 @@ TEST_F(FormCacheBrowserTest,
               UnorderedElementsAre(HasId(FormRendererId()), HasName("myForm")));
   EXPECT_TRUE(forms.removed_forms.empty());
 
-  std::vector<FormFieldData> values_to_fill = forms.updated_forms[0].fields;
+  std::vector<FormFieldData::FillData> values_to_fill;
+  values_to_fill.reserve(forms.updated_forms[0].fields.size());
+  for (const FormFieldData& field : forms.updated_forms[0].fields) {
+    values_to_fill.emplace_back(field);
+  }
   values_to_fill[0].value = u"John";
   values_to_fill[0].is_autofilled = true;
   values_to_fill[1].value = u"Smith";
@@ -609,7 +616,7 @@ TEST_F(FormCacheBrowserTest, DoNotStoreEmptyForms) {
   EXPECT_TRUE(forms.updated_forms.empty());
   EXPECT_TRUE(forms.removed_forms.empty());
 
-  EXPECT_EQ(1u, GetMainFrame()->GetDocument().Forms().size());
+  EXPECT_EQ(1u, GetMainFrame()->GetDocument().GetTopLevelForms().size());
   EXPECT_EQ(0u, test_api(form_cache).extracted_forms_size());
 }
 
@@ -631,7 +638,7 @@ TEST_F(FormCacheBrowserTest, FormCacheSizeUpperBound) {
   EXPECT_TRUE(forms.removed_forms.empty());
 
   EXPECT_EQ(kMaxExtractableFields + 1,
-            GetMainFrame()->GetDocument().Forms().size());
+            GetMainFrame()->GetDocument().GetTopLevelForms().size());
   EXPECT_EQ(kMaxExtractableFields, test_api(form_cache).extracted_forms_size());
 }
 
@@ -645,7 +652,7 @@ TEST_F(FormCacheBrowserTest, FieldLimit) {
   LoadHTML(html.c_str());
 
   ASSERT_EQ(kMaxExtractableFields + 1,
-            GetMainFrame()->GetDocument().Forms().size());
+            GetMainFrame()->GetDocument().GetTopLevelForms().size());
 
   FormCache form_cache(GetMainFrame());
   FormCache::UpdateFormCacheResult forms = UpdateFormCache(form_cache);
@@ -664,7 +671,7 @@ TEST_F(FormCacheBrowserTest, FrameLimit) {
   LoadHTML(html.c_str());
 
   ASSERT_EQ(kMaxExtractableChildFrames + 1,
-            GetMainFrame()->GetDocument().Forms().size());
+            GetMainFrame()->GetDocument().GetTopLevelForms().size());
 
   FormCache form_cache(GetMainFrame());
   FormCache::UpdateFormCacheResult forms = UpdateFormCache(form_cache);
@@ -695,7 +702,7 @@ TEST_F(FormCacheBrowserTest, MAYBE_FieldAndFrameLimit) {
   LoadHTML(html.c_str());
 
   ASSERT_EQ(kMaxExtractableFields + 1,
-            GetMainFrame()->GetDocument().Forms().size());
+            GetMainFrame()->GetDocument().GetTopLevelForms().size());
 
   FormCache form_cache(GetMainFrame());
   FormCache::UpdateFormCacheResult forms = UpdateFormCache(form_cache);
@@ -705,8 +712,7 @@ TEST_F(FormCacheBrowserTest, MAYBE_FieldAndFrameLimit) {
                                     &std::vector<FormFieldData>::empty,
                                     &FormData::fields));
   EXPECT_TRUE(base::ranges::none_of(
-      base::make_span(forms.updated_forms)
-          .subspan(0, kMaxExtractableChildFrames),
+      base::make_span(forms.updated_forms).first(kMaxExtractableChildFrames),
       &std::vector<FrameTokenWithPredecessor>::empty, &FormData::child_frames));
   EXPECT_TRUE(base::ranges::all_of(
       base::make_span(forms.updated_forms).subspan(kMaxExtractableChildFrames),

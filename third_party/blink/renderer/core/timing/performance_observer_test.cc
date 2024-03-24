@@ -4,8 +4,9 @@
 
 #include "third_party/blink/renderer/core/timing/performance_observer.h"
 
+#include <optional>
+
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/origin_trials/scoped_test_origin_trial_policy.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
@@ -19,6 +20,7 @@
 #include "third_party/blink/renderer/core/timing/performance_mark.h"
 #include "third_party/blink/renderer/core/timing/window_performance.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 
 namespace blink {
@@ -50,8 +52,9 @@ class PerformanceObserverTest : public testing::Test {
 
   bool IsRegistered() { return observer_->is_registered_; }
   int NumPerformanceEntries() { return observer_->performance_entries_.size(); }
-  void Deliver() { observer_->Deliver(absl::nullopt); }
+  void Deliver() { observer_->Deliver(std::nullopt); }
 
+  test::TaskEnvironment task_environment_;
   Persistent<MockPerformance> base_;
   Persistent<V8PerformanceObserverCallback> cb_;
   Persistent<PerformanceObserver> observer_;
@@ -166,77 +169,4 @@ TEST_F(PerformanceObserverTest, ObserveAfterContextDetached) {
   EXPECT_FALSE(observer_->GetExecutionContext());
   observer_->observe(script_state, options, exception_state);
 }
-
-// Origin trial integration tests for Long Animation Frames
-TEST_F(PerformanceObserverTest, ObserveLoAFWithoutOriginTrial) {
-  ScopedLongAnimationFrameTimingForTest rtef_scope(false);
-  V8TestingScope scope;
-  Initialize(scope.GetScriptState());
-
-  NonThrowableExceptionState exception_state;
-  PerformanceObserverInit* options = PerformanceObserverInit::Create();
-  Vector<String> entry_type_vec;
-  entry_type_vec.push_back("long-animation-frame");
-  options->setEntryTypes(entry_type_vec);
-
-  observer_->observe(scope.GetScriptState(), options, exception_state);
-  EXPECT_FALSE(IsRegistered());
-}
-
-TEST_F(PerformanceObserverTest, ObserveLoAFWithOriginTrial) {
-  ScopedLongAnimationFrameTimingForTest rtef_scope(false);
-  ScopedTestOriginTrialPolicy origin_trial_policy;
-  V8TestingScope scope(KURL("http://127.0.0.1:8000/"));
-  Initialize(scope.GetScriptState());
-
-  // Generate token with the command:
-  // tools/origin_trials/generate_token.py http://127.0.0.1:8000 \
-  //     LongAnimationFrameTiming --expire-timestamp=2000000000
-  scope.GetExecutionContext()->GetOriginTrialContext()->AddToken(
-      "A552VLYxq9h4IFXr7EdTlq4df/"
-      "Y0SUK6Fc8hicuJYKiTa7uuxb9h8cfpgBocxjo45VzW4HHZQwxad6rSmL19CgQAAABgeyJvcm"
-      "lnaW4iOiAiaHR0cDovLzEyNy4wLjAuMTo4MDAwIiwgImZlYXR1cmUiOiAiTG9uZ0FuaW1hdG"
-      "lvbkZyYW1lVGltaW5nIiwgImV4cGlyeSI6IDIwMDAwMDAwMDB9");
-
-  NonThrowableExceptionState exception_state;
-  PerformanceObserverInit* options = PerformanceObserverInit::Create();
-  Vector<String> entry_type_vec;
-  entry_type_vec.push_back("long-animation-frame");
-  options->setEntryTypes(entry_type_vec);
-
-  observer_->observe(scope.GetScriptState(), options, exception_state);
-  EXPECT_TRUE(IsRegistered());
-}
-
-TEST_F(PerformanceObserverTest, ObserveLoAFWithThirdPartyOriginTrial) {
-  ScopedLongAnimationFrameTimingForTest rtef_scope(false);
-  ScopedTestOriginTrialPolicy origin_trial_policy;
-  V8TestingScope scope(KURL("http://127.0.0.1:8000/"));
-  Initialize(scope.GetScriptState());
-
-  // Generate token with the command:
-  // tools/origin_trials/generate_token.py http://127.0.0.1:8001 \
-  //     LongAnimationFrameTiming --expire-timestamp=2000000000 --is-third-party
-  scoped_refptr<SecurityOrigin> third_party_origin =
-      SecurityOrigin::Create(KURL("http://127.0.0.1:8001"));
-  scope.GetExecutionContext()
-      ->GetOriginTrialContext()
-      ->AddTokenFromExternalScript(
-          "A/HCdSqPWTUezQlvIpOXlq0Asl62Zy3BI6sZwOzhNciuy/"
-          "Q3ZsoWIFrJPh3nl4etnZydDeruU50G1m7nL20C+"
-          "AsAAAB2eyJvcmlnaW4iOiAiaHR0cDovLzEyNy4wLjAuMTo4MDAxIiwgImZlYXR1cmUiO"
-          "iAiTG9uZ0FuaW1hdGlvbkZyYW1lVGltaW5nIiwgImV4cGlyeSI6IDIwMDAwMDAwMDAsI"
-          "CJpc1RoaXJkUGFydHkiOiB0cnVlfQ==",
-          {third_party_origin});
-
-  NonThrowableExceptionState exception_state;
-  PerformanceObserverInit* options = PerformanceObserverInit::Create();
-  Vector<String> entry_type_vec;
-  entry_type_vec.push_back("long-animation-frame");
-  options->setEntryTypes(entry_type_vec);
-
-  observer_->observe(scope.GetScriptState(), options, exception_state);
-  EXPECT_TRUE(IsRegistered());
-}
-
 }  // namespace blink

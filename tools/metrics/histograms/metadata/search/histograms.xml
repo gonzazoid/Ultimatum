@@ -120,6 +120,33 @@ chromium-metrics-reviews@google.com.
   <token key="AuxiliarySearchDataType" variants="AuxiliarySearchDataType"/>
 </histogram>
 
+<histogram name="Search.ChoiceDebug.IsDefaultProviderAddedToChoices"
+    enum="Boolean" expires_after="2025-02-11">
+  <owner>dgn@chromium.org</owner>
+  <owner>chrome-waffle-eng@google.com</owner>
+  <summary>
+    Records whether the current default search provided was inserted in the
+    choice screen in addition to the normal, country-based prepopulated set.
+    This histogram is recorded when the list of search engines is fetched for
+    the dialog, on Desktop.
+  </summary>
+</histogram>
+
+<histogram name="Search.ChoiceDebug.UnexpectedSearchEngineId" units="id"
+    expires_after="2025-02-11">
+  <owner>dgn@chromium.org</owner>
+  <owner>chrome-waffle-eng@google.com</owner>
+  <summary>
+    Records the id of an unexpected search engine that causes the choice screen
+    to be suppressed. We would normally only expect the choice screen to include
+    options that are in a country-specific list, or at least part of the set of
+    currently available prepopulated search engines.
+
+    This histogram might be recorded at each navigation, in a sparse histogram,
+    until the choice screen ends up being shown.
+  </summary>
+</histogram>
+
 <histogram name="Search.ChoiceReprompt{Category}"
     enum="SearchEngineChoiceReprompt" expires_after="2024-11-30">
   <owner>droger@chromium.org</owner>
@@ -137,7 +164,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Search.ChoiceScreenDefaultSearchEngineType"
-    enum="OmniboxSearchEngineType" expires_after="2024-06-02">
+    enum="OmniboxSearchEngineType" expires_after="2024-08-04">
   <owner>dgn@chromium.org</owner>
   <owner>jyammine@google.com</owner>
   <owner>chrome-waffle-eng@google.com</owner>
@@ -151,7 +178,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Search.ChoiceScreenEvents"
-    enum="SearchEngineChoiceScreenEvents" expires_after="2024-06-02">
+    enum="SearchEngineChoiceScreenEvents" expires_after="2024-08-04">
   <owner>samarchehade@chromium.org</owner>
   <owner>chrome-waffle-eng@google.com</owner>
   <summary>
@@ -164,7 +191,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Search.ChoiceScreenNavigationConditions"
-    enum="SearchEngineChoiceScreenConditions" expires_after="2024-06-02">
+    enum="SearchEngineChoiceScreenConditions" expires_after="2024-08-04">
   <owner>dgn@chromium.org</owner>
   <owner>muellerj@chromium.org</owner>
   <owner>chrome-waffle-eng@google.com</owner>
@@ -178,7 +205,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Search.ChoiceScreenProfileInitConditions"
-    enum="SearchEngineChoiceScreenConditions" expires_after="2024-06-02">
+    enum="SearchEngineChoiceScreenConditions" expires_after="2024-08-04">
   <owner>dgn@chromium.org</owner>
   <owner>muellerj@chromium.org</owner>
   <owner>chrome-waffle-eng@google.com</owner>
@@ -300,7 +327,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Search.ContextualSearch.NetError" enum="NetErrorCodes"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>donnd@chromium.org</owner>
   <owner>basiaz@google.com</owner>
   <summary>
@@ -381,7 +408,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Search.ContextualSearch.SelectionExpanded"
-    enum="ContextualSearchGestureIsTap" expires_after="2024-05-19">
+    enum="ContextualSearchGestureIsTap" expires_after="2024-07-21">
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -705,7 +732,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Search.Image.Camera.Result" enum="CameraResult"
-    expires_after="2024-05-26">
+    expires_after="2024-07-28">
   <owner>juanmojica@google.com</owner>
   <owner>schechter@google.com</owner>
   <owner>stanfield@google.com</owner>
@@ -727,8 +754,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Search.Lens.ViewportDimensionsSent.Success" units="Boolean"
-    expires_after="2024-06-02">
+<histogram name="Search.Lens.ViewportDimensionsSent.Success" enum="Boolean"
+    expires_after="2024-08-04">
   <owner>mercerd@google.com</owner>
   <owner>lens-chrome-eng@google.com</owner>
   <summary>
@@ -891,7 +918,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Search.QueryTiles.TrendingTileEvent" enum="TrendingTileEvent"
-    expires_after="2024-05-19">
+    expires_after="2024-07-21">
   <owner>qinmin@chromium.org</owner>
   <owner>chrome-upboarding-eng@google.com</owner>
   <summary>
@@ -1006,7 +1033,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Search.RelatedSearches.NumberOfSuggestionsClicked2"
-    units="selected" expires_after="2024-02-25">
+    units="selected" expires_after="2025-02-01">
   <owner>gangwu@chromium.org</owner>
   <owner>related-searches-vteam@google.com</owner>
   <summary>
@@ -1056,6 +1083,17 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="Search.SearchEngineDuplicateCounts" units="keyword duplicates"
+    expires_after="2024-07-21">
+  <owner>dgn@chromium.org</owner>
+  <owner>droger@chromium.org</owner>
+  <summary>
+    The number of keyword duplicates resulting from conflict resolution. This is
+    sampled once per browser session immediately after the client syncs Search
+    Engines.
+  </summary>
+</histogram>
+
 <histogram name="Search.SearchEngineListedInPromoDialog"
     enum="OmniboxSearchEngineType" expires_after="M81">
 <!-- Name completed by histogram_suffixes name="SearchEnginePromoOrdering" and name="SearchEnginePromoDeviceType" -->
@@ -1077,6 +1115,19 @@ chromium-metrics-reviews@google.com.
     an Android specific dialog prompting the user to pick a default search
     engine. The dialog was shown on a device that had Chrome before it was first
     introduced.
+  </summary>
+</histogram>
+
+<histogram name="Search.SearchProviderOverrideStatus"
+    enum="SearchProviderOverrideStatus" expires_after="2024-08-04">
+  <owner>dgn@chromium.org</owner>
+  <owner>droger@chromium.org</owner>
+  <summary>
+    The status of the preference where the search engine overrides provided by
+    the Chrome distribution channel are loaded. It is recorded every time we put
+    together a list of built-in search engines providers, which can happen
+    multiple times per run, when initially loading search engines for the
+    omnibox, showing a search engine choice screen or settings screen, etc.
   </summary>
 </histogram>
 

@@ -13,18 +13,23 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/autofill/content/browser/content_autofill_driver.h"
 #include "components/autofill/content/browser/test_autofill_manager_injector.h"
+#include "components/autofill/content/common/mojom/autofill_driver.mojom.h"
 #include "components/autofill/core/browser/autofill_address_util.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/browser_autofill_manager.h"
 #include "components/autofill/core/browser/browser_autofill_manager_test_api.h"
 #include "components/autofill/core/browser/field_types.h"
+#include "components/autofill/core/browser/mock_autofill_manager_observer.h"
 #include "components/autofill/core/browser/test_autofill_manager_waiter.h"
 #include "components/autofill/core/common/autofill_features.h"
+#include "components/autofill/core/common/form_data.h"
+#include "components/autofill/core/common/unique_ids.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "net/dns/mock_host_resolver.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
+using testing::_;
 using testing::Eq;
 using testing::Not;
 using testing::ResultOf;
@@ -469,14 +474,16 @@ IN_PROC_BROWSER_TEST_F(DevToolsAutofillTest, AddressFormFilled) {
   // Create fake filled fields.
   // TODO(crbug.com/1331312): Get rid of FormFieldData.
   FormData form;
-  form.host_frame = form_id().frame_token;
-  form.unique_renderer_id = form_id().renderer_id;
+  form.host_frame = LocalFrameToken(*main_frame()->GetFrameToken());
+  form.renderer_id = form_id().renderer_id;
   form.fields.push_back(test::CreateTestFormField(
       /*label=*/"", "name_1", "value_1", FormControlType::kInputText));
   form.fields.back().id_attribute = u"id_1";
+  form.fields.back().host_frame = form.host_frame;
   form.fields.push_back(test::CreateTestFormField(
       /*label=*/"", "name_2", "value_2", FormControlType::kInputText));
   form.fields.back().id_attribute = u"id_2";
+  form.fields.back().host_frame = form.host_frame;
 
   // The parsed form is queried by
   // AutofillHandler::OnFillOrPreviewDataModelForm() to obtain the type
@@ -495,10 +502,10 @@ IN_PROC_BROWSER_TEST_F(DevToolsAutofillTest, AddressFormFilled) {
   (*test_api(main_autofill_manager()).mutable_form_structures())[form_id()] =
       std::move(form_structure);
 
-  std::vector<const FormFieldData* const> filled_fields_by_autofill = {
+  const std::vector<const FormFieldData*> filled_fields_by_autofill = {
       {&form.fields[0], &form.fields[1]}};
 
-  // Enabled events and emit event about form being filled.
+  // Enable events and emit event about form being filled.
   SendCommandSync("Autofill.enable");
   main_autofill_manager().NotifyObservers(
       &autofill::AutofillManager::Observer::OnFillOrPreviewDataModelForm,
@@ -547,6 +554,10 @@ IN_PROC_BROWSER_TEST_F(DevToolsAutofillTest, AddressFormFilled) {
                             af->Type().GetStorableType()))));
     // Note: we read the value from `FormFieldData`.
     EXPECT_THAT(ff, FilledFieldHasAttributeWithValue16("value", ffd->value));
+    EXPECT_THAT(ff, FilledFieldHasAttributeWithValue16(
+                        "frameId",
+                        base::UTF8ToUTF16(
+                            main_frame()->GetDevToolsFrameToken().ToString())));
     EXPECT_THAT(ff,
                 Not(FilledFieldHasAttributeWithValue16("value", af->value)));
     EXPECT_THAT(ff,
@@ -556,7 +567,7 @@ IN_PROC_BROWSER_TEST_F(DevToolsAutofillTest, AddressFormFilled) {
     EXPECT_THAT(ff,
                 FilledFieldHasAttributeWithValue16("name", af->name_attribute));
     EXPECT_EQ(*ff.GetDict().FindIntByDottedPath("fieldId"),
-              (int)(ffd->unique_renderer_id.value()));
+              (int)(ffd->renderer_id.value()));
   }
 
   // The first filled field uses autocomplete attribute as filling strategy.
@@ -570,4 +581,93 @@ IN_PROC_BROWSER_TEST_F(DevToolsAutofillTest, AddressFormFilled) {
             "autofillInferred");
 }
 
+// This test guards the assumption that autofill events in iframes are routed to
+// the main frame on the browser side. It's implicitly assumed in tests that
+// make direct `AutofillManager::Observer` calls on `main_autofill_manager()`
+// while testing iframes.
+IN_PROC_BROWSER_TEST_F(DevToolsAutofillTest, AutofillInOOPIFs) {
+  embedded_test_server()->ServeFilesFromSourceDirectory(
+      "chrome/test/data/autofill");
+  ASSERT_TRUE(embedded_test_server()->Start());
+  GURL url = embedded_test_server()->GetURL(
+      "a.com", "/autofill_address_multi_form_in_oopif.html");
+
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
+  ASSERT_TRUE(content::WaitForLoadStop(web_contents()));
+
+  EXPECT_TRUE(main_autofill_manager().WaitForFormWithNFields(10));
+  ASSERT_EQ(main_autofill_manager().form_structures().size(), 1u);
+
+  FormData form =
+      main_autofill_manager().form_structures().begin()->second->ToFormData();
+
+  autofill::MockAutofillManagerObserver observer;
+  main_autofill_manager().AddObserver(&observer);
+
+  // Expect the `AskForValuesToFill()` call below to be routed to the main
+  // frame `AutofillManager`.
+  EXPECT_CALL(observer,
+              OnBeforeAskForValuesToFill(_, form.global_id(),
+                                         form.fields[0].global_id(), _));
+
+  std::vector<const FormFieldData* const> filled_fields_by_autofill = {
+      {&form.fields[0], &form.fields[1]}};
+  web_contents()->ForEachRenderFrameHost([&](content::RenderFrameHost* rfh) {
+    // Call the driver of the field host iframe.
+    if (rfh->GetFrameToken().ToString() ==
+        form.fields[0].host_frame->ToString()) {
+      ASSERT_NE(rfh->GetFrameToken(), main_frame()->GetFrameToken());
+      auto* driver = static_cast<mojom::AutofillDriver*>(
+          autofill::ContentAutofillDriver::GetForRenderFrameHost(rfh));
+      driver->AskForValuesToFill(
+          form, form.fields[0], ::gfx::RectF(10, 10),
+          ::autofill::mojom::AutofillSuggestionTriggerSource::kUnspecified);
+    }
+  });
+
+  main_autofill_manager().RemoveObserver(&observer);
+}
+
+// Tests that only the handler associated with the root frame (page) handles
+// AutofillManager events (for cross-iframe filling, the filling events from all
+// frames are routed to the root AutofillManager and others don't emit them).
+// It also tests that only relevant elements (those from forms which have at
+// least one field autofilled, others are ignored) are sent to the frontend.
+IN_PROC_BROWSER_TEST_F(DevToolsAutofillTest, AddressFormFilledInOOPIFs) {
+  embedded_test_server()->ServeFilesFromSourceDirectory(
+      "chrome/test/data/autofill");
+  ASSERT_TRUE(embedded_test_server()->Start());
+  GURL url = embedded_test_server()->GetURL(
+      "a.com", "/autofill_address_multi_form_in_oopif.html");
+
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
+  ASSERT_TRUE(content::WaitForLoadStop(web_contents()));
+
+  Attach();
+
+  EXPECT_TRUE(main_autofill_manager().WaitForFormWithNFields(10));
+  ASSERT_EQ(main_autofill_manager().form_structures().size(), 1u);
+
+  std::string frame_target_id = GetOOPIFTargetId();
+  std::string session_id = AttachToTarget(frame_target_id);
+
+  SendCommandSync("Autofill.enable");
+  SendSessionCommand("Autofill.enable", base::Value::Dict(), session_id, true);
+
+  AutofillProfile profile = CreateTestProfile();
+  FormData form =
+      main_autofill_manager().form_structures().begin()->second->ToFormData();
+  std::vector<const FormFieldData* const> filled_fields_by_autofill = {
+      {&form.fields[0], &form.fields[1]}};
+  main_autofill_manager().NotifyObservers(
+      &autofill::AutofillManager::Observer::OnFillOrPreviewDataModelForm,
+      form.global_id(), autofill::mojom::ActionPersistence::kFill,
+      filled_fields_by_autofill, &profile);
+
+  base::Value::Dict notification = WaitForNotification(
+      "Autofill.addressFormFilled", /*allow_existing=*/true);
+  EXPECT_EQ(notification.FindListByDottedPath("filledFields")->size(), 6u);
+  EXPECT_FALSE(HasExistingNotification("Autofill.addressFormFilled"))
+      << "The other handler should not handle `OnFillOrPreviewDataModelForm`";
+}
 }  // namespace autofill

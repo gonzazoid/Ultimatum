@@ -159,13 +159,11 @@ class NetworkingPrivateApiTest : public ApiUnitTest {
         base::Value::Dict()
             .Set("GUID", kManagedUserWifiGuid)
             .Set("Type", "WiFi")
-            .Set("WiFi",
-                 base::Value::Dict()
-                     .Set("Passphrase", "fake")
-                     .Set("SSID", user_policy_ssid)
-                     .Set("HexSSID", base::HexEncode(user_policy_ssid.c_str(),
-                                                     user_policy_ssid.size()))
-                     .Set("Security", "WPA-PSK")));
+            .Set("WiFi", base::Value::Dict()
+                             .Set("Passphrase", "fake")
+                             .Set("SSID", user_policy_ssid)
+                             .Set("HexSSID", base::HexEncode(user_policy_ssid))
+                             .Set("Security", "WPA-PSK")));
 
     config_handler->SetPolicy(::onc::ONC_SOURCE_USER_POLICY, kUserHash,
                               user_policy_onc,
@@ -179,8 +177,7 @@ class NetworkingPrivateApiTest : public ApiUnitTest {
             .Set("WiFi",
                  base::Value::Dict()
                      .Set("SSID", device_policy_ssid)
-                     .Set("HexSSID", base::HexEncode(device_policy_ssid.c_str(),
-                                                     device_policy_ssid.size()))
+                     .Set("HexSSID", base::HexEncode(device_policy_ssid))
                      .Set("Security", "None")));
     config_handler->SetPolicy(::onc::ONC_SOURCE_DEVICE_POLICY, "",
                               device_policy_onc,
@@ -924,7 +921,7 @@ TEST_F(NetworkingPrivateApiTest,
 
 TEST_F(NetworkingPrivateApiTest, CreatePrivateNetwork_NonMatchingSsids) {
   const std::string ssid = "new_wifi_config";
-  const std::string hex_ssid = base::HexEncode(ssid.c_str(), ssid.size());
+  const std::string hex_ssid = base::HexEncode(ssid);
   const char kNetworkConfig[] =
       R"({
            "Priority": 1,

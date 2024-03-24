@@ -14,13 +14,14 @@
 #include "chrome/browser/ui/side_search/side_search_config.h"
 #include "chrome/browser/ui/toolbar/app_menu_model.h"
 #include "chrome/browser/ui/toolbar/bookmark_sub_menu_model.h"
-#include "chrome/browser/ui/toolbar/pinned_toolbar_actions_model.h"
+#include "chrome/browser/ui/toolbar/pinned_toolbar/pinned_toolbar_actions_model.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/side_panel/side_panel.h"
 #include "chrome/browser/ui/views/side_panel/side_panel_coordinator.h"
 #include "chrome/browser/ui/views/side_panel/side_panel_entry.h"
 #include "chrome/browser/ui/views/side_panel/side_panel_registry.h"
+#include "chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.h"
 #include "chrome/browser/ui/views/toolbar/pinned_toolbar_actions_container.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
 #include "chrome/browser/ui/web_applications/web_app_launch_utils.h"
@@ -411,21 +412,22 @@ IN_PROC_BROWSER_TEST_F(PinnedSidePanelInteractiveTest,
   RunTestSequence(
       // Verify side panel is closed.
       EnsureNotPresent(kSidePanelElementId),
-      // Verify bookmarks is pinned to the toolbar.
-      Check(base::BindLambdaForTesting([=]() {
-        return actions_model->Contains(kActionSidePanelShowBookmarks);
-      })),
-      CheckView(
-          kPinnedToolbarActionsContainerElementId,
-          [](views::View* view) { return view->children().size() == 2u; }),
-      CheckViewProperty(kPinnedToolbarActionsContainerDividerElementId,
-                        &views::View::GetVisible, true),
       // Verify the bookmarks pinned toolbar button is not highlighted.
       CheckPinnedToolbarActionsContainerChildInkDropState(0, false),
       // Open the bookmarks side panel.
       OpenBookmarksSidePanel(),
+      // Verify bookmarks is pinned to the toolbar.
+      Check(base::BindLambdaForTesting([=]() {
+        return actions_model->Contains(kActionSidePanelShowBookmarks);
+      })),
+      WaitForShow(kPinnedActionToolbarButtonElementId), FlushEvents(),
+      CheckView(
+          kPinnedToolbarActionsContainerElementId,
+          [](views::View* view) { return view->children().size() == 2u; }),
       // Verify the bookmarks pinned toolbar button is highlighted.
       CheckPinnedToolbarActionsContainerChildInkDropState(0, true),
+      CheckViewProperty(kPinnedToolbarActionsContainerDividerElementId,
+                        &views::View::GetVisible, true),
       // Close the side panel.
       PressButton(kSidePanelCloseButtonElementId),
       WaitForHide(kSidePanelElementId), FlushEvents(),
@@ -439,10 +441,10 @@ IN_PROC_BROWSER_TEST_F(PinnedSidePanelInteractiveTest,
 
 IN_PROC_BROWSER_TEST_F(PinnedSidePanelInteractiveTest,
                        ToggleSidePanelVisibility) {
-  constexpr char kBookmarksButton[] = "bookmarks_button";
   RunTestSequence(
       // Ensure the side panel isn't open
       EnsureNotPresent(kSidePanelElementId),
+      EnsureNotPresent(kPinnedActionToolbarButtonElementId),
       // Open bookmarks sidepanel
       OpenBookmarksSidePanel(), WaitForShow(kSidePanelElementId), FlushEvents(),
       WaitForShow(kPinnedToolbarActionsContainerElementId), FlushEvents(),
@@ -451,12 +453,10 @@ IN_PROC_BROWSER_TEST_F(PinnedSidePanelInteractiveTest,
       PressButton(kSidePanelPinButtonElementId),
       CheckActionPinnedToToolbar(kActionSidePanelShowBookmarks, true),
       EnsurePresent(kPinnedToolbarActionsContainerElementId),
-      NameChildViewByType<
-          PinnedToolbarActionsContainer::PinnedActionToolbarButton>(
-          kPinnedToolbarActionsContainerElementId, kBookmarksButton),
-      WaitForShow(kBookmarksButton), FlushEvents(),
+      WaitForShow(kPinnedActionToolbarButtonElementId), FlushEvents(),
       // Toggle side panel
-      PressButton(kBookmarksButton), WaitForHide(kSidePanelElementId));
+      PressButton(kPinnedActionToolbarButtonElementId),
+      WaitForHide(kSidePanelElementId));
 }
 
 IN_PROC_BROWSER_TEST_F(PinnedSidePanelInteractiveTest,

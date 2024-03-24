@@ -133,6 +133,9 @@ public class ContextualSearchManager
     private final ObserverList<ContextualSearchObserver> mObservers =
             new ObserverList<ContextualSearchObserver>();
 
+    private final ObserverList<ContextualSearchSelectionObserver> mSelectionObservers =
+            new ObserverList<ContextualSearchSelectionObserver>();
+
     private final Activity mActivity;
     private final ContextualSearchTabPromotionDelegate mTabPromotionDelegate;
     private final ViewTreeObserver.OnGlobalFocusChangeListener mOnFocusChangeListener;
@@ -359,6 +362,8 @@ public class ContextualSearchManager
         mParentView.getViewTreeObserver().addOnGlobalFocusChangeListener(mOnFocusChangeListener);
 
         mProfile = profile;
+        mPolicy.setProfile(profile);
+
         mLayoutManager = layoutManager;
 
         ContextualSearchPanelInterface panel;
@@ -1040,9 +1045,10 @@ public class ContextualSearchManager
     public void onContextualSearchPrefChanged() {
         // The pref may be automatically changed during application startup due to enterprise
         // configuration settings, so we may not have a panel yet.
-        if (mSearchPanel != null) {
+        if (mSearchPanel != null && mProfile != null) {
             // Nitifies panel that if the user opted in or not.
-            boolean userOptedIn = ContextualSearchPolicy.isContextualSearchPrefFullyOptedIn();
+            boolean userOptedIn =
+                    ContextualSearchPolicy.isContextualSearchPrefFullyOptedIn(mProfile);
             mSearchPanel.onContextualSearchPrefChanged(userOptedIn);
         }
     }
@@ -1097,10 +1103,29 @@ public class ContextualSearchManager
         assert surroundingText != null;
         int startOffset = mContext.getSelectionStartOffset();
         int endOffset = mContext.getSelectionEndOffset();
+
+        ContextualSearchSelection sel =
+                new ContextualSearchSelection(
+                        mContext.getEncoding(), surroundingText, startOffset, endOffset);
+        notifyInternalObservers(sel);
+
         GSAContextDisplaySelection selection =
                 new GSAContextDisplaySelection(
                         mContext.getEncoding(), surroundingText, startOffset, endOffset);
         notifyShowContextualSearch(selection);
+    }
+
+    /**
+     * Notifies all internal Contextual Search observers that a search has occurred. This API is for
+     * internal, Chromium-only observers that don't share the selection data with any servers and
+     * only process it locally.
+     *
+     * @param selectionContext The selection and context that triggered the search.
+     */
+    private void notifyInternalObservers(ContextualSearchSelection selectionContext) {
+        for (ContextualSearchSelectionObserver observer : mSelectionObservers) {
+            observer.onSelectionChanged(selectionContext);
+        }
     }
 
     /**
@@ -1120,6 +1145,20 @@ public class ContextualSearchManager
         for (ContextualSearchObserver observer : mObservers) {
             observer.onHideContextualSearch();
         }
+    }
+
+    /**
+     * @param observer An observer to notify when the user performs a contextual search.
+     */
+    public void addObserver(ContextualSearchSelectionObserver observer) {
+        mSelectionObservers.addObserver(observer);
+    }
+
+    /**
+     * @param observer An observer to no longer notify when the user performs a contextual search.
+     */
+    public void removeObserver(ContextualSearchSelectionObserver observer) {
+        mSelectionObservers.removeObserver(observer);
     }
 
     // ============================================================================================
@@ -1455,6 +1494,16 @@ public class ContextualSearchManager
         if (getSearchPanelWebContents() != null) {
             getSearchPanelWebContents().onShow();
         }
+    }
+
+    @Override
+    public void setContextualSearchPromoCardSelection(boolean enabled) {
+        ContextualSearchPolicy.setContextualSearchFullyOptedIn(mProfile, enabled);
+    }
+
+    @Override
+    public void onPromoShown() {
+        ContextualSearchPolicy.onPromoShown(mProfile);
     }
 
     /** @return The {@link SelectionClient} used by Contextual Search. */
@@ -1928,22 +1977,11 @@ public class ContextualSearchManager
     }
 
     /**
+     * @param profile The {@link Profile} associated with this Contextual Search session.
      * @return Whether the Contextual Search feature was disabled by the user explicitly.
      */
-    public static boolean isContextualSearchDisabled() {
-        return ContextualSearchPolicy.isContextualSearchDisabled();
-    }
-
-    /**
-     * @param enabled Whether The user to choose fully Contextual Search privacy opt-in.
-     */
-    public static void setContextualSearchPromoCardSelection(boolean enabled) {
-        ContextualSearchPolicy.setContextualSearchFullyOptedIn(enabled);
-    }
-
-    /** Notifies that a promo card has been shown. */
-    public static void onPromoShown() {
-        ContextualSearchPolicy.onPromoShown();
+    public static boolean isContextualSearchDisabled(Profile profile) {
+        return ContextualSearchPolicy.isContextualSearchDisabled(profile);
     }
 
     // Private helper functions

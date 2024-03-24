@@ -7,8 +7,8 @@ import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
 import 'chrome://resources/cr_elements/cr_input/cr_input.js';
 
 import {getTrustedHTML} from 'chrome://resources/js/static_types.js';
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
-import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import type {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import type {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
 import {keyDownOn, keyEventOn} from 'chrome://resources/polymer/v3_0/iron-test-helpers/mock-interactions.js';
 import {assertEquals, assertFalse, assertNotEquals, assertNotReached, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {eventToPromise} from 'chrome://webui-test/test_util.js';
@@ -415,24 +415,29 @@ suite('cr-dialog', function() {
     bodyContainer!.scrollTop = 100;
   });
 
-  test('dialog `open` attribute updated when Escape is pressed', function() {
-    document.body.innerHTML = getTrustedHTML`
-      <cr-dialog>
-        <div slot="title">title</div>
-      </cr-dialog>`;
+  test(
+      'dialog `open` attribute updated when Escape is pressed',
+      async function() {
+        document.body.innerHTML = getTrustedHTML`
+          <cr-dialog>
+            <div slot="title">title</div>
+          </cr-dialog>`;
 
-    const dialog = document.body.querySelector('cr-dialog')!;
-    dialog.showModal();
+        const dialog = document.body.querySelector('cr-dialog')!;
 
-    assertTrue(dialog.open);
-    assertTrue(dialog.hasAttribute('open'));
+        const whenOpen = eventToPromise('cr-dialog-open', dialog);
+        dialog.showModal();
+        await whenOpen;
+        assertTrue(dialog.open);
+        assertTrue(dialog.hasAttribute('open'));
 
-    const e = new CustomEvent('cancel', {cancelable: true});
-    dialog.getNative().dispatchEvent(e);
-
-    assertFalse(dialog.open);
-    assertFalse(dialog.hasAttribute('open'));
-  });
+        const whenCancel = eventToPromise('cancel', dialog);
+        const e = new CustomEvent('cancel', {cancelable: true});
+        dialog.getNative().dispatchEvent(e);
+        await whenCancel;
+        assertFalse(dialog.open);
+        assertFalse(dialog.hasAttribute('open'));
+      });
 
   test('dialog cannot be cancelled when `no-cancel` is set', function() {
     document.body.innerHTML = getTrustedHTML`
@@ -441,6 +446,7 @@ suite('cr-dialog', function() {
       </cr-dialog>`;
 
     const dialog = document.body.querySelector('cr-dialog')!;
+    assertTrue(dialog.noCancel);
     dialog.showModal();
 
     assertTrue(dialog.$.close.hidden);
@@ -465,6 +471,7 @@ suite('cr-dialog', function() {
       </cr-dialog>`;
 
     const dialog = document.body.querySelector('cr-dialog')!;
+    assertTrue(dialog.showCloseButton);
     dialog.showModal();
     assertTrue(dialog.open);
 
@@ -544,7 +551,7 @@ suite('cr-dialog', function() {
     assertTrue(dialog.open);
   });
 
-  test('close-text', () => {
+  test('close-text', async () => {
     document.body.innerHTML = getTrustedHTML`
       <cr-dialog close-text="foo">
         <div slot="title">title</div>
@@ -557,6 +564,7 @@ suite('cr-dialog', function() {
     assertEquals('foo', dialog.$.close.getAttribute('aria-label'));
 
     dialog.closeText = undefined;
+    await dialog.updateComplete;
     assertEquals(null, dialog.$.close.ariaLabel);
     assertFalse(dialog.$.close.hasAttribute('aria-label'));
   });

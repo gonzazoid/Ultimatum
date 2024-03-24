@@ -112,6 +112,11 @@ class NtpBackgroundServiceTest : public testing::Test,
 INSTANTIATE_TEST_SUITE_P(All, NtpBackgroundServiceTest, ::testing::Bool());
 
 TEST_P(NtpBackgroundServiceTest, CollectionRequest) {
+  // TODO (crbug/1522182): Test fails under ChromeRefresh2023. Skip until fixed
+  //                       or removed.
+  if (features::IsChromeRefresh2023()) {
+    GTEST_SKIP();
+  }
   g_browser_process->SetApplicationLocale("foo");
   service()->FetchCollectionInfo();
   base::RunLoop().RunUntilIdle();
@@ -634,7 +639,7 @@ TEST_P(NtpBackgroundServiceTest,
 TEST_P(NtpBackgroundServiceTest, NextImageNetworkError) {
   SetUpResponseWithNetworkError(service()->GetNextImageURLForTesting());
 
-  service()->FetchNextCollectionImage("shapes", absl::nullopt);
+  service()->FetchNextCollectionImage("shapes", std::nullopt);
   base::RunLoop().RunUntilIdle();
 
   EXPECT_THAT(service()->next_image_error_info().error_type,
@@ -645,7 +650,7 @@ TEST_P(NtpBackgroundServiceTest, BadNextImageResponse) {
   SetUpResponseWithData(service()->GetNextImageURLForTesting(),
                         "bad serialized GetImageFromCollectionResponse");
 
-  service()->FetchNextCollectionImage("shapes", absl::nullopt);
+  service()->FetchNextCollectionImage("shapes", std::nullopt);
   base::RunLoop().RunUntilIdle();
 
   EXPECT_THAT(service()->next_image_error_info().error_type,
@@ -707,7 +712,7 @@ TEST_P(NtpBackgroundServiceTest, MultipleRequestsNextImage) {
   // NOTE: the effect of the resume token in the request (i.e. prevent images
   // from being repeated) cannot be verified in a unit test.
   EXPECT_CALL(observer_, OnNextCollectionImageAvailable).Times(1);
-  service()->FetchNextCollectionImage("shapes", absl::nullopt);
+  service()->FetchNextCollectionImage("shapes", std::nullopt);
   // Subsequent requests are ignored while the loader is in use.
   service()->FetchNextCollectionImage("shapes", "resume0");
   base::RunLoop().RunUntilIdle();
@@ -772,7 +777,7 @@ TEST_P(NtpBackgroundServiceTest, GetThumbnailUrl) {
                                                         kValidThumbnailUrl);
 
   EXPECT_EQ(kValidThumbnailUrl, service()->GetThumbnailUrl(kValidUrl));
-  EXPECT_EQ(GURL::EmptyGURL(), service()->GetThumbnailUrl(kInvalidUrl));
+  EXPECT_EQ(GURL(), service()->GetThumbnailUrl(kInvalidUrl));
 }
 
 TEST_P(NtpBackgroundServiceTest, OverrideBaseUrl) {

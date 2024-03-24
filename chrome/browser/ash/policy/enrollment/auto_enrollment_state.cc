@@ -21,6 +21,8 @@ std::string_view AutoEnrollmentResultToString(AutoEnrollmentResult result) {
       return "No enrollment";
     case AutoEnrollmentResult::kDisabled:
       return "Device disabled";
+    case AutoEnrollmentResult::kSuggestedEnrollment:
+      return "Suggested enrollment";
   }
 }
 
@@ -32,6 +34,9 @@ std::string AutoEnrollmentErrorToString(AutoEnrollmentError error) {
           },
           [](AutoEnrollmentSystemClockSyncError) {
             return std::string("System clock sync error");
+          },
+          [](AutoEnrollmentStateKeysRetrievalError) {
+            return std::string("State keys retrieval error");
           },
           [](const AutoEnrollmentDMServerError& error) {
             return base::StringPrintf(

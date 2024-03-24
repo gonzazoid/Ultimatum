@@ -6,6 +6,7 @@
 
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/observer_list.h"
 #include "components/autofill/content/renderer/form_autofill_util.h"
 #include "components/autofill/core/common/autofill_features.h"
@@ -30,12 +31,15 @@ using blink::WebFormElement;
 namespace autofill {
 
 namespace {
+
+constexpr char kSubmissionSourceHistogram[] =
+    "Autofill.SubmissionDetectionSource.FormTracker";
+
 bool ShouldReplaceElementsByRendererIds() {
   return base::FeatureList::IsEnabled(
-             blink::features::kAutofillUseDomNodeIdForRendererId) &&
-         base::FeatureList::IsEnabled(
-             features::kAutofillReplaceCachedWebElementsByRendererIds);
+      features::kAutofillReplaceCachedWebElementsByRendererIds);
 }
+
 }  // namespace
 
 using mojom::SubmissionSource;
@@ -49,8 +53,7 @@ FormRef::FormRef(blink::WebFormElement form)
 
 blink::WebFormElement FormRef::GetForm() const {
   return ShouldReplaceElementsByRendererIds()
-             ? form_util::FindFormByRendererId(blink::WebDocument(),
-                                               form_renderer_id_)
+             ? form_util::GetFormByRendererId(form_renderer_id_)
              : form_;
 }
 
@@ -72,8 +75,6 @@ FieldRef::FieldRef(blink::WebElement content_editable)
     : field_renderer_id_(content_editable.GetDomNodeId()) {
   CHECK(!content_editable.IsNull());
   CHECK(content_editable.IsContentEditable());
-  CHECK(base::FeatureList::IsEnabled(
-      blink::features::kAutofillUseDomNodeIdForRendererId));
   if (!ShouldReplaceElementsByRendererIds()) {
     field_ = content_editable;
   }
@@ -81,17 +82,14 @@ FieldRef::FieldRef(blink::WebElement content_editable)
 
 blink::WebFormControlElement FieldRef::GetField() const {
   return ShouldReplaceElementsByRendererIds()
-             ? form_util::FindFormControlByRendererId(blink::WebDocument(),
-                                                      field_renderer_id_)
+             ? form_util::GetFormControlByRendererId(field_renderer_id_)
              : field_.DynamicTo<WebFormControlElement>();
 }
 
 blink::WebElement FieldRef::GetContentEditable() const {
-  CHECK(base::FeatureList::IsEnabled(
-      blink::features::kAutofillUseDomNodeIdForRendererId));
   blink::WebElement content_editable =
       ShouldReplaceElementsByRendererIds()
-          ? form_util::FindContentEditableByRendererId(field_renderer_id_)
+          ? form_util::GetContentEditableByRendererId(field_renderer_id_)
           : field_;
   return content_editable.IsContentEditable() ? content_editable
                                               : blink::WebElement();
@@ -103,9 +101,11 @@ FieldRendererId FieldRef::GetId() const {
                            : form_util::GetFieldRendererId(field_);
 }
 
-FormTracker::FormTracker(content::RenderFrame* render_frame)
+FormTracker::FormTracker(content::RenderFrame* render_frame,
+                         UserGestureRequired user_gesture_required)
     : content::RenderFrameObserver(render_frame),
-      blink::WebLocalFrameObserver(render_frame->GetWebFrame()) {
+      blink::WebLocalFrameObserver(render_frame->GetWebFrame()),
+      user_gesture_required_(user_gesture_required) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(form_tracker_sequence_checker_);
 }
 
@@ -323,17 +323,16 @@ void FormTracker::OnFrameDetached() {
 }
 
 void FormTracker::FireFormSubmitted(const blink::WebFormElement& form) {
+  base::UmaHistogramEnumeration(kSubmissionSourceHistogram,
+                                SubmissionSource::FORM_SUBMISSION);
   for (auto& observer : observers_)
     observer.OnFormSubmitted(form);
   ResetLastInteractedElements();
 }
 
 void FormTracker::FireProbablyFormSubmitted() {
-  if (base::FeatureList::IsEnabled(
-          features::kAutofillProbableFormSubmissionInBrowser)) {
-    return;
-  }
-
+  base::UmaHistogramEnumeration(kSubmissionSourceHistogram,
+                                SubmissionSource::PROBABLY_FORM_SUBMITTED);
   for (auto& observer : observers_)
     observer.OnProbablyFormSubmitted();
   ResetLastInteractedElements();
@@ -341,6 +340,7 @@ void FormTracker::FireProbablyFormSubmitted() {
 
 void FormTracker::FireInferredFormSubmission(SubmissionSource source) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(form_tracker_sequence_checker_);
+  base::UmaHistogramEnumeration(kSubmissionSourceHistogram, source);
   for (auto& observer : observers_)
     observer.OnInferredFormSubmission(source);
   ResetLastInteractedElements();

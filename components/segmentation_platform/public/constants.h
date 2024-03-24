@@ -149,6 +149,7 @@ const char kAdaptiveToolbarModelLabelShare[] = "Share";
 const char kAdaptiveToolbarModelLabelVoice[] = "Voice";
 const char kAdaptiveToolbarModelLabelTranslate[] = "Translate";
 const char kAdaptiveToolbarModelLabelAddToBookmarks[] = "AddToBookmarks";
+const char kAdaptiveToolbarModelLabelReadAloud[] = "ReadAloud";
 
 // Labels for contextual page actions model.
 const char kContextualPageActionModelLabelPriceTracking[] = "price_tracking";
@@ -196,6 +197,11 @@ const char kDeviceTierSegmentLabelHigh[] = "High";
 const char kTabletProductivityUserModelLabelNone[] = "None";
 const char kTabletProductivityUserModelLabelMedium[] = "Medium";
 const char kTabletProductivityUserModelLabelHigh[] = "High";
+
+// Labels for Android Home modules for ranking.
+const char kSingleTab[] = "SingleTab";
+const char kPriceChange[] = "PriceChange";
+const char kTabResumptionForAndroidHome[] = "TabResumption";
 
 // Labels for IOS modules for ranking.
 const char kMostVisitedTiles[] = "MostVisitedTiles";

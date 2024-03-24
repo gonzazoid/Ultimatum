@@ -18,7 +18,6 @@
 #import "base/threading/scoped_blocking_call.h"
 #import "components/optimization_guide/core/optimization_guide_features.h"
 #import "components/prefs/pref_service.h"
-#import "components/signin/ios/browser/active_state_manager.h"
 #import "components/signin/public/identity_manager/identity_manager.h"
 #import "ios/chrome/browser/browser_state/model/chrome_browser_state_impl.h"
 #import "ios/chrome/browser/browser_state/model/constants.h"
@@ -26,6 +25,7 @@
 #import "ios/chrome/browser/browser_state_metrics/model/browser_state_metrics.h"
 #import "ios/chrome/browser/optimization_guide/model/optimization_guide_service.h"
 #import "ios/chrome/browser/optimization_guide/model/optimization_guide_service_factory.h"
+#import "ios/chrome/browser/page_info/about_this_site_service_factory.h"
 #import "ios/chrome/browser/push_notification/model/push_notification_browser_state_service_factory.h"
 #import "ios/chrome/browser/segmentation_platform/model/segmentation_platform_service_factory.h"
 #import "ios/chrome/browser/shared/model/application_context/application_context.h"
@@ -111,22 +111,7 @@ base::FilePath GetUserDataDir() {
 
 ChromeBrowserStateManagerImpl::ChromeBrowserStateManagerImpl() {}
 
-ChromeBrowserStateManagerImpl::~ChromeBrowserStateManagerImpl() {
-  for (const auto& pair : browser_states_) {
-    ChromeBrowserStateImpl* browser_state = pair.second.get();
-    ActiveStateManager::FromBrowserState(browser_state)->SetActive(false);
-    if (!browser_state->HasOffTheRecordChromeBrowserState()) {
-      continue;
-    }
-
-    web::BrowserState* otr_browser_state =
-        browser_state->GetOffTheRecordChromeBrowserState();
-    if (!ActiveStateManager::ExistsForBrowserState(otr_browser_state)) {
-      continue;
-    }
-    ActiveStateManager::FromBrowserState(otr_browser_state)->SetActive(false);
-  }
-}
+ChromeBrowserStateManagerImpl::~ChromeBrowserStateManagerImpl() {}
 
 ChromeBrowserState* ChromeBrowserStateManagerImpl::GetLastUsedBrowserState() {
   return GetBrowserState(GetLastUsedBrowserStateDir(GetUserDataDir()));
@@ -235,6 +220,10 @@ void ChromeBrowserStateManagerImpl::DoFinalInitForServices(
 
   ChildAccountServiceFactory::GetForBrowserState(browser_state)->Init();
   SupervisedUserServiceFactory::GetForBrowserState(browser_state)->Init();
+
+  // The AboutThisSiteService needs to be created at startup in order to
+  // register its OptimizationType with OptimizationGuideDecider.
+  AboutThisSiteServiceFactory::GetForBrowserState(browser_state);
 }
 
 void ChromeBrowserStateManagerImpl::AddBrowserStateToCache(

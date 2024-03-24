@@ -9,7 +9,8 @@ import '../cr_shared_style.css.js';
 import '../cr_shared_vars.css.js';
 import '//resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
 
-import {DomIf, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import type {DomIf} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {CrSearchFieldMixin} from '../cr_search_field/cr_search_field_mixin.js';
 
@@ -46,7 +47,6 @@ export class CrToolbarSearchFieldElement extends
         type: Boolean,
         value: false,
         notify: true,
-        observer: 'showingSearchChanged_',
         reflectToAttribute: true,
       },
 
@@ -145,6 +145,8 @@ export class CrToolbarSearchFieldElement extends
   private onSearchTermKeydown_(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       this.showingSearch = false;
+      this.setValue('');
+      this.getSearchInput().blur();
     }
   }
 
@@ -152,27 +154,15 @@ export class CrToolbarSearchFieldElement extends
     if (e.target !== this.shadowRoot!.querySelector('#clearSearch')) {
       this.showingSearch = true;
     }
+    if (this.narrow) {
+      this.focus_();
+    }
   }
 
   private clearSearch_() {
     this.setValue('');
     this.focus_();
     this.spinnerActive = false;
-  }
-
-  private showingSearchChanged_(_current: boolean, previous?: boolean) {
-    // Prevent unnecessary 'search-changed' event from firing on startup.
-    if (previous === undefined) {
-      return;
-    }
-
-    if (this.showingSearch) {
-      this.focus_();
-      return;
-    }
-
-    this.setValue('');
-    this.getSearchInput().blur();
   }
 }
 

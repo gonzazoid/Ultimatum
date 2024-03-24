@@ -5,8 +5,10 @@
 // clang-format off
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {HttpsFirstModeSetting, SafeBrowsingSetting, SettingsSecurityPageElement} from 'chrome://settings/lazy_load.js';
-import {HatsBrowserProxyImpl, CrSettingsPrefs, MetricsBrowserProxyImpl, OpenWindowProxyImpl, PrivacyElementInteractions, PrivacyPageBrowserProxyImpl, Router, routes, SafeBrowsingInteractions, SecureDnsMode, SecurityPageInteraction, SettingsPrefsElement, SettingsToggleButtonElement} from 'chrome://settings/settings.js';
+import type {SettingsSecurityPageElement} from 'chrome://settings/lazy_load.js';
+import {HttpsFirstModeSetting, SafeBrowsingSetting} from 'chrome://settings/lazy_load.js';
+import type {SettingsPrefsElement, SettingsToggleButtonElement} from 'chrome://settings/settings.js';
+import {HatsBrowserProxyImpl, CrSettingsPrefs, MetricsBrowserProxyImpl, OpenWindowProxyImpl, PrivacyElementInteractions, PrivacyPageBrowserProxyImpl, Router, routes, SafeBrowsingInteractions, SecureDnsMode, SecurityPageInteraction} from 'chrome://settings/settings.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {isChildVisible} from 'chrome://webui-test/test_util.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
@@ -25,6 +27,7 @@ function pagePrefs() {
     profile: {password_manager_leak_detection: {value: false}},
     safebrowsing: {
       scout_reporting_enabled: {value: true},
+      esb_opt_in_with_friendlier_settings: {value: false},
     },
     generated: {
       safe_browsing: {
@@ -146,6 +149,17 @@ suite('Main', function() {
         page.getPref('generated.https_first_mode_enabled').value);
   });
 
+  // Test that clicking the V8 security row navigates to the setting page.
+  test('NavigateToV8Setting', function() {
+    const link =
+        page.shadowRoot!.querySelector<HTMLElement>('#v8-setting-link');
+    assertTrue(!!link);
+    link.click();
+    assertEquals(
+        routes.SITE_SETTINGS_JAVASCRIPT_JIT,
+        Router.getInstance().getCurrentRoute());
+  });
+
   // TODO(crbug.com/1494186): Add test for alternate sub-label when Advanced
   // Protection is enabled.
 });
@@ -167,6 +181,7 @@ suite('SecurityPageHappinessTrackingSurveys', function() {
     page = document.createElement('settings-security-page');
     page.prefs = settingsPrefs.prefs;
     document.body.appendChild(page);
+    testHatsBrowserProxy.reset();
     Router.getInstance().navigateTo(routes.SECURITY);
     return flushTasks();
   });
@@ -174,6 +189,27 @@ suite('SecurityPageHappinessTrackingSurveys', function() {
   teardown(function() {
     page.remove();
     Router.getInstance().navigateTo(routes.BASIC);
+  });
+
+  test('SecurityPageSwitchRouteCallsHatsProxy', async function() {
+    const t1 = 10000;
+    testHatsBrowserProxy.setNow(t1);
+    window.dispatchEvent(new Event('focus'));
+
+    const t2 = 20000;
+    testHatsBrowserProxy.setNow(t2);
+    window.dispatchEvent(new Event('blur'));
+
+    // Switch tabs within the settings page.
+    Router.getInstance().navigateTo(routes.PRIVACY);
+
+    const args =
+        await testHatsBrowserProxy.whenCalled('securityPageHatsRequest');
+
+    // Verify that the method securityPageHatsRequest was called and the time
+    // the user spent on the security page was logged correctly.
+    const expectedTotalTimeInFocus = t2 - t1;
+    assertEquals(expectedTotalTimeInFocus, args[2]);
   });
 
   test('SecurityPageBeforeUnloadCallsHatsProxy', async function() {
@@ -199,6 +235,7 @@ suite('SecurityPageHappinessTrackingSurveys', function() {
 
     // Fire the beforeunload event to simulate closing the page.
     window.dispatchEvent(new Event('beforeunload'));
+
     const args =
         await testHatsBrowserProxy.whenCalled('securityPageHatsRequest');
 
@@ -481,7 +518,7 @@ suite('SafeBrowsing', function() {
 
   test(
       'SafeBrowsingRadio_ManuallyExpandedRemainExpandedOnRepeatSelection',
-      function() {
+      async function() {
         page.$.safeBrowsingStandard.click();
         flush();
         assertEquals(
@@ -493,7 +530,7 @@ suite('SafeBrowsing', function() {
         // Expanding another radio button should not collapse already expanded
         // option.
         page.$.safeBrowsingEnhanced.$.expandButton.click();
-        flush();
+        await page.$.safeBrowsingEnhanced.$.expandButton.updateComplete;
         assertTrue(page.$.safeBrowsingStandard.expanded);
         assertTrue(page.$.safeBrowsingEnhanced.expanded);
 
@@ -515,7 +552,7 @@ suite('SafeBrowsing', function() {
             page.prefs.generated.safe_browsing.value);
 
         page.$.safeBrowsingEnhanced.$.expandButton.click();
-        flush();
+        await page.$.safeBrowsingEnhanced.$.expandButton.updateComplete;
         assertTrue(page.$.safeBrowsingStandard.expanded);
         assertTrue(page.$.safeBrowsingEnhanced.expanded);
 
@@ -960,4 +997,30 @@ suite('SafeBrowsing', function() {
     assertEquals(subLabel, standardProtection.subLabel);
   });
   // </if>
+
+  test('FriendlierSettingsPopulatedOnEsbOptIn', async function() {
+    loadTimeData.overrideValues({
+      enableFriendlierSafeBrowsingSettings: false,
+    });
+    resetPage();
+    page.$.safeBrowsingEnhanced.click();
+    assertFalse(
+        page.getPref('safebrowsing.esb_opt_in_with_friendlier_settings').value);
+
+    loadTimeData.overrideValues({
+      enableFriendlierSafeBrowsingSettings: true,
+    });
+    resetPage();
+    page.$.safeBrowsingEnhanced.click();
+    assertTrue(
+        page.getPref('safebrowsing.esb_opt_in_with_friendlier_settings').value);
+  });
+
+  test('FriendlierSettingsClearedOnEsbOptOut', async function() {
+    page.$.safeBrowsingEnhanced.click();
+    page.setPrefValue('safebrowsing.esb_opt_in_with_friendlier_settings', true);
+    page.$.safeBrowsingStandard.click();
+    assertFalse(
+        page.getPref('safebrowsing.esb_opt_in_with_friendlier_settings').value);
+  });
 });

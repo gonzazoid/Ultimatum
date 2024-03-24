@@ -10,6 +10,7 @@
 
 #include <list>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
@@ -39,7 +40,6 @@
 #include "components/history/core/browser/visit_tracker.h"
 #include "components/sync/service/sync_service.h"
 #include "sql/init_status.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/origin.h"
 
 class SkBitmap;
@@ -164,7 +164,7 @@ class HistoryBackend : public base::RefCountedThreadSafe<HistoryBackend>,
     virtual void NotifyURLVisited(
         const URLRow& url_row,
         const VisitRow& visit_row,
-        absl::optional<int64_t> local_navigation_id) = 0;
+        std::optional<int64_t> local_navigation_id) = 0;
 
     // Notify HistoryService that some URLs have been modified. The event will
     // be forwarded to the HistoryServiceObservers in the correct thread.
@@ -292,6 +292,8 @@ class HistoryBackend : public base::RefCountedThreadSafe<HistoryBackend>,
       base::OnceCallback<void(HistoryBackend*, URLDatabase*)> callback);
 
   QueryURLResult QueryURL(const GURL& url, bool want_visits);
+  std::vector<QueryURLResult> QueryURLs(const std::vector<GURL>& urls,
+                                        bool want_visits);
   QueryResults QueryHistory(const std::u16string& text_query,
                             const QueryOptions& options);
 
@@ -499,16 +501,17 @@ class HistoryBackend : public base::RefCountedThreadSafe<HistoryBackend>,
   std::vector<AnnotatedVisit> GetAnnotatedVisits(
       const QueryOptions& options,
       bool compute_redirect_chain_start_properties,
+      bool get_unclustered_visits_only,
       bool* limited_by_max_count = nullptr);
 
   // Utility method to Construct `AnnotatedVisit`s.
-  std::vector<AnnotatedVisit> ToAnnotatedVisits(
+  std::vector<AnnotatedVisit> ToAnnotatedVisitsFromRows(
       const VisitVector& visit_rows,
       bool compute_redirect_chain_start_properties) override;
 
   // Like above, but will first construct `visit_rows` from each `VisitID`
-  // before delegating to the overloaded `ToAnnotatedVisits()` above.
-  std::vector<AnnotatedVisit> ToAnnotatedVisits(
+  // before delegating to the `ToAnnotatedVisitsFromRows()` above.
+  std::vector<AnnotatedVisit> ToAnnotatedVisitsFromIds(
       const std::vector<VisitID>& visit_ids,
       bool compute_redirect_chain_start_properties);
 
@@ -636,8 +639,8 @@ class HistoryBackend : public base::RefCountedThreadSafe<HistoryBackend>,
       const std::u16string& title,
       bool hidden,
       const VisitRow& visit,
-      const absl::optional<VisitContextAnnotations>& context_annotations,
-      const absl::optional<VisitContentAnnotations>& content_annotations)
+      const std::optional<VisitContextAnnotations>& context_annotations,
+      const std::optional<VisitContentAnnotations>& content_annotations)
       override;
 
   // Updates a visit coming from another device (typically to update its
@@ -652,8 +655,8 @@ class HistoryBackend : public base::RefCountedThreadSafe<HistoryBackend>,
       const std::u16string& title,
       bool hidden,
       const VisitRow& visit,
-      const absl::optional<VisitContextAnnotations>& context_annotations,
-      const absl::optional<VisitContentAnnotations>& content_annotations)
+      const std::optional<VisitContextAnnotations>& context_annotations,
+      const std::optional<VisitContentAnnotations>& content_annotations)
       override;
 
   // Updates the `referring_visit` and `opener_visit` fields for the visit with
@@ -716,6 +719,7 @@ class HistoryBackend : public base::RefCountedThreadSafe<HistoryBackend>,
 
   // Calls ExpireHistoryBackend::ExpireHistoryBetween and commits the change.
   void ExpireHistoryBetween(const std::set<GURL>& restrict_urls,
+                            std::optional<std::string> restrict_app_id,
                             base::Time begin_time,
                             base::Time end_time,
                             bool user_initiated);
@@ -828,6 +832,7 @@ class HistoryBackend : public base::RefCountedThreadSafe<HistoryBackend>,
   //
   // This does not schedule database commits, it is intended to be used as a
   // subroutine for AddPage only. It also assumes the database is valid.
+  // Note that |app_is| is used for mobile only; |nullopt| on other platforms.
   std::pair<URLID, VisitID> AddPageVisit(
       const GURL& url,
       base::Time time,
@@ -839,15 +844,16 @@ class HistoryBackend : public base::RefCountedThreadSafe<HistoryBackend>,
       bool should_increment_typed_count,
       VisitID opener_visit,
       bool consider_for_ntp_most_visited,
-      absl::optional<int64_t> local_navigation_id = absl::nullopt,
-      absl::optional<std::u16string> title = absl::nullopt,
-      absl::optional<GURL> top_level_url = absl::nullopt,
-      absl::optional<GURL> frame_url = absl::nullopt,
-      absl::optional<base::TimeDelta> visit_duration = absl::nullopt,
-      absl::optional<std::string> originator_cache_guid = absl::nullopt,
-      absl::optional<VisitID> originator_visit_id = absl::nullopt,
-      absl::optional<VisitID> originator_referring_visit = absl::nullopt,
-      absl::optional<VisitID> originator_opener_visit = absl::nullopt,
+      std::optional<int64_t> local_navigation_id = std::nullopt,
+      std::optional<std::u16string> title = std::nullopt,
+      std::optional<GURL> top_level_url = std::nullopt,
+      std::optional<GURL> frame_url = std::nullopt,
+      std::optional<std::string> app_id = std::nullopt,
+      std::optional<base::TimeDelta> visit_duration = std::nullopt,
+      std::optional<std::string> originator_cache_guid = std::nullopt,
+      std::optional<VisitID> originator_visit_id = std::nullopt,
+      std::optional<VisitID> originator_referring_visit = std::nullopt,
+      std::optional<VisitID> originator_opener_visit = std::nullopt,
       bool is_known_to_sync = false);
 
   // Returns a redirect-or-referral chain in `redirects` for the VisitID
@@ -972,7 +978,7 @@ class HistoryBackend : public base::RefCountedThreadSafe<HistoryBackend>,
                              const GURL& icon_url) override;
   void NotifyURLVisited(const URLRow& url_row,
                         const VisitRow& visit_row,
-                        absl::optional<int64_t> local_navigation_id) override;
+                        std::optional<int64_t> local_navigation_id) override;
   void NotifyURLsModified(const URLRows& changed_urls,
                           bool is_from_expiration) override;
   void NotifyURLsDeleted(DeletionInfo deletion_info) override;

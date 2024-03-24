@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/memory/raw_ptr.h"
@@ -17,7 +18,6 @@
 #include "components/leveldb_proto/public/proto_database.h"
 #include "components/segmentation_platform/internal/database/signal_database.h"
 #include "components/segmentation_platform/internal/database/signal_key.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class Clock;
@@ -47,13 +47,13 @@ class SignalDatabaseImpl : public SignalDatabase {
   void Initialize(SuccessCallback callback) override;
   void WriteSample(proto::SignalType signal_type,
                    uint64_t name_hash,
-                   absl::optional<int32_t> value,
+                   std::optional<int32_t> value,
                    SuccessCallback callback) override;
   void GetSamples(proto::SignalType signal_type,
                   uint64_t name_hash,
                   base::Time start_time,
                   base::Time end_time,
-                  SamplesCallback callback) override;
+                  EntriesCallback callback) override;
   const std::vector<DbEntry>* GetAllSamples() override;
   void DeleteSamples(proto::SignalType signal_type,
                      uint64_t name_hash,
@@ -69,7 +69,7 @@ class SignalDatabaseImpl : public SignalDatabase {
                              leveldb_proto::Enums::InitStatus status);
 
   void OnGetSamples(
-      SamplesCallback callback,
+      EntriesCallback callback,
       base::Time start_time,
       base::Time end_time,
       bool success,
@@ -106,6 +106,7 @@ class SignalDatabaseImpl : public SignalDatabase {
   // Whether or not initialization has been completed.
   bool initialized_{false};
 
+  const bool enable_signal_cache_;
   std::vector<DbEntry> all_signals_;
 
   // A cache of recently added signals. Used for avoiding collisions between two

@@ -5,8 +5,9 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_INLINE_LINE_BREAKER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_INLINE_LINE_BREAKER_H_
 
+#include <optional>
+
 #include "base/check_op.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/exclusions/line_layout_opportunity.h"
 #include "third_party/blink/renderer/core/layout/inline/inline_item_result.h"
@@ -187,14 +188,15 @@ class CORE_EXPORT LineBreaker {
                                                const InlineItemResult&,
                                                unsigned end_offset);
   void UpdateShapeResult(const LineInfo&, InlineItemResult*);
-  scoped_refptr<ShapeResult> ShapeText(const InlineItem&,
-                                       unsigned start,
-                                       unsigned end,
-                                       ShapeOptions = ShapeOptions());
+  const ShapeResult* ShapeText(const InlineItem&,
+                               unsigned start,
+                               unsigned end,
+                               ShapeOptions = ShapeOptions());
 
   void HandleTrailingSpaces(const InlineItem&, LineInfo*);
   void HandleTrailingSpaces(const InlineItem&, const ShapeResult*, LineInfo*);
   void RemoveTrailingCollapsibleSpace(LineInfo*);
+  void SplitTrailingBidiPreservedSpace(LineInfo*);
   LayoutUnit TrailingCollapsibleSpaceWidth(LineInfo*);
   void ComputeTrailingCollapsibleSpace(LineInfo*);
   void RewindTrailingOpenTags(LineInfo*);
@@ -222,7 +224,7 @@ class CORE_EXPORT LineBreaker {
                    const BlockBreakToken* float_break_token,
                    LineInfo*);
   void UpdateLineOpportunity();
-  void RewindFloats(unsigned new_end, InlineItemResults& item_results);
+  void RewindFloats(unsigned new_end, LineInfo&, InlineItemResults&);
 
   void HandleInitialLetter(const InlineItem&, LineInfo*);
   void HandleOutOfFlowPositioned(const InlineItem&, LineInfo*);
@@ -371,7 +373,7 @@ class CORE_EXPORT LineBreaker {
   bool previous_line_had_forced_break_ = false;
   const Hyphenation* hyphenation_ = nullptr;
 
-  absl::optional<wtf_size_t> hyphen_index_;
+  std::optional<wtf_size_t> hyphen_index_;
   bool has_any_hyphens_ = false;
 
   // Cache the result of |ComputeTrailingCollapsibleSpace| to avoid shaping
@@ -383,7 +385,7 @@ class CORE_EXPORT LineBreaker {
     InlineItemResult* item_result;
     const ShapeResultView* collapsed_shape_result;
   };
-  absl::optional<TrailingCollapsibleSpace> trailing_collapsible_space_;
+  std::optional<TrailingCollapsibleSpace> trailing_collapsible_space_;
 
   LayoutUnit override_available_width_;
 
@@ -416,7 +418,7 @@ class CORE_EXPORT LineBreaker {
     wtf_size_t from_item_index;
     wtf_size_t to_index;
   };
-  absl::optional<RewindIndex> last_rewind_;
+  std::optional<RewindIndex> last_rewind_;
 
   // This has a valid object if is_svg_text_.
   std::unique_ptr<ResolvedTextLayoutAttributesIterator> svg_resolved_iterator_;

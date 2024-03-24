@@ -28,7 +28,7 @@
 #import "ios/testing/earl_grey/app_launch_manager.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #import "ios/testing/earl_grey/matchers.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 #import "net/test/embedded_test_server/embedded_test_server.h"
 #import "ui/base/l10n/l10n_util.h"
 #import "url/gurl.h"
@@ -53,13 +53,6 @@ static const char* kInterstitialFirstTimeBanner =
 @end
 
 @implementation SupervisedUserWithParentalControlsTestCase
-
-- (AppLaunchConfiguration)appConfigurationForTestCase {
-  AppLaunchConfiguration config;
-  config.features_enabled.push_back(
-      supervised_user::kFilterWebsitesForSupervisedUsersOnDesktopAndIOS);
-  return config;
-}
 
 - (void)signInSupervisedUserWithSync:(BOOL)withSync {
   FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
@@ -187,8 +180,6 @@ static const char* kInterstitialFirstTimeBanner =
 
   // Restart the browser (needed to obtain non-realized states).
   AppLaunchConfiguration config;
-  config.features_enabled.push_back(
-      supervised_user::kFilterWebsitesForSupervisedUsersOnDesktopAndIOS);
   config.relaunch_policy = ForceRelaunchByCleanShutdown;
   // Add the switch to make sure that the user stays signed in in the restart.
   config.additional_args.push_back(std::string("-") +

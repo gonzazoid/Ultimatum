@@ -8,7 +8,6 @@
 #import "base/test/metrics/histogram_tester.h"
 #import "base/test/scoped_feature_list.h"
 #import "base/test/task_environment.h"
-#import "components/password_manager/core/browser/affiliation/affiliation_utils.h"
 #import "components/password_manager/core/browser/password_manager_test_utils.h"
 #import "components/password_manager/core/browser/password_store/test_password_store.h"
 #import "components/password_manager/core/browser/ui/affiliated_group.h"
@@ -22,6 +21,7 @@
 #import "ios/chrome/browser/shared/public/commands/application_commands.h"
 #import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
 #import "ios/chrome/browser/shared/public/commands/credential_provider_promo_commands.h"
+#import "ios/chrome/browser/shared/public/commands/settings_commands.h"
 #import "ios/chrome/browser/shared/public/commands/snackbar_commands.h"
 #import "ios/chrome/browser/sync/model/mock_sync_service_utils.h"
 #import "ios/chrome/browser/sync/model/sync_service_factory.h"
@@ -47,7 +47,7 @@ password_manager::AffiliatedGroup GetTestAffiliatedGroup() {
   password_manager::CredentialUIEntry credential(form);
   return password_manager::AffiliatedGroup(
       /*credentials=*/{credential},
-      /*branding=*/password_manager::FacetBrandingInfo());
+      /*branding=*/affiliations::FacetBrandingInfo());
 }
 
 // Registers a mock command handler in the dispatcher.
@@ -93,10 +93,9 @@ class PasswordDetailsCoordinatorTest : public PlatformTest {
         std::make_unique<TestBrowser>(browser_state_.get(), scene_state_);
 
     CommandDispatcher* dispatcher = browser_->GetCommandDispatcher();
-    // Mock ApplicationCommands. Since ApplicationCommands conforms to
-    // ApplicationSettingsCommands, it must be mocked as well.
+    // Mock ApplicationCommands and SettingsCommands
     HandleCommand(@protocol(ApplicationCommands), dispatcher);
-    HandleCommand(@protocol(ApplicationSettingsCommands), dispatcher);
+    HandleCommand(@protocol(SettingsCommands), dispatcher);
 
     // Mock SnackbarCommands.
     HandleCommand(@protocol(SnackbarCommands), dispatcher);

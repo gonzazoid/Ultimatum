@@ -27,11 +27,15 @@ export enum CustomizeChromeAction {
   WALLPAPER_SEARCH_MOOD_DESCRIPTOR_UPDATED,
   WALLPAPER_SEARCH_COLOR_DESCRIPTOR_UPDATED,
   WALLPAPER_SEARCH_INSPIRATION_THEME_SELECTED,
-  MAX_VALUE,
+  SET_CLASSIC_CHROME_THEME_CLICKED,
+  SHOW_SHORTCUTS_TOGGLE_CLICKED,
+  SHOW_CARDS_TOGGLE_CLICKED,
+  WALLPAPER_SEARCH_APPEARANCE_BUTTON_CLICKED,
+  MAX_VALUE = WALLPAPER_SEARCH_APPEARANCE_BUTTON_CLICKED,
 }
 
 export function recordCustomizeChromeAction(action: CustomizeChromeAction) {
   chrome.metricsPrivate.recordEnumerationValue(
       'NewTabPage.CustomizeChromeSidePanelAction', action,
-      CustomizeChromeAction.MAX_VALUE);
+      CustomizeChromeAction.MAX_VALUE + 1);
 }

@@ -37,12 +37,12 @@ class DlpContentManagerTestHelper {
   ~DlpContentManagerTestHelper();
 
   void ChangeConfidentiality(content::WebContents* web_contents,
-                             const DlpContentRestrictionSet& restrictions);
+                             DlpContentRestrictionSet restrictions);
 
   // To be called when confidentiality for |web_contents| needs to be changed
   // but without reacting to the change.
   void UpdateConfidentiality(content::WebContents* web_contents,
-                             const DlpContentRestrictionSet& restrictions);
+                             DlpContentRestrictionSet restrictions);
 
   void ChangeVisibility(content::WebContents* web_contents);
 
@@ -60,7 +60,7 @@ class DlpContentManagerTestHelper {
   GetRunningScreenShares() const;
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  absl::optional<DlpContentManagerAsh::VideoCaptureInfo>
+  std::optional<DlpContentManagerAsh::VideoCaptureInfo>
   GetRunningVideoCaptureInfo() const;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 

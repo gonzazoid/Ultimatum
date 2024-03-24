@@ -102,7 +102,7 @@ LockScreenMediaView::LockScreenMediaView(
   // Create the media view to receive media info updates, but the view may not
   // be visible to users yet and its visibility is set in LockContentsView.
   view_ = AddChildView(
-      std::make_unique<global_media_controls::MediaNotificationViewAshImpl>(
+      std::make_unique<global_media_controls::MediaItemUIDetailedView>(
           this, /*item=*/nullptr, /*footer_view=*/nullptr,
           /*device_selector_view=*/nullptr, std::move(dismiss_button),
           media_color_theme,
@@ -306,12 +306,17 @@ void LockScreenMediaView::SetMediaControllerForTesting(
   media_controller_remote_ = std::move(media_controller);
 }
 
+void LockScreenMediaView::SetSwitchMediaDelayTimerForTesting(
+    std::unique_ptr<base::OneShotTimer> test_timer) {
+  switch_media_delay_timer_ = std::move(test_timer);
+}
+
 views::Button* LockScreenMediaView::GetDismissButtonForTesting() {
   return dismiss_button_;
 }
 
-global_media_controls::MediaNotificationViewAshImpl*
-LockScreenMediaView::GetMediaNotificationViewForTesting() {
+global_media_controls::MediaItemUIDetailedView*
+LockScreenMediaView::GetDetailedViewForTesting() {
   return view_;
 }
 
@@ -331,7 +336,10 @@ void LockScreenMediaView::Show() {
 }
 
 void LockScreenMediaView::Hide() {
-  media_controller_remote_->Stop();
+  // |media_controller_remote_| can be null in tests.
+  if (media_controller_remote_.is_bound()) {
+    media_controller_remote_->Stop();
+  }
   hide_media_view_callback_.Run();
 }
 

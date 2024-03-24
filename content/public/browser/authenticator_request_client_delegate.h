@@ -194,6 +194,11 @@ class CONTENT_EXPORT AuthenticatorRequestClientDelegate
     kWinUserCancelled,
     kHybridTransportError,
     kNoPasskeys,
+    // kEnclaveError means that there was some error communicating with a
+    // passkeys enclave. This is a fatal (like `kHybridTransportError` but
+    // unlike security keys) because, like hybrid, the user has taken some
+    // action to send the request to the enclave.
+    kEnclaveError,
   };
 
   // RequestSource enumerates the source of a request, which is either the Web
@@ -291,6 +296,7 @@ class CONTENT_EXPORT AuthenticatorRequestClientDelegate
       RequestSource request_source,
       device::FidoRequestType request_type,
       std::optional<device::ResidentKeyRequirement> resident_key_requirement,
+      device::UserVerificationRequirement user_verification_requirement,
       base::span<const device::CableDiscoveryData> pairings_from_extension,
       bool is_enclave_authenticator_available,
       device::FidoDiscoveryFactory* fido_discovery_factory);

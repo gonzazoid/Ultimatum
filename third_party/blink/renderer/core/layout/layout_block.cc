@@ -585,12 +585,12 @@ bool LayoutBlock::HasLineIfEmpty() const {
   return FirstLineStyleRef().HasLineIfEmpty();
 }
 
-absl::optional<LayoutUnit> LayoutBlock::BaselineForEmptyLine() const {
+std::optional<LayoutUnit> LayoutBlock::BaselineForEmptyLine() const {
   NOT_DESTROYED();
   const ComputedStyle* style = FirstLineStyle();
   const SimpleFontData* font_data = style->GetFont().PrimaryFont();
   if (!font_data)
-    return absl::nullopt;
+    return std::nullopt;
   const auto& font_metrics = font_data->GetFontMetrics();
   const auto baseline_type = style->GetFontBaseline();
   const LayoutUnit line_height = FirstLineHeight();
@@ -685,33 +685,13 @@ PhysicalRect LayoutBlock::LocalCaretRect(
   const ComputedStyle& style = StyleRef();
   const bool is_horizontal = style.IsHorizontalWritingMode();
 
-  if (RuntimeEnabledFeatures::EmptyCaretInVerticalEnabled()) {
-    LayoutUnit inline_size = is_horizontal ? Size().width : Size().height;
-    LogicalRect caret_rect = LogicalRect(
-        LocalCaretRectForEmptyElement(inline_size, TextIndentOffset()));
-    if (extra_width_to_end_of_line) {
-      *extra_width_to_end_of_line = inline_size - caret_rect.InlineEndOffset();
-    }
-    return CreateWritingModeConverter().ToPhysical(caret_rect);
+  LayoutUnit inline_size = is_horizontal ? Size().width : Size().height;
+  LogicalRect caret_rect =
+      LocalCaretRectForEmptyElement(inline_size, TextIndentOffset());
+  if (extra_width_to_end_of_line) {
+    *extra_width_to_end_of_line = inline_size - caret_rect.InlineEndOffset();
   }
-  DeprecatedLayoutRect caret_rect;
-  if (is_horizontal) {
-    caret_rect =
-        LocalCaretRectForEmptyElement(Size().width, TextIndentOffset());
-
-    if (extra_width_to_end_of_line) {
-      *extra_width_to_end_of_line = Size().width - caret_rect.MaxX();
-    }
-  } else {
-    caret_rect =
-        LocalCaretRectForEmptyElement(Size().height, TextIndentOffset());
-
-    if (extra_width_to_end_of_line) {
-      *extra_width_to_end_of_line = Size().height - caret_rect.MaxY();
-    }
-  }
-
-  return PhysicalRect(caret_rect);
+  return CreateWritingModeConverter().ToPhysical(caret_rect);
 }
 
 void LayoutBlock::AddOutlineRects(OutlineRectCollector& collector,

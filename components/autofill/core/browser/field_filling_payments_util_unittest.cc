@@ -29,7 +29,7 @@
 #include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill/core/browser/data_model/credit_card_test_api.h"
 #include "components/autofill/core/browser/field_types.h"
-#include "components/autofill/core/browser/form_parsing/credit_card_field.h"
+#include "components/autofill/core/browser/form_parsing/credit_card_field_parser.h"
 #include "components/autofill/core/browser/form_structure_test_api.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/autofill/core/common/autofill_test_utils.h"
@@ -416,7 +416,7 @@ struct FillUtilExpirationDateTestCase {
   bool expected_response;
   const char* opt_label = nullptr;
   FieldType server_override = UNKNOWN_TYPE;
-  // If this is absl::nullopt, a test is valid regardless whether the
+  // If this is std::nullopt, a test is valid regardless whether the
   // features::kAutofillEnableExpirationDateImprovements is enabled or not.
   // If it is true, it should only execute if
   // features::kAutofillEnableExpirationDateImprovements is enabled. The inverse
@@ -471,8 +471,8 @@ TEST_P(ExpirationDateTest, FillExpirationDateInput) {
   field.SetHtmlType(test_case.field_type, HtmlFieldMode());
   field.max_length = test_case.field_max_length;
 
-  CreditCardField::ExpirationDateFormat format =
-      CreditCardField::DetermineExpirationDateFormat(
+  CreditCardFieldParser::ExpirationDateFormat format =
+      CreditCardFieldParser::DetermineExpirationDateFormat(
           field, CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR, NO_SERVER_DATA,
           NO_SERVER_DATA);
   field.set_heuristic_type(HeuristicSource::kLegacy,

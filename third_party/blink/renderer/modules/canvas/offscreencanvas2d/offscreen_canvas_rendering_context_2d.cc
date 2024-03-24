@@ -139,7 +139,8 @@ void OffscreenCanvasRenderingContext2D::commit() {
 
 void OffscreenCanvasRenderingContext2D::FlushRecording(FlushReason reason) {
   CanvasResourceProvider* provider = GetCanvasResourceProvider();
-  if (UNLIKELY(provider == nullptr) || !provider->HasRecordedDrawOps()) {
+  if (UNLIKELY(provider == nullptr) ||
+      !provider->Recorder().HasReleasableDrawOps()) {
     return;
   }
 
@@ -311,7 +312,8 @@ cc::PaintCanvas* OffscreenCanvasRenderingContext2D::GetOrCreatePaintCanvas() {
   return GetPaintCanvas();
 }
 
-cc::PaintCanvas* OffscreenCanvasRenderingContext2D::GetPaintCanvas() {
+const cc::PaintCanvas* OffscreenCanvasRenderingContext2D::GetPaintCanvas()
+    const {
   if (UNLIKELY(!is_valid_size_ || isContextLost())) {
     return nullptr;
   }
@@ -319,7 +321,16 @@ cc::PaintCanvas* OffscreenCanvasRenderingContext2D::GetPaintCanvas() {
   if (UNLIKELY(provider == nullptr)) {
     return nullptr;
   }
-  return provider->Canvas();
+  return &provider->Canvas();
+}
+
+const MemoryManagedPaintRecorder* OffscreenCanvasRenderingContext2D::Recorder()
+    const {
+  const CanvasResourceProvider* provider = GetCanvasResourceProvider();
+  if (UNLIKELY(provider == nullptr)) {
+    return nullptr;
+  }
+  return &provider->Recorder();
 }
 
 void OffscreenCanvasRenderingContext2D::WillDraw(
@@ -375,20 +386,6 @@ bool OffscreenCanvasRenderingContext2D::WritePixels(
       orig_info, pixels, row_bytes, x, y);
 }
 
-void OffscreenCanvasRenderingContext2D::SkipQueuedDrawCommands() {
-  if (CanvasResourceProvider* provider = GetCanvasResourceProvider();
-      provider != nullptr) {
-    provider->SkipQueuedDrawCommands();
-  }
-}
-
-void OffscreenCanvasRenderingContext2D::RestartRecording() {
-  if (CanvasResourceProvider* provider = GetCanvasResourceProvider();
-      provider != nullptr) {
-    provider->RestartRecording();
-  }
-}
-
 bool OffscreenCanvasRenderingContext2D::ResolveFont(const String& new_font) {
   OffscreenFontCache& font_cache = GetOffscreenFontCache();
   FontDescription* cached_font = font_cache.GetFont(new_font);
@@ -441,7 +438,7 @@ void OffscreenCanvasRenderingContext2D::TryRestoreContextEvent(
     // to true, it means context is forced to be lost for testing purpose.
     // Restore the context.
     CanvasResourceProvider* provider = GetOrCreateCanvasResourceProvider();
-    if (provider && provider->Canvas()) {
+    if (provider) {
       try_restore_context_event_timer_.Stop();
       DispatchContextRestoredEvent(nullptr);
       return;
@@ -457,7 +454,7 @@ void OffscreenCanvasRenderingContext2D::TryRestoreContextEvent(
     canvas->SetRestoringGpuContext(true);
     CanvasResourceProvider* provider = GetOrCreateCanvasResourceProvider();
     canvas->SetRestoringGpuContext(false);
-    if (provider && provider->Canvas()) {
+    if (provider) {
       try_restore_context_event_timer_.Stop();
       DispatchContextRestoredEvent(nullptr);
       return;
@@ -472,19 +469,19 @@ void OffscreenCanvasRenderingContext2D::TryRestoreContextEvent(
     }
     try_restore_context_event_timer_.Stop();
     if (CanvasResourceProvider* provider = GetOrCreateCanvasResourceProvider();
-        provider && provider->Canvas()) {
+        provider) {
       DispatchContextRestoredEvent(nullptr);
     }
   }
 }
 
-absl::optional<cc::PaintRecord> OffscreenCanvasRenderingContext2D::FlushCanvas(
+std::optional<cc::PaintRecord> OffscreenCanvasRenderingContext2D::FlushCanvas(
     FlushReason reason) {
   if (CanvasResourceProvider* provider = GetCanvasResourceProvider();
       LIKELY(provider != nullptr)) {
     return provider->FlushCanvas(reason);
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 OffscreenCanvas* OffscreenCanvasRenderingContext2D::HostAsOffscreenCanvas()
@@ -494,6 +491,10 @@ OffscreenCanvas* OffscreenCanvasRenderingContext2D::HostAsOffscreenCanvas()
 
 FontSelector* OffscreenCanvasRenderingContext2D::GetFontSelector() const {
   return Host()->GetFontSelector();
+}
+
+int OffscreenCanvasRenderingContext2D::LayerCount() const {
+  return BaseRenderingContext2D::LayerCount();
 }
 
 }  // namespace blink

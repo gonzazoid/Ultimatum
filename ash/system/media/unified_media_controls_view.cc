@@ -136,7 +136,7 @@ void UnifiedMediaControlsView::MediaActionButton::SetAction(
   SetVectorIcon(GetVectorIconForMediaAction(action));
 }
 
-BEGIN_METADATA(UnifiedMediaControlsView, MediaActionButton, IconButton)
+BEGIN_METADATA(UnifiedMediaControlsView, MediaActionButton)
 END_METADATA
 
 UnifiedMediaControlsView::UnifiedMediaControlsView(
@@ -258,7 +258,7 @@ void UnifiedMediaControlsView::SetArtwork(
   artwork_view_->SetImageSize(image_size);
   artwork_view_->SetImage(*artwork);
 
-  Layout();
+  DeprecatedLayoutImmediately();
   artwork_view_->SetClipPath(GetArtworkClipPath());
 }
 

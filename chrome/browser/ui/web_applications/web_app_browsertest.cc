@@ -2,7 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "chrome/browser/web_applications/web_app.h"
+
 #include <stddef.h>
+
 #include <memory>
 #include <optional>
 #include <set>
@@ -11,18 +14,19 @@
 #include <utility>
 #include <vector>
 
-#include "base/barrier_callback.h"
 #include "base/check.h"
 #include "base/check_op.h"
 #include "base/files/file_util.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback.h"
+#include "base/functional/concurrent_callbacks.h"
 #include "base/run_loop.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/metrics/user_action_tester.h"
+#include "base/test/run_until.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_future.h"
 #include "base/threading/thread_restrictions.h"
@@ -50,7 +54,6 @@
 #include "chrome/browser/ui/browser_navigator_params.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/browser_window.h"
-#include "chrome/browser/ui/exclusive_access/exclusive_access_test.h"
 #include "chrome/browser/ui/page_info/page_info_dialog.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/toolbar/app_menu_model.h"
@@ -71,7 +74,6 @@
 #include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
 #include "chrome/browser/web_applications/test/web_app_test_observers.h"
 #include "chrome/browser/web_applications/test/web_app_test_utils.h"
-#include "chrome/browser/web_applications/web_app.h"
 #include "chrome/browser/web_applications/web_app_command_manager.h"
 #include "chrome/browser/web_applications/web_app_command_scheduler.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
@@ -125,7 +127,6 @@
 #include "chrome/browser/ash/system_web_apps/color_helpers.h"
 #include "chrome/browser/ash/system_web_apps/test_support/test_system_web_app_installation.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
-#include "chromeos/constants/chromeos_features.h"
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -135,6 +136,7 @@
 #include "ui/views/widget/any_widget_observer.h"
 #include "ui/views/widget/widget.h"
 // TODO(crbug.com/1125897): Enable gn check once it handles conditional includes
+#include "chromeos/constants/chromeos_features.h"
 #include "components/metrics/structured/structured_events.h"  // nogncheck
 #endif
 
@@ -1147,6 +1149,16 @@ IN_PROC_BROWSER_TEST_F(WebAppBrowserCrOSEventsTest,
   base::Time before_install_time = base::Time::Now();
   NavigateViaLinkClickToURLAndWait(browser(), GetUrlWithScreenshots());
 
+  // Wait until the screenshots are in the app banner manager.
+  webapps::AppBannerManager* app_banner_manager =
+      webapps::AppBannerManager::FromWebContents(
+          browser()->tab_strip_model()->GetActiveWebContents());
+  ASSERT_TRUE(base::test::RunUntil([&]() {
+    std::optional<webapps::WebAppBannerData> banner_data =
+        app_banner_manager->GetCurrentWebAppBannerData();
+    return banner_data.has_value() && !banner_data->screenshots.empty();
+  })) << "Screenshots were never loaded for current tab.";
+
   // Wait for the detailed install dialog to show up post install, and accept
   // it.
   views::NamedWidgetShownWaiter waiter(views::test::AnyWidgetTestPasskey{},
@@ -1421,7 +1433,7 @@ IN_PROC_BROWSER_TEST_F(WebAppBrowserTest, ShortcutIconCorrectColor) {
       << color_utils::SkColorToRgbString(icon_pixel_color.value());
 
   base::test::TestFuture<webapps::UninstallResultCode> future;
-  provider->scheduler().UninstallWebApp(
+  provider->scheduler().RemoveUserUninstallableManagements(
       app_id, webapps::WebappUninstallSource::kAppMenu, future.GetCallback());
   EXPECT_TRUE(UninstallSucceeded(future.Get()));
 }
@@ -1511,7 +1523,7 @@ IN_PROC_BROWSER_TEST_F(WebAppBrowserTest_ShortcutMenu, ShortcutsMenuSuccess) {
           .find("/banners/launch_url2"));
 
   base::test::TestFuture<webapps::UninstallResultCode> future;
-  provider().scheduler().UninstallWebApp(
+  provider().scheduler().RemoveUserUninstallableManagements(
       app_id, webapps::WebappUninstallSource::kAppMenu, future.GetCallback());
   EXPECT_TRUE(UninstallSucceeded(future.Get()));
   EXPECT_THAT(tester.GetAllSamples("WebApp.ShortcutsMenuUnregistered.Result"),
@@ -1570,7 +1582,7 @@ IN_PROC_BROWSER_TEST_F(WebAppBrowserTest_ShortcutMenu,
 
   bool sub_manager_execute_enabled = AreSubManagersExecuteEnabled();
   base::test::TestFuture<webapps::UninstallResultCode> future;
-  provider().scheduler().UninstallWebApp(
+  provider().scheduler().RemoveUserUninstallableManagements(
       app_id, webapps::WebappUninstallSource::kAppMenu, future.GetCallback());
   EXPECT_TRUE(UninstallSucceeded(future.Get()));
   if (sub_manager_execute_enabled) {
@@ -1622,7 +1634,7 @@ IN_PROC_BROWSER_TEST_F(WebAppBrowserTest, WebAppCreateAndDeleteShortcut) {
 
   // Uninstall the web app
   base::test::TestFuture<webapps::UninstallResultCode> future;
-  provider->scheduler().UninstallWebApp(
+  provider->scheduler().RemoveUserUninstallableManagements(
       app_id, webapps::WebappUninstallSource::kAppMenu, future.GetCallback());
   EXPECT_TRUE(UninstallSucceeded(future.Get()));
 
@@ -1753,9 +1765,13 @@ IN_PROC_BROWSER_TEST_P(WebAppBrowserTestUpdateShortcutResult, UpdateShortcut) {
   base::HistogramTester tester;
   base::test::TestFuture<Result> result;
 
-  auto synchronize_barrier = base::BarrierCallback<Result>(
-      /*num_callbacks=*/2,
-      base::BindOnce(
+  base::ConcurrentCallbacks<Result> concurrent;
+  provider->os_integration_manager().UpdateShortcuts(
+      app_id, "Manifest test app", concurrent.CreateCallback());
+  provider->os_integration_manager().Synchronize(
+      app_id, base::BindOnce(concurrent.CreateCallback(), Result::kOk));
+  std::move(concurrent)
+      .Done(base::BindOnce(
           [&](base::OnceCallback<void(Result)> result_callback,
               std::vector<Result> final_results) {
             DCHECK_EQ(2u, final_results.size());
@@ -1768,10 +1784,6 @@ IN_PROC_BROWSER_TEST_P(WebAppBrowserTestUpdateShortcutResult, UpdateShortcut) {
           },
           result.GetCallback()));
 
-  provider->os_integration_manager().UpdateShortcuts(
-      app_id, "Manifest test app", synchronize_barrier);
-  provider->os_integration_manager().Synchronize(
-      app_id, base::BindOnce(synchronize_barrier, Result::kOk));
   ASSERT_TRUE(result.Wait());
   EXPECT_THAT(result.Get(), testing::Eq(Result::kOk));
 
@@ -2087,9 +2099,7 @@ IN_PROC_BROWSER_TEST_F(WebAppBrowserTest, PopupLocationBar) {
   EXPECT_TRUE(
       popup_browser->SupportsWindowFeature(Browser::FEATURE_LOCATIONBAR));
 
-  FullscreenNotificationObserver waiter(popup_browser);
-  chrome::ToggleFullscreenMode(popup_browser);
-  waiter.Wait();
+  ui_test_utils::ToggleFullscreenModeAndWait(popup_browser);
 
   EXPECT_TRUE(
       popup_browser->CanSupportWindowFeature(Browser::FEATURE_LOCATIONBAR));
@@ -2367,7 +2377,7 @@ IN_PROC_BROWSER_TEST_F(WebAppBrowserTest_FileHandler,
 
   // Uninstall the web app
   base::test::TestFuture<webapps::UninstallResultCode> future;
-  provider().scheduler().UninstallWebApp(
+  provider().scheduler().RemoveUserUninstallableManagements(
       app_id, webapps::WebappUninstallSource::kAppsPage, future.GetCallback());
   EXPECT_TRUE(UninstallSucceeded(future.Get()));
   EXPECT_THAT(tester.GetAllSamples("WebApp.FileHandlersUnregistration.Result"),
@@ -2449,7 +2459,7 @@ IN_PROC_BROWSER_TEST_F(WebAppBrowserTest_FileHandler,
   ASSERT_TRUE(temp_dir.Delete());
   // Uninstall the web app
   base::test::TestFuture<webapps::UninstallResultCode> future;
-  provider().scheduler().UninstallWebApp(
+  provider().scheduler().RemoveUserUninstallableManagements(
       app_id, webapps::WebappUninstallSource::kAppsPage, future.GetCallback());
   EXPECT_TRUE(UninstallSucceeded(future.Get()));
 }
@@ -2570,6 +2580,13 @@ IN_PROC_BROWSER_TEST_F(WebAppBrowserTest_PageInfoManagementLink,
 }
 
 IN_PROC_BROWSER_TEST_F(WebAppBrowserTest_PageInfoManagementLink, LaunchAsTab) {
+#if BUILDFLAG(IS_CHROMEOS)
+  if (chromeos::features::IsCrosShortstandEnabled()) {
+    GTEST_SKIP()
+        << "Cannot launch web apps in a tab when Shortstand is enabled.";
+  }
+#endif
+
   const GURL app_url = GetSecureAppURL();
   const webapps::AppId app_id = InstallPWA(app_url);
 

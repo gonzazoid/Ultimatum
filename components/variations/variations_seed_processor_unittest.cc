@@ -34,6 +34,7 @@
 #include "components/variations/proto/study.pb.h"
 #include "components/variations/study_filtering.h"
 #include "components/variations/variations_associated_data.h"
+#include "components/variations/variations_layers.h"
 #include "components/variations/variations_test_utils.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -171,14 +172,18 @@ class ChromeEnvironment {
     auto client_state = CreateTestClientFilterableState();
     client_state->platform = Study::PLATFORM_ANDROID;
 
+    // TODO(crbug.com/1518674): Add test cases for seeds with a layer of LIMITED
+    // entropy mode.
     MockEntropyProviders entropy_providers({
         .low_entropy = kAlwaysUseLastGroup,
         .high_entropy = kAlwaysUseFirstGroup,
     });
+
+    VariationsLayers layers(seed, entropy_providers);
     // This should mimic the call through SetUpFieldTrials from
     // components/variations/service/variations_service.cc
     VariationsSeedProcessor().CreateTrialsFromSeed(
-        seed, *client_state, callback, entropy_providers, feature_list);
+        seed, *client_state, callback, entropy_providers, layers, feature_list);
   }
 };
 
@@ -198,10 +203,12 @@ class WebViewEnvironment {
     MockEntropyProviders entropy_providers({
         .low_entropy = kAlwaysUseLastGroup,
     });
+
+    VariationsLayers layers(seed, entropy_providers);
     // This should mimic the call through SetUpFieldTrials from
     // android_webview/browser/aw_feature_list_creator.cc
     VariationsSeedProcessor().CreateTrialsFromSeed(
-        seed, *client_state, callback, entropy_providers, feature_list);
+        seed, *client_state, callback, entropy_providers, layers, feature_list);
   }
 };
 

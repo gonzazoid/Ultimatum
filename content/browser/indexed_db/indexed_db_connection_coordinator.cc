@@ -117,9 +117,9 @@ class IndexedDBConnectionCoordinator::ConnectionRequest {
         {{GetDatabaseLockId(db_->metadata().name),
           PartitionedLockManager::LockType::kExclusive}};
     state_ = RequestState::kPendingLocks;
-    db_->lock_manager()->AcquireLocks(std::move(lock_requests),
-                                      lock_receiver_.weak_factory.GetWeakPtr(),
-                                      std::move(next_step));
+    db_->lock_manager().AcquireLocks(std::move(lock_requests),
+                                     lock_receiver_.weak_factory.GetWeakPtr(),
+                                     std::move(next_step));
   }
 
   RequestState state_ = RequestState::kNotStarted;
@@ -216,7 +216,8 @@ class IndexedDBConnectionCoordinator::OpenRequest
       DCHECK(is_new_database);
       pending_->factory_client->OnOpenSuccess(
           db_->CreateConnection(std::move(pending_->database_callbacks),
-                                std::move(pending_->client_state_checker)),
+                                std::move(pending_->client_state_checker),
+                                pending_->client_token),
           db_->metadata_);
       bucket_context_handle_.Release();
       state_ = RequestState::kDone;
@@ -228,7 +229,8 @@ class IndexedDBConnectionCoordinator::OpenRequest
          new_version == IndexedDBDatabaseMetadata::NO_VERSION)) {
       pending_->factory_client->OnOpenSuccess(
           db_->CreateConnection(std::move(pending_->database_callbacks),
-                                std::move(pending_->client_state_checker)),
+                                std::move(pending_->client_state_checker),
+                                pending_->client_token),
           db_->metadata_);
       state_ = RequestState::kDone;
       bucket_context_handle_.Release();
@@ -306,9 +308,9 @@ class IndexedDBConnectionCoordinator::OpenRequest
     DCHECK(state_ == RequestState::kPendingLocks);
 
     DCHECK(!lock_receiver_.locks.empty());
-    connection_ =
-        db_->CreateConnection(std::move(pending_->database_callbacks),
-                              std::move(pending_->client_state_checker));
+    connection_ = db_->CreateConnection(
+        std::move(pending_->database_callbacks),
+        std::move(pending_->client_state_checker), pending_->client_token);
     bucket_context_handle_.Release();
     DCHECK(!connection_ptr_for_close_comparision_);
     connection_ptr_for_close_comparision_ = connection_.get();

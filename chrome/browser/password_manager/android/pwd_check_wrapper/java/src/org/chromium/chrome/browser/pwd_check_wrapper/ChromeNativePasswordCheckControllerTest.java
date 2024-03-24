@@ -24,7 +24,7 @@ import org.chromium.chrome.browser.password_check.PasswordCheck;
 import org.chromium.chrome.browser.password_check.PasswordCheckFactory;
 import org.chromium.chrome.browser.password_check.PasswordCheckUIStatus;
 import org.chromium.chrome.browser.pwd_check_wrapper.PasswordCheckController.PasswordCheckResult;
-import org.chromium.chrome.browser.pwd_check_wrapper.PasswordCheckController.PasswordStoreType;
+import org.chromium.chrome.browser.pwd_check_wrapper.PasswordCheckController.PasswordStorageType;
 import org.chromium.components.browser_ui.settings.SettingsLauncher;
 
 import java.util.OptionalInt;
@@ -60,7 +60,7 @@ public class ChromeNativePasswordCheckControllerTest {
         when(mPasswordCheck.getCompromisedCredentialsCount()).thenReturn(0);
 
         CompletableFuture<PasswordCheckResult> passwordCheckResultFuture =
-                mController.checkPasswords(PasswordStoreType.PROFILE_STORE);
+                mController.checkPasswords(PasswordStorageType.LOCAL_STORAGE);
         verify(mPasswordCheck).startCheck();
 
         mController.onCompromisedCredentialsFetchCompleted();
@@ -84,7 +84,7 @@ public class ChromeNativePasswordCheckControllerTest {
         when(mPasswordCheck.getCompromisedCredentialsCount()).thenReturn(0);
 
         CompletableFuture<PasswordCheckResult> passwordCheckResultFuture =
-                mController.checkPasswords(PasswordStoreType.PROFILE_STORE);
+                mController.checkPasswords(PasswordStorageType.LOCAL_STORAGE);
         verify(mPasswordCheck).startCheck();
 
         mController.onSavedPasswordsFetchCompleted();
@@ -110,7 +110,7 @@ public class ChromeNativePasswordCheckControllerTest {
         when(mPasswordCheck.getSavedPasswordsCount()).thenReturn(10);
 
         CompletableFuture<PasswordCheckResult> passwordCheckResultFuture =
-                mController.checkPasswords(PasswordStoreType.PROFILE_STORE);
+                mController.checkPasswords(PasswordStorageType.LOCAL_STORAGE);
         verify(mPasswordCheck).startCheck();
 
         mController.onCompromisedCredentialsFetchCompleted();
@@ -126,7 +126,7 @@ public class ChromeNativePasswordCheckControllerTest {
     @Test
     public void passwordCheckReturnsOfflineError() throws ExecutionException, InterruptedException {
         CompletableFuture<PasswordCheckResult> passwordCheckResultFuture =
-                mController.checkPasswords(PasswordStoreType.PROFILE_STORE);
+                mController.checkPasswords(PasswordStorageType.LOCAL_STORAGE);
         verify(mPasswordCheck).startCheck();
 
         mController.onPasswordCheckStatusChanged(PasswordCheckUIStatus.ERROR_OFFLINE);
@@ -147,11 +147,12 @@ public class ChromeNativePasswordCheckControllerTest {
     public void getBreachedCredentialsCountTest() throws ExecutionException, InterruptedException {
         // Set fake to return 1 breached credential.
         final int breachedCount = 1;
+        when(mPasswordCheck.hasAccountForRequest()).thenReturn(true);
         when(mPasswordCheck.getCompromisedCredentialsCount()).thenReturn(breachedCount);
         when(mPasswordCheck.getSavedPasswordsCount()).thenReturn(10);
 
         CompletableFuture<PasswordCheckResult> passwordCheckResultFuture =
-                mController.getBreachedCredentialsCount(PasswordStoreType.PROFILE_STORE);
+                mController.getBreachedCredentialsCount(PasswordStorageType.LOCAL_STORAGE);
         verify(mPasswordCheck).addObserver(mController, true);
 
         mController.onCompromisedCredentialsFetchCompleted();
@@ -165,10 +166,25 @@ public class ChromeNativePasswordCheckControllerTest {
 
     @Test
     public void passwordCheckControllerIsDestroyedProperly() {
-        mController.checkPasswords(PasswordStoreType.PROFILE_STORE);
+        mController.checkPasswords(PasswordStorageType.LOCAL_STORAGE);
 
         mController.destroy();
         verify(mPasswordCheck).stopCheck();
         verify(mPasswordCheck).removeObserver(mController);
+    }
+
+    @Test
+    public void getBreachedCredentialsCountReturnsSignedOutError()
+            throws ExecutionException, InterruptedException {
+        when(mPasswordCheck.hasAccountForRequest()).thenReturn(false);
+
+        PasswordCheckResult passwordCheckResult =
+                mController.getBreachedCredentialsCount(PasswordStorageType.LOCAL_STORAGE).get();
+
+        assertEquals(OptionalInt.empty(), passwordCheckResult.getBreachedCount());
+        assertEquals(OptionalInt.empty(), passwordCheckResult.getTotalPasswordsCount());
+        assertEquals(
+                PasswordCheckUIStatus.ERROR_SIGNED_OUT,
+                ((PasswordCheckNativeException) passwordCheckResult.getError()).errorCode);
     }
 }

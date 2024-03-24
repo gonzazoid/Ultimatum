@@ -28,6 +28,9 @@ constexpr base::TimeDelta kMinimumTimedelta = base::Seconds(6);
 namespace ash {
 
 ScreenCaptureTrayItemView::ScreenCaptureTrayItemMetadata::
+    ScreenCaptureTrayItemMetadata()
+    : ScreenCaptureTrayItemMetadata(base::TimeTicks::Now()) {}
+ScreenCaptureTrayItemView::ScreenCaptureTrayItemMetadata::
     ScreenCaptureTrayItemMetadata(base::TimeTicks time_created)
     : time_created(std::move(time_created)) {}
 ScreenCaptureTrayItemView::ScreenCaptureTrayItemMetadata::
@@ -59,10 +62,6 @@ ScreenCaptureTrayItemView::ScreenCaptureTrayItemView(Shelf* shelf)
 
 ScreenCaptureTrayItemView::~ScreenCaptureTrayItemView() = default;
 
-const char* ScreenCaptureTrayItemView::GetClassName() const {
-  return "ScreenCaptureTrayItemView";
-}
-
 views::View* ScreenCaptureTrayItemView::GetTooltipHandlerForPoint(
     const gfx::Point& point) {
   return HitTestPoint(point) ? this : nullptr;
@@ -92,9 +91,15 @@ void ScreenCaptureTrayItemView::Refresh() {
 
 void ScreenCaptureTrayItemView::MultiCaptureStarted(const std::string& label,
                                                     const url::Origin& origin) {
-  requests_.emplace(label,
-                    ScreenCaptureTrayItemMetadata(base::TimeTicks::Now()));
+  requests_.emplace(label, ScreenCaptureTrayItemMetadata());
   Refresh();
+}
+
+void ScreenCaptureTrayItemView::MultiCaptureStartedFromApp(
+    const std::string& label,
+    const std::string& app_id,
+    const std::string& app_short_name) {
+  MultiCaptureStarted(label, /*origin=*/{});
 }
 
 void ScreenCaptureTrayItemView::MultiCaptureStopped(const std::string& label) {

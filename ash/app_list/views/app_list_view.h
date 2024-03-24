@@ -16,10 +16,10 @@
 #include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/raw_ptr_exclusion.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "ui/aura/window_observer.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/events/event.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
@@ -55,6 +55,7 @@ FORWARD_DECLARE_TEST(AppListControllerImplTest,
 // definitions in this header.
 class ASH_EXPORT AppListView : public views::WidgetDelegateView,
                                public aura::WindowObserver {
+  METADATA_HEADER(AppListView, views::WidgetDelegateView)
  public:
   class TestApi {
    public:
@@ -99,9 +100,7 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
     ~ScopedContentsResetDisabler();
 
    private:
-    // This field is not a raw_ptr<> because it was filtered by the rewriter
-    // for: #union
-    RAW_PTR_EXCLUSION AppListView* const view_;
+    const raw_ptr<AppListView> view_;
   };
 
   // Does not take ownership of |delegate|.
@@ -154,9 +153,8 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
 
   // views::View:
   void OnPaint(gfx::Canvas* canvas) override;
-  const char* GetClassName() const override;
   bool AcceleratorPressed(const ui::Accelerator& accelerator) override;
-  void Layout() override;
+  void Layout(PassKey) override;
 
   // ui::EventHandler:
   void OnKeyEvent(ui::KeyEvent* event) override;

@@ -7,7 +7,9 @@
  * braille content to the Panel on Chrome OS, or a content script on
  * other platforms.
  */
-import {LocalStorage} from '../../../common/local_storage.js';
+import {LocalStorage} from '/common/local_storage.js';
+import {TestImportManager} from '/common/testing/test_import_manager.js';
+
 import {BrailleDisplayState} from '../../common/braille/braille_key_types.js';
 import {NavBraille} from '../../common/braille/nav_braille.js';
 import {Msgs} from '../../common/msgs.js';
@@ -196,3 +198,6 @@ const PREF_KEY = 'brailleCaptions';
  * @const
  */
 const BRAILLE_UNICODE_BLOCK_START = 0x2800;
+
+TestImportManager.exportForTesting(
+    BrailleCaptionsBackground, BrailleCaptionsListener);

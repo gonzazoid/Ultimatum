@@ -6,6 +6,7 @@
 
 #include <limits>
 #include <memory>
+#include <optional>
 
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
@@ -15,7 +16,6 @@
 #include "base/ranges/algorithm.h"
 #include "media/base/media_switches.h"
 #include "media/video/h264_level_limits.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
 namespace {
@@ -1052,7 +1052,7 @@ bool H264Decoder::FinishPicture(scoped_refptr<H264Picture> pic) {
         // outputting all pictures before it, to avoid outputting corrupted
         // frames.
         (*output_candidate)->frame_num == *recovery_frame_num_) {
-      recovery_frame_num_ = absl::nullopt;
+      recovery_frame_num_ = std::nullopt;
       if (!OutputPic(*output_candidate))
         return false;
     }
@@ -1287,7 +1287,7 @@ bool H264Decoder::HandleFrameNumGap(int frame_num) {
     // Seek, SPS, PPS, IDR-frame, non-IDR, ... non-IDR with invalid number.
     // The only way to work around this reliably is to ignore this error.
     // Video playback is not affected, no artefacts are visible.
-    // return false;
+    return true;
   }
 
   DVLOG(2) << "Handling frame_num gap: " << prev_ref_frame_num_ << "->"
@@ -1759,7 +1759,7 @@ VideoColorSpace H264Decoder::GetVideoColorSpace() const {
   return picture_color_space_;
 }
 
-absl::optional<gfx::HDRMetadata> H264Decoder::GetHDRMetadata() const {
+std::optional<gfx::HDRMetadata> H264Decoder::GetHDRMetadata() const {
   return hdr_metadata_;
 }
 

@@ -11,6 +11,7 @@ import {AutomationPredicate} from '../automation_predicate.js';
 import {AutomationUtil} from '../automation_util.js';
 import {constants} from '../constants.js';
 import {StringUtil} from '../string_util.js';
+import {TestImportManager} from '../testing/test_import_manager.js';
 import {AutomationTreeWalker} from '../tree_walker.js';
 
 import {AncestryRecoveryStrategy, RecoveryStrategy} from './recovery_strategy.js';
@@ -486,7 +487,7 @@ export class Cursor {
            newNode.state![StateType.RICHLY_EDITABLE]) &&
           newIndex <= newNode.children.length) {
         // Valid child node offset. Note that there is a special case where
-        // |newIndex == node.children.length|. In these cases, we actually
+        // |newIndex === node.children.length|. In these cases, we actually
         // want to position the cursor at the end of the text of
         // |node.children[newIndex - 1]|.
         // |newIndex| is assumed to be > 0.
@@ -682,3 +683,5 @@ export class WrappingCursor extends Cursor {
     return new WrappingCursor(result.node, result.index);
   }
 }
+
+TestImportManager.exportForTesting(Cursor);

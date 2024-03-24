@@ -31,6 +31,7 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/media_router/browser/media_router_factory.h"
 #include "components/media_router/common/test/test_helper.h"
+#include "components/performance_manager/public/features.h"
 #include "components/sessions/content/session_tab_helper.h"
 #include "components/signin/public/identity_manager/identity_test_utils.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -107,7 +108,12 @@ AccessCodeCastIntegrationBrowserTest::AccessCodeCastIntegrationBrowserTest()
     : url_to_intercept_(std::string(kDefaultDiscoveryEndpoint) +
                         kDiscoveryServicePath),
       mock_cast_socket_service_(nullptr, base::OnTaskRunnerDeleter(nullptr)) {
-  feature_list_.InitAndEnableFeature(features::kAccessCodeCastUI);
+  // TODO(crbug.com/323780452): Remove performance manager feature after deflake
+  feature_list_.InitWithFeatures(
+      {features::kAccessCodeCastUI,
+       performance_manager::features::
+           kBackgroundTabLoadingFromPerformanceManager},
+      {});
   task_runner_ = base::MakeRefCounted<base::TestMockTimeTaskRunner>();
 }
 
@@ -379,14 +385,14 @@ bool AccessCodeCastIntegrationBrowserTest::HasSinkInDevicesDict(
   return !media_sink.Get().empty();
 }
 
-absl::optional<base::Time>
+std::optional<base::Time>
 AccessCodeCastIntegrationBrowserTest::GetDeviceAddedTimeFromDict(
     const MediaSink::Id& sink_id) {
   if (!GetPrefUpdater()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  base::test::TestFuture<absl::optional<base::Time>> time;
+  base::test::TestFuture<std::optional<base::Time>> time;
   GetPrefUpdater()->GetDeviceAddedTime(sink_id, time.GetCallback());
   return time.Get();
 }
@@ -638,7 +644,7 @@ void AccessCodeCastIntegrationBrowserTest::UpdateDeviceAddedTime(
 
   GetPrefUpdater()->GetDeviceAddedTime(
       sink_id,
-      base::BindLambdaForTesting([this](absl::optional<base::Time> time) {
+      base::BindLambdaForTesting([this](std::optional<base::Time> time) {
         if (time.has_value()) {
           this->device_added_time_ = time.value();
         }
@@ -656,7 +662,7 @@ void AccessCodeCastIntegrationBrowserTest::
 
 bool AccessCodeCastIntegrationBrowserTest::IsAccessCodeCastLacrosSyncEnabled() {
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-  base::test::TestFuture<absl::optional<base::Value>> future;
+  base::test::TestFuture<std::optional<base::Value>> future;
   chromeos::LacrosService::Get()->GetRemote<crosapi::mojom::Prefs>()->GetPref(
       crosapi::mojom::PrefPath::kAccessCodeCastDevices, future.GetCallback());
   return future.Take().has_value();

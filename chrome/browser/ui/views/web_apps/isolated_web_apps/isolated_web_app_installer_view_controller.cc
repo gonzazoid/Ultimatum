@@ -47,7 +47,10 @@
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/public/cpp/shelf_model.h"
+#include "ash/public/cpp/shelf_types.h"
 #include "ash/webui/settings/public/constants/routes.mojom.h"
+#include "chrome/browser/ui/ash/shelf/isolated_web_app_installer_shelf_item_controller.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
@@ -105,7 +108,6 @@ struct IsolatedWebAppInstallerViewController::InstallabilityCheckedVisitor {
     LOG(ERROR) << "Isolated Web App bundle installability check failed: "
                << invalid.error;
     model_->SetDialog(IsolatedWebAppInstallerModel::BundleInvalidDialog{});
-    controller_->OnModelChanged();
   }
 
   void operator()(const InstallabilityChecker::BundleInstallable& installable) {
@@ -121,25 +123,20 @@ struct IsolatedWebAppInstallerViewController::InstallabilityCheckedVisitor {
     }
     model_->SetSignedWebBundleMetadata(installable.metadata);
     model_->SetStep(IsolatedWebAppInstallerModel::Step::kShowMetadata);
-    controller_->OnModelChanged();
   }
 
   void operator()(const InstallabilityChecker::BundleUpdatable& updatable) {
-    // TODO(crbug.com/1479140): Handle updates
-    controller_->Close();
+    model_->SetDialog(
+        IsolatedWebAppInstallerModel::BundleAlreadyInstalledDialog{
+            updatable.metadata.app_name(), updatable.installed_version});
   }
 
   void operator()(const InstallabilityChecker::BundleOutdated& outdated) {
-    if (outdated.metadata.version() == outdated.installed_version) {
-      model_->SetDialog(
-          IsolatedWebAppInstallerModel::BundleAlreadyInstalledDialog{
-              outdated.metadata.app_name(), outdated.installed_version});
-    } else {
-      model_->SetDialog(IsolatedWebAppInstallerModel::BundleOutdatedDialog{
-          outdated.metadata.app_name(), outdated.metadata.version(),
-          outdated.installed_version});
-    }
-    controller_->OnModelChanged();
+    // TODO(crbug.com/1479140): Once we have an update flow we should add
+    // more specific error messages for newer vs same version already installed.
+    model_->SetDialog(
+        IsolatedWebAppInstallerModel::BundleAlreadyInstalledDialog{
+            outdated.metadata.app_name(), outdated.installed_version});
   }
 
   void operator()(const InstallabilityChecker::ProfileShutdown&) {
@@ -167,10 +164,13 @@ IsolatedWebAppInstallerViewController::IsolatedWebAppInstallerViewController(
   CHECK(model_);
   CHECK(web_app_provider_);
   CHECK(pref_observer_);
+  model_->AddObserver(this);
 }
 
 IsolatedWebAppInstallerViewController::
-    ~IsolatedWebAppInstallerViewController() = default;
+    ~IsolatedWebAppInstallerViewController() {
+  model_->RemoveObserver(this);
+}
 
 void IsolatedWebAppInstallerViewController::Start(
     base::OnceClosure initialized_callback,
@@ -196,8 +196,6 @@ void IsolatedWebAppInstallerViewController::AddOrUpdateWindowToShelf() {
   if (!window_) {
     return;
   }
-// Currently only supports Lacros.
-// TODO(crbug.com/1515466): Ash Implementation.
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   chromeos::LacrosService* lacros_service = chromeos::LacrosService::Get();
   if (lacros_service->IsAvailable<crosapi::mojom::LacrosShelfItemTracker>()) {
@@ -215,8 +213,37 @@ void IsolatedWebAppInstallerViewController::AddOrUpdateWindowToShelf() {
     lacros_service->GetRemote<crosapi::mojom::LacrosShelfItemTracker>()
         ->AddOrUpdateWindow(std::move(window_data));
   }
-
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  ash::ShelfModel* shelf_model = ash::ShelfModel::Get();
+  ash::ShelfID shelf_id = ash::ShelfID(instance_id_);
+
+  ash::ShelfItem item;
+  item.id = shelf_id;
+  item.status = ash::STATUS_RUNNING;
+  item.type = ash::TYPE_APP;
+  if (icon_.isNull()) {
+    item.image = IsolatedWebAppInstallerShelfItemController::
+        GetDefaultInstallerShelfIcon();
+  } else {
+    item.image = icon_;
+  }
+
+  auto item_index = shelf_model->ItemIndexByID(shelf_id);
+  if (item_index == -1) {
+    // Add as new item to the shelf.
+    auto delegate =
+        std::make_unique<IsolatedWebAppInstallerShelfItemController>(shelf_id);
+    shelf_model->Add(item, std::move(delegate));
+    static_cast<LacrosShelfItemController*>(
+        shelf_model->GetShelfItemDelegate(shelf_id))
+        ->AddWindow(window_);
+  } else {
+    // Update existing item on the shelf.
+    shelf_model->Set(item_index, item);
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 }
 
 void IsolatedWebAppInstallerViewController::SetIcon(gfx::ImageSkia icon) {
@@ -226,6 +253,15 @@ void IsolatedWebAppInstallerViewController::SetIcon(gfx::ImageSkia icon) {
 void IsolatedWebAppInstallerViewController::SetViewForTesting(
     IsolatedWebAppInstallerView* view) {
   view_ = view;
+}
+
+views::Widget* IsolatedWebAppInstallerViewController::GetWidgetForTesting() {
+  return widget_;
+}
+
+views::Widget*
+IsolatedWebAppInstallerViewController::GetChildWidgetForTesting() {
+  return child_widget_;
 }
 
 void IsolatedWebAppInstallerViewController::Show() {
@@ -239,18 +275,19 @@ void IsolatedWebAppInstallerViewController::Show() {
       CreateDialogDelegate(std::move(view));
   dialog_delegate_ = dialog_delegate.get();
 
-  OnModelChanged();
+  OnStepChanged();
+  OnChildDialogChanged();
 
-  views::Widget* widget =
+  widget_ =
       views::DialogDelegate::CreateDialogWidget(std::move(dialog_delegate),
                                                 /*context=*/nullptr,
                                                 /*parent=*/nullptr);
 
   CHECK(!window_);
-  window_ = widget->GetNativeWindow();
+  window_ = widget_->GetNativeWindow();
   AddOrUpdateWindowToShelf();
 
-  widget->Show();
+  widget_->Show();
 }
 
 void IsolatedWebAppInstallerViewController::FocusWindow() {
@@ -279,7 +316,6 @@ bool IsolatedWebAppInstallerViewController::OnAccept() {
           base::BindRepeating(&IsolatedWebAppInstallerViewController::
                                   OnShowMetadataLearnMoreClicked,
                               base::Unretained(this))});
-      OnModelChanged();
       return false;
     }
 
@@ -308,8 +344,18 @@ bool IsolatedWebAppInstallerViewController::OnAccept() {
 }
 
 void IsolatedWebAppInstallerViewController::OnComplete() {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  ash::ShelfModel* shelf_model = ash::ShelfModel::Get();
+  ash::ShelfID shelf_id = ash::ShelfID(instance_id_);
+  int index = shelf_model->ItemIndexByID(shelf_id);
+  if (-1 != index) {
+    shelf_model->RemoveItemAt(index);
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
   view_ = nullptr;
   dialog_delegate_ = nullptr;
+  widget_ = nullptr;
   std::move(completion_callback_).Run();
 }
 
@@ -322,7 +368,7 @@ void IsolatedWebAppInstallerViewController::Close() {
 void IsolatedWebAppInstallerViewController::OnPrefChanged(bool enabled) {
   if (enabled) {
     model_->SetStep(IsolatedWebAppInstallerModel::Step::kGetMetadata);
-    model_->SetDialog(absl::nullopt);
+    model_->SetDialog(std::nullopt);
     if (!installability_checker_) {
       callback_delayer_ = std::make_unique<CallbackDelayer>(
           kGetMetadataMinimumDelay, kProgressBarPausePercentage,
@@ -345,7 +391,6 @@ void IsolatedWebAppInstallerViewController::OnPrefChanged(bool enabled) {
       installability_checker_.reset();
     }
   }
-  OnModelChanged();
   if (!is_initialized_) {
     is_initialized_ = true;
     std::move(initialized_callback_).Run();
@@ -379,7 +424,6 @@ void IsolatedWebAppInstallerViewController::OnInstallComplete(
   } else {
     model_->SetDialog(IsolatedWebAppInstallerModel::InstallationFailedDialog{});
   }
-  OnModelChanged();
 }
 
 void IsolatedWebAppInstallerViewController::OnShowMetadataLearnMoreClicked() {
@@ -405,21 +449,16 @@ void IsolatedWebAppInstallerViewController::OnSettingsLinkClicked() {
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 }
 
-void IsolatedWebAppInstallerViewController::OnManageProfilesLinkClicked() {
-  // TODO(crbug.com/1479140): Implement
-}
-
 void IsolatedWebAppInstallerViewController::OnChildDialogCanceled() {
   // Currently all child dialogs should close the installer when closed.
   Close();
 }
 
 void IsolatedWebAppInstallerViewController::OnChildDialogAccepted() {
+  model_->SetDialog(std::nullopt);
   switch (model_->step()) {
     case IsolatedWebAppInstallerModel::Step::kShowMetadata: {
       model_->SetStep(IsolatedWebAppInstallerModel::Step::kInstall);
-      model_->SetDialog(std::nullopt);
-      OnModelChanged();
 
       callback_delayer_ = std::make_unique<CallbackDelayer>(
           kInstallationMinimumDelay, kProgressBarPausePercentage,
@@ -440,7 +479,6 @@ void IsolatedWebAppInstallerViewController::OnChildDialogAccepted() {
     case IsolatedWebAppInstallerModel::Step::kInstall:
       // A child dialog on the install screen means the installation failed.
       // Accepting the dialog corresponds to the Retry button.
-      model_->SetDialog(std::nullopt);
       installability_checker_.reset();
       pref_observer_->Reset();
       Start(base::DoNothing(), std::move(completion_callback_));
@@ -451,12 +489,19 @@ void IsolatedWebAppInstallerViewController::OnChildDialogAccepted() {
   }
 }
 
-void IsolatedWebAppInstallerViewController::OnModelChanged() {
+void IsolatedWebAppInstallerViewController::OnChildDialogDestroying() {
+  child_widget_ = nullptr;
+}
+
+void IsolatedWebAppInstallerViewController::OnStepChanged() {
   if (!view_) {
     return;
   }
 
   switch (model_->step()) {
+    case IsolatedWebAppInstallerModel::Step::kNone:
+      NOTREACHED();
+      break;
     case IsolatedWebAppInstallerModel::Step::kDisabled:
       IsolatedWebAppInstallerView::SetDialogButtons(
           dialog_delegate_, IDS_APP_CLOSE,
@@ -491,9 +536,11 @@ void IsolatedWebAppInstallerViewController::OnModelChanged() {
       view_->ShowInstallSuccessScreen(model_->bundle_metadata());
       break;
   }
+}
 
+void IsolatedWebAppInstallerViewController::OnChildDialogChanged() {
   if (model_->has_dialog()) {
-    view_->ShowDialog(model_->dialog());
+    child_widget_ = view_->ShowDialog(model_->dialog());
   }
 }
 

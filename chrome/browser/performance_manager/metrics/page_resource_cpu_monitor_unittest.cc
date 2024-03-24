@@ -5,6 +5,7 @@
 #include "chrome/browser/performance_manager/metrics/page_resource_cpu_monitor.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "base/check.h"
@@ -35,7 +36,6 @@
 #include "content/public/test/navigation_simulator.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace performance_manager::metrics {
@@ -66,24 +66,24 @@ struct SinglePageRendererNodes {
 
 // Helpers to lookup measurement results from TestNodeWrapper's.
 
-absl::optional<double> GetMeasurementResult(
+std::optional<double> GetMeasurementResult(
     const PageResourceCPUMonitor::CPUUsageMap& cpu_usage_map,
     const ResourceContext& context) {
   const auto it = cpu_usage_map.find(context);
   if (it == cpu_usage_map.end()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return it->second;
 }
 
-absl::optional<double> GetMeasurementResult(
+std::optional<double> GetMeasurementResult(
     const PageResourceCPUMonitor::CPUUsageMap& cpu_usage_map,
     const TestNodeWrapper<FrameNodeImpl>& frame_wrapper) {
   return GetMeasurementResult(cpu_usage_map,
                               frame_wrapper->GetResourceContext());
 }
 
-absl::optional<double> GetMeasurementResult(
+std::optional<double> GetMeasurementResult(
     const PageResourceCPUMonitor::CPUUsageMap& cpu_usage_map,
     const TestNodeWrapper<WorkerNodeImpl>& worker_wrapper) {
   return GetMeasurementResult(cpu_usage_map,
@@ -145,7 +145,7 @@ class PageResourceCPUMonitorTest : public GraphTestHarness {
   void SetProcessExited(ProcessNodeImpl* process_node) {
     process_node->SetProcessExitStatus(0);
     // After a process exits, GetCumulativeCPUUsage() starts returning an error.
-    SetProcessCPUUsageError(process_node, base::TimeDelta());
+    SetProcessCPUUsageError(process_node, true);
   }
 
   void SetProcessCPUUsage(const ProcessNodeImpl* process_node, double usage) {
@@ -153,8 +153,8 @@ class PageResourceCPUMonitorTest : public GraphTestHarness {
   }
 
   void SetProcessCPUUsageError(const ProcessNodeImpl* process_node,
-                               base::TimeDelta usage_error) {
-    delegate_factory_.GetDelegate(process_node).SetError(usage_error);
+                               bool has_error) {
+    delegate_factory_.GetDelegate(process_node).SetError(has_error);
   }
 
   // Factory to return CPUMeasurementDelegates for `cpu_monitor_`. This must be
@@ -224,7 +224,7 @@ TEST_F(PageResourceCPUMonitorTest, CPUMeasurement) {
     auto measurements = cpu_monitor_.UpdateCPUMeasurements();
     EXPECT_THAT(GetMeasurementResult(measurements,
                                      early_exit_renderer.resource_context),
-                Eq(absl::nullopt));
+                Eq(std::nullopt));
     EXPECT_THAT(GetMeasurementResult(measurements, renderer1.resource_context),
                 Optional(DoubleEq(1.0)));
     EXPECT_THAT(GetMeasurementResult(measurements, renderer2.resource_context),
@@ -232,9 +232,9 @@ TEST_F(PageResourceCPUMonitorTest, CPUMeasurement) {
     EXPECT_THAT(GetMeasurementResult(measurements, renderer3.resource_context),
                 Optional(DoubleEq(0.5)));
     EXPECT_THAT(GetMeasurementResult(measurements, renderer4.resource_context),
-                AnyOf(Optional(DoubleEq(0.0)), Eq(absl::nullopt)));
+                AnyOf(Optional(DoubleEq(0.0)), Eq(std::nullopt)));
     EXPECT_THAT(GetMeasurementResult(measurements, renderer5.resource_context),
-                Eq(absl::nullopt));
+                Eq(std::nullopt));
   }
 
   SetProcessId(renderer5.process_node.get());
@@ -308,15 +308,15 @@ TEST_F(PageResourceCPUMonitorTest, CPUMeasurement) {
     // they were alive and 0% for the rest of the measurement interval.
     auto measurements = cpu_monitor_.UpdateCPUMeasurements();
     EXPECT_THAT(GetMeasurementResult(measurements, renderer1.resource_context),
-                Eq(absl::nullopt));
+                Eq(std::nullopt));
     EXPECT_THAT(GetMeasurementResult(measurements, renderer2.resource_context),
-                Eq(absl::nullopt));
+                Eq(std::nullopt));
     EXPECT_THAT(GetMeasurementResult(measurements, renderer3.resource_context),
                 Optional(DoubleEq(0.0)));
     EXPECT_THAT(GetMeasurementResult(measurements, renderer4.resource_context),
                 Optional(DoubleEq(0.0)));
     EXPECT_THAT(GetMeasurementResult(measurements, renderer5.resource_context),
-                Eq(absl::nullopt));
+                Eq(std::nullopt));
   }
 
   // `renderer3` exits just before the StopMonitoring call and `renderer4`
@@ -451,8 +451,6 @@ TEST_F(PageResourceCPUMonitorTest, CPUMeasurementError) {
   SetProcessId(renderer1.process_node.get());
   const SinglePageRendererNodes renderer2 = CreateSimpleCPUTrackingRenderer();
   SetProcessId(renderer2.process_node.get());
-  const SinglePageRendererNodes renderer3 = CreateSimpleCPUTrackingRenderer();
-  SetProcessId(renderer3.process_node.get());
 
   cpu_monitor_.StartMonitoring(graph());
 
@@ -464,28 +462,19 @@ TEST_F(PageResourceCPUMonitorTest, CPUMeasurementError) {
                 Optional(DoubleEq(1.0)));
     EXPECT_THAT(GetMeasurementResult(measurements, renderer2.resource_context),
                 Optional(DoubleEq(1.0)));
-    EXPECT_THAT(GetMeasurementResult(measurements, renderer3.resource_context),
-                Optional(DoubleEq(1.0)));
   }
 
   SetProcessCPUUsage(renderer1.process_node.get(), 0.5);
   SetProcessCPUUsage(renderer2.process_node.get(), 0.5);
-  SetProcessCPUUsage(renderer3.process_node.get(), 0.5);
-
-  // Most platforms returns a zero TimeDelta on error.
-  SetProcessCPUUsageError(renderer1.process_node.get(), base::TimeDelta());
-  // Linux returns a negative TimeDelta on error.
-  SetProcessCPUUsageError(renderer2.process_node.get(), base::TimeDelta::Min());
+  SetProcessCPUUsageError(renderer1.process_node.get(), true);
 
   task_env().FastForwardBy(kTimeBetweenMeasurements);
 
   {
     auto measurements = cpu_monitor_.UpdateCPUMeasurements();
     EXPECT_THAT(GetMeasurementResult(measurements, renderer1.resource_context),
-                Eq(absl::nullopt));
+                Eq(std::nullopt));
     EXPECT_THAT(GetMeasurementResult(measurements, renderer2.resource_context),
-                Eq(absl::nullopt));
-    EXPECT_THAT(GetMeasurementResult(measurements, renderer3.resource_context),
                 Optional(DoubleEq(0.5)));
   }
 
@@ -548,7 +537,7 @@ TEST_F(PageResourceCPUMonitorTimingTest, ProcessLifetime) {
     // Process can't be measured yet.
     auto measurements = cpu_monitor_->UpdateCPUMeasurements();
     EXPECT_THAT(GetMeasurementResult(measurements, frame_context),
-                Eq(absl::nullopt));
+                Eq(std::nullopt));
   });
 
   // Assign a real process to the ProcessNode. (Will call
@@ -579,7 +568,7 @@ TEST_F(PageResourceCPUMonitorTimingTest, ProcessLifetime) {
     // nullopt.
     auto measurements = cpu_monitor_->UpdateCPUMeasurements();
     EXPECT_THAT(GetMeasurementResult(measurements, frame_context),
-                Eq(absl::nullopt));
+                Eq(std::nullopt));
   });
 }
 

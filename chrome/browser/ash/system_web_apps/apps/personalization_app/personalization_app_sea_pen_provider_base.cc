@@ -7,97 +7,55 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "ash/constants/ash_features.h"
+#include "ash/controls/contextual_tooltip.h"
 #include "ash/public/cpp/image_util.h"
+#include "ash/wallpaper/wallpaper_constants.h"
 #include "ash/wallpaper/wallpaper_utils/wallpaper_resizer.h"
+#include "ash/webui/common/mojom/sea_pen.mojom-forward.h"
 #include "ash/webui/common/mojom/sea_pen.mojom.h"
 #include "base/functional/bind.h"
 #include "base/json/json_writer.h"
+#include "base/json/values_util.h"
+#include "base/metrics/field_trial_params.h"
+#include "base/metrics/histogram_functions.h"
+#include "base/metrics/histogram_macros.h"
+#include "base/metrics/user_metrics.h"
 #include "base/strings/stringprintf.h"
+#include "base/strings/utf_string_conversions.h"
+#include "base/values.h"
 #include "chrome/browser/ash/system_web_apps/apps/personalization_app/personalization_app_utils.h"
 #include "chrome/browser/ash/wallpaper_handlers/sea_pen_fetcher.h"
 #include "chrome/browser/ash/wallpaper_handlers/wallpaper_fetcher_delegate.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/browser_commands.h"
+#include "chrome/browser/ui/browser_finder.h"
+#include "chrome/browser/ui/chrome_pages.h"
+#include "chromeos/strings/grit/chromeos_strings.h"
 #include "components/manta/features.h"
 #include "components/manta/manta_status.h"
-#include "components/manta/proto/manta.pb.h"
 #include "content/public/browser/web_ui.h"
-#include "third_party/abseil-cpp/absl/utility/utility.h"
+#include "ui/base/l10n/l10n_util.h"
 #include "ui/base/webui/web_ui_util.h"
 
 namespace ash::personalization_app {
+
 namespace {
+
 constexpr int kSeaPenImageThumbnailSizeDip = 512;
-constexpr char kMonthName[12][4] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-
-// Converts a base::Time time into a string in the format "mmm dd, yyyy" such as
-// "Jan 08, 2023".
-std::string GetTimeInfo(base::Time time) {
-  base::Time::Exploded exploded_time;
-  time.UTCExplode(&exploded_time);
-  return base::StringPrintf("%s %02d, %04d",
-                            kMonthName[exploded_time.month - 1],
-                            exploded_time.day_of_month, exploded_time.year);
-}
-
-/**
- * Serializes a sea pen query into json string format based on the query type
- * such as {freeform_query: <string>} or {template_id: <number>, options:
- * {<chip_number>:<option_number>, ...}}. For example:
- * {"freeform_query":"test query"}
- * {"template_id":"2","options":{"4":"34","5":"40"}}
- *
- * @param query  pointer to the sea pen query
- * @return query information in string format
- */
-std::string SeaPenQueryToJsonString(const mojom::SeaPenQueryPtr& query) {
-  std::string query_info;
-  base::Value::Dict query_dict = base::Value::Dict();
-  query_dict.Set("creation_time", GetTimeInfo(base::Time::Now()));
-
-  switch (query->which()) {
-    case mojom::SeaPenQuery::Tag::kTextQuery:
-      query_dict.Set("freeform_query", query->get_text_query());
-      break;
-    case mojom::SeaPenQuery::Tag::kTemplateQuery:
-      query_dict.Set("template_id", base::NumberToString(static_cast<int32_t>(
-                                        query->get_template_query()->id)));
-      base::Value::Dict options_dict = base::Value::Dict();
-      for (const auto& [chip, option] : query->get_template_query()->options) {
-        options_dict.Set(base::NumberToString(static_cast<int32_t>(chip)),
-                         base::NumberToString(static_cast<int32_t>(option)));
-      }
-      query_dict.Set("options", std::move(options_dict));
-      break;
-  }
-
-  base::JSONWriter::Write(query_dict, &query_info);
-  return query_info;
-}
-
-// Constructs the xmp metadata string from the string query information.
-std::string QueryInfoToXmpString(const std::string& query_info) {
-  static constexpr char kXmpData[] = R"(
-            <x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 6.0.0">
-               <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-                  <rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/">
-                     <dc:description>%s</dc:description>
-                  </rdf:Description>
-               </rdf:RDF>
-            </x:xmpmeta>)";
-  return base::StringPrintf(kXmpData, query_info.c_str());
-}
 
 }  // namespace
 
 PersonalizationAppSeaPenProviderBase::PersonalizationAppSeaPenProviderBase(
     content::WebUI* web_ui,
     std::unique_ptr<wallpaper_handlers::WallpaperFetcherDelegate>
-        wallpaper_fetcher_delegate)
-    : profile_(Profile::FromWebUI(web_ui)),
+        wallpaper_fetcher_delegate,
+    manta::proto::FeatureName feature_name)
+    : feature_name_(feature_name),
+      profile_(Profile::FromWebUI(web_ui)),
       wallpaper_fetcher_delegate_(std::move(wallpaper_fetcher_delegate)) {}
 
 PersonalizationAppSeaPenProviderBase::~PersonalizationAppSeaPenProviderBase() =
@@ -106,10 +64,15 @@ PersonalizationAppSeaPenProviderBase::~PersonalizationAppSeaPenProviderBase() =
 void PersonalizationAppSeaPenProviderBase::BindInterface(
     mojo::PendingReceiver<::ash::personalization_app::mojom::SeaPenProvider>
         receiver) {
-  CHECK(manta::features::IsMantaServiceEnabled() &&
-        features::IsSeaPenEnabled());
+  CHECK(manta::features::IsMantaServiceEnabled());
+  CHECK(::ash::features::IsSeaPenEnabled() ||
+        ::ash::features::IsVcBackgroundReplaceEnabled());
   sea_pen_receiver_.reset();
   sea_pen_receiver_.Bind(std::move(receiver));
+}
+
+bool PersonalizationAppSeaPenProviderBase::IsEligibleForSeaPen() {
+  return ::ash::personalization_app::IsEligibleForSeaPen(profile_);
 }
 
 void PersonalizationAppSeaPenProviderBase::SearchWallpaper(
@@ -126,9 +89,10 @@ void PersonalizationAppSeaPenProviderBase::SearchWallpaper(
   auto* sea_pen_fetcher = GetOrCreateSeaPenFetcher();
   CHECK(sea_pen_fetcher);
   sea_pen_fetcher->FetchThumbnails(
-      query, base::BindOnce(
-                 &PersonalizationAppSeaPenProviderBase::OnFetchThumbnailsDone,
-                 weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+      feature_name_, query,
+      base::BindOnce(
+          &PersonalizationAppSeaPenProviderBase::OnFetchThumbnailsDone,
+          weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
 
 void PersonalizationAppSeaPenProviderBase::SelectSeaPenThumbnail(
@@ -147,7 +111,7 @@ void PersonalizationAppSeaPenProviderBase::SelectSeaPenThumbnail(
   // should not be null when a thumbnail is selected.
   CHECK(last_query_);
   sea_pen_fetcher->FetchWallpaper(
-      it->second, last_query_,
+      feature_name_, it->second, last_query_,
       base::BindOnce(
           &PersonalizationAppSeaPenProviderBase::OnFetchWallpaperDone,
           weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
@@ -221,7 +185,7 @@ void PersonalizationAppSeaPenProviderBase::OnFetchThumbnailsDone(
     const auto image_id = image.id;
     auto [it, _] = sea_pen_images_.insert(
         std::pair<uint32_t, SeaPenImage>(image_id, std::move(image)));
-    result.emplace_back(absl::in_place, GetJpegDataUrl(it->second.jpg_bytes),
+    result.emplace_back(std::in_place, GetJpegDataUrl(it->second.jpg_bytes),
                         image_id);
   }
   std::move(callback).Run(std::move(result), status_code);
@@ -236,10 +200,7 @@ void PersonalizationAppSeaPenProviderBase::OnFetchWallpaperDone(
   }
 
   CHECK(last_query_);
-  const std::string query_info =
-      QueryInfoToXmpString(SeaPenQueryToJsonString(last_query_));
-
-  OnFetchWallpaperDoneInternal(*image, query_info, std::move(callback));
+  OnFetchWallpaperDoneInternal(*image, last_query_, std::move(callback));
 }
 
 void PersonalizationAppSeaPenProviderBase::OnRecentSeaPenImageSelected(
@@ -268,6 +229,62 @@ void PersonalizationAppSeaPenProviderBase::OnGetRecentSeaPenImageThumbnail(
   std::move(callback).Run(GURL(webui::GetBitmapDataUrl(
       *WallpaperResizer::GetResizedImage(image, kSeaPenImageThumbnailSizeDip)
            .bitmap())));
+}
+
+void PersonalizationAppSeaPenProviderBase::OpenFeedbackDialog(
+    const mojom::SeaPenFeedbackMetadataPtr metadata) {
+  const std::string hashtag = "#AIWallpaper";
+  const std::string feedback_type =
+      metadata->is_positive ? "Positive" : "Negative";
+  CHECK(last_query_);
+  const std::string user_visible_query_text =
+      (last_query_->is_text_query())
+          ? last_query_->get_text_query()
+          : last_query_->get_template_query()->user_visible_query->text;
+  const std::string description_template =
+      hashtag + " " + feedback_type + ": " + user_visible_query_text + "\n";
+
+  base::Value::Dict ai_metadata;
+  ai_metadata.Set("from_chromeos", "true");
+  ai_metadata.Set("log_id", metadata->log_id);
+
+  base::RecordAction(base::UserMetricsAction("SeaPen_FeedbackPressed"));
+  chrome::ShowFeedbackPage(
+      /*browser=*/chrome::FindBrowserWithProfile(profile_),
+      /*source=*/chrome::kFeedbackSourceAI, description_template,
+      /*description_placeholder_text=*/
+      base::UTF16ToUTF8(
+          l10n_util::GetStringUTF16(IDS_SEA_PEN_FEEDBACK_PLACEHOLDER)),
+      /*category_tag=*/std::string(),
+      /*extra_diagnostics=*/std::string(),
+      /*autofill_data=*/base::Value::Dict(), std::move(ai_metadata));
+}
+
+void PersonalizationAppSeaPenProviderBase::ShouldShowSeaPenTermsOfServiceDialog(
+    ShouldShowSeaPenTermsOfServiceDialogCallback callback) {
+  if (!features::IsSeaPenEnabled() &&
+      !features::IsVcBackgroundReplaceEnabled()) {
+    sea_pen_receiver_.ReportBadMessage(
+        "Cannot call `ShouldShowSeaPenWallpaperTermsDialog()` without Sea Pen "
+        "feature enabled");
+    return;
+  }
+
+  // TODO(b/315032845): confirm how to store and retrieve the terms of service
+  // records instead of using contextual tooltip.
+  std::move(callback).Run(contextual_tooltip::ShouldShowNudge(
+      profile_->GetPrefs(),
+      contextual_tooltip::TooltipType::kSeaPenWallpaperTermsDialog,
+      /*recheck_delay=*/nullptr));
+}
+
+void PersonalizationAppSeaPenProviderBase::
+    HandleSeaPenTermsOfServiceAccepted() {
+  // TODO(b/315032845): confirm how to store and retrieve the terms of service
+  // records instead of using contextual tooltip.
+  contextual_tooltip::HandleGesturePerformed(
+      profile_->GetPrefs(),
+      contextual_tooltip::TooltipType::kSeaPenWallpaperTermsDialog);
 }
 
 }  // namespace ash::personalization_app

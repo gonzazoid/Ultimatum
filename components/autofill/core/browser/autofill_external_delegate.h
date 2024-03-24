@@ -62,14 +62,8 @@ class AutofillExternalDelegate : public AutofillPopupDelegate,
                            const SuggestionPosition& position) override;
   void DidPerformButtonActionForSuggestion(
       const Suggestion& suggestion) override;
-  bool RemoveSuggestion(const std::u16string& value,
-                        PopupItemId popup_item_id,
-                        Suggestion::BackendId backend_id) override;
+  bool RemoveSuggestion(const Suggestion& suggestion) override;
   void ClearPreviewedForm() override;
-
-  // Returns PopupType::kUnspecified for all popups prior to `onQuery`, or the
-  // popup type after call to `onQuery`.
-  PopupType GetPopupType() const override;
 
   // Returns FillingProduct::kNone for all popups prior to
   // `OnSuggestionsReturned`. Returns the filling product of the first
@@ -98,8 +92,7 @@ class AutofillExternalDelegate : public AutofillPopupDelegate,
   // to be displayed. Called when an Autofill query result is available.
   virtual void OnSuggestionsReturned(
       FieldGlobalId field_id,
-      const std::vector<Suggestion>& suggestions,
-      bool is_all_server_suggestions = false);
+      const std::vector<Suggestion>& suggestions);
 
   // Returns the last targeted field types to be filled. This does not
   // equate to the field types that were actually filed, but only to those
@@ -131,7 +124,7 @@ class AutofillExternalDelegate : public AutofillPopupDelegate,
   void DidEndTextFieldEditing();
 
   // PersonalDataManagerObserver:
-  void OnPersonalDataFinishedProfileTasks() override;
+  void OnPersonalDataChanged() override;
 
   const FormData& query_form() const { return query_form_; }
 
@@ -251,6 +244,10 @@ class AutofillExternalDelegate : public AutofillPopupDelegate,
   // Returns the text (i.e. |Suggestion| value) for Chrome autofill options.
   std::u16string GetSettingsSuggestionValue() const;
 
+  // Returns the trigger source to use to reopen the popup after an edit or
+  // delete address profile dialog is closed.
+  AutofillSuggestionTriggerSource GetReopenTriggerSource() const;
+
   const raw_ref<BrowserAutofillManager> manager_;
 
   // The current form and field selected by Autofill.
@@ -267,11 +264,7 @@ class AutofillExternalDelegate : public AutofillPopupDelegate,
   base::flat_map<Section, FieldTypeSet>
       last_field_types_to_fill_for_address_form_section_;
 
-  bool should_show_scan_credit_card_ = false;
-  PopupType popup_type_ = PopupType::kUnspecified;
-
-  bool should_show_cards_from_account_option_ = false;
-  bool show_cards_from_account_suggestion_added_ = false;
+  bool show_cards_from_account_suggestion_was_shown_ = false;
 
   std::vector<PopupItemId> shown_suggestion_types_;
 

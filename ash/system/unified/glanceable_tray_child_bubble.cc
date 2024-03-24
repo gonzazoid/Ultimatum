@@ -51,8 +51,8 @@ GlanceableTrayChildBubble::GlanceableTrayChildBubble(
   }
 }
 
-void GlanceableTrayChildBubble::Layout() {
-  views::View::Layout();
+void GlanceableTrayChildBubble::Layout(PassKey) {
+  LayoutSuperclass<views::View>(this);
   if (error_message_) {
     error_message_->UpdateBoundsToContainer(GetLocalBounds());
   }
@@ -79,7 +79,7 @@ void GlanceableTrayChildBubble::MaybeDismissErrorMessage() {
   RemoveChildViewT(std::exchange(error_message_, nullptr));
 }
 
-BEGIN_METADATA(GlanceableTrayChildBubble, views::View)
+BEGIN_METADATA(GlanceableTrayChildBubble)
 END_METADATA
 
 }  // namespace ash

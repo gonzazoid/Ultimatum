@@ -78,7 +78,7 @@ class HighlightBorder : public views::View {
     SchedulePaint();
   }
 
-  void Layout() override {
+  void Layout(PassKey) override {
     auto bounds = parent()->GetLocalBounds();
     bounds.Inset(gfx::Insets(views::FocusRing::kDefaultHaloInset));
     SetBoundsRect(bounds);
@@ -419,7 +419,7 @@ void ArcSplashScreenDialogView::Show(aura::Window* parent,
   views::BubbleDialogDelegateView::CreateBubble(std::move(dialog_view))->Show();
 }
 
-BEGIN_METADATA(ArcSplashScreenDialogView, views::BubbleDialogDelegateView)
+BEGIN_METADATA(ArcSplashScreenDialogView)
 END_METADATA
 
 }  // namespace arc

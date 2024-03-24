@@ -107,10 +107,6 @@ static constexpr auto kTypeNameToFieldType =
          {"ADDRESS_HOME_ADDRESS", ADDRESS_HOME_ADDRESS},
          {"ADDRESS_HOME_ADDRESS_WITH_NAME", ADDRESS_HOME_ADDRESS_WITH_NAME},
          {"ADDRESS_HOME_FLOOR", ADDRESS_HOME_FLOOR},
-         {"NAME_FULL_WITH_HONORIFIC_PREFIX", NAME_FULL_WITH_HONORIFIC_PREFIX},
-         {"BIRTHDATE_DAY", BIRTHDATE_DAY},
-         {"BIRTHDATE_MONTH", BIRTHDATE_MONTH},
-         {"BIRTHDATE_4_DIGIT_YEAR", BIRTHDATE_4_DIGIT_YEAR},
          {"PHONE_HOME_CITY_CODE_WITH_TRUNK_PREFIX",
           PHONE_HOME_CITY_CODE_WITH_TRUNK_PREFIX},
          {"PHONE_HOME_CITY_AND_NUMBER_WITHOUT_TRUNK_PREFIX",
@@ -136,7 +132,13 @@ static constexpr auto kTypeNameToFieldType =
           ADDRESS_HOME_BETWEEN_STREETS_OR_LANDMARK},
          {"SINGLE_USERNAME_FORGOT_PASSWORD", SINGLE_USERNAME_FORGOT_PASSWORD},
          {"SINGLE_USERNAME_WITH_INTERMEDIATE_VALUES",
-          SINGLE_USERNAME_WITH_INTERMEDIATE_VALUES}});
+          SINGLE_USERNAME_WITH_INTERMEDIATE_VALUES},
+         {"ADDRESS_HOME_STREET_LOCATION_AND_LOCALITY",
+          ADDRESS_HOME_STREET_LOCATION_AND_LOCALITY},
+         {"ADDRESS_HOME_STREET_LOCATION_AND_LANDMARK",
+          ADDRESS_HOME_STREET_LOCATION_AND_LANDMARK},
+         {"ADDRESS_HOME_DEPENDENT_LOCALITY_AND_LANDMARK",
+          ADDRESS_HOME_DEPENDENT_LOCALITY_AND_LANDMARK}});
 
 bool IsFillableFieldType(FieldType field_type) {
   switch (field_type) {
@@ -149,7 +151,6 @@ bool IsFillableFieldType(FieldType field_type) {
     case NAME_LAST_SECOND:
     case NAME_MIDDLE_INITIAL:
     case NAME_FULL:
-    case NAME_FULL_WITH_HONORIFIC_PREFIX:
     case NAME_SUFFIX:
     case EMAIL_ADDRESS:
     case USERNAME_AND_EMAIL_ADDRESS:
@@ -192,6 +193,9 @@ bool IsFillableFieldType(FieldType field_type) {
     case ADDRESS_HOME_OVERFLOW:
     case ADDRESS_HOME_BETWEEN_STREETS_OR_LANDMARK:
     case ADDRESS_HOME_OVERFLOW_AND_LANDMARK:
+    case ADDRESS_HOME_STREET_LOCATION_AND_LOCALITY:
+    case ADDRESS_HOME_STREET_LOCATION_AND_LANDMARK:
+    case ADDRESS_HOME_DEPENDENT_LOCALITY_AND_LANDMARK:
     case DELIVERY_INSTRUCTIONS:
       return true;
 
@@ -250,9 +254,6 @@ bool IsFillableFieldType(FieldType field_type) {
     case PRICE:
     case NUMERIC_QUANTITY:
     case SEARCH_TERM:
-    case BIRTHDATE_DAY:
-    case BIRTHDATE_MONTH:
-    case BIRTHDATE_4_DIGIT_YEAR:
     case UNKNOWN_TYPE:
     case MAX_VALID_FIELD_TYPE:
       return false;
@@ -326,8 +327,6 @@ std::string_view FieldTypeToDeveloperRepresentationString(FieldType type) {
       return "Price";
     case NAME_HONORIFIC_PREFIX:
       return "Honorific prefix";
-    case NAME_FULL_WITH_HONORIFIC_PREFIX:
-      return "Full name with honorific prefix";
     case NAME_FIRST:
       return "First name";
     case NAME_MIDDLE:
@@ -416,14 +415,14 @@ std::string_view FieldTypeToDeveloperRepresentationString(FieldType type) {
       return "Address overflow and landmark";
     case ADDRESS_HOME_BETWEEN_STREETS_OR_LANDMARK:
       return "Address between-streets and landmark";
+    case ADDRESS_HOME_STREET_LOCATION_AND_LOCALITY:
+      return "Address street location and locality";
+    case ADDRESS_HOME_STREET_LOCATION_AND_LANDMARK:
+      return "Address street location and landmark";
+    case ADDRESS_HOME_DEPENDENT_LOCALITY_AND_LANDMARK:
+      return "Address locality and landmark";
     case DELIVERY_INSTRUCTIONS:
       return "Delivery instructions";
-    case BIRTHDATE_DAY:
-      return "Birthdate day";
-    case BIRTHDATE_MONTH:
-      return "Birthdate month";
-    case BIRTHDATE_4_DIGIT_YEAR:
-      return "Birthdate year";
     case CREDIT_CARD_NAME_FULL:
       return "Credit card full name";
     case CREDIT_CARD_NAME_FIRST:
@@ -478,7 +477,6 @@ FieldTypeGroup GroupTypeOfFieldType(FieldType field_type) {
     case NAME_MIDDLE_INITIAL:
     case NAME_FULL:
     case NAME_SUFFIX:
-    case NAME_FULL_WITH_HONORIFIC_PREFIX:
       return FieldTypeGroup::kName;
 
     case EMAIL_ADDRESS:
@@ -526,6 +524,9 @@ FieldTypeGroup GroupTypeOfFieldType(FieldType field_type) {
     case ADDRESS_HOME_OVERFLOW:
     case ADDRESS_HOME_OVERFLOW_AND_LANDMARK:
     case ADDRESS_HOME_BETWEEN_STREETS_OR_LANDMARK:
+    case ADDRESS_HOME_STREET_LOCATION_AND_LOCALITY:
+    case ADDRESS_HOME_STREET_LOCATION_AND_LANDMARK:
+    case ADDRESS_HOME_DEPENDENT_LOCALITY_AND_LANDMARK:
     case DELIVERY_INSTRUCTIONS:
       return FieldTypeGroup::kAddress;
 
@@ -574,11 +575,6 @@ FieldTypeGroup GroupTypeOfFieldType(FieldType field_type) {
 
     case USERNAME:
       return FieldTypeGroup::kUsernameField;
-
-    case BIRTHDATE_DAY:
-    case BIRTHDATE_MONTH:
-    case BIRTHDATE_4_DIGIT_YEAR:
-      return FieldTypeGroup::kBirthdateField;
 
     case PRICE:
     case SEARCH_TERM:
@@ -654,7 +650,7 @@ FieldTypeGroup GroupTypeOfHtmlFieldType(HtmlFieldType field_type) {
     case HtmlFieldType::kBirthdateDay:
     case HtmlFieldType::kBirthdateMonth:
     case HtmlFieldType::kBirthdateYear:
-      return FieldTypeGroup::kBirthdateField;
+      return FieldTypeGroup::kNoGroup;
 
     case HtmlFieldType::kUpiVpa:
       return FieldTypeGroup::kNoGroup;
@@ -780,13 +776,6 @@ FieldType HtmlFieldTypeToBestCorrespondingFieldType(HtmlFieldType field_type) {
     case HtmlFieldType::kEmail:
       return EMAIL_ADDRESS;
 
-    case HtmlFieldType::kBirthdateDay:
-      return BIRTHDATE_DAY;
-    case HtmlFieldType::kBirthdateMonth:
-      return BIRTHDATE_MONTH;
-    case HtmlFieldType::kBirthdateYear:
-      return BIRTHDATE_4_DIGIT_YEAR;
-
     case HtmlFieldType::kAdditionalNameInitial:
       return NAME_MIDDLE_INITIAL;
 
@@ -809,6 +798,9 @@ FieldType HtmlFieldTypeToBestCorrespondingFieldType(HtmlFieldType field_type) {
       return IBAN_VALUE;
 
     // These types aren't stored; they're transient.
+    case HtmlFieldType::kBirthdateDay:
+    case HtmlFieldType::kBirthdateMonth:
+    case HtmlFieldType::kBirthdateYear:
     case HtmlFieldType::kUpiVpa:
     case HtmlFieldType::kTransactionAmount:
     case HtmlFieldType::kTransactionCurrency:

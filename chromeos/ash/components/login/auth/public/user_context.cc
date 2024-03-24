@@ -4,6 +4,8 @@
 
 #include "chromeos/ash/components/login/auth/public/user_context.h"
 
+#include <optional>
+
 #include "ash/constants/ash_features.h"
 #include "base/check.h"
 #include "chromeos/ash/components/login/auth/public/auth_session_intent.h"
@@ -20,7 +22,7 @@ UserContext::UserContext(const UserContext& other) = default;
 
 UserContext::UserContext(const user_manager::User& user)
     : account_id_(user.GetAccountId()), user_type_(user.GetType()) {
-  if (user_type_ == user_manager::USER_TYPE_REGULAR) {
+  if (user_type_ == user_manager::UserType::kRegular) {
     account_id_.SetUserEmail(
         user_manager::CanonicalizeUserID(account_id_.GetUserEmail()));
   }
@@ -29,9 +31,10 @@ UserContext::UserContext(const user_manager::User& user)
 UserContext::UserContext(user_manager::UserType user_type,
                          const AccountId& account_id)
     : account_id_(account_id), user_type_(user_type) {
-  if (user_type_ == user_manager::USER_TYPE_REGULAR)
+  if (user_type_ == user_manager::UserType::kRegular) {
     account_id_.SetUserEmail(
         user_manager::CanonicalizeUserID(account_id_.GetUserEmail()));
+  }
 }
 
 UserContext::~UserContext() = default;
@@ -168,6 +171,16 @@ void UserContext::CryptohomeContext::ClearAuthorizedIntents() {
 void UserContext::CryptohomeContext::AddAuthorizedIntent(
     const AuthSessionIntent auth_intent) {
   authorized_for_.Put(auth_intent);
+}
+
+std::optional<UserContext::MountState>
+UserContext::CryptohomeContext::GetMountState() const {
+  return mount_state_;
+}
+
+void UserContext::CryptohomeContext::SetMountState(
+    UserContext::MountState mount_state) {
+  mount_state_ = mount_state;
 }
 
 void UserContext::CryptohomeContext::ClearSecrets() {
@@ -523,6 +536,14 @@ void UserContext::ClearAuthorizedIntents() {
 
 void UserContext::AddAuthorizedIntent(const AuthSessionIntent auth_intent) {
   cryptohome_.AddAuthorizedIntent(auth_intent);
+}
+
+std::optional<UserContext::MountState> UserContext::GetMountState() const {
+  return cryptohome_.GetMountState();
+}
+
+void UserContext::SetMountState(UserContext::MountState mount_state) {
+  cryptohome_.SetMountState(mount_state);
 }
 
 void UserContext::ClearSecrets() {

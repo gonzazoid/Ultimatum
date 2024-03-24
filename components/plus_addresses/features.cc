@@ -7,7 +7,7 @@
 #include "base/feature_list.h"
 #include "base/time/time.h"
 
-namespace plus_addresses {
+namespace plus_addresses::features {
 // Controls the enabled/disabled state of the experimental feature.
 BASE_FEATURE(kFeature,
              "PlusAddressesEnabled",
@@ -22,6 +22,8 @@ const char kSyncWithEnterprisePlusAddressServerName[] = "sync-with-server";
 const char kEnterprisePlusAddressTimerDelayName[] = "timer-delay";
 const char kPlusAddressManagementUrlName[] = "manage-url";
 const char kPlusAddressExcludedSitesName[] = "excluded-sites";
+const char kPlusAddressErrorReportUrlName[] = "error-report-url";
+const char kDisableForForbiddenUsersName[] = "disable-for-forbidden-users";
 
 const base::FeatureParam<std::string>
     kEnterprisePlusAddressSuggestionLabelOverride{
@@ -43,5 +45,9 @@ const base::FeatureParam<std::string> kPlusAddressManagementUrl{
     &kFeature, kPlusAddressManagementUrlName, ""};
 const base::FeatureParam<std::string> kPlusAddressExcludedSites{
     &kFeature, kPlusAddressExcludedSitesName, ""};
+const base::FeatureParam<std::string> kPlusAddressErrorReportUrl{
+    &kFeature, kPlusAddressErrorReportUrlName, ""};
+const base::FeatureParam<bool> kDisableForForbiddenUsers{
+    &kFeature, kDisableForForbiddenUsersName, false};
 
-}  // namespace plus_addresses
+}  // namespace plus_addresses::features

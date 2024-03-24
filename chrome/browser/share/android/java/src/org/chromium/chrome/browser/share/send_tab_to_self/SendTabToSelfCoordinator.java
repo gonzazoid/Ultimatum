@@ -58,13 +58,13 @@ public class SendTabToSelfCoordinator {
             mGotDeviceListCallback = gotDeviceListCallback;
             mProfile = profile;
 
-            SyncServiceFactory.get().addSyncStateChangedListener(this);
+            SyncServiceFactory.getForProfile(mProfile).addSyncStateChangedListener(this);
             mBottomSheetController.addObserver(this);
             notifyAndDestroyIfDone();
         }
 
         private void destroy() {
-            SyncServiceFactory.get().removeSyncStateChangedListener(this);
+            SyncServiceFactory.getForProfile(mProfile).removeSyncStateChangedListener(this);
             mBottomSheetController.removeObserver(this);
         }
 
@@ -110,7 +110,7 @@ public class SendTabToSelfCoordinator {
         }
 
         @Override
-        public void destroy() {}
+        public void onAccountPickerDestroy() {}
 
         @Override
         public void signIn(

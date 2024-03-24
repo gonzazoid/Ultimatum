@@ -6,7 +6,9 @@
 #define DEVICE_VR_OPENXR_OPENXR_API_WRAPPER_H_
 
 #include <stdint.h>
+
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/functional/callback.h"
@@ -17,11 +19,11 @@
 #include "device/vr/openxr/openxr_platform.h"
 #include "device/vr/openxr/openxr_scene_understanding_manager.h"
 #include "device/vr/openxr/openxr_stage_bounds_provider.h"
+#include "device/vr/openxr/openxr_unbounded_space_provider.h"
 #include "device/vr/openxr/openxr_view_configuration.h"
 #include "device/vr/public/mojom/vr_service.mojom.h"
 #include "device/vr/public/mojom/xr_session.mojom.h"
 #include "device/vr/vr_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/openxr/src/include/openxr/openxr.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -204,8 +206,6 @@ class OpenXrApiWrapper {
   std::unordered_set<mojom::XRSessionFeature> enabled_features_;
   raw_ptr<OpenXrGraphicsBinding> graphics_binding_ = nullptr;
 
-  XrReferenceSpaceType unbounded_space_type_ = XR_REFERENCE_SPACE_TYPE_MAX_ENUM;
-
   // The swapchain is initializd when a session begins and is re-created when
   // the state of a secondary view configuration changes.
   XrSwapchain color_swapchain_;
@@ -221,6 +221,7 @@ class OpenXrApiWrapper {
   std::unique_ptr<OpenXrAnchorManager> anchor_manager_;
   std::unique_ptr<OpenXrStageBoundsProvider> bounds_provider_;
   std::unique_ptr<OpenXRSceneUnderstandingManager> scene_understanding_manager_;
+  std::unique_ptr<OpenXrUnboundedSpaceProvider> unbounded_space_provider_;
 
   // The context provider is owned by the OpenXrRenderLoop, and may change when
   // there is a context lost.

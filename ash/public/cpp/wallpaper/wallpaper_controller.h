@@ -15,11 +15,13 @@
 #include "ash/public/cpp/wallpaper/sea_pen_image.h"
 #include "ash/public/cpp/wallpaper/wallpaper_info.h"
 #include "ash/public/cpp/wallpaper/wallpaper_types.h"
+#include "ash/webui/common/mojom/sea_pen.mojom.h"
 #include "base/containers/lru_cache.h"
 #include "base/files/file_path.h"
 #include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "components/user_manager/user_type.h"
 
 class AccountId;
@@ -44,6 +46,9 @@ class ASH_PUBLIC_EXPORT WallpaperController {
 
   using DeleteRecentSeaPenImageCallback =
       base::OnceCallback<void(bool success)>;
+
+  using GetSeaPenMetadataCallback =
+      base::OnceCallback<void(std::optional<base::Value::Dict> metadata)>;
 
   using DailyGooglePhotosIdCache = base::HashingLRUCacheSet<uint32_t>;
 
@@ -230,27 +235,15 @@ class ASH_PUBLIC_EXPORT WallpaperController {
 
   // Sets `sea_pen_image` received from the Manta API as system wallpaper for
   // user with `account_id` and saves the image to disk with xmp metadata
-  // containing `query_info` data.
-  // `query_info` is a string constructed as XMP format (like XML standard
-  // format) which includes the query information used to generate the image and
-  // its creation time. For example:
-  //    <x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 6.0.0">
-  //      <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-  //        <rdf:Description rdf:about=""
-  //        xmlns:dc="http://purl.org/dc/elements/1.1/">
-  //          <dc:description>{"creation_time":"Jan
-  //          03,2024","options":{"6":"48","7":"61"},"template_id":"3"}
-  //          </dc:description>
-  //        </rdf:Description>
-  //      </rdf:RDF>
-  //    </x:xmpmeta>
+  // containing query info from SeaPenQuery `query`.
   // @see //components/manta
   // Calls `callback` with boolean success. Can fail if `account_id` is not
   // allowed to set wallpaper, or the image failed to decode.
-  virtual void SetSeaPenWallpaper(const AccountId& account_id,
-                                  const SeaPenImage& sea_pen_image,
-                                  const std::string& query_info,
-                                  SetWallpaperCallback callback) = 0;
+  virtual void SetSeaPenWallpaper(
+      const AccountId& account_id,
+      const SeaPenImage& sea_pen_image,
+      const personalization_app::mojom::SeaPenQueryPtr& query,
+      SetWallpaperCallback callback) = 0;
 
   // Sets the recently used Sea Pen wallpaper as system wallpaper for
   // user with `account_id`.
@@ -259,6 +252,13 @@ class ASH_PUBLIC_EXPORT WallpaperController {
   virtual void SetSeaPenWallpaperFromFile(const AccountId& account_id,
                                           const base::FilePath& file_path,
                                           SetWallpaperCallback callback) = 0;
+
+  // Extracts SeaPen metadata from a image `file_path`. Calls `callback` with
+  // the extracted data. Will run `callback`with std::nullopt if the
+  // `file_path`does not exist or reading metadata fails.
+  virtual void GetSeaPenMetadata(const AccountId& account_id,
+                                 const base::FilePath& file_path,
+                                 GetSeaPenMetadataCallback callback) = 0;
 
   // Removes the selected Sea Pen image from Sea Pen directory.
   virtual void DeleteRecentSeaPenImage(

@@ -26,6 +26,7 @@ try_.defaults.set(
     siso_configs = ["builder"],
     siso_enable_cloud_profiler = True,
     siso_enable_cloud_trace = True,
+    siso_enabled = True,
     siso_project = siso.project.DEFAULT_UNTRUSTED,
 )
 
@@ -96,9 +97,10 @@ try_.orchestrator_builder(
     experiments = {
         # go/nplus1shardsproposal
         "chromium.add_one_test_shard": 10,
+        # crbug/940930
+        "chromium.enable_cleandead": 100,
     },
     main_list_view = "try",
-    siso_enabled = True,
     tryjob = try_.job(),
     # TODO(crbug.com/1372179): Use orchestrator pool once overloaded test pools
     # are addressed
@@ -111,7 +113,6 @@ try_.compilator_builder(
     name = "android-12-x64-rel-compilator",
     branch_selector = branches.selector.ANDROID_BRANCHES,
     main_list_view = "try",
-    siso_enabled = True,
 )
 
 try_.builder(
@@ -182,7 +183,6 @@ try_.orchestrator_builder(
             "no_secondary_abi",
             "use_clang_coverage",
             "partial_code_coverage_instrumentation",
-            "enable_dangling_raw_ptr_feature_flag",
         ],
     ),
     compilator = "android-arm64-rel-compilator",
@@ -191,9 +191,10 @@ try_.orchestrator_builder(
         # go/nplus1shardsproposal
         "chromium.add_one_test_shard": 10,
         "chromium.compilator_can_outlive_parent": 100,
+        # crbug/940930
+        "chromium.enable_cleandead": 100,
     },
     main_list_view = "try",
-    siso_enabled = True,
     tryjob = try_.job(),
     # TODO(crbug.com/1372179): Use orchestrator pool once overloaded test pools
     # are addressed
@@ -205,7 +206,6 @@ try_.compilator_builder(
     name = "android-arm64-rel-compilator",
     branch_selector = branches.selector.ANDROID_BRANCHES,
     main_list_view = "try",
-    siso_enabled = True,
 )
 
 # TODO(crbug.com/1367523): Reenable this builder once the reboot issue is resolved.
@@ -256,7 +256,9 @@ try_.builder(
             "official_optimize",
             "stable_channel",
             "v8_release_branch",
-            "android_low_end",
+            # Allows the bot to measure low-end arm32 and high-end arm64 using
+            # a single build.
+            "android_low_end_secondary_toolchain",
         ],
     ),
     builderless = not settings.is_main,
@@ -271,13 +273,12 @@ try_.builder(
                 "//tools/binary_size:binary_size_trybot_py",
             ],
             "compile_targets": [
-                "monochrome_static_initializers",
+                "check_chrome_static_initializers",
                 "trichrome_32_minimal_apks",
                 "validate_expectations",
             ],
         },
     },
-    siso_enabled = True,
     tryjob = try_.job(),
 )
 
@@ -304,7 +305,7 @@ try_.builder(
     ],
     gn_args = gn_args.config(
         configs = [
-            "android_builder",
+            "android_builder_without_codecs",
             "cronet_android",
             "debug_static_builder",
             "reclient",
@@ -884,9 +885,10 @@ try_.orchestrator_builder(
     coverage_test_types = ["unit", "overall"],
     experiments = {
         "chromium.add_one_test_shard": 10,
+        # crbug/940930
+        "chromium.enable_cleandead": 100,
     },
     main_list_view = "try",
-    siso_enabled = True,
     tryjob = try_.job(),
     # TODO(crbug.com/1372179): Use orchestrator pool once overloaded test pools
     # are addressed
@@ -901,7 +903,6 @@ try_.compilator_builder(
     cores = 64 if settings.is_main else 32,
     contact_team_email = "clank-engprod@google.com",
     main_list_view = "try",
-    siso_enabled = True,
 )
 
 try_.builder(
@@ -988,8 +989,11 @@ try_.builder(
         ],
     ),
     builderless = not settings.is_main,
+    experiments = {
+        # crbug/940930
+        "chromium.enable_cleandead": 100,
+    },
     main_list_view = "try",
-    siso_enabled = True,
     tryjob = try_.job(),
 )
 
@@ -1015,9 +1019,12 @@ try_.builder(
     builderless = not settings.is_main,
     cores = 32 if settings.is_main else 16,
     ssd = True,
+    experiments = {
+        # crbug/940930
+        "chromium.enable_cleandead": 100,
+    },
     main_list_view = "try",
     reclient_jobs = reclient.jobs.HIGH_JOBS_FOR_CQ,
-    siso_enabled = True,
     tryjob = try_.job(),
 )
 
@@ -1120,7 +1127,7 @@ try_.builder(
     ),
     gn_args = gn_args.config(
         configs = [
-            "android_builder",
+            "android_builder_without_codecs",
             "cronet_android",
             "release_try_builder",
             "reclient",
@@ -1129,8 +1136,11 @@ try_.builder(
     ),
     builderless = not settings.is_main,
     contact_team_email = "cronet-team@google.com",
+    experiments = {
+        # crbug/940930
+        "chromium.enable_cleandead": 50,
+    },
     main_list_view = "try",
-    siso_enabled = True,
     tryjob = try_.job(),
 )
 

@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 import {Oobe} from '../../cr_ui.js';
-import {OOBE_UI_STATE} from '../display_manager_types.js';
+import {OobeUiState} from '../display_manager_types.js';
 import {OobeTypes} from '../oobe_types.js';
 
 /**
@@ -28,7 +28,7 @@ export const LoginScreenBehavior = {
   initializeLoginScreen(screenName) {
     const api = {};
 
-    if (this.EXTERNAL_API.length != 0) {
+    if (this.EXTERNAL_API.length !== 0) {
       for (let i = 0; i < this.EXTERNAL_API.length; ++i) {
         const methodName = this.EXTERNAL_API[i];
         if (typeof this[methodName] !== 'function') {
@@ -75,11 +75,11 @@ export const LoginScreenBehavior = {
 
   /**
    * Returns UI state to be used when showing this screen. Default
-   * implementation returns OOBE_UI_STATE.HIDDEN.
-   * @return {OOBE_UI_STATE} The state of the OOBE UI.
+   * implementation returns OobeUiState.HIDDEN.
+   * @return {OobeUiState} The state of the OOBE UI.
    */
   getOobeUIInitialState() {
-    return OOBE_UI_STATE.HIDDEN;
+    return OobeUiState.HIDDEN;
   },
 
   /**
@@ -116,7 +116,7 @@ export const LoginScreenBehavior = {
    */
   registerScreenApi_(name, api) {
     // TODO(crbug.com/1229130) - Improve this.
-    if (globalThis.login == undefined) {
+    if (globalThis.login === undefined) {
       globalThis.login = {};
     }
     globalThis.login[name] = api;
@@ -129,7 +129,7 @@ export class LoginScreenBehaviorInterface {
   initializeLoginScreen(screenName) {}
   /** @param {string|Array<?>} action_id */
   userActed(action_id) {}
-  /** @return {OOBE_UI_STATE} */
+  /** @return {OobeUiState} */
   getOobeUIInitialState() {}
   /** @return {!Array<string>} */
   get EXTERNAL_API() {}

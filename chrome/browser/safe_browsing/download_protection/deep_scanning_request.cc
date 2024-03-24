@@ -5,6 +5,7 @@
 #include "chrome/browser/safe_browsing/download_protection/deep_scanning_request.h"
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/functional/bind.h"
@@ -48,7 +49,6 @@
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "components/url_matcher/url_matcher.h"
 #include "content/public/browser/download_item_utils.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace safe_browsing {
 
@@ -327,11 +327,11 @@ bool HasDecryptionFailedResult(
 }  // namespace
 
 /* static */
-absl::optional<enterprise_connectors::AnalysisSettings>
+std::optional<enterprise_connectors::AnalysisSettings>
 DeepScanningRequest::ShouldUploadBinary(download::DownloadItem* item) {
   // Files already on the disk shouldn't be uploaded for scanning.
   if (item->GetURL().SchemeIsFile())
-    return absl::nullopt;
+    return std::nullopt;
 
   auto* service =
       enterprise_connectors::ConnectorsServiceFactory::GetForBrowserContext(
@@ -341,7 +341,7 @@ DeepScanningRequest::ShouldUploadBinary(download::DownloadItem* item) {
   if (!service ||
       !service->IsConnectorEnabled(
           enterprise_connectors::AnalysisConnector::FILE_DOWNLOADED)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // Check that item->GetURL() matches the appropriate URL patterns by getting
@@ -446,9 +446,7 @@ void DeepScanningRequest::StartSingleFileScan() {
                      weak_ptr_factory_.GetWeakPtr(), item_->GetFullPath()));
   request->set_filename(item_->GetTargetFilePath().AsUTF8Unsafe());
 
-  std::string raw_digest_sha256 = item_->GetHash();
-  std::string sha256 =
-      base::HexEncode(raw_digest_sha256.data(), raw_digest_sha256.size());
+  std::string sha256 = base::HexEncode(item_->GetHash());
   request->set_digest(sha256);
 
   if (password_) {
@@ -682,7 +680,7 @@ void DeepScanningRequest::OnEnterpriseScanComplete(
         &MaybeReportDeepScanningVerdict, profile, item_->GetURL(),
         item_->GetTabUrl(), "", "", file_metadata.filename,
         file_metadata.sha256, file_metadata.mime_type,
-        extensions::SafeBrowsingPrivateEventRouter::kTriggerFileDownload,
+        extensions::SafeBrowsingPrivateEventRouter::kTriggerFileDownload, "",
         DeepScanAccessPoint::DOWNLOAD, file_metadata.size, result,
         file_metadata.scan_response));
 

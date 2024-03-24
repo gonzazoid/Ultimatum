@@ -97,9 +97,7 @@ struct SourceRegistration {
   // Specifies how long this source is eligible for attribution.
   mojo_base.mojom.TimeDelta expiry;
 
-  // Specifies a custom set of report windows determining the time
-  // bounds of a report being generated with this source.
-  EventReportWindows event_report_windows;
+  TriggerSpecs trigger_specs;
 
   // Specifies how long after source registration an aggregatable
   // report can be generated with this source.
@@ -159,6 +157,13 @@ struct AggregatableDedupKey {
   FilterPair filters;
 };
 
+struct AggregatableValues {
+  // A map of aggregation key identifier and the corresponding value.
+  map<string, uint32> values;
+
+  FilterPair filters;
+};
+
 // Represents a request from a reporting origin to trigger attribution on a
 // given site. See:
 // https://github.com/WICG/attribution-reporting-api/blob/main/EVENT.md#triggering-attribution
@@ -173,8 +178,9 @@ struct TriggerRegistration {
   // header.
   array<AggregatableTriggerData> aggregatable_trigger_data;
 
-  // A map of aggregation key identifier and the corresponding value.
-  map<string, uint32> aggregatable_values;
+  // List of all aggregatable values for matching a contribution value with a
+  // source's aggregation key.
+  array<AggregatableValues> aggregatable_values;
 
   // A key that is propagated through the Attribution Reporting API for
   // debugging purposes.

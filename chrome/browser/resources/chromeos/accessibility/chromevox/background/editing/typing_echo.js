@@ -2,7 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {LocalStorage} from '../../../common/local_storage.js';
+import {LocalStorage} from '/common/local_storage.js';
+import {TestImportManager} from '/common/testing/test_import_manager.js';
+
 import {Msgs} from '../../common/msgs.js';
 import {Personality, QueueMode} from '../../common/tts_types.js';
 import {ChromeVox} from '../chromevox.js';
@@ -82,3 +84,5 @@ export class TypingEcho {
  * @type {TypingEchoState}
  */
 TypingEcho.current;
+
+TestImportManager.exportForTesting(['TypingEchoState', TypingEchoState]);

@@ -14,6 +14,7 @@
 #include "chrome/browser/ui/views/toolbar/side_panel_toolbar_button.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
 #include "chrome/common/pref_names.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/events/event_utils.h"
 #include "ui/gfx/image/image_unittest_util.h"
 #include "ui/gfx/paint_vector_icon.h"
@@ -54,7 +55,9 @@ TEST_F(SidePanelToolbarButtonTest, SetCorrectIconInLTR) {
   ASSERT_TRUE(gfx::test::AreImagesEqual(
       gfx::Image(side_panel_button->GetImage(views::Button::STATE_NORMAL)),
       gfx::Image(gfx::CreateVectorIcon(
-          kSidePanelIcon, color_provider->GetColor(kColorToolbarButtonIcon)))));
+          features::IsChromeRefresh2023() ? kSidePanelChromeRefreshIcon
+                                          : kSidePanelIcon,
+          color_provider->GetColor(kColorToolbarButtonIcon)))));
 
   // Left aligned side panels should use the left aligned icon.
   browser_view()->GetProfile()->GetPrefs()->SetBoolean(
@@ -63,7 +66,8 @@ TEST_F(SidePanelToolbarButtonTest, SetCorrectIconInLTR) {
   ASSERT_TRUE(gfx::test::AreImagesEqual(
       gfx::Image(side_panel_button->GetImage(views::Button::STATE_NORMAL)),
       gfx::Image(gfx::CreateVectorIcon(
-          kSidePanelLeftIcon,
+          features::IsChromeRefresh2023() ? kSidePanelLeftChromeRefreshIcon
+                                          : kSidePanelLeftIcon,
           color_provider->GetColor(kColorToolbarButtonIcon)))));
 }
 
@@ -97,7 +101,9 @@ TEST_F(SidePanelToolbarButtonTest, SetCorrectIconInRTL) {
   EXPECT_TRUE(gfx::test::AreImagesEqual(
       gfx::Image(side_panel_button->GetImage(views::Button::STATE_NORMAL)),
       gfx::Image(gfx::CreateVectorIcon(
-          kSidePanelIcon, color_provider->GetColor(kColorToolbarButtonIcon)))));
+          features::IsChromeRefresh2023() ? kSidePanelChromeRefreshIcon
+                                          : kSidePanelIcon,
+          color_provider->GetColor(kColorToolbarButtonIcon)))));
 
   // Left aligned side panels should use the left aligned icon.
   browser_view()->GetProfile()->GetPrefs()->SetBoolean(
@@ -106,6 +112,7 @@ TEST_F(SidePanelToolbarButtonTest, SetCorrectIconInRTL) {
   EXPECT_TRUE(gfx::test::AreImagesEqual(
       gfx::Image(side_panel_button->GetImage(views::Button::STATE_NORMAL)),
       gfx::Image(gfx::CreateVectorIcon(
-          kSidePanelLeftIcon,
+          features::IsChromeRefresh2023() ? kSidePanelLeftChromeRefreshIcon
+                                          : kSidePanelLeftIcon,
           color_provider->GetColor(kColorToolbarButtonIcon)))));
 }

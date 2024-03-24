@@ -66,7 +66,6 @@ message AutofillProfileSpecifics {
   optional string profile_label = 62;
 
   // Contact info name fields.
-  repeated string name_honorific = 26;
   repeated string name_first = 2;
   repeated string name_middle = 3;
   repeated string name_last = 4;
@@ -80,12 +79,13 @@ message AutofillProfileSpecifics {
   repeated string name_last_conjunction = 28;
   repeated string name_last_second = 29;
   repeated string name_full = 21;
-  // This value contains the combination of the full name and the honorific
-  // prefix.
-  repeated string name_full_with_honorific = 60;
+
+  reserved 60;
+  reserved "name_full_with_honorific";
 
   // Validation status records for name fields.
-  repeated VerificationStatus name_honorific_status = 30;
+  reserved 30;
+  reserved "name_honorific_status";
   repeated VerificationStatus name_first_status = 31;
   repeated VerificationStatus name_middle_status = 32;
   repeated VerificationStatus name_last_status = 33;
@@ -93,7 +93,8 @@ message AutofillProfileSpecifics {
   repeated VerificationStatus name_last_conjunction_status = 35;
   repeated VerificationStatus name_last_second_status = 36;
   repeated VerificationStatus name_full_status = 37;
-  repeated VerificationStatus name_full_with_honorific_status = 61;
+  reserved 61;
+  reserved "name_full_with_honorific_status";
 
   // Contact info additional fields.
   repeated string email_address = 5;
@@ -156,6 +157,10 @@ message AutofillProfileSpecifics {
   // Note that some address forms require the combination of both in a single
   // field as opposed to each one separately.
   optional string address_home_overflow_and_landmark = 83;
+  // Combination of types address_home_street_location and
+  // address_home_dependent_locality. Note that some address forms require the
+  // combination of both in a single field as opposed to each one separately.
+  optional string address_home_street_location_and_locality = 89;
 
   // Validation status records for address fields.
   optional VerificationStatus address_home_city_status = 43;
@@ -171,6 +176,8 @@ message AutofillProfileSpecifics {
   optional VerificationStatus address_home_between_streets_or_landmark_status =
       82;
   optional VerificationStatus address_home_overflow_and_landmark_status = 84;
+  optional VerificationStatus address_home_street_location_and_locality_status =
+      90;
   optional VerificationStatus address_home_street_address_status = 47;
   optional VerificationStatus address_home_sorting_code_status = 48;
   optional VerificationStatus address_home_dependent_locality_status = 49;
@@ -190,10 +197,13 @@ message AutofillProfileSpecifics {
   reserved 63;
   reserved "disallow_settings_visible_updates";
 
-  // Birthdate fields.
-  optional int32 birthdate_day = 64;
-  optional int32 birthdate_month = 65;
-  optional int32 birthdate_year = 66;  // 4 digits.
+  // Removed in M123.
+  reserved 64;
+  reserved "birthdate_day";
+  reserved 65;
+  reserved "birthdate_month";
+  reserved 66;
+  reserved "birthdate_year";
 
   // Deprecated.
   optional string deprecated_label = 1 [deprecated = true];
@@ -212,6 +222,9 @@ message AutofillProfileSpecifics {
   reserved "address_home_dependent_thoroughfare_name_status";
   reserved 54;
   reserved "address_home_premise_name_status";
+  // Removed in M122.
+  reserved 26;
+  reserved "name_honorific";
 }
 
 message AutofillSpecifics {

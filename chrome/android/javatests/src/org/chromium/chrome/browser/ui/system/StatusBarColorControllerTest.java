@@ -15,6 +15,7 @@ import android.content.res.Resources;
 import android.graphics.Color;
 
 import androidx.annotation.ColorInt;
+import androidx.core.content.ContextCompat;
 import androidx.test.filters.LargeTest;
 import androidx.test.filters.SmallTest;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -27,12 +28,15 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import org.chromium.base.ThreadUtils;
 import org.chromium.base.supplier.Supplier;
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Criteria;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.Feature;
+import org.chromium.base.test.util.Features.DisableFeatures;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.base.test.util.Restriction;
 import org.chromium.chrome.browser.ChromeTabbedActivity;
 import org.chromium.chrome.browser.app.ChromeActivity;
@@ -42,6 +46,7 @@ import org.chromium.chrome.browser.layouts.LayoutType;
 import org.chromium.chrome.browser.tab.TabLaunchType;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.tasks.tab_management.TabUiThemeUtil;
+import org.chromium.chrome.browser.toolbar.ToolbarFeatures;
 import org.chromium.chrome.browser.toolbar.top.ToolbarLayout;
 import org.chromium.chrome.browser.toolbar.top.ToolbarPhone;
 import org.chromium.chrome.features.start_surface.StartSurfaceTestUtils;
@@ -51,10 +56,9 @@ import org.chromium.chrome.test.R;
 import org.chromium.chrome.test.batch.BlankCTATabInitialStateRule;
 import org.chromium.chrome.test.util.NewTabPageTestUtils;
 import org.chromium.chrome.test.util.OmniboxTestUtils;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.chrome.test.util.browser.ThemeTestUtils;
 import org.chromium.components.browser_ui.styles.ChromeColors;
+import org.chromium.components.browser_ui.widget.scrim.ScrimProperties;
 import org.chromium.components.embedder_support.util.UrlConstants;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.content_public.browser.test.util.TestTouchUtils;
@@ -311,6 +315,51 @@ public class StatusBarColorControllerTest {
                 statusBarColor.get().intValue());
     }
 
+    @Test
+    @LargeTest
+    @Feature({"StatusBar"})
+    @Restriction({UiRestriction.RESTRICTION_TYPE_PHONE}) // Status bar is always black on tablets
+    public void testFocusAndScrollColors() throws Exception {
+        ChromeTabbedActivity activity = sActivityTestRule.getActivity();
+        final StatusBarColorController statusBarColorController =
+                sActivityTestRule
+                        .getActivity()
+                        .getRootUiCoordinatorForTesting()
+                        .getStatusBarColorController();
+        sActivityTestRule.loadUrlInNewTab("about:blank", /* incognito= */ false);
+
+        mOmniboxUtils.requestFocus();
+        final @ColorInt int focusedColor =
+                ChromeColors.getSurfaceColor(
+                        activity, R.dimen.omnibox_suggestion_dropdown_bg_elevation);
+        waitForStatusBarColor(activity, focusedColor);
+
+        statusBarColorController.onSuggestionDropdownScroll();
+        final @ColorInt int scrolledColor =
+                ChromeColors.getSurfaceColor(activity, R.dimen.toolbar_text_box_elevation);
+        waitForStatusBarColor(activity, scrolledColor);
+
+        statusBarColorController.onSuggestionDropdownOverscrolledToTop();
+        waitForStatusBarColor(activity, focusedColor);
+
+        TabModelSelector tabModelSelector = activity.getTabModelSelectorSupplier().get();
+        ThreadUtils.runOnUiThread(() -> tabModelSelector.selectModel(/* incognito= */ true));
+        sActivityTestRule.loadUrlInNewTab("about:blank", /* incognito= */ true);
+
+        mOmniboxUtils.requestFocus();
+        final @ColorInt int focusedIncognitoColor =
+                ContextCompat.getColor(activity, R.color.omnibox_dropdown_bg_incognito);
+        waitForStatusBarColor(activity, focusedIncognitoColor);
+
+        statusBarColorController.onSuggestionDropdownScroll();
+        final @ColorInt int scrolledIncognitoColor =
+                ContextCompat.getColor(activity, R.color.default_bg_color_dark_elev_2_baseline);
+        waitForStatusBarColor(activity, scrolledIncognitoColor);
+
+        statusBarColorController.onSuggestionDropdownOverscrolledToTop();
+        waitForStatusBarColor(activity, focusedIncognitoColor);
+    }
+
     /** Test that the theme color is cleared when the Omnibox gains focus. */
     @Test
     @LargeTest
@@ -318,10 +367,9 @@ public class StatusBarColorControllerTest {
     @Restriction({UiRestriction.RESTRICTION_TYPE_PHONE}) // Status bar is always black on tablets
     public void testBrandColorIgnoredWhenOmniboxIsFocused() throws Exception {
         ChromeTabbedActivity activity = sActivityTestRule.getActivity();
-        final int expectedFocusedColor =
+        final @ColorInt int expectedFocusedColor =
                 ChromeColors.getSurfaceColor(
-                        activity,
-                        org.chromium.chrome.R.dimen.omnibox_suggestion_dropdown_bg_elevation);
+                        activity, R.dimen.omnibox_suggestion_dropdown_bg_elevation);
 
         String pageWithBrandColorUrl =
                 sActivityTestRule
@@ -351,8 +399,7 @@ public class StatusBarColorControllerTest {
         ChromeTabbedActivity activity = sActivityTestRule.getActivity();
         final int expectedFocusedColor =
                 ChromeColors.getSurfaceColor(
-                        activity,
-                        org.chromium.chrome.R.dimen.omnibox_suggestion_dropdown_bg_elevation);
+                        activity, R.dimen.omnibox_suggestion_dropdown_bg_elevation);
 
         String pageWithBrandColorUrl =
                 sActivityTestRule
@@ -445,7 +492,7 @@ public class StatusBarColorControllerTest {
         UiRestriction.RESTRICTION_TYPE_TABLET,
         DeviceRestriction.RESTRICTION_TYPE_NON_AUTO
     })
-    public void testStatusBarColorForTabStripRedesignFolioTablet() throws Exception {
+    public void testStatusBarColorForTabStripRedesignFolioTablet() {
         final ChromeActivity activity = sActivityTestRule.getActivity();
         final StatusBarColorController statusBarColorController =
                 sActivityTestRule
@@ -453,18 +500,76 @@ public class StatusBarColorControllerTest {
                         .getRootUiCoordinatorForTesting()
                         .getStatusBarColorController();
 
-        // Before enable tab strip redesign, status bar should be black.
-        assertEquals(
-                "Wrong initial value returned before enable Tab Strip Redesign Folio",
-                Color.BLACK,
-                activity.getWindow().getStatusBarColor());
-
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> statusBarColorController.updateStatusBarColor());
         assertEquals(
                 "Wrong value returned for Tab Strip Redesign Folio.",
                 TabUiThemeUtil.getTabStripBackgroundColor(activity, false),
                 activity.getWindow().getStatusBarColor());
+    }
+
+    @Test
+    @LargeTest
+    @Feature({"StatusBar"})
+    @Restriction({
+        UiRestriction.RESTRICTION_TYPE_TABLET,
+        DeviceRestriction.RESTRICTION_TYPE_NON_AUTO
+    })
+    public void testStatusBarColorOnTabletDuringTabStripTransition() {
+        final ChromeActivity activity = sActivityTestRule.getActivity();
+        final StatusBarColorController statusBarColorController =
+                sActivityTestRule
+                        .getActivity()
+                        .getRootUiCoordinatorForTesting()
+                        .getStatusBarColorController();
+        statusBarColorController.setAllowToolbarColorOnTablets(true);
+
+        var toolbarColor = sActivityTestRule.getActivity().getToolbarManager().getPrimaryColor();
+
+        // We will invoke #onToolbarColorChanged() on a tablet that in turn invokes
+        // #updateStatusBarColor() to assert that it sets |mToolbarColor| as expected. The status
+        // bar should use |mToolbarColor| when the tab strip is hidden, and the tab strip background
+        // color otherwise.
+
+        // Assume that the tab strip is initially hidden.
+        statusBarColorController.setTabStripHiddenOnTablet(true);
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> statusBarColorController.onToolbarColorChanged(toolbarColor));
+        assertEquals(
+                "Status bar color on tablet should match the toolbar background when the tab strip"
+                        + " is hidden.",
+                toolbarColor,
+                activity.getWindow().getStatusBarColor());
+
+        // Simulate an in-progress hide->show transition, where a scrim will be added on the status
+        // bar.
+        // TabStripHeightObserver#onHeightChanged() is expected to update the final strip visibility
+        // state in StatusBarColorController for this transition once the control container margins
+        // are updated and before the transition runs to completion.
+        statusBarColorController.setTabStripHiddenOnTablet(false);
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> statusBarColorController.setTabStripColorOverlay(toolbarColor, 0.5f));
+        assertEquals(
+                "Status bar color on tablet should use the tab strip transition scrim overlay"
+                        + " during a strip transition.",
+                ColorUtils.getColorWithOverlay(
+                        TabUiThemeUtil.getTabStripBackgroundColor(activity, false),
+                        toolbarColor,
+                        0.5f),
+                activity.getWindow().getStatusBarColor());
+
+        // Simulate transition completion by resetting the transition overlay state in
+        // StatusBarColorController.
+        TestThreadUtils.runOnUiThreadBlocking(
+                () ->
+                        statusBarColorController.setTabStripColorOverlay(
+                                ScrimProperties.INVALID_COLOR, 0f));
+        assertEquals(
+                "Status bar color on tablet should match the tab strip background when the tab"
+                        + " strip is visible.",
+                TabUiThemeUtil.getTabStripBackgroundColor(activity, false),
+                activity.getWindow().getStatusBarColor());
+        ToolbarFeatures.USE_TOOLBAR_BG_COLOR_FOR_STRIP_TRANSITION_SCRIM.setForTesting(false);
     }
 
     /** Test status bar is always black in Automotive devices. */

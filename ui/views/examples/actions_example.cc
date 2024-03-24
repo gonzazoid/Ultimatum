@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "base/callback_list.h"
@@ -17,7 +18,6 @@
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/actions/action_id.h"
 #include "ui/actions/actions.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -29,7 +29,7 @@
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
-#include "ui/views/action_view_controller.h"
+#include "ui/views/actions/action_view_controller.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/button/checkbox.h"
 #include "ui/views/controls/button/md_text_button.h"
@@ -50,97 +50,6 @@
 #include "ui/views/view_class_properties.h"
 #include "ui/views/view_observer.h"
 #include "ui/views/view_utils.h"
-
-namespace views::examples {
-
-class ActionCheckbox : public Checkbox {
-  METADATA_HEADER(ActionCheckbox, Checkbox)
-
- public:
-  ActionCheckbox();
-  ActionCheckbox(const ActionCheckbox&) = delete;
-  ActionCheckbox& operator=(const ActionCheckbox&) = delete;
-  ~ActionCheckbox() override = default;
-  actions::ActionItem* GetActionItem() const;
-  void SetActionItem(actions::ActionItem* action_item);
-  std::u16string GetName() const;
-  void SetName(const std::u16string& name);
-
- private:
-  void ActionItemChanged();
-  void TriggerAction();
-  std::u16string name_;
-  raw_ptr<actions::ActionItem> action_item_ = nullptr;
-  base::CallbackListSubscription action_changed_subscription_;
-};
-
-ActionCheckbox::ActionCheckbox()
-    : Checkbox(std::u16string(),
-               base::BindRepeating(&ActionCheckbox::TriggerAction,
-                                   base::Unretained(this))) {}
-
-actions::ActionItem* ActionCheckbox::GetActionItem() const {
-  return action_item_.get();
-}
-
-void ActionCheckbox::SetActionItem(actions::ActionItem* action_item) {
-  if (action_item_.get() == action_item) {
-    return;
-  }
-  action_item_ = action_item;
-  action_changed_subscription_ = {};
-  if (action_item_) {
-    action_changed_subscription_ =
-        action_item_->AddActionChangedCallback(base::BindRepeating(
-            &ActionCheckbox::ActionItemChanged, base::Unretained(this)));
-    ActionItemChanged();
-  }
-  OnPropertyChanged(&action_item_,
-                    static_cast<PropertyEffects>(kPropertyEffectsLayout |
-                                                 kPropertyEffectsPaint));
-}
-
-std::u16string ActionCheckbox::GetName() const {
-  return name_;
-}
-
-void ActionCheckbox::SetName(const std::u16string& name) {
-  if (name_ == name) {
-    return;
-  }
-  name_ = name;
-  if (GetText().empty()) {
-    SetText(name_);
-  }
-  OnPropertyChanged(&name_, kPropertyEffectsNone);
-}
-
-void ActionCheckbox::ActionItemChanged() {
-  SetText(action_item_->GetText());
-  SetEnabled(action_item_->GetEnabled());
-  SetVisible(action_item_->GetVisible());
-  SetTooltipText(action_item_->GetTooltipText());
-  SetChecked(action_item_->GetChecked());
-}
-
-void ActionCheckbox::TriggerAction() {
-  if (action_item_) {
-    action_item_->SetChecked(GetChecked());
-    action_item_->InvokeAction();
-  }
-}
-
-BEGIN_METADATA(ActionCheckbox)
-END_METADATA
-
-BEGIN_VIEW_BUILDER(, ActionCheckbox, Checkbox)
-VIEW_BUILDER_PROPERTY(actions::ActionItem*, ActionItem)
-VIEW_BUILDER_PROPERTY(std::u16string, Name)
-END_VIEW_BUILDER
-
-}  // namespace views::examples
-
-DEFINE_VIEW_BUILDER(, views::examples::ActionCheckbox)
 
 namespace views::examples {
 
@@ -175,7 +84,7 @@ class ViewsComboboxModel : public ui::ComboboxModel, public ViewObserver {
   // ui::ComboboxModel overrides.
   size_t GetItemCount() const override;
   std::u16string GetItemAt(size_t index) const override;
-  absl::optional<size_t> GetDefaultIndex() const override;
+  std::optional<size_t> GetDefaultIndex() const override;
 
   View* GetViewItemAt(size_t index) const;
 
@@ -206,14 +115,16 @@ std::u16string ViewsComboboxModel::GetItemAt(size_t index) const {
       ss << index;
       return base::ASCIIToUTF16(base::StringPiece("Button: " + ss.str()));
     }
-    if (IsViewClass<ActionCheckbox>(view)) {
-      return AsViewClass<ActionCheckbox>(view)->GetName();
+    if (IsViewClass<Checkbox>(view)) {
+      std::stringstream ss;
+      ss << index;
+      return base::ASCIIToUTF16(base::StringPiece("Checkbox: " + ss.str()));
     }
   }
   return u"<Unknown>";
 }
 
-absl::optional<size_t> ViewsComboboxModel::GetDefaultIndex() const {
+std::optional<size_t> ViewsComboboxModel::GetDefaultIndex() const {
   return {0};
 }
 
@@ -589,9 +500,9 @@ void ActionsExample::AssignAction(actions::ActionItem* action,
   if (IsViewClass<MdTextButton>(view)) {
     action_view_controller_.CreateActionViewRelationship(
         static_cast<MdTextButton*>(view), GetSelectedAction()->GetAsWeakPtr());
-  } else if (IsViewClass<ActionCheckbox>(view)) {
-    ActionCheckbox* checkbox = AsViewClass<ActionCheckbox>(view);
-    checkbox->SetActionItem(GetSelectedAction());
+  } else if (IsViewClass<Checkbox>(view)) {
+    action_view_controller_.CreateActionViewRelationship(
+        static_cast<Checkbox*>(view), GetSelectedAction()->GetAsWeakPtr());
   }
 }
 
@@ -599,7 +510,7 @@ void ActionsExample::CreateControl(actions::ActionItem* action,
                                    actions::ActionInvocationContext context) {
   static int control_num = 0;
   std::unique_ptr<View> new_view;
-  const absl::optional<size_t> selected_index =
+  const std::optional<size_t> selected_index =
       available_controls_->GetSelectedIndex();
   switch (selected_index.value_or(0)) {
     case 0:
@@ -609,8 +520,8 @@ void ActionsExample::CreateControl(actions::ActionItem* action,
       break;
     case 1:
       new_view =
-          Builder<ActionCheckbox>()
-              .SetName(u"Checkbox " + base::NumberToString16(control_num))
+          Builder<Checkbox>()
+              .SetText(u"Checkbox " + base::NumberToString16(control_num))
               .Build();
       break;
     default:

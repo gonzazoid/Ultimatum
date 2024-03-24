@@ -110,12 +110,10 @@ void ChromeBookmarkClient::Init(bookmarks::BookmarkModel* model) {
     managed_bookmark_service_->BookmarkModelCreated(model);
   model_ = model;
 
-  if (base::FeatureList::IsEnabled(commerce::kShoppingCollection)) {
-    shopping_save_location_provider_ =
-        std::make_unique<ShoppingCollectionProvider>(model, profile_);
+  shopping_save_location_provider_ =
+      std::make_unique<ShoppingCollectionProvider>(model, profile_);
 
-    AddSuggestedSaveLocationProvider(shopping_save_location_provider_.get());
-  }
+  AddSuggestedSaveLocationProvider(shopping_save_location_provider_.get());
 
 #if BUILDFLAG(ENABLE_OFFLINE_PAGES)
   offline_page_observer_ =
@@ -125,11 +123,6 @@ void ChromeBookmarkClient::Init(bookmarks::BookmarkModel* model) {
       offline_page_observer_.get());
   model_observation_->Observe(model);
 #endif
-}
-
-bool ChromeBookmarkClient::AreFoldersForAccountStorageAllowed() {
-  return base::FeatureList::IsEnabled(
-      syncer::kEnableBookmarkFoldersForAccountStorage);
 }
 
 base::CancelableTaskTracker::TaskId
@@ -176,18 +169,8 @@ ChromeBookmarkClient::GetLoadManagedNodeCallback() {
   return managed_bookmark_service_->GetLoadManagedNodeCallback();
 }
 
-bookmarks::metrics::StorageStateForUma
-ChromeBookmarkClient::GetStorageStateForUma() {
-  if (local_or_syncable_bookmark_sync_service_->IsTrackingMetadata()) {
-    return bookmarks::metrics::StorageStateForUma::kSyncEnabled;
-  }
-
-  if (account_bookmark_sync_service_ &&
-      account_bookmark_sync_service_->IsTrackingMetadata()) {
-    return bookmarks::metrics::StorageStateForUma::kAccount;
-  }
-
-  return bookmarks::metrics::StorageStateForUma::kLocalOnly;
+bool ChromeBookmarkClient::IsSyncFeatureEnabledIncludingBookmarksForUma() {
+  return local_or_syncable_bookmark_sync_service_->IsTrackingMetadata();
 }
 
 bool ChromeBookmarkClient::CanSetPermanentNodeTitle(
@@ -201,24 +184,33 @@ bool ChromeBookmarkClient::IsNodeManaged(const bookmarks::BookmarkNode* node) {
          managed_bookmark_service_->IsNodeManaged(node);
 }
 
-std::string ChromeBookmarkClient::EncodeBookmarkSyncMetadata() {
-  // TODO(crbug.com/1494120): Also encode metadata produced by
-  // `account_bookmark_sync_service_` once BookmarkClient API allows it.
+std::string ChromeBookmarkClient::EncodeLocalOrSyncableBookmarkSyncMetadata() {
   return local_or_syncable_bookmark_sync_service_->EncodeBookmarkSyncMetadata();
 }
 
-void ChromeBookmarkClient::DecodeBookmarkSyncMetadata(
+std::string ChromeBookmarkClient::EncodeAccountBookmarkSyncMetadata() {
+  if (!account_bookmark_sync_service_) {
+    return std::string();
+  }
+
+  return account_bookmark_sync_service_->EncodeBookmarkSyncMetadata();
+}
+
+void ChromeBookmarkClient::DecodeLocalOrSyncableBookmarkSyncMetadata(
     const std::string& metadata_str,
     const base::RepeatingClosure& schedule_save_closure) {
   local_or_syncable_bookmark_sync_service_->DecodeBookmarkSyncMetadata(
       metadata_str, schedule_save_closure,
       std::make_unique<
           sync_bookmarks::BookmarkModelViewUsingLocalOrSyncableNodes>(model_));
-  // TODO(crbug.com/1494120): Pass along sync metadata once BookmarkClient API
-  // is capable of reading it from BookmarkModel.
+}
+
+void ChromeBookmarkClient::DecodeAccountBookmarkSyncMetadata(
+    const std::string& metadata_str,
+    const base::RepeatingClosure& schedule_save_closure) {
   if (account_bookmark_sync_service_) {
     account_bookmark_sync_service_->DecodeBookmarkSyncMetadata(
-        std::string(), schedule_save_closure,
+        metadata_str, schedule_save_closure,
         std::make_unique<sync_bookmarks::BookmarkModelViewUsingAccountNodes>(
             model_));
   }

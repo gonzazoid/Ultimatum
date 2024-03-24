@@ -11,7 +11,7 @@
 #include "base/files/file_path.h"
 #include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/observer_list_types.h"
+#include "base/observer_list.h"
 #include "base/version.h"
 
 class PrefService;
@@ -25,16 +25,10 @@ class ScreenAIInstallState {
     kNotDownloaded,
     // Component download is in progress.
     kDownloading,
-    // Either component download or initialization failed. Component load and
-    // initialization may fail due to different OS or malware protection
-    // restrictions, however this is expected to be quite rare.
-    // Note that if library load and initialization crashes, the Failed state
-    // may never be set.
-    kFailed,
+    // Component download failed.
+    kDownloadFailed,
     // Component is downloaded but not loaded yet.
-    kDownloaded,
-    // Component is initialized successfully by at least one profile.
-    kReady
+    kDownloaded
   };
 
   class Observer : public base::CheckedObserver {
@@ -84,8 +78,6 @@ class ScreenAIInstallState {
   // Returns true if the component is downloaded and not failed to initialize.
   bool IsComponentAvailable();
 
-  void SetComponentReadyForTesting();
-
   // Sets the component state and informs the observers.
   void SetState(State state);
 
@@ -104,7 +96,6 @@ class ScreenAIInstallState {
   State get_state() { return state_; }
 
   void ResetForTesting();
-  void SetComponentFolderForTesting();
   void SetStateForTesting(State state);
 
  private:
@@ -116,7 +107,7 @@ class ScreenAIInstallState {
   base::FilePath component_binary_path_;
   State state_ = State::kNotDownloaded;
 
-  std::vector<raw_ptr<Observer, VectorExperimental>> observers_;
+  base::ObserverList<Observer> observers_;
 };
 
 }  // namespace screen_ai

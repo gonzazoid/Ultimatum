@@ -42,7 +42,7 @@ class CORE_EXPORT LoaderFactoryForFrame final
       scoped_refptr<base::SingleThreadTaskRunner>,
       scoped_refptr<base::SingleThreadTaskRunner>,
       BackForwardCacheLoaderHelper*,
-      const absl::optional<base::UnguessableToken>&
+      const std::optional<base::UnguessableToken>&
           service_worker_race_network_request_token,
       bool is_from_origin_dirty_style_sheet) override;
   CodeCacheHost* GetCodeCacheHost() override;
@@ -53,6 +53,8 @@ class CORE_EXPORT LoaderFactoryForFrame final
       mojom::blink::LocalFrameHost& local_frame_host,
       mojo::PendingReceiver<mojom::blink::KeepAliveHandle> pending_receiver);
   scoped_refptr<BackgroundCodeCacheHost> GetBackgroundCodeCacheHost();
+
+  URLLoaderThrottleProvider* GetURLLoaderThrottleProvider();
   Vector<std::unique_ptr<URLLoaderThrottle>> CreateThrottles(
       const network::ResourceRequest&);
 

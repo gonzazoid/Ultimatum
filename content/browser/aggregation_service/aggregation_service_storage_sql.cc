@@ -436,6 +436,13 @@ bool AggregationServiceStorageSql::ReportingOriginHasCapacity(
     return false;
 
   int64_t count = count_request_statement.ColumnInt64(0);
+
+  // Goes above 1000 to ensure the limit is being applied correctly.
+  base::UmaHistogramCustomCounts(
+      "PrivacySandbox.AggregationService.Storage.Sql."
+      "StoredRequestsPerReportingOrigin",
+      count, /*min=*/1, /*exclusive_max=*/2000, /*buckets=*/50);
+
   return count < max_stored_requests_per_reporting_origin_;
 }
 
@@ -637,9 +644,9 @@ AggregationServiceStorageSql::GetRequestsReportingOnOrBefore(
     if (!not_after_time.is_max()) {
       base::UmaHistogramCustomTimes(
           "PrivacySandbox.AggregationService.Storage.Sql."
-          "RequestDelayFromUpdatedReportTime",
+          "RequestDelayFromUpdatedReportTime2",
           not_after_time - get_requests_statement.ColumnTime(1),
-          /*min=*/base::Seconds(1),
+          /*min=*/base::Milliseconds(1),
           /*max=*/base::Days(24),
           /*buckets=*/50);
     }

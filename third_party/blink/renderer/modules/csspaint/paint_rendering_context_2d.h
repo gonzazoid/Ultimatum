@@ -59,7 +59,12 @@ class MODULES_EXPORT PaintRenderingContext2D
   Color GetCurrentColor() const final;
 
   cc::PaintCanvas* GetOrCreatePaintCanvas() final { return GetPaintCanvas(); }
-  cc::PaintCanvas* GetPaintCanvas() final;
+  using BaseRenderingContext2D::GetPaintCanvas;  // Pull the non-const overload.
+  const cc::PaintCanvas* GetPaintCanvas() const final;
+  const MemoryManagedPaintRecorder* Recorder() const override {
+    return &paint_recorder_;
+  }
+
   void WillDraw(const SkIRect&, CanvasPerformanceMonitor::DrawType) final;
 
   double shadowOffsetX() const final;
@@ -91,8 +96,8 @@ class MODULES_EXPORT PaintRenderingContext2D
   void resetTransform() final;
   void reset() final;
 
-  absl::optional<cc::PaintRecord> FlushCanvas(FlushReason) final {
-    return absl::nullopt;
+  std::optional<cc::PaintRecord> FlushCanvas(FlushReason) final {
+    return std::nullopt;
   }
 
   PaintRecord GetRecord();
@@ -104,17 +109,16 @@ class MODULES_EXPORT PaintRenderingContext2D
  protected:
   PredefinedColorSpace GetDefaultImageDataColorSpace() const final;
   bool IsPaint2D() const override { return true; }
-  void SkipQueuedDrawCommands() override;
-  void RestartRecording() override;
 
   // PaintRenderingContext2D is unable to resolve fonts.
   bool ResolveFont(const String& new_font) final { return false; }
 
  private:
   void InitializeForRecording(cc::PaintCanvas* canvas) const override;
+  void RecordingCleared() override;
 
   MemoryManagedPaintRecorder paint_recorder_;
-  absl::optional<PaintRecord> previous_frame_;
+  std::optional<PaintRecord> previous_frame_;
   gfx::Size container_size_;
   Member<const PaintRenderingContext2DSettings> context_settings_;
   // The paint worklet canvas operates on CSS pixels, and that's different than

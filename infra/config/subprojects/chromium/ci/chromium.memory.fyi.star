@@ -46,6 +46,7 @@ ci.builder(
             apply_configs = ["mb"],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
     ),
     gn_args = gn_args.config(
@@ -84,12 +85,12 @@ ci.builder(
             apply_configs = ["mb"],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
     ),
     gn_args = gn_args.config(
         configs = [
             "tsan",
-            "disable_nacl",
             "fail_on_san_warnings",
             "release_builder",
             "reclient",
@@ -119,6 +120,7 @@ ci.builder(
             apply_configs = ["mb"],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.LINUX,
         ),
     ),
     gn_args = gn_args.config(
@@ -141,6 +143,7 @@ ci.builder(
 # and measuring performance to see if we can roll LSan into ASan.
 ci.builder(
     name = "mac-lsan-fyi-rel",
+    description_html = "Runs basic Mac tests with is_lsan=true",
     schedule = "with 24h interval",
     triggered_by = [],
     builder_spec = builder_config.builder_spec(
@@ -152,6 +155,7 @@ ci.builder(
             apply_configs = ["mb"],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
+            target_platform = builder_config.target_platform.MAC,
         ),
         run_tests_serially = True,
     ),
@@ -160,7 +164,6 @@ ci.builder(
             "asan",
             "lsan",
             "dcheck_always_on",
-            "disable_nacl",
             "release_builder",
             "reclient",
         ],
@@ -171,6 +174,43 @@ ci.builder(
     console_view_entry = consoles.console_view_entry(
         category = "mac|lsan",
         short_name = "lsan",
+    ),
+    execution_timeout = 12 * time.hour,
+    reclient_jobs = reclient.jobs.DEFAULT,
+)
+
+ci.builder(
+    name = "mac-ubsan-fyi-rel",
+    description_html = "Runs basic Mac tests with is_ubsan=true",
+    schedule = "with 24h interval",
+    triggered_by = [],
+    builder_spec = builder_config.builder_spec(
+        gclient_config = builder_config.gclient_config(
+            config = "chromium",
+        ),
+        chromium_config = builder_config.chromium_config(
+            config = "chromium",
+            apply_configs = ["mb"],
+            build_config = builder_config.build_config.RELEASE,
+            target_bits = 64,
+            target_platform = builder_config.target_platform.MAC,
+        ),
+        run_tests_serially = True,
+    ),
+    gn_args = gn_args.config(
+        configs = [
+            "ubsan_no_recover",
+            "dcheck_always_on",
+            "release_builder",
+            "reclient",
+        ],
+    ),
+    builderless = 1,
+    cores = None,
+    os = os.MAC_DEFAULT,
+    console_view_entry = consoles.console_view_entry(
+        category = "mac|ubsan",
+        short_name = "ubsan",
     ),
     execution_timeout = 12 * time.hour,
     reclient_jobs = reclient.jobs.DEFAULT,

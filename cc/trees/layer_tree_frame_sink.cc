@@ -50,7 +50,7 @@ LayerTreeFrameSink::LayerTreeFrameSink(
     scoped_refptr<RasterContextProviderWrapper> worker_context_provider_wrapper,
     scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner,
     gpu::GpuMemoryBufferManager* gpu_memory_buffer_manager,
-    std::unique_ptr<gpu::ClientSharedImageInterface> shared_image_interface)
+    scoped_refptr<gpu::ClientSharedImageInterface> shared_image_interface)
     : context_provider_(std::move(context_provider)),
       worker_context_provider_wrapper_(
           std::move(worker_context_provider_wrapper)),
@@ -184,10 +184,10 @@ void LayerTreeFrameSink::OnGpuChannelLost() {
   client_->DidLoseLayerTreeFrameSink();
 }
 
-gpu::ClientSharedImageInterface* LayerTreeFrameSink::shared_image_interface()
-    const {
+scoped_refptr<gpu::ClientSharedImageInterface>
+LayerTreeFrameSink::shared_image_interface() const {
   return base::FeatureList::IsEnabled(features::kSharedBitmapToSharedImage)
-             ? shared_image_interface_.get()
+             ? shared_image_interface_
              : nullptr;
 }
 

@@ -25,6 +25,7 @@
 #include "ui/accessibility/ax_action_data.h"
 #include "ui/accessibility/ax_mode.h"
 #include "ui/accessibility/ax_node_data.h"
+#include "ui/accessibility/platform/ax_platform_for_test.h"
 #include "ui/accessibility/platform/ax_platform_node.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -2574,12 +2575,15 @@ TEST_F(MenuControllerTest, DragFromViewIntoMenuAndExit) {
 // Tests that |MenuHost::InitParams| are correctly forwarded to the created
 // |aura::Window|.
 TEST_F(MenuControllerTest, AuraWindowIsInitializedWithMenuHostInitParams) {
-  ShowSubmenu(nullptr,
-              [](auto& params) { params.menu_type = ui::MenuType::kRootMenu; });
-  EXPECT_EQ(
-      ui::MenuType::kRootMenu,
+  constexpr gfx::Rect kAnchorRect(1, 5, 2, 5);
+  ShowSubmenu(nullptr, [anchor_rect = kAnchorRect](auto& params) {
+    params.owned_window_anchor.anchor_rect = anchor_rect;
+  });
+  auto* property =
       menu_item()->GetSubmenu()->GetWidget()->GetNativeWindow()->GetProperty(
-          aura::client::kMenuType));
+          aura::client::kOwnedWindowAnchor);
+  ASSERT_TRUE(property);
+  EXPECT_EQ(kAnchorRect, property->anchor_rect);
 }
 
 // Tests that |aura::Window| has the correct properties when a context menu is
@@ -2593,8 +2597,6 @@ TEST_F(MenuControllerTest, ContextMenuInitializesAuraWindowWhenShown) {
 
   SubmenuView* const submenu = menu_item()->GetSubmenu();
   const aura::Window* window = submenu->GetWidget()->GetNativeWindow();
-  EXPECT_EQ(ui::MenuType::kRootContextMenu,
-            window->GetProperty(aura::client::kMenuType));
   const ui::OwnedWindowAnchor* anchor =
       window->GetProperty(aura::client::kOwnedWindowAnchor);
   EXPECT_TRUE(anchor);
@@ -2622,8 +2624,6 @@ TEST_F(MenuControllerTest, ContextMenuInitializesAuraWindowWhenShown) {
 
   anchor = window->GetProperty(aura::client::kOwnedWindowAnchor);
   EXPECT_TRUE(anchor);
-  EXPECT_EQ(ui::MenuType::kChildMenu,
-            window->GetProperty(aura::client::kMenuType));
   EXPECT_EQ(ui::OwnedWindowAnchorPosition::kTopRight, anchor->anchor_position);
   EXPECT_EQ(ui::OwnedWindowAnchorGravity::kBottomRight, anchor->anchor_gravity);
   EXPECT_EQ((ui::OwnedWindowConstraintAdjustment::kAdjustmentSlideY |
@@ -2650,8 +2650,6 @@ TEST_F(MenuControllerTest, RootAndChildMenusInitializeAuraWindowWhenShown) {
   const ui::OwnedWindowAnchor* anchor =
       window->GetProperty(aura::client::kOwnedWindowAnchor);
   EXPECT_TRUE(anchor);
-  EXPECT_EQ(ui::MenuType::kRootMenu,
-            window->GetProperty(aura::client::kMenuType));
   EXPECT_EQ(ui::OwnedWindowAnchorPosition::kBottomLeft,
             anchor->anchor_position);
   EXPECT_EQ(ui::OwnedWindowAnchorGravity::kBottomRight, anchor->anchor_gravity);
@@ -2678,8 +2676,6 @@ TEST_F(MenuControllerTest, RootAndChildMenusInitializeAuraWindowWhenShown) {
 
   anchor = window->GetProperty(aura::client::kOwnedWindowAnchor);
   EXPECT_TRUE(anchor);
-  EXPECT_EQ(ui::MenuType::kChildMenu,
-            window->GetProperty(aura::client::kMenuType));
   EXPECT_EQ(ui::OwnedWindowAnchorPosition::kTopRight, anchor->anchor_position);
   EXPECT_EQ(ui::OwnedWindowAnchorGravity::kBottomRight, anchor->anchor_gravity);
   EXPECT_EQ((ui::OwnedWindowConstraintAdjustment::kAdjustmentSlideY |
@@ -2926,8 +2922,8 @@ TEST_F(MenuControllerTest, SetSelectionIndices_ChildrenChanged) {
   GET_CHILD_BUTTON(button3, item5, 2);
   OpenMenu(menu_item());
 
-  const auto expect_coordinates = [](const View* v, absl::optional<int> pos,
-                                     absl::optional<int> size) {
+  const auto expect_coordinates = [](const View* v, std::optional<int> pos,
+                                     std::optional<int> size) {
     ui::AXNodeData data;
     v->GetViewAccessibility().GetAccessibleNodeData(&data);
     const auto check_attribute = [&](const auto& expected, auto attribute) {
@@ -2956,8 +2952,8 @@ TEST_F(MenuControllerTest, SetSelectionIndices_ChildrenChanged) {
   MenuChildrenChanged(menu_item());
 
   // Verify that disabled menu items no longer have PosInSet or SetSize.
-  expect_coordinates(item1, absl::nullopt, absl::nullopt);
-  expect_coordinates(button1, absl::nullopt, absl::nullopt);
+  expect_coordinates(item1, std::nullopt, std::nullopt);
+  expect_coordinates(button1, std::nullopt, std::nullopt);
   expect_coordinates(item3, 1, 5);
   expect_coordinates(item4, 2, 5);
   expect_coordinates(button2, 3, 5);
@@ -3005,7 +3001,7 @@ TEST_F(MenuControllerTest, AccessibilityEmitsSelectChildrenChanged) {
 // Test that in accessibility mode disabled menu items are taken into account
 // during items indices assignment.
 TEST_F(MenuControllerTest, AccessibilityDisabledItemsIndices) {
-  const ScopedAXModeSetter ax_mode_setter(ui::AXMode::kNativeAPIs);
+  const ::ui::ScopedAXModeSetter ax_mode_setter(ui::AXMode::kNativeAPIs);
 
   SubmenuView* const submenu = menu_item()->GetSubmenu();
   const MenuItemView* const item1 = submenu->GetMenuItemAt(0);

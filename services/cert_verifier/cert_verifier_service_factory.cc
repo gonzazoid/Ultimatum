@@ -36,10 +36,11 @@
 #endif
 
 #if BUILDFLAG(CHROME_ROOT_STORE_SUPPORTED)
+#include <optional>
+
 #include "mojo/public/cpp/base/big_buffer.h"
 #include "net/cert/internal/trust_store_chrome.h"
 #include "net/cert/root_store_proto_lite/root_store.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/boringssl/src/pki/parse_name.h"
 #include "third_party/boringssl/src/pki/parsed_certificate.h"
 #endif
@@ -69,13 +70,28 @@ internal::CertVerifierServiceImpl* GetNewCertVerifierImpl(
   // Populate initial instance params from creation params.
   net::CertVerifyProc::InstanceParams instance_params;
   if (creation_params->initial_additional_certificates) {
-    instance_params.additional_trust_anchors = net::x509_util::ParseAllCerts(
-        creation_params->initial_additional_certificates->trust_anchors);
+    instance_params
+        .additional_trust_anchors = net::x509_util::ParseAllValidCerts(
+        net::x509_util::ConvertToX509CertificatesIgnoreErrors(
+            creation_params->initial_additional_certificates->trust_anchors));
+
     instance_params.additional_untrusted_authorities =
-        net::x509_util::ParseAllCerts(
-            creation_params->initial_additional_certificates->all_certificates);
+        net::x509_util::ParseAllValidCerts(
+            net::x509_util::ConvertToX509CertificatesIgnoreErrors(
+                creation_params->initial_additional_certificates
+                    ->all_certificates));
+
+    instance_params.additional_trust_anchors_with_enforced_constraints =
+        net::x509_util::ParseAllValidCerts(
+            net::x509_util::ConvertToX509CertificatesIgnoreErrors(
+                creation_params->initial_additional_certificates
+                    ->trust_anchors_with_enforced_constraints));
+
     instance_params.additional_distrusted_spkis =
         creation_params->initial_additional_certificates->distrusted_spkis;
+    instance_params.include_system_trust_store =
+        creation_params->initial_additional_certificates
+            ->include_system_trust_store;
   }
 
   std::unique_ptr<net::CertVerifierWithUpdatableProc> cert_verifier =
@@ -116,7 +132,7 @@ std::string GetName(const bssl::ParsedCertificate& cert) {
 std::string GetHash(const bssl::ParsedCertificate& cert) {
   net::SHA256HashValue hash =
       net::X509Certificate::CalculateFingerprint256(cert.cert_buffer());
-  return base::HexEncode(hash.data, std::size(hash.data));
+  return base::HexEncode(hash.data);
 }
 #endif
 
@@ -295,7 +311,7 @@ void CertVerifierServiceFactoryImpl::UpdateChromeRootStore(
     return;
   }
 
-  absl::optional<net::ChromeRootStoreData> root_store_data =
+  std::optional<net::ChromeRootStoreData> root_store_data =
       net::ChromeRootStoreData::CreateChromeRootStoreData(proto);
   if (!root_store_data) {
     LOG(ERROR) << "error interpreting proto for Chrome Root Store";

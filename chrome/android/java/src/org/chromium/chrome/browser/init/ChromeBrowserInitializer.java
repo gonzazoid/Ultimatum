@@ -38,7 +38,7 @@ import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.language.GlobalAppLocaleController;
 import org.chromium.chrome.browser.metrics.UmaUtils;
 import org.chromium.chrome.browser.preferences.AllPreferenceKeyRegistries;
-import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.signin.SigninCheckerProvider;
 import org.chromium.chrome.browser.webapps.ChromeWebApkHost;
 import org.chromium.components.background_task_scheduler.BackgroundTaskSchedulerFactory;
@@ -64,7 +64,7 @@ import java.util.Locale;
  */
 public class ChromeBrowserInitializer {
     private static final String TAG = "BrowserInitializer";
-    private static ChromeBrowserInitializer sChromeBrowserInitializer;
+    private static ChromeBrowserInitializer sChromeBrowserInitializer = new ChromeBrowserInitializer();
     private static BrowserStartupController sBrowserStartupController;
     private final Locale mInitialLocale = Locale.getDefault();
     private List<Runnable> mTasksToRunWithFullBrowser;
@@ -80,9 +80,6 @@ public class ChromeBrowserInitializer {
      * @return The singleton instance of {@link ChromeBrowserInitializer}.
      */
     public static ChromeBrowserInitializer getInstance() {
-        if (sChromeBrowserInitializer == null) {
-            sChromeBrowserInitializer = new ChromeBrowserInitializer();
-        }
         return sChromeBrowserInitializer;
     }
 
@@ -362,7 +359,7 @@ public class ChromeBrowserInitializer {
                             LibraryProcessType.PROCESS_BROWSER,
                             /* singleProcess= */ false,
                             /* startGpuProcess= */ startGpuProcess);
-            SigninCheckerProvider.get(Profile.getLastUsedRegularProfile());
+            SigninCheckerProvider.get(ProfileManager.getLastUsedRegularProfile());
         } finally {
             TraceEvent.end("ChromeBrowserInitializer.startChromeBrowserProcessesSync");
         }

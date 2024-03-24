@@ -5,8 +5,9 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_PHYSICAL_BOX_FRAGMENT_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_PHYSICAL_BOX_FRAGMENT_H_
 
+#include <optional>
+
 #include "base/dcheck_is_on.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/block_break_token.h"
 #include "third_party/blink/renderer/core/layout/geometry/box_sides.h"
@@ -53,7 +54,7 @@ class CORE_EXPORT PhysicalBoxFragment final : public PhysicalFragment {
                       const PhysicalBoxStrut& borders,
                       bool has_padding,
                       const PhysicalBoxStrut& padding,
-                      const absl::optional<PhysicalRect>& inflow_bounds,
+                      const std::optional<PhysicalRect>& inflow_bounds,
                       bool has_fragment_items,
                       WritingMode block_or_line_writing_mode);
 
@@ -139,16 +140,16 @@ class CORE_EXPORT PhysicalBoxFragment final : public PhysicalFragment {
     return HasItems() ? ComputeItemsAddress() : nullptr;
   }
 
-  absl::optional<LayoutUnit> FirstBaseline() const {
+  std::optional<LayoutUnit> FirstBaseline() const {
     if (has_first_baseline_)
       return first_baseline_;
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  absl::optional<LayoutUnit> LastBaseline() const {
+  std::optional<LayoutUnit> LastBaseline() const {
     if (has_last_baseline_)
       return last_baseline_;
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   bool UseLastBaselineForInlineBaseline() const {
@@ -189,12 +190,12 @@ class CORE_EXPORT PhysicalBoxFragment final : public PhysicalFragment {
         ->table_cell_column_index;
   }
 
-  absl::optional<wtf_size_t> TableSectionStartRowIndex() const {
+  std::optional<wtf_size_t> TableSectionStartRowIndex() const {
     DCHECK(IsTableSection());
     if (const auto* field = GetRareField(FieldId::kTableSectionStartRowIndex)) {
       return field->table_section_start_row_index;
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   const Vector<LayoutUnit>* TableSectionRowOffsets() const {
@@ -260,18 +261,18 @@ class CORE_EXPORT PhysicalBoxFragment final : public PhysicalFragment {
   }
 
   // Returns the bounds of any inflow children for this fragment (specifically
-  // no out-of-flow positioned objects). This will return |absl::nullopt| if:
+  // no out-of-flow positioned objects). This will return |std::nullopt| if:
   //  - The fragment is *not* a scroll container.
   //  - The scroll container contains no inflow children.
   // This is normally the union of all inflow children's border-box rects
   // (without relative positioning applied), however for grid layout it is the
   // size and position of the grid instead.
   // This is used for scrollable overflow calculations.
-  const absl::optional<PhysicalRect> InflowBounds() const {
+  const std::optional<PhysicalRect> InflowBounds() const {
     if (const auto* field = GetRareField(FieldId::kInflowBounds)) {
       return field->inflow_bounds;
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // Return true if this is either a container that establishes an inline
@@ -313,9 +314,6 @@ class CORE_EXPORT PhysicalBoxFragment final : public PhysicalFragment {
   // Returns the offset in the |OwnerLayoutBox| coordinate system. This is only
   // supported for CSS boxes (i.e. not for fragmentainers, for instance).
   PhysicalOffset OffsetFromOwnerLayoutBox() const;
-
-  PhysicalRect ComputeRubyEmHeightBox() const;
-  PhysicalRect ComputeRubyEmHeightBoxFromChildren() const;
 
   // TODO(layout-dev): These three methods delegate to legacy layout for now,
   // update them to use LayoutNG based overflow information from the fragment
@@ -412,6 +410,10 @@ class CORE_EXPORT PhysicalBoxFragment final : public PhysicalFragment {
   }
 
   bool IsMonolithic() const { return bit_field_.get<IsMonolithicFlag>(); }
+
+  bool IsMonolithicOverflowPropagationDisabled() const {
+    return bit_field_.get<IsMonolithicOverflowPropagationDisabledFlag>();
+  }
 
 #if DCHECK_IS_ON()
   void CheckSameForSimplifiedLayout(const PhysicalBoxFragment&,
@@ -514,6 +516,50 @@ class CORE_EXPORT PhysicalBoxFragment final : public PhysicalFragment {
     return MutableForCloning(*this);
   }
 
+  // Fragmented out-of-flow layout is special. An OOF fragment becomes a direct
+  // child of a fragmentainer (the fragmentainer that contains the actual
+  // containing block of the OOF). This takes place after regular fragmentation
+  // context layout (in order to calculate the correct block-offsets (and thus
+  // which fragmentainer to start in)), so it will have to mutate the fragment
+  // that was created during regular layout, by adding additional children
+  // afterwards. This is nowhere close to as good as performing proper layout,
+  // but it's mostly good enough for this purpose (there are correctness
+  // issues). For one, the break token isn't updated (or created). Since OOF
+  // fragmentation is handled specially, this is fine, and even necessary, in
+  // fact. All we care about, is to update overflow.
+  class MutableForOofFragmentation {
+    STACK_ALLOCATED();
+
+   public:
+    explicit MutableForOofFragmentation(const PhysicalBoxFragment& fragment)
+        : fragment_(const_cast<PhysicalBoxFragment&>(fragment)) {}
+
+    // Merge relevant parts of the specified fragmentainer into this one. This
+    // means that all children will be copied over, and they will all be assumed
+    // to be out-of-flow. All other necessary bits of information will also be
+    // merged over. This includes information inside the break token, as well as
+    // anchor queries. The overflow rectangle may also be updated. It's useful
+    // to keep in mind that the placeholder fragmentainer has been generated by
+    // SimplifiedOofLayoutAlgorithm (which means that we should only copy over
+    // information and flags that this algorithm outputs correctly).
+    void Merge(const PhysicalBoxFragment& placeholder_fragmentainer);
+
+    // Append a fragmentainer to an existing multicol container fragment.
+    void AddChildFragmentainer(const PhysicalBoxFragment& child_fragment,
+                               LogicalOffset child_offset);
+
+    // After having added one or more children with AddChildFragment() or
+    // Merge(), overflow may have to be updated.
+    void UpdateOverflow();
+
+   private:
+    PhysicalBoxFragment& fragment_;
+  };
+  friend class MutableForOofFragmentation;
+  MutableForOofFragmentation GetMutableForOofFragmentation() const {
+    return MutableForOofFragmentation(*this);
+  }
+
   // Returns if this fragment can compute ink overflow.
   bool CanUseFragmentsForInkOverflow() const {
     return !layout_object_->IsLayoutReplaced();
@@ -555,6 +601,8 @@ class CORE_EXPORT PhysicalBoxFragment final : public PhysicalFragment {
       HasDescendantsForTablePartFlag::DefineNextValue<bool, 1>;
   using IsMonolithicFlag =
       IsFragmentationContextRootFlag::DefineNextValue<bool, 1>;
+  using IsMonolithicOverflowPropagationDisabledFlag =
+      IsMonolithicFlag::DefineNextValue<bool, 1>;
 
   bool IncludeBorderTop() const {
     return bit_field_.get<IncludeBorderTopFlag>();

@@ -10,7 +10,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "ios-simulator-full-configs",
-              "project": "chromium"
+              "project": "chromium-m123"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-mac-archive",
@@ -40,7 +40,7 @@
         {
           "bucket": "ci",
           "builder": "ios-simulator-full-configs",
-          "project": "chromium"
+          "project": "chromium-m123"
         }
       ]
     }
@@ -73,5 +73,5 @@
   "builder_group": "tryserver.chromium.mac",
   "cq": "path-based",
   "recipe": "chromium_trybot",
-  "xcode_build_version": "15a507"
+  "xcode_build_version": "15c500b"
 }

@@ -269,7 +269,7 @@ void SessionService::DeleteLastSession() {
 
 void SessionService::SetTabGroup(SessionID window_id,
                                  SessionID tab_id,
-                                 absl::optional<tab_groups::TabGroupId> group) {
+                                 std::optional<tab_groups::TabGroupId> group) {
   if (!ShouldTrackChangesToWindow(window_id))
     return;
 
@@ -286,7 +286,7 @@ void SessionService::SetTabGroupMetadata(
     SessionID window_id,
     const tab_groups::TabGroupId& group_id,
     const tab_groups::TabGroupVisualData* visual_data,
-    const absl::optional<std::string> saved_guid) {
+    const std::optional<std::string> saved_guid) {
   if (!ShouldTrackChangesToWindow(window_id))
     return;
 
@@ -574,7 +574,8 @@ bool SessionService::RestoreIfNecessary(const StartupTabs& startup_tabs,
       browser_creator.LaunchBrowser(*command_line, profile(), base::FilePath(),
                                     chrome::startup::IsProcessStartup::kYes,
                                     chrome::startup::IsFirstRun::kNo,
-                                    std::make_unique<OldLaunchModeRecorder>());
+                                    std::make_unique<OldLaunchModeRecorder>(),
+                                    /*restore_tabbed_browser=*/true);
       return true;
     } else {
       // If 'browser' is not null, show the crash bubble in the current browser
@@ -592,7 +593,7 @@ void SessionService::BuildCommandsForTab(
     SessionID window_id,
     WebContents* tab,
     int index_in_window,
-    absl::optional<tab_groups::TabGroupId> group,
+    std::optional<tab_groups::TabGroupId> group,
     bool is_pinned,
     IdToRange* tab_to_available_range) {
   DCHECK(is_saving_enabled());
@@ -623,7 +624,7 @@ void SessionService::BuildCommandsForTab(
   }
 
 #if defined(TOOLKIT_VIEWS)
-  absl::optional<std::pair<std::string, std::string>> tab_restore_data =
+  std::optional<std::pair<std::string, std::string>> tab_restore_data =
       side_search::MaybeGetSideSearchTabRestoreData(tab);
   if (tab_restore_data.has_value()) {
     command_storage_manager()->AppendRebuildCommand(

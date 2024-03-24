@@ -11,11 +11,11 @@ import {getDeepActiveElement} from 'chrome://resources/js/util.js';
 import {keyDownOn} from 'chrome://resources/polymer/v3_0/iron-test-helpers/mock-interactions.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {assertDeepEquals, assertEquals, assertFalse, assertGE, assertGT, assertNotEquals, assertNull, assertStringContains, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {FakeSettingsPrivate} from 'chrome://webui-test/fake_settings_private.js';
 import {fakeDataBind, flushTasks, waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
 import {eventToPromise, isVisible} from 'chrome://webui-test/test_util.js';
 
 import {FakeLanguageSettingsPrivate, getFakeLanguagePrefs} from '../fake_language_settings_private.js';
-import {FakeSettingsPrivate} from '../fake_settings_private.js';
 
 import {TestLanguagesBrowserProxy} from './test_os_languages_browser_proxy.js';
 import {TestLanguagesMetricsProxy} from './test_os_languages_metrics_proxy.js';
@@ -64,16 +64,15 @@ suite('<os-settings-input-page>', () => {
     // settingsPrivate, so prefer to use settingsPrivate getters/setters
     // whenever possible.
     settingsPrivate.onPrefsChanged.addListener(spellCheckServiceListener);
-    prefElement.initialize(
-        settingsPrivate as unknown as typeof chrome.settingsPrivate);
+    prefElement.initialize(settingsPrivate);
     document.body.appendChild(prefElement);
 
     await CrSettingsPrefs.initialized;
 
     // Set up fake languageSettingsPrivate API.
     const languageSettingsPrivate = browserProxy.getLanguageSettingsPrivate() as
-        unknown as FakeLanguageSettingsPrivate;
-    languageSettingsPrivate.setSettingsPrefs(prefElement);
+        FakeLanguageSettingsPrivate;
+    languageSettingsPrivate.setSettingsPrefsForTesting(prefElement);
 
     // Instantiate the data model with data bindings for prefs.
     settingsLanguages = document.createElement('settings-languages');
@@ -264,8 +263,9 @@ suite('<os-settings-input-page>', () => {
     test('Deep link to spell check', async () => {
       await createInputPage();
 
+      const setting = settingMojom.Setting.kSpellCheckOnOff;
       const params = new URLSearchParams();
-      params.append('settingId', settingMojom.Setting.kSpellCheck.toString());
+      params.append('settingId', setting.toString());
       Router.getInstance().navigateTo(routes.OS_LANGUAGES_INPUT, params);
       flush();
 
@@ -278,7 +278,7 @@ suite('<os-settings-input-page>', () => {
       await waitAfterNextRender(deepLinkElement);
       assertEquals(
           deepLinkElement, getDeepActiveElement(),
-          'Spell check toggle should be focused for settingId=1207.');
+          `Spell check toggle should be focused for settingId=${setting}.`);
     });
 
     test('Spellcheck row is focused after returning from subpage', async () => {

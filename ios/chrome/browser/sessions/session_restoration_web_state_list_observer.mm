@@ -11,16 +11,6 @@
 #import "ios/web/public/navigation/navigation_manager.h"
 #import "ios/web/public/web_state.h"
 
-namespace {
-
-// Returns whether `web_state` can be serialized or not.
-bool CanSerializeWebState(const web::WebState* web_state) {
-  return web_state->IsRealized() &&
-         !web_state->GetNavigationManager()->IsRestoreSessionInProgress();
-}
-
-}  // namespace
-
 SessionRestorationWebStateListObserver::SessionRestorationWebStateListObserver(
     WebStateList* web_state_list,
     WebStateListDirtyCallback callback)
@@ -48,7 +38,7 @@ void SessionRestorationWebStateListObserver::ClearDirty() {
   dirty_web_states_.clear();
   detached_web_states_.clear();
   inserted_web_states_.clear();
-  discarded_web_states_.clear();
+  closed_web_states_.clear();
 }
 
 #pragma mark - WebStateListObserver
@@ -126,24 +116,24 @@ void SessionRestorationWebStateListObserver::DetachWebState(
   // Browser which will adopt it and take care of saving its state.
   dirty_web_states_.erase(detached_web_state);
 
-  // If the WebState has been inserted and marked for adoption, but detached
-  // before it could be adopted, then it should still be listed as detached
-  // from the original WebStateList. In that case, do not mark it orphaned
-  // here (the state won't be accessible from this WebStateList).
+  // If the detached WebState is still listed as recently inserted, then it
+  // means it will still be considered up-for-adoption by another Browser.
+  // In that case, remove the WebState from the list of inserted WebStates,
+  // otherwise, add it to the list of detached WebState.
   //
-  // Otherwise, list it as orphaned unless it is closed and or serializable
-  // (as the WebStateList where it is inserted can just serialize it to get
-  // the state).
+  // If the WebState is closed, always add it to the list of closed WebStates
+  // (this allow deleting data when a WebState is moved between Browsers and
+  // then closed before it the session could be saved).
   const web::WebStateID identifier = detached_web_state->GetUniqueIdentifier();
   if (base::Contains(inserted_web_states_, identifier)) {
     inserted_web_states_.erase(identifier);
-  } else if (!is_closing && !CanSerializeWebState(detached_web_state)) {
+  } else if (!is_closing) {
     detached_web_states_.insert(identifier);
   }
 
-  // In all cases, record the WebState as discarded. This allows the client
-  // to clear any cached state it may have been keeping for the WebState.
-  discarded_web_states_.insert(identifier);
+  if (is_closing) {
+    closed_web_states_.insert(identifier);
+  }
 
   // Stop observing the detached WebState. If it is inserted in another
   // Browser, its state will be observed there.
@@ -162,7 +152,7 @@ void SessionRestorationWebStateListObserver::AttachWebState(
   // If the newly attached `WebState` can be serialized, then mark it as dirty
   // to force its serialization, otherwise adopt it (this will allow re-using
   // the existing data on disk).
-  if (CanSerializeWebState(attached_web_state)) {
+  if (attached_web_state->IsRealized()) {
     MarkWebStateDirty(attached_web_state);
   } else {
     inserted_web_states_.insert(attached_web_state->GetUniqueIdentifier());
@@ -175,7 +165,7 @@ void SessionRestorationWebStateListObserver::MarkWebStateDirty(
   // when a WebState transition to the realized state but has not completed
   // the restoration of the navigation history. Clear the dirty state of the
   // observer to be notified of the next event.
-  if (!CanSerializeWebState(web_state)) {
+  if (!web_state->IsRealized()) {
     SessionRestorationWebStateObserver::FromWebState(web_state)->clear_dirty();
     return;
   }
@@ -185,7 +175,7 @@ void SessionRestorationWebStateListObserver::MarkWebStateDirty(
     dirty_web_states_.insert(web_state);
 
     if (!is_web_state_list_dirty_) {
-      callback_.Run(web_state_list_);
+      callback_.Run(web_state_list_.get());
     }
   }
 }
@@ -197,6 +187,6 @@ void SessionRestorationWebStateListObserver::MarkDirty() {
 
   is_web_state_list_dirty_ = true;
   if (dirty_web_states_.empty()) {
-    callback_.Run(web_state_list_);
+    callback_.Run(web_state_list_.get());
   }
 }
