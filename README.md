@@ -46,7 +46,7 @@ In general, this is enough to get an idea of what this fork is and does; as more
 
 #### get started as a user
 
-[get compiled binary (macOS only) and start serfing](/docs/hash-net/get-started-for-users.md)
+[get compiled binary and start serfing](/docs/hash-net/get-started-for-users.md)
 
 #### get started as a web master
 
