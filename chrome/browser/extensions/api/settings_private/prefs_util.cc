@@ -1081,6 +1081,8 @@ const PrefsUtil::TypedPrefMap& PrefsUtil::GetAllowlistedKeys() {
       settings_api::PrefType::kString;
   (*s_allowlist)[prefs::kHashNetPrivateKey] =
       settings_api::PrefType::kString;
+  (*s_allowlist)[prefs::kChameleonUserAgent] =
+      settings_api::PrefType::kString;
 #endif
 
   // Proxy settings.

@@ -1,0 +1,21 @@
+  <settings-section page-title="User agent" section="userAgent" id="userAgentSection" >
+    <cr-textarea
+        id="userAgentInput"
+        value="{{userAgent}}"
+        rows=1
+        autogrow="true"
+        placeholder="enter userAgent, something like Mozilla/5.0 (Macintosh; Intel Mac OS X ..."
+        maxlength="102400"
+        spellcheck="false"
+        on-input="onUserAgentInput_"
+        on-change="onUserAgentInput_">
+    </cr-textarea>
+    <cr-button
+        id="saveUserAgentButton"
+        role="button"
+        on-click="onSaveUserAgentButtonClick_"
+        disabled="[[!userAgentChangedAndValid]]"
+        class="internals-button">
+      save new user agent 
+    </cr-button>
+  </settings-section>

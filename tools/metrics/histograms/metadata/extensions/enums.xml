@@ -3095,6 +3095,7 @@ Called by update_extension_permission.py.-->
   <int value="255" label="kEnterpriseKioskInput"/>
   <int value="256" label="kOdfsConfigPrivate"/>
   <int value="257" label="kChromeOSManagementAudio"/>
+  <int value="258" label="kProfile"/>
 </enum>
 
 <enum name="ExtensionPolicyReinstallReason">

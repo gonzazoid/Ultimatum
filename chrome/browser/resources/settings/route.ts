@@ -155,6 +155,7 @@ function createBrowserSettingsRoutes(): SettingsRoutes {
   r.BASIC = new Route('/');
   r.ABOUT = new Route('/help', loadTimeData.getString('aboutPageTitle'));
   r.HASH_NET = new Route('/hashnet', '#Net');
+  r.PROFILE = new Route('/profile', 'Profile');
 
   r.SEARCH = r.BASIC.createSection(
       '/search', 'search', loadTimeData.getString('searchPageTitle'));

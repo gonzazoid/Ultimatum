@@ -1284,6 +1284,7 @@ inline constexpr char kUsedPolicyCertificates[] =
 inline constexpr char kHashNetOn[] = "settings.hashnet.on";
 inline constexpr char kHashNetAgentsList[] = "settings.hashnet.agents_list";
 inline constexpr char kHashNetPrivateKey[] = "settings.hashnet.private_key";
+inline constexpr char kChameleonUserAgent[] = "settings.chameleon.user_agent";
 
 // A boolean pref set to true if a Home button to open the Home pages should be
 // visible on the toolbar.
