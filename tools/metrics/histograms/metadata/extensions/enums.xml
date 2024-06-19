@@ -2719,6 +2719,7 @@ Called by update_extension_histograms.py.-->
   <int value="1868" label="OS_MANAGEMENT_SETAUDIOVOLUME"/>
   <int value="1869" label="AUTOTESTPRIVATE_SETDEVICELANGUAGE"/>
   <int value="1870" label="AUTOFILLPRIVATE_SETAUTOFILLSYNCTOGGLEENABLED"/>
+  <int value="1871" label="PROFILES_SETUSERAGENT"/>
 </enum>
 
 <enum name="ExtensionInstallationCrxInstallError">
@@ -3095,7 +3096,7 @@ Called by update_extension_permission.py.-->
   <int value="255" label="kEnterpriseKioskInput"/>
   <int value="256" label="kOdfsConfigPrivate"/>
   <int value="257" label="kChromeOSManagementAudio"/>
-  <int value="258" label="kProfile"/>
+  <int value="258" label="kProfiles"/>
 </enum>
 
 <enum name="ExtensionPolicyReinstallReason">

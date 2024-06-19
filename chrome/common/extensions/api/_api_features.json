@@ -286,8 +286,8 @@
     "dependencies": ["permission:cookies"],
     "contexts": ["blessed_extension"]
   },
-  "profile": {
-    "dependencies": ["permission:profile"],
+  "profiles": {
+    "dependencies": ["permission:profiles"],
     "contexts": ["blessed_extension"]
   },
   "crashReportPrivate": [{

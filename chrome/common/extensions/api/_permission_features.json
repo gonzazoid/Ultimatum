@@ -190,7 +190,7 @@
     "channel": "stable",
     "extension_types": ["extension", "legacy_packaged_app"]
   },
-  "profile": {
+  "profiles": {
     "channel": "stable",
     "extension_types": ["extension", "legacy_packaged_app"]
   },
