@@ -1931,6 +1931,8 @@ enum HistogramValue {
   AUTOTESTPRIVATE_SETDEVICELANGUAGE = 1869,
   AUTOFILLPRIVATE_SETAUTOFILLSYNCTOGGLEENABLED = 1870,
   PROFILES_SETUSERAGENT = 1871,
+  PROFILES_SETUSERAGENTSUBSTITUTION = 1872,
+
   // Last entry: Add new entries above, then run:
   // tools/metrics/histograms/update_extension_histograms.py
   ENUM_BOUNDARY

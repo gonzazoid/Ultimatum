@@ -7126,8 +7126,9 @@ std::string ChromeContentBrowserClient::GetUserAgentBasedOnPolicy(
     content::BrowserContext* context) {
   const PrefService* prefs = Profile::FromBrowserContext(context)->GetPrefs();
 
-  const std::string userAgent = prefs->GetString(prefs::kChameleonUserAgent);
-  if (userAgent != "") {
+  const bool userAgentSubstitution = prefs->GetBoolean(prefs::kChameleonUserAgentSubstitution);
+  if (userAgentSubstitution) {
+    const std::string userAgent = prefs->GetString(prefs::kChameleonUserAgent);
     return userAgent;
   }
 

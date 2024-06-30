@@ -50,6 +50,17 @@ class ProfilesSetUserAgentFunction : public ProfilesFunction {
   ResponseAction Run() override;
 };
 
+class ProfilesSetUserAgentSubstitutionFunction : public ProfilesFunction {
+ public:
+  DECLARE_EXTENSION_FUNCTION("profiles.setUserAgentSubstitution", PROFILES_SETUSERAGENTSUBSTITUTION)
+
+ protected:
+  ~ProfilesSetUserAgentSubstitutionFunction() override {}
+
+  // ExtensionFunction:
+  ResponseAction Run() override;
+};
+
 }  // namespace extensions
 
 #endif  // CHROME_BROWSER_EXTENSIONS_API_PROFILES_PROFILES_API_H_

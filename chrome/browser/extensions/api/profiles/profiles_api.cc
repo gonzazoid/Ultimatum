@@ -35,6 +35,7 @@
 namespace extensions {
 
 namespace SetUserAgent = api::profiles::SetUserAgent;
+namespace SetUserAgentSubstitution = api::profiles::SetUserAgentSubstitution;
 
 namespace {
 
@@ -57,9 +58,17 @@ ExtensionFunction::ResponseAction ProfilesSetUserAgentFunction::Run() {
 
   PrefService* prefs = GetProfile()->GetPrefs();
 
-  std::string user_agent = prefs->GetString(prefs::kHomePage);
-  prefs->SetString(prefs::kChameleonUserAgent, user_agent);
   prefs->SetString(prefs::kChameleonUserAgent, params->user_agent);
+
+  return RespondNow(NoArguments());
+}
+
+ExtensionFunction::ResponseAction ProfilesSetUserAgentSubstitutionFunction::Run() {
+  std::optional<SetUserAgentSubstitution::Params> params = SetUserAgentSubstitution::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
+
+  PrefService* prefs = GetProfile()->GetPrefs();
+  prefs->SetBoolean(prefs::kChameleonUserAgentSubstitution, params->user_agent_substitution);
 
   return RespondNow(NoArguments());
 }

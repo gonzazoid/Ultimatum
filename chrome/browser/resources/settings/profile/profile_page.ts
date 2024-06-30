@@ -18,6 +18,8 @@ import 'chrome://resources/cr_elements/cr_shared_style.css.js';
 import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 
+import type {SettingsToggleButtonElement} from '../controls/settings_toggle_button.js';
+
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
 import {sanitizeInnerHtml} from 'chrome://resources/js/parse_html_subset.js';
@@ -52,12 +54,19 @@ export class ProfilePageElement extends ProfilePageElementBase {
         value: false,
       },
 
+      userAgentSubstitution: {
+        type: Object,
+        value() {
+          return {type: chrome.settingsPrivate.PrefType.BOOLEAN};
+        },
+      },
       userAgent: String,
       oldUserAgent: String,
       userAgentChangedAndValid: Boolean,
     };
   }
 
+  private userAgentSubstitution: chrome.settingsPrivate.PrefObject<boolean>;
   userAgent: string;
   userAgentChangedAndValid: boolean;
   oldUserAgent: String;
@@ -67,7 +76,9 @@ export class ProfilePageElement extends ProfilePageElementBase {
 
     CrSettingsPrefs.initialized.then(() => {
       const userAgent = this.getPref('settings.chameleon.user_agent').value;
+      const userAgentSubstitution = this.getPref('settings.chameleon.user_agent_substitution');
 
+      this.userAgentSubstitution = userAgentSubstitution;
       this.userAgent = userAgent;
       this.oldUserAgent = userAgent;
       this.userAgentChangedAndValid = false;
@@ -76,6 +87,11 @@ export class ProfilePageElement extends ProfilePageElementBase {
 
   private userAgentIsValid() {
     return true;
+  }
+
+  private onUserAgentSubstitutionToggleChange_(e: Event) {
+    const target = e.target as SettingsToggleButtonElement;
+    this.setPrefValue('settings.chameleon.user_agent_substitution', !!target.checked);
   }
 
   private onUserAgentInput_() {

@@ -1,4 +1,11 @@
   <settings-section page-title="User agent" section="userAgent" id="userAgentSection" >
+    <settings-toggle-button
+      id="userAgentSubstitutionToggle"
+      pref="{{userAgentSubstitution}}"
+      no-set-pref
+      label="replace user agent"
+      on-settings-boolean-control-change="onUserAgentSubstitutionToggleChange_">
+    </settings-toggle-button>
     <cr-textarea
         id="userAgentInput"
         value="{{userAgent}}"

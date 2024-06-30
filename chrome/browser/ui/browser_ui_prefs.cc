@@ -79,6 +79,7 @@ void RegisterBrowserUserPrefs(user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterStringPref(prefs::kHashNetPrivateKey, std::string());
 
   registry->RegisterStringPref(prefs::kChameleonUserAgent, std::string());
+  registry->RegisterBooleanPref(prefs::kChameleonUserAgentSubstitution, false);
 
   registry->RegisterInt64Pref(prefs::kDefaultBrowserLastDeclined, 0);
   bool reset_check_default = false;

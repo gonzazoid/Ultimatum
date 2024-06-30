@@ -10,8 +10,10 @@ namespace profiles {
   interface Functions {
 
     static void setUserAgent(
-        DOMString userAgent);
+      DOMString userAgent);
 
+    static void setUserAgentSubstitution(
+      boolean userAgentSubstitution);
   };
 
 };

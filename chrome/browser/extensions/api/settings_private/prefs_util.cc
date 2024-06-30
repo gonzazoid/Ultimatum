@@ -1083,6 +1083,8 @@ const PrefsUtil::TypedPrefMap& PrefsUtil::GetAllowlistedKeys() {
       settings_api::PrefType::kString;
   (*s_allowlist)[prefs::kChameleonUserAgent] =
       settings_api::PrefType::kString;
+  (*s_allowlist)[prefs::kChameleonUserAgentSubstitution] =
+      settings_api::PrefType::kBoolean;
 #endif
 
   // Proxy settings.

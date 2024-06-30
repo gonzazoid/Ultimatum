@@ -2720,6 +2720,7 @@ Called by update_extension_histograms.py.-->
   <int value="1869" label="AUTOTESTPRIVATE_SETDEVICELANGUAGE"/>
   <int value="1870" label="AUTOFILLPRIVATE_SETAUTOFILLSYNCTOGGLEENABLED"/>
   <int value="1871" label="PROFILES_SETUSERAGENT"/>
+  <int value="1872" label="PROFILES_SETUSERAGENTSUBSTITUTION"/>
 </enum>
 
 <enum name="ExtensionInstallationCrxInstallError">
