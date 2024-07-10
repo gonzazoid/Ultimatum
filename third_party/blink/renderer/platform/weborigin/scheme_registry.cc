@@ -68,7 +68,7 @@ class URLSchemesRegistry final {
          // is considered secure. Additional checks are performed to ensure that
          // other http pages are filtered out.
         service_worker_schemes({"http", "https"}),
-        fetch_api_schemes({"http", "https"}),
+        fetch_api_schemes({"http", "https", "hash", "signed", "related"}),
         allowed_in_referrer_schemes({"http", "https"}) {
     for (auto& scheme : url::GetCorsEnabledSchemes())
       cors_enabled_schemes.insert(scheme.c_str());

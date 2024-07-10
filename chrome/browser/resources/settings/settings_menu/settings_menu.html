@@ -45,6 +45,13 @@
       <cr-menu-selector id="menu" selectable="a:not(#extensionsLink)"
           attr-for-selected="href" on-iron-activate="onSelectorActivate_"
           on-click="onLinkClick_" selected-attribute="selected">
+        <a role="menuitem" id="hashnet" href="/hashnet"
+            hidden="[[!pageVisibility.hashnet]]"
+            class="cr-nav-menu-item">
+          <iron-icon icon="settings:assignment"></iron-icon>
+          hashNet
+          <cr-ripple></cr-ripple>
+        </a>
         <a role="menuitem"
             id="people" href="/people" hidden="[[!pageVisibility.people]]"
             class="cr-nav-menu-item">

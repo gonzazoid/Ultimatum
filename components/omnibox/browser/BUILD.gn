@@ -69,6 +69,7 @@ aggregate_vector_icons("omnibox_vector_icons") {
     "extension_app.icon",
     "find_in_page.icon",
     "find_in_page_chrome_refresh.icon",
+    "hash_net.icon",
     "http.icon",
     "http_chrome_refresh.icon",
     "https_valid_in_chip.icon",

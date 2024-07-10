@@ -29,6 +29,7 @@ export interface SettingsRoutes {
   DOWNLOADS: Route;
   EDIT_DICTIONARY: Route;
   FONTS: Route;
+  HASH_NET: Route;
   // <if expr="_google_chrome">
   GET_MOST_CHROME: Route;
   // </if>
