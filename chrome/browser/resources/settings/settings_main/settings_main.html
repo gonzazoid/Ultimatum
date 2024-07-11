@@ -55,3 +55,9 @@
           prefs="{{prefs}}">
       </settings-hashnet-page>
     </template>
+    <template is="dom-if" if="[[showPages_.profile]]">
+      <settings-profile-page role="main"
+          class="cr-centered-card-container"
+          prefs="{{prefs}}">
+      </settings-profile-page>
+    </template>

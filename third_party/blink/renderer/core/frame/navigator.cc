@@ -42,10 +42,18 @@ namespace blink {
 Navigator::Navigator(ExecutionContext* context) : NavigatorBase(context) {}
 
 String Navigator::productSub() const {
+  Settings* settings = DomWindow()->GetFrame()->GetSettings();
+  if (settings && settings->GetProductSubSubstitution())
+    return settings->GetProductSub();
+
   return "20030107";
 }
 
 String Navigator::vendor() const {
+  Settings* settings = DomWindow()->GetFrame()->GetSettings();
+  if (settings && settings->GetVendorSubstitution())
+    return settings->GetVendor();
+
   // Do not change without good cause. History:
   // https://code.google.com/p/chromium/issues/detail?id=276813
   // https://www.w3.org/Bugs/Public/show_bug.cgi?id=27786
@@ -63,6 +71,12 @@ String Navigator::platform() const {
   // mobile and desktop when ReduceUserAgent is enabled.
   if (!DomWindow())
     return NavigatorBase::platform();
+
+  // TODO put it after platform_override
+  Settings* settings = DomWindow()->GetFrame()->GetSettings();
+  if (settings && settings->GetPlatformSubstitution())
+    return settings->GetPlatform();
+
   const String& platform_override =
       DomWindow()->GetFrame()->GetSettings()->GetNavigatorPlatformOverride();
   return platform_override.empty() ? NavigatorBase::platform()

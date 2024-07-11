@@ -25,6 +25,9 @@ bool StructTraits<blink::mojom::WebPreferencesDataView,
       !data.ReadMathFontFamilyMap(&out->math_font_family_map) ||
       !data.ReadDefaultEncoding(&out->default_encoding) ||
       !data.ReadHashNetPublicKey(&out->hash_net_public_key) ||
+      !data.ReadProductSub(&out->product_sub) ||
+      !data.ReadPlatform(&out->platform) ||
+      !data.ReadVendor(&out->vendor) ||
       !data.ReadTextTrackBackgroundColor(&out->text_track_background_color) ||
       !data.ReadTextTrackTextColor(&out->text_track_text_color) ||
       !data.ReadTextTrackTextSize(&out->text_track_text_size) ||
@@ -57,6 +60,9 @@ bool StructTraits<blink::mojom::WebPreferencesDataView,
   out->minimum_logical_font_size = data.minimum_logical_font_size();
   out->context_menu_on_mouse_up = data.context_menu_on_mouse_up();
   out->javascript_enabled = data.javascript_enabled();
+  out->product_sub_substitution = data.product_sub_substitution();
+  out->platform_substitution = data.platform_substitution();
+  out->vendor_substitution = data.vendor_substitution();
   out->web_security_enabled = data.web_security_enabled();
   out->loads_images_automatically = data.loads_images_automatically();
   out->images_enabled = data.images_enabled();

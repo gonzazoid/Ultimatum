@@ -53,6 +53,13 @@
           <cr-ripple></cr-ripple>
         </a>
         <a role="menuitem"
+            id="profile" href="/profile" hidden="[[!pageVisibility.profile]]"
+            class="cr-nav-menu-item">
+          <iron-icon icon="settings:assignment"></iron-icon>
+         Profile
+          <cr-ripple></cr-ripple>
+        </a>
+        <a role="menuitem"
             id="people" href="/people" hidden="[[!pageVisibility.people]]"
             class="cr-nav-menu-item">
 <if expr="not _google_chrome">
