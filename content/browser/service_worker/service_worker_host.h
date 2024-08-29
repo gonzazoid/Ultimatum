@@ -14,6 +14,7 @@
 #include "base/task/single_thread_task_runner.h"
 #include "content/browser/browser_interface_broker_impl.h"
 #include "content/browser/buckets/bucket_context.h"
+#include "content/browser/cache_storage_raw/cache_storage_raw.h"
 #include "content/browser/renderer_host/code_cache_host_impl.h"
 #include "content/browser/service_worker/service_worker_container_host.h"
 #include "content/common/content_export.h"
@@ -31,6 +32,7 @@
 #include "services/service_manager/public/cpp/interface_provider.h"
 #include "third_party/blink/public/mojom/blob/blob_url_store.mojom-forward.h"
 #include "third_party/blink/public/mojom/broadcastchannel/broadcast_channel.mojom.h"
+#include "third_party/blink/public/mojom/cache_storage_raw/cache_storage_raw.mojom.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom.h"
 #include "third_party/blink/public/mojom/loader/code_cache.mojom.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_container.mojom.h"
@@ -91,6 +93,9 @@ class CONTENT_EXPORT ServiceWorkerHost : public BucketContext {
   // setup for eager cache storage has failed.
   void BindCacheStorage(
       mojo::PendingReceiver<blink::mojom::CacheStorage> receiver);
+
+  void BindCacheStorageRaw(
+      mojo::PendingReceiver<blink::mojom::CacheStorageRaw> receiver);
 
 #if !BUILDFLAG(IS_ANDROID)
   void BindHidService(mojo::PendingReceiver<blink::mojom::HidService> receiver);
