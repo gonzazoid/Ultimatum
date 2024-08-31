@@ -49,7 +49,7 @@ namespace disk_cache {
 
     size_t length = raw_entry_->stream0.size();
     scoped_refptr<net::WrappedIOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(
-        base::span<uint8_t>(raw_entry_->stream0.data(), length)
+        base::span<uint8_t>(raw_entry_->stream0)
     );
     int write_result = entry_->WriteData(0, 0, buf.get(), length, std::move(split_callback.first), true);
     if (write_result != net::ERR_IO_PENDING)
@@ -76,7 +76,7 @@ namespace disk_cache {
 
     size_t length = raw_entry_->stream1.size();
     scoped_refptr<net::WrappedIOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(
-        base::span<uint8_t>(raw_entry_->stream1.data(), length)
+        base::span<uint8_t>(raw_entry_->stream1)
     );
     int write_result = entry_->WriteData(1, 0, buf.get(), length, std::move(split_callback.first), true);
     if (write_result != net::ERR_IO_PENDING)
@@ -114,7 +114,7 @@ namespace disk_cache {
                        weak_factory_.GetWeakPtr()));
 
     auto buf = base::MakeRefCounted<net::WrappedIOBuffer>(
-        base::span<uint8_t>(raw_entry_->stream1.data() + total_bytes_, length)
+        UNSAFE_BUFFERS(base::span<uint8_t>(raw_entry_->stream1.data() + total_bytes_, length))
     );
     total_bytes_ += length;
     current_chunk_num_++;
@@ -147,7 +147,7 @@ namespace disk_cache {
 
     size_t length = raw_entry_->stream2.size();
     scoped_refptr<net::WrappedIOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(
-        base::span<uint8_t>(raw_entry_->stream2.data(), length)
+        base::span<uint8_t>(raw_entry_->stream2)
     );
     int write_result = entry_->WriteData(2, 0, buf.get(), length, std::move(split_callback.first), true);
     if (write_result != net::ERR_IO_PENDING)

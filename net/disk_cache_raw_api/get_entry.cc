@@ -66,7 +66,7 @@ namespace disk_cache {
     size_t length = entry_->GetDataSize(0);
     entry_response_->stream0.resize(length);
     scoped_refptr<net::WrappedIOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(
-        base::span<uint8_t>(entry_response_->stream0.data(), length)
+        base::span<uint8_t>(entry_response_->stream0)
     );
     auto split_callback = base::SplitOnceCallback(
       base::BindOnce(&CacheStorageRawApiGetEntry::GetFirstStreamCompleted, weak_factory_.GetWeakPtr())
@@ -106,7 +106,7 @@ namespace disk_cache {
       size_t length = entry_->GetDataSize(1);
       entry_response_->stream1.resize(length);
       scoped_refptr<net::WrappedIOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(
-        base::span<uint8_t>(entry_response_->stream1.data(), length)
+        base::span<uint8_t>(entry_response_->stream1)
       );
       auto split_callback = base::SplitOnceCallback(
         base::BindOnce(&CacheStorageRawApiGetEntry::GetSecondStreamCompleted, weak_factory_.GetWeakPtr())
@@ -145,9 +145,8 @@ namespace disk_cache {
 
     int64_t offset = chunks_[current_chunk_num_].first;
     size_t length = chunks_[current_chunk_num_].second;
-
     auto current_chunk = base::MakeRefCounted<net::WrappedIOBuffer>(
-        base::span<uint8_t>(entry_response_->stream1.data() + total_bytes_, length)
+        UNSAFE_BUFFERS(base::span<uint8_t>(entry_response_->stream1.data() + total_bytes_, length))
     );
 
     int read_status = entry_->ReadSparseData(offset, current_chunk.get(), length, std::move(split_callback.first));
@@ -179,7 +178,7 @@ namespace disk_cache {
 
     entry_response_->stream2.resize(length);
     scoped_refptr<net::WrappedIOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(
-      base::span<uint8_t>(entry_response_->stream2.data(), length)
+      base::span<uint8_t>(entry_response_->stream2)
     );
     auto split_callback = base::SplitOnceCallback(
       base::BindOnce(&CacheStorageRawApiGetEntry::GetThirdStreamCompleted, weak_factory_.GetWeakPtr())
