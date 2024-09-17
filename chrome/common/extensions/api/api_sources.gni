@@ -35,6 +35,7 @@ schema_sources_ = [
   "history.json",
   "profiles.idl",
   "disk_cache.idl",
+  "hsts_cache.idl",
   "identity.idl",
   "image_writer_private.idl",
   "instance_id.json",
