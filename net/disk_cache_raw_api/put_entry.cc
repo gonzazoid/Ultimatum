@@ -8,7 +8,11 @@
 namespace disk_cache {
 
   CacheStorageRawApiPutEntry::CacheStorageRawApiPutEntry() {}
-  CacheStorageRawApiPutEntry::~CacheStorageRawApiPutEntry() {}
+  CacheStorageRawApiPutEntry::~CacheStorageRawApiPutEntry() {
+    if (entry_)
+      entry_->Close();
+    entry_ = nullptr;
+  }
 
   void CacheStorageRawApiPutEntry::Run(
     const base::FilePath& path,
@@ -28,8 +32,6 @@ namespace disk_cache {
   }
 
   void CacheStorageRawApiPutEntry::SendResponse (std::string status) {
-    if (entry_)
-      entry_->Close();
     std::move(put_entry_callback_).Run(status);
   }
 

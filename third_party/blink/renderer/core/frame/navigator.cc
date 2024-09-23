@@ -21,6 +21,8 @@
  *  MA 02110-1301, USA
  */
 
+#include <iostream>
+
 #include "third_party/blink/renderer/core/frame/navigator.h"
 
 #include "third_party/blink/public/common/user_agent/user_agent_metadata.h"
@@ -42,17 +44,19 @@ namespace blink {
 Navigator::Navigator(ExecutionContext* context) : NavigatorBase(context) {}
 
 String Navigator::productSub() const {
-  Settings* settings = DomWindow()->GetFrame()->GetSettings();
-  if (settings && settings->GetProductSubSubstitution())
-    return settings->GetProductSub();
-
+  // std::cout << "Frame!!! " << (DomWindow()->GetFrame() != nullptr) << "\n";
+  // Settings* settings = DomWindow()->GetFrame()->GetSettings();
+  // std::cout << "AFTER GET SETTINGS!!!" << (settings != nullptr) << "\n";
+  // if (settings && settings->GetProductSubSubstitution()) {
+  //   return settings->GetProductSub();
+  // }
   return "20030107";
 }
 
 String Navigator::vendor() const {
-  Settings* settings = DomWindow()->GetFrame()->GetSettings();
-  if (settings && settings->GetVendorSubstitution())
-    return settings->GetVendor();
+  // Settings* settings = DomWindow()->GetFrame()->GetSettings();
+  // if (settings && settings->GetVendorSubstitution())
+  //   return settings->GetVendor();
 
   // Do not change without good cause. History:
   // https://code.google.com/p/chromium/issues/detail?id=276813
