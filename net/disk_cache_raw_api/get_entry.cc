@@ -102,7 +102,7 @@ namespace disk_cache {
       return;
     }
 
-    if (result.ranges->size() == 0) {
+    if (result.ranges == nullptr || result.ranges->size() == 0) {
       size_t length = entry_->GetDataSize(1);
       entry_response_->stream1.resize(length);
       scoped_refptr<net::WrappedIOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(

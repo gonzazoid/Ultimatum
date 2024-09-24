@@ -409,9 +409,12 @@ RangeResult EntryImpl::GetAvailableRangeImpl(int64_t offset, int len) {
 RangesResult EntryImpl::GetAvailableRangesImpl() {
 
   int result = InitSparseData();
-  if (net::OK != result)
+  if (net::OK != result) {
+    if (result == net::ERR_CACHE_OPERATION_NOT_SUPPORTED) {
+      return RangesResult(net::OK);
+    }
     return RangesResult(static_cast<net::Error>(result));
-
+  }
   return sparse_->GetAvailableRanges();
 }
 
