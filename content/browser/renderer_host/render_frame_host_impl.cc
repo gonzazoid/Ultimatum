@@ -14372,6 +14372,11 @@ bool RenderFrameHostImpl::DidCommitNavigationInternal(
                                ? UrlInfo()
                                : navigation_request->GetUrlInfo());
 
+  auto nav_url = navigation_request->GetURL();
+  if ((nav_url.SchemeIsHash() || nav_url.SchemeIsSigned()) && !site_instance_->HasSite()) {
+    site_instance_->SetSite(UrlInfo(UrlInfoInit(nav_url)));
+  }
+
   isolation_info_ = navigation_request->isolation_info_for_subresources();
 
   // Navigations in the same document and page activations do not create a new

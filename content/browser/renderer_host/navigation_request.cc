@@ -2441,6 +2441,7 @@ void NavigationRequest::BeginNavigation() {
 }
 
 bool NavigationRequest::MaybeStartPrerenderingActivationChecks() {
+  if (GetURL().SchemeIsHash() || GetURL().SchemeIsSigned()) return false;
   // Find an available prerendered page for this request. If it's found, this
   // request may activate it instead of loading a page via network.
   FrameTreeNodeId candidate_prerender_frame_tree_node_id =

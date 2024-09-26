@@ -816,6 +816,17 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
 
   mojo::Remote<mojom::AcceptCHFrameObserver> accept_ch_frame_observer_;
 
+  std::unique_ptr<crypto::SecureHash> hash_checker_;
+  bool gather_response_ = false;
+  bool splash_response_ = false;
+  std::vector<std::pair<scoped_refptr<net::IOBuffer>, int>> response_acc_ = {};
+  base::Value::List signed_responses_ = {};
+  size_t current_chunk_ = 0;
+  int current_offset_ = 0;
+  bool IsValidHashNetResponse() const;
+  void StartSignedSplashing();
+  void ReadMoreHashNetHelper();
+
   // Stores cookies passed from the browser process to later add them to the
   // request. This prevents the network stack from overriding them.
   bool allow_cookies_from_browser_ = false;

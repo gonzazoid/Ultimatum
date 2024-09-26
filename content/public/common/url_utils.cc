@@ -48,6 +48,8 @@ bool IsSavableURL(const GURL& url) {
 }
 
 bool IsURLHandledByNetworkStack(const GURL& url) {
+  if (url.SchemeIsHash()) return false; // IT'S USED BY NAVIGATION, FIX AMBIGUITY
+  if (url.SchemeIsSigned()) return false; // IT'S USED BY NAVIGATION, FIX AMBIGUITY
   // Javascript URLs, srcdoc, schemes that don't load data should not send a
   // request to the network stack.
   if (url.SchemeIs(url::kJavaScriptScheme) || url.is_empty() ||

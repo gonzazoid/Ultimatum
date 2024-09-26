@@ -537,6 +537,30 @@ bool CorsURLLoaderFactory::IsValidCorsExemptHeaders(
 
 bool CorsURLLoaderFactory::IsValidRequest(const ResourceRequest& request,
                                           uint32_t options) {
+  if (request.url.SchemeIs(url::kHashNetHashScheme)) {
+    return true;
+  }
+
+  if (request.url.SchemeIs(url::kHashNetSignedScheme)) {
+    return true;
+  }
+
+  if (request.url.SchemeIs(url::kHashNetRelatedScheme)) {
+    return true;
+  }
+
+  if (request.request_initiator.has_value()) {
+    if (request.request_initiator->scheme() == url::kHashNetHashScheme) return true;
+  }
+
+  if (request.request_initiator.has_value()) {
+    if (request.request_initiator->scheme() == url::kHashNetSignedScheme) return true;
+  }
+
+  if (request.request_initiator.has_value()) {
+    if (request.request_initiator->scheme() == url::kHashNetRelatedScheme) return true;
+  }
+
   if (request.url.SchemeIs(url::kDataScheme)) {
     LOG(WARNING) << "CorsURLLoaderFactory doesn't support `data` scheme.";
     mojo::ReportBadMessage("CorsURLLoaderFactory: data: URL is not supported.");

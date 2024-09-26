@@ -233,6 +233,8 @@ static const int caretPadding = 10;
 
 namespace blink {
 
+class WebString;
+
 using mojom::blink::EffectiveConnectionType;
 
 // Historically, these values came from Webkit in
@@ -1561,6 +1563,7 @@ void WebView::ApplyWebPreferences(const web_pref::WebPreferences& prefs,
   settings->SetDefaultTextEncodingName(
       WebString::FromASCII(prefs.default_encoding));
   settings->SetJavaScriptEnabled(prefs.javascript_enabled);
+  settings->SetHashNetPublicKey(WebString::FromUTF8(prefs.hash_net_public_key));
   settings->SetWebSecurityEnabled(prefs.web_security_enabled);
   settings->SetLoadsImagesAutomatically(prefs.loads_images_automatically);
   settings->SetImagesEnabled(prefs.images_enabled);

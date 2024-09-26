@@ -107,6 +107,12 @@ std::unique_ptr<URLRequestJob> URLRequestJobFactory::CreateJob(
       return job;
   }
 
+  // TODO seems like we don't need this anymore
+  if (request->url().SchemeIsHash()) { // last breath situation TODO compare original and current urls
+    auto it = protocol_handler_map_.find("http");
+    return it->second->CreateJob(request);
+  }
+
   auto it = protocol_handler_map_.find(request->url().scheme());
   if (it == protocol_handler_map_.end()) {
     return std::make_unique<URLRequestErrorJob>(request,

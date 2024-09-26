@@ -418,11 +418,17 @@ void URLRequest::GetMimeType(std::string* mime_type) const {
 }
 
 void URLRequest::GetCharset(std::string* charset) const {
+  if (last_breath_) {
+    *charset = "utf-8";
+    return;
+  }
   DCHECK(job_.get());
   job_->GetCharset(charset);
 }
 
 int URLRequest::GetResponseCode() const {
+  if (last_breath_ && IsHashNetHashRequest()) return 404;
+  if ((IsHashNetSignedRequest() || IsHashNetRelatedRequest()) && method_ == "GET") return 200;
   DCHECK(job_.get());
   return job_->GetResponseCode();
 }
@@ -443,6 +449,12 @@ void URLRequest::SetLoadFlags(int flags) {
     DCHECK_EQ(priority_, MAXIMUM_PRIORITY);
   }
   partial_load_flags_ = flags;
+
+  if (context_->GetHashNetOn()) {
+    if (IsHashNetRequest()) {
+      partial_load_flags_ = partial_load_flags_ | net::LOAD_DISABLE_CACHE;
+    }
+  }
 
   // This should be a no-op given the above DCHECKs, but do this
   // anyway for release mode.
@@ -579,6 +591,13 @@ void URLRequest::Start() {
   load_timing_info_.request_start_time = response_info_.request_time;
   load_timing_info_.request_start = base::TimeTicks::Now();
 
+  if (IsHashNetRequest() && context_->GetHashNetOn()) {
+    if (!original_url().IsValidHashNetUrl(method_)) {
+      BeforeRequestComplete(ERR_INVALID_URL);
+      return;
+    }
+  }
+
   if (network_delegate()) {
     OnCallToDelegate(NetLogEventType::NETWORK_DELEGATE_BEFORE_URL_REQUEST);
     int error = network_delegate()->NotifyBeforeURLRequest(
@@ -618,6 +637,17 @@ URLRequest::URLRequest(base::PassKey<URLRequestContext> pass_key,
       traffic_annotation_(traffic_annotation) {
   // Sanity check out environment.
   DCHECK(base::SingleThreadTaskRunner::HasCurrentDefault());
+
+  if (context_->GetHashNetOn()) {
+    if (url.SchemeIsHashNetScheme()) {
+      hash_net_request_manager_ = std::make_unique<HashNetRequestManager>(context_->GetHashNetAgentsList(), url);
+      std::string new_location = hash_net_request_manager_->GetNextHashNetAgentRequestUrl();
+      if (!new_location.empty()) {
+        GURL new_url = GURL(new_location);
+        url_chain_.push_back(new_url);
+      } // otherwise ???
+    }
+  }
 
   context->url_requests()->insert(this);
   net_log_.BeginEvent(NetLogEventType::REQUEST_ALIVE, [&] {
@@ -788,6 +818,10 @@ int URLRequest::DoCancel(int error, const SSLInfo& ssl_info) {
 }
 
 int URLRequest::Read(IOBuffer* dest, int dest_size) {
+  if (agent_failed_) {
+    OnCallToDelegateComplete();
+    return 0;
+  }
   DCHECK(job_.get());
   DCHECK_NE(ERR_IO_PENDING, status_);
 
@@ -863,6 +897,15 @@ void URLRequest::NotifyReceivedRedirect(const RedirectInfo& redirect_info,
 void URLRequest::NotifyResponseStarted(int net_error) {
   DCHECK_LE(net_error, 0);
 
+  if (net_error != OK && (IsHashNetSignedRequest() || IsHashNetRelatedRequest()) && method_ == "GET" && !HasNextHashNetAgent()) {
+    net_error = OK;
+    set_status(OK);
+    last_breath_ = true;
+  }
+  if (net_error != OK && IsHashNetHashRequest() && method_ == "GET" && !HasNextHashNetAgent()) {
+    last_breath_ = true;
+  }
+
   // Change status if there was an error.
   if (net_error != OK)
     set_status(net_error);
@@ -882,7 +925,7 @@ void URLRequest::NotifyResponseStarted(int net_error) {
   }
 
   // Notify in case the entire URL Request has been finished.
-  if (!has_notified_completion_ && net_error != OK)
+  if (!has_notified_completion_ && net_error != OK && !IsHashNetRequest())
     NotifyRequestCompleted();
 
   OnCallToDelegate(NetLogEventType::URL_REQUEST_DELEGATE_RESPONSE_STARTED);
@@ -1024,7 +1067,8 @@ void URLRequest::Redirect(
   }
 
   url_chain_.push_back(redirect_info.new_url);
-  --redirect_limit_;
+  if (!IsHashNetRequest())
+    --redirect_limit_;
 
   Start();
 }
@@ -1309,6 +1353,71 @@ void URLRequest::SetIsSharedDictionaryReadAllowedCallback(
   DCHECK(!job_.get());
   DCHECK(is_shared_dictionary_read_allowed_callback_.is_null());
   is_shared_dictionary_read_allowed_callback_ = std::move(callback);
+}
+
+bool URLRequest::IsHashNetHashRequest() const {
+  if (!hash_net_request_manager_) return false;
+  return original_url().SchemeIsHash();
+}
+
+bool URLRequest::IsHashNetSignedRequest() const {
+  if (!hash_net_request_manager_) return false;
+  return original_url().SchemeIsSigned();
+}
+
+bool URLRequest::IsHashNetRelatedRequest() const {
+  if (!hash_net_request_manager_) return false;
+  return original_url().SchemeIsRelated();
+}
+
+bool URLRequest::IsHashNetRequest() const {
+  return !!hash_net_request_manager_;
+}
+
+void URLRequest::FinalizeHashNetRequest() {
+  url_chain_.push_back(url()); // to look nice in devtools
+}
+
+bool URLRequest::HasNextHashNetAgent() const {
+  return hash_net_request_manager_->HasNextHashNetAgent();
+}
+
+// always call HasNextHashNetAgent before TryNextHashNetAgent
+// if there is no agents - caller must decide what to do
+void URLRequest::TryNextHashNetAgent() {
+  agent_failed_ = false;
+  absl::optional<std::vector<std::string>> removed_headers = {};
+  absl::optional<net::HttpRequestHeaders> modified_headers = {};
+
+  std::string original_referrer;
+  absl::optional<std::string> referrer_policy_header = absl::optional<std::string>("no-referrer");
+  std::string new_location = hash_net_request_manager_->GetNextHashNetAgentRequestUrl();
+
+  GURL new_url = GURL(new_location);
+
+  RedirectInfo redirect_info = net::RedirectInfo::ComputeRedirectInfo(
+    method_, // const std::string& original_method,
+    original_url(), // const GURL& original_url,
+    site_for_cookies(), // const SiteForCookies& original_site_for_cookies,
+    net::RedirectInfo::FirstPartyURLPolicy::NEVER_CHANGE_URL, // RedirectInfo::FirstPartyURLPolicy original_first_party_url_policy,
+    net::ReferrerPolicy::NO_REFERRER, // ReferrerPolicy original_referrer_policy,
+    original_referrer, // const std::string& original_referrer,
+    307, // int http_status_code,
+    new_url, // const GURL& new_location,
+    referrer_policy_header, // const absl::optional<std::string>& referrer_policy_header,
+    false, // bool insecure_scheme_was_upgraded,
+    false, // bool copy_fragment,
+    false); // bool is_signed_exchange_fallback_redirect
+  Redirect(redirect_info, removed_headers, modified_headers);
+}
+
+void URLRequest::SetAgentFailed() {
+  agent_failed_ = true;
+  if (!HasNextHashNetAgent()) SetLastBreath();
+}
+
+void URLRequest::SetLastBreath() {
+  last_breath_ = true;
 }
 
 void URLRequest::set_socket_tag(const SocketTag& socket_tag) {

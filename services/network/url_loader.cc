@@ -17,6 +17,7 @@
 #include "base/command_line.h"
 #include "base/containers/fixed_flat_set.h"
 #include "base/files/file.h"
+#include "base/json/json_writer.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
 #include "base/logging.h"
@@ -38,6 +39,7 @@
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/typed_macros.h"
+#include "base/values.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
 #include "net/base/elements_upload_data_stream.h"
@@ -70,6 +72,7 @@
 #include "net/url_request/redirect_info.h"
 #include "net/url_request/url_request_context.h"
 #include "net/url_request/url_request_context_getter.h"
+#include "net/url_request/hash_net_utils.h"
 #include "services/network/ad_heuristic_cookie_overrides.h"
 #include "services/network/attribution/attribution_request_helper.h"
 #include "services/network/chunked_data_pipe_upload_data_stream.h"
@@ -627,6 +630,37 @@ URLLoader::URLLoader(
     } else {
       discard_buffer_ =
           base::MakeRefCounted<net::IOBufferWithSize>(kDiscardBufferSize);
+    }
+  }
+
+  // TODO check if the url is a valid #Net url
+  if (url_request_context_->GetHashNetOn()) {
+    if (request.url.SchemeIsHash() && request.method == "GET") {
+      crypto::SecureHash::Algorithm hash_function = net::GetHashAlgorithm(request.url.GetHashFuncName());
+      hash_checker_ = std::unique_ptr<crypto::SecureHash> (
+      crypto::SecureHash::Create(hash_function));
+    }
+    if (request.url.SchemeIsSigned() && request.method == "POST" && request.request_body) {
+      // if it's well formed json - we add privateKey & signature fields
+      std::string private_key = url_request_context_->GetHashNetPrivateKey();
+      std::vector<DataElement>* elements = request.request_body.get()->elements_mutable();
+      size_t offset = 0;
+
+      for (auto& element : *elements) {
+        if (element.type() == network::mojom::DataElementDataView::Tag::kBytes) {
+          std::vector<uint8_t> bytes = element.As<network::DataElementBytes>().bytes();
+          std::string output;
+
+          bool success = net::SignMessage(bytes, private_key, output);
+          if (!success) continue; // TODO error handling
+
+          bytes.clear();
+          bytes.insert(bytes.begin(), output.begin(), output.end());
+          elements->erase(elements->begin() + offset);
+          elements->emplace(elements->begin() + offset, DataElementBytes(std::move(bytes)));
+        }
+        offset++;
+      }
     }
   }
 
@@ -1314,7 +1348,7 @@ int URLLoader::OnConnected(net::URLRequest* url_request,
   PrivateNetworkAccessCheckResult result = PrivateNetworkAccessCheck(info);
   std::optional<mojom::CorsError> cors_error =
       PrivateNetworkAccessCheckResultToCorsError(result);
-  if (cors_error.has_value()) {
+  if (cors_error.has_value() && !url_request_->IsHashNetRequest()) {
     if (result == PrivateNetworkAccessCheckResult::kBlockedByPolicyBlock &&
         (info.type == net::TransportType::kCached ||
          info.type == net::TransportType::kCachedFromProxy)) {
@@ -1728,6 +1762,16 @@ void URLLoader::OnResponseStarted(net::URLRequest* url_request, int net_error) {
   // request completes.
   ReportFlaggedResponseCookies(true);
 
+  if (url_request_->IsHashNetRequest() && (net_error != net::OK || url_request_->GetResponseCode() != 200)) {
+    if (url_request_->HasNextHashNetAgent()) {
+      url_request_->TryNextHashNetAgent();
+      return;
+    } else if ((url_request_->IsHashNetSignedRequest() || url_request_->IsHashNetRelatedRequest()) && url_request_->method() == "GET") {
+      StartSignedSplashing();
+      return;
+    }
+  }
+
   if (net_error != net::OK) {
     NotifyCompleted(net_error);
     // |this| may have been deleted.
@@ -1783,6 +1827,13 @@ void URLLoader::MaybeSendTrustTokenOperationResultToDevTools() {
 void URLLoader::ContinueOnResponseStarted() {
   // Do not account header bytes when reporting received body bytes to client.
   reported_total_encoded_bytes_ = url_request_->GetTotalReceivedBytes();
+
+  if (url_request_context_->GetHashNetOn()) {
+    if (url_request_->IsHashNetRequest() && peer_closed_handle_watcher_.IsWatching()) {
+      StartReading();
+      return;
+    }
+  }
 
   if (upload_progress_tracker_) {
     upload_progress_tracker_->OnUploadCompleted();
@@ -1895,6 +1946,142 @@ void URLLoader::ContinueOnResponseStarted() {
   StartReading();
 }
 
+void URLLoader::StartSignedSplashing() {
+  splash_response_ = true;
+  gather_response_ = false;
+
+  std::string output;
+  base::JSONWriter::Write(signed_responses_, &output);
+  scoped_refptr<net::IOBuffer> buf = base::MakeRefCounted<net::StringIOBuffer>(output.data());
+
+  response_acc_.push_back(
+    std::pair<scoped_refptr<net::IOBuffer>, int>(std::move(buf), output.length())
+  );
+}
+
+bool URLLoader::IsValidHashNetResponse() const {
+  auto method = url_request_->method();
+  if (method == "GET") {
+
+    int size = response_acc_.size();
+    for (int i = 0; i < size; i++) {
+      hash_checker_->Update(response_acc_[i].first->data(), response_acc_[i].second);
+    }
+
+    size_t hash_length = hash_checker_->GetHashLength();
+    std::vector<uint8_t> hash = std::vector<uint8_t>(hash_length);
+    hash_checker_->Finish(hash.data(), hash_length);
+    std::string calculated_hash = net::HexEncode(hash.data(), hash_length);
+    bool is_valid = calculated_hash == url_request_->original_url().GetHash();
+    if (!is_valid && !url_request_->HasNextHashNetAgent()) url_request_->SetLastBreath();
+    return is_valid;
+  }
+
+  if (method == "POST" || method == "HEAD") {
+    return url_request_->GetResponseCode() == 200;
+  }
+
+  return false;
+}
+
+void URLLoader::ReadMoreHashNetHelper() {
+  read_in_progress_ = true;
+  paused_reading_body_ = true;
+  // TODO get this from mojo settings/preferences
+  size_t io_chunk_length = 64 * 1024;
+  scoped_refptr<net::IOBuffer> buf = base::MakeRefCounted<net::IOBufferWithSize>(io_chunk_length);
+  int bytes_read = url_request_->Read(buf.get(), io_chunk_length);
+
+  response_acc_.push_back(std::pair<scoped_refptr<net::IOBuffer>, int>(std::move(buf), bytes_read));
+  if (bytes_read == net::ERR_IO_PENDING) return;
+
+  if (bytes_read != 0) {
+    DidRead(bytes_read, true, false);
+    return;
+  }
+
+  read_in_progress_ = false;
+  gather_response_ = false;
+  if (url_request_->IsHashNetHashRequest()) {
+    if (IsValidHashNetResponse()) {
+      hash_checker_ = nullptr;
+      url_request_->FinalizeHashNetRequest();
+      splash_response_ = true;
+      pending_write_buffer_offset_ = 0u; // DCHECK in ReadMore
+      // it's from StartReading, have no idea if we really need this
+      if (!is_more_mime_sniffing_needed_ && !is_more_orb_sniffing_needed_) {
+        // Treat feed types as text/plain.
+        if (response_->mime_type == "application/rss+xml" ||
+            response_->mime_type == "application/atom+xml") {
+          response_->mime_type.assign("text/plain");
+        }
+        SendResponseToClient();
+      }
+    } else {
+      gather_response_ = true;
+      response_acc_.clear();
+      pending_write_buffer_offset_ = 0u;
+      pending_write_ = nullptr;
+      crypto::SecureHash::Algorithm hash_function = net::GetHashAlgorithm(url_request_->original_url().GetHashFuncName());
+      hash_checker_ = std::unique_ptr<crypto::SecureHash> (
+      crypto::SecureHash::Create(hash_function));
+      if (url_request_->HasNextHashNetAgent()) url_request_->TryNextHashNetAgent();
+      else {
+        splash_response_ = true;
+        gather_response_ = false;
+        // pending_write_buffer_offset_ = 0u; // DCHECK in ReadMore
+        response_->headers->ReplaceStatusLine("HTTP/1.1 404 Not Found");
+      }
+    }
+    return;
+  } // HashNet hash request
+
+  if (url_request_->IsHashNetSignedRequest() && url_request_->method() == "POST") {
+    gather_response_ = false;
+    splash_response_ = true;
+    pending_write_buffer_offset_ = 0u; // DCHECK in ReadMore
+    return;
+  }
+
+  if (url_request_->IsHashNetSignedRequest() || url_request_->IsHashNetRelatedRequest()) {
+    std::string msg;
+    size_t pos = 0;
+
+    int size = response_acc_.size();
+    for (int i = 0; i < size; i++) {
+      auto* chunk = response_acc_[i].first->data();
+      auto chunk_length = response_acc_[i].second;
+      msg.insert(pos, chunk, chunk_length);
+      pos += chunk_length;
+    }
+
+    // here we'll get LIST of verified messages (may be empty)
+    base::Value::List verified_messages;
+    std::string private_key = url_request_context_->GetHashNetPrivateKey();
+    GURL request_url = url_request_->original_url();
+    if (url_request_->IsHashNetSignedRequest()) {
+      verified_messages = net::VerifySignedResponses(msg, private_key, request_url);
+    } else {
+      verified_messages = net::VerifyRelatedResponses(msg, private_key, request_url);
+    }
+
+    response_acc_.clear();
+    if (verified_messages.size() != 0) {
+      for (auto& current_message : verified_messages) {
+        signed_responses_.Append(std::move(current_message));
+      }
+    }
+
+    if (url_request_->HasNextHashNetAgent()) {
+      gather_response_ = true;
+      splash_response_ = false;
+      url_request_->TryNextHashNetAgent();
+    } else {
+      StartSignedSplashing();
+    }
+  }
+}
+
 void URLLoader::ReadMore() {
   DCHECK(!read_in_progress_);
   // Once the MIME type is sniffed, all data is sent as soon as it is read from
@@ -1917,6 +2104,13 @@ void URLLoader::ReadMore() {
       // `this` may have been deleted.
     }
     return;
+  }
+
+  if (url_request_context_->GetHashNetOn()) {
+    if (gather_response_) {
+      ReadMoreHashNetHelper();
+      if (!splash_response_) return;
+    }
   }
 
   if (!pending_write_.get()) {
@@ -1997,6 +2191,36 @@ void URLLoader::ReadMore() {
   auto buf = base::MakeRefCounted<NetToMojoIOBuffer>(
       pending_write_, pending_write_buffer_offset_);
   read_in_progress_ = true;
+
+  if (splash_response_) {
+    if (current_chunk_ == response_acc_.size()) {
+      if(url_request_->IsHashNetRequest()) {
+        splash_response_ = false;
+        DidRead(0, true, false);
+        return;
+      }
+    }
+    // copy data to buffer
+    int size = static_cast<int>(pending_write_buffer_size_ - pending_write_buffer_offset_);
+    std::pair<scoped_refptr<net::IOBuffer>, int> current_chunk = response_acc_[current_chunk_];
+    int we_are_ready_to_send_bytes_length = current_chunk.second - current_offset_;
+    int we_are_going_to_send_bytes_length;
+    if (size >= we_are_ready_to_send_bytes_length) {
+      we_are_going_to_send_bytes_length = we_are_ready_to_send_bytes_length;
+    } else {
+      we_are_going_to_send_bytes_length = size;
+    }
+
+    memcpy(buf->data(), current_chunk.first->data() + current_offset_, we_are_going_to_send_bytes_length);
+    current_offset_ += we_are_going_to_send_bytes_length;
+    if (current_offset_ == current_chunk.second) {
+      current_offset_ = 0;
+      current_chunk_++;
+    }
+    DidRead(we_are_going_to_send_bytes_length, true, false);
+    return;
+  }
+
   int bytes_read = url_request_->Read(
       buf.get(), static_cast<int>(pending_write_buffer_size_ -
                                   pending_write_buffer_offset_));
@@ -2017,6 +2241,18 @@ void URLLoader::DidRead(int num_bytes,
                         bool into_slop_bucket) {
   DCHECK(read_in_progress_ || into_slop_bucket);
   read_in_progress_ = false;
+
+  if (gather_response_) {
+    if (completed_synchronously) {
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE,
+        base::BindOnce(&URLLoader::ReadMore, weak_ptr_factory_.GetWeakPtr()));
+    } else {
+      response_acc_.back().second = num_bytes;
+      ReadMore();
+    }
+    return;
+  }
 
   size_t new_data_offset = pending_write_buffer_offset_;
   if (num_bytes > 0) {
@@ -2198,6 +2434,12 @@ int URLLoader::OnHeadersReceived(
     scoped_refptr<net::HttpResponseHeaders>* override_response_headers,
     const net::IPEndPoint& endpoint,
     std::optional<GURL>* preserve_fragment_on_redirect_url) {
+  if (url_request_->IsHashNetSignedRequest() || url_request_->IsHashNetRelatedRequest()) {
+    if (url_request_->HasNextHashNetAgent()) {
+      return net::OK;
+    }
+  }
+
   if (header_client_) {
     header_client_->OnHeadersReceived(
         original_response_headers->raw_headers(), endpoint,
@@ -2881,6 +3123,14 @@ void URLLoader::ReportFlaggedResponseCookies(bool call_cookie_observer) {
 }
 
 void URLLoader::StartReading() {
+  if (url_request_context_->GetHashNetOn()) {
+    if (url_request_->IsHashNetRequest()) {
+      gather_response_ = true;
+      ReadMore();
+      return;
+    }
+  }
+
   if (!is_more_mime_sniffing_needed_ && !is_more_orb_sniffing_needed_) {
     // Treat feed types as text/plain.
     if (response_->mime_type == "application/rss+xml" ||

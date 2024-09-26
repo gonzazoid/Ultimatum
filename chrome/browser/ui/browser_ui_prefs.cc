@@ -88,6 +88,10 @@ void RegisterBrowserUserPrefs(user_prefs::PrefRegistrySyncable* registry) {
       prefs::kShowHomeButton, false,
       GetHomeAndForwardButtonAndHomePageIsNewTabPageFlags());
 
+  registry->RegisterBooleanPref(prefs::kHashNetOn, true);
+  registry->RegisterStringPref(prefs::kHashNetAgentsList, std::string());
+  registry->RegisterStringPref(prefs::kHashNetPrivateKey, std::string());
+
   registry->RegisterBooleanPref(
       prefs::kShowForwardButton, true,
       GetHomeAndForwardButtonAndHomePageIsNewTabPageFlags());

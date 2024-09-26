@@ -339,6 +339,10 @@ CorsURLLoader::CorsURLLoader(
   TRACE_EVENT("loading", "CorsURLLoader::CorsURLLoader",
               perfetto::Flow::ProcessScoped(net_log_.source().id));
   CHECK(url_loader_network_service_observer_ != nullptr);
+
+  if (request_.url.SchemeIsHash() || request_.url.SchemeIsSigned() || request_.url.SchemeIsRelated())
+    is_hash_net_request_ = true;
+
   if (ignore_isolated_world_origin)
     request_.isolated_world_origin = std::nullopt;
 
@@ -536,7 +540,7 @@ void CorsURLLoader::FollowRedirect(
   // After both OOR-CORS and network service are fully shipped, we may be able
   // to remove the logic in net/.
   if ((fetch_cors_flag_ && NeedsPreflight(request_)) ||
-      (!original_fetch_cors_flag && fetch_cors_flag_) ||
+      (!original_fetch_cors_flag && fetch_cors_flag_ && !is_hash_net_request_) ||
       (fetch_cors_flag_ && original_method != request_.method)) {
     DCHECK_NE(request_.mode, mojom::RequestMode::kNoCors);
     network_client_receiver_.reset();
@@ -590,7 +594,7 @@ void CorsURLLoader::OnReceiveResponse(
   const bool is_304_for_revalidation =
       request_.is_revalidating && response_head->headers &&
       response_head->headers->response_code() == 304;
-  if (fetch_cors_flag_ && !is_304_for_revalidation) {
+  if (fetch_cors_flag_ && !is_304_for_revalidation && !is_hash_net_request_) {
     const auto result = CheckAccessAndReportMetrics(
         request_.url,
         GetHeaderString(*response_head,
@@ -689,6 +693,7 @@ void CorsURLLoader::CheckTainted(const net::RedirectInfo& redirect_info) {
   // `request`’s current url’s origin and `request`’s origin is not same origin
   // with `request`’s current url’s origin, then set `request`’s tainted origin
   // flag.
+  if (request_.url.SchemeIsHash() || request_.url.SchemeIsSigned() || request_.url.SchemeIsRelated()) return;
   if (request_.request_initiator &&
       (!url::IsSameOriginWith(redirect_info.new_url, request_.url) &&
        !request_.request_initiator->IsSameOriginWith(request_.url))) {
@@ -707,7 +712,7 @@ void CorsURLLoader::OnReceiveRedirect(const net::RedirectInfo& redirect_info,
 
   // If `CORS flag` is set and a CORS check for `request` and `response` returns
   // failure, then return a network error.
-  if (fetch_cors_flag_ && IsCorsEnabledRequestMode(request_.mode)) {
+  if (fetch_cors_flag_ && IsCorsEnabledRequestMode(request_.mode) && !is_hash_net_request_) {
     const auto result = CheckAccessAndReportMetrics(
         request_.url,
         GetHeaderString(*response_head,
@@ -1207,7 +1212,7 @@ void CorsURLLoader::HandleComplete(URLLoaderCompletionStatus status) {
   // following request expect the resource to be in the same IP address space
   // as was originally observed. Spec:
   // https://wicg.github.io/private-network-access/#http-no-service-worker-fetch
-  if (status.cors_error_status &&
+  if (status.cors_error_status && !is_hash_net_request_ &&
       status.cors_error_status->cors_error ==
           mojom::CorsError::kUnexpectedPrivateNetworkAccess) {
     DCHECK(status.cors_error_status->resource_address_space !=
@@ -1273,6 +1278,10 @@ void CorsURLLoader::OnNetworkClientMojoDisconnect() {
 // //third_party/blink/renderer/platform/loader/cors/cors.cc.
 void CorsURLLoader::SetCorsFlagIfNeeded() {
   if (fetch_cors_flag_) {
+    return;
+  }
+
+  if (is_hash_net_request_) {
     return;
   }
 

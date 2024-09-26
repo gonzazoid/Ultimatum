@@ -94,6 +94,7 @@ build_webui("build") {
     "controls/settings_slider.ts",
     "controls/settings_toggle_button.ts",
     "downloads_page/downloads_page.ts",
+    "hashnet_page/hashnet_page.ts",
     "on_startup_page/on_startup_page.ts",
     "on_startup_page/startup_url_dialog.ts",
     "on_startup_page/startup_url_entry.ts",

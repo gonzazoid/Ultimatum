@@ -1182,6 +1182,13 @@ const PrefsUtil::TypedPrefMap& PrefsUtil::GetAllowlistedKeys() {
       settings_api::PrefType::kBoolean;
 #endif
 
+  (*s_allowlist)[prefs::kHashNetOn] =
+      settings_api::PrefType::kBoolean;
+  (*s_allowlist)[prefs::kHashNetAgentsList] =
+      settings_api::PrefType::kString;
+  (*s_allowlist)[prefs::kHashNetPrivateKey] =
+      settings_api::PrefType::kString;
+
   // Proxy settings.
   (*s_allowlist)[proxy_config::prefs::kProxy] =
       settings_api::PrefType::kDictionary;

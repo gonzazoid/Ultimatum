@@ -56,6 +56,8 @@
 #include "net/socket/socket_tag.h"
 #include "net/storage_access_api/status.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
+#include "net/url_request/hash_net_request_manager.h"
+#include "net/url_request/hash_net_utils.h"
 #include "net/url_request/redirect_info.h"
 #include "net/url_request/referrer_policy.h"
 #include "url/gurl.h"
@@ -871,6 +873,16 @@ class NET_EXPORT URLRequest : public base::SupportsUserData {
 
   static bool DefaultCanUseCookies();
 
+  bool IsHashNetRequest() const;
+  bool IsHashNetHashRequest() const;
+  bool IsHashNetSignedRequest() const;
+  bool IsHashNetRelatedRequest() const;
+  void FinalizeHashNetRequest();
+  void TryNextHashNetAgent();
+  bool HasNextHashNetAgent() const;
+  void SetLastBreath();
+  void SetAgentFailed();
+
   base::WeakPtr<URLRequest> GetWeakPtr();
 
  protected:
@@ -979,6 +991,10 @@ class NET_EXPORT URLRequest : public base::SupportsUserData {
   // NetworkAnonymiationKey.
   net::IsolationInfo CreateIsolationInfoFromNetworkAnonymizationKey(
       const NetworkAnonymizationKey& network_anonymization_key);
+
+  std::unique_ptr<net::HashNetRequestManager> hash_net_request_manager_;
+  bool last_breath_ = false;
+  bool agent_failed_ = false;
 
   // Contextual information used for this request. Cannot be NULL. This contains
   // most of the dependencies which are shared between requests (disk cache,
