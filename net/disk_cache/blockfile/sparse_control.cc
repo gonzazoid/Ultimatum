@@ -329,6 +329,31 @@ int SparseControl::StartIO(SparseOperation op,
   return net::ERR_IO_PENDING;
 }
 
+int SparseControl::StartIORanges() {
+
+  DCHECK(init_);
+  // We don't support simultaneous IO for sparse data.
+  if (operation_ != kNoOperation)
+    return net::ERR_CACHE_OPERATION_NOT_SUPPORTED;
+
+  DCHECK(user_callback_.is_null());
+
+  pending_ = false;
+  finished_ = false;
+  abort_ = false;
+
+  DoChildrenIORanges();
+
+  if (!pending_) {
+    // Everything was done synchronously.
+    operation_ = kNoOperation;
+    user_buf_ = nullptr;
+    return result_; // ???
+  }
+
+  return net::ERR_IO_PENDING;
+}
+
 RangeResult SparseControl::GetAvailableRange(int64_t offset, int len) {
   DCHECK(init_);
   // We don't support simultaneous IO for sparse data.
@@ -346,6 +371,24 @@ RangeResult SparseControl::GetAvailableRange(int64_t offset, int len) {
   if (result < 0)
     return RangeResult(static_cast<net::Error>(result));
   return RangeResult(offset, 0);
+}
+
+RangesResult SparseControl::GetAvailableRanges() {
+  DCHECK(init_);
+
+  // We don't support simultaneous IO for sparse data.
+  if (operation_ != kNoOperation)
+    return RangesResult(net::ERR_CACHE_OPERATION_NOT_SUPPORTED);
+
+  StartIORanges();
+
+  RangesResult res;
+  res.net_error = net::OK;
+  res.ranges = std::make_unique<std::vector<RangeResult>>();
+  for (const net::Interval<int>& interval : ranges_) {
+    res.ranges->push_back(RangeResult(interval.min(), interval.max() - interval.min()));
+  }
+  return res;
 }
 
 void SparseControl::CancelIO() {
@@ -700,6 +743,35 @@ void SparseControl::InitChildData() {
   SetChildBit(true);
 }
 
+void SparseControl::DoChildrenIORanges() {
+  while (DoChildIORanges()) continue;
+  range_found_ = true;
+  pending_ = false;
+}
+
+bool SparseControl::DoChildIORanges() {
+  finished_ = true;
+
+  if (result_ < 0)
+    return false;
+
+  bool found = children_map_.FindNextSetBitBeforeLimit(&current_index_, children_map_.Size());
+  if (!found)
+    return false;
+  offset_ = current_index_ << 20;
+  if (!OpenChild())
+    return false;
+
+  // We have more work to do. Let's not trigger a callback to the caller.
+  finished_ = false;
+
+  DoSaveAvailableRange();
+
+  current_index_++;
+
+  return true;
+}
+
 void SparseControl::DoChildrenIO() {
   while (DoChildIO()) continue;
 
@@ -726,7 +798,7 @@ bool SparseControl::DoChildIO() {
     return false;
 
   if (!OpenChild())
-    return false;
+   return false;
 
   if (!VerifyRange())
     return false;
@@ -784,6 +856,53 @@ bool SparseControl::DoChildIO() {
 
   DoChildIOCompleted(rv);
   return true;
+}
+
+void SparseControl::DoSaveAvailableRange() {
+  if (!child_)
+    return; // Move on to the next child.
+
+  int last_bit = child_map_.Size();
+  bool last_write_range_saved = false;
+  int index = 0;
+  int found;
+  while ((found = child_map_.FindBits(&index, last_bit, true))) {
+    net::Interval<int> bitmap_range(index * kBlockSize + offset_,
+                                    index * kBlockSize + offset_ + found * kBlockSize);
+
+    net::Interval<int> last_write_range;
+    if (child_data_.header.last_block >= 0) {
+      last_write_range =
+        net::Interval<int>(
+          child_data_.header.last_block * kBlockSize + offset_,
+          child_data_.header.last_block * kBlockSize + offset_ + child_data_.header.last_block_len
+        );
+    }
+
+    // Often |last_write_range| is contiguously after |bitmap_range|, but not
+    // always. See if they can be combined.
+    if (!last_write_range.Empty() && !bitmap_range.Empty() &&
+        bitmap_range.max() == last_write_range.min()) {
+      bitmap_range.SetMax(last_write_range.max());
+      last_write_range_saved = true;
+      last_write_range.Clear();
+    }
+    if (!bitmap_range.Empty()) {
+      ranges_.push_back(bitmap_range);
+    }
+    index += found;
+  }
+
+  if (!last_write_range_saved && child_data_.header.last_block >= 0) {
+    net::Interval<int> last_write_range;
+    if (child_data_.header.last_block >= 0) {
+      last_write_range =
+          net::Interval<int>(child_data_.header.last_block * kBlockSize + offset_,
+                             child_data_.header.last_block * kBlockSize + offset_ +
+                                 child_data_.header.last_block_len);
+    }
+    ranges_.push_back(last_write_range);
+  }
 }
 
 int SparseControl::DoGetAvailableRange() {

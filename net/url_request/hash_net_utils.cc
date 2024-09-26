@@ -20,6 +20,7 @@ std::string HexEncode(
     hex_string.reserve(in_binary_data_length * 2);
 
     // Run through the binary data and convert to a hex string
+    UNSAFE_BUFFERS(
     std::for_each(
         in_binary_data,
         in_binary_data + in_binary_data_length,
@@ -27,7 +28,7 @@ std::string HexEncode(
             hex_string.push_back(hex_digits[inputByte >> 4]);
             hex_string.push_back(hex_digits[inputByte & 0x0F]);
         });
-
+    );
     return hex_string;
 }
 

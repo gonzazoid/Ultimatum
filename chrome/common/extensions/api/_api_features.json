@@ -292,6 +292,10 @@
     "dependencies": ["permission:profiles"],
     "contexts": ["privileged_extension"]
   },
+  "diskCache": {
+    "dependencies": ["permission:diskCache"],
+    "contexts": ["privileged_extension"]
+  },
   "crashReportPrivate": [{
     "dependencies": ["permission:crashReportPrivate"],
     "contexts": ["privileged_extension"],

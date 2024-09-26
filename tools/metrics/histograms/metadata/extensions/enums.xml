@@ -2769,6 +2769,10 @@ Called by update_extension_histograms.py.-->
   <int value="1906" label="ACCESSIBILITY_PRIVATE_UPDATEFACEGAZEBUBBLE"/>
   <int value="1907" label="PROFILES_SETPARAMETER"/>
   <int value="1908" label="PROFILES_SETPARAMETERSUBSTITUTION"/>
+  <int value="1909" label="DISKCACHE_KEYS"/>
+  <int value="1910" label="DISKCACHE_GETENTRY"/>
+  <int value="1911" label="DISKCACHE_PUTENTRY"/>
+  <int value="1912" label="DISKCACHE_DELETEENTRY"/>
 </enum>
 
 <enum name="ExtensionInstallationCrxInstallError">
@@ -3151,6 +3155,7 @@ Called by update_extension_permission.py.-->
   <int value="257" label="kChromeOSManagementAudio"/>
   <int value="258" label="kChromeOSDiagnosticsNetworkInfoForMlab"/>
   <int value="259" label="kProfiles"/>
+  <int value="260" label="kDiskCache"/>
 </enum>
 
 <enum name="ExtensionPolicyReinstallReason">

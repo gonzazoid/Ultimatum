@@ -438,6 +438,9 @@ void EmbeddedWorkerInstance::Start(
             std::move(factory_bundle_for_new_scripts));
   }
 
+  BindCacheStorageRaw(
+      params->provider_info->cache_storage_raw.InitWithNewPipeAndPassReceiver());
+
   // Create cache storage now as an optimization, so the service worker can
   // use the Cache Storage API immediately on startup.
   // Without COEP, BindCacheStorage won't bind the cache storage,
@@ -777,6 +780,13 @@ void EmbeddedWorkerInstance::BindCacheStorage(
   pending_cache_storage_requests_.emplace_back(std::move(receiver),
                                                bucket_locator);
   BindCacheStorageInternal();
+}
+
+void EmbeddedWorkerInstance::BindCacheStorageRaw(
+    mojo::PendingReceiver<blink::mojom::CacheStorageRaw> receiver) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  pending_cache_storage_raw_requests_.emplace_back(std::move(receiver));
+  BindCacheStorageRawInternal();
 }
 
 #if !BUILDFLAG(IS_ANDROID)
@@ -1131,6 +1141,19 @@ EmbeddedWorkerInstance::MakeScriptLoaderFactoryRemote(
   return script_loader_factory_remote;
 }
 
+void EmbeddedWorkerInstance::BindCacheStorageRawInternal() {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+
+  for (auto& request : pending_cache_storage_raw_requests_) {
+    auto* rph = RenderProcessHost::FromID(process_id());
+    if (!rph)
+      return;
+
+    rph->BindCacheStorageRaw(std::move(request.receiver));
+  }
+  pending_cache_storage_raw_requests_.clear();
+}
+
 void EmbeddedWorkerInstance::BindCacheStorageInternal() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   const network::CrossOriginEmbedderPolicy* coep =
@@ -1235,5 +1258,13 @@ EmbeddedWorkerInstance::CacheStorageRequest::CacheStorageRequest(
 EmbeddedWorkerInstance::CacheStorageRequest::CacheStorageRequest(
     CacheStorageRequest&& other) = default;
 EmbeddedWorkerInstance::CacheStorageRequest::~CacheStorageRequest() = default;
+
+EmbeddedWorkerInstance::CacheStorageRawRequest::CacheStorageRawRequest(
+    mojo::PendingReceiver<blink::mojom::CacheStorageRaw> receiver)
+    : receiver(std::move(receiver)) {}
+
+EmbeddedWorkerInstance::CacheStorageRawRequest::CacheStorageRawRequest(
+    CacheStorageRawRequest&& other) = default;
+EmbeddedWorkerInstance::CacheStorageRawRequest::~CacheStorageRawRequest() = default;
 
 }  // namespace content

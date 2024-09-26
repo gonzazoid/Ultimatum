@@ -14,6 +14,7 @@
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/services/storage/privileged/mojom/indexed_db_control.mojom-forward.h"
+#include "components/services/storage/public/mojom/cache_storage_raw_control.mojom-forward.h"
 #include "components/services/storage/public/mojom/cache_storage_control.mojom-forward.h"
 #include "components/services/storage/public/mojom/local_storage_control.mojom-forward.h"
 #include "content/common/content_export.h"
@@ -159,6 +160,7 @@ class CONTENT_EXPORT StoragePartition {
   virtual ServiceWorkerContext* GetServiceWorkerContext() = 0;
   virtual DedicatedWorkerService* GetDedicatedWorkerService() = 0;
   virtual SharedWorkerService* GetSharedWorkerService() = 0;
+  virtual storage::mojom::CacheStorageRawControl* GetCacheStorageRawControl() = 0;
   virtual storage::mojom::CacheStorageControl* GetCacheStorageControl() = 0;
   virtual GeneratedCodeCacheContext* GetGeneratedCodeCacheContext() = 0;
   virtual DevToolsBackgroundServicesContext*

@@ -1401,6 +1401,7 @@ mojom("mojom") {
     "cookie_encryption_provider.mojom",
     "cors_origin_pattern.mojom",
     "default_credentials.mojom",
+    "disk_cache_raw_api.mojom",
     "dhcp_wpad_url_client.mojom",
     "digitally_signed.mojom",
     "first_party_sets_access_delegate.mojom",

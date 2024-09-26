@@ -35,6 +35,7 @@
 #include "components/services/storage/public/cpp/buckets/bucket_info.h"
 #include "components/services/storage/public/cpp/quota_error_or.h"
 #include "content/browser/blob_storage/file_backed_blob_factory_worker_impl.h"
+#include "content/browser/cache_storage_raw/cache_storage_raw.h"
 #include "content/browser/child_process_launcher.h"
 #include "content/browser/renderer_host/media/aec_dump_manager_impl.h"
 #include "content/browser/renderer_host/render_process_host_internal_observer.h"
@@ -76,6 +77,7 @@
 #include "third_party/blink/public/mojom/background_sync/background_sync.mojom-forward.h"
 #include "third_party/blink/public/mojom/blob/file_backed_blob_factory.mojom.h"
 #include "third_party/blink/public/mojom/buckets/bucket_manager_host.mojom-forward.h"
+#include "third_party/blink/public/mojom/cache_storage_raw/cache_storage_raw.mojom.h"
 #include "third_party/blink/public/mojom/call_stack_generator/call_stack_generator.mojom.h"
 #include "third_party/blink/public/mojom/dom_storage/dom_storage.mojom.h"
 #include "third_party/blink/public/mojom/filesystem/file_system.mojom-forward.h"
@@ -329,6 +331,7 @@ class CONTENT_EXPORT RenderProcessHostImpl
                       const ProcessLock& process_lock) override;
   ProcessLock GetProcessLock() const override;
   bool IsProcessLockedToSiteForTesting() override;
+  void BindCacheStorageRaw(mojo::PendingReceiver<blink::mojom::CacheStorageRaw> receiver) override;
   void BindCacheStorage(
       const network::CrossOriginEmbedderPolicy& cross_origin_embedder_policy,
       mojo::PendingRemote<network::mojom::CrossOriginEmbedderPolicyReporter>

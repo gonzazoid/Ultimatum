@@ -64,6 +64,7 @@
 #include "content/browser/browsing_topics/browsing_topics_site_data_manager_impl.h"
 #include "content/browser/buckets/bucket_manager.h"
 #include "content/browser/cache_storage/cache_storage_control_wrapper.h"
+#include "content/browser/cache_storage_raw/cache_storage_raw_control_wrapper.h"
 #include "content/browser/code_cache/generated_code_cache.h"
 #include "content/browser/code_cache/generated_code_cache_context.h"
 #include "content/browser/cookie_deprecation_label/cookie_deprecation_label_manager_impl.h"
@@ -1355,6 +1356,9 @@ void StoragePartitionImpl::Initialize(
           ChromeBlobStorageContext::GetRemoteFor(browser_context_),
           std::move(file_system_access_context), GetIOThreadTaskRunner({}));
 
+  cache_storage_raw_control_wrapper_ = std::make_unique<CacheStorageRawControlWrapper>(
+      GetIOThreadTaskRunner({}));
+
   cache_storage_control_wrapper_ = std::make_unique<CacheStorageControlWrapper>(
       GetIOThreadTaskRunner({}), path,
       browser_context_->GetSpecialStoragePolicy(), quota_manager_proxy,
@@ -1715,6 +1719,12 @@ StoragePartitionImpl::GetFileSystemAccessEntryFactory() {
 QuotaContext* StoragePartitionImpl::GetQuotaContext() {
   DCHECK(initialized_);
   return quota_context_.get();
+}
+
+storage::mojom::CacheStorageRawControl*
+StoragePartitionImpl::GetCacheStorageRawControl() {
+  DCHECK(initialized_);
+  return cache_storage_raw_control_wrapper_.get();
 }
 
 storage::mojom::CacheStorageControl*

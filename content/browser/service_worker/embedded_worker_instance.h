@@ -30,6 +30,7 @@
 #include "third_party/blink/public/common/service_worker/embedded_worker_status.h"
 #include "third_party/blink/public/common/service_worker/service_worker_status_code.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
+#include "third_party/blink/public/mojom/cache_storage_raw/cache_storage_raw.mojom.h"
 #include "third_party/blink/public/mojom/cache_storage/cache_storage.mojom.h"
 #include "third_party/blink/public/mojom/service_worker/controller_service_worker.mojom.h"
 #include "third_party/blink/public/mojom/service_worker/embedded_worker.mojom.h"
@@ -240,6 +241,9 @@ class CONTENT_EXPORT EmbeddedWorkerInstance
       std::unique_ptr<blink::PendingURLLoaderFactoryBundle> script_bundle,
       std::unique_ptr<blink::PendingURLLoaderFactoryBundle> subresource_bundle);
 
+  void BindCacheStorageRaw(
+      mojo::PendingReceiver<blink::mojom::CacheStorageRaw> receiver);
+
   void BindCacheStorage(
       mojo::PendingReceiver<blink::mojom::CacheStorage> receiver,
       const storage::BucketLocator& bucket_locator);
@@ -342,6 +346,7 @@ class CONTENT_EXPORT EmbeddedWorkerInstance
       std::unique_ptr<blink::PendingURLLoaderFactoryBundle> script_bundle);
 
   void BindCacheStorageInternal();
+  void BindCacheStorageRawInternal();
   mojo::PendingRemote<network::mojom::CrossOriginEmbedderPolicyReporter>
   GetCoepReporterInternal(StoragePartitionImpl* storage_partition);
 
@@ -414,9 +419,20 @@ class CONTENT_EXPORT EmbeddedWorkerInstance
     storage::BucketLocator bucket;
   };
 
+  struct CacheStorageRawRequest {
+    CacheStorageRawRequest(
+        mojo::PendingReceiver<blink::mojom::CacheStorageRaw> receiver);
+    CacheStorageRawRequest(CacheStorageRawRequest&& other);
+    ~CacheStorageRawRequest();
+
+    mojo::PendingReceiver<blink::mojom::CacheStorageRaw> receiver;
+  };
+
   // Hold in-flight CacheStorage requests. They will be bound when the
   // ServiceWorker COEP header will be known.
   std::vector<CacheStorageRequest> pending_cache_storage_requests_;
+
+  std::vector<CacheStorageRawRequest> pending_cache_storage_raw_requests_;
 
   // COEP Reporter connected to the URLLoaderFactories that handles subresource
   // requests initiated from the service worker. The impl lives on the UI
