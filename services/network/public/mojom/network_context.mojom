@@ -23,6 +23,7 @@ import "services/network/public/mojom/cross_origin_embedder_policy.mojom";
 import "services/network/public/mojom/default_credentials.mojom";
 import "services/network/public/mojom/devtools_observer.mojom";
 import "services/network/public/mojom/disk_cache_raw_api.mojom";
+import "services/network/public/mojom/hsts_cache_raw_api.mojom";
 import "services/network/public/mojom/restricted_udp_socket.mojom";
 import "services/network/public/mojom/fetch_api.mojom";
 import "services/network/public/mojom/first_party_sets_access_delegate.mojom";
@@ -1098,6 +1099,11 @@ interface NetworkContext {
   GetHttpCacheEntry(string key) => (DiskCacheEntryResponse response);
   PutHttpCacheEntry(DiskCacheEntry entry) => (string response);
   DeleteHttpCacheEntry(string key) => (string response);
+
+  GetHstsCacheKeys() => (HstsCacheKeysResponse response);
+  GetHstsCacheEntry(array<uint8> key) => (HstsCacheGetEntryResponse response);
+  PutHstsCacheEntry(HstsCacheEntry entry) => (string response);
+  DeleteHstsCacheEntry(array<uint8> key) => (string response);
 
   // Computes the size of cache objects last accessed between |start_time| and
   // |end_time|.

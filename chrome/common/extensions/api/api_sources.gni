@@ -46,6 +46,7 @@ if (enable_extensions) {
     "font_settings.json",
     "gcm.json",
     "history.json",
+    "hsts_cache.idl",
     "profiles.idl",
     "identity.idl",
     "image_writer_private.idl",

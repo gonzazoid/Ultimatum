@@ -131,6 +131,8 @@ source_set("extensions") {
     "api/profiles/profiles_api.h",
     "api/disk_cache/disk_cache_api.cc",
     "api/disk_cache/disk_cache_api.h",
+    "api/hsts_cache/hsts_cache_api.cc",
+    "api/hsts_cache/hsts_cache_api.h",
     "api/identity/extension_token_key.cc",
     "api/identity/extension_token_key.h",
     "api/identity/gaia_remote_consent_flow.cc",
