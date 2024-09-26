@@ -32,6 +32,7 @@ export interface SettingsRoutes {
   EDIT_DICTIONARY: Route;
   FONTS: Route;
   HASH_NET: Route;
+  PROFILE: Route;
   HISTORY_SEARCH: Route;
   INCOMPATIBLE_APPLICATIONS: Route;
   LANGUAGES: Route;

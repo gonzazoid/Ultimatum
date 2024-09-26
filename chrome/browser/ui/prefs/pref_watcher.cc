@@ -78,6 +78,14 @@ const char* const kWebPrefsToObserve[] = {
     prefs::kHashNetOn,
     prefs::kHashNetAgentsList,
     prefs::kHashNetPrivateKey,
+    prefs::kChameleonUserAgent,
+    prefs::kChameleonUserAgentSubstitution,
+    prefs::kChameleonProductSub,
+    prefs::kChameleonProductSubSubstitution,
+    prefs::kChameleonPlatform,
+    prefs::kChameleonPlatformSubstitution,
+    prefs::kChameleonVendor,
+    prefs::kChameleonVendorSubstitution,
 };
 
 const int kWebPrefsToObserveLength = std::size(kWebPrefsToObserve);

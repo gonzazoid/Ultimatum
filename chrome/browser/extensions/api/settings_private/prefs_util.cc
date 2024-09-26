@@ -1188,6 +1188,22 @@ const PrefsUtil::TypedPrefMap& PrefsUtil::GetAllowlistedKeys() {
       settings_api::PrefType::kString;
   (*s_allowlist)[prefs::kHashNetPrivateKey] =
       settings_api::PrefType::kString;
+  (*s_allowlist)[prefs::kChameleonUserAgent] =
+      settings_api::PrefType::kString;
+  (*s_allowlist)[prefs::kChameleonUserAgentSubstitution] =
+      settings_api::PrefType::kBoolean;
+  (*s_allowlist)[prefs::kChameleonProductSub] =
+      settings_api::PrefType::kString;
+  (*s_allowlist)[prefs::kChameleonProductSubSubstitution] =
+      settings_api::PrefType::kBoolean;
+  (*s_allowlist)[prefs::kChameleonPlatform] =
+      settings_api::PrefType::kString;
+  (*s_allowlist)[prefs::kChameleonPlatformSubstitution] =
+      settings_api::PrefType::kBoolean;
+  (*s_allowlist)[prefs::kChameleonVendor] =
+      settings_api::PrefType::kString;
+  (*s_allowlist)[prefs::kChameleonVendorSubstitution] =
+      settings_api::PrefType::kBoolean;
 
   // Proxy settings.
   (*s_allowlist)[proxy_config::prefs::kProxy] =
