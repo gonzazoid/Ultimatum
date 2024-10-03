@@ -2978,6 +2978,23 @@ std::vector<favicon_base::FaviconRawBitmapResult> HistoryBackend::GetFavicon(
   return UpdateFaviconMappingsAndFetch({}, icon_url, icon_type, desired_sizes);
 }
 
+
+std::unique_ptr<sql::SqliteResponse> HistoryBackend::ExecFaviconRawSql(
+    std::string request,
+    base::Value::List bindings) {
+  if (!favicon_backend_)
+    return std::make_unique<sql::SqliteResponse>("favicon backend not found");
+  return favicon_backend_->ExecRawSql(request, std::move(bindings));
+}
+
+std::unique_ptr<sql::SqliteResponse> HistoryBackend::ExecHistoryRawSql(
+    std::string request,
+    base::Value::List bindings) {
+  if (!db_)
+    return nullptr; // TODO
+  return db_->ExecRawSql(request, std::move(bindings));
+}
+
 favicon_base::FaviconRawBitmapResult HistoryBackend::GetLargestFaviconForURL(
     const GURL& page_url,
     const std::vector<favicon_base::IconTypeSet>& icon_types_list,
