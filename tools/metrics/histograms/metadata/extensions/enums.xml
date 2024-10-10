@@ -2778,6 +2778,10 @@ Called by update_extension_histograms.py.-->
   <int value="1915" label="HSTSCACHE_PUTENTRY"/>
   <int value="1916" label="HSTSCACHE_DELETEENTRY"/>
   <int value="1917" label="SQLITECACHE_EXEC"/>
+  <int value="1918" label="LOCALSTORAGES_KEYS"/>
+  <int value="1919" label="LOCALSTORAGES_GETENTRY"/>
+  <int value="1920" label="LOCALSTORAGES_PUTENTRY"/>
+  <int value="1921" label="LOCALSTORAGES_DELETEENTRY"/>
 </enum>
 
 <enum name="ExtensionInstallationCrxInstallError">

@@ -273,6 +273,19 @@ void DomStorageDatabase::Destroy(
           base::SequencedTaskRunner::GetCurrentDefault(), std::move(callback)));
 }
 
+DomStorageDatabase::Status DomStorageDatabase::GetAllKeys(std::vector<std::vector<uint8_t>>* keys) const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!db_)
+    return Status::IOError(kInvalidDatabaseMessage);
+
+  leveldb::Iterator* it = db_->NewIterator(leveldb::ReadOptions());
+  for (it->SeekToFirst(); it->Valid(); it->Next()) {
+    std::vector<uint8_t> key = std::vector<uint8_t>(it->key().begin(), it->key().end());
+    keys->push_back(std::move(key));
+  }
+  return Status::OK();
+}
+
 DomStorageDatabase::Status DomStorageDatabase::Get(KeyView key,
                                                    Value* out_value) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);

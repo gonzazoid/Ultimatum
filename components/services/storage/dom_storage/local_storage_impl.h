@@ -73,6 +73,11 @@ class LocalStorageImpl : public base::trace_event::MemoryDumpProvider,
   void PurgeUnusedAreasIfNeeded();
 
   // mojom::LocalStorageControl implementation:
+  void GetKeys(GetKeysCallback callback) override;
+  void GetEntry(const std::vector<uint8_t>& key, GetEntryCallback callback) override;
+  void PutEntry(const std::vector<uint8_t>& key, const std::vector<uint8_t>& value, PutEntryCallback callback) override;
+  void DeleteEntry(const std::vector<uint8_t>& key, DeleteEntryCallback callback) override;
+
   void BindStorageArea(
       const blink::StorageKey& storage_key,
       mojo::PendingReceiver<blink::mojom::StorageArea> receiver) override;
