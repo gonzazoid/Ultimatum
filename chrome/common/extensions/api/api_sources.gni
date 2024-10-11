@@ -51,6 +51,7 @@ if (enable_extensions) {
     "image_writer_private.idl",
     "instance_id.json",
     "language_settings_private.idl",
+    "local_storages.idl",
     "notifications.idl",
     "omnibox.json",
     "page_capture.json",
