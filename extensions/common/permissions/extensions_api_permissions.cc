@@ -173,6 +173,7 @@ constexpr APIPermissionInfo::InitInfo permissions_to_register[] = {
     {APIPermissionID::kWindowShape, "app.window.shape"},
     {APIPermissionID::kWmDesksPrivate, "wmDesksPrivate"},
     {APIPermissionID::kProfiles, "profiles"},
+    {APIPermissionID::kDiskCache, "diskCache"},
 };
 
 }  // namespace
