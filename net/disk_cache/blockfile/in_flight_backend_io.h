@@ -45,6 +45,10 @@ class BackendIO : public BackgroundIO {
             BackendImpl* backend,
             RangeResultCallback callback);
 
+  BackendIO(InFlightBackendIO* controller,
+            BackendImpl* backend,
+            RangesResultCallback callback);
+
   BackendIO(const BackendIO&) = delete;
   BackendIO& operator=(const BackendIO&) = delete;
 
@@ -72,7 +76,13 @@ class BackendIO : public BackgroundIO {
   bool has_range_result_callback() const {
     return !range_result_callback_.is_null();
   }
+
+  bool has_ranges_result_callback() const {
+    return !ranges_result_callback_.is_null();
+  }
+
   void RunRangeResultCallback();
+  void RunRangesResultCallback();
 
   // The operations we proxy:
   void Init();
@@ -105,6 +115,7 @@ class BackendIO : public BackgroundIO {
                        net::IOBuffer* buf,
                        int buf_len);
   void GetAvailableRange(EntryImpl* entry, int64_t offset, int len);
+  void GetAvailableRanges(EntryImpl* entry);
   void CancelSparseIO(EntryImpl* entry);
   void ReadyForSparseIO(EntryImpl* entry);
 
@@ -141,7 +152,8 @@ class BackendIO : public BackgroundIO {
     OP_WRITE_SPARSE,
     OP_GET_RANGE,
     OP_CANCEL_IO,
-    OP_IS_READY
+    OP_IS_READY,
+    OP_GET_RANGES
   };
 
   ~BackendIO() override;
@@ -168,6 +180,9 @@ class BackendIO : public BackgroundIO {
   // For GetAvailableRange
   RangeResultCallback range_result_callback_;
   RangeResult range_result_;
+
+  RangesResultCallback ranges_result_callback_;
+  RangesResult ranges_result_;
 
   // The arguments of all the operations we proxy:
   std::string key_;
@@ -248,6 +263,8 @@ class InFlightBackendIO : public InFlightIO {
                          int64_t offset,
                          int len,
                          RangeResultCallback callback);
+  void GetAvailableRanges(EntryImpl* entry,
+                         RangesResultCallback callback);
   void CancelSparseIO(EntryImpl* entry);
   void ReadyForSparseIO(EntryImpl* entry, net::CompletionOnceCallback callback);
 
