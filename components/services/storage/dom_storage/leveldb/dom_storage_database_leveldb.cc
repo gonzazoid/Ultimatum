@@ -234,6 +234,70 @@ DomStorageDatabaseLevelDB::GetMapKeyValues(KeyView prefix) {
   return entries;
 }
 
+StatusOr<std::map<DomStorageDatabase::Key, DomStorageDatabase::Value>>
+DomStorageDatabaseLevelDB::GetKeyValue(const std::vector<uint8_t>& dom_storage_key) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!db_) {
+    return base::unexpected(DbStatus::IOError(kInvalidDatabaseMessage));
+  }
+
+  std::map<Key, Value> entries;
+
+  // TODO db_->Get()
+  leveldb::Iterator* it = db_->NewIterator(leveldb::ReadOptions());
+  for (it->SeekToFirst(); it->Valid(); it->Next()) {
+    std::string s_key = it->key().ToString();
+    std::vector<uint8_t> key = std::vector<uint8_t>(s_key.begin(), s_key.end());
+    if (key == dom_storage_key) {
+      std::string s_value = it->value().ToString();
+      std::vector<uint8_t> value = std::vector<uint8_t>(s_value.begin(), s_value.end());
+      entries[key] = std::move(value);
+    }
+  }
+  return entries;
+}
+
+DbStatus DomStorageDatabaseLevelDB::DeleteKey(const std::vector<uint8_t>& dom_storage_key) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!db_) {
+    return DbStatus::IOError(kInvalidDatabaseMessage);
+  }
+
+  return FromLevelDBStatus(
+      db_->Delete(leveldb::WriteOptions(), std::string(dom_storage_key.begin(), dom_storage_key.end()))
+  );
+}
+
+DbStatus DomStorageDatabaseLevelDB::PutEntry(
+      const std::vector<uint8_t>& key, const std::vector<uint8_t>& value) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!db_) {
+    return DbStatus::IOError(kInvalidDatabaseMessage);
+  }
+
+  return FromLevelDBStatus(
+      db_->Put(
+        leveldb::WriteOptions(),
+        std::string(key.begin(), key.end()),
+        std::string(value.begin(), value.end())
+      )
+  );
+}
+
+StatusOr<std::vector<std::vector<uint8_t>>> DomStorageDatabaseLevelDB::GetAllKeys() const {
+  if (!db_)
+    return base::unexpected(DbStatus::IOError(kInvalidDatabaseMessage));
+
+  std::vector<std::vector<uint8_t>> keys;
+  leveldb::Iterator* it = db_->NewIterator(leveldb::ReadOptions());
+  for (it->SeekToFirst(); it->Valid(); it->Next()) {
+    std::string s_key = it->key().ToString();
+    std::vector<uint8_t> key = std::vector<uint8_t>(s_key.begin(), s_key.end());
+    keys.push_back(std::move(key));
+  }
+  return keys;
+}
+
 DbStatus DomStorageDatabaseLevelDB::RewriteDB() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (!db_) {
