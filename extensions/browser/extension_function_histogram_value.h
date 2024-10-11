@@ -2009,6 +2009,8 @@ enum HistogramValue {
   SIDEPANEL_GETLAYOUT = 1946,
   SIDEPANEL_CLOSE = 1947,
   DEVELOPERPRIVATE_LOADCRX = 1948,
+  PROFILES_SETPARAMETER = 1949,
+  PROFILES_SETPARAMETERSUBSTITUTION = 1950,
   // Last entry: Add new entries above, then run:
   // tools/metrics/histograms/update_extension_histograms.py
   ENUM_BOUNDARY
