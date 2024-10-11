@@ -1,0 +1,16 @@
+// Copyright 2024 gonzazoid
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+// write here fucking something
+[permissions=sqliteCache]
+namespace sqliteCache {
+
+  callback SqliteRequestCallback = void (any[] response);
+
+  interface Functions {
+
+    static void exec(DOMString storage, DOMString sqlRequest, any[] bindings, SqliteRequestCallback callback);
+
+  };
+};

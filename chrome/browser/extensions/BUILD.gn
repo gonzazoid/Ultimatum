@@ -33,6 +33,8 @@ source_set("extensions") {
     "api/disk_cache/disk_cache_api.h",
     "api/hsts_cache/hsts_cache_api.cc",
     "api/hsts_cache/hsts_cache_api.h",
+    "api/sqlite_cache/sqlite_cache_api.cc",
+    "api/sqlite_cache/sqlite_cache_api.h",
     "active_install_data.cc",
     "active_install_data.h",
     "activity_log/activity_action_constants.cc",
