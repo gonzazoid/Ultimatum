@@ -1,0 +1,15 @@
+// Copyright 2024 gonzazoid
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+module storage.mojom;
+
+struct LocalStorageKeysResponse {
+  string status;
+  array<array<uint8>>? keys;
+};
+
+struct LocalStorageGetEntryResponse {
+  string status;
+  array<uint8>? value;
+};
