@@ -199,6 +199,30 @@ void WebSettingsImpl::SetHashNetPublicKey(const WebString publicKey) {
   settings_->SetHashNetPublicKey((String)publicKey);
 }
 
+void WebSettingsImpl::SetProductSub(const WebString productSub) {
+  settings_->SetProductSub((String)productSub);
+}
+
+void WebSettingsImpl::SetProductSubSubstitution(const bool productSubSubstitution) {
+  settings_->SetProductSubSubstitution(productSubSubstitution);
+}
+
+void WebSettingsImpl::SetPlatform(const WebString platform) {
+  settings_->SetPlatform((String)platform);
+}
+
+void WebSettingsImpl::SetPlatformSubstitution(const bool platformSubstitution) {
+  settings_->SetPlatformSubstitution(platformSubstitution);
+}
+
+void WebSettingsImpl::SetVendor(const WebString vendor) {
+  settings_->SetVendor((String)vendor);
+}
+
+void WebSettingsImpl::SetVendorSubstitution(const bool vendorSubstitution) {
+  settings_->SetVendorSubstitution(vendorSubstitution);
+}
+
 void WebSettingsImpl::SetWebSecurityEnabled(bool enabled) {
   settings_->SetWebSecurityEnabled(enabled);
 }

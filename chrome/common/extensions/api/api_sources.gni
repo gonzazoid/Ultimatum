@@ -49,6 +49,7 @@ schema_sources_ = [
   "webrtc_logging_private.idl",
   "webstore_private.json",
   "windows.json",
+  "profiles.idl",
 ]
 
 if (enable_service_discovery) {

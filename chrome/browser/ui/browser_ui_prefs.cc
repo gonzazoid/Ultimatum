@@ -133,6 +133,18 @@ void RegisterBrowserUserPrefs(user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterStringPref(prefs::kHashNetAgentsList, std::string());
   registry->RegisterStringPref(prefs::kHashNetPrivateKey, std::string());
 
+  registry->RegisterStringPref(prefs::kChameleonUserAgent, std::string());
+  registry->RegisterBooleanPref(prefs::kChameleonUserAgentSubstitution, false);
+
+  registry->RegisterStringPref(prefs::kChameleonProductSub, std::string());
+  registry->RegisterBooleanPref(prefs::kChameleonProductSubSubstitution, false);
+
+  registry->RegisterStringPref(prefs::kChameleonPlatform, std::string());
+  registry->RegisterBooleanPref(prefs::kChameleonPlatformSubstitution, false);
+
+  registry->RegisterStringPref(prefs::kChameleonVendor, std::string());
+  registry->RegisterBooleanPref(prefs::kChameleonVendorSubstitution, false);
+
   registry->RegisterBooleanPref(prefs::kWebAppCreateOnDesktop, true);
   registry->RegisterBooleanPref(prefs::kWebAppCreateInAppsMenu, true);
   registry->RegisterBooleanPref(prefs::kWebAppCreateInQuickLaunchBar, true);

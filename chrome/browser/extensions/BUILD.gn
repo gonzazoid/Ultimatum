@@ -148,6 +148,8 @@ source_set("extensions") {
     "api/preference/privacy_sandbox_transformer.h",
     "api/preference/protected_content_enabled_transformer.cc",
     "api/preference/protected_content_enabled_transformer.h",
+    "api/profiles/profiles_api.cc",
+    "api/profiles/profiles_api.h",
     "api/proxy/proxy_api_constants.cc",
     "api/proxy/proxy_api_constants.h",
     "api/proxy/proxy_api_helpers.cc",

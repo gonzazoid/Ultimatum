@@ -1,0 +1,21 @@
+// Copyright 2024 gonzazoid
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+// Use the <code>chrome.downloads</code> API to programmatically initiate,
+// monitor, manipulate, and search for downloads.
+[permissions=profile]
+namespace profiles {
+
+  interface Functions {
+
+    static void setParameter(
+      DOMString key,
+      DOMString value);
+
+    static void setParameterSubstitution(
+      DOMString key,
+      boolean value);
+
+  };
+};
