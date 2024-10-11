@@ -77,6 +77,12 @@ class LocalStorageLevelDB : public DomStorageDatabase {
                     memory_dump_id) override;
   StatusOr<std::map<Key, Value>> ReadMapKeyValues(
       MapLocator map_locator) override;
+  StatusOr<std::map<Key, Value>> ReadKeyValue(
+      const std::vector<uint8_t>& dom_storage_key) override;
+  DbStatus DeleteEntry(
+      const std::vector<uint8_t>& dom_storage_key) override;
+  DbStatus PutEntry(
+      const std::vector<uint8_t>& key, const std::vector<uint8_t>& value) override;
   DbStatus UpdateMaps(std::vector<MapBatchUpdate> map_updates) override;
   DbStatus CloneMap(MapLocator source_map, MapLocator target_map) override;
 
@@ -92,6 +98,8 @@ class LocalStorageLevelDB : public DomStorageDatabase {
   //  (3) The last access time from the "METAACCESS:" entry's value, which is a
   //      `LocalStorageAreaAccessMetaData` protobuf.
   StatusOr<Metadata> ReadAllMetadata() override;
+
+  StatusOr<std::vector<std::vector<uint8_t>>> GetAllKeys() const override;
 
   // Writes LevelDB entries for map usage metadata.  Writes up to two entries
   // for each map in `metadata.map_metadata`:

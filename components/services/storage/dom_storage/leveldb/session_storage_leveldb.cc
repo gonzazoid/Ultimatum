@@ -16,6 +16,7 @@
 #include "base/types/expected_macros.h"
 #include "components/services/storage/dom_storage/leveldb/dom_storage_batch_operation_leveldb.h"
 #include "components/services/storage/dom_storage/leveldb/dom_storage_database_leveldb.h"
+#include "components/services/storage/dom_storage/leveldb/dom_storage_database_leveldb_utils.h"
 #include "third_party/abseil-cpp/absl/container/flat_hash_map.h"
 #include "third_party/blink/public/common/dom_storage/session_storage_namespace_id.h"
 
@@ -29,6 +30,7 @@ StatusOr<DomStorageDatabase::MapMetadata> ParseMapMetadata(
   // For example:
   // 'namespace-2b437ef2_a816_4f5f_b4fd_0e2e4da516a8-https://example.test/'
   std::string_view key = base::as_string_view(namespace_entry.key);
+  LOG(INFO) << "ParseMapMetadata " << key;
 
   // The key must start with 'namespace-'.
   CHECK(base::StartsWith(key, base::as_string_view(kNamespacePrefix)));
@@ -167,6 +169,21 @@ SessionStorageLevelDB::ReadMapKeyValues(MapLocator map_locator) {
   return leveldb_->GetMapKeyValues(GetMapPrefix(map_locator.map_id().value()));
 }
 
+StatusOr<std::map<DomStorageDatabase::Key, DomStorageDatabase::Value>>
+SessionStorageLevelDB::ReadKeyValue(const std::vector<uint8_t>& dom_storage_key) {
+  return leveldb_->GetKeyValue(dom_storage_key);
+}
+
+DbStatus SessionStorageLevelDB::DeleteEntry(
+    const std::vector<uint8_t>& dom_storage_key) {
+  return leveldb_->DeleteKey(dom_storage_key);
+}
+
+DbStatus SessionStorageLevelDB::PutEntry(
+      const std::vector<uint8_t>& key, const std::vector<uint8_t>& value) {
+  return leveldb_->PutEntry(key, value);
+}
+
 DbStatus SessionStorageLevelDB::UpdateMaps(
     std::vector<MapBatchUpdate> map_updates) {
   std::unique_ptr<DomStorageBatchOperationLevelDB> leveldb_batch =
@@ -286,6 +303,13 @@ DbStatus SessionStorageLevelDB::PurgeOrigins(std::set<url::Origin> origins) {
 
 DbStatus SessionStorageLevelDB::CleanUpStaleData() {
   return leveldb_->RewriteDB();
+}
+
+StatusOr<std::vector<std::vector<uint8_t>>> SessionStorageLevelDB::GetAllKeys() const {
+  if (!leveldb_)
+    return base::unexpected(DbStatus::IOError(kInvalidDatabaseMessage));
+
+  return leveldb_->GetAllKeys();
 }
 
 DbStatus SessionStorageLevelDB::PutVersionForTesting(int64_t version) {

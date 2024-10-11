@@ -143,6 +143,24 @@ LocalStorageSqlite::ReadMapKeyValues(MapLocator map_locator) {
   return map_entries;
 }
 
+StatusOr<std::map<DomStorageDatabase::Key, DomStorageDatabase::Value>>
+LocalStorageSqlite::ReadKeyValue(const std::vector<uint8_t>& dom_storage_key) {
+  // TODO
+  std::map<Key, Value> map_entries = {};
+
+  return map_entries;
+}
+
+DbStatus LocalStorageSqlite::DeleteEntry(
+    const std::vector<uint8_t>& dom_storage_key) {
+  return DbStatus::OK();
+}
+
+DbStatus LocalStorageSqlite::PutEntry(
+      const std::vector<uint8_t>& key, const std::vector<uint8_t>& value) {
+  return DbStatus::OK();
+}
+
 DbStatus LocalStorageSqlite::UpdateMaps(
     std::vector<MapBatchUpdate> map_updates) {
   sql::Transaction transaction(database_.get());
@@ -304,6 +322,27 @@ DbStatus LocalStorageSqlite::DeleteSessions(
 
 DbStatus LocalStorageSqlite::PurgeOrigins(std::set<url::Origin> origins) {
   return ::storage::PurgeOrigins(*this, std::move(origins));
+}
+
+StatusOr<std::vector<std::vector<uint8_t>>> LocalStorageSqlite::GetAllKeys() const {
+  // if (!leveldb_)
+  //   return DbStatus::IOError(kInvalidDatabaseMessage);
+
+  // return leveldb_->GetAllKeys(keys);
+  std::vector<std::vector<uint8_t>> keys;
+  constexpr const char kSelectAllKeys[] =
+      "SELECT storage_key "
+      "FROM maps";
+
+  sql::Statement statement(
+      database_->GetCachedStatement(SQL_FROM_HERE, kSelectAllKeys));
+
+  while (statement.Step()) {
+    // TODO what if key is broken? like in ReadAllMetadata
+    keys.push_back(statement.ColumnBlobAsVector(0));
+  }
+
+  return keys;
 }
 
 DbStatus LocalStorageSqlite::CleanUpStaleData() {

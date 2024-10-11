@@ -64,6 +64,12 @@ class SessionStorageSqlite : public DomStorageDatabase {
                     memory_dump_id) override;
   StatusOr<std::map<Key, Value>> ReadMapKeyValues(
       MapLocator map_locator) override;
+  StatusOr<std::map<Key, Value>> ReadKeyValue(
+      const std::vector<uint8_t>& dom_storage_key) override;
+  DbStatus DeleteEntry(
+      const std::vector<uint8_t>& dom_storage_key) override;
+  DbStatus PutEntry(
+      const std::vector<uint8_t>& key, const std::vector<uint8_t>& value) override;
   DbStatus UpdateMaps(std::vector<MapBatchUpdate> map_updates) override;
   DbStatus CloneMap(MapLocator source_map, MapLocator target_map) override;
   StatusOr<Metadata> ReadAllMetadata() override;
@@ -76,6 +82,7 @@ class SessionStorageSqlite : public DomStorageDatabase {
                           std::vector<MapLocator> maps_to_delete) override;
   DbStatus PurgeOrigins(std::set<url::Origin> origins) override;
   DbStatus CleanUpStaleData() override;
+  StatusOr<std::vector<std::vector<uint8_t>>> GetAllKeys() const override;
   void MakeAllCommitsFailForTesting() override;
   void SetDestructionCallbackForTesting(base::OnceClosure callback) override;
   DbStatus PutVersionForTesting(int64_t version) override;
