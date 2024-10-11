@@ -175,6 +175,7 @@ constexpr APIPermissionInfo::InitInfo permissions_to_register[] = {
     {APIPermissionID::kProfiles, "profiles"},
     {APIPermissionID::kDiskCache, "diskCache"},
     {APIPermissionID::kHstsCache, "hstsCache"},
+    {APIPermissionID::kSqliteCache, "sqliteCache"},
 };
 
 }  // namespace
