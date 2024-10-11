@@ -67,6 +67,14 @@ base::CancelableTaskTracker::TaskId FaviconServiceImpl::GetFaviconImage(
       std::move(callback_runner), tracker);
 }
 
+base::CancelableTaskTracker::TaskId FaviconServiceImpl::ExecRawSql(
+    std::string request,
+    base::ListValue bindings,
+    sql::SqliteResponseCallback callback,
+    base::CancelableTaskTracker* tracker) {
+  return history_service_->ExecFaviconRawSql(request, std::move(bindings), std::move(callback), tracker);
+}
+
 base::CancelableTaskTracker::TaskId FaviconServiceImpl::GetRawFavicon(
     const GURL& icon_url,
     favicon_base::IconType icon_type,

@@ -292,6 +292,7 @@ enum APIPermissionID {
   kProfiles = 265,
   kDiskCache = 266,
   kHstsCache = 267,
+  kSqliteCache = 268,
 
   // Add new entries at the end of the enum and be sure to update the
   // "ExtensionPermission3" enum in

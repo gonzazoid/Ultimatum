@@ -46,6 +46,12 @@ class FaviconServiceImpl : public FaviconService {
   ~FaviconServiceImpl() override;
 
   // FaviconService implementation.
+  base::CancelableTaskTracker::TaskId ExecRawSql(
+      std::string request,
+      base::ListValue bindings,
+      sql::SqliteResponseCallback callback,
+      base::CancelableTaskTracker* tracker
+  ) override;
   base::CancelableTaskTracker::TaskId GetFaviconImage(
       const GURL& icon_url,
       favicon_base::FaviconImageCallback callback,

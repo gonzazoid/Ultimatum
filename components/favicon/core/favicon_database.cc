@@ -326,6 +326,33 @@ FaviconDatabase::GetOldOnDemandFavicons(base::Time threshold) {
   return icon_mappings;
 }
 
+std::unique_ptr<sql::SqliteResponse>
+FaviconDatabase::ExecRawSql(std::string request,
+                            base::ListValue bindings) {
+  sql::Statement statement(db_.GetUniqueStatement(request));
+  std::unique_ptr<sql::SqliteResponse> response = std::make_unique<sql::SqliteResponse>();
+
+  if (!statement.is_valid()) {
+    response->status = "invalid statement";
+    return response;
+  }
+
+  if (!statement.BindAll(std::move(bindings))) {
+    response->status = "binding failed";
+    return response;
+  }
+
+  response->result = statement.GetResponse();
+
+  if (statement.Succeeded()) {
+    response->status = "ok";
+  } else {
+    response->status = "request failed";
+  }
+
+  return response;
+}
+
 bool FaviconDatabase::GetFaviconBitmapIDSizes(
     favicon_base::FaviconID icon_id,
     std::vector<FaviconBitmapIDSize>* bitmap_id_sizes) {
