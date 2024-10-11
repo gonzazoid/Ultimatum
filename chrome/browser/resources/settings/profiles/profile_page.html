@@ -1,0 +1,116 @@
+   <settings-section page-title="User agent" section="userAgent" id="userAgentSection" >
+    <settings-toggle-button
+      id="userAgentSubstitutionToggle"
+      pref="{{userAgentSubstitution}}"
+      no-set-pref
+      label="replace user agent"
+      on-settings-boolean-control-change="onUserAgentSubstitutionToggleChange_">
+    </settings-toggle-button>
+    <cr-textarea
+        id="userAgentInput"
+        value="{{userAgent}}"
+        rows=1
+        autogrow="true"
+        placeholder="enter userAgent, something like Mozilla/5.0 (Macintosh; Intel Mac OS X ..."
+        maxlength="102400"
+        spellcheck="false"
+        on-input="onUserAgentInput_"
+        on-change="onUserAgentInput_">
+    </cr-textarea>
+    <cr-button
+        id="saveUserAgentButton"
+        role="button"
+        on-click="onSaveUserAgentButtonClick_"
+        disabled="[[!userAgentChangedAndValid]]"
+        class="internals-button">
+      save new user agent
+    </cr-button>
+  </settings-section>
+
+  <settings-section page-title="Product sub" section="productSub" id="productSubSection" >
+    <settings-toggle-button
+      id="productSubSubstitutionToggle"
+      pref="{{productSubSubstitution}}"
+      no-set-pref
+      label="replace navigator.productSub"
+      on-settings-boolean-control-change="onProductSubSubstitutionToggleChange_">
+    </settings-toggle-button>
+    <cr-textarea
+        id="productSubInput"
+        value="{{productSub}}"
+        rows=1
+        autogrow="true"
+        placeholder="enter productSub, something like 20030107"
+        maxlength="102400"
+        spellcheck="false"
+        on-input="onProductSubInput_"
+        on-change="onProductSubInput_">
+    </cr-textarea>
+    <cr-button
+        id="saveProductSubButton"
+        role="button"
+        on-click="onSaveProductSubButtonClick_"
+        disabled="[[!productSubChangedAndValid]]"
+        class="internals-button">
+      save new product sub
+    </cr-button>
+  </settings-section>
+
+  <settings-section page-title="Platform" section="platform" id="platformSection" >
+    <settings-toggle-button
+      id="platformSubstitutionToggle"
+      pref="{{platformSubstitution}}"
+      no-set-pref
+      label="replace navigator.platform"
+      on-settings-boolean-control-change="onPlatformSubstitutionToggleChange_">
+    </settings-toggle-button>
+    <cr-textarea
+        id="platformInput"
+        value="{{platform}}"
+        rows=1
+        autogrow="true"
+        placeholder="enter platform, something like MacIntel or Win32"
+        maxlength="102400"
+        spellcheck="false"
+        on-input="onPlatformInput_"
+        on-change="onPlatformInput_">
+    </cr-textarea>
+    <cr-button
+        id="savePlatformButton"
+        role="button"
+        on-click="onSavePlatformButtonClick_"
+        disabled="[[!platformChangedAndValid]]"
+        class="internals-button">
+      save new platform
+    </cr-button>
+  </settings-section>
+
+  <settings-section page-title="Vendor" section="vendor" id="vendorSection" >
+    <settings-toggle-button
+      id="vendorSubstitutionToggle"
+      pref="{{vendorSubstitution}}"
+      no-set-pref
+      label="replace navigator.vendor"
+      on-settings-boolean-control-change="onVendorSubstitutionToggleChange_">
+    </settings-toggle-button>
+    <cr-textarea
+        id="vendorInput"
+        value="{{vendor}}"
+        rows=1
+        autogrow="true"
+        placeholder="enter vendor, something like Google Inc. or Opera Software ASA"
+        maxlength="102400"
+        spellcheck="false"
+        on-input="onVendorInput_"
+        on-change="onVendorInput_">
+    </cr-textarea>
+    <cr-button
+        id="saveVendorButton"
+        role="button"
+        on-click="onSaveVendorButtonClick_"
+        disabled="[[!vendorChangedAndValid]]"
+        class="internals-button">
+      save new vendor
+    </cr-button>
+  </settings-section>
+ 

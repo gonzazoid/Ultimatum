@@ -2824,6 +2824,8 @@ Called by update_extension_histograms.py.-->
   <int value="1939" label="BOOKMARKMANAGERPRIVATE_ISACTIVETABINSPLIT"/>
   <int value="1940" label="ENTERPRISE_LOGIN_EXITCURRENTMANAGEDGUESTSESSION"/>
   <int value="1941" label="DEVELOPERPRIVATE_LOADCRX"/>
+  <int value="1942" label="PROFILES_SETPARAMETER"/>
+  <int value="1943" label="PROFILES_SETPARAMETERSUBSTITUTION"/>
 </enum>
 
 <!-- LINT.ThenChange(//extensions/browser/extension_function_histogram_value.h:HistogramValue) -->
@@ -3212,6 +3214,7 @@ Called by update_extension_permission.py.-->
   <int value="261" label="kOmniboxDirectInput"/>
   <int value="262" label="kExperimentalActor"/>
   <int value="263" label="kEnterpriseLogin"/>
+  <int value="264" label="kProfiles"/>
 </enum>
 
 <enum name="ExtensionPolicyReinstallReason">

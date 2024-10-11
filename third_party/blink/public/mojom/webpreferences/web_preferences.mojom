@@ -124,6 +124,12 @@ struct WebPreferences {
   bool context_menu_on_mouse_up;
   bool javascript_enabled;
   string hash_net_public_key;
+  string product_sub;
+  bool product_sub_substitution;
+  string platform;
+  bool platform_substitution;
+  string vendor;
+  bool vendor_substitution;
   bool web_security_enabled;
   bool loads_images_automatically;
   bool images_enabled;
