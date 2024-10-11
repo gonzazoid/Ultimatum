@@ -57,6 +57,7 @@
 #include "components/sync/model/proxy_data_type_controller_delegate.h"
 #include "components/visitedlink/core/visited_link.h"
 #include "net/base/schemeful_site.h"
+#include "sql/statement.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/page_transition_types.h"
 #include "url/gurl.h"
@@ -910,6 +911,34 @@ void HistoryService::AddPagesWithDetails(const URLRows& info,
   ScheduleTask(PRIORITY_NORMAL,
                base::BindOnce(&HistoryBackend::AddPagesWithDetails,
                               history_backend_, info, visit_source));
+}
+
+base::CancelableTaskTracker::TaskId HistoryService::ExecFaviconRawSql(
+    std::string request,
+    base::Value::List bindings,
+    sql::SqliteResponseCallback callback,
+    base::CancelableTaskTracker* tracker) {
+  CHECK(backend_task_runner_) << "History service being called after cleanup";
+  CHECK(tracker);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return tracker->PostTaskAndReplyWithResult(
+      backend_task_runner_.get(), FROM_HERE,
+      base::BindOnce(&HistoryBackend::ExecFaviconRawSql, history_backend_, request, std::move(bindings)),
+      std::move(callback));
+}
+
+base::CancelableTaskTracker::TaskId HistoryService::ExecHistoryRawSql(
+    std::string request,
+    base::Value::List bindings,
+    sql::SqliteResponseCallback callback,
+    base::CancelableTaskTracker* tracker) {
+  CHECK(backend_task_runner_) << "History service being called after cleanup";
+  CHECK(tracker);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return tracker->PostTaskAndReplyWithResult(
+      backend_task_runner_.get(), FROM_HERE,
+      base::BindOnce(&HistoryBackend::ExecHistoryRawSql, history_backend_, request, std::move(bindings)),
+      std::move(callback));
 }
 
 base::CancelableTaskTracker::TaskId HistoryService::GetFavicon(

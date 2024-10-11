@@ -65,6 +65,7 @@ if (enable_extensions) {
     "sessions.json",
     "settings_private.idl",
     "side_panel.idl",
+    "sqlite_cache.idl",
     "system_private.json",
     "tab_capture.idl",
     "tab_groups.json",

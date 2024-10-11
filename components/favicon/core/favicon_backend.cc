@@ -175,6 +175,12 @@ favicon_base::FaviconRawBitmapResult FaviconBackend::GetLargestFaviconForUrl(
   return bitmap_result;
 }
 
+std::unique_ptr<sql::SqliteResponse>
+FaviconBackend::ExecRawSql(std::string request,
+                           base::Value::List bindings) {
+  return db_->ExecRawSql(request, std::move(bindings));
+}
+
 std::vector<favicon_base::FaviconRawBitmapResult>
 FaviconBackend::GetFaviconsForUrl(const GURL& page_url,
                                   const favicon_base::IconTypeSet& icon_types,

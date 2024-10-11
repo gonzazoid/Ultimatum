@@ -344,6 +344,12 @@ class HistoryService : public KeyedService,
       QueryHistoryCallback callback,
       base::CancelableTaskTracker* tracker);
 
+  base::CancelableTaskTracker::TaskId ExecHistoryRawSql(
+      std::string request,
+      base::Value::List bindings,
+      sql::SqliteResponseCallback callback,
+      base::CancelableTaskTracker* tracker);
+
   // Called when the results of QueryRedirectsFrom are available.
   // The given vector will contain a list of all redirects, not counting
   // the original page. If A redirects to B which redirects to C, the vector
@@ -958,6 +964,12 @@ class HistoryService : public KeyedService,
   // these methods directly you should call the respective method on the
   // FaviconService.
 
+  base::CancelableTaskTracker::TaskId ExecFaviconRawSql(
+      std::string request,
+      base::Value::List bindings,
+      sql::SqliteResponseCallback callback,
+      base::CancelableTaskTracker* tracker);
+
   // Used by FaviconService to get the favicon bitmaps from the history backend
   // whose edge sizes most closely match `desired_sizes` for `icon_type`. If
   // `desired_sizes` has a '0' entry, the largest favicon bitmap for
@@ -965,6 +977,7 @@ class HistoryService : public KeyedService,
   // most one result for each entry in `desired_sizes`. If a favicon bitmap is
   // determined to be the best candidate for multiple `desired_sizes` there will
   // be fewer results.
+
   base::CancelableTaskTracker::TaskId GetFavicon(
       const GURL& icon_url,
       favicon_base::IconType icon_type,
