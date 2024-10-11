@@ -266,6 +266,19 @@ DbStatus DomStorageDatabaseLevelDB::GetPrefixed(
       });
 }
 
+DbStatus DomStorageDatabaseLevelDB::GetAllKeys(std::vector<std::vector<uint8_t>>* keys) const {
+  if (!db_)
+    return DbStatus::IOError(kInvalidDatabaseMessage);
+
+  leveldb::Iterator* it = db_->NewIterator(leveldb::ReadOptions());
+  for (it->SeekToFirst(); it->Valid(); it->Next()) {
+    std::string s_key = it->key().ToString();
+    std::vector<uint8_t> key = std::vector<uint8_t>(s_key.begin(), s_key.end());
+    keys->push_back(std::move(key));
+  }
+  return DbStatus::OK();
+}
+
 DbStatus DomStorageDatabaseLevelDB::RewriteDB() {
   if (!db_) {
     return DbStatus::IOError(kInvalidDatabaseMessage);
