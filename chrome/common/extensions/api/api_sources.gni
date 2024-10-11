@@ -51,6 +51,7 @@ schema_sources_ = [
   "windows.json",
   "profiles.idl",
   "disk_cache.idl",
+  "hsts_cache.idl",
 ]
 
 if (enable_service_discovery) {
