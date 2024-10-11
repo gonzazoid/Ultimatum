@@ -229,4 +229,12 @@
       </settings-about-page>
     </template>
   </div>
+
+  <div slot="view" id="hashnet">
+    <template is="dom-if" if="[[showPages_.hashnet]]">
+      <settings-hashnet-page role="main"
+          class="cr-centered-card-container"
+          prefs="{{prefs}}">
+      </settings-hashnet-page>
+    </template>
 </cr-view-manager>

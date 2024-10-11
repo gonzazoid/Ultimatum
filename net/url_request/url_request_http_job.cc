@@ -1260,8 +1260,23 @@ void URLRequestHttpJob::OnStartCompleted(int result) {
     SetProxyChain(transaction_->GetResponseInfo()->proxy_chain);
   }
 
-  if (result == OK) {
+  if (result == OK || request()->IsHashNetRequest()) {
+    if (result != OK) {
+      if (request()->IsHashNetHashRequest() || request()->method() == "POST") {
+        override_response_headers_ = HttpResponseHeaders::TryToCreate("HTTP/1.1 404 Not Found\n\n");
+      } else {
+        override_response_headers_ = HttpResponseHeaders::TryToCreate("HTTP/1.1 200 Ok\n\n");
+      }
+      request()->SetAgentFailed();
+      result = OK;
+    }
+
     scoped_refptr<HttpResponseHeaders> headers = GetResponseHeaders();
+
+    if ((request()->IsHashNetSignedRequest() || request()->IsHashNetRelatedRequest()) && request()->method() != "POST") {
+      std::string status_line = "HTTP/1.1 200 Ok";
+      headers->ReplaceStatusLine(status_line);
+    }
 
     NetworkDelegate* network_delegate = request()->network_delegate();
     if (network_delegate) {
@@ -1329,6 +1344,7 @@ void URLRequestHttpJob::OnStartCompleted(int result) {
     override_response_info_ = std::make_unique<HttpResponseInfo>();
     override_response_info_->request_time = request_time;
 
+    // SIC !!!
     override_response_info_->headers = RedirectUtil::SynthesizeRedirectHeaders(
         UpgradeSchemeToCryptographic(request_->url()),
         RedirectUtil::ResponseCode::REDIRECT_307_TEMPORARY_REDIRECT, "DNS",

@@ -92,6 +92,8 @@ InternalPageInfoBubbleView::InternalPageInfoBubbleView(
     } else {
       text = IDS_PAGE_INFO_READER_MODE_PAGE;
     }
+  } else if (url.SchemeIs(url::kHashNetHashScheme) || url.SchemeIs(url::kHashNetSignedScheme)) {
+    text = IDS_PAGE_INFO_HASH_NET_PAGE;
   } else {
     CHECK(url.SchemeIs(content::kChromeUIScheme));
   }

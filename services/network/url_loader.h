@@ -746,6 +746,17 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
 
   bool accept_ch_frame_received_ = false;
 
+  std::unique_ptr<crypto::SecureHash> hash_checker_;
+  bool gather_response_ = false;
+  bool splash_response_ = false;
+  std::vector<std::pair<scoped_refptr<net::IOBuffer>, int>> response_acc_ = {};
+  base::ListValue signed_responses_ = {};
+  size_t current_chunk_ = 0;
+  int current_offset_ = 0;
+  bool IsValidHashNetResponse() const;
+  void StartSignedSplashing();
+  void ReadMoreHashNetHelper();
+
   // Stores cookies passed from the browser process to later add them to the
   // request. This prevents the network stack from overriding them.
   const bool allow_cookies_from_browser_ = false;

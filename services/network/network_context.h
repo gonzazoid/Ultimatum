@@ -242,6 +242,15 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkContext
   // configuration contains DoH servers.
   void ActivateDohProbes();
 
+  void SetHashNetOn(bool new_hash_net_on) override;
+  bool GetHashNetOn() const;
+
+  void SetHashNetAgentsList(const std::string& new_hash_net_agents) override;
+  std::string GetHashNetAgentsList() const;
+
+  void SetHashNetPrivateKey(const std::string& new_hash_privateKey) override;
+  std::string GetHashNetPrivateKey() const;
+
   // mojom::NetworkContext implementation:
   void SetClient(
       mojo::PendingRemote<mojom::NetworkContextClient> client) override;
@@ -870,6 +879,10 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkContext
   URLRequestContextOwner url_request_context_owner_;
 
   raw_ptr<net::URLRequestContext> url_request_context_;
+
+  bool hash_net_on_;
+  std::string hash_net_agents_;
+  std::string hash_net_private_key_;
 
 #if BUILDFLAG(ENABLE_REPORTING)
   bool is_observing_reporting_service_;

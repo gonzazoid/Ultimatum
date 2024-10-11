@@ -174,6 +174,7 @@ HttpStreamFactory::JobController::JobController(
   DCHECK(session_);
   DCHECK(job_factory_);
   DCHECK(request_info_.url.SchemeIsHTTPOrHTTPS() ||
+         request_info_.url.SchemeIsHashNetScheme() || // SchemeIsHash() ???
          request_info_.url.SchemeIsWSOrWSS());
 
   net_log_.BeginEvent(NetLogEventType::HTTP_STREAM_JOB_CONTROLLER, [&] {
