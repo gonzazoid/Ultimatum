@@ -142,6 +142,8 @@ class NET_EXPORT_PRIVATE SimpleEntryImpl : public Entry,
   RangeResult GetAvailableRange(int64_t offset,
                                 int len,
                                 RangeResultCallback callback) override;
+  RangesResult GetAvailableRanges(RangesResultCallback callback) override;
+
   bool CouldBeSparse() const override;
   void CancelSparseIO() override;
   net::Error ReadyForSparseIO(CompletionOnceCallback callback) override;
@@ -265,6 +267,7 @@ class NET_EXPORT_PRIVATE SimpleEntryImpl : public Entry,
   void GetAvailableRangeInternal(int64_t sparse_offset,
                                  int len,
                                  RangeResultCallback callback);
+  void GetAvailableRangesInternal(RangesResultCallback callback);
 
   void DoomEntryInternal(CompletionOnceCallback callback);
 
@@ -326,6 +329,10 @@ class NET_EXPORT_PRIVATE SimpleEntryImpl : public Entry,
   void GetAvailableRangeOperationComplete(
       RangeResultCallback completion_callback,
       std::unique_ptr<RangeResult> result);
+
+  void GetAvailableRangesOperationComplete(
+      RangesResultCallback completion_callback,
+      std::unique_ptr<RangesResult> result);
 
   // Called after an asynchronous doom completes.
   void DoomOperationComplete(CompletionOnceCallback callback,

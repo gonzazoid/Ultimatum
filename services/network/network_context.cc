@@ -1395,6 +1395,152 @@ void NetworkContext::ClearHttpCache(base::Time start_time,
                      base::Unretained(this), std::move(callback))));
 }
 
+// start of disk_cache webextensions api support
+disk_cache::Backend* NetworkContext::GetHttpCacheBackend(std::string& status) {
+  net::HttpCache* http_cache = url_request_context_->http_transaction_factory()->GetCache();
+  if (!http_cache) {
+    status = "http cache not found";
+    return nullptr;
+  }
+
+  disk_cache::Backend* backend = http_cache->GetCurrentBackend();
+  if (!backend) {
+    status = "http cache backend not found";
+    return nullptr;
+  }
+  return backend;
+}
+
+// GetHttpCacheKeys
+void NetworkContext::OnHttpCacheKeys(GetHttpCacheKeysCallback callback, std::unique_ptr<disk_cache::KeysResult> keysResult) {
+  auto response = network::mojom::DiskCacheKeysResponse::New();
+  response->status = keysResult->status;
+  if (keysResult->status == "ok") {
+    response->keys = std::move(keysResult->keys);
+  }
+  std::move(callback).Run(std::move(response));
+}
+
+void NetworkContext::GetHttpCacheKeys(GetHttpCacheKeysCallback callback) {
+  std::string status;
+  disk_cache::Backend* backend = GetHttpCacheBackend(status);
+  if (!backend) {
+    auto response = network::mojom::DiskCacheKeysResponse::New();
+    response->status = status;
+    std::move(callback).Run(std::move(response));
+    return;
+  }
+
+  if (!keys_exec_)
+    keys_exec_ = std::make_unique<disk_cache::CacheStorageRawApiKeys>();
+
+  auto keys_callback = base::BindOnce(&NetworkContext::OnHttpCacheKeys,
+                   weak_factory_.GetWeakPtr(), std::move(callback));
+  keys_exec_->Run(base::FilePath(), backend, std::move(keys_callback));
+}
+
+// GetHttpCacheEntry
+void NetworkContext::OnHttpCacheEntry(GetHttpCacheEntryCallback callback, std::unique_ptr<disk_cache::RawEntryResult> entryResult) {
+  auto response = network::mojom::DiskCacheEntryResponse::New();
+  response->status = entryResult->status;
+  if (entryResult->status == "ok") {
+    auto entry = network::mojom::DiskCacheEntry::New();
+    entry->key = std::move(entryResult->entry->key);
+    entry->stream0 = std::move(entryResult->entry->stream0);
+    entry->stream1 = std::move(entryResult->entry->stream1);
+    if (entryResult->entry->ranges.has_value()) {
+      std::vector<network::mojom::DiskCacheEntryRangePtr> ranges = {};
+      for (auto& it : entryResult->entry->ranges.value()) {
+        auto range = network::mojom::DiskCacheEntryRange::New(it.first, it.second);
+        ranges.push_back(std::move(range));
+      }
+      entry->ranges = std::move(ranges);
+    } else {
+      entry->stream2 = std::move(entryResult->entry->stream2);
+    }
+    response->entry = std::move(entry);
+  }
+  std::move(callback).Run(std::move(response));
+}
+
+void NetworkContext::GetHttpCacheEntry(const std::string& key, GetHttpCacheEntryCallback callback) {
+  std::string status;
+  disk_cache::Backend* backend = GetHttpCacheBackend(status);
+  if (!backend) {
+    auto response = network::mojom::DiskCacheEntryResponse::New();
+    response->status = status;
+    std::move(callback).Run(std::move(response));
+    return;
+  }
+
+  if (!entry_exec_)
+    entry_exec_ = std::make_unique<disk_cache::CacheStorageRawApiGetEntry>();
+
+  auto entry_callback = base::BindOnce(&NetworkContext::OnHttpCacheEntry,
+                   weak_factory_.GetWeakPtr(), std::move(callback));
+  entry_exec_->Run(base::FilePath(), backend, key, std::move(entry_callback));
+}
+
+// PutHttpCacheEntry
+void NetworkContext::OnHttpCachePutEntry(PutHttpCacheEntryCallback callback, std::string& status) {
+  std::move(callback).Run(status);
+}
+
+void NetworkContext::PutHttpCacheEntry(const mojom::DiskCacheEntryPtr entry, PutHttpCacheEntryCallback callback) {
+  std::string status;
+  disk_cache::Backend* backend = GetHttpCacheBackend(status);
+  if (!backend) {
+    std::move(callback).Run(std::move(status));
+    return;
+  }
+
+  if (!put_entry_exec_)
+    put_entry_exec_ = std::make_unique<disk_cache::CacheStorageRawApiPutEntry>();
+
+  auto put_entry_callback = base::BindOnce(&NetworkContext::OnHttpCachePutEntry,
+                   weak_factory_.GetWeakPtr(), std::move(callback));
+
+  auto raw_entry = std::make_unique<disk_cache::RawEntry>();
+  raw_entry->key = entry->key;
+  raw_entry->stream0 = std::move(entry->stream0);
+  raw_entry->stream1 = std::move(entry->stream1);
+
+  if (entry->ranges.has_value()) {
+    std::vector<std::pair<int64_t, size_t>> ranges = {};
+    for (const network::mojom::DiskCacheEntryRangePtr& range : entry->ranges.value()) {
+      std::pair<int64_t, size_t> new_range = std::make_pair(range->offset, static_cast<size_t>(range->length));
+      ranges.push_back(std::move(new_range));
+    }
+    raw_entry->ranges = std::move(ranges);
+  } else {
+    raw_entry->stream2 = std::move(entry->stream2);
+  }
+
+  put_entry_exec_->Run(base::FilePath(), backend, std::move(raw_entry), std::move(put_entry_callback));
+}
+
+// DeleteHttpCacheEntry
+void NetworkContext::OnHttpCacheDeleteEntry(DeleteHttpCacheEntryCallback callback, std::string& status) {
+  std::move(callback).Run(status);
+}
+
+void NetworkContext::DeleteHttpCacheEntry(const std::string& key, DeleteHttpCacheEntryCallback callback) {
+  std::string status;
+  disk_cache::Backend* backend = GetHttpCacheBackend(status);
+  if (!backend) {
+    std::move(callback).Run(std::move(status));
+    return;
+  }
+
+  if (!delete_exec_)
+    delete_exec_ = std::make_unique<disk_cache::CacheStorageRawApiDeleteEntry>();
+
+  auto delete_callback = base::BindOnce(&NetworkContext::OnHttpCacheDeleteEntry,
+                   weak_factory_.GetWeakPtr(), std::move(callback));
+  delete_exec_->Run(base::FilePath(), backend, key, std::move(delete_callback));
+}
+// end of disk_cache webextensions api support
+
 void NetworkContext::ComputeHttpCacheSize(
     base::Time start_time,
     base::Time end_time,

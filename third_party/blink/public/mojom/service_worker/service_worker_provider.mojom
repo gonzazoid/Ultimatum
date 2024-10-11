@@ -6,6 +6,7 @@ module blink.mojom;
 
 import "services/network/public/mojom/url_loader_factory.mojom";
 import "third_party/blink/public/mojom/browser_interface_broker.mojom";
+import "third_party/blink/public/mojom/cache_storage_raw/cache_storage_raw.mojom";
 import "third_party/blink/public/mojom/cache_storage/cache_storage.mojom";
 import "third_party/blink/public/mojom/service_worker/service_worker_container.mojom";
 import "third_party/blink/public/mojom/service_worker/service_worker_container_type.mojom";
@@ -38,6 +39,7 @@ struct ServiceWorkerProviderInfoForStartWorker {
   // optimization would be wasteful because these workers usually are aborted
   // after the byte-to-byte update check before running.
   pending_remote<CacheStorage>? cache_storage;
+  pending_remote<CacheStorageRaw>? cache_storage_raw;
 
   // Used for accessing services from the worker.
   pending_remote<blink.mojom.BrowserInterfaceBroker> browser_interface_broker;

@@ -407,6 +407,19 @@ RangeResult EntryImpl::GetAvailableRangeImpl(int64_t offset, int len) {
   return sparse_->GetAvailableRange(offset, len);
 }
 
+RangesResult EntryImpl::GetAvailableRangesImpl() {
+
+  int result = InitSparseData();
+  if (net::OK != result) {
+    if (result == net::ERR_CACHE_OPERATION_NOT_SUPPORTED) {
+      return RangesResult(net::OK);
+    }
+    return RangesResult(static_cast<net::Error>(result));
+  }
+
+  return sparse_->GetAvailableRanges();
+}
+
 void EntryImpl::CancelSparseIOImpl() {
   if (!sparse_.get())
     return;
@@ -887,6 +900,14 @@ RangeResult EntryImpl::GetAvailableRange(int64_t offset,
 
   background_queue_->GetAvailableRange(this, offset, len, std::move(callback));
   return RangeResult(net::ERR_IO_PENDING);
+}
+
+RangesResult EntryImpl::GetAvailableRanges(RangesResultCallback callback) {
+  if (!background_queue_.get())
+    return RangesResult(net::ERR_UNEXPECTED);
+
+  background_queue_->GetAvailableRanges(this, std::move(callback));
+  return RangesResult(net::ERR_IO_PENDING);
 }
 
 bool EntryImpl::CouldBeSparse() const {
