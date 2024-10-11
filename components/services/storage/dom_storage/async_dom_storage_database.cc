@@ -205,6 +205,98 @@ void AsyncDomStorageDatabase::InitiateCommit() {
               .Then(std::move(run_all)));
 }
 
+
+void AsyncDomStorageDatabase::GetAllKeys(mojom::LocalStorageControl::GetKeysCallback callback) {
+  database_.AsyncCall(&DomStorageDatabase::GetAllKeys)
+      .Then(base::BindOnce(
+        [](
+           mojom::LocalStorageControl::GetKeysCallback callback,
+           StatusOr<std::vector<std::vector<uint8_t>>> result) {
+          auto response = storage::mojom::LocalStorageKeysResponse::New();
+          if (result.has_value()) {
+            response->status = "ok";
+            response->keys = std::move(result).value();
+          } else {
+            response->status = std::move(result).error().ToString();
+          }
+          std::move(callback).Run(std::move(response));
+        },
+        std::move(callback)
+      ));
+}
+
+void AsyncDomStorageDatabase::GetEntry(
+    const std::vector<uint8_t>& dom_storage_key,
+    mojom::LocalStorageControl::GetEntryCallback callback) {
+  database_.AsyncCall(&DomStorageDatabase::ReadKeyValue)
+      .WithArgs(dom_storage_key)
+      .Then(base::BindOnce(
+        [](const std::vector<uint8_t>& dom_storage_key,
+           mojom::LocalStorageControl::GetEntryCallback callback,
+           StatusOr<std::map<DomStorageDatabase::Key, DomStorageDatabase::Value>> result) {
+           auto response = storage::mojom::LocalStorageGetEntryResponse::New();
+
+          if (result.has_value()) {
+            std::map<DomStorageDatabase::Key, DomStorageDatabase::Value>
+              key_value_results;
+
+            key_value_results = std::move(result).value();
+            auto value = key_value_results.find(dom_storage_key);
+            if (value != key_value_results.end()) {
+              response->status = "ok";
+              response->value = value->second;
+            } else {
+              response->status = "not found";
+            }
+          } else {
+            response->status = std::move(result).error().ToString();;
+          }
+          std::move(callback).Run(std::move(response));
+        },
+        dom_storage_key,
+        std::move(callback)
+      ));
+}
+
+void AsyncDomStorageDatabase::PutEntry(
+  const std::vector<uint8_t>& key,
+  const std::vector<uint8_t>& value,
+  mojom::LocalStorageControl::PutEntryCallback callback) {
+  database_.AsyncCall(&DomStorageDatabase::PutEntry)
+      .WithArgs(key, value)
+      .Then(base::BindOnce(
+        [](
+           mojom::LocalStorageControl::PutEntryCallback callback,
+           DbStatus status) {
+          if (status.ok()) {
+            std::move(callback).Run("ok");
+          } else {
+            std::move(callback).Run(status.ToString());
+          }
+        },
+        std::move(callback)
+      ));
+}
+
+void AsyncDomStorageDatabase::DeleteEntry(
+  const std::vector<uint8_t>& key,
+  mojom::LocalStorageControl::DeleteEntryCallback callback) {
+  database_.AsyncCall(&DomStorageDatabase::DeleteEntry)
+      .WithArgs(key)
+      .Then(base::BindOnce(
+        [](
+           mojom::LocalStorageControl::DeleteEntryCallback callback,
+           DbStatus status) {
+          if (status.ok()) {
+            std::move(callback).Run("ok");
+          } else {
+            std::move(callback).Run(status.ToString());
+          }
+        },
+        std::move(callback)
+      ));
+  }
+
 void AsyncDomStorageDatabase::OnDatabaseOpened(StatusCallback callback,
                                                DbStatus open_status) {
   CHECK(!is_database_opened_);

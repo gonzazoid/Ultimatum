@@ -16,6 +16,8 @@
 #include "components/services/storage/dom_storage/db_status.h"
 #include "components/services/storage/dom_storage/dom_storage_database.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
+#include "components/services/storage/public/mojom/local_storage_control.mojom.h"
+#include "components/services/storage/public/mojom/local_storage_raw.mojom.h"
 
 namespace storage {
 
@@ -66,6 +68,21 @@ class AsyncDomStorageDatabase {
   using ReadAllMetadataCallback =
       base::OnceCallback<void(StatusOr<DomStorageDatabase::Metadata>)>;
   void ReadAllMetadata(ReadAllMetadataCallback callback);
+
+  void GetAllKeys(mojom::LocalStorageControl::GetKeysCallback callback);
+  void GetEntry(
+    const std::vector<uint8_t>& dom_storage_key,
+    mojom::LocalStorageControl::GetEntryCallback callback
+  );
+  void PutEntry(
+    const std::vector<uint8_t>& key,
+    const std::vector<uint8_t>& value,
+    mojom::LocalStorageControl::PutEntryCallback callback
+  );
+  void DeleteEntry(
+    const std::vector<uint8_t>& key,
+    mojom::LocalStorageControl::DeleteEntryCallback callback
+  );
 
   void PutMetadata(DomStorageDatabase::Metadata metadata,
                    StatusCallback callback);
