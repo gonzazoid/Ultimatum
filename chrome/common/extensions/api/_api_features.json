@@ -328,6 +328,10 @@
     "dependencies": ["permission:sqliteCache"],
     "contexts": ["privileged_extension"]
   },
+  "localStorages": {
+    "dependencies": ["permission:localStorages"],
+    "contexts": ["privileged_extension"]
+  },
   "crashReportPrivate": [{
     "dependencies": ["permission:crashReportPrivate"],
     "contexts": ["privileged_extension"],
