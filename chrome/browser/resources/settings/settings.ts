@@ -33,6 +33,7 @@ export {PluralStringProxyImpl as SettingsPluralStringProxyImpl} from 'chrome://r
 export {getTrustedHTML} from 'chrome://resources/js/static_types.js';
 export {SettingsAboutPageElement} from './about_page/about_page.js';
 export {HashNetPageElement} from './hashnet_page/hashnet_page.js';
+export {ProfilePageElement} from './profiles/profile_page.js';
 export {ControlledRadioButtonElement} from './controls/controlled_radio_button.js';
 export {SettingsDropdownMenuElement} from './controls/settings_dropdown_menu.js';
 export {SettingsToggleButtonElement} from './controls/settings_toggle_button.js';

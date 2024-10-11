@@ -316,6 +316,10 @@
     "dependencies": ["permission:cookies"],
     "contexts": ["privileged_extension"]
   },
+  "profiles": {
+    "dependencies": ["permission:profiles"],
+    "contexts": ["privileged_extension"]
+  },
   "crashReportPrivate": [{
     "dependencies": ["permission:crashReportPrivate"],
     "contexts": ["privileged_extension"],

@@ -59,6 +59,36 @@
     },
 
     {
+      name: "productSub",
+      type: "String",
+    },
+
+    {
+      name: "productSubSubstitution",
+      type: "bool",
+    },
+
+    {
+      name: "platform",
+      type: "String",
+    },
+
+    {
+      name: "platformSubstitution",
+      type: "bool",
+    },
+
+    {
+      name: "vendor",
+      type: "String",
+    },
+
+    {
+      name: "vendorSubstitution",
+      type: "bool",
+    },
+
+    {
       name: "hashNetPublicKey",
       type: "String",
     },

@@ -2844,6 +2844,8 @@ Called by update_extension_histograms.py.-->
   <int value="1950"
       label="ACCESSIBILITY_PRIVATE_ENABLESPOKENFEEDBACKMV3KEYHANDLING"/>
   <int value="1951" label="DEVELOPERPRIVATE_LOADCRX"/>
+  <int value="1952" label="PROFILES_SETPARAMETER"/>
+  <int value="1953" label="PROFILES_SETPARAMETERSUBSTITUTION"/>
 </enum>
 
 <!-- LINT.ThenChange(//extensions/browser/extension_function_histogram_value.h:HistogramValue) -->
@@ -3232,6 +3234,7 @@ Called by update_extension_permission.py.-->
   <int value="261" label="kOmniboxDirectInput"/>
   <int value="262" label="kExperimentalActor"/>
   <int value="263" label="kEnterpriseLogin"/>
+  <int value="264" label="kProfiles"/>
 </enum>
 
 <enum name="ExtensionPolicyReinstallReason">
