@@ -18,6 +18,7 @@ export interface PageVisibility {
   extensions?: boolean;
   glic?: boolean;
   hashnet?: boolean;
+  profile?: boolean;
   languages?: boolean;
   onStartup?: boolean;
   people?: boolean;

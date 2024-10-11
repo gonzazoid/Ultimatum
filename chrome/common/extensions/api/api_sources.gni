@@ -35,6 +35,7 @@ schema_sources_ = [
   "webrtc_logging_private.idl",
   "webstore_private.json",
   "windows.json",
+  "profiles.idl",
 ]
 
 # Schemas that should be used only to auto-generate the C++ types.
