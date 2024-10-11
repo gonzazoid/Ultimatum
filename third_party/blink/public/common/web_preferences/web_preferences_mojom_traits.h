@@ -92,6 +92,30 @@ struct BLINK_COMMON_EXPORT StructTraits<blink::mojom::WebPreferencesDataView,
     return r.hash_net_public_key;
   }
 
+  static const std::string product_sub(const blink::web_pref::WebPreferences& r) {
+    return r.product_sub;
+  }
+
+  static bool product_sub_substitution(const blink::web_pref::WebPreferences& r) {
+    return r.product_sub_substitution;
+  }
+
+  static const std::string platform(const blink::web_pref::WebPreferences& r) {
+    return r.platform;
+  }
+
+  static bool platform_substitution(const blink::web_pref::WebPreferences& r) {
+    return r.platform_substitution;
+  }
+
+  static const std::string vendor(const blink::web_pref::WebPreferences& r) {
+    return r.vendor;
+  }
+
+  static bool vendor_substitution(const blink::web_pref::WebPreferences& r) {
+    return r.vendor_substitution;
+  }
+
   static bool loads_images_automatically(
       const blink::web_pref::WebPreferences& r) {
     return r.loads_images_automatically;
