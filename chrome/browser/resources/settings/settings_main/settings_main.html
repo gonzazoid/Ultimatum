@@ -49,3 +49,9 @@
           prefs="{{prefs}}">
       </settings-about-page>
     </template>
+    <template is="dom-if" if="[[showPages_.hashnet]]">
+      <settings-hashnet-page role="main"
+          class="cr-centered-card-container"
+          prefs="{{prefs}}">
+      </settings-hashnet-page>
+    </template>

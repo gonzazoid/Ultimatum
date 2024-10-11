@@ -1,0 +1,5 @@
+[
+    ImplementedAs=HashNet
+] partial interface Window {
+    [CallWith=ScriptState, NewObject] DOMString getHashNetPublicKey();
+};
