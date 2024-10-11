@@ -53,6 +53,7 @@ schema_sources_ = [
   "settings_private.idl",
   "autofill_private.idl",
   "resources_private.idl",
+  "profiles.idl",
 ]
 
 if (enable_service_discovery) {

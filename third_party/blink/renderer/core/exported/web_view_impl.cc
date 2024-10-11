@@ -1604,6 +1604,12 @@ void WebView::ApplyWebPreferences(const web_pref::WebPreferences& prefs,
       WebString::FromASCII(prefs.default_encoding));
   settings->SetJavaScriptEnabled(prefs.javascript_enabled);
   settings->SetHashNetPublicKey(WebString::FromUTF8(prefs.hash_net_public_key));
+  settings->SetProductSub(WebString::FromUTF8(prefs.product_sub));
+  settings->SetProductSubSubstitution(prefs.product_sub_substitution);
+  settings->SetPlatform(WebString::FromUTF8(prefs.platform));
+  settings->SetPlatformSubstitution(prefs.platform_substitution);
+  settings->SetVendor(WebString::FromUTF8(prefs.vendor));
+  settings->SetVendorSubstitution(prefs.vendor_substitution);
   settings->SetWebSecurityEnabled(prefs.web_security_enabled);
   settings->SetLoadsImagesAutomatically(prefs.loads_images_automatically);
   settings->SetImagesEnabled(prefs.images_enabled);

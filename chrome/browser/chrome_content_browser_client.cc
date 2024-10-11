@@ -4640,6 +4640,24 @@ void ChromeContentBrowserClient::OverrideWebPreferences(
   std::string public_key = net::DerivePublicKeyFromPrivate(private_key);
   web_prefs->hash_net_public_key = public_key;
 
+  std::string product_sub = prefs->GetString(prefs::kChameleonProductSub);
+  web_prefs->product_sub = product_sub;
+
+  bool product_sub_substitution = prefs->GetBoolean(prefs::kChameleonProductSubSubstitution);
+  web_prefs->product_sub_substitution = product_sub_substitution;
+
+  std::string platform = prefs->GetString(prefs::kChameleonPlatform);
+  web_prefs->platform = platform;
+
+  bool platform_substitution = prefs->GetBoolean(prefs::kChameleonPlatformSubstitution);
+  web_prefs->platform_substitution = platform_substitution;
+
+  std::string vendor = prefs->GetString(prefs::kChameleonVendor);
+  web_prefs->vendor = vendor;
+
+  bool vendor_substitution = prefs->GetBoolean(prefs::kChameleonVendorSubstitution);
+  web_prefs->vendor_substitution = vendor_substitution;
+
   if (!prefs->GetBoolean(prefs::kWebKitWebSecurityEnabled)) {
     web_prefs->web_security_enabled = false;
   }

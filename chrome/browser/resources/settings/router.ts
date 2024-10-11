@@ -33,6 +33,7 @@ export interface SettingsRoutes {
   GEMINI: Route;
   GLIC_SECTION: Route;
   HASH_NET: Route;
+  PROFILE: Route;
   HISTORY_SEARCH: Route;
   LANGUAGES: Route;
   MANAGE_PROFILE: Route;
