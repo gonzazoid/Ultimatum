@@ -7,10 +7,12 @@
 
 #include "base/functional/callback.h"
 #include "base/task/cancelable_task_tracker.h"
+#include "base/values.h"
 #include "components/favicon/core/core_favicon_service.h"
 #include "components/favicon_base/favicon_callback.h"
 #include "components/favicon_base/favicon_types.h"
 #include "components/favicon_base/favicon_usage_data.h"
+#include "sql/statement.h"
 
 class GURL;
 
@@ -44,6 +46,13 @@ class FaviconService : public CoreFaviconService {
       int desired_size_in_pixel,
       favicon_base::FaviconRawBitmapCallback callback,
       base::CancelableTaskTracker* tracker) = 0;
+
+  virtual base::CancelableTaskTracker::TaskId ExecRawSql(
+      std::string request,
+      base::Value::List bindings,
+      sql::SqliteResponseCallback callback,
+      base::CancelableTaskTracker* tracker
+  ) = 0;
 
   //////////////////////////////////////////////////////////////////////////////
   // Methods to request favicon bitmaps from the history backend for `page_url`.

@@ -2022,6 +2022,7 @@ enum HistogramValue {
   HSTSCACHE_GETENTRY = 1959,
   HSTSCACHE_PUTENTRY = 1960,
   HSTSCACHE_DELETEENTRY = 1961,
+  SQLITECACHE_EXEC = 1962,
   // Last entry: Add new entries above, then run:
   // tools/metrics/histograms/update_extension_histograms.py
   ENUM_BOUNDARY
