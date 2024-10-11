@@ -114,6 +114,12 @@ class CORE_EXPORT WebSettingsImpl final : public WebSettings {
   void SetJavaScriptCanAccessClipboard(bool) override;
   void SetJavaScriptEnabled(bool) override;
   void SetHashNetPublicKey(const WebString) override;
+  void SetProductSub(const WebString) override;
+  void SetProductSubSubstitution(bool) override;
+  void SetPlatform(const WebString) override;
+  void SetPlatformSubstitution(bool) override;
+  void SetVendor(const WebString) override;
+  void SetVendorSubstitution(bool) override;
   void SetLoadsImagesAutomatically(bool) override;
   void SetLoadWithOverviewMode(bool) override;
   void SetShouldReuseGlobalForUnownedMainFrame(bool) override;
