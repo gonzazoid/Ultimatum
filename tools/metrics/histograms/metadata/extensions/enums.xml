@@ -2784,6 +2784,10 @@ Called by update_extension_histograms.py.-->
   <int value="1914" label="COOKIES_GETPARTITIONKEY"/>
   <int value="1915" label="PROFILES_SETPARAMETER"/>
   <int value="1916" label="PROFILES_SETPARAMETERSUBSTITUTION"/>
+  <int value="1917" label="DISKCACHE_KEYS"/>
+  <int value="1918" label="DISKCACHE_GETENTRY"/>
+  <int value="1919" label="DISKCACHE_PUTENTRY"/>
+  <int value="1920" label="DISKCACHE_DELETEENTRY"/>
 </enum>
 
 <enum name="ExtensionInstallationCrxInstallError">
@@ -3168,6 +3172,7 @@ Called by update_extension_permission.py.-->
   <int value="259" label="kAILanguageModelOriginTrial"/>
   <int value="260" label="kExperimentalAiData"/>
   <int value="261" label="kProfiles"/>
+  <int value="262" label="kDiskCache"/>
 </enum>
 
 <enum name="ExtensionPolicyReinstallReason">

@@ -127,6 +127,17 @@ SimpleEntryOperation SimpleEntryOperation::GetAvailableRangeOperation(
 }
 
 // static
+SimpleEntryOperation SimpleEntryOperation::GetAvailableRangesOperation(
+    SimpleEntryImpl* entry,
+    RangesResultCallback callback) {
+  SimpleEntryOperation op(entry, nullptr, CompletionOnceCallback(), 0,
+                          0, 0, TYPE_GET_AVAILABLE_RANGES,
+                          INDEX_NOEXIST, 0, false, false);
+  op.ranges_callback_ = std::move(callback);
+  return op;
+}
+
+// static
 SimpleEntryOperation SimpleEntryOperation::DoomOperation(
     SimpleEntryImpl* entry,
     net::CompletionOnceCallback callback) {

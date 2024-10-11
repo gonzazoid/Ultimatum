@@ -37,6 +37,7 @@ if (enable_extensions) {
     "debugger.json",
     "desktop_capture.json",
     "developer_private.idl",
+    "disk_cache.idl",
     "crash_report_private.idl",
     "downloads.idl",
     "downloads_internal.idl",

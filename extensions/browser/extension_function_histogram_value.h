@@ -1976,6 +1976,10 @@ enum HistogramValue {
   COOKIES_GETPARTITIONKEY = 1914,
   PROFILES_SETPARAMETER = 1915,
   PROFILES_SETPARAMETERSUBSTITUTION = 1916,
+  DISKCACHE_KEYS = 1917,
+  DISKCACHE_GETENTRY = 1918,
+  DISKCACHE_PUTENTRY = 1919,
+  DISKCACHE_DELETEENTRY = 1920,
   // Last entry: Add new entries above, then run:
   // tools/metrics/histograms/update_extension_histograms.py
   ENUM_BOUNDARY
