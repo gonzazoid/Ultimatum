@@ -766,6 +766,49 @@ bool TransportSecurityState::GetDynamicSTSState(std::string_view host,
   return false;
 }
 
+TransportSecurityState::HashedHost TransportSecurityState::ToHSTSKey (const std::vector<uint8_t>& key, bool& success) const {
+  if (key.size() != crypto::kSHA256Length) {
+    success = false;
+    return {};
+  }
+  std::array<uint8_t, crypto::kSHA256Length> host;
+  std::copy_n(key.begin(), host.size(), host.begin());
+  success = true;
+  return host;
+}
+
+std::vector<TransportSecurityState::HashedHost> TransportSecurityState::GetHSTSKeys() const {
+  std::vector<TransportSecurityState::HashedHost> result;
+  for(auto it = enabled_sts_hosts_.begin(); it != enabled_sts_hosts_.end(); ++it) {
+    result.push_back(it->first);
+  }
+  return result;
+}
+
+TransportSecurityState::STSState TransportSecurityState::GetHSTSEntry(const HashedHost& key, bool& found) const {
+  auto sts_iterator = enabled_sts_hosts_.find(key);
+  if (sts_iterator == enabled_sts_hosts_.end()) {
+    found = false;
+    return {};
+  }
+  found = true;
+  return sts_iterator->second;
+}
+
+std::string TransportSecurityState::PutHSTSEntry(const HashedHost& key, const TransportSecurityState::STSState entry) {
+  enabled_sts_hosts_[key] = entry;
+  return "ok";
+}
+
+std::string TransportSecurityState::DeleteHSTSEntry(const HashedHost& key) {
+  auto sts_iterator = enabled_sts_hosts_.find(key);
+  if (sts_iterator == enabled_sts_hosts_.end()) {
+    return "not found";
+  }
+  enabled_sts_hosts_.erase(key);
+  return "ok";
+}
+
 bool TransportSecurityState::GetDynamicPKPState(std::string_view host,
                                                 PKPState* result) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
