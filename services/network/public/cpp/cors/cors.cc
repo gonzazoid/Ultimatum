@@ -146,6 +146,18 @@ base::expected<void, CorsErrorStatus> CheckAccess(
     const std::optional<std::string>& allow_credentials_header,
     mojom::CredentialsMode credentials_mode,
     const url::Origin& origin) {
+
+  if (/* navigation request */ response_url.SchemeIsHash() || /* fetch request */ origin.GetURL().SchemeIsHash()) {
+    return base::expected<void, CorsErrorStatus>();
+  }
+  if (/* navigation request */ response_url.SchemeIsSigned() || /* fetch request */ origin.GetURL().SchemeIsSigned()) {
+    return base::expected<void, CorsErrorStatus>();
+  }
+
+  if (origin.GetURL().SchemeIsRelated()) {
+    return base::expected<void, CorsErrorStatus>();
+  }
+
   if (allow_origin_header == kAsterisk) {
     // A wildcard Access-Control-Allow-Origin can not be used if credentials are
     // to be sent, even with Access-Control-Allow-Credentials set to true.

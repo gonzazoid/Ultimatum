@@ -102,6 +102,7 @@ build_webui("build") {
     "downloads_page/downloads_page.ts",
     "glic_page/glic_page.ts",
     "glic_page/glic_subpage.ts",
+    "hashnet_page/hashnet_page.ts",
     "on_startup_page/on_startup_page.ts",
     "on_startup_page/startup_url_dialog.ts",
     "on_startup_page/startup_url_entry.ts",

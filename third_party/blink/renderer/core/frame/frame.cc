@@ -280,6 +280,11 @@ Settings* Frame::GetSettings() const {
   return nullptr;
 }
 
+std::string Frame::GetHashNetPublicKey() {
+  Settings* settings = GetSettings();
+  return settings->GetHashNetPublicKey().Utf8();
+}
+
 WindowProxy* Frame::GetWindowProxy(DOMWrapperWorld& world) {
   return window_proxy_manager_->GetWindowProxy(world);
 }

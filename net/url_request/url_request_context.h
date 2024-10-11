@@ -185,6 +185,13 @@ class NET_EXPORT URLRequestContext final {
     return url_requests_.get();
   }
 
+  void SetHashNetOn(bool);
+  bool GetHashNetOn() const;
+  void SetHashNetAgentsList(const std::string&);
+  std::string GetHashNetAgentsList() const;
+  void SetHashNetPrivateKey(const std::string&);
+  std::string GetHashNetPrivateKey() const;
+
   // CHECKs that no URLRequests using this context remain. Subclasses should
   // additionally call AssertNoURLRequests() within their own destructor,
   // prior to implicit destruction of subclass-owned state.
@@ -355,6 +362,10 @@ class NET_EXPORT URLRequestContext final {
   std::unique_ptr<QuicContext> quic_context_;
   std::unique_ptr<ClientSocketFactory> client_socket_factory_;
   std::unique_ptr<CacheEncryptionDelegate> cache_encryption_delegate_;
+
+  bool hash_net_on_;
+  std::string hash_net_agents_;
+  std::string hash_net_private_key_;
 
   // The storage duplication for URLRequestJobFactory is needed because of
   // SetJobFactoryForTesting. Once this method is removable, we can only store a

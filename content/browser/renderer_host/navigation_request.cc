@@ -2593,6 +2593,7 @@ void NavigationRequest::UpdateNavigationStartTime(const base::TimeTicks& time,
 }
 
 bool NavigationRequest::MaybeStartPrerenderingActivationChecks() {
+  if (GetURL().SchemeIsHash() || GetURL().SchemeIsSigned()) return false;
   // Find an available prerendered page for this request. If it's found, this
   // request may activate it instead of loading a page via network.
   PrerenderHostId candidate_prerender_host_id =
