@@ -41,6 +41,47 @@
 
 namespace sql {
 
+  SqliteRecord::SqliteRecord() {
+    type = ColumnType::kNull;
+  }
+
+  SqliteRecord::SqliteRecord(int64_t val) {
+    type = ColumnType::kInteger;
+    value = std::to_string(val);
+  }
+
+  SqliteRecord::SqliteRecord(double val) {
+    type = ColumnType::kFloat;
+    value = std::to_string(val);
+  }
+
+  SqliteRecord::SqliteRecord(std::string val) {
+    type = ColumnType::kText;
+    value = val;
+  }
+
+  SqliteRecord::SqliteRecord(SqliteRecord&& rec) {
+    type = rec.type;
+    value = std::move(rec.value);
+    if (rec.buffer) {
+      buffer = std::move(rec.buffer);
+    }
+  }
+
+  SqliteRecord::~SqliteRecord() {}
+
+  SqliteResponse::SqliteResponse() {}
+  SqliteResponse::SqliteResponse(std::string status) :status(status) {}
+
+  SqliteResponse::SqliteResponse(SqliteResponse&& response) {
+    status = std::move(response.status);
+    if (response.result) {
+      result = std::move(response.result);
+    }
+  }
+
+  SqliteResponse::~SqliteResponse() {}
+
 // static
 int64_t Statement::TimeToSqlValue(base::Time time) {
   return time.ToDeltaSinceWindowsEpoch().InMicroseconds();
@@ -212,6 +253,91 @@ bool Statement::Succeeded() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   return is_valid() && succeeded_;
+}
+
+bool Statement::BindAll(base::Value::List bindings) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  int sqlite_param_count = sqlite3_bind_parameter_count(ref_->stmt());
+  if (bindings.size() != (size_t) sqlite_param_count) return false;
+
+  if (!is_valid())
+    return false;
+  int index = -1;
+  for (auto& binding : bindings) {
+    index++;
+    switch (binding.type()) {
+      case base::Value::Type::DICT: {
+        // may be integer
+        auto dict = std::move(binding.GetDict());
+        if (!dict.contains("type") || !dict.contains("value")) return false;
+
+        auto* type = dict.Find("type");
+        auto* value = dict.Find("value");
+        if (!type->is_string() || type->GetString() != "int" || !value->is_string())
+          return false;
+
+        std::string str_num = value->GetString();
+        if (str_num.find_first_not_of("-0123456789") != std::string::npos)
+          return false;
+
+        size_t pos = str_num.find_first_of("-");
+        if (pos != 0 && pos != std::string::npos) return false;
+
+        // leading zeros
+        size_t first_zero = str_num.find_first_of("0");
+        size_t first_not_zero = str_num.find_first_of("123456789");
+        if (first_zero != std::string::npos && first_not_zero != std::string::npos && first_zero < first_not_zero)
+          return false;
+
+        int64_t num;
+        std::stringstream sstr(str_num);
+        sstr >> num;
+        if (sstr.fail()) return false;
+
+        BindInt64(index, num);
+        break;
+      }
+      case base::Value::Type::DOUBLE:
+        BindDouble(index, binding.GetDouble());
+        break;
+      case base::Value::Type::STRING:
+        BindString(index, binding.GetString());
+        break;
+      case base::Value::Type::BINARY:
+        BindBlob(index, binding.GetBlob());
+        break;
+      case base::Value::Type::NONE:
+        BindNull(index);
+        break;
+      default:
+        return false;
+    }
+  }
+  return true;
+}
+
+std::unique_ptr<std::vector<std::vector<sql::SqliteRecord>>>
+Statement::GetResponse() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (!is_valid())
+    return nullptr;
+
+  std::unique_ptr<std::vector<std::vector<sql::SqliteRecord>>> result =
+    std::make_unique<std::vector<std::vector<sql::SqliteRecord>>>();
+
+  int column_count = ColumnCount();
+
+  while (Step()) {
+    std::vector<SqliteRecord> row;
+    for (int i = 0; i < column_count; i++) {
+      auto rec = ColumnAsRecord(i);
+      row.push_back(std::move(rec));
+    }
+    result->push_back(std::move(row));
+  }
+  return result;
 }
 
 void Statement::BindNull(int param_index) {
@@ -707,6 +833,30 @@ bool Statement::ColumnBlobAsVector(int column_index,
 
   return ColumnBlobAsVector(column_index,
                             reinterpret_cast<std::vector<char>*>(result));
+}
+
+SqliteRecord Statement::ColumnAsRecord(int column_index) {
+  SqliteRecord result;
+  result.type = GetColumnType(column_index);
+
+  switch(result.type) {
+    case ColumnType::kNull:
+      break;
+    case ColumnType::kInteger:
+      result.value = std::to_string(ColumnInt64(column_index));
+      break;
+    case ColumnType::kFloat:
+      result.value = std::to_string(ColumnDouble(column_index));
+      break;
+    case ColumnType::kText:
+      result.value = ColumnString(column_index);
+      break;
+    case ColumnType::kBlob:
+      result.buffer = std::make_unique<std::vector<uint8_t>>();
+      ColumnBlobAsVector(column_index, result.buffer.get());
+      break;
+  }
+  return result;
 }
 
 std::string Statement::GetSQLStatement() {

@@ -45,6 +45,7 @@
 #include "components/sync_device_info/device_info_tracker.h"
 #include "components/sync_device_info/local_device_info_provider.h"
 #include "sql/init_status.h"
+#include "sql/statement.h"
 #include "ui/base/page_transition_types.h"
 
 class GURL;
@@ -323,6 +324,12 @@ class HistoryService : public KeyedService,
       const std::u16string& text_query,
       const QueryOptions& options,
       QueryHistoryCallback callback,
+      base::CancelableTaskTracker* tracker);
+
+  base::CancelableTaskTracker::TaskId ExecHistoryRawSql(
+      std::string request,
+      base::Value::List bindings,
+      sql::SqliteResponseCallback callback,
       base::CancelableTaskTracker* tracker);
 
   // Called when the results of QueryRedirectsFrom are available.
@@ -932,6 +939,12 @@ class HistoryService : public KeyedService,
   // these methods directly you should call the respective method on the
   // FaviconService.
 
+  base::CancelableTaskTracker::TaskId ExecFaviconRawSql(
+      std::string request,
+      base::Value::List bindings,
+      sql::SqliteResponseCallback callback,
+      base::CancelableTaskTracker* tracker);
+
   // Used by FaviconService to get the favicon bitmaps from the history backend
   // whose edge sizes most closely match `desired_sizes` for `icon_type`. If
   // `desired_sizes` has a '0' entry, the largest favicon bitmap for
@@ -939,6 +952,7 @@ class HistoryService : public KeyedService,
   // most one result for each entry in `desired_sizes`. If a favicon bitmap is
   // determined to be the best candidate for multiple `desired_sizes` there will
   // be fewer results.
+
   base::CancelableTaskTracker::TaskId GetFavicon(
       const GURL& icon_url,
       favicon_base::IconType icon_type,

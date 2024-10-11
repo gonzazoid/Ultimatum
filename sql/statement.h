@@ -19,6 +19,7 @@
 #include "base/sequence_checker.h"
 #include "base/thread_annotations.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "sql/database.h"
 
 namespace sql {
@@ -34,6 +35,45 @@ enum class ColumnType {
   kBlob = 4,
   kNull = 5,
 };
+
+class COMPONENT_EXPORT(SQL) SqliteRecord {
+ public:
+  ColumnType type;
+  std::string value;
+  std::unique_ptr<std::vector<uint8_t>> buffer;
+
+  SqliteRecord();
+  SqliteRecord(int64_t val);
+  SqliteRecord(double val);
+  SqliteRecord(std::string val);
+
+  // SqliteRecord(const SqliteRecord&) = delete;
+  // SqliteRecord& operator=(const SqliteRecord&) = delete;
+
+  SqliteRecord(SqliteRecord&&);
+  // SqliteRecord& operator=(SqliteRecord&&) = default;
+
+  ~SqliteRecord();
+};
+
+class COMPONENT_EXPORT(SQL) SqliteResponse {
+ public:
+  std::string status;
+  std::unique_ptr<std::vector<std::vector<sql::SqliteRecord>>> result;
+
+  SqliteResponse();
+  SqliteResponse(std::string status);
+
+  // SqliteRecord(const SqliteRecord&) = delete;
+  // SqliteRecord& operator=(const SqliteRecord&) = delete;
+
+  SqliteResponse(SqliteResponse&&);
+  // SqliteRecord& operator=(SqliteRecord&&) = default;
+
+  ~SqliteResponse();
+};
+
+using SqliteResponseCallback = base::OnceCallback<void(std::unique_ptr<sql::SqliteResponse>)>;
 
 // Compiles and executes SQL statements.
 //
@@ -125,7 +165,9 @@ class COMPONENT_EXPORT(SQL) Statement {
   bool Succeeded() const;
 
   // Binding -------------------------------------------------------------------
-
+  bool BindAll(base::Value::List);
+  std::unique_ptr<std::vector<std::vector<sql::SqliteRecord>>>
+    GetResponse();
   // These all take a 0-based parameter index and return true on success.
   // strings there may be out of memory.
   void BindNull(int param_index);
@@ -254,6 +296,7 @@ class COMPONENT_EXPORT(SQL) Statement {
   bool ColumnBlobAsVector(int column_index, std::vector<char>* result);
   bool ColumnBlobAsVector(int column_index, std::vector<uint8_t>* result);
 
+  SqliteRecord ColumnAsRecord(int column_index);
   // Diagnostics --------------------------------------------------------------
 
   // Returns the original text of a SQL statement WITHOUT any bound values.

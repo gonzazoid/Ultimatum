@@ -33,6 +33,7 @@ schema_sources_ = [
   "profiles.idl",
   "disk_cache.idl",
   "hsts_cache.idl",
+  "sqlite_cache.idl",
 ]
 
 # Schemas that should be used only to auto-generate the C++ types.
