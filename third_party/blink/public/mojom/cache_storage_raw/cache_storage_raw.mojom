@@ -1,0 +1,18 @@
+// Copyright 2024 gonzazoid
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+module blink.mojom;
+
+import "mojo/public/mojom/base/string16.mojom";
+import "mojo/public/mojom/base/file_path.mojom";
+import "services/network/public/mojom/disk_cache_raw_api.mojom";
+
+interface CacheStorageRaw {
+  // Returns all cache entries names for pointed cache file.
+  Keys(mojo_base.mojom.FilePath path) => (network.mojom.DiskCacheKeysResponse response);
+
+  GetCacheEntry(mojo_base.mojom.FilePath path, string key) => (network.mojom.DiskCacheEntryResponse response);
+  DeleteCacheEntry(mojo_base.mojom.FilePath path, string key) => (string response);
+  PutCacheEntry(mojo_base.mojom.FilePath path, network.mojom.DiskCacheEntry cacheEntry) => (string response);
+};

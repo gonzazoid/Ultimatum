@@ -53,6 +53,13 @@ BackendIO::BackendIO(InFlightBackendIO* controller,
   range_result_callback_ = std::move(callback);
 }
 
+BackendIO::BackendIO(InFlightBackendIO* controller,
+                     BackendImpl* backend,
+                     RangesResultCallback callback)
+    : BackendIO(controller, backend) {
+  ranges_result_callback_ = std::move(callback);
+}
+
 BackendIO::BackendIO(InFlightBackendIO* controller, BackendImpl* backend)
     : BackgroundIO(controller),
       backend_(backend),
@@ -134,6 +141,10 @@ void BackendIO::RunEntryResultCallback() {
 
 void BackendIO::RunRangeResultCallback() {
   std::move(range_result_callback_).Run(range_result_);
+}
+
+void BackendIO::RunRangesResultCallback() {
+  std::move(ranges_result_callback_).Run(ranges_result_);
 }
 
 void BackendIO::Init() {
@@ -262,6 +273,11 @@ void BackendIO::GetAvailableRange(EntryImpl* entry, int64_t offset, int len) {
   entry_ = entry;
   offset64_ = offset;
   buf_len_ = len;
+}
+
+void BackendIO::GetAvailableRanges(EntryImpl* entry) {
+  operation_ = OP_GET_RANGES;
+  entry_ = entry;
 }
 
 void BackendIO::CancelSparseIO(EntryImpl* entry) {
@@ -418,6 +434,10 @@ void BackendIO::ExecuteEntryOperation() {
     case OP_GET_RANGE:
       range_result_ = entry_->GetAvailableRangeImpl(offset64_, buf_len_);
       result_ = range_result_.net_error;
+      break;
+    case OP_GET_RANGES:
+      ranges_result_ = entry_->GetAvailableRangesImpl();
+      result_ = ranges_result_.net_error;
       break;
     case OP_CANCEL_IO:
       entry_->CancelSparseIOImpl();
@@ -624,6 +644,14 @@ void InFlightBackendIO::GetAvailableRange(EntryImpl* entry,
   PostOperation(FROM_HERE, operation.get());
 }
 
+void InFlightBackendIO::GetAvailableRanges(EntryImpl* entry,
+                                          RangesResultCallback callback) {
+  auto operation =
+      base::MakeRefCounted<BackendIO>(this, backend_, std::move(callback));
+  operation->GetAvailableRanges(entry);
+  PostOperation(FROM_HERE, operation.get());
+}
+
 void InFlightBackendIO::CancelSparseIO(EntryImpl* entry) {
   auto operation = base::MakeRefCounted<BackendIO>(
       this, backend_, net::CompletionOnceCallback());
@@ -654,6 +682,11 @@ void InFlightBackendIO::OnOperationComplete(BackgroundIO* operation,
   if (op->has_range_result_callback()) {
     DCHECK(op->IsEntryOperation());
     op->RunRangeResultCallback();
+  }
+
+  if (op->has_ranges_result_callback()) {
+    DCHECK(op->IsEntryOperation());
+    op->RunRangesResultCallback();
   }
 
   if (op->has_entry_result_callback() && !cancel) {

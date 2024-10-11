@@ -1959,6 +1959,10 @@ enum HistogramValue {
   ACCESSIBILITY_PRIVATE_SCROLLATPOINT = 1897,
   PROFILES_SETPARAMETER = 1898,
   PROFILES_SETPARAMETERSUBSTITUTION = 1899,
+  DISKCACHE_KEYS = 1900,
+  DISKCACHE_GETENTRY = 1901,
+  DISKCACHE_PUTENTRY = 1902,
+  DISKCACHE_DELETEENTRY = 1903,
   // Last entry: Add new entries above, then run:
   // tools/metrics/histograms/update_extension_histograms.py
   ENUM_BOUNDARY
