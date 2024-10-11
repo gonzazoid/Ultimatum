@@ -65,4 +65,18 @@ void DomStorageDatabaseFactory::Destroy(
       directory, name, std::move(blocking_task_runner), std::move(callback));
 }
 
+DbStatus DomStorageDatabase::GetAllKeys(std::vector<std::vector<uint8_t>>* keys) const {
+  // TODO REWRITE!!!
+  // if (!db_)
+  //   return Status::IOError(kInvalidDatabaseMessage);
+
+  // leveldb::Iterator* it = db_->NewIterator(leveldb::ReadOptions());
+  // for (it->SeekToFirst(); it->Valid(); it->Next()) {
+    // TODO use begin() & end() of Slice in v.131
+  //   std::vector<uint8_t> key = std::vector<uint8_t>(it->key().data(), it->key().data() + it->key().size());
+  //   keys->push_back(std::move(key));
+  // }
+  return DbStatus::OK();
+}
+
 }  // namespace storage
