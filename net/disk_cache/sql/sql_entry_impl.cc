@@ -333,6 +333,16 @@ RangeResult SqlEntryImpl::GetAvailableRange(int64_t offset,
   return RangeResult(net::ERR_IO_PENDING);
 }
 
+RangesResult SqlEntryImpl::GetAvailableRanges(RangesResultCallback callback) {
+  if (!backend_) {
+    return RangesResult(net::ERR_FAILED);
+  }
+
+  // TODO IMPLEMENT!!!
+
+  return RangesResult(net::ERR_IO_PENDING);
+}
+
 bool SqlEntryImpl::CouldBeSparse() const {
   // SqlEntryImpl doesn't distinguish the stream 1 data and the sparse data.
   return true;
