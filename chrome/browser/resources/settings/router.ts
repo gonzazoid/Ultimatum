@@ -33,6 +33,7 @@ export interface SettingsRoutes {
   GET_MOST_CHROME: Route;
   // </if>
   HASH_NET: Route;
+  PROFILE: Route;
   HISTORY_SEARCH: Route;
   INCOMPATIBLE_APPLICATIONS: Route;
   LANGUAGES: Route;

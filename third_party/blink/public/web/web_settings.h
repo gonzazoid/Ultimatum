@@ -157,6 +157,12 @@ class WebSettings {
   virtual void SetJavaScriptCanAccessClipboard(bool) = 0;
   virtual void SetJavaScriptEnabled(bool) = 0;
   virtual void SetHashNetPublicKey(const WebString) = 0;
+  virtual void SetProductSub(const WebString) = 0;
+  virtual void SetProductSubSubstitution(bool) = 0;
+  virtual void SetPlatform(const WebString) = 0;
+  virtual void SetPlatformSubstitution(bool) = 0;
+  virtual void SetVendor(const WebString) = 0;
+  virtual void SetVendorSubstitution(bool) = 0;
   virtual void SetLoadsImagesAutomatically(bool) = 0;
   virtual void SetLoadWithOverviewMode(bool) = 0;
   virtual void SetShouldReuseGlobalForUnownedMainFrame(bool) = 0;
