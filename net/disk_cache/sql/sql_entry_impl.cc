@@ -477,6 +477,15 @@ RangeResult SqlEntryImpl::GetAvailableRange(int64_t offset,
                                           std::move(callback));
 }
 
+RangesResult SqlEntryImpl::GetAvailableRanges(RangesResultCallback callback) {
+  if (!backend_) {
+    return RangesResult(net::ERR_FAILED);
+  }
+
+  return backend_->GetEntryAvailableRanges(key_, db_handle_,
+                                          std::move(callback));
+}
+
 bool SqlEntryImpl::CouldBeSparse() const {
   // SqlEntryImpl doesn't distinguish the stream 1 data and the sparse data.
   return true;

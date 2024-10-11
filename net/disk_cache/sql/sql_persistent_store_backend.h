@@ -105,6 +105,8 @@ class SqlPersistentStore::Backend {
                                      int64_t offset,
                                      int len,
                                      base::TimeTicks start_time);
+  RangesResult GetEntryAvailableRanges(ResId res_id,
+                                     base::TimeTicks start_time);
   Int64OrError CalculateSizeOfEntriesBetween(base::Time initial_time,
                                              base::Time end_time,
                                              base::TimeTicks start_time);
@@ -195,6 +197,7 @@ class SqlPersistentStore::Backend {
 
  private:
   using RangeResultOrError = base::expected<RangeResult, Error>;
+  using RangesResultOrError = base::expected<RangesResult, Error>;
   using OptionalEntryInfoWithKeyAndIteratorOrError =
       base::expected<OptionalEntryInfoWithKeyAndIterator, Error>;
 
@@ -277,6 +280,7 @@ class SqlPersistentStore::Backend {
   RangeResultOrError GetEntryAvailableRangeInternal(ResId res_id,
                                                     int64_t offset,
                                                     int len);
+  RangesResultOrError GetEntryAvailableRangesInternal(ResId res_id);
   Int64OrError CalculateSizeOfEntriesBetweenInternal(base::Time initial_time,
                                                      base::Time end_time);
   OptionalEntryInfoWithKeyAndIteratorOrError OpenNextEntryInternal(

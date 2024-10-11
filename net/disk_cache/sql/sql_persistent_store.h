@@ -454,6 +454,10 @@ class NET_EXPORT_PRIVATE SqlPersistentStore {
                               int len,
                               RangeResultCallback callback);
 
+  void GetEntryAvailableRanges(const CacheEntryKey& key,
+                              ResId res_id,
+                              RangesResultCallback callback);
+
   // Calculates the total size of all entries whose `last_used` time falls
   // within the range [`initial_time`, `end_time`). The size includes the key,
   // header, body data, and a static overhead per entry. `callback` is invoked

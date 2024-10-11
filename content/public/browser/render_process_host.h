@@ -41,6 +41,7 @@
 #include "third_party/blink/public/mojom/background_sync/background_sync.mojom.h"
 #include "third_party/blink/public/mojom/buckets/bucket_manager_host.mojom-forward.h"
 #include "third_party/blink/public/mojom/cache_storage/cache_storage.mojom-forward.h"
+#include "third_party/blink/public/mojom/cache_storage_raw/cache_storage_raw.mojom.h"
 #include "third_party/blink/public/mojom/file_system_access/file_system_access_manager.mojom.h"
 #include "third_party/blink/public/mojom/filesystem/file_system.mojom-forward.h"
 #include "third_party/blink/public/mojom/indexeddb/indexeddb.mojom-forward.h"
@@ -661,6 +662,8 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Listener,
       const base::TimeDelta& unload_handler_timeout,
       const SiteInfo& site_info) = 0;
   virtual void StopTrackingProcessForShutdownDelay() = 0;
+  virtual void BindCacheStorageRaw(
+      mojo::PendingReceiver<blink::mojom::CacheStorageRaw> receiver) = 0;
   virtual void BindCacheStorage(
       const network::CrossOriginEmbedderPolicy& cross_origin_embedder_policy,
       mojo::PendingRemote<network::mojom::CrossOriginEmbedderPolicyReporter>

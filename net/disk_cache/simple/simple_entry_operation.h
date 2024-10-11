@@ -38,6 +38,7 @@ class SimpleEntryOperation {
     TYPE_WRITE_SPARSE = 7,
     TYPE_GET_AVAILABLE_RANGE = 8,
     TYPE_DOOM = 9,
+    TYPE_GET_AVAILABLE_RANGES = 10,
   };
 
   // Whether an open/create method has returned an entry (optimistically)
@@ -93,6 +94,9 @@ class SimpleEntryOperation {
       uint64_t sparse_offset,
       size_t sparse_length,
       RangeResultCallback callback);
+  static SimpleEntryOperation GetAvailableRangesOperation(
+      SimpleEntryImpl* entry,
+      RangesResultCallback callback);
   static SimpleEntryOperation DoomOperation(SimpleEntryImpl* entry,
                                             CompletionOnceCallback callback);
 
@@ -105,6 +109,9 @@ class SimpleEntryOperation {
   }
   RangeResultCallback ReleaseRangeResultCalback() {
     return std::move(range_callback_);
+  }
+  RangesResultCallback ReleaseRangesResultCalback() {
+    return std::move(ranges_callback_);
   }
 
   EntryResultState entry_result_state() { return entry_result_state_; }
@@ -150,6 +157,7 @@ class SimpleEntryOperation {
 
   // Used in get available range operations.
   RangeResultCallback range_callback_;
+  RangesResultCallback ranges_callback_;
 
   const EntryOperationType type_;
   // Used in the "open or create" operation.

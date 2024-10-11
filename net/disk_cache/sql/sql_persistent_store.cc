@@ -252,6 +252,13 @@ void SqlPersistentStore::GetEntryAvailableRange(const CacheEntryKey& key,
                                        std::move(callback));
 }
 
+void SqlPersistentStore::GetEntryAvailableRanges(const CacheEntryKey& key,
+                                                ResId res_id,
+                                                RangesResultCallback callback) {
+  GetShard(key).GetEntryAvailableRanges(key, res_id,
+                                       std::move(callback));
+}
+
 void SqlPersistentStore::CalculateSizeOfEntriesBetween(
     base::Time initial_time,
     base::Time end_time,

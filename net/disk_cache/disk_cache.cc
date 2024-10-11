@@ -608,6 +608,37 @@ Entry* EntryResult::ReleaseEntry() {
   return ret;
 }
 
+RangesResult::RangesResult() = default;
+RangesResult::~RangesResult() = default;
+
+RangesResult::RangesResult(const RangesResult& other) {
+  net_error = other.net_error;
+  ranges = other.ranges ? std::make_unique<std::vector<RangeResult>>(*other.ranges) : nullptr;
+}
+
+RangesResult::RangesResult(RangesResult&& other) {
+  net_error = other.net_error;
+  ranges = std::move(other.ranges);
+}
+
+RangesResult::RangesResult(net::Error error) {
+  net_error = error;
+}
+
+RangesResult& RangesResult::operator=(RangesResult&& other) {
+  net_error = other.net_error;
+  ranges = std::move(other.ranges);
+
+  return *this;
+}
+
+RangesResult& RangesResult::operator=(const RangesResult& other) {
+  net_error = other.net_error;
+
+  ranges = other.ranges ? std::make_unique<std::vector<RangeResult>>(*other.ranges) : nullptr;
+
+  return *this;
+}
 TrivialFileOperations::TrivialFileOperations() {
   DETACH_FROM_SEQUENCE(sequence_checker_);
 }

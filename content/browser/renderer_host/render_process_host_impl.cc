@@ -82,6 +82,7 @@
 #include "components/services/storage/public/cpp/buckets/constants.h"
 #include "components/services/storage/public/cpp/quota_error_or.h"
 #include "components/services/storage/public/mojom/cache_storage_control.mojom.h"
+#include "components/services/storage/public/mojom/cache_storage_raw_control.mojom.h"
 #include "components/tracing/common/tracing_switches.h"
 #include "components/viz/common/switches.h"
 #include "components/viz/host/gpu_client.h"
@@ -2160,6 +2161,13 @@ void RenderProcessHostImpl::CreateMessageFilters() {
   p2p_socket_dispatcher_host_ =
       std::make_unique<P2PSocketDispatcherHost>(GetDeprecatedID());
 #endif  // BUILDFLAG(IS_P2P_ENABLED)
+}
+
+void RenderProcessHostImpl::BindCacheStorageRaw(
+    mojo::PendingReceiver<blink::mojom::CacheStorageRaw> receiver) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+
+  storage_partition_impl_->GetCacheStorageRawControl()->AddReceiver(std::move(receiver));
 }
 
 void RenderProcessHostImpl::BindCacheStorage(

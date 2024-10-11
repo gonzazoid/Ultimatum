@@ -39,6 +39,10 @@
 #include "net/cert/cert_verify_result.h"
 #include "net/cookies/cookie_setting_override.h"
 #include "net/dns/canary_domain_service.h"
+#include "net/disk_cache_raw_api/keys.h"
+#include "net/disk_cache_raw_api/get_entry.h"
+#include "net/disk_cache_raw_api/put_entry.h"
+#include "net/disk_cache_raw_api/delete_entry.h"
 #include "net/dns/host_resolver.h"
 #include "net/dns/public/dns_config_overrides.h"
 #include "net/first_party_sets/first_party_set_metadata.h"
@@ -60,6 +64,7 @@
 #include "services/network/public/mojom/connection_change_observer_client.mojom.h"
 #include "services/network/public/mojom/cookie_access_observer.mojom.h"
 #include "services/network/public/mojom/cookie_manager.mojom-shared.h"
+#include "services/network/public/mojom/disk_cache_raw_api.mojom.h"
 #include "services/network/public/mojom/host_resolver.mojom.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "services/network/public/mojom/network_context_client.mojom.h"
@@ -294,6 +299,10 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkContext
                       base::Time end_time,
                       mojom::ClearDataFilterPtr filter,
                       ClearHttpCacheCallback callback) override;
+  void GetHttpCacheKeys(GetHttpCacheKeysCallback callback) override;
+  void GetHttpCacheEntry(const std::string& key, GetHttpCacheEntryCallback callback) override;
+  void PutHttpCacheEntry(const mojom::DiskCacheEntryPtr entry, PutHttpCacheEntryCallback callback) override;
+  void DeleteHttpCacheEntry(const std::string& key, DeleteHttpCacheEntryCallback callback) override;
   void ComputeHttpCacheSize(base::Time start_time,
                             base::Time end_time,
                             ComputeHttpCacheSizeCallback callback) override;
@@ -883,6 +892,17 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkContext
   bool hash_net_on_;
   std::string hash_net_agents_;
   std::string hash_net_private_key_;
+
+  std::unique_ptr<disk_cache::CacheStorageRawApiKeys> keys_exec_;
+  std::unique_ptr<disk_cache::CacheStorageRawApiGetEntry> entry_exec_;
+  std::unique_ptr<disk_cache::CacheStorageRawApiPutEntry> put_entry_exec_;
+  std::unique_ptr<disk_cache::CacheStorageRawApiDeleteEntry> delete_exec_;
+
+  disk_cache::Backend* GetHttpCacheBackend(std::string& status);
+  void OnHttpCacheKeys(GetHttpCacheKeysCallback callback, std::unique_ptr<disk_cache::KeysResult> keysResult);
+  void OnHttpCacheEntry(GetHttpCacheEntryCallback callback, std::unique_ptr<disk_cache::RawEntryResult> entryResult);
+  void OnHttpCachePutEntry(PutHttpCacheEntryCallback callback, std::string& status);
+  void OnHttpCacheDeleteEntry(DeleteHttpCacheEntryCallback callback, std::string& status);
 
 #if BUILDFLAG(ENABLE_REPORTING)
   bool is_observing_reporting_service_;

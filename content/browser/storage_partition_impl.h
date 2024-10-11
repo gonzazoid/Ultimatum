@@ -94,6 +94,7 @@ class BroadcastChannelService;
 class BrowsingDataFilterBuilder;
 class KeepAliveURLLoaderService;
 class BucketManager;
+class CacheStorageRawControlWrapper;
 class CacheStorageControlWrapper;
 #if BUILDFLAG(ENABLE_LIBRARY_CDMS)
 class CdmStorageDataModel;
@@ -203,6 +204,7 @@ class CONTENT_EXPORT StoragePartitionImpl
   SharedStorageRuntimeManager* GetSharedStorageRuntimeManager();  // override;
   storage::mojom::IndexedDBControl& GetIndexedDBControl() override;
   FileSystemAccessEntryFactory* GetFileSystemAccessEntryFactory() override;
+  storage::mojom::CacheStorageRawControl* GetCacheStorageRawControl() override;
   storage::mojom::CacheStorageControl* GetCacheStorageControl() override;
   ServiceWorkerContextWrapper* GetServiceWorkerContext() override;
   DedicatedWorkerServiceImpl* GetDedicatedWorkerService() override;
@@ -786,6 +788,7 @@ class CONTENT_EXPORT StoragePartitionImpl
   std::unique_ptr<LockManager<storage::BucketId>> lock_manager_;
   std::unique_ptr<indexed_db::IndexedDBControlWrapper>
       indexed_db_control_wrapper_;
+  std::unique_ptr<CacheStorageRawControlWrapper> cache_storage_raw_control_wrapper_;
   std::unique_ptr<CacheStorageControlWrapper> cache_storage_control_wrapper_;
   scoped_refptr<ServiceWorkerContextWrapper> service_worker_context_;
   std::unique_ptr<DedicatedWorkerServiceImpl> dedicated_worker_service_;

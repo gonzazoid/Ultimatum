@@ -186,6 +186,11 @@ class NET_EXPORT_PRIVATE SqlBackendImpl final : public Backend {
       int len,
       RangeResultCallback callback);
 
+  RangesResult GetEntryAvailableRanges(
+    const CacheEntryKey& key,
+    const scoped_refptr<EntryDbHandle>& db_handle,
+    RangesResultCallback callback);
+
   // Sets the in-memory hints for the entry identified by `key` and
   // `db_handle`. This schedules an operation to update the in-memory
   // index.
@@ -452,6 +457,12 @@ class NET_EXPORT_PRIVATE SqlBackendImpl final : public Backend {
       int len,
       RangeResultCallback callback,
       std::unique_ptr<ExclusiveOperationCoordinator::OperationHandle> handle);
+
+  void HandleGetEntryAvailableRangesOperation(
+    const CacheEntryKey& key,
+    const scoped_refptr<EntryDbHandle>& db_handle,
+    RangesResultCallback callback,
+    std::unique_ptr<ExclusiveOperationCoordinator::OperationHandle> handle);
 
   // Handles the operation to set in-memory hints. This is called by the
   // `ExclusiveOperationCoordinator` to ensure that `db_handle` is

@@ -55,6 +55,7 @@ schema_sources_ = [
   "autofill_private.idl",
   "resources_private.idl",
   "profiles.idl",
+  "disk_cache.idl",
 ]
 
 if (enable_service_discovery) {
