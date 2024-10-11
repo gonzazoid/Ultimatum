@@ -168,6 +168,12 @@ HttpStreamFactory::JobController::JobController(
          base::EqualsCaseInsensitiveASCII(origin_url_.scheme_piece(),
                                           url::kHttpsScheme) ||
          base::EqualsCaseInsensitiveASCII(origin_url_.scheme_piece(),
+                                          url::kHashNetHashScheme) ||
+         base::EqualsCaseInsensitiveASCII(origin_url_.scheme_piece(),
+                                          url::kHashNetSignedScheme) ||
+         base::EqualsCaseInsensitiveASCII(origin_url_.scheme_piece(),
+                                          url::kHashNetRelatedScheme) ||
+         base::EqualsCaseInsensitiveASCII(origin_url_.scheme_piece(),
                                           url::kWsScheme) ||
          base::EqualsCaseInsensitiveASCII(origin_url_.scheme_piece(),
                                           url::kWssScheme));

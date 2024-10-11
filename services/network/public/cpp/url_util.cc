@@ -9,7 +9,7 @@
 namespace network {
 
 bool IsURLHandledByNetworkService(const GURL& url) {
-  return (url.SchemeIsHTTPOrHTTPS() || url.SchemeIsWSOrWSS());
+  return (url.SchemeIsHTTPOrHTTPS() || url.SchemeIsWSOrWSS() || url.SchemeIsHash() || url.SchemeIsSigned() || url.SchemeIsRelated());
 }
 
 }  // namespace network
