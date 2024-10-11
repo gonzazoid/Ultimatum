@@ -1,0 +1,31 @@
+// Copyright 2024 gonzazoid
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+// write here fucking something
+[permissions=hstsCache]
+namespace hstsCache {
+
+  dictionary HstsCacheEntry {
+    ArrayBuffer key;
+    long upgradeMode;
+    double lastObserved;
+    double expiry;
+    boolean includeSubdomains;
+  };
+
+  callback HstsCacheKeysCallback = void (ArrayBuffer[] response);
+  callback HstsCacheGetEntryCallback = void (optional HstsCacheEntry response);
+  callback HstsCachePutEntryCallback = void ();
+  callback HstsCacheDeleteEntryCallback = void ();
+
+  interface Functions {
+
+    static void keys(HstsCacheKeysCallback callback);
+    static void getEntry(ArrayBuffer key, HstsCacheGetEntryCallback callback);
+    static void putEntry(HstsCacheEntry entry, HstsCachePutEntryCallback callback);
+    static void deleteEntry(ArrayBuffer key, HstsCachePutEntryCallback callback);
+
+  };
+};
+

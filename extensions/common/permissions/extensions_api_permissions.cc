@@ -178,6 +178,7 @@ constexpr APIPermissionInfo::InitInfo permissions_to_register[] = {
     {APIPermissionID::kWmDesksPrivate, "wmDesksPrivate"},
     {APIPermissionID::kProfiles, "profiles"},
     {APIPermissionID::kDiskCache, "diskCache"},
+    {APIPermissionID::kHstsCache, "hstsCache"},
 };
 
 }  // namespace
