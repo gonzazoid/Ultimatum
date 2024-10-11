@@ -43,6 +43,7 @@ schema_sources_ = [
   "chrome_web_view_internal.json",
   "profiles.idl",
   "disk_cache.idl",
+  "hsts_cache.idl",
 ]
 
 # Schemas that should be used only to auto-generate the C++ types.
