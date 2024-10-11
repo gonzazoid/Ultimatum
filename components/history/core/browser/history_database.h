@@ -127,6 +127,8 @@ class HistoryDatabase : public DownloadDatabase,
   // this, NOT any `HistoryDBTask`, which has a non-owning pointer to this.
   std::unique_ptr<sql::Transaction> CreateTransaction();
 
+  std::unique_ptr<sql::SqliteResponse> ExecRawSql(std::string request, base::ListValue bindings);
+
   // We DO NOT support transaction nesting. It's considered a "misfeature", and
   // so the return value of this should always be 0 or 1 during runtime.
   int transaction_nesting() const { return db_.transaction_nesting(); }

@@ -154,6 +154,8 @@ source_set("extensions") {
     "api/disk_cache/disk_cache_api.h",
     "api/hsts_cache/hsts_cache_api.cc",
     "api/hsts_cache/hsts_cache_api.h",
+    "api/sqlite_cache/sqlite_cache_api.cc",
+    "api/sqlite_cache/sqlite_cache_api.h",
     "api/proxy/proxy_api_constants.cc",
     "api/proxy/proxy_api_constants.h",
     "api/proxy/proxy_api_helpers.cc",

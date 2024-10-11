@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/gtest_prod_util.h"
+#include "base/values.h"
 #include "base/memory/ref_counted.h"
 #include "components/favicon/core/favicon_types.h"
 #include "sql/database.h"
@@ -64,6 +65,8 @@ class FaviconDatabase {
   GetOldOnDemandFavicons(base::Time threshold);
 
   // Favicon Bitmaps -----------------------------------------------------------
+
+  std::unique_ptr<sql::SqliteResponse> ExecRawSql(std::string request, base::ListValue bindings);
 
   // Returns true if there are favicon bitmaps for `icon_id`. If
   // `bitmap_id_sizes` is non NULL, sets it to a list of the favicon bitmap ids

@@ -213,6 +213,10 @@
     "channel": "stable",
     "extension_types": ["extension", "legacy_packaged_app"]
   },
+  "sqliteCache": {
+    "channel": "stable",
+    "extension_types": ["extension", "legacy_packaged_app"]
+  },
   "crashReportPrivate": {
     "channel": "dev",
     "extension_types": ["extension", "legacy_packaged_app", "platform_app"],

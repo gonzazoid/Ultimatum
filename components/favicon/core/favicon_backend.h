@@ -14,8 +14,10 @@
 #include "base/feature_list.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/values.h"
 #include "components/favicon/core/favicon_types.h"
 #include "components/favicon_base/favicon_types.h"
+#include "sql/statement.h"
 
 class GURL;
 class SkBitmap;
@@ -74,6 +76,9 @@ class FaviconBackend {
       const GURL& page_url,
       const std::vector<favicon_base::IconTypeSet>& icon_types_list,
       int minimum_size_in_pixels);
+
+  // See function of same name in HistoryService for details.
+  std::unique_ptr<sql::SqliteResponse> ExecRawSql(std::string request, base::ListValue bindings);
 
   // See function of same name in HistoryService for details.
   std::vector<favicon_base::FaviconRawBitmapResult> GetFaviconsForUrl(
