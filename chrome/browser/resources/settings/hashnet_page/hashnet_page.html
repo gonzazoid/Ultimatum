@@ -1,0 +1,50 @@
+  <settings-section page-title="" section="hashnet" id="hashNetSection" >
+    <settings-toggle-button
+      id="hashNetOnToggle"
+      label="#Net on/off"
+      pref="{{prefs.settings.hashnet.on}}">
+    </settings-toggle-button>
+  </settings-section>
+  <settings-section page-title="Private key" section="privateKey" id="privateKeySection" >
+    <cr-textarea
+        id="privateKeyInput"
+        value="{{privateKey}}"
+        rows=2
+        autogrow="true"
+        placeholder="enter private key, something like secp256r1.sha256:fedcba98..."
+        maxlength="102400"
+        spellcheck="false"
+        on-input="onPrivateKeyInput_"
+        on-change="onPrivateKeyInput_">
+    </cr-textarea>
+    <cr-button
+        id="savePrivateKeyButton"
+        role="button"
+        on-click="onSavePrivateKeyButtonClick_"
+        disabled="[[!privateKeyChangedAndValid]]"
+        class="internals-button">
+      save new private key
+    </cr-button>
+  </settings-section>
+  <settings-section page-title="#Net agents" section="agents" id="agentsListSection" >
+    <!-- Max length of 100 KB to prevent browser from freezing. -->
+    <cr-textarea
+        id="agentsListinput"
+        value="{{agentsList}}"
+        rows=16
+        autogrow="true"
+        placeholder="enter #Net agents url patterns, like http://172.86.96.172/{{request}}/{{function}}/{{path}}"
+        maxlength="102400"
+        spellcheck="false"
+        on-input="onAgentsListInput_"
+        on-change="onAgentsListInput_">
+    </cr-textarea>
+    <cr-button
+        id="saveAgentsListButton"
+        role="button"
+        on-click="onSaveAgentsListButtonClick_"
+        disabled="[[!agentsListChanged]]"
+        class="internals-button">
+      save new agent's list
+    </cr-button>
+  </settings-section>
