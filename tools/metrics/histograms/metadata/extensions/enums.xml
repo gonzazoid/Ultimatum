@@ -2893,6 +2893,10 @@ Called by update_extension_histograms.py.-->
   <int value="1965" label="DISKCACHE_GETENTRY"/>
   <int value="1966" label="DISKCACHE_PUTENTRY"/>
   <int value="1967" label="DISKCACHE_DELETEENTRY"/>
+  <int value="1968" label="HSTSCACHE_KEYS"/>
+  <int value="1969" label="HSTSCACHE_GETENTRY"/>
+  <int value="1970" label="HSTSCACHE_PUTENTRY"/>
+  <int value="1971" label="HSTSCACHE_DELETEENTRY"/>
 </enum>
 
 <!-- LINT.ThenChange(//extensions/browser/extension_function_histogram_value.h:HistogramValue) -->
@@ -3285,6 +3289,7 @@ Called by update_extension_permission.py.-->
   <int value="264" label="kProxyOverrideRulesPrivate"/>
   <int value="265" label="kProfiles"/>
   <int value="266" label="kDiskCache"/>
+  <int value="267" label="kHstsCache"/>
 </enum>
 
 <enum name="ExtensionPolicyReinstallReason">
