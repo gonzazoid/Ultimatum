@@ -167,6 +167,10 @@ class ProfileNetworkContextService
   // formatting them as appropriate.
   void UpdateAcceptLanguage();
 
+  void UpdateHashNetOn();
+  void UpdateHashNetAgentsList();
+  void UpdateHashNetPrivateKey();
+
   // Computes appropriate value of Accept-Language header based on
   // |pref_accept_language_|
   std::string ComputeAcceptLanguage() const;
@@ -273,6 +277,10 @@ class ProfileNetworkContextService
   // may get deleted but nulls are not removed from the vector.
   std::vector<std::unique_ptr<SSLConfigOverlay>> ssl_config_overlays_;
 #endif  // BUILDFLAG(IS_CHROMEOS)
+
+  BooleanPrefMember pref_hash_net_on_;
+  StringPrefMember pref_hash_net_agents_list_;
+  StringPrefMember pref_hash_net_private_key_;
 
   scoped_refptr<content_settings::CookieSettings> cookie_settings_;
   base::ScopedObservation<content_settings::CookieSettings,

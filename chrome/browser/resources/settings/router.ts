@@ -32,6 +32,7 @@ export interface SettingsRoutes {
   FONTS: Route;
   GEMINI: Route;
   GLIC_SECTION: Route;
+  HASH_NET: Route;
   HISTORY_SEARCH: Route;
   LANGUAGES: Route;
   MANAGE_PROFILE: Route;

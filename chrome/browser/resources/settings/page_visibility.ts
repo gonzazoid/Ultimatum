@@ -15,6 +15,8 @@ export interface PageVisibility {
   defaultBrowser?: boolean;
   downloads?: boolean;
   extensions?: boolean;
+  glic?: boolean;
+  hashnet?: boolean;
   languages?: boolean;
   onStartup?: boolean;
   people?: boolean;

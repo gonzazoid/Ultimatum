@@ -762,6 +762,15 @@ NetworkContext::NetworkContext(
       params_->bound_network);
   url_request_context_ = url_request_context_owner_.url_request_context.get();
 
+  url_request_context_->SetHashNetOn(params_->hash_net_on);
+  hash_net_on_ = params_->hash_net_on;
+
+  url_request_context_->SetHashNetAgentsList(params_->hash_net_agents_list);
+  hash_net_agents_ = params_->hash_net_agents_list;
+
+  url_request_context_->SetHashNetPrivateKey(params_->hash_net_private_key);
+  hash_net_private_key_ = params_->hash_net_private_key;
+
   cookie_manager_ = std::make_unique<CookieManager>(
       url_request_context_, &first_party_sets_access_delegate_,
       std::move(session_cleanup_cookie_store),
@@ -982,6 +991,33 @@ std::unique_ptr<NetworkContext> NetworkContext::CreateForTesting(
 void NetworkContext::SetCertVerifierForTesting(
     net::CertVerifier* cert_verifier) {
   g_cert_verifier_for_testing = cert_verifier;
+}
+
+void NetworkContext::SetHashNetOn(bool new_hash_net_on) {
+  hash_net_on_ = new_hash_net_on;
+  url_request_context_->SetHashNetOn(new_hash_net_on);
+}
+
+bool NetworkContext::GetHashNetOn() const {
+  return hash_net_on_;
+}
+
+void NetworkContext::SetHashNetAgentsList(const std::string& new_hash_net_agents) {
+  hash_net_agents_ = new_hash_net_agents; // TODO REMOVE
+  url_request_context_->SetHashNetAgentsList(new_hash_net_agents);
+}
+
+std::string NetworkContext::GetHashNetAgentsList() const {
+  return hash_net_agents_;
+}
+
+void NetworkContext::SetHashNetPrivateKey(const std::string& new_hash_net_private_key) {
+  hash_net_private_key_ = new_hash_net_private_key; // TODO REMOVE
+  url_request_context_->SetHashNetPrivateKey(params_->hash_net_private_key);
+}
+
+std::string NetworkContext::GetHashNetPrivateKey() const { // NOT SURE IF WE EVEN NEED THIS ANYMORE
+  return hash_net_private_key_;
 }
 
 void NetworkContext::CreateURLLoaderFactory(

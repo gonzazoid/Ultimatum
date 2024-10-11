@@ -584,6 +584,30 @@ bool CorsURLLoaderFactory::IsValidRequest(
     const ResourceRequest& request,
     uint32_t options,
     const net::MutableNetworkTrafficAnnotationTag& traffic_annotation) {
+  if (request.url.SchemeIs(url::kHashNetHashScheme)) {
+    return true;
+  }
+
+  if (request.url.SchemeIs(url::kHashNetSignedScheme)) {
+    return true;
+  }
+
+  if (request.url.SchemeIs(url::kHashNetRelatedScheme)) {
+    return true;
+  }
+
+  if (request.request_initiator.has_value()) {
+    if (request.request_initiator->scheme() == url::kHashNetHashScheme) return true;
+  }
+
+  if (request.request_initiator.has_value()) {
+    if (request.request_initiator->scheme() == url::kHashNetSignedScheme) return true;
+  }
+
+  if (request.request_initiator.has_value()) {
+    if (request.request_initiator->scheme() == url::kHashNetRelatedScheme) return true;
+  }
+
   if (request.url.SchemeIs(url::kDataScheme)) {
     const std::string annotation_hash =
         base::NumberToString(traffic_annotation.unique_id_hash_code);

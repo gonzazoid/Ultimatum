@@ -16048,6 +16048,11 @@ bool RenderFrameHostImpl::DidCommitNavigationInternal(
         GetNetworkIsolationKey());
   }
 
+  auto nav_url = navigation_request->GetURL();
+  if ((nav_url.SchemeIsHash() || nav_url.SchemeIsSigned()) && !site_instance_->HasSite()) {
+    site_instance_->SetSite(UrlInfo(UrlInfoInit(nav_url)));
+  }
+
   isolation_info_ = navigation_request->isolation_info_for_subresources();
 
   if (lifecycle_state_ == LifecycleStateImpl::kActive) {
