@@ -1307,6 +1307,25 @@ RangeResult SqlBackendImpl::GetEntryAvailableRange(
                      : RangeResult(net::ERR_IO_PENDING);
 }
 
+RangesResult SqlBackendImpl::GetEntryAvailableRanges(
+    const CacheEntryKey& key,
+    const scoped_refptr<ResIdOrErrorHolder>& res_id_or_error,
+    RangesResultCallback callback) {
+  auto sync_result_receiver =
+      base::MakeRefCounted<SyncResultReceiver<const RangesResult&>>(
+          std::move(callback));
+  exclusive_operation_coordinator_.PostOrRunNormalOperation(
+      key, base::BindOnce(
+               &SqlBackendImpl::HandleGetEntryAvailableRangesOperation,
+               weak_factory_.GetWeakPtr(), key, res_id_or_error,
+               WrapCallbackWithAbortError<const RangesResult&>(
+                   sync_result_receiver->GetCallback(),
+                   RangesResult(net::ERR_ABORTED))));
+  auto sync_result = sync_result_receiver->FinishSyncCall();
+  return sync_result ? std::move(*sync_result)
+                     : RangesResult(net::ERR_IO_PENDING);
+}
+
 void SqlBackendImpl::HandleGetEntryAvailableRangeOperation(
     const CacheEntryKey& key,
     const scoped_refptr<ResIdOrErrorHolder>& res_id_or_error,
@@ -1324,6 +1343,24 @@ void SqlBackendImpl::HandleGetEntryAvailableRangeOperation(
     return;
   }
   store_->GetEntryAvailableRange(key, *optional_res_id, offset, len,
+                                 std::move(callback));
+}
+
+void SqlBackendImpl::HandleGetEntryAvailableRangesOperation(
+    const CacheEntryKey& key,
+    const scoped_refptr<ResIdOrErrorHolder>& res_id_or_error,
+    RangesResultCallback callback,
+    std::unique_ptr<ExclusiveOperationCoordinator::OperationHandle> handle) {
+  const auto optional_res_id = GetResId(res_id_or_error);
+  if (!optional_res_id) {
+    // Fail the operation for entries that previously failed a speculative
+    // creation or optimistic write.
+    const auto optional_error = GetError(res_id_or_error);
+    CHECK(optional_error.has_value());
+    std::move(callback).Run(RangesResult(net::ERR_FAILED));
+    return;
+  }
+  store_->GetEntryAvailableRanges(key, *optional_res_id,
                                  std::move(callback));
 }
 

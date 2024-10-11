@@ -74,12 +74,20 @@ class CONTENT_EXPORT GeneratedCodeCacheContext
       const std::string& context_key,
       std::string_view url);
 
+  base::FilePath generated_js_code_cache_path() const { return generated_js_code_cache_path_; }
+  base::FilePath generated_wasm_code_cache_path() const { return generated_wasm_code_cache_path_; }
+  base::FilePath generated_webui_js_code_cache_path() const { return generated_webui_js_code_cache_path_; }
+
  private:
   friend class base::RefCountedThreadSafe<GeneratedCodeCacheContext>;
   ~GeneratedCodeCacheContext();
 
   void InitializeOnThread(const base::FilePath& path, int max_bytes);
   void ShutdownOnThread();
+
+  base::FilePath generated_js_code_cache_path_;
+  base::FilePath generated_wasm_code_cache_path_;
+  base::FilePath generated_webui_js_code_cache_path_;
 
   // Created, used and deleted on the code cache thread.
   std::unique_ptr<GeneratedCodeCache, base::OnTaskRunnerDeleter>

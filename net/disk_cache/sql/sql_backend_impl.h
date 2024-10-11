@@ -186,6 +186,11 @@ class NET_EXPORT_PRIVATE SqlBackendImpl final : public Backend {
       int len,
       RangeResultCallback callback);
 
+  RangesResult GetEntryAvailableRanges(
+    const CacheEntryKey& key,
+    const scoped_refptr<ResIdOrErrorHolder>& res_id_or_error,
+    RangesResultCallback callback);
+
   // Sends a dummy operation through the background task runner via the
   // operation coordinator, for unit tests.
   int FlushQueueForTest(CompletionOnceCallback callback);
@@ -442,6 +447,12 @@ class NET_EXPORT_PRIVATE SqlBackendImpl final : public Backend {
       int len,
       RangeResultCallback callback,
       std::unique_ptr<ExclusiveOperationCoordinator::OperationHandle> handle);
+
+  void HandleGetEntryAvailableRangesOperation(
+    const CacheEntryKey& key,
+    const scoped_refptr<ResIdOrErrorHolder>& res_id_or_error,
+    RangesResultCallback callback,
+    std::unique_ptr<ExclusiveOperationCoordinator::OperationHandle> handle);
 
   // Handles the backend logic for cache eviction. This method is scheduled as
   // an exclusive operation to ensure no other cache activities are running. It
