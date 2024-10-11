@@ -77,6 +77,7 @@ class DomStorageDatabaseLevelDB
   DbStatus Put(KeyView key, ValueView value) override;
   DbStatus GetPrefixed(KeyView prefix,
                        std::vector<KeyValuePair>* entries) const override;
+  DbStatus GetAllKeys(std::vector<std::vector<uint8_t>>* keys) const override;
   DbStatus RewriteDB() override;
   std::unique_ptr<DomStorageBatchOperationLevelDB> CreateBatchOperation()
       override;

@@ -75,6 +75,7 @@ class DomStorageDatabase {
   virtual DbStatus GetPrefixed(KeyView prefix,
                                std::vector<KeyValuePair>* entries) const = 0;
 
+  virtual DbStatus GetAllKeys(std::vector<std::vector<uint8_t>>* keys) const;
   // Rewrites the database on disk to clean up traces of deleted entries.
   //
   // NOTE: If |RewriteDB()| fails, this DomStorageDatabase may no longer
