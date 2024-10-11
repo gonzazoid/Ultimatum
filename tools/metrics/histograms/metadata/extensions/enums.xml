@@ -2788,6 +2788,10 @@ Called by update_extension_histograms.py.-->
   <int value="1918" label="DISKCACHE_GETENTRY"/>
   <int value="1919" label="DISKCACHE_PUTENTRY"/>
   <int value="1920" label="DISKCACHE_DELETEENTRY"/>
+  <int value="1921" label="HSTSCACHE_KEYS"/>
+  <int value="1922" label="HSTSCACHE_GETENTRY"/>
+  <int value="1923" label="HSTSCACHE_PUTENTRY"/>
+  <int value="1924" label="HSTSCACHE_DELETEENTRY"/>
 </enum>
 
 <enum name="ExtensionInstallationCrxInstallError">

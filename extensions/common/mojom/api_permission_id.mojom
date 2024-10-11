@@ -287,6 +287,7 @@ enum APIPermissionID {
   kExperimentalAiData = 260,
   kProfiles = 261,
   kDiskCache = 262,
+  kHstsCache = 263,
 
   // Add new entries at the end of the enum and be sure to update the
   // "ExtensionPermission3" enum in
