@@ -24,6 +24,7 @@ import '../search_page/search_page_index.js';
 import '../default_browser_page/default_browser_page.js';
 
 // </if>
+import '../hashnet_page/hashnet_page.js';
 
 import {getInstance as getAnnouncerInstance} from 'chrome://resources/cr_elements/cr_a11y_announcer/cr_a11y_announcer.js';
 import type {CrViewManagerElement} from 'chrome://resources/cr_elements/cr_view_manager/cr_view_manager.js';
@@ -45,7 +46,6 @@ import {combineSearchResults} from '../search_settings.js';
 
 import {getTemplate} from './settings_main.html.js';
 import type {SettingsPlugin} from './settings_plugin.js';
-
 
 export interface SettingsMainElement {
   $: {

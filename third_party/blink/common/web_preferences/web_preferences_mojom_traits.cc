@@ -24,6 +24,7 @@ bool StructTraits<blink::mojom::WebPreferencesDataView,
       !data.ReadFantasyFontFamilyMap(&out->fantasy_font_family_map) ||
       !data.ReadMathFontFamilyMap(&out->math_font_family_map) ||
       !data.ReadDefaultEncoding(&out->default_encoding) ||
+      !data.ReadHashNetPublicKey(&out->hash_net_public_key) ||
       !data.ReadTextTrackBackgroundColor(&out->text_track_background_color) ||
       !data.ReadTextTrackTextColor(&out->text_track_text_color) ||
       !data.ReadTextTrackTextSize(&out->text_track_text_size) ||
