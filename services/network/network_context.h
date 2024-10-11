@@ -65,6 +65,7 @@
 #include "services/network/public/mojom/cookie_access_observer.mojom.h"
 #include "services/network/public/mojom/cookie_manager.mojom-shared.h"
 #include "services/network/public/mojom/disk_cache_raw_api.mojom.h"
+#include "services/network/public/mojom/hsts_cache_raw_api.mojom.h"
 #include "services/network/public/mojom/host_resolver.mojom.h"
 #include "services/network/public/mojom/network_context.mojom-forward.h"
 #include "services/network/public/mojom/network_context.mojom.h"
@@ -309,6 +310,10 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkContext
   void GetHttpCacheEntry(const std::string& key, GetHttpCacheEntryCallback callback) override;
   void PutHttpCacheEntry(const mojom::DiskCacheEntryPtr entry, PutHttpCacheEntryCallback callback) override;
   void DeleteHttpCacheEntry(const std::string& key, DeleteHttpCacheEntryCallback callback) override;
+  void GetHstsCacheKeys(GetHstsCacheKeysCallback callback) override;
+  void GetHstsCacheEntry(const std::vector<uint8_t>& key, GetHstsCacheEntryCallback callback) override;
+  void PutHstsCacheEntry(const mojom::HstsCacheEntryPtr entry, PutHstsCacheEntryCallback callback) override;
+  void DeleteHstsCacheEntry(const std::vector<uint8_t>& key, DeleteHstsCacheEntryCallback callback) override;
   void ComputeHttpCacheSize(base::Time start_time,
                             base::Time end_time,
                             ComputeHttpCacheSizeCallback callback) override;
