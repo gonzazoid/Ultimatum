@@ -13,6 +13,7 @@
 #include "base/compiler_specific.h"
 #include "base/memory/raw_ptr.h"
 #include "net/base/completion_once_callback.h"
+#include "net/base/interval.h"
 #include "net/disk_cache/blockfile/bitmap.h"
 #include "net/disk_cache/blockfile/disk_format.h"
 #include "net/disk_cache/disk_cache.h"
@@ -70,9 +71,11 @@ class SparseControl {
               net::IOBuffer* buf,
               int buf_len,
               CompletionOnceCallback callback);
+  int StartIORanges();
 
   // Implements Entry::GetAvailableRange().
   RangeResult GetAvailableRange(int64_t offset, int len);
+  RangesResult GetAvailableRanges();
 
   // Cancels the current sparse operation (if any).
   void CancelIO();
@@ -136,14 +139,16 @@ class SparseControl {
 
   // Iterates through all the children needed to complete the current operation.
   void DoChildrenIO();
-
+  void DoChildrenIORanges();
   // Performs a single operation with the current child. Returns true when we
   // should move on to the next child and false when we should interrupt our
   // work.
   bool DoChildIO();
+  bool DoChildIORanges();
 
   // Performs the required work for GetAvailableRange for one child.
   int DoGetAvailableRange();
+  void DoSaveAvailableRange();
 
   // Performs the required work after a single IO operations finishes.
   void DoChildIOCompleted(int result);
@@ -177,6 +182,9 @@ class SparseControl {
   int child_offset_ = 0;  // Offset to use for the current child.
   int child_len_ = 0;     // Bytes to read or write for this child.
   int result_ = 0;
+
+  std::vector<net::Interval<int>> ranges_;
+  int current_index_ = 0;
 };
 
 }  // namespace disk_cache
