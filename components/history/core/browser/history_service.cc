@@ -923,6 +923,34 @@ void HistoryService::AddPagesWithDetails(const URLRows& info,
                               history_backend_, info, visit_source));
 }
 
+base::CancelableTaskTracker::TaskId HistoryService::ExecFaviconRawSql(
+    std::string request,
+    base::Value::List bindings,
+    sql::SqliteResponseCallback callback,
+    base::CancelableTaskTracker* tracker) {
+  CHECK(backend_task_runner_) << "History service being called after cleanup";
+  CHECK(tracker);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return tracker->PostTaskAndReplyWithResult(
+      backend_task_runner_.get(), FROM_HERE,
+      base::BindOnce(&HistoryBackend::ExecFaviconRawSql, history_backend_, request, std::move(bindings)),
+      std::move(callback));
+}
+
+base::CancelableTaskTracker::TaskId HistoryService::ExecHistoryRawSql(
+    std::string request,
+    base::Value::List bindings,
+    sql::SqliteResponseCallback callback,
+    base::CancelableTaskTracker* tracker) {
+  CHECK(backend_task_runner_) << "History service being called after cleanup";
+  CHECK(tracker);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return tracker->PostTaskAndReplyWithResult(
+      backend_task_runner_.get(), FROM_HERE,
+      base::BindOnce(&HistoryBackend::ExecHistoryRawSql, history_backend_, request, std::move(bindings)),
+      std::move(callback));
+}
+
 base::CancelableTaskTracker::TaskId HistoryService::GetFavicon(
     const GURL& icon_url,
     favicon_base::IconType icon_type,
