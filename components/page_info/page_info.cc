@@ -456,6 +456,8 @@ bool PageInfo::IsPermissionFactoryDefault(const PermissionInfo& permission,
 // static
 bool PageInfo::IsFileOrInternalPage(const GURL& url) {
   return url.SchemeIs(content::kChromeUIScheme) ||
+         url.SchemeIs(url::kHashNetHashScheme) ||
+         url.SchemeIs(url::kHashNetSignedScheme) ||
          url.SchemeIs(content::kChromeDevToolsScheme) ||
          url.SchemeIs(content::kViewSourceScheme) ||
          url.SchemeIs(url::kFileScheme);
