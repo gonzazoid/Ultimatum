@@ -1,0 +1,23 @@
+// Copyright 2024 gonzazoid
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+module network.mojom;
+
+struct HstsCacheKeysResponse {
+  string status;
+  array<array<uint8>>? keys;
+};
+
+struct HstsCacheEntry {
+  array<uint8> key;
+  uint8 upgrade_mode;
+  int64 last_observed;
+  int64 expiry;
+  bool include_subdomains;
+};
+
+struct HstsCacheGetEntryResponse {
+  string status;
+  HstsCacheEntry? entry;
+};
