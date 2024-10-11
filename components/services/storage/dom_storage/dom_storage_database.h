@@ -118,6 +118,7 @@ class DomStorageDatabase : private base::trace_event::MemoryDumpProvider {
       scoped_refptr<base::SequencedTaskRunner> blocking_task_runner,
       StatusCallback callback);
 
+  Status GetAllKeys(std::vector<std::vector<uint8_t>>* keys) const;
   // Retrieves the value for |key| in the database.
   Status Get(KeyView key, Value* out_value) const;
 

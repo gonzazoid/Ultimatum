@@ -42,6 +42,7 @@
 #include "components/services/storage/dom_storage/dom_storage_database.h"
 #include "components/services/storage/dom_storage/features.h"
 #include "components/services/storage/dom_storage/local_storage_database.pb.h"
+#include "components/services/storage/public/mojom/local_storage_raw.mojom.h"
 #include "components/services/storage/dom_storage/storage_area_impl.h"
 #include "components/services/storage/public/cpp/constants.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
@@ -355,6 +356,142 @@ LocalStorageImpl::LocalStorageImpl(
 
   if (receiver)
     control_receiver_.Bind(std::move(receiver));
+}
+
+void LocalStorageImpl::GetKeys(
+  GetKeysCallback callback
+  ) {
+  std::unique_ptr<std::vector<std::vector<uint8_t>>> keys = std::make_unique<std::vector<std::vector<uint8_t>>>();
+  database_->RunDatabaseTask(
+    base::BindOnce(
+      [](std::vector<std::vector<uint8_t>>*keys, const DomStorageDatabase& db) {
+        auto status = db.GetAllKeys(keys);
+        return status;
+      },
+      keys.get()
+    ),
+    base::BindOnce([](
+        GetKeysCallback callback,
+        std::unique_ptr<std::vector<std::vector<uint8_t>>> keys,
+        leveldb::Status status
+      ) {
+        auto response = storage::mojom::LocalStorageKeysResponse::New();
+        if (status.ok()) {
+          response->status = "ok";
+          response->keys = *keys.release();
+        } else {
+          response->status = status.ToString();
+        }
+        std::move(callback).Run(std::move(response));
+      },
+      std::move(callback), std::move(keys)
+    )
+  );
+}
+
+void LocalStorageImpl::GetEntry(
+  const std::vector<uint8_t>& key,
+  GetEntryCallback callback
+  ) {
+
+  std::unique_ptr<std::vector<uint8_t>> value = std::make_unique<std::vector<uint8_t>>();
+  database_->RunDatabaseTask(
+    base::BindOnce(
+      [](const std::vector<uint8_t>& key, std::vector<uint8_t>*value, const DomStorageDatabase& db) {
+        auto status = db.Get(key, value);
+        return status;
+      },
+      key,
+      value.get()
+    ),
+    base::BindOnce([](
+      GetEntryCallback callback,
+      std::unique_ptr<std::vector<uint8_t>> value,
+      leveldb::Status status) {
+        auto response = storage::mojom::LocalStorageGetEntryResponse::New();
+        if (status.ok()) {
+          response->status = "ok";
+          response->value = *value.release();
+        } else if (status.IsNotFound()) {
+          response->status = "not found";
+        } else {
+          response->status = status.ToString();
+        }
+        std::move(callback).Run(std::move(response));
+      },
+      std::move(callback), std::move(value)
+    )
+  );
+}
+
+void LocalStorageImpl::PutEntry(
+  const std::vector<uint8_t>& key,
+  const std::vector<uint8_t>& value,
+  PutEntryCallback callback
+  ) {
+
+  database_->RunDatabaseTask(
+    base::BindOnce(
+      [](const std::vector<uint8_t>& key, const std::vector<uint8_t>& value, const DomStorageDatabase& db) {
+        leveldb::WriteBatch batch;
+        batch.Put(
+          leveldb_env::MakeSlice(DomStorageDatabase::Value(
+            key.begin(), key.end()
+          )),
+          leveldb_env::MakeSlice(DomStorageDatabase::Value(
+            value.begin(), value.end()
+          ))
+        );
+        return db.Commit(&batch);
+      },
+      std::move(key),
+      std::move(value)
+    ),
+    base::BindOnce([](
+        PutEntryCallback callback,
+        leveldb::Status status)
+      {
+        if (status.ok()) {
+          std::move(callback).Run("ok");
+        } else {
+          std::move(callback).Run(status.ToString());
+        }
+      },
+      std::move(callback)
+    )
+  );
+}
+
+void LocalStorageImpl::DeleteEntry(
+  const std::vector<uint8_t>& key,
+  DeleteEntryCallback callback
+  ) {
+
+  database_->RunDatabaseTask(
+    base::BindOnce(
+      [](const std::vector<uint8_t>& key, const DomStorageDatabase& db) {
+        leveldb::WriteBatch batch;
+        batch.Delete(
+          leveldb_env::MakeSlice(DomStorageDatabase::Value(
+            key.begin(), key.end()
+          ))
+        );
+        return db.Commit(&batch);
+      },
+      std::move(key)
+    ),
+    base::BindOnce([](
+      DeleteEntryCallback callback,
+      leveldb::Status status) {
+        if (status.ok()) {
+          std::move(callback).Run("ok");
+        } else {
+          std::move(callback).Run(status.ToString());
+        }
+      },
+      std::move(callback)
+    )
+  );
 }
 
 void LocalStorageImpl::BindStorageArea(
