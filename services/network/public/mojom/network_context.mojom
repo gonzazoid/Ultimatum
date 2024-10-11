@@ -319,6 +319,10 @@ struct NetworkContextParams {
   // will not be added.
   string accept_language;
 
+  bool hash_net_on;
+  string hash_net_agents_list;
+  string hash_net_private_key;
+
   // Whether Brotli content-encoding should be enabled for HTTPS responses.
   bool enable_brotli = true;
 
@@ -1270,6 +1274,10 @@ interface NetworkContext {
 
   // Updates the Accept-Language header to be used for requests.
   SetAcceptLanguage(string new_accept_language);
+
+  SetHashNetOn(bool new_hash_net_on);
+  SetHashNetAgentsList(string new_hash_net_agents_list);
+  SetHashNetPrivateKey(string new_hash_net_private_key);
 
   // If false, the referrer of requests is never populated.
   SetEnableReferrers(bool enable_referrers);

@@ -29,6 +29,10 @@ namespace prefs {
 // *************** PROFILE PREFS ***************
 // These are attached to the user profile
 
+inline constexpr char kHashNetOn[] = "settings.hashnet.on";
+inline constexpr char kHashNetAgentsList[] = "settings.hashnet.agents_list";
+inline constexpr char kHashNetPrivateKey[] = "settings.hashnet.private_key";
+
 // A string property indicating whether default apps should be installed
 // in this profile.  Use the value "install" to enable defaults apps, or
 // "noinstall" to disable them.  This property is usually set in the
