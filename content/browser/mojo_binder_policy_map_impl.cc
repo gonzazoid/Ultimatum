@@ -19,6 +19,7 @@
 #include "services/network/public/mojom/restricted_cookie_manager.mojom.h"
 #include "third_party/blink/public/mojom/blob/blob_url_store.mojom.h"
 #include "third_party/blink/public/mojom/broadcastchannel/broadcast_channel.mojom.h"
+#include "third_party/blink/public/mojom/cache_storage_raw/cache_storage_raw.mojom.h"
 #include "third_party/blink/public/mojom/cache_storage/cache_storage.mojom.h"
 #include "third_party/blink/public/mojom/clipboard/clipboard.mojom.h"
 #include "third_party/blink/public/mojom/file/file_utilities.mojom.h"
@@ -82,6 +83,8 @@ void RegisterNonAssociatedPolicies(MojoBinderPolicyMap& map,
   map.SetNonAssociatedPolicy<blink::mojom::FileUtilitiesHost>(
       MojoBinderNonAssociatedPolicy::kUnexpected);
 
+  map.SetNonAssociatedPolicy<blink::mojom::CacheStorageRaw>(
+      MojoBinderNonAssociatedPolicy::kGrant);
   map.SetNonAssociatedPolicy<blink::mojom::CacheStorage>(
       MojoBinderNonAssociatedPolicy::kGrant);
   map.SetNonAssociatedPolicy<blink::mojom::IDBFactory>(

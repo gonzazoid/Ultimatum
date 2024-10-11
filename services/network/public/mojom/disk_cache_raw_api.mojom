@@ -1,0 +1,28 @@
+// Copyright 2024 gonzazoid
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+module network.mojom;
+
+struct DiskCacheKeysResponse {
+  string status;
+  array<string>? keys;
+};
+
+struct DiskCacheEntryRange {
+  int64 offset;
+  uint64 length;
+};
+
+struct DiskCacheEntry {
+  string key;
+  array<uint8> stream0;
+  array<uint8> stream1;
+  array<uint8> stream2;
+  array<DiskCacheEntryRange>? ranges;
+};
+
+struct DiskCacheEntryResponse {
+  string status;
+  DiskCacheEntry? entry;
+};

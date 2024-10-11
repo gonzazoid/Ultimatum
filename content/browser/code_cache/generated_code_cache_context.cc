@@ -105,6 +105,7 @@ void GeneratedCodeCacheContext::InitializeOnThread(const base::FilePath& path,
       }
     }
 
+    generated_webui_js_code_cache_path_ = path.AppendASCII("webui_js");
     generated_webui_js_code_cache_ = {
         new GeneratedCodeCache(
             path.AppendASCII("webui_js"), max_bytes_webui_js,
@@ -120,6 +121,7 @@ void GeneratedCodeCacheContext::InitializeOnThread(const base::FilePath& path,
                              GeneratedCodeCache::CodeCacheType::kJavaScript),
       base::OnTaskRunnerDeleter(task_runner_)};
 
+  generated_wasm_code_cache_path_ = path.AppendASCII("wasm");
   generated_wasm_code_cache_ = {
       new GeneratedCodeCache(path.AppendASCII("wasm"), max_bytes,
                              GeneratedCodeCache::CodeCacheType::kWebAssembly),

@@ -48,6 +48,7 @@ schema_sources_ = [
   "content_settings.json",
   "chrome_web_view_internal.json",
   "profiles.idl",
+  "disk_cache.idl",
 ]
 
 if (enable_service_discovery) {
