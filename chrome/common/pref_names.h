@@ -32,6 +32,15 @@ inline constexpr char kHashNetOn[] = "settings.hashnet.on";
 inline constexpr char kHashNetAgentsList[] = "settings.hashnet.agents_list";
 inline constexpr char kHashNetPrivateKey[] = "settings.hashnet.private_key";
 
+inline constexpr char kChameleonUserAgent[] = "settings.chameleon.user_agent";
+inline constexpr char kChameleonUserAgentSubstitution[] = "settings.chameleon.user_agent_substitution";
+inline constexpr char kChameleonProductSub[] = "settings.chameleon.product_sub";
+inline constexpr char kChameleonProductSubSubstitution[] = "settings.chameleon.product_sub_substitution";
+inline constexpr char kChameleonPlatform[] = "settings.chameleon.platform";
+inline constexpr char kChameleonPlatformSubstitution[] = "settings.chameleon.platform_substitution";
+inline constexpr char kChameleonVendor[] = "settings.chameleon.vendor";
+inline constexpr char kChameleonVendorSubstitution[] = "settings.chameleon.vendor_substitution";
+
 // A string property indicating whether default apps should be installed
 // in this profile.  Use the value "install" to enable defaults apps, or
 // "noinstall" to disable them.  This property is usually set in the

@@ -27,6 +27,8 @@ source_set("extensions") {
   # TODO(https://crbug.com/356905053): When files support being built on
   # desktop android, move them here, outside the if (enable_extensions) block.
   sources = [
+    "api/profiles/profiles_api.cc",
+    "api/profiles/profiles_api.h",
     "active_install_data.cc",
     "active_install_data.h",
     "activity_log/activity_action_constants.cc",
