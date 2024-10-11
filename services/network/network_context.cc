@@ -1541,6 +1541,83 @@ void NetworkContext::DeleteHttpCacheEntry(const std::string& key, DeleteHttpCach
 }
 // end of disk_cache webextensions api support
 
+// start of hsts_cache webextensions api support
+void NetworkContext::GetHstsCacheKeys(GetHstsCacheKeysCallback callback) {
+  auto* ts_state = url_request_context_->transport_security_state();
+  auto keys_array = ts_state->GetHSTSKeys();
+  std::vector<std::vector<uint8_t>> keys_vector;
+  for(auto it = keys_array.begin(); it != keys_array.end(); ++it) {
+    keys_vector.push_back(std::vector<uint8_t>(it->begin(), it->end()));
+  }
+  auto response = network::mojom::HstsCacheKeysResponse::New();
+  response->status = "ok";
+  response->keys = std::move(keys_vector);
+  std::move(callback).Run(std::move(response));
+}
+
+// GetHstsCacheEntry
+void NetworkContext::GetHstsCacheEntry(const std::vector<uint8_t>& key, GetHstsCacheEntryCallback callback) {
+  mojom::HstsCacheGetEntryResponsePtr response = mojom::HstsCacheGetEntryResponse::New();
+  auto* ts_state = url_request_context_->transport_security_state();
+  bool success;
+  auto host = ts_state->ToHSTSKey(key, success);
+  if (!success) {
+    response->status = "illformed key";
+    std::move(callback).Run(std::move(response));
+    return;
+  }
+
+  bool found;
+  auto hsts_entry = ts_state->GetHSTSEntry(host, found);
+  if (found) {
+    response->status = "ok";
+    mojom::HstsCacheEntryPtr entry = mojom::HstsCacheEntry::New();
+    entry->key = key;
+    entry->upgrade_mode = hsts_entry.upgrade_mode;
+    entry->last_observed = hsts_entry.last_observed.InMillisecondsFSinceUnixEpochIgnoringNull();
+    entry->expiry = hsts_entry.expiry.InMillisecondsFSinceUnixEpochIgnoringNull();
+    entry->include_subdomains = hsts_entry.include_subdomains;
+
+    response->entry = std::move(entry);
+  } else {
+    response->status = "not found";
+  }
+  std::move(callback).Run(std::move(response));
+}
+
+void NetworkContext::PutHstsCacheEntry(const mojom::HstsCacheEntryPtr entry, PutHstsCacheEntryCallback callback) {
+  auto* ts_state = url_request_context_->transport_security_state();
+  bool success;
+  auto host = ts_state->ToHSTSKey(entry->key, success);
+  if (!success) {
+    std::move(callback).Run("illformed key");
+    return;
+  }
+
+  net::TransportSecurityState::STSState hsts_entry;
+  hsts_entry.last_observed = base::Time::FromMillisecondsSinceUnixEpoch(entry->last_observed);
+  hsts_entry.expiry = base::Time::FromMillisecondsSinceUnixEpoch(entry->expiry);
+  hsts_entry.upgrade_mode = static_cast<net::TransportSecurityState::STSState::UpgradeMode>(entry->upgrade_mode);
+  hsts_entry.include_subdomains = entry->include_subdomains;
+
+  std::string status = ts_state->PutHSTSEntry(host, hsts_entry);
+  std::move(callback).Run(status);
+}
+
+void NetworkContext::DeleteHstsCacheEntry(const std::vector<uint8_t>& key, DeleteHstsCacheEntryCallback callback) {
+  auto* ts_state = url_request_context_->transport_security_state();
+  bool success;
+  auto host = ts_state->ToHSTSKey(key, success);
+  if (!success) {
+    std::move(callback).Run("illformed key");
+    return;
+  }
+
+  std::string status = ts_state->DeleteHSTSEntry(host);
+  std::move(callback).Run(std::move(status));
+}
+// end of hsts_cache webextensions api support
+
 void NetworkContext::ComputeHttpCacheSize(
     base::Time start_time,
     base::Time end_time,

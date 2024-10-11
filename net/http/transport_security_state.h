@@ -362,6 +362,12 @@ class NET_EXPORT TransportSecurityState {
   bool GetSTSState(std::string_view host, STSState* sts_result);
   bool GetPKPState(std::string_view host, PKPState* pkp_result);
 
+  HashedHost ToHSTSKey(const std::vector<uint8_t>& key, bool& success) const;
+  std::vector<HashedHost> GetHSTSKeys() const;
+  STSState GetHSTSEntry(const HashedHost& key, bool& found) const;
+  std::string PutHSTSEntry(const HashedHost& key, const TransportSecurityState::STSState entry);
+  std::string DeleteHSTSEntry(const HashedHost& key);
+
   // Returns true and updates |*result| iff |host| has static HSTS/HPKP
   // (respectively) state. If multiple entries match |host|, the most specific
   // match determines the return value.
