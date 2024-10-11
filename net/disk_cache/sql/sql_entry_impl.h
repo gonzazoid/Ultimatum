@@ -74,6 +74,8 @@ class NET_EXPORT_PRIVATE SqlEntryImpl final
   RangeResult GetAvailableRange(int64_t offset,
                                 int len,
                                 RangeResultCallback callback) override;
+  RangesResult GetAvailableRanges(RangesResultCallback callback) override;
+
   bool CouldBeSparse() const override;
   void CancelSparseIO() override;
   net::Error ReadyForSparseIO(CompletionOnceCallback callback) override;

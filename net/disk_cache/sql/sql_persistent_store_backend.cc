@@ -132,6 +132,7 @@ void PopulateTraceDetails(const RangeResult& range_result,
   dict.Add("range_start", range_result.start);
   dict.Add("range_available_len", range_result.available_len);
 }
+
 void PopulateTraceDetails(const ReadResult& read_result,
                           perfetto::TracedDictionary& dict) {
   dict.Add("read_bytes", read_result.read_bytes);
@@ -139,6 +140,13 @@ void PopulateTraceDetails(const ReadResult& read_result,
            read_result.cache_buffer ? read_result.cache_buffer->size() : 0);
   dict.Add("cache_buffer_offset", read_result.cache_buffer_offset);
 }
+
+void PopulateTraceDetails(const RangesResult& range_result,
+                          perfetto::TracedDictionary& dict) {
+  dict.Add("range_start", 0);
+  dict.Add("range_available_len", 0);
+}
+
 void PopulateTraceDetails(const EntryInfoWithKeyAndIterator& result,
                           perfetto::TracedDictionary& dict) {
   PopulateTraceDetails(result.info, dict);
@@ -2119,6 +2127,31 @@ RangeResult SqlPersistentStore::Backend::GetEntryAvailableRange(
   return result.value_or(RangeResult(net::Error::ERR_FAILED));
 }
 
+RangesResult SqlPersistentStore::Backend::GetEntryAvailableRanges(
+    ResId res_id,
+    base::TimeTicks start_time) {
+  const base::TimeDelta posting_delay = base::TimeTicks::Now() - start_time;
+  TRACE_EVENT_BEGIN1("disk_cache", "SqlBackend.GetEntryAvailableRanges", "data",
+                     [&](perfetto::TracedValue trace_context) {
+                       auto dict = std::move(trace_context).WriteDictionary();
+                       dict.Add("res_id", res_id.value());
+                       dict.Add("offset", 0);
+                       dict.Add("len", 0);
+                     });
+  base::ElapsedTimer timer;
+  auto result = GetEntryAvailableRangesInternal(res_id);
+  RecordTimeAndErrorResultHistogram("GetEntryAvailableRanges", posting_delay,
+                                    timer.Elapsed(),
+                                    result.error_or(Error::kOk),
+                                    /*corruption_detected=*/false);
+  TRACE_EVENT_END1("disk_cache", "SqlBackend.GetEntryAvailableRanges", "result",
+                   [&](perfetto::TracedValue trace_context) {
+                     auto dict = std::move(trace_context).WriteDictionary();
+                     PopulateTraceDetails(result, store_status_, dict);
+                   });
+  return result.value_or(RangesResult(net::Error::ERR_FAILED));
+}
+
 SqlPersistentStore::Backend::RangeResultOrError
 SqlPersistentStore::Backend::GetEntryAvailableRangeInternal(ResId res_id,
                                                             int64_t offset,
@@ -2171,6 +2204,34 @@ SqlPersistentStore::Backend::GetEntryAvailableRangeInternal(ResId res_id,
     return RangeResult(*available_start, available_end - *available_start);
   }
   return RangeResult(offset, 0);
+}
+
+SqlPersistentStore::Backend::RangesResultOrError
+SqlPersistentStore::Backend::GetEntryAvailableRangesInternal(ResId res_id) {
+  if (auto db_error = CheckDatabaseStatus(); db_error != Error::kOk) {
+    return base::unexpected(db_error);
+  }
+
+  RangesResult res;
+  res.net_error = net::OK;
+  res.ranges = std::make_unique<std::vector<RangeResult>>();
+  // To finds the available contiguous range of data for a given entry. queries
+  // the `blobs` table for data chunks that overlap with the requested range
+  // [offset, end).
+  {
+    sql::Statement statement(db_.GetCachedStatement(
+        SQL_FROM_HERE,
+        GetQuery(Query::kGetEntryAvailableRanges_SelectAll)));
+    statement.BindInt64(0, res_id.value());
+
+    while (statement.Step()) {
+      int64_t blob_start = statement.ColumnInt64(0);
+      int64_t blob_end = statement.ColumnInt64(1);
+      res.ranges->push_back(RangeResult(blob_start, blob_end - blob_start));
+    }
+  }
+
+  return res;
 }
 
 Int64OrError SqlPersistentStore::Backend::CalculateSizeOfEntriesBetween(

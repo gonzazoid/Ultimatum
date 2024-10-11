@@ -265,6 +265,15 @@ void SqlPersistentStore::BackendShard::GetEntryAvailableRange(
       .Then(WrapCallback(std::move(callback)));
 }
 
+void SqlPersistentStore::BackendShard::GetEntryAvailableRanges(
+    const CacheEntryKey& key,
+    ResId res_id,
+    RangesResultCallback callback) {
+  backend_.AsyncCall(&SqlPersistentStore::Backend::GetEntryAvailableRanges)
+      .WithArgs(res_id, base::TimeTicks::Now())
+      .Then(WrapCallback(std::move(callback)));
+}
+
 void SqlPersistentStore::BackendShard::CalculateSizeOfEntriesBetween(
     base::Time initial_time,
     base::Time end_time,

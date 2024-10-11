@@ -1,0 +1,35 @@
+// Copyright 2024 gonzazoid
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+// write here fucking something
+[permissions=diskCache]
+namespace diskCache {
+
+  dictionary CacheRawRange {
+    long offset;
+    long length;
+  };
+
+  dictionary CacheRawEntry {
+    ArrayBuffer stream0;
+    ArrayBuffer stream1;
+    ArrayBuffer stream2;
+    DOMString key;
+    CacheRawRange[]? ranges;
+  };
+
+  callback DiskCacheKeysCallback = void (DOMString[] response);
+  callback DiskCacheGetEntryCallback = void (optional CacheRawEntry response);
+  callback DiskCachePutEntryCallback = void ();
+  callback DiskCacheDeleteEntryCallback = void ();
+
+  interface Functions {
+
+    static void keys(DOMString storage, DiskCacheKeysCallback callback);
+    static void getEntry(DOMString storage, DOMString key, DiskCacheGetEntryCallback callback);
+    static void putEntry(DOMString storage, CacheRawEntry entry, DiskCachePutEntryCallback callback);
+    static void deleteEntry(DOMString storage, DOMString key, DiskCacheDeleteEntryCallback callback);
+  };
+};
+

@@ -2024,6 +2024,10 @@ enum HistogramValue {
   DEVELOPERPRIVATE_LOADCRX = 1961,
   PROFILES_SETPARAMETER = 1962,
   PROFILES_SETPARAMETERSUBSTITUTION = 1963,
+  DISKCACHE_KEYS = 1964,
+  DISKCACHE_GETENTRY = 1965,
+  DISKCACHE_PUTENTRY = 1966,
+  DISKCACHE_DELETEENTRY = 1967,
   // Last entry: Add new entries above, then run:
   // tools/metrics/histograms/update_extension_histograms.py
   ENUM_BOUNDARY

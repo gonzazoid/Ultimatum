@@ -619,6 +619,15 @@ RangeResult SimpleEntryImpl::GetAvailableRange(int64_t offset,
   return RangeResult(net::ERR_IO_PENDING);
 }
 
+RangesResult SimpleEntryImpl::GetAvailableRanges(RangesResultCallback callback) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  ScopedOperationRunner operation_runner(this);
+  pending_operations_.push(SimpleEntryOperation::GetAvailableRangesOperation(
+      this, std::move(callback)));
+  return RangesResult(net::ERR_IO_PENDING);
+}
+
 bool SimpleEntryImpl::CouldBeSparse() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // TODO(morlovich): Actually check.
@@ -796,6 +805,9 @@ void SimpleEntryImpl::RunNextOperationIfNeeded() {
         GetAvailableRangeInternal(operation.sparse_offset(),
                                   operation.sparse_length(),
                                   operation.ReleaseRangeResultCalback());
+        break;
+      case SimpleEntryOperation::TYPE_GET_AVAILABLE_RANGES:
+        GetAvailableRangesInternal(operation.ReleaseRangesResultCalback());
         break;
       case SimpleEntryOperation::TYPE_DOOM:
         DoomEntryInternal(operation.ReleaseCallback());
@@ -1373,6 +1385,35 @@ void SimpleEntryImpl::GetAvailableRangeInternal(int64_t sparse_offset,
                                              std::move(reply), entry_priority_);
 }
 
+void SimpleEntryImpl::GetAvailableRangesInternal(RangesResultCallback callback) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  ScopedOperationRunner operation_runner(this);
+
+  if (state_ == STATE_FAILURE || state_ == STATE_UNINITIALIZED) {
+    if (!callback.is_null()) {
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE,
+          base::BindOnce(std::move(callback), RangesResult(net::ERR_FAILED)));
+    }
+    // |this| may be destroyed after return here.
+    return;
+  }
+
+  DCHECK_EQ(STATE_READY, state_);
+  state_ = STATE_IO_PENDING;
+
+  auto result = std::make_unique<RangesResult>();
+  OnceClosure task = base::BindOnce(
+      &SimpleSynchronousEntry::GetAvailableRanges,
+      base::Unretained(synchronous_entry_),
+      result.get());
+  OnceClosure reply =
+      base::BindOnce(&SimpleEntryImpl::GetAvailableRangesOperationComplete, this,
+                     std::move(callback), std::move(result));
+  prioritized_task_runner_->PostTaskAndReply(FROM_HERE, std::move(task),
+                                             std::move(reply), entry_priority_);
+}
+
 void SimpleEntryImpl::DoomEntryInternal(net::CompletionOnceCallback callback) {
   if (doom_state_ == DOOM_COMPLETED) {
     // During the time we were sitting on a queue, some operation failed
@@ -1664,6 +1705,23 @@ void SimpleEntryImpl::GetAvailableRangeOperationComplete(
   if (!completion_callback.is_null()) {
     base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(completion_callback), *result));
+  }
+  RunNextOperationIfNeeded();
+}
+
+void SimpleEntryImpl::GetAvailableRangesOperationComplete(
+    RangesResultCallback completion_callback,
+    std::unique_ptr<RangesResult> result) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK(synchronous_entry_);
+  DCHECK(result);
+
+  SimpleEntryStat entry_stat(last_used_, data_size_,
+                              sparse_data_size_);
+  UpdateStateAfterOperationComplete(entry_stat, result->net_error);
+  if (!completion_callback.is_null()) {
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(std::move(completion_callback), std::move(*result)));
   }
   RunNextOperationIfNeeded();
 }

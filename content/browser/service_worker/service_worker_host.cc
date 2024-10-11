@@ -117,6 +117,13 @@ void ServiceWorkerHost::BindCacheStorage(
       storage::BucketLocator::ForDefaultBucket(version_->key()));
 }
 
+void ServiceWorkerHost::BindCacheStorageRaw(
+    mojo::PendingReceiver<blink::mojom::CacheStorageRaw> receiver) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  version_->embedded_worker()->BindCacheStorageRaw(
+      std::move(receiver));
+}
+
 void ServiceWorkerHost::GetSandboxedFileSystemForBucket(
     const storage::BucketInfo& bucket,
     const std::vector<std::string>& directory_path_components,

@@ -1003,6 +1003,17 @@ void SimpleSynchronousEntry::GetAvailableRange(const SparseRequest& in_entry_op,
   *out_result = RangeResult(start, range_len);
 }
 
+void SimpleSynchronousEntry::GetAvailableRanges(RangesResult* out_result) {
+  DCHECK(initialized_);
+  out_result->ranges = std::make_unique<std::vector<RangeResult>>();
+  auto it = sparse_ranges_.begin();
+  while (it != sparse_ranges_.end()) {
+    out_result->ranges->push_back(RangeResult(it->second.offset, it->second.length));
+    ++it;
+  }
+  out_result->net_error = net::OK;
+}
+
 int SimpleSynchronousEntry::CheckEOFRecord(
     BackendFileOperations* file_operations,
     CacheFile* file,
