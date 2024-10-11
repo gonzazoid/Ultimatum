@@ -1,0 +1,26 @@
+// Copyright 2024 gonzazoid
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+// write here fucking something
+[permissions=localStorages]
+namespace localStorages {
+
+  callback LocalStoragesKeysCallback = void (ArrayBuffer[] response);
+  callback LocalStoragesGetEntryCallback = void (ArrayBuffer response);
+  callback LocalStoragesPutEntryCallback = void ();
+  callback LocalStoragesDeleteEntryCallback = void ();
+  callback LocalStoragesFlushCallback = void ();
+  callback LocalStoragesPurgeMemoryCallback = void ();
+
+  interface Functions {
+
+    static void keys(LocalStoragesKeysCallback callback);
+    static void getEntry(ArrayBuffer key, LocalStoragesGetEntryCallback callback);
+    static void putEntry(ArrayBuffer key, ArrayBuffer value, LocalStoragesPutEntryCallback callback);
+    static void deleteEntry(ArrayBuffer key, LocalStoragesDeleteEntryCallback callback);
+    static void flush(LocalStoragesFlushCallback callback);
+    static void purgeMemory(LocalStoragesPurgeMemoryCallback callback);
+  };
+};
+
