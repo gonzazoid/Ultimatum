@@ -1,0 +1,4 @@
+blink_core_sources_hash_net = [
+  "hash_net.cc",
+  "hash_net.h",
+]
