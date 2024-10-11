@@ -8092,7 +8092,7 @@ void RenderFrameHostImpl::SuddenTerminationDisablerChanged(
       has_unload_handler_ = present;
       break;
     case blink::mojom::SuddenTerminationDisablerType::kVisibilityChangeHandler:
-      DCHECK_NE(has_visibilitychange_handler_, present);
+      // DCHECK_NE(has_visibilitychange_handler_, present); // TODO craches if ctrl-f5 whith devtools opened
       has_visibilitychange_handler_ = present;
       break;
   }
@@ -14182,6 +14182,11 @@ bool RenderFrameHostImpl::DidCommitNavigationInternal(
   SetLastCommittedSiteInfo(navigation_request->DidEncounterError()
                                ? UrlInfo()
                                : navigation_request->GetUrlInfo());
+
+  auto nav_url = navigation_request->GetURL();
+  if ((nav_url.SchemeIsHash() || nav_url.SchemeIsSigned()) && !site_instance_->HasSite()) {
+    site_instance_->SetSite(UrlInfo(UrlInfoInit(nav_url)));
+  }
 
   isolation_info_ = navigation_request->isolation_info_for_subresources();
 

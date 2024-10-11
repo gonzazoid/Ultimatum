@@ -800,6 +800,8 @@ bool SearchProvider::IsQueryPotentiallyPrivate() const {
   // assume we're OK.
   if (!base::EqualsCaseInsensitiveASCII(input_.scheme(), url::kHttpScheme) &&
       !base::EqualsCaseInsensitiveASCII(input_.scheme(), url::kHttpsScheme) &&
+      !base::EqualsCaseInsensitiveASCII(input_.scheme(), url::kHashNetHashScheme) &&
+      !base::EqualsCaseInsensitiveASCII(input_.scheme(), url::kHashNetSignedScheme) &&
       !base::EqualsCaseInsensitiveASCII(input_.scheme(), url::kFtpScheme))
     return (input_.type() != metrics::OmniboxInputType::QUERY);
 
