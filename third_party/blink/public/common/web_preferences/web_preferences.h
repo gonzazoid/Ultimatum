@@ -57,6 +57,7 @@ struct BLINK_COMMON_EXPORT WebPreferences {
   std::string default_encoding = "ISO-8859-1";
   bool context_menu_on_mouse_up = BUILDFLAG(IS_WIN);
   bool javascript_enabled = true;
+  std::string hash_net_public_key = "";
   bool web_security_enabled = true;
   bool loads_images_automatically = true;
   bool images_enabled = true;

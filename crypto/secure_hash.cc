@@ -18,13 +18,43 @@ namespace crypto {
 
 namespace {
 
+class SecureHashSHA1 : public SecureHash {
+ public:
+  SecureHashSHA1() {
+    SHA1_Init(&ctx_);
+  }
+
+  SecureHashSHA1(const SecureHashSHA1& other) : ctx_(other.ctx_) {}
+
+  ~SecureHashSHA1() override {
+    OPENSSL_cleanse(&ctx_, sizeof(ctx_));
+  }
+
+  void Update(base::span<const uint8_t> input) override {
+    SHA1_Update(&ctx_, input.data(), input.size());
+  }
+
+  void Finish(base::span<uint8_t> output) override {
+    ScopedOpenSSLSafeSizeBuffer<SHA_DIGEST_LENGTH> result(output.data(),
+                                                             output.size());
+    SHA1_Final(result.safe_buffer(), &ctx_);
+  }
+
+  std::unique_ptr<SecureHash> Clone() const override {
+    return std::make_unique<SecureHashSHA1>(*this);
+  }
+
+  size_t GetHashLength() const override { return SHA_DIGEST_LENGTH; }
+
+ private:
+  SHA_CTX ctx_;
+};
+
 class SecureHashSHA256 : public SecureHash {
  public:
   SecureHashSHA256() { SHA256_Init(&ctx_); }
 
-  SecureHashSHA256(const SecureHashSHA256& other) {
-    UNSAFE_TODO(memcpy(&ctx_, &other.ctx_, sizeof(ctx_)));
-  }
+  SecureHashSHA256(const SecureHashSHA256& other) : ctx_(other.ctx_) {}
 
   ~SecureHashSHA256() override {
     OPENSSL_cleanse(&ctx_, sizeof(ctx_));
@@ -54,9 +84,7 @@ class SecureHashSHA512 : public SecureHash {
  public:
   SecureHashSHA512() { SHA512_Init(&ctx_); }
 
-  SecureHashSHA512(const SecureHashSHA512& other) {
-    UNSAFE_TODO(memcpy(&ctx_, &other.ctx_, sizeof(ctx_)));
-  }
+  SecureHashSHA512(const SecureHashSHA512& other) : ctx_(other.ctx_) {}
 
   ~SecureHashSHA512() override { OPENSSL_cleanse(&ctx_, sizeof(ctx_)); }
 
@@ -84,6 +112,8 @@ class SecureHashSHA512 : public SecureHash {
 
 std::unique_ptr<SecureHash> SecureHash::Create(Algorithm algorithm) {
   switch (algorithm) {
+    case SHA1:
+      return std::make_unique<SecureHashSHA1>();
     case SHA256:
       return std::make_unique<SecureHashSHA256>();
     case SHA512:
