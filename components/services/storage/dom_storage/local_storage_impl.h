@@ -73,6 +73,11 @@ class LocalStorageImpl : public base::trace_event::MemoryDumpProvider,
   void PurgeUnusedAreasIfNeeded();
 
   // mojom::LocalStorageControl implementation:
+  void GetKeys(GetKeysCallback callback) override;
+  void GetEntry(const std::vector<uint8_t>& key, GetEntryCallback callback) override;
+  void PutEntry(const std::vector<uint8_t>& key, const std::vector<uint8_t>& value, PutEntryCallback callback) override;
+  void DeleteEntry(const std::vector<uint8_t>& key, DeleteEntryCallback callback) override;
+
   void BindStorageArea(
       const blink::StorageKey& storage_key,
       mojo::PendingReceiver<blink::mojom::StorageArea> receiver) override;
@@ -110,6 +115,12 @@ class LocalStorageImpl : public base::trace_event::MemoryDumpProvider,
   friend class DOMStorageBrowserTest;
 
   class StorageAreaHolder;
+
+  // mojom::LocalStorageControl implementation helpers:
+  void GetKeysImpl(GetKeysCallback callback);
+  void GetEntryImpl(const std::vector<uint8_t>& key, GetEntryCallback callback);
+  void PutEntryImpl(const std::vector<uint8_t>& key, const std::vector<uint8_t>& value, PutEntryCallback callback);
+  void DeleteEntryImpl(const std::vector<uint8_t>& key, DeleteEntryCallback callback);
 
   // Runs |callback| immediately if already connected to a database, otherwise
   // delays running |callback| untill after a connection has been established.

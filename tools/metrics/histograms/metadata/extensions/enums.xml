@@ -2833,6 +2833,12 @@ Called by update_extension_histograms.py.-->
   <int value="1948" label="HSTSCACHE_PUTENTRY"/>
   <int value="1949" label="HSTSCACHE_DELETEENTRY"/>
   <int value="1950" label="SQLITECACHE_EXEC"/>
+  <int value="1951" label="LOCALSTORAGES_KEYS"/>
+  <int value="1952" label="LOCALSTORAGES_GETENTRY"/>
+  <int value="1953" label="LOCALSTORAGES_PUTENTRY"/>
+  <int value="1954" label="LOCALSTORAGES_DELETEENTRY"/>
+  <int value="1955" label="LOCALSTORAGES_FLUSH"/>
+  <int value="1956" label="LOCALSTORAGES_PURGEMEMORY"/>
 </enum>
 
 <!-- LINT.ThenChange(//extensions/browser/extension_function_histogram_value.h:HistogramValue) -->
@@ -3224,6 +3230,7 @@ Called by update_extension_permission.py.-->
   <int value="264" label="kDiskCache"/>
   <int value="265" label="kHstsCache"/>
   <int value="266" label="kSqliteCache"/>
+  <int value="267" label="kLocalStorages"/>
 </enum>
 
 <enum name="ExtensionPolicyReinstallReason">

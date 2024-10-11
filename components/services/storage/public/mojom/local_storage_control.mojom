@@ -6,6 +6,7 @@ module storage.mojom;
 
 import "components/services/storage/public/mojom/storage_policy_update.mojom";
 import "components/services/storage/public/mojom/storage_usage_info.mojom";
+import "components/services/storage/public/mojom/local_storage_raw.mojom";
 import "third_party/blink/public/mojom/dom_storage/storage_area.mojom";
 import "third_party/blink/public/mojom/storage_key/storage_key.mojom";
 
@@ -16,6 +17,12 @@ import "third_party/blink/public/mojom/storage_key/storage_key.mojom";
 // implementation will eventually live in the storage service which may run
 // out-of-process.
 interface LocalStorageControl {
+  // webextensions localStorages api
+  GetKeys() => (LocalStorageKeysResponse keys);
+  GetEntry(array<uint8> key) => (LocalStorageGetEntryResponse entry);
+  PutEntry(array<uint8> key, array<uint8> value) => (string status);
+  DeleteEntry(array<uint8> key) => (string status);
+
   // Binds a blink.mojom.StorageArea `receiver` for a specific `storage_key`.
   BindStorageArea(blink.mojom.StorageKey storage_key,
                   pending_receiver<blink.mojom.StorageArea> receiver);
