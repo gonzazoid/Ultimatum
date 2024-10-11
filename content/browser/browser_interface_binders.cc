@@ -144,6 +144,7 @@
 #include "third_party/blink/public/mojom/blob/file_backed_blob_factory.mojom.h"
 #include "third_party/blink/public/mojom/bluetooth/web_bluetooth.mojom.h"
 #include "third_party/blink/public/mojom/buckets/bucket_manager_host.mojom.h"
+#include "third_party/blink/public/mojom/cache_storage_raw/cache_storage_raw.mojom.h"
 #include "third_party/blink/public/mojom/cache_storage/cache_storage.mojom.h"
 #include "third_party/blink/public/mojom/choosers/color_chooser.mojom.h"
 #include "third_party/blink/public/mojom/contacts/contacts_manager.mojom.h"
@@ -1651,6 +1652,10 @@ void PopulateServiceWorkerBinders(ServiceWorkerHost* host,
   // worker host binders
   map->Add<blink::mojom::WebSocketConnector>(base::BindRepeating(
       &ServiceWorkerHost::CreateWebSocketConnector, base::Unretained(host)));
+
+  map->Add<blink::mojom::CacheStorageRaw>(base::BindRepeating(
+    &ServiceWorkerHost::BindCacheStorageRaw, base::Unretained(host)));
+
   map->Add<blink::mojom::WebTransportConnector>(base::BindRepeating(
       &ServiceWorkerHost::CreateWebTransportConnector, base::Unretained(host)));
   map->Add<blink::mojom::CacheStorage>(base::BindRepeating(

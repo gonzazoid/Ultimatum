@@ -107,6 +107,11 @@ void GeneratedCodeCacheContext::InitializeOnThread(const base::FilePath& path,
   base::FilePath generated_js_code_cache_path = path.AppendASCII("js");
   base::FilePath webui_js_code_cache_path = path.AppendASCII("webui_js");
   base::FilePath generated_wasm_code_cache_path = path.AppendASCII("wasm");
+
+  generated_js_code_cache_path_ = generated_js_code_cache_path;  
+  generated_wasm_code_cache_path_ = generated_wasm_code_cache_path;
+  generated_webui_js_code_cache_path_ = webui_js_code_cache_path;
+
 #if !BUILDFLAG(IS_FUCHSIA)
   // Use a short name for the root directory due to max path length limits.
   base::FilePath persistent_cache_collection_path = path.AppendASCII("pc");

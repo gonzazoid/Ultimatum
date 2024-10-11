@@ -436,6 +436,17 @@ inline constexpr const char kGetEntryAvailableRange_SelectOverlapping[] =
     "ORDER BY start";
 // clang-format on
 
+inline constexpr const char kGetEntryAvailableRanges_SelectAll[] =
+    // clang-format off
+    "SELECT "
+        "start,"  // 0
+        "end "    // 1
+    "FROM blobs "
+    "WHERE "
+        "res_id=? "      // 0
+    "ORDER BY start";
+// clang-format on
+
 inline constexpr const char
     kCalculateSizeOfEntriesBetween_SelectLiveResources[] =
         // clang-format off
@@ -544,6 +555,7 @@ enum class Query {
   kDeleteBlobsByResId_DeleteFromBlobs,
   kReadEntryData_SelectOverlapping,
   kGetEntryAvailableRange_SelectOverlapping,
+  kGetEntryAvailableRanges_SelectAll,
   kCalculateSizeOfEntriesBetween_SelectLiveResources,
   kOpenNextEntry_SelectLiveResources,
   kStartEviction_SelectLiveResources,
@@ -628,6 +640,8 @@ inline base::cstring_view GetQuery(Query query) {
       return internal::kReadEntryData_SelectOverlapping;
     case Query::kGetEntryAvailableRange_SelectOverlapping:
       return internal::kGetEntryAvailableRange_SelectOverlapping;
+    case Query::kGetEntryAvailableRanges_SelectAll:
+      return internal::kGetEntryAvailableRanges_SelectAll;
     case Query::kCalculateSizeOfEntriesBetween_SelectLiveResources:
       return internal::kCalculateSizeOfEntriesBetween_SelectLiveResources;
     case Query::kOpenNextEntry_SelectLiveResources:

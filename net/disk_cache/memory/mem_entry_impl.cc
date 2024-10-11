@@ -338,6 +338,10 @@ RangeResult MemEntryImpl::GetAvailableRange(int64_t offset,
   return result;
 }
 
+RangesResult MemEntryImpl::GetAvailableRanges(RangesResultCallback callback) {
+  return RangesResult(net::ERR_CACHE_OPERATION_NOT_SUPPORTED);
+}
+
 bool MemEntryImpl::CouldBeSparse() const {
   DCHECK_EQ(EntryType::kParent, type());
   return (children_.get() != nullptr);

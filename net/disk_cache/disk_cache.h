@@ -52,8 +52,10 @@ class Backend;
 class EntryResult;
 class BackendFileOperationsFactory;
 struct RangeResult;
+class RangesResult;
 using EntryResultCallback = base::OnceCallback<void(EntryResult)>;
 using RangeResultCallback = base::OnceCallback<void(const RangeResult&)>;
+using RangesResultCallback = base::OnceCallback<void(const RangesResult&)>;
 
 // How to handle resetting the back-end cache from the previous session.
 // See CreateCacheBackend() for its usage.
@@ -466,6 +468,9 @@ class NET_EXPORT Entry {
                                         int len,
                                         RangeResultCallback callback) = 0;
 
+  virtual RangesResult GetAvailableRanges(
+                                        RangesResultCallback callback) = 0;
+
   // Returns true if this entry could be a sparse entry or false otherwise. This
   // is a quick test that may return true even if the entry is not really
   // sparse. This method doesn't modify the state of this entry (it will not
@@ -599,6 +604,25 @@ struct NET_EXPORT RangeResult {
   //
   // Valid iff net_error is net::OK.
   int available_len = 0;
+};
+
+// Represents a result of GetAvailableRanges.
+class NET_EXPORT RangesResult {
+ public:
+  RangesResult();
+  RangesResult(net::Error net_error);
+
+  ~RangesResult();
+  RangesResult(RangesResult&&);
+  RangesResult& operator=(RangesResult&&);
+
+  RangesResult(const RangesResult&);
+  RangesResult& operator=(const RangesResult&);
+
+  net::Error net_error;
+
+  // Valid iff net_error is net::OK.
+  std::unique_ptr<std::vector<RangeResult>> ranges;
 };
 
 // The maximum size of cache that can be created for type

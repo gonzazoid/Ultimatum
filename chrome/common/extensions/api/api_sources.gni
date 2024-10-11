@@ -50,6 +50,7 @@ schema_sources_ = [
   "webstore_private.json",
   "windows.json",
   "profiles.idl",
+  "disk_cache.idl",
 ]
 
 if (enable_service_discovery) {

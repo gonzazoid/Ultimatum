@@ -101,6 +101,9 @@ class SqlPersistentStore::BackendShard {
                               int64_t offset,
                               int len,
                               RangeResultCallback callback);
+  void GetEntryAvailableRanges(const CacheEntryKey& key,
+                              ResId res_id,
+                              RangesResultCallback callback);
   void CalculateSizeOfEntriesBetween(base::Time initial_time,
                                      base::Time end_time,
                                      Int64OrErrorCallback callback);
