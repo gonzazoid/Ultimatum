@@ -1963,6 +1963,10 @@ enum HistogramValue {
   DISKCACHE_GETENTRY = 1901,
   DISKCACHE_PUTENTRY = 1902,
   DISKCACHE_DELETEENTRY = 1903,
+  HSTSCACHE_KEYS = 1904,
+  HSTSCACHE_GETENTRY = 1905,
+  HSTSCACHE_PUTENTRY = 1906,
+  HSTSCACHE_DELETEENTRY = 1907,
   // Last entry: Add new entries above, then run:
   // tools/metrics/histograms/update_extension_histograms.py
   ENUM_BOUNDARY
