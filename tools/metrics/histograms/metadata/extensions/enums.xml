@@ -2822,6 +2822,8 @@ Called by update_extension_histograms.py.-->
   <int value="1937" label="BOOKMARKMANAGERPRIVATE_OPENINNEWTABGROUP"/>
   <int value="1938" label="CONTROLLEDFRAMEINTERNAL_CONTEXTMENUSUPDATE"/>
   <int value="1939" label="BOOKMARKMANAGERPRIVATE_ISACTIVETABINSPLIT"/>
+  <int value="1940" label="PROFILES_SETPARAMETER"/>
+  <int value="1941" label="PROFILES_SETPARAMETERSUBSTITUTION"/>
 </enum>
 
 <!-- LINT.ThenChange(//extensions/browser/extension_function_histogram_value.h:HistogramValue) -->
@@ -3209,6 +3211,7 @@ Called by update_extension_permission.py.-->
   <int value="260" label="kExperimentalAiData"/>
   <int value="261" label="kOmniboxDirectInput"/>
   <int value="262" label="kExperimentalActor"/>
+  <int value="263" label="kProfiles"/>
 </enum>
 
 <enum name="ExtensionPolicyReinstallReason">

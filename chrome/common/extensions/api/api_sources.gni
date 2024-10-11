@@ -30,6 +30,7 @@ schema_sources_ = [
   "settings_private.idl",
   "content_settings.json",
   "web_navigation.json",
+  "profiles.idl",
 ]
 
 # Schemas that should be used only to auto-generate the C++ types.

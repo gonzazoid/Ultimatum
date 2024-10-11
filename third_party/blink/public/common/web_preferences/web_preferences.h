@@ -58,6 +58,12 @@ struct BLINK_COMMON_EXPORT WebPreferences {
   bool context_menu_on_mouse_up = BUILDFLAG(IS_WIN);
   bool javascript_enabled = true;
   std::string hash_net_public_key = "";
+  std::string product_sub = "";
+  bool product_sub_substitution = false;
+  std::string platform = "";
+  bool platform_substitution = false;
+  std::string vendor = "";
+  bool vendor_substitution = false;
   bool web_security_enabled = true;
   bool loads_images_automatically = true;
   bool images_enabled = true;

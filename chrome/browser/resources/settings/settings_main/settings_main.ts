@@ -15,6 +15,7 @@ import 'chrome://resources/js/search_highlight_utils.js';
 import 'chrome://resources/cr_elements/cr_icon/cr_icon.js';
 import '../about_page/about_page.js';
 import '../hashnet_page/hashnet_page.js';
+import '../profiles/profile_page.js';
 import '../basic_page/basic_page.js';
 import '../search_settings.js';
 import '../settings_shared.css.js';
@@ -34,6 +35,7 @@ interface MainPageVisibility {
   about: boolean;
   settings: boolean;
   hashnet: boolean;
+  profile: boolean;
 }
 
 export interface SettingsMainElement {
@@ -70,7 +72,7 @@ export class SettingsMainElement extends SettingsMainElementBase {
       showPages_: {
         type: Object,
         value() {
-          return {about: false, settings: false, hashnet: false};
+          return {about: false, settings: false, hashnet: false, profile: false};
         },
       },
 
@@ -120,7 +122,9 @@ export class SettingsMainElement extends SettingsMainElementBase {
         routes.ABOUT.contains(Router.getInstance().getCurrentRoute());
     const inHashNet =
         routes.HASH_NET.contains(Router.getInstance().getCurrentRoute());
-    this.showPages_ = {about: inAbout, settings: !inAbout && !inHashNet, hashnet: inHashNet};
+    const inProfile =
+        routes.PROFILE.contains(Router.getInstance().getCurrentRoute());
+    this.showPages_ = {about: inAbout, settings: !inAbout && !inHashNet && !inProfile, hashnet: inHashNet, profile: inProfile};
   }
 
   private onShowingSubpage_() {
@@ -169,7 +173,7 @@ export class SettingsMainElement extends SettingsMainElementBase {
 
   private showManagedHeader_(): boolean {
     return !this.inSearchMode_ && !this.showingSubpage_ &&
-        !this.showPages_.about && !this.showPages_.hashnet;
+        !this.showPages_.about && !this.showPages_.hashnet && !this.showPages_.profile;
   }
 }
 
