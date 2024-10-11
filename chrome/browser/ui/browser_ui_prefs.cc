@@ -105,6 +105,10 @@ void RegisterBrowserUserPrefs(user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterBooleanPref(prefs::kPinSplitTabButton, false,
                                 pref_registration_flags);
 
+  registry->RegisterBooleanPref(prefs::kHashNetOn, true);
+  registry->RegisterStringPref(prefs::kHashNetAgentsList, std::string());
+  registry->RegisterStringPref(prefs::kHashNetPrivateKey, std::string());
+
   registry->RegisterInt64Pref(prefs::kDefaultBrowserLastDeclined, 0);
   registry->RegisterBooleanPref(prefs::kWebAppCreateOnDesktop, true);
   registry->RegisterBooleanPref(prefs::kWebAppCreateInAppsMenu, true);

@@ -32,6 +32,7 @@ export {OpenWindowProxy, OpenWindowProxyImpl} from 'chrome://resources/js/open_w
 export {PluralStringProxyImpl as SettingsPluralStringProxyImpl} from 'chrome://resources/js/plural_string_proxy.js';
 export {getTrustedHTML} from 'chrome://resources/js/static_types.js';
 export {SettingsAboutPageElement} from './about_page/about_page.js';
+export {HashNetPageElement} from './hashnet_page/hashnet_page.js';
 export {ControlledRadioButtonElement} from './controls/controlled_radio_button.js';
 export {SettingsDropdownMenuElement} from './controls/settings_dropdown_menu.js';
 export {SettingsToggleButtonElement} from './controls/settings_toggle_button.js';

@@ -2869,6 +2869,63 @@ void RenderFrameImpl::CommitNavigation(
 
   FillNavigationParamsRequest(*common_params, *commit_params,
                               navigation_params.get());
+
+  if (common_params->url.SchemeIs(url::kHashNetHashScheme) || common_params->url.SchemeIs(url::kHashNetSignedScheme)) {
+    std::string bootstrap = "\
+    <html>\
+      <head></head>\
+      <body>\
+        <script>\
+          (async () => {\
+            const by = key => (a, b) => {\
+              const result = BigInt(b[key]) - BigInt(a[key]);\
+              return result > 0n ? 1 : (result < 0n ? -1 : 0);\
+            };\
+            const url = window.location.toString();\
+            document.open();\
+            try {\
+              const response = await fetch(url);\
+              if (response.status == 200) {\
+                if (window.location.protocol === \"signed:\") {\
+                  const responses = await response.json();\
+                  if (responses.length) {\
+                    const newestResponse = responses.sort(by(\"nonce\"))[0];\
+                    const { hash } = newestResponse;\
+                    const [hashFunction, hashValue] = hash.split(\":\");\
+                    const newUrl = `hash://${hashFunction}/${hashValue}`;\
+                    const newResponse = await fetch(newUrl);\
+                    if (newResponse.status == 200) {\
+                      const body = await newResponse.text();\
+                      document.write(body);\
+                    } else {\
+                      document.write(`#Net: ${newResponse.status} ${newResponse.statusText}`);\
+                    }\
+                  } else {\
+                    document.write(`#Net: ${url} 404 Not Found`);\
+                  }\
+                }\
+                if(window.location.protocol === \"hash:\") {\
+                  const body = await response.text();\
+                  document.write(body);\
+                }\
+              } else {\
+                document.write(`#Net: ${response.status} ${response.statusText}`);\
+              }\
+            } catch (e) {\
+              document.write(`#Net: error occured during request\n${e.message}`);\
+            }\
+            document.close();\
+          })();\
+        </script>\
+	    </body>\
+    </html>";
+    WebNavigationParams::FillStaticResponse(navigation_params.get(),
+                                            WebString::FromUTF8("text/html"),
+                                            WebString::FromUTF8("UTF-8"), bootstrap);
+    std::move(commit_with_params).Run(std::move(navigation_params));
+    return;
+  }
+
   if (!url_loader_client_endpoints &&
       common_params->url.SchemeIs(url::kDataScheme)) {
     // Normally, data urls will have |url_loader_client_endpoints| set.

@@ -357,6 +357,7 @@
 #include "net/base/features.h"
 #include "net/cookies/cookie_setting_override.h"
 #include "net/cookies/site_for_cookies.h"
+#include "net/url_request/hash_net_utils.h"
 #include "net/ssl/client_cert_store.h"
 #include "net/ssl/ssl_cert_request_info.h"
 #include "net/ssl/ssl_private_key.h"
@@ -4418,6 +4419,10 @@ void ChromeContentBrowserClient::OverrideWebPreferences(
   if (!prefs->GetBoolean(prefs::kWebKitJavascriptEnabled)) {
     web_prefs->javascript_enabled = false;
   }
+
+  std::string private_key = prefs->GetString(prefs::kHashNetPrivateKey);
+  std::string public_key = net::DerivePublicKeyFromPrivate(private_key);
+  web_prefs->hash_net_public_key = public_key;
 
   if (!prefs->GetBoolean(prefs::kWebKitWebSecurityEnabled)) {
     web_prefs->web_security_enabled = false;

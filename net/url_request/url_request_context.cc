@@ -141,6 +141,30 @@ std::unique_ptr<URLRequest> URLRequestContext::CreateRequest(
       traffic_annotation, is_for_websockets, net_log_source);
 }
 
+void URLRequestContext::SetHashNetOn(bool new_hash_net_on) {
+  hash_net_on_ = new_hash_net_on;
+}
+
+bool URLRequestContext::GetHashNetOn() const {
+  return hash_net_on_;
+}
+
+void URLRequestContext::SetHashNetAgentsList(const std::string& new_hash_net_agents) {
+  hash_net_agents_ = new_hash_net_agents;
+}
+
+std::string URLRequestContext::GetHashNetAgentsList() const {
+  return hash_net_agents_;
+}
+
+void URLRequestContext::SetHashNetPrivateKey(const std::string& new_hash_net_private_key) {
+  hash_net_private_key_ = new_hash_net_private_key;
+}
+
+std::string URLRequestContext::GetHashNetPrivateKey() const {
+  return hash_net_private_key_;
+}
+
 void URLRequestContext::AssertNoURLRequests() const {
   int num_requests = url_requests_->size();
   if (num_requests != 0) {

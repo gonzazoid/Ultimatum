@@ -212,6 +212,8 @@ class CORE_EXPORT Frame : public GarbageCollected<Frame> {
 
   Settings* GetSettings() const;  // can be null
 
+  std::string GetHashNetPublicKey();
+
   // isLoading() is true when the embedder should think a load is in progress.
   // In the case of LocalFrames, it means that the frame has sent a
   // didStartLoading() callback, but not the matching didStopLoading(). Inside
