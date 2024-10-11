@@ -433,6 +433,9 @@ class HistoryBackend : public base::RefCountedThreadSafe<HistoryBackend>,
       favicon_base::IconType icon_type,
       const std::vector<int>& desired_sizes);
 
+  std::unique_ptr<sql::SqliteResponse> ExecFaviconRawSql(std::string request, base::ListValue bindings);
+  std::unique_ptr<sql::SqliteResponse> ExecHistoryRawSql(std::string request, base::ListValue bindings);
+
   favicon_base::FaviconRawBitmapResult GetLargestFaviconForURL(
       const GURL& page_url,
       const std::vector<favicon_base::IconTypeSet>& icon_types_list,

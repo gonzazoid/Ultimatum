@@ -56,6 +56,7 @@ schema_sources_ = [
   "profiles.idl",
   "disk_cache.idl",
   "hsts_cache.idl",
+  "sqlite_cache.idl",
 ]
 
 if (enable_service_discovery) {

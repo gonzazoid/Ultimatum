@@ -410,6 +410,37 @@ std::unique_ptr<sql::Transaction> HistoryDatabase::CreateTransaction() {
   return std::make_unique<sql::Transaction>(&db_);
 }
 
+std::unique_ptr<sql::SqliteResponse>
+HistoryDatabase::ExecRawSql(std::string request,
+                            base::ListValue bindings) {
+  sql::Statement statement(db_.GetCachedStatement(
+      sql::StatementID(SQL_FROM_HERE),
+      request));
+
+  std::unique_ptr<sql::SqliteResponse> response = std::make_unique<sql::SqliteResponse>();
+
+  if (!statement.is_valid()) {
+    response->status = "invalid statement";
+    return response;
+  }
+
+  if (!statement.BindAll(std::move(bindings))) {
+    response->status = "binding failed";
+    return response;
+  }
+
+  response->result = statement.GetResponse();
+
+  if (statement.Succeeded()) {
+    response->status = "ok";
+  } else {
+    response->status = "request failed";
+  }
+
+  return response;
+}
+
+
 bool HistoryDatabase::RecreateAllTablesButURL() {
   if (!DropVisitTable())
     return false;
