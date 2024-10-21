@@ -397,13 +397,13 @@ std::optional<CrxInstallError> CrxInstaller::AllowInstall(
       off_store_install_allow_reason_ == OffStoreInstallDisallowed) {
     // Don't delete source in this case so that the user can install
     // manually if they want.
-    delete_source_ = false;
-    did_handle_successfully_ = false;
+    // delete_source_ = false;
+    // did_handle_successfully_ = false;
 
-    return CrxInstallError(
-        CrxInstallErrorType::OTHER,
-        CrxInstallErrorDetail::OFFSTORE_INSTALL_DISALLOWED,
-        l10n_util::GetStringUTF16(IDS_EXTENSION_INSTALL_DISALLOWED_ON_SITE));
+    // return CrxInstallError(
+    //     CrxInstallErrorType::OTHER,
+    //     CrxInstallErrorDetail::OFFSTORE_INSTALL_DISALLOWED,
+    //     l10n_util::GetStringUTF16(IDS_EXTENSION_INSTALL_DISALLOWED_ON_SITE));
   }
 
   if (extension_->is_app()) {

@@ -116,8 +116,8 @@ bool IsExtensionDownload(const DownloadItem& download_item) {
 }
 
 bool IsTrustedExtensionDownload(Profile* profile, const DownloadItem& item) {
-  return IsExtensionDownload(item) &&
-         OffStoreInstallAllowedByPrefs(profile, item);
+  return IsExtensionDownload(item); /* &&
+         OffStoreInstallAllowedByPrefs(profile, item); */
 }
 
 std::unique_ptr<base::AutoReset<bool>> OverrideOffstoreInstallAllowedForTesting(
