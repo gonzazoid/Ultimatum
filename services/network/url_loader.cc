@@ -2199,7 +2199,7 @@ void URLLoader::ReadMore() {
       we_are_going_to_send_bytes_length = size;
     }
 
-    memcpy(buf->data(), current_chunk.first->data() + current_offset_, we_are_going_to_send_bytes_length);
+    UNSAFE_BUFFERS(memcpy(buf->data(), current_chunk.first->data() + current_offset_, we_are_going_to_send_bytes_length));
     current_offset_ += we_are_going_to_send_bytes_length;
     if (current_offset_ == current_chunk.second) {
       current_offset_ = 0;
