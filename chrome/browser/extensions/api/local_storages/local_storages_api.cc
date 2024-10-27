@@ -35,10 +35,12 @@ void LocalStoragesKeysFunction::OnKeys(const ::storage::mojom::LocalStorageKeysR
 }
 
 ExtensionFunction::ResponseAction LocalStoragesKeysFunction::Run() {
-  auto* ls_control = GetProfile()->GetDefaultStoragePartition()->GetLocalStorageControl();
-  ls_control->GetKeys(base::BindOnce(&LocalStoragesKeysFunction::OnKeys, base::Unretained(this)));
-
   AddRef();
+
+  auto* ls_control = GetProfile()->GetDefaultStoragePartition()->GetLocalStorageControl();
+  auto callback = base::BindOnce(&LocalStoragesKeysFunction::OnKeys, base::Unretained(this));
+  ls_control->GetKeys(std::move(callback));
+
   return RespondLater();
 }
 
@@ -60,10 +62,11 @@ ExtensionFunction::ResponseAction LocalStoragesGetEntryFunction::Run() {
   std::optional<api::local_storages::GetEntry::Params> params = api::local_storages::GetEntry::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
+  AddRef();
+
   auto* ls_control = GetProfile()->GetDefaultStoragePartition()->GetLocalStorageControl();
   ls_control->GetEntry(params->key, base::BindOnce(&LocalStoragesGetEntryFunction::OnEntry, base::Unretained(this)));
 
-  AddRef();
   return RespondLater();
 }
 
@@ -80,10 +83,11 @@ ExtensionFunction::ResponseAction LocalStoragesPutEntryFunction::Run() {
   std::optional<api::local_storages::PutEntry::Params> params = api::local_storages::PutEntry::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
+  AddRef();
+
   auto* ls_control = GetProfile()->GetDefaultStoragePartition()->GetLocalStorageControl();
   ls_control->PutEntry(params->key, params->value, base::BindOnce(&LocalStoragesPutEntryFunction::OnEntrySaved, base::Unretained(this)));
 
-  AddRef();
   return RespondLater();
 }
 
@@ -100,10 +104,11 @@ ExtensionFunction::ResponseAction LocalStoragesDeleteEntryFunction::Run() {
   std::optional<api::local_storages::DeleteEntry::Params> params = api::local_storages::DeleteEntry::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
+  AddRef();
+
   auto* ls_control = GetProfile()->GetDefaultStoragePartition()->GetLocalStorageControl();
   ls_control->DeleteEntry(params->key, base::BindOnce(&LocalStoragesDeleteEntryFunction::OnEntryDeleted, base::Unretained(this)));
 
-  AddRef();
   return RespondLater();
 }
 

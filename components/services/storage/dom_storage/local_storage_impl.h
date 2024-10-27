@@ -116,6 +116,12 @@ class LocalStorageImpl : public base::trace_event::MemoryDumpProvider,
 
   class StorageAreaHolder;
 
+  // mojom::LocalStorageControl implementation helpers:
+  void GetKeysImpl(GetKeysCallback callback);
+  void GetEntryImpl(const std::vector<uint8_t>& key, GetEntryCallback callback);
+  void PutEntryImpl(const std::vector<uint8_t>& key, const std::vector<uint8_t>& value, PutEntryCallback callback);
+  void DeleteEntryImpl(const std::vector<uint8_t>& key, DeleteEntryCallback callback);
+
   // Runs |callback| immediately if already connected to a database, otherwise
   // delays running |callback| untill after a connection has been established.
   // Initiates connecting to the database if no connection is in progres yet.

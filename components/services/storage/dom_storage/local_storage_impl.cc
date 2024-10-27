@@ -358,23 +358,14 @@ LocalStorageImpl::LocalStorageImpl(
     control_receiver_.Bind(std::move(receiver));
 }
 
-void LocalStorageImpl::GetKeys(
+void LocalStorageImpl::GetKeysImpl(
   GetKeysCallback callback
   ) {
-  std::unique_ptr<std::vector<std::vector<uint8_t>>> keys = std::make_unique<std::vector<std::vector<uint8_t>>>();
   database_->RunDatabaseTask(
     base::BindOnce(
-      [](std::vector<std::vector<uint8_t>>*keys, const DomStorageDatabase& db) {
-        auto status = db.GetAllKeys(keys);
-        return status;
-      },
-      keys.get()
-    ),
-    base::BindOnce([](
-        GetKeysCallback callback,
-        std::unique_ptr<std::vector<std::vector<uint8_t>>> keys,
-        leveldb::Status status
-      ) {
+      [](const DomStorageDatabase& db) {
+        std::unique_ptr<std::vector<std::vector<uint8_t>>> keys = std::make_unique<std::vector<std::vector<uint8_t>>>();
+        auto status = db.GetAllKeys(keys.get());
         auto response = storage::mojom::LocalStorageKeysResponse::New();
         if (status.ok()) {
           response->status = "ok";
@@ -382,32 +373,35 @@ void LocalStorageImpl::GetKeys(
         } else {
           response->status = status.ToString();
         }
+        return response;
+      }
+    ),
+    base::BindOnce([](
+        GetKeysCallback callback,
+        storage::mojom::LocalStorageKeysResponsePtr response
+      ) {
         std::move(callback).Run(std::move(response));
       },
-      std::move(callback), std::move(keys)
+      std::move(callback)
     )
   );
 }
 
-void LocalStorageImpl::GetEntry(
+void LocalStorageImpl::GetKeys(GetKeysCallback callback) {
+  RunWhenConnected(base::BindOnce(&LocalStorageImpl::GetKeysImpl,
+                                  weak_ptr_factory_.GetWeakPtr(),
+                                  std::move(callback)));
+}
+
+void LocalStorageImpl::GetEntryImpl(
   const std::vector<uint8_t>& key,
   GetEntryCallback callback
   ) {
-
-  std::unique_ptr<std::vector<uint8_t>> value = std::make_unique<std::vector<uint8_t>>();
   database_->RunDatabaseTask(
     base::BindOnce(
-      [](const std::vector<uint8_t>& key, std::vector<uint8_t>*value, const DomStorageDatabase& db) {
-        auto status = db.Get(key, value);
-        return status;
-      },
-      key,
-      value.get()
-    ),
-    base::BindOnce([](
-      GetEntryCallback callback,
-      std::unique_ptr<std::vector<uint8_t>> value,
-      leveldb::Status status) {
+      [](const std::vector<uint8_t>& key, const DomStorageDatabase& db) {
+        std::unique_ptr<std::vector<uint8_t>> value = std::make_unique<std::vector<uint8_t>>();
+        auto status = db.Get(key, value.get());
         auto response = storage::mojom::LocalStorageGetEntryResponse::New();
         if (status.ok()) {
           response->status = "ok";
@@ -417,14 +411,30 @@ void LocalStorageImpl::GetEntry(
         } else {
           response->status = status.ToString();
         }
+        return response;
+      },
+      key
+    ),
+    base::BindOnce([](
+      GetEntryCallback callback,
+      storage::mojom::LocalStorageGetEntryResponsePtr response) {
         std::move(callback).Run(std::move(response));
       },
-      std::move(callback), std::move(value)
+      std::move(callback)
     )
   );
 }
 
-void LocalStorageImpl::PutEntry(
+void LocalStorageImpl::GetEntry(
+  const std::vector<uint8_t>& key,
+  GetEntryCallback callback) {
+  RunWhenConnected(base::BindOnce(&LocalStorageImpl::GetEntryImpl,
+                                  weak_ptr_factory_.GetWeakPtr(),
+                                  std::move(key),
+                                  std::move(callback)));
+}
+
+void LocalStorageImpl::PutEntryImpl(
   const std::vector<uint8_t>& key,
   const std::vector<uint8_t>& value,
   PutEntryCallback callback
@@ -462,7 +472,20 @@ void LocalStorageImpl::PutEntry(
   );
 }
 
-void LocalStorageImpl::DeleteEntry(
+void LocalStorageImpl::PutEntry(
+  const std::vector<uint8_t>& key,
+  const std::vector<uint8_t>& value,
+  PutEntryCallback callback
+  ) {
+  RunWhenConnected(base::BindOnce(&LocalStorageImpl::PutEntryImpl,
+                                  weak_ptr_factory_.GetWeakPtr(),
+                                  std::move(key),
+                                  std::move(value),
+                                  std::move(callback)));
+}
+
+
+void LocalStorageImpl::DeleteEntryImpl(
   const std::vector<uint8_t>& key,
   DeleteEntryCallback callback
   ) {
@@ -492,6 +515,15 @@ void LocalStorageImpl::DeleteEntry(
       std::move(callback)
     )
   );
+}
+
+void LocalStorageImpl::DeleteEntry(
+  const std::vector<uint8_t>& key,
+  DeleteEntryCallback callback) {
+  RunWhenConnected(base::BindOnce(&LocalStorageImpl::DeleteEntryImpl,
+                                  weak_ptr_factory_.GetWeakPtr(),
+                                  std::move(key),
+                                  std::move(callback)));
 }
 
 void LocalStorageImpl::BindStorageArea(
