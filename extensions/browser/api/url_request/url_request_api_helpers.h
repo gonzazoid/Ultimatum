@@ -18,7 +18,7 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
 #include "base/values.h"
-#include "chrome/common/extensions/api/url_request.h"
+#include "extensions/common/api/url_request.h"
 #include "extensions/common/extension_id.h"
 #include "net/base/auth.h"
 #include "net/http/http_request_headers.h"

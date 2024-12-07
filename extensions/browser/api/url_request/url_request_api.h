@@ -12,7 +12,7 @@
 #include "extensions/browser/api/url_request/extension_url_request_event_router.h"
 #include "extensions/browser/api/url_request/url_request_api_constants.h"
 #include "extensions/browser/api/url_request/url_request_api_helpers.h"
-#include "chrome/common/extensions/api/url_request.h"
+#include "extensions/common/api/url_request.h"
 #include "content/public/browser/content_browser_client.h"
 #include "extensions/browser/extension_function.h"
 #include "extensions/browser/event_router.h"
