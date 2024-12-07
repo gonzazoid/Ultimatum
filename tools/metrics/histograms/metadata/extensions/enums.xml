@@ -757,6 +757,7 @@ Called by update_extension_histograms.py.-->
   <int value="557" label="ACCESSIBILITY_PRIVATE_ON_CHROMEVOX_FOCUS_CHANGED"/>
   <int value="558"
       label="ACCESSIBILITY_PRIVATE_ON_TOGGLE_GESTURE_INFO_FOR_SETTINGS"/>
+  <int value="559" label="URL_REQUEST_ON_BEFORE_REQUEST"/>
 </enum>
 
 <enum name="ExtensionForceInstalledPreInstalledDeprecatedSite">
@@ -2774,6 +2775,8 @@ Called by update_extension_histograms.py.-->
   <int value="1912" label="LOCALSTORAGES_DELETEENTRY"/>
   <int value="1913" label="LOCALSTORAGES_FLUSH"/>
   <int value="1914" label="LOCALSTORAGES_PURGEMEMORY"/>
+  <int value="1915" label="URLREQUESTINTERNAL_ADDEVENTLISTENER"/>
+  <int value="1916" label="URLREQUESTINTERNAL_EVENTHANDLED"/>
 </enum>
 
 <enum name="ExtensionInstallationCrxInstallError">

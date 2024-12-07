@@ -674,6 +674,7 @@
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
 #include "chrome/browser/web_applications/web_app_utils.h"
 #include "content/public/browser/site_isolation_policy.h"
+#include "extensions/browser/api/url_request/url_request_api.h"
 #include "extensions/browser/api/web_request/web_request_api.h"
 #include "extensions/browser/api/web_request/web_request_proxying_webtransport.h"
 #include "extensions/browser/extension_navigation_throttle.h"
@@ -6673,6 +6674,22 @@ void ChromeContentBrowserClient::WillCreateURLLoaderFactory(
     network::mojom::URLLoaderFactoryOverridePtr* factory_override,
     scoped_refptr<base::SequencedTaskRunner> navigation_response_task_runner) {
 #if BUILDFLAG(ENABLE_EXTENSIONS)
+  auto* url_request_api =
+      extensions::BrowserContextKeyedAPIFactory<extensions::UrlRequestAPI>::Get(
+          browser_context);
+
+  // NOTE: Some unit test environments do not initialize
+  // BrowserContextKeyedAPI factories for e.g. WebRequest.
+  if (url_request_api) {
+    // bool use_proxy_for_url_request =
+    url_request_api->MaybeProxyURLLoaderFactory(
+        browser_context, frame, render_process_id, type,
+        std::move(navigation_id), ukm_source_id, factory_builder,
+        header_client, navigation_response_task_runner, request_initiator);
+    // if (bypass_redirect_checks)
+    //   *bypass_redirect_checks = use_proxy_for_url_request;
+  }
+
   auto* web_request_api =
       extensions::BrowserContextKeyedAPIFactory<extensions::WebRequestAPI>::Get(
           browser_context);

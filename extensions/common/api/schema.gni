@@ -84,6 +84,7 @@ if (enable_extensions) {
     "virtual_keyboard.idl",
     "virtual_keyboard_private.json",
     "web_request.json",
+    "url_request.json",
     "web_view_internal.json",
   ]
 
@@ -110,6 +111,7 @@ if (enable_desktop_android_extensions) {
     "scripts_internal.idl",
     "types.json",
     "web_request.json",
+    "url_request.json",
     "extension_types.json",
     "usb.idl",
     "system_display.idl",
@@ -130,7 +132,7 @@ extensions_types_only_schema_files =
     get_path_info(extensions_types_only_schema_files_, "abspath")
 
 extensions_api_uncompiled_sources =
-    get_path_info([ "web_request_internal.json" ], "abspath")
+    get_path_info([ "web_request_internal.json", "url_request_internal.json" ], "abspath")
 
 extensions_api_uncompiled_bundle_schema_sources =
     get_path_info([

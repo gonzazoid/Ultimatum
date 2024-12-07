@@ -38,6 +38,7 @@
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "extensions/browser/api/web_request/web_request_api.h"
+#include "extensions/browser/api/url_request/url_request_api.h"
 #include "extensions/browser/browser_context_keyed_api_factory.h"
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
@@ -263,6 +264,20 @@ void PrefetchManager::PrefetchUrl(
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   network::URLLoaderFactoryBuilder factory_builder;
+
+  auto* url_request_api =
+      extensions::BrowserContextKeyedAPIFactory<extensions::UrlRequestAPI>::Get(
+          profile_);
+  if (url_request_api) {
+    url_request_api->MaybeProxyURLLoaderFactory(
+        profile_, /*frame=*/nullptr, /*render_process_id=*/0,
+        content::ContentBrowserClient::URLLoaderFactoryType::kPrefetch,
+        /*navigation_id=*/std::nullopt, ukm::kInvalidSourceIdObj,
+        factory_builder, /*header_client=*/nullptr,
+        /*navigation_response_task_runner=*/nullptr,
+        /*request_initiator=*/url::Origin());
+  }
+
   auto* web_request_api =
       extensions::BrowserContextKeyedAPIFactory<extensions::WebRequestAPI>::Get(
           profile_);

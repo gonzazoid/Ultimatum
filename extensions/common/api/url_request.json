@@ -1,0 +1,236 @@
+// Copyright 2012 The Chromium Authors
+// Copyright 2024 gonzazoid
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+[
+  {
+    "namespace": "urlRequest",
+    "description": "Use the <code>chrome.urlRequest</code> API to observe and analyze traffic and to intercept, block, or modify requests in-flight.",
+    "types": [
+      {
+        "id": "ResourceType",
+        "type": "string",
+        "enum": [
+          {"name": "main_frame", "description": "Specifies the resource as the main frame."},
+          {"name": "sub_frame", "description": "Specifies the resource as a sub frame."},
+          {"name":  "stylesheet", "description": "Specifies the resource as a stylesheet."},
+          {"name": "script", "description": "Specifies the resource as a script."},
+          {"name": "image", "description": "Specifies the resource as an image."},
+          {"name": "font", "description": "Specifies the resource as a font."},
+          {"name": "object", "description": "Specifies the resource as an object."},
+          {"name": "xmlhttprequest",
+           "description": "Specifies the resource as an XMLHttpRequest."},
+          {"name": "ping",
+           "description": "Specifies the resource as a ping."},
+          {"name": "csp_report",
+          "description": "Specifies the resource as a Content Security Policy (CSP) report."},
+          {"name": "media", "description": "Specifies the resource as a media object."},
+          {"name": "websocket", "description": "Specifies the resource as a WebSocket."},
+          {"name": "webbundle", "description": "Specifies the resource as a WebBundle."},
+          {"name": "other", "description": "Specifies the resource as a type not included in the listed types."}
+        ]
+      },
+      {
+        "id": "OnBeforeRequestOptions",
+        "type": "string",
+        "enum": [
+          {"name": "blocking", "description": "Specifies the request is blocked until the callback function returns."},
+          {"name": "requestBody", "description": "Specifies that the request body should be included in the event."},
+          {"name": "extraHeaders", "description": "Specifies that headers can violate Cross-Origin Resource Sharing (CORS)."}
+        ]
+      },
+      {
+        "id": "RequestFilter",
+        "type": "object",
+        "description": "An object describing filters to apply to urlRequest events.",
+        "properties": {
+          "urls": {
+            "type": "array",
+            "description": "A list of URLs or URL patterns. Requests that cannot match any of the URLs will be filtered out.",
+            "items": { "type": "string" }
+          },
+          "types": {
+            "type": "array",
+            "optional": true,
+            "description": "A list of request types. Requests that cannot match any of the types will be filtered out.",
+            "items": { "$ref": "ResourceType" }
+          },
+          "tabId": { "type": "integer", "optional": true },
+          "windowId": { "type": "integer", "optional": true }
+        }
+      },
+      {
+        "id": "HttpHeaders",
+        "nocompile": true,
+        "type": "array",
+        "description": "An array of HTTP headers. Each header is represented as a dictionary containing the keys <code>name</code> and either <code>value</code> or <code>binaryValue</code>.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {"type": "string", "description": "Name of the HTTP header."},
+            "value": {"type": "string", "optional": true, "description": "Value of the HTTP header if it can be represented by UTF-8."},
+            "binaryValue": {
+              "type": "array",
+              "optional": true,
+              "description": "Value of the HTTP header if it cannot be represented by UTF-8, stored as individual byte values (0..255).",
+              "items": {"type": "integer"}
+            }
+          }
+        }
+      },
+      {
+        "id": "BlockingResponse",
+        "nocompile": true,
+        "type": "object",
+        "description": "Returns value for event handlers that have the 'blocking' extraInfoSpec applied. Allows the event handler to modify network requests.",
+        "properties": {
+          "response": {
+            "$ref": "ResponseType",
+            "optional": true,
+            "description": "If present, the request is done."
+          },
+          "cancel": {
+            "type": "boolean",
+            "optional": true,
+            "description": "If true, the request is cancelled. This prevents the request from being sent. This can be used as a response to the onBeforeRequest, onBeforeSendHeaders, onHeadersReceived and onAuthRequired events."
+          },
+          "redirectUrl": {
+            "type": "string",
+            "optional": true,
+            "description": "Only used as a response to the onBeforeRequest and onHeadersReceived events. If set, the original request is prevented from being sent/completed and is instead redirected to the given URL. Redirections to non-HTTP schemes such as <code>data:</code> are allowed. Redirects initiated by a redirect action use the original request method for the redirect, with one exception: If the redirect is initiated at the onHeadersReceived stage, then the redirect will be issued using the GET method. Redirects from URLs with <code>ws://</code> and <code>wss://</code> schemes are <b>ignored</b>."
+          }
+        }
+      },
+      {
+        "id": "ResponseType",
+        "nocompile": true,
+        "type": "object",
+        "properties": {
+          "body": {
+            "optional": true,
+            "type": "binary"
+          },
+          "headers": {
+            "$ref": "HttpHeaders",
+            "optional": true,
+            "description": ""
+          },
+          "status": {
+            "type": "string",
+            "optional": true
+          },
+          "statusText": {
+            "type": "string",
+            "optional": true
+          }
+        },
+        "description": ""
+      },
+      {
+        "id": "UploadData",
+        "type": "object",
+        "properties": {
+          "bytes": {
+            "type": "any",
+            "optional": true,
+            "description": "An ArrayBuffer with a copy of the data."
+          },
+          "file": {
+            "type": "string",
+            "optional": true,
+            "description": "A string with the file's path and name."
+          }
+        },
+        "description": "Contains data uploaded in a URL request."
+      },
+      {
+        "id": "FormDataItem",
+        "choices": [
+          { "type": "binary" },
+          { "type": "string" }
+        ],
+        "description": "Contains data passed within form data. For urlencoded form it is stored as string if data is utf-8 string and as ArrayBuffer otherwise. For form-data it is ArrayBuffer. If form-data represents uploading file, it is string with filename, if the filename is provided."
+      },
+      {
+        "id": "IgnoredActionType",
+        "decription": "Denotes the extension proposed action which was ignored.",
+        "type": "string",
+        "enum": ["redirect", "request_headers", "response_headers"]
+      }
+    ],
+    "events": [
+      {
+        "name": "onBeforeRequest",
+        "type": "function",
+        "description": "Fired when a request is about to occur.",
+        "parameters": [
+          {
+            "type": "object",
+            "name": "details",
+            "properties": {
+              "requestId": {"type": "string", "description": "The ID of the request. Request IDs are unique within a browser session. As a result, they could be used to relate different events of the same request."},
+              "url": {"type": "string"},
+              "method": {"type": "string", "description": "Standard HTTP method."},
+              "frameId": {"type": "integer", "description": "The value 0 indicates that the request happens in the main frame; a positive value indicates the ID of a subframe in which the request happens. If the document of a (sub-)frame is loaded (<code>type</code> is <code>main_frame</code> or <code>sub_frame</code>), <code>frameId</code> indicates the ID of this frame, not the ID of the outer frame. Frame IDs are unique within a tab."},
+              "parentFrameId": {"type": "integer", "description": "ID of frame that wraps the frame which sent the request. Set to -1 if no parent frame exists."},
+              "documentId": {"type": "string", "optional": true, "description": "The UUID of the document making the request."},
+              "parentDocumentId": {"type": "string", "optional": true, "description": "The UUID of the parent document owning this frame. This is not set if there is no parent."},
+              "documentLifecycle": {"$ref": "extensionTypes.DocumentLifecycle", "optional": true, "description": "The lifecycle the document is in."},
+              "frameType": {"$ref": "extensionTypes.FrameType", "optional": true, "description": "The type of frame the request occurred in."},
+              "requestBody": {
+                "type": "object",
+                "optional": true,
+                "description": "Contains the HTTP request body data. Only provided if extraInfoSpec contains 'requestBody'.",
+                "properties": {
+                  "error": {"type": "string", "optional": true, "description": "Errors when obtaining request body data."},
+                  "formData": {
+                    "type": "object",
+                    "optional": true,
+                    "description": "If the request method is POST and the body is a sequence of key-value pairs encoded in UTF8, encoded as either multipart/form-data, or application/x-www-form-urlencoded, this dictionary is present and for each key contains the list of all values for that key. If the data is of another media type, or if it is malformed, the dictionary is not present. An example value of this dictionary is {'key': ['value1', 'value2']}.",
+                    "properties": {},
+                    "additionalProperties": {
+                      "type": "array",
+                      "items": { "$ref": "FormDataItem" }
+                    }
+                  },
+                  "raw" : {
+                    "type": "array",
+                    "optional": true,
+                    "items": {"$ref": "UploadData"},
+                    "description": "If the request method is PUT or POST, and the body is not already parsed in formData, then the unparsed request body elements are contained in this array."
+                  }
+                }
+              },
+              "tabId": {"type": "integer", "description": "The ID of the tab in which the request takes place. Set to -1 if the request isn't related to a tab."},
+              "type": {"$ref": "ResourceType", "description": "How the requested resource will be used."},
+              "initiator": {"type": "string", "optional": true, "description": "The origin where the request was initiated. This does not change through redirects. If this is an opaque origin, the string 'null' will be used."},
+              "timeStamp": {"type": "number", "description": "The time when this signal is triggered, in milliseconds since the epoch."}
+            }
+          }
+        ],
+        "extraParameters": [
+          {
+            "$ref": "RequestFilter",
+            "name": "filter",
+            "description": "A set of filters that restricts the events that will be sent to this listener."
+          },
+          {
+            "type": "array",
+            "optional": true,
+            "name": "extraInfoSpec",
+            "description": "Array of extra information that should be passed to the listener function.",
+            "items": {
+              "$ref": "OnBeforeRequestOptions"
+            }
+          }
+        ],
+        "returns": {
+          "$ref": "BlockingResponse",
+          "description": "If \"blocking\" is specified in the \"extraInfoSpec\" parameter, the event listener should return an object of this type.",
+          "optional": true
+        }
+      }
+    ]
+  }
+]

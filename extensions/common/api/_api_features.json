@@ -825,6 +825,45 @@
     "dependencies": ["permission:vpnProvider"],
     "contexts": ["privileged_extension"]
   },
+  "urlRequest": {
+    "dependencies": ["permission:urlRequest"],
+    "contexts": ["privileged_extension"]
+  },
+  "urlRequestInternal": [{
+    "internal": true,
+    "channel": "stable",
+    "contexts": ["privileged_extension"]
+  }, {
+    // webview uses webRequestInternal API.
+    "channel": "stable",
+    "internal": true,
+    "contexts": ["webui"],
+    "matches": [
+      "chrome://add-supervision/*",
+      "chrome://assistant-optin/*",
+      "chrome://chrome-signin/*",
+      "chrome://discards/*",
+      "chrome://home/*",
+      "chrome://mobilesetup/*",
+      "chrome://oobe/*",
+      "chrome://os-settings/*",
+      "chrome://parent-access/*",
+      "chrome://password-change/*",
+      "chrome://lock-reauth/*"
+    ]
+  }, {
+    // This feature is used by the Controlled Frame API and is specifically
+    // enabled by //chrome.
+    "internal": true,
+    "channel": "stable",
+    "contexts": ["web_page"],
+    "matches": [
+      "<all_urls>"
+    ],
+    // This feature is only enabled if the embedder's delegated check returns
+    // true.
+    "requires_delegated_availability_check": true
+  }],
   "webRequest": {
     "dependencies": ["permission:webRequest"],
     "contexts": ["privileged_extension"]

@@ -758,6 +758,17 @@
     "channel": "stable",
     "extension_types": ["platform_app"]
   },
+  "urlRequest": [
+    {
+      "channel": "stable",
+      "extension_types": ["extension", "legacy_packaged_app"]
+    },
+    {
+      "channel": "stable",
+      "dependencies": ["behavior:imprivata_login_screen_extension"],
+      "extension_types": ["login_screen_extension"]
+    }
+  ],
   "webRequest": [
     {
       "channel": "stable",

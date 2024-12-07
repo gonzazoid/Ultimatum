@@ -15,6 +15,7 @@
 #include "extensions/renderer/api/messaging/messaging_bindings.h"
 #include "extensions/renderer/api/runtime_hooks_delegate.h"
 #include "extensions/renderer/api/web_request_hooks.h"
+#include "extensions/renderer/api/url_request_hooks.h"
 #include "extensions/renderer/api_activity_logger.h"
 #include "extensions/renderer/api_definitions_natives.h"
 #include "extensions/renderer/bindings/api_bindings_system.h"
@@ -139,6 +140,8 @@ void CoreExtensionsRendererAPIProvider::AddBindingsSystemHooks(
                                base::BindRepeating(&ContentSetting::Create));
   bindings->RegisterHooksDelegate("webRequest",
                                   std::make_unique<WebRequestHooks>());
+  bindings->RegisterHooksDelegate("urlRequest",
+                                  std::make_unique<UrlRequestHooks>());
   bindings->RegisterHooksDelegate(
       "declarativeContent",
       std::make_unique<DeclarativeContentHooksDelegate>());
@@ -189,7 +192,9 @@ void CoreExtensionsRendererAPIProvider::PopulateSourceMap(
       {"uncaught_exception_handler", IDR_UNCAUGHT_EXCEPTION_HANDLER_JS},
       {"utils", IDR_UTILS_JS},
       {"webRequest", IDR_WEB_REQUEST_CUSTOM_BINDINGS_JS},
+      {"urlRequest", IDR_URL_REQUEST_CUSTOM_BINDINGS_JS},
       {"webRequestEvent", IDR_WEB_REQUEST_EVENT_JS},
+      {"urlRequestEvent", IDR_URL_REQUEST_EVENT_JS},
       // Note: webView not webview so that this doesn't interfere with the
       // chrome.webview API bindings.
       {"webView", IDR_WEB_VIEW_JS},

@@ -1974,6 +1974,8 @@ enum HistogramValue {
   LOCALSTORAGES_DELETEENTRY = 1912,
   LOCALSTORAGES_FLUSH = 1913,
   LOCALSTORAGES_PURGEMEMORY = 1914,
+  URLREQUESTINTERNAL_ADDEVENTLISTENER = 1915,
+  URLREQUESTINTERNAL_EVENTHANDLED = 1916,
   // Last entry: Add new entries above, then run:
   // tools/metrics/histograms/update_extension_histograms.py
   ENUM_BOUNDARY

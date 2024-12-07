@@ -1426,6 +1426,7 @@ void EventRouter::DispatchPendingEvent(
   // unknowingly relying on this behavior for listeners registered
   // asynchronously (which is not supported, but may be happening).
   bool check_for_specific_event =
+      base::StartsWith(event->event_name, "urlRequest") ||
       base::StartsWith(event->event_name, "webRequest");
   bool dispatch_to_process =
       check_for_specific_event

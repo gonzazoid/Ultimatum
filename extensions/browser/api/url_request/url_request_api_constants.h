@@ -1,0 +1,75 @@
+// Copyright 2012 The Chromium Authors
+// Copyright 2024 gonzazoid
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+// Constants used for the WebRequest API.
+
+#ifndef EXTENSIONS_BROWSER_API_URL_REQUEST_URL_REQUEST_API_CONSTANTS_H_
+#define EXTENSIONS_BROWSER_API_URL_REQUEST_URL_REQUEST_API_CONSTANTS_H_
+
+namespace extension_url_request_api_constants {
+
+// Keys.
+extern const char kChallengerKey[];
+extern const char kDocumentIdKey[];
+extern const char kDocumentLifecycleKey[];
+extern const char kErrorKey[];
+extern const char kFrameIdKey[];
+extern const char kFrameTypeKey[];
+extern const char kParentDocumentIdKey[];
+extern const char kParentFrameIdKey[];
+extern const char kProcessIdKey[];
+extern const char kFromCache[];
+extern const char kHostKey[];
+extern const char kIpKey[];
+extern const char kMethodKey[];
+extern const char kPortKey[];
+extern const char kRedirectUrlKey[];
+extern const char kRequestIdKey[];
+extern const char kStatusCodeKey[];
+extern const char kStatusLineKey[];
+extern const char kTabIdKey[];
+extern const char kTimeStampKey[];
+extern const char kTypeKey[];
+extern const char kUrlKey[];
+extern const char kRequestBodyKey[];
+extern const char kRequestBodyErrorKey[];
+extern const char kRequestBodyFormDataKey[];
+extern const char kRequestBodyRawKey[];
+extern const char kRequestBodyRawBytesKey[];
+extern const char kRequestBodyRawFileKey[];
+extern const char kPostDataKey[];
+extern const char kPostDataFormKey[];
+extern const char kRequestHeadersKey[];
+// extern const char kResponseHeadersKey[];
+extern const char kHeadersKey[];
+extern const char kHeaderNameKey[];
+extern const char kHeaderValueKey[];
+extern const char kHeaderBinaryValueKey[];
+extern const char kIsProxyKey[];
+extern const char kMessageKey[];
+extern const char kSchemeKey[];
+extern const char kStageKey[];
+extern const char kRealmKey[];
+extern const char kUsernameKey[];
+extern const char kPasswordKey[];
+extern const char kInitiatorKey[];
+
+// Stages.
+inline constexpr char kOnBeforeRequest[] = "onBeforeRequest";
+
+// Error messages.
+extern const char kInvalidRedirectUrl[];
+extern const char kInvalidBlockingResponse[];
+extern const char kInvalidRequestFilterUrl[];
+extern const char kBlockingPermissionRequired[];
+extern const char kHostPermissionsRequired[];
+extern const char kInvalidHeaderKeyCombination[];
+extern const char kInvalidHeader[];
+extern const char kInvalidHeaderName[];
+extern const char kInvalidHeaderValue[];
+
+}  // namespace extension_url_request_api_constants
+
+#endif  // EXTENSIONS_BROWSER_API_URL_REQUEST_URL_REQUEST_API_CONSTANTS_H_

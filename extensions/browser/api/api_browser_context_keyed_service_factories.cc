@@ -51,6 +51,8 @@
 #include "extensions/browser/api/web_request/web_request_api.h"
 #include "extensions/browser/api/web_request/web_request_proxying_url_loader_factory.h"
 #include "extensions/browser/api/web_request/web_request_proxying_websocket.h"
+#include "extensions/browser/api/url_request/url_request_api.h"
+#include "extensions/browser/api/url_request/url_request_proxying_url_loader_factory.h"
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -131,6 +133,8 @@ void EnsureApiBrowserContextKeyedServiceFactoriesBuilt() {
 #endif
   WebRequestAPI::GetFactoryInstance();
   WebRequestProxyingURLLoaderFactory::EnsureAssociatedFactoryBuilt();
+  UrlRequestAPI::GetFactoryInstance();
+  UrlRequestProxyingURLLoaderFactory::EnsureAssociatedFactoryBuilt();
   WebRequestProxyingWebSocket::EnsureAssociatedFactoryBuilt();
 #endif
 }
