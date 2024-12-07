@@ -16,6 +16,7 @@ extensions_api_schema_files_ = [
   "storage.json",
   "test.json",
   "web_request.json",
+  "url_request.json",
 ]
 
 # Schemas that should be used only to auto-generate the C++ types.
@@ -130,7 +131,7 @@ extensions_types_only_schema_files =
     get_path_info(extensions_types_only_schema_files_, "abspath")
 
 extensions_api_uncompiled_sources =
-    get_path_info([ "web_request_internal.json" ], "abspath")
+    get_path_info([ "web_request_internal.json", "url_request_internal.json" ], "abspath")
 
 extensions_api_uncompiled_bundle_schema_sources =
     get_path_info([

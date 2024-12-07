@@ -24,6 +24,7 @@
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "extensions/browser/api/web_request/web_request_event_router_factory.h"
+#include "extensions/browser/api/url_request/url_request_event_router_factory.h"
 #endif
 
 #if BUILDFLAG(ENABLE_GUEST_VIEW)
@@ -61,6 +62,7 @@ void EnsureCoreBrowserContextKeyedServiceFactoriesBuilt() {
   UserScriptWorldConfigurationManager::GetFactory();
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   WebRequestEventRouterFactory::GetInstance();
+  UrlRequestEventRouterFactory::GetInstance();
   MessageTracker::GetFactory();
 #endif
 }

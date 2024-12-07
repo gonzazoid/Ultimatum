@@ -52,6 +52,8 @@
 #include "extensions/browser/api/usb/usb_device_manager.h"
 #include "extensions/browser/api/usb/usb_device_resource.h"
 #include "extensions/browser/api/web_request/web_request_proxying_websocket.h"
+#include "extensions/browser/api/url_request/url_request_api.h"
+#include "extensions/browser/api/url_request/url_request_proxying_url_loader_factory.h"
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -77,6 +79,8 @@ void EnsureApiBrowserContextKeyedServiceFactoriesBuilt() {
   StorageFrontend::GetFactoryInstance();
   WebRequestAPI::GetFactoryInstance();
   WebRequestProxyingURLLoaderFactory::EnsureAssociatedFactoryBuilt();
+  UrlRequestAPI::GetFactoryInstance();
+  UrlRequestProxyingURLLoaderFactory::EnsureAssociatedFactoryBuilt();
 
 // The following are not supported in the experimental desktop-android build.
 // TODO(https://crbug.com/356905053): Enable these APIs on desktop-android.
