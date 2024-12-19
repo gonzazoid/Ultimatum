@@ -41,4 +41,4 @@ coming soon, have a look at #Net utils and badger's layer code.
 #### TODOS
 
 - ``content/browser/renderer_host/render_frame_host_impl.cc`` look at git diff
-- [Debut article](/docs/hash-net/debute-article.md) split and add to documentation
+- [Debut article](/docs/hash-net/debut-article.md) split and add to documentation
