@@ -335,6 +335,11 @@ void UrlRequestProxyingURLLoaderFactory::InProgressRequest::FollowRedirect(
   // calculates it.
   UpdateRequestInfo();
 
+  if (target_loader_.is_bound()) {
+    target_loader_->FollowRedirect(removed_headers, modified_headers,
+                                   modified_cors_exempt_headers, new_url);
+  }
+
   ++num_redirects_;
   RestartInternal();
 }
@@ -394,6 +399,13 @@ void UrlRequestProxyingURLLoaderFactory::InProgressRequest::OnReceiveRedirect(
       TRACE_ID_WITH_SCOPE(kUrlRequestProxyingURLLoaderFactoryScope,
                           TRACE_ID_LOCAL(request_id_)),
       TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT);
+
+  if (redirect_url_ != redirect_info.new_url &&
+      !IsRedirectSafe(request_.url, redirect_info.new_url,
+                      info_->is_navigation_request)) {
+    OnNetworkError(CreateURLLoaderCompletionStatus(net::ERR_UNSAFE_REDIRECT));
+    return;
+  }
 
   current_response_ = std::move(head);
   HandleResponseOrRedirectHeaders(
