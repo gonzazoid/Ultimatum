@@ -8,7 +8,9 @@
 #include "net/disk_cache/disk_cache.h"
 
 namespace disk_cache {
-
+// Maximum number of recursive calls we permit
+// before forcing an asynchronous task.
+const int kMaxQueryCacheRecursiveDepth = 20;
 class NET_EXPORT RawEntry {
  public:
   RawEntry();
@@ -45,6 +47,7 @@ class CacheStorageRawApi {
 
   void DeleteBackendCompletedIO();
 
+  int query_cache_recursive_depth_ = 0;
   std::unique_ptr<Backend> backend_;
   bool manage_backend_ = true;
   net::Error backend_error_;

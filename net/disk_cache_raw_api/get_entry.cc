@@ -21,6 +21,21 @@ namespace disk_cache {
     const std::string& key,
     RawEntryResultCallback callback
   ) {
+    if (in_progress_) {
+      // put task in the queue and quit
+      queue_.push_back({path, backend, key, std::move(callback)});
+      return;
+    }
+    in_progress_ = true;
+    RunHelper(path, backend, key, std::move(callback));
+  }
+
+  void CacheStorageRawApiGetEntry::RunHelper(
+    const base::FilePath& path,
+    disk_cache::Backend* backend,
+    const std::string& key,
+    RawEntryResultCallback callback
+  ) {
     entry_callback_ = std::move(callback);
     entry_response_ = std::make_unique<RawEntry>();
     entry_response_->key = std::move(key);
@@ -53,10 +68,17 @@ namespace disk_cache {
 
   void CacheStorageRawApiGetEntry::OnEntryOpened(
     disk_cache::EntryResult result) {
-    if (result.net_error() == net::ERR_FAILED) {
-
+    net::Error status = result.net_error();
+    if (status == net::ERR_FAILED) {
       // entry not found
       std::string error_message = "not found";
+      SendResponse(error_message);
+      return;
+    }
+
+    if (status != net::OK) {
+      // unknown error
+      std::string error_message = net::ErrorToString(status);
       SendResponse(error_message);
       return;
     }
@@ -72,9 +94,9 @@ namespace disk_cache {
       base::BindOnce(&CacheStorageRawApiGetEntry::GetFirstStreamCompleted, weak_factory_.GetWeakPtr())
     );
 
-    int status = entry_->ReadData(0, 0, buf.get(), length, std::move(split_callback.first));
-    if (status != net::ERR_IO_PENDING) {
-      std::move(split_callback.second).Run(status);
+    int reading_status = entry_->ReadData(0, 0, buf.get(), length, std::move(split_callback.first));
+    if (reading_status != net::ERR_IO_PENDING) {
+      std::move(split_callback.second).Run(reading_status);
     }
   }
 
@@ -202,12 +224,57 @@ namespace disk_cache {
   }
 
   void CacheStorageRawApiGetEntry::SendResponse (std::string status) {
-    entry_->Close();
-    entry_ = nullptr;
     auto response = std::make_unique<RawEntryResult>();
     response->status = status;
     if (status == "ok")
       response->entry = std::move(entry_response_);
     std::move(entry_callback_).Run(std::move(response));
+
+    // CheckQueue();
+    auto next_callback = base::BindOnce(&CacheStorageRawApiGetEntry::CheckQueue, weak_factory_.GetWeakPtr());
+
+    if (query_cache_recursive_depth_ <= kMaxQueryCacheRecursiveDepth) {
+      query_cache_recursive_depth_ += 1;
+      std::move(next_callback).Run();
+      return;
+    }
+
+    query_cache_recursive_depth_ = 0;
+    auto task_runner = base::SequencedTaskRunner::GetCurrentDefault();
+    task_runner->PostTask(
+      FROM_HERE,
+      std::move(next_callback));
   }
+
+  void CacheStorageRawApiGetEntry::CheckQueue () {
+    if (entry_) {
+      entry_->Close();
+      entry_ = nullptr;
+    }
+
+    chunks_.clear();
+    current_chunk_num_ = 0;
+    total_bytes_ = 0;
+
+    if (!manage_backend_) {
+      backend_.release();
+    }
+    backend_ = nullptr;
+
+    if (queue_.size() == 0) {
+      query_cache_recursive_depth_ = 0;
+      in_progress_ = false;
+      return;
+    }
+
+    auto& [path_, backend_, key_, callback_] = queue_.front();
+    base::FilePath path = std::move(path_);
+    disk_cache::Backend* backend = std::move(backend_);
+    const std::string key = std::move(key_);
+    RawEntryResultCallback callback = std::move(callback_);
+
+    queue_.pop_front();
+    RunHelper(path, backend, key, std::move(callback));
+  }
+
 }

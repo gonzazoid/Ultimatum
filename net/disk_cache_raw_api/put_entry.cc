@@ -20,6 +20,21 @@ namespace disk_cache {
     std::unique_ptr<RawEntry> cacheEntry,
     PutEntryResultCallback callback
   ) {
+    if (in_progress_) {
+      // put task in the queue and quit
+      queue_.push_back({path, backend, std::move(cacheEntry), std::move(callback)});
+      return;
+    }
+    in_progress_ = true;
+    RunHelper(path, backend, std::move(cacheEntry), std::move(callback));
+  }
+
+  void CacheStorageRawApiPutEntry::RunHelper(
+    const base::FilePath& path,
+    disk_cache::Backend* backend,
+    std::unique_ptr<RawEntry> cacheEntry,
+    PutEntryResultCallback callback
+  ) {
     put_entry_callback_ = std::move(callback);
     raw_entry_ = std::move(cacheEntry);
 
@@ -33,11 +48,26 @@ namespace disk_cache {
 
   void CacheStorageRawApiPutEntry::SendResponse (std::string status) {
     std::move(put_entry_callback_).Run(status);
+
+    // CheckQueue();
+    auto next_callback = base::BindOnce(&CacheStorageRawApiPutEntry::CheckQueue, weak_factory_.GetWeakPtr());
+
+    if (query_cache_recursive_depth_ <= kMaxQueryCacheRecursiveDepth) {
+      query_cache_recursive_depth_ += 1;
+      std::move(next_callback).Run();
+      return;
+    }
+
+    query_cache_recursive_depth_ = 0;
+    auto task_runner = base::SequencedTaskRunner::GetCurrentDefault();
+    task_runner->PostTask(
+      FROM_HERE,
+      std::move(next_callback));
   }
 
   void CacheStorageRawApiPutEntry::OnEntryCreated(
     disk_cache::EntryResult result) {
-    if (result.net_error() == net::ERR_FAILED) {
+    if (result.net_error() != net::OK) {
       std::string error_message = "disk_cache entry creation failed";
       SendResponse(error_message);
       return;
@@ -184,5 +214,35 @@ namespace disk_cache {
       return;
 
     std::move(split_callback.second).Run(std::move(entry_result));
+  }
+
+void CacheStorageRawApiPutEntry::CheckQueue () {
+    if (entry_) {
+      entry_->Close();
+      entry_ = nullptr;
+    }
+    raw_entry_ = nullptr;
+
+    current_chunk_num_ = 0;
+    total_bytes_ = 0;
+
+    if (!manage_backend_) {
+      backend_.release();
+    }
+    backend_ = nullptr;
+
+    if (queue_.size() == 0) {
+      query_cache_recursive_depth_ = 0;
+      in_progress_ = false;
+      return;
+    }
+
+    auto& [path_, backend_, cacheEntry_, callback_] = queue_.front();
+    base::FilePath path = std::move(path_);
+    disk_cache::Backend* backend = std::move(backend_);
+    std::unique_ptr<RawEntry> cacheEntry = std::move(cacheEntry_);
+    PutEntryResultCallback callback = std::move(callback_);
+    queue_.pop_front();
+    RunHelper(path, backend, std::move(cacheEntry), std::move(callback));
   }
 }

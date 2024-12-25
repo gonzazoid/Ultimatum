@@ -15,6 +15,21 @@ namespace disk_cache {
     const std::string& key,
     DeleteEntryResultCallback callback
   ) {
+    if (in_progress_) {
+      // put task in the queue and quit
+      queue_.push_back({path, backend, key, std::move(callback)});
+      return;
+    }
+    in_progress_ = true;
+    RunHelper(path, backend, key, std::move(callback));
+  }
+
+  void CacheStorageRawApiDeleteEntry::RunHelper(
+    const base::FilePath& path,
+    disk_cache::Backend* backend,
+    const std::string& key,
+    DeleteEntryResultCallback callback
+  ) {
     delete_callback_ = std::move(callback);
 
     backend_callback_ = base::BindOnce(
@@ -27,6 +42,42 @@ namespace disk_cache {
 
   void CacheStorageRawApiDeleteEntry::SendResponse (std::string status) {
     std::move(delete_callback_).Run(status);
+
+    // CheckQueue();
+    auto next_callback = base::BindOnce(&CacheStorageRawApiDeleteEntry::CheckQueue, weak_factory_.GetWeakPtr());
+
+    if (query_cache_recursive_depth_ <= kMaxQueryCacheRecursiveDepth) {
+      query_cache_recursive_depth_ += 1;
+      std::move(next_callback).Run();
+      return;
+    }
+
+    query_cache_recursive_depth_ = 0;
+    auto task_runner = base::SequencedTaskRunner::GetCurrentDefault();
+    task_runner->PostTask(
+      FROM_HERE,
+      std::move(next_callback));
+  }
+
+  void CacheStorageRawApiDeleteEntry::CheckQueue () {
+    if (!manage_backend_) {
+      backend_.release();
+    }
+    backend_ = nullptr;
+
+    if (queue_.size() == 0) {
+      in_progress_ = false;
+      query_cache_recursive_depth_ = 0;
+      return;
+    }
+
+    auto& [path_, backend_, key_, callback_] = queue_.front();
+    base::FilePath path = std::move(path_);
+    disk_cache::Backend* backend = std::move(backend_);
+    const std::string key = std::move(key_);
+    DeleteEntryResultCallback callback = std::move(callback_);
+    queue_.pop_front();
+    RunHelper(path, backend, key, std::move(callback));
   }
 
   void CacheStorageRawApiDeleteEntry::OnEntryDoomed(

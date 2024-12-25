@@ -5,11 +5,15 @@
 #ifndef NET_DISK_CACHE_DISK_CACHE_RAW_API_DELETE_ENTRY_H_
 #define NET_DISK_CACHE_DISK_CACHE_RAW_API_DELETE_ENTRY_H_
 
+#include <tuple>
+#include <deque>
+
 #include "net/disk_cache_raw_api/api.h"
 
 namespace disk_cache {
 
 using DeleteEntryResultCallback = base::OnceCallback<void(std::string&)>;
+using DeleteEntryTask = std::tuple<base::FilePath, disk_cache::Backend*, std::string, DeleteEntryResultCallback>;
 
 class NET_EXPORT CacheStorageRawApiDeleteEntry: public virtual CacheStorageRawApi {
  public:
@@ -29,10 +33,20 @@ class NET_EXPORT CacheStorageRawApiDeleteEntry: public virtual CacheStorageRawAp
 
  private:
 
+  void RunHelper(
+    const base::FilePath& path,
+    disk_cache::Backend* backend,
+    const std::string& key,
+    DeleteEntryResultCallback callback
+  );
+
   void BackendCallback(const std::string& key);
   void SendResponse (std::string status);
   void OnEntryDoomed(int result);
+  void CheckQueue();
 
+  bool in_progress_ = false;
+  std::deque<DeleteEntryTask> queue_;
   DeleteEntryResultCallback delete_callback_;
 
   base::WeakPtrFactory<CacheStorageRawApiDeleteEntry> weak_factory_{this};

@@ -5,6 +5,9 @@
 #ifndef NET_DISK_CACHE_DISK_CACHE_RAW_API_KEYS_H_
 #define NET_DISK_CACHE_DISK_CACHE_RAW_API_KEYS_H_
 
+#include <tuple>
+#include <deque>
+
 #include "net/disk_cache_raw_api/api.h"
 
 namespace disk_cache {
@@ -23,6 +26,7 @@ class NET_EXPORT KeysResult {
 };
 
 using KeysResultCallback = base::OnceCallback<void(std::unique_ptr<KeysResult>)>;
+using KeysTask = std::tuple<base::FilePath, disk_cache::Backend*, KeysResultCallback>;
 
 class NET_EXPORT CacheStorageRawApiKeys: public virtual CacheStorageRawApi {
  public:
@@ -41,17 +45,25 @@ class NET_EXPORT CacheStorageRawApiKeys: public virtual CacheStorageRawApi {
 
  private:
 
+  void RunHelper(
+    const base::FilePath& path,
+    disk_cache::Backend* backend,
+    KeysResultCallback callback
+  );
+
   void BackendCallback();
   void StartIteration();
   void Iterate();
   void HandleCacheEntry(disk_cache::EntryResult result);
   void SendErrKeysResponse(std::string error);
+  void CheckQueue();
 
-  int query_cache_recursive_depth_ = 0;
   std::unique_ptr<disk_cache::Backend::Iterator> iterator_;
   std::vector<std::string> keys_;
 
   KeysResultCallback keys_callback_;
+  bool in_progress_ = false;
+  std::deque<KeysTask> queue_;
 
   base::WeakPtrFactory<CacheStorageRawApiKeys> weak_factory_{this};
 };

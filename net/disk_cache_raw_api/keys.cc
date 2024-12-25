@@ -5,10 +5,6 @@
 #include "net/disk_cache_raw_api/keys.h"
 
 namespace disk_cache {
-  // Maximum number of recursive OpenNextEntry() calls we permit
-  // before forcing an asynchronous task.
-  const int kMaxQueryCacheRecursiveDepth = 20;
-
   KeysResult::KeysResult() = default;
   KeysResult::~KeysResult() = default;
 
@@ -19,6 +15,20 @@ namespace disk_cache {
   CacheStorageRawApiKeys::~CacheStorageRawApiKeys() {}
 
   void CacheStorageRawApiKeys::Run(
+    const base::FilePath& path,
+    Backend* backend,
+    KeysResultCallback callback
+  ) {
+    if (in_progress_) {
+      // put task in the queue and quit
+      queue_.push_back({path, backend, std::move(callback)});
+      return;
+    }
+    in_progress_ = true;
+    RunHelper(path, backend, std::move(callback));
+  }
+
+  void CacheStorageRawApiKeys::RunHelper(
     const base::FilePath& path,
     Backend* backend,
     KeysResultCallback callback
@@ -90,6 +100,7 @@ namespace disk_cache {
       response->status = "ok";
       response->keys = std::move(keys_);
       std::move(keys_callback_).Run(std::move(response));
+      CheckQueue();
       return;
     }
 
@@ -119,5 +130,31 @@ namespace disk_cache {
     auto response = std::make_unique<KeysResult>();
     response->status = std::move(error);
     std::move(keys_callback_).Run(std::move(response));
+    CheckQueue();
+  }
+
+  void CacheStorageRawApiKeys::CheckQueue () {
+    if (iterator_) {
+      iterator_ = nullptr;
+    }
+    keys_.clear();
+
+    if (!manage_backend_) {
+      backend_.release();
+    }
+    backend_ = nullptr;
+
+    if (queue_.size() == 0) {
+      in_progress_ = false;
+      query_cache_recursive_depth_ = 0;
+      return;
+    }
+
+    auto& [path_, backend_, callback_] = queue_.front();
+    base::FilePath path = std::move(path_);
+    disk_cache::Backend* backend = std::move(backend_);
+    KeysResultCallback callback = std::move(callback_);
+    queue_.pop_front();
+    RunHelper(path, backend, std::move(callback));
   }
 }

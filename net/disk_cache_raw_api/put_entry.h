@@ -5,11 +5,15 @@
 #ifndef NET_DISK_CACHE_DISK_CACHE_RAW_API_PUT_ENTRY_H_
 #define NET_DISK_CACHE_DISK_CACHE_RAW_API_PUT_ENTRY_H_
 
+#include <tuple>
+#include <deque>
+
 #include "net/disk_cache_raw_api/api.h"
 
 namespace disk_cache {
 
 using PutEntryResultCallback = base::OnceCallback<void(std::string&)>;
+using PutEntryTask = std::tuple<base::FilePath, disk_cache::Backend*, std::unique_ptr<RawEntry>, PutEntryResultCallback>;
 
 class NET_EXPORT CacheStorageRawApiPutEntry: public virtual CacheStorageRawApi {
  public:
@@ -29,6 +33,13 @@ class NET_EXPORT CacheStorageRawApiPutEntry: public virtual CacheStorageRawApi {
 
  private:
 
+  void RunHelper(
+    const base::FilePath& path,
+    disk_cache::Backend* backend,
+    std::unique_ptr<RawEntry> cacheEntry,
+    PutEntryResultCallback callback
+  );
+
   void BackendCallback();
   void OnEntryCreated(disk_cache::EntryResult result);
 
@@ -41,6 +52,7 @@ class NET_EXPORT CacheStorageRawApiPutEntry: public virtual CacheStorageRawApi {
   void WriteSparseEntry();
   void WriteNextChunk();
   void OnChunk(int status);
+  void CheckQueue();
 
   raw_ptr<disk_cache::Entry> entry_;
   std::unique_ptr<RawEntry> raw_entry_;
@@ -48,6 +60,8 @@ class NET_EXPORT CacheStorageRawApiPutEntry: public virtual CacheStorageRawApi {
 
   size_t current_chunk_num_;
   size_t total_bytes_;
+  bool in_progress_ = false;
+  std::deque<PutEntryTask> queue_;
 
   base::WeakPtrFactory<CacheStorageRawApiPutEntry> weak_factory_{this};
 };

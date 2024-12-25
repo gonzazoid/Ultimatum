@@ -1401,8 +1401,9 @@ void NetworkContext::GetHttpCacheKeys(GetHttpCacheKeysCallback callback) {
     return;
   }
 
-  // if (!keys_exec_)
-  keys_exec_ = std::make_unique<disk_cache::CacheStorageRawApiKeys>();
+  if (!keys_exec_)
+    keys_exec_ = std::make_unique<disk_cache::CacheStorageRawApiKeys>();
+
   auto keys_callback = base::BindOnce(&NetworkContext::OnHttpCacheKeys,
                    weak_factory_.GetWeakPtr(), std::move(callback));
   keys_exec_->Run(base::FilePath(), backend, std::move(keys_callback));
@@ -1442,8 +1443,9 @@ void NetworkContext::GetHttpCacheEntry(const std::string& key, GetHttpCacheEntry
     return;
   }
 
-  // if (!entry_exec_)
-  entry_exec_ = std::make_unique<disk_cache::CacheStorageRawApiGetEntry>();
+  if (!entry_exec_)
+    entry_exec_ = std::make_unique<disk_cache::CacheStorageRawApiGetEntry>();
+
   auto entry_callback = base::BindOnce(&NetworkContext::OnHttpCacheEntry,
                    weak_factory_.GetWeakPtr(), std::move(callback));
   entry_exec_->Run(base::FilePath(), backend, key, std::move(entry_callback));
@@ -1462,8 +1464,9 @@ void NetworkContext::PutHttpCacheEntry(const mojom::DiskCacheEntryPtr entry, Put
     return;
   }
 
-  // if (!put_entry_exec_)
-  put_entry_exec_ = std::make_unique<disk_cache::CacheStorageRawApiPutEntry>();
+  if (!put_entry_exec_)
+    put_entry_exec_ = std::make_unique<disk_cache::CacheStorageRawApiPutEntry>();
+
   auto put_entry_callback = base::BindOnce(&NetworkContext::OnHttpCachePutEntry,
                    weak_factory_.GetWeakPtr(), std::move(callback));
 
@@ -1499,8 +1502,9 @@ void NetworkContext::DeleteHttpCacheEntry(const std::string& key, DeleteHttpCach
     return;
   }
 
-  // if (!delete_exec_)
-  delete_exec_ = std::make_unique<disk_cache::CacheStorageRawApiDeleteEntry>();
+  if (!delete_exec_)
+    delete_exec_ = std::make_unique<disk_cache::CacheStorageRawApiDeleteEntry>();
+
   auto delete_callback = base::BindOnce(&NetworkContext::OnHttpCacheDeleteEntry,
                    weak_factory_.GetWeakPtr(), std::move(callback));
   delete_exec_->Run(base::FilePath(), backend, key, std::move(delete_callback));
