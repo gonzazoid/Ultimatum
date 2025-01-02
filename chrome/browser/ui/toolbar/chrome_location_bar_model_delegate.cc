@@ -179,13 +179,13 @@ const gfx::VectorIcon* ChromeLocationBarModelDelegate::GetVectorIconOverride()
   if (url.SchemeIs(extensions::kExtensionScheme)) {
     return &vector_icons::kExtensionChromeRefreshIcon;
   }
-#endif
 
   if (url.SchemeIs(url::kHashNetHashScheme))
     return &omnibox::kHashNetIcon;
 
   if (url.SchemeIs(url::kHashNetSignedScheme))
     return &omnibox::kHashNetIcon;
+#endif
 
   return nullptr;
 }
