@@ -24,6 +24,8 @@ import org.chromium.components.embedder_support.util.UrlConstants;
 import org.chromium.components.embedder_support.util.UrlUtilities;
 import org.chromium.url.GURL;
 
+import org.chromium.base.ContextUtils;
+
 /**
  * Provides information regarding homepage enabled states and URI.
  *
@@ -117,8 +119,7 @@ public class HomepageManager implements HomepagePolicyManager.HomepagePolicyStat
      * @return Whether to close the app when the user has zero tabs.
      */
     public static boolean shouldCloseAppWithZeroTabs() {
-        return HomepageManager.isHomepageEnabled()
-                && !UrlUtilities.isNTPUrl(HomepageManager.getHomepageUri());
+        return ContextUtils.getAppSharedPreferences().getBoolean("close_browser_after_last_tab", false);
     }
 
     /**
@@ -147,6 +148,7 @@ public class HomepageManager implements HomepagePolicyManager.HomepagePolicyStat
      *         if the homepage button is force enabled via flag.
      */
     public static String getDefaultHomepageUri() {
+        if (true) return "chrome://newtab";
         if (PartnerBrowserCustomizations.getInstance().isHomepageProviderAvailableAndEnabled()) {
             return PartnerBrowserCustomizations.getInstance().getHomePageUrl().getSpec();
         }
@@ -164,7 +166,7 @@ public class HomepageManager implements HomepagePolicyManager.HomepagePolicyStat
         }
         if (!homepagePartnerDefaultUri.equals("")) return homepagePartnerDefaultUri;
 
-        return UrlConstants.NTP_NON_NATIVE_URL;
+        return "chrome-search://local-ntp/local-ntp.html";
     }
 
     /**
@@ -196,17 +198,8 @@ public class HomepageManager implements HomepagePolicyManager.HomepagePolicyStat
      * Get homepage URI without checking if the homepage is enabled.
      * @return Homepage URI based on policy and shared preference settings.
      */
-    private @NonNull String getHomepageUriIgnoringEnabledState() {
-        if (HomepagePolicyManager.isHomepageManagedByPolicy()) {
-            return HomepagePolicyManager.getHomepageUrl();
-        }
-        if (getPrefHomepageUseChromeNTP()) {
-            return UrlConstants.NTP_NON_NATIVE_URL;
-        }
-        if (getPrefHomepageUseDefaultUri()) {
-            return getDefaultHomepageUri();
-        }
-        return getPrefHomepageCustomUri();
+    public @NonNull String getHomepageUriIgnoringEnabledState() {
+        return ContextUtils.getAppSharedPreferences().getString("active_homepage", "chrome://newtab");
     }
 
     /**
@@ -231,6 +224,7 @@ public class HomepageManager implements HomepagePolicyManager.HomepagePolicyStat
      * @return User specified homepage custom URI string.
      */
     public String getPrefHomepageCustomUri() {
+        if (true) return ContextUtils.getAppSharedPreferences().getString("active_homepage", "chrome://newtab");
         return mSharedPreferencesManager.readString(ChromePreferenceKeys.HOMEPAGE_CUSTOM_URI, "");
     }
 

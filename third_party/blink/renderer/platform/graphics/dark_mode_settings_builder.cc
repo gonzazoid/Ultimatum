@@ -24,14 +24,18 @@ const constexpr DarkModeInversionAlgorithm kDefaultDarkModeInversionAlgorithm =
     DarkModeInversionAlgorithm::kInvertLightnessLAB;
 const constexpr DarkModeImagePolicy kDefaultDarkModeImagePolicy =
     DarkModeImagePolicy::kFilterSmart;
-const constexpr int kDefaultForegroundBrightnessThreshold = 150;
+const constexpr int kDefaultForegroundBrightnessThreshold = 127;
 const constexpr int kDefaultBackgroundBrightnessThreshold = 205;
+const constexpr bool kDefaultDarkModeIsGrayscale = false;
 const constexpr float kDefaultDarkModeContrastPercent = 0.0f;
+const constexpr float kDefaultDarkModeImageGrayscalePercent = 0.0f;
 
 typedef std::unordered_map<std::string, std::string> SwitchParams;
 
 SwitchParams ParseDarkModeSettings() {
   SwitchParams switch_params;
+
+  LOG(INFO) << "[Kiwi] ParseDarkModeSettings";
 
   if (!base::CommandLine::ForCurrentProcess()->HasSwitch("dark-mode-settings"))
     return switch_params;
@@ -41,12 +45,17 @@ SwitchParams ParseDarkModeSettings() {
           "dark-mode-settings"),
       ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
 
+    LOG(INFO) << "[Kiwi] ParseDarkModeSettings - Read: " << base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
+          "dark-mode-settings");
+
   for (auto param_value : param_values) {
     std::vector<std::string> pair = base::SplitString(
         param_value, "=", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
 
-    if (pair.size() == 2)
+    if (pair.size() == 2) {
       switch_params[base::ToLowerASCII(pair[0])] = base::ToLowerASCII(pair[1]);
+      LOG(INFO) << "[Kiwi] ParseDarkModeSettings - A: " << base::ToLowerASCII(pair[0]) << " -- " << base::ToLowerASCII(pair[1]);
+    }
   }
 
   return switch_params;
@@ -157,12 +166,24 @@ DarkModeSettings BuildDarkModeSettings() {
       Clamp<int>(GetForegroundBrightnessThreshold(switch_params), 0, 255);
   settings.background_brightness_threshold =
       Clamp<int>(GetBackgroundBrightnessThreshold(switch_params), 0, 255);
+  settings.grayscale = GetIntegerSwitchParamValue<bool>(
+      switch_params, "IsGrayScale", kDefaultDarkModeIsGrayscale);
   settings.contrast =
       Clamp<float>(GetFloatSwitchParamValue(switch_params, "ContrastPercent",
                                             kDefaultDarkModeContrastPercent),
                    -1.0f, 1.0f);
+  settings.image_grayscale_percent = Clamp<float>(
+      GetFloatSwitchParamValue(switch_params, "ImageGrayScalePercent",
+                               kDefaultDarkModeImageGrayscalePercent),
+      0.0f, 1.0f);
 
   settings.increase_text_contrast = GetIncreaseTextContrast(switch_params);
+  if (settings.contrast > 0)
+    settings.increase_text_contrast = true;
+  else
+    settings.increase_text_contrast = false;
+  settings.is_dark_ui = GetIntegerSwitchParamValue<bool>(
+      switch_params, "IsDarkUi", false);
 
   return settings;
 }

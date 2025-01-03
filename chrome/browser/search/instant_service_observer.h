@@ -8,8 +8,10 @@
 #include "build/build_config.h"
 #include "chrome/common/search/instant_types.h"
 
+#if 0
 #if BUILDFLAG(IS_ANDROID)
 #error "Instant is only used on desktop";
+#endif
 #endif
 
 struct InstantMostVisitedInfo;

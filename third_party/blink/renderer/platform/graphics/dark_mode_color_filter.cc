@@ -28,7 +28,7 @@ class SkColorFilterWrapper : public DarkModeColorFilter {
       const DarkModeSettings& settings) {
     SkHighContrastConfig config;
     config.fInvertStyle = invert_style;
-    config.fGrayscale = false;
+    config.fGrayscale = settings.grayscale;
     config.fContrast = settings.contrast;
 
     return std::unique_ptr<SkColorFilterWrapper>(
@@ -50,20 +50,33 @@ class SkColorFilterWrapper : public DarkModeColorFilter {
 
 // LABColorFilter implementation.
 class LABColorFilter : public DarkModeColorFilter {
+ private:
+   DarkModeSettings settings_;
+
  public:
-  LABColorFilter() : transformer_(lab::DarkModeSRGBLABTransformer()) {
+  LABColorFilter(const DarkModeSettings& settings) : transformer_(lab::DarkModeSRGBLABTransformer()) {
     SkHighContrastConfig config;
     config.fInvertStyle = SkHighContrastConfig::InvertStyle::kInvertLightness;
-    config.fGrayscale = false;
-    config.fContrast = 0.0;
+    config.fGrayscale = settings.grayscale;
+    config.fContrast = settings.contrast;
     filter_ = SkHighContrastFilter::Make(config);
+    settings_ = settings;
   }
 
   SkColor InvertColor(SkColor color) const override {
     SkV3 rgb = {SkColorGetR(color) / 255.0f, SkColorGetG(color) / 255.0f,
                 SkColorGetB(color) / 255.0f};
     SkV3 lab = transformer_.SRGBToLAB(rgb);
-    lab.x = std::min(110.0f - lab.x, 100.0f);
+
+//  input contrast is -0.15 to +0.15
+//  110 = gray
+//  100 = black
+    float contrast = settings_.contrast;
+    if (contrast < 0)
+      contrast = contrast * -1;
+    float threshold = 100;
+    threshold = 100 + (settings_.contrast * 100);
+    lab.x = std::min(threshold - lab.x, 100.0f);
     rgb = transformer_.LABToSRGB(lab);
 
     SkColor inverted_color = SkColorSetARGB(
@@ -83,8 +96,8 @@ class LABColorFilter : public DarkModeColorFilter {
   // TODO(gilmanmh): Consider adding a more general way to adjust colors after
   // applying the main filter.
   SkColor AdjustGray(SkColor color) const {
-    static const uint8_t kBrightnessThreshold = 32;
-    static const uint8_t kAdjustedBrightness = 18;
+    static const uint8_t kBrightnessThreshold = 0;
+    static const uint8_t kAdjustedBrightness = 0;
 
     uint8_t r = SkColorGetR(color);
     uint8_t g = SkColorGetG(color);
@@ -126,7 +139,7 @@ std::unique_ptr<DarkModeColorFilter> DarkModeColorFilter::FromSettings(
           SkHighContrastConfig::InvertStyle::kInvertLightness, settings);
 
     case DarkModeInversionAlgorithm::kInvertLightnessLAB:
-      return std::make_unique<LABColorFilter>();
+      return std::make_unique<LABColorFilter>(settings);
   }
   NOTREACHED();
 }

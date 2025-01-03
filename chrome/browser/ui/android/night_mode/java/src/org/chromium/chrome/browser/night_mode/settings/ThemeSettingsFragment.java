@@ -43,10 +43,12 @@ public class ThemeSettingsFragment extends PreferenceFragmentCompat {
                 (RadioButtonGroupThemePreference) findPreference(PREF_UI_THEME_PREF);
         mWebContentsDarkModeEnabled = WebContentsDarkModeController.isGlobalUserSettingsEnabled(
                 Profile.getLastUsedRegularProfile());
+        mWebContentsDarkModeEnabled = false;
         radioButtonGroupThemePreference.initialize(
                 NightModeUtils.getThemeSetting(), mWebContentsDarkModeEnabled);
 
         radioButtonGroupThemePreference.setOnPreferenceChangeListener((preference, newValue) -> {
+            if (false)
             if (ChromeFeatureList.isEnabled(
                         ChromeFeatureList.DARKEN_WEBSITES_CHECKBOX_IN_THEMES_SETTING)) {
                 if (radioButtonGroupThemePreference.isDarkenWebsitesEnabled()
@@ -59,6 +61,7 @@ public class ThemeSettingsFragment extends PreferenceFragmentCompat {
             }
             int theme = (int) newValue;
             sharedPreferencesManager.writeInt(UI_THEME_SETTING, theme);
+            WebContentsDarkModeController.updateDarkModeStringSettings();
             return true;
         });
 
@@ -72,6 +75,7 @@ public class ThemeSettingsFragment extends PreferenceFragmentCompat {
                     getArguments().getInt(KEY_THEME_SETTINGS_ENTRY));
         }
 
+        if (false)
         if (ChromeFeatureList.isEnabled(
                     ChromeFeatureList.DARKEN_WEBSITES_CHECKBOX_IN_THEMES_SETTING)) {
             WebContentsDarkModeMessageController.notifyEventSettingsOpened(

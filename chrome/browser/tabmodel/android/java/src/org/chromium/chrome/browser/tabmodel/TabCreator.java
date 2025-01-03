@@ -17,6 +17,9 @@ import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.url.GURL;
 
+import java.nio.ByteBuffer;
+import org.chromium.base.ContextUtils;
+
 /**
  * Creates Tabs.  If the TabCreator creates Tabs asynchronously, null pointers will be returned
  * everywhere instead of a Tab.
@@ -94,7 +97,19 @@ public abstract class TabCreator {
     public final void launchNTP() {
         try {
             TraceEvent.begin("TabCreator.launchNTP");
-            launchUrl(UrlConstants.NTP_URL, TabLaunchType.FROM_CHROME_UI);
+            launchUrl(ContextUtils.getAppSharedPreferences().getString("active_homepage", "chrome://newtab"), TabLaunchType.FROM_CHROME_UI);
+        } finally {
+            TraceEvent.end("TabCreator.launchNTP");
+        }
+    }
+
+    /**
+     * Creates a new tab and loads the NTP.
+     */
+    public final void launchIncognitoNTP() {
+        try {
+            TraceEvent.begin("TabCreator.launchNTP");
+            launchUrl("chrome-search://local-ntp/incognito-ntp.html", TabLaunchType.FROM_CHROME_UI);
         } finally {
             TraceEvent.end("TabCreator.launchNTP");
         }

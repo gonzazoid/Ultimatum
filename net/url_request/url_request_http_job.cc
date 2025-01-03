@@ -327,6 +327,39 @@ void URLRequestHttpJob::OnGotFirstPartySetMetadata(
       http_user_agent_settings_ ?
           http_user_agent_settings_->GetUserAgent() : std::string());
 
+  if (request_info_.url.host().find("addons.opera.com") != std::string::npos)
+  {
+     request_info_.extra_headers.SetHeader(HttpRequestHeaders::kUserAgent, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.86 Safari/537.36 OPR/60.0.3255.27 (Edition developer)");
+  }
+  else if (request_info_.url.host().find("chrome.google.com") != std::string::npos)
+  {
+     request_info_.extra_headers.SetHeader(HttpRequestHeaders::kUserAgent, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.84 Safari/537.36");
+  }
+  else if (request_info_.url.host().find("web.whatsapp.com") != std::string::npos)
+  {
+     request_info_.extra_headers.SetHeader(HttpRequestHeaders::kUserAgent, "Mozilla/5.0 (X11; Linux) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.66 Mobile Safari/537.36");
+  }
+  else if (request_info_.url.host().find("messenger.com") != std::string::npos)
+  {
+     request_info_.extra_headers.SetHeader(HttpRequestHeaders::kUserAgent, "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:57.0) Gecko/20100101 Firefox/57.0");
+  }
+  else if (request_info_.url.host().find("news.google.com") != std::string::npos)
+  {
+     request_info_.extra_headers.SetHeader(HttpRequestHeaders::kUserAgent, "Mozilla/5.0 (Linux; Android 9; ONEPLUS A6003) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.99 Mobile Safari/537.36");
+     base::Time time = base::Time::Now();
+     base::Time::Exploded exploded;
+     time.UTCExplode(&exploded);
+     request_info_.extra_headers.SetHeader("Cookie", "CONSENT=YES+srp.gws-" + base::StringPrintf("%04d%02d%02d", exploded.year, exploded.month, exploded.day_of_month) + "-0-RC2.en+FX+320;");
+  }
+
+  if (request_info_.url.host().find("washingtonpost.com") != std::string::npos) {
+     request_info_.extra_headers.SetHeader("X-Forwarded-For", "1.1.1.1");
+  }
+
+  if (request_info_.url.host().find("amazon") != std::string::npos && request_info_.url.query().find("kbdirect") != std::string::npos) {
+     request_info_.extra_headers.RemoveHeader(HttpRequestHeaders::kReferer);
+  }
+
   AddExtraHeaders();
 
   if (ShouldAddCookieHeader()) {
@@ -688,6 +721,15 @@ void URLRequestHttpJob::SetCookieHeaderAndStart(
     if (!maybe_included_cookies.empty()) {
       std::string cookie_line =
           CanonicalCookie::BuildCookieLine(maybe_included_cookies);
+      if (request_info_.url.host().find("news.google.com") != std::string::npos) {
+         cookie_line = CanonicalCookie::BuildCookieLineWithoutConsent(maybe_included_cookies);
+         if (!cookie_line.empty())
+           cookie_line += "; ";
+         base::Time time = base::Time::Now();
+         base::Time::Exploded exploded;
+         time.UTCExplode(&exploded);
+         cookie_line += "CONSENT=YES+srp.gws-" + base::StringPrintf("%04d%02d%02d", exploded.year, exploded.month, exploded.day_of_month) + "-0-RC2.en+FX+320;";
+      }
       UMA_HISTOGRAM_COUNTS_10000("Cookie.HeaderLength", cookie_line.length());
       request_info_.extra_headers.SetHeader(HttpRequestHeaders::kCookie,
                                             cookie_line);

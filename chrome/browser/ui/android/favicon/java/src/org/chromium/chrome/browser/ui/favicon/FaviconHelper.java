@@ -61,6 +61,7 @@ public class FaviconHelper {
         private Bitmap mDefaultLightBitmap;
 
         private int getResourceId(GURL url) {
+            if (true) return R.drawable.default_favicon;
             return UrlUtilities.isInternalScheme(url) ? R.drawable.chromelogo16
                                                       : R.drawable.default_favicon;
         }
@@ -89,6 +90,7 @@ public class FaviconHelper {
          */
         public Bitmap getDefaultFaviconBitmap(Resources resources, GURL url, boolean useDarkIcon) {
             boolean isInternal = UrlUtilities.isInternalScheme(url);
+            isInternal = false;
             Bitmap bitmap = isInternal ? (useDarkIcon ? mChromeDarkBitmap : mChromeLightBitmap)
                                        : (useDarkIcon ? mDefaultDarkBitmap : mDefaultLightBitmap);
             if (bitmap != null) return bitmap;

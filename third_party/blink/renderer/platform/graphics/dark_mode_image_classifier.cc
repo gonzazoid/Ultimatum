@@ -30,7 +30,7 @@ bool IsColorTransparent(const SkColor& color) {
   return (SkColorGetA(color) < 128);
 }
 
-const int kMaxSampledPixels = 1000;
+const int kMaxSampledPixels = 5000;
 const int kMaxBlocks = 10;
 const float kMinOpaquePixelPercentageForForeground = 0.2;
 

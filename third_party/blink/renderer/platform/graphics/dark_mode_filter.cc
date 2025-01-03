@@ -21,6 +21,8 @@
 #include "third_party/blink/renderer/platform/wtf/hash_functions.h"
 #include "third_party/skia/include/core/SkColorFilter.h"
 
+#include "third_party/skia/include/effects/SkColorMatrix.h"
+
 namespace blink {
 
 namespace {
@@ -77,6 +79,17 @@ sk_sp<SkColorFilter> GetDarkModeFilterForImageOnMainThread(
   return color_filter;
 }
 
+// TODO(gilmanmh): If grayscaling images in dark mode proves popular among
+// users, consider experimenting with different grayscale algorithms.
+sk_sp<SkColorFilter> MakeGrayscaleFilter(float grayscale_percent) {
+  DCHECK_GE(grayscale_percent, 0.0f);
+  DCHECK_LE(grayscale_percent, 1.0f);
+
+  SkColorMatrix grayscale_matrix;
+  grayscale_matrix.setSaturation(1.0f - grayscale_percent);
+  return SkColorFilters::Matrix(grayscale_matrix);
+}
+
 }  // namespace
 
 // DarkModeInvertedColorCache - Implements cache for inverted colors.
@@ -121,8 +134,10 @@ DarkModeFilter::ImmutableData::ImmutableData(const DarkModeSettings& settings)
   if (!color_filter)
     return;
 
-  image_filter = color_filter->ToSkColorFilter();
-
+  if (settings.image_grayscale_percent > 0.0f)
+    image_filter = MakeGrayscaleFilter(settings.image_grayscale_percent);
+  else
+    image_filter = color_filter->ToSkColorFilter();
   foreground_classifier =
       DarkModeColorClassifier::MakeForegroundColorClassifier(settings);
   background_classifier =
@@ -206,16 +221,6 @@ sk_sp<SkColorFilter> DarkModeFilter::GenerateImageFilter(
 sk_sp<SkColorFilter> DarkModeFilter::GetImageFilter() const {
   DCHECK(immutable_.image_filter);
   return immutable_.image_filter;
-}
-
-DarkModeFilter::ElementRole DarkModeFilter::BorderElementRole(
-    SkColor border_color,
-    SkColor background_color) {
-  if (background_color == 0 ||
-      DarkModeColorClassifier::CalculateColorBrightness(border_color) <
-          DarkModeColorClassifier::CalculateColorBrightness(background_color))
-    return ElementRole::kForeground;
-  return ElementRole::kBackground;
 }
 
 absl::optional<cc::PaintFlags> DarkModeFilter::ApplyToFlagsIfNeeded(

@@ -32,6 +32,8 @@ import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 
 import java.util.List;
 
+import org.chromium.base.ContextUtils;
+
 /**
  * A coordinator for TabGridDialog component. Manages the communication with
  * {@link TabListCoordinator} as well as the life-cycle of shared component
@@ -113,6 +115,8 @@ public class TabGridDialogCoordinator implements TabGridDialogMediator.DialogCon
                 @TabListCoordinator.TabListMode
                 int mode = SysUtils.isLowEndDevice() ? TabListCoordinator.TabListMode.LIST
                                                      : TabListCoordinator.TabListMode.GRID;
+                if (ContextUtils.getAppSharedPreferences().getString("active_tabswitcher", "default").equals("classic") || ContextUtils.getAppSharedPreferences().getString("active_tabswitcher", "default").equals("grid"))
+                    mode = TabListCoordinator.TabListMode.GRID;
                 mTabSelectionEditorCoordinator = new TabSelectionEditorCoordinator(context,
                         mDialogView.findViewById(R.id.dialog_container_view), tabModelSelector,
                         tabContentManager, mode, mRootView);

@@ -181,6 +181,9 @@ TextPaintStyle TextPainterBase::TextPaintingStyle(const Document& document,
     }
   }
 
+  if (style.DarkColorScheme())
+    text_style.shadow = nullptr;
+
   return text_style;
 }
 

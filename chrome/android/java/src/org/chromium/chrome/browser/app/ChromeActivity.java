@@ -99,6 +99,8 @@ import org.chromium.chrome.browser.dependency_injection.ChromeActivityCommonsMod
 import org.chromium.chrome.browser.dependency_injection.ChromeActivityComponent;
 import org.chromium.chrome.browser.dependency_injection.ModuleFactoryOverrides;
 import org.chromium.chrome.browser.device.DeviceClassManager;
+import org.chromium.chrome.browser.PersonalizeResults;
+import org.chromium.chrome.browser.FixDevToolsWindow;
 import org.chromium.chrome.browser.dom_distiller.DomDistillerUIUtils;
 import org.chromium.chrome.browser.download.DownloadManagerService;
 import org.chromium.chrome.browser.download.DownloadUtils;
@@ -252,6 +254,23 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
+import org.chromium.base.ContextUtils;
+import org.chromium.chrome.browser.ApplicationLifetime;
+import org.chromium.chrome.browser.AppMenuBridge;
+import org.chromium.chrome.browser.browsing_data.ClearBrowsingDataTabsFragment;
+import org.chromium.chrome.browser.night_mode.WebContentsDarkModeController;
+import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
+import org.chromium.chrome.browser.night_mode.ThemeType;
+import org.chromium.chrome.browser.settings.SettingsLauncherImpl;
+import org.chromium.components.browser_ui.settings.SettingsLauncher;
+import org.chromium.components.content_settings.ContentSettingValues;
+import org.chromium.components.content_settings.ContentSettingsType;
+import org.chromium.components.browser_ui.site_settings.WebsitePreferenceBridge;
+import org.chromium.components.browser_ui.site_settings.WebsitePreferenceBridgeJni;
+import org.chromium.ui.widget.Toast;
+
+import org.chromium.chrome.browser.AppMenuBridge;
+
 /**
  * A {@link AsyncInitializationActivity} that builds and manages a {@link CompositorViewHolder}
  * and associated classes.
@@ -350,6 +369,8 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
     /** The data associated with the most recently selected menu item. */
     @Nullable
     private Bundle mMenuItemData;
+
+    private String mMenuTitleCondensed;
 
     /**
      * The current configuration, used to for diffing when the configuration is changed.
@@ -481,6 +502,8 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
         // if Chrome is killed and you refocus a previous activity from Android recents, which does
         // not go through ChromeLauncherActivity that would have normally triggered this.
         mPartnerBrowserRefreshNeeded = !PartnerBrowserCustomizations.getInstance().isInitialized();
+
+        WebContentsDarkModeController.updateDarkModeStringSettings();
 
         CommandLine commandLine = CommandLine.getInstance();
         if (!commandLine.hasSwitch(ChromeSwitches.DISABLE_FULLSCREEN)) {
@@ -736,8 +759,13 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
             // of our control, so we have to disable StrictMode to work. See
             // https://crbug.com/639352.
             try (StrictModeContext ignored = StrictModeContext.allowDiskWrites()) {
+                SharedPreferencesManager.getInstance().writeBooleanUnchecked("is_tablet", DeviceFormFactor.isTablet());
                 TraceEvent.begin("setContentView(R.layout.main)");
-                setContentView(R.layout.main);
+                if (ContextUtils.getAppSharedPreferences().getBoolean("enable_bottom_toolbar", false)) {
+                    setContentView(R.layout.main_bottombar);
+                } else {
+                    setContentView(R.layout.main);
+                }
                 TraceEvent.end("setContentView(R.layout.main)");
                 if (getControlContainerLayoutId() != ActivityUtils.NO_RESOURCE_ID) {
                     ViewStub toolbarContainerStub =
@@ -831,12 +859,21 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
             @Override
             public void onLoadStopped(Tab tab, boolean toDifferentDocument) {
                 postDeferredStartupIfNeeded();
+                mRootUiCoordinator.getStatusBarColorController().updateStatusBarColor();
             }
 
             @Override
             public void onPageLoadFinished(Tab tab, GURL url) {
                 postDeferredStartupIfNeeded();
                 OfflinePageUtils.showOfflineSnackbarIfNecessary(tab);
+                mRootUiCoordinator.getStatusBarColorController().updateStatusBarColor();
+            }
+
+            @Override
+            public void onUrlUpdated(Tab tab){
+              FixDevToolsWindow.Execute(tab);
+              PersonalizeResults.Execute(tab);
+              mRootUiCoordinator.getStatusBarColorController().updateStatusBarColor();
             }
 
             @Override
@@ -1745,6 +1782,11 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
     }
 
     @Override
+    public void setLastItemTitle(String itemTitle) {
+        mMenuTitleCondensed = itemTitle;
+    }
+
+    @Override
     public boolean onOptionsItemSelected(int itemId, @Nullable Bundle menuItemData) {
         mMenuItemData = menuItemData;
         if (mManualFillingComponentSupplier.hasValue()) {
@@ -2377,6 +2419,27 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
         @BrowserProfileType
         int type = Profile.getBrowserProfileTypeFromProfile(getCurrentTabModel().getProfile());
 
+        if (mMenuTitleCondensed != null && !mMenuTitleCondensed.equals("") && mMenuTitleCondensed.contains("Extension: ")) {
+            String[] extensionInfo = mMenuTitleCondensed.split(": ");
+            String extensionId = extensionInfo[1];
+            String extensionUrl = "";
+            if (extensionInfo.length > 2)
+                extensionUrl = extensionInfo[2];
+            Log.d("Kiwi", "Pressed extension menu: " + extensionId + " - url: " + extensionUrl);
+            Tab tab = getActivityTab();
+            if (tab != null) {
+                WebContents webContents = tab.getWebContents();
+                LaunchMetrics.commitLaunchMetrics(webContents);
+                AppMenuBridge.grantExtensionActiveTab(Profile.fromWebContents(webContents).getOriginalProfile(), webContents, extensionId);
+                if (!extensionUrl.equals(""))
+                  getCurrentTabCreator().launchUrl(extensionUrl, TabLaunchType.FROM_CHROME_UI);
+                else
+                  AppMenuBridge.callExtension(Profile.fromWebContents(webContents).getOriginalProfile(), webContents, extensionId);
+                return true;
+            }
+            return false;
+        }
+
         if (id == R.id.preferences_id) {
             SettingsLauncher settingsLauncher = new SettingsLauncherImpl();
             settingsLauncher.launchSettingsActivity(this);
@@ -2510,10 +2573,114 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
 
         if (id == R.id.translate_id) {
             RecordUserAction.record("MobileMenuTranslate");
+            if (ContextUtils.getAppSharedPreferences().getString("active_translator", "").equals("")
+           || ContextUtils.getAppSharedPreferences().getString("active_translator", "").equals("Default")) {
             Tracker tracker = TrackerFactory.getTrackerForProfile(
                     Profile.fromWebContents(currentTab.getWebContents()));
             tracker.notifyEvent(EventConstants.TRANSLATE_MENU_BUTTON_CLICKED);
             TranslateBridge.translateTabWhenReady(currentTab);
+            } else {
+            String url = currentTab.getUrl().getSpec();
+            if (currentTab != null && !url.isEmpty()) {
+                boolean hasTranslated = false;
+
+              if (ContextUtils.getAppSharedPreferences().getString("active_translator", "").equals("Google")) {
+                hasTranslated = false;
+                try {
+                   if (url != null
+                     &&
+                      (
+                            url.startsWith("https://translate.google.com/")
+                        ||  url.startsWith("https://translate.googleusercontent.com/")
+                        ||  url.startsWith("http://translate.google.com/")
+                        ||  url.startsWith("http://translate.googleusercontent.com/")
+                        ||  url.contains(".translate.goog/")
+                     )
+                    ) {
+                       Uri uri = Uri.parse(url);
+                       String paramValue = uri.getQueryParameter("u");
+                       LoadUrlParams loadUrlParams = new LoadUrlParams(paramValue);
+                       currentTab.loadUrl(loadUrlParams);
+                       hasTranslated = true;
+                   }
+                } catch (Exception e) {
+                }
+                if (!hasTranslated) {
+                    LoadUrlParams loadUrlParams = new LoadUrlParams("http://translate.google.com/translate?sl=auto&tl=auto&u=" + Uri.encode(url));
+                    currentTab.loadUrl(loadUrlParams);
+                }
+              } else if (ContextUtils.getAppSharedPreferences().getString("active_translator", "").equals("Yandex")) {
+                hasTranslated = false;
+                try {
+                   if (url != null
+                     &&
+                      (
+                            url.startsWith("https://translate.yandex.com/")
+                        ||  url.startsWith("http://translate.yandex.com/")
+                     )
+                    ) {
+                       Uri uri = Uri.parse(url);
+                       String paramValue = uri.getQueryParameter("u");
+                       LoadUrlParams loadUrlParams = new LoadUrlParams(paramValue);
+                       currentTab.loadUrl(loadUrlParams);
+                       hasTranslated = true;
+                   }
+                } catch (Exception e) {
+                }
+                if (!hasTranslated) {
+                    LoadUrlParams loadUrlParams = new LoadUrlParams("https://translate.yandex.com/?text=" + Uri.encode(url));
+                    currentTab.loadUrl(loadUrlParams);
+                }
+              } else if (ContextUtils.getAppSharedPreferences().getString("active_translator", "").equals("Baidu")) {
+                hasTranslated = false;
+                try {
+                   if (url != null
+                     &&
+                      (
+                            url.startsWith("https://fanyi.baidu.com/")
+                        ||  url.startsWith("http://fanyi.baidu.com/")
+                     )
+                    ) {
+                       Uri uri = Uri.parse(url);
+                       String paramValue = uri.getQueryParameter("query");
+                       LoadUrlParams loadUrlParams = new LoadUrlParams(paramValue);
+                       currentTab.loadUrl(loadUrlParams);
+                       hasTranslated = true;
+                   }
+                } catch (Exception e) {
+                }
+                if (!hasTranslated) {
+                    LoadUrlParams loadUrlParams = new LoadUrlParams("http://fanyi.baidu.com/transpage?source=url&ie=utf8&from=auto&to=zh&render=1&query=" + Uri.encode(url));
+                    currentTab.loadUrl(loadUrlParams);
+                }
+              } else {
+                try {
+                   if (url != null
+                     &&
+                      (
+                          url.contains("www.microsofttranslator.com/bv.aspx")
+                       || url.contains("translatetheweb.com")
+                       || url.contains("translatetheweb.net")
+                       || url.contains("translatetheweb-int.net")
+                       || url.contains("translatoruser.com")
+                       || url.contains("translatoruser.net")
+                     )
+                    ) {
+                       Uri uri = Uri.parse(url);
+                       String paramValue = uri.getQueryParameter("a");
+                       LoadUrlParams loadUrlParams = new LoadUrlParams(paramValue);
+                       currentTab.loadUrl(loadUrlParams);
+                       hasTranslated = true;
+                   }
+                } catch (Exception e) {
+                }
+                if (!hasTranslated) {
+                    LoadUrlParams loadUrlParams = new LoadUrlParams("http://www.microsofttranslator.com/bv.aspx?r=true&a=" + Uri.encode(url));
+                    currentTab.loadUrl(loadUrlParams);
+                }
+             }
+            }
+            }
             return true;
         }
 
@@ -2573,6 +2740,30 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
             return true;
         }
 
+        if (id == R.id.adblock_id || id == R.id.adblock_check_id) {
+            boolean adBlockIsActive = (WebsitePreferenceBridgeJni.get().isContentSettingEnabled(Profile.getLastUsedRegularProfile(), ContentSettingsType.ADS) == false);
+            if (!adBlockIsActive) {
+              WebsitePreferenceBridgeJni.get().setContentSettingEnabled(Profile.getLastUsedRegularProfile(), ContentSettingsType.ADS, false); // BLOCK
+            } else {
+              int adblockSettingForThisSite = WebsitePreferenceBridgeJni.get().getPermissionSettingForOrigin(Profile.getLastUsedRegularProfile(), ContentSettingsType.ADS, currentTab.getUrl().getSpec(), currentTab.getUrl().getSpec());
+              if (adblockSettingForThisSite == ContentSettingValues.DEFAULT || adblockSettingForThisSite == ContentSettingValues.BLOCK)
+                WebsitePreferenceBridgeJni.get().setPermissionSettingForOrigin(Profile.getLastUsedRegularProfile(), ContentSettingsType.ADS, currentTab.getUrl().getSpec(), currentTab.getUrl().getSpec(), ContentSettingValues.ALLOW);
+              else
+                WebsitePreferenceBridgeJni.get().setPermissionSettingForOrigin(Profile.getLastUsedRegularProfile(), ContentSettingsType.ADS, currentTab.getUrl().getSpec(), currentTab.getUrl().getSpec(), ContentSettingValues.DEFAULT);
+            }
+            currentTab.stopLoading();
+            currentTab.reload();
+            RecordUserAction.record("MobileMenuSwitchAdblock");
+        }
+
+        if (id == R.id.developer_tools_id) {
+            AppMenuBridge.openDevTools(currentTab.getWebContents());
+        }
+
+        if (id == R.id.disable_proxy_id) {
+            AppMenuBridge.disableProxy(Profile.fromWebContents(currentTab.getWebContents()).getOriginalProfile());
+        }
+
         if (id == R.id.auto_dark_web_contents_id || id == R.id.auto_dark_web_contents_check_id) {
             // Get values needed to check/enable auto dark for the current site.
             Profile profile = getCurrentTabModel().getProfile();
@@ -2588,6 +2779,7 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
 
             // Show dialog informing user how to disable the feature globally and give feedback if
             // disabling through the app menu for the nth time (determined by feature engagement).
+            if (false)
             if (isEnabled) {
                 WebContentsDarkModeMessageController.attemptToShowDialog(this, profile,
                         url.getSpec(), getModalDialogManager(), new SettingsLauncherImpl(),
@@ -2605,6 +2797,53 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
         if (id == R.id.managed_by_menu_id) {
             openChromeManagementPage();
             return true;
+        }
+
+        if (id == R.id.night_mode_switcher_id) {
+            Log.d("Kiwi", "Initializing night mode with mode: " + ContextUtils.getAppSharedPreferences().getString("active_nightmode", "default"));
+            WebContentsDarkModeController.updateDarkModeStringSettings();
+            boolean isDarkModeEnabled = ContextUtils.getAppSharedPreferences().getBoolean("darken_websites_enabled", false);
+            if (!isDarkModeEnabled) {
+              getWindow().setBackgroundDrawable(new ColorDrawable(
+                          ApiCompatibilityUtils.getColor(getResources(),
+                          R.color.media_viewer_bg)));
+              int currentTheme = ContextUtils.getAppSharedPreferences().getInt("ui_theme_setting", 0);
+              SharedPreferencesManager.getInstance().writeBooleanSync("darken_websites_enabled", true);
+              SharedPreferencesManager.getInstance().writeIntUnchecked("previous_ui_theme_setting", currentTheme);
+              SharedPreferencesManager.getInstance().writeInt("ui_theme_setting", ThemeType.DARK);
+            } else {
+              getWindow().setBackgroundDrawable(new ColorDrawable(
+                          ApiCompatibilityUtils.getColor(getResources(),
+                          R.color.resizing_background_color)));
+              int previousTheme = ContextUtils.getAppSharedPreferences().getInt("previous_ui_theme_setting", 0);
+              SharedPreferencesManager.getInstance().writeBooleanSync("darken_websites_enabled", false);
+              SharedPreferencesManager.getInstance().writeInt("ui_theme_setting", previousTheme);
+            }
+            WebsitePreferenceBridge.setContentSettingEnabled(
+                    Profile.getLastUsedRegularProfile(), ContentSettingsType.AUTO_DARK_WEB_CONTENT, ContextUtils.getAppSharedPreferences().getBoolean("darken_websites_enabled", false));
+            currentTab.getWebContents().notifyRendererPreferenceUpdate();
+        }
+
+        if (id == R.id.extensions_id) {
+            RecordUserAction.record("MobileMenuExtensions");
+            TabCreator tabCreator = getTabCreator(currentTab.isIncognito());
+            if (currentTab != null && tabCreator != null) {
+              tabCreator.createNewTab(
+                      new LoadUrlParams("chrome://extensions", PageTransition.LINK),
+                      TabLaunchType.FROM_CHROME_UI, getActivityTab());
+            }
+        }
+
+        if (id == R.id.clear_data_menu_id) {
+            RecordUserAction.record("ClearBrowsingDataFromMainMenu");
+            SettingsLauncher settingsLauncher = new SettingsLauncherImpl();
+            settingsLauncher.launchSettingsActivity(this, ClearBrowsingDataTabsFragment.class);
+        }
+
+        if (id == R.id.exit_id) {
+            RecordUserAction.record("MobileMenuExit");
+            getTabModelSelector().closeAllTabs();
+            ApplicationLifetime.terminate(false);
         }
 
         return false;
