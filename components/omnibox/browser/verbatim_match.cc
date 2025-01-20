@@ -23,7 +23,7 @@ namespace {
 // snippet in the context of the current page on mobile devices.
 constexpr auto kNavigableSchemes = base::MakeFixedFlatSet<std::string_view>(
     {url::kHttpScheme, url::kHttpsScheme, url::kAboutScheme,
-     content::kChromeUIScheme});
+     content::kChromeUIScheme, "chrome-extension"});
 #endif
 }  // namespace
 

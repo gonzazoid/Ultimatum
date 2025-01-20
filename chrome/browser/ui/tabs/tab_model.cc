@@ -260,9 +260,11 @@ bool TabModel::IsInNormalWindow() const {
   return GetModelForTabInterface()->delegate()->IsNormalWindow();
 }
 
+#if !BUILDFLAG(IS_ANDROID)
 BrowserWindowInterface* TabModel::GetBrowserWindowInterface() {
   return GetModelForTabInterface()->delegate()->GetBrowserWindowInterface();
 }
+#endif
 
 tabs::TabFeatures* TabModel::GetTabFeatures() {
   return tab_features_.get();
@@ -284,13 +286,24 @@ std::optional<tab_groups::TabGroupId> TabModel::GetGroup() const {
   return group_;
 }
 
+#if !BUILDFLAG(IS_ANDROID)
+bool TabModel::ShouldAcceptMouseEventsWhileWindowInactive() const {
+  return accept_input_when_window_inactive_ > 0;
+}
+
+std::unique_ptr<ScopedAcceptMouseEventsWhileWindowInactive>
+TabModel::AcceptMouseEventsWhileWindowInactive() {
+  return std::make_unique<ScopedAcceptMouseEventsWhileWindowInactiveImpl>(this);
+}
+#endif
+
 void TabModel::Close() {
-  auto* window_interface = GetBrowserWindowInterface();
-  auto* tab_strip = window_interface->GetTabStripModel();
-  CHECK(tab_strip);
-  const int tab_idx = tab_strip->GetIndexOfTab(this);
-  CHECK(tab_idx != TabStripModel::kNoTab);
-  tab_strip->CloseWebContentsAt(tab_idx, TabCloseTypes::CLOSE_NONE);
+  // auto* window_interface = GetBrowserWindowInterface();
+  // auto* tab_strip = window_interface->GetTabStripModel();
+  // CHECK(tab_strip);
+  // const int tab_idx = tab_strip->GetIndexOfTab(this);
+  // CHECK(tab_idx != TabStripModel::kNoTab);
+  // tab_strip->CloseWebContentsAt(tab_idx, TabCloseTypes::CLOSE_NONE);
 }
 
 void TabModel::OnTabStripModelChanged(
@@ -357,6 +370,21 @@ TabModel::ScopedTabModalUIImpl::~ScopedTabModalUIImpl() {
   }
 }
 
+#if !BUILDFLAG(IS_ANDROID)
+TabModel::ScopedAcceptMouseEventsWhileWindowInactiveImpl::
+    ScopedAcceptMouseEventsWhileWindowInactiveImpl(TabModel* tab)
+    : tab_(tab->weak_factory_.GetWeakPtr()) {
+  ++tab_->accept_input_when_window_inactive_;
+}
+
+TabModel::ScopedAcceptMouseEventsWhileWindowInactiveImpl::
+    ~ScopedAcceptMouseEventsWhileWindowInactiveImpl() {
+  if (tab_) {
+    --tab_->accept_input_when_window_inactive_;
+  }
+}
+#endif
+
 void TabModel::WriteIntoTrace(perfetto::TracedValue context) const {
   auto dict = std::move(context).WriteDictionary();
   dict.Add("web_contents", GetContents());
@@ -390,10 +418,10 @@ void TabModel::DestroyTabFeatures() {
 }
 
 // static
-TabInterface* TabInterface::GetFromContents(
-    content::WebContents* web_contents) {
-  return TabLookupFromWebContents::FromWebContents(web_contents)->model();
-}
+// TabInterface* TabInterface::GetFromContents(
+//     content::WebContents* web_contents) {
+//   return TabLookupFromWebContents::FromWebContents(web_contents)->model();
+// }
 
 // static
 TabInterface* TabInterface::MaybeGetFromContents(

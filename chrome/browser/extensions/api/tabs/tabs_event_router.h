@@ -54,6 +54,17 @@ class TabsEventRouter : public TabStripModelObserver,
 
   ~TabsEventRouter() override;
 
+#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+  // The DispatchEvent methods forward events to the |profile|'s event router.
+  // The TabsEventRouter listens to events for all profiles,
+  // so we avoid duplication by dropping events destined for other profiles.
+  void DispatchEventAndroid(Profile* profile,
+                     events::HistogramValue histogram_value,
+                     const std::string& event_name,
+                     base::Value::List args,
+                     EventRouter::UserGestureState user_gesture);
+#endif
+
   // BrowserTabStripTrackerDelegate:
   bool ShouldTrackBrowser(Browser* browser) override;
 
@@ -227,11 +238,13 @@ class TabsEventRouter : public TabStripModelObserver,
   base::ScopedMultiSourceObservation<zoom::ZoomController, zoom::ZoomObserver>
       zoom_scoped_observations_{this};
 
+#if !BUILDFLAG(IS_ANDROID)
   BrowserTabStripTracker browser_tab_strip_tracker_;
 
   base::ScopedObservation<resource_coordinator::TabLifecycleUnitSource,
                           resource_coordinator::LifecycleUnitObserver>
       tab_source_scoped_observation_{this};
+#endif
 };
 
 }  // namespace extensions

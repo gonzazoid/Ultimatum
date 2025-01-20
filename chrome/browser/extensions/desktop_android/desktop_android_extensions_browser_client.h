@@ -6,7 +6,9 @@
 #define CHROME_BROWSER_EXTENSIONS_DESKTOP_ANDROID_DESKTOP_ANDROID_EXTENSIONS_BROWSER_CLIENT_H_
 
 #include "extensions/browser/extensions_browser_client.h"
+// #include "chrome/browser/extensions/api/chrome_extensions_api_client.h"
 #include "extensions/buildflags/buildflags.h"
+#include "chrome/browser/extensions/tab_helper.h"
 
 #if !BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #error "This file is only used for the experimental desktop-android build."
@@ -58,7 +60,17 @@ class DesktopAndroidExtensionsBrowserClient : public ExtensionsBrowserClient {
       const DesktopAndroidExtensionsBrowserClient&) = delete;
   ~DesktopAndroidExtensionsBrowserClient() override;
 
+  // Returns the single instance of |this|.
+  static DesktopAndroidExtensionsBrowserClient* Get();
+  void Set(DesktopAndroidExtensionsBrowserClient* client);
+
   // ExtensionsBrowserClient overrides:
+  bool IsValidTabId(content::BrowserContext* browser_context,
+                    int tab_id,
+                    bool include_incognito,
+                    content::WebContents** web_contents) const override;
+  ScriptExecutor* GetScriptExecutorForTab(
+      content::WebContents& web_contents) override;
   bool IsShuttingDown() override;
   bool AreExtensionsDisabled(const base::CommandLine& command_line,
                              content::BrowserContext* context) override;
@@ -152,6 +164,11 @@ class DesktopAndroidExtensionsBrowserClient : public ExtensionsBrowserClient {
       content::BrowserContext* context) override;
   KioskDelegate* GetKioskDelegate() override;
   std::string GetApplicationLocale() override;
+
+  void GetTabAndWindowIdForWebContents(
+    content::WebContents* web_contents,
+    int* tab_id,
+    int* window_id) override;
 
  private:
   std::unique_ptr<ExtensionCache> extension_cache_;

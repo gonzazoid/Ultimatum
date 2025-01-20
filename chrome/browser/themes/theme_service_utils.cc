@@ -13,15 +13,16 @@
 #include "third_party/skia/include/core/SkColor.h"
 
 bool CurrentThemeIsGrayscale(const PrefService* pref_service) {
-  return pref_service->GetBoolean(GetThemePrefNameInMigration(
-      ThemePrefInMigration::kGrayscaleThemeEnabled));
+  return false; // pref_service->GetBoolean(GetThemePrefNameInMigration(
+      // ThemePrefInMigration::kGrayscaleThemeEnabled));
 }
 
 std::optional<SkColor> CurrentThemeUserColor(const PrefService* pref_service) {
-  const SkColor user_color = pref_service->GetInteger(
-      GetThemePrefNameInMigration(ThemePrefInMigration::kUserColor));
-  return user_color == SK_ColorTRANSPARENT ? std::nullopt
-                                           : std::make_optional(user_color);
+  return std::nullopt;
+  // const SkColor user_color = pref_service->GetInteger(
+  //     GetThemePrefNameInMigration(ThemePrefInMigration::kUserColor));
+  // return user_color == SK_ColorTRANSPARENT ? std::nullopt
+  //                                          : std::make_optional(user_color);
 }
 
 sync_pb::ThemeSpecifics::UserColorTheme::BrowserColorVariant

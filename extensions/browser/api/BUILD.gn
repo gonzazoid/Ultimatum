@@ -45,6 +45,8 @@ group("api_implementations") {
     "//extensions/browser/api/system_memory",
     "//extensions/browser/api/system_network",
     "//extensions/browser/api/test",
+    "//extensions/browser/api/mime_handler_private",
+    "//extensions/browser/api/automation_internal",
   ]
 
   # APIs that are currently not supported on desktop-android.
@@ -55,7 +57,6 @@ group("api_implementations") {
       "//extensions/browser/api/app_runtime",
       "//extensions/browser/api/app_window",
       "//extensions/browser/api/audio",
-      "//extensions/browser/api/automation_internal",
       "//extensions/browser/api/bluetooth",
       "//extensions/browser/api/bluetooth_low_energy",
       "//extensions/browser/api/bluetooth_socket",
@@ -163,7 +164,7 @@ source_set("extensions_api_client") {
   }
 
   deps = [
-    "//extensions/browser/api/messaging:native_messaging",
+    # "//extensions/browser/api/messaging:native_messaging",
     "//extensions/browser/api/system_display:display_info_provider",
     "//extensions/browser/api/virtual_keyboard_private:virtual_keyboard_delegate",
   ]

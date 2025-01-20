@@ -1508,7 +1508,7 @@ void ExtensionPrefs::OnExtensionInstalled(
 void ExtensionPrefs::OnExtensionUninstalled(const ExtensionId& extension_id,
                                             const ManifestLocation location,
                                             bool external_uninstall) {
-  app_sorting()->ClearOrdinals(extension_id);
+  // app_sorting()->ClearOrdinals(extension_id);
 
   // For external extensions, we save a preference reminding ourself not to try
   // and install the extension anymore (except when |external_uninstall| is
@@ -1516,6 +1516,7 @@ void ExtensionPrefs::OnExtensionUninstalled(const ExtensionId& extension_id,
   // no longer lists the extension).
   if (!external_uninstall && Manifest::IsExternalLocation(location)) {
     ScopedListPrefUpdate update(prefs_, kExternalUninstalls);
+
     update->Append(extension_id);
   }
 
@@ -2266,7 +2267,7 @@ void ExtensionPrefs::RegisterProfilePrefs(
   // defined.
   registry->RegisterIntegerPref(kCorruptedDisableCount.name, 0);
 
-#if BUILDFLAG(ENABLE_SUPERVISED_USERS) && BUILDFLAG(ENABLE_EXTENSIONS_CORE)
+#if BUILDFLAG(ENABLE_SUPERVISED_USERS) && (BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS))
   registry->RegisterBooleanPref(
       prefs::kSupervisedUserExtensionsMayRequestPermissions, false);
   registry->RegisterBooleanPref(prefs::kSkipParentApprovalToInstallExtensions,
@@ -2517,10 +2518,10 @@ void ExtensionPrefs::FinishExtensionInfoPrefs(
   // |app_sorting|, |extension_pref_value_map_|, and (potentially) observers
   // are updated non-transactionally. This is probably not fixable without
   // nested transactional updates to pref dictionaries.
-  if (needs_sort_ordinal) {
-    CHECK(app_sorting());
-    app_sorting()->EnsureValidOrdinals(extension_id, suggested_page_ordinal);
-  }
+  // if (needs_sort_ordinal) {
+  //   CHECK(app_sorting());
+  //   app_sorting()->EnsureValidOrdinals(extension_id, suggested_page_ordinal);
+  // }
 
   bool is_enabled = true;
   base::Value::List* disable_reasons = nullptr;

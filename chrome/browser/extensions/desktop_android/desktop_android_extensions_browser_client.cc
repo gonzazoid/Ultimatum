@@ -11,16 +11,23 @@
 #include "chrome/browser/extensions/api/management/chrome_management_api_delegate.h"
 #include "chrome/browser/extensions/chrome_extension_system_factory.h"
 #include "chrome/browser/extensions/chrome_extension_web_contents_observer.h"
+#include "chrome/browser/extensions/api/preference/network_prediction_transformer.h"
+#include "chrome/browser/extensions/api/proxy/proxy_pref_transformer.h"
 #include "chrome/browser/extensions/chrome_extensions_browser_api_provider.h"
 #include "chrome/browser/extensions/desktop_android/desktop_android_extension_host_delegate.h"
 #include "chrome/browser/extensions/desktop_android/desktop_android_runtime_api_delegate.h"
 #include "chrome/browser/extensions/error_console/error_console.h"
 #include "chrome/browser/extensions/extension_util.h"
+#include "chrome/browser/prefetch/pref_names.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_selections.h"
 #include "components/update_client/update_client.h"
+#include "chrome/browser/extensions/extension_tab_util.h"
+#include "chrome/browser/extensions/pref_mapping.h"
+#include "chrome/browser/supervised_user/supervised_user_extensions_delegate_impl.h"
 #include "components/version_info/version_info.h"
+#include "components/proxy_config/proxy_config_pref_names.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -28,6 +35,13 @@
 #include "extensions/browser/api/core_extensions_browser_api_provider.h"
 #include "extensions/browser/api/extensions_api_client.h"
 #include "extensions/browser/api/messaging/messaging_delegate.h"
+#include "chrome/browser/extensions/api/chrome_extensions_api_client.h"
+#include "extensions/browser/api/declarative_content/content_rules_registry.h"
+#include "chrome/browser/extensions/api/declarative_content/chrome_content_rules_registry.h"
+#include "chrome/browser/extensions/api/declarative_content/default_content_predicate_evaluators.h"
+#include "chrome/browser/extensions/api/management/chrome_management_api_delegate.h"
+#include "extensions/browser/api/mime_handler_private/mime_handler_private.h"
+#include "extensions/browser/guest_view/mime_handler_view/mime_handler_view_guest.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_error.h"
 #include "extensions/browser/extension_util.h"
@@ -38,7 +52,15 @@
 #include "extensions/browser/updater/null_extension_cache.h"
 #include "extensions/browser/url_request_util.h"
 #include "extensions/common/features/feature_channel.h"
+#include "extensions/common/api/mime_handler.mojom.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
+
+#include "extensions/browser/api/content_settings/content_settings_service.h"
+
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+#endif
 
 using content::BrowserContext;
 using content::BrowserThread;
@@ -46,6 +68,37 @@ using content::BrowserThread;
 namespace extensions {
 
 namespace {
+
+bool RegisterTransformers() {
+  PrefMapping* pref_mapping = PrefMapping::GetInstance();
+  // pref_mapping->RegisterPrefTransformer(
+  //     prefs::kCookieControlsMode,
+  //     std::make_unique<CookieControlsModeTransformer>());
+  pref_mapping->RegisterPrefTransformer(
+      proxy_config::prefs::kProxy, std::make_unique<ProxyPrefTransformer>());
+  pref_mapping->RegisterPrefTransformer(
+      prefetch::prefs::kNetworkPredictionOptions,
+      std::make_unique<NetworkPredictionTransformer>());
+  // pref_mapping->RegisterPrefTransformer(
+  //     prefs::kProtectedContentDefault,
+  //     std::make_unique<ProtectedContentEnabledTransformer>());
+  // pref_mapping->RegisterPrefTransformer(
+  //     prefs::kPrivacySandboxM1TopicsEnabled,
+  //     std::make_unique<PrivacySandboxTransformer>());
+  // pref_mapping->RegisterPrefTransformer(
+  //     prefs::kPrivacySandboxM1FledgeEnabled,
+  //     std::make_unique<PrivacySandboxTransformer>());
+  // pref_mapping->RegisterPrefTransformer(
+  //     prefs::kPrivacySandboxM1AdMeasurementEnabled,
+  //     std::make_unique<PrivacySandboxTransformer>());
+  // pref_mapping->RegisterPrefTransformer(
+  //     prefs::kPrivacySandboxRelatedWebsiteSetsEnabled,
+  //     std::make_unique<PrivacySandboxTransformer>());
+
+  return true;
+}
+
+DesktopAndroidExtensionsBrowserClient* g_extension_browser_client = nullptr;
 
 class DesktopAndroidKioskDelegate : public KioskDelegate {
  public:
@@ -76,6 +129,23 @@ class DesktopAndroidExtensionsAPIClient : public ExtensionsAPIClient {
     return messaging_delegate_.get();
   }
 
+  std::unique_ptr<SupervisedUserExtensionsDelegate>
+  CreateSupervisedUserExtensionsDelegate(
+    content::BrowserContext* browser_context) const override {
+    return std::make_unique<SupervisedUserExtensionsDelegateImpl>(
+      browser_context);
+  }
+
+  scoped_refptr<ContentRulesRegistry>
+  CreateContentRulesRegistry(
+      content::BrowserContext* browser_context,
+      RulesCacheDelegate* cache_delegate) const override {
+    return base::MakeRefCounted<ChromeContentRulesRegistry>(
+        browser_context, cache_delegate,
+        base::BindOnce(&CreateDefaultContentPredicateEvaluators,
+                       base::Unretained(browser_context)));
+  }
+
   ManagementAPIDelegate* CreateManagementAPIDelegate() const override {
     // `ManagementAPI` owns the object.
     return new ChromeManagementAPIDelegate;
@@ -93,10 +163,21 @@ DesktopAndroidExtensionsBrowserClient::DesktopAndroidExtensionsBrowserClient()
       api_client_(std::make_unique<DesktopAndroidExtensionsAPIClient>()) {
   AddAPIProvider(std::make_unique<CoreExtensionsBrowserAPIProvider>());
   AddAPIProvider(std::make_unique<ChromeExtensionsBrowserAPIProvider>());
+
+  static bool registered = RegisterTransformers();
+  CHECK(registered);
 }
 
 DesktopAndroidExtensionsBrowserClient::
     ~DesktopAndroidExtensionsBrowserClient() = default;
+
+DesktopAndroidExtensionsBrowserClient* DesktopAndroidExtensionsBrowserClient::Get() {
+  return g_extension_browser_client;
+}
+
+void DesktopAndroidExtensionsBrowserClient::Set(DesktopAndroidExtensionsBrowserClient* client) {
+  g_extension_browser_client = client;
+}
 
 bool DesktopAndroidExtensionsBrowserClient::IsShuttingDown() {
   return false;
@@ -106,6 +187,19 @@ bool DesktopAndroidExtensionsBrowserClient::AreExtensionsDisabled(
     const base::CommandLine& command_line,
     BrowserContext* context) {
   return false;
+}
+
+bool DesktopAndroidExtensionsBrowserClient::IsValidTabId(content::BrowserContext* browser_context,
+    int tab_id,
+    bool include_incognito,
+    content::WebContents** web_contents) const {
+  return ExtensionTabUtil::GetTabById(tab_id, browser_context, include_incognito, nullptr, web_contents, nullptr);
+}
+
+ScriptExecutor* DesktopAndroidExtensionsBrowserClient::GetScriptExecutorForTab(
+    content::WebContents& web_contents) {
+  TabHelper* tab_helper = TabHelper::FromWebContents(&web_contents);
+  return tab_helper ? tab_helper->script_executor() : nullptr;
 }
 
 bool DesktopAndroidExtensionsBrowserClient::IsValidContext(void* context) {
@@ -232,7 +326,9 @@ PrefService* DesktopAndroidExtensionsBrowserClient::GetPrefServiceForContext(
 
 void DesktopAndroidExtensionsBrowserClient::GetEarlyExtensionPrefsObservers(
     content::BrowserContext* context,
-    std::vector<EarlyExtensionPrefsObserver*>* observers) const {}
+    std::vector<EarlyExtensionPrefsObserver*>* observers) const {
+  observers->push_back(ContentSettingsService::Get(context));
+}
 
 ProcessManagerDelegate*
 DesktopAndroidExtensionsBrowserClient::GetProcessManagerDelegate() const {
@@ -286,12 +382,38 @@ DesktopAndroidExtensionsBrowserClient::GetExtensionSystemFactory() {
   return ChromeExtensionSystemFactory::GetInstance();
 }
 
+void BindMimeHandlerService(
+    content::RenderFrameHost* frame_host,
+    mojo::PendingReceiver<mime_handler::MimeHandlerService> receiver) {
+  auto* guest_view = MimeHandlerViewGuest::FromRenderFrameHost(frame_host);
+  if (!guest_view) {
+    return;
+  }
+  MimeHandlerServiceImpl::Create(guest_view->GetStreamWeakPtr(),
+                                 std::move(receiver));
+}
+
+void BindBeforeUnloadControl(
+    content::RenderFrameHost* frame_host,
+    mojo::PendingReceiver<mime_handler::BeforeUnloadControl> receiver) {
+  auto* guest_view = MimeHandlerViewGuest::FromRenderFrameHost(frame_host);
+  if (!guest_view) {
+    return;
+  }
+  guest_view->FuseBeforeUnloadControl(std::move(receiver));
+}
+
 void DesktopAndroidExtensionsBrowserClient::
     RegisterBrowserInterfaceBindersForFrame(
         mojo::BinderMapWithContext<content::RenderFrameHost*>* binder_map,
         content::RenderFrameHost* render_frame_host,
         const Extension* extension) const {
   PopulateExtensionFrameBinders(binder_map, render_frame_host, extension);
+
+  binder_map->Add<mime_handler::MimeHandlerService>(
+      base::BindRepeating(&BindMimeHandlerService));
+  binder_map->Add<mime_handler::BeforeUnloadControl>(
+      base::BindRepeating(&BindBeforeUnloadControl));
 }
 
 std::unique_ptr<RuntimeAPIDelegate>
@@ -354,6 +476,26 @@ KioskDelegate* DesktopAndroidExtensionsBrowserClient::GetKioskDelegate() {
 
 std::string DesktopAndroidExtensionsBrowserClient::GetApplicationLocale() {
   return "en-US";
+}
+
+void DesktopAndroidExtensionsBrowserClient::GetTabAndWindowIdForWebContents(
+    content::WebContents* web_contents,
+    int* tab_id,
+    int* window_id) {
+  for (TabModel* model : TabModelList::models()) {
+    for (int i = 0; i < model->GetTabCount(); i++) {
+      // yeah, I'm ashamed of myself too
+      content::WebContents* contents = model->GetWebContentsAt(i);
+      if (contents == web_contents) {
+        *tab_id = model->GetTabAt(i)->GetTabId().id();
+        *window_id = model->GetTabAt(i)->GetWindowId().id();
+        return;
+      }
+    }
+  }
+
+  *tab_id = -1;
+  *window_id = -1;
 }
 
 }  // namespace extensions

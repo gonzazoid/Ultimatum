@@ -50,6 +50,7 @@
 #include "extensions/common/extension_set.h"
 #include "extensions/common/install_warning.h"
 #include "extensions/common/manifest.h"
+#include "extensions/common/manifest_constants.h"
 #include "extensions/common/manifest_handlers/background_info.h"
 #include "extensions/common/manifest_handlers/icons_handler.h"
 #include "extensions/common/manifest_handlers/offline_enabled_info.h"
@@ -71,6 +72,10 @@
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "ui/base/accelerators/global_accelerator_listener/global_accelerator_listener.h"  // nogncheck
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+
+#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+#include "extensions/browser/management_policy.h"
+#endif
 
 namespace extensions {
 
@@ -639,6 +644,35 @@ void ExtensionInfoGeneratorShared::FillExtensionInfo(
 
   info.id = extension.id();
 
+  info.popup_url = "";
+  auto manifest_version = extension.manifest()->value()->FindInt(manifest_keys::kManifestVersion);
+
+  if (*manifest_version == 2) {
+    const base::Value::Dict* dict =
+        extension.manifest()->value()->FindDict(manifest_keys::kBrowserAction);
+    if (dict) {
+      const base::Value* default_popup = dict->Find(manifest_keys::kActionDefaultPopup);
+      if (default_popup) {
+        const std::string* url_str = default_popup->GetIfString();
+        if (url_str)
+          info.popup_url = "chrome-extension://" + extension.id() + "/" + *url_str;
+      }
+    }
+  }
+
+  if (*manifest_version == 3) {
+    const base::Value::Dict* dict =
+        extension.manifest()->value()->FindDict(manifest_keys::kAction);
+    if (dict) {
+      const base::Value* default_popup = dict->Find(manifest_keys::kActionDefaultPopup);
+      if (default_popup) {
+        const std::string* url_str = default_popup->GetIfString();
+        if (url_str)
+          info.popup_url = "chrome-extension://" + extension.id() + "/" + *url_str;
+      }
+    }
+  }
+
   // Incognito access.
   info.incognito_access.is_enabled = util::CanBeIncognitoEnabled(&extension);
   info.incognito_access.is_active =
@@ -700,6 +734,14 @@ void ExtensionInfoGeneratorShared::FillExtensionInfo(
   if (location_text != -1) {
     info.location_text = l10n_util::GetStringUTF8(location_text);
   }
+
+#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+  ManagementPolicy* management_policy = extension_system_->management_policy();
+  info.must_remain_installed =
+      management_policy->MustRemainInstalled(&extension, nullptr);
+  info.user_may_modify =
+      management_policy->UserMayModifySettings(&extension, nullptr);
+#endif
 
   // Runtime/Manifest errors.
   if (error_console_enabled) {

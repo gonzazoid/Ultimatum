@@ -28,19 +28,19 @@ ExtensionCommandsGlobalRegistry::ExtensionCommandsGlobalRegistry(
 
 ExtensionCommandsGlobalRegistry::~ExtensionCommandsGlobalRegistry() {
   if (!IsEventTargetsEmpty()) {
-    ui::GlobalAcceleratorListener* global_shortcut_listener =
-        ui::GlobalAcceleratorListener::GetInstance();
-    if (!global_shortcut_listener) {
+    // ui::GlobalAcceleratorListener* global_shortcut_listener =
+    //     ui::GlobalAcceleratorListener::GetInstance();
+    // if (!global_shortcut_listener) {
       return;
-    }
+    // }
 
     // Resume GlobalShortcutListener before we clean up if the shortcut handling
     // is currently suspended.
-    if (global_shortcut_listener->IsShortcutHandlingSuspended()) {
-      global_shortcut_listener->SetShortcutHandlingSuspended(false);
-    }
+    // if (global_shortcut_listener->IsShortcutHandlingSuspended()) {
+    //   global_shortcut_listener->SetShortcutHandlingSuspended(false);
+    // }
 
-    global_shortcut_listener->UnregisterAccelerators(this);
+    // global_shortcut_listener->UnregisterAccelerators(this);
   }
 }
 
@@ -76,75 +76,75 @@ void ExtensionCommandsGlobalRegistry::AddExtensionKeybindings(
     return;
   }
 
-  auto* instance = ui::GlobalAcceleratorListener::GetInstance();
-  if (!instance) {
+  // auto* instance = ui::GlobalAcceleratorListener::GetInstance();
+  // if (!instance) {
     return;
-  }
-  extensions::CommandService* command_service =
-      extensions::CommandService::Get(browser_context_);
-  ui::CommandMap commands;
-  if (instance->IsRegistrationHandledExternally()) {
-    if (!command_service->GetNamedCommands(
-            extension->id(), extensions::CommandService::ALL,
-            extensions::CommandService::ANY_SCOPE, &commands)) {
-      return;
-    }
-    PrefService* prefs =
-        ExtensionsBrowserClient::Get()->GetPrefServiceForContext(
-            browser_context_);
-    std::string profile_id = prefs->GetString(pref_names::kGlobalShortcutsUuid);
-    if (profile_id.empty()) {
-      auto uuid = base::Uuid::GenerateRandomV4();
-      profile_id = uuid.AsLowercaseString();
-      prefs->SetString(pref_names::kGlobalShortcutsUuid, profile_id);
-    }
-    instance->OnCommandsChanged(extension->id(), profile_id, commands, this);
-  }
+  // }
+  // extensions::CommandService* command_service =
+  //     extensions::CommandService::Get(browser_context_);
+  // ui::CommandMap commands;
+  // if (instance->IsRegistrationHandledExternally()) {
+  //   if (!command_service->GetNamedCommands(
+  //           extension->id(), extensions::CommandService::ALL,
+  //           extensions::CommandService::ANY_SCOPE, &commands)) {
+  //     return;
+  //   }
+  //   PrefService* prefs =
+  //       ExtensionsBrowserClient::Get()->GetPrefServiceForContext(
+  //           browser_context_);
+  //   std::string profile_id = prefs->GetString(pref_names::kGlobalShortcutsUuid);
+  //   if (profile_id.empty()) {
+  //     auto uuid = base::Uuid::GenerateRandomV4();
+  //     profile_id = uuid.AsLowercaseString();
+  //     prefs->SetString(pref_names::kGlobalShortcutsUuid, profile_id);
+  //   }
+  //   instance->OnCommandsChanged(extension->id(), profile_id, commands, this);
+  // }
 
   // Add all the active global keybindings, if any.
-  if (!command_service->GetNamedCommands(
-          extension->id(), extensions::CommandService::ACTIVE,
-          extensions::CommandService::GLOBAL, &commands)) {
-    return;
-  }
+  // if (!command_service->GetNamedCommands(
+  //         extension->id(), extensions::CommandService::ACTIVE,
+  //         extensions::CommandService::GLOBAL, &commands)) {
+  //   return;
+  // }
 
-  for (auto& command : commands) {
-    if (!command_name.empty() &&
-        (command.second.command_name() != command_name)) {
-      continue;
-    }
-    const ui::Accelerator& accelerator = command.second.accelerator();
+  // for (auto& command : commands) {
+  //   if (!command_name.empty() &&
+  //       (command.second.command_name() != command_name)) {
+  //     continue;
+  //   }
+  //   const ui::Accelerator& accelerator = command.second.accelerator();
 
-    if (!IsAcceleratorRegistered(accelerator)) {
-      if (!instance->RegisterAccelerator(accelerator, this)) {
-        continue;
-      }
-    }
+  //   if (!IsAcceleratorRegistered(accelerator)) {
+  //     if (!instance->RegisterAccelerator(accelerator, this)) {
+  //       continue;
+  //     }
+  //   }
 
-    AddEventTarget(accelerator, extension->id(), command.second.command_name());
-  }
+  //   AddEventTarget(accelerator, extension->id(), command.second.command_name());
+  // }
 }
 
 void ExtensionCommandsGlobalRegistry::RemoveExtensionKeybindingImpl(
     const ui::Accelerator& accelerator,
     const std::string& command_name) {
-  auto* instance = ui::GlobalAcceleratorListener::GetInstance();
-  if (!instance) {
+  // auto* instance = ui::GlobalAcceleratorListener::GetInstance();
+  // if (!instance) {
     return;
-  }
-  instance->UnregisterAccelerator(accelerator, this);
+  // }
+  // instance->UnregisterAccelerator(accelerator, this);
 }
 
 void ExtensionCommandsGlobalRegistry::OnShortcutHandlingSuspended(
     bool suspended) {
-  auto* instance = ui::GlobalAcceleratorListener::GetInstance();
-  if (!instance) {
+  // auto* instance = ui::GlobalAcceleratorListener::GetInstance();
+  // if (!instance) {
     return;
-  }
-  instance->SetShortcutHandlingSuspended(suspended);
-  if (registry_for_active_window()) {
-    registry_for_active_window()->SetShortcutHandlingSuspended(suspended);
-  }
+  // }
+  // instance->SetShortcutHandlingSuspended(suspended);
+  // if (registry_for_active_window()) {
+  //   registry_for_active_window()->SetShortcutHandlingSuspended(suspended);
+  // }
 }
 
 void ExtensionCommandsGlobalRegistry::OnKeyPressed(

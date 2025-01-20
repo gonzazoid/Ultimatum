@@ -872,12 +872,12 @@ void ExternalProviderImpl::CreateExternalProviders(
 #if !BUILDFLAG(IS_CHROMEOS) && BUILDFLAG(ENABLE_EXTENSIONS)
   // The pre-installed apps are installed as INTERNAL but use the external
   // extension installer codeflow.
-  provider_list->push_back(std::make_unique<preinstalled_apps::Provider>(
-      profile, service,
-      base::MakeRefCounted<ExternalPrefLoader>(
-          chrome::DIR_DEFAULT_APPS, ExternalPrefLoader::NONE, nullptr),
-      ManifestLocation::kInternal, ManifestLocation::kInternal,
-      Extension::FROM_WEBSTORE | Extension::WAS_INSTALLED_BY_DEFAULT));
+  // provider_list->push_back(std::make_unique<preinstalled_apps::Provider>(
+  //     profile, service,
+  //     base::MakeRefCounted<ExternalPrefLoader>(
+  //         chrome::DIR_DEFAULT_APPS, ExternalPrefLoader::NONE, nullptr),
+  //     ManifestLocation::kInternal, ManifestLocation::kInternal,
+  //     Extension::FROM_WEBSTORE | Extension::WAS_INSTALLED_BY_DEFAULT));
 #endif
 
   std::unique_ptr<ExternalProviderImpl> drive_migration_provider(

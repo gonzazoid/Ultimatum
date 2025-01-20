@@ -25,8 +25,8 @@ namespace {
 void InspectExtensionHost(
     DevToolsOpenedByAction opened_by,
     std::unique_ptr<LazyContextTaskQueue::ContextInfo> context_info) {
-  if (context_info != nullptr)
-    DevToolsWindow::OpenDevToolsWindow(context_info->web_contents, opened_by);
+  // if (context_info != nullptr)
+    // DevToolsWindow::OpenDevToolsWindow(context_info->web_contents, opened_by);
 }
 
 void InspectServiceWorkerBackgroundHelper(
@@ -62,7 +62,7 @@ void InspectServiceWorkerBackground(const Extension* extension,
             extension->GetResourceURL(
                 BackgroundInfo::GetBackgroundServiceWorkerScript(extension)) &&
         host->GetBrowserContext() == profile) {
-      DevToolsWindow::OpenDevToolsWindow(host, profile, opened_by);
+      // DevToolsWindow::OpenDevToolsWindow(host, profile, opened_by);
       break;
     }
   }

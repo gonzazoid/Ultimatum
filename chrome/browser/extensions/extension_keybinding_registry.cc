@@ -156,26 +156,26 @@ void ExtensionKeybindingRegistry::CommandExecuted(
     // the extension acts on the command. NOTE: The Global Commands handler does
     // not set the delegate as it deals only with named commands (not
     // page/browser actions that are associated with the current page directly).
-    ActiveTabPermissionGranter* granter =
-        web_contents ? TabHelper::FromWebContents(web_contents)
-                           ->active_tab_permission_granter()
-                     : nullptr;
+    ActiveTabPermissionGranter* granter = nullptr;
+        // web_contents ? TabHelper::FromWebContents(web_contents)
+        //                    ->active_tab_permission_granter()
+        //              : nullptr;
     if (granter) {
-      granter->GrantIfRequested(extension);
+      // granter->GrantIfRequested(extension);
     }
 
     if (web_contents) {
       // The action APIs (browserAction, pageAction, action) are only available
       // to privileged extension contexts. As such, we deterministically know
       // that the right context type here is privileged.
-      constexpr mojom::ContextType context_type =
-          mojom::ContextType::kPrivilegedExtension;
-      ExtensionTabUtil::ScrubTabBehavior scrub_tab_behavior =
-          ExtensionTabUtil::GetScrubTabBehavior(extension, context_type,
-                                                web_contents);
-      tab_value = base::Value(ExtensionTabUtil::CreateTabObject(
-                                  web_contents, scrub_tab_behavior, extension)
-                                  .ToValue());
+      // constexpr mojom::ContextType context_type =
+      //     mojom::ContextType::kPrivilegedExtension;
+      // ExtensionTabUtil::ScrubTabBehavior scrub_tab_behavior =
+      //     ExtensionTabUtil::GetScrubTabBehavior(extension, context_type,
+      //                                           web_contents);
+      // tab_value = base::Value(ExtensionTabUtil::CreateTabObject(
+      //                             web_contents, scrub_tab_behavior, extension)
+      //                             .ToValue());
     }
   }
 

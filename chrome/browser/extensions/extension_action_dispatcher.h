@@ -74,7 +74,7 @@ class ExtensionActionDispatcher : public BrowserContextKeyedAPI {
                     content::WebContents* web_contents,
                     content::BrowserContext* browser_context);
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   // Dispatches the onClicked event for extension that owns the given action.
   void DispatchExtensionActionClicked(const ExtensionAction& extension_action,
                                       content::WebContents* web_contents,

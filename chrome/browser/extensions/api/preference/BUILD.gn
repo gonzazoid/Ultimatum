@@ -5,7 +5,7 @@
 import("//chrome/common/features.gni")
 import("//extensions/buildflags/buildflags.gni")
 
-assert(enable_extensions,
+assert(enable_extensions_core,
        "Cannot depend on extensions because enable_extensions=false.")
 
 source_set("preference") {

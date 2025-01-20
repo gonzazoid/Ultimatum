@@ -554,8 +554,8 @@ export class ExtensionsDetailViewElement extends
    * should be displayed.
    */
   protected shouldShowMv2DeprecationFindAlternativeButton_(): boolean {
-    return this.mv2ExperimentStage_ === Mv2ExperimentStage.WARNING &&
-        !!this.data.recommendationsUrl;
+    return false; // this.mv2ExperimentStage_ === Mv2ExperimentStage.WARNING &&
+        // !!this.data.recommendationsUrl;
   }
 
   /**
@@ -687,12 +687,12 @@ export class ExtensionsDetailViewElement extends
    * It will not be shown again during this stage.
    */
   protected onKeepActionClick_(): void {
-    assert(
-        this.mv2ExperimentStage_ === Mv2ExperimentStage.DISABLE_WITH_REENABLE);
+    // assert(
+    //     this.mv2ExperimentStage_ === Mv2ExperimentStage.DISABLE_WITH_REENABLE);
     chrome.metricsPrivate.recordUserAction(
         'Extensions.Mv2Deprecation.Disabled.DismissedForExtension.DetailPage');
     this.$.actionMenu.close();
-    this.delegate.dismissMv2DeprecationNoticeForExtension(this.data.id);
+    // this.delegate.dismissMv2DeprecationNoticeForExtension(this.data.id);
   }
 
   /**

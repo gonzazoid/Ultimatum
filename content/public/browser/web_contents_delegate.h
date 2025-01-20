@@ -823,11 +823,11 @@ class CONTENT_EXPORT WebContentsDelegate {
       const std::vector<blink::mojom::DraggableRegionPtr>& regions,
       WebContents* contents) {}
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
   // Whether the WebContents should use per PWA instanced
   // system media controls.
   virtual bool ShouldUseInstancedSystemMediaControls() const;
-#endif  // !BUILDFLAG(IS_ANDROID)
+// #endif  // !BUILDFLAG(IS_ANDROID)
 
   // Allow delegate to override how to take a bitmap snapshot of this
   // WebContents. Return true if the delegate will execute callback with a

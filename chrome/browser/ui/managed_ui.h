@@ -46,6 +46,12 @@ std::optional<std::string> GetEnterpriseAccountDomain(const Profile& profile);
 // users.
 bool ShouldDisplayManagedUi(Profile* profile);
 
+// An icon name/label recognized by <iron-icon> for the WebUI footnote for
+// Managed UI indicating that the browser is managed.
+//
+// Returns an empty string if ShouldDisplayManagedUi(profile) is false.
+std::string GetManagedUiWebUIIcon(Profile* profile);
+
 #if !BUILDFLAG(IS_ANDROID)
 // The URL which management surfaces should link to for more info.
 //
@@ -64,12 +70,6 @@ std::u16string GetManagedUiMenuItemLabel(Profile* profile);
 //
 // Must only be called if ShouldDisplayManagedUi(profile) is true.
 std::u16string GetManagedUiMenuItemTooltip(Profile* profile);
-
-// An icon name/label recognized by <iron-icon> for the WebUI footnote for
-// Managed UI indicating that the browser is managed.
-//
-// Returns an empty string if ShouldDisplayManagedUi(profile) is false.
-std::string GetManagedUiWebUIIcon(Profile* profile);
 
 // The label for the WebUI footnote for Managed UI indicating that the browser
 // is managed. These strings contain HTML for an <a> element.
