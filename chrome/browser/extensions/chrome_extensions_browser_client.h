@@ -252,19 +252,19 @@ class ChromeExtensionsBrowserClient : public ExtensionsBrowserClient {
 // On Android, we rely on the stub implementations in ExtensionsBrowserClient
 // for these methods, so we cannot declare them here (otherwise the linker
 // sees them as un-implemented).
-#if BUILDFLAG(ENABLE_EXTENSIONS)
-  void CleanUpWebView(content::BrowserContext* browser_context,
-                      int embedder_process_id,
-                      int view_instance_id) override;
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
+  // void CleanUpWebView(content::BrowserContext* browser_context,
+  //                     int embedder_process_id,
+  //                     int view_instance_id) override;
   ScriptExecutor* GetScriptExecutorForTab(
       content::WebContents& web_contents) override;
-  void GetWebViewStoragePartitionConfig(
-      content::BrowserContext* browser_context,
-      content::SiteInstance* owner_site_instance,
-      const std::string& partition_name,
-      bool in_memory,
-      base::OnceCallback<void(std::optional<content::StoragePartitionConfig>)>
-          callback) override;
+  // void GetWebViewStoragePartitionConfig(
+  //     content::BrowserContext* browser_context,
+  //     content::SiteInstance* owner_site_instance,
+  //     const std::string& partition_name,
+  //     bool in_memory,
+  //     base::OnceCallback<void(std::optional<content::StoragePartitionConfig>)>
+  //         callback) override;
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
   static void set_did_chrome_update_for_testing(bool did_update);

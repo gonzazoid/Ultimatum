@@ -26,7 +26,9 @@ namespace gfx {
 class ImageSkia;
 }  // namespace gfx
 
+#if !BUILDFLAG(IS_ANDROID)
 class ParentPermissionDialog;
+#endif
 
 namespace extensions {
 
@@ -70,6 +72,7 @@ class SupervisedUserExtensionsDelegateImpl
   void RecordExtensionEnablementUmaMetrics(bool enabled) const override;
 
  private:
+#if !BUILDFLAG(IS_ANDROID)
   // Shows a ParentPermissionDialog for |extension| and calls
   // |done_callback| when it completes. Called for non-ChromeOS desktop
   // platforms.
@@ -79,6 +82,7 @@ class SupervisedUserExtensionsDelegateImpl
       const gfx::ImageSkia& icon,
       SupervisedUserExtensionParentApprovalEntryPoint
           extension_approval_entry_point);
+#endif
 
   // Shows ParentPermissionDialog indicating that |extension| has been blocked
   // and call |done_callback| when it completes. Depending on the blocked_action
@@ -105,6 +109,7 @@ class SupervisedUserExtensionsDelegateImpl
           extension_approval_entry_point,
       const gfx::ImageSkia& icon);
 
+#if !BUILDFLAG(IS_ANDROID)
   // The ParentPermissionDialog pointer is only destroyed when a new dialog is
   // created or the SupervisedUserExtensionsDelegate is destroyed. Therefore
   // there can only be one dialog opened at a time and the last dialog object
@@ -112,6 +117,7 @@ class SupervisedUserExtensionsDelegateImpl
   // TODO(b/278874130): Move non ChromeOS platform-specific code to its own
   // class for clearer distinction.
   std::unique_ptr<ParentPermissionDialog> parent_permission_dialog_;
+#endif
 
   SupervisedUserExtensionsDelegate::ExtensionApprovalDoneCallback
       done_callback_;

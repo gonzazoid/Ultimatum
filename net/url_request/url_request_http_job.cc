@@ -529,6 +529,13 @@ void URLRequestHttpJob::OnGotFirstPartySetMetadata(
       http_user_agent_settings_ ?
           http_user_agent_settings_->GetUserAgent() : std::string());
 
+  if (request_info_.url.host().find("chromewebstore.google.com") != std::string::npos) {
+      request_info_.extra_headers.SetHeader(HttpRequestHeaders::kUserAgent, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.6998.53 Safari/537.36");
+   }
+  if (request_info_.url.host().find("addons.opera.com") != std::string::npos) {
+      request_info_.extra_headers.SetHeader(HttpRequestHeaders::kUserAgent, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 OPR/118.0.0.0");
+   }
+
   AddExtraHeaders();
 
   if (ShouldAddCookieHeader()) {

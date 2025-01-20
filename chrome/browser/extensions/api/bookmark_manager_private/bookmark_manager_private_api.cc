@@ -296,10 +296,10 @@ BookmarkManagerPrivateDragEventRouter::BookmarkManagerPrivateDragEventRouter(
           *web_contents),
       profile_(Profile::FromBrowserContext(web_contents->GetBrowserContext())) {
   // We need to guarantee the BookmarkTabHelper is created.
-  BookmarkTabHelper::CreateForWebContents(web_contents);
-  BookmarkTabHelper* bookmark_tab_helper =
-      BookmarkTabHelper::FromWebContents(web_contents);
-  bookmark_tab_helper->set_bookmark_drag_delegate(this);
+  // BookmarkTabHelper::CreateForWebContents(web_contents);
+  // BookmarkTabHelper* bookmark_tab_helper =
+  //     BookmarkTabHelper::FromWebContents(web_contents);
+  // bookmark_tab_helper->set_bookmark_drag_delegate(this);
 }
 
 BookmarkManagerPrivateDragEventRouter::
@@ -389,13 +389,13 @@ ExtensionFunction::ResponseValue ClipboardBookmarkManagerFunction::CopyOrCut(
     return Error(bookmarks_errors::kModifySpecialError);
 
   if (cut) {
-    BookmarkUIOperationsHelperNonMergedSurfaces::CutToClipboard(
-        model, nodes, bookmarks::metrics::BookmarkEditSource::kExtension,
-        GetProfile()->IsOffTheRecord());
+    // BookmarkUIOperationsHelperNonMergedSurfaces::CutToClipboard(
+    //     model, nodes, bookmarks::metrics::BookmarkEditSource::kExtension,
+    //     GetProfile()->IsOffTheRecord());
   } else {
-    BookmarkUIOperationsHelperNonMergedSurfaces::CopyToClipboard(
-        model, nodes, bookmarks::metrics::BookmarkEditSource::kExtension,
-        GetProfile()->IsOffTheRecord());
+    // BookmarkUIOperationsHelperNonMergedSurfaces::CopyToClipboard(
+    //     model, nodes, bookmarks::metrics::BookmarkEditSource::kExtension,
+    //     GetProfile()->IsOffTheRecord());
   }
   return NoArguments();
 }
@@ -433,10 +433,10 @@ BookmarkManagerPrivatePasteFunction::RunOnReady() {
   std::string error;
   if (!CanBeModified(parent_node, &error))
     return Error(error);
-  BookmarkUIOperationsHelperNonMergedSurfaces helper(model, parent_node);
-  bool can_paste = helper.CanPasteFromClipboard();
-  if (!can_paste)
-    return Error("Could not paste from clipboard");
+  // BookmarkUIOperationsHelperNonMergedSurfaces helper(model, parent_node);
+  // bool can_paste = helper.CanPasteFromClipboard();
+  // if (!can_paste)
+  //   return Error("Could not paste from clipboard");
 
   // We want to use the highest index of the selected nodes as a destination.
   std::vector<raw_ptr<const BookmarkNode, VectorExperimental>> nodes;
@@ -452,7 +452,7 @@ BookmarkManagerPrivatePasteFunction::RunOnReady() {
   if (!highest_index)
     highest_index = parent_node->children().size();
 
-  helper.PasteFromClipboard(highest_index);
+  // helper.PasteFromClipboard(highest_index);
   return NoArguments();
 }
 
@@ -471,10 +471,10 @@ BookmarkManagerPrivateCanPasteFunction::RunOnReady() {
   const BookmarkNode* parent_node = GetNodeFromString(model, params->parent_id);
   if (!parent_node)
     return Error(bookmarks_errors::kNoParentError);
-  bool can_paste =
-      BookmarkUIOperationsHelperNonMergedSurfaces(model, parent_node)
-          .CanPasteFromClipboard();
-  return WithArguments(can_paste);
+  // bool can_paste =
+  //     BookmarkUIOperationsHelperNonMergedSurfaces(model, parent_node)
+  //         .CanPasteFromClipboard();
+  return WithArguments(false /* can_paste */);
 }
 
 ExtensionFunction::ResponseValue
@@ -517,7 +517,7 @@ BookmarkManagerPrivateStartDragFunction::RunOnReady() {
   if (!EditBookmarksEnabled())
     return Error(bookmarks_errors::kEditBookmarksDisabled);
 
-  content::WebContents* web_contents = GetSenderWebContents();
+  // content::WebContents* web_contents = GetSenderWebContents();
   std::optional<StartDrag::Params> params = StartDrag::Params::Create(args());
   if (!params)
     return BadMessage();
@@ -530,13 +530,13 @@ BookmarkManagerPrivateStartDragFunction::RunOnReady() {
                  base::JoinString(params->id_list, ", "));
   }
 
-  ui::mojom::DragEventSource source = ui::mojom::DragEventSource::kMouse;
-  if (params->is_from_touch)
-    source = ui::mojom::DragEventSource::kTouch;
+  // ui::mojom::DragEventSource source = ui::mojom::DragEventSource::kMouse;
+  // if (params->is_from_touch)
+  //   source = ui::mojom::DragEventSource::kTouch;
 
-  chrome::DragBookmarks(
-      GetProfile(), {std::move(nodes), params->drag_node_index, web_contents,
-                     source, gfx::Point(params->x, params->y)});
+  // chrome::DragBookmarks(
+  //     GetProfile(), {std::move(nodes), params->drag_node_index, web_contents,
+  //                    source, gfx::Point(params->x, params->y)});
 
   return NoArguments();
 }
@@ -572,10 +572,10 @@ BookmarkManagerPrivateDropFunction::RunOnReady() {
 
   const BookmarkNodeData* drag_data = router->GetBookmarkNodeData();
   CHECK_NE(nullptr, drag_data) << "Somehow we're dropping null bookmark data";
-  const bool copy = false;
-  BookmarkUIOperationsHelperNonMergedSurfaces(model, drop_parent)
-      .DropBookmarks(GetProfile(), *drag_data, drop_index, copy,
-                     chrome::BookmarkReorderDropTarget::kBookmarkManagerAPI);
+  // const bool copy = false;
+  // BookmarkUIOperationsHelperNonMergedSurfaces(model, drop_parent)
+  //     .DropBookmarks(GetProfile(), *drag_data, drop_index, copy,
+  //                    chrome::BookmarkReorderDropTarget::kBookmarkManagerAPI);
 
   router->ClearBookmarkNodeData();
   return NoArguments();
@@ -748,13 +748,13 @@ BookmarkManagerPrivateOpenInNewWindowFunction::RunOnReady() {
                   : WindowOpenDisposition::NEW_FOREGROUND_TAB;
     if (params->incognito)
       navigate_params.disposition = WindowOpenDisposition::OFF_THE_RECORD;
-    base::WeakPtr<content::NavigationHandle> handle =
-        Navigate(&navigate_params);
-    if (handle) {
-      ChromeNavigationUIData* ui_data =
-          static_cast<ChromeNavigationUIData*>(handle->GetNavigationUIData());
-      ui_data->set_bookmark_id(url_and_id.id);
-    }
+    // base::WeakPtr<content::NavigationHandle> handle =
+    //     Navigate(&navigate_params);
+    // if (handle) {
+    //   ChromeNavigationUIData* ui_data =
+    //       static_cast<ChromeNavigationUIData*>(handle->GetNavigationUIData());
+    //   ui_data->set_bookmark_id(url_and_id.id);
+    // }
 
     first_tab = false;
   }
@@ -785,9 +785,9 @@ BookmarkManagerPrivateOpenInNewTabGroupFunction::RunOnReady() {
                  base::JoinString(params->id_list, ", "));
   }
 
-  chrome::OpenAllIfAllowed(browser, nodes,
-                           WindowOpenDisposition::NEW_BACKGROUND_TAB,
-                           bookmarks::OpenAllBookmarksContext::kInGroup);
+  // chrome::OpenAllIfAllowed(browser, nodes,
+  //                          WindowOpenDisposition::NEW_BACKGROUND_TAB,
+  //                          bookmarks::OpenAllBookmarksContext::kInGroup);
 
   return NoArguments();
 }
@@ -857,16 +857,16 @@ void BookmarkManagerPrivateImportFunction::FileSelected(
     const ui::SelectedFileInfo& file,
     int index) {
   // Deletes itself.
-  ExternalProcessImporterHost* importer_host = new ExternalProcessImporterHost;
-  user_data_importer::SourceProfile source_profile;
-  source_profile.importer_type = user_data_importer::TYPE_BOOKMARKS_FILE;
-  source_profile.source_path = file.path();
-  importer_host->StartImportSettings(source_profile, GetProfile(),
-                                     user_data_importer::FAVORITES,
-                                     new ProfileWriter(GetProfile()));
+  // ExternalProcessImporterHost* importer_host = new ExternalProcessImporterHost;
+  // user_data_importer::SourceProfile source_profile;
+  // source_profile.importer_type = user_data_importer::TYPE_BOOKMARKS_FILE;
+  // source_profile.source_path = file.path();
+  // importer_host->StartImportSettings(source_profile, GetProfile(),
+  //                                    user_data_importer::FAVORITES,
+  //                                    new ProfileWriter(GetProfile()));
 
-  importer::LogImporterUseToMetrics("BookmarksAPI",
-                                    user_data_importer::TYPE_BOOKMARKS_FILE);
+  // importer::LogImporterUseToMetrics("BookmarksAPI",
+  //                                   user_data_importer::TYPE_BOOKMARKS_FILE);
   select_file_dialog_.reset();
   Release();  // Balanced in BookmarkManagerPrivateIOFunction::SelectFile()
 }
@@ -894,8 +894,8 @@ BookmarkManagerPrivateExportFunction::RunOnReady() {
 void BookmarkManagerPrivateExportFunction::FileSelected(
     const ui::SelectedFileInfo& file,
     int index) {
-  bookmark_html_writer::WriteBookmarks(GetProfile(), file.path(),
-                                       base::DoNothing());
+  // bookmark_html_writer::WriteBookmarks(GetProfile(), file.path(),
+  //                                      base::DoNothing());
   select_file_dialog_.reset();
   Release();  // Balanced in BookmarkManagerPrivateIOFunction::SelectFile()
 }

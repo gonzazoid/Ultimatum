@@ -20,6 +20,10 @@
 #include "extensions/browser/api/web_request/web_request_api.h"
 #include "extensions/browser/api/web_request/web_request_proxying_url_loader_factory.h"
 #include "extensions/buildflags/buildflags.h"
+#include "extensions/browser/api/management/management_api.h"
+#include "extensions/browser/api/messaging/message_service.h"
+#include "extensions/browser/api/content_settings/content_settings_service.h"
+#include "extensions/browser/api/web_request/web_request_proxying_websocket.h"
 
 // The following are not supported in the experimental desktop-android build.
 // TODO(https://crbug.com/356905053): Enable these APIs on desktop-android.
@@ -51,7 +55,6 @@
 #include "extensions/browser/api/system_info/system_info_api.h"
 #include "extensions/browser/api/usb/usb_device_manager.h"
 #include "extensions/browser/api/usb/usb_device_resource.h"
-#include "extensions/browser/api/web_request/web_request_proxying_websocket.h"
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -82,6 +85,11 @@ void EnsureApiBrowserContextKeyedServiceFactoriesBuilt() {
   StorageFrontend::GetFactoryInstance();
   WebRequestAPI::GetFactoryInstance();
   WebRequestProxyingURLLoaderFactory::EnsureAssociatedFactoryBuilt();
+  WebRequestProxyingWebSocket::EnsureAssociatedFactoryBuilt();
+  MessageService::GetFactoryInstance();
+  ManagementAPI::GetFactoryInstance();
+  RulesRegistryService::GetFactoryInstance();
+  ContentSettingsService::GetFactoryInstance();
 
 // The following are not supported in the experimental desktop-android build.
 // TODO(https://crbug.com/356905053): Enable these APIs on desktop-android.
@@ -114,7 +122,6 @@ void EnsureApiBrowserContextKeyedServiceFactoriesBuilt() {
 #if BUILDFLAG(IS_CHROMEOS)
   ClipboardAPI::GetFactoryInstance();
 #endif
-  ContentSettingsService::GetFactoryInstance();
   FeedbackPrivateAPI::GetFactoryInstance();
   HidDeviceManager::GetFactoryInstance();
 #if BUILDFLAG(IS_CHROMEOS)
@@ -131,7 +138,6 @@ void EnsureApiBrowserContextKeyedServiceFactoriesBuilt() {
   VirtualKeyboardAPI::GetFactoryInstance();
   WebcamPrivateAPI::GetFactoryInstance();
 #endif
-  WebRequestProxyingWebSocket::EnsureAssociatedFactoryBuilt();
   WriteQuotaChecker::GetFactoryInstance();
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 }

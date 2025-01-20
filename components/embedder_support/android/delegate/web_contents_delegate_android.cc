@@ -34,6 +34,11 @@
 #include "url/android/gurl_android.h"
 #include "url/gurl.h"
 
+#include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+#include "chrome/browser/extensions/api/tabs/tabs_windows_api.h"
+#include "chrome/browser/extensions/api/tabs/tabs_event_router.h"
+
 // Must come after all headers that specialize FromJniType() / ToJniType().
 #include "components/embedder_support/android/web_contents_delegate_jni_headers/WebContentsDelegateAndroid_jni.h"
 
@@ -171,6 +176,13 @@ void WebContentsDelegateAndroid::LoadingStateChanged(
   }
   Java_WebContentsDelegateAndroid_loadingStateChanged(env, obj,
                                                       should_show_loading_ui);
+
+
+  extensions::TabsWindowsAPI* tabs_window_api = extensions::TabsWindowsAPI::Get(source->GetBrowserContext());
+  if (tabs_window_api) {
+    // TODO proper tab index
+    tabs_window_api->tabs_event_router()->TabChangedAt(source, 0, TabChangeType::kLoadingOnly);
+  }
 }
 
 void WebContentsDelegateAndroid::RendererUnresponsive(

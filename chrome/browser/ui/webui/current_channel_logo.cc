@@ -26,7 +26,8 @@ int CurrentChannelLogoResourceId() {
     case version_info::Channel::DEV:
     case version_info::Channel::BETA:
     case version_info::Channel::STABLE:
-      NOTREACHED();
+      return IDR_PRODUCT_LOGO_32;
+      // NOTREACHED();
 #endif
     case version_info::Channel::UNKNOWN:
       return IDR_PRODUCT_LOGO_32;

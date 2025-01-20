@@ -50,16 +50,18 @@ generate_grd("build_grd") {
     "$target_gen_dir/mojo/resources.grdp",
   ]
 
-  if ((!is_android && !is_ios) || is_desktop_android) {
+  if ((!is_android && !is_ios) || is_desktop_android || enable_desktop_android_extensions) {
     public_deps += [
       "cr_components/cr_shortcut_input:build_grdp",
       "cr_components/managed_footnote:build_grdp",
       "//third_party/d3:build_grdp",
+      "//third_party/polymer/v3_0:build_grdp",
     ]
     grdp_files += [
       "$root_gen_dir/third_party/d3/d3_resources.grdp",
       "$target_gen_dir/cr_components/cr_shortcut_input/resources.grdp",
       "$target_gen_dir/cr_components/managed_footnote/resources.grdp",
+      "$root_gen_dir/third_party/polymer/v3_0/polymer_3_0_resources.grdp",
     ]
   }
 

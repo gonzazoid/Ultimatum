@@ -3,6 +3,7 @@
 # found in the LICENSE file.
 
 import("//ui/webui/resources/tools/generate_grd.gni")
+import("//extensions/buildflags/buildflags.gni")
 
 generate_grd("build_grdp") {
   grd_prefix = "webui_images"
@@ -45,6 +46,8 @@ generate_grd("build_grdp") {
     "2x/check.png",
     "2x/disabled_select.png",
     "2x/select.png",
+    "arrow_down.svg",
+    "arrow_right.svg",
   ]
 
   if (!is_ios) {
@@ -55,10 +58,8 @@ generate_grd("build_grdp") {
     ]
   }
 
-  if (!is_android && !is_ios) {
+  if ((!is_android && !is_ios) || enable_desktop_android_extensions) {
     input_files += [
-      "arrow_down.svg",
-      "arrow_right.svg",
       "business.svg",
       "colorize.svg",
       "chevron_down.svg",

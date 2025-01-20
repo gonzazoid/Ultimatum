@@ -3167,7 +3167,7 @@ inline constexpr char kShowCastIconInToolbar[] =
     "media_router.show_cast_icon_in_toolbar";
 #endif  // !BUILDFLAG(IS_ANDROID)
 
-#if !BUILDFLAG(IS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 // Pref name for the policy controlling the way in which users are notified of
 // the need to relaunch the browser for a pending update.
 inline constexpr char kRelaunchNotification[] = "browser.relaunch_notification";
@@ -3181,12 +3181,12 @@ inline constexpr char kRelaunchNotificationPeriod[] =
 inline constexpr char kRelaunchWindow[] = "browser.relaunch_window";
 #endif  // !BUILDFLAG(IS_ANDROID)
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
 // Pref name for the policy controlling the maximum age of a build before
 // forcing a fast relaunch.
 inline constexpr char kRelaunchFastIfOutdated[] =
     "browser.relaunch_fast_if_outdated";
-#endif  // !BUILDFLAG(IS_ANDROID)
+// #endif  // !BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_CHROMEOS)
 // Pref name for the policy controlling the time period between the first user
@@ -3358,7 +3358,7 @@ inline constexpr char kHardwareAccelerationModePrevious[] =
 // by the cloud policy subsystem.
 inline constexpr char kDevicePolicyRefreshRate[] = "policy.device_refresh_rate";
 
-#if !BUILDFLAG(IS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 // A boolean where true means that the browser has previously attempted to
 // enable autoupdate and failed, so the next out-of-date browser start should
 // not prompt the user to enable autoupdate, it should offer to reinstall Chrome

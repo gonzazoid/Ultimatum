@@ -123,8 +123,9 @@ void ExtensionUninstallDialogViews::Show() {
 
   std::unique_ptr<ui::DialogModel> dialog_model = dialog_builder.Build();
   dialog_model_ = dialog_model.get();
-
+#if !BUILDFLAG(IS_ANDROID)
   ShowDialog(parent(), extension()->id(), std::move(dialog_model));
+#endif
 }
 
 void ExtensionUninstallDialogViews::Close() {

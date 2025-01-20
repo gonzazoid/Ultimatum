@@ -16,7 +16,10 @@
 #include "components/omnibox/browser/location_bar_model_delegate.h"
 #include "components/sessions/core/session_id.h"
 #include "components/sync_sessions/synced_window_delegate.h"
+#include "extensions/common/extension.h"
 
+#include "chrome/browser/extensions/window_controller.h"
+#include "extensions/common/mojom/context_type.mojom.h"
 struct NavigateParams;
 
 namespace browser_sync {
@@ -204,6 +207,22 @@ class TabModel : public TabListInterface {
 
   TabModel(const TabModel&) = delete;
   TabModel& operator=(const TabModel&) = delete;
+
+
+  virtual base::Value::Dict CreateWindowValueForExtension(
+    const extensions::Extension* extension,
+    extensions::WindowController::PopulateTabBehavior populate_tab_behavior,
+    extensions::mojom::ContextType context) const;
+  virtual base::Value::List CreateTabList(
+    const extensions::Extension* extension,
+    extensions::mojom::ContextType context) const;
+  virtual extensions::api::tabs::Tab CreateTabObject(
+    const extensions::Extension* extension,
+    int tab_index) const;
+  virtual tab_groups::TabGroupId CreateTabGroup(std::vector<int>) const = 0;
+  virtual bool AddTabsToTabGroup(std::vector<int>, int) const = 0;
+  virtual bool Ungroup(std::vector<int>) const = 0;
+  // virtual void MoveTab(int id, int newIndex) const = 0;
 
   virtual Profile* GetProfile() const;
   virtual bool IsOffTheRecord() const;

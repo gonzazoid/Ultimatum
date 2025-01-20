@@ -171,6 +171,7 @@ void ValidateOverridesList(const extensions::ExtensionSet* all_extensions,
 
 // Reloads the page in |web_contents| if it uses the same profile as |profile|
 // and if the current URL is a chrome URL.
+/*
 void UnregisterAndReplaceOverrideForWebContents(const std::string& page,
                                                 Profile* profile,
                                                 WebContents* web_contents) {
@@ -190,6 +191,7 @@ void UnregisterAndReplaceOverrideForWebContents(const std::string& page,
           content::Referrer(url, network::mojom::ReferrerPolicy::kDefault)),
       ui::PAGE_TRANSITION_RELOAD, std::string());
 }
+*/
 
 enum UpdateBehavior {
   UPDATE_DEACTIVATE,  // Mark 'active' as false.
@@ -252,11 +254,11 @@ void UpdateOverridesLists(Profile* profile,
                             behavior)) {
       // This is the active override, so we need to find all existing
       // tabs for this override and get them to reload the original URL.
-      base::RepeatingCallback<void(WebContents*)> callback =
-          base::BindRepeating(&UnregisterAndReplaceOverrideForWebContents,
-                              page_override_pair.first, profile);
+      // base::RepeatingCallback<void(WebContents*)> callback =
+      //     base::BindRepeating(&UnregisterAndReplaceOverrideForWebContents,
+      //                         page_override_pair.first, profile);
       // Apply to all existing tabs.
-      extensions::ExtensionTabUtil::ForEachTab(callback);
+      // extensions::ExtensionTabUtil::ForEachTab(callback);
     }
   }
 }

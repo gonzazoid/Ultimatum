@@ -2643,6 +2643,17 @@ public abstract class ChromeActivity extends AsyncInitializationActivity
             return true;
         }
 
+        if (id == R.id.extensions_id) {
+            RecordUserAction.record("MobileMenuExtensions");
+            TabCreator tabCreator = getTabCreator(currentTab.isIncognito());
+            if (currentTab != null && tabCreator != null) {
+              tabCreator.createNewTab(
+                      new LoadUrlParams("chrome://extensions", PageTransition.LINK),
+                      TabLaunchType.FROM_CHROME_UI, getActivityTab());
+              return true;
+            }
+        }
+
         return false;
     }
 

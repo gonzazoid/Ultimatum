@@ -14,8 +14,10 @@
 #include "chrome/browser/supervised_user/supervised_user_extensions_manager.h"
 #include "chrome/browser/supervised_user/supervised_user_extensions_metrics_recorder.h"
 #include "chrome/browser/supervised_user/supervised_user_service_factory.h"
+#if !BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/ui/extensions/extensions_dialogs.h"
 #include "chrome/browser/ui/supervised_user/parent_permission_dialog.h"
+#endif
 #include "components/prefs/pref_service.h"
 #include "components/supervised_user/core/common/features.h"
 #include "components/supervised_user/core/common/pref_names.h"
@@ -25,7 +27,7 @@
 #include "ui/gfx/native_widget_types.h"
 
 namespace {
-
+#if !BUILDFLAG(IS_ANDROID)
 void OnParentPermissionDialogComplete(
     extensions::SupervisedUserExtensionsDelegate::ExtensionApprovalDoneCallback
         delegate_done_callback,
@@ -48,6 +50,7 @@ void OnParentPermissionDialogComplete(
       break;
   }
 }
+#endif
 
 }  // namespace
 
@@ -137,6 +140,7 @@ void SupervisedUserExtensionsDelegateImpl::RecordExtensionEnablementUmaMetrics(
   extensions_manager_.RecordExtensionEnablementUmaMetrics(enabled);
 }
 
+#if !BUILDFLAG(IS_ANDROID)
 void SupervisedUserExtensionsDelegateImpl::
     ShowParentPermissionDialogForExtension(
         const Extension& extension,
@@ -156,6 +160,7 @@ void SupervisedUserExtensionsDelegateImpl::
           std::move(inner_done_callback));
   parent_permission_dialog_->ShowDialog();
 }
+#endif
 
 void SupervisedUserExtensionsDelegateImpl::
     ShowInstallBlockedByParentDialogForExtension(
@@ -174,9 +179,11 @@ void SupervisedUserExtensionsDelegateImpl::
         FROM_HERE, std::move(block_dialog_callback));
     return;
   }
+#if !BUILDFLAG(IS_ANDROID)
   ShowExtensionInstallBlockedByParentDialog(
       ExtensionInstalledBlockedByParentDialogAction::kEnable, &extension,
       contents, std::move(block_dialog_callback));
+#endif
 }
 
 void SupervisedUserExtensionsDelegateImpl::RequestExtensionApproval(

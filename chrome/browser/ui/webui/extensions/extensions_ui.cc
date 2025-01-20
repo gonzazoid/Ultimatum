@@ -431,7 +431,6 @@ content::WebUIDataSource* CreateAndAddExtensionsSource(Profile* profile,
 
   // Add localized generic strings that need '&' to be removed from them.
   webui::AddLocalizedString(source, "edit", IDS_EDIT);
-
   source->AddString("errorLinesNotShownSingular",
                     l10n_util::GetPluralStringFUTF16(
                         IDS_EXTENSIONS_ERROR_LINES_NOT_SHOWN, 1));
@@ -475,7 +474,6 @@ content::WebUIDataSource* CreateAndAddExtensionsSource(Profile* profile,
   source->AddBoolean(kShowActivityLogKey,
                      base::CommandLine::ForCurrentProcess()->HasSwitch(
                          ::switches::kEnableExtensionActivityLogging));
-
   source->AddString(kLoadTimeClassesKey, GetLoadTimeClasses(in_dev_mode));
 
   source->AddBoolean(kEnableEnhancedSiteControls,
@@ -532,8 +530,8 @@ ExtensionsUIConfig::CreateWebUIController(content::WebUI* web_ui,
                                           const GURL& url) {
   Profile* profile = Profile::FromWebUI(web_ui);
   if (profile->IsGuestSession()) {
-    return std::make_unique<PageNotAvailableForGuestUI>(
-        web_ui, chrome::kChromeUIExtensionsHost);
+    // return std::make_unique<PageNotAvailableForGuestUI>(
+    //     web_ui, chrome::kChromeUIExtensionsHost);
   }
   return std::make_unique<ExtensionsUI>(web_ui);
 }
@@ -554,12 +552,13 @@ ExtensionsUI::ExtensionsUI(content::WebUI* web_ui) : WebUIController(web_ui) {
   source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ObjectSrc, "object-src 'self';");
 
-  content::URLDataSource::Add(
-      profile, std::make_unique<FaviconSource>(
-                   profile, chrome::FaviconUrlFormat::kFavicon2));
+  // content::URLDataSource::Add(
+  //     profile, std::make_unique<FaviconSource>(
+  //                  profile, chrome::FaviconUrlFormat::kFavicon2));
 
   // Add a handler to provide pluralized strings.
   auto plural_string_handler = std::make_unique<PluralStringHandler>();
+  /*
   plural_string_handler->AddLocalizedString("safetyCheckTitle",
                                             IDS_EXTENSIONS_SC_TITLE);
   plural_string_handler->AddLocalizedString("safetyCheckDescription",
@@ -578,6 +577,7 @@ ExtensionsUI::ExtensionsUI(content::WebUI* web_ui) : WebUIController(web_ui) {
   plural_string_handler->AddLocalizedString(
       "mv2DeprecationPanelDisabledSubtitle",
       IDS_EXTENSIONS_MV2_DEPRECATION_PANEL_DISABLED_SUBTITLE);
+  */
   web_ui->AddMessageHandler(std::move(plural_string_handler));
 }
 

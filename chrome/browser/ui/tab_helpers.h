@@ -61,6 +61,7 @@ class TabHelpers {
 
   friend class TabAndroid;
   friend class android::TabWebContentsDelegateAndroid;
+  friend class tabs::TabModel;
 #else
   friend class Browser;
   friend class chrome::BrowserTabStripModelDelegate;
