@@ -306,16 +306,16 @@ bool SelectionPopupController::ShowSelectionMenu(
       params.source_type == ui::mojom::MenuSourceType::kTouch ||
       params.source_type == ui::mojom::MenuSourceType::kLongPress;
 
-  menu_model_bridge_ = std::make_unique<ui::MenuModelBridge>();
   if (selection_popup_delegate_) {
     extra_items_menu_model_.reset();
     extra_items_menu_model_ =
         selection_popup_delegate_->GetSelectionPopupExtraItems(
             *render_frame_host, params);
-    if (extra_items_menu_model_) {
-      menu_model_bridge_->AddExtensionItems(extra_items_menu_model_.get());
-    }
+    // if (extra_items_menu_model_) {
+    //   menu_model_bridge_->AddExtensionItems(extra_items_menu_model_.get());
+    // }
   }
+  menu_model_bridge_ = std::make_unique<ui::MenuModelBridge>(extra_items_menu_model_ ? extra_items_menu_model_->AsWeakPtr() : nullptr);
 
   Java_SelectionPopupControllerImpl_showSelectionMenu(
       env, obj, params.x, params.y, params.selection_rect.x(),

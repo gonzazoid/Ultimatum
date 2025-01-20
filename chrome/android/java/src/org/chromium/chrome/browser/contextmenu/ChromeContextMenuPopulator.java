@@ -414,9 +414,9 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
     @VisibleForTesting
     boolean shouldShowDeveloperMenu() {
         return DevToolsWindowAndroid.isDevToolsAllowedFor(
-                        getProfile(), mItemDelegate.getWebContents())
-                && DeviceInput.supportsAlphabeticKeyboard()
-                && DeviceInput.supportsPrecisionPointer();
+                        getProfile(), mItemDelegate.getWebContents());
+                // && DeviceInput.supportsAlphabeticKeyboard()
+                // && DeviceInput.supportsPrecisionPointer();
     }
 
     @Override
@@ -623,7 +623,6 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
             if (enableShareFromContextMenu()) {
                 imageGroup.add(createShareListItem(Item.SHARE_IMAGE, Item.DIRECT_SHARE_IMAGE));
             }
-
             groupedItems.add(imageGroup);
         }
 

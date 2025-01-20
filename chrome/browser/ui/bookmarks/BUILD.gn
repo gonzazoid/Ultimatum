@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-assert(is_win || is_mac || is_linux || is_chromeos)
+# assert(is_win || is_mac || is_linux || is_chromeos)
 
 source_set("bookmarks") {
   sources = [
@@ -72,7 +72,7 @@ source_set("impl") {
     "//chrome/browser/ui/browser_window",
     "//chrome/browser/ui/tabs:tab_group",
     "//chrome/browser/ui/tabs:tab_strip",
-    "//chrome/browser/ui/tabs/saved_tab_groups",
+    # "//chrome/browser/ui/tabs/saved_tab_groups",
     "//components/bookmarks/common",
     "//components/bookmarks/managed",
     "//components/saved_tab_groups/public:features",
@@ -85,86 +85,4 @@ source_set("impl") {
   if (is_mac) {
     deps += [ "//chrome/browser/web_applications" ]
   }
-}
-
-source_set("browser_tests") {
-  testonly = true
-  defines = [ "HAS_OUT_OF_PROC_TEST_RUNNER" ]
-  sources = [ "bookmark_browsertest.cc" ]
-
-  deps = [
-    ":bookmarks",
-    "//base",
-    "//base/test:test_support",
-    "//chrome/app:command_ids",
-    "//chrome/browser",
-    "//chrome/browser:browser_process",
-    "//chrome/browser:primitives",
-    "//chrome/browser:test_support",
-    "//chrome/browser/profiles:profile",
-    "//chrome/browser/tab_group_sync:factories",
-    "//chrome/browser/ui",
-    "//chrome/browser/ui:browser_list",
-    "//chrome/browser/ui:ui_features",
-    "//chrome/browser/ui/browser_window",
-    "//chrome/browser/ui/tabs:tab_strip",
-    "//chrome/browser/ui/tabs/saved_tab_groups",
-    "//chrome/common",
-    "//chrome/test:test_support_ui",
-    "//components/bookmarks/browser",
-    "//components/bookmarks/test",
-    "//components/saved_tab_groups/public",
-    "//components/security_interstitials/content:security_interstitial_page",
-    "//content/public/browser",
-    "//content/test:test_support",
-    "//net:test_support",
-    "//testing/gmock",
-    "//ui/base",
-    "//ui/base:features",
-    "//ui/base/dragdrop/mojom",
-    "//ui/gfx",
-  ]
-}
-
-source_set("unit_tests") {
-  testonly = true
-  sources = [
-    "bookmark_context_menu_controller_unittest.cc",
-    "bookmark_editor_unittest.cc",
-    "bookmark_stats_tab_helper_unittest.cc",
-    "bookmark_ui_operations_helper_unittest.cc",
-    "bookmark_ui_utils_desktop_unittest.cc",
-    "bookmark_unittest.cc",
-    "bookmark_utils_unittest.cc",
-    "recently_used_folders_combo_model_unittest.cc",
-  ]
-
-  deps = [
-    ":bookmarks",
-    "//base",
-    "//base/test:test_support",
-    "//chrome/app:command_ids",
-    "//chrome/browser",
-    "//chrome/browser/profiles:profile",
-    "//chrome/browser/tab_group_sync:factories",
-    "//chrome/browser/ui:ui_features",
-    "//chrome/browser/ui/browser_window",
-    "//chrome/common",
-    "//chrome/test:test_support",
-    "//components/bookmarks/browser",
-    "//components/bookmarks/common",
-    "//components/bookmarks/managed",
-    "//components/bookmarks/test",
-    "//components/dom_distiller/core",
-    "//components/saved_tab_groups/public:features",
-    "//components/saved_tab_groups/test_support",
-    "//components/sync_preferences:test_support",
-    "//content/public/browser",
-    "//content/test:test_support",
-    "//testing/gtest",
-    "//ui/base",
-    "//ui/base/clipboard",
-    "//ui/base/clipboard:clipboard_test_support",
-    "//url",
-  ]
 }

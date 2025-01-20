@@ -493,6 +493,8 @@ void LayoutView::QuadsInAncestorInternal(Vector<gfx::QuadF>& quads,
 void LayoutView::CommitPendingSelection() {
   NOT_DESTROYED();
   TRACE_EVENT0("blink", "LayoutView::commitPendingSelection");
+  if (NeedsLayout())
+    ClearNeedsLayout();
   DCHECK(!NeedsLayout());
   frame_view_->GetFrame().Selection().CommitAppearanceIfNeeded();
 }

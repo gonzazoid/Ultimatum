@@ -117,6 +117,12 @@
 #include "extensions/browser/updater/null_extension_cache.h"
 #endif
 
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/android/tab_android.h"
+#include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+#endif
+
 namespace extensions {
 
 namespace {
@@ -628,6 +634,22 @@ void ChromeExtensionsBrowserClient::GetTabAndWindowIdForWebContents(
     content::WebContents* web_contents,
     int* tab_id,
     int* window_id) {
+#if BUILDFLAG(IS_ANDROID)
+  for (TabModel* model : TabModelList::models()) {
+    for (int i = 0; i < model->GetTabCount(); i++) {
+      // yeah, I'm ashamed of myself too
+      content::WebContents* contents = model->GetWebContentsAt(i);
+      if (contents == web_contents) {
+        *tab_id = model->GetTabAt(i)->GetTabId().id();
+        *window_id = model->GetTabAt(i)->GetWindowId().id();
+        return;
+      }
+    }
+  }
+
+  *tab_id = -1;
+  *window_id = -1;
+#else
   sessions::SessionTabHelper* session_tab_helper =
       sessions::SessionTabHelper::FromWebContents(web_contents);
   if (session_tab_helper) {
@@ -637,6 +659,7 @@ void ChromeExtensionsBrowserClient::GetTabAndWindowIdForWebContents(
     *tab_id = -1;
     *window_id = -1;
   }
+#endif
 }
 
 KioskDelegate* ChromeExtensionsBrowserClient::GetKioskDelegate() {

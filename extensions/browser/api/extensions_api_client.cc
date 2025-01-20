@@ -163,12 +163,12 @@ FileSystemDelegate* ExtensionsAPIClient::GetFileSystemDelegate() {
 FeedbackPrivateDelegate* ExtensionsAPIClient::GetFeedbackPrivateDelegate() {
   return nullptr;
 }
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 AutomationInternalApiDelegate*
 ExtensionsAPIClient::GetAutomationInternalApiDelegate() {
   return nullptr;
 }
-#endif  // !BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_CHROMEOS)
 NonNativeFileSystemDelegate*

@@ -61,6 +61,7 @@ public class ExtensionToolbarCoordinatorImpl implements ExtensionToolbarCoordina
         mExtensionsMenuCoordinator =
                 new ExtensionsMenuCoordinator(
                         context,
+                        windowAndroid,
                         container.findViewById(R.id.extensions_menu_button),
                         container.findViewById(R.id.extensions_divider),
                         themeColorProvider,

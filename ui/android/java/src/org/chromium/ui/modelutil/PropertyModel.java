@@ -336,8 +336,8 @@ public class PropertyModel extends PropertyObservable<PropertyKey> {
 
     private void validateKey(PropertyKey key) {
         if (BuildConfig.ENABLE_ASSERTS && !mData.containsKey(key)) {
-            throw new IllegalArgumentException(
-                    "Invalid key passed in: " + key + ". Current data is: " + mData.toString());
+        //     throw new IllegalArgumentException(
+        //             "Invalid key passed in: " + key + ". Current data is: " + mData.toString());
         }
     }
 

@@ -201,7 +201,7 @@ void SupervisedUserPrefStore::OnNewSettingsAvailable(
           static_cast<int>(policy::IncognitoModeAvailability::kDisabled));
     }
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
     {
       bool permissions_disallowed =
           settings.FindBool(supervised_user::kGeolocationDisabled)

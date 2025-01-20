@@ -575,7 +575,7 @@ source_set("browser_sources") {
     "//content/public/common:buildflags",
     "//extensions:extensions_browser_resources",
     "//extensions/browser/api:extensions_api_client",
-    "//extensions/browser/api/messaging:native_messaging",
+    # "//extensions/browser/api/messaging:native_messaging",
     "//extensions/browser/api/storage:settings_namespace",
     "//extensions/browser/api/storage:settings_observer",
     "//extensions/browser/api/system_display:display_info_provider",

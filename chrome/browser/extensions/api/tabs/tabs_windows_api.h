@@ -35,11 +35,11 @@ class TabsWindowsAPI : public BrowserContextKeyedAPI,
   // Creates the tabs event router. Visible for testing.
   void InitTabsEventRouter();
 
-#if BUILDFLAG(IS_ANDROID)
+// #if BUILDFLAG(IS_ANDROID)
   TabsEventRouterAndroid* tabs_event_router_android();
-#else
+// #else
   TabsEventRouter* tabs_event_router();
-#endif
+// #endif
 
   WindowsEventRouter* windows_event_router();
 
@@ -63,13 +63,13 @@ class TabsWindowsAPI : public BrowserContextKeyedAPI,
   }
   static const bool kServiceIsNULLWhileTesting = true;
 
-#if BUILDFLAG(IS_ANDROID)
+// #if BUILDFLAG(IS_ANDROID)
   // TODO(crbug.com/427503497): Remove this once TabsEventRouter works on
   // Android.
   std::unique_ptr<TabsEventRouterAndroid> tabs_event_router_android_;
-#else
+// #else
   std::unique_ptr<TabsEventRouter> tabs_event_router_;
-#endif
+// #endif
   std::unique_ptr<WindowsEventRouter> windows_event_router_;
 };
 

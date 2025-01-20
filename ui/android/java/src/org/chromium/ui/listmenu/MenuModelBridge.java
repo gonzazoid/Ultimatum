@@ -10,13 +10,19 @@ import static org.chromium.ui.listmenu.ListMenuItemProperties.START_ICON_BITMAP;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.TITLE;
 
 import android.graphics.Bitmap;
+import android.view.View;
+
+import androidx.annotation.VisibleForTesting;
 
 import org.jni_zero.CalledByNative;
 import org.jni_zero.JNINamespace;
 import org.jni_zero.JniType;
+import org.jni_zero.NativeMethods;
 
+import org.chromium.base.metrics.RecordUserAction;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
+import org.chromium.ui.listmenu.ListItemType;
 import org.chromium.ui.modelutil.MVCListAdapter.ListItem;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
 import org.chromium.ui.modelutil.PropertyModel;
@@ -34,16 +40,21 @@ import java.util.List;
 public class MenuModelBridge {
 
     private final List<ListItem> mItems = new ArrayList<>();
+    private long mNativePtr;
 
     @CalledByNative
-    private static MenuModelBridge create() {
-        return new MenuModelBridge();
+    private static MenuModelBridge create(long nativePtr) {
+        return new MenuModelBridge(nativePtr);
     }
 
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
     /** {@return A {@link MenuModelBridge} instance} */
-    public MenuModelBridge() {}
+    public MenuModelBridge(long nativePtr) {
+        mNativePtr = nativePtr;
+    }
 
     /** {@return The list of {@link ListItem} held by this {@link MenuModelBridge}} */
+    @CalledByNative
     public List<ListItem> getListItems() {
         return mItems;
     }
@@ -72,14 +83,22 @@ public class MenuModelBridge {
             @JniType("std::u16string") final String label,
             @JniType("std::optional<SkBitmap>") final @Nullable Bitmap bitmap,
             final boolean isEnabled,
-            final Runnable callback) {
+            final int indexForModelActivation) {
+        // final View.OnHoverListener mItemOnHoverListener = (v, e) -> true;
         PropertyModel.Builder modelBuilder =
                 new PropertyModel.Builder(ListMenuItemProperties.ALL_KEYS)
                         .with(TITLE, label)
                         .with(START_ICON_BITMAP, bitmap)
                         .with(ENABLED, isEnabled)
-                        .with(CLICK_LISTENER, (view) -> callback.run());
+                        .with(CLICK_LISTENER,
+                              (view) -> {
+                                    if (mNativePtr == 0) return;
+                                    RecordUserAction.record("ContextMenu.ExtensionItemClicked");
+                                    MenuModelBridgeJni.get()
+                                            .activatedAt(mNativePtr, indexForModelActivation);
+                              }); 
         mItems.add(new ListItem(ListItemType.MENU_ITEM, modelBuilder.build()));
+        // mItems.add(new ListItem(ListItemType.CONTEXT_MENU_ITEM, modelBuilder.build()));
     }
 
     /**
@@ -88,20 +107,27 @@ public class MenuModelBridge {
      * @param label The label to display.
      * @param isChecked Whether the checkbox is checked.
      * @param isEnabled Whether the checkbox and label are enabled.
-     * @param callback The callback to run when the checkbox is clicked.
+     * @param indexForModelActivation The index for {@link Natives#activatedAt(long, int)}.
      */
     @CalledByNative
     private void addCheck(
             @JniType("std::u16string") final String label,
             final boolean isChecked,
             final boolean isEnabled,
-            final Runnable callback) {
+            final int indexForModelActivation) {
         PropertyModel.Builder modelBuilder =
                 new PropertyModel.Builder(ListMenuCheckItemProperties.ALL_KEYS)
                         .with(TITLE, label)
                         .with(ListMenuCheckItemProperties.CHECKED, isChecked)
                         .with(ENABLED, isEnabled)
-                        .with(CLICK_LISTENER, (view) -> callback.run());
+                        .with(
+                                CLICK_LISTENER,
+                                (view) -> {
+                                    if (mNativePtr == 0) return;
+                                    RecordUserAction.record("ContextMenu.ExtensionItemClicked");
+                                    MenuModelBridgeJni.get()
+                                            .activatedAt(mNativePtr, indexForModelActivation);
+                                });
         mItems.add(new ListItem(ListItemType.MENU_ITEM_WITH_CHECKBOX, modelBuilder.build()));
     }
 
@@ -111,24 +137,38 @@ public class MenuModelBridge {
      * @param label The label to display.
      * @param isSelected Whether the radio option is selected.
      * @param isEnabled Whether the radio option and label are enabled.
-     * @param callback The callback to run when the radio option is selected.
+     * @param indexForModelActivation The index for {@link Natives#activatedAt(long, int)}.
      */
     @CalledByNative
     private void addRadioButton(
             @JniType("std::u16string") final String label,
             final boolean isSelected,
             final boolean isEnabled,
-            final Runnable callback) {
+            final int indexForModelActivation) {
         PropertyModel.Builder modelBuilder =
                 new PropertyModel.Builder(ListMenuRadioItemProperties.ALL_KEYS)
                         .with(TITLE, label)
                         .with(ListMenuRadioItemProperties.SELECTED, isSelected)
                         .with(ENABLED, isEnabled)
-                        .with(CLICK_LISTENER, (view) -> callback.run());
+                        .with(
+                                CLICK_LISTENER,
+                                (view) -> {
+                                    if (mNativePtr == 0) return;
+                                    RecordUserAction.record("ContextMenu.ExtensionItemClicked");
+                                    MenuModelBridgeJni.get()
+                                            .activatedAt(mNativePtr, indexForModelActivation);
+                                });
         mItems.add(new ListItem(ListItemType.MENU_ITEM_WITH_RADIO_BUTTON, modelBuilder.build()));
     }
 
-    /** Adds a context menu item that is a submenu parent. */
+    /**
+     * Adds a context menu item with a radio button.
+     *
+     * @param label The label to display.
+     * @param bitmap The icon to display (or null if there should be no icon).
+     * @param isEnabled Whether the radio option and label are enabled.
+     * @param submenuItems The items that will be under this submenu.
+     */
     @CalledByNative
     private void addSubmenu(
             @JniType("std::u16string") final String label,
@@ -149,5 +189,16 @@ public class MenuModelBridge {
     private void addDivider() {
         // TODO(crbug.com/416222384): Update context menus to use incognito theming.
         mItems.add(new ListItem(ListItemType.DIVIDER, new PropertyModel()));
+    }
+
+    public void onActivatedAt(int offset) {
+      MenuModelBridgeJni.get().activatedAt(mNativePtr, offset);
+    }
+
+    @NativeMethods
+    public interface Natives {
+        void activatedAt(
+                long nativeMenuModelBridge, int position);
+
     }
 }

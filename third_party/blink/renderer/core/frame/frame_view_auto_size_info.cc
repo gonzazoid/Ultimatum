@@ -8,6 +8,7 @@
 #include "third_party/blink/public/mojom/scroll/scrollbar_mode.mojom-blink.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
+#include "third_party/blink/renderer/core/frame/location.h"
 #include "third_party/blink/renderer/core/layout/layout_box.h"
 #include "third_party/blink/renderer/core/layout/layout_view.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
@@ -134,8 +135,11 @@ bool FrameViewAutoSizeInfo::AutoSizeIfNeeded() {
     change_size = false;
   }
 
-  if (change_size)
-    frame_view_->Resize(new_size.width(), new_size.height());
+  if (change_size && document->location()->protocol() == "chrome-extension:") {
+    if ((new_size.width() > size.width()) || (new_size.height() > size.height())) {
+      frame_view_->Resize(new_size.width(), new_size.height());
+    }
+  }
 
   // Force the scrollbar state to avoid the scrollbar code adding them and
   // causing them to be needed. For example, a vertical scrollbar may cause

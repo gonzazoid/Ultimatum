@@ -22,8 +22,8 @@
   },
   "chrome_settings_overrides": {
     "channel": "stable",
-    "extension_types": ["extension"],
-    "platforms": ["win", "mac"]
+    "extension_types": ["extension"]
+    // "platforms": ["win", "mac"]
   },
   "content_scripts": [
     {

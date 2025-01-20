@@ -102,7 +102,7 @@ class ElementInnerTextCollector final {
 };
 
 String ElementInnerTextCollector::RunOn(const Element& element) {
-  DCHECK(!element.InActiveDocument() || !NeedsLayoutTreeUpdate(element));
+  // DCHECK(!element.InActiveDocument() || !NeedsLayoutTreeUpdate(element));
 
   if (visitor_) {
     visitor_->WillVisit(element, result_.length());

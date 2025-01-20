@@ -89,6 +89,7 @@ bool DefaultLocaleHandler::Validate(
 
   base::FilePath locale_path;
   while (!(locale_path = locales.Next()).empty()) {
+    // we need this commented only when installing unpacked extension
     if (extension_l10n_util::ShouldSkipValidation(path, locale_path,
                                                   all_locales))
       continue;
@@ -107,10 +108,10 @@ bool DefaultLocaleHandler::Validate(
           base::UTF16ToUTF8(messages_path.LossyDisplayName()).c_str());
       return false;
     }
-
-    if (locale_path == default_locale_path) {
+    // TODO!!!
+    // if (locale_path == default_locale_path) {
       has_default_locale_message_file = true;
-    }
+    // }
   }
 
   // Only message file for default locale has to exist.

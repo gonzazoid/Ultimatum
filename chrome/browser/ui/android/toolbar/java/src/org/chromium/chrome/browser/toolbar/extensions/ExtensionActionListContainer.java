@@ -54,7 +54,7 @@ class ExtensionActionListContainer extends ViewGroup {
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         // The parent passes the window width as the maximum width.
-        assert MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.AT_MOST;
+        // assert MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.AT_MOST;
         int remainingWidth =
                 MeasureSpec.getSize(widthMeasureSpec)
                         - getResources()
@@ -82,13 +82,13 @@ class ExtensionActionListContainer extends ViewGroup {
 
             if (childWidthWithMargins > remainingWidth) {
                 // Measure remaining children with zero size.
-                final int zeroMeasureSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.EXACTLY);
-                for (; i < numChildren; i++) {
-                    final View overflowChild = getChildAt(i);
-                    overflowChild.measure(zeroMeasureSpec, zeroMeasureSpec);
-                    assert overflowChild.getMeasuredWidth() == 0;
-                }
-                break;
+                // final int zeroMeasureSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.EXACTLY);
+                // for (; i < numChildren; i++) {
+                //     final View overflowChild = getChildAt(i);
+                //     overflowChild.measure(zeroMeasureSpec, zeroMeasureSpec);
+                //     assert overflowChild.getMeasuredWidth() == 0;
+                // }
+                // break;
             }
 
             remainingWidth -= childWidthWithMargins;

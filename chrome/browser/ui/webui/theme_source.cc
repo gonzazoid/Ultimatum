@@ -178,8 +178,8 @@ bool ThemeSource::ShouldServiceRequest(const GURL& url,
                                        content::BrowserContext* browser_context,
                                        int render_process_id) {
   return url.SchemeIs(chrome::kChromeSearchScheme)
-             ? InstantService::ShouldServiceRequest(url, browser_context,
-                                                    render_process_id)
+             ? false // InstantService::ShouldServiceRequest(url, browser_context,
+                     //                                render_process_id)
              : URLDataSource::ShouldServiceRequest(url, browser_context,
                                                    render_process_id);
 }
@@ -279,6 +279,7 @@ void ThemeSource::SendColorsCss(
         std::string css_string;
         for (ui::ColorId id = start; id < end; ++id) {
           const SkColor color = color_provider.GetColor(id);
+          LOG(INFO) << "COLOR!!! " << color_css_name.Run(id).c_str() << ": " << ui::ConvertSkColorToCSSColor(color).c_str();
           std::string css_id_to_color_mapping =
               base::StringPrintf("%s:%s;", color_css_name.Run(id).c_str(),
                                  ui::ConvertSkColorToCSSColor(color).c_str());
@@ -357,6 +358,8 @@ void ThemeSource::SendColorsCss(
     return;
   }
 
+  LOG(INFO) << "CSS";
+  LOG(INFO) << css_string;
   std::move(callback).Run(
       base::MakeRefCounted<base::RefCountedString>(std::move(css_string)));
 

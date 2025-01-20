@@ -43,10 +43,10 @@ bool GetTabSearchTrailingTabstrip(const Profile* profile) {
 
   // If this pref has already been read, we need to return the same value.
   if (!g_tab_search_trailing_tabstrip_at_startup.has_value()) {
-    g_tab_search_trailing_tabstrip_at_startup =
-        profile && CanShowTabSearchPositionSetting()
-            ? profile->GetPrefs()->GetBoolean(prefs::kTabSearchRightAligned)
-            : GetDefaultTabSearchRightAligned();
+    g_tab_search_trailing_tabstrip_at_startup = GetDefaultTabSearchRightAligned();
+    //     profile && CanShowTabSearchPositionSetting()
+    //         ? profile->GetPrefs()->GetBoolean(prefs::kTabSearchRightAligned)
+    //         : GetDefaultTabSearchRightAligned();
   }
 
   return g_tab_search_trailing_tabstrip_at_startup.value();

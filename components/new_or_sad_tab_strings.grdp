@@ -124,7 +124,7 @@
           formatter_data="android_java">
         Learn more about Incognito
       </message>
-      <if expr="not is_android">
+      <if expr="not is_android or enable_desktop_android_extensions">
         <message name="IDS_NEW_TAB_OTR_HEADING"
                  desc="Heading used when a person opens an OTR window">
           You’ve gone Incognito

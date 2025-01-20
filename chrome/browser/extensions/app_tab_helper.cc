@@ -123,18 +123,18 @@ void AppTabHelper::DidFinishNavigation(
   ExtensionRegistry* registry = ExtensionRegistry::Get(context);
   const ExtensionSet& enabled_extensions = registry->enabled_extensions();
 
-  Browser* browser = chrome::FindBrowserWithTab(web_contents());
-  if (browser && (browser->is_type_app() || browser->is_type_app_popup())) {
-    const Extension* extension = registry->GetInstalledExtension(
-        web_app::GetAppIdFromApplicationName(browser->app_name()));
-    if (extension && AppLaunchInfo::GetFullLaunchURL(extension).is_valid()) {
-      DCHECK(extension->is_app());
-      SetExtensionApp(extension);
-    }
-  } else {
+  // Browser* browser = chrome::FindBrowserWithTab(web_contents());
+  // if (browser && (browser->is_type_app() || browser->is_type_app_popup())) {
+  //   const Extension* extension = registry->GetInstalledExtension(
+  //       web_app::GetAppIdFromApplicationName(browser->app_name()));
+  //   if (extension && AppLaunchInfo::GetFullLaunchURL(extension).is_valid()) {
+  //     DCHECK(extension->is_app());
+  //     SetExtensionApp(extension);
+  //   }
+  // } else {
     UpdateExtensionAppIcon(
         enabled_extensions.GetExtensionOrAppByURL(navigation_handle->GetURL()));
-  }
+  // }
 }
 
 void AppTabHelper::DidCloneToNewWebContents(WebContents* old_web_contents,

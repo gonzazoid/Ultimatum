@@ -7,6 +7,7 @@ package org.chromium.chrome.browser.tab;
 import static org.chromium.build.NullUtil.assertNonNull;
 
 import android.content.Context;
+import android.graphics.Rect;
 import android.view.View;
 
 import androidx.annotation.ColorInt;
@@ -341,6 +342,8 @@ public interface Tab extends TabLifecycle {
      * @return Whether the Tab has requested a reload.
      */
     boolean needsReload();
+
+    Rect getBounds();
 
     /**
      * @return true iff the tab is loading and an interstitial page is not showing.

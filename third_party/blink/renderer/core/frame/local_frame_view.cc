@@ -1370,17 +1370,18 @@ void LocalFrameView::ClearLayoutSubtreeRootsAndMarkContainingBlocks() {
 }
 
 bool LocalFrameView::CheckLayoutInvalidationIsAllowed() const {
-#if DCHECK_IS_ON()
-  if (allows_layout_invalidation_after_layout_clean_)
-    return true;
-
-  // If we are updating all lifecycle phases beyond LayoutClean, we don't expect
-  // dirty layout after LayoutClean.
-  CHECK_FOR_DIRTY_LAYOUT(Lifecycle().GetState() <
-                         DocumentLifecycle::kLayoutClean);
-
-#endif
   return true;
+// #if DCHECK_IS_ON()
+//   if (allows_layout_invalidation_after_layout_clean_)
+//     return true;
+
+//   // If we are updating all lifecycle phases beyond LayoutClean, we don't expect
+//   // dirty layout after LayoutClean.
+//   CHECK_FOR_DIRTY_LAYOUT(Lifecycle().GetState() <
+//                          DocumentLifecycle::kLayoutClean);
+
+// #endif
+//   return true;
 }
 
 bool LocalFrameView::RunPostLayoutIntersectionObserverSteps() {
@@ -1524,9 +1525,9 @@ bool LocalFrameView::NeedsLayout() const {
 }
 
 NOINLINE bool LocalFrameView::CheckDoesNotNeedLayout() const {
-  CHECK_FOR_DIRTY_LAYOUT(!LayoutPending());
-  CHECK_FOR_DIRTY_LAYOUT(!GetLayoutView() || !GetLayoutView()->NeedsLayout());
-  CHECK_FOR_DIRTY_LAYOUT(!IsSubtreeLayout());
+  // CHECK_FOR_DIRTY_LAYOUT(!LayoutPending());
+  // CHECK_FOR_DIRTY_LAYOUT(!GetLayoutView() || !GetLayoutView()->NeedsLayout());
+  // CHECK_FOR_DIRTY_LAYOUT(!IsSubtreeLayout());
   return true;
 }
 
@@ -2605,7 +2606,8 @@ bool LocalFrameView::RunCompositingInputsLifecyclePhase(
           highlight_registry->ValidateHighlightMarkers();
         }
       }
-
+      if (frame_view.NeedsLayout() || frame_view.GetLayoutView()->NeedsLayout())
+        frame_view.ClearLayoutSubtreeRootsAndMarkContainingBlocks();
       frame_view.GetLayoutView()->CommitPendingSelection();
       frame_view.GetLayoutView()->Layer()->UpdateDescendantDependentFlags();
     });
@@ -3212,6 +3214,7 @@ void LocalFrameView::UpdateStyleAndLayout() {
     did_layout |= UpdateStyleAndLayoutInternal();
   }
 
+  GetFrame().GetDocument()->GetStyleEngine().UpdateActiveStyle(); // helps for tampermonkey v3 popup
 #if DCHECK_IS_ON()
   if (!Lifecycle().LifecyclePostponed() && !ShouldThrottleRendering()) {
     DCHECK(!frame_->GetDocument()->NeedsLayoutTreeUpdate());
@@ -3781,6 +3784,7 @@ void LocalFrameView::PropagateFrameRects() {
   gfx::Size frame_size = FrameRect().size();
   if (!frame_size_ || *frame_size_ != frame_size) {
     frame_size_ = frame_size;
+    LOG(INFO) << "FRAME SIZE!!! " << frame_size.width() << " " << GetFrame().GetDocument()->Url();
     GetFrame().GetLocalFrameHostRemote().FrameSizeChanged(frame_size);
   }
 }

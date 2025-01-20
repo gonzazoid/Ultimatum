@@ -25,6 +25,9 @@
 #include "chrome/browser/ui/android/tab_model/tab_model_list.h"
 #include "chrome/browser/ui/android/tab_model/tab_model_observer_jni_bridge.h"
 #include "chrome/browser/ui/browser_navigator_params.h"
+// #include "chrome/browser/ui/browser_window/internal/android/android_browser_window.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/resource_request_body_android.h"
 #include "ui/base/unowned_user_data/scoped_unowned_user_data.h"
@@ -247,6 +250,29 @@ void TabModelJniBridge::HandlePopupNavigation(TabAndroid* parent,
 WebContents* TabModelJniBridge::GetWebContentsAt(int index) const {
   TabAndroid* tab = GetTabAt(index);
   return tab == nullptr ? nullptr : tab->web_contents();
+}
+
+bool TabModelJniBridge::AddTabsToTabGroup(std::vector<int> indices, int destination) const {
+  JNIEnv* env = base::android::AttachCurrentThread();
+
+  ScopedJavaLocalRef<jintArray> java_array =
+    base::android::ToJavaIntArray(env, indices);
+
+  return Java_TabModelJniBridge_addTabsToTabGroup(env, java_object_.get(env), java_array, destination);
+}
+
+tab_groups::TabGroupId TabModelJniBridge::CreateTabGroup(std::vector<int> indices) const {
+  JNIEnv* env = base::android::AttachCurrentThread();
+
+  ScopedJavaLocalRef<jintArray> java_array =
+    base::android::ToJavaIntArray(env, indices);
+
+  auto java_token = Java_TabModelJniBridge_createTabGroup(env, java_object_.get(env), java_array);
+  if (java_token) {
+    base::Token token = base::android::TokenAndroid::FromJavaToken(env, java_token);
+    return tab_groups::TabGroupId::FromRawToken(token);
+  }
+  return tab_groups::TabGroupId::CreateEmpty();
 }
 
 TabAndroid* TabModelJniBridge::GetTabAt(int index) const {

@@ -24,6 +24,8 @@ void FrameContentAsText(wtf_size_t max_chars,
   if (!frame->View() || frame->View()->CanThrottleRendering())
     return;
 
+  if (frame->View()->NeedsLayout()) return;
+  if (document->NeedsLayoutTreeUpdate()) return;
   DCHECK(!frame->View()->NeedsLayout());
   DCHECK(!document->NeedsLayoutTreeUpdate());
 

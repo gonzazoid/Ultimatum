@@ -8,6 +8,7 @@
 #include <optional>
 
 #include "base/android/jni_android.h"
+#include "base/functional/callback.h"
 #include "base/android/scoped_java_ref.h"
 #include "base/component_export.h"
 #include "base/memory/weak_ptr.h"
@@ -21,20 +22,21 @@
 namespace ui {
 class COMPONENT_EXPORT(UI_MENUS) MenuModelBridge {
  public:
-  MenuModelBridge();
+ explicit MenuModelBridge(base::WeakPtr<ui::MenuModel> menu_model);
   MenuModelBridge(const MenuModelBridge&) = delete;
   MenuModelBridge& operator=(const MenuModelBridge&) = delete;
   virtual ~MenuModelBridge();
 
-  void AddExtensionItems(ui::MenuModel* menu_model);
-
+  void ActivatedAt(JNIEnv* env, size_t i);
   base::android::ScopedJavaGlobalRef<jobject> GetJavaObject();
 
+  jni_zero::ScopedJavaLocalRef<jobject> GetListItems();
  private:
+  void AddExtensionItems();
   base::android::ScopedJavaGlobalRef<jobject> java_obj_;
-  base::WeakPtrFactory<MenuModelBridge> weak_ptr_factory_{this};
-
-  void ActivatedAt(base::WeakPtr<ui::MenuModel> menu_model, size_t i);
+  base::WeakPtr<ui::MenuModel> menu_model_;
+  std::vector<std::unique_ptr<MenuModelBridge>> submenu_model_bridges_;
+  // base::WeakPtrFactory<MenuModelBridge> weak_ptr_factory_{this};
 };
 
 }  // namespace ui

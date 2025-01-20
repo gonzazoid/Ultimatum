@@ -14,6 +14,10 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/referrer.h"
 #include "extensions/browser/supervised_user_extensions_delegate.h"
+#include "chrome/browser/supervised_user/supervised_user_extensions_delegate_impl.h"
+#include "chrome/browser/extensions/api/messaging/chrome_messaging_delegate.h"
+// #include "extensions/browser/api/messaging/messaging_delegate.h"
+#include "extensions/browser/api/messaging/native_message_host.h"
 #include "extensions/buildflags/buildflags.h"
 #include "ui/base/window_open_disposition.h"
 
@@ -66,7 +70,9 @@ ChromeExtensionsAPIClient::CreateSupervisedUserExtensionsDelegate(
     content::BrowserContext* browser_context) const {
   // TODO(crbug.com/402488726): Support supervised users on desktop Android.
   // This is a stub implementation that always blocks installs.
-  return std::make_unique<SupervisedUserExtensionsDelegate>();
+  // return std::make_unique<SupervisedUserExtensionsDelegate>();
+  return std::make_unique<SupervisedUserExtensionsDelegateImpl>(
+      browser_context);
 }
 
 std::unique_ptr<DisplayInfoProvider>

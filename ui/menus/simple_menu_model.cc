@@ -8,6 +8,7 @@
 
 #include <utility>
 
+#include "base/logging.h"
 #include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/notimplemented.h"
@@ -575,7 +576,9 @@ void SimpleMenuModel::ActivatedAt(size_t index) {
 }
 
 void SimpleMenuModel::ActivatedAt(size_t index, int event_flags) {
+  LOG(INFO) << "SimpleMenuModel::ActivatedAt";
   if (!delegate_) {
+    LOG(INFO) << "!delegate_";
     return;
   }
   // The delegate might be destroyed after executing the command. Hence the
@@ -583,6 +586,7 @@ void SimpleMenuModel::ActivatedAt(size_t index, int event_flags) {
   // MenuControllerTest.OwningDelegate.
   const base::RepeatingCallback<void(int)> on_execute_callback =
       items_[ValidateItemIndex(index)].on_execute_callback;
+  LOG(INFO) << "BEFORE delegate_->ExecuteCommand(GetCommandIdAt(index), event_flags)";
   delegate_->ExecuteCommand(GetCommandIdAt(index), event_flags);
   if (on_execute_callback) {
     on_execute_callback.Run(event_flags);

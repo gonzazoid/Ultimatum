@@ -22,8 +22,8 @@ found in the LICENSE file.
     <ImageView
         android:id="@+id/extensions_menu_item_icon"
         style="@style/ListMenuItemIconStyle.Start"
-        android:layout_width="20dp"
-        android:layout_height="20dp"
+        android:layout_width="34dp"
+        android:layout_height="34dp"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"

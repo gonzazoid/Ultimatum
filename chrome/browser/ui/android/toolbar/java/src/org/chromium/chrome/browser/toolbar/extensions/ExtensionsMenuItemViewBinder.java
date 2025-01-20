@@ -23,13 +23,25 @@ public class ExtensionsMenuItemViewBinder {
     public static void bind(PropertyModel model, View view, PropertyKey key) {
         if (key == ExtensionsMenuItemProperties.TITLE) {
             TextView titleView = view.findViewById(R.id.extensions_menu_item_title);
-            titleView.setText(model.get(ExtensionsMenuItemProperties.TITLE));
+            String text = model.get(ExtensionsMenuItemProperties.TITLE);
+            int indexOfNL = text.indexOf("\n");
+            if (indexOfNL != -1) {
+              text = text.substring(0, indexOfNL);
+            }
+            titleView.setText(text);
         } else if (key == ExtensionsMenuItemProperties.ICON) {
             ImageView iconView = view.findViewById(R.id.extensions_menu_item_icon);
             Bitmap bitmap = model.get(ExtensionsMenuItemProperties.ICON);
             // TODO: Investigate the correct resizing method.
             bitmap.setDensity(120);
             iconView.setImageBitmap(bitmap);
+        } else if (key == ExtensionsMenuItemProperties.CLICK_LISTENER) {
+            // view.findViewById(R.id.extensions_menu_item_context_menu)
+            //         .setOnClickListener(model.get(ExtensionsMenuItemProperties.CLICK_LISTENER));
+            view.findViewById(R.id.extensions_menu_item_icon)
+                    .setOnClickListener(model.get(ExtensionsMenuItemProperties.CLICK_LISTENER));
+            view.findViewById(R.id.extensions_menu_item_title)
+                    .setOnClickListener(model.get(ExtensionsMenuItemProperties.CLICK_LISTENER));
         }
     }
 }
