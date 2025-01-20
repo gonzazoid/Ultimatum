@@ -4,8 +4,9 @@
 
 import("//tools/grit/preprocess_if_expr.gni")
 import("//ui/webui/resources/tools/generate_grd.gni")
+import("//extensions/buildflags/buildflags.gni")
 
-include_polymer = !is_android && !is_ios
+include_polymer = (!is_android || enable_desktop_android_extensions)  && !is_ios
 
 preprocess_manifest = "preprocessed_manifest.json"
 

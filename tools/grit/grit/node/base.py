@@ -490,6 +490,7 @@ class Node:
 
     # Set values only for variables that are needed to eval the expression.
     variable_map = {}
+
     for name in variables_in_expr:
       if name == 'os':
         value = target_platform
@@ -525,12 +526,16 @@ class Node:
         def pp_if(symbol):
           return defs.get(symbol, False)
         value = pp_if
-
+      elif name == 'enable_desktop_android_extensions':
+        value = True
       elif name in defs:
         value = defs[name]
       elif name in extra_variables:
         value = extra_variables[name]
       else:
+        print("====================")
+        print(defs)
+        print("====================")
         # Undefined variables are disallowed. All variables appearing in
         # <if expr> conditions need to be defined.
         assert False, 'undefined Grit variable found: ' + name

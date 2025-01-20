@@ -117,39 +117,39 @@ class TabsCreateFunction : public ExtensionFunction {
   ResponseAction Run() override;
   DECLARE_EXTENSION_FUNCTION("tabs.create", TABS_CREATE)
 };
-class TabsDuplicateFunction : public ExtensionFunction {
-  ~TabsDuplicateFunction() override = default;
-  ResponseAction Run() override;
-  DECLARE_EXTENSION_FUNCTION("tabs.duplicate", TABS_DUPLICATE)
-};
-class TabsHighlightFunction : public ExtensionFunction {
-  ~TabsHighlightFunction() override = default;
-  ResponseAction Run() override;
-  bool HighlightTab(TabStripModel* tabstrip,
-                    ui::ListSelectionModel* selection,
-                    std::optional<size_t>* active_index,
-                    int index,
-                    std::string* error);
-  DECLARE_EXTENSION_FUNCTION("tabs.highlight", TABS_HIGHLIGHT)
-};
-class TabsUpdateFunction : public ExtensionFunction {
- public:
-  TabsUpdateFunction();
+// class TabsDuplicateFunction : public ExtensionFunction {
+//   ~TabsDuplicateFunction() override = default;
+//   ResponseAction Run() override;
+//   DECLARE_EXTENSION_FUNCTION("tabs.duplicate", TABS_DUPLICATE)
+// };
+// class TabsHighlightFunction : public ExtensionFunction {
+//   ~TabsHighlightFunction() override = default;
+//   ResponseAction Run() override;
+//   bool HighlightTab(TabStripModel* tabstrip,
+//                     ui::ListSelectionModel* selection,
+//                     std::optional<size_t>* active_index,
+//                     int index,
+//                     std::string* error);
+//   DECLARE_EXTENSION_FUNCTION("tabs.highlight", TABS_HIGHLIGHT)
+// };
+// class TabsUpdateFunction : public ExtensionFunction {
+//  public:
+//   TabsUpdateFunction();
 
- protected:
-  ~TabsUpdateFunction() override = default;
-  bool UpdateURL(const std::string& url,
-                 int tab_id,
-                 std::string* error);
-  ResponseValue GetResult();
+//  protected:
+//   ~TabsUpdateFunction() override = default;
+//   bool UpdateURL(const std::string& url,
+//                  int tab_id,
+//                  std::string* error);
+//   ResponseValue GetResult();
 
-  raw_ptr<content::WebContents, DanglingUntriaged> web_contents_;
+//   raw_ptr<content::WebContents, DanglingUntriaged> web_contents_;
 
- private:
-  ResponseAction Run() override;
+//  private:
+//   ResponseAction Run() override;
 
-  DECLARE_EXTENSION_FUNCTION("tabs.update", TABS_UPDATE)
-};
+//   DECLARE_EXTENSION_FUNCTION("tabs.update", TABS_UPDATE)
+// };
 class TabsMoveFunction : public ExtensionFunction {
   ~TabsMoveFunction() override = default;
   ResponseAction Run() override;
@@ -157,14 +157,15 @@ class TabsMoveFunction : public ExtensionFunction {
                int* new_index,
                base::Value::List& tab_values,
                const std::optional<int>& window_id,
-               std::string* error);
+               std::string* error,
+               int num_tab = 1);
   DECLARE_EXTENSION_FUNCTION("tabs.move", TABS_MOVE)
 };
-class TabsReloadFunction : public ExtensionFunction {
-  ~TabsReloadFunction() override = default;
-  ResponseAction Run() override;
-  DECLARE_EXTENSION_FUNCTION("tabs.reload", TABS_RELOAD)
-};
+// class TabsReloadFunction : public ExtensionFunction {
+//   ~TabsReloadFunction() override = default;
+//   ResponseAction Run() override;
+//   DECLARE_EXTENSION_FUNCTION("tabs.reload", TABS_RELOAD)
+// };
 class TabsRemoveFunction : public ExtensionFunction {
  public:
   TabsRemoveFunction();
@@ -303,14 +304,14 @@ class TabsExecuteScriptFunction : public ExecuteCodeInTabFunction {
   DECLARE_EXTENSION_FUNCTION("tabs.executeScript", TABS_EXECUTESCRIPT)
 };
 
-class TabsInsertCSSFunction : public ExecuteCodeInTabFunction {
- private:
-  ~TabsInsertCSSFunction() override = default;
+// class TabsInsertCSSFunction : public ExecuteCodeInTabFunction {
+//  private:
+//   ~TabsInsertCSSFunction() override = default;
 
-  bool ShouldInsertCSS() const override;
+//   bool ShouldInsertCSS() const override;
 
-  DECLARE_EXTENSION_FUNCTION("tabs.insertCSS", TABS_INSERTCSS)
-};
+//   DECLARE_EXTENSION_FUNCTION("tabs.insertCSS", TABS_INSERTCSS)
+// };
 
 // TODO(https://crrev.com/c/608854): When a file URL is passed, this will do
 // more work than needed: since the key is created based on the file URL in
@@ -320,51 +321,51 @@ class TabsInsertCSSFunction : public ExecuteCodeInTabFunction {
 // b) localize it
 //
 // ... hence, it could just go straight to the ScriptExecutor.
-class TabsRemoveCSSFunction : public ExecuteCodeInTabFunction {
- private:
-  ~TabsRemoveCSSFunction() override = default;
+// class TabsRemoveCSSFunction : public ExecuteCodeInTabFunction {
+//  private:
+//   ~TabsRemoveCSSFunction() override = default;
 
-  bool ShouldRemoveCSS() const override;
+//   bool ShouldRemoveCSS() const override;
 
-  DECLARE_EXTENSION_FUNCTION("tabs.removeCSS", TABS_REMOVECSS)
-};
+//   DECLARE_EXTENSION_FUNCTION("tabs.removeCSS", TABS_REMOVECSS)
+// };
 
-class TabsSetZoomFunction : public ExtensionFunction {
- private:
-  ~TabsSetZoomFunction() override = default;
+// class TabsSetZoomFunction : public ExtensionFunction {
+//  private:
+//   ~TabsSetZoomFunction() override = default;
 
-  ResponseAction Run() override;
+//   ResponseAction Run() override;
 
-  DECLARE_EXTENSION_FUNCTION("tabs.setZoom", TABS_SETZOOM)
-};
+//   DECLARE_EXTENSION_FUNCTION("tabs.setZoom", TABS_SETZOOM)
+// };
 
-class TabsGetZoomFunction : public ExtensionFunction {
- private:
-  ~TabsGetZoomFunction() override = default;
+// class TabsGetZoomFunction : public ExtensionFunction {
+//  private:
+//   ~TabsGetZoomFunction() override = default;
 
-  ResponseAction Run() override;
+//   ResponseAction Run() override;
 
-  DECLARE_EXTENSION_FUNCTION("tabs.getZoom", TABS_GETZOOM)
-};
+//   DECLARE_EXTENSION_FUNCTION("tabs.getZoom", TABS_GETZOOM)
+// };
 
-class TabsSetZoomSettingsFunction : public ExtensionFunction {
- private:
-  ~TabsSetZoomSettingsFunction() override = default;
+// class TabsSetZoomSettingsFunction : public ExtensionFunction {
+//  private:
+//   ~TabsSetZoomSettingsFunction() override = default;
 
-  ResponseAction Run() override;
+//   ResponseAction Run() override;
 
-  DECLARE_EXTENSION_FUNCTION("tabs.setZoomSettings", TABS_SETZOOMSETTINGS)
-};
+//   DECLARE_EXTENSION_FUNCTION("tabs.setZoomSettings", TABS_SETZOOMSETTINGS)
+// };
 
-class TabsGetZoomSettingsFunction : public ExtensionFunction {
- private:
-  ~TabsGetZoomSettingsFunction() override = default;
+// class TabsGetZoomSettingsFunction : public ExtensionFunction {
+//  private:
+//   ~TabsGetZoomSettingsFunction() override = default;
 
-  ResponseAction Run() override;
+//   ResponseAction Run() override;
 
-  DECLARE_EXTENSION_FUNCTION("tabs.getZoomSettings", TABS_GETZOOMSETTINGS)
-};
-
+//   DECLARE_EXTENSION_FUNCTION("tabs.getZoomSettings", TABS_GETZOOMSETTINGS)
+// };
+/*
 class TabsDiscardFunction : public ExtensionFunction {
  public:
   DECLARE_EXTENSION_FUNCTION("tabs.discard", TABS_DISCARD)
@@ -412,7 +413,7 @@ class TabsGoBackFunction : public ExtensionFunction {
   // ExtensionFunction:
   ExtensionFunction::ResponseAction Run() override;
 };
-
+*/
 }  // namespace extensions
 
 #endif  // CHROME_BROWSER_EXTENSIONS_API_TABS_TABS_API_H_

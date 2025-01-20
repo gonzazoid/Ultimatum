@@ -525,6 +525,7 @@ bool CommandService::CanAutoAssign(const ui::Command& command,
   // android.
   // Until IsChromeAccelerator is implemented, allowlist Ctrl-Shift-L. This is
   // very artificial but eases testing.
+  // return false; // !chrome::IsChromeAccelerator(command.accelerator());
   return command.accelerator().IsCtrlDown() &&
          command.accelerator().IsShiftDown() &&
          command.accelerator().key_code() == ui::VKEY_L;

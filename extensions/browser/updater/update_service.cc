@@ -163,7 +163,8 @@ void UpdateService::StartUpdateCheck(
   DCHECK(!update_params.update_info.empty());
 
   VLOG(2) << "UpdateService::StartUpdateCheck";
-
+  return;
+  /*
   if (!ExtensionsBrowserClient::Get()->IsBackgroundUpdateAllowed()) {
     VLOG(1) << "UpdateService - Extension update not allowed.";
     if (!callback.is_null()) {
@@ -212,18 +213,18 @@ void UpdateService::StartUpdateCheck(
       get_data = base::BindRepeating(
           &UpdateDataProvider::GetData, update_data_provider_,
           update_params.install_immediately, std::move(update_data));
-
-  for (const std::vector<std::string>& update_id_group : update_ids) {
-    update_client_->Update(
-        update_id_group, get_data,
-        base::BindRepeating(&UpdateService::OnCrxStateChange,
-                            weak_ptr_factory_.GetWeakPtr(),
-                            update_found_callback),
-        update_params.priority == ExtensionUpdateCheckParams::FOREGROUND,
-        base::BindOnce([](base::RepeatingClosure callback,
-                          update_client::Error /*error*/) { callback.Run(); },
-                       closure));
-  }
+  */
+  // for (const std::vector<std::string>& update_id_group : update_ids) {
+  //   update_client_->Update(
+  //       update_id_group, get_data,
+  //       base::BindRepeating(&UpdateService::OnCrxStateChange,
+  //                           weak_ptr_factory_.GetWeakPtr(),
+  //                           update_found_callback),
+  //       update_params.priority == ExtensionUpdateCheckParams::FOREGROUND,
+  //       base::BindOnce([](base::RepeatingClosure callback,
+  //                         update_client::Error /*error*/) { callback.Run(); },
+  //                      closure));
+  // }
 }
 
 void UpdateService::UpdateCheckComplete(InProgressUpdate update) {

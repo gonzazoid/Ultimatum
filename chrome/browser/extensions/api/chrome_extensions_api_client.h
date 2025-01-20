@@ -61,8 +61,8 @@ class ChromeExtensionsAPIClient : public ExtensionsAPIClient {
   void OpenFileUrl(const GURL& file_url,
                    content::BrowserContext* browser_context) override;
 #if BUILDFLAG(ENABLE_GUEST_VIEW)
-  std::unique_ptr<AppViewGuestDelegate> CreateAppViewGuestDelegate()
-      const override;
+  // std::unique_ptr<AppViewGuestDelegate> CreateAppViewGuestDelegate()
+  //     const override;
   std::unique_ptr<ExtensionOptionsGuestDelegate>
   CreateExtensionOptionsGuestDelegate(
       ExtensionOptionsGuest* guest) const override;

@@ -53,6 +53,11 @@ base::FilePath ExtensionResource::GetFilePath(
     const base::FilePath& extension_root,
     const base::FilePath& relative_path,
     SymlinkPolicy symlink_policy) {
+#if BUILDFLAG(IS_ANDROID)
+  if (extension_root.IsContentUri()) {
+    return extension_root.Append(relative_path);
+  }
+#endif
   // We need to resolve the parent references in the extension_root
   // path on its own because IsParent doesn't like parent references.
   base::FilePath clean_extension_root(

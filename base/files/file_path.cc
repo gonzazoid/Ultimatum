@@ -40,6 +40,10 @@
 #include <CoreFoundation/CoreFoundation.h>
 #endif
 
+#if BUILDFLAG(IS_ANDROID)
+#include "base/android/content_uri_utils.h"
+#endif
+
 namespace base {
 
 using StringType = FilePath::StringType;
@@ -109,6 +113,11 @@ bool AreDriveLetterComponentsEqual(FilePath::StringViewType left,
 #endif  // defined(FILE_PATH_USES_DRIVE_LETTERS)
 
 bool IsPathAbsolute(StringViewType path) {
+#if BUILDFLAG(IS_ANDROID)
+  if (path.length() > 10 && path.substr(0, 10) == "content://") {
+    return true;
+  }
+#endif
 #if defined(FILE_PATH_USES_DRIVE_LETTERS)
   StringType::size_type letter = FindDriveLetter(path);
   if (letter != StringType::npos) {
@@ -544,7 +553,15 @@ FilePath FilePath::BaseName() const {
   if (letter != StringType::npos) {
     new_path.path_.erase(0, letter + 1);
   }
-
+#if BUILDFLAG(IS_ANDROID)
+  if (new_path.IsContentUri()) {
+    size_t last_separator = new_path.path_.rfind("%2F");
+    if (last_separator != StringType::npos) {
+      new_path.path_.erase(0, last_separator + 3);
+      return new_path;
+    }
+  }
+#endif
   // Keep everything after the final separator, but if the pathname is only
   // one character and it's a separator, leave it alone.
   StringType::size_type last_separator = new_path.path_.find_last_of(
@@ -719,6 +736,21 @@ FilePath FilePath::Append(StringViewType component) const {
   }
 
   DCHECK(!IsPathAbsolute(appended));
+
+#if BUILDFLAG(IS_ANDROID)
+  if (IsContentUri()) {
+    FileEnumerator::FileInfo maybe_dir_info;
+    base::internal::ContentUriGetFileInfo(*this, &maybe_dir_info);
+    if (maybe_dir_info.IsDirectory()) {
+      auto directory_entries_ = base::internal::ListContentUriDirectory(*this);
+      for (auto& info : directory_entries_) {
+        if (info.GetName().AsUTF8Unsafe() == appended) {
+          return FilePath(info.content_uri());
+        }
+      }
+    }
+  }
+#endif
 
   if (path_.compare(kCurrentDirectory) == 0 && !appended.empty()) {
     // Append normally doesn't do any normalization, but as a special case,

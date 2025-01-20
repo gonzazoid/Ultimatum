@@ -108,16 +108,16 @@ InspectableViewsFinder::ViewList InspectableViewsFinder::GetViewsForExtension(
     const Extension& extension,
     bool is_enabled) {
   ViewList result;
-  if (!IsInspectionAllowed(profile_, &extension)) {
-    return result;
-  }
-  GetViewsForExtensionForProfile(
-      extension, profile_, is_enabled, false, &result);
-  if (profile_->HasPrimaryOTRProfile()) {
-    GetViewsForExtensionForProfile(
-        extension, profile_->GetPrimaryOTRProfile(/*create_if_needed=*/true),
-        is_enabled, true, &result);
-  }
+  // if (!IsInspectionAllowed(profile_, &extension)) {
+  //   return result;
+  // }
+  // GetViewsForExtensionForProfile(
+  //     extension, profile_, is_enabled, false, &result);
+  // if (profile_->HasPrimaryOTRProfile()) {
+  //   GetViewsForExtensionForProfile(
+  //       extension, profile_->GetPrimaryOTRProfile(/*create_if_needed=*/true),
+  //       is_enabled, true, &result);
+  // }
 
   return result;
 }

@@ -110,6 +110,7 @@
 #include "ui/shell_dialogs/selected_file_info.h"
 #include "url/gurl.h"
 #include "url/origin.h"
+#include "chrome/browser/extensions/account_extension_tracker.h"
 
 namespace extensions {
 
@@ -577,11 +578,11 @@ ExtensionFunction::ResponseAction DeveloperPrivateLoadDirectoryFunction::Run() {
 
   std::string unused_error;
   // Check if the DirectoryEntry is the instance of chrome filesystem.
-  if (!app_file_handler_util::ValidateFileEntryAndGetPath(
-          filesystem_name, filesystem_path, source_process_id(),
-          &project_base_path_, &unused_error)) {
-    return RespondNow(Error("DirectoryEntry of unsupported filesystem."));
-  }
+  // if (!app_file_handler_util::ValidateFileEntryAndGetPath(
+  //         filesystem_name, filesystem_path, source_process_id(),
+  //         &project_base_path_, &unused_error)) {
+  //   return RespondNow(Error("DirectoryEntry of unsupported filesystem."));
+  // }
 
   // Try to load using the FileSystem API backend, in case the filesystem
   // points to a non-native local directory.
@@ -798,8 +799,8 @@ ExtensionFunction::ResponseAction DeveloperPrivateShowOptionsFunction::Run() {
     return RespondNow(Error(kCouldNotFindWebContentsError));
   }
 
-  ExtensionTabUtil::OpenOptionsPage(extension,
-                                    chrome::FindBrowserWithTab(web_contents));
+  // ExtensionTabUtil::OpenOptionsPage(extension,
+  //                                   chrome::FindBrowserWithTab(web_contents));
   return RespondNow(NoArguments());
 }
 
@@ -900,24 +901,24 @@ DeveloperPrivateRemoveMultipleExtensionsFunction::Run() {
     return AlreadyResponded();
   }
 
-  gfx::NativeWindow parent;
-  if (!GetSenderWebContents()) {
-    CHECK_IS_TEST();
-    parent = gfx::NativeWindow();
-  } else {
-    parent = chrome::FindBrowserWithTab(GetSenderWebContents())
-                 ->window()
-                 ->GetNativeWindow();
-  }
+  // gfx::NativeWindow parent;
+  // if (!GetSenderWebContents()) {
+  //   CHECK_IS_TEST();
+  //   parent = gfx::NativeWindow();
+  // } // else {
+    // parent = chrome::FindBrowserWithTab(GetSenderWebContents())
+    //              ->window()
+    //              ->GetNativeWindow();
+  // }
 
-  ShowExtensionMultipleUninstallDialog(
-      profile_, parent, extension_ids_,
-      base::BindOnce(
-          &DeveloperPrivateRemoveMultipleExtensionsFunction::OnDialogAccepted,
-          this),
-      base::BindOnce(
-          &DeveloperPrivateRemoveMultipleExtensionsFunction::OnDialogCancelled,
-          this));
+  // ShowExtensionMultipleUninstallDialog(
+  //     profile_, parent, extension_ids_,
+  //     base::BindOnce(
+  //         &DeveloperPrivateRemoveMultipleExtensionsFunction::OnDialogAccepted,
+  //         this),
+  //     base::BindOnce(
+  //         &DeveloperPrivateRemoveMultipleExtensionsFunction::OnDialogCancelled,
+  //         this));
   return RespondLater();
 }
 
@@ -1001,22 +1002,22 @@ DeveloperPrivateDismissMv2DeprecationNoticeForExtensionFunction::Run() {
         return AlreadyResponded();
       }
 
-      Browser* browser = chrome::FindLastActiveWithProfile(
-          Profile::FromBrowserContext(browser_context()));
-      if (!browser) {
-        return RespondNow(Error(kCouldNotFindWebContentsError));
-      }
+      // Browser* browser = chrome::FindLastActiveWithProfile(
+      //     Profile::FromBrowserContext(browser_context()));
+      // if (!browser) {
+      //   return RespondNow(Error(kCouldNotFindWebContentsError));
+      // }
 
-      ShowMv2DeprecationKeepDialog(
-          browser, *extension,
-          base::BindOnce(
-              &DeveloperPrivateDismissMv2DeprecationNoticeForExtensionFunction::
-                  OnDialogAccepted,
-              this),
-          base::BindOnce(
-              &DeveloperPrivateDismissMv2DeprecationNoticeForExtensionFunction::
-                  OnDialogCancelled,
-              this));
+      // ShowMv2DeprecationKeepDialog(
+      //     browser, *extension,
+      //     base::BindOnce(
+      //         &DeveloperPrivateDismissMv2DeprecationNoticeForExtensionFunction::
+      //             OnDialogAccepted,
+      //         this),
+      //     base::BindOnce(
+      //         &DeveloperPrivateDismissMv2DeprecationNoticeForExtensionFunction::
+      //             OnDialogCancelled,
+      //         this));
 
       return RespondLater();
     }
@@ -1107,19 +1108,19 @@ DeveloperPrivateUploadExtensionToAccountFunction::Run() {
     return RespondNow(Error(kCouldNotFindWebContentsError));
   }
 
-  Browser* browser = chrome::FindBrowserWithTab(web_contents);
-  if (!browser) {
-    return RespondNow(Error(kCouldNotFindWebContentsError));
-  }
+  // Browser* browser = chrome::FindBrowserWithTab(web_contents);
+  // if (!browser) {
+  //   return RespondNow(Error(kCouldNotFindWebContentsError));
+  // }
 
-  ShowUploadExtensionToAccountDialog(
-      browser, *extension,
-      base::BindOnce(
-          &DeveloperPrivateUploadExtensionToAccountFunction::OnDialogAccepted,
-          this),
-      base::BindOnce(
-          &DeveloperPrivateUploadExtensionToAccountFunction::OnDialogCancelled,
-          this));
+  // ShowUploadExtensionToAccountDialog(
+  //     browser, *extension,
+  //     base::BindOnce(
+  //         &DeveloperPrivateUploadExtensionToAccountFunction::OnDialogAccepted,
+  //         this),
+  //     base::BindOnce(
+  //         &DeveloperPrivateUploadExtensionToAccountFunction::OnDialogCancelled,
+  //         this));
 
   return RespondLater();
 }

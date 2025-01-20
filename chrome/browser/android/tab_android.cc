@@ -197,6 +197,14 @@ std::unique_ptr<TabAndroid> TabAndroid::CreateForTesting(
   return tab;
 }
 
+SessionID TabAndroid::GetTabId() const {
+  auto* contents = web_contents();
+  if (contents) {
+    return sessions::SessionTabHelper::IdForTab(contents);
+  }
+  return SessionID::InvalidValue();
+}
+
 SessionID TabAndroid::GetWindowId() const {
   return session_window_id_;
 }
@@ -262,6 +270,38 @@ bool TabAndroid::IsUserInteractable() const {
   return Java_TabImpl_isUserInteractable(env, weak_java_tab_.get(env));
 }
 
+bool TabAndroid::IsFrozen() const {
+  JNIEnv* env = base::android::AttachCurrentThread();
+  return Java_TabImpl_isFrozen(env, weak_java_tab_.get(env));
+}
+
+bool TabAndroid::NeedsReload() const {
+  JNIEnv* env = base::android::AttachCurrentThread();
+  return Java_TabImpl_needsReload(env, weak_java_tab_.get(env));
+}
+
+gfx::Rect TabAndroid::GetBounds() const {
+  JNIEnv* env = base::android::AttachCurrentThread();
+  // it would be much better to move all this gni magic
+  // somewhere else, like base::Android::something
+  base::android::ScopedJavaLocalRef<jobject> j_rect = Java_TabImpl_getBounds(env, weak_java_tab_.get(env));
+  jclass cls = env->GetObjectClass(j_rect.obj());
+
+  jfieldID left_field = env->GetFieldID(cls, "left", "I");
+  const int left = env->GetIntField(j_rect.obj(), left_field);
+
+  jfieldID top_field = env->GetFieldID(cls, "top", "I");
+  const int top = env->GetIntField(j_rect.obj(), top_field);
+
+  jfieldID right_field = env->GetFieldID(cls, "right", "I");
+  const int right = env->GetIntField(j_rect.obj(), right_field);
+
+  jfieldID bottom_field = env->GetFieldID(cls, "bottom", "I");
+  const int bottom = env->GetIntField(j_rect.obj(), bottom_field);
+
+  return gfx::Rect(top, left, right - left, bottom - top);
+}
+
 sync_sessions::SyncedTabDelegate* TabAndroid::GetSyncedTabDelegate() const {
   return synced_tab_delegate_.get();
 }
@@ -293,6 +333,16 @@ int TabAndroid::GetTabLaunchTypeAtCreation() const {
 int TabAndroid::GetParentId() const {
   JNIEnv* env = base::android::AttachCurrentThread();
   return Java_TabImpl_getParentId(env, weak_java_tab_.get(env));
+}
+
+std::optional<base::Token> TabAndroid::GetTabGroupId() const {
+  JNIEnv* env = base::android::AttachCurrentThread();
+  ScopedJavaLocalRef<jobject> j_token =
+      Java_TabImpl_getTabGroupId(env, weak_java_tab_.get(env));
+  if (j_token.is_null()) {
+    return std::nullopt;
+  }
+  return base::android::TokenAndroid::FromJavaToken(env, j_token);
 }
 
 void TabAndroid::DeleteFrozenNavigationEntries(

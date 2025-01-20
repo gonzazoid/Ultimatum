@@ -110,7 +110,7 @@
 #include "chrome/browser/ui/webui/extensions/extension_icon_source.h"
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "chrome/browser/extensions/extension_service.h"
 #include "components/guest_view/browser/guest_view_manager.h"
 #include "extensions/browser/api/web_request/extension_web_request_event_router.h"
@@ -279,7 +279,7 @@ OffTheRecordProfileImpl::~OffTheRecordProfileImpl() {
 
   SimpleKeyMap::GetInstance()->Dissociate(this);
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   extensions::WebRequestEventRouter::OnOTRBrowserContextDestroyed(profile_,
                                                                   this);
 #endif
@@ -458,7 +458,7 @@ OffTheRecordProfileImpl::GetURLLoaderFactory() {
 }
 
 content::BrowserPluginGuestManager* OffTheRecordProfileImpl::GetGuestManager() {
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   return guest_view::GuestViewManager::FromBrowserContext(this);
 #else
   return NULL;

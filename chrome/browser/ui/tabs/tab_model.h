@@ -137,7 +137,9 @@ class TabModel final : public TabInterface, public TabStripModelObserver {
       TabInterfaceCallback callback) override;
 
   bool IsInNormalWindow() const override;
+#if !BUILDFLAG(IS_ANDROID)
   BrowserWindowInterface* GetBrowserWindowInterface() override;
+#endif
   tabs::TabFeatures* GetTabFeatures() override;
   bool IsPinned() const override;
   bool IsSplit() const override;

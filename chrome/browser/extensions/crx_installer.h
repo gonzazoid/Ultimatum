@@ -20,6 +20,8 @@
 #include "base/version.h"
 #include "chrome/browser/extensions/extension_install_prompt.h"
 #include "chrome/browser/extensions/manifest_check_level.h"
+#include "chrome/browser/extensions/extension_service.h"
+#include "chrome/browser/extensions/webstore_installer.h"
 #include "chrome/browser/profiles/profile_observer.h"
 #include "chrome/common/extensions/extension_constants.h"
 #include "components/sync/model/string_ordinal.h"

@@ -16,6 +16,10 @@
 #include "extensions/browser/extensions_browser_client.h"
 #include "extensions/common/constants.h"
 
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/extensions/desktop_android/desktop_android_extensions_browser_client.h"
+#endif
+
 namespace extensions {
 
 // static

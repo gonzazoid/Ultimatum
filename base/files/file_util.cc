@@ -345,6 +345,29 @@ std::optional<std::vector<uint8_t>> ReadFileToBytes(const FilePath& path) {
     return std::nullopt;
   }
 
+// This is definitely not the best approach, I can see that. I took this code from tools/android/touch_replay/touch_replay.cc ReadNullTerminatedString
+// One day may be I'll find the time to make it better
+#if BUILDFLAG(IS_ANDROID)
+  if(path.IsContentUri()) {
+    base::File file(path,
+                       base::File::FLAG_OPEN | base::File::FLAG_READ);
+    if (!file.IsValid()) {
+      return std::nullopt;
+    }
+    char cur;
+    int64_t offset = 0;
+    std::vector<uint8_t> bytes;
+    do {
+      int bytes_read = file.Read(offset, &cur, 1);
+      if (bytes_read < 1) {
+        return bytes;
+      }
+      bytes.push_back(cur);
+      offset++;
+    } while (true);
+  }
+#endif
+
   ScopedFILE file_stream(OpenFile(path, "rb"));
   if (!file_stream) {
     return std::nullopt;
@@ -376,6 +399,31 @@ bool ReadFileToStringWithMaxSize(const FilePath& path,
   if (path.ReferencesParent()) {
     return false;
   }
+
+// This is definitely not the best approach, I can see that. I took this code from tools/android/touch_replay/touch_replay.cc ReadNullTerminatedString
+// One day may be I'll find the time to make it better
+#if BUILDFLAG(IS_ANDROID)
+  if(path.IsContentUri()) {
+    base::File file(path,
+                       base::File::FLAG_OPEN | base::File::FLAG_READ);
+    if (!file.IsValid()) {
+      return false;
+    }
+    char cur;
+    size_t name_bytes_read = 0;
+    int64_t offset = 0;
+    do {
+      int bytes_read = file.Read(offset, &cur, 1);
+      if (bytes_read < 1) {
+        return true;
+      }
+      contents->resize(++name_bytes_read, cur);
+      offset++;
+    } while (cur != '\0');
+    return true;
+  }
+#endif
+
   ScopedFILE file_stream(OpenFile(path, "rb"));
   if (!file_stream) {
     return false;

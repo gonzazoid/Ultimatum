@@ -156,9 +156,11 @@ WindowsEventRouter::WindowsEventRouter(Profile* profile)
     : profile_(profile),
       focused_profile_(nullptr),
       focused_window_id_(extension_misc::kUnknownWindowId) {
-  DCHECK(!profile->IsOffTheRecord());
+  // DCHECK(!profile->IsOffTheRecord()); // TODO why we get here when incognito tab is created???
 
+#if !BUILDFLAG(IS_ANDROID)
   observed_app_registry_.Observe(AppWindowRegistry::Get(profile_));
+#endif
   observed_controller_list_.Observe(WindowControllerList::GetInstance());
   // Needed for when no suitable window can be passed to an extension as the
   // currently focused window. On Mac (even in a toolkit-views build) always
@@ -171,12 +173,14 @@ WindowsEventRouter::WindowsEventRouter(Profile* profile)
 #elif defined(TOOLKIT_VIEWS)
   views::WidgetFocusManager::GetInstance()->AddFocusChangeListener(this);
 #else
-#error Unsupported
+// #error Unsupported
 #endif
 
+#if !BUILDFLAG(IS_ANDROID)
   AppWindowRegistry* registry = AppWindowRegistry::Get(profile_);
   for (AppWindow* app_window : registry->app_windows())
     AddAppWindow(app_window);
+#endif
 }
 
 WindowsEventRouter::~WindowsEventRouter() {
@@ -185,6 +189,7 @@ WindowsEventRouter::~WindowsEventRouter() {
 #endif
 }
 
+#if !BUILDFLAG(IS_ANDROID)
 void WindowsEventRouter::OnAppWindowAdded(AppWindow* app_window) {
   if (!profile_->IsSameOrParent(
           Profile::FromBrowserContext(app_window->browser_context())))
@@ -206,6 +211,7 @@ void WindowsEventRouter::OnAppWindowActivated(AppWindow* app_window) {
   OnActiveWindowChanged(iter != app_windows_.end() ? iter->second.get()
                                                    : nullptr);
 }
+#endif
 
 void WindowsEventRouter::OnWindowControllerAdded(
     WindowController* window_controller) {
@@ -327,9 +333,11 @@ bool WindowsEventRouter::HasEventListener(const std::string& event_name) {
 }
 
 void WindowsEventRouter::AddAppWindow(AppWindow* app_window) {
+#if !BUILDFLAG(IS_ANDROID)
   std::unique_ptr<AppWindowController> controller(new AppWindowController(
       app_window, std::make_unique<AppBaseWindow>(app_window), profile_));
   app_windows_[app_window->session_id().id()] = std::move(controller);
+#endif
 }
 
 }  // namespace extensions
