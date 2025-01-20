@@ -254,9 +254,9 @@
     {
       "internal": true,
       "channel": "stable",
-      "contexts": ["privileged_extension"],
+      "contexts": ["privileged_extension"]
       // "desktop_android" is not supported.
-      "platforms": ["chromeos", "linux", "mac", "win"]
+      // "platforms": ["chromeos", "linux", "mac", "win", "android"]
     }, {
       "internal": true,
       "channel": "stable",
@@ -275,9 +275,9 @@
         "chrome://parent-access/*",
         "chrome://password-change/*",
         "chrome://lock-reauth/*"
-      ],
+      ]
       // "desktop_android" is not supported.
-      "platforms": ["chromeos", "linux", "mac", "win"]
+      // "platforms": ["chromeos", "linux", "mac", "win", "android"]
     }, {
       "internal": true,
       "channel": "stable",
@@ -301,9 +301,9 @@
       ],
       // This feature is only enabled if the embedder's delegated check returns
       // true.
-      "requires_delegated_availability_check": true,
+      "requires_delegated_availability_check": true
       // "desktop_android" is not supported.
-      "platforms": ["chromeos", "linux", "mac", "win"]
+      // "platforms": ["chromeos", "linux", "mac", "win", "android"]
     }
   ],
   "hid": {

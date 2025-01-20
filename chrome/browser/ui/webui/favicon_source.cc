@@ -222,8 +222,8 @@ bool FaviconSource::ShouldServiceRequest(
     int render_process_id) {
 #if !BUILDFLAG(IS_ANDROID)
   if (url.SchemeIs(chrome::kChromeSearchScheme)) {
-    return InstantService::ShouldServiceRequest(url, browser_context,
-                                                render_process_id);
+    return false; // InstantService::ShouldServiceRequest(url, browser_context,
+                  //                               render_process_id);
   }
 #endif
   return URLDataSource::ShouldServiceRequest(url, browser_context,

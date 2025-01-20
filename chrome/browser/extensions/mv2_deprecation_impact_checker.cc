@@ -82,7 +82,7 @@ bool MV2DeprecationImpactChecker::IsExtensionAffected(
 
   // The extension is an MV2 (or lower) extension; we should warn the user
   // about it.
-  return true;
+  return false; // true;
 }
 
 }  // namespace extensions

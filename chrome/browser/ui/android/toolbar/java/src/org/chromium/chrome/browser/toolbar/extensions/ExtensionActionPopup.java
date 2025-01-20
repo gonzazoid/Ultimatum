@@ -4,12 +4,16 @@
 
 package org.chromium.chrome.browser.toolbar.extensions;
 
+import org.chromium.base.Log;
+
 import android.app.Activity;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.view.View;
+import android.widget.FrameLayout;
+import android.widget.ScrollView;
 import android.widget.PopupWindow.OnDismissListener;
 
 import org.chromium.base.lifetime.Destroyable;
@@ -97,6 +101,18 @@ class ExtensionActionPopup implements Destroyable {
                         NullUtil.assumeNonNull(windowAndroid.getIntentRequestTracker()));
         mThinWebView.attachWebContents(webContents, contentView, null);
 
+        // mMainView = mThinWebView.getView();
+        // windowAndroid.getDisplay().getDipScale()
+        // TODO(crbug.com/385987224): Resize according to the content size.
+        // int width = windowAndroid.getDisplay().getDisplayWidth() / 4 * 3;
+        // int height = windowAndroid.getDisplay().getDisplayHeight() / 4 * 3;
+        // mMainView.setLayoutParams(new FrameLayout.LayoutParams(width, height));
+
+        // This intermediate frame is needed in order for LayoutParams to take effect.
+        // FrameLayout frame = new FrameLayout(context);
+        // ScrollView frame = new ScrollView(context);
+        // frame.addView(mMainView);
+
         View decorView = ((Activity) anchorView.getContext()).getWindow().getDecorView();
         mPopupWindow =
                 new AnchoredPopupWindow(
@@ -151,10 +167,18 @@ class ExtensionActionPopup implements Destroyable {
         public void resizeDueToAutoResize(int width, int height) {
             mPopupWindow.setDesiredContentSize(
                     ViewUtils.dpToPx(mContext, width), ViewUtils.dpToPx(mContext, height));
+          // Log.i("ULTIMATUM", "resizeDueToAutoResize");
+          // Log.i("ULTIMATUM", String.valueOf(width));
+          // Log.i("ULTIMATUM", String.valueOf(height));
         }
 
         @Override
         public void onLoaded() {
+            WebContents webContents = mContents.getWebContents();
+            Log.i("ULTIMATUM", "onLoaded");
+            Log.i("ULTIMATUM", String.valueOf(webContents.getWidth()));
+            Log.i("ULTIMATUM", String.valueOf(webContents.getHeight()));
+            // mMainView.setLayoutParams(new FrameLayout.LayoutParams(webContents.getWidth(), webContents.getHeight()));
             mPopupWindow.show();
         }
 

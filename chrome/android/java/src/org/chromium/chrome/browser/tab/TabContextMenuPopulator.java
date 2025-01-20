@@ -4,12 +4,15 @@
 
 package org.chromium.chrome.browser.tab;
 
+import org.chromium.base.Log;
+
 import org.chromium.base.ObserverList.RewindableIterator;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.components.embedder_support.contextmenu.ChipDelegate;
 import org.chromium.components.embedder_support.contextmenu.ContextMenuParams;
 import org.chromium.components.embedder_support.contextmenu.ContextMenuPopulator;
+import org.chromium.ui.modelutil.MVCListAdapter.ListItem;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
 
 import java.util.List;
@@ -20,6 +23,7 @@ public class TabContextMenuPopulator implements ContextMenuPopulator {
     private final ContextMenuPopulator mPopulator;
     private final ContextMenuParams mParams;
     private final TabImpl mTab;
+    private @Nullable List<ListItem> mExtensionsMenu;
 
     /**
      * Constructs an instance of a {@link ContextMenuPopulator} and delegate calls to {@code
@@ -36,8 +40,15 @@ public class TabContextMenuPopulator implements ContextMenuPopulator {
         mTab = (TabImpl) tab;
     }
 
+    // public void setExtensionsMenu(List<ListItem> extensionsMenu) {
+    //   mExtensionsMenu = extensionsMenu;
+    // }
+
     @Override
     public List<ModelList> buildContextMenu() {
+        if (mExtensionsMenu != null) {
+            // mPopulator.setExtensionsMenu(mExtensionsMenu);
+        }
         List<ModelList> itemGroups = mPopulator.buildContextMenu();
         if (!mTab.isDestroyed()) {
             TabContextMenuData.getOrCreateForTab(mTab)

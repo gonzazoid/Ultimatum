@@ -8,8 +8,13 @@
 #include <utility>
 
 #include "chrome/browser/extensions/error_console/error_console.h"
+#include "chrome/browser/extensions/tab_helper.h"
 #include "chrome/browser/extensions/user_script_listener.h"
+#include "chrome/browser/android/tab_android.h"
+#include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/ui/android/tab_model/tab_model_list.h"
 #include "chrome/browser/ui/webui/devtools/devtools_ui.h"
+#include "chrome/browser/browser_process.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"

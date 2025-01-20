@@ -275,6 +275,8 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
         // Extensions
         if (shouldShowExtensionsItem()) modelList.add(buildExtensionsItem());
 
+        modelList.add(buildDevToolsItem());
+
         // Divider
         modelList.add(
                 new MVCListAdapter.ListItem(
@@ -638,6 +640,8 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
     private boolean shouldShowExtensionsItem() {
         // TODO(crbug.com/422307625): Remove this check once extensions are ready for dogfooding.
         return ExtensionUi.isEnabled(getProfileFromTabModel());
+        // return mExtensionService != null && mExtensionService.areExtensionsEnabled();
+        // return true;
     }
 
     private MVCListAdapter.ListItem buildExtensionsItem() {
@@ -648,6 +652,15 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
                         R.id.extensions_menu_id,
                         R.string.menu_extensions,
                         shouldShowIconBeforeItem() ? R.drawable.ic_extension_24dp : 0));
+    }
+
+    private MVCListAdapter.ListItem buildDevToolsItem() {
+        return new MVCListAdapter.ListItem(
+                AppMenuHandler.AppMenuItemType.STANDARD,
+                buildModelForStandardMenuItem(
+                        R.id.dev_tools,
+                        R.string.menu_dev_tools,
+                        shouldShowIconBeforeItem() ? R.drawable.ic_dev_tools_24dp : 0));
     }
 
     private boolean shouldShowPageZoomItem(Tab currentTab) {

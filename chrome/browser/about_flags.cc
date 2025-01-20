@@ -351,7 +351,7 @@
 #include "components/unexportable_keys/features.h"  // nogncheck
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "chrome/browser/extensions/cws_info_service.h"
 #include "extensions/common/extension_features.h"
 #include "extensions/common/switches.h"
@@ -484,7 +484,7 @@ const FeatureEntry::Choice kUseAngleChoicesAndroid[] = {
      gl::kANGLEImplementationVulkanName}};
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 const FeatureEntry::Choice kExtensionsToolbarZeroStateChoices[] = {
     {flag_descriptions::kExtensionsToolbarZeroStateChoicesDisabled, "", ""},
     {flag_descriptions::kExtensionsToolbarZeroStateVistWebStore,
@@ -9636,16 +9636,16 @@ const FeatureEntry kFeatureEntries[] = {
      FEATURE_VALUE_TYPE(ash::features::kTrafficCountersForWiFiTesting)},
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
-    {"experimental-omnibox-labs",
-     flag_descriptions::kExperimentalOmniboxLabsName,
-     flag_descriptions::kExperimentalOmniboxLabsDescription, kOsDesktop,
-     FEATURE_VALUE_TYPE(extensions_features::kExperimentalOmniboxLabs)},
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+    // {"experimental-omnibox-labs",
+    //  flag_descriptions::kExperimentalOmniboxLabsName,
+    //  flag_descriptions::kExperimentalOmniboxLabsDescription, kOsDesktop,
+    //  FEATURE_VALUE_TYPE(extensions_features::kExperimentalOmniboxLabs)},
 
-    {kExtensionAiDataInternalName,
-     flag_descriptions::kExtensionAiDataCollectionName,
-     flag_descriptions::kExtensionAiDataCollectionDescription, kOsDesktop,
-     SINGLE_VALUE_TYPE(switches::kExtensionAiDataCollection)},
+    // {kExtensionAiDataInternalName,
+    //  flag_descriptions::kExtensionAiDataCollectionName,
+    //  flag_descriptions::kExtensionAiDataCollectionDescription, kOsDesktop,
+    //  SINGLE_VALUE_TYPE(switches::kExtensionAiDataCollection)},
 
     {"extensions-collapse-main-menu",
      flag_descriptions::kExtensionsCollapseMainMenuName,
@@ -9662,17 +9662,17 @@ const FeatureEntry kFeatureEntries[] = {
      flag_descriptions::kExtensionsToolbarZeroStateDescription, kOsDesktop,
      MULTI_VALUE_TYPE(kExtensionsToolbarZeroStateChoices)},
 
-    {"iph-extensions-menu-feature",
-     flag_descriptions::kIPHExtensionsMenuFeatureName,
-     flag_descriptions::kIPHExtensionsMenuFeatureDescription, kOsDesktop,
-     FEATURE_VALUE_TYPE(feature_engagement::kIPHExtensionsMenuFeature)},
+    // {"iph-extensions-menu-feature",
+    //  flag_descriptions::kIPHExtensionsMenuFeatureName,
+    //  flag_descriptions::kIPHExtensionsMenuFeatureDescription, kOsDesktop,
+    //  FEATURE_VALUE_TYPE(feature_engagement::kIPHExtensionsMenuFeature)},
 
-    {"iph-extensions-request-access-button-feature",
-     flag_descriptions::kIPHExtensionsRequestAccessButtonFeatureName,
-     flag_descriptions::kIPHExtensionsRequestAccessButtonFeatureDescription,
-     kOsDesktop,
-     FEATURE_VALUE_TYPE(
-         feature_engagement::kIPHExtensionsRequestAccessButtonFeature)},
+    // {"iph-extensions-request-access-button-feature",
+    //  flag_descriptions::kIPHExtensionsRequestAccessButtonFeatureName,
+    //  flag_descriptions::kIPHExtensionsRequestAccessButtonFeatureDescription,
+    //  kOsDesktop,
+    //  FEATURE_VALUE_TYPE(
+    //      feature_engagement::kIPHExtensionsRequestAccessButtonFeature)},
 
     {"extension-manifest-v2-deprecation-disabled",
      flag_descriptions::kExtensionManifestV2DeprecationDisabledName,
@@ -10512,10 +10512,12 @@ const FeatureEntry kFeatureEntries[] = {
      flag_descriptions::kDefaultSiteInstanceGroupsDescription, kOsAll,
      FEATURE_VALUE_TYPE(features::kDefaultSiteInstanceGroups)},
 
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #if BUILDFLAG(ENABLE_EXTENSIONS)
     {"cws-info-fast-check", flag_descriptions::kCWSInfoFastCheckName,
      flag_descriptions::kCWSInfoFastCheckDescription, kOsDesktop,
      FEATURE_VALUE_TYPE(extensions::kCWSInfoFastCheck)},
+#endif
 
     {"extension-disable-unsupported-developer-mode-extensions",
      flag_descriptions::kExtensionDisableUnsupportedDeveloperName,

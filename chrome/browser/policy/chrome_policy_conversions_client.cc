@@ -28,7 +28,7 @@
 #include "components/policy/core/common/policy_service.h"
 #include "extensions/buildflags/buildflags.h"
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "extensions/browser/extension_registry.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_set.h"
@@ -119,7 +119,7 @@ Value::List ChromePolicyConversionsClient::GetExtensionPolicies(
     PolicyDomain policy_domain) {
   Value::List policies;
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 
   const bool for_signin_screen =
       policy_domain == POLICY_DOMAIN_SIGNIN_EXTENSIONS;

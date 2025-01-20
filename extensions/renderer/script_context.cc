@@ -356,6 +356,7 @@ bool ScriptContext::IsAnyFeatureAvailableToContext(
     CheckAliasStatus check_alias) {
   DCHECK(thread_checker_.CalledOnValidThread());
   if (web_frame()) {
+    LOG(INFO) << "web_frame()";
     return ExtensionAPI::GetSharedInstance()->IsAnyFeatureAvailableToContext(
         api, extension(), context_type(),
         GetDocumentLoaderURLForFrame(web_frame()), check_alias,
@@ -364,6 +365,7 @@ bool ScriptContext::IsAnyFeatureAvailableToContext(
 
   // TODO(lazyboy): Decide what we should do for service workers, where
   // web_frame() is null.
+  LOG(INFO) << "NOT web_frame()";
   return ExtensionAPI::GetSharedInstance()->IsAnyFeatureAvailableToContext(
       api, extension(), context_type(), url_, check_alias, kRendererProfileId,
       RendererContextData());

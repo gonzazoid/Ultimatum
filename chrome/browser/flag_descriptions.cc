@@ -2017,7 +2017,7 @@ const char kSymphoniaAudioDecodingDescription[] =
     "FFMPEG for decoding audio.";
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 const char kEnableWebHidInWebViewName[] = "Web HID in WebView";
 const char kEnableWebHidInWebViewDescription[] =
     "Enable WebViews to access Web HID upon embedder's permission.";

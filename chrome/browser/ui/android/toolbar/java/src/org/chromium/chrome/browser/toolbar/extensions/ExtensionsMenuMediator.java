@@ -62,7 +62,7 @@ class ExtensionsMenuMediator implements Destroyable {
         mProfile = profile;
 
         // TODO(crbug.com/422307625): Remove this check once extensions are ready for dogfooding.
-        boolean extensionsSupported = false;
+        boolean extensionsSupported = true;
         if (mProfile != null) {
             ExtensionActionsBridge extensionActionsBridge = ExtensionActionsBridge.get(mProfile);
             if (extensionActionsBridge != null && extensionActionsBridge.extensionsEnabled()) {

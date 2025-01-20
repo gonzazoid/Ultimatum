@@ -10,6 +10,10 @@ import static org.chromium.chrome.browser.contextmenu.ContextMenuItemWithIconBut
 import static org.chromium.chrome.browser.contextmenu.ContextMenuItemWithIconButtonProperties.END_BUTTON_IMAGE;
 import static org.chromium.chrome.browser.contextmenu.ContextMenuItemWithIconButtonProperties.END_BUTTON_MENU_ID;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.ENABLED;
+
+import org.chromium.base.Log;
+
+import static org.chromium.ui.listmenu.ListMenuItemProperties.CLICK_LISTENER;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.MENU_ITEM_ID;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.TITLE;
 
@@ -24,6 +28,7 @@ import android.text.TextUtils;
 import android.util.Pair;
 import android.util.SparseArray;
 import android.webkit.URLUtil;
+import android.view.View;
 
 import androidx.annotation.IntDef;
 import androidx.annotation.VisibleForTesting;
@@ -127,6 +132,9 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
             "ContextMenu.LensSupportStatus";
     private final boolean mIsDownloadRestrictedByPolicy;
     private final SparseArray<CustomContentAction> mCustomActionMap;
+
+    private @Nullable List<ListItem> mExtensionsMenu;
+    private boolean extensionMenuAdded;
 
     private PendingIntentSender mPendingIntentSender;
     // True when the tracker indicates IPH in the form of "new" label needs to be shown.
@@ -368,6 +376,7 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
         mIsDownloadRestrictedByPolicy = DownloadUtils.isDownloadRestrictedByPolicy(getProfile());
         mCustomActionMap = new SparseArray<>();
         mPendingIntentSender = new PendingIntentSender();
+        extensionMenuAdded = false;
         if (ChromeFeatureList.sCctContextualMenuItems.isEnabled()) {
             if (customContentActions.size() > MAX_CUSTOM_MENU_ITEMS) {
                 customContentActions = customContentActions.subList(0, MAX_CUSTOM_MENU_ITEMS);
@@ -414,10 +423,14 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
     @VisibleForTesting
     boolean shouldShowDeveloperMenu() {
         return DevToolsWindowAndroid.isDevToolsAllowedFor(
-                        getProfile(), mItemDelegate.getWebContents())
-                && DeviceInput.supportsAlphabeticKeyboard()
-                && DeviceInput.supportsPrecisionPointer();
+                        getProfile(), mItemDelegate.getWebContents());
+                // && DeviceInput.supportsAlphabeticKeyboard()
+                // && DeviceInput.supportsPrecisionPointer();
     }
+
+    // public void setExtensionsMenu(List<ListItem> extensionsMenu) {
+    //   mExtensionsMenu = extensionsMenu;
+    // }
 
     @Override
     public List<ModelList> buildContextMenu() {
@@ -443,6 +456,7 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
         }
         if (mParams.isAnchor()) {
             ModelList linkGroup = new ModelList();
+
             if (FirstRunStatus.getFirstRunFlowComplete()
                     && !isEmptyUrl(mParams.getUrl())
                     && UrlUtilities.isAcceptedScheme(mParams.getUrl())) {
@@ -547,6 +561,14 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
                     || MailTo.isMailTo(mParams.getLinkUrl().getSpec())) {
                 linkGroup.add(createListItem(Item.COPY));
             }
+
+            if (mExtensionsMenu != null && !extensionMenuAdded) {
+                for (ListItem item : mExtensionsMenu) {
+                    linkGroup.add(item);
+                }
+                extensionMenuAdded = true;
+            }
+
             if (!linkGroup.isEmpty()) {
                 groupedItems.add(linkGroup);
             }
@@ -624,6 +646,13 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
                 imageGroup.add(createShareListItem(Item.SHARE_IMAGE, Item.DIRECT_SHARE_IMAGE));
             }
 
+            if (mExtensionsMenu != null && !extensionMenuAdded) {
+                for (ListItem item : mExtensionsMenu) {
+                    imageGroup.add(item);
+                }
+                extensionMenuAdded = true;
+            }
+
             groupedItems.add(imageGroup);
         }
 
@@ -648,6 +677,14 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
                                 mContext.getString(titleResId),
                                 /* enabled= */ true));
             }
+
+            if (mExtensionsMenu != null && !extensionMenuAdded) {
+                for (ListItem item : mExtensionsMenu) {
+                    videoGroup.add(item);
+                }
+                extensionMenuAdded = true;
+            }
+
             if (!videoGroup.isEmpty()) {
                 groupedItems.add(videoGroup);
             }
@@ -1075,6 +1112,17 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
             recordContextMenuSelection(ContextMenuUma.Action.SHOW_INTEREST_IN_ELEMENT);
             WebContents webContents = mItemDelegate.getWebContents();
             webContents.showInterestInElement(mParams.getInterestForNodeID());
+        } else if (itemId == R.id.contextmenu_extensions_menu) {
+            if (mExtensionsMenu != null) {
+              for (ListItem item : mExtensionsMenu) {
+                if (item.model.get(MENU_ITEM_ID) == R.id.contextmenu_extensions_menu) {
+                  item.model.set(MENU_ITEM_ID, 0);
+                  View.OnClickListener listener = item.model.get(CLICK_LISTENER);
+                  listener.onClick(null);
+                  break;
+                }
+              }
+            }
         } else {
             assert false;
         }
@@ -1087,6 +1135,10 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
         if (mShowEphemeralTabNewLabel != null && mShowEphemeralTabNewLabel) {
             Tracker tracker = TrackerFactory.getTrackerForProfile(getProfile());
             if (tracker.isInitialized()) tracker.dismissed(FeatureConstants.EPHEMERAL_TAB_FEATURE);
+        }
+        if (mExtensionsMenu != null) {
+          mExtensionsMenu = null;
+          extensionMenuAdded = false;
         }
     }
 

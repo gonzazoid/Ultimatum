@@ -10,6 +10,7 @@ import static org.chromium.ui.listmenu.ListMenuItemProperties.START_ICON_BITMAP;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.TITLE;
 
 import android.graphics.Bitmap;
+import android.view.View;
 
 import org.jni_zero.CalledByNative;
 import org.jni_zero.JNINamespace;
@@ -17,6 +18,7 @@ import org.jni_zero.JniType;
 
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
+import org.chromium.ui.listmenu.ListItemType;
 import org.chromium.ui.modelutil.MVCListAdapter.ListItem;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
 import org.chromium.ui.modelutil.PropertyModel;
@@ -44,6 +46,7 @@ public class MenuModelBridge {
     public MenuModelBridge() {}
 
     /** {@return The list of {@link ListItem} held by this {@link MenuModelBridge}} */
+    @CalledByNative
     public List<ListItem> getListItems() {
         return mItems;
     }
@@ -73,6 +76,7 @@ public class MenuModelBridge {
             @JniType("std::optional<SkBitmap>") final @Nullable Bitmap bitmap,
             final boolean isEnabled,
             final Runnable callback) {
+        // final View.OnHoverListener mItemOnHoverListener = (v, e) -> true;
         PropertyModel.Builder modelBuilder =
                 new PropertyModel.Builder(ListMenuItemProperties.ALL_KEYS)
                         .with(TITLE, label)
@@ -80,6 +84,7 @@ public class MenuModelBridge {
                         .with(ENABLED, isEnabled)
                         .with(CLICK_LISTENER, (view) -> callback.run());
         mItems.add(new ListItem(ListItemType.MENU_ITEM, modelBuilder.build()));
+        // mItems.add(new ListItem(ListItemType.CONTEXT_MENU_ITEM, modelBuilder.build()));
     }
 
     /**

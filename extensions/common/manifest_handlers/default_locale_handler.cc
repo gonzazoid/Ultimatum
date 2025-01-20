@@ -89,9 +89,10 @@ bool DefaultLocaleHandler::Validate(
 
   base::FilePath locale_path;
   while (!(locale_path = locales.Next()).empty()) {
-    if (extension_l10n_util::ShouldSkipValidation(path, locale_path,
-                                                  all_locales))
-      continue;
+    // we need this commented only when installing unpacked extension
+    // if (extension_l10n_util::ShouldSkipValidation(path, locale_path,
+    //                                               all_locales))
+    //   continue;
 
     base::FilePath messages_path = locale_path.Append(kMessagesFilename);
     base::FilePath gzipped_messages_path =

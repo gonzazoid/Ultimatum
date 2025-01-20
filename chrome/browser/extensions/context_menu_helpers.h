@@ -128,6 +128,7 @@ bool CreateMenuItem(const PropertyWithEnumT& create_properties,
                     const Extension* extension,
                     const MenuItem::Id& item_id,
                     std::string* error) {
+  LOG(INFO) << "CreateMenuItem";
   bool is_webview = item_id.extension_key.webview_instance_id != 0;
   MenuManager* menu_manager = MenuManager::Get(browser_context);
 
@@ -136,18 +137,21 @@ bool CreateMenuItem(const PropertyWithEnumT& create_properties,
     *error = ErrorUtils::FormatErrorMessage(
         kTooManyMenuItems,
         base::NumberToString(MenuManager::kMaxItemsPerExtension));
+    LOG(INFO) << "MenuManager::kMaxItemsPerExtension";
     return false;
   }
 
   if (menu_manager->GetItemById(item_id)) {
     *error =
         ErrorUtils::FormatErrorMessage(kDuplicateIDError, GetIDString(item_id));
+    LOG(INFO) << "kDuplicateIDError";
     return false;
   }
 
   if (!is_webview && BackgroundInfo::HasLazyContext(extension) &&
       create_properties.onclick) {
     *error = kOnclickDisallowedError;
+    LOG(INFO) << "kOnclickDisallowedError";
     return false;
   }
 
@@ -162,6 +166,7 @@ bool CreateMenuItem(const PropertyWithEnumT& create_properties,
     // Launcher item is not allowed for <webview>.
     if (is_webview || !extension->is_platform_app()) {
       *error = kLauncherNotAllowedError;
+      LOG(INFO) << "kLauncherNotAllowedError";
       return false;
     }
   }
@@ -172,6 +177,7 @@ bool CreateMenuItem(const PropertyWithEnumT& create_properties,
     // Action items are not allowed for <webview>.
     if (is_webview || !extension->is_extension()) {
       *error = kActionNotAllowedError;
+      LOG(INFO) << "kActionNotAllowedError";
       return false;
     }
   }
@@ -184,6 +190,7 @@ bool CreateMenuItem(const PropertyWithEnumT& create_properties,
   MenuItem::Type type = GetType(create_properties.type, MenuItem::NORMAL);
   if (title.empty() && type != MenuItem::SEPARATOR) {
     *error = kTitleNeededError;
+    LOG(INFO) << "kTitleNeededError";
     return false;
   }
 
@@ -203,6 +210,7 @@ bool CreateMenuItem(const PropertyWithEnumT& create_properties,
   if (!item->PopulateURLPatterns(
           base::OptionalToPtr(create_properties.document_url_patterns),
           base::OptionalToPtr(create_properties.target_url_patterns), error)) {
+    LOG(INFO) << "!item->PopulateURLPatterns";
     return false;
   }
 
@@ -213,15 +221,21 @@ bool CreateMenuItem(const PropertyWithEnumT& create_properties,
                   item_id.extension_key));
   if (parent_id.get()) {
     MenuItem* parent = GetParent(*parent_id, menu_manager, error);
-    if (!parent)
+    if (!parent) {
+      LOG(INFO) << "NO PARENT ID!!!";
       return false;
+    }
     success = menu_manager->AddChildItem(parent->id(), std::move(item));
+    LOG(INFO) << "SUCCESS??? " << success;
   } else {
     success = menu_manager->AddContextItem(extension, std::move(item));
+    LOG(INFO) << "SUCCESS??? " << success;
   }
 
-  if (!success)
+  if (!success) {
+    LOG(INFO) << "NO SUCCESS!!";
     return false;
+  }
 
   menu_manager->WriteToStorage(extension, item_id.extension_key);
   return true;

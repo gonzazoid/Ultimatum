@@ -15,7 +15,8 @@
 #include "chrome/browser/ui/tab_helpers.h"
 #include "chrome/browser/ui/tabs/features.h"
 #include "chrome/browser/ui/tabs/public/tab_dialog_manager.h"
-#include "chrome/browser/ui/tabs/public/tab_features.h"
+// #include "chrome/browser/ui/tabs/public/tab_features.h"
+#include "chrome/browser/android/tab_features.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_model_delegate.h"
@@ -79,7 +80,7 @@ TabModel::TabModel(std::unique_ptr<content::WebContents> contents,
   // TODO(https://crbug.com/362038317): Tab-helpers should be created in exactly
   // one place, which is here.
   TabHelpers::AttachTabHelpers(contents_);
-  tab_features_ = std::make_unique<TabFeatures>();
+  tab_features_ = std::make_unique<TabFeatures>(contents_, Profile::FromBrowserContext(contents_->GetBrowserContext()));
   const SessionID session_id = sessions::SessionTabHelper::IdForTab(contents_);
   CHECK(session_id.is_valid());
   SetSessionId(session_id.id());
@@ -87,8 +88,8 @@ TabModel::TabModel(std::unique_ptr<content::WebContents> contents,
   // Once tabs are pulled into a standalone module, TabFeatures and its
   // initialization will need to be delegated back to the main module.
   if (!g_disable_tab_feature_initialization) {
-    tab_features_->Init(
-        *this, Profile::FromBrowserContext(contents_->GetBrowserContext()));
+    // tab_features_->Init(
+    //     *this, Profile::FromBrowserContext(contents_->GetBrowserContext()));
   }
 }
 
@@ -281,6 +282,7 @@ bool TabModel::IsInNormalWindow() const {
   return GetModelForTabInterface()->delegate()->IsNormalWindow();
 }
 
+#if !BUILDFLAG(IS_ANDROID)
 BrowserWindowInterface* TabModel::GetBrowserWindowInterface() {
   return GetModelForTabInterface()->delegate()->GetBrowserWindowInterface();
 }
@@ -288,6 +290,7 @@ BrowserWindowInterface* TabModel::GetBrowserWindowInterface() {
 const BrowserWindowInterface* TabModel::GetBrowserWindowInterface() const {
   return GetModelForTabInterface()->delegate()->GetBrowserWindowInterface();
 }
+#endif
 
 tabs::TabFeatures* TabModel::GetTabFeatures() {
   return tab_features_.get();
@@ -313,13 +316,24 @@ std::optional<tab_groups::TabGroupId> TabModel::GetGroup() const {
   return group_;
 }
 
+#if !BUILDFLAG(IS_ANDROID)
+bool TabModel::ShouldAcceptMouseEventsWhileWindowInactive() const {
+  return accept_input_when_window_inactive_ > 0;
+}
+
+std::unique_ptr<ScopedAcceptMouseEventsWhileWindowInactive>
+TabModel::AcceptMouseEventsWhileWindowInactive() {
+  return std::make_unique<ScopedAcceptMouseEventsWhileWindowInactiveImpl>(this);
+}
+#endif
+
 void TabModel::Close() {
-  auto* window_interface = GetBrowserWindowInterface();
-  auto* tab_strip = window_interface->GetTabStripModel();
-  CHECK(tab_strip);
-  const int tab_idx = tab_strip->GetIndexOfTab(this);
-  CHECK(tab_idx != TabStripModel::kNoTab);
-  tab_strip->CloseWebContentsAt(tab_idx, TabCloseTypes::CLOSE_NONE);
+  // auto* window_interface = GetBrowserWindowInterface();
+  // auto* tab_strip = window_interface->GetTabStripModel();
+  // CHECK(tab_strip);
+  // const int tab_idx = tab_strip->GetIndexOfTab(this);
+  // CHECK(tab_idx != TabStripModel::kNoTab);
+  // tab_strip->CloseWebContentsAt(tab_idx, TabCloseTypes::CLOSE_NONE);
 }
 
 void TabModel::OnTabStripModelChanged(
@@ -444,26 +458,26 @@ void TabModel::DestroyTabFeatures() {
 }
 
 // static
-TabInterface* TabInterface::GetFromContents(
-    content::WebContents* web_contents) {
-  return TabLookupFromWebContents::FromWebContents(web_contents)->model();
-}
+// TabInterface* TabInterface::GetFromContents(
+//     content::WebContents* web_contents) {
+//   return TabLookupFromWebContents::FromWebContents(web_contents)->model();
+// }
 
 // static
-const TabInterface* TabInterface::GetFromContents(
-    const content::WebContents* web_contents) {
-  return TabLookupFromWebContents::FromWebContents(web_contents)->model();
-}
+// const TabInterface* TabInterface::GetFromContents(
+//     const content::WebContents* web_contents) {
+//   return TabLookupFromWebContents::FromWebContents(web_contents)->model();
+// }
 
 // static
-TabInterface* TabInterface::MaybeGetFromContents(
-    content::WebContents* web_contents) {
-  TabLookupFromWebContents* lookup =
-      TabLookupFromWebContents::FromWebContents(web_contents);
-  if (!lookup) {
-    return nullptr;
-  }
-  return lookup->model();
-}
+// TabInterface* TabInterface::MaybeGetFromContents(
+//     content::WebContents* web_contents) {
+//   TabLookupFromWebContents* lookup =
+//       TabLookupFromWebContents::FromWebContents(web_contents);
+//   if (!lookup) {
+//     return nullptr;
+//   }
+//   return lookup->model();
+// }
 
 }  // namespace tabs

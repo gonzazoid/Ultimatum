@@ -39,7 +39,7 @@ bool CanOperateOnWindow(const ExtensionFunction* function,
 bool CalledFromChildWindow(ExtensionFunction* function,
                            const extensions::WindowController* controller);
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
 // Enum return value for `ShouldOpenIncognitoWindow`, indicating whether to use
 // incognito or the presence of an error.
 enum IncognitoResult { kRegular, kIncognito, kError };
@@ -53,7 +53,7 @@ IncognitoResult ShouldOpenIncognitoWindow(Profile* profile,
                                           std::optional<bool> incognito,
                                           std::vector<GURL>* urls,
                                           std::string* error);
-#endif  // !BUILDFLAG(IS_ANDROID)
+// #endif  // !BUILDFLAG(IS_ANDROID)
 
 }  // namespace windows_util
 

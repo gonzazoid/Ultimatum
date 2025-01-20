@@ -1175,7 +1175,7 @@ extern const char kSymphoniaAudioDecodingName[];
 extern const char kSymphoniaAudioDecodingDescription[];
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 extern const char kEnableWebHidInWebViewName[];
 extern const char kEnableWebHidInWebViewDescription[];
 

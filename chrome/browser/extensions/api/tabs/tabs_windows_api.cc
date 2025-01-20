@@ -14,11 +14,12 @@
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_system.h"
 
-#if BUILDFLAG(IS_ANDROID)
+// #if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/extensions/api/tabs/tabs_event_router_android.h"
-#else
+// #else
 #include "chrome/browser/extensions/api/tabs/tabs_event_router.h"
-#endif
+#include "chrome/browser/extensions/api/tabs/windows_event_router.h"
+// #endif
 
 namespace extensions {
 
@@ -62,26 +63,26 @@ TabsWindowsAPI* TabsWindowsAPI::Get(content::BrowserContext* context) {
 }
 
 void TabsWindowsAPI::InitTabsEventRouter() {
-#if BUILDFLAG(IS_ANDROID)
+// #if BUILDFLAG(IS_ANDROID)
   tabs_event_router_android_ = std::make_unique<TabsEventRouterAndroid>(
       Profile::FromBrowserContext(browser_context_));
-#else
+// #else
   tabs_event_router_ = std::make_unique<TabsEventRouter>(
       Profile::FromBrowserContext(browser_context_));
-#endif
+// #endif
 }
 
-#if BUILDFLAG(IS_ANDROID)
+// #if BUILDFLAG(IS_ANDROID)
 // TODO(crbug.com/371432155): Delete this method once TabsEventRouter works on
 // desktop Android.
 TabsEventRouterAndroid* TabsWindowsAPI::tabs_event_router_android() {
   return tabs_event_router_android_.get();
 }
-#else
+// #else
 TabsEventRouter* TabsWindowsAPI::tabs_event_router() {
   return tabs_event_router_.get();
 }
-#endif
+// #endif
 
 WindowsEventRouter* TabsWindowsAPI::windows_event_router() {
   return windows_event_router_.get();

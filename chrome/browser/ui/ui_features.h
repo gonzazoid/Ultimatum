@@ -32,7 +32,7 @@ BASE_DECLARE_FEATURE(kCloseOmniboxPopupOnInactiveAreaClick);
 BASE_DECLARE_FEATURE(kFewerUpdateConfirmations);
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 
 // Controls how extensions show up in the main menu. When enabled, if the
 // current profile has no extensions, instead of a full extensions submenu, only

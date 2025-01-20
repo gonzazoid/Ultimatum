@@ -6,6 +6,7 @@ package org.chromium.components.embedder_support.contextmenu;
 
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
+import org.chromium.ui.modelutil.MVCListAdapter.ListItem;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
 
 import java.util.List;
@@ -16,6 +17,7 @@ import java.util.List;
  */
 @NullMarked
 public interface ContextMenuPopulator {
+    // void setExtensionsMenu(List<ListItem> extensionsMenu);
     /**
      * Should be used to populate {@code menu} with the correct context menu items.
      *

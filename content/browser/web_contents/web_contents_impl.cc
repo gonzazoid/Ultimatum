@@ -8624,11 +8624,13 @@ void WebContentsImpl::ShowContextMenu(
     mojo::PendingAssociatedRemote<blink::mojom::ContextMenuClient>
         context_menu_client,
     const ContextMenuParams& params) {
+  LOG(INFO) << "WebContentsImpl::ShowContextMenu";
   OPTIONAL_TRACE_EVENT1("content", "WebContentsImpl::ShowContextMenu",
                         "render_frame_host", render_frame_host);
   // If a renderer fires off a second command to show a context menu before the
   // first context menu is closed, just ignore it. https://crbug.com/707534
   if (showing_context_menu_) {
+    LOG(INFO) << "WE ARE ALREADY SHOWING!!!";
     return;
   }
 
@@ -8645,6 +8647,7 @@ void WebContentsImpl::ShowContextMenu(
     if (auto* guest_delegate = guest_holder->delegate()) {
       if (guest_delegate->GuestHandleContextMenu(render_frame_host,
                                                  context_menu_params)) {
+        LOG(INFO) << "GUEST DELEGATE HANLED IT!!!";
         return;
       }
     }
@@ -8653,9 +8656,11 @@ void WebContentsImpl::ShowContextMenu(
   // Allow WebContentsDelegates to handle the context menu operation first.
   if (delegate_ &&
       delegate_->HandleContextMenu(render_frame_host, context_menu_params)) {
+    LOG(INFO) << "WebContentsDelegates HANDLED IT!!";
     return;
   }
 
+  LOG(INFO) << "render_view_host_delegate_view_ is gonna handle it";
   render_view_host_delegate_view_->ShowContextMenu(render_frame_host,
                                                    context_menu_params);
 }

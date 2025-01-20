@@ -6,10 +6,21 @@ package org.chromium.chrome.browser.contextmenu;
 
 import static org.chromium.build.NullUtil.assumeNonNull;
 
+import org.chromium.base.Log;
+
+import android.util.Pair;
 import android.view.View;
 
 import org.jni_zero.CalledByNative;
 import org.jni_zero.NativeMethods;
+
+import org.chromium.chrome.R;
+
+import static org.chromium.ui.listmenu.ListMenuItemProperties.ENABLED;
+import static org.chromium.ui.listmenu.ListMenuItemProperties.MENU_ITEM_ID;
+import static org.chromium.ui.listmenu.ListMenuItemProperties.TITLE;
+import org.chromium.ui.modelutil.PropertyModel;
+import org.chromium.ui.listmenu.ListItemType;
 
 import org.chromium.base.Callback;
 import org.chromium.base.ResettersForTesting;
@@ -30,6 +41,8 @@ import org.chromium.content_public.browser.RenderFrameHost;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
+import org.chromium.ui.modelutil.MVCListAdapter.ListItem;
+// import org.chromium.ui.listmenu.MenuModelBridge;
 
 import java.util.List;
 
@@ -59,6 +72,8 @@ public class ContextMenuHelper {
                 mCurrentPopulator.onItemSelected(result);
             };
 
+    private @Nullable List<ListItem> mExtensionsMenu;
+
     private ContextMenuHelper(long nativeContextMenuHelper, WebContents webContents) {
         mNativeContextMenuHelper = nativeContextMenuHelper;
         mWebContents = webContents;
@@ -85,6 +100,13 @@ public class ContextMenuHelper {
         if (mPopulatorFactory != null) mPopulatorFactory.onDestroy();
         mPopulatorFactory = populatorFactory;
     }
+
+    // @CalledByNative
+    // private void setExtensionsMenu(List<ListItem> list) {
+    //   Log.i("ULTIMATUM", "setExtensionsMenu in ContextMenuHelper.java");
+    //   mExtensionsMenu = list;
+    //   // mCurrentPopulator.setExtensionsMenu(list);
+    // }
 
     /**
      * Starts showing a context menu for {@code view} based on {@code params}.
@@ -172,6 +194,18 @@ public class ContextMenuHelper {
     }
 
     private void displayContextMenu(float topContentOffsetPx) {
+        if (mExtensionsMenu != null) {
+          Log.i("ULTIMATUM", "displayContextMenu in ContextMenuHelper.java");
+          if (mCurrentPopulator != null) {
+            Log.i("ULTIMATUM", "mCurrentPopulator.setExtensionsMenu in ContextMenuHelper.java");
+            // mCurrentPopulator.setExtensionsMenu(mExtensionsMenu);
+          } else {
+            Log.i("ULTIMATUM", "mCurrentPopulator is null in ContextMenuHelper.java");
+          }
+        } else {
+          Log.i("ULTIMATUM", "extensions menu is empty");
+        }
+
         List<ModelList> items = assumeNonNull(mCurrentPopulator).buildContextMenu();
         assert mOnMenuClosed != null;
         if (items.isEmpty()) {

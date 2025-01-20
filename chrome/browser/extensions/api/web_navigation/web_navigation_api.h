@@ -177,7 +177,7 @@ class WebNavigationEventRouter : public TabStripModelObserver,
   // The profile that owns us via ExtensionService.
   raw_ptr<Profile> profile_;
 
-  BrowserTabStripTracker browser_tab_strip_tracker_;
+  // BrowserTabStripTracker browser_tab_strip_tracker_;
 };
 
 // API function that returns the state of a given frame.

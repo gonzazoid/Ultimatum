@@ -27,6 +27,11 @@ import org.chromium.ui.modelutil.MVCListAdapter.ListItem;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
 import org.chromium.ui.modelutil.PropertyModel;
 
+import org.chromium.ui.base.ViewUtils;
+
+import java.util.ArrayList;
+import java.util.List;
+
 @NullMarked
 class ExtensionActionListMediator implements Destroyable {
     private static final String TAG = "EALMediator";
@@ -55,6 +60,7 @@ class ExtensionActionListMediator implements Destroyable {
         mExtensionActionsUpdateHelper =
                 new ExtensionActionsUpdateHelper(
                         mModels, profileSupplier, currentTabSupplier, mActionsUpdateDelegate);
+        mExtensionActionsUpdateHelper.useOnlyPinned();
     }
 
     @Override
@@ -86,7 +92,11 @@ class ExtensionActionListMediator implements Destroyable {
             case ShowAction.NONE:
                 break;
             case ShowAction.SHOW_POPUP:
-                openPopup(buttonView, actionId);
+                if (mCurrentPopup == null) {
+                  openPopup(buttonView, actionId);
+                } else {
+                  closePopup();
+                }
                 break;
             case ShowAction.TOGGLE_SIDE_PANEL:
                 Log.e(TAG, "Extension side panels are not implemented yet");
@@ -97,6 +107,7 @@ class ExtensionActionListMediator implements Destroyable {
     private void openPopup(View buttonView, String actionId) {
         // TODO(crbug.com/385987224): Do not open a popup again when the user clicks the action
         // button while its popup is open.
+        // or we can just close popup if the user clicks the extension icon again
         closePopup();
 
         Tab currentTab = mExtensionActionsUpdateHelper.getCurrentTab();
@@ -141,9 +152,15 @@ class ExtensionActionListMediator implements Destroyable {
                 ExtensionActionsBridge extensionActionsBridge, int tabId, String actionId) {
             ExtensionAction action = extensionActionsBridge.getAction(actionId, tabId);
             assert action != null;
+            // get extensions menu icon as a standard (height/width-wise)
+            // suppose it's 24dp based on chrome/browser/ui/android/extensions/java/res/drawable/chrome_extension.xml
+            int expectedHeight = ViewUtils.dpToPx(mContext, 6);
             Bitmap icon = extensionActionsBridge.getActionIcon(actionId, tabId);
             assert icon != null;
-
+            int height = icon.getHeight();
+            if (((float) height / (float) expectedHeight) > 1.2) {
+              icon = Bitmap.createScaledBitmap(icon, expectedHeight, expectedHeight, false);
+            }
             return new ListItem(
                     ListItemType.EXTENSION_ACTION,
                     new PropertyModel.Builder(ExtensionActionButtonProperties.ALL_KEYS)

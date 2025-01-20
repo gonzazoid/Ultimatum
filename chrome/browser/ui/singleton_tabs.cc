@@ -21,20 +21,20 @@
 namespace {
 
 // Returns true if two URLs are equal after taking |replacements| into account.
-bool CompareURLsWithReplacements(const GURL& url,
-                                 const GURL& other,
-                                 const GURL::Replacements& replacements,
-                                 TemplateURLService* template_url_service) {
-  GURL url_replaced = url.ReplaceComponents(replacements);
-  GURL other_replaced = other.ReplaceComponents(replacements);
-  AutocompleteInput input;
-  return AutocompleteMatch::GURLToStrippedGURL(
-             url_replaced, input, template_url_service, std::u16string(),
-             /*keep_search_intent_params=*/false) ==
-         AutocompleteMatch::GURLToStrippedGURL(
-             other_replaced, input, template_url_service, std::u16string(),
-             /*keep_search_intent_params=*/false);
-}
+// bool CompareURLsWithReplacements(const GURL& url,
+//                                  const GURL& other,
+//                                  const GURL::Replacements& replacements,
+//                                  TemplateURLService* template_url_service) {
+//   GURL url_replaced = url.ReplaceComponents(replacements);
+//   GURL other_replaced = other.ReplaceComponents(replacements);
+//   AutocompleteInput input;
+//   return AutocompleteMatch::GURLToStrippedGURL(
+//              url_replaced, input, template_url_service, std::u16string(),
+//              /*keep_search_intent_params=*/false) ==
+//          AutocompleteMatch::GURLToStrippedGURL(
+//              other_replaced, input, template_url_service, std::u16string(),
+//              /*keep_search_intent_params=*/false);
+// }
 
 }  // namespace
 
@@ -72,21 +72,21 @@ void ShowSingletonTabOverwritingNTP(
 
 void ShowSingletonTabOverwritingNTP(NavigateParams* params) {
   DCHECK_EQ(params->disposition, WindowOpenDisposition::SINGLETON_TAB);
-  content::WebContents* contents =
-      params->browser->tab_strip_model()->GetActiveWebContents();
-  if (contents) {
-    const GURL& contents_url = contents->GetVisibleURL();
-    if (contents_url == chrome::kChromeUINewTabURL ||
-        search::IsInstantNTP(contents) || contents_url == url::kAboutBlankURL) {
-      int tab_index = GetIndexOfExistingTab(params->browser, *params);
-      if (tab_index < 0) {
-        params->disposition = WindowOpenDisposition::CURRENT_TAB;
-      } else {
-        params->switch_to_singleton_tab =
-            params->browser->tab_strip_model()->GetWebContentsAt(tab_index);
-      }
-    }
-  }
+  // content::WebContents* contents =
+  //     params->browser->tab_strip_model()->GetActiveWebContents();
+  // if (contents) {
+  //   const GURL& contents_url = contents->GetVisibleURL();
+  //   if (contents_url == chrome::kChromeUINewTabURL ||
+  //       search::IsInstantNTP(contents) || contents_url == url::kAboutBlankURL) {
+  //     int tab_index = GetIndexOfExistingTab(params->browser, *params);
+  //     if (tab_index < 0) {
+  //       params->disposition = WindowOpenDisposition::CURRENT_TAB;
+  //     } else {
+  //       params->switch_to_singleton_tab =
+  //           params->browser->tab_strip_model()->GetWebContentsAt(tab_index);
+  //     }
+  //   }
+  // }
   Navigate(params);
 }
 
@@ -111,49 +111,49 @@ int GetIndexOfExistingTab(Browser* browser, const NavigateParams& params) {
   // In case the URL was rewritten by the BrowserURLHandler we need to ensure
   // that we do not open another URL that will get redirected to the rewritten
   // URL.
-  const bool target_is_view_source =
-      params.url.SchemeIs(content::kViewSourceScheme);
+  // const bool target_is_view_source =
+  //     params.url.SchemeIs(content::kViewSourceScheme);
   GURL rewritten_url(params.url);
   content::BrowserURLHandler::GetInstance()->RewriteURLIfNecessary(
       &rewritten_url, browser->profile());
 
-  TemplateURLService* turl_service =
-      TemplateURLServiceFactory::GetForProfile(browser->profile());
+  // TemplateURLService* turl_service =
+  //     TemplateURLServiceFactory::GetForProfile(browser->profile());
   // If there are several matches: prefer the active tab by starting there.
-  int start_index = std::max(0, browser->tab_strip_model()->active_index());
-  int tab_count = browser->tab_strip_model()->count();
-  for (int i = 0; i < tab_count; ++i) {
-    int tab_index = (start_index + i) % tab_count;
-    content::WebContents* tab =
-        browser->tab_strip_model()->GetWebContentsAt(tab_index);
+  // int start_index = std::max(0, browser->tab_strip_model()->active_index());
+  // int tab_count = browser->tab_strip_model()->count();
+  // for (int i = 0; i < tab_count; ++i) {
+    // int tab_index = (start_index + i) % tab_count;
+    // content::WebContents* tab =
+    //     browser->tab_strip_model()->GetWebContentsAt(tab_index);
 
-    GURL tab_url = tab->GetVisibleURL();
+    // GURL tab_url = tab->GetVisibleURL();
 
     // RewriteURLIfNecessary removes the "view-source:" scheme which could lead
     // to incorrect matching, so ensure that the target and the candidate are
     // either both view-source:, or neither is.
-    if (tab_url.SchemeIs(content::kViewSourceScheme) != target_is_view_source) {
-      continue;
-    }
+    // if (tab_url.SchemeIs(content::kViewSourceScheme) != target_is_view_source) {
+    //   continue;
+    // }
 
-    GURL rewritten_tab_url = tab_url;
-    content::BrowserURLHandler::GetInstance()->RewriteURLIfNecessary(
-        &rewritten_tab_url, browser->profile());
+    // GURL rewritten_tab_url = tab_url;
+    // content::BrowserURLHandler::GetInstance()->RewriteURLIfNecessary(
+    //     &rewritten_tab_url, browser->profile());
 
-    GURL::Replacements replacements;
-    replacements.ClearRef();
-    if (params.path_behavior == NavigateParams::IGNORE_AND_NAVIGATE) {
-      replacements.ClearPath();
-      replacements.ClearQuery();
-    }
+    // GURL::Replacements replacements;
+    // replacements.ClearRef();
+    // if (params.path_behavior == NavigateParams::IGNORE_AND_NAVIGATE) {
+    //   replacements.ClearPath();
+    //   replacements.ClearQuery();
+    // }
 
-    if (CompareURLsWithReplacements(tab_url, params.url, replacements,
-                                    turl_service) ||
-        CompareURLsWithReplacements(rewritten_tab_url, rewritten_url,
-                                    replacements, turl_service)) {
-      return tab_index;
-    }
-  }
+    // if (CompareURLsWithReplacements(tab_url, params.url, replacements,
+    //                                 turl_service) ||
+    //     CompareURLsWithReplacements(rewritten_tab_url, rewritten_url,
+    //                                 replacements, turl_service)) {
+    //   return tab_index;
+    // }
+  // }
 
   return -1;
 }
@@ -161,14 +161,14 @@ int GetIndexOfExistingTab(Browser* browser, const NavigateParams& params) {
 std::pair<Browser*, int> GetIndexAndBrowserOfExistingTab(
     Profile* profile,
     const NavigateParams& params) {
-  for (Browser* browser : BrowserList::GetInstance()->OrderedByActivation()) {
-    // When tab switching, only look at same profile and anonymity level.
-    if (profile == browser->profile() && !browser->is_delete_scheduled()) {
-      int index = GetIndexOfExistingTab(browser, params);
-      if (index >= 0) {
-        return {browser, index};
-      }
-    }
-  }
+  // for (Browser* browser : BrowserList::GetInstance()->OrderedByActivation()) {
+  //   // When tab switching, only look at same profile and anonymity level.
+  //   if (profile == browser->profile() && !browser->is_delete_scheduled()) {
+  //     int index = GetIndexOfExistingTab(browser, params);
+  //     if (index >= 0) {
+  //       return {browser, index};
+  //     }
+  //   }
+  // }
   return {nullptr, -1};
 }

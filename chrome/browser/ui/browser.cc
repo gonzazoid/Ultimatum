@@ -270,6 +270,10 @@
 #include "components/captive_portal/content/captive_portal_tab_helper.h"
 #endif
 
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+#include "chrome/browser/extensions/extension_browser_window_helper.h"
+#endif
+
 #if BUILDFLAG(ENABLE_PRINTING)
 #include "components/printing/browser/print_composite_client.h"
 #endif
@@ -334,7 +338,7 @@ BrowserWindow* CreateBrowserWindow(std::unique_ptr<Browser> browser,
 const extensions::Extension* GetExtensionForOrigin(
     Profile* profile,
     const GURL& security_origin) {
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   if (!security_origin.SchemeIs(extensions::kExtensionScheme)) {
     return nullptr;
   }

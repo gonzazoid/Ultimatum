@@ -18,8 +18,8 @@ export function getHtml(this: ItemElement) {
 <div id="card" class="${this.computeClasses_()}">
   <div id="main">
     <div id="icon-wrapper">
-      <img id="icon" src="${this.data.iconUrl}"
-          aria-describedby="a11yAssociation" alt="">
+      <a href="${this.data.popupUrl}"><img id="icon" src="${this.data.iconUrl}"
+          aria-describedby="a11yAssociation" alt=""></a>
       ${this.computeSourceIndicatorIcon_() ? html`
         <div id="source-indicator">
           <div class="source-icon-wrapper" role="img"

@@ -2937,8 +2937,8 @@ static_library("browser") {
       "android/tab_favicon.h",
       "android/tab_group_android.cc",
       "android/tab_group_android.h",
-      "android/tab_group_features.cc",
-      "android/tab_group_features.h",
+      # "android/tab_group_features.cc",
+      # "android/tab_group_features.h",
       "android/tab_interface_android.cc",
       "android/tab_interface_android.h",
       "android/tab_printer.cc",
@@ -3026,6 +3026,10 @@ static_library("browser") {
       "dom_distiller/dom_distiller_service_factory_android.cc",
       "dom_distiller/dom_distiller_service_factory_android.h",
       "dom_distiller/tab_utils_android.cc",
+      "download/android/extension_install_dialog_bridge.cc",
+      "download/android/extension_install_dialog_bridge.h",
+      "download/android/extension_uninstall_dialog_bridge.cc",
+      "download/android/extension_uninstall_dialog_bridge.h",
       "download/android/dangerous_download_dialog_bridge.cc",
       "download/android/dangerous_download_dialog_bridge.h",
       "download/android/download_callback_validator.cc",
@@ -3206,6 +3210,10 @@ static_library("browser") {
       "password_manager/android/password_store_bridge.h",
       "password_manager/android/save_update_password_message_delegate.cc",
       "password_manager/android/save_update_password_message_delegate.h",
+      # "password_manager/android/shared_preferences_delegate_android.cc",
+      # "password_manager/android/shared_preferences_delegate_android.h",
+      "password_manager/generated_password_leak_detection_pref.cc",
+      "password_manager/generated_password_leak_detection_pref.h",
       "payments/android/service_worker_payment_app_bridge.cc",
       "performance_manager/policies/process_rank_policy_android.cc",
       "performance_manager/policies/process_rank_policy_android.h",
@@ -3246,6 +3254,10 @@ static_library("browser") {
       "safe_browsing/android/safe_browsing_referring_app_bridge_android.h",
       "safe_browsing/android/safe_browsing_settings_navigation_android.cc",
       "safe_browsing/android/safe_browsing_settings_navigation_android.h",
+      "safe_browsing/generated_safe_browsing_pref.cc",
+      "safe_browsing/generated_safe_browsing_pref.h",
+      "safe_browsing/generated_security_settings_bundle_pref.cc",
+      "safe_browsing/generated_security_settings_bundle_pref.h",
       "search_resumption/search_resumption_module_bridge.cc",
       "search_resumption/search_resumption_module_bridge.h",
       "search_resumption/start_suggest_service_factory.cc",
@@ -3273,6 +3285,8 @@ static_library("browser") {
       "signin/signin_manager_android_factory.cc",
       "signin/signin_manager_android_factory.h",
       "ssl/android/https_first_mode_bridge.cc",
+      "ssl/generated_https_first_mode_pref.cc",
+      "ssl/generated_https_first_mode_pref.h",
       "ssl/chrome_security_state_client.cc",
       "ssl/chrome_security_state_client.h",
       "ssl/chrome_security_state_model_delegate.cc",
@@ -3335,6 +3349,28 @@ static_library("browser") {
       "webauthn/android/chrome_webauthn_client_android.h",
       "webauthn/android/webauthn_request_delegate_android.cc",
       "webauthn/android/webauthn_request_delegate_android.h",
+      "resource_coordinator/decision_details.cc",
+      "resource_coordinator/decision_details.h",
+      "resource_coordinator/discard_metrics_lifecycle_unit_observer.cc",
+      "resource_coordinator/discard_metrics_lifecycle_unit_observer.h",
+      "resource_coordinator/lifecycle_unit.cc",
+      "resource_coordinator/lifecycle_unit.h",
+      "resource_coordinator/lifecycle_unit_base.cc",
+      "resource_coordinator/lifecycle_unit_base.h",
+      "resource_coordinator/lifecycle_unit_observer.cc",
+      "resource_coordinator/lifecycle_unit_observer.h",
+      "resource_coordinator/lifecycle_unit_source.h",
+      "resource_coordinator/lifecycle_unit_source_base.cc",
+      "resource_coordinator/lifecycle_unit_source_base.h",
+      "resource_coordinator/lifecycle_unit_source_observer.h",
+      "resource_coordinator/tab_lifecycle_unit.cc",
+      "resource_coordinator/tab_lifecycle_unit.h",
+      "resource_coordinator/tab_lifecycle_unit_external.cc",
+      "resource_coordinator/tab_lifecycle_unit_external.h",
+      "resource_coordinator/tab_lifecycle_unit_source.cc",
+      "resource_coordinator/tab_lifecycle_unit_source.h",
+      "bookmarks/bookmark_html_writer.cc",
+      "bookmarks/bookmark_html_writer.h",
     ]
     sources += [
       # TODO(crbug.com/40071344): Fold into "keyboard_accessory/android".
@@ -3365,6 +3401,11 @@ static_library("browser") {
       "touch_to_fill/password_manager/touch_to_fill_controller_webauthn_delegate.h",
     ]
 
+    sources += [
+      # "ui/tabs/tab_features.cc",
+      # "ui/tabs/tab_features.h",
+    ]
+
     deps += [
       ":delta_file_proto",
       ":profile_token",
@@ -3373,6 +3414,7 @@ static_library("browser") {
       "//cc/slim",
       "//chrome/android:jni_headers",
       "//chrome/browser/android:tabs_impl",
+      "//chrome/browser/ui/tabs:tab_group_impl",
       "//chrome/browser/android:tabs_public",
       "//chrome/browser/android/content:jni_headers",
       "//chrome/browser/android/extensions:android",
@@ -7582,13 +7624,21 @@ static_library("browser") {
     sources += [ "download/download_crx_util_android.cc" ]
   }
 
+  if (is_android && enable_desktop_android_extensions) {
+    sources += [ "download/download_crx_util_android.cc" ]
+  } else {
+    sources += [
+      "download/download_crx_util.cc",
+    ]
+  }
+
   if (enable_extensions_core) {
     sources += [
       "autocomplete/keyword_extensions_delegate_impl.cc",
       "autocomplete/keyword_extensions_delegate_impl.h",
       "autocomplete/unscoped_extension_provider_delegate_impl.cc",
       "autocomplete/unscoped_extension_provider_delegate_impl.h",
-      "download/download_crx_util.cc",
+      # "download/download_crx_util.cc",
       "speech/extension_api/tts_engine_extension_api.cc",
       "speech/extension_api/tts_engine_extension_api.h",
       "speech/extension_api/tts_extension_api.cc",
@@ -7886,17 +7936,46 @@ static_library("browser") {
   # block with the `enable_extensions` block above.
   if (enable_desktop_android_extensions) {
     sources += [
+      "upgrade_detector/build_state.cc",
+      "upgrade_detector/build_state.h",
+      "upgrade_detector/upgrade_detector.cc",
+      "upgrade_detector/upgrade_detector.h",
+      "upgrade_detector/upgrade_observer.h",
+
       # TODO(https://crbug.com/356905053): These files are temporary workarounds
       # allow for a lightweight extensions runtime in desktop-android builds.
       # They should be removed.
       "extensions/extension_menu_model_android.cc",
       "extensions/extension_menu_model_android.h",
+
+      # "extensions/desktop_android/desktop_android_extension_host_delegate.cc",
+      # "extensions/desktop_android/desktop_android_extension_host_delegate.h",
+      # "extensions/extension_menu_delegate_android.cc",
+      # "extensions/extension_menu_delegate_android.h",
+
+      # "extensions/desktop_android/desktop_android_extensions_browser_client.cc",
+      # "extensions/desktop_android/desktop_android_extensions_browser_client.h",
+      # "extensions/desktop_android/desktop_android_runtime_api_delegate.cc",
+      # "extensions/desktop_android/desktop_android_runtime_api_delegate.h",
+
+      "guest_view/extension_options/chrome_extension_options_guest_delegate.cc",
+      "guest_view/extension_options/chrome_extension_options_guest_delegate.h",
+      "guest_view/mime_handler_view/chrome_mime_handler_view_guest_delegate.cc",
+      "guest_view/mime_handler_view/chrome_mime_handler_view_guest_delegate.h",
+      "guest_view/web_view/chrome_web_view_guest_delegate.cc",
+      "guest_view/web_view/chrome_web_view_guest_delegate.h",
+      "guest_view/web_view/chrome_web_view_permission_helper_delegate.cc",
+      "guest_view/web_view/chrome_web_view_permission_helper_delegate.h",
+      "guest_view/web_view/context_menu_content_type_web_view.cc",
+      "guest_view/web_view/context_menu_content_type_web_view.h",
     ]
 
     deps += [
       "//chrome/browser/extensions",
       "//extensions/browser/updater:keepalive",
-    ]
+      "//extensions/components/javascript_dialog_extensions_client",
+      "//chrome/browser/themes",
+      ]
 
     # Circular dependency due to some utility function in
     # //chrome/browser/extensions/extension_util.cc calling

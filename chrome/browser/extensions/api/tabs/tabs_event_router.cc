@@ -68,7 +68,7 @@ constexpr char kDiscardedKey[] = "discarded";
 constexpr char kAutoDiscardableKey[] = "autoDiscardable";
 constexpr char kMutedInfoKey[] = "mutedInfo";
 constexpr char kTabIdKey[] = "tabId";
-constexpr char kTabIdsKey[] = "tabIds";
+// constexpr char kTabIdsKey[] = "tabIds";
 constexpr char kToIndexKey[] = "toIndex";
 
 bool WillDispatchTabUpdatedEvent(
@@ -90,8 +90,9 @@ bool WillDispatchTabUpdatedEvent(
 
   base::Value::Dict changed_properties;
   for (const auto& property : changed_property_names) {
-    if (const base::Value* value = tab_value.Find(property))
+    if (const base::Value* value = tab_value.Find(property)) {
       changed_properties.Set(property, value->Clone());
+    }
   }
 
   event_args_out.emplace();
@@ -195,6 +196,12 @@ void TabsEventRouter::TabEntry::WebContentsDestroyed() {
   router_->UnregisterForTabNotifications(web_contents());
 }
 
+#if BUILDFLAG(IS_ANDROID)
+TabsEventRouter::TabsEventRouter(Profile* profile)
+    : profile_(profile) {
+  DCHECK(!profile->IsOffTheRecord());
+}
+#else
 TabsEventRouter::TabsEventRouter(Profile* profile)
     : profile_(profile), browser_tab_strip_tracker_(this, this) {
   DCHECK(!profile->IsOffTheRecord());
@@ -206,16 +213,20 @@ TabsEventRouter::TabsEventRouter(Profile* profile)
       resource_coordinator::GetTabLifecycleUnitSource());
   performance_manager::PageLiveStateDecorator::AddAllPageObserver(this);
 }
+#endif
 
 TabsEventRouter::~TabsEventRouter() {
+#if !BUILDFLAG(IS_ANDROID)
   performance_manager::PageLiveStateDecorator::RemoveAllPageObserver(this);
   BrowserList::RemoveObserver(this);
+#endif
 }
 
 bool TabsEventRouter::ShouldTrackBrowser(BrowserWindowInterface* browser) {
-  return profile_->IsSameOrParent(browser->GetProfile()) &&
-         ExtensionTabUtil::BrowserSupportsTabs(
-             browser->GetBrowserForMigrationOnly());
+  return false;
+  // return profile_->IsSameOrParent(browser->GetProfile()) &&
+  //        ExtensionTabUtil::BrowserSupportsTabs(
+  //            browser->GetBrowserForMigrationOnly());
 }
 
 void TabsEventRouter::OnBrowserSetLastActive(Browser* browser) {
@@ -267,7 +278,7 @@ void TabsEventRouter::OnTabStripModelChanged(
       break;
   }
 
-  if (tab_strip_model->empty())
+  if (!tab_strip_model /* || tab_strip_model->empty() */) // TODO
     return;
 
   if (selection.active_tab_changed())
@@ -282,6 +293,11 @@ void TabsEventRouter::TabChangedAt(WebContents* contents,
                                    int index,
                                    TabChangeType change_type) {
   TabEntry* entry = GetTabEntry(contents);
+  if (!entry) {
+    RegisterForTabNotifications(contents);
+    entry = GetTabEntry(contents);
+  }
+
   // TabClosingAt() may have already removed the entry for |contents| even
   // though the tab has not yet been detached.
   if (entry)
@@ -453,9 +469,11 @@ void TabsEventRouter::DispatchTabInsertedAt(TabStripModel* tab_strip_model,
   if (!GetTabEntry(contents)) {
     // We've never seen this tab, send create event as long as we're not in the
     // constructor.
+#if !BUILDFLAG(IS_ANDROID)
     if (browser_tab_strip_tracker_.is_processing_initial_browsers())
       RegisterForTabNotifications(contents);
     else
+#endif
       TabCreatedAt(contents, index, active);
     return;
   }
@@ -557,6 +575,10 @@ void TabsEventRouter::DispatchActiveTabChanged(WebContents* old_contents,
 void TabsEventRouter::DispatchTabSelectionChanged(
     TabStripModel* tab_strip_model,
     const ui::ListSelectionModel& old_model) {
+#if BUILDFLAG(IS_ANDROID)
+  // use only current tab and current window???
+  return;
+#else
   ui::ListSelectionModel::SelectedIndices new_selection =
       tab_strip_model->selection_model().selected_indices();
   base::Value::List all_tabs;
@@ -593,6 +615,7 @@ void TabsEventRouter::DispatchTabSelectionChanged(
   DispatchEvent(profile, events::TABS_ON_HIGHLIGHTED,
                 api::tabs::OnHighlighted::kEventName, std::move(args),
                 EventRouter::UserGestureState::kUnknown);
+#endif
 }
 
 void TabsEventRouter::DispatchTabMoved(WebContents* contents,
@@ -637,6 +660,10 @@ void TabsEventRouter::DispatchTabReplacedAt(WebContents* old_contents,
 void TabsEventRouter::TabCreatedAt(WebContents* contents,
                                    int index,
                                    bool active) {
+#if BUILDFLAG(IS_ANDROID)
+  if (!contents) return;
+#endif
+
   Profile* profile = Profile::FromBrowserContext(contents->GetBrowserContext());
   auto event = std::make_unique<Event>(events::TABS_ON_CREATED,
                                        api::tabs::OnCreated::kEventName,
@@ -646,7 +673,9 @@ void TabsEventRouter::TabCreatedAt(WebContents* contents,
       base::BindRepeating(&WillDispatchTabCreatedEvent, contents, active);
   EventRouter::Get(profile)->BroadcastEvent(std::move(event));
 
+#if !BUILDFLAG(IS_ANDROID)
   RegisterForTabNotifications(contents);
+#endif
 }
 
 void TabsEventRouter::TabUpdated(TabEntry* entry,
@@ -678,13 +707,33 @@ void TabsEventRouter::FaviconUrlUpdated(WebContents* contents) {
   DispatchTabUpdatedEvent(contents, std::move(changed_property_names));
 }
 
+#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+void TabsEventRouter::DispatchEventAndroid(
+    Profile* profile,
+    events::HistogramValue histogram_value,
+    const std::string& event_name,
+    base::Value::List args,
+    EventRouter::UserGestureState user_gesture) {
+  DispatchEvent(
+    profile,
+    histogram_value,
+    event_name,
+    std::move(args),
+    user_gesture);
+}
+#endif
+
 void TabsEventRouter::DispatchEvent(
     Profile* profile,
     events::HistogramValue histogram_value,
     const std::string& event_name,
     base::Value::List args,
     EventRouter::UserGestureState user_gesture) {
+#if BUILDFLAG(IS_ANDROID)
+  return;
+#else
   EventRouter* event_router = EventRouter::Get(profile);
+
   if (!profile_->IsSameOrParent(profile) || !event_router)
     return;
 
@@ -692,6 +741,7 @@ void TabsEventRouter::DispatchEvent(
                                        std::move(args), profile);
   event->user_gesture = user_gesture;
   event_router->BroadcastEvent(std::move(event));
+#endif
 }
 
 void TabsEventRouter::DispatchTabUpdatedEvent(
@@ -717,8 +767,10 @@ void TabsEventRouter::DispatchTabUpdatedEvent(
 void TabsEventRouter::RegisterForTabNotifications(WebContents* contents) {
   favicon_scoped_observations_.AddObservation(
       favicon::ContentFaviconDriver::FromWebContents(contents));
+#if !BUILDFLAG(IS_ANDROID)
   zoom_scoped_observations_.AddObservation(
       ZoomController::FromWebContents(contents));
+#endif
 
   int tab_id = ExtensionTabUtil::GetTabId(contents);
   DCHECK(tab_entries_.find(tab_id) == tab_entries_.end());
@@ -726,10 +778,12 @@ void TabsEventRouter::RegisterForTabNotifications(WebContents* contents) {
 }
 
 void TabsEventRouter::UnregisterForTabNotifications(WebContents* contents) {
+#if !BUILDFLAG(IS_ANDROID)
   if (auto* zoom_controller = ZoomController::FromWebContents(contents);
       zoom_scoped_observations_.IsObservingSource(zoom_controller)) {
     zoom_scoped_observations_.RemoveObservation(zoom_controller);
   }
+#endif
   favicon_scoped_observations_.RemoveObservation(
       favicon::ContentFaviconDriver::FromWebContents(contents));
 

@@ -926,8 +926,20 @@ void NativeExtensionBindingsSystem::GetInternalAPI(
   }
 
   std::string api_name = gin::V8ToString(isolate, info[0]);
+  LOG(INFO) << "API NAME!!! " << api_name;
   const Feature* feature = FeatureProvider::GetAPIFeature(api_name);
+  if (feature) {
+    LOG(INFO) << "FEATURE!!!";
+  } else {
+    LOG(INFO) << "NOT FEATURE!!!";
+  }
   ScriptContext* script_context = GetScriptContextFromV8ContextChecked(context);
+  if (script_context->IsAnyFeatureAvailableToContext(
+                     *feature, CheckAliasStatus::NOT_ALLOWED)) {
+    LOG(INFO) << "ALLOWED!!!";
+  } else {
+    LOG(INFO) << "NOT ALLOWED!!!";
+  }
   if (!feature || !script_context->IsAnyFeatureAvailableToContext(
                       *feature, CheckAliasStatus::NOT_ALLOWED)) {
     NOTREACHED();

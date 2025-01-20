@@ -371,13 +371,13 @@ content::PermissionResult PermissionContextBase::GetPermissionStatus(
     // possible.
     // TODO(crbug.com/40068594): Scope granted permissions to a
     // StoragePartition.
-    if (base::FeatureList::IsEnabled(
-            features::kMitigateUnpartitionedWebviewPermissions) &&
-        !guest->IsPermissionRequestable(content_settings_type_)) {
-      return content::PermissionResult(
-          PermissionStatus::DENIED,
-          content::PermissionStatusSource::UNSPECIFIED);
-    }
+    // if (base::FeatureList::IsEnabled(
+    //         features::kMitigateUnpartitionedWebviewPermissions) &&
+    //     !guest->IsPermissionRequestable(content_settings_type_)) {
+    //   return content::PermissionResult(
+    //       PermissionStatus::DENIED,
+    //       content::PermissionStatusSource::UNSPECIFIED);
+    // }
   }
 #endif
 

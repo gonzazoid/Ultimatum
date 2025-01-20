@@ -1278,7 +1278,7 @@ are declared in tools/grit/grit_args.gni.
       </if>
 
       <!-- Page menu. Android has separate strings for its menu -->
-      <if expr="not is_android">
+      <if expr="not is_android or is_android">
         <if expr="not use_titlecase">
           <message name="IDS_ADDRESSES_AND_MORE_SUBMENU_OPTION" desc="The text label of the addresses and more item for the passwords and autofill submenu">
             &amp;Addresses and more
@@ -5935,7 +5935,7 @@ are declared in tools/grit/grit_args.gni.
           </message>
         </if>
       </if>
-      <if expr="enable_extensions">
+      <if expr="enable_extensions or enable_desktop_android_extensions">
         <message name="IDS_EXTENSIONS_WANTS_ACCESS_TO_SITE" desc="The message shown on mouseover when an extension wants to run on a specific site.">
           Wants access to this site
         </message>
@@ -13145,6 +13145,9 @@ Check your passwords anytime in <ph name="GOOGLE_PASSWORD_MANAGER">$1<ex>Google 
            (Settings specific strings are in settings_strings.grdp).
            Not necessary on Android that uses native UI in settings unless extensions are enabled. -->
       <if expr="not is_android or enable_extensions_core">
+        <message name="IDS_SETTINGS_SAFETY_HUB" desc="Name of a page in settings that gives users an overview over their safety status and where users can take action to improve their safety.">
+          Safety Check
+        </message>
         <message name="IDS_TOOLBAR_INFORM_SET_HOME_PAGE" desc="The confirmation message when dropping a link on the Home toolbar button">
            Your home page has been set.
         </message>

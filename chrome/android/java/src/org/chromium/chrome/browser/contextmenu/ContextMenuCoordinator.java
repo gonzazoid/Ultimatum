@@ -7,6 +7,10 @@ package org.chromium.chrome.browser.contextmenu;
 import static org.chromium.build.NullUtil.assertNonNull;
 import static org.chromium.build.NullUtil.assumeNonNull;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.CLICK_LISTENER;
+
+import org.chromium.base.Log;
+
+import static org.chromium.ui.listmenu.ListMenuItemProperties.ENABLED;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.MENU_ITEM_ID;
 
 import android.app.Activity;
@@ -318,6 +322,30 @@ public class ContextMenuCoordinator implements ContextMenuUi {
         mListView.setAdapter(adapter);
 
         mListView.setItemsCanFocus(true);
+
+        mListView.setOnItemClickListener(
+                (p, v, pos, id) -> {
+                    assert id != -1; // INVALID_ITEM_ID;
+                    if (id == 0) {
+                      // may be extensions context menu
+                      ListItem contextItem = getItem(pos);
+                      contextItem.model.set(MENU_ITEM_ID, R.id.contextmenu_extensions_menu);
+                      clickItem(
+                            R.id.contextmenu_extensions_menu,
+                            activity,
+                            onItemClicked,
+                            contextItem.model.get(ENABLED));
+                      return;
+                    }
+                    // if we have item's position - why brootforce?
+                    ListItem item = findItem((int) id);
+                    clickItem(
+                            (int) id,
+                            activity,
+                            onItemClicked,
+                            item == null ? true : item.model.get(ENABLED));
+                });
+        //
         // Set the fading edge for context menu. This is guarded by drag and drop feature flag, but
         // ideally this could be enabled for all forms of context menu.
         if (isDragDropEnabled) {
@@ -342,6 +370,28 @@ public class ContextMenuCoordinator implements ContextMenuUi {
                 };
 
         mDialog.show();
+    }
+
+    /**
+     * Execute an action for the selected item and close the menu.
+     *
+     * @param id The id of the item.
+     * @param activity The current activity.
+     * @param onItemClicked The callback to take action with the given id.
+     * @param enabled Whether the item is enabled.
+     */
+    private void clickItem(
+            int id, Activity activity, Callback<Integer> onItemClicked, boolean enabled) {
+        // Do not start any action when the activity is on the way to destruction.
+        // See https://crbug.com/990987
+        if (activity.isFinishing() || activity.isDestroyed()) return;
+
+        onItemClicked.onResult(id);
+
+        // Dismiss the dialog if the item is enabled.
+        if (enabled) {
+            dismissDialog();
+        }
     }
 
     /**
