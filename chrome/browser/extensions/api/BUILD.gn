@@ -51,6 +51,14 @@ group("api_implementations") {
     "//chrome/browser/extensions/api/web_navigation",
     "//chrome/browser/extensions/api/webrtc_audio_private",
     "//chrome/browser/extensions/api/webrtc_logging_private",
+    "//chrome/browser/extensions/api/permissions",
+    "//chrome/browser/extensions/api/proxy",
+    "//chrome/browser/extensions/api/extension_action",
+    "//chrome/browser/extensions/api/preference",
+    "//chrome/browser/extensions/api/content_settings",
+    # "//chrome/browser/extensions/api/tab_groups",
+    "//chrome/browser/extensions/api/web_navigation",
+    "//chrome/browser/extensions/api/web_view",
   ]
 
   if (enable_service_discovery) {

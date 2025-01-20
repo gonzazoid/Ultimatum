@@ -47,9 +47,9 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/supervised_user/supervised_user_browser_utils.h"
-#include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/browser_finder.h"
-#include "chrome/browser/ui/browser_window.h"
+// #include "chrome/browser/ui/browser.h"
+// #include "chrome/browser/ui/browser_finder.h"
+// #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/chrome_select_file_policy.h"
 #include "chrome/browser/ui/extensions/application_launch.h"
 #include "chrome/browser/ui/extensions/extensions_dialogs.h"
@@ -106,6 +106,7 @@
 #include "ui/shell_dialogs/selected_file_info.h"
 #include "url/gurl.h"
 #include "url/origin.h"
+#include "chrome/browser/extensions/sync/account_extension_tracker.h"
 
 namespace extensions {
 
@@ -121,6 +122,182 @@ namespace PackDirectory = api::developer_private::PackDirectory;
 namespace Reload = api::developer_private::Reload;
 
 namespace api {
+
+DeveloperPrivateLoadCRXFunction::DeveloperPrivateLoadCRXFunction() =
+    default;
+
+DeveloperPrivateLoadCRXFunction::~DeveloperPrivateLoadCRXFunction() {
+  // There may be pending file dialogs, we need to tell them that we've gone
+  // away so they don't try and call back to us.
+  if (select_file_dialog_.get()) {
+    select_file_dialog_->ListenerDestroyed();
+  }
+}
+
+ExtensionFunction::ResponseAction DeveloperPrivateLoadCRXFunction::Run() {
+  std::optional<developer::LoadCRX::Params> params =
+      developer::LoadCRX::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
+
+  content::WebContents* web_contents = GetSenderWebContents();
+  if (!web_contents) {
+    return RespondNow(Error(kCouldNotFindWebContentsError));
+  }
+
+  Profile* profile = Profile::FromBrowserContext(browser_context());
+  if (profile && supervised_user::AreExtensionsPermissionsEnabled(profile)) {
+    return RespondNow(
+        Error("Child account users cannot load .crx extensions."));
+  }
+  PrefService* prefs = profile->GetPrefs();
+  if (!prefs->GetBoolean(prefs::kExtensionsUIDeveloperMode)) {
+    return RespondNow(
+        Error("Must be in developer mode to load .crx extensions."));
+  }
+  if (ExtensionManagementFactory::GetForBrowserContext(browser_context())
+          ->BlocklistedByDefault()) {
+    return RespondNow(Error("Extension installation is blocked by policy."));
+  }
+
+  fail_quietly_ = params->options && params->options->fail_quietly &&
+                  *params->options->fail_quietly;
+
+  populate_error_ = params->options && params->options->populate_error &&
+                    *params->options->populate_error;
+
+  if (params->options && params->options->retry_guid) {
+    DeveloperPrivateAPI* api = DeveloperPrivateAPI::Get(browser_context());
+    base::FilePath path =
+        api->GetUnpackedPath(web_contents, *params->options->retry_guid);
+    if (path.empty()) {
+      return RespondNow(Error("Invalid retry id"));
+    }
+
+    AddRef();  // Balanced in Finish.
+    StartFileLoad(path);
+    return RespondLater();
+  }
+
+  if (params->options && params->options->use_dragged_path &&
+      *params->options->use_dragged_path) {
+    DeveloperPrivateAPI* api = DeveloperPrivateAPI::Get(browser_context());
+    ui::FileInfo file = api->GetDraggedFile(web_contents);
+    if (file.path.empty()) {
+      return RespondNow(Error("No dragged path"));
+    }
+
+    AddRef();  // Balanced in Finish.
+    StartFileLoad(file.path);
+    return RespondLater();
+  }
+
+  ShowSelectFileDialog();
+  AddRef();  // Balanced in Finish.
+  return RespondLater();
+}
+
+void DeveloperPrivateLoadCRXFunction::ShowSelectFileDialog() {
+  LOG(INFO) << "DeveloperPrivateLoadCRXFunction::ShowSelectFileDialog";
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+
+  // Start or cancel the file load without showing the select file dialog for
+  // tests that require it.
+  if (accept_dialog_for_testing_.has_value()) {
+    if (accept_dialog_for_testing_.value()) {
+      CHECK(selected_file_for_testing_.has_value());
+      FileSelected(selected_file_for_testing_.value(), /*index=*/0);
+    } else {
+      FileSelectionCanceled();
+    }
+    return;
+  }
+
+  content::WebContents* web_contents = GetSenderWebContents();
+  CHECK(web_contents);
+  select_file_dialog_ = ui::SelectFileDialog::Create(
+      this, std::make_unique<ChromeSelectFilePolicy>(web_contents));
+
+  ui::SelectFileDialog::Type file_type =
+      ui::SelectFileDialog::SELECT_OPEN_FILE;
+  std::u16string title =
+      u"install from .crx";
+  const base::FilePath last_directory =
+      DeveloperPrivateAPI::Get(browser_context())->last_unpacked_directory();
+  auto file_type_info = ui::SelectFileDialog::FileTypeInfo();
+  int file_type_index = 0;
+  gfx::NativeWindow owning_window =
+      platform_util::GetTopLevel(web_contents->GetNativeView());
+
+  select_file_dialog_->SelectFile(file_type, title, last_directory,
+                                  &file_type_info, file_type_index,
+                                  base::FilePath::StringType(), owning_window);
+}
+
+void DeveloperPrivateLoadCRXFunction::FileSelected(
+    const ui::SelectedFileInfo& file,
+    int index) {
+  select_file_dialog_.reset();
+  StartFileLoad(file.path());
+}
+
+void DeveloperPrivateLoadCRXFunction::FileSelectionCanceled() {
+  select_file_dialog_.reset();
+  // This isn't really an error, but we should keep it like this for
+  // backward compatibility.
+  Finish(Error(kFileSelectionCanceled));
+}
+
+void DeveloperPrivateLoadCRXFunction::StartFileLoad(
+    const base::FilePath file_path) {
+  scoped_refptr<CrxInstaller> installer(
+      CrxInstaller::CreateSilent(browser_context()));
+
+  installer->InstallCrx(file_path);
+  // installer->set_be_noisy_on_failure(!fail_quietly_);
+  // installer->set_completion_callback(base::BindOnce(
+  //     &DeveloperPrivateLoadCRXFunction::OnLoadComplete, this));
+  // installer->Load(file_path);
+
+  // retry_guid_ = DeveloperPrivateAPI::Get(browser_context())
+  //                   ->AddUnpackedPath(GetSenderWebContents(), file_path);
+}
+
+void DeveloperPrivateLoadCRXFunction::OnLoadComplete(
+    const Extension* extension,
+    const base::FilePath& file_path,
+    const std::string& error) {
+  if (extension) {
+    Finish(NoArguments());
+    return;
+  }
+
+  if (!populate_error_) {
+    Finish(Error(error));
+    return;
+  }
+
+  GetManifestError(
+      error, file_path,
+      base::BindOnce(&DeveloperPrivateLoadCRXFunction::OnGotManifestError,
+                     this));
+}
+
+void DeveloperPrivateLoadCRXFunction::OnGotManifestError(
+    const base::FilePath& file_path,
+    const std::string& error,
+    size_t line_number,
+    const std::string& manifest) {
+  DCHECK(!retry_guid_.empty());
+  Finish(WithArguments(
+      CreateLoadError(file_path, error, line_number, manifest, retry_guid_)
+          .ToValue()));
+}
+
+void DeveloperPrivateLoadCRXFunction::Finish(
+    ResponseValue response_value) {
+  Respond(std::move(response_value));
+  Release();  // Balanced in Run().
+}
 
 ExtensionFunction::ResponseAction DeveloperPrivateLoadDirectoryFunction::Run() {
   // In theory `extension()` can be null when an ExtensionFunction is invoked
@@ -154,11 +331,11 @@ ExtensionFunction::ResponseAction DeveloperPrivateLoadDirectoryFunction::Run() {
 
   std::string unused_error;
   // Check if the DirectoryEntry is the instance of chrome filesystem.
-  if (!app_file_handler_util::ValidateFileEntryAndGetPath(
-          filesystem_name, filesystem_path, source_process_id(),
-          &project_base_path_, &unused_error)) {
-    return RespondNow(Error("DirectoryEntry of unsupported filesystem."));
-  }
+  // if (!app_file_handler_util::ValidateFileEntryAndGetPath(
+  //         filesystem_name, filesystem_path, source_process_id(),
+  //         &project_base_path_, &unused_error)) {
+  //   return RespondNow(Error("DirectoryEntry of unsupported filesystem."));
+  // }
 
   // Try to load using the FileSystem API backend, in case the filesystem
   // points to a non-native local directory.
@@ -405,22 +582,22 @@ DeveloperPrivateDismissMv2DeprecationNoticeForExtensionFunction::Run() {
         return AlreadyResponded();
       }
 
-      Browser* browser = chrome::FindLastActiveWithProfile(
-          Profile::FromBrowserContext(browser_context()));
-      if (!browser) {
-        return RespondNow(Error(kCouldNotFindWebContentsError));
-      }
+      // Browser* browser = chrome::FindLastActiveWithProfile(
+      //     Profile::FromBrowserContext(browser_context()));
+      // if (!browser) {
+      //   return RespondNow(Error(kCouldNotFindWebContentsError));
+      // }
 
-      ShowMv2DeprecationKeepDialog(
-          browser, *extension,
-          base::BindOnce(
-              &DeveloperPrivateDismissMv2DeprecationNoticeForExtensionFunction::
-                  OnDialogAccepted,
-              this),
-          base::BindOnce(
-              &DeveloperPrivateDismissMv2DeprecationNoticeForExtensionFunction::
-                  OnDialogCancelled,
-              this));
+      // ShowMv2DeprecationKeepDialog(
+      //     browser, *extension,
+      //     base::BindOnce(
+      //         &DeveloperPrivateDismissMv2DeprecationNoticeForExtensionFunction::
+      //             OnDialogAccepted,
+      //         this),
+      //     base::BindOnce(
+      //         &DeveloperPrivateDismissMv2DeprecationNoticeForExtensionFunction::
+      //             OnDialogCancelled,
+      //         this));
 
       return RespondLater();
     }

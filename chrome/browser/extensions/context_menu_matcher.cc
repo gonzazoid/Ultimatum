@@ -92,8 +92,8 @@ void ContextMenuMatcher::AppendExtensionItems(
   // Also, don't add separators when Smart Text Selection is enabled. Smart
   // actions are grouped with extensions and the separator logic is
   // handled by them.
-  prepend_separator = *index == 0 && menu_model_->GetItemCount() &&
-                      !is_smart_text_selection_enabled_;
+  // prepend_separator = *index == 0 && menu_model_->GetItemCount() &&
+  //                     !is_smart_text_selection_enabled_;
 #endif
 
   // Extensions (other than platform apps) are only allowed one top-level slot

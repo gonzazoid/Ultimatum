@@ -407,11 +407,11 @@ content::PermissionResult PermissionContextBase::GetPermissionStatus(
     // possible.
     // TODO(crbug.com/40068594): Scope granted permissions to a
     // StoragePartition.
-    if (!guest->IsPermissionRequestable(content_settings_type_)) {
-      return content::PermissionResult(
-          PermissionStatus::DENIED,
-          content::PermissionStatusSource::UNSPECIFIED);
-    }
+    // if (!guest->IsPermissionRequestable(content_settings_type_)) {
+    //   return content::PermissionResult(
+    //       PermissionStatus::DENIED,
+    //       content::PermissionStatusSource::UNSPECIFIED);
+    // }
   }
 #endif
 

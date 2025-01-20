@@ -10,10 +10,15 @@ source_set("background") {
   public = [
     "ntp_background_service_factory.h",
     "theme_delegate.h",
+    "ntp_custom_background_service.h",
+    "ntp_custom_background_service_factory.h",
+    "ntp_custom_background_service_observer.h"
   ]
   sources = [
     "ntp_background_service_factory.cc",
     "theme_delegate.cc",
+    "ntp_custom_background_service.cc",
+    "ntp_custom_background_service_factory.cc",
   ]
   public_deps = [
     "//base",

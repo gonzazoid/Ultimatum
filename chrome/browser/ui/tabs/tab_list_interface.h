@@ -18,7 +18,7 @@
 
 // BrowserWindowInterface is available on desktop Android, but not other Android
 // builds.
-#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_DESKTOP_ANDROID)
+#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_DESKTOP_ANDROID) || BUILDFLAG(IS_ANDROID)
 class BrowserWindowInterface;
 #endif
 
@@ -35,7 +35,7 @@ class TabListInterface {
   TabListInterface(const TabListInterface& other) = delete;
   void operator=(const TabListInterface& other) = delete;
 
-#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_DESKTOP_ANDROID)
+#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_DESKTOP_ANDROID) || BUILDFLAG(IS_ANDROID)
   // Returns the TabListInterface associated with the given `browser`.
   static TabListInterface* From(BrowserWindowInterface* browser);
 #endif

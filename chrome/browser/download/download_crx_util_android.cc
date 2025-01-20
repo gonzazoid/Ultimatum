@@ -14,14 +14,14 @@ static_assert(!BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 namespace download_crx_util {
 
 bool IsExtensionDownload(const download::DownloadItem& download_item) {
-  // Extensions are not supported on non-desktop Android. We want to treat them
+  // Extensions are not supported on Android. We want to treat them
   // as normal file downloads.
   return false;
 }
 
 bool IsTrustedExtensionDownload(Profile* profile,
                                 const download::DownloadItem& item) {
-  // Extensions are not supported on non-desktop Android, return the safe
+  // Extensions are not supported on Android, return the safe
   // default.
   return false;
 }

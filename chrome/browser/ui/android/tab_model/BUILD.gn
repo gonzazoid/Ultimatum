@@ -95,7 +95,7 @@ source_set("test_support") {
     "//chrome/browser/ui/android/tab_model",
   ]
 
-  if (is_desktop_android) {
+  if (is_desktop_android || is_android) {
     deps += [ "//chrome/browser/ui/browser_window" ]
   }
 }
