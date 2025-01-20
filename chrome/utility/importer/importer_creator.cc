@@ -37,8 +37,8 @@ scoped_refptr<Importer> CreateImporterByType(
     case user_data_importer::TYPE_BOOKMARKS_FILE:
       return new BookmarksFileImporter();
 #if !BUILDFLAG(IS_CHROMEOS)
-    case user_data_importer::TYPE_FIREFOX:
-      return new FirefoxImporter();
+    // case user_data_importer::TYPE_FIREFOX:
+    //   return new FirefoxImporter();
 #endif
 #if BUILDFLAG(IS_MAC)
     case user_data_importer::TYPE_SAFARI:

@@ -200,7 +200,7 @@ std::unique_ptr<PermissionSet> AdjustHostPatterns(
 
     URLPattern new_pattern(pattern);
     int new_valid_schemes =
-        pattern.valid_schemes() & ~URLPattern::SCHEME_CHROMEUI;
+        pattern.valid_schemes() /* & ~URLPattern::SCHEME_CHROMEUI */;
     new_pattern.SetValidSchemes(new_valid_schemes);
     new_explicit_hosts.AddPattern(std::move(new_pattern));
   }

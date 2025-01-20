@@ -518,6 +518,9 @@ bool SelectionEditor::NeedsUpdateVisibleSelection() const {
 }
 
 void SelectionEditor::UpdateCachedVisibleSelectionIfNeeded() const {
+  // crash when backspace typed text in input form (google search for example)
+  if (GetDocument().Lifecycle().GetState() < DocumentLifecycle::kAfterPerformLayout)
+    return;
   // Note: Since we |FrameCaret::updateApperance()| is called from
   // |FrameView::performPostLayoutTasks()|, we check lifecycle against
   // |AfterPerformLayout| instead of |LayoutClean|.

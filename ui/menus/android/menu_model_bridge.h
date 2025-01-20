@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/android/jni_android.h"
+#include "base/functional/callback.h"
 #include "base/android/scoped_java_ref.h"
 #include "base/component_export.h"
 #include "base/memory/weak_ptr.h"
@@ -31,6 +32,7 @@ class COMPONENT_EXPORT(UI_MENUS) MenuModelBridge {
   void ActivatedAt(JNIEnv* env, size_t i);
   base::android::ScopedJavaGlobalRef<jobject> GetJavaObject();
 
+  jni_zero::ScopedJavaLocalRef<jobject> GetListItems();
  private:
   void AddExtensionItems();
   base::android::ScopedJavaGlobalRef<jobject> java_obj_;

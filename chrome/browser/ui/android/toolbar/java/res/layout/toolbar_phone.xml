@@ -74,6 +74,13 @@ found in the LICENSE file.
             android:layout_height="match_parent"
             android:visibility="gone"/>
 
+        <ViewStub
+            android:id="@+id/extensions_toolbar_container_stub"
+            android:inflatedId="@+id/extensions_toolbar_container"
+            android:layout_width="wrap_content"
+            android:layout_height="?attr/toolbarButtonHeight"
+            android:layout_marginVertical="?attr/toolbarButtonMarginVertical"/>
+
         <org.chromium.chrome.browser.toolbar.top.ToggleTabStackButton
             android:id="@+id/tab_switcher_button"
             style="@style/ToolbarHoverableButton"

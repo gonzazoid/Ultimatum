@@ -46,6 +46,11 @@
 
 static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
+// #if BUILDFLAG(IS_ANDROID)
+// #include "chrome/browser/ui/android/tab_model/tab_model.h"
+// #include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+// #endif
+
 namespace extensions {
 
 namespace {
@@ -81,10 +86,10 @@ api::tabs::WindowType GetTabsWindowType(const BrowserWindowInterface* browser) {
     case BrowserWindowInterface::TYPE_CUSTOM_TAB:
       return api::tabs::WindowType::kCustomTab;
 #endif
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
     case BrowserWindowInterface::TYPE_DEVTOOLS:
       return api::tabs::WindowType::kDevtools;
-#endif
+// #endif
 
     // All the following are considered "normal".
     // TODO(https://crbug.com/438514981): This is almost certainly wrong, and
@@ -92,9 +97,9 @@ api::tabs::WindowType GetTabsWindowType(const BrowserWindowInterface* browser) {
     // closer to a popup, and custom tabs might be app-like (if they can even
     // reach this point).
     case BrowserWindowInterface::TYPE_NORMAL:
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
     case BrowserWindowInterface::TYPE_PICTURE_IN_PICTURE:
-#endif
+// #endif
       return api::tabs::WindowType::kNormal;
   }
 }
@@ -284,6 +289,10 @@ bool BrowserExtensionWindowController::OpenOptionsPage(
     const GURL& url,
     bool open_in_tab) {
   DCHECK(OptionsPageInfo::HasOptionsPage(extension));
+#if BUILDFLAG(IS_ANDROID)
+  // TODO!!!
+  return false;
+#else
 
 #if BUILDFLAG(IS_ANDROID)
   // On Android, we just open the options page in a new tab.
@@ -317,6 +326,7 @@ bool BrowserExtensionWindowController::OpenOptionsPage(
 #endif
 
   return true;
+#endif
 }
 
 }  // namespace extensions

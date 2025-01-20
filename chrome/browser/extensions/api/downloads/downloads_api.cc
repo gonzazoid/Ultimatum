@@ -37,6 +37,8 @@
 #include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/download/bubble/download_bubble_prefs.h"
+// #include "chrome/browser/download/bubble/download_bubble_ui_controller.h"
 #include "chrome/browser/download/download_core_service.h"
 #include "chrome/browser/download/download_core_service_factory.h"
 #include "chrome/browser/download/download_danger_prompt.h"
@@ -1750,10 +1752,10 @@ ExtensionFunction::ResponseAction DownloadsSetShelfEnabledFunction::Run() {
     // using this API is still compatible with the new download bubble. This
     // API will eventually be deprecated (replaced by the SetUiOptions API
     // below).
-    Browser* browser = window->GetBrowser();
-    if (browser->window()->GetDownloadBubbleUIController()) {
-      browser->window()->GetDownloadBubbleUIController()->HideDownloadUi();
-    }
+    // Browser* browser = window->GetBrowser();
+    // if (browser->window()->GetDownloadBubbleUIController()) {
+    //   browser->window()->GetDownloadBubbleUIController()->HideDownloadUi();
+    // }
 #endif
   }
 

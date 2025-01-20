@@ -1148,6 +1148,7 @@ void WebstorePrivateBeginInstallWithManifest3Function::
       base::BindOnce(&WebstorePrivateBeginInstallWithManifest3Function::
                          OnFrictionPromptDone,
                      this));
+  // OnFrictionPromptDone(true);
 }
 
 void WebstorePrivateBeginInstallWithManifest3Function::ShowInstallDialog(
@@ -1191,6 +1192,7 @@ void WebstorePrivateBeginInstallWithManifest3Function::ShowInstallDialog(
     }
   }
 
+#if !BUILDFLAG(IS_ANDROID)
   install_prompt_ = std::make_unique<ExtensionInstallPrompt>(contents);
   install_prompt_->ShowDialog(
       base::BindOnce(&WebstorePrivateBeginInstallWithManifest3Function::
@@ -1198,6 +1200,7 @@ void WebstorePrivateBeginInstallWithManifest3Function::ShowInstallDialog(
                      this),
       dummy_extension_.get(), &icon_, std::move(prompt),
       ExtensionInstallPrompt::GetDefaultShowDialogCallback());
+#endif
 }
 
 void WebstorePrivateBeginInstallWithManifest3Function::

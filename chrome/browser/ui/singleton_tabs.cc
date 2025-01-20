@@ -78,4 +78,3 @@ NavigateParams GetSingletonTabNavigateParams(BrowserWindowInterface* browser,
   params.tabstrip_add_types |= AddTabTypes::ADD_INHERIT_OPENER;
   return params;
 }
-

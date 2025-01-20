@@ -64,7 +64,9 @@ source_set("lib") {
   ]
 
   if (is_android) {
-    deps += [ ":device_service_jni_headers" ]
+    deps += [
+      ":device_service_jni_headers",
+    ]
   } else {
     deps += [ "//services/device/hid" ]
 

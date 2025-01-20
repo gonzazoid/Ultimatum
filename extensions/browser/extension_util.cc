@@ -576,10 +576,10 @@ bool AnyCurrentlyInstalledExtensionIsFromWebstore(
 }
 
 bool IsExtensionDownload(const download::DownloadItem& download_item) {
-  if (download_item.GetTargetDisposition() ==
-      download::DownloadItem::TARGET_DISPOSITION_PROMPT) {
-    return false;
-  }
+  // if (download_item.GetTargetDisposition() ==
+  //     download::DownloadItem::TARGET_DISPOSITION_PROMPT) {
+  //   return false;
+  // }
 
   if (download_item.GetMimeType() == Extension::kMimeType ||
       UserScript::IsURLUserScript(download_item.GetURL(),

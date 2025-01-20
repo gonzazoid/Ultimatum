@@ -235,6 +235,10 @@ source_set("impl") {
 
   if (is_android) {
     sources += [
+      "android/extension_install_dialog_bridge.cc",
+      "android/extension_install_dialog_bridge.h",
+      "android/extension_uninstall_dialog_bridge.cc",
+      "android/extension_uninstall_dialog_bridge.h",
       "android/dangerous_download_dialog_bridge.cc",
       "android/download_callback_validator.cc",
       "android/download_controller.cc",

@@ -9,7 +9,7 @@
 #include "content/public/browser/url_data_source.h"
 
 #if BUILDFLAG(IS_ANDROID)
-#error "Instant is only used on desktop";
+// #error "Instant is only used on desktop";
 #endif
 
 // Serves HTML for displaying suggestions for 3P remote NTPs using iframes

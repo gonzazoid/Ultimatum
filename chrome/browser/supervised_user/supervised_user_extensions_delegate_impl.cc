@@ -13,8 +13,10 @@
 #include "chrome/browser/supervised_user/supervised_user_browser_utils.h"
 #include "chrome/browser/supervised_user/supervised_user_extensions_manager.h"
 #include "chrome/browser/supervised_user/supervised_user_service_factory.h"
+#if !BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/ui/extensions/extensions_dialogs.h"
 #include "chrome/browser/ui/supervised_user/parent_permission_dialog.h"
+#endif
 #include "components/prefs/pref_service.h"
 #include "components/supervised_user/core/common/features.h"
 #include "components/supervised_user/core/common/pref_names.h"
@@ -28,7 +30,7 @@
 #endif  // BUILDFLAG(IS_ANDROID)
 
 namespace {
-
+#if !BUILDFLAG(IS_ANDROID)
 void OnParentPermissionDialogComplete(
     extensions::SupervisedUserExtensionsDelegate::ExtensionApprovalDoneCallback
         delegate_done_callback,
@@ -48,6 +50,7 @@ void OnParentPermissionDialogComplete(
       break;
   }
 }
+#endif
 
 // Converts delegate enum to metrics recorder enum for AskParentDialogState.
 SupervisedUserExtensionsMetricsRecorder::AskParentDialogState
@@ -201,16 +204,16 @@ void SupervisedUserExtensionsDelegateImpl::
     ShowParentPermissionDialogForExtension(const Extension& extension,
                                            content::WebContents* contents,
                                            const gfx::ImageSkia& icon) {
-  ParentPermissionDialog::DoneCallback inner_done_callback = base::BindOnce(
-      &::OnParentPermissionDialogComplete, std::move(done_callback_));
+  // ParentPermissionDialog::DoneCallback inner_done_callback = base::BindOnce(
+  //     &::OnParentPermissionDialogComplete, std::move(done_callback_));
 
-  gfx::NativeWindow parent_window =
-      contents ? contents->GetTopLevelNativeWindow() : gfx::NativeWindow();
-  parent_permission_dialog_ =
-      ParentPermissionDialog::CreateParentPermissionDialogForExtension(
-          Profile::FromBrowserContext(context_), parent_window, icon,
-          &extension, std::move(inner_done_callback));
-  parent_permission_dialog_->ShowDialog();
+  // gfx::NativeWindow parent_window =
+  //     contents ? contents->GetTopLevelNativeWindow() : gfx::NativeWindow();
+  // parent_permission_dialog_ =
+  //     ParentPermissionDialog::CreateParentPermissionDialogForExtension(
+  //         Profile::FromBrowserContext(context_), parent_window, icon,
+  //         &extension, std::move(inner_done_callback));
+  // parent_permission_dialog_->ShowDialog();
 }
 
 void SupervisedUserExtensionsDelegateImpl::
@@ -229,9 +232,11 @@ void SupervisedUserExtensionsDelegateImpl::
         FROM_HERE, std::move(block_dialog_callback));
     return;
   }
+#if !BUILDFLAG(IS_ANDROID)
   ShowExtensionInstallBlockedByParentDialog(
       ExtensionInstalledBlockedByParentDialogAction::kEnable, &extension,
       contents, std::move(block_dialog_callback));
+#endif
 }
 
 void SupervisedUserExtensionsDelegateImpl::RequestExtensionApproval(

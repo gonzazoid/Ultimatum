@@ -78,7 +78,7 @@ class ExtensionsToolbarAndroid : public ExtensionsToolbarViewModel::Delegate,
       int canvas_height_dp,
       float scale_factor);
   std::vector<ToolbarActionsModel::ActionId> GetAllActionIds(JNIEnv* env);
-  std::vector<ToolbarActionsModel::ActionId> GetPinnedActionIds(JNIEnv* env);
+  std::vector<ToolbarActionsModel::ActionId> GetPinnedActionIds(JNIEnv* env, bool incognito);
   base::android::ScopedJavaLocalRef<jobject> GetMenuButtonState(
       JNIEnv* env,
       content::WebContents* web_contents,

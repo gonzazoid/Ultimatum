@@ -24,6 +24,8 @@ import org.chromium.ui.R;
 import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
 
+import org.chromium.base.Log;
+
 /**
  * Class responsible for binding the model of the ListMenuItem and the view. Each item is expected
  * to have at the bare minimum a title (TITLE_ID, or TITLE) or an icon (START_ICON_ID,
@@ -156,11 +158,13 @@ public class ListMenuItemViewBinder {
             // for an item. The intent will be expected to be retrieved and used
             // by the component using this binder and not the binder itself.
         } else if (propertyKey == ListMenuItemProperties.KEEP_START_ICON_SPACING_WHEN_HIDDEN) {
-            if (startIcon.getVisibility() != View.VISIBLE) {
+            if (startIcon != null) {
+              if (startIcon.getVisibility() != View.VISIBLE) {
                 // Update the "hidden" visibility type as needed.
                 hideStartIcon(
                         startIcon,
                         model.get(ListMenuItemProperties.KEEP_START_ICON_SPACING_WHEN_HIDDEN));
+              }
             }
         } else if (propertyKey == ListMenuItemProperties.ENABLED) {
             // Set enabled state on view, textView, and icons (because with some layout files,

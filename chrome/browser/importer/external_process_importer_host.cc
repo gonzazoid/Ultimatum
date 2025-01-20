@@ -130,10 +130,12 @@ void ExternalProcessImporterHost::OnTemplateURLServiceLoaded() {
 
 void ExternalProcessImporterHost::ShowWarningDialog() {
   DCHECK(!headless_);
+#if !BUILDFLAG(IS_ANDROID)
   importer::ShowImportLockDialog(
       parent_window_,
       base::BindOnce(&ExternalProcessImporterHost::OnImportLockDialogEnd,
                      weak_ptr_factory_.GetWeakPtr()));
+#endif
 }
 
 void ExternalProcessImporterHost::OnImportLockDialogEnd(bool is_continue) {

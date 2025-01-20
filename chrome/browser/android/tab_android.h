@@ -110,6 +110,7 @@ class TabAndroid : public tabs::TabInterface,
       int tab_id,
       std::unique_ptr<content::WebContents> web_contents);
 
+  SessionID GetTabId() const;
   // TabAndroidDataProvider
   SessionID GetWindowId() const override;
   int GetAndroidId() const override;
@@ -139,6 +140,9 @@ class TabAndroid : public tabs::TabInterface,
   // Return whether the tab is currently visible and the user can interact with
   // it.
   bool IsUserInteractable() const;
+  bool IsFrozen() const;
+  bool NeedsReload() const;
+  gfx::Rect GetBounds() const;
 
   // Return whether the tab is currently being used for offscreen rendering.
   bool IsOffscreenRendering() const;
@@ -159,6 +163,9 @@ class TabAndroid : public tabs::TabInterface,
 
   // Returns the parent tab identifier for the tab.
   int GetParentId() const;
+
+  // Returns the tab group ID of the Tab or null if not part of a group.
+  std::optional<base::Token> GetTabGroupId() const;
 
   // Delete navigation entries matching predicate from frozen state.
   void DeleteFrozenNavigationEntries(

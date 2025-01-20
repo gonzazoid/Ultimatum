@@ -1002,6 +1002,7 @@ source_set("core") {
     "//ui/webui",
     "//ui/webui:buildflags",
     "//ui/webui/tracked_element",
+    "//chrome/browser/themes",
   ]
 
   # The :impl targets and other circular-dep targets below include monolith
@@ -1228,8 +1229,11 @@ source_set("core") {
     ]
   }
 
-  if (!is_android || is_desktop_android) {
-    deps += [ "//chrome/browser/ui/webui/discards" ]
+  if (!is_android || is_desktop_android || is_android) {
+    deps += [
+      "//chrome/browser/themes:themes",
+      # "//chrome/browser/ui/webui/discards",
+    ]
   }
 
   if (enable_dice_support) {
@@ -2816,6 +2820,8 @@ static_library("browser") {
       "//chrome/browser/commerce/price_tracking/android:jni_headers",
       "//chrome/browser/composeplate/android:jni_headers",
       "//chrome/browser/incognito:jni_headers",
+      "//chrome/browser/importer",
+      "//chrome/browser/importer:impl",
       "//chrome/browser/prefetch/android:jni_headers",
       "//chrome/browser/preloading/android",
       "//chrome/browser/ui/webui/feed_internals",
@@ -2844,6 +2850,7 @@ static_library("browser") {
       "//chrome/browser/ui/webui/notifications_internals:impl",
       "//chrome/browser/webapps:android_impl",
       "//chrome/browser/webapps/installable:impl",
+      "//chrome/browser/new_tab_page/chrome_colors",
     ]
 
     # //chrome/browser/android contains Android-specific implementations that
@@ -4966,17 +4973,41 @@ static_library("browser") {
   # block with the `enable_extensions` block above.
   if (enable_desktop_android_extensions) {
     sources += [
+      "upgrade_detector/build_state.cc",
+      "upgrade_detector/build_state.h",
+      "upgrade_detector/upgrade_detector.cc",
+      "upgrade_detector/upgrade_detector.h",
+      "upgrade_detector/upgrade_observer.h",
+
       # TODO(https://crbug.com/356905053): These files are temporary workarounds
       # allow for a lightweight extensions runtime in desktop-android builds.
       # They should be removed.
       "extensions/extension_menu_model_android.cc",
       "extensions/extension_menu_model_android.h",
+      "guest_view/app_view/chrome_app_view_guest_delegate.cc",
+      "guest_view/app_view/chrome_app_view_guest_delegate.h",
+      # "guest_view/chrome_guest_view_manager_delegate.cc",
+      # "guest_view/chrome_guest_view_manager_delegate.h",
+      # "guest_view/extension_options/chrome_extension_options_guest_delegate.cc",
+      # "guest_view/extension_options/chrome_extension_options_guest_delegate.h",
+      "guest_view/mime_handler_view/chrome_mime_handler_view_guest_delegate.cc",
+      "guest_view/mime_handler_view/chrome_mime_handler_view_guest_delegate.h",
+      # "guest_view/web_view/chrome_web_view_guest_delegate.cc",
+      # "guest_view/web_view/chrome_web_view_guest_delegate.h",
+      # "guest_view/web_view/chrome_web_view_permission_helper_delegate.cc",
+      # "guest_view/web_view/chrome_web_view_permission_helper_delegate.h",
+      # "guest_view/web_view/context_menu_content_type_web_view.cc",
+      # "guest_view/web_view/context_menu_content_type_web_view.h",
+
     ]
 
     deps += [
       "//chrome/browser/extensions",
       "//chrome/browser/ui/android/extensions",
       "//extensions/browser:keepalive",
+      # "//extensions/browser/updater:keepalive",
+      "//extensions/components/javascript_dialog_extensions_client",
+      "//chrome/browser/themes",
     ]
 
     # Circular dependency due to some utility function in
@@ -5264,6 +5295,7 @@ group("browser_public_dependencies") {
       "//chrome/android/features/dev_ui:buildflags",
       "//chrome/browser/android:resource_mapper",
       "//components/image_fetcher/core",
+      "//ui/webui/resources/cr_components/help_bubble:mojo_bindings",
     ]
   } else {
     public_deps += [

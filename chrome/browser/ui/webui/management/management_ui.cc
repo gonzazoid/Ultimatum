@@ -20,7 +20,7 @@
 #include "chrome/common/url_constants.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/generated_resources.h"
-#include "chrome/grit/management_resources.h"
+// #include "chrome/grit/management_resources.h"
 #include "chrome/grit/management_resources_map.h"
 #include "chrome/grit/theme_resources.h"
 #include "components/policy/core/common/policy_pref_names.h"
@@ -59,7 +59,7 @@ content::WebUIDataSource* CreateAndAddManagementUIHtmlSource(Profile* profile) {
   ManagementUI::GetLocalizedStrings(localized_strings, /*remove_links=*/false);
   source->AddLocalizedStrings(localized_strings);
 
-  source->SetDefaultResource(IDR_MANAGEMENT_MANAGEMENT_HTML);
+  // source->SetDefaultResource(IDR_MANAGEMENT_MANAGEMENT_HTML);
 
 #if BUILDFLAG(IS_CHROMEOS)
   source->AddString("managementDeviceLearnMoreUrl",
@@ -88,8 +88,8 @@ content::WebUIDataSource* CreateAndAddManagementUIHtmlSource(Profile* profile) {
                                             ? "webui-refresh-2026"
                                             : "");
 
-  webui::SetupWebUIDataSource(source, kManagementResources,
-                              IDR_MANAGEMENT_MANAGEMENT_HTML);
+  // webui::SetupWebUIDataSource(source, kManagementResources,
+  //                             IDR_MANAGEMENT_MANAGEMENT_HTML);
 
 #if BUILDFLAG(IS_ANDROID)
   source->AddResourcePath("images/product_logo.png",
@@ -326,6 +326,6 @@ ManagementUI::~ManagementUI() = default;
 
 // static
 void ManagementUI::RegisterProfilePrefs(PrefRegistrySimple* registry) {
-  registry->RegisterBooleanPref(
-      policy::policy_prefs::kHasDismissedManagementPagePromotionBanner, false);
+  // registry->RegisterBooleanPref(
+  //     policy::policy_prefs::kHasDismissedManagementPagePromotionBanner, false);
 }

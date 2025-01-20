@@ -5,6 +5,7 @@
 #include "base/files/file_path.h"
 
 #include <string.h>
+#include <sstream>
 
 #include <algorithm>
 #include <atomic>
@@ -38,6 +39,10 @@
 #include "base/win/win_util.h"
 #elif BUILDFLAG(IS_APPLE)
 #include <CoreFoundation/CoreFoundation.h>
+#endif
+
+#if BUILDFLAG(IS_ANDROID)
+#include "base/android/content_uri_utils.h"
 #endif
 
 namespace base {
@@ -109,6 +114,11 @@ bool AreDriveLetterComponentsEqual(FilePath::StringViewType left,
 #endif  // defined(FILE_PATH_USES_DRIVE_LETTERS)
 
 bool IsPathAbsolute(StringViewType path) {
+#if BUILDFLAG(IS_ANDROID)
+  if (path.length() > 10 && path.substr(0, 10) == "content://") {
+    return true;
+  }
+#endif
 #if defined(FILE_PATH_USES_DRIVE_LETTERS)
   StringType::size_type letter = FindDriveLetter(path);
   if (letter != StringType::npos) {
@@ -445,6 +455,15 @@ bool FilePath::IsParentSlow(const FilePath& child) const {
 }
 
 bool FilePath::AppendRelativePath(const FilePath& child, FilePath* path) const {
+#if BUILDFLAG(IS_ANDROID)
+  // we get here from extensions/common/extension_l10n_util.cc ShouldSkipValidation
+  // TODO very dirty hack, redo
+  if (IsVirtualDocumentPath() && child.IsContentUri()) {
+    std::vector<StringType> child_components = child.GetComponents();
+    *path = Append(child_components.back());
+    return true;
+  }
+#endif
   std::vector<StringType> parent_components = GetComponents();
   std::vector<StringType> child_components = child.GetComponents();
 
@@ -539,7 +558,15 @@ FilePath FilePath::BaseName() const {
   if (letter != StringType::npos) {
     new_path.path_.erase(0, letter + 1);
   }
-
+#if BUILDFLAG(IS_ANDROID)
+  if (new_path.IsContentUri()) {
+    size_t last_separator = new_path.path_.rfind("%2F");
+    if (last_separator != StringType::npos) {
+      new_path.path_.erase(0, last_separator + 3);
+      return new_path;
+    }
+  }
+#endif
   // Keep everything after the final separator, but if the pathname is only
   // one character and it's a separator, leave it alone.
   StringType::size_type last_separator = new_path.path_.find_last_of(
@@ -714,6 +741,28 @@ FilePath FilePath::Append(StringViewType component) const {
   }
 
   DCHECK(!IsPathAbsolute(appended));
+
+#if BUILDFLAG(IS_ANDROID)
+  if (IsContentUri()) {
+    FileEnumerator::FileInfo maybe_dir_info;
+    base::internal::ContentUriGetFileInfo(*this, &maybe_dir_info);
+    FilePath res = *this;
+    std::istringstream f((std::basic_string<char>(component)));
+    std::string token;
+    if (maybe_dir_info.IsDirectory()) {
+      while(getline(f, token, '/')) {
+        auto directory_entries = base::internal::ListContentUriDirectory(res, FileEnumerator::FileType::FILES | FileEnumerator::FileType::DIRECTORIES);
+        for (auto& info : directory_entries) {
+          if (info.GetName().AsUTF8Unsafe() == token) {
+            res = FilePath(info.content_uri());
+            break;
+          }
+        }
+      }
+    }
+    return res;
+  }
+#endif
 
   if (path_.compare(kCurrentDirectory) == 0 && !appended.empty()) {
     // Append normally doesn't do any normalization, but as a special case,

@@ -31,8 +31,9 @@ class BookmarksUI : public ui::MojoWebUIController {
   BookmarksUI(const BookmarksUI&) = delete;
   BookmarksUI& operator=(const BookmarksUI&) = delete;
 
+#if !BUILDFLAG(IS_ANDROID)
   static base::RefCountedMemory* GetFaviconResourceBytes(
       ui::ResourceScaleFactor scale_factor);
+#endif
 };
-
 #endif  // CHROME_BROWSER_UI_WEBUI_BOOKMARKS_BOOKMARKS_UI_H_

@@ -17,7 +17,7 @@
 #include "chrome/browser/ui/tabs/tab_group_features.h"
 #include "chrome/browser/ui/tabs/tab_group_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/browser/ui/views/tabs/hovercard/hover_card_anchor_target.h"
+// #include "chrome/browser/ui/views/tabs/hovercard/hover_card_anchor_target.h"
 #include "components/saved_tab_groups/public/saved_tab_group.h"
 #include "components/saved_tab_groups/public/tab_group_sync_service.h"
 #include "components/tab_groups/tab_group_id.h"
@@ -150,10 +150,10 @@ bool TabGroupDataObserver::RefreshTabData() {
   std::vector<tabs::TabInterface*> tabs;
   tabs::TabInterface* const first_tab_in_group = tab_group_->GetFirstTab();
   if (first_tab_in_group) {
-    TabStripModel* const tab_strip_model =
-        first_tab_in_group->GetBrowserWindowInterface()->GetTabStripModel();
-    tabs =
-        tab_strip_model->GetTabsAtIndices(tab_group_->ListTabs().ToIntVector());
+    // TabStripModel* const tab_strip_model =
+    //     first_tab_in_group->GetBrowserWindowInterface()->GetTabStripModel();
+    // tabs =
+    //     tab_strip_model->GetTabsAtIndices(tab_group_->ListTabs().ToIntVector());
   }
 
   std::vector<TabGroupTabData> tab_data;
@@ -201,9 +201,11 @@ bool TabGroupDataObserver::IsTabGroupShared() {
     return false;
   }
 
-  std::optional<tab_groups::SavedTabGroup> saved_group =
-      tab_group_sync_service->GetGroup(tab_group_->id());
-  return saved_group.has_value() && saved_group.value().is_shared_tab_group();
+  // std::optional<tab_groups::SavedTabGroup> saved_group =
+  //     tab_group_sync_service->GetGroup(tab_group_->id());
+  // return saved_group.has_value() && saved_group.value().is_shared_tab_group();
+  // TODO
+  return false;
 }
 
 }  // namespace tabs

@@ -8777,21 +8777,23 @@ const FeatureEntry kFeatureEntries[] = {
      FEATURE_VALUE_TYPE(ash::features::kTrafficCountersForWiFiTesting)},
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
     {"api-mime-handler", flag_descriptions::kApiMimeHandlerName,
      flag_descriptions::kApiMimeHandlerDescription, kOsDesktop,
      FEATURE_VALUE_TYPE(extensions_features::kApiMimeHandler)},
+#endif
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
     {"experimental-omnibox-labs",
      flag_descriptions::kExperimentalOmniboxLabsName,
      flag_descriptions::kExperimentalOmniboxLabsDescription,
      kOsDesktop | kOsAndroid,
      FEATURE_VALUE_TYPE(extensions_features::kExperimentalOmniboxLabs)},
 
-    {kExtensionAiDataInternalName,
-     flag_descriptions::kExtensionAiDataCollectionName,
-     flag_descriptions::kExtensionAiDataCollectionDescription, kOsDesktop,
-     SINGLE_VALUE_TYPE(switches::kExtensionAiDataCollection)},
+    // {kExtensionAiDataInternalName,
+    //  flag_descriptions::kExtensionAiDataCollectionName,
+    //  flag_descriptions::kExtensionAiDataCollectionDescription, kOsDesktop,
+    //  SINGLE_VALUE_TYPE(switches::kExtensionAiDataCollection)},
 
     {"extensions-collapse-main-menu",
      flag_descriptions::kExtensionsCollapseMainMenuName,
@@ -9538,10 +9540,12 @@ const FeatureEntry kFeatureEntries[] = {
      flag_descriptions::kDefaultSiteInstanceGroupsDescription, kOsAll,
      FEATURE_VALUE_TYPE(features::kDefaultSiteInstanceGroups)},
 
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #if BUILDFLAG(ENABLE_EXTENSIONS)
     {"cws-info-fast-check", flag_descriptions::kCWSInfoFastCheckName,
      flag_descriptions::kCWSInfoFastCheckDescription, kOsDesktop,
      FEATURE_VALUE_TYPE(extensions::kCWSInfoFastCheck)},
+#endif
 
     {"extension-disable-unsupported-developer-mode-extensions",
      flag_descriptions::kExtensionDisableUnsupportedDeveloperName,

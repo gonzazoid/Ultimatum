@@ -17,6 +17,9 @@
 #include "url/gurl.h"
 #include "url/origin.h"
 
+#include "extensions/browser/extension_util.h"
+#include "chrome/browser/profiles/profile.h"
+
 // Must come after all headers that specialize FromJniType() / ToJniType().
 #include "chrome/browser/ui/android/extensions/jni_headers/ExtensionsMenuBridge_jni.h"
 #include "chrome/browser/ui/android/extensions/jni_headers/ExtensionsMenuTypes_jni.h"
@@ -162,10 +165,14 @@ ExtensionsMenuDelegateAndroid::GetHostAccessRequests(JNIEnv* env) {
 }
 
 std::vector<ScopedJavaLocalRef<jobject>>
-ExtensionsMenuDelegateAndroid::GetMenuEntries(JNIEnv* env) {
+ExtensionsMenuDelegateAndroid::GetMenuEntries(JNIEnv* env, bool incognito) {
   std::vector<ScopedJavaLocalRef<jobject>> java_entries;
 
   for (size_t i = 0; i < menu_model_->action_models().size(); ++i) {
+    extensions::ExtensionId id = menu_model_->action_models()[i]->GetId();
+    if (incognito && !util::IsIncognitoEnabled(id, browser_->GetProfile())) {
+      continue;
+    }
     java_entries.push_back(GetMenuEntry(env, i));
   }
 

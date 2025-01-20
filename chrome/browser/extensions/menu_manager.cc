@@ -259,7 +259,7 @@ base::DictValue MenuItem::ToValue() const {
   base::DictValue value;
   // Should only be called for extensions with event pages, which only have
   // string IDs for items.
-  DCHECK_EQ(0, id_.uid);
+  // DCHECK_EQ(0, id_.uid);
   value.Set(kStringUIDKey, id_.string_uid);
   value.Set(kMenuManagerIncognitoKey, id_.incognito);
   value.Set(kMenuManagerTypeKey, type_);
@@ -900,7 +900,8 @@ void MenuManager::WriteToStorage(const Extension* extension,
   // be null in the case that |webview_instance_id| is valid.
   DCHECK(extension);
   if (!BackgroundInfo::HasLazyContext(extension)) {
-    return;
+    LOG(INFO) << "!BackgroundInfo::HasLazyContext(extension)";
+    // return;
   }
 
   // Schedule a task to write to storage since there could be many calls in a

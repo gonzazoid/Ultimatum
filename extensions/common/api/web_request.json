@@ -159,6 +159,11 @@
         "type": "object",
         "description": "Returns value for event handlers that have the 'blocking' extraInfoSpec applied. Allows the event handler to modify network requests.",
         "properties": {
+          "response": {
+            "$ref": "ResponseType",
+            "optional": true,
+            "description": "If present, the request is done."
+          },
           "cancel": {
             "type": "boolean",
             "optional": true,
@@ -189,6 +194,31 @@
             }
           }
         }
+      },
+      {
+        "id": "ResponseType",
+        "nocompile": true,
+        "type": "object",
+        "properties": {
+          "body": {
+            "optional": true,
+            "type": "binary"
+          },
+          "headers": {
+            "$ref": "HttpHeaders",
+            "optional": true,
+            "description": ""
+          },
+          "status": {
+            "type": "string",
+            "optional": true
+          },
+          "statusText": {
+            "type": "string",
+            "optional": true
+          }
+        },
+        "description": ""
       },
       {
         "id": "UploadData",

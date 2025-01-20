@@ -564,7 +564,7 @@
     </if>
   </if>
 
-  <if expr="not is_android">
+  <if expr="not is_android or is_android">
 
     <!-- Feature Showcase - Google Password Manager -->
     <message name="IDS_FEATURE_SHOWCASE_PASSWORD_MANAGER_TITLE" desc="Headline for the password security onboarding screen. It introduces the product name 'Google Password Manager,' which should typically remain in English or follow established brand guidelines for the locale. The intent is to highlight safety and security. (CHAR LIMIT = 50)">

@@ -6,7 +6,7 @@ import("//build/config/android/rules.gni")
 import("//build/config/chrome_build.gni")
 import("//third_party/jni_zero/jni_zero.gni")
 
-assert(is_desktop_android)
+assert(is_desktop_android || is_android)
 
 source_set("internal") {
   sources = [

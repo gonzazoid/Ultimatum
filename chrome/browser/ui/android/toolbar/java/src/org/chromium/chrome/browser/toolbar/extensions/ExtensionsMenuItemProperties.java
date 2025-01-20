@@ -66,6 +66,11 @@ public class ExtensionsMenuItemProperties {
 
     public static final WritableBooleanPropertyKey IS_ENTERPRISE = new WritableBooleanPropertyKey();
 
+    public static final WritableObjectPropertyKey<View.OnClickListener>
+            ITEM_CLICK_LISTENER = new WritableObjectPropertyKey<>();
+
+
+
     public static final PropertyKey[] ALL_KEYS =
             new PropertyKey[] {
                 EXTENSION_ID,
@@ -75,6 +80,7 @@ public class ExtensionsMenuItemProperties {
                 CONTEXT_MENU_BUTTON_ACCESSIBLE_NAME,
                 CONTEXT_MENU_BUTTON_ON_CLICK,
                 PRIMARY_ACTION_ON_CLICK,
+                ITEM_CLICK_LISTENER,
                 SITE_ACCESS_TOGGLE_CHECKED,
                 SITE_ACCESS_TOGGLE_ON_CLICK,
                 SITE_ACCESS_TOGGLE_STATUS,
@@ -86,4 +92,5 @@ public class ExtensionsMenuItemProperties {
                 SITE_PERMISSIONS_BUTTON_TOOLTIP,
                 IS_ENTERPRISE
             };
+
 }

@@ -382,8 +382,8 @@ bool DeletionDialogController::IsShowingDialog() const {
 void DeletionDialogController::CreateDialogFromBrowser(
     BrowserWindowInterface* browser,
     std::unique_ptr<ui::DialogModel> dialog_model) {
-  widget_ = chrome::ShowBrowserModal(browser->GetBrowserForMigrationOnly(),
-                                     std::move(dialog_model));
+  // widget_ = chrome::ShowBrowserModal(browser->GetBrowserForMigrationOnly(),
+  //                                    std::move(dialog_model));
 }
 
 bool DeletionDialogController::MaybeShowDialog(

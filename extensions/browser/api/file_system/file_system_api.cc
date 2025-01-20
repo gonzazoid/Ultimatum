@@ -200,14 +200,14 @@ content::WebContents* GetWebContentsForRenderFrameHost(
   if (!render_frame_host)
     return nullptr;
 
-  content::WebContents* web_contents =
-      content::WebContents::FromRenderFrameHost(render_frame_host);
+  // content::WebContents* web_contents =
+  //     content::WebContents::FromRenderFrameHost(render_frame_host);
   // Check if there is an app window associated with the web contents; if not,
   // return null.
-  return AppWindowRegistry::Get(browser_context)
+  return /* AppWindowRegistry::Get(browser_context)
                  ->GetAppWindowForWebContents(web_contents)
              ? web_contents
-             : nullptr;
+             : */ nullptr;
 }
 
 // Creates a unique filename by appending a uniquifier if needed. Returns the

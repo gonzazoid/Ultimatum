@@ -83,9 +83,9 @@ source_set("core_keyed_service_factories") {
     "//extensions/buildflags",
   ]
 
-  if (enable_extensions && !is_android) {
+  # if (enable_extensions && !is_android) {
     deps += [ "//extensions/browser/mime_handler:mime_handler_registry" ]
-  }
+  # }
 }
 
 # The set of all sources that are related to the core extensions system.
@@ -650,7 +650,7 @@ source_set("browser_sources") {
     "//extensions:extensions_browser_resources",
     "//extensions/browser:keepalive",
     "//extensions/browser/api:extensions_api_client",
-    "//extensions/browser/api/messaging:native_messaging",
+    # "//extensions/browser/api/messaging:native_messaging",
     "//extensions/browser/api/storage:settings_namespace",
     "//extensions/browser/api/storage:settings_observer",
     "//extensions/browser/api/system_display:display_info_provider",
@@ -696,9 +696,9 @@ source_set("browser_sources") {
     deps += [ "//rlz:rlz_lib" ]
   }
 
-  if (!is_android) {
+#   if (!is_android) {
     deps += [ "//extensions/browser/mime_handler" ]
-  }
+#   }
 
   public_deps = [
     "//base",
@@ -731,7 +731,7 @@ source_set("browser_sources") {
         "guest_view/app_view/app_view_guest_delegate.h",
       ]
     }
-    if (enable_extensions) {
+    if (enable_extensions_core) {
       sources += [
         "guest_view/mime_handler_view/mime_handler_stream_manager.cc",
         "guest_view/mime_handler_view/mime_handler_stream_manager.h",
@@ -755,6 +755,8 @@ source_set("browser_sources") {
       }
     }
     sources += [
+      "guest_view/app_view/app_view_guest.cc",
+      "guest_view/app_view/app_view_guest.h",
       "guest_view/extension_options/extension_options_constants.cc",
       "guest_view/extension_options/extension_options_constants.h",
       "guest_view/extension_options/extension_options_guest.cc",
@@ -821,6 +823,11 @@ source_set("browser_sources") {
 
     deps += [ "//components/web_modal" ]
   }
+
+  sources += [
+    # "api/device_permissions_prompt.cc",
+    # "api/device_permissions_prompt.h",
+  ]
 
   # TODO(https://crbug.com/356905053): The following files don't compile cleanly
   # with desktop-android. Either make them compile, or determine they should

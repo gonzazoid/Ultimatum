@@ -14,6 +14,12 @@ source_set("tabs_public") {
     "public/tab_dialog_manager.h",
     "public/tab_features.h",
   ]
+  sources = [] # "tab_network_state.cc" ]
+  if (enable_desktop_android_extensions) {
+    public += [ "tab_utils.h" ]
+    sources += [ "tab_utils.cc" ]
+  }
+
   public_deps = [
     "//base",
     "//chrome/common:buildflags",
@@ -44,11 +50,14 @@ source_set("utils") {
   deps = [ "//content/public/browser" ]
 }
 
-if (!is_android) {
+if (!is_android || enable_desktop_android_extensions) {
   source_set("features") {
     sources = [
       "features.cc",
       "features.h",
+      # "tab_features.cc",
+      # "//chrome/browser/android/tab_features.cc",
+      # "//chrome/browser/android/tab_features.h",
     ]
     public_deps = [ "//base" ]
     deps = [ "//chrome/browser/ui:ui_features" ]
@@ -108,14 +117,14 @@ if (!is_android) {
       "//chrome/browser/glic",
       "//chrome/browser/glic/browser_ui",
       "//chrome/browser/profiles:profile",
-      "//chrome/browser/send_tab_to_self",
+      # "//chrome/browser/send_tab_to_self",
       "//chrome/browser/ui:ui_features",
-      "//chrome/browser/ui/send_tab_to_self",
-      "//chrome/browser/ui/views/frame:immersive_mode_controller",
+      # "//chrome/browser/ui/send_tab_to_self",
+      # "//chrome/browser/ui/views/frame:immersive_mode_controller",
       "//chrome/browser/ui/web_applications",
-      "//chrome/browser/user_education",
-      "//components/commerce/core:commerce_constants",
-      "//components/commerce/core:feature_list",
+      # "//chrome/browser/user_education",
+      # "//components/commerce/core:commerce_constants",
+      # "//components/commerce/core:feature_list",
       "//components/feed:feature_list",
     ]
 
@@ -123,6 +132,7 @@ if (!is_android) {
     # enable the diagnostic by removing this line.
     configs += [ "//build/config/compiler:no_exit_time_destructors" ]
   }
+}
 
   source_set("tab_group") {
     sources = [
@@ -136,7 +146,7 @@ if (!is_android) {
       "tab_group_theme.h",
     ]
 
-    deps = [ "//ui/views" ]
+    # deps = [ "//ui/views" ]
 
     public_deps = [
       ":tab_strip_model_observer",
@@ -156,7 +166,7 @@ if (!is_android) {
       "tab_group_data.cc",
       "tab_group_deletion_dialog_controller.cc",
       "tab_group_desktop.cc",
-      "tab_group_features.cc",
+      # "tab_group_features.cc",
       "tab_group_model.cc",
       "tab_group_theme.cc",
     ]
@@ -177,13 +187,14 @@ if (!is_android) {
       "//chrome/browser/ui/color:color_headers",
       "//chrome/browser/ui/dialogs",
       "//chrome/browser/ui/tabs:tab_strip",
-      "//chrome/browser/ui/tabs/saved_tab_groups",
-      "//chrome/browser/ui/toasts",
-      "//chrome/browser/ui/toasts/api:toasts",
+      # "//chrome/browser/ui/tabs/saved_tab_groups",
+      # "//chrome/browser/ui/toasts",
+      # "//chrome/browser/ui/toasts/api:toasts",
 
       # TODO(370883612): depends on //chrome/browser/ui/tabs instead.
       "//components/saved_tab_groups/internal:tab_group_sync_bridge",
       "//components/tab_groups",
+      # "//ui/views:buildflags",
     ]
   }
 
@@ -207,12 +218,11 @@ if (!is_android) {
       ":tabs_public",
       "//base",
       "//components/back_forward_cache",
-      "//components/constrained_window",
+      # "//components/constrained_window",
       "//components/favicon/core",
       "//components/sessions",
       "//components/sync_sessions",
       "//components/tab_groups",
-      "//components/web_modal",
       "//content/public/browser",
       "//ui/base",
       "//ui/menus",
@@ -220,6 +230,13 @@ if (!is_android) {
 
     if (is_chromeos) {
       sources += [ "existing_window_sub_menu_model_chromeos.h" ]
+    }
+
+    if (!is_android) {
+      public_deps += [
+        "//components/constrained_window",
+        "//components/web_modal",
+      ]
     }
   }
 
@@ -238,7 +255,6 @@ if (!is_android) {
 
     deps = [
       ":tab_group",
-      ":tab_menu",
       ":tab_model",
       ":tab_strip",
       ":tabs",
@@ -248,10 +264,10 @@ if (!is_android) {
       "//chrome/browser/profiles:profile",
       "//chrome/browser/ui:ui_features",
       "//chrome/browser/ui/browser_window",
-      "//chrome/browser/ui/commerce",
-      "//chrome/browser/ui/tabs/saved_tab_groups",
-      "//chrome/browser/ui/toasts",
-      "//chrome/browser/ui/window_metadata",
+      # "//chrome/browser/ui/commerce",
+      # "//chrome/browser/ui/tabs/saved_tab_groups",
+      # "//chrome/browser/ui/toasts",
+      # "//chrome/browser/ui/window_metadata",
       "//components/saved_tab_groups/public",
       "//components/tab_groups",
       "//components/tabs:impl",
@@ -261,6 +277,14 @@ if (!is_android) {
       sources += [ "existing_window_sub_menu_model_chromeos.cc" ]
 
       deps += [ "//chromeos/ui/wm" ]
+    }
+
+    if (!is_android) {
+      deps += [
+        ":tab_menu",
+        "//chrome/browser/ui/browser_window",
+        # "//chrome/browser/ui/commerce:commerce",
+      ]
     }
   }
 
@@ -274,6 +298,7 @@ if (!is_android) {
       "tab_strip_prefs.h",
       "tab_strip_scrubbing_metrics.h",
       "tab_strip_user_gesture_details.h",
+      "pinned_tab_collection.h",
     ]
 
     public_deps = [
@@ -302,6 +327,15 @@ if (!is_android) {
       "tab_strip_scrubbing_metrics.cc",
     ]
 
+    if (is_android) {
+      sources += [
+        # moved to components/tabs/
+        # "pinned_tab_collection.cc",
+        # "unpinned_tab_collection.cc",
+        # "tab_collection_storage.cc",
+      ]
+    }
+
     deps = [
       ":tab_group",
       ":tab_model",
@@ -317,25 +351,24 @@ if (!is_android) {
       "//chrome/browser/profiles:profile",
       "//chrome/browser/reading_list",
       "//chrome/browser/resource_coordinator",
-      "//chrome/browser/ui:browser_tab_strip",
+      # "//chrome/browser/ui:browser_tab_strip",
       "//chrome/browser/ui:tab_search_feature",
       "//chrome/browser/ui:ui_features",
       "//chrome/browser/ui/browser_window",
-      "//chrome/browser/ui/commerce",
-      "//chrome/browser/ui/send_tab_to_self",
-      "//chrome/browser/ui/thumbnails",
-      "//chrome/browser/ui/user_education",
-      "//chrome/browser/ui/views/tabs/vertical",
+      # "//chrome/browser/ui/commerce",
+      # "//chrome/browser/ui/send_tab_to_self",
+      # "//chrome/browser/ui/thumbnails",
+      # "//chrome/browser/ui/user_education",
+      # "//chrome/browser/ui/views/tabs/vertical",
       "//chrome/browser/ui/web_applications",
       "//chrome/browser/ui/web_applications:launch_utils",
-      "//chrome/browser/web_applications",
+      # "//chrome/browser/web_applications",
       "//components/commerce/core:utils",
       "//components/content_settings/core/browser",
       "//components/feature_engagement/public",
       "//components/pref_registry",
       "//components/reading_list/core",
       "//components/tab_groups",
-      "//components/web_modal",
       "//components/webapps/common",
     ]
 
@@ -405,8 +438,15 @@ if (!is_android) {
     ]
 
     allow_circular_includes_from = [ ":tab_group" ]
+
+    if (!is_android) {
+      deps = [
+        "//chrome/browser/ui:browser_list",
+      ]
+    }
   }
 
+if (!is_android) {
   source_set("impl") {
     public_deps = [
       "//chrome/browser:browser_public_dependencies",
@@ -451,7 +491,7 @@ if (!is_android) {
       "//chrome/app/vector_icons",
       "//chrome/browser/accessibility_annotator/content_annotator",
       "//chrome/browser/actor",
-      "//chrome/browser/actor/ui",
+      # "//chrome/browser/actor/ui",
       "//chrome/browser/bookmarks",
       "//chrome/browser/collaboration/messaging",
       "//chrome/browser/commerce",
@@ -489,7 +529,7 @@ if (!is_android) {
       "//chrome/browser/ui/actions:actions_util",
       "//chrome/browser/ui/autofill",
       "//chrome/browser/ui/browser_window",
-      "//chrome/browser/ui/commerce",
+      # "//chrome/browser/ui/commerce",
       "//chrome/browser/ui/context_highlight",
       "//chrome/browser/ui/contextual_search",
       "//chrome/browser/ui/cookie_controls",
@@ -501,8 +541,8 @@ if (!is_android) {
       "//chrome/browser/ui/tabs/back_to_opener",
       "//chrome/browser/ui/tabs/back_to_opener:impl",
       "//chrome/browser/ui/tabs/projects:impl",
-      "//chrome/browser/ui/tabs/saved_tab_groups",
-      "//chrome/browser/ui/thumbnails",
+      # "//chrome/browser/ui/tabs/saved_tab_groups",
+      # "//chrome/browser/ui/thumbnails",
       "//chrome/browser/ui/toolbar",
       "//chrome/browser/ui/toolbar/pinned_toolbar",
       "//chrome/browser/ui/user_education",
@@ -520,7 +560,7 @@ if (!is_android) {
       "//chrome/browser/ui/web_applications",
       "//chrome/browser/ui/webui:webui_util",
       "//chrome/browser/vr",
-      "//chrome/browser/web_applications",
+      # "//chrome/browser/web_applications",
       "//components/browsing_topics",
       "//components/content_settings/core/browser",
       "//components/contextual_tasks/public",
@@ -577,7 +617,7 @@ if (!is_android) {
       deps += [ "//chrome/browser/apps/app_service" ]
     }
   }
-
+}
   # This is a separate component to avoid possible circular deps.
   source_set("tab_strip_model_observer") {
     sources = [
@@ -595,7 +635,10 @@ if (!is_android) {
   }
 
   source_set("tab_strip_model_observer_impl") {
-    sources = [ "tab_strip_model_observer.cc" ]
+    sources = [
+      "tab_strip_model_observer.cc",
+      # "tab_collection.cc",
+    ]
     public_deps = [ "//chrome/browser:browser_public_dependencies" ]
     deps = [
       ":tab_strip",
@@ -605,6 +648,7 @@ if (!is_android) {
     ]
   }
 
+if (!is_android) {
   source_set("test_support") {
     testonly = true
 
@@ -695,7 +739,7 @@ if (!is_android) {
       "//chrome/browser/ui/tabs/saved_tab_groups",
       "//chrome/browser/ui/tabs/saved_tab_groups:test_support",
       "//chrome/browser/ui/thumbnails",
-      "//chrome/browser/web_applications",
+      # "//chrome/browser/web_applications",
       "//chrome/browser/web_applications:prevent_close_test_support",
       "//chrome/browser/web_applications:web_applications_test_support",
       "//chrome/common:chrome_features",
@@ -800,7 +844,7 @@ if (!is_android) {
       "//chrome/browser/ui/startup:startup_tab",
       "//chrome/browser/ui/tab_contents",
       "//chrome/browser/ui/tabs/alert:tab_alert",
-      "//chrome/browser/ui/thumbnails",
+      # "//chrome/browser/ui/thumbnails",
       "//chrome/browser/user_education",
       "//chrome/common:non_code_constants",
       "//chrome/test:test_support",

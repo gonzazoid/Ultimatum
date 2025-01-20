@@ -283,6 +283,7 @@ static_library("common_lib") {
       "//extensions/common",
       "//extensions/common:common_constants",
       "//extensions/common:core_api_provider",
+      "//chrome/common/controlled_frame",
     ]
 
     sources += [
@@ -298,7 +299,7 @@ static_library("common_lib") {
     if (is_win || is_mac || is_linux || is_chromeos) {
       assert(enable_extensions)
       deps += [
-        "//chrome/common/apps/platform_apps",
+        # "//chrome/common/apps/platform_apps",
         "//chrome/common/controlled_frame",
         "//components/app_constants",
       ]
@@ -341,6 +342,7 @@ static_library("common_lib") {
   }
 
   if (is_android) {
+    public_deps += [ "//chrome/common/importer" ]
     sources += [
       "chrome_descriptors_android.h",
       "media/chrome_media_drm_bridge_client.cc",

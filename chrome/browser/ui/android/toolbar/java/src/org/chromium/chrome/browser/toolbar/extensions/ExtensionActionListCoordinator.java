@@ -57,6 +57,7 @@ public class ExtensionActionListCoordinator implements Destroyable {
             Context context,
             ExtensionActionListRecyclerView container,
             WindowAndroid windowAndroid,
+            ListMenuButton extensionsButton,
             ChromeAndroidTask task,
             Profile profile,
             NullableObservableSupplier<Tab> currentTabSupplier,
@@ -74,6 +75,7 @@ public class ExtensionActionListCoordinator implements Destroyable {
                 new ExtensionActionListMediator(
                         context,
                         windowAndroid,
+                        extensionsButton,
                         mModels,
                         task,
                         profile,

@@ -207,7 +207,7 @@ source_set("impl") {
   if (enable_extensions_core) {
     deps += [
       "//chrome/browser/ui/webui/extensions",
-      "//chrome/browser/ui/webui/management",
+      # "//chrome/browser/ui/webui/management",
       "//extensions/common",
     ]
   }
@@ -399,10 +399,10 @@ source_set("impl") {
     ]
   }
 
-  if (enable_extensions) {
+  if (enable_extensions_core) {
     deps += [
-      "//chrome/browser/apps/platform_apps",
-      "//extensions/browser/api/audio",
+      # "//chrome/browser/apps/platform_apps",
+      # "//extensions/browser/api/audio",
       "//extensions/browser/api/runtime",
     ]
   }

@@ -20,7 +20,7 @@
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/signin/signin_util.h"
 #include "chrome/browser/sync/sync_service_factory.h"
-#include "chrome/browser/ui/browser.h"
+// #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
 #include "chrome/browser/ui/browser_window/public/profile_browser_collection.h"
@@ -314,34 +314,34 @@ void BookmarksMessageHandler::HandleGetCanUploadBookmarkToAccountStorage(
 
 void BookmarksMessageHandler::HandleSingleUploadClicked(
     const base::ListValue& args) {
-  CHECK_EQ(1U, args.size());
-  const std::string& id_string = args[0].GetString();
-  int64_t id;
-  base::StringToInt64(id_string, &id);
+  // CHECK_EQ(1U, args.size());
+  // const std::string& id_string = args[0].GetString();
+  // int64_t id;
+  // base::StringToInt64(id_string, &id);
 
-  Profile* profile = Profile::FromWebUI(web_ui());
-  bookmarks::BookmarkModel* model =
-      BookmarkModelFactory::GetForBrowserContext(profile);
+  // Profile* profile = Profile::FromWebUI(web_ui());
+  // bookmarks::BookmarkModel* model =
+  //     BookmarkModelFactory::GetForBrowserContext(profile);
 
   // Do not continue if account nodes are no longer available. This can happen
   // if the user signs out and the UI is not updated properly.
   // TODO(crbug.com/413637312): Remove this once the icon is no longer visible
   // upon sign out.
-  if (!model->account_other_node()) {
-    return;
-  }
+  // if (!model->account_other_node()) {
+  //   return;
+  // }
 
   // All conditions for uploading to account storage should be met at this
   // point.
-  CHECK(CanUploadBookmarkToAccountStorage(id_string));
+  // CHECK(CanUploadBookmarkToAccountStorage(id_string));
 
   // Show the dialog asking the user to confirm their choice to move the
   // bookmark.
-  BrowserWindowInterface* const browser =
-      ProfileBrowserCollection::GetForProfile(profile)->GetLastActiveBrowser();
-  ShowBookmarkAccountStorageUploadDialog(
-      browser ? browser->GetBrowserForMigrationOnly() : nullptr,
-      bookmarks::GetBookmarkNodeByID(model, id));
+  // BrowserWindowInterface* const browser =
+  //     ProfileBrowserCollection::GetForProfile(profile)->GetLastActiveBrowser();
+  // ShowBookmarkAccountStorageUploadDialog(
+  //     browser ? browser->GetBrowserForMigrationOnly() : nullptr,
+  //     bookmarks::GetBookmarkNodeByID(model, id));
 }
 
 void BookmarksMessageHandler::UpdateCanEditBookmarks() {
@@ -362,12 +362,12 @@ void BookmarksMessageHandler::HandleGetBatchUploadPromoData(
     return;
   }
 
-  BatchUploadService* batch_upload =
-      BatchUploadServiceFactory::GetForProfile(profile);
-  CHECK(batch_upload);
-  batch_upload->GetLocalDataDescriptionsForAvailableTypes(base::BindOnce(
-      &BookmarksMessageHandler::OnGetLocalDataDescriptionReceived,
-      weak_ptr_factory_.GetWeakPtr(), callback_id.Clone()));
+  // BatchUploadService* batch_upload =
+  //     BatchUploadServiceFactory::GetForProfile(profile);
+  // CHECK(batch_upload);
+  // batch_upload->GetLocalDataDescriptionsForAvailableTypes(base::BindOnce(
+  //     &BookmarksMessageHandler::OnGetLocalDataDescriptionReceived,
+  //     weak_ptr_factory_.GetWeakPtr(), callback_id.Clone()));
 }
 
 void BookmarksMessageHandler::OnGetLocalDataDescriptionReceived(
@@ -393,30 +393,30 @@ void BookmarksMessageHandler::RequestLocalDataDescriptionsUpdate() {
     return;
   }
 
-  BatchUploadService* batch_upload =
-      BatchUploadServiceFactory::GetForProfile(profile);
-  CHECK(batch_upload);
-  batch_upload->GetLocalDataDescriptionsForAvailableTypes(base::BindOnce(
-      &BookmarksMessageHandler::FireOnGetLocalDataDescriptionReceived,
-      weak_ptr_factory_.GetWeakPtr()));
+  // BatchUploadService* batch_upload =
+  //     BatchUploadServiceFactory::GetForProfile(profile);
+  // CHECK(batch_upload);
+  // batch_upload->GetLocalDataDescriptionsForAvailableTypes(base::BindOnce(
+  //     &BookmarksMessageHandler::FireOnGetLocalDataDescriptionReceived,
+  //     weak_ptr_factory_.GetWeakPtr()));
 }
 
 void BookmarksMessageHandler::HandleOnBatchUploadPromoClicked(
     const base::ListValue& args) {
-  Profile* profile = Profile::FromWebUI(web_ui());
-  CHECK(CanEditBookmarks());
-  CHECK(SyncServiceFactory::IsSyncAllowed(profile));
-  CHECK(CanShowBatchUploadPromo(profile));
+  // Profile* profile = Profile::FromWebUI(web_ui());
+  // CHECK(CanEditBookmarks());
+  // CHECK(SyncServiceFactory::IsSyncAllowed(profile));
+  // CHECK(CanShowBatchUploadPromo(profile));
 
-  BatchUploadService* service =
-      BatchUploadServiceFactory::GetForProfile(profile);
-  CHECK(service);
-  BrowserWindowInterface* browser =
-      GlobalBrowserCollection::GetInstance()->FindBrowserWithTab(
-          web_ui()->GetWebContents());
-  service->OpenBatchUpload(
-      browser->GetBrowserForMigrationOnly(),
-      BatchUploadService::EntryPoint::kBookmarksManagerPromoCard);
+  // BatchUploadService* service =
+  //     BatchUploadServiceFactory::GetForProfile(profile);
+  // CHECK(service);
+  // BrowserWindowInterface* browser =
+  //     GlobalBrowserCollection::GetInstance()->FindBrowserWithTab(
+  //         web_ui()->GetWebContents());
+  // service->OpenBatchUpload(
+  //     browser->GetBrowserForMigrationOnly(),
+  //     BatchUploadService::EntryPoint::kBookmarksManagerPromoCard);
 }
 
 void BookmarksMessageHandler::HandleOnBatchUploadPromoDismissed(

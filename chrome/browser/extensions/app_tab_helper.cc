@@ -130,13 +130,13 @@ void AppTabHelper::DidFinishNavigation(
   if (browser &&
       (browser->GetType() == BrowserWindowInterface::Type::TYPE_APP ||
        browser->GetType() == BrowserWindowInterface::Type::TYPE_APP_POPUP)) {
-    const Extension* extension =
-        registry->GetInstalledExtension(web_app::GetAppIdFromApplicationName(
-            browser->GetBrowserForMigrationOnly()->app_name()));
-    if (extension && AppLaunchInfo::GetFullLaunchURL(extension).is_valid()) {
-      DCHECK(extension->is_app());
-      SetExtensionApp(extension);
-    }
+    // const Extension* extension =
+    //     registry->GetInstalledExtension(web_app::GetAppIdFromApplicationName(
+    //         browser->GetBrowserForMigrationOnly()->app_name()));
+    // if (extension && AppLaunchInfo::GetFullLaunchURL(extension).is_valid()) {
+    //   DCHECK(extension->is_app());
+    //   SetExtensionApp(extension);
+    // }
   } else {
     UpdateExtensionAppIcon(
         enabled_extensions.GetExtensionOrAppByURL(navigation_handle->GetURL()));

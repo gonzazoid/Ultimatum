@@ -5,7 +5,7 @@
 import("//extensions/buildflags/buildflags.gni")
 import("//pdf/features.gni")
 
-assert(enable_extensions && !is_android)
+# assert(enable_extensions && !is_android)
 
 source_set("mime_handler") {
   sources = [

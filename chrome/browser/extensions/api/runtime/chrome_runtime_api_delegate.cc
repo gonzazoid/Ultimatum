@@ -55,6 +55,8 @@
 #include "base/win/windows_version.h"
 #endif
 
+#include "chrome/browser/extensions/extension_tab_util.h"
+
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "chrome/browser/devtools/devtools_window.h"
 #include "chrome/browser/ui/browser.h"

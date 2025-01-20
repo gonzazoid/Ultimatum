@@ -8,9 +8,11 @@ import android.content.Context;
 import android.graphics.Bitmap;
 
 import androidx.annotation.VisibleForTesting;
+import android.view.View;
 
 import org.chromium.base.lifetime.Destroyable;
 import org.chromium.base.supplier.NullableObservableSupplier;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.chrome.browser.extensions.ContextMenuSource;
 import org.chromium.chrome.browser.profiles.Profile;
@@ -19,6 +21,7 @@ import org.chromium.chrome.browser.tab.TabLaunchType;
 import org.chromium.chrome.browser.tabmodel.TabCreator;
 import org.chromium.chrome.browser.ui.browser_window.ChromeAndroidTask;
 import org.chromium.chrome.browser.ui.extensions.ExtensionActionContextMenuBridge;
+import org.chromium.chrome.browser.ui.extensions.ExtensionActionsBridge;
 import org.chromium.chrome.browser.ui.extensions.ExtensionsMenuBridge;
 import org.chromium.chrome.browser.ui.extensions.ExtensionsMenuTypes;
 import org.chromium.chrome.browser.ui.extensions.ExtensionsToolbarBridge;
@@ -33,6 +36,7 @@ import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.widget.ViewRectProvider;
 
 import java.util.ArrayList;
+import java.util.function.Consumer;
 import java.util.List;
 
 /**
@@ -41,6 +45,7 @@ import java.util.List;
  */
 @NullMarked
 class ExtensionsMenuMediator implements Destroyable, ExtensionsMenuBridge.Observer {
+    private final Consumer<String> mOnItemClick;
     private final ModelList mActionModels;
     private final Context mContext;
     private final NullableObservableSupplier<Tab> mCurrentTabSupplier;
@@ -66,6 +71,7 @@ class ExtensionsMenuMediator implements Destroyable, ExtensionsMenuBridge.Observ
      * @param onReady A runnable to run when the menu is ready to be shown.
      */
     public ExtensionsMenuMediator(
+            Consumer<String> onItemClick,
             Context context,
             ChromeAndroidTask task,
             Profile profile,
@@ -77,6 +83,7 @@ class ExtensionsMenuMediator implements Destroyable, ExtensionsMenuBridge.Observ
             PropertyModel sitePermissionsPropertyModel,
             Runnable onDismissMenu,
             Runnable onReady) {
+        mOnItemClick = onItemClick;
         mActionModels = actionModels;
         mContext = context;
         mCurrentTabSupplier = currentTabSupplier;
@@ -173,6 +180,10 @@ class ExtensionsMenuMediator implements Destroyable, ExtensionsMenuBridge.Observ
     /** Called when the site settings toggle is clicked. */
     public void onSiteSettingsToggleChanged(boolean isChecked) {
         mMenuBridge.onSiteSettingsToggleChanged(isChecked);
+    }
+
+    private void onItemClick(View view, String actionId) {
+        mOnItemClick.accept(actionId);
     }
 
     /** Destroys the mediator. */
@@ -402,6 +413,9 @@ class ExtensionsMenuMediator implements Destroyable, ExtensionsMenuBridge.Observ
                         .with(
                                 ExtensionsMenuItemProperties.SITE_PERMISSIONS_BUTTON_ON_CLICK,
                                 (view) -> onSitePermissionsButtonClicked(entry.id))
+                        .with(
+                                ExtensionsMenuItemProperties.ITEM_CLICK_LISTENER,
+                                (view) -> onItemClick(view, entry.id))
                         .build();
         updateMenuItem(model, entry);
         return new ListItem(0, model);
@@ -504,7 +518,12 @@ class ExtensionsMenuMediator implements Destroyable, ExtensionsMenuBridge.Observ
      * action models list. Also updates the zero state visibility.
      */
     private void updateMenuEntries() {
-        List<ExtensionsMenuTypes.MenuEntryState> entries = mMenuBridge.getMenuEntries();
+        // mActionModels.clear();
+        Tab currentTab = mCurrentTabSupplier.get();
+        if (currentTab == null) {
+            return;
+        }
+        List<ExtensionsMenuTypes.MenuEntryState> entries = mMenuBridge.getMenuEntries(currentTab.isOffTheRecord());
 
         if (mActionModels.size() != entries.size()) {
             // If sizes mismatch (e.g., initial load), clear and rebuild.

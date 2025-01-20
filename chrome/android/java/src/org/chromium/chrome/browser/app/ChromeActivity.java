@@ -2774,6 +2774,31 @@ public abstract class ChromeActivity extends AsyncInitializationActivity
                 getActivityTab());
     }
 
+    /** Opens the chrome://extensions page on a new tab. */
+    private void openChromeExtensionsPage() {
+        String extPageUrl = "chrome://extensions";
+        TabModel model = getCurrentTabModel();
+        int tabs_count = model.getCount();
+        for (int i = 0; i < tabs_count; i++) {
+          Tab tab = model.getTabAt(i);
+          GURL url = tab.getUrl();
+          if (url.getSpec().startsWith(extPageUrl)) {
+            model.setIndex(i, TabSelectionType.FROM_USER);
+            return;
+          }
+        }
+
+        Tab currentTab = getActivityTab();
+        TabCreator tabCreator = getTabCreator(currentTab != null && currentTab.isIncognito());
+        if (tabCreator == null) return;
+
+        tabCreator.createNewTab(
+                new LoadUrlParams(UrlConstants.CHROME_EXTENSIONS_URL, PageTransition.AUTO_TOPLEVEL),
+                TabLaunchType.FROM_CHROME_UI,
+                getActivityTab());
+
+    }
+
     private void onReaderModeMenuItemClick(Tab currentTab) {
         ReaderModeManager readerModeManager =
                 currentTab.getUserDataHost().getUserData(ReaderModeManager.class);
@@ -3143,6 +3168,11 @@ public abstract class ChromeActivity extends AsyncInitializationActivity
             doOpenInApp(currentTab);
             return true;
         }
+
+        // if (id == R.id.extensions_menu_id) {
+        //     openChromeExtensionsPage();
+        //     return true;
+        // }
 
         return false;
     }

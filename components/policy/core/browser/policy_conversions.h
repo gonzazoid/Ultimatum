@@ -151,7 +151,7 @@ class POLICY_EXPORT DefaultPolicyConversions
   base::DictValue ToValueDict() override;
 
  private:
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   base::DictValue GetExtensionPolicies();
   base::DictValue GetExtensionPolicies(PolicyDomain policy_domain);
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)

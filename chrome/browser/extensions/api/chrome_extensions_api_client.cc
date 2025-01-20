@@ -71,7 +71,7 @@
 #include "extensions/browser/api/virtual_keyboard_private/virtual_keyboard_delegate.h"
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
 #include "chrome/browser/guest_view/mime_handler_view/chrome_mime_handler_view_guest_delegate.h"
 #endif
 
@@ -84,12 +84,12 @@
 
 #endif  // BUILDFLAG(ENABLE_GUEST_VIEW)
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/extensions/api/feedback_private/chrome_feedback_private_delegate.h"
 #include "chrome/browser/extensions/api/file_system/chrome_file_system_delegate.h"
 #include "chrome/browser/search/instant_service.h"
 #include "chrome/browser/search/instant_service_factory.h"
-#endif
+// #endif
 
 #if BUILDFLAG(IS_CHROMEOS)
 #include "chrome/browser/extensions/api/file_handlers/non_native_file_system_delegate_chromeos.h"
@@ -313,14 +313,14 @@ void ChromeExtensionsAPIClient::OpenFileUrlForTesting(
   CHECK(file_url.SchemeIsFile());
 
   // Find the first browser window that matches this profile.
-  Profile* profile = Profile::FromBrowserContext(browser_context);
+  // Profile* profile = Profile::FromBrowserContext(browser_context);
   BrowserWindowInterface* browser = nullptr;
-  for (BrowserWindowInterface* bwi : GetAllBrowserWindowInterfaces()) {
-    if (bwi->GetProfile() == profile) {
-      browser = bwi;
-      break;
-    }
-  }
+  // for (BrowserWindowInterface* bwi : GetAllBrowserWindowInterfaces()) {
+  //   if (bwi->GetProfile() == profile) {
+  //     browser = bwi;
+  //     break;
+  //   }
+  // }
   CHECK(browser) << "Unable to find browser with matching profile.";
 
   // Find the active tab.
@@ -357,7 +357,8 @@ ChromeExtensionsAPIClient::CreateGuestViewManagerDelegate() const {
   return std::make_unique<ChromeGuestViewManagerDelegate>();
 }
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+// TODO
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
 std::unique_ptr<MimeHandlerViewGuestDelegate>
 ChromeExtensionsAPIClient::CreateMimeHandlerViewGuestDelegate(
     MimeHandlerViewGuest* guest) const {
@@ -460,7 +461,7 @@ MessagingDelegate* ChromeExtensionsAPIClient::GetMessagingDelegate() {
 }
 
 // The APIs that require these methods are not supported on Android.
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
 FileSystemDelegate* ChromeExtensionsAPIClient::GetFileSystemDelegate() {
   if (!file_system_delegate_) {
 #if BUILDFLAG(IS_CHROMEOS)
@@ -489,7 +490,7 @@ ChromeExtensionsAPIClient::GetAutomationInternalApiDelegate() {
   }
   return extensions_automation_api_delegate_.get();
 }
-#endif  // !BUILDFLAG(IS_ANDROID)
+// #endif  // !BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_CHROMEOS)
 MediaPerceptionAPIDelegate*

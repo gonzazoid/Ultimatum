@@ -18,6 +18,7 @@ import android.view.ViewConfiguration;
 
 import androidx.annotation.VisibleForTesting;
 
+import org.chromium.base.Callback;
 import org.chromium.base.lifetime.Destroyable;
 import org.chromium.base.lifetime.LifetimeAssert;
 import org.chromium.base.supplier.NullableObservableSupplier;
@@ -119,6 +120,7 @@ class ExtensionActionListMediator implements Destroyable {
     private final Context mContext;
     private final WindowAndroid mWindowAndroid;
     private final ModelList mModels;
+
     private final ChromeAndroidTask mTask;
     private final Profile mProfile;
     private final NullableObservableSupplier<Tab> mCurrentTabSupplier;
@@ -131,10 +133,12 @@ class ExtensionActionListMediator implements Destroyable {
     private @Nullable AnchoredPopupWindow mHoverCard;
     private @Nullable String mHoverCardActionId;
     private @Nullable Runnable mShowHoverCardRunnable;
+    private final ListMenuButton mExtensionsButton;
 
     private final ExtensionsToolbarBridge mExtensionsToolbarBridge;
     private final ToolbarDelegate mToolbarDelegate = new ToolbarDelegate();
     private final ToolbarObserver mToolbarObserver = new ToolbarObserver();
+    // private final Callback<@Nullable Tab> mCurrentTabObserver = this::onCurrentTabChanged;
 
     private final ModalDialogManagerObserver mModalDialogManagerObserver =
             new ModalDialogManagerObserver() {
@@ -165,6 +169,7 @@ class ExtensionActionListMediator implements Destroyable {
     public ExtensionActionListMediator(
             Context context,
             WindowAndroid windowAndroid,
+            ListMenuButton extensionsButton,
             ModelList models,
             ChromeAndroidTask task,
             Profile profile,
@@ -181,6 +186,7 @@ class ExtensionActionListMediator implements Destroyable {
         mTask = task;
         mProfile = profile;
         mCurrentTabSupplier = currentTabSupplier;
+        // mCurrentTabSupplier.addSyncObserver(mCurrentTabObserver);
         mRecyclerViewDelegate = recyclerViewDelegate;
         mExtensionsToolbarBridge = extensionsToolbarBridge;
         mContextMenuPopulatorFactory = contextMenuPopulatorFactory;
@@ -189,9 +195,12 @@ class ExtensionActionListMediator implements Destroyable {
         mModalDialogManager = modalDialogManager;
         mModalDialogManager.addObserver(mModalDialogManagerObserver);
 
+        mExtensionsButton = extensionsButton;
+
         mExtensionsToolbarBridge.setActionListDelegate(mToolbarDelegate);
         mExtensionsToolbarBridge.addObserver(mToolbarObserver);
         reconcileActionItems();
+
     }
 
     @Override
@@ -249,10 +258,10 @@ class ExtensionActionListMediator implements Destroyable {
         // The pinned action IDs are a subset of all action IDs.
         Set<String> allActionIdsSet =
                 new HashSet<>(Arrays.asList(mExtensionsToolbarBridge.getAllActionIds()));
-        String[] pinnedActionIds = mExtensionsToolbarBridge.getPinnedActionIds();
 
         Tab currentTab = mCurrentTabSupplier.get();
         WebContents webContents = currentTab != null ? currentTab.getWebContents() : null;
+        String[] pinnedActionIds = mExtensionsToolbarBridge.getPinnedActionIds(currentTab == null || currentTab.isOffTheRecord());
 
         @Nullable String currentPopupActionId = null;
         if (mActionState instanceof ActionState.PopupActive activeState) {
@@ -685,10 +694,11 @@ class ExtensionActionListMediator implements Destroyable {
         ListMenuButton buttonView =
                 (ListMenuButton) mRecyclerViewDelegate.getButtonViewForId(actionId);
         if (buttonView == null) {
-            contents.destroy();
-            mActionState = new ActionState.Idle();
-            undoPopout();
-            return;
+            buttonView = mExtensionsButton;
+            // contents.destroy();
+            // mActionState = new ActionState.Idle();
+            // undoPopout();
+            // return;
         }
 
         Activity activity = mWindowAndroid.getActivity().get();

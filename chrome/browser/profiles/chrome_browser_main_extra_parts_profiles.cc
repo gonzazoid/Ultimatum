@@ -329,6 +329,8 @@
 
 // Per-platform #include blocks, in alphabetical order.
 
+#include "chrome/browser/ui/webui/theme_colors_source_manager_factory.h"
+
 #if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/android/metrics/android_session_durations_service_factory.h"
 #include "chrome/browser/android/omnibox/autocomplete_controller_android.h"
@@ -403,7 +405,6 @@
 #include "chrome/browser/ui/safety_hub/safety_hub_hats_service_factory.h"
 #include "chrome/browser/ui/views/profiles/avatar_toolbar_button_state_manager.h"
 #include "chrome/browser/ui/waap/waap_ui_metrics_service_factory.h"
-#include "chrome/browser/ui/webui/theme_colors_source_manager_factory.h"
 #include "chrome/browser/usb/usb_connection_tracker_factory.h"
 #include "chrome/browser/user_education/user_education_service_factory.h"
 #include "chrome/browser/web_applications/isolated_web_apps/window_management/isolated_web_apps_window_open_permission_service_factory.h"
@@ -1515,10 +1516,10 @@ void ChromeBrowserMainExtraPartsProfiles::
   TemplateURLPrepopulateData::ResolverFactory::GetInstance();
   TemplateURLServiceFactory::GetInstance();
   tips::TipsServiceFactory::GetInstance();
-#if !BUILDFLAG(IS_ANDROID)
-  ThemeColorsSourceManagerFactory::GetInstance();
+// #if !BUILDFLAG(IS_ANDROID)
+  // ThemeColorsSourceManagerFactory::GetInstance();
   ThemeServiceFactory::GetInstance();
-#endif
+// #endif
 #if BUILDFLAG(IS_ANDROID)
   thin_webview::android::ChromeThinWebViewInitializer::Initialize();
 #endif

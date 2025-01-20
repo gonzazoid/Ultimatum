@@ -259,10 +259,10 @@ source_set("configs") {
     ]
   }
 
-  if (is_win || is_mac || is_linux || is_chromeos || is_desktop_android) {
+  if (is_win || is_mac || is_linux || is_chromeos || is_desktop_android || is_android) {
     deps += [
-      "//chrome/browser/ui/webui/discards",
-      "//chrome/browser/ui/webui/management",
+      # "//chrome/browser/ui/webui/discards",
+      # "//chrome/browser/ui/webui/management",
     ]
   }
 

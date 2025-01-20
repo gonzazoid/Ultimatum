@@ -1,13 +1,4 @@
-# GitHub Copilot Integration in Chromium
-
-This directory provides instructions and prompts for integrating GitHub Copilot
-with the chromium codebase.
-
-This directory is currently in a prototyping state and may be removed in the
-future. As we add support for multiple coding IDE/agents, we will likely pull
-common prompts and instructions into a central directory with stubs for bespoke
-IDE/agent integration. Please check with your organization before using GitHub
-Copilot.
+# ![Logo](../chrome/app/theme/chromium/product_logo_64.png) Ultimatum
 
 Note: This README file is intentionally NOT named /.github/README.md to avoid
 replacing the root level [README.md](../README.md) on

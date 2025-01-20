@@ -74,7 +74,7 @@ class ChromeExtensionsAPIClient : public ExtensionsAPIClient {
       ExtensionOptionsGuest* guest) const override;
   std::unique_ptr<guest_view::GuestViewManagerDelegate>
   CreateGuestViewManagerDelegate() const override;
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   std::unique_ptr<MimeHandlerViewGuestDelegate>
   CreateMimeHandlerViewGuestDelegate(
       MimeHandlerViewGuest* guest) const override;
@@ -108,11 +108,11 @@ class ChromeExtensionsAPIClient : public ExtensionsAPIClient {
   MetricsPrivateDelegate* GetMetricsPrivateDelegate() override;
   MessagingDelegate* GetMessagingDelegate() override;
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
   FileSystemDelegate* GetFileSystemDelegate() override;
   FeedbackPrivateDelegate* GetFeedbackPrivateDelegate() override;
   AutomationInternalApiDelegate* GetAutomationInternalApiDelegate() override;
-#endif
+// #endif
 
 #if BUILDFLAG(IS_CHROMEOS)
   MediaPerceptionAPIDelegate* GetMediaPerceptionAPIDelegate() override;
@@ -138,13 +138,13 @@ class ChromeExtensionsAPIClient : public ExtensionsAPIClient {
   std::unique_ptr<ChromeMetricsPrivateDelegate> metrics_private_delegate_;
   std::unique_ptr<MessagingDelegate> messaging_delegate_;
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
   // Desktop Android does not support these APIs.
   std::unique_ptr<FileSystemDelegate> file_system_delegate_;
   std::unique_ptr<FeedbackPrivateDelegate> feedback_private_delegate_;
   std::unique_ptr<extensions::ChromeAutomationInternalApiDelegate>
       extensions_automation_api_delegate_;
-#endif
+// #endif
 
 #if BUILDFLAG(IS_CHROMEOS)
   std::unique_ptr<MediaPerceptionAPIDelegate> media_perception_api_delegate_;

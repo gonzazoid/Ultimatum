@@ -173,6 +173,9 @@ class ExtensionHost : public DeferredStartRenderHost,
   void OnExtensionUnloaded(content::BrowserContext* browser_context,
                            const Extension* extension,
                            UnloadedExtensionReason reason) override;
+  void OnExtensionInstalled(content::BrowserContext* browser_context,
+                           const Extension* extension,
+                           bool is_update) override;
 
   // Notifies observers when an event has been acknowledged from the renderer to
   // the browser. `event_has_listener_in_background_context` being set to true

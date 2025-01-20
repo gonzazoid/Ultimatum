@@ -39,7 +39,7 @@
 #include "ui/gfx/text_constants.h"
 #include "ui/menus/simple_menu_model.h"
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
 #include "chrome/browser/extensions/context_menu_matcher.h"
 #include "chrome/browser/extensions/menu_manager.h"
 #endif
@@ -213,7 +213,7 @@ class RenderViewContextMenu
   // Helper function to escape "&" as "&&".
   void EscapeAmpersands(std::u16string* text);
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   extensions::ContextMenuMatcher extension_items_;
 #endif
   void RecordUsedItem(int id) override;
@@ -342,7 +342,7 @@ class RenderViewContextMenu
   bool AppendAccessibilityLabelsItems();
   void AppendDictationItems();
   void AppendSearchProvider();
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   void AppendCurrentExtensionItems();
 #endif
   void AppendPrintPreviewItems();

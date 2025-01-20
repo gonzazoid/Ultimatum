@@ -59,6 +59,12 @@ group("api_implementations") {
     "//chrome/browser/extensions/api/web_navigation",
     "//chrome/browser/extensions/api/web_view",
     "//chrome/browser/extensions/api/webrtc_logging_private",
+    "//chrome/browser/extensions/api/content_settings",
+    "//chrome/browser/extensions/api/networking_private",
+    "//chrome/browser/extensions/api/autofill_private",
+    "//chrome/browser/extensions/api/resources_private",
+    "//chrome/browser/extensions/api/settings_overrides",
+    "//chrome/browser/extensions/api/web_view",
   ]
 
   if (enable_service_discovery) {

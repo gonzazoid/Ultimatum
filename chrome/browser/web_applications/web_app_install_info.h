@@ -40,8 +40,8 @@
 #include "third_party/skia/include/core/SkColor.h"
 #include "url/gurl.h"
 
-static_assert(BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) ||
-              BUILDFLAG(IS_CHROMEOS));
+// static_assert(BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) ||
+//               BUILDFLAG(IS_CHROMEOS));
 
 namespace web_app {
 

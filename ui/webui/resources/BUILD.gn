@@ -50,7 +50,7 @@ generate_grd("build_grd") {
     "$target_gen_dir/mojo/resources.grdp",
   ]
 
-  if ((!is_android && !is_ios) || is_desktop_android) {
+  if ((!is_android && !is_ios) || is_desktop_android || enable_desktop_android_extensions) {
     public_deps += [
       "cr_components/app_management:build_grdp",
       "cr_components/color_change_listener:build_grdp",

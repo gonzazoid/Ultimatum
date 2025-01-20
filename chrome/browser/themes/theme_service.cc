@@ -110,7 +110,7 @@ void WritePackToDiskCallback(BrowserThemePack* pack,
 
 // ThemeService::ThemeObserver ------------------------------------------------
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
 class ThemeService::ThemeObserver
     : public extensions::ExtensionRegistryObserver {
  public:
@@ -565,9 +565,11 @@ void ThemeService::RemoveUnusedThemes() {
   }
 }
 
+// #if !BUILDFLAG(IS_ANDROID)
 ThemeSyncableService* ThemeService::GetThemeSyncableService() const {
   return theme_syncable_service_.get();
 }
+// #endif
 
 // static
 const ui::ThemeProvider& ThemeService::GetThemeProviderForProfile(
@@ -656,6 +658,7 @@ void ThemeService::SetBrowserColorScheme(
 ThemeService::BrowserColorScheme ThemeService::GetBrowserColorScheme() const {
   return static_cast<BrowserColorScheme>(
       profile_->GetPrefs()->GetInteger(prefs::kBrowserColorScheme));
+  // return {};
 }
 
 bool ThemeService::BrowserUsesDarkColors() const {
@@ -697,6 +700,7 @@ void ThemeService::SetBrowserColorVariant(
 ui::mojom::BrowserColorVariant ThemeService::GetBrowserColorVariant() const {
   return static_cast<ui::mojom::BrowserColorVariant>(
       profile_->GetPrefs()->GetInteger(prefs::kBrowserColorVariant));
+  // return {};
 }
 
 void ThemeService::SetUserColorAndBrowserColorVariant(
@@ -1032,8 +1036,8 @@ void ThemeService::OnThemeBuiltFromExtension(
 
   // Offer to revert to the old theme.
   if (can_revert_theme && !suppress_infobar && extension->is_theme()) {
-    ThemeInstalledInfoBarDelegate::CreateForLastActiveTab(
-        profile_, extension->name(), extension->id(), std::move(reinstaller));
+    // ThemeInstalledInfoBarDelegate::CreateForLastActiveTab(
+    //     profile_, extension->name(), extension->id(), std::move(reinstaller));
   }
 }
 

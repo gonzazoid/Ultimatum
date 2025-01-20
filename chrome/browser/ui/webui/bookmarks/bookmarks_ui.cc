@@ -200,9 +200,11 @@ BookmarksUI::BookmarksUI(content::WebUI* web_ui)
   web_ui->AddMessageHandler(std::make_unique<MetricsHandler>());
 }
 
+#if !BUILDFLAG(IS_ANDROID)
 // static
 base::RefCountedMemory* BookmarksUI::GetFaviconResourceBytes(
     ui::ResourceScaleFactor scale_factor) {
   return ui::ResourceBundle::GetSharedInstance().LoadDataResourceBytesForScale(
       IDR_BOOKMARKS_FAVICON, scale_factor);
 }
+#endif

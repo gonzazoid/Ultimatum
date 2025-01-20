@@ -427,20 +427,20 @@ const PrefsUtil::TypedPrefMap& PrefsUtil::GetAllowlistedKeys() {
       settings_api::PrefType::kBoolean;
 
   // Security page
-  (*s_allowlist)[::kGeneratedPasswordLeakDetectionPref] =
-      settings_api::PrefType::kBoolean;
+  // (*s_allowlist)[::kGeneratedPasswordLeakDetectionPref] =
+  //     settings_api::PrefType::kBoolean;
   (*s_allowlist)[::prefs::kSafeBrowsingEnabled] =
       settings_api::PrefType::kBoolean;
   (*s_allowlist)[::prefs::kSafeBrowsingEnhanced] =
       settings_api::PrefType::kBoolean;
   (*s_allowlist)[::prefs::kSafeBrowsingScoutReportingEnabled] =
       settings_api::PrefType::kBoolean;
-  (*s_allowlist)[::safe_browsing::kGeneratedSafeBrowsingPref] =
-      settings_api::PrefType::kNumber;
+  // (*s_allowlist)[::safe_browsing::kGeneratedSafeBrowsingPref] =
+  //     settings_api::PrefType::kNumber;
   (*s_allowlist)[::prefs::kHttpsOnlyModeEnabled] =
       settings_api::PrefType::kBoolean;
-  (*s_allowlist)[::kGeneratedHttpsFirstModePref] =
-      settings_api::PrefType::kNumber;
+  // (*s_allowlist)[::kGeneratedHttpsFirstModePref] =
+  //     settings_api::PrefType::kNumber;
   (*s_allowlist)[::prefs::kHttpsFirstModeBundleToastQueued] =
       settings_api::PrefType::kBoolean;
   (*s_allowlist)[::prefs::kSecuritySettingsBundle] =
@@ -553,8 +553,8 @@ const PrefsUtil::TypedPrefMap& PrefsUtil::GetAllowlistedKeys() {
       settings_api::PrefType::kNumber;
   (*s_allowlist)[::content_settings::kGeneratedGeolocationPref] =
       settings_api::PrefType::kNumber;
-  (*s_allowlist)[::content_settings::kGeneratedJavascriptOptimizerPref] =
-      settings_api::PrefType::kNumber;
+  // (*s_allowlist)[::content_settings::kGeneratedJavascriptOptimizerPref] =
+  //     settings_api::PrefType::kNumber;
   (*s_allowlist)[::prefs::kPluginsAlwaysOpenPdfExternally] =
       settings_api::PrefType::kBoolean;
   (*s_allowlist)[::prefs::kProtectedContentDefault] =
@@ -632,8 +632,8 @@ const PrefsUtil::TypedPrefMap& PrefsUtil::GetAllowlistedKeys() {
   (*s_allowlist)[::prefs::kToastAlertLevel] = settings_api::PrefType::kNumber;
 #endif
 
-  (*s_allowlist)[::prefs::kCaretBrowsingEnabled] =
-      settings_api::PrefType::kBoolean;
+  // (*s_allowlist)[::prefs::kCaretBrowsingEnabled] =
+  //     settings_api::PrefType::kBoolean;
 
 #if BUILDFLAG(IS_CHROMEOS)
   // Accounts / Users / People.
@@ -1277,8 +1277,8 @@ const PrefsUtil::TypedPrefMap& PrefsUtil::GetAllowlistedKeys() {
 #endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
 
   // Media Remoting settings.
-  (*s_allowlist)[media_router::prefs::kMediaRouterMediaRemotingEnabled] =
-      settings_api::PrefType::kBoolean;
+  // (*s_allowlist)[media_router::prefs::kMediaRouterMediaRemotingEnabled] =
+  //     settings_api::PrefType::kBoolean;
 
   // Performance settings.
   (*s_allowlist)
@@ -1769,6 +1769,19 @@ bool PrefsUtil::IsPrefUserModifiable(const std::string& pref_name) {
 
 PrefService* PrefsUtil::FindServiceForPref(const std::string& pref_name) {
   PrefService* user_prefs = profile_->GetPrefs();
+
+  // Proxy is a peculiar case: on ChromeOS, settings exist in both user
+  // prefs and local state, but chrome://settings should affect only user prefs.
+  // Elsewhere the proxy settings are stored in local state.
+  // See http://crbug.com/157147
+
+  if (pref_name == proxy_config::prefs::kProxy) {
+#if BUILDFLAG(IS_CHROMEOS)
+    return user_prefs;
+#else
+    return g_browser_process->local_state();
+#endif
+  }
 
 #if BUILDFLAG(IS_CHROMEOS)
   // Secure DNS configurations should apply to the current user session. The

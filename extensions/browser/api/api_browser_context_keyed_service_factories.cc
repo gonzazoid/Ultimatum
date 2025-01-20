@@ -24,6 +24,10 @@
 #include "extensions/browser/api/web_request/web_request_proxying_websocket.h"
 #include "extensions/browser/api/web_request/web_request_proxying_webtransport_shutdown_notifier_factory.h"
 #include "extensions/buildflags/buildflags.h"
+#include "extensions/browser/api/management/management_api.h"
+#include "extensions/browser/api/messaging/message_service.h"
+#include "extensions/browser/api/content_settings/content_settings_service.h"
+#include "extensions/browser/api/web_request/web_request_proxying_websocket.h"
 
 // The following are not supported in the experimental desktop-android build.
 // TODO(https://crbug.com/356905053): Enable these APIs on desktop-android.

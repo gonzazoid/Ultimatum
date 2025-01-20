@@ -11,6 +11,7 @@
 #include "build/build_config.h"
 #include "content/public/browser/page_navigator.h"
 
+#include "base/callback_list.h"
 #if !BUILDFLAG(IS_ANDROID)
 #include "ui/base/window_open_disposition.h"
 #endif
@@ -138,20 +139,20 @@ class BrowserWindowInterface : public content::PageNavigator {
     // * Legacy packaged app ("v1 packaged app")
     // * Hosted app (e.g. the Web Store "app" preinstalled on Chromebooks)
     TYPE_APP,
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
     // Devtools browser.
     TYPE_DEVTOOLS,
-#endif
+// #endif
     // App popup browser. It behaves like an app browser (e.g. it should have an
     // AppBrowserController) but looks like a popup (e.g. it never has a tab
     // strip).
     TYPE_APP_POPUP,
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
     // Document picture-in-picture browser.  It's mostly the same as a
     // TYPE_POPUP, except that it floats above other windows.  It also has some
     // additional restrictions, like it cannot navigated, to prevent misuse.
     TYPE_PICTURE_IN_PICTURE,
-#endif
+// #endif
 #if BUILDFLAG(IS_ANDROID)
     // TODO(https://crbug.com/493668475): Revisit if this type is needed.
     // Android Custom Tab browser.

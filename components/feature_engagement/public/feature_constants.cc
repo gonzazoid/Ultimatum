@@ -31,6 +31,37 @@ bool IsOnDeviceStorageEnabled() {
 #endif
 }
 
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
+BASE_FEATURE(kIPHExtensionsMenuFeature,
+             "IPH_ExtensionsMenu",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kIPHExtensionsRequestAccessButtonFeature,
+             "IPH_ExtensionsRequestAccessButton",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kIPHExtensionsZeroStatePromoFeature,
+             "IPH_ExtensionsZeroStatePromo",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+const base::FeatureParam<IPHExtensionsZeroStatePromoVariant>::Option
+    kIPHExtensionsZeroStatePromoVariantOptions[] = {
+        {IPHExtensionsZeroStatePromoVariant::kCustomActionIph,
+         "custom-action-iph"},
+        {IPHExtensionsZeroStatePromoVariant::kCustomUiChipIphV1,
+         "custom-ui-chip-iph"},
+        {IPHExtensionsZeroStatePromoVariant::kCustomUiChipIphV2,
+         "custom-ui-chip-iph-v2"},
+        {IPHExtensionsZeroStatePromoVariant::kCustomUiChipIphV3,
+         "custom-ui-chip-iph-v3"},
+        {IPHExtensionsZeroStatePromoVariant::kCustomUIPlainLinkIph,
+         "custom-ui-plain-link-iph"}};
+BASE_FEATURE_ENUM_PARAM(
+    IPHExtensionsZeroStatePromoVariant,
+    kIPHExtensionsZeroStatePromoVariantParam,
+    &feature_engagement::kIPHExtensionsZeroStatePromoFeature,
+    "x_iph-variant",
+    IPHExtensionsZeroStatePromoVariant::kCustomUiChipIphV2,
+    &kIPHExtensionsZeroStatePromoVariantOptions);
+#endif
+
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_LINUX) || \
     BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_FUCHSIA)
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
@@ -77,36 +108,7 @@ BASE_FEATURE(kIPHExplicitBrowserSigninPreferenceRememberedFeature,
 BASE_FEATURE(kIPHHistorySearchFeature,
              "IPH_HistorySearch",
              base::FEATURE_ENABLED_BY_DEFAULT);
-#if BUILDFLAG(ENABLE_EXTENSIONS)
-BASE_FEATURE(kIPHExtensionsMenuFeature,
-             "IPH_ExtensionsMenu",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-BASE_FEATURE(kIPHExtensionsRequestAccessButtonFeature,
-             "IPH_ExtensionsRequestAccessButton",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-BASE_FEATURE(kIPHExtensionsZeroStatePromoFeature,
-             "IPH_ExtensionsZeroStatePromo",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-const base::FeatureParam<IPHExtensionsZeroStatePromoVariant>::Option
-    kIPHExtensionsZeroStatePromoVariantOptions[] = {
-        {IPHExtensionsZeroStatePromoVariant::kCustomActionIph,
-         "custom-action-iph"},
-        {IPHExtensionsZeroStatePromoVariant::kCustomUiChipIphV1,
-         "custom-ui-chip-iph"},
-        {IPHExtensionsZeroStatePromoVariant::kCustomUiChipIphV2,
-         "custom-ui-chip-iph-v2"},
-        {IPHExtensionsZeroStatePromoVariant::kCustomUiChipIphV3,
-         "custom-ui-chip-iph-v3"},
-        {IPHExtensionsZeroStatePromoVariant::kCustomUIPlainLinkIph,
-         "custom-ui-plain-link-iph"}};
-BASE_FEATURE_ENUM_PARAM(
-    IPHExtensionsZeroStatePromoVariant,
-    kIPHExtensionsZeroStatePromoVariantParam,
-    &feature_engagement::kIPHExtensionsZeroStatePromoFeature,
-    "x_iph-variant",
-    IPHExtensionsZeroStatePromoVariant::kCustomUiChipIphV2,
-    &kIPHExtensionsZeroStatePromoVariantOptions);
-#endif
+
 BASE_FEATURE(kIPHFocusHelpBubbleScreenReaderPromoFeature,
              "IPH_FocusHelpBubbleScreenReaderPromo",
              base::FEATURE_ENABLED_BY_DEFAULT);

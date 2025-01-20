@@ -45,7 +45,9 @@
 #include "chrome/browser/ui/bookmarks/bookmark_drag_drop.h"
 #include "chrome/browser/ui/bookmarks/bookmark_ui_operations_helper.h"
 #include "chrome/browser/ui/bookmarks/bookmark_utils_desktop.h"
+#if !BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/ui/browser.h"
+#endif
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/navigator/browser_navigator.h"
 #include "chrome/browser/ui/select_file_policy/chrome_select_file_policy.h"
@@ -81,6 +83,14 @@
 #include "ui/base/webui/web_ui_util.h"
 #include "ui/shell_dialogs/selected_file_info.h"
 
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+#include "chrome/browser/android/tab_android.h"
+#include "chrome/browser/ui/navigator/browser_navigator_params.h"
+#include "content/public/browser/navigation_controller.h"
+#endif
+
 using bookmarks::BookmarkModel;
 using bookmarks::BookmarkNode;
 using bookmarks::BookmarkNodeData;
@@ -109,7 +119,9 @@ namespace {
 constexpr char kBookmarkNodesNotFoundFromIdListError[] =
     "Could not find bookmark nodes with given ids: [*]";
 
+#if !BUILDFLAG(IS_ANDROID)
 constexpr char kInvalidBrowserError[] = "Can't find a valid browser";
+#endif
 
 constexpr char kDropFailedNoWebContentsError[] =
     "Drop failed: sender WebContents is gone.";
@@ -418,13 +430,13 @@ ExtensionFunction::ResponseValue ClipboardBookmarkManagerFunction::CopyOrCut(
   }
 
   if (cut) {
-    BookmarkUIOperationsHelperNonMergedSurfaces::CutToClipboard(
-        model, nodes, bookmarks::metrics::BookmarkEditSource::kExtension,
-        GetProfile()->IsOffTheRecord());
+    // BookmarkUIOperationsHelperNonMergedSurfaces::CutToClipboard(
+    //     model, nodes, bookmarks::metrics::BookmarkEditSource::kExtension,
+    //     GetProfile()->IsOffTheRecord());
   } else {
-    BookmarkUIOperationsHelperNonMergedSurfaces::CopyToClipboard(
-        model, nodes, bookmarks::metrics::BookmarkEditSource::kExtension,
-        GetProfile()->IsOffTheRecord());
+    // BookmarkUIOperationsHelperNonMergedSurfaces::CopyToClipboard(
+    //     model, nodes, bookmarks::metrics::BookmarkEditSource::kExtension,
+    //     GetProfile()->IsOffTheRecord());
   }
   return NoArguments();
 }
@@ -474,14 +486,15 @@ BookmarkManagerPrivatePasteFunction::RunOnReady() {
   if (!CanBeModified(parent_node, &error)) {
     return RespondNow(Error(error));
   }
-  auto helper = std::make_unique<BookmarkUIOperationsHelperNonMergedSurfaces>(
-      model, parent_node);
-  auto* helper_ptr = helper.get();
-  helper_ptr->CanPasteFromClipboard(
-      base::BindOnce(&BookmarkManagerPrivatePasteFunction::OnCanPasteFinished,
-                     base::RetainedRef(this), std::move(helper),
-                     params->selected_id_list, params->parent_id));
-  return RespondLater();
+  // auto helper = std::make_unique<BookmarkUIOperationsHelperNonMergedSurfaces>(
+  //     model, parent_node);
+  // auto* helper_ptr = helper.get();
+  // helper_ptr->CanPasteFromClipboard(
+  //     base::BindOnce(&BookmarkManagerPrivatePasteFunction::OnCanPasteFinished,
+  //                    base::RetainedRef(this), std::move(helper),
+  //                    params->selected_id_list, params->parent_id));
+  // return RespondLater();
+  return RespondNow(NoArguments());
 }
 
 void BookmarkManagerPrivatePasteFunction::OnCanPasteFinished(
@@ -552,12 +565,13 @@ BookmarkManagerPrivateCanPasteFunction::RunOnReady() {
     return RespondNow(Error(bookmarks_errors::kNoParentError));
   }
 
-  auto helper = std::make_unique<BookmarkUIOperationsHelperNonMergedSurfaces>(
-      model, parent_node);
-  helper->CanPasteFromClipboard(base::BindOnce(
-      &BookmarkManagerPrivateCanPasteFunction::OnCanPasteFinished,
-      base::RetainedRef(this)));
-  return RespondLater();
+  // auto helper = std::make_unique<BookmarkUIOperationsHelperNonMergedSurfaces>(
+  //     model, parent_node);
+  // helper->CanPasteFromClipboard(base::BindOnce(
+  //     &BookmarkManagerPrivateCanPasteFunction::OnCanPasteFinished,
+  //     base::RetainedRef(this)));
+  // return RespondLater();
+  return RespondNow(WithArguments(true));
 }
 
 void BookmarkManagerPrivateCanPasteFunction::OnCanPasteFinished(
@@ -567,6 +581,9 @@ void BookmarkManagerPrivateCanPasteFunction::OnCanPasteFinished(
 
 ExtensionFunction::ResponseAction
 BookmarkManagerPrivateIsActiveTabInSplitFunction::RunOnReady() {
+#if BUILDFLAG(IS_ANDROID)
+const bool is_active_tab_in_split_view = false;
+#else
   WindowController* window_controller =
       ChromeExtensionFunctionDetails(this).GetCurrentWindowController();
   if (!window_controller) {
@@ -580,6 +597,7 @@ BookmarkManagerPrivateIsActiveTabInSplitFunction::RunOnReady() {
 
   const bool is_active_tab_in_split_view =
       browser->GetActiveTabInterface()->IsSplit();
+#endif
   return RespondNow(WithArguments(is_active_tab_in_split_view));
 }
 
@@ -612,7 +630,7 @@ BookmarkManagerPrivateStartDragFunction::RunOnReady() {
     return RespondNow(Error(bookmarks_errors::kEditBookmarksDisabled));
   }
 
-  content::WebContents* web_contents = GetSenderWebContents();
+  // content::WebContents* web_contents = GetSenderWebContents();
   std::optional<StartDrag::Params> params = StartDrag::Params::Create(args());
   if (!params) {
     return RespondNow(BadMessage());
@@ -626,14 +644,14 @@ BookmarkManagerPrivateStartDragFunction::RunOnReady() {
                             base::JoinString(params->id_list, ", ")));
   }
 
-  ui::mojom::DragEventSource source = ui::mojom::DragEventSource::kMouse;
-  if (params->is_from_touch) {
-    source = ui::mojom::DragEventSource::kTouch;
-  }
+  // ui::mojom::DragEventSource source = ui::mojom::DragEventSource::kMouse;
+  // if (params->is_from_touch) {
+  //   source = ui::mojom::DragEventSource::kTouch;
+  // }
 
-  chrome::DragBookmarks(
-      GetProfile(), {std::move(nodes), params->drag_node_index, web_contents,
-                     source, gfx::Point(params->x, params->y)});
+  // chrome::DragBookmarks(
+  //     GetProfile(), {std::move(nodes), params->drag_node_index, web_contents,
+  //                    source, gfx::Point(params->x, params->y)});
 
   return RespondNow(NoArguments());
 }
@@ -685,10 +703,10 @@ BookmarkManagerPrivateDropFunction::RunOnReady() {
   if (!drag_data) {
     return RespondNow(Error(kDropFailedNoDragDataError));
   }
-  const bool copy = false;
-  BookmarkUIOperationsHelperNonMergedSurfaces(model, drop_parent)
-      .DropBookmarks(GetProfile(), *drag_data, drop_index, copy,
-                     chrome::BookmarkReorderDropTarget::kBookmarkManagerAPI);
+  // const bool copy = false;
+  // BookmarkUIOperationsHelperNonMergedSurfaces(model, drop_parent)
+  //     .DropBookmarks(GetProfile(), *drag_data, drop_index, copy,
+  //                    chrome::BookmarkReorderDropTarget::kBookmarkManagerAPI);
 
   router->ClearBookmarkNodeData();
   return RespondNow(NoArguments());
@@ -808,7 +826,43 @@ BookmarkManagerPrivateOpenInNewTabFunction::RunOnReady() {
     return RespondNow(Error(maybe_url.error()));
   }
   GURL validated_url = std::move(maybe_url.value());
+#if BUILDFLAG(IS_ANDROID)
+  /*
+   * try something like this:
+  OpenURLParams params(handle->GetURL(), Referrer(),
+                       WindowOpenDisposition::NEW_FOREGROUND_TAB,
+                       ui::PageTransition::PAGE_TRANSITION_LINK,
+                       / *is_renderer_initiated=* /false);
 
+  params.initiator_origin =
+      handle->GetWebContents()->GetPrimaryMainFrame()->GetLastCommittedOrigin();
+
+  GetContentClient()->browser()->OpenURL(handle->GetStartingSiteInstance(),
+                                         params, base::DoNothing());
+   * from content/browser/renderer_host/isolated_web_app_throttle.cc
+   * */
+  for (TabModel* model : TabModelList::models()) {
+    if (!include_incognito_information() && model->IsOffTheRecord()) {
+      continue;
+    }
+    if (!model->IsActiveModel()) {
+      continue;
+    }
+    std::unique_ptr<content::WebContents> contents =
+        content::WebContents::Create(
+            /* Profile::FromBrowserContext(browser_context()) */
+            content::WebContents::CreateParams(GetProfile()));
+    content::NavigationController::LoadURLParams nav_params(validated_url);
+    nav_params.transition_type =
+        ui::PageTransitionFromInt(ui::PAGE_TRANSITION_TYPED);
+    nav_params.has_user_gesture = true;
+    contents->GetController().LoadURLWithParams(nav_params);
+    model->CreateTab(nullptr, std::move(contents), TabModel::kInvalidIndex,
+                         TabModel::TabLaunchType::FROM_RECENT_TABS_FOREGROUND,
+                         /*should_pin=*/false);
+    break;
+  }
+#else
   base::expected<BrowserWindowInterface*, std::string> maybe_browser =
       OpenTabHelper::FindOrCreateBrowser(validated_url, *this,
                                          /*create_if_needed=*/false);
@@ -844,6 +898,7 @@ BookmarkManagerPrivateOpenInNewTabFunction::RunOnReady() {
     }
   }
 
+#endif
   return RespondNow(NoArguments());
 }
 
@@ -928,6 +983,9 @@ BookmarkManagerPrivateOpenInNewWindowFunction::RunOnReady() {
 
 ExtensionFunction::ResponseAction
 BookmarkManagerPrivateOpenInNewTabGroupFunction::RunOnReady() {
+#if BUILDFLAG(IS_ANDROID)
+  // TODO
+#else
   std::optional<OpenInNewTabGroup::Params> params =
       OpenInNewTabGroup::Params::Create(args());
   if (!params) {
@@ -957,6 +1015,7 @@ BookmarkManagerPrivateOpenInNewTabGroupFunction::RunOnReady() {
                               WindowOpenDisposition::NEW_BACKGROUND_TAB,
                               bookmarks::OpenAllBookmarksContext::kInGroup);
 
+#endif
   return RespondNow(NoArguments());
 }
 
@@ -1044,8 +1103,8 @@ void BookmarkManagerPrivateImportFunction::FileSelected(
                                      user_data_importer::FAVORITES,
                                      new ProfileWriter(GetProfile()));
 
-  importer::LogImporterUseToMetrics("BookmarksAPI",
-                                    user_data_importer::TYPE_BOOKMARKS_FILE);
+  // importer::LogImporterUseToMetrics("BookmarksAPI",
+  //                                   user_data_importer::TYPE_BOOKMARKS_FILE);
   CleanupFileDialog();
 }
 

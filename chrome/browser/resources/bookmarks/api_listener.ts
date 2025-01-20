@@ -119,11 +119,13 @@ function onChildrenReordered(
  * loaded at once when the import is finished.
  */
 function onImportBegan() {
+  console.log("onImportBegan");
   chrome.bookmarks.onCreated.removeListener(onBookmarkCreated);
   document.dispatchEvent(new CustomEvent('import-began'));
 }
 
 function onImportEnded() {
+  console.log("onImportEnded");
   chrome.bookmarks.getTree().then((results) => {
     dispatch(refreshNodes(normalizeNodes(results[0]!)));
   });

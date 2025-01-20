@@ -21,6 +21,7 @@
 #include "components/sync/model/string_ordinal.h"
 #include "extensions/browser/extension_install_prompt_client.h"
 #include "extensions/browser/extension_system.h"
+#include "extensions/browser/manifest_check_level.h"
 #include "extensions/browser/install_flag.h"
 #include "extensions/browser/manifest_check_level.h"
 #include "extensions/browser/preload_check.h"

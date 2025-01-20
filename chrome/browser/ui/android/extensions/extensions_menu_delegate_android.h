@@ -44,7 +44,7 @@ class ExtensionsMenuDelegateAndroid : public ExtensionsMenuViewModel::Delegate,
   base::android::ScopedJavaLocalRef<jobject> GetMenuEntry(JNIEnv* env,
                                                           int action_index);
   std::vector<base::android::ScopedJavaLocalRef<jobject>> GetMenuEntries(
-      JNIEnv* env);
+      JNIEnv* env, bool incognito);
   base::android::ScopedJavaLocalRef<jobject> GetSiteSettings(JNIEnv* env);
   int GetOptionalSection(JNIEnv* env);
   std::vector<base::android::ScopedJavaLocalRef<jobject>> GetHostAccessRequests(

@@ -34,9 +34,9 @@
 #include "ui/base/window_open_disposition.h"
 #include "url/gurl.h"
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
 #include "components/tab_groups/tab_group_id.h"
-#endif
+// #endif
 
 class BrowserWindowInterface;
 class Profile;
@@ -71,10 +71,10 @@ struct OpenURLParams;
 
 // TODO(thestig): Split or ifdef out more fields that are not used on Android.
 struct NavigateParams {
-#if BUILDFLAG(IS_ANDROID)
+// #if BUILDFLAG(IS_ANDROID)
   explicit NavigateParams(
       std::unique_ptr<content::WebContents> contents_to_insert);
-#endif
+// #endif
 
   NavigateParams(BrowserWindowInterface* a_browser,
                  const GURL& a_url,
@@ -295,7 +295,7 @@ struct NavigateParams {
   //       window).
   raw_ptr<BrowserWindowInterface, AcrossTasksDanglingUntriaged> browser;
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
   // The group the caller would like the tab to be added to.
   std::optional<tab_groups::TabGroupId> group;
 
@@ -305,7 +305,7 @@ struct NavigateParams {
   // ping-pong issue. They will still be allowed to load locally like a normal
   // navigation.
   bool navigation_initiated_from_sync = false;
-#endif
+// #endif
 
   // The profile that is initiating the navigation. If there is a non-NULL
   // browser passed in via |browser|, it's profile will be used instead.

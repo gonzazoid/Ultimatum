@@ -10,7 +10,6 @@
 namespace extensions {
 
 namespace {
-
 void GetExtensionNameAndId(const Extension* extension,
                            std::string* name,
                            std::string* id) {
@@ -163,29 +162,30 @@ bool ManagementPolicy::ExtensionMayModifySettings(
     const Extension* source_extension,
     const Extension* extension,
     std::u16string* error) const {
-  for (const Provider* provider : providers_) {
-    if (!provider->ExtensionMayModifySettings(source_extension, extension,
-                                              error)) {
-      std::string id;
-      std::string name;
-      GetExtensionNameAndId(extension, &name, &id);
-      DVLOG(1) << "Modification of extension " << name << " (" << id << ")"
-               << " prohibited by " << provider->GetDebugPolicyProviderName();
-      return false;
-    }
-  }
+  // for (const Provider* provider : providers_) {
+  //   if (!provider->ExtensionMayModifySettings(source_extension, extension,
+  //                                             error)) {
+  //     std::string id;
+  //     std::string name;
+  //     GetExtensionNameAndId(extension, &name, &id);
+  //     DVLOG(1) << "Modification of extension " << name << " (" << id << ")"
+  //              << " prohibited by " << provider->GetDebugPolicyProviderName();
+  //     return false;
+  //   }
+  // }
   return true;
 }
 
 bool ManagementPolicy::MustRemainEnabled(const Extension* extension,
                                          std::u16string* error) const {
-  return ApplyToProviderList(
-      &Provider::MustRemainEnabled, "Disabling", false, extension, error);
+  return true; // ApplyToProviderList(
+  //     &Provider::MustRemainEnabled, "Disabling", false, extension, error);
 }
 
 bool ManagementPolicy::MustRemainDisabled(
     const Extension* extension,
     disable_reason::DisableReason* reason) const {
+  /*
   if (!UserMayLoad(extension)) {
     if (reason) {
       *reason = disable_reason::DISABLE_BLOCKED_BY_POLICY;
@@ -198,7 +198,7 @@ bool ManagementPolicy::MustRemainDisabled(
       return true;
     }
   }
-
+  */
   return false;
 }
 
@@ -238,18 +238,20 @@ bool ManagementPolicy::ApplyToProviderList(ProviderFunction function,
                                            bool normal_result,
                                            const Extension* extension,
                                            std::u16string* error) const {
-  for (const Provider* provider : providers_) {
-    bool result = (provider->*function)(extension, error);
-    if (result != normal_result) {
-      std::string id;
-      std::string name;
-      GetExtensionNameAndId(extension, &name, &id);
-      DVLOG(1) << debug_operation_name << " of extension " << name
-               << " (" << id << ")"
-               << " prohibited by " << provider->GetDebugPolicyProviderName();
-      return !normal_result;
-    }
-  }
+  // LOG(INFO) << "ManagementPolicy::ApplyToProviderList " << providers_.size();
+  // LOG(INFO) << "ManagementPolicy::ApplyToProviderList after get size";
+  // for (const Provider* provider : providers_) {
+  //   bool result = (provider->*function)(extension, error);
+  //   if (result != normal_result) {
+  //     std::string id;
+  //     std::string name;
+  //     GetExtensionNameAndId(extension, &name, &id);
+  //     DVLOG(1) << debug_operation_name << " of extension " << name
+  //              << " (" << id << ")"
+  //              << " prohibited by " << provider->GetDebugPolicyProviderName();
+  //     return !normal_result;
+  //   }
+  // }
   return normal_result;
 }
 

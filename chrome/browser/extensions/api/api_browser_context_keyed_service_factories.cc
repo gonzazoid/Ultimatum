@@ -27,14 +27,25 @@
 #include "extensions/buildflags/buildflags.h"
 #include "printing/buildflags/buildflags.h"
 
+#include "chrome/browser/extensions/api/bookmark_manager_private/bookmark_manager_private_api.h"
+#include "chrome/browser/extensions/api/settings_private/settings_private_event_router_factory.h"
+
+#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+#include "chrome/browser/extensions/api/developer_private/developer_private_api.h"
+#include "chrome/browser/extensions/commands/command_service.h"
+#include "extensions/browser/api/management/management_api.h"
+#include "chrome/browser/extensions/api/preference/preference_api.h"
+#include "chrome/browser/extensions/api/settings_overrides/settings_overrides_api.h"
+#include "chrome/browser/extensions/api/tabs/tabs_windows_api.h"
+#include "chrome/browser/extensions/api/tab_groups/tab_groups_event_router_factory.h"
+#endif
+#include "chrome/browser/extensions/api/autofill_private/autofill_private_event_router_factory.h"
 // The following are not supported in the experimental desktop-android build.
 // TODO(https://crbug.com/356905053): Enable these APIs on desktop-android.
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/extensions/api/activity_log_private/activity_log_private_api.h"
-#include "chrome/browser/extensions/api/autofill_private/autofill_private_event_router_factory.h"
-#include "chrome/browser/extensions/api/bookmark_manager_private/bookmark_manager_private_api.h"
 #include "chrome/browser/extensions/api/braille_display_private/braille_display_private_api.h"
 #include "chrome/browser/extensions/api/enterprise_reporting_private/enterprise_reporting_private_event_router.h"
 #include "chrome/browser/extensions/api/image_writer_private/operation_manager.h"
@@ -43,7 +54,6 @@
 #include "chrome/browser/extensions/api/passwords_private/passwords_private_delegate_factory.h"
 #include "chrome/browser/extensions/api/passwords_private/passwords_private_event_router_factory.h"
 #include "chrome/browser/extensions/api/settings_overrides/settings_overrides_api.h"
-#include "chrome/browser/extensions/api/settings_private/settings_private_event_router_factory.h"
 #include "chrome/browser/extensions/api/side_panel/side_panel_service.h"
 #include "components/safe_browsing/buildflags.h"
 #include "extensions/browser/api/networking_private/networking_private_delegate_factory.h"
@@ -87,6 +97,7 @@ void EnsureApiBrowserContextKeyedServiceFactoriesBuilt() {
   extensions::CookiesAPI::GetFactoryInstance();
   extensions::DeveloperPrivateAPI::GetFactoryInstance();
   extensions::ExtensionNotificationDisplayHelperFactory::GetInstance();
+  extensions::ManagementAPI::GetFactoryInstance();
   extensions::FontSettingsAPI::GetFactoryInstance();
   extensions::ExtensionGCMAppHandler::GetFactoryInstance();
   extensions::HistoryAPI::GetFactoryInstance();
@@ -106,13 +117,15 @@ void EnsureApiBrowserContextKeyedServiceFactoriesBuilt() {
   extensions::TabsWindowsAPI::GetFactoryInstance();
   extensions::WebNavigationAPI::GetFactoryInstance();
 
+  extensions::AutofillPrivateEventRouterFactory::GetInstance();
+  extensions::BookmarkManagerPrivateAPI::GetFactoryInstance();
+  extensions::SettingsPrivateEventRouterFactory::GetInstance();
+  extensions::SettingsOverridesAPI::GetFactoryInstance();
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   extensions::ActivityLogAPI::GetFactoryInstance();
-  extensions::AutofillPrivateEventRouterFactory::GetInstance();
 #if BUILDFLAG(IS_CHROMEOS)
   extensions::BluetoothLowEnergyAPI::GetFactoryInstance();
 #endif
-  extensions::BookmarkManagerPrivateAPI::GetFactoryInstance();
   extensions::BrailleDisplayPrivateAPI::GetFactoryInstance();
 #if BUILDFLAG(IS_CHROMEOS)
   extensions::DocumentScanAPIHandler::GetFactoryInstance();
@@ -137,8 +150,6 @@ void EnsureApiBrowserContextKeyedServiceFactoriesBuilt() {
 #if BUILDFLAG(SAFE_BROWSING_AVAILABLE)
   extensions::SafeBrowsingPrivateEventRouterFactory::GetInstance();
 #endif
-  extensions::SettingsPrivateEventRouterFactory::GetInstance();
-  extensions::SettingsOverridesAPI::GetFactoryInstance();
   extensions::SidePanelService::GetFactoryInstance();
 #if BUILDFLAG(IS_CHROMEOS)
   extensions::TerminalPrivateAPI::GetFactoryInstance();

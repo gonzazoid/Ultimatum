@@ -10,8 +10,11 @@
 #include "base/android/jni_string.h"
 #include "chrome/browser/extensions/extension_management.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/toolbar/toolbar_actions_model.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "ui/events/android/key_event_android.h"
+
+#include "chrome/browser/ui/layout_constants.h"
 
 // Must come after all headers that specialize FromJniType() / ToJniType().
 #include "chrome/browser/ui/android/extensions/jni_headers/ExtensionAction_jni.h"

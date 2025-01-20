@@ -301,7 +301,7 @@ ExternalInstallErrorDesktop::ExternalInstallErrorDesktop(
       alert_type_(alert_type),
       manager_(manager),
       error_service_(GlobalErrorServiceFactory::GetForProfile(
-          Profile::FromBrowserContext(browser_context_))) {
+         Profile::FromBrowserContext(browser_context_))) {
   prompt_ = std::make_unique<ExtensionInstallPrompt::Prompt>(
       ExtensionInstallPrompt::EXTERNAL_INSTALL_PROMPT);
 
