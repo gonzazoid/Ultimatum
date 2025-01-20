@@ -207,10 +207,10 @@ const PrefsUtil::TypedPrefMap& PrefsUtil::GetAllowlistedKeys() {
       settings_api::PrefType::kBoolean;
   (*s_allowlist)[bookmarks::prefs::kShowTabGroupsInBookmarkBar] =
       settings_api::PrefType::kBoolean;
-  (*s_allowlist)[::prefs::kSidePanelHorizontalAlignment] =
-      settings_api::PrefType::kBoolean;
-  (*s_allowlist)[::prefs::kTabSearchRightAligned] =
-      settings_api::PrefType::kBoolean;
+  // (*s_allowlist)[::prefs::kSidePanelHorizontalAlignment] =
+  //     settings_api::PrefType::kBoolean;
+  // (*s_allowlist)[::prefs::kTabSearchRightAligned] =
+  //     settings_api::PrefType::kBoolean;
   (*s_allowlist)[tab_groups::prefs::kAutoPinNewTabGroups] =
       settings_api::PrefType::kBoolean;
 
@@ -360,28 +360,28 @@ const PrefsUtil::TypedPrefMap& PrefsUtil::GetAllowlistedKeys() {
       settings_api::PrefType::kBoolean;
 
   // Security page
-  (*s_allowlist)[::kGeneratedPasswordLeakDetectionPref] =
-      settings_api::PrefType::kBoolean;
+  // (*s_allowlist)[::kGeneratedPasswordLeakDetectionPref] =
+  //     settings_api::PrefType::kBoolean;
   (*s_allowlist)[::prefs::kSafeBrowsingEnabled] =
       settings_api::PrefType::kBoolean;
   (*s_allowlist)[::prefs::kSafeBrowsingEnhanced] =
       settings_api::PrefType::kBoolean;
   (*s_allowlist)[::prefs::kSafeBrowsingScoutReportingEnabled] =
       settings_api::PrefType::kBoolean;
-  (*s_allowlist)[::safe_browsing::kGeneratedSafeBrowsingPref] =
-      settings_api::PrefType::kNumber;
+  // (*s_allowlist)[::safe_browsing::kGeneratedSafeBrowsingPref] =
+  //     settings_api::PrefType::kNumber;
   (*s_allowlist)[::prefs::kHttpsOnlyModeEnabled] =
       settings_api::PrefType::kBoolean;
-  (*s_allowlist)[::kGeneratedHttpsFirstModePref] =
-      settings_api::PrefType::kNumber;
+  // (*s_allowlist)[::kGeneratedHttpsFirstModePref] =
+  //     settings_api::PrefType::kNumber;
 
   // Tracking protection page
   (*s_allowlist)[::prefs::kCookieControlsMode] =
       settings_api::PrefType::kNumber;
-  (*s_allowlist)[::content_settings::kCookieDefaultContentSetting] =
-      settings_api::PrefType::kString;
-  (*s_allowlist)[::content_settings::kThirdPartyCookieBlockingSetting] =
-      settings_api::PrefType::kNumber;
+  // (*s_allowlist)[::content_settings::kCookieDefaultContentSetting] =
+  //     settings_api::PrefType::kString;
+  // (*s_allowlist)[::content_settings::kThirdPartyCookieBlockingSetting] =
+  //     settings_api::PrefType::kNumber;
   (*s_allowlist)[::prefs::kPrivacySandboxRelatedWebsiteSetsEnabled] =
       settings_api::PrefType::kBoolean;
   (*s_allowlist)[::prefs::kBlockAll3pcToggleEnabled] =
@@ -484,10 +484,10 @@ const PrefsUtil::TypedPrefMap& PrefsUtil::GetAllowlistedKeys() {
       settings_api::PrefType::kBoolean;
 
   // Site Settings prefs.
-  (*s_allowlist)[::content_settings::kGeneratedNotificationPref] =
-      settings_api::PrefType::kNumber;
-  (*s_allowlist)[::content_settings::kGeneratedGeolocationPref] =
-      settings_api::PrefType::kNumber;
+  // (*s_allowlist)[::content_settings::kGeneratedNotificationPref] =
+  //     settings_api::PrefType::kNumber;
+  // (*s_allowlist)[::content_settings::kGeneratedGeolocationPref] =
+  //     settings_api::PrefType::kNumber;
   (*s_allowlist)[::prefs::kPluginsAlwaysOpenPdfExternally] =
       settings_api::PrefType::kBoolean;
   (*s_allowlist)[::prefs::kProtectedContentDefault] =
@@ -575,8 +575,8 @@ const PrefsUtil::TypedPrefMap& PrefsUtil::GetAllowlistedKeys() {
   (*s_allowlist)[::prefs::kToastAlertLevel] = settings_api::PrefType::kNumber;
 #endif
 
-  (*s_allowlist)[::prefs::kCaretBrowsingEnabled] =
-      settings_api::PrefType::kBoolean;
+  // (*s_allowlist)[::prefs::kCaretBrowsingEnabled] =
+  //     settings_api::PrefType::kBoolean;
 
 #if BUILDFLAG(IS_CHROMEOS)
   // Accounts / Users / People.
@@ -1222,8 +1222,8 @@ const PrefsUtil::TypedPrefMap& PrefsUtil::GetAllowlistedKeys() {
 #endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
 
   // Media Remoting settings.
-  (*s_allowlist)[media_router::prefs::kMediaRouterMediaRemotingEnabled] =
-      settings_api::PrefType::kBoolean;
+  // (*s_allowlist)[media_router::prefs::kMediaRouterMediaRemotingEnabled] =
+  //     settings_api::PrefType::kBoolean;
 
   // Performance settings.
   (*s_allowlist)
@@ -1723,7 +1723,7 @@ PrefService* PrefsUtil::FindServiceForPref(const std::string& pref_name) {
   // See http://crbug.com/157147
 
   if (pref_name == proxy_config::prefs::kProxy) {
-#if BUILDFLAG(IS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
     return user_prefs;
 #else
     return g_browser_process->local_state();

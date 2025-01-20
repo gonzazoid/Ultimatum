@@ -19,7 +19,7 @@ SchemaRegistry::InternalObserver::~InternalObserver() = default;
 SchemaRegistry::SchemaRegistry() : schema_map_(new SchemaMap) {
   for (int i = 0; i < POLICY_DOMAIN_SIZE; ++i)
     domains_ready_[i] = false;
-#if !BUILDFLAG(ENABLE_EXTENSIONS)
+#if !BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   SetExtensionsDomainsReady();
 #endif
 }

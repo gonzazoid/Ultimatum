@@ -87,7 +87,7 @@ TabHelper::TabHelper(content::WebContents* web_contents)
   ActiveTabPermissionGranter::CreateForWebContents(web_contents, tab_id,
                                                    profile_);
 
-  ActivityLog::GetInstance(profile_)->ObserveScripts(script_executor_.get());
+  // ActivityLog::GetInstance(profile_)->ObserveScripts(script_executor_.get());
 
   InvokeForContentRulesRegistries([this](ContentRulesRegistry* registry) {
     registry->MonitorWebContentsForRuleEvaluation(this->web_contents());

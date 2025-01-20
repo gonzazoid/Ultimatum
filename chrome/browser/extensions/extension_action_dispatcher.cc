@@ -83,9 +83,9 @@ void ExtensionActionDispatcher::DispatchExtensionActionClicked(
 
   if (event_name) {
     base::Value::List args;
-    // The action APIs (browserAction, pageAction, action) are only available
-    // to privileged extension contexts. As such, we deterministically know that
-    // the right context type here is privileged.
+    The action APIs (browserAction, pageAction, action) are only available
+    to privileged extension contexts. As such, we deterministically know that
+    the right context type here is privileged.
     constexpr mojom::ContextType context_type =
         mojom::ContextType::kPrivilegedExtension;
     ExtensionTabUtil::ScrubTabBehavior scrub_tab_behavior =
@@ -102,7 +102,7 @@ void ExtensionActionDispatcher::DispatchExtensionActionClicked(
 #else
   // TODO(crbug.com/393179880): Once we can create JS tab objects via
   // ExtensionTabUtil::CreateTabObject() enable this method.
-  NOTIMPLEMENTED() << "Dispatching actions not yet supported on Android.";
+  // NOTIMPLEMENTED() << "Dispatching actions not yet supported on Android.";
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 }
 

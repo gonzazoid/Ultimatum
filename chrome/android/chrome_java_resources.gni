@@ -7,6 +7,14 @@
 # (for f in $(find java/res/*/ -type f); do echo '  "'$f'",'; done; echo ']') >> chrome_java_resources.gni
 # git cl format
 
+android_extensions_sources = [
+  "java/res/drawable-hdpi/ic_extensions.png",
+  "java/res/drawable-mdpi/ic_extensions.png",
+  "java/res/drawable-xhdpi/ic_extensions.png",
+  "java/res/drawable-xxhdpi/ic_extensions.png",
+  "java/res/drawable-xxxhdpi/ic_extensions.png",
+]
+
 chrome_java_resources = [
   "java/res/anim/accelerate_quart.xml",
   "java/res/anim/activity_close_exit.xml",
@@ -651,3 +659,5 @@ chrome_java_resources = [
   "java/res/xml/tracing_preferences.xml",
   "java/res/xml/unified_account_settings_preferences.xml",
 ]
+
+chrome_java_resources += android_extensions_sources

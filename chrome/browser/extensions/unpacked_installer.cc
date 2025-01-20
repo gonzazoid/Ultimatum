@@ -260,7 +260,7 @@ bool UnpackedInstaller::LoadExtension(mojom::ManifestLocation location,
   // Clean up the kMetadataFolder if necessary. This prevents spurious
   // warnings/errors and ensures we don't treat a user provided file as one by
   // the Extension system.
-  file_util::MaybeCleanupMetadataFolder(extension_path_);
+  // file_util::MaybeCleanupMetadataFolder(extension_path_);
 
   // Treat presence of illegal filenames as a hard error for unpacked
   // extensions. Don't do so for command line extensions since this breaks
@@ -306,7 +306,7 @@ bool UnpackedInstaller::IsLoadingUnpackedAllowed() const {
 }
 
 void UnpackedInstaller::GetAbsolutePath() {
-  extension_path_ = base::MakeAbsoluteFilePath(extension_path_);
+  // extension_path_ = base::MakeAbsoluteFilePath(extension_path_);
 
   // Set priority explicitly to avoid unwanted task priority inheritance.
   content::GetUIThreadTaskRunner({base::TaskPriority::USER_BLOCKING})

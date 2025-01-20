@@ -61,9 +61,10 @@
 #include "extensions/common/manifest_url_handlers.h"
 #include "ui/message_center/public/cpp/notifier_id.h"
 
+#include "chrome/browser/extensions/extension_sync_service.h"
+
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "chrome/browser/extensions/chrome_app_sorting.h"
-#include "chrome/browser/extensions/extension_sync_service.h"
 #else
 #include "chrome/browser/extensions/chrome_extension_registrar_delegate.h"
 #include "extensions/browser/null_app_sorting.h"
@@ -289,7 +290,7 @@ void ChromeExtensionSystem::Shared::Init(bool extensions_enabled) {
 
   extension_service_->Init();
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   // Make sure ExtensionSyncService is created.
   ExtensionSyncService::Get(profile_);
 #endif
@@ -350,7 +351,7 @@ QuotaService* ChromeExtensionSystem::Shared::quota_service() {
 }
 
 AppSorting* ChromeExtensionSystem::Shared::app_sorting() {
-  return app_sorting_.get();
+  return nullptr; // app_sorting_.get();
 }
 
 ContentVerifier* ChromeExtensionSystem::Shared::content_verifier() {

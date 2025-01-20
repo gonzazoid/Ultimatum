@@ -106,7 +106,7 @@ bool ChromeFileSystemDelegate::ShowSelectFileDialog(
     const ui::SelectFileDialog::FileTypeInfo* file_types,
     FileSystemDelegate::FilesSelectedCallback files_selected_callback,
     base::OnceClosure file_selection_canceled_callback) {
-  const Extension* extension = extension_function->extension();
+  // const Extension* extension = extension_function->extension();
   content::WebContents* web_contents =
       extension_function->GetSenderWebContents();
 
@@ -124,11 +124,11 @@ bool ChromeFileSystemDelegate::ShowSelectFileDialog(
   // TODO(michaelpg): As a workaround for https://crbug.com/736930, allow this
   // to work from a background page for non-platform apps (which, in practice,
   // is restricted to allowlisted extensions).
-  if (extension->is_platform_app() &&
-      !AppWindowRegistry::Get(extension_function->browser_context())
-           ->GetAppWindowForWebContents(web_contents)) {
-    return false;
-  }
+  // if (extension->is_platform_app() &&
+  //     !AppWindowRegistry::Get(extension_function->browser_context())
+  //          ->GetAppWindowForWebContents(web_contents)) {
+  //   return false;
+  // }
 
   // The file picker will hold a reference to the ExtensionFunction
   // instance, preventing its destruction (and subsequent sending of the
@@ -147,9 +147,9 @@ void ChromeFileSystemDelegate::ConfirmSensitiveDirectoryAccess(
     content::WebContents* web_contents,
     base::OnceClosure on_accept,
     base::OnceClosure on_cancel) {
-  CreateDirectoryAccessConfirmationDialog(has_write_permission, app_name,
-                                          web_contents, std::move(on_accept),
-                                          std::move(on_cancel));
+  // CreateDirectoryAccessConfirmationDialog(has_write_permission, app_name,
+  //                                         web_contents, std::move(on_accept),
+  //                                         std::move(on_cancel));
 }
 
 int ChromeFileSystemDelegate::GetDescriptionIdForAcceptType(
@@ -182,7 +182,7 @@ void ChromeFileSystemDelegate::GetVolumeList(
 
 SavedFilesServiceInterface* ChromeFileSystemDelegate::GetSavedFilesService(
     content::BrowserContext* browser_context) {
-  return apps::SavedFilesService::Get(browser_context);
+  return nullptr; // apps::SavedFilesService::Get(browser_context);
 }
 
 }  // namespace extensions

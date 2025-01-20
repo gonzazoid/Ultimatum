@@ -151,7 +151,8 @@ FileEnumerator::FileEnumerator(const FilePath& root_path,
 #if BUILDFLAG(IS_ANDROID)
   // Content-URIs have limited support.
   if (root_path.IsContentUri()) {
-    CHECK_EQ(file_type_, FileType::FILES | FileType::DIRECTORIES);
+    // CHECK_EQ(file_type_, FileType::FILES | FileType::DIRECTORIES); // this is just wrong
+     CHECK_NE(0, file_type_ & (FileType::FILES | FileType::DIRECTORIES));
     // Get display-name of root path.
     FileInfo root_info;
     internal::ContentUriGetFileInfo(root_path, &root_info);

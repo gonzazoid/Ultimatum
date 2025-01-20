@@ -54,9 +54,9 @@
 #include "ui/gfx/geometry/rect.h"
 #include "ui/shell_dialogs/select_file_dialog.h"
 
-#if BUILDFLAG(IS_ANDROID)
-#error This file should only be included on desktop.
-#endif
+// #if BUILDFLAG(IS_ANDROID)
+// #error This file should only be included on desktop.
+// #endif
 
 #if BUILDFLAG(IS_OZONE)
 #include "ui/ozone/public/platform_session_manager.h"

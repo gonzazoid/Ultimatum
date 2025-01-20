@@ -13,6 +13,16 @@
 #include "extensions/buildflags/buildflags.h"
 #include "printing/buildflags/buildflags.h"
 
+#include "chrome/browser/extensions/api/settings_private/settings_private_event_router_factory.h"
+#include "chrome/browser/extensions/api/web_navigation/web_navigation_api.h"
+
+#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+#include "chrome/browser/extensions/api/developer_private/developer_private_api.h"
+#include "chrome/browser/extensions/commands/command_service.h"
+#include "extensions/browser/api/management/management_api.h"
+#include "chrome/browser/extensions/api/preference/preference_api.h"
+#include "chrome/browser/extensions/api/tabs/tabs_windows_api.h"
+#endif
 // The following are not supported in the experimental desktop-android build.
 // TODO(https://crbug.com/356905053): Enable these APIs on desktop-android.
 #if BUILDFLAG(ENABLE_EXTENSIONS)
@@ -38,14 +48,12 @@
 #include "chrome/browser/extensions/api/reading_list/reading_list_event_router_factory.h"
 #include "chrome/browser/extensions/api/sessions/sessions_api.h"
 #include "chrome/browser/extensions/api/settings_overrides/settings_overrides_api.h"
-#include "chrome/browser/extensions/api/settings_private/settings_private_event_router_factory.h"
 #include "chrome/browser/extensions/api/side_panel/side_panel_service.h"
 #include "chrome/browser/extensions/api/tab_capture/tab_capture_registry.h"
 #include "chrome/browser/extensions/api/tab_groups/tab_groups_event_router_factory.h"
 #include "chrome/browser/extensions/api/tabs/tabs_windows_api.h"
 #include "chrome/browser/extensions/api/web_authentication_proxy/web_authentication_proxy_api.h"
 #include "chrome/browser/extensions/api/web_authentication_proxy/web_authentication_proxy_service.h"
-#include "chrome/browser/extensions/api/web_navigation/web_navigation_api.h"
 #include "chrome/browser/extensions/api/webrtc_audio_private/webrtc_audio_private_api.h"
 #include "components/safe_browsing/buildflags.h"
 #include "extensions/browser/api/bluetooth_low_energy/bluetooth_low_energy_api.h"
@@ -85,6 +93,15 @@ void EnsureApiBrowserContextKeyedServiceFactoriesBuilt() {
   extensions::DeveloperPrivateAPI::GetFactoryInstance();
   extensions::ExtensionNotificationDisplayHelperFactory::GetInstance();
   extensions::HistoryAPI::GetFactoryInstance();
+  extensions::PreferenceAPI::GetFactoryInstance();
+  extensions::WebNavigationAPI::GetFactoryInstance();
+
+#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+  extensions::ManagementAPI::GetFactoryInstance();
+  extensions::TabsWindowsAPI::GetFactoryInstance();
+#endif
+
+  extensions::SettingsPrivateEventRouterFactory::GetInstance();
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   extensions::ActivityLogAPI::GetFactoryInstance();
@@ -117,7 +134,6 @@ void EnsureApiBrowserContextKeyedServiceFactoriesBuilt() {
   extensions::PasswordsPrivateDelegateFactory::GetInstance();
   extensions::PasswordsPrivateEventRouterFactory::GetInstance();
   extensions::PermissionsEventRouterFactory::GetInstance();
-  extensions::PreferenceAPI::GetFactoryInstance();
 #if BUILDFLAG(IS_CHROMEOS) && BUILDFLAG(USE_CUPS)
   extensions::PrintingAPIHandler::GetFactoryInstance();
 #endif
@@ -127,12 +143,11 @@ void EnsureApiBrowserContextKeyedServiceFactoriesBuilt() {
   extensions::SafeBrowsingPrivateEventRouterFactory::GetInstance();
 #endif
   extensions::SessionsAPI::GetFactoryInstance();
-  extensions::SettingsPrivateEventRouterFactory::GetInstance();
   extensions::SettingsOverridesAPI::GetFactoryInstance();
   extensions::SidePanelService::GetFactoryInstance();
-  extensions::TabGroupsEventRouterFactory::GetInstance();
+  extensions::TabGroupsEventRouterFactory::GetInstance(); // ???
   extensions::TabCaptureRegistry::GetFactoryInstance();
-  extensions::TabsWindowsAPI::GetFactoryInstance();
+  extensions::TabsWindowsAPI::GetFactoryInstance(); // ???
 #if BUILDFLAG(IS_CHROMEOS)
   extensions::TerminalPrivateAPI::GetFactoryInstance();
   extensions::VerifyTrustApiService::GetFactoryInstance();
@@ -140,7 +155,6 @@ void EnsureApiBrowserContextKeyedServiceFactoriesBuilt() {
   extensions::WebAuthenticationProxyAPI::GetFactoryInstance();
   extensions::WebAuthenticationProxyRegistrarFactory::GetInstance();
   extensions::WebAuthenticationProxyServiceFactory::GetInstance();
-  extensions::WebNavigationAPI::GetFactoryInstance();
   extensions::WebrtcAudioPrivateEventService::GetFactoryInstance();
 #if BUILDFLAG(IS_CHROMEOS)
   extensions::WMDesksPrivateEventsAPI::GetFactoryInstance();

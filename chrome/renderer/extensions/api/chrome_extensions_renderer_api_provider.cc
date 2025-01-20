@@ -14,7 +14,7 @@
 #include "extensions/renderer/native_extension_bindings_system.h"
 #include "extensions/renderer/resource_bundle_source_map.h"
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "build/chromeos_buildflags.h"
 #include "chrome/renderer/extensions/api/app_hooks_delegate.h"
 #include "chrome/renderer/extensions/api/identity_hooks_delegate.h"
@@ -90,14 +90,16 @@ void ChromeExtensionsRendererAPIProvider::AddBindingsSystemHooks(
   bindings->RegisterHooksDelegate(
       "extension", std::make_unique<extensions::ExtensionHooksDelegate>(
                        bindings_system->messaging_service()));
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
+  bindings->RegisterHooksDelegate(
+      "tabs", std::make_unique<extensions::TabsHooksDelegate>(
+                  bindings_system->messaging_service()));
+#endif
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   bindings->RegisterHooksDelegate(
       "app", std::make_unique<extensions::AppHooksDelegate>(
                  dispatcher, bindings->request_handler(),
                  bindings_system->GetIPCMessageSender()));
-  bindings->RegisterHooksDelegate(
-      "tabs", std::make_unique<extensions::TabsHooksDelegate>(
-                  bindings_system->messaging_service()));
   bindings->RegisterHooksDelegate(
       "identity", std::make_unique<extensions::IdentityHooksDelegate>());
 #if BUILDFLAG(IS_CHROMEOS)

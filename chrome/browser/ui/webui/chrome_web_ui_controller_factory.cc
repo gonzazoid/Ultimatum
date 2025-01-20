@@ -130,7 +130,7 @@
 #include "chrome/browser/ui/webui/whats_new/whats_new_ui.h"
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || (BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS))
 #include "chrome/browser/extensions/extension_web_ui.h"
 #include "extensions/browser/extension_registry.h"  // nogncheck
 #include "extensions/browser/extension_system.h"    // nogncheck
@@ -287,7 +287,7 @@ void ChromeWebUIControllerFactory::GetFaviconForURL(
   // overrides. This changes urls in |kChromeUIScheme| to extension urls, and
   // allows to use ExtensionWebUI::GetFaviconForURL.
   GURL url(page_url);
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || (BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS))
   ExtensionWebUI::HandleChromeURLOverride(&url, profile);
 
   // All extensions get their favicon from the icons part of the manifest.

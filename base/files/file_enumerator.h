@@ -78,6 +78,7 @@ class BASE_EXPORT FileEnumerator {
 #if BUILDFLAG(IS_ANDROID)
     // Display names of subdirs.
     const std::vector<std::string>& subdirs() const { return subdirs_; }
+    FilePath content_uri() const { return content_uri_; }
 #endif
 
     int64_t GetSize() const;

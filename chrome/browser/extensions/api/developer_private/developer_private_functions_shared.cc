@@ -1420,16 +1420,16 @@ ExtensionFunction::ResponseAction DeveloperPrivateOpenDevToolsFunction::Run() {
     // Line/column numbers are reported in display-friendly 1-based numbers,
     // but are inspected in zero-based numbers.
     // Default to the first line/column.
-    DevToolsWindow::OpenDevToolsWindow(
-        web_contents,
-        DevToolsToggleAction::Reveal(
-            base::UTF8ToUTF16(*properties.url),
-            properties.line_number ? *properties.line_number - 1 : 0,
-            properties.column_number ? *properties.column_number - 1 : 0),
-        DevToolsOpenedByAction::kInspectLink);
+    // DevToolsWindow::OpenDevToolsWindow(
+    //     web_contents,
+    //     DevToolsToggleAction::Reveal(
+    //         base::UTF8ToUTF16(*properties.url),
+    //         properties.line_number ? *properties.line_number - 1 : 0,
+    //         properties.column_number ? *properties.column_number - 1 : 0),
+    //     DevToolsOpenedByAction::kInspectLink);
   } else {
-    DevToolsWindow::OpenDevToolsWindow(web_contents,
-                                       DevToolsOpenedByAction::kInspectLink);
+    // DevToolsWindow::OpenDevToolsWindow(web_contents,
+    //                                    DevToolsOpenedByAction::kInspectLink);
   }
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   // Once we open the inspector, we focus on the appropriate tab...

@@ -275,8 +275,8 @@ void ThemeService::Init() {
       FROM_HERE, base::BindOnce(&ThemeService::OnExtensionServiceReady,
                                 weak_ptr_factory_.GetWeakPtr()));
 #endif
-  theme_syncable_service_ =
-      std::make_unique<ThemeSyncableService>(profile_, this);
+  // theme_syncable_service_ =
+  //     std::make_unique<ThemeSyncableService>(profile_, this);
 
   // TODO(gayane): Temporary entry point for Chrome Colors. Remove once UI is
   // there.
@@ -323,7 +323,7 @@ void ThemeService::Shutdown() {
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   theme_observer_.reset();
 #endif
-  theme_syncable_service_.reset();
+  // theme_syncable_service_.reset();
 }
 
 CustomThemeSupplier* ThemeService::GetThemeSupplier() const {
@@ -489,9 +489,11 @@ void ThemeService::RemoveUnusedThemes() {
   }
 }
 
+#if !BUILDFLAG(IS_ANDROID)
 ThemeSyncableService* ThemeService::GetThemeSyncableService() const {
   return theme_syncable_service_.get();
 }
+#endif
 
 // static
 const ui::ThemeProvider& ThemeService::GetThemeProviderForProfile(
@@ -576,6 +578,7 @@ void ThemeService::SetBrowserColorScheme(
 ThemeService::BrowserColorScheme ThemeService::GetBrowserColorScheme() const {
   return static_cast<BrowserColorScheme>(
       profile_->GetPrefs()->GetInteger(prefs::kBrowserColorScheme));
+  // return {};
 }
 
 void ThemeService::SetUserColor(std::optional<SkColor> user_color) {
@@ -606,6 +609,7 @@ void ThemeService::SetBrowserColorVariant(
 ui::mojom::BrowserColorVariant ThemeService::GetBrowserColorVariant() const {
   return static_cast<ui::mojom::BrowserColorVariant>(
       profile_->GetPrefs()->GetInteger(prefs::kBrowserColorVariant));
+  // return {};
 }
 
 void ThemeService::SetUserColorAndBrowserColorVariant(
@@ -939,8 +943,8 @@ void ThemeService::OnThemeBuiltFromExtension(
 
   // Offer to revert to the old theme.
   if (can_revert_theme && !suppress_infobar && extension->is_theme()) {
-    ThemeInstalledInfoBarDelegate::CreateForLastActiveTab(
-        profile_, extension->name(), extension->id(), std::move(reinstaller));
+    // ThemeInstalledInfoBarDelegate::CreateForLastActiveTab(
+    //     profile_, extension->name(), extension->id(), std::move(reinstaller));
   }
 }
 
@@ -1012,5 +1016,5 @@ bool ThemeService::DisableExtension(const std::string& extension_id) {
 }
 
 void ThemeService::ResetThemeSyncableServiceForTest() {
-  theme_syncable_service_.reset();
+  // theme_syncable_service_.reset();
 }

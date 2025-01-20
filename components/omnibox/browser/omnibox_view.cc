@@ -42,7 +42,7 @@
 
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 // GN doesn't understand conditional includes, so we need nogncheck here.
 #include "extensions/common/constants.h"  // nogncheck
 #endif
@@ -327,7 +327,7 @@ void OmniboxView::UpdateTextStyle(
       display_text.substr(scheme.begin, scheme.len);
 
   const bool is_extension_url =
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
       base::EqualsASCII(url_scheme, extensions::kExtensionScheme);
 #else
       false;

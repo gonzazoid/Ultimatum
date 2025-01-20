@@ -14,7 +14,7 @@
 #include "extensions/buildflags/buildflags.h"
 #include "url/gurl.h"
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "extensions/common/constants.h"
 #endif
 
@@ -36,7 +36,7 @@ ChromeFaviconClient::ChromeFaviconClient(Profile* profile) : profile_(profile) {
 ChromeFaviconClient::~ChromeFaviconClient() = default;
 
 bool ChromeFaviconClient::IsNativeApplicationURL(const GURL& url) {
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   if (url.SchemeIs(extensions::kExtensionScheme))
     return true;
 #endif

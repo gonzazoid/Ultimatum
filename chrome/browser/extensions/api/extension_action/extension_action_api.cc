@@ -52,6 +52,21 @@ const char kNoTabError[] = "No tab with id: *.";
 
 bool g_report_error_for_invisible_icon = false;
 
+// const char kOpenPopupError[] =
+//     "Failed to show popup either because there is an existing popup or another "
+//     "error occurred.";
+// const char kFailedToOpenPopupGenericError[] = "Failed to open popup.";
+// constexpr char kNoActiveWindowFound[] =
+//     "Could not find an active browser window.";
+// constexpr char kNoActivePopup[] =
+//     "Extension does not have a popup on the active tab.";
+#if !BUILDFLAG(IS_ANDROID)
+constexpr char kOpenPopupInactiveWindow[] =
+    "Cannot show popup for an inactive window. To show the popup for this "
+    "window, first call `chrome.windows.update` with `focused` set to "
+    "true.";
+#endif
+
 // Returns true if the color values provided could be parsed into a color
 // object out param.
 bool ParseColor(const base::Value& color_value, SkColor& color) {
@@ -237,7 +252,8 @@ ExtensionActionSetIconFunction::RunExtensionAction() {
     // Obsolete argument: ignore it.
     return RespondNow(NoArguments());
   } else {
-    EXTENSION_FUNCTION_VALIDATE(false);
+    return RespondNow(NoArguments());
+    // EXTENSION_FUNCTION_VALIDATE(false);
   }
 
   NotifyChange();
@@ -395,8 +411,12 @@ ExtensionFunction::ResponseAction ActionGetUserSettingsFunction::Run() {
   DCHECK_EQ(ActionInfo::Type::kAction, action->action_type());
 
   const bool is_pinned =
+#if BUILDFLAG(IS_ANDROID)
+      false;
+#else
       ToolbarActionsModel::Get(Profile::FromBrowserContext(browser_context()))
           ->IsActionPinned(extension_id());
+#endif
 
   // TODO(crbug.com/360916928): Today, no action APIs are compiled.
   // Unfortunately, this means we miss out on the compiled types, which would be

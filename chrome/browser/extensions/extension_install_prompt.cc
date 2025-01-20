@@ -45,6 +45,13 @@
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/image/image_skia_rep.h"
 
+#if BUILDFLAG(IS_ANDROID)
+#include "ui/android/view_android.h"
+#include "ui/android/window_android.h"
+
+#include "chrome/browser/download/android/extension_install_dialog_bridge.h"
+#endif
+
 using extensions::Extension;
 using extensions::Manifest;
 using extensions::PermissionMessage;
@@ -426,7 +433,7 @@ ExtensionInstallPrompt::ExtensionInstallPrompt(content::WebContents* contents)
                    ? Profile::FromBrowserContext(contents->GetBrowserContext())
                    : nullptr),
       extension_(nullptr),
-      install_ui_(ExtensionInstallUI::Create(profile_)),
+      // install_ui_(ExtensionInstallUI::Create(profile_)),
       show_params_(new ExtensionInstallPromptShowParams(contents)),
       did_call_show_dialog_(false) {}
 
@@ -434,7 +441,7 @@ ExtensionInstallPrompt::ExtensionInstallPrompt(Profile* profile,
                                                gfx::NativeWindow native_window)
     : profile_(profile),
       extension_(nullptr),
-      install_ui_(ExtensionInstallUI::Create(profile_)),
+      // install_ui_(ExtensionInstallUI::Create(profile_)),
       show_params_(
           new ExtensionInstallPromptShowParams(profile, native_window)),
       did_call_show_dialog_(false) {}
@@ -496,12 +503,12 @@ void ExtensionInstallPrompt::OnInstallSuccess(
   extension_ = extension;
   SetIcon(icon);
 
-  install_ui_->OnInstallSuccess(extension, &icon_);
+  // install_ui_->OnInstallSuccess(extension, &icon_);
 }
 
 void ExtensionInstallPrompt::OnInstallFailure(
     const extensions::CrxInstallError& error) {
-  install_ui_->OnInstallFailure(error);
+  // install_ui_->OnInstallFailure(error);
 }
 
 std::unique_ptr<ExtensionInstallPrompt::Prompt>
@@ -552,6 +559,35 @@ void ExtensionInstallPrompt::LoadImageIfNeeded() {
                                          weak_factory_.GetWeakPtr()));
 }
 
+#if BUILDFLAG(IS_ANDROID)
+void ShowExtensionInstallAndroidDialogImpl(
+    std::unique_ptr<ExtensionInstallPromptShowParams> show_params,
+    ExtensionInstallPrompt::DoneCallback done_callback,
+    std::unique_ptr<ExtensionInstallPrompt::Prompt> prompt) {
+  // DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+
+  auto done = base::SplitOnceCallback(std::move(done_callback));
+  auto accepted = base::BindOnce(std::move(done.first),
+      ExtensionInstallPrompt::DoneCallbackPayload(ExtensionInstallPrompt::Result::ACCEPTED));
+  auto canceled = base::BindOnce(std::move(done.second),
+      ExtensionInstallPrompt::DoneCallbackPayload(ExtensionInstallPrompt::Result::USER_CANCELED));
+
+  // If the dialog has to be parented to WebContents, force activate the
+  // contents. See crbug.com/40059470.
+  content::WebContents* web_contents = show_params->GetParentWebContents();
+  if (web_contents) {
+    ui::ViewAndroid* view_android =
+        web_contents ? web_contents->GetNativeView() : nullptr;
+    ui::WindowAndroid* window_android =
+        view_android ? view_android->GetWindowAndroid() : nullptr;
+    std::unique_ptr<ExtensionInstallDialogBridge> extension_install_bridge =
+        std::make_unique<ExtensionInstallDialogBridge>();
+    extension_install_bridge->Show(std::move(prompt), window_android, std::move(accepted), std::move(canceled));
+    extension_install_bridge.release();
+  }
+}
+#endif
+
 void ExtensionInstallPrompt::ShowConfirmation() {
   std::unique_ptr<const PermissionSet> permissions_to_display;
 
@@ -585,8 +621,12 @@ void ExtensionInstallPrompt::ShowConfirmation() {
   if (AutoConfirmPromptIfEnabled())
     return;
 
+#if BUILDFLAG(IS_ANDROID)
+  show_dialog_callback_ = base::BindRepeating(&ShowExtensionInstallAndroidDialogImpl);
+#else
   if (show_dialog_callback_.is_null())
     show_dialog_callback_ = GetDefaultShowDialogCallback();
+#endif
   // TODO(crbug.com/40625151): Use OnceCallback and eliminate the need for
   // a callback on the stack.
   auto cb = std::move(done_callback_);

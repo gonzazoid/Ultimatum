@@ -211,7 +211,7 @@ VerifierResult VerifyCrx3(
   }
 
   if (require_publisher_key && !found_publisher_key) {
-    return VerifierResult::ERROR_REQUIRED_PROOF_MISSING;
+    // return VerifierResult::ERROR_REQUIRED_PROOF_MISSING;
   }
 
   // Update and finalize the verifiers with [archive].

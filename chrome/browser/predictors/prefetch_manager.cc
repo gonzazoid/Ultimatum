@@ -39,7 +39,7 @@
 #include "third_party/blink/public/common/navigation/preloading_headers.h"
 #include "third_party/blink/public/mojom/loader/resource_load_info.mojom-shared.h"
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
 #include "extensions/browser/api/web_request/web_request_api.h"
 #include "extensions/browser/browser_context_keyed_api_factory.h"
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
@@ -278,7 +278,7 @@ void PrefetchManager::PrefetchUrl(
       net::IsolationInfo::RequestType::kOther, top_frame_origin, frame_origin,
       net::SiteForCookies::FromUrl(info.url));
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   network::URLLoaderFactoryBuilder factory_builder;
   auto* web_request_api =
       extensions::BrowserContextKeyedAPIFactory<extensions::WebRequestAPI>::Get(

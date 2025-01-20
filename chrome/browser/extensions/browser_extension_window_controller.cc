@@ -24,6 +24,11 @@
 #include "extensions/common/manifest_handlers/options_page_info.h"
 #include "extensions/common/mojom/context_type.mojom.h"
 
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+#endif
+
 namespace extensions {
 
 namespace {
@@ -37,17 +42,23 @@ constexpr char kShowStateKey[] = "state";
 constexpr char kTopKey[] = "top";
 constexpr char kWidthKey[] = "width";
 constexpr char kWindowTypeKey[] = "type";
+#if !BUILDFLAG(IS_ANDROID)
 constexpr char kShowStateValueNormal[] = "normal";
 constexpr char kShowStateValueMinimized[] = "minimized";
 constexpr char kShowStateValueMaximized[] = "maximized";
 constexpr char kShowStateValueFullscreen[] = "fullscreen";
 constexpr char kShowStateValueLockedFullscreen[] = "locked-fullscreen";
+#endif
 
 }  // anonymous namespace
 
 BrowserExtensionWindowController::BrowserExtensionWindowController(
     Browser* browser)
+#if BUILDFLAG(IS_ANDROID)
+    : WindowController(nullptr, nullptr),
+#else
     : WindowController(browser->window(), browser->profile()),
+#endif
       browser_(browser) {
   WindowControllerList::GetInstance()->AddExtensionWindow(this);
 }
@@ -80,7 +91,9 @@ void BrowserExtensionWindowController::SetFullscreenMode(
     bool is_fullscreen,
     const GURL& extension_url) const {
   if (browser_->window()->IsFullscreen() != is_fullscreen) {
+#if !BUILDFLAG(IS_ANDROID)
     browser_->ToggleFullscreenModeWithExtension(extension_url);
+#endif
   }
 }
 
@@ -103,7 +116,16 @@ bool BrowserExtensionWindowController::IsDeleteScheduled() const {
 }
 
 content::WebContents* BrowserExtensionWindowController::GetActiveTab() const {
+#if BUILDFLAG(IS_ANDROID)
+  for (TabModel* model : TabModelList::models()) {
+    if (model->IsActiveModel()) {
+      return model->GetActiveWebContents();
+    }
+  }
+  return nullptr; // not reached???
+#else
   return browser_->tab_strip_model()->GetActiveWebContents();
+#endif
 }
 
 bool BrowserExtensionWindowController::HasEditableTabStrip() const {
@@ -111,12 +133,30 @@ bool BrowserExtensionWindowController::HasEditableTabStrip() const {
 }
 
 int BrowserExtensionWindowController::GetTabCount() const {
+#if BUILDFLAG(IS_ANDROID)
+  for (TabModel* model : TabModelList::models()) {
+    if (model->IsActiveModel()) {
+      return model->GetTabCount();
+    }
+  }
+  return 0;
+#else
   return browser_->tab_strip_model()->count();
+#endif
 }
 
 content::WebContents* BrowserExtensionWindowController::GetWebContentsAt(
     int i) const {
+#if BUILDFLAG(IS_ANDROID)
+  for (TabModel* model : TabModelList::models()) {
+    if (model->IsActiveModel()) {
+      return model->GetWebContentsAt(i);
+    }
+  }
+  return nullptr;
+#else
   return browser_->tab_strip_model()->GetWebContentsAt(i);
+#endif
 }
 
 bool BrowserExtensionWindowController::IsVisibleToTabsAPIForExtension(
@@ -139,6 +179,28 @@ BrowserExtensionWindowController::CreateWindowValueForExtension(
     mojom::ContextType context) const {
   base::Value::Dict dict;
 
+#if BUILDFLAG(IS_ANDROID)
+  dict.Set(kWindowTypeKey, api::tabs::ToString(api::tabs::WindowType::kNormal));
+  dict.Set(kFocusedKey, true);
+  dict.Set(kIncognitoKey, false); // TODO
+  dict.Set(kAlwaysOnTopKey, false);
+  dict.Set(kShowStateKey, "fullscreen");
+
+  content::WebContents* web_contents;
+  for (TabModel* model : TabModelList::models()) {
+    if (model->IsActiveModel()) {
+      web_contents = model->GetActiveWebContents();
+      dict.Set(extension_misc::kId, model->GetSessionId().id());
+      break;
+    }
+  }
+  gfx::Rect bounds = web_contents->GetViewBounds(); // GetContainerBounds();
+  gfx::Size size = web_contents->GetSize();
+  dict.Set(kLeftKey, bounds.x());
+  dict.Set(kTopKey, bounds.y());
+  dict.Set(kWidthKey, size.width()); // bounds.width());
+  dict.Set(kHeightKey, size.height()); // bounds.height());
+#else
   dict.Set(extension_misc::kId, browser_->session_id().id());
   dict.Set(kWindowTypeKey, GetWindowTypeText());
   ui::BaseWindow* window = browser_->window();
@@ -177,6 +239,7 @@ BrowserExtensionWindowController::CreateWindowValueForExtension(
   if (populate_tab_behavior == kPopulateTabs) {
     dict.Set(ExtensionTabUtil::kTabsKey, CreateTabList(extension, context));
   }
+#endif
 
   return dict;
 }
@@ -185,6 +248,9 @@ base::Value::List BrowserExtensionWindowController::CreateTabList(
     const Extension* extension,
     mojom::ContextType context) const {
   base::Value::List tab_list;
+#if BUILDFLAG(IS_ANDROID)
+  // TODO
+#else
   TabStripModel* tab_strip = browser_->tab_strip_model();
   for (int i = 0; i < tab_strip->count(); ++i) {
     content::WebContents* web_contents = tab_strip->GetWebContentsAt(i);
@@ -195,12 +261,16 @@ base::Value::List BrowserExtensionWindowController::CreateTabList(
                                                       extension, tab_strip, i)
                         .ToValue());
   }
+#endif
 
   return tab_list;
 }
 
 bool BrowserExtensionWindowController::OpenOptionsPage(
     const Extension* extension) {
+#if BUILDFLAG(IS_ANDROID)
+  return false;
+#else
   if (!OptionsPageInfo::HasOptionsPage(extension)) {
     return false;
   }
@@ -244,6 +314,7 @@ bool BrowserExtensionWindowController::OpenOptionsPage(
                                      ? NavigateParams::RESPECT
                                      : NavigateParams::IGNORE_AND_NAVIGATE);
   return true;
+#endif
 }
 
 bool BrowserExtensionWindowController::SupportsTabs() {

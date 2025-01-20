@@ -28,13 +28,13 @@
 #include "chrome/browser/extensions/shared_module_service_factory.h"
 #include "chrome/browser/extensions/updater/extension_updater_factory.h"
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "chrome/browser/extensions/account_extension_tracker.h"
 #include "chrome/browser/extensions/chrome_app_icon_service_factory.h"
 #include "chrome/browser/extensions/extension_error_controller_factory.h"
 #include "chrome/browser/extensions/extension_gcm_app_handler.h"
 #include "chrome/browser/extensions/extension_sync_service_factory.h"
-#include "chrome/browser/extensions/extension_web_ui_override_registrar.h"
+// #include "chrome/browser/extensions/extension_web_ui_override_registrar.h"
 #include "chrome/browser/extensions/manifest_v2_experiment_manager.h"
 #include "chrome/browser/extensions/menu_manager_factory.h"
 #include "chrome/browser/extensions/permissions/permissions_updater.h"
@@ -76,18 +76,19 @@ void EnsureChromeBrowserContextKeyedServiceFactoriesBuilt() {
   extensions::PermissionsUpdater::EnsureAssociatedFactoryBuilt();
   extensions::SharedModuleServiceFactory::GetInstance();
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   ExtensionSyncServiceFactory::GetInstance();
   extensions::AccountExtensionTracker::GetFactory();
-  extensions::ChromeAppIconServiceFactory::GetInstance();
+  // extensions::ChromeAppIconServiceFactory::GetInstance();
+  extensions::ExtensionActionDispatcher::GetFactoryInstance();
   extensions::ExtensionErrorControllerFactory::GetInstance();
-  extensions::ExtensionGCMAppHandler::GetFactoryInstance();
+  // extensions::ExtensionGCMAppHandler::GetFactoryInstance();
   extensions::ManifestV2ExperimentManager::GetFactory();
   extensions::MenuManagerFactory::GetInstance();
 #if BUILDFLAG(ENABLE_PLUGINS)
   extensions::PluginManager::GetFactoryInstance();
 #endif  // BUILDFLAG(ENABLE_PLUGINS)
-  extensions::WarningBadgeServiceFactory::GetInstance();
+  // extensions::WarningBadgeServiceFactory::GetInstance();
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 #if BUILDFLAG(IS_CHROMEOS)
   extensions::AssessmentAssistantTrackerFactory::GetInstance();

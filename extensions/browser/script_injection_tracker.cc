@@ -47,7 +47,6 @@ using perfetto::protos::pbzero::ChromeTrackEvent;
 namespace extensions {
 
 namespace {
-
 // Helper for lazily attaching ExtensionIdSet to a RenderProcessHost.  Used to
 // track the set of extensions which have injected a JS script into a
 // RenderProcessHost.

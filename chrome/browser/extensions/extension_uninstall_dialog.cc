@@ -37,17 +37,28 @@
 #include "ui/views/native_window_tracker.h"
 #include "url/origin.h"
 
+#if BUILDFLAG(IS_ANDROID)
+#include "ui/android/view_android.h"
+#include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+#include "content/public/browser/web_contents.h"
+#include "chrome/browser/download/android/extension_uninstall_dialog_bridge.h"
+#endif
+
 namespace extensions {
 
 namespace {
 
+#if !BUILDFLAG(IS_ANDROID)
 constexpr int kIconSize = 64;
+#endif
 
 constexpr char16_t kExtensionRemovedError[] =
     u"Extension was removed before dialog closed.";
 
 constexpr char kReferrerId[] = "chrome-remove-extension-dialog";
 
+#if !BUILDFLAG(IS_ANDROID)
 float GetScaleFactor(gfx::NativeWindow window) {
   const display::Screen* screen = display::Screen::GetScreen();
   if (!screen) {
@@ -58,6 +69,7 @@ float GetScaleFactor(gfx::NativeWindow window) {
   }
   return screen->GetPrimaryDisplay().device_scale_factor();
 }
+#endif
 
 base::RepeatingClosure* g_on_will_show_callback = nullptr;
 }  // namespace
@@ -73,8 +85,8 @@ ExtensionUninstallDialog::ExtensionUninstallDialog(
     ExtensionUninstallDialog::Delegate* delegate)
     : profile_(profile), parent_(parent), delegate_(delegate) {
   DCHECK(delegate_);
-  if (parent)
-    parent_window_tracker_ = views::NativeWindowTracker::Create(parent);
+  // if (parent)
+  //   parent_window_tracker_ = views::NativeWindowTracker::Create(parent);
   profile_observation_.Observe(profile_.get());
 }
 
@@ -89,12 +101,45 @@ void ExtensionUninstallDialog::ConfirmUninstallByExtension(
   ConfirmUninstall(extension, reason, source);
 }
 
+#if BUILDFLAG(IS_ANDROID)
+void ShowExtensionUninstallAndroidDialogImpl(
+    ExtensionUninstallDialog::DoneCallback done_callback,
+    const Extension* extension) {
+  // DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+
+  auto done = base::SplitOnceCallback(std::move(done_callback));
+  auto accepted = base::BindOnce(std::move(done.first),
+      ExtensionUninstallDialog::CloseAction::CLOSE_ACTION_UNINSTALL);
+  auto canceled = base::BindOnce(std::move(done.second),
+      ExtensionUninstallDialog::CloseAction::CLOSE_ACTION_CANCELED);
+
+  content::WebContents* web_contents;
+
+  for (TabModel* model : TabModelList::models()) {
+    if (model->IsActiveModel()) {
+      web_contents = model->GetActiveWebContents();
+      break;
+    }
+  }
+
+  if (web_contents) {
+    ui::ViewAndroid* view_android =
+        web_contents ? web_contents->GetNativeView() : nullptr;
+    ui::WindowAndroid* window_android =
+        view_android ? view_android->GetWindowAndroid() : nullptr;
+    std::unique_ptr<ExtensionUninstallDialogBridge> extension_uninstall_bridge =
+        std::make_unique<ExtensionUninstallDialogBridge>();
+    extension_uninstall_bridge->Show(extension, window_android, std::move(accepted), std::move(canceled));
+    extension_uninstall_bridge.release();
+  }
+}
+#endif
+
 void ExtensionUninstallDialog::ConfirmUninstall(
     const scoped_refptr<const Extension>& extension,
     UninstallReason reason,
     UninstallSource source) {
   DCHECK(thread_checker_.CalledOnValidThread());
-
   UMA_HISTOGRAM_ENUMERATION("Extensions.UninstallSource", source,
                             NUM_UNINSTALL_SOURCES);
 
@@ -119,9 +164,16 @@ void ExtensionUninstallDialog::ConfirmUninstall(
 
   // Dialog will be shown once icon is loaded.
   DCHECK(!dialog_shown_);
+#if BUILDFLAG(IS_ANDROID)
+  dialog_shown_ = true;
+  ExtensionUninstallDialog::DoneCallback done_callback =
+    base::BindOnce(&ExtensionUninstallDialog::OnDialogClosed, base::Unretained(this));
+  ShowExtensionUninstallAndroidDialogImpl(std::move(done_callback), extension.get());
+#else
   icon_ = ChromeAppIconService::Get(profile_)->CreateIcon(this, extension->id(),
                                                           kIconSize);
   icon_->image_skia().GetRepresentation(GetScaleFactor(parent_));
+#endif
 }
 
 void ExtensionUninstallDialog::OnIconUpdated(ChromeAppIcon* icon) {
@@ -245,7 +297,7 @@ void ExtensionUninstallDialog::HandleReportAbuse() {
       extension_urls::GetWebstoreReportAbuseUrl(extension_->id(), kReferrerId),
       ui::PAGE_TRANSITION_LINK);
   params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
-  Navigate(&params);
+  // Navigate(&params);
 }
 
 }  // namespace extensions

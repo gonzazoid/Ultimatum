@@ -139,8 +139,8 @@ bool ChromeExtensionsAPIClient::ShouldHideBrowserNetworkRequest(
       request.web_request_type != WebRequestResourceType::MAIN_FRAME;
 
   // Hide requests made by the Devtools frontend.
-  bool is_sensitive_request =
-      is_browser_request && DevToolsUI::IsFrontendResourceURL(request.url);
+  bool is_sensitive_request = false;
+  //     is_browser_request && DevToolsUI::IsFrontendResourceURL(request.url);
 
   // Hide requests made by the browser on behalf of the NTP.
   is_sensitive_request |=
@@ -268,21 +268,21 @@ void ChromeExtensionsAPIClient::ClearActionCount(
 
   action->ClearDNRActionCountForAllTabs();
 
-  std::vector<content::WebContents*> contents_to_notify =
-      ExtensionTabUtil::GetAllActiveWebContentsForContext(
-          context, /*include_incognito=*/true);
+  // std::vector<content::WebContents*> contents_to_notify =
+  //     ExtensionTabUtil::GetAllActiveWebContentsForContext(
+  //         context, /*include_incognito=*/true);
 
-  for (auto* active_contents : contents_to_notify) {
-    ExtensionActionDispatcher::Get(context)->NotifyChange(
-        action, active_contents, context);
-  }
+  // for (auto* active_contents : contents_to_notify) {
+  //   ExtensionActionDispatcher::Get(context)->NotifyChange(
+  //       action, active_contents, context);
+  // }
 }
 
 #if BUILDFLAG(ENABLE_GUEST_VIEW)
-std::unique_ptr<AppViewGuestDelegate>
-ChromeExtensionsAPIClient::CreateAppViewGuestDelegate() const {
-  return std::make_unique<ChromeAppViewGuestDelegate>();
-}
+// std::unique_ptr<AppViewGuestDelegate>
+// ChromeExtensionsAPIClient::CreateAppViewGuestDelegate() const {
+//   return std::make_unique<ChromeAppViewGuestDelegate>();
+// }
 
 std::unique_ptr<ExtensionOptionsGuestDelegate>
 ChromeExtensionsAPIClient::CreateExtensionOptionsGuestDelegate(
@@ -292,7 +292,7 @@ ChromeExtensionsAPIClient::CreateExtensionOptionsGuestDelegate(
 
 std::unique_ptr<guest_view::GuestViewManagerDelegate>
 ChromeExtensionsAPIClient::CreateGuestViewManagerDelegate() const {
-  return std::make_unique<ChromeGuestViewManagerDelegate>();
+  return nullptr; // std::make_unique<ChromeGuestViewManagerDelegate>();
 }
 
 std::unique_ptr<MimeHandlerViewGuestDelegate>
@@ -395,12 +395,13 @@ FileSystemDelegate* ChromeExtensionsAPIClient::GetFileSystemDelegate() {
 
 FeedbackPrivateDelegate*
 ChromeExtensionsAPIClient::GetFeedbackPrivateDelegate() {
-  if (!feedback_private_delegate_) {
-    feedback_private_delegate_ =
-        std::make_unique<ChromeFeedbackPrivateDelegate>();
-  }
-  return feedback_private_delegate_.get();
+  // if (!feedback_private_delegate_) {
+  //   feedback_private_delegate_ =
+  //       std::make_unique<ChromeFeedbackPrivateDelegate>();
+  // }
+  return nullptr; // feedback_private_delegate_.get();
 }
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 AutomationInternalApiDelegate*
 ChromeExtensionsAPIClient::GetAutomationInternalApiDelegate() {
@@ -410,7 +411,6 @@ ChromeExtensionsAPIClient::GetAutomationInternalApiDelegate() {
   }
   return extensions_automation_api_delegate_.get();
 }
-#endif  // !BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_CHROMEOS)
 MediaPerceptionAPIDelegate*

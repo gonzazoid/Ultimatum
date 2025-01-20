@@ -57,8 +57,8 @@ cr-tooltip-icon {
 }
 
 #icon {
-  height: 36px;
-  width: 36px;
+  height: 12rem;
+  width: 12rem;
 }
 
 #card {
@@ -73,7 +73,7 @@ cr-tooltip-icon {
 }
 
 #card.dev-mode {
-  height: 208px;
+  /* height: 208px; */
 }
 
 #main {
@@ -89,6 +89,7 @@ cr-tooltip-icon {
   flex-direction: column;
   margin-inline-start: 24px;
   overflow: hidden;
+  line-height: normal;
 }
 
 #name-and-version {
@@ -98,10 +99,15 @@ cr-tooltip-icon {
 
 #name {
   margin-inline-end: 8px;
+  font-size: 2rem;
+  font-weight: 500;
+  height: 3rem;
+  line-height: 2rem;
 }
 
 #description {
   flex: 1;
+  font-size: 2rem;
 }
 
 #warnings {
@@ -153,6 +159,7 @@ cr-tooltip-icon {
 
 #button-strip cr-button {
   margin-inline-start: 8px;
+  margin-bottom: 15px;
 }
 
 #source-indicator {
@@ -181,6 +188,13 @@ cr-tooltip-icon {
 
 cr-tooltip {
   --paper-tooltip-min-width: 0;
+}
+
+#detailsButton,
+#removeButton {
+  height: 3rem;
+  font-size: 2rem;
+  font-weight: 400;
 }
 
 #errors-button {

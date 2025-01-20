@@ -20,9 +20,9 @@
 #include "base/observer_list.h"
 #include "build/build_config.h"
 
-#if BUILDFLAG(IS_ANDROID)
-#error This file should only be included on desktop.
-#endif
+// #if BUILDFLAG(IS_ANDROID)
+// #error This file should only be included on desktop.
+// #endif
 
 enum class BrowserClosingStatus;
 

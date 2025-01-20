@@ -33,22 +33,18 @@ export function getHtml(this: ExtensionsSidebarElement) {
     <cr-ripple></cr-ripple>
   </a>
 </cr-menu-selector>
-<div class="separator" ?hidden="${!this.inDevMode}"></div>
-      ${this.inDevMode ? html`
-        <div class="cr-nav-menu-item" id="moreExtensions">
-          <span id="promo-message-text" class="cr-secondary-text"
-            .innerHTML="${this.computeDocsPromoText_()}">
-          </span>
-        </div>
-        `: ''}
 <div class="separator"></div>
 <div class="cr-nav-menu-item" id="moreExtensions">
   <cr-icon id="web-store-icon" icon="extensions-icons:web_store">
   </cr-icon>
-  <span id="discover-more-text" class="cr-secondary-text"
-      @click="${this.onMoreExtensionsClick_}"
-      .innerHTML="${this.computeDiscoverMoreText_()}">
-  </span>
+  <a href="https://chromewebstore.google.com/">Chrome Web Store</a>
+  <cr-ripple></cr-ripple>
+</div>
+<div class="separator"></div>
+<div class="cr-nav-menu-item" id="moreExtensions">
+  <cr-icon id="web-store-icon" icon="extensions-icons:web_store">
+  </cr-icon>
+  <a href="https://addons.opera.com/">Opera add-ons</a>
   <cr-ripple></cr-ripple>
 </div>
 <!--_html_template_end_-->`;

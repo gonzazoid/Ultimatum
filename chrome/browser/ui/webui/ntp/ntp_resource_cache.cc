@@ -333,13 +333,13 @@ void NTPResourceCache::CreateNewTabIncognitoHTML(
     replacements["cookieControlsHeader"] = "cookie-controls-title";
     replacements["cookieControlsTitle"] =
         l10n_util::GetStringUTF8(IDS_NEW_TAB_OTR_THIRD_PARTY_BLOCKED_COOKIE);
-    localized_strings.Set(
-        "cookieControlsDescription",
-        l10n_util::GetStringFUTF16(
-            IDS_NEW_TAB_OTR_THIRD_PARTY_BLOCKED_COOKIE_SUBLABEL,
-            chrome::kUserBypassHelpCenterURL,
-            l10n_util::GetStringUTF16(
-                IDS_NEW_TAB_OPENS_HC_ARTICLE_IN_NEW_TAB)));
+    // localized_strings.Set(
+    //     "cookieControlsDescription",
+    //     l10n_util::GetStringFUTF16(
+    //         IDS_NEW_TAB_OTR_THIRD_PARTY_BLOCKED_COOKIE_SUBLABEL,
+    //         chrome::kUserBypassHelpCenterURL,
+    //         l10n_util::GetStringUTF16(
+    //             IDS_NEW_TAB_OPENS_HC_ARTICLE_IN_NEW_TAB)));
   } else {
     replacements["cookieControlsTitle"] =
         l10n_util::GetStringUTF8(IDS_NEW_TAB_OTR_THIRD_PARTY_COOKIE);
@@ -383,8 +383,8 @@ void NTPResourceCache::CreateNewTabGuestHTML() {
   localized_strings.Set("title", l10n_util::GetStringUTF16(IDS_NEW_TAB_TITLE));
   const char* guest_tab_link = kLearnMoreGuestSessionUrl;
   int guest_tab_idr = IDR_GUEST_TAB_HTML;
-  int guest_tab_description_ids = IDS_NEW_TAB_GUEST_SESSION_DESCRIPTION;
-  int guest_tab_heading_ids = IDS_NEW_TAB_GUEST_SESSION_HEADING;
+  // int guest_tab_description_ids = IDS_NEW_TAB_GUEST_SESSION_DESCRIPTION;
+  // int guest_tab_heading_ids = IDS_NEW_TAB_GUEST_SESSION_HEADING;
   int guest_tab_link_ids = IDS_LEARN_MORE;
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -423,17 +423,17 @@ void NTPResourceCache::CreateNewTabGuestHTML() {
   }
 #endif
 
-  localized_strings.Set("guestTabDescription",
-                        l10n_util::GetStringUTF16(guest_tab_description_ids));
-  localized_strings.Set("guestTabHeading",
-                        l10n_util::GetStringUTF16(guest_tab_heading_ids));
+  // localized_strings.Set("guestTabDescription",
+  //                       l10n_util::GetStringUTF16(guest_tab_description_ids));
+  // localized_strings.Set("guestTabHeading",
+  //                       l10n_util::GetStringUTF16(guest_tab_heading_ids));
   localized_strings.Set("learnMore",
                         l10n_util::GetStringUTF16(guest_tab_link_ids));
   localized_strings.Set("learnMoreLink", guest_tab_link);
-  localized_strings.Set(
-      "learnMoreA11yLabel",
-      l10n_util::GetStringUTF16(
-          IDS_NEW_TAB_GUEST_SESSION_LEARN_MORE_ACCESSIBILITY_TEXT));
+  // localized_strings.Set(
+  //     "learnMoreA11yLabel",
+  //     l10n_util::GetStringUTF16(
+  //         IDS_NEW_TAB_GUEST_SESSION_LEARN_MORE_ACCESSIBILITY_TEXT));
 
   const std::string& app_locale = g_browser_process->GetApplicationLocale();
   webui::SetLoadTimeDataDefaults(app_locale, &localized_strings);
@@ -451,105 +451,105 @@ void NTPResourceCache::CreateNewTabGuestHTML() {
 
 void NTPResourceCache::CreateNewTabIncognitoCSS(
     const content::WebContents::Getter& wc_getter) {
-  auto* web_contents = wc_getter.Run();
-  const ui::NativeTheme* native_theme =
-      webui::GetNativeThemeDeprecated(web_contents);
-  DCHECK(native_theme);
+  // auto* web_contents = wc_getter.Run();
+  // const ui::NativeTheme* native_theme =
+  //     webui::GetNativeThemeDeprecated(web_contents);
+  // DCHECK(native_theme);
 
-  const ui::ThemeProvider& tp = ThemeService::GetThemeProviderForProfile(
-      profile_->GetPrimaryOTRProfile(/*create_if_needed=*/true));
+  // const ui::ThemeProvider& tp = ThemeService::GetThemeProviderForProfile(
+  //     profile_->GetPrimaryOTRProfile(/*create_if_needed=*/true));
 
   // Generate the replacements.
-  ui::TemplateReplacements substitutions;
+  // ui::TemplateReplacements substitutions;
 
   // Cache-buster for background.
-  substitutions["themeId"] =
-      profile_->GetPrefs()->GetString(prefs::kCurrentThemeID);
+  // substitutions["themeId"] =
+  //     profile_->GetPrefs()->GetString(prefs::kCurrentThemeID);
 
   // Colors.
-  const ui::ColorProvider& cp = web_contents->GetColorProvider();
-  substitutions["colorBackground"] = color_utils::SkColorToRgbaString(
-      GetThemeColor(native_theme, cp, kColorNewTabPageBackground));
-  substitutions["backgroundPosition"] = GetNewTabBackgroundPositionCSS(tp);
-  substitutions["backgroundTiling"] = GetNewTabBackgroundTilingCSS(tp);
+  // const ui::ColorProvider& cp = web_contents->GetColorProvider();
+  // substitutions["colorBackground"] = color_utils::SkColorToRgbaString(
+  //     GetThemeColor(native_theme, cp, kColorNewTabPageBackground));
+  // substitutions["backgroundPosition"] = GetNewTabBackgroundPositionCSS(tp);
+  // substitutions["backgroundTiling"] = GetNewTabBackgroundTilingCSS(tp);
 
   // Get our template.
-  static const base::NoDestructor<scoped_refptr<base::RefCountedMemory>>
-      new_tab_theme_css(
-          ui::ResourceBundle::GetSharedInstance().LoadDataResourceBytes(
-              IDR_INCOGNITO_TAB_THEME_CSS));
-  CHECK(*new_tab_theme_css);
-  new_tab_incognito_css_ = base::MakeRefCounted<base::RefCountedString>(
-      ReplaceTemplateExpressions(*new_tab_theme_css, substitutions));
+  // static const base::NoDestructor<scoped_refptr<base::RefCountedMemory>>
+  //     new_tab_theme_css(
+  //         ui::ResourceBundle::GetSharedInstance().LoadDataResourceBytes(
+  //             IDR_INCOGNITO_TAB_THEME_CSS));
+  // CHECK(*new_tab_theme_css);
+  // new_tab_incognito_css_ = base::MakeRefCounted<base::RefCountedString>(
+  //     ReplaceTemplateExpressions(*new_tab_theme_css, substitutions));
 }
 
 void NTPResourceCache::CreateNewTabCSS(
     const content::WebContents::Getter& wc_getter) {
-  auto* web_contents = wc_getter.Run();
-  const ui::NativeTheme* native_theme =
-      webui::GetNativeThemeDeprecated(web_contents);
-  DCHECK(native_theme);
+  // auto* web_contents = wc_getter.Run();
+  // const ui::NativeTheme* native_theme =
+  //     webui::GetNativeThemeDeprecated(web_contents);
+  // DCHECK(native_theme);
 
-  const ui::ThemeProvider& tp =
-      ThemeService::GetThemeProviderForProfile(profile_);
-  const ui::ColorProvider& cp = web_contents->GetColorProvider();
+  // const ui::ThemeProvider& tp =
+  //     ThemeService::GetThemeProviderForProfile(profile_);
+  // const ui::ColorProvider& cp = web_contents->GetColorProvider();
 
   // Get our theme colors.
-  SkColor color_background =
-      GetThemeColor(native_theme, cp, kColorNewTabPageBackground);
-  SkColor color_text = GetThemeColor(native_theme, cp, kColorNewTabPageText);
-  SkColor color_text_light =
-      GetThemeColor(native_theme, cp, kColorNewTabPageTextLight);
+  // SkColor color_background =
+  //     GetThemeColor(native_theme, cp, kColorNewTabPageBackground);
+  // SkColor color_text = GetThemeColor(native_theme, cp, kColorNewTabPageText);
+  // SkColor color_text_light =
+  //     GetThemeColor(native_theme, cp, kColorNewTabPageTextLight);
 
-  SkColor color_section_border =
-      GetThemeColor(native_theme, cp, kColorNewTabPageSectionBorder);
+  // SkColor color_section_border =
+  //     GetThemeColor(native_theme, cp, kColorNewTabPageSectionBorder);
 
   // Generate the replacements.
-  ui::TemplateReplacements substitutions;
+  // ui::TemplateReplacements substitutions;
 
   // Cache-buster for background.
-  substitutions["themeId"] =
-      profile_->GetPrefs()->GetString(prefs::kCurrentThemeID);
+  // substitutions["themeId"] =
+  //     profile_->GetPrefs()->GetString(prefs::kCurrentThemeID);
 
   // Colors.
-  substitutions["colorBackground"] =
-      color_utils::SkColorToRgbaString(color_background);
-  substitutions["colorLink"] = color_utils::SkColorToRgbString(
-      GetThemeColor(native_theme, cp, kColorNewTabPageLink));
-  substitutions["backgroundPosition"] = GetNewTabBackgroundPositionCSS(tp);
-  substitutions["backgroundTiling"] = GetNewTabBackgroundTilingCSS(tp);
-  substitutions["colorTextRgba"] = color_utils::SkColorToRgbaString(color_text);
-  substitutions["colorTextLight"] =
-      color_utils::SkColorToRgbaString(color_text_light);
-  substitutions["colorSectionBorder"] =
-      color_utils::SkColorToRgbString(color_section_border);
-  substitutions["colorText"] = color_utils::SkColorToRgbString(color_text);
+  // substitutions["colorBackground"] =
+  //     color_utils::SkColorToRgbaString(color_background);
+  // substitutions["colorLink"] = color_utils::SkColorToRgbString(
+  //     GetThemeColor(native_theme, cp, kColorNewTabPageLink));
+  // substitutions["backgroundPosition"] = GetNewTabBackgroundPositionCSS(tp);
+  // substitutions["backgroundTiling"] = GetNewTabBackgroundTilingCSS(tp);
+  // substitutions["colorTextRgba"] = color_utils::SkColorToRgbaString(color_text);
+  // substitutions["colorTextLight"] =
+  //     color_utils::SkColorToRgbaString(color_text_light);
+  // substitutions["colorSectionBorder"] =
+  //     color_utils::SkColorToRgbString(color_section_border);
+  // substitutions["colorText"] = color_utils::SkColorToRgbString(color_text);
 
   // For themes that right-align the background, we flip the attribution to the
   // left to avoid conflicts.
-  int alignment =
-      tp.GetDisplayProperty(ThemeProperties::NTP_BACKGROUND_ALIGNMENT);
-  if (alignment & ThemeProperties::ALIGN_RIGHT) {
-    substitutions["leftAlignAttribution"] = "0";
-    substitutions["rightAlignAttribution"] = "auto";
-    substitutions["textAlignAttribution"] = "right";
-  } else {
-    substitutions["leftAlignAttribution"] = "auto";
-    substitutions["rightAlignAttribution"] = "0";
-    substitutions["textAlignAttribution"] = "left";
-  }
+  // int alignment =
+  //     tp.GetDisplayProperty(ThemeProperties::NTP_BACKGROUND_ALIGNMENT);
+  // if (alignment & ThemeProperties::ALIGN_RIGHT) {
+  //   substitutions["leftAlignAttribution"] = "0";
+  //   substitutions["rightAlignAttribution"] = "auto";
+  //   substitutions["textAlignAttribution"] = "right";
+  // } else {
+  //   substitutions["leftAlignAttribution"] = "auto";
+  //   substitutions["rightAlignAttribution"] = "0";
+  //   substitutions["textAlignAttribution"] = "left";
+  // }
 
-  substitutions["displayAttribution"] =
-      tp.HasCustomImage(IDR_THEME_NTP_ATTRIBUTION) ? "inline" : "none";
+  // substitutions["displayAttribution"] =
+  //     tp.HasCustomImage(IDR_THEME_NTP_ATTRIBUTION) ? "inline" : "none";
 
   // Get our template.
-  static const base::NoDestructor<scoped_refptr<base::RefCountedMemory>>
-      new_tab_theme_css(
-          ui::ResourceBundle::GetSharedInstance().LoadDataResourceBytes(
-              IDR_NEW_TAB_4_THEME_CSS));
-  CHECK(*new_tab_theme_css);
-  new_tab_css_ = base::MakeRefCounted<base::RefCountedString>(
-      ReplaceTemplateExpressions(*new_tab_theme_css, substitutions));
+  // static const base::NoDestructor<scoped_refptr<base::RefCountedMemory>>
+  //     new_tab_theme_css(
+  //         ui::ResourceBundle::GetSharedInstance().LoadDataResourceBytes(
+  //             IDR_NEW_TAB_4_THEME_CSS));
+  // CHECK(*new_tab_theme_css);
+  // new_tab_css_ = base::MakeRefCounted<base::RefCountedString>(
+  //     ReplaceTemplateExpressions(*new_tab_theme_css, substitutions));
 }
 
 void NTPResourceCache::OnPolicyChanged(const base::Value* previous,

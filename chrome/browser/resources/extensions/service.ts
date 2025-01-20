@@ -168,7 +168,7 @@ export class Service implements ServiceInterface {
     }
     chrome.metricsPrivate.recordUserAction('Extensions.RemoveExtensionClick');
     this.isDeleting_ = true;
-    chrome.management.uninstall(id, {showConfirmDialog: true})
+    chrome.management.uninstall(id, {showConfirmDialog: false})
         .catch(
             _ => {
                 // The error was almost certainly the user canceling the dialog.

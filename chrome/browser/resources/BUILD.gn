@@ -143,7 +143,10 @@ group("resources") {
   }
 
   if (enable_extensions_core) {
-    public_deps += [ "extensions:resources" ]
+    public_deps += [
+      ":component_extension_resources",
+      "extensions:resources"
+    ]
   }
 
   if (enable_pdf) {

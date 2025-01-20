@@ -5,6 +5,7 @@
 package org.chromium.chrome.browser.tabmodel;
 
 import androidx.annotation.CallSuper;
+import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
 
 import org.jni_zero.CalledByNative;
@@ -13,6 +14,9 @@ import org.jni_zero.NativeMethods;
 
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
+
+import org.chromium.base.Token;
+
 import org.chromium.chrome.browser.flags.ActivityType;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
@@ -20,6 +24,9 @@ import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.common.ResourceRequestBody;
 import org.chromium.url.GURL;
 import org.chromium.url.Origin;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /** Bridges between the C++ and Java {@link TabModel} interfaces. */
 @NullMarked
@@ -195,6 +202,70 @@ public abstract class TabModelJniBridge implements TabModelInternal {
      */
     @CalledByNative
     protected abstract @Nullable Tab createNewTabForDevTools(GURL url, boolean newWindow);
+
+    @CalledByNative
+    @VisibleForTesting
+    @Nullable Token createTabGroup(@NonNull int[] indices) {
+        // TODO check if indices are less than GetTabCount()
+        if (indices.length == 0) return null;
+        Tab rootTab = getTabAt(indices[0]);
+        if (rootTab == null) return null;
+        final TabGroupModelFilter filter = TabModelUtils.getTabGroupModelFilterByTab(rootTab);
+        if (filter == null) return null;
+        filter.createSingleTabGroup(rootTab);
+        if (indices.length > 1) {
+          List<Tab> tabs = new ArrayList<Tab>();
+          for (int i = 1; i < indices.length; i++) {
+            tabs.add(getTabAt(indices[i]));
+          }
+          filter.mergeListOfTabsToGroup(tabs, rootTab, true);
+        }
+        return rootTab.getTabGroupId();
+    }
+
+    @CalledByNative
+    @VisibleForTesting
+    boolean addTabsToTabGroup(@NonNull int[] indices, int dest) {
+        // TODO check if indices and dest are less than GetTabCount()
+        if (indices.length == 0) return false;
+        Tab rootTab = getTabAt(dest);
+        if (rootTab == null) return false;
+        final TabGroupModelFilter filter = TabModelUtils.getTabGroupModelFilterByTab(rootTab);
+        if (filter == null) return false;
+        List<Tab> tabs = new ArrayList<Tab>();
+        for (int i = 0; i < indices.length; i++) {
+          tabs.add(getTabAt(indices[i]));
+        }
+        filter.mergeListOfTabsToGroup(tabs, rootTab, true);
+        return true;
+    }
+
+    @CalledByNative
+    @VisibleForTesting
+    boolean ungroup(@NonNull int[] indices) {
+        // TODO check if indices are less than GetTabCount()
+        if (indices.length == 0) return false;
+        Tab rootTab = getTabAt(indices[0]);
+        if (rootTab == null) return false;
+        final TabGroupModelFilter filter = TabModelUtils.getTabGroupModelFilterByTab(rootTab);
+        if (filter == null) return false;
+
+        List<Tab> tabs = new ArrayList<Tab>();
+        for (int i = 0; i < indices.length; i++) {
+          tabs.add(getTabAt(indices[i]));
+        }
+        filter.getTabUngrouper()
+              .ungroupTabs(tabs, /* trailing= */ true, /* allowDialog= */ false);
+        return true;
+    }
+
+    @Override
+    @CalledByNative
+    public abstract void moveTab(int from_index, int to_index);
+
+    /** Returns whether supplied {@link Tab} instance is in a tab group. */
+    // @CalledByNative
+    // public abstract boolean isTabInTabGroup(@NonNull Tab tab);
 
     /**
      * Returns the count of non-custom tabs that have a {@link

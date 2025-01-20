@@ -5,7 +5,9 @@
 #include "chrome/browser/extensions/api/chrome_extensions_api_client.h"
 
 #include "base/notimplemented.h"
-#include "extensions/browser/api/messaging/messaging_delegate.h"
+#include "chrome/browser/supervised_user/supervised_user_extensions_delegate_impl.h"
+#include "chrome/browser/extensions/api/messaging/chrome_messaging_delegate.h"
+// #include "extensions/browser/api/messaging/messaging_delegate.h"
 #include "extensions/browser/api/messaging/native_message_host.h"
 #include "extensions/buildflags/buildflags.h"
 
@@ -38,8 +40,10 @@ std::unique_ptr<SupervisedUserExtensionsDelegate>
 ChromeExtensionsAPIClient::CreateSupervisedUserExtensionsDelegate(
     content::BrowserContext* browser_context) const {
   // TODO(crbug.com/402488726): Support supervised users on desktop Android.
-  NOTIMPLEMENTED();
-  return nullptr;
+  // NOTIMPLEMENTED();
+  // return nullptr;
+  return std::make_unique<SupervisedUserExtensionsDelegateImpl>(
+      browser_context);
 }
 
 std::unique_ptr<DisplayInfoProvider>
@@ -58,7 +62,7 @@ MessagingDelegate* ChromeExtensionsAPIClient::GetMessagingDelegate() {
     //   c) native messaging
     // TODO(crbug.com/371432155): Use ChromeMessagingDelegate when we have
     // better support for tabs.
-    messaging_delegate_ = std::make_unique<MessagingDelegate>();
+    messaging_delegate_ = std::make_unique<ChromeMessagingDelegate>();
   }
   return messaging_delegate_.get();
 }

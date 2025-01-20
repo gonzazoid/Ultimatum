@@ -10,6 +10,7 @@
 #include "chrome/browser/ui/apps/chrome_app_delegate.h"
 #include "components/renderer_context_menu/context_menu_delegate.h"
 #include "content/public/browser/web_contents.h"
+#include "chrome/browser/profiles/profile.h"
 
 namespace extensions {
 

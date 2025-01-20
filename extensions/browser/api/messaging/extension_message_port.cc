@@ -56,9 +56,9 @@ const char kReceivingEndDoesntExistError[] =
 const char kClosedWhileResponsePendingError[] =
     "A listener indicated an asynchronous response by returning true, but the "
     "message channel closed before a response was received";
-const char kClosedWhenPageEntersBFCache[] =
-    "The page keeping the extension port is moved into back/forward cache, so "
-    "the message channel is closed.";
+// const char kClosedWhenPageEntersBFCache[] =
+//     "The page keeping the extension port is moved into back/forward cache, so "
+//     "the message channel is closed.";
 
 }  // namespace
 
@@ -98,12 +98,12 @@ class ExtensionMessagePort::ContextTracker
       if (previous_rfh &&
           previous_rfh->GetLifecycleState() ==
               content::RenderFrameHost::LifecycleState::kInBackForwardCache) {
-        if (port_->UnregisterFramesUnderMainFrame(
-                previous_rfh, kClosedWhenPageEntersBFCache)) {
+        // if (port_->UnregisterFramesUnderMainFrame(
+        //         previous_rfh, kClosedWhenPageEntersBFCache)) {
           // Since the channel and the port is already closed, we don't have to
           // run the following block to unregister the frames any more.
           return;
-        }
+        // }
       }
     }
 
