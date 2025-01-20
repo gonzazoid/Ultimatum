@@ -90,6 +90,7 @@ class TabAndroid : public tabs::TabInterface,
       int tab_id,
       std::unique_ptr<content::WebContents> web_contents);
 
+  SessionID GetTabId() const;
   // TabAndroidDataProvider
   SessionID GetWindowId() const override;
   int GetAndroidId() const override;
@@ -124,6 +125,9 @@ class TabAndroid : public tabs::TabInterface,
   // Return whether the tab is currently visible and the user can interact with
   // it.
   bool IsUserInteractable() const;
+  bool IsFrozen() const;
+  bool NeedsReload() const;
+  gfx::Rect GetBounds() const;
 
   sync_sessions::SyncedTabDelegate* GetSyncedTabDelegate() const;
 

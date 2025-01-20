@@ -95,22 +95,22 @@ void GeneratedPrefs::CreatePrefs() {
   prefs_[kResolveTimezoneByGeolocationMethodShort] =
       CreateGeneratedResolveTimezoneByGeolocationMethodShort(profile_);
 #endif
-  prefs_[content_settings::kCookieDefaultContentSetting] = std::make_unique<
-      content_settings::GeneratedCookieDefaultContentSettingPref>(profile_);
-  prefs_[content_settings::kThirdPartyCookieBlockingSetting] = std::make_unique<
-      content_settings::GeneratedThirdPartyCookieBlockingSettingPref>(profile_);
-  prefs_[kGeneratedPasswordLeakDetectionPref] =
-      std::make_unique<GeneratedPasswordLeakDetectionPref>(profile_);
-  prefs_[safe_browsing::kGeneratedSafeBrowsingPref] =
-      std::make_unique<safe_browsing::GeneratedSafeBrowsingPref>(profile_);
-  prefs_[content_settings::kGeneratedNotificationPref] = std::make_unique<
-      content_settings::GeneratedPermissionPromptingBehaviorPref>(
-      profile_, ContentSettingsType::NOTIFICATIONS);
-  prefs_[content_settings::kGeneratedGeolocationPref] = std::make_unique<
-      content_settings::GeneratedPermissionPromptingBehaviorPref>(
-      profile_, ContentSettingsType::GEOLOCATION);
-  prefs_[kGeneratedHttpsFirstModePref] =
-      std::make_unique<GeneratedHttpsFirstModePref>(profile_);
+  // prefs_[content_settings::kCookieDefaultContentSetting] = std::make_unique<
+  //     content_settings::GeneratedCookieDefaultContentSettingPref>(profile_);
+  // prefs_[content_settings::kThirdPartyCookieBlockingSetting] = std::make_unique<
+  //     content_settings::GeneratedThirdPartyCookieBlockingSettingPref>(profile_);
+  // prefs_[kGeneratedPasswordLeakDetectionPref] =
+  //     std::make_unique<GeneratedPasswordLeakDetectionPref>(profile_);
+  // prefs_[safe_browsing::kGeneratedSafeBrowsingPref] =
+  //     std::make_unique<safe_browsing::GeneratedSafeBrowsingPref>(profile_);
+  // prefs_[content_settings::kGeneratedNotificationPref] = std::make_unique<
+  //     content_settings::GeneratedPermissionPromptingBehaviorPref>(
+  //     profile_, ContentSettingsType::NOTIFICATIONS);
+  // prefs_[content_settings::kGeneratedGeolocationPref] = std::make_unique<
+  //     content_settings::GeneratedPermissionPromptingBehaviorPref>(
+  //     profile_, ContentSettingsType::GEOLOCATION);
+  // prefs_[kGeneratedHttpsFirstModePref] =
+  //     std::make_unique<GeneratedHttpsFirstModePref>(profile_);
 }
 
 }  // namespace settings_private

@@ -220,6 +220,7 @@ declare global {
         fileAccessPendingChange: boolean;
         homePage: HomePage;
         iconUrl: string;
+        popupUrl: string;
         id: string;
         incognitoAccess: AccessModifier;
         userScriptsAccess: AccessModifier;

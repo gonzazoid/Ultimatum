@@ -605,6 +605,7 @@ class TabImpl implements Tab {
      * @return true iff the tab doesn't hold a live page. This happens before initialize() and when
      * the tab holds frozen WebContents state that is yet to be inflated.
      */
+    @CalledByNative
     @Override
     public boolean isFrozen() {
         return !isNativePage() && getWebContents() == null;
@@ -893,9 +894,16 @@ class TabImpl implements Tab {
         if (getWebContents() != null) getWebContents().stop();
     }
 
+    @CalledByNative
     @Override
     public boolean needsReload() {
         return getWebContents() != null && getWebContents().getNavigationController().needsReload();
+    }
+
+    @CalledByNative
+    @Override
+    public Rect getBounds() {
+        return getWindowAndroid().getDisplay().getBounds();
     }
 
     @Override
@@ -2244,8 +2252,8 @@ class TabImpl implements Tab {
     /**
      * @return parent identifier for the {@link Tab}
      */
-    @Override
     @CalledByNative
+    @Override
     public int getParentId() {
         return mParentId;
     }

@@ -9,7 +9,12 @@
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_prefs_factory.h"
 #include "extensions/browser/extension_system_provider.h"
+
+// #if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+// #include "chrome/browser/extensions/desktop_android/desktop_android_extensions_browser_client.h"
+// #else
 #include "extensions/browser/extensions_browser_client.h"
+// #endif
 
 namespace extensions {
 
@@ -39,7 +44,15 @@ InstallTrackerFactory::InstallTrackerFactory()
               // Ash Internals.
               .WithAshInternals(ProfileSelection::kRedirectedToOriginal)
               .Build()) {
-  DependsOn(ExtensionsBrowserClient::Get()->GetExtensionSystemFactory());
+// #if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+//   DependsOn(DesktopAndroidExtensionsBrowserClient::Get()->GetExtensionSystemFactory());
+// #else
+  LOG(INFO) << "ExtensionsBrowserClient::Get() result " << (ExtensionsBrowserClient::Get() == nullptr);
+  // TODO unravel this!!!
+  if (ExtensionsBrowserClient::Get()) {
+    DependsOn(ExtensionsBrowserClient::Get()->GetExtensionSystemFactory());
+  }
+// #endif
   DependsOn(ExtensionPrefsFactory::GetInstance());
 }
 

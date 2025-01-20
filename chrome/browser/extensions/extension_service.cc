@@ -236,7 +236,7 @@ ExtensionService::ExtensionService(
     profile_manager_observation_.Observe(g_browser_process->profile_manager());
   }
 
-  UpgradeDetector::GetInstance()->AddObserver(this);
+  // UpgradeDetector::GetInstance()->AddObserver(this);
 
   cws_info_service_observation_.Observe(CWSInfoService::Get(profile_));
 
@@ -281,7 +281,7 @@ base::WeakPtr<ExtensionServiceInterface> ExtensionService::AsWeakPtr() {
 }
 
 ExtensionService::~ExtensionService() {
-  UpgradeDetector::GetInstance()->RemoveObserver(this);
+  // UpgradeDetector::GetInstance()->RemoveObserver(this);
 }
 
 void ExtensionService::Shutdown() {

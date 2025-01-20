@@ -147,15 +147,19 @@ class TabModel final : public TabInterface, public TabStripModelObserver {
       TabInterfaceCallback callback) override;
 
   bool IsInNormalWindow() const override;
+#if !BUILDFLAG(IS_ANDROID)
   BrowserWindowInterface* GetBrowserWindowInterface() override;
+#endif
   tabs::TabFeatures* GetTabFeatures() override;
   bool IsPinned() const override;
   bool IsSplit() const override;
   std::optional<split_tabs::SplitTabId> GetSplit() const override;
   std::optional<tab_groups::TabGroupId> GetGroup() const override;
+#if !BUILDFLAG(IS_ANDROID)
   bool ShouldAcceptMouseEventsWhileWindowInactive() const override;
   std::unique_ptr<ScopedAcceptMouseEventsWhileWindowInactive>
   AcceptMouseEventsWhileWindowInactive() override;
+#endif
   void Close() override;
 
  private:
@@ -184,6 +188,7 @@ class TabModel final : public TabInterface, public TabStripModelObserver {
     base::WeakPtr<TabModel> tab_;
   };
 
+#if !BUILDFLAG(IS_ANDROID)
   // Whether the tab should accept mouse events while in the foreground, but the
   // window is inactive.
   class ScopedAcceptMouseEventsWhileWindowInactiveImpl
@@ -196,6 +201,7 @@ class TabModel final : public TabInterface, public TabStripModelObserver {
     // Owns this. Some consumers may hold this beyond the lifetime of the tab.
     base::WeakPtr<TabModel> tab_;
   };
+#endif
 
   // This must always be the first member so that it is destroyed last. This is
   // because there are some instances where a caller may want to destroy a
@@ -267,7 +273,7 @@ class TabModel final : public TabInterface, public TabStripModelObserver {
   // Whether to accept input events when the tab is in the foreground and the
   // window is inactive. This is a reference count for
   // number of instances of ScopedAcceptMouseEventsWhileWindowInactiveImpl.
-  int accept_input_when_window_inactive_ = 0;
+  // int accept_input_when_window_inactive_ = 0;
 
   // Features that are per-tab will be owned by this class.
   std::unique_ptr<TabFeatures> tab_features_;

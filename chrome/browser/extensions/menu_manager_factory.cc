@@ -10,6 +10,9 @@
 #include "extensions/browser/extension_system.h"
 #include "extensions/browser/extension_system_provider.h"
 #include "extensions/browser/extensions_browser_client.h"
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/extensions/desktop_android/desktop_android_extension_system.h"
+#endif
 
 namespace extensions {
 
@@ -45,7 +48,11 @@ MenuManagerFactory::MenuManagerFactory()
               // Ash Internals.
               .WithAshInternals(ProfileSelection::kRedirectedToOriginal)
               .Build()) {
+#if BUILDFLAG(IS_ANDROID)
+  DependsOn(DesktopAndroidExtensionSystem::GetFactory());
+#else
   DependsOn(ExtensionsBrowserClient::Get()->GetExtensionSystemFactory());
+#endif
 }
 
 MenuManagerFactory::~MenuManagerFactory() = default;

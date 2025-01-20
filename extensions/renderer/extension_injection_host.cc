@@ -80,6 +80,7 @@ PermissionsData::PageAccess ExtensionInjectionHost::CanExecuteOnFrame(
   }
 
   // Only allowlisted extensions may run scripts on another extension's page.
+  // TODO we are definitely going to dig here
   if (outermost_origin->scheme() == kExtensionScheme &&
       outermost_origin->host() != extension_->id() &&
       !PermissionsData::CanExecuteScriptEverywhere(extension_->id(),

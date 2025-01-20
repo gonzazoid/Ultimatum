@@ -107,7 +107,7 @@
 #include "chromeos/constants/pref_names.h"
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_special_storage_policy.h"
 #include "components/guest_view/browser/guest_view_manager.h"
@@ -206,7 +206,7 @@ void OffTheRecordProfileImpl::Init() {
   ChromePluginServiceFilter::GetInstance()->RegisterProfile(this);
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   // Make the chrome//extension-icon/ resource available.
   content::URLDataSource::Add(
       this, std::make_unique<extensions::ExtensionIconSource>(profile_));
@@ -275,7 +275,7 @@ OffTheRecordProfileImpl::~OffTheRecordProfileImpl() {
 
   SimpleKeyMap::GetInstance()->Dissociate(this);
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   extensions::WebRequestEventRouter::OnOTRBrowserContextDestroyed(profile_,
                                                                   this);
 #endif
@@ -454,7 +454,7 @@ OffTheRecordProfileImpl::GetURLLoaderFactory() {
 }
 
 content::BrowserPluginGuestManager* OffTheRecordProfileImpl::GetGuestManager() {
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   return guest_view::GuestViewManager::FromBrowserContext(this);
 #else
   return NULL;
@@ -463,7 +463,7 @@ content::BrowserPluginGuestManager* OffTheRecordProfileImpl::GetGuestManager() {
 
 storage::SpecialStoragePolicy*
 OffTheRecordProfileImpl::GetSpecialStoragePolicy() {
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   return GetExtensionSpecialStoragePolicy();
 #else
   return NULL;

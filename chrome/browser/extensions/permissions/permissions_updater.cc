@@ -45,6 +45,10 @@
 #include "extensions/common/permissions/permissions_data.h"
 #include "extensions/common/url_pattern_set.h"
 
+#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+#include "chrome/browser/extensions/desktop_android/desktop_android_extension_system.h"
+#endif
+
 using content::RenderProcessHost;
 
 namespace extensions {
@@ -73,8 +77,12 @@ class PermissionsUpdaterShutdownNotifierFactory
       : BrowserContextKeyedServiceShutdownNotifierFactory(
             "PermissionsUpdaterShutdownFactory") {
     DependsOn(EventRouterFactory::GetInstance());
+#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+    DependsOn(DesktopAndroidExtensionSystem::GetFactory());
+#else
     CHECK(ExtensionsBrowserClient::Get());
     DependsOn(ExtensionsBrowserClient::Get()->GetExtensionSystemFactory());
+#endif
   }
   ~PermissionsUpdaterShutdownNotifierFactory() override = default;
 };

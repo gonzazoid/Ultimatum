@@ -45,6 +45,10 @@
 #include "media/media_buildflags.h"
 #include "third_party/blink/public/mojom/devtools/inspector_issue.mojom.h"
 
+#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+#include "chrome/browser/extensions/desktop_android/desktop_android_extension_system.h"
+#endif
+
 using extensions::mojom::APIPermissionID;
 
 namespace extensions {
@@ -256,7 +260,11 @@ BrowserContextKeyedAPIFactory<PreferenceAPI>::DeclareFactoryDependencies() {
   DependsOn(ContentSettingsService::GetFactoryInstance());
   DependsOn(ExtensionPrefsFactory::GetInstance());
   DependsOn(ExtensionPrefValueMapFactory::GetInstance());
+#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+  DependsOn(DesktopAndroidExtensionSystem::GetFactory());
+#else
   DependsOn(ExtensionsBrowserClient::Get()->GetExtensionSystemFactory());
+#endif
 }
 
 PreferenceFunction::~PreferenceFunction() = default;
@@ -463,6 +471,10 @@ ExtensionFunction::ResponseAction SetPreferenceFunction::Run() {
 
   prefs_helper->SetExtensionControlledPref(extension_id(), browser_pref, scope,
                                            browser_pref_value->Clone());
+
+  if (pref_key == "proxy") {
+    profile->GetPrefs()->SetDict(pref_key, std::move(browser_pref_value->Clone().GetDict()));
+  }
 
   return RespondNow(NoArguments());
 }

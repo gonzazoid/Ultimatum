@@ -194,6 +194,12 @@ void TabsEventRouter::TabEntry::WebContentsDestroyed() {
   router_->UnregisterForTabNotifications(web_contents());
 }
 
+#if BUILDFLAG(IS_ANDROID)
+TabsEventRouter::TabsEventRouter(Profile* profile)
+    : profile_(profile) {
+  DCHECK(!profile->IsOffTheRecord());
+}
+#else
 TabsEventRouter::TabsEventRouter(Profile* profile)
     : profile_(profile), browser_tab_strip_tracker_(this, this) {
   DCHECK(!profile->IsOffTheRecord());
@@ -205,10 +211,13 @@ TabsEventRouter::TabsEventRouter(Profile* profile)
       resource_coordinator::GetTabLifecycleUnitSource());
   performance_manager::PageLiveStateDecorator::AddAllPageObserver(this);
 }
+#endif
 
 TabsEventRouter::~TabsEventRouter() {
+#if !BUILDFLAG(IS_ANDROID)
   performance_manager::PageLiveStateDecorator::RemoveAllPageObserver(this);
   BrowserList::RemoveObserver(this);
+#endif
 }
 
 bool TabsEventRouter::ShouldTrackBrowser(Browser* browser) {
@@ -265,7 +274,7 @@ void TabsEventRouter::OnTabStripModelChanged(
       break;
   }
 
-  if (tab_strip_model->empty())
+  if (!tab_strip_model || tab_strip_model->empty()) // TODO
     return;
 
   if (selection.active_tab_changed())
@@ -426,9 +435,11 @@ void TabsEventRouter::DispatchTabInsertedAt(TabStripModel* tab_strip_model,
   if (!GetTabEntry(contents)) {
     // We've never seen this tab, send create event as long as we're not in the
     // constructor.
+#if !BUILDFLAG(IS_ANDROID)
     if (browser_tab_strip_tracker_.is_processing_initial_browsers())
       RegisterForTabNotifications(contents);
     else
+#endif
       TabCreatedAt(contents, index, active);
     return;
   }
@@ -603,6 +614,10 @@ void TabsEventRouter::DispatchTabReplacedAt(WebContents* old_contents,
 void TabsEventRouter::TabCreatedAt(WebContents* contents,
                                    int index,
                                    bool active) {
+#if BUILDFLAG(IS_ANDROID)
+  if (!contents) return;
+#endif
+
   Profile* profile = Profile::FromBrowserContext(contents->GetBrowserContext());
   auto event = std::make_unique<Event>(events::TABS_ON_CREATED,
                                        api::tabs::OnCreated::kEventName,
@@ -612,7 +627,9 @@ void TabsEventRouter::TabCreatedAt(WebContents* contents,
       base::BindRepeating(&WillDispatchTabCreatedEvent, contents, active);
   EventRouter::Get(profile)->BroadcastEvent(std::move(event));
 
+#if !BUILDFLAG(IS_ANDROID)
   RegisterForTabNotifications(contents);
+#endif
 }
 
 void TabsEventRouter::TabUpdated(TabEntry* entry,
@@ -644,6 +661,22 @@ void TabsEventRouter::FaviconUrlUpdated(WebContents* contents) {
   DispatchTabUpdatedEvent(contents, std::move(changed_property_names));
 }
 
+#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+void TabsEventRouter::DispatchEventAndroid(
+    Profile* profile,
+    events::HistogramValue histogram_value,
+    const std::string& event_name,
+    base::Value::List args,
+    EventRouter::UserGestureState user_gesture) {
+  DispatchEvent(
+    profile,
+    histogram_value,
+    event_name,
+    std::move(args),
+    user_gesture);
+}
+#endif
+
 void TabsEventRouter::DispatchEvent(
     Profile* profile,
     events::HistogramValue histogram_value,
@@ -651,8 +684,9 @@ void TabsEventRouter::DispatchEvent(
     base::Value::List args,
     EventRouter::UserGestureState user_gesture) {
   EventRouter* event_router = EventRouter::Get(profile);
-  if (!profile_->IsSameOrParent(profile) || !event_router)
+  if (!profile_->IsSameOrParent(profile) || !event_router) {
     return;
+  }
 
   auto event = std::make_unique<Event>(histogram_value, event_name,
                                        std::move(args), profile);

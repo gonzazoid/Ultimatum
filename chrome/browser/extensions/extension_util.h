@@ -9,6 +9,7 @@
 #include <string>
 
 #include "base/values.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/constants.h"
 
 namespace content {
@@ -47,6 +48,7 @@ void SetIsIncognitoEnabled(const std::string& extension_id,
                            content::BrowserContext* context,
                            bool enabled);
 
+// #if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 // Sets whether |extension_id| can inject scripts into pages with file URLs.
 // Reloads the extension if it's enabled since this permission is applied at
 // loading time only. Note than an ExtensionService must exist.

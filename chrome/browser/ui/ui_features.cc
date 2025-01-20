@@ -43,14 +43,14 @@ BASE_FEATURE(kFewerUpdateConfirmations,
              base::FEATURE_ENABLED_BY_DEFAULT);
 #endif
 
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #if BUILDFLAG(ENABLE_EXTENSIONS)
-
 // Controls whether we use a different UX for simple extensions overriding
 // settings.
 BASE_FEATURE(kLightweightExtensionOverrideConfirmations,
              "LightweightExtensionOverrideConfirmations",
              base::FEATURE_ENABLED_BY_DEFAULT);
-
+#endif
 BASE_FEATURE(kExtensionsCollapseMainMenu,
              "ExtensionsCollapseMainMenu",
              base::FEATURE_DISABLED_BY_DEFAULT);
