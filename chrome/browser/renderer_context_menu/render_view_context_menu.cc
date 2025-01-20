@@ -676,7 +676,7 @@ content::Referrer CreateReferrer(const GURL& url,
 
 content::WebContents* GetWebContentsToUse(
     content::RenderFrameHost* render_frame_host) {
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   // If we're viewing in a MimeHandlerViewGuest, use its embedder WebContents.
   auto* guest_view =
       extensions::MimeHandlerViewGuest::FromRenderFrameHost(render_frame_host);
@@ -913,7 +913,7 @@ RenderViewContextMenu::~RenderViewContextMenu() = default;
 
 // Menu construction functions -------------------------------------------------
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
 // static
 bool RenderViewContextMenu::ExtensionContextAndPatternMatch(
     const content::ContextMenuParams& params,

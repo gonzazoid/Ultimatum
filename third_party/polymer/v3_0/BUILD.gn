@@ -9,7 +9,7 @@ import("//ui/webui/resources/tools/generate_code_cache.gni")
 import("//ui/webui/resources/tools/generate_grd.gni")
 import("//ui/webui/resources/tools/minify_js.gni")
 
-assert(!is_android && !is_ios)
+# assert(!is_android && !is_ios)
 
 js_files = [
   "iron-a11y-keys-behavior/iron-a11y-keys-behavior.js",

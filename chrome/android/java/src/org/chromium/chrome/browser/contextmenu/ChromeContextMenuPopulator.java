@@ -388,6 +388,18 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
         }
         if (mParams.isAnchor()) {
             ModelList linkGroup = new ModelList();
+
+            final PropertyModel model =
+                new PropertyModel.Builder(MENU_ITEM_ID, TITLE, ENABLED)
+                        .with(MENU_ITEM_ID, 9999)
+                        .with(
+                                TITLE,
+                                "Test!!!")
+                        .with(ENABLED, true)
+                        .build();
+            ListItem testListItem = new ListItem(ListItemType.CONTEXT_MENU_ITEM, model);
+            linkGroup.add(testListItem);
+
             if (FirstRunStatus.getFirstRunFlowComplete()
                     && !isEmptyUrl(mParams.getUrl())
                     && UrlUtilities.isAcceptedScheme(mParams.getUrl())) {

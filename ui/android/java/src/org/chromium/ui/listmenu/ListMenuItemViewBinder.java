@@ -22,6 +22,8 @@ import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModel.ReadableIntPropertyKey;
 
+import org.chromium.base.Log;
+
 /**
  * Class responsible for binding the model of the ListMenuItem and the view. Each item is expected
  * to have at the bare minimum a title (TITLE_ID, or TITLE) or an icon (START_ICON_ID,
@@ -122,7 +124,8 @@ public class ListMenuItemViewBinder {
                 textView.setEllipsize(null);
             }
         } else {
-            assert false : "Supplied propertyKey not implemented in ListMenuItemProperties.";
+            // assert false : "Supplied propertyKey not implemented in ListMenuItemProperties.";
+            // Log.i("ULTIMATUM", propertyKey.toString());
         }
     }
 

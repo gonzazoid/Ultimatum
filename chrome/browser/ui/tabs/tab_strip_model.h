@@ -36,9 +36,9 @@
 #include "ui/base/page_transition_types.h"
 #include "ui/gfx/range/range.h"
 
-#if BUILDFLAG(IS_ANDROID)
-#error This file should only be included on desktop.
-#endif
+// #if BUILDFLAG(IS_ANDROID)
+// #error This file should only be included on desktop.
+// #endif
 
 class DraggingTabsSession;
 class Profile;

@@ -26,7 +26,7 @@ class MenuModelBridge {
   virtual ~MenuModelBridge();
 
   void AddExtensionItems(ui::MenuModel* menu_model);
-
+  jni_zero::ScopedJavaLocalRef<jobject> GetListItems();
  private:
   base::android::ScopedJavaGlobalRef<jobject> java_obj_;
   base::WeakPtrFactory<MenuModelBridge> weak_ptr_factory_{this};

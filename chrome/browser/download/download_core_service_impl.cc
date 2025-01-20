@@ -29,7 +29,7 @@
 #include "ash/constants/ash_features.h"
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "chrome/browser/extensions/api/downloads/downloads_api.h"
 #endif
 
@@ -66,7 +66,7 @@ DownloadCoreServiceImpl::GetDownloadManagerDelegate() {
 
   manager_delegate_->SetDownloadManager(manager);
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   extension_event_router_ =
       std::make_unique<extensions::ExtensionDownloadsEventRouter>(profile_,
                                                                   manager);
@@ -113,7 +113,7 @@ DownloadHistory* DownloadCoreServiceImpl::GetDownloadHistory() {
   return download_history_.get();
 }
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 extensions::ExtensionDownloadsEventRouter*
 DownloadCoreServiceImpl::GetExtensionEventRouter() {
   return extension_event_router_.get();
@@ -183,7 +183,7 @@ void DownloadCoreServiceImpl::Shutdown() {
     // manually earlier. See http://crbug.com/131692
     profile_->GetDownloadManager()->Shutdown();
   }
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   extension_event_router_.reset();
 #endif
   manager_delegate_.reset();

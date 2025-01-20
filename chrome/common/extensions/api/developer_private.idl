@@ -228,6 +228,7 @@ namespace developerPrivate {
     boolean fileAccessPendingChange;
     HomePage homePage;
     DOMString iconUrl;
+    DOMString popupUrl;
     DOMString id;
     AccessModifier incognitoAccess;
     AccessModifier userScriptsAccess;

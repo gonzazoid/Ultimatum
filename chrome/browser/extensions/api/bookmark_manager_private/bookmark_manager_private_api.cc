@@ -472,10 +472,10 @@ BookmarkManagerPrivateCanPasteFunction::RunOnReady() {
   const BookmarkNode* parent_node = GetNodeFromString(model, params->parent_id);
   if (!parent_node)
     return Error(bookmarks_errors::kNoParentError);
-  bool can_paste =
-      BookmarkUIOperationsHelperNonMergedSurfaces(model, parent_node)
-          .CanPasteFromClipboard();
-  return WithArguments(can_paste);
+  // bool can_paste =
+  //     BookmarkUIOperationsHelperNonMergedSurfaces(model, parent_node)
+  //         .CanPasteFromClipboard();
+  return WithArguments(false /* can_paste */);
 }
 
 ExtensionFunction::ResponseValue
@@ -518,7 +518,7 @@ BookmarkManagerPrivateStartDragFunction::RunOnReady() {
   if (!EditBookmarksEnabled())
     return Error(bookmarks_errors::kEditBookmarksDisabled);
 
-  content::WebContents* web_contents = GetSenderWebContents();
+  // content::WebContents* web_contents = GetSenderWebContents();
   std::optional<StartDrag::Params> params = StartDrag::Params::Create(args());
   if (!params)
     return BadMessage();
@@ -531,13 +531,13 @@ BookmarkManagerPrivateStartDragFunction::RunOnReady() {
                  base::JoinString(params->id_list, ", "));
   }
 
-  ui::mojom::DragEventSource source = ui::mojom::DragEventSource::kMouse;
-  if (params->is_from_touch)
-    source = ui::mojom::DragEventSource::kTouch;
+  // ui::mojom::DragEventSource source = ui::mojom::DragEventSource::kMouse;
+  // if (params->is_from_touch)
+  //   source = ui::mojom::DragEventSource::kTouch;
 
-  chrome::DragBookmarks(
-      GetProfile(), {std::move(nodes), params->drag_node_index, web_contents,
-                     source, gfx::Point(params->x, params->y)});
+  // chrome::DragBookmarks(
+  //     GetProfile(), {std::move(nodes), params->drag_node_index, web_contents,
+  //                    source, gfx::Point(params->x, params->y)});
 
   return NoArguments();
 }
@@ -749,13 +749,13 @@ BookmarkManagerPrivateOpenInNewWindowFunction::RunOnReady() {
                   : WindowOpenDisposition::NEW_FOREGROUND_TAB;
     if (params->incognito)
       navigate_params.disposition = WindowOpenDisposition::OFF_THE_RECORD;
-    base::WeakPtr<content::NavigationHandle> handle =
-        Navigate(&navigate_params);
-    if (handle) {
-      ChromeNavigationUIData* ui_data =
-          static_cast<ChromeNavigationUIData*>(handle->GetNavigationUIData());
-      ui_data->set_bookmark_id(url_and_id.id);
-    }
+    // base::WeakPtr<content::NavigationHandle> handle =
+    //     Navigate(&navigate_params);
+    // if (handle) {
+    //   ChromeNavigationUIData* ui_data =
+    //       static_cast<ChromeNavigationUIData*>(handle->GetNavigationUIData());
+    //   ui_data->set_bookmark_id(url_and_id.id);
+    // }
 
     first_tab = false;
   }
@@ -786,9 +786,9 @@ BookmarkManagerPrivateOpenInNewTabGroupFunction::RunOnReady() {
                  base::JoinString(params->id_list, ", "));
   }
 
-  bookmarks::OpenAllIfAllowed(browser, nodes,
-                              WindowOpenDisposition::NEW_BACKGROUND_TAB,
-                              bookmarks::OpenAllBookmarksContext::kInGroup);
+  // bookmarks::OpenAllIfAllowed(browser, nodes,
+  //                             WindowOpenDisposition::NEW_BACKGROUND_TAB,
+  //                             bookmarks::OpenAllBookmarksContext::kInGroup);
 
   return NoArguments();
 }
@@ -858,16 +858,16 @@ void BookmarkManagerPrivateImportFunction::FileSelected(
     const ui::SelectedFileInfo& file,
     int index) {
   // Deletes itself.
-  ExternalProcessImporterHost* importer_host = new ExternalProcessImporterHost;
-  user_data_importer::SourceProfile source_profile;
-  source_profile.importer_type = user_data_importer::TYPE_BOOKMARKS_FILE;
-  source_profile.source_path = file.path();
-  importer_host->StartImportSettings(source_profile, GetProfile(),
-                                     user_data_importer::FAVORITES,
-                                     new ProfileWriter(GetProfile()));
+  // ExternalProcessImporterHost* importer_host = new ExternalProcessImporterHost;
+  // user_data_importer::SourceProfile source_profile;
+  // source_profile.importer_type = user_data_importer::TYPE_BOOKMARKS_FILE;
+  // source_profile.source_path = file.path();
+  // importer_host->StartImportSettings(source_profile, GetProfile(),
+  //                                    user_data_importer::FAVORITES,
+  //                                    new ProfileWriter(GetProfile()));
 
-  importer::LogImporterUseToMetrics("BookmarksAPI",
-                                    user_data_importer::TYPE_BOOKMARKS_FILE);
+  // importer::LogImporterUseToMetrics("BookmarksAPI",
+  //                                   user_data_importer::TYPE_BOOKMARKS_FILE);
   select_file_dialog_.reset();
   Release();  // Balanced in BookmarkManagerPrivateIOFunction::SelectFile()
 }

@@ -12,6 +12,7 @@ import org.jni_zero.JniType;
 
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
+import org.chromium.ui.listmenu.ListItemType;
 import org.chromium.ui.modelutil.MVCListAdapter.ListItem;
 import org.chromium.ui.modelutil.PropertyModel;
 
@@ -38,6 +39,7 @@ public class MenuModelBridge {
     private MenuModelBridge() {}
 
     /** {@return The list of {@link ListItem} held by this {@link MenuModelBridge}.} */
+    @CalledByNative
     public List<ListItem> getListItems() {
         return mItems;
     }

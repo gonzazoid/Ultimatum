@@ -363,8 +363,8 @@ void AppViewGuest::LaunchAppAndFireEvent(
   embed_request.Set(appview::kGuestInstanceID, guest_instance_id());
   embed_request.Set(appview::kEmbedderID, owner_host());
   embed_request.Set(appview::kData, std::move(data));
-  AppRuntimeEventRouter::DispatchOnEmbedRequestedEvent(
-      browser_context(), std::move(embed_request), extension);
+  // AppRuntimeEventRouter::DispatchOnEmbedRequestedEvent(
+  //     browser_context(), std::move(embed_request), extension);
 }
 
 void AppViewGuest::LoadURL() {

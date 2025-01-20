@@ -11,7 +11,7 @@
 
 // TODO(crbug.com/419057482): Once we have a cross-platform interface for
 // browser windows, port this to desktop Android.
-static_assert(BUILDFLAG(ENABLE_EXTENSIONS));
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 class ExtensionFunction;
 

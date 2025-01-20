@@ -408,31 +408,31 @@
           ]
         }
       },
-      {
-        "name": "duplicate",
-        "type": "function",
-        "description": "Duplicates a tab.",
-        "parameters": [
-          {
-            "type": "integer",
-            "name": "tabId",
-            "minimum": 0,
-            "description": "The ID of the tab to duplicate."
-          }
-        ],
-        "returns_async": {
-          "name": "callback",
-          "optional": true,
-          "parameters": [
-            {
-              "name": "tab",
-              "optional": true,
-              "description": "Details about the duplicated tab. The <code>url</code>, <code>pendingUrl</code>, <code>title</code> and <code>favIconUrl</code> properties are only included on the $(ref:tabs.Tab) object if the extension has the <code>\"tabs\"</code> permission or has host permissions for the page.",
-              "$ref": "Tab"
-            }
-          ]
-        }
-      },
+    //   {
+    //     "name": "duplicate",
+    //     "type": "function",
+    //     "description": "Duplicates a tab.",
+    //     "parameters": [
+    //       {
+    //         "type": "integer",
+    //         "name": "tabId",
+    //         "minimum": 0,
+    //         "description": "The ID of the tab to duplicate."
+    //       }
+    //     ],
+    //     "returns_async": {
+    //       "name": "callback",
+    //       "optional": true,
+    //       "parameters": [
+    //         {
+    //           "name": "tab",
+    //           "optional": true,
+    //           "description": "Details about the duplicated tab. The <code>url</code>, <code>pendingUrl</code>, <code>title</code> and <code>favIconUrl</code> properties are only included on the $(ref:tabs.Tab) object if the extension has the <code>\"tabs\"</code> permission or has host permissions for the page.",
+    //           "$ref": "Tab"
+    //         }
+    //       ]
+    //     }
+    //   },
       {
         "name": "query",
         "type": "function",
@@ -549,43 +549,43 @@
           ]
         }
       },
-      {
-        "name": "highlight",
-        "type": "function",
-        "description": "Highlights the given tabs and focuses on the first of group. Will appear to do nothing if the specified tab is currently active.",
-        "parameters": [
-          {
-            "type": "object",
-            "name": "highlightInfo",
-            "properties": {
-              "windowId": {
-                "type": "integer",
-                "optional": true,
-                "description": "The window that contains the tabs.",
-                "minimum": -2
-              },
-              "tabs": {
-                "description": "One or more tab indices to highlight.",
-                "choices": [
-                  {"type": "array", "items": {"type": "integer", "minimum": 0}},
-                  {"type": "integer"}
-                ]
-              }
-            }
-          }
-        ],
-        "returns_async": {
-          "name": "callback",
-          "optional": true,
-          "parameters": [
-            {
-              "name": "window",
-              "$ref": "windows.Window",
-              "description": "Contains details about the window whose tabs were highlighted."
-            }
-          ]
-        }
-      },
+    //   {
+    //     "name": "highlight",
+    //     "type": "function",
+    //     "description": "Highlights the given tabs and focuses on the first of group. Will appear to do nothing if the specified tab is currently active.",
+    //     "parameters": [
+    //       {
+    //         "type": "object",
+    //         "name": "highlightInfo",
+    //         "properties": {
+    //           "windowId": {
+    //             "type": "integer",
+    //             "optional": true,
+    //             "description": "The window that contains the tabs.",
+    //             "minimum": -2
+    //           },
+    //           "tabs": {
+    //             "description": "One or more tab indices to highlight.",
+    //             "choices": [
+    //               {"type": "array", "items": {"type": "integer", "minimum": 0}},
+    //               {"type": "integer"}
+    //             ]
+    //           }
+    //         }
+    //       }
+    //     ],
+    //     "returns_async": {
+    //       "name": "callback",
+    //       "optional": true,
+    //       "parameters": [
+    //         {
+    //           "name": "window",
+    //           "$ref": "windows.Window",
+    //           "description": "Contains details about the window whose tabs were highlighted."
+    //         }
+    //       ]
+    //     }
+    //   },
       {
         "name": "update",
         "type": "function",
@@ -706,27 +706,27 @@
           ]
         }
       },
-      {
-        "name": "reload",
-        "type": "function",
-        "description": "Reload a tab.",
-        "parameters": [
-          {"type": "integer", "name": "tabId", "minimum": 0, "optional": true, "description": "The ID of the tab to reload; defaults to the selected tab of the current window."},
-          {
-            "type": "object",
-            "name": "reloadProperties",
-            "optional": true,
-            "properties": {
-              "bypassCache": {
-                "type": "boolean",
-                "optional": true,
-                "description": "Whether to bypass local caching. Defaults to <code>false</code>."
-              }
-            }
-          }
-        ],
-        "returns_async": {"name": "callback", "optional": true, "parameters": []}
-      },
+    //   {
+    //     "name": "reload",
+    //     "type": "function",
+    //     "description": "Reload a tab.",
+    //     "parameters": [
+    //       {"type": "integer", "name": "tabId", "minimum": 0, "optional": true, "description": "The ID of the tab to reload; defaults to the selected tab of the current window."},
+    //       {
+    //         "type": "object",
+    //         "name": "reloadProperties",
+    //         "optional": true,
+    //         "properties": {
+    //           "bypassCache": {
+    //             "type": "boolean",
+    //             "optional": true,
+    //             "description": "Whether to bypass local caching. Defaults to <code>false</code>."
+    //           }
+    //         }
+    //       }
+    //     ],
+    //     "returns_async": {"name": "callback", "optional": true, "parameters": []}
+    //   },
       {
         "name": "remove",
         "type": "function",
@@ -937,133 +937,133 @@
           "parameters": []
         }
       },
-      {
-        "name": "setZoom",
-        "type": "function",
-        "description": "Zooms a specified tab.",
-        "parameters": [
-          {
-            "type": "integer",
-            "name": "tabId",
-            "minimum": 0,
-            "optional": true,
-            "description": "The ID of the tab to zoom; defaults to the active tab of the current window."
-          },
-          {
-            "type": "number",
-            "name": "zoomFactor",
-            "description": "The new zoom factor. A value of <code>0</code> sets the tab to its current default zoom factor. Values greater than <code>0</code> specify a (possibly non-default) zoom factor for the tab."
-          }
-        ],
-        "returns_async": {
-          "name": "callback",
-          "optional": true,
-          "description": "Called after the zoom factor has been changed.",
-          "parameters": []
-        }
-      },
-      {
-        "name": "getZoom",
-        "type": "function",
-        "description": "Gets the current zoom factor of a specified tab.",
-        "parameters": [
-          {
-            "type": "integer",
-            "name": "tabId",
-            "minimum": 0,
-            "optional": true,
-            "description": "The ID of the tab to get the current zoom factor from; defaults to the active tab of the current window."
-          }
-        ],
-        "returns_async": {
-          "name": "callback",
-          "description": "Called with the tab's current zoom factor after it has been fetched.",
-          "parameters": [
-            {
-              "type": "number",
-              "name": "zoomFactor",
-              "description": "The tab's current zoom factor."
-            }
-          ]
-        }
-      },
-      {
-        "name": "setZoomSettings",
-        "type": "function",
-        "description": "Sets the zoom settings for a specified tab, which define how zoom changes are handled. These settings are reset to defaults upon navigating the tab.",
-        "parameters": [
-          {
-            "type": "integer",
-            "name": "tabId",
-            "optional": true,
-            "minimum": 0,
-            "description": "The ID of the tab to change the zoom settings for; defaults to the active tab of the current window."
-          },
-          {
-            "$ref": "ZoomSettings",
-            "name": "zoomSettings",
-            "description": "Defines how zoom changes are handled and at what scope."
-          }
-        ],
-        "returns_async": {
-          "name": "callback",
-          "optional": true,
-          "description": "Called after the zoom settings are changed.",
-          "parameters": []
-        }
-      },
-      {
-        "name": "getZoomSettings",
-        "type": "function",
-        "description": "Gets the current zoom settings of a specified tab.",
-        "parameters": [
-          {
-            "type": "integer",
-            "name": "tabId",
-            "optional": true,
-            "minimum": 0,
-            "description": "The ID of the tab to get the current zoom settings from; defaults to the active tab of the current window."
-          }
-        ],
-        "returns_async": {
-          "name": "callback",
-          "description": "Called with the tab's current zoom settings.",
-          "parameters": [
-            {
-              "$ref": "ZoomSettings",
-              "name": "zoomSettings",
-              "description": "The tab's current zoom settings."
-            }
-          ]
-        }
-      },
-      {
-        "name": "discard",
-        "type": "function",
-        "description": "Discards a tab from memory. Discarded tabs are still visible on the tab strip and are reloaded when activated.",
-        "parameters": [
-          {
-            "type": "integer",
-            "name": "tabId",
-            "optional": true,
-            "minimum": 0,
-            "description": "The ID of the tab to be discarded. If specified, the tab is discarded unless it is active or already discarded. If omitted, the browser discards the least important tab. This can fail if no discardable tabs exist."
-          }
-        ],
-        "returns_async": {
-          "name": "callback",
-          "optional": true,
-          "description": "Called after the operation is completed.",
-          "parameters": [
-            {
-              "name": "tab",
-              "$ref": "Tab",
-              "optional": true,
-              "description": "The discarded tab, if it was successfully discarded; undefined otherwise."
-            }
-          ]
-        }
-      },
+    //   {
+    //     "name": "setZoom",
+    //     "type": "function",
+    //     "description": "Zooms a specified tab.",
+    //     "parameters": [
+    //       {
+    //         "type": "integer",
+    //         "name": "tabId",
+    //         "minimum": 0,
+    //         "optional": true,
+    //         "description": "The ID of the tab to zoom; defaults to the active tab of the current window."
+    //       },
+    //       {
+    //         "type": "number",
+    //         "name": "zoomFactor",
+    //         "description": "The new zoom factor. A value of <code>0</code> sets the tab to its current default zoom factor. Values greater than <code>0</code> specify a (possibly non-default) zoom factor for the tab."
+    //       }
+    //     ],
+    //     "returns_async": {
+    //       "name": "callback",
+    //       "optional": true,
+    //       "description": "Called after the zoom factor has been changed.",
+    //       "parameters": []
+    //     }
+    //   },
+    //   {
+    //     "name": "getZoom",
+    //     "type": "function",
+    //     "description": "Gets the current zoom factor of a specified tab.",
+    //     "parameters": [
+    //       {
+    //         "type": "integer",
+    //         "name": "tabId",
+    //         "minimum": 0,
+    //         "optional": true,
+    //         "description": "The ID of the tab to get the current zoom factor from; defaults to the active tab of the current window."
+    //       }
+    //     ],
+    //     "returns_async": {
+    //       "name": "callback",
+    //       "description": "Called with the tab's current zoom factor after it has been fetched.",
+    //       "parameters": [
+    //         {
+    //           "type": "number",
+    //           "name": "zoomFactor",
+    //           "description": "The tab's current zoom factor."
+    //         }
+    //       ]
+    //     }
+    //   },
+    //   {
+    //     "name": "setZoomSettings",
+    //     "type": "function",
+    //     "description": "Sets the zoom settings for a specified tab, which define how zoom changes are handled. These settings are reset to defaults upon navigating the tab.",
+    //     "parameters": [
+    //       {
+    //         "type": "integer",
+    //         "name": "tabId",
+    //         "optional": true,
+    //         "minimum": 0,
+    //         "description": "The ID of the tab to change the zoom settings for; defaults to the active tab of the current window."
+    //       },
+    //       {
+    //         "$ref": "ZoomSettings",
+    //         "name": "zoomSettings",
+    //         "description": "Defines how zoom changes are handled and at what scope."
+    //       }
+    //     ],
+    //     "returns_async": {
+    //       "name": "callback",
+    //       "optional": true,
+    //       "description": "Called after the zoom settings are changed.",
+    //       "parameters": []
+    //     }
+    //   },
+    //   {
+    //     "name": "getZoomSettings",
+    //     "type": "function",
+    //     "description": "Gets the current zoom settings of a specified tab.",
+    //     "parameters": [
+    //       {
+    //         "type": "integer",
+    //         "name": "tabId",
+    //         "optional": true,
+    //         "minimum": 0,
+    //         "description": "The ID of the tab to get the current zoom settings from; defaults to the active tab of the current window."
+    //       }
+    //     ],
+    //     "returns_async": {
+    //       "name": "callback",
+    //       "description": "Called with the tab's current zoom settings.",
+    //       "parameters": [
+    //         {
+    //           "$ref": "ZoomSettings",
+    //           "name": "zoomSettings",
+    //           "description": "The tab's current zoom settings."
+    //         }
+    //       ]
+    //     }
+    //   },
+    //   {
+    //     "name": "discard",
+    //     "type": "function",
+    //     "description": "Discards a tab from memory. Discarded tabs are still visible on the tab strip and are reloaded when activated.",
+    //     "parameters": [
+    //       {
+    //         "type": "integer",
+    //         "name": "tabId",
+    //         "optional": true,
+    //         "minimum": 0,
+    //         "description": "The ID of the tab to be discarded. If specified, the tab is discarded unless it is active or already discarded. If omitted, the browser discards the least important tab. This can fail if no discardable tabs exist."
+    //       }
+    //     ],
+    //     "returns_async": {
+    //       "name": "callback",
+    //       "optional": true,
+    //       "description": "Called after the operation is completed.",
+    //       "parameters": [
+    //         {
+    //           "name": "tab",
+    //           "$ref": "Tab",
+    //           "optional": true,
+    //           "description": "The discarded tab, if it was successfully discarded; undefined otherwise."
+    //         }
+    //       ]
+    //     }
+    //   },
       {
         "name": "goForward",
         "type": "function",

@@ -147,9 +147,9 @@ CrxInstaller::CrxInstaller(content::BrowserContext* context,
 
   CHECK(profile()->IsSameOrParent(approval->profile));
   if (client_) {
-    client_->install_ui()->SetUseAppInstalledBubble(
-        approval->use_app_installed_bubble);
-    client_->install_ui()->SetSkipPostInstallUI(approval->skip_post_install_ui);
+    // client_->install_ui()->SetUseAppInstalledBubble(
+    //     approval->use_app_installed_bubble);
+    // client_->install_ui()->SetSkipPostInstallUI(approval->skip_post_install_ui);
   }
 
   if (approval->skip_install_dialog) {
@@ -251,19 +251,19 @@ void CrxInstaller::InstallUserScript(const base::FilePath& source_file,
 }
 
 void CrxInstaller::ConvertUserScriptOnSharedFileThread() {
-  std::u16string error;
-  scoped_refptr<Extension> extension = ConvertUserScriptToExtension(
-      source_file_, download_url_, install_directory_, &error);
-  if (!extension.get()) {
-    ReportFailureFromSharedFileThread(CrxInstallError(
-        CrxInstallErrorType::OTHER,
-        CrxInstallErrorDetail::CONVERT_USER_SCRIPT_TO_EXTENSION_FAILED, error));
-    return;
-  }
+  // std::u16string error;
+  // scoped_refptr<Extension> extension = ConvertUserScriptToExtension(
+  //     source_file_, download_url_, install_directory_, &error);
+  // if (!extension.get()) {
+  //   ReportFailureFromSharedFileThread(CrxInstallError(
+  //       CrxInstallErrorType::OTHER,
+  //       CrxInstallErrorDetail::CONVERT_USER_SCRIPT_TO_EXTENSION_FAILED, error));
+  //   return;
+  // }
 
-  OnUnpackSuccessOnSharedFileThread(extension->path(), extension->path(),
-                                    nullptr, extension, SkBitmap(),
-                                    /*ruleset_install_prefs=*/{});
+  // OnUnpackSuccessOnSharedFileThread(extension->path(), extension->path(),
+  //                                   nullptr, extension, SkBitmap(),
+  //                                   /*ruleset_install_prefs=*/{});
 }
 
 void CrxInstaller::UpdateExtensionFromUnpackedCrx(
@@ -401,13 +401,13 @@ std::optional<CrxInstallError> CrxInstaller::AllowInstall(
       off_store_install_allow_reason_ == OffStoreInstallDisallowed) {
     // Don't delete source in this case so that the user can install
     // manually if they want.
-    delete_source_ = false;
-    did_handle_successfully_ = false;
+    // delete_source_ = false;
+    // did_handle_successfully_ = false;
 
-    return CrxInstallError(
-        CrxInstallErrorType::OTHER,
-        CrxInstallErrorDetail::OFFSTORE_INSTALL_DISALLOWED,
-        l10n_util::GetStringUTF16(IDS_EXTENSION_INSTALL_DISALLOWED_ON_SITE));
+    // return CrxInstallError(
+    //     CrxInstallErrorType::OTHER,
+    //     CrxInstallErrorDetail::OFFSTORE_INSTALL_DISALLOWED,
+    //     l10n_util::GetStringUTF16(IDS_EXTENSION_INSTALL_DISALLOWED_ON_SITE));
   }
 
   if (extension_->is_app()) {
@@ -737,8 +737,8 @@ void CrxInstaller::OnInstallChecksComplete(const PreloadCheck::Errors& errors) {
     // We don't want to show the error infobar for installs from the WebStore,
     // because the WebStore already shows an error dialog itself.
     // Note: |client_| can be NULL in unit_tests!
-    if (extension()->from_webstore() && client_)
-      client_->install_ui()->SetSkipPostInstallUI(true);
+    // if (extension()->from_webstore() && client_)
+    //   client_->install_ui()->SetSkipPostInstallUI(true);
 
     ReportFailureFromUIThread(
         CrxInstallError(CrxInstallErrorType::DECLINED,
@@ -1197,13 +1197,13 @@ void CrxInstaller::ConfirmReEnable() {
 
   if (client_) {
     AddRef();  // Balanced in OnInstallPromptDone().
-    ExtensionInstallPrompt::PromptType type =
-        ExtensionInstallPrompt::GetReEnablePromptTypeForExtension(profile_,
-                                                                  extension());
-    client_->ShowDialog(
-        base::BindOnce(&CrxInstaller::OnInstallPromptDone, this), extension(),
-        nullptr, std::make_unique<ExtensionInstallPrompt::Prompt>(type),
-        ExtensionInstallPrompt::GetDefaultShowDialogCallback());
+    // ExtensionInstallPrompt::PromptType type =
+    //     ExtensionInstallPrompt::GetReEnablePromptTypeForExtension(profile_,
+    //                                                               extension());
+    // client_->ShowDialog(
+    //     base::BindOnce(&CrxInstaller::OnInstallPromptDone, this), extension(),
+    //     nullptr, std::make_unique<ExtensionInstallPrompt::Prompt>(type),
+    //     ExtensionInstallPrompt::GetDefaultShowDialogCallback());
   }
 }
 

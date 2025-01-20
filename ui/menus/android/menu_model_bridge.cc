@@ -29,6 +29,11 @@ MenuModelBridge::MenuModelBridge() {
 
 MenuModelBridge::~MenuModelBridge() = default;
 
+jni_zero::ScopedJavaLocalRef<jobject> MenuModelBridge::GetListItems() {
+  JNIEnv* env = base::android::AttachCurrentThread();
+  return Java_MenuModelBridge_getListItems(env, java_obj_);
+}
+
 void MenuModelBridge::AddExtensionItems(ui::MenuModel* menu_model) {
   JNIEnv* env = base::android::AttachCurrentThread();
   for (size_t i = 0; i < menu_model->GetItemCount(); ++i) {

@@ -5,7 +5,7 @@
 import("//chrome/common/features.gni")
 import("//extensions/buildflags/buildflags.gni")
 
-assert(enable_extensions)
+assert(enable_extensions_core)
 
 source_set("web_navigation") {
   sources = [
@@ -31,7 +31,7 @@ source_set("web_navigation") {
 
   deps = [
     "//chrome/browser/extensions",
-    "//chrome/browser/ui:browser_list",
+    # "//chrome/browser/ui:browser_list",
     "//chrome/common",
     "//chrome/common/extensions/api",
     "//content/public/common",

@@ -64,6 +64,7 @@ void ContextMenuMatcher::AppendExtensionItems(
     int* index,
     bool is_action_menu,
     const std::u16string& group_title) {
+  LOG(INFO) << "ContextMenuMatcher::AppendExtensionItems " << selection_text << " :: " << group_title;
   DCHECK_GE(*index, 0);
   int max_index =
       extensions_context_custom_last - extensions_context_custom_first;
@@ -89,8 +90,8 @@ void ContextMenuMatcher::AppendExtensionItems(
   // Also, don't add separators when Smart Text Selection is enabled. Smart
   // actions are grouped with extensions and the separator logic is
   // handled by them.
-  prepend_separator = *index == 0 && menu_model_->GetItemCount() &&
-                      !is_smart_text_selection_enabled_;
+  // prepend_separator = *index == 0 && menu_model_->GetItemCount() &&
+  //                     !is_smart_text_selection_enabled_;
 #endif
 
   // Extensions (other than platform apps) are only allowed one top-level slot

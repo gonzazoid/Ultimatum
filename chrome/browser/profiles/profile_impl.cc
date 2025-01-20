@@ -242,7 +242,7 @@
 #include "extensions/browser/extension_pref_value_map_factory.h"
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/ui/webui/extensions/extension_icon_source.h"
 #include "components/guest_view/browser/guest_view_manager.h"
@@ -491,6 +491,9 @@ ProfileImpl::ProfileImpl(
 #if BUILDFLAG(IS_ANDROID)
   auto* startup_data = g_browser_process->startup_data();
   DCHECK(startup_data && startup_data->GetProfileKey());
+
+
+
   TakePrefsFromStartupData();
   async_prefs = false;
 #else
@@ -558,7 +561,7 @@ void ProfileImpl::TakePrefsFromStartupData() {
   // ProfileImpl is created. The ownership of all these pre-created objects
   // will be taken by ProfileImpl.
   key_ = startup_data->TakeProfileKey();
-  prefs_ = startup_data->TakeProfilePrefService();
+  // prefs_ = startup_data->TakeProfilePrefService();
   schema_registry_service_ = startup_data->TakeSchemaRegistryService();
   user_cloud_policy_manager_ = startup_data->TakeUserCloudPolicyManager();
   profile_policy_connector_ = startup_data->TakeProfilePolicyConnector();
@@ -570,6 +573,17 @@ void ProfileImpl::TakePrefsFromStartupData() {
       CreateExtensionPrefStore(this, /*incognito_pref_store=*/false));
 
   ProfileKeyStartupAccessor::GetInstance()->Reset();
+
+  mojo::PendingRemote<prefs::mojom::TrackedPreferenceValidationDelegate>
+    pref_validation_delegate;
+  prefs_ = CreateProfilePrefService(
+      pref_registry_, CreateExtensionPrefStore(this, false),
+      profile_policy_connector_->policy_service(),
+      g_browser_process->browser_policy_connector(),
+      std::move(pref_validation_delegate), GetIOTaskRunner(), key_.get(), path_,
+      false);
+  key_->SetPrefs(prefs_.get());
+
 }
 #endif
 
@@ -1096,7 +1110,7 @@ void ProfileImpl::OnLocaleReady(CreateMode create_mode) {
 
   // Migrate obsolete prefs.
   MigrateObsoleteProfilePrefs(GetPrefs(), GetPath());
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   // Note: Extension preferences can be keyed off the extension ID, so need to
   // be handled specially (rather than directly as part of
   // MigrateObsoleteProfilePrefs()).
@@ -1306,7 +1320,7 @@ ProfileImpl::GetURLLoaderFactory() {
 }
 
 content::BrowserPluginGuestManager* ProfileImpl::GetGuestManager() {
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   return guest_view::GuestViewManager::FromBrowserContext(this);
 #else
   return NULL;

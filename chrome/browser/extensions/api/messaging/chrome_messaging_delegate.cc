@@ -118,15 +118,15 @@ ChromeMessagingDelegate::CreateReceiverForNativeApp(
     bool allow_user_level,
     std::string* error_out) {
   DCHECK(error_out);
-  gfx::NativeView native_view =
-      source ? source->GetNativeView() : gfx::NativeView();
-  std::unique_ptr<NativeMessageHost> native_host =
-      NativeMessageHost::Create(browser_context, native_view, extension_id,
-                                native_app_name, allow_user_level, error_out);
-  if (!native_host.get())
+  // gfx::NativeView native_view =
+  //     source ? source->GetNativeView() : gfx::NativeView();
+  // std::unique_ptr<NativeMessageHost> native_host =
+  //     NativeMessageHost::Create(browser_context, native_view, extension_id,
+  //                               native_app_name, allow_user_level, error_out);
+  // if (!native_host.get())
     return nullptr;
-  return std::make_unique<NativeMessagePort>(channel_delegate, receiver_port_id,
-                                             std::move(native_host));
+  // return std::make_unique<NativeMessagePort>(channel_delegate, receiver_port_id,
+  //                                            std::move(native_host));
 }
 
 void ChromeMessagingDelegate::QueryIncognitoConnectability(
@@ -136,8 +136,8 @@ void ChromeMessagingDelegate::QueryIncognitoConnectability(
     const GURL& source_url,
     base::OnceCallback<void(bool)> callback) {
   DCHECK(context->IsOffTheRecord());
-  IncognitoConnectability::Get(context)->Query(
-      target_extension, source_contents, source_url, std::move(callback));
+  // IncognitoConnectability::Get(context)->Query(
+  //     target_extension, source_contents, source_url, std::move(callback));
 }
 
 }  // namespace extensions
