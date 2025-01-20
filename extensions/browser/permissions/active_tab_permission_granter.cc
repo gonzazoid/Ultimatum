@@ -143,6 +143,9 @@ void ActiveTabPermissionGranter::GrantIfRequested(const Extension* extension) {
   // Do not use `RFH::GetLastCommittedOrigin()` because it returns an empty
   // origin in case of a frame with CSP sandbox.
   const GURL& url = web_contents()->GetLastCommittedURL();
+  // TODO DONT GRANT FOR NEW TAB FOR NOW
+  // it would be much better to understand why we even get here on new tabs
+  if (url.SchemeIs("chrome-native")) return;
 
   // If the extension requested the host permission to |url| but had it
   // withheld, we grant it active tab-style permissions, even if it doesn't have

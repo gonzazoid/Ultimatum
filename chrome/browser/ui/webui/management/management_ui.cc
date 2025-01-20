@@ -17,8 +17,8 @@
 #include "chrome/common/url_constants.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/generated_resources.h"
-#include "chrome/grit/management_resources.h"
-#include "chrome/grit/management_resources_map.h"
+// #include "chrome/grit/management_resources.h"
+// #include "chrome/grit/management_resources_map.h"
 #include "chrome/grit/theme_resources.h"
 #include "components/policy/core/common/policy_pref_names.h"
 #include "components/prefs/pref_registry_simple.h"
@@ -56,7 +56,7 @@ content::WebUIDataSource* CreateAndAddManagementUIHtmlSource(Profile* profile) {
   ManagementUI::GetLocalizedStrings(localized_strings, /*remove_links=*/false);
   source->AddLocalizedStrings(localized_strings);
 
-  source->SetDefaultResource(IDR_MANAGEMENT_MANAGEMENT_HTML);
+  // source->SetDefaultResource(IDR_MANAGEMENT_MANAGEMENT_HTML);
 
 #if BUILDFLAG(IS_CHROMEOS)
   source->AddString("managementDeviceLearnMoreUrl",
@@ -81,8 +81,8 @@ content::WebUIDataSource* CreateAndAddManagementUIHtmlSource(Profile* profile) {
                         l10n_util::GetStringUTF16(IDS_PLUGIN_VM_APP_NAME)));
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
-  webui::SetupWebUIDataSource(source, kManagementResources,
-                              IDR_MANAGEMENT_MANAGEMENT_HTML);
+  // webui::SetupWebUIDataSource(source, kManagementResources,
+  //                             IDR_MANAGEMENT_MANAGEMENT_HTML);
   return source;
 }
 
@@ -205,7 +205,7 @@ void ManagementUI::GetLocalizedStrings(
       {"applicationPermissions", IDS_MANAGEMENT_APPLICATIONS_PERMISSIONS},
       {"title", IDS_MANAGEMENT_TITLE},
       {"toolbarTitle", IDS_MANAGEMENT_TOOLBAR_TITLE},
-      {"searchPrompt", IDS_SETTINGS_SEARCH_PROMPT},
+      // {"searchPrompt", IDS_SETTINGS_SEARCH_PROMPT},
       {"clearSearch", IDS_CLEAR_SEARCH},
       {"backButton", IDS_ACCNAME_BACK},
       {"managedWebsites", IDS_MANAGEMENT_MANAGED_WEBSITES},

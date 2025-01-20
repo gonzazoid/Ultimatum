@@ -15,6 +15,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <numeric>
 
 #include "base/check.h"
 #include "base/check_op.h"
@@ -78,12 +79,12 @@
 #include "chrome/browser/ui/user_education/browser_user_education_interface.h"
 #include "chrome/browser/ui/views/tabs/dragging/tab_drag_controller.h"
 #include "chrome/browser/ui/views/tabs/vertical/vertical_tab_strip_metrics.h"
-#include "chrome/browser/ui/web_applications/web_app_dialog_utils.h"
-#include "chrome/browser/ui/web_applications/web_app_launch_utils.h"
-#include "chrome/browser/ui/web_applications/web_app_tabbed_utils.h"
-#include "chrome/browser/web_applications/policy/web_app_policy_manager.h"
-#include "chrome/browser/web_applications/web_app_provider.h"
-#include "chrome/browser/web_applications/web_app_tab_helper.h"
+// #include "chrome/browser/ui/web_applications/web_app_dialog_utils.h"
+// #include "chrome/browser/ui/web_applications/web_app_launch_utils.h"
+// #include "chrome/browser/ui/web_applications/web_app_tabbed_utils.h"
+// #include "chrome/browser/web_applications/policy/web_app_policy_manager.h"
+// #include "chrome/browser/web_applications/web_app_provider.h"
+// #include "chrome/browser/web_applications/web_app_tab_helper.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/webui_url_constants.h"
 #include "components/commerce/core/commerce_utils.h"
@@ -353,10 +354,12 @@ void TabStripModel::RemoveObserver(TabStripModelObserver* observer) {
 }
 
 int TabStripModel::count() const {
+  if (!contents_data_) return 0;
   return contents_data_->TabCountRecursive();
 }
 
 bool TabStripModel::empty() const {
+  if (!contents_data_) return true;
   return contents_data_->TabCountRecursive() == 0;
 }
 
@@ -1940,7 +1943,7 @@ split_tabs::SplitTabId TabStripModel::AddToNewSplit(
   CHECK(active_index() != kNoTab);
   CHECK(active_index() != indices[0]);
 
-  split_tabs::RecordSplitTabCreated(source);
+  // split_tabs::RecordSplitTabCreated(source);
 
   split_tabs::SplitTabId split_id = split_tabs::SplitTabId::GenerateNew();
 
@@ -1950,7 +1953,7 @@ split_tabs::SplitTabId TabStripModel::AddToNewSplit(
 
   AddToSplitImpl(split_id, indices, active_index(), visual_data,
                  SplitTabChange::SplitTabAddReason::kNewSplitTabAdded);
-  split_tabs::LogSplitViewCreatedUKM(this, split_id);
+  // split_tabs::LogSplitViewCreatedUKM(this, split_id);
   return split_id;
 }
 
@@ -2479,7 +2482,7 @@ bool TabStripModel::IsContextMenuCommandEnabled(
 
     case CommandCloseAllTabs:
       DCHECK(delegate()->IsForWebApp());
-      DCHECK(web_app::HasPinnedHomeTab(this));
+      // DCHECK(web_app::HasPinnedHomeTab(this));
       return true;
 
     case CommandToggleVertical:
@@ -3581,12 +3584,21 @@ int TabStripModel::InsertTabAtImpl(
   // TODO(gbillock): Ask the modal dialog manager whether the WebContents should
   // be blocked, or just let the modal dialog manager make the blocking call
   // directly and not use this at all.
+<<<<<<< HEAD
   const web_modal::WebContentsModalDialogManager* manager =
       web_modal::WebContentsModalDialogManager::FromWebContents(
           tab->GetContents());
   if (manager) {
     tab->SetBlocked(manager->IsDialogActive());
   }
+=======
+  // const web_modal::WebContentsModalDialogManager* manager =
+  //     web_modal::WebContentsModalDialogManager::FromWebContents(
+  //         tab->GetContents());
+  // if (manager) {
+  //   tab->set_blocked(manager->IsDialogActive());
+  // }
+>>>>>>> f60622f579a16 (ultimatum: webextensions on Android,draft)
 
   InsertTabAtIndexImpl(std::move(tab), index, group, pin, active);
 
@@ -3604,7 +3616,7 @@ int TabStripModel::GetIndexOfTab(const tabs::TabInterface* tab) const {
 }
 
 tabs::TabInterface* TabStripModel::GetTabAtIndex(int index) const {
-  return contents_data_->GetTabAtIndexRecursive(index);
+  return nullptr; // contents_data_->GetTabAtIndexRecursive(index);
 }
 
 std::vector<tabs::TabInterface*> TabStripModel::GetTabsAtIndices(
@@ -3893,12 +3905,12 @@ TabStripSelectionChange TabStripModel::SetSelection(
         // if the user backgrounds an audible tab.
         if (selection.old_contents &&
             selection.old_contents->IsCurrentlyAudible()) {
-          if (auto* const user_ed =
-                  BrowserUserEducationInterface::MaybeGetForWebContentsInTab(
-                      selection.old_contents)) {
-            user_ed->MaybeShowFeaturePromo(
-                feature_engagement::kIPHTabAudioMutingFeature);
-          }
+          // if (auto* const user_ed =
+          //         BrowserUserEducationInterface::MaybeGetForWebContentsInTab(
+          //             selection.old_contents)) {
+            // user_ed->MaybeShowFeaturePromo(
+            //     feature_engagement::kIPHTabAudioMutingFeature);
+          // }
         }
       }
     }
@@ -5233,11 +5245,11 @@ void TabStripModel::OnActiveTabChanged(
       // It's possible this could be done with a separate TabStripModelObserver,
       // but then it would be possible for a different observer to jump in front
       // and modify the WebContents, so for now, do it here.
-      auto* const thumbnail_helper =
-          ThumbnailTabHelper::FromWebContents(old_tab->GetContents());
-      if (thumbnail_helper) {
-        thumbnail_helper->CaptureThumbnailOnTabBackgrounded();
-      }
+      // auto* const thumbnail_helper =
+      //     ThumbnailTabHelper::FromWebContents(old_tab->GetContents());
+      // if (thumbnail_helper) {
+      //   thumbnail_helper->CaptureThumbnailOnTabBackgrounded();
+      // }
 
       old_opener = GetOpenerOfTabAt(index);
 
@@ -5269,16 +5281,16 @@ bool TabStripModel::PolicyAllowsTabClosing(
     return true;
   }
 
-  web_app::WebAppProvider* provider =
-      web_app::WebAppProvider::GetForWebContents(contents);
+  // web_app::WebAppProvider* provider =
+  //     web_app::WebAppProvider::GetForWebContents(contents);
   // Can be null if there is no tab helper or app id.
-  const webapps::AppId* app_id = web_app::WebAppTabHelper::GetAppId(contents);
-  if (!app_id) {
+  // const webapps::AppId* app_id = web_app::WebAppTabHelper::GetAppId(contents);
+  // if (!app_id) {
     return true;
-  }
+  // }
 
-  return !delegate()->IsForWebApp() ||
-         !provider->policy_manager().IsPreventCloseEnabled(*app_id);
+  // return !delegate()->IsForWebApp() ||
+  //        !provider->policy_manager().IsPreventCloseEnabled(*app_id);
 }
 
 int TabStripModel::DetermineInsertionIndex(ui::PageTransition transition,

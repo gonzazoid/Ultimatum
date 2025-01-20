@@ -18,6 +18,9 @@
 #include "ui/gfx/android/java_bitmap.h"
 #include "ui/gfx/image/image_skia_rep.h"
 
+#include "extensions/browser/extension_util.h"
+#include "chrome/browser/profiles/profile.h"
+
 // Must come after all headers that specialize FromJniType() / ToJniType().
 #include "chrome/browser/ui/android/extensions/jni_headers/ExtensionAction_jni.h"
 #include "chrome/browser/ui/android/extensions/jni_headers/ExtensionsToolbarBridge_jni.h"
@@ -201,9 +204,14 @@ ExtensionsToolbarAndroid::GetAllActionIds(JNIEnv* env) {
 }
 
 std::vector<ToolbarActionsModel::ActionId>
-ExtensionsToolbarAndroid::GetPinnedActionIds(JNIEnv* env) {
+ExtensionsToolbarAndroid::GetPinnedActionIds(JNIEnv* env, bool incognito) {
   const auto& ids = toolbar_view_model_->GetPinnedActionIds();
-  return std::vector(ids.begin(), ids.end());
+  std::vector<ToolbarActionsModel::ActionId> actions = {};
+  for (auto it : ids) {
+    if (!incognito || extensions::util::IsIncognitoEnabled(it, browser_->GetProfile()))
+      actions.push_back(it);
+  }
+  return actions;
 }
 
 int ExtensionsToolbarAndroid::GetExtensionsMenuButtonState(

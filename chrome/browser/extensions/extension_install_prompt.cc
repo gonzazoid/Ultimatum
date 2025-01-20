@@ -50,6 +50,12 @@
 
 static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
+#if BUILDFLAG(IS_ANDROID)
+ #include "ui/android/view_android.h"
+// #include "ui/android/window_android.h"
+#include "chrome/browser/download/android/extension_install_dialog_bridge.h"
+#endif
+
 using extensions::Extension;
 using extensions::Manifest;
 using extensions::PermissionMessage;
@@ -472,7 +478,11 @@ ExtensionInstallPrompt::ExtensionInstallPrompt(content::WebContents* contents)
       extension_(nullptr),
       install_ui_(ExtensionInstallUI::Create(profile_)),
       show_params_(new ExtensionInstallPromptShowParams(contents)),
-      did_call_show_dialog_(false) {}
+      did_call_show_dialog_(false)
+#if BUILDFLAG(IS_ANDROID)
+      , extension_install_dialog_bridge_(std::make_unique<ExtensionInstallDialogBridge>())
+#endif
+  {}
 
 ExtensionInstallPrompt::ExtensionInstallPrompt(Profile* profile,
                                                gfx::NativeWindow native_window)
@@ -621,6 +631,32 @@ void ExtensionInstallPrompt::LoadImageIfNeeded() {
                                          weak_factory_.GetWeakPtr()));
 }
 
+#if BUILDFLAG(IS_ANDROID)
+void ExtensionInstallPrompt::ShowExtensionInstallAndroidDialogImpl(
+    std::unique_ptr<ExtensionInstallPromptShowParams> show_params,
+    ExtensionInstallPrompt::DoneCallback done_callback,
+    std::unique_ptr<ExtensionInstallPrompt::Prompt> prompt) {
+  // DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+
+  auto done = base::SplitOnceCallback(std::move(done_callback));
+  auto accepted = base::BindOnce(std::move(done.first),
+      ExtensionInstallPrompt::DoneCallbackPayload(ExtensionInstallPrompt::Result::ACCEPTED));
+  auto canceled = base::BindOnce(std::move(done.second),
+      ExtensionInstallPrompt::DoneCallbackPayload(ExtensionInstallPrompt::Result::USER_CANCELED));
+
+  // If the dialog has to be parented to WebContents, force activate the
+  // contents. See crbug.com/40059470.
+  content::WebContents* web_contents = show_params->GetParentWebContents();
+  if (web_contents) {
+    ui::ViewAndroid* view_android =
+        web_contents ? web_contents->GetNativeView() : nullptr;
+    ui::WindowAndroid* window_android =
+        view_android ? view_android->GetWindowAndroid() : nullptr;
+    extension_install_dialog_bridge_->Show(std::move(prompt), window_android, std::move(accepted), std::move(canceled));
+  }
+}
+#endif
+
 void ExtensionInstallPrompt::ShowConfirmation() {
   std::unique_ptr<const PermissionSet> permissions_to_display;
 
@@ -654,8 +690,12 @@ void ExtensionInstallPrompt::ShowConfirmation() {
   if (AutoConfirmPromptIfEnabled())
     return;
 
+#if BUILDFLAG(IS_ANDROID)
+  show_dialog_callback_ = base::BindRepeating(&ExtensionInstallPrompt::ShowExtensionInstallAndroidDialogImpl, weak_factory_.GetWeakPtr());
+#else
   if (show_dialog_callback_.is_null())
     show_dialog_callback_ = GetDefaultShowDialogCallback();
+#endif
   // TODO(crbug.com/40625151): Use OnceCallback and eliminate the need for
   // a callback on the stack.
   auto cb = std::move(done_callback_);

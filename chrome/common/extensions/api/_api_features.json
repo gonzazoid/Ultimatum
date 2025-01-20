@@ -119,9 +119,9 @@
       "chrome://bookmarks/*",
       "chrome://bookmarks-side-panel.top-chrome/*",
       "chrome://read-later.top-chrome/*"
-    ],
+    ]
     // "desktop_android" is not supported.
-    "platforms": ["chromeos", "linux", "mac", "win"]
+    // "platforms": ["chromeos", "linux", "mac", "win"]
   },
   "bookmarks": [{
     "dependencies": ["permission:bookmarks"],

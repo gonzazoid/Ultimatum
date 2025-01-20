@@ -237,6 +237,9 @@
 #include "extensions/browser/extension_pref_store.h"
 #include "extensions/browser/extension_pref_value_map.h"
 #include "extensions/browser/extension_pref_value_map_factory.h"
+#include "chrome/browser/extensions/extension_service.h"
+#include "chrome/browser/ui/webui/extensions/extension_icon_source.h"
+// #include "components/guest_view/browser/guest_view_manager.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_system.h"
 #endif
@@ -490,6 +493,9 @@ ProfileImpl::ProfileImpl(
 #if BUILDFLAG(IS_ANDROID)
   auto* startup_data = g_browser_process->startup_data();
   DCHECK(startup_data && startup_data->GetProfileKey());
+
+
+
   TakePrefsFromStartupData();
   async_prefs = false;
 #else
@@ -558,18 +564,31 @@ void ProfileImpl::TakePrefsFromStartupData() {
   // ProfileImpl is created. The ownership of all these pre-created objects
   // will be taken by ProfileImpl.
   key_ = startup_data->TakeProfileKey();
-  prefs_ = startup_data->TakeProfilePrefService();
+  // prefs_ = startup_data->TakeProfilePrefService();
   schema_registry_service_ = startup_data->TakeSchemaRegistryService();
   user_cloud_policy_manager_ = startup_data->TakeUserCloudPolicyManager();
   profile_policy_connector_ = startup_data->TakeProfilePolicyConnector();
   pref_registry_ = startup_data->TakePrefRegistrySyncable();
+
+  ProfileKeyStartupAccessor::GetInstance()->Reset();
+
+  // TODO do we still need this???
+  mojo::PendingRemote<prefs::mojom::TrackedPreferenceValidationDelegate>
+    pref_validation_delegate;
+  prefs_ = CreateProfilePrefService(
+      pref_registry_, CreateExtensionPrefStore(this, false),
+      profile_policy_connector_->policy_service(),
+      g_browser_process->browser_policy_connector(),
+      std::move(pref_validation_delegate), GetIOTaskRunner(), key_.get(), path_,
+      false, g_browser_process->os_crypt_async(),
+      g_browser_process->device_parental_controls());
+  key_->SetPrefs(prefs_.get());
 
   // The extension prefs value store requires a profile, so it can't be created
   // in StartupData.
   prefs_->UpdateExtensionPrefStore(
       CreateExtensionPrefStore(this, /*incognito_pref_store=*/false));
 
-  ProfileKeyStartupAccessor::GetInstance()->Reset();
 }
 #endif
 

@@ -52,9 +52,10 @@
 #include "base/win/windows_version.h"
 #endif
 
+#include "chrome/browser/extensions/extension_tab_util.h"
+
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "chrome/browser/devtools/devtools_window.h"
-#include "chrome/browser/extensions/extension_tab_util.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_navigator.h"
@@ -454,6 +455,7 @@ bool ChromeRuntimeAPIDelegate::OpenOptionsPage(
 #else
   // TODO(crbug.com/383366125): Implement this when options page for extensions
   // becomes available for desktop android.
+  // TODO
   NOTIMPLEMENTED_LOG_ONCE();
   return false;
 #endif

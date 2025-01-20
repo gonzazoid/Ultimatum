@@ -83,12 +83,12 @@
 
 #endif  // BUILDFLAG(ENABLE_GUEST_VIEW)
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/extensions/api/feedback_private/chrome_feedback_private_delegate.h"
 #include "chrome/browser/extensions/api/file_system/chrome_file_system_delegate.h"
 #include "chrome/browser/search/instant_service.h"
 #include "chrome/browser/search/instant_service_factory.h"
-#endif
+// #endif
 
 #if BUILDFLAG(IS_CHROMEOS)
 #include "chrome/browser/extensions/api/file_handlers/non_native_file_system_delegate_chromeos.h"
@@ -305,14 +305,14 @@ void ChromeExtensionsAPIClient::OpenFileUrlForTesting(
   CHECK(file_url.SchemeIsFile());
 
   // Find the first browser window that matches this profile.
-  Profile* profile = Profile::FromBrowserContext(browser_context);
+  // Profile* profile = Profile::FromBrowserContext(browser_context);
   BrowserWindowInterface* browser = nullptr;
-  for (BrowserWindowInterface* bwi : GetAllBrowserWindowInterfaces()) {
-    if (bwi->GetProfile() == profile) {
-      browser = bwi;
-      break;
-    }
-  }
+  // for (BrowserWindowInterface* bwi : GetAllBrowserWindowInterfaces()) {
+  //   if (bwi->GetProfile() == profile) {
+  //     browser = bwi;
+  //     break;
+  //   }
+  // }
   CHECK(browser) << "Unable to find browser with matching profile.";
 
   // Find the active tab.
@@ -349,6 +349,7 @@ ChromeExtensionsAPIClient::CreateGuestViewManagerDelegate() const {
   return std::make_unique<ChromeGuestViewManagerDelegate>();
 }
 
+// TODO
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 std::unique_ptr<MimeHandlerViewGuestDelegate>
 ChromeExtensionsAPIClient::CreateMimeHandlerViewGuestDelegate(
@@ -450,8 +451,6 @@ MessagingDelegate* ChromeExtensionsAPIClient::GetMessagingDelegate() {
   return messaging_delegate_.get();
 }
 
-// The APIs that require these methods are not supported on Android.
-#if !BUILDFLAG(IS_ANDROID)
 FileSystemDelegate* ChromeExtensionsAPIClient::GetFileSystemDelegate() {
   if (!file_system_delegate_) {
 #if BUILDFLAG(IS_CHROMEOS)
@@ -463,6 +462,8 @@ FileSystemDelegate* ChromeExtensionsAPIClient::GetFileSystemDelegate() {
   return file_system_delegate_.get();
 }
 
+// The APIs that require these methods are not supported on Android.
+// #if !BUILDFLAG(IS_ANDROID)
 FeedbackPrivateDelegate*
 ChromeExtensionsAPIClient::GetFeedbackPrivateDelegate() {
   if (!feedback_private_delegate_) {
@@ -471,6 +472,7 @@ ChromeExtensionsAPIClient::GetFeedbackPrivateDelegate() {
   }
   return feedback_private_delegate_.get();
 }
+// #endif  // !BUILDFLAG(IS_ANDROID)
 
 AutomationInternalApiDelegate*
 ChromeExtensionsAPIClient::GetAutomationInternalApiDelegate() {
@@ -480,7 +482,6 @@ ChromeExtensionsAPIClient::GetAutomationInternalApiDelegate() {
   }
   return extensions_automation_api_delegate_.get();
 }
-#endif  // !BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_CHROMEOS)
 MediaPerceptionAPIDelegate*

@@ -35,6 +35,12 @@
 #include "extensions/common/permissions/permissions_data.h"
 #include "ui/base/l10n/l10n_util.h"
 
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+#include "chrome/browser/android/tab_android.h"
+#endif
+
 static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 namespace {
@@ -1393,10 +1399,22 @@ void ExtensionsMenuViewModel::OnWebContentsChanged(
 }
 
 content::WebContents* ExtensionsMenuViewModel::GetActiveWebContents() {
+#if BUILDFLAG(IS_ANDROID)
+  for (TabModel* model : TabModelList::models()) {
+    if (!model->IsActiveModel()) {
+      continue;
+    }
+    return model->GetActiveWebContents();
+  }
+  return nullptr;
+#else
+  auto* tab = TabListInterface::From(browser_)->GetActiveTab();
+
   auto* tab_list = TabListInterface::From(browser_);
   if (!tab_list) {
     return nullptr;
   }
   auto* tab = tab_list->GetActiveTab();
   return tab ? tab->GetContents() : nullptr;
+#endif
 }

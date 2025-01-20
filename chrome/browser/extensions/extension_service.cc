@@ -802,6 +802,22 @@ void ExtensionService::OnExtensionHostRenderProcessGone(
   DCHECK(
       profile_->IsSameOrParent(Profile::FromBrowserContext(browser_context)));
 
+#if BUILDFLAG(IS_ANDROID)
+  // Ultimatum browser
+  // oom can cause killing background pages
+  // at this point there is nothing we can do about it
+  // so we just restart instead of terminating the extension
+  if (
+      extension_host->extension()->manifest_version() == 2 &&
+      registry_->enabled_extensions().Contains(extension_host->extension()->id())
+  ) {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&ExtensionRegistrar::ReloadExtension,
+                                extension_registrar_->GetWeakPtr(),
+                                extension_host->extension_id()));
+    return;
+  }
+#endif
   // Mark the extension as terminated and deactivated. We want it to
   // be in a consistent state: either fully working or not loaded
   // at all, but never half-crashed.  We do it in a PostTask so

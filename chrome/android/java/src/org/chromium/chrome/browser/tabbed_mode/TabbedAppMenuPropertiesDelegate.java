@@ -327,6 +327,8 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
             }
         }
 
+        modelList.add(buildDevToolsItem());
+
         // Divider
         modelList.add(
                 new MVCListAdapter.ListItem(
@@ -829,12 +831,22 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
                                 : Resources.ID_NULL));
     }
 
+    private MVCListAdapter.ListItem buildDevToolsItem() {
+        return new MVCListAdapter.ListItem(
+                AppMenuHandler.AppMenuItemType.STANDARD,
+                buildModelForStandardMenuItem(
+                        R.id.dev_tools,
+                        R.string.menu_dev_tools,
+                        shouldShowIconBeforeItem() ? R.drawable.ic_dev_tools_24dp : 0));
+    }
+
     @Contract("null -> false")
     private boolean shouldShowPageZoomItem(@Nullable Tab currentTab) {
         return currentTab != null
                 && shouldShowWebContentsDependentMenuItem(currentTab)
                 && PageZoomUtils.shouldShowZoomMenuItem();
     }
+
 
     private boolean shouldShowLFFPageZoomItem() {
         return AccessibilityFeatureMap.sAndroidZoomIndicator.isEnabled()

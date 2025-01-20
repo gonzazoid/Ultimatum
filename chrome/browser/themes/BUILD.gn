@@ -4,7 +4,7 @@
 
 import("//extensions/buildflags/buildflags.gni")
 
-assert(is_win || is_mac || is_linux || is_chromeos)
+assert(is_win || is_mac || is_linux || is_chromeos || is_android)
 
 source_set("themes") {
   public = [
@@ -29,15 +29,20 @@ source_set("themes") {
     "theme_service.cc",
     "theme_service_factory.cc",
     "theme_service_utils.cc",
-    "theme_syncable_service.cc",
   ]
+  if (!is_android) {
+    sources += [
+      "theme_syncable_service.cc",
+    ]
+  }
+
   deps = [
     "//chrome/app/theme:theme_resources",
     "//chrome/browser/new_tab_page/chrome_colors",
     "//chrome/browser/search/background",
     "//chrome/browser/search/background:constants",
     "//chrome/browser/ui/color:color_headers",
-    "//chrome/browser/ui/frame",
+    # "//chrome/browser/ui/frame",
     "//chrome/browser/ui/tabs:features",
     "//chrome/browser/ui/tabs:tab_group",
     "//chrome/browser/ui/webui/cr_components/theme_color_picker",
@@ -58,6 +63,13 @@ source_set("themes") {
     "//ui/gfx",
     "//ui/native_theme",
   ]
+  if (!is_android) {
+    deps += [
+      "//chrome/browser/search/background:constants",
+      "//chrome/browser/ui/frame",
+    ]
+  }
+
   public_deps = [
     "//base",
     "//chrome/browser/profiles:profile",

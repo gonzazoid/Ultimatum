@@ -17,6 +17,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
+#include "base/time/time.h"
 #include "chrome/browser/extensions/api/developer_private/developer_private_api.h"
 #include "chrome/browser/extensions/api/developer_private/inspectable_views_finder.h"
 #include "chrome/browser/extensions/commands/command_service.h"
@@ -59,6 +60,7 @@
 #include "extensions/common/extension_urls.h"
 #include "extensions/common/install_warning.h"
 #include "extensions/common/manifest.h"
+#include "extensions/common/manifest_constants.h"
 #include "extensions/common/manifest_handlers/background_info.h"
 #include "extensions/common/manifest_handlers/icons_handler.h"
 #include "extensions/common/manifest_handlers/offline_enabled_info.h"
@@ -75,6 +77,7 @@
 #include "ui/gfx/color_utils.h"
 #include "ui/gfx/image/image.h"
 #include "ui/gfx/skbitmap_operations.h"
+#include "extensions/browser/management_policy.h"
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "ui/base/accelerators/global_accelerator_listener/global_accelerator_listener.h"  // nogncheck
@@ -432,6 +435,7 @@ void ExtensionInfoGenerator::OnProfileWillBeDestroyed(Profile* profile) {
 }
 
 void ExtensionInfoGenerator::CreateExtensionInfo(
+    developer::EventType event_type,
     const ExtensionId& id,
     ExtensionInfosCallback callback) {
   DCHECK(callback_.is_null() && list_.empty())
@@ -456,9 +460,15 @@ void ExtensionInfoGenerator::CreateExtensionInfo(
   }
 
   if (pending_image_loads_ == 0) {
-    // Don't call the callback re-entrantly.
-    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
-        FROM_HERE, base::BindOnce(std::move(callback), std::move(list_)));
+    if (event_type == developer::EventType::kUninstalled) {
+      // Uninstall from unpacked case
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+          FROM_HERE, base::BindOnce(std::move(callback), std::move(list_)), base::Milliseconds(200));
+    } else {
+      // Don't call the callback re-entrantly.
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, base::BindOnce(std::move(callback), std::move(list_)));
+    }
     list_.clear();
   } else {
     callback_ = std::move(callback);
@@ -696,6 +706,35 @@ void ExtensionInfoGenerator::FillExtensionInfo(const Extension& extension,
   info.web_store_url = ManifestURL::GetWebStoreURL(&extension).spec();
 
   info.id = extension.id();
+
+  info.popup_url = "";
+  auto manifest_version = extension.manifest()->value()->FindInt(manifest_keys::kManifestVersion);
+
+  if (*manifest_version == 2) {
+    const base::DictValue* dict =
+        extension.manifest()->value()->FindDict(manifest_keys::kBrowserAction);
+    if (dict) {
+      const base::Value* default_popup = dict->Find(manifest_keys::kActionDefaultPopup);
+      if (default_popup) {
+        const std::string* url_str = default_popup->GetIfString();
+        if (url_str)
+          info.popup_url = "chrome-extension://" + extension.id() + "/" + *url_str;
+      }
+    }
+  }
+
+  if (*manifest_version == 3) {
+    const base::DictValue* dict =
+        extension.manifest()->value()->FindDict(manifest_keys::kAction);
+    if (dict) {
+      const base::Value* default_popup = dict->Find(manifest_keys::kActionDefaultPopup);
+      if (default_popup) {
+        const std::string* url_str = default_popup->GetIfString();
+        if (url_str)
+          info.popup_url = "chrome-extension://" + extension.id() + "/" + *url_str;
+      }
+    }
+  }
 
   // Incognito access.
   info.incognito_access.is_enabled = util::CanBeIncognitoEnabled(&extension);

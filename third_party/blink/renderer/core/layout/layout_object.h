@@ -1423,6 +1423,14 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
 
   bool NeedsLayout() const {
     NOT_DESTROYED();
+    // NOP LOG(INFO) << "bitfields_.SelfNeedsFullLayout(): " << bitfields_.SelfNeedsFullLayout();
+    // NOP LOG(INFO) << "bitfields_.ChildNeedsFullLayout(): " << bitfields_.ChildNeedsFullLayout();
+    // YEP LOG(INFO) << "bitfields_.NeedsSimplifiedLayout(): " << bitfields_.NeedsSimplifiedLayout();
+    if (bitfields_.NeedsSimplifiedLayout()) {
+      // LOG(INFO) << "=======================";
+      // LOG(INFO) << ToString();
+      // LOG(INFO) << "=======================";
+    }
     return bitfields_.SelfNeedsFullLayout() ||
            bitfields_.ChildNeedsFullLayout() ||
            bitfields_.NeedsSimplifiedLayout();
@@ -4336,6 +4344,7 @@ inline void LayoutObject::ClearNeedsLayoutWithoutPaintInvalidation() {
 
   if (!ChildLayoutBlockedByDisplayLock()) {
     SetChildNeedsFullLayout(false);
+    // LOG(INFO) << "SetNeedsSimplifiedLayout(false);";
     SetNeedsSimplifiedLayout(false);
   } else if (!ChildNeedsFullLayout() && !NeedsSimplifiedLayout()) {
     // We aren't clearing the child dirty bits because the node is locked and
@@ -4380,6 +4389,7 @@ inline void LayoutObject::SetChildNeedsLayout(MarkingBehavior mark_parents) {
 inline void LayoutObject::SetNeedsSimplifiedLayout() {
   NOT_DESTROYED();
   bool already_needed_layout = NeedsSimplifiedLayout();
+  // LOG(INFO) << "SetNeedsSimplifiedLayout(true);";
   SetNeedsSimplifiedLayout(true);
 #if DCHECK_IS_ON()
   DCHECK(!IsSetNeedsLayoutForbidden());

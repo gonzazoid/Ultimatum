@@ -341,10 +341,10 @@ void AppViewGuest::LaunchAppAndFireEvent(
     base::DictValue data,
     GuestPageCreatedCallback callback,
     std::unique_ptr<LazyContextTaskQueue::ContextInfo> context_info) {
-  bool has_event_listener = EventRouter::Get(browser_context())
+  bool has_event_listener = false; /* EventRouter::Get(browser_context())
                                 ->ExtensionHasEventListener(
                                     context_info->extension_id,
-                                    app_runtime::OnEmbedRequested::kEventName);
+                                    app_runtime::OnEmbedRequested::kEventName); */
   if (!has_event_listener) {
     RejectGuestCreation(std::move(owned_this), std::move(callback));
     return;
@@ -364,8 +364,8 @@ void AppViewGuest::LaunchAppAndFireEvent(
   embed_request.Set(appview::kGuestInstanceID, guest_instance_id());
   embed_request.Set(appview::kEmbedderID, owner_host());
   embed_request.Set(appview::kData, std::move(data));
-  AppRuntimeEventRouter::DispatchOnEmbedRequestedEvent(
-      browser_context(), std::move(embed_request), extension);
+  // AppRuntimeEventRouter::DispatchOnEmbedRequestedEvent(
+  //     browser_context(), std::move(embed_request), extension);
 }
 
 void AppViewGuest::LoadURL() {

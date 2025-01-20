@@ -225,6 +225,7 @@ namespace developerPrivate {
     boolean fileAccessPendingChange;
     HomePage homePage;
     DOMString iconUrl;
+    DOMString popupUrl;
     DOMString id;
     AccessModifier incognitoAccess;
     AccessModifier userScriptsAccess;
@@ -650,6 +651,12 @@ namespace developerPrivate {
     // Loads a user-selected unpacked item.
     // |options| : Additional configuration parameters.
     static void loadUnpacked(
+        optional LoadUnpackedOptions options,
+        optional LoadErrorCallback callback);
+
+    // Loads a user-selected crx item.
+    // |options| : Additional configuration parameters.
+    static void loadCRX(
         optional LoadUnpackedOptions options,
         optional LoadErrorCallback callback);
 

@@ -220,6 +220,7 @@ declare global {
         fileAccessPendingChange: boolean;
         homePage: HomePage;
         iconUrl: string;
+        popupUrl: string;
         id: string;
         incognitoAccess: AccessModifier;
         userScriptsAccess: AccessModifier;
@@ -452,6 +453,8 @@ declare global {
       export function getProfileConfiguration(): Promise<ProfileInfo>;
       export function installDroppedFile(): Promise<void>;
       export function loadUnpacked(options: LoadUnpackedOptions):
+          Promise<LoadError|null>;
+      export function loadCRX(options: LoadUnpackedOptions):
           Promise<LoadError|null>;
       export function notifyDragInstallInProgress(): void;
       export function openDevTools(properties: OpenDevToolsProperties):

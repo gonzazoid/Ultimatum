@@ -675,6 +675,8 @@ struct WebRequestEventRouter::BlockedRequest {
   // Only valid for OnBeforeRequest and OnHeadersReceived.
   raw_ptr<GURL> new_url = nullptr;
 
+  raw_ptr<extension_web_request_api_helpers::BlockingResponse> new_response = nullptr;
+
   // The request headers that will be issued along with this request. Only valid
   // for OnBeforeSendHeaders.
   raw_ptr<net::HttpRequestHeaders> request_headers = nullptr;
@@ -706,7 +708,7 @@ helpers::EventResponseDelta CalculateDelta(
     case WebRequestEventRouter::EventTypes::kOnBeforeRequest:
       return helpers::CalculateOnBeforeRequestDelta(
           response->extension_id, response->extension_install_time,
-          response->cancel, response->new_url);
+          response->cancel, response->response, response->new_url);
     case WebRequestEventRouter::EventTypes::kOnBeforeSendHeaders: {
       net::HttpRequestHeaders* old_headers = blocked_request->request_headers;
       net::HttpRequestHeaders* new_headers = response->request_headers.get();
@@ -1035,6 +1037,7 @@ int WebRequestEventRouter::OnBeforeRequest(
     WebRequestInfo* request,
     net::CompletionOnceCallback callback,
     GURL* new_url,
+    extension_web_request_api_helpers::BlockingResponse* new_response,
     bool* should_collapse_initiator) {
   DCHECK(should_collapse_initiator);
 
@@ -1182,6 +1185,7 @@ int WebRequestEventRouter::OnBeforeRequest(
   blocked_request.request = request;
   blocked_request.callback = std::move(callback);
   blocked_request.new_url = new_url;
+  blocked_request.new_response = new_response;
 
   if (blocked_request.num_handlers_blocking == 0) {
     // If there are no blocking handlers, only the declarative rules tried
@@ -2898,7 +2902,9 @@ int WebRequestEventRouter::ExecuteDeltas(
   deltas.sort(&helpers::InDecreasingExtensionInstallationTimeOrder);
 
   std::optional<ExtensionId> canceled_by_extension;
+  std::optional<ExtensionId> finished_by_extension;
   helpers::MergeCancelOfResponses(blocked_request.response_deltas,
+                                  &finished_by_extension,
                                   &canceled_by_extension);
 
   extension_web_request_api_helpers::IgnoredActions ignored_actions;
@@ -2907,7 +2913,7 @@ int WebRequestEventRouter::ExecuteDeltas(
   if (blocked_request.event == EventTypes::kOnBeforeRequest) {
     CHECK(!blocked_request.callback.is_null());
     helpers::MergeOnBeforeRequestResponses(
-        request->url, blocked_request.response_deltas, blocked_request.new_url,
+        request->url, blocked_request.response_deltas, blocked_request.new_url, blocked_request.new_response,
         &extension_id, &ignored_actions);
   } else if (blocked_request.event == EventTypes::kOnBeforeSendHeaders) {
     CHECK(!blocked_request.before_send_headers_callback.is_null());

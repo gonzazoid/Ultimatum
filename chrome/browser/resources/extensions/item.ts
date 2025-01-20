@@ -17,7 +17,7 @@ import type {ChromeEvent} from '/tools/typescript/definitions/chrome_event.js';
 import type {CrToggleElement} from 'chrome://resources/cr_elements/cr_toggle/cr_toggle.js';
 import {TooltipPosition} from 'chrome://resources/cr_elements/cr_tooltip/cr_tooltip.js';
 import {I18nMixinLit} from 'chrome://resources/cr_elements/i18n_mixin_lit.js';
-import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
+import {assert /* , assertNotReached */} from 'chrome://resources/js/assert.js';
 import {isRTL} from 'chrome://resources/js/util.js';
 import {CrLitElement} from 'chrome://resources/lit/v3_0/lit.rollup.js';
 import type {PropertyValues} from 'chrome://resources/lit/v3_0/lit.rollup.js';
@@ -322,22 +322,23 @@ export class ExtensionsItemElement extends ExtensionsItemElementBase {
   }
 
   protected computeSourceIndicatorIcon_(): string {
-    switch (getItemSource(this.data)) {
-      case SourceType.POLICY:
-        return 'extensions-icons:business';
-      case SourceType.SIDELOADED:
-        return 'extensions-icons:input';
-      case SourceType.UNKNOWN:
-        // TODO(dpapad): Ask UX for a better icon for this case.
-        return 'extensions-icons:input';
-      case SourceType.UNPACKED:
-        return 'extensions-icons:unpacked';
-      case SourceType.WEBSTORE:
-      case SourceType.INSTALLED_BY_DEFAULT:
-        return '';
-      default:
-        assertNotReached();
-    }
+    return '';
+    // switch (getItemSource(this.data)) {
+    //   case SourceType.POLICY:
+    //     return 'extensions-icons:business';
+    //   case SourceType.SIDELOADED:
+    //     return 'extensions-icons:input';
+    //   case SourceType.UNKNOWN:
+    //     // TODO(dpapad): Ask UX for a better icon for this case.
+    //     return 'extensions-icons:input';
+    //   case SourceType.UNPACKED:
+    //     return 'extensions-icons:unpacked';
+    //   case SourceType.WEBSTORE:
+    //   case SourceType.INSTALLED_BY_DEFAULT:
+    //     return '';
+    //   default:
+    //     assertNotReached();
+    // }
   }
 
   protected computeSourceIndicatorText_(): string {

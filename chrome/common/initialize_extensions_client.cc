@@ -16,7 +16,7 @@
 #include "extensions/common/features/feature.h"
 #include "extensions/common/user_scripts_availability.h"
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "chrome/common/controlled_frame/controlled_frame.h"
 #include "chrome/common/controlled_frame/controlled_frame_api_provider.h"
 #endif
@@ -77,7 +77,7 @@ void EnsureExtensionsClientInitialized() {
     extensions_client->AddAPIProvider(
         std::make_unique<chrome_apps::ChromeAppsAPIProvider>());
 #endif
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
     extensions_client->AddAPIProvider(
         std::make_unique<controlled_frame::ControlledFrameAPIProvider>());
 #endif

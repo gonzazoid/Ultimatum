@@ -191,7 +191,7 @@ void ExtensionKeybindingRegistry::CommandExecuted(
     // the extension acts on the command. NOTE: The Global Commands handler does
     // not set the delegate as it deals only with named commands (not
     // page/browser actions that are associated with the current page directly).
-    ActiveTabPermissionGranter* granter =
+    ActiveTabPermissionGranter* granter = nullptr;
         web_contents ? ActiveTabPermissionGranter::FromWebContents(web_contents)
                      : nullptr;
     if (granter) {

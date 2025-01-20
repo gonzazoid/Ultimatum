@@ -177,6 +177,7 @@ source_set("webui") {
   }
 }
 
+if (!is_android || enable_desktop_android_extensions) {
 source_set("webui_util") {
   sources = [
     "webui_embedding_context.cc",
@@ -187,4 +188,5 @@ source_set("webui_util") {
     "//chrome/browser/ui/browser_window",
     "//chrome/browser/ui/tabs:tabs_public",
   ]
+}
 }

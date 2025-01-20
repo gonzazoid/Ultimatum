@@ -108,6 +108,7 @@ found in the LICENSE file.
     <!-- Video Group -->
     <item type="id" name="contextmenu_save_video" />
     <item type="id" name="contextmenu_picture_in_picture" />
+    <item type="id" name="contextmenu_extensions_menu" />
 
     <!-- Menu item IDs for FullscreenActivities -->
     <item type="id" name="contextmenu_open_in_chrome" />

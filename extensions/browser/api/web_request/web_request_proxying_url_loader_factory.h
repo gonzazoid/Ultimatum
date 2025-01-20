@@ -196,6 +196,7 @@ class WebRequestProxyingURLLoaderFactory
         WebRequestEventRouter::AuthRequiredResponse response);
     void ContinueToBeforeRedirect(const net::RedirectInfo& redirect_info,
                                   int error_code);
+    void HandleBlockingResponse();
     void HandleResponseOrRedirectHeaders(
         net::CompletionOnceCallback continuation);
     void OnRequestError(const network::URLLoaderCompletionStatus& status,
@@ -242,6 +243,7 @@ class WebRequestProxyingURLLoaderFactory
     std::optional<mojo_base::BigBuffer> current_cached_metadata_;
     scoped_refptr<net::HttpResponseHeaders> override_headers_;
     GURL redirect_url_;
+    extension_web_request_api_helpers::BlockingResponse blocking_response_;
 
     // Holds any provided auth credentials through the extent of the request's
     // lifetime.

@@ -1591,6 +1591,7 @@ void LayoutObject::MarkContainerChainForLayout(bool schedule_relayout) {
       if (object->NeedsSimplifiedLayout()) {
         return;
       }
+      // LOG(INFO) << "object->SetNeedsSimplifiedLayout(true);";
       object->SetNeedsSimplifiedLayout(true);
     } else {
       if (object->ChildNeedsFullLayout()) {
@@ -5513,11 +5514,12 @@ void ShowLayoutTree(const blink::LayoutObject* object1,
     const blink::LayoutObject* root = object1;
     while (root->Parent())
       root = root->Parent();
+    // TODO why if? we already have checked object1
     if (object1) {
       blink::StringBuilder string_builder;
       root->DumpLayoutTreeAndMark(string_builder, object1, "*", object2, "-",
                                   0);
-      DLOG(INFO) << "\n" << string_builder.ToString().Utf8();
+      // DLOG(INFO) << "\n" << string_builder.ToString().Utf8();
     }
   } else {
     DLOG(INFO) << "Cannot showLayoutTree. Root is (nil)";

@@ -413,7 +413,7 @@ source_set("unittests") {
 
   # Traditional desktop platforms and desktop android with extensions support.
   if (!is_android || enable_desktop_android_extensions) {
-    deps += [ "//chrome/browser/media/router/discovery:test_support" ]
+    # deps += [ "//chrome/browser/media/router/discovery:test_support" ]
   }
 
   if (enable_openscreen_protocol) {

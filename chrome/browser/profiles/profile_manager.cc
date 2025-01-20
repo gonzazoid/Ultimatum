@@ -115,7 +115,8 @@
 #include "extensions/browser/extension_system.h"
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+// #if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "chrome/browser/extensions/chrome_content_browser_client_extensions_part.h"
 #include "extensions/browser/api/management/management_api.h"
 #include "extensions/browser/extension_registry.h"
@@ -288,7 +289,7 @@ void ProfileSizeTask(const base::FilePath& path, int enabled_app_count) {
     UMA_HISTOGRAM_COUNTS_10000("Profile.AppCount", enabled_app_count);
 }
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 
 // Returns the number of installed (and enabled) apps, excluding any component
 // apps.
@@ -1580,7 +1581,7 @@ void ProfileManager::DoFinalInitForServices(Profile* profile,
   // initializing the supervised flag if necessary).
   ChildAccountServiceFactory::GetForProfile(profile)->Init();
   ListFamilyMembersServiceFactory::GetForProfile(profile)->Init();
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   // After the ManagementPolicy has been set, update it for the Supervised User
   // Extension Delegate, which has been created before the profile
   // initialization and needs to obtain the new policies.
@@ -1640,7 +1641,7 @@ void ProfileManager::DoFinalInitLogging(Profile* profile) {
 
   // Count number of extensions in this profile.
   int enabled_app_count = -1;
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   enabled_app_count = GetEnabledAppCount(profile);
 #endif
 

@@ -954,6 +954,7 @@ RuntimeGetContextsFunction::GetFrameContexts() {
   return results;
 }
 
+// TODO
 int RuntimeGetContextsFunction::GetTabId(content::WebContents& web_contents) {
   mojom::ViewType view_type = extensions::GetViewType(&web_contents);
 
@@ -974,6 +975,7 @@ int RuntimeGetContextsFunction::GetFrameId(content::RenderFrameHost& host) {
   return ExtensionApiFrameIdMap::GetFrameId(&host);
 }
 
+// TODO
 int RuntimeGetContextsFunction::GetWindowId(
     content::WebContents& web_contents) {
   mojom::ViewType view_type = extensions::GetViewType(&web_contents);

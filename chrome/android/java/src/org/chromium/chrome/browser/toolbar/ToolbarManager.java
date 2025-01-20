@@ -8,6 +8,7 @@ import static org.chromium.build.NullUtil.assertNonNull;
 import static org.chromium.build.NullUtil.assumeNonNull;
 import static org.chromium.chrome.browser.preferences.ChromePreferenceKeys.ADAPTIVE_TOOLBAR_CUSTOMIZATION_SETTINGS;
 
+import org.chromium.base.Log;
 import android.app.Activity;
 import android.content.ComponentCallbacks;
 import android.content.Context;
@@ -2349,9 +2350,11 @@ public class ToolbarManager
         ViewStub extensionToolbarStub =
                 mControlContainer.findViewById(R.id.extension_toolbar_container_stub);
         if (extensionToolbarStub != null) {
+            Log.i("ULTIMATUM", "extensionToolbarStub");
             ChromeAndroidTask task = mChromeAndroidTaskSupplier.get();
             // ChromeAndroidTask is available only on Desktop Android.
             if (task != null) {
+                Log.i("ULTIMATUM", "extensionToolbarStub task");
                 mExtensionToolbarCoordinator =
                         ExtensionToolbarCoordinator.maybeCreate(
                                 mActivity,
@@ -2362,13 +2365,18 @@ public class ToolbarManager
                                 mActivityTabProvider.asObservable(),
                                 mTabCreatorManager.getTabCreator(false),
                                 getBrowsingModeThemeColorProvider(),
-                                (ToolbarTablet) mToolbarLayout,
+                                (ToolbarPhone) mToolbarLayout, // TODO
+                                // (ToolbarTablet) mToolbarLayout,
                                 contextMenuPopulatorFactory,
                                 selectionDropdownMenuDelegate);
                 if (mExtensionToolbarCoordinator != null) {
                     mToolbar.setExtensionToolbarCoordinator(mExtensionToolbarCoordinator);
                 }
+            } else {
+                Log.i("ULTIMATUM", "extensionToolbarStub task: nope");
             }
+        } else {
+            Log.i("ULTIMATUM", "extensionToolbarStub: nope");
         }
 
         // Must be initialized before Toolbar attempts to use it.

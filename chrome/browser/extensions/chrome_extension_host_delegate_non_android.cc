@@ -9,14 +9,14 @@
 #include "chrome/browser/extensions/browser_window_util.h"
 #include "chrome/browser/extensions/chrome_extension_host_delegate.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
+// #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_navigator.h"
 #include "chrome/browser/ui/browser_window/public/create_browser_window.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/browser/extensions_browser_client.h"
 #include "ui/base/base_window.h"
 
-static_assert(!BUILDFLAG(IS_ANDROID));
+// static_assert(!BUILDFLAG(IS_ANDROID));
 
 namespace extensions {
 

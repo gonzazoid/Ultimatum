@@ -235,17 +235,17 @@ void StartupData::CreateServicesInternal() {
                        chrome_feature_list_creator()->actual_locale(),
                        pref_registry_.get());
 
-  mojo::PendingRemote<prefs::mojom::TrackedPreferenceValidationDelegate>
-      pref_validation_delegate;
+  // mojo::PendingRemote<prefs::mojom::TrackedPreferenceValidationDelegate>
+  //     pref_validation_delegate;
   // The preference tracking and protection is not required on Android.
-  DCHECK(!ProfilePrefStoreManager::kPlatformSupportsPreferenceTracking);
+  // DCHECK(!ProfilePrefStoreManager::kPlatformSupportsPreferenceTracking);
 
-  prefs_ = ::CreateProfilePrefService(
-      pref_registry_, nullptr /* extension_pref_store */,
-      profile_policy_connector_->policy_service(), browser_policy_connector,
-      std::move(pref_validation_delegate), io_task_runner, key_.get(), path,
-      false /* async_prefs*/, g_browser_process->os_crypt_async(),
-      g_browser_process->device_parental_controls());
+  // prefs_ = ::CreateProfilePrefService(
+  //     pref_registry_, nullptr /* extension_pref_store */,
+  //     profile_policy_connector_->policy_service(), browser_policy_connector,
+  //     std::move(pref_validation_delegate), io_task_runner, key_.get(), path,
+  //     false /* async_prefs*/, g_browser_process->os_crypt_async(),
+  //     g_browser_process->device_parental_controls());
 }
 #endif
 

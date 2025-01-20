@@ -24,7 +24,13 @@
 #include "chrome/browser/resource_coordinator/tab_lifecycle_unit_external.h"
 #include "chrome/browser/resource_coordinator/tab_lifecycle_unit_source.h"
 #include "chrome/browser/resource_coordinator/utils.h"
+#if !BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/ui/browser.h"
+<<<<<<< HEAD
+=======
+#endif
+#include "chrome/browser/ui/browser_list.h"
+>>>>>>> f60622f579a16 (ultimatum: webextensions on Android,draft)
 #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
@@ -44,6 +50,12 @@
 #include "extensions/common/mojom/event_dispatcher.mojom-forward.h"
 #include "ui/gfx/range/range.h"
 
+#if BUILDFLAG(IS_ANDROID)
+// #include "chrome/browser/android/tab_android.h"
+#include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+#endif
+
 using base::Value;
 using content::WebContents;
 
@@ -58,6 +70,35 @@ constexpr char kDiscardedKey[] = "discarded";
 
 }  // namespace
 
+#if BUILDFLAG(IS_ANDROID)
+int get_tab_index(TabAndroid* tab) {
+  int index = -1;
+  for (TabModel* model : TabModelList::models()) {
+    index = model->GetIndexOfTab(tab->GetHandle());
+    if (index != -1) break;
+  }
+  return index;
+}
+
+TabsEventRouterPlatformDelegate::TabsEventRouterPlatformDelegate(
+    TabsEventRouter& router,
+    Profile& profile)
+    : router_(router),
+      profile_(profile) {
+  DCHECK(!profile.IsOffTheRecord()); // why???
+  // BrowserList::AddObserver(this);
+  TabModelList::AddObserver(this);
+  for (TabModel* const model : TabModelList::models()) {
+    if (model->GetTabModelType() != TabModel::TabModelType::kStandard) {
+      continue;
+    }
+    if (profile_->IsSameOrParent(model->GetProfile())) {
+      model->AddObserver(this);
+      router_->TrackTabList(*model);
+    }
+  }
+}
+#else
 TabsEventRouterPlatformDelegate::TabsEventRouterPlatformDelegate(
     TabsEventRouter& router,
     Profile& profile)
@@ -82,14 +123,74 @@ TabsEventRouterPlatformDelegate::TabsEventRouterPlatformDelegate(
   tab_source_scoped_observation_.Observe(
       resource_coordinator::GetTabLifecycleUnitSource());
 }
+#endif
 
+<<<<<<< HEAD
 TabsEventRouterPlatformDelegate::~TabsEventRouterPlatformDelegate() = default;
+=======
+TabsEventRouterPlatformDelegate::~TabsEventRouterPlatformDelegate() {
+  // BrowserList::RemoveObserver(this);
+  for (TabModel* const model : TabModelList::models()) {
+    if (model->GetTabModelType() != TabModel::TabModelType::kStandard) {
+      continue;
+    }
+    if (profile_->IsSameOrParent(model->GetProfile())) {
+      model->RemoveObserver(this);
+    }
+  }
+}
+>>>>>>> f60622f579a16 (ultimatum: webextensions on Android,draft)
+
+
+void TabsEventRouterPlatformDelegate::OnTabModelAdded(TabModel* tab_model){
+    tab_model->AddObserver(this);
+}
+
+void TabsEventRouterPlatformDelegate::OnTabModelRemoved(TabModel* tab_model) {
+    tab_model->RemoveObserver(this);
+}
+
+// see chrome/browser/ui/android/tab_model/tab_model_observer.h
+void TabsEventRouterPlatformDelegate::DidAddTab(TabAndroid* tab,
+                                                TabModel::TabLaunchType type) {
+    int index = get_tab_index(tab);
+    router_->OnTabAdded(tab, index);
+}
+
+void TabsEventRouterPlatformDelegate::DidMoveTab(TabAndroid* tab,
+                                                 int new_index,
+                                                 int old_index) {
+  router_->OnTabMoved(tab, old_index, new_index);
+}
+
+void TabsEventRouterPlatformDelegate::DidSelectTab(TabAndroid* tab,
+                                                   TabModel::TabSelectionType type) {
+  router_->OnActiveTabChanged(tab);
+}
+
+void TabsEventRouterPlatformDelegate::DidRemoveTabForClosure(TabAndroid* tab) {
+    TabStripModelChange::Remove remove;
+    int index = -1; // get_tab_index(tab);
+    remove.contents.emplace_back(tab,
+                                 index,
+                                 TabRemovedReason::kDeleted,
+                                 tabs::TabInterface::DetachReason::kDelete,
+                                 tab->GetWindowId());
+    TabStripModelChange change(std::move(remove));
+
+    TabStripSelectionChange selection;
+
+    OnTabStripModelChanged(nullptr, change, selection);
+}
+
 
 bool TabsEventRouterPlatformDelegate::ShouldTrackBrowser(
     BrowserWindowInterface* browser) {
-  return router_->ShouldTrackBrowser(*browser);
+  return true; // ???
+  // return router_->ShouldTrackBrowser(*browser);
 }
 
+<<<<<<< HEAD
 void TabsEventRouterPlatformDelegate::OnBrowserActivated(
     BrowserWindowInterface* browser) {
   TabsWindowsAPI* tabs_window_api = TabsWindowsAPI::Get(&(*profile_));
@@ -106,6 +207,22 @@ void TabsEventRouterPlatformDelegate::OnBrowserCreated(
     CHECK(tab_list);
     router_->TrackTabList(*tab_list);
   }
+=======
+void TabsEventRouterPlatformDelegate::OnBrowserSetLastActive(Browser* browser) {
+  // TabsWindowsAPI* tabs_window_api = TabsWindowsAPI::Get(&(*profile_));
+  // if (tabs_window_api) {
+  //   tabs_window_api->windows_event_router()->OnActiveWindowChanged(
+  //       browser ? BrowserExtensionWindowController::From(browser) : nullptr);
+  // }
+}
+
+void TabsEventRouterPlatformDelegate::OnBrowserAdded(Browser* browser) {
+  // if (ShouldTrackBrowser(browser)) {
+  //   TabListInterface* tab_list = TabListInterface::From(browser);
+  //   CHECK(tab_list);
+  //   router_->TrackTabList(*tab_list);
+  // }
+>>>>>>> f60622f579a16 (ultimatum: webextensions on Android,draft)
 }
 
 void TabsEventRouterPlatformDelegate::OnTabStripModelChanged(
@@ -130,8 +247,8 @@ void TabsEventRouterPlatformDelegate::OnTabStripModelChanged(
       break;
   }
 
-  if (tab_strip_model->empty()) {
-    return;
+  // if (tab_strip_model->empty()) {
+  //   return;
   }
 }
 

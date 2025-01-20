@@ -453,11 +453,11 @@ bool WebContentsDelegate::IsPrivileged() {
   return false;
 }
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
 bool WebContentsDelegate::ShouldUseInstancedSystemMediaControls() const {
   return false;
 }
-#endif  // !BUILDFLAG(IS_ANDROID)
+// #endif  // !BUILDFLAG(IS_ANDROID)
 
 bool WebContentsDelegate::MaybeCopyContentAreaAsBitmap(
     base::OnceCallback<void(const SkBitmap&)> callback) {

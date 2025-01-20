@@ -105,8 +105,8 @@ OpenTabHelper::FindOrCreateBrowser(const GURL& validated_url,
   // browser *and* it's attempting to close? Should that be *or*? This goes
   // back to the dawn of time, AKA the initial implementation in 2014:
   // https://codereview.chromium.org/245933002.
-  if (browser && browser->GetType() != BrowserWindowInterface::TYPE_NORMAL &&
-      browser->GetBrowserForMigrationOnly()->IsAttemptingToCloseBrowser()) {
+  if (browser && browser->GetType() != BrowserWindowInterface::TYPE_NORMAL // &&
+      /* browser->GetBrowserForMigrationOnly()->IsAttemptingToCloseBrowser() */) {
     browser = nullptr;
     fallback_to_tabbed_browser = true;
   }

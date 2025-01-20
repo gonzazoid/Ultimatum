@@ -19,7 +19,10 @@
 #include "components/sessions/core/session_id.h"
 #include "components/sync_sessions/synced_window_delegate.h"
 #include "ui/base/unowned_user_data/scoped_unowned_user_data.h"
+#include "extensions/common/extension.h"
 
+#include "chrome/browser/extensions/window_controller.h"
+#include "extensions/common/mojom/context_type.mojom.h"
 struct NavigateParams;
 
 namespace browser_sync {
@@ -250,6 +253,22 @@ class TabModel : public TabListInterface {
 
   TabModel(const TabModel&) = delete;
   TabModel& operator=(const TabModel&) = delete;
+
+
+  virtual base::DictValue CreateWindowValueForExtension(
+    const extensions::Extension* extension,
+    extensions::WindowController::PopulateTabBehavior populate_tab_behavior,
+    extensions::mojom::ContextType context);
+  virtual base::ListValue CreateTabList(
+    const extensions::Extension* extension,
+    extensions::mojom::ContextType context);
+  // virtual extensions::api::tabs::Tab CreateTabObject(
+  //   const extensions::Extension* extension,
+  //   int tab_index) const;
+  // virtual tab_groups::TabGroupId CreateTabGroup(std::vector<tabs::TabHandle>& tabs) const = 0;
+  virtual bool AddTabsToTabGroup(std::vector<int>, int) const = 0;
+  // virtual bool Ungroup(std::vector<int>) const = 0;
+  // virtual void MoveTab(int id, int newIndex) const = 0;
 
   virtual Profile* GetProfile() const;
   virtual bool IsOffTheRecord() const;

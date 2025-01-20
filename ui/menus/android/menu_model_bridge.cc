@@ -4,6 +4,7 @@
 
 #include "ui/menus/android/menu_model_bridge.h"
 
+#include "base/logging.h"
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
 #include "base/android/scoped_java_ref.h"
@@ -34,6 +35,19 @@ MenuModelBridge::~MenuModelBridge() {
   Java_MenuModelBridge_destroyNative(base::android::AttachCurrentThread(),
                                      java_obj_);
 }
+
+// jni_zero::ScopedJavaLocalRef<jobject> MenuModelBridge::GetListItems() {
+//   JNIEnv* env = base::android::AttachCurrentThread();
+//   return Java_MenuModelBridge_getListItems(env, java_obj_);
+// }
+
+// private
+// void MenuModelBridge::AddExtensionItems() {
+//   if (!menu_model_) {
+//     return;
+//   }
+//   // base::ElapsedTimer timer;
+//   JNIEnv* env = base::android::AttachCurrentThread();
 
 void MenuModelBridge::ActivatedAt(JNIEnv* env, size_t i) {
   if (!menu_model_) {
@@ -112,10 +126,10 @@ void MenuModelBridge::AddExtensionItems() {
     }
   }
 
-  base::UmaHistogramCustomMicrosecondsTimes(
-      "MenuModelBridge.AddExtensionItems.Duration",
-      base::Microseconds(timer.Elapsed().InMicrosecondsF()),
-      base::Microseconds(1), base::Microseconds(2000), 100);
+  // base::UmaHistogramCustomMicrosecondsTimes(
+  //     "MenuModelBridge.AddExtensionItems.Duration",
+  //     base::Microseconds(timer.Elapsed().InMicrosecondsF()),
+  //     base::Microseconds(1), base::Microseconds(2000), 100);
 }
 
 }  // namespace ui

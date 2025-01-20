@@ -520,8 +520,11 @@ bool DownloadManagerImpl::ShouldAutomaticallyOpenFileByPolicy(
 bool DownloadManagerImpl::ShouldOpenDownload(
     download::DownloadItemImpl* item,
     ShouldOpenDownloadCallback callback) {
-  if (!delegate_)
+  LOG(INFO) << "DownloadManagerImpl::ShouldOpenDownload";
+  if (!delegate_) {
+    LOG(INFO) << "NO DELEGATE";
     return true;
+  }
 
   // Relies on DownloadItemImplDelegate::ShouldOpenDownloadCallback and
   // DownloadManagerDelegate::DownloadOpenDelayedCallback "just happening"

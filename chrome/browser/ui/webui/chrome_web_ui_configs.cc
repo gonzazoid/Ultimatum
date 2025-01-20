@@ -129,6 +129,7 @@
 #include "chrome/browser/ui/webui/webui_gallery/webui_gallery_ui.h"
 #include "chrome/browser/ui/webui/webui_js_error/webui_js_error_ui.h"
 #else  // !BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/ui/webui/bookmarks/bookmarks_ui.h"
 #include "chrome/browser/ui/webui/feed_internals/feed_internals_ui.h"
 #include "chrome/browser/ui/webui/notifications_internals/notifications_internals_ui.h"
 #include "chrome/browser/ui/webui/webapks/webapks_ui.h"
@@ -310,6 +311,7 @@ void RegisterChromeWebUIConfigs() {
   map.AddWebUIConfig(std::make_unique<FeedInternalsUIConfig>());
   map.AddWebUIConfig(std::make_unique<NotificationsInternalsUIConfig>());
   map.AddWebUIConfig(std::make_unique<WebApksUIConfig>());
+  map.AddWebUIConfig(std::make_unique<BookmarksUIConfig>());
 #else  // BUILDFLAG(IS_ANDROID)
   map.AddWebUIConfig(std::make_unique<glic::GlicFreUIConfig>());
 #if !BUILDFLAG(IS_CHROMEOS)

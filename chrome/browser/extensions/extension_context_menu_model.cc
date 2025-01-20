@@ -79,6 +79,12 @@
 #include "chrome/common/extensions/api/side_panel.h"
 #endif
 
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+#include "chrome/browser/android/tab_android.h"
+#endif
+
 static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 namespace extensions {
@@ -1047,7 +1053,16 @@ void ExtensionContextMenuModel::CreatePageAccessItems(
 }
 
 content::WebContents* ExtensionContextMenuModel::GetActiveWebContents() const {
+// TODO remove this, else clause should work on Android, check browse_ initialization
+#if BUILDFLAG(IS_ANDROID)
+  for (TabModel* model : TabModelList::models()) {
+    if (model->IsActiveModel())
+      return model->GetActiveWebContents();
+  }
+  return nullptr;
+#else
   return TabListInterface::From(browser_)->GetActiveTab()->GetContents();
+#endif
 }
 
 #if !BUILDFLAG(IS_ANDROID)

@@ -8,15 +8,18 @@ import android.content.Context;
 import android.graphics.Bitmap;
 
 import androidx.annotation.VisibleForTesting;
+import android.view.View;
 
 import org.chromium.base.lifetime.Destroyable;
 import org.chromium.base.supplier.NullableObservableSupplier;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.chrome.browser.extensions.ContextMenuSource;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.ui.browser_window.ChromeAndroidTask;
 import org.chromium.chrome.browser.ui.extensions.ExtensionActionContextMenuBridge;
+import org.chromium.chrome.browser.ui.extensions.ExtensionActionsBridge;
 import org.chromium.chrome.browser.ui.extensions.ExtensionsMenuBridge;
 import org.chromium.chrome.browser.ui.extensions.ExtensionsMenuTypes;
 import org.chromium.chrome.browser.ui.extensions.R;
@@ -27,6 +30,7 @@ import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.widget.ViewRectProvider;
 
+import java.util.function.Consumer;
 import java.util.List;
 
 /**
@@ -35,10 +39,12 @@ import java.util.List;
  */
 @NullMarked
 class ExtensionsMenuMediator implements Destroyable, ExtensionsMenuBridge.Observer {
+    private final Consumer<String> mOnItemClick;
     private final ModelList mActionModels;
     private final Context mContext;
     private final NullableObservableSupplier<Tab> mCurrentTabSupplier;
     private final ExtensionsMenuBridge mMenuBridge;
+    private final ExtensionActionsBridge mExtensionActionsBridge;
     private final PropertyModel mMenuPropertyModel;
     private final Runnable mOnReady;
     private final ChromeAndroidTask mTask;
@@ -52,6 +58,7 @@ class ExtensionsMenuMediator implements Destroyable, ExtensionsMenuBridge.Observ
      * @param onReady A runnable to run when the menu is ready to be shown.
      */
     public ExtensionsMenuMediator(
+            Consumer<String> onItemClick,
             Context context,
             ChromeAndroidTask task,
             Profile profile,
@@ -59,6 +66,7 @@ class ExtensionsMenuMediator implements Destroyable, ExtensionsMenuBridge.Observ
             ModelList actionModels,
             PropertyModel propertyModel,
             Runnable onReady) {
+        mOnItemClick = onItemClick;
         mActionModels = actionModels;
         mContext = context;
         mCurrentTabSupplier = currentTabSupplier;
@@ -66,6 +74,9 @@ class ExtensionsMenuMediator implements Destroyable, ExtensionsMenuBridge.Observ
         mMenuPropertyModel = propertyModel;
         mTask = task;
         mProfile = profile;
+
+        mExtensionActionsBridge = new ExtensionActionsBridge(task, profile);
+
         mMenuBridge = new ExtensionsMenuBridge(mTask, mProfile, /* observer= */ this);
 
         mMenuPropertyModel.set(
@@ -104,6 +115,10 @@ class ExtensionsMenuMediator implements Destroyable, ExtensionsMenuBridge.Observ
                 contextMenuBridge,
                 new ViewRectProvider(buttonView),
                 /* dismissRunnable= */ null);
+    }
+
+    private void onItemClick(View view, String actionId) {
+        mOnItemClick.accept(actionId);
     }
 
     /** Destroys the mediator. */
@@ -238,7 +253,11 @@ class ExtensionsMenuMediator implements Destroyable, ExtensionsMenuBridge.Observ
      */
     private void updateMenuEntries() {
         mActionModels.clear();
-        List<ExtensionsMenuTypes.MenuEntryState> entries = mMenuBridge.getMenuEntries();
+        Tab currentTab = mCurrentTabSupplier.get();
+        if (currentTab == null) {
+            return;
+        }
+        List<ExtensionsMenuTypes.MenuEntryState> entries = mMenuBridge.getMenuEntries(currentTab.isOffTheRecord());
 
         for (ExtensionsMenuTypes.MenuEntryState entry : entries) {
             mActionModels.add(createMenuItem(entry));

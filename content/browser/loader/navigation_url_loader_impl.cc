@@ -83,6 +83,9 @@
 #include "content/public/common/url_constants.h"
 #include "content/public/common/url_utils.h"
 #include "content/public/common/webplugininfo.h"
+#include "extensions/buildflags/buildflags.h"
+#include "extensions/browser/browser_context_keyed_api_factory.h"
+#include "extensions/browser/api/web_request/web_request_api.h"
 #include "media/media_buildflags.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -686,6 +689,7 @@ void NavigationURLLoaderImpl::Start() {
   if (!request_info_->is_pdf) {
     // Requests to WebUI scheme won't get redirected to/from other schemes
     // or be intercepted, so we just let it go here.
+    // Ultimatum browser: they can and they will (be intercepted)
     std::string scheme = request_info_->common_params->url.GetScheme();
     if (std::ranges::contains(URLDataManagerBackend::GetWebUISchemes(),
                               scheme)) {
@@ -694,7 +698,7 @@ void NavigationURLLoaderImpl::Start() {
       CHECK(frame_tree_node);
       CHECK(frame_tree_node->navigation_request());
 
-      CreateThrottlingLoaderAndStart(
+      auto factory =
           url_loader_factory::Create(
               ContentBrowserClient::URLLoaderFactoryType::kNavigation,
               url_loader_factory::TerminalParams::ForNonNetwork(
@@ -712,7 +716,36 @@ void NavigationURLLoaderImpl::Start() {
                   /*bypass_redirect_checks=*/nullptr,
                   frame_tree_node->navigation_request()->GetNavigationId(),
                   GetUIThreadTaskRunner(
-                      {BrowserTaskType::kNavigationNetworkResponse}))),
+                      {BrowserTaskType::kNavigationNetworkResponse})));
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
+      auto* web_request_api =
+          extensions::BrowserContextKeyedAPIFactory<extensions::WebRequestAPI>::Get(
+              browser_context_);
+
+      // NOTE: Some unit test environments do not initialize
+      // BrowserContextKeyedAPI factories for e.g. WebRequest.
+      if (web_request_api) {
+        network::URLLoaderFactoryBuilder factory_builder;
+        bool use_proxy_for_web_request =
+            web_request_api->MaybeProxyURLLoaderFactory(
+                browser_context_,
+                frame_tree_node->current_frame_host(),
+                frame_tree_node->current_frame_host()->GetProcess()->GetDeprecatedID(),
+                content::ContentBrowserClient::URLLoaderFactoryType::kNavigation,
+                request_info_->navigation_id,
+                ukm::SourceIdObj::FromInt64(ukm_source_id_),
+                factory_builder,
+                /*header_client=*/nullptr,
+                GetUIThreadTaskRunner(
+                          {BrowserTaskType::kNavigationNetworkResponse}),
+                resource_request_->request_initiator.value_or(url::Origin()));
+        if (use_proxy_for_web_request) {
+          factory = std::move(factory_builder).Finish(factory);
+        }
+      }
+#endif
+      CreateThrottlingLoaderAndStart(
+          factory,
           /*additional_throttles=*/{});
       return;
     }

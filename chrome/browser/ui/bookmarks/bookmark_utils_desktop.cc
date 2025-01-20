@@ -423,12 +423,12 @@ void DoOpen(Browser* browser,
       }
 
       // Connect to new group.
-      std::optional<tab_groups::SavedTabGroup> new_tab_group =
-          tab_group_sync_service->GetGroup(new_group_id);
-      if (new_tab_group.has_value()) {
-        tab_group_sync_service->UpdateBookmarkNodeId(
-            new_tab_group->saved_guid(), bookmark_folder_node_id);
-      }
+      // std::optional<tab_groups::SavedTabGroup> new_tab_group =
+      //     tab_group_sync_service->GetGroup(new_group_id);
+      // if (new_tab_group.has_value()) {
+      //   tab_group_sync_service->UpdateBookmarkNodeId(
+      //       new_tab_group->saved_guid(), bookmark_folder_node_id);
+      // }
     } else {
       if (!tab_group_sync_service) {
         return;

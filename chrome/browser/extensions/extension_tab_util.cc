@@ -66,8 +66,15 @@
 #include "url/url_constants.h"
 
 #if BUILDFLAG(IS_ANDROID)
+#include "base/types/expected_macros.h"
 #include "chrome/browser/ui/android/tab_model/tab_model.h"
 #include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+#include "extensions/common/manifest_handlers/incognito_info.h"
+// #include "chrome/browser/ui/browser.h"                   // nogncheck
+#include "chrome/browser/ui/browser_finder.h"            // nogncheck
+// #include "chrome/browser/ui/browser_window.h"            // nogncheck
+#include "chrome/browser/renderer_host/chrome_navigation_ui_data.h"
+#include "chrome/browser/ui/tabs/tab_utils.h"        // nogncheck
 #else
 #include "chrome/browser/resource_coordinator/tab_lifecycle_unit_external.h"
 #include "chrome/browser/ui/browser.h"                             // nogncheck
@@ -360,7 +367,18 @@ api::tabs::Tab ExtensionTabUtil::CreateTabObject(
   tabs::TabInterface* tab_interface =
       tab_list ? tab_list->GetTab(tab_index) : nullptr;
 
+#if BUILDFLAG(IS_ANDROID)
+  WebContents* active_contents = nullptr;
+  for (TabModel* model : TabModelList::models()) {
+    if (model->IsActiveModel()) {
+      active_contents = model->GetActiveWebContents();
+      break;
+    }
+  }
+  bool is_active = contents == active_contents;
+#else
   bool is_active = tab_interface && tab_interface->IsActivated();
+#endif
   tab_object.active = is_active;
   tab_object.selected = is_active;
   tab_object.highlighted = tab_interface && tab_interface->IsSelected();

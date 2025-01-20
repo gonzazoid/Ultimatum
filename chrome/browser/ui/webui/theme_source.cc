@@ -177,8 +177,8 @@ bool ThemeSource::ShouldServiceRequest(const GURL& url,
                                        content::BrowserContext* browser_context,
                                        int render_process_id) {
   return url.SchemeIs(chrome::kChromeSearchScheme)
-             ? InstantService::ShouldServiceRequest(url, browser_context,
-                                                    render_process_id)
+             ? false // InstantService::ShouldServiceRequest(url, browser_context,
+                     //                                render_process_id)
              : URLDataSource::ShouldServiceRequest(url, browser_context,
                                                    render_process_id);
 }
@@ -363,6 +363,8 @@ void ThemeSource::SendColorsCss(
     return;
   }
 
+  // LOG(INFO) << "CSS";
+  // LOG(INFO) << css_string;
   std::move(callback).Run(
       base::MakeRefCounted<base::RefCountedString>(std::move(*css_content)));
 

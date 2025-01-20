@@ -124,6 +124,34 @@ WebRequestEventImpl.prototype.addListener =
 
       try {
         let result = $Function.apply(cb, null, arguments);
+
+        /* ultimatum code */
+        if (result && result.response && result.response instanceof $Promise.self) {
+          $Promise.catch(
+            $Promise.then(result.response, (response) => {
+              if (!(response instanceof Response)) {
+                throw new Error ("not instance of Response");
+              }
+              response.arrayBuffer().then(buf => {
+                const headers = [];
+                for (const key of response.headers.keys()) {
+                  headers.push({ name: key, value: response.headers.get(key) }); // TODO binaryValue
+                };
+                const responseToSend = {
+                  body: buf,
+                  headers,
+                  status: `${response.status}`,
+                  statusText: `${response.statusText}`
+                };
+                result.response = responseToSend;
+                webRequestInternal.eventHandled(
+                    eventName, subEventName, requestId, webViewInstanceId, result);
+              });
+            }));
+           return;
+        };
+        /* end of ultimatum code */
+
         if (allowAsyncResponsesForAllEvents &&
             result instanceof $Promise.self) {
           $Promise.catch(

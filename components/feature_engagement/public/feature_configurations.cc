@@ -364,7 +364,7 @@ std::optional<FeatureConfig> GetClientSideFeatureConfig(
     return config;
   }
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   if (kIPHExtensionsMenuFeature.name == feature->name) {
     FeatureConfig config;
     config.valid = true;

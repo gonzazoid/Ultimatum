@@ -689,7 +689,7 @@ content::Referrer CreateReferrer(const GURL& url,
 
 content::WebContents* GetWebContentsToUse(
     content::RenderFrameHost* render_frame_host) {
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   // If we're viewing in a MimeHandlerViewGuest, use its embedder WebContents.
   auto* guest_view =
       extensions::MimeHandlerViewGuest::FromRenderFrameHost(render_frame_host);
@@ -945,7 +945,7 @@ RenderViewContextMenu::~RenderViewContextMenu() = default;
 
 // Menu construction functions -------------------------------------------------
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
 void RenderViewContextMenu::AppendCurrentExtensionItems() {
   // Avoid appending extension related items when |extension| is null.
   // For Panel, this happens when the panel is navigated to a url outside of the

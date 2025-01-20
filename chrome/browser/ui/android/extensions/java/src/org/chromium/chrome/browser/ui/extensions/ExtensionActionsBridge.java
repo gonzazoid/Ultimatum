@@ -96,7 +96,8 @@ public class ExtensionActionsBridge implements Destroyable {
         void destroy(long nativeExtensionActionsBridge);
 
         HandleKeyEventResult handleKeyDownEvent(
-                long nativeExtensionActionsBridge,
-                @JniType("ui::KeyEventAndroid") KeyEvent keyEvent);
+          long nativeExtensionActionsBridge,
+          @JniType("ui::KeyEventAndroid") KeyEvent keyEvent);
+
     }
 }

@@ -215,9 +215,9 @@
   "declarativeWebRequest": {
     "channel": "beta",
     "extension_types": ["extension", "legacy_packaged_app"],
-    "max_manifest_version": 2,
+    "max_manifest_version": 2
     // "desktop_android" is not supported.
-    "platforms": ["chromeos", "linux", "mac", "win"]
+    // "platforms": ["chromeos", "linux", "mac", "win", "android"]
   },
   "devtools": {
     "channel": "stable",
@@ -266,7 +266,7 @@
     "channel": "stable",
     "extension_types": ["extension", "platform_app"],
     // "desktop_android" is not supported.
-    "platforms": ["chromeos", "linux", "mac", "win"],
+    // "platforms": ["chromeos", "linux", "mac", "win", "android"],
     "allowlist": [
       "7910EAFDAF64B947E1CB31B333A9BD14CA556B6C",  // Feedback UI.
       "1C93BD3CF875F4A73C0B2A163BB8FBDA8B8B3D80",  // http://crbug.com/293683
@@ -286,14 +286,14 @@
   "fileSystem": [{
     "channel": "stable",
     "extension_types": ["platform_app"],
-    "default_parent": true,
+    "default_parent": true
     // "desktop_android" is not supported.
-    "platforms": ["chromeos", "linux", "mac", "win"]
+    // "platforms": ["chromeos", "linux", "mac", "win", "android"]
   },{
     "channel": "stable",
     "extension_types": ["extension"],
     // "desktop_android" is not supported.
-    "platforms": ["chromeos", "linux", "mac", "win"],
+    // "platforms": ["chromeos", "linux", "mac", "win", "android"],
     "allowlist": [
       "2FC374607C2DF285634B67C64A2E356C607091C3",  // Quickoffice
       "3727DD3E564B6055387425027AD74C58784ACC15",  // Quickoffice internal
@@ -446,7 +446,7 @@
     "channel": "stable",
     "extension_types": ["extension", "legacy_packaged_app", "platform_app"],
     // "desktop_android" is not supported.
-    "platforms": ["chromeos", "mac", "win", "linux"],
+    // "platforms": ["chromeos", "mac", "win", "linux", "android"],
     "allowlist": [
       "0DE0F05680A4A056BCEC864ED8DDA84296F82B40",  // http://crbug.com/434651
       "1C93BD3CF875F4A73C0B2A163BB8FBDA8B8B3D80",  // http://crbug.com/293683
@@ -485,7 +485,7 @@
     "channel": "stable",
     "extension_types": ["extension", "legacy_packaged_app", "platform_app"],
     // "desktop_android" is not supported.
-    "platforms": ["chromeos", "mac", "win", "linux"],
+    // "platforms": ["chromeos", "mac", "win", "linux", "android"],
     "allowlist": [
       // DO NOT ADD ANY MORE ENTRIES HERE.
       // networkingPrivate is being migrated to networking.onc.
@@ -580,9 +580,9 @@
   },
   "socket": {
     "channel": "stable",
-    "extension_types": ["platform_app"],
+    "extension_types": ["platform_app"]
     // "desktop_android" is not supported.
-    "platforms": ["chromeos", "linux", "mac", "win"]
+    // "platforms": ["chromeos", "linux", "mac", "win", "android"]
   },
   "storage": [
     {
@@ -670,15 +670,15 @@
   "system.storage": [
     {
       "channel": "stable",
-      "extension_types": ["extension", "legacy_packaged_app", "platform_app"],
+      "extension_types": ["extension", "legacy_packaged_app", "platform_app"]
       // "desktop_android" is not supported.
-      "platforms": ["chromeos", "linux", "mac", "win"]
+      // "platforms": ["chromeos", "linux", "mac", "win", "android"]
     },
     {
       "channel": "stable",
       "extension_types": ["hosted_app"],
       // "desktop_android" is not supported.
-      "platforms": ["chromeos", "linux", "mac", "win"],
+      // "platforms": ["chromeos", "linux", "mac", "win", "android"],
       "allowlist": ["B44D08FD98F1523ED5837D78D0A606EA9D6206E5"]  // Web Store
     }
   ],
@@ -782,9 +782,9 @@
   },
   "webview": {
     "channel": "stable",
-    "extension_types": ["platform_app"],
+    "extension_types": ["platform_app"]
     // "desktop_android" is not supported.
-    "platforms": ["chromeos", "linux", "mac", "win"]
+    // "platforms": ["chromeos", "linux", "mac", "win", "android"]
   },
   "webRequest": [
     {
@@ -799,13 +799,13 @@
   ],
   "webRequestBlocking": [{
     "channel": "stable",
-    "extension_types": ["extension", "legacy_packaged_app"],
-    "max_manifest_version": 2
+    "extension_types": ["extension", "legacy_packaged_app"]
+    // "max_manifest_version": 2
   }, {
     "channel": "stable",
     "extension_types": ["extension"],
     "location": "policy",
-    "min_manifest_version": 3
+    "min_manifest_version": 2
   }],
   "webRequestAuthProvider": {
     "channel": "stable",

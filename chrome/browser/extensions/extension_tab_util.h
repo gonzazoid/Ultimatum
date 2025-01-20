@@ -22,6 +22,8 @@
 #include "extensions/buildflags/buildflags.h"
 #include "extensions/common/mojom/context_type.mojom-forward.h"
 #include "ui/base/window_open_disposition.h"
+// #include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/android/tab_android.h"
 
 static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 

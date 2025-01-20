@@ -18,6 +18,12 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "url/origin.h"
 
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+#include "chrome/browser/android/tab_android.h"
+#endif
+
 static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 using content::WebContentsObserver;
@@ -340,11 +346,21 @@ void ExtensionsToolbarViewModel::AppendActionModel(
 
 content::WebContents* ExtensionsToolbarViewModel::GetCurrentWebContents()
     const {
+#if BUILDFLAG(IS_ANDROID)
+  for (TabModel* model : TabModelList::models()) {
+    if (!model->IsActiveModel()) {
+      continue;
+    }
+    return model->GetActiveWebContents();
+  }
+  return nullptr;
+#else
   tabs::TabInterface* tab = TabListInterface::From(browser_)->GetActiveTab();
   if (!tab) {
     return nullptr;
   }
   return tab->GetContents();
+#endif
 }
 
 void ExtensionsToolbarViewModel::OnHostAccessRequestAdded(

@@ -1955,7 +1955,7 @@ void DownloadItemImpl::MaybeCompleteDownload() {
 // is ready for completion.
 void DownloadItemImpl::OnDownloadCompleting() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-
+  LOG(INFO) << "DownloadItemImpl::OnDownloadCompleting";
   if (state_ != IN_PROGRESS_INTERNAL)
     return;
 
@@ -1979,6 +1979,7 @@ void DownloadItemImpl::OnDownloadCompleting() {
                        // Safe because we control download file lifetime.
                        base::Unretained(download_file_.get()),
                        std::move(rename_callback)));
+    LOG(INFO) << "WE ARE HERE";
     return;
   }
 #endif  // BUILDFLAG(IS_ANDROID)

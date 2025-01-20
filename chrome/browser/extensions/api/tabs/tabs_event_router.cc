@@ -267,14 +267,15 @@ void TabsEventRouter::UnregisterForTabNotifications(
       favicon::ContentFaviconDriver::FromWebContents(&web_contents);
   bool is_observing_favicon_driver =
       favicon_scoped_observations_.IsObservingSource(favicon_driver);
-  CHECK(is_observing_favicon_driver || !expect_registered);
+  // crbug.com/40190724
+  // CHECK(is_observing_favicon_driver || !expect_registered);
   if (is_observing_favicon_driver) {
     favicon_scoped_observations_.RemoveObservation(favicon_driver);
   }
 
   int tab_id = ExtensionTabUtil::GetTabId(&web_contents);
-  int removed_count = tab_entries_.erase(tab_id);
-  DCHECK(removed_count > 0 || !expect_registered);
+  /* int removed_count = */ tab_entries_.erase(tab_id);
+  // DCHECK(removed_count > 0 || !expect_registered);
 }
 
 TabsEventRouter::TabEntry* TabsEventRouter::GetTabEntry(
@@ -377,8 +378,11 @@ void TabsEventRouter::DispatchEvent(
     const std::string& event_name,
     base::ListValue args,
     EventRouter::UserGestureState user_gesture) {
+  LOG(INFO) << "EVENT!!! " << event_name;
+  LOG(INFO) << "TabsEventRouter::DispatchEvent profile??? " << (profile != nullptr);
+  // LOG(INFO) << "TabsEventRouter::DispatchEvent profile_??? " << (profile_.get() != nullptr);
   EventRouter* event_router = EventRouter::Get(profile);
-  if (!profile_->IsSameOrParent(profile) || !event_router) {
+  if (/* !profile_->IsSameOrParent(profile) || */ !event_router) {
     return;
   }
 

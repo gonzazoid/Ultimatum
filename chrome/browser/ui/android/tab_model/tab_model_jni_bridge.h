@@ -69,6 +69,9 @@ class TabModelJniBridge : public TabModel {
   void AddTabListInterfaceObserver(TabListInterfaceObserver* observer) override;
   void RemoveTabListInterfaceObserver(
       TabListInterfaceObserver* observer) override;
+  // tab_groups::TabGroupId CreateTabGroup(std::vector<int>) const override;
+  bool AddTabsToTabGroup(std::vector<int>, int) const override;
+  // bool Ungroup(std::vector<int>) const override;
   int GetTabCount() const override;
   int GetActiveIndex() const override;
   tabs::TabInterface* GetActiveTab() override;

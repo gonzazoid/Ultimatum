@@ -49,6 +49,14 @@
 
 static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+#include "chrome/browser/extensions/extension_service.h"
+#include "chrome/browser/extensions/sync/extension_sync_service.h"
+#include "extensions/browser/permissions/permissions_updater.h"
+#include "chrome/browser/extensions/shared_module_service.h"
+#include "chrome/browser/ui/webui/extensions/extension_icon_source.h"
+#endif
+
 namespace extensions::util {
 
 namespace {
@@ -177,7 +185,7 @@ void SetIsIncognitoEnabled(const std::string& extension_id,
 
     // TODO(crbug.com/356905053): Enable handling component extensions on
     // desktop android.
-#if !BUILDFLAG(IS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
     // TODO(treib,kalman): Should this be Manifest::IsComponentLocation(..)?
     // (which also checks for kExternalComponent).
     if (extension->location() == mojom::ManifestLocation::kComponent) {

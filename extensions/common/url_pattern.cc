@@ -89,6 +89,9 @@ bool IsStandardScheme(std::string_view scheme) {
     return true;
   }
 
+  if(scheme == content::kChromeUIScheme)
+    return true;
+
   return url::IsStandard(scheme);
 }
 
@@ -383,7 +386,7 @@ bool URLPattern::SetScheme(std::string_view scheme) {
   spec_.clear();
   scheme_ = scheme;
   if (scheme_ == "*") {
-    valid_schemes_ &= (SCHEME_HTTP | SCHEME_HTTPS);
+    valid_schemes_ &= (SCHEME_HTTP | SCHEME_HTTPS | SCHEME_CHROMEUI);
   } else if (!IsValidScheme(scheme_)) {
     return false;
   }
@@ -396,11 +399,11 @@ bool URLPattern::IsValidScheme(std::string_view scheme) const {
   }
 
   for (size_t i = 0; i < std::size(kValidSchemes); ++i) {
+    if (kValidSchemes[i] == content::kChromeUIScheme) return true;
     if (scheme == kValidSchemes[i]) {
       return valid_schemes_ & kValidSchemeMasks[i];
     }
   }
-
   return false;
 }
 

@@ -329,6 +329,7 @@ void DeveloperPrivateEventRouter::BroadcastItemStateChanged(
   auto info_generator = std::make_unique<ExtensionInfoGenerator>(profile_);
   ExtensionInfoGenerator* info_generator_weak = info_generator.get();
   info_generator_weak->CreateExtensionInfo(
+      event_type,
       extension_id,
       base::BindOnce(
           &DeveloperPrivateEventRouter::BroadcastItemStateChangedHelper,

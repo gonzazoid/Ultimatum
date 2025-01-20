@@ -2,7 +2,7 @@
 <!-- Bookmarks specific strings (included from generated_resources.grd). -->
 <grit-part>
   <!-- Begin of Bookmarks Bar strings-->
-  <if expr="not is_android">
+  <if expr="not is_android or is_android">
     <!-- The special folders created when importing from other other browsers. -->
     <if expr="is_win">
       <message name="IDS_BOOKMARK_GROUP_FROM_IE" desc="The group name of bookmarks from Internet Explorer">
@@ -127,7 +127,7 @@
     <message name="IDS_BOOKMARK_BAR_NEW_FOLDER" desc="Menu title for adding a new folder">
       Add &amp;folder...
     </message>
-    <if expr="not is_android">
+    <if expr="not is_android or is_android">
       <message name="IDS_SHOW_BOOKMARK_BAR" desc="The toggle to show the bookmark bar">
         &amp;Show bookmarks bar
       </message>
@@ -191,7 +191,7 @@
     <message name="IDS_BOOKMARK_BAR_NEW_FOLDER" desc="In Title Case: Menu title for adding a new folder">
       Add &amp;Folder...
     </message>
-    <if expr="not is_android">
+    <if expr="not is_android or is_android">
       <message name="IDS_SHOW_BOOKMARK_BAR" desc="In Title Case: The toggle to show the bookmark bar">
         &amp;Show Bookmarks Bar
       </message>
@@ -203,7 +203,7 @@
   <message name="IDS_BOOKMARK_BAR_SHOULD_OPEN_ALL" desc="Message in the message box shown if user asks to open a lot of bookmarks in a folder. The number will always be 15 or more.">
     Are you sure you want to open <ph name="TAB_COUNT">$1<ex>20</ex></ph> tabs?
   </message>
-  <if expr="not is_android">
+  <if expr="not is_android or is_android">
     <message name="IDS_BOOKMARK_BAR_ALREADY_CREATED_GROUP" desc="Message in the message box shown when user opens a bookmark folder as tab group if user already did that before">
       A tab group was already created with this bookmark folder. Do you want to create a new tab group or replace the existing one?
     </message>

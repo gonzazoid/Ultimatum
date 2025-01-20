@@ -41,19 +41,29 @@
 
 static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
+#if BUILDFLAG(IS_ANDROID)
+#include "ui/android/view_android.h"
+#include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+#include "content/public/browser/web_contents.h"
+#endif
+
 namespace extensions {
 
 namespace {
 
+#if !BUILDFLAG(IS_ANDROID)
 constexpr int kIconSize = 64;
+#endif
 
 constexpr char16_t kExtensionRemovedError[] =
     u"Extension was removed before dialog closed.";
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
 constexpr char kReferrerId[] = "chrome-remove-extension-dialog";
 #endif
 
+#if !BUILDFLAG(IS_ANDROID)
 float GetScaleFactor(gfx::NativeWindow window) {
   const display::Screen* screen = display::Screen::Get();
   if (!screen) {
@@ -64,6 +74,7 @@ float GetScaleFactor(gfx::NativeWindow window) {
   }
   return screen->GetPrimaryDisplay().device_scale_factor();
 }
+#endif
 
 base::RepeatingClosure* g_on_will_show_callback = nullptr;
 }  // namespace
@@ -77,10 +88,16 @@ ExtensionUninstallDialog::ExtensionUninstallDialog(
     Profile* profile,
     gfx::NativeWindow parent,
     ExtensionUninstallDialog::Delegate* delegate)
-    : profile_(profile), parent_(parent), delegate_(delegate) {
+    : profile_(profile), parent_(parent), delegate_(delegate)
+#if BUILDFLAG(IS_ANDROID)
+      , extension_uninstall_bridge_(std::make_unique<ExtensionUninstallDialogBridge>())
+#endif
+  {
   DCHECK(delegate_);
+#if !BUILDFLAG(IS_ANDROID)
   if (parent)
     parent_window_tracker_ = ui::NativeWindowTracker::Create(parent);
+#endif
   profile_observation_.Observe(profile_.get());
 }
 
@@ -95,12 +112,37 @@ void ExtensionUninstallDialog::ConfirmUninstallByExtension(
   ConfirmUninstall(extension, reason, source);
 }
 
+#if BUILDFLAG(IS_ANDROID)
+void ExtensionUninstallDialog::ShowExtensionUninstallAndroidDialogImpl(
+    ExtensionUninstallDialog::DoneCallback accept_callback,
+    ExtensionUninstallDialog::DoneCallback cancel_callback,
+    const Extension* extension) {
+  // DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+
+  content::WebContents* web_contents;
+
+  for (TabModel* model : TabModelList::models()) {
+    if (model->IsActiveModel()) {
+      web_contents = model->GetActiveWebContents();
+      break;
+    }
+  }
+
+  if (web_contents) {
+    ui::ViewAndroid* view_android =
+        web_contents ? web_contents->GetNativeView() : nullptr;
+    ui::WindowAndroid* window_android =
+        view_android ? view_android->GetWindowAndroid() : nullptr;
+    extension_uninstall_bridge_->Show(extension, window_android, std::move(accept_callback), std::move(cancel_callback));
+  }
+}
+#endif
+
 void ExtensionUninstallDialog::ConfirmUninstall(
     const scoped_refptr<const Extension>& extension,
     UninstallReason reason,
     UninstallSource source) {
   DCHECK(thread_checker_.CalledOnValidThread());
-
   UMA_HISTOGRAM_ENUMERATION("Extensions.UninstallSource", source,
                             NUM_UNINSTALL_SOURCES);
 
@@ -110,10 +152,12 @@ void ExtensionUninstallDialog::ConfirmUninstall(
   if (!profile_)
     return;
 
+#if !BUILDFLAG(IS_ANDROID)
   if (parent() && parent_window_tracker_->WasNativeWindowDestroyed()) {
     OnDialogClosed(CLOSE_ACTION_CANCELED);
     return;
   }
+#endif
 
   ExtensionManagement* extension_management =
       ExtensionManagementFactory::GetForBrowserContext(profile_);
@@ -125,9 +169,24 @@ void ExtensionUninstallDialog::ConfirmUninstall(
 
   // Dialog will be shown once icon is loaded.
   DCHECK(!dialog_shown_);
+#if BUILDFLAG(IS_ANDROID)
+  dialog_shown_ = true;
+  ExtensionUninstallDialog::DoneCallback accept_callback = base::BindOnce(
+    &ExtensionUninstallDialog::OnDialogClosed,
+    weak_ptr_factory_.GetWeakPtr(),
+    ExtensionUninstallDialog::CloseAction::CLOSE_ACTION_UNINSTALL
+  );
+  ExtensionUninstallDialog::DoneCallback cancel_callback = base::BindOnce(
+    &ExtensionUninstallDialog::OnDialogClosed,
+    weak_ptr_factory_.GetWeakPtr(),
+    ExtensionUninstallDialog::CloseAction::CLOSE_ACTION_CANCELED
+  );
+  ShowExtensionUninstallAndroidDialogImpl(std::move(accept_callback), std::move(cancel_callback), extension.get());
+#else
   icon_ = ChromeAppIconService::Get(profile_)->CreateIcon(this, extension->id(),
                                                           kIconSize);
   icon_->image_skia().GetRepresentation(GetScaleFactor(parent_));
+#endif
 }
 
 void ExtensionUninstallDialog::OnIconUpdated(ChromeAppIcon* icon) {
@@ -245,7 +304,7 @@ bool ExtensionUninstallDialog::Uninstall(std::u16string* error) {
 }
 
 void ExtensionUninstallDialog::HandleReportAbuse() {
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   DCHECK(profile_);
   NavigateParams params(
       profile_,
@@ -256,7 +315,7 @@ void ExtensionUninstallDialog::HandleReportAbuse() {
 #else   // BUILDFLAG(ENABLE_EXTENSIONS)
   // TODO(crbug.com/424011073): Implement this method once we compile `Navigate`
   // on Desktop Android.
-  NOTIMPLEMENTED();
+  // NOTIMPLEMENTED();
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 }
 

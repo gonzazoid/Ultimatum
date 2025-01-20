@@ -2873,6 +2873,12 @@ static_library("browser") {
       "device_reauth/android/device_authenticator_bridge_impl.h",
       "device_reauth/android/reauthenticator_bridge.cc",
       "device_reauth/android/reauthenticator_bridge.h",
+      # "digital_credentials/digital_identity_provider_android.cc",
+      # "digital_credentials/digital_identity_provider_android.h",
+      "download/android/extension_install_dialog_bridge.cc",
+      "download/android/extension_install_dialog_bridge.h",
+      "download/android/extension_uninstall_dialog_bridge.cc",
+      "download/android/extension_uninstall_dialog_bridge.h",
       "download/android/dangerous_download_dialog_bridge.cc",
       "download/android/dangerous_download_dialog_bridge.h",
       "download/android/download_callback_validator.cc",
@@ -3056,6 +3062,10 @@ static_library("browser") {
       "password_manager/android/password_store_bridge.h",
       "password_manager/android/save_update_password_message_delegate.cc",
       "password_manager/android/save_update_password_message_delegate.h",
+      # "password_manager/android/shared_preferences_delegate_android.cc",
+      # "password_manager/android/shared_preferences_delegate_android.h",
+      "password_manager/generated_password_leak_detection_pref.cc",
+      "password_manager/generated_password_leak_detection_pref.h",
       "payments/android/service_worker_payment_app_bridge.cc",
       "performance_manager/policies/discard_page_with_crashed_subframe_policy.cc",
       "performance_manager/policies/discard_page_with_crashed_subframe_policy.h",
@@ -3099,6 +3109,10 @@ static_library("browser") {
       "safe_browsing/android/safe_browsing_referring_app_bridge_android.h",
       "safe_browsing/android/safe_browsing_settings_navigation_android.cc",
       "safe_browsing/android/safe_browsing_settings_navigation_android.h",
+      "safe_browsing/generated_safe_browsing_pref.cc",
+      "safe_browsing/generated_safe_browsing_pref.h",
+      "safe_browsing/generated_security_settings_bundle_pref.cc",
+      "safe_browsing/generated_security_settings_bundle_pref.h",
       "search_resumption/search_resumption_module_bridge.cc",
       "search_resumption/search_resumption_module_bridge.h",
       "search_resumption/start_suggest_service_factory.cc",
@@ -3126,6 +3140,8 @@ static_library("browser") {
       "signin/signin_manager_android_factory.cc",
       "signin/signin_manager_android_factory.h",
       "ssl/android/https_first_mode_bridge.cc",
+      "ssl/generated_https_first_mode_pref.cc",
+      "ssl/generated_https_first_mode_pref.h",
       "ssl/chrome_security_state_client.cc",
       "ssl/chrome_security_state_client.h",
       "ssl/chrome_security_state_model_delegate.cc",
@@ -3177,6 +3193,8 @@ static_library("browser") {
       "webauthn/android/credential_sorter_android.h",
       "webauthn/android/webauthn_request_delegate_android.cc",
       "webauthn/android/webauthn_request_delegate_android.h",
+      # "bookmarks/bookmark_html_writer.cc",
+      # "bookmarks/bookmark_html_writer.h",
     ]
     sources += [
       # TODO(crbug.com/40071344): Fold into "keyboard_accessory/android".
@@ -3217,6 +3235,7 @@ static_library("browser") {
       "//chrome/android:jni_headers",
       "//chrome/browser/accessibility/settings",
       "//chrome/browser/android:tabs_impl",
+      "//chrome/browser/ui/tabs:tab_group_impl",
       "//chrome/browser/android:tabs_public",
       "//chrome/browser/android/content:jni_headers",
       "//chrome/browser/android/extensions:android",
@@ -3466,6 +3485,8 @@ static_library("browser") {
       "//ui/accessibility",
       "//ui/base/unowned_user_data",
       "//url",
+      "//chrome/browser/importer",
+      "//chrome/browser/importer:impl",
     ]
     deps += [
       # TODO(crbug.com/372647115): When c/b/android/oom_intervention gets modularized, consider
@@ -7777,16 +7798,40 @@ static_library("browser") {
   # block with the `enable_extensions` block above.
   if (enable_desktop_android_extensions) {
     sources += [
+      "upgrade_detector/build_state.cc",
+      "upgrade_detector/build_state.h",
+      "upgrade_detector/upgrade_detector.cc",
+      "upgrade_detector/upgrade_detector.h",
+      "upgrade_detector/upgrade_observer.h",
+
       # TODO(https://crbug.com/356905053): These files are temporary workarounds
       # allow for a lightweight extensions runtime in desktop-android builds.
       # They should be removed.
       "extensions/extension_menu_model_android.cc",
       "extensions/extension_menu_model_android.h",
+      "guest_view/app_view/chrome_app_view_guest_delegate.cc",
+      "guest_view/app_view/chrome_app_view_guest_delegate.h",
+      # "guest_view/chrome_guest_view_manager_delegate.cc",
+      # "guest_view/chrome_guest_view_manager_delegate.h",
+      # "guest_view/extension_options/chrome_extension_options_guest_delegate.cc",
+      # "guest_view/extension_options/chrome_extension_options_guest_delegate.h",
+      "guest_view/mime_handler_view/chrome_mime_handler_view_guest_delegate.cc",
+      "guest_view/mime_handler_view/chrome_mime_handler_view_guest_delegate.h",
+      # "guest_view/web_view/chrome_web_view_guest_delegate.cc",
+      # "guest_view/web_view/chrome_web_view_guest_delegate.h",
+      # "guest_view/web_view/chrome_web_view_permission_helper_delegate.cc",
+      # "guest_view/web_view/chrome_web_view_permission_helper_delegate.h",
+      # "guest_view/web_view/context_menu_content_type_web_view.cc",
+      # "guest_view/web_view/context_menu_content_type_web_view.h",
+
     ]
 
     deps += [
       "//chrome/browser/extensions",
       "//extensions/browser:keepalive",
+      # "//extensions/browser/updater:keepalive",
+      "//extensions/components/javascript_dialog_extensions_client",
+      "//chrome/browser/themes",
     ]
 
     # Circular dependency due to some utility function in
@@ -8376,6 +8421,7 @@ static_library("browser_public_dependencies") {
     public_deps += [
       "//chrome/android/features/dev_ui:buildflags",
       "//components/image_fetcher/core",
+      "//ui/webui/resources/cr_components/help_bubble:mojo_bindings",
     ]
   } else {
     public_deps += [

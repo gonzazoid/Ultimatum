@@ -24,7 +24,13 @@
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/native_ui_types.h"
 
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/download/android/extension_uninstall_dialog_bridge.h"
+#endif
+
 static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
+
+class ExtensionUninstallDialogBridge;
 
 namespace ui {
 class NativeWindowTracker;
@@ -48,6 +54,8 @@ class ExtensionUninstallDialog : public ChromeAppIconDelegate,
     CLOSE_ACTION_CANCELED = 2,
     CLOSE_ACTION_LAST = 3,
   };
+
+  using DoneCallback = base::OnceCallback<void()>;
 
   // TODO(devlin): For a single method like this, a callback is probably more
   // appropriate than a delegate.
@@ -143,6 +151,13 @@ class ExtensionUninstallDialog : public ChromeAppIconDelegate,
   // Forcefully closes the dialog view.
   virtual void Close() = 0;
 
+#if BUILDFLAG(IS_ANDROID)
+void ShowExtensionUninstallAndroidDialogImpl(
+    ExtensionUninstallDialog::DoneCallback accept_callback,
+    ExtensionUninstallDialog::DoneCallback cancel_callback,
+    const Extension* extension);
+#endif
+
   // Resets to nullptr when the Profile is deleted.
   raw_ptr<Profile> profile_;
 
@@ -175,6 +190,10 @@ class ExtensionUninstallDialog : public ChromeAppIconDelegate,
   bool extension_uninstalled_early_ = false;
 
   UninstallReason uninstall_reason_ = UNINSTALL_REASON_FOR_TESTING;
+
+#if BUILDFLAG(IS_ANDROID)
+  std::unique_ptr<ExtensionUninstallDialogBridge> extension_uninstall_bridge_;
+#endif
 
   base::ScopedObservation<ExtensionRegistry, ExtensionRegistryObserver>
       registry_observation_{this};

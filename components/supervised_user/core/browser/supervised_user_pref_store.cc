@@ -224,7 +224,7 @@ void SupervisedUserPrefStore::RecreatePreferences() {
       }
     }
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
     {
       bool permissions_disallowed =
           family_link_settings_->FindBool(supervised_user::kGeolocationDisabled)

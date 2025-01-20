@@ -577,6 +577,59 @@ IgnoredAction::IgnoredAction(extensions::ExtensionId extension_id,
 
 IgnoredAction::IgnoredAction(IgnoredAction&& rhs) = default;
 
+BlockingResponse::BlockingResponse() {
+  body = {};
+  headers = {};
+}
+BlockingResponse::BlockingResponse(BlockingResponse&& other) = default;
+BlockingResponse& BlockingResponse ::operator=(BlockingResponse&& other) {
+  LOG(INFO) << "MOVING BlockingResponse";
+  if (!other.empty()) {
+    body = std::move(other.body);
+    headers = std::move(other.headers);
+    status = std::move(other.status);
+    status_text = std::move(other.status_text);
+  }
+  return *this;
+}
+BlockingResponse::~BlockingResponse() = default;
+BlockingResponse& BlockingResponse ::operator=(
+    const BlockingResponse& other) = default;
+
+
+bool BlockingResponse::operator==(const BlockingResponse& other) const {
+  return std::tie(body, headers, status, status_text) ==
+         std::tie(other.body, other.headers, other.status, other.status_text);
+}
+
+BlockingResponse BlockingResponse::Clone() const {
+  BlockingResponse clone;
+  clone.body = body;
+  clone.headers = headers;
+  clone.status = status;
+  clone.status_text = status_text;
+  return clone;
+}
+
+// TODO
+bool BlockingResponse::empty() const {
+  if (!initialized) return true;
+  if (body.size() != 0) {
+    return false;
+  }
+  if (headers.size() != 0) {
+    return false;
+  }
+  if (status != "") {
+    return false;
+  }
+  if (status_text != "") {
+    return false;
+  }
+
+  return true;
+}
+
 bool ExtraInfoSpec::InitFromValue(const base::Value& value,
                                   int* extra_info_spec) {
   *extra_info_spec = 0;
@@ -770,9 +823,11 @@ EventResponseDelta CalculateOnBeforeRequestDelta(
     const extensions::ExtensionId& extension_id,
     const base::Time& extension_install_time,
     bool cancel,
+    BlockingResponse& response,
     const GURL& new_url) {
   EventResponseDelta result(extension_id, extension_install_time);
   result.cancel = cancel;
+  result.new_response = response;
   result.new_url = new_url;
   return result;
 }
@@ -910,11 +965,16 @@ EventResponseDelta CalculateOnAuthRequiredDelta(
 
 void MergeCancelOfResponses(
     const EventResponseDeltas& deltas,
+    std::optional<extensions::ExtensionId>* finished_by_extension,
     std::optional<extensions::ExtensionId>* canceled_by_extension) {
   *canceled_by_extension = std::nullopt;
   for (const auto& delta : deltas) {
     if (delta.cancel) {
       *canceled_by_extension = delta.extension_id;
+      break;
+    }
+    if (!delta.new_response.empty()) {
+      *finished_by_extension = delta.extension_id;
       break;
     }
   }
@@ -931,6 +991,7 @@ static bool MergeRedirectUrlOfResponsesHelper(
     const GURL& url,
     const EventResponseDeltas& deltas,
     GURL* new_url,
+    BlockingResponse* new_response,
     std::optional<extensions::ExtensionId>* extension_id,
     IgnoredActions* ignored_actions,
     bool consider_only_cancel_scheme_urls) {
@@ -940,11 +1001,19 @@ static bool MergeRedirectUrlOfResponsesHelper(
   }
 
   bool redirected = false;
+  bool finished = false;
 
   for (const auto& delta : deltas) {
+    if (!finished || *new_response == delta.new_response) {
+      *new_response = delta.new_response;
+      *extension_id = delta.extension_id;
+      finished = true;
+    }
+
     if (!delta.new_url.is_valid()) {
       continue;
     }
+
     if (consider_only_cancel_scheme_urls &&
         !delta.new_url.SchemeIs(url::kDataScheme) &&
         delta.new_url.spec() != "about:blank") {
@@ -955,23 +1024,26 @@ static bool MergeRedirectUrlOfResponsesHelper(
       *new_url = delta.new_url;
       *extension_id = delta.extension_id;
       redirected = true;
-    } else {
+    }
+
+    if (!redirected && !finished) {
       ignored_actions->emplace_back(delta.extension_id,
                                     web_request::IgnoredActionType::kRedirect);
     }
   }
-  return redirected;
+  return redirected || finished;
 }
 
 void MergeRedirectUrlOfResponses(
     const GURL& url,
     const EventResponseDeltas& deltas,
     GURL* new_url,
+    BlockingResponse* new_response,
     std::optional<extensions::ExtensionId>* extension_id,
     IgnoredActions* ignored_actions) {
   // First handle only redirects to data:// URLs and about:blank. These are a
   // special case as they represent a way of cancelling a request.
-  if (MergeRedirectUrlOfResponsesHelper(url, deltas, new_url, extension_id,
+  if (MergeRedirectUrlOfResponsesHelper(url, deltas, new_url, new_response, extension_id,
                                         ignored_actions, true)) {
     // If any extension cancelled a request by redirecting to a data:// URL or
     // about:blank, we don't consider the other redirects.
@@ -979,7 +1051,7 @@ void MergeRedirectUrlOfResponses(
   }
 
   // Handle all other redirects.
-  MergeRedirectUrlOfResponsesHelper(url, deltas, new_url, extension_id,
+  MergeRedirectUrlOfResponsesHelper(url, deltas, new_url, new_response, extension_id,
                                     ignored_actions, false);
 }
 
@@ -987,9 +1059,10 @@ void MergeOnBeforeRequestResponses(
     const GURL& url,
     const EventResponseDeltas& deltas,
     GURL* new_url,
+    BlockingResponse* new_response,
     std::optional<extensions::ExtensionId>* extension_id,
     IgnoredActions* ignored_actions) {
-  MergeRedirectUrlOfResponses(url, deltas, new_url, extension_id,
+  MergeRedirectUrlOfResponses(url, deltas, new_url, new_response, extension_id,
                               ignored_actions);
 }
 
@@ -1701,8 +1774,9 @@ void MergeOnHeadersReceivedResponses(
                                            override_response_headers);
 
   GURL new_url;
+  BlockingResponse new_response;
   std::optional<extensions::ExtensionId> extension_id;
-  MergeRedirectUrlOfResponses(request.url, deltas, &new_url, &extension_id,
+  MergeRedirectUrlOfResponses(request.url, deltas, &new_url, &new_response, &extension_id,
                               ignored_actions);
   if (new_url.is_valid()) {
     // Only create a copy if we really want to modify the response headers.

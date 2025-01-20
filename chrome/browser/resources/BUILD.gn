@@ -32,6 +32,12 @@ group("resources") {
     public_deps += [ ":component_extension_resources" ]
   }
 
+  if (is_android) {
+    public_deps += [
+      "bookmarks:resources",
+    ]
+  }
+
   if (!is_android) {
     public_deps += [
       ":app_icon_resources",
@@ -163,7 +169,10 @@ group("resources") {
   }
 
   if (enable_extensions_core) {
-    public_deps += [ "extensions:resources" ]
+    public_deps += [
+      ":component_extension_resources",
+      "extensions:resources"
+    ]
   }
 
   if (enable_pdf) {

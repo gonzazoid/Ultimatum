@@ -474,8 +474,9 @@ public class NativePageFactory {
                 page = getBuilder().buildNewTabPage(tab, url);
                 break;
             case NativePageType.BOOKMARKS:
-                page = getBuilder().buildBookmarksPage(tab);
-                break;
+                return null;
+                // page = getBuilder().buildBookmarksPage(tab);
+                // break;
             case NativePageType.DOWNLOADS:
                 page = getBuilder().buildDownloadsPage(tab);
                 break;

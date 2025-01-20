@@ -35,6 +35,10 @@
 #include "extensions/common/url_pattern.h"
 #include "extensions/common/url_pattern_set.h"
 
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
+#include "chrome/browser/extensions/chrome_extension_function_details.h"
+#endif
+
 namespace extensions {
 
 using api::permissions::Permissions;
@@ -477,6 +481,16 @@ ExtensionFunction::ResponseAction PermissionsRequestFunction::Run() {
       std::move(total_new_permissions),
       ExtensionInstallPrompt::GetDefaultShowDialogCallback());
 
+  // auto accept =
+  //   ExtensionInstallPrompt::DoneCallbackPayload(
+  //         ExtensionInstallPrompt::Result::ACCEPTED);
+
+  // base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+  //    FROM_HERE, base::BindOnce(&PermissionsRequestFunction::OnInstallPromptDone, base::Unretained(this), accept),
+  //    base::Milliseconds(100));
+
+  // OnInstallPromptDone(ExtensionInstallPrompt::DoneCallbackPayload(
+  //       ExtensionInstallPrompt::Result::ACCEPTED));
   // ExtensionInstallPrompt::ShowDialog() can call the response synchronously.
   return did_respond() ? AlreadyResponded() : RespondLater();
 }

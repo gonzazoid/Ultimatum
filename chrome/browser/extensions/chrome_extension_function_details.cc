@@ -21,9 +21,10 @@
 #include "extensions/browser/app_window/app_window_registry.h"
 #endif  // BUILDFLAG(ENABLE_PLATFORM_APPS)
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+// #if BUILDFLAG(ENABLE_EXTENSIONS)
+#include "chrome/browser/ui/browser_finder.h"
 #include "components/web_modal/web_contents_modal_dialog_manager.h"
-#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+// #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
@@ -55,19 +56,19 @@ WindowController* ChromeExtensionFunctionDetails::GetCurrentWindowController()
   // profile. Note that the profile may already be incognito, in which case
   // we will search the incognito version only, regardless of the value of
   // |include_incognito|.
-  Profile* profile = Profile::FromBrowserContext(function_->browser_context());
+  // Profile* profile = Profile::FromBrowserContext(function_->browser_context());
 
   WindowController* window_controller = nullptr;
-  ForEachCurrentBrowserWindowInterfaceOrderedByActivation(
-      [&](BrowserWindowInterface* browser) {
-        if (browser->GetProfile() == profile ||
-            (function_->include_incognito_information() &&
-             browser->GetProfile()->GetOriginalProfile() == profile)) {
-          window_controller = BrowserExtensionWindowController::From(browser);
-          return false;  // Stop iterating.
-        }
-        return true;  // Continue iterating.
-      });
+  // ForEachCurrentBrowserWindowInterfaceOrderedByActivation(
+  //     [&](BrowserWindowInterface* browser) {
+  //       if (browser->GetProfile() == profile ||
+  //           (function_->include_incognito_information() &&
+  //            browser->GetProfile()->GetOriginalProfile() == profile)) {
+  //         window_controller = BrowserExtensionWindowController::From(browser);
+  //         return false;  // Stop iterating.
+  //       }
+  //       return true;  // Continue iterating.
+  //     });
 
   // NOTE(rafaelw): This can return NULL in some circumstances. In particular,
   // a background_page onload chrome.tabs api call can make it into here
@@ -118,19 +119,19 @@ gfx::NativeWindow ChromeExtensionFunctionDetails::GetNativeWindowForUI() {
 #endif  // BUILDFLAG(ENABLE_PLATFORM_APPS)
 
   // As a last resort, find a browser.
-  std::vector<BrowserWindowInterface*> all_browsers =
-      GetAllBrowserWindowInterfaces();
-  BrowserWindowInterface* browser = nullptr;
-  Profile* profile = Profile::FromBrowserContext(function_->browser_context());
-  for (auto* candidate : all_browsers) {
-    if (candidate->GetProfile() == profile) {
-      browser = candidate;
-      break;
-    }
-  }
-  if (browser) {
-    return browser->GetWindow()->GetNativeWindow();
-  }
+  // std::vector<BrowserWindowInterface*> all_browsers =
+  //     GetAllBrowserWindowInterfaces();
+  // BrowserWindowInterface* browser = nullptr;
+  // Profile* profile = Profile::FromBrowserContext(function_->browser_context());
+  // for (auto* candidate : all_browsers) {
+  //   if (candidate->GetProfile() == profile) {
+  //     browser = candidate;
+  //     break;
+  //   }
+  // }
+  // if (browser) {
+  //   return browser->GetWindow()->GetNativeWindow();
+  // }
 
   // If there are no browser windows open, no window is available.
   // This could happen e.g. if extension launches a long process or simple

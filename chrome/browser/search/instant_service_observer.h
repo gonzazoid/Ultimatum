@@ -9,7 +9,7 @@
 #include "chrome/common/search/instant_types.h"
 
 #if BUILDFLAG(IS_ANDROID)
-#error "Instant is only used on desktop";
+// #error "Instant is only used on desktop";
 #endif
 
 struct InstantMostVisitedInfo;

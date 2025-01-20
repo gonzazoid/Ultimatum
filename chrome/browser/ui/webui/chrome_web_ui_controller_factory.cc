@@ -60,6 +60,7 @@
 
 #if BUILDFLAG(IS_ANDROID)
 #include "components/feed/feed_feature_list.h"
+#include "chrome/browser/ui/webui/bookmarks/bookmarks_ui.h"
 #else  // BUILDFLAG(IS_ANDROID)
 #include "base/memory/ref_counted_memory.h"
 #include "base/memory/scoped_refptr.h"
@@ -391,6 +392,12 @@ base::RefCountedMemory* ChromeWebUIControllerFactory::GetFaviconResourceBytes(
   if (page_url.host() == chrome::kChromeUIVersionHost) {
     return VersionUI::GetFaviconResourceBytes(scale_factor);
   }
+
+#if BUILDFLAG(IS_ANDROID)
+  if (page_url.host() == chrome::kChromeUIBookmarksHost) {
+    return BookmarksUI::GetFaviconResourceBytes(scale_factor);
+  }
+#endif
 
 #if !BUILDFLAG(IS_ANDROID)
 #if !BUILDFLAG(IS_CHROMEOS)

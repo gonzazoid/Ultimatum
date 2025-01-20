@@ -450,9 +450,9 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
     @VisibleForTesting
     boolean shouldShowDeveloperMenu() {
         return DevToolsWindowAndroid.isDevToolsAllowedFor(
-                        getProfile(), mItemDelegate.getWebContents())
-                && DeviceInput.supportsAlphabeticKeyboard()
-                && DeviceInput.supportsPrecisionPointer();
+                        getProfile(), mItemDelegate.getWebContents());
+                // && DeviceInput.supportsAlphabeticKeyboard()
+                // && DeviceInput.supportsPrecisionPointer();
     }
 
     @VisibleForTesting

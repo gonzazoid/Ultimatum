@@ -71,11 +71,12 @@ void ConfigurePostInstallDialogModel(
   }
 
 #if BUILDFLAG(IS_ANDROID)
-  dialog_model_builder.AddOkButton(
-      base::DoNothing(),
-      ui::DialogModel::Button::Params().SetLabel(
-          l10n_util::GetStringUTF16(IDS_EXTENSION_INSTALLED_OK_BUTTON)));
+  // dialog_model_builder.AddOkButton(
+  //     base::DoNothing(),
+  //     ui::DialogModel::Button::Params().SetLabel(
+  //         l10n_util::GetStringUTF16(IDS_EXTENSION_INSTALLED_OK_BUTTON)));
 #endif
+  dialog_model_builder.AddOkButton(base::DoNothing());
 }
 
 void OpenExtensionsShortcutsPage(
