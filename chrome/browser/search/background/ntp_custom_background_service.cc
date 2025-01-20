@@ -124,7 +124,7 @@ void RemoveLocalBackgroundImageCopy(Profile* profile) {
           ntp_features::kCustomizeChromeWallpaperSearch) &&
       base::FeatureList::IsEnabled(
           optimization_guide::features::kOptimizationGuideModelExecution)) {
-    WallpaperSearchBackgroundManager::RemoveWallpaperSearchBackground(profile);
+    // WallpaperSearchBackgroundManager::RemoveWallpaperSearchBackground(profile);
   }
   // Delete uploaded image.
   base::FilePath path = profile->GetPath().AppendASCII(
@@ -577,7 +577,7 @@ void NtpCustomBackgroundService::SetBackgroundToLocalResource() {
   if (pref_service_->GetBoolean(prefs::kNtpCustomBackgroundLocalToDevice) &&
       !pref_service_->GetString(prefs::kNtpCustomBackgroundLocalToDeviceId)
            .empty()) {
-    WallpaperSearchBackgroundManager::RemoveWallpaperSearchBackground(profile_);
+    // WallpaperSearchBackgroundManager::RemoveWallpaperSearchBackground(profile_);
   }
   pref_service_->SetBoolean(prefs::kNtpCustomBackgroundLocalToDevice, true);
   pref_service_->ClearPref(prefs::kNtpCustomBackgroundLocalToDeviceId);

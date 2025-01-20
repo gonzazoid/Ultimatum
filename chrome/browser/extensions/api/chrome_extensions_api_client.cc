@@ -294,14 +294,14 @@ void ChromeExtensionsAPIClient::OpenFileUrlForTesting(
   CHECK(file_url.SchemeIsFile());
 
   // Find the first browser window that matches this profile.
-  Profile* profile = Profile::FromBrowserContext(browser_context);
+  // Profile* profile = Profile::FromBrowserContext(browser_context);
   BrowserWindowInterface* browser = nullptr;
-  for (BrowserWindowInterface* bwi : GetAllBrowserWindowInterfaces()) {
-    if (bwi->GetProfile() == profile) {
-      browser = bwi;
-      break;
-    }
-  }
+  // for (BrowserWindowInterface* bwi : GetAllBrowserWindowInterfaces()) {
+  //   if (bwi->GetProfile() == profile) {
+  //     browser = bwi;
+  //     break;
+  //   }
+  // }
   CHECK(browser) << "Unable to find browser with matching profile.";
 
   // Find the active tab.
@@ -319,10 +319,10 @@ void ChromeExtensionsAPIClient::OpenFileUrlForTesting(
 }
 
 #if BUILDFLAG(ENABLE_GUEST_VIEW)
-std::unique_ptr<AppViewGuestDelegate>
-ChromeExtensionsAPIClient::CreateAppViewGuestDelegate() const {
-  return std::make_unique<ChromeAppViewGuestDelegate>();
-}
+// std::unique_ptr<AppViewGuestDelegate>
+// ChromeExtensionsAPIClient::CreateAppViewGuestDelegate() const {
+//   return std::make_unique<ChromeAppViewGuestDelegate>();
+// }
 
 std::unique_ptr<ExtensionOptionsGuestDelegate>
 ChromeExtensionsAPIClient::CreateExtensionOptionsGuestDelegate(
@@ -448,6 +448,7 @@ ChromeExtensionsAPIClient::GetFeedbackPrivateDelegate() {
   }
   return feedback_private_delegate_.get();
 }
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 AutomationInternalApiDelegate*
 ChromeExtensionsAPIClient::GetAutomationInternalApiDelegate() {
@@ -457,7 +458,6 @@ ChromeExtensionsAPIClient::GetAutomationInternalApiDelegate() {
   }
   return extensions_automation_api_delegate_.get();
 }
-#endif  // !BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_CHROMEOS)
 MediaPerceptionAPIDelegate*

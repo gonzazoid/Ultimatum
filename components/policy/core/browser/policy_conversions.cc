@@ -113,7 +113,7 @@ Value::Dict DefaultPolicyConversions::ToValueDict() {
     all_policies.Set("chromePolicies", client()->GetChromePolicies());
   }
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   all_policies.Merge(GetExtensionPolicies());
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
@@ -142,7 +142,7 @@ Value::Dict DefaultPolicyConversions::GetDeviceLocalAccountPolicies() {
 }
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 base::Value::Dict DefaultPolicyConversions::GetExtensionPolicies() {
   base::Value::Dict extension_policies;
   if (client()->HasUserPolicies()) {

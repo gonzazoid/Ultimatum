@@ -25,6 +25,10 @@
 #include "content/public/browser/browser_main_runner.h"
 #include "content/public/common/content_switches.h"
 
+#include "components/color/color_mixers.h"
+#include "ui/color/color_provider_manager.h"
+#include "chrome/browser/ui/color/chrome_color_mixers.h"
+
 namespace {
 // Whether to use the process start time for startup metrics.
 BASE_FEATURE(kUseProcessStartTimeForMetrics, base::FEATURE_DISABLED_BY_DEFAULT);
@@ -122,6 +126,11 @@ ChromeMainDelegateAndroid::RunProcess(
   }
 
   int exit_code = browser_runner_->Initialize(std::move(main_function_params));
+
+  ui::ColorProviderManager::Get().AppendColorProviderInitializer(
+      base::BindRepeating(color::AddComponentsColorMixers));
+  ui::ColorProviderManager::Get().AppendColorProviderInitializer(
+      base::BindRepeating(AddChromeColorMixers));
   // On Android we do not run BrowserMain(), so the above initialization of a
   // BrowserMainRunner is all we want to occur. Preserve any error codes > 0.
   if (exit_code > 0)

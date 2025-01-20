@@ -15,7 +15,7 @@ html {
   --warning-color: rgb(242, 153, 0);
   /* Warning text color with sufficient contrast against white background */
   --warning-text-color: #B16300;
-  --extensions-card-height: 160px;
+  --extensions-card-height: 20rem;
   --separator-gap: 9px;
   --sidebar-width: 256px;
   --cr-toolbar-field-width: 680px;

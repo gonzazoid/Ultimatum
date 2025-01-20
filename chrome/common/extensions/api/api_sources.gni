@@ -43,6 +43,10 @@ schema_sources_ = [
   "webrtc_logging_private.idl",
   "webstore_private.json",
   "windows.json",
+  "bookmark_manager_private.json",
+  "settings_private.idl",
+  "content_settings.json",
+  "chrome_web_view_internal.json",
 ]
 
 if (enable_service_discovery) {
@@ -55,6 +59,7 @@ if (enable_service_discovery) {
 uncompiled_sources_ = [
   "action.json",
   "browsing_data.json",
+  "browser_action.json",
   "extension.json",
   "top_sites.json",
 ]
@@ -69,9 +74,7 @@ if (enable_extensions) {
     "experimental_ai_data.idl",
     "autofill_private.idl",
     "autotest_private.idl",
-    "bookmark_manager_private.json",
     "braille_display_private.idl",
-    "chrome_web_view_internal.json",
     "command_line_private.json",
     "content_settings.json",
     "desktop_capture.json",
@@ -83,7 +86,6 @@ if (enable_extensions) {
     "resources_private.idl",
     "safe_browsing_private.idl",
     "sessions.json",
-    "settings_private.idl",
     "side_panel.idl",
     "system_private.json",
     "tab_capture.idl",
@@ -150,7 +152,6 @@ if (enable_extensions) {
   }
 
   uncompiled_sources_ += [
-    "browser_action.json",
     "idltest.idl",
     "page_action.json",
   ]

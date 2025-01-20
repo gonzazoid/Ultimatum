@@ -8,10 +8,10 @@
 #include "build/build_config.h"
 #include "chrome/browser/extensions/api/developer_private/developer_private_functions_shared.h"
 
-#if BUILDFLAG(IS_ANDROID)
-#include "chrome/browser/extensions/api/developer_private/developer_private_functions_android.h"
-#else
+// #if BUILDFLAG(IS_ANDROID)
+// #include "chrome/browser/extensions/api/developer_private/developer_private_functions_android.h"
+// #else
 #include "chrome/browser/extensions/api/developer_private/developer_private_functions_desktop.h"
-#endif
+// #endif
 
 #endif  // CHROME_BROWSER_EXTENSIONS_API_DEVELOPER_PRIVATE_DEVELOPER_PRIVATE_FUNCTIONS_H_

@@ -49,7 +49,7 @@ content::NavigationController::LoadURLParams LoadURLParamsFromNavigateParams(
   return load_url_params;
 }
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
 content::NavigationController::LoadURLParams LoadURLParamsFromNavigateParams(
     content::WebContents* target_contents,
     NavigateParams* params) {
@@ -72,4 +72,4 @@ content::NavigationController::LoadURLParams LoadURLParamsFromNavigateParams(
 
   return load_url_params;
 }
-#endif
+// #endif

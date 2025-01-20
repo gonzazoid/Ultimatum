@@ -24,6 +24,8 @@
 #include "components/tab_groups/tab_group_color.h"  // nogncheck
 #include "components/tab_groups/tab_group_id.h"     // nogncheck
 #include "extensions/common/mojom/context_type.mojom-forward.h"
+#else
+#include "chrome/browser/android/tab_android.h"
 #endif
 
 static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
@@ -77,16 +79,16 @@ class ExtensionTabUtil {
   static constexpr char kJavaScriptUrlsNotAllowedInExtensionNavigations[] =
       "JavaScript URLs are not allowed in API based extension navigations. Use "
       "chrome.scripting.executeScript instead.";
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
   static constexpr char kBrowserWindowNotAllowed[] =
       "Browser windows not allowed.";
-#endif  // !BUILDFLAG(IS_ANDROID)
+// #endif  // !BUILDFLAG(IS_ANDROID)
   static constexpr char kCannotNavigateToDevtools[] =
       "Cannot navigate to a devtools:// page.";
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
   static constexpr char kLockedFullscreenModeNewTabError[] =
       "You cannot create new tabs while in locked fullscreen mode.";
-#endif  // !BUILDFLAG(IS_ANDROID)
+// #endif  // !BUILDFLAG(IS_ANDROID)
   static constexpr char kCannotNavigateToChromeUntrusted[] =
       "Cannot navigate to a chrome-untrusted:// page.";
   static constexpr char kFileUrlsNotAllowedInExtensionNavigations[] =
@@ -105,7 +107,7 @@ class ExtensionTabUtil {
     ScrubTabBehaviorType pending_info;
   };
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
   struct OpenTabParams {
     OpenTabParams();
     ~OpenTabParams();
@@ -129,7 +131,7 @@ class ExtensionTabUtil {
       ExtensionFunction* function,
       const OpenTabParams& params,
       bool user_gesture);
-#endif
+// #endif
 
   static int GetWindowId(BrowserWindowInterface* browser);
   static int GetTabId(const content::WebContents* web_contents);
@@ -187,11 +189,11 @@ class ExtensionTabUtil {
       WindowController::PopulateTabBehavior populate_tab_behavior,
       mojom::ContextType context);
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
   // Creates a tab MutedInfo object (see chrome/common/extensions/api/tabs.json)
   // with information about the mute state of a browser tab.
   static api::tabs::MutedInfo CreateMutedInfo(content::WebContents* contents);
-#endif
+// #endif
 
   // Gets the level of scrubbing of tab data that needs to happen for a given
   // extension and web contents. This is the preferred way to get
@@ -353,7 +355,7 @@ class ExtensionTabUtil {
   static WindowController* GetWindowControllerOfTab(
       content::WebContents* web_contents);
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
   // Open the extension's options page. Returns true if an options page was
   // successfully opened (though it may not necessarily *load*, e.g. if the
   // URL does not exist). This call to open the options page is iniatiated by
@@ -367,6 +369,7 @@ class ExtensionTabUtil {
   static bool OpenOptionsPage(const Extension* extension,
                               BrowserWindowInterface* browser);
 
+#if !BUILDFLAG(IS_ANDROID)
   // Returns true if the given Browser can report tabs to extensions.
   // Example of Browsers which don't support tabs include apps and devtools.
   static bool BrowserSupportsTabs(BrowserWindowInterface* browser);

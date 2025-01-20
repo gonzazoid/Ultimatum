@@ -15,7 +15,7 @@
       <include name="IDR_PDF_PLUGIN_HTML" file="plugins/pdf_plugin.html" flattenhtml="true" type="BINDATA" />
 
       <!-- Extension libraries. -->
-      <if expr="enable_extensions_core">
+      <if expr="enable_extensions or enable_desktop_android_extensions">
         <!-- Custom bindings for extension APIs. -->
         <include name="IDR_ACTION_CUSTOM_BINDINGS_JS" file="extensions\action_custom_bindings.js" type="BINDATA" />
         <include name="IDR_BROWSER_ACTION_CUSTOM_BINDINGS_JS" file="extensions\browser_action_custom_bindings.js" type="BINDATA" />

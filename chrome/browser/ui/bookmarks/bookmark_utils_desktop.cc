@@ -413,40 +413,40 @@ void DoOpen(Browser* browser,
       }
 
       // Connect to new group.
-      std::optional<tab_groups::SavedTabGroup> new_tab_group =
-          tab_group_sync_service->GetGroup(new_group_id);
-      if (new_tab_group.has_value()) {
-        tab_group_sync_service->UpdateBookmarkNodeId(
-            new_tab_group->saved_guid(), bookmark_folder_node_id);
-      }
+      // std::optional<tab_groups::SavedTabGroup> new_tab_group =
+      //     tab_group_sync_service->GetGroup(new_group_id);
+      // if (new_tab_group.has_value()) {
+      //   tab_group_sync_service->UpdateBookmarkNodeId(
+      //       new_tab_group->saved_guid(), bookmark_folder_node_id);
+      // }
     } else {
       if (!tab_group_sync_service) {
         return;
       }
 
       // Open existing group and replace existing tabs with the new ones.
-      std::optional<tab_groups::TabGroupId> existing_group_id =
-          tab_group_sync_service->OpenTabGroup(
-              connected_group_id.value(),
-              std::make_unique<tab_groups::TabGroupActionContextDesktop>(
-                  browser, tab_groups::OpeningSource::kConnectOnGroupShare));
+      // std::optional<tab_groups::TabGroupId> existing_group_id =
+      //     tab_group_sync_service->OpenTabGroup(
+      //         connected_group_id.value(),
+      //         std::make_unique<tab_groups::TabGroupActionContextDesktop>(
+      //             browser, tab_groups::OpeningSource::kConnectOnGroupShare));
 
-      if (!existing_group_id.has_value()) {
+      // if (!existing_group_id.has_value()) {
         return;
-      }
+      // }
 
-      gfx::Range range = model->group_model()
-                             ->GetTabGroup(existing_group_id.value())
-                             ->ListTabs();
-      std::vector<content::WebContents*> existing_tabs_in_group;
-      for (size_t index = range.start(); index < range.end(); index++) {
-        existing_tabs_in_group.push_back(model->GetWebContentsAt(index));
-      }
-      model->AddToExistingGroup(tab_indices, existing_group_id.value());
-      for (content::WebContents* existing_tab : existing_tabs_in_group) {
-        model->CloseWebContentsAt(model->GetIndexOfWebContents(existing_tab),
-                                  TabCloseTypes::CLOSE_NONE);
-      }
+      // gfx::Range range = model->group_model()
+      //                        ->GetTabGroup(existing_group_id.value())
+      //                        ->ListTabs();
+      // std::vector<content::WebContents*> existing_tabs_in_group;
+      // for (size_t index = range.start(); index < range.end(); index++) {
+      //   existing_tabs_in_group.push_back(model->GetWebContentsAt(index));
+      // }
+      // model->AddToExistingGroup(tab_indices, existing_group_id.value());
+      // for (content::WebContents* existing_tab : existing_tabs_in_group) {
+      //   model->CloseWebContentsAt(model->GetIndexOfWebContents(existing_tab),
+      //                             TabCloseTypes::CLOSE_NONE);
+      // }
     }
   }
 }

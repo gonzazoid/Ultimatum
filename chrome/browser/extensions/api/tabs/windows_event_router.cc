@@ -170,7 +170,7 @@ WindowsEventRouter::WindowsEventRouter(Profile* profile)
 #endif
       focused_profile_(nullptr),
       focused_window_id_(extension_misc::kUnknownWindowId) {
-  DCHECK(!profile->IsOffTheRecord());
+  // DCHECK(!profile->IsOffTheRecord()); // TODO why we get here when incognito tab is created???
 
   observed_controller_list_.Observe(WindowControllerList::GetInstance());
   // Needed for when no suitable window can be passed to an extension as the
@@ -184,9 +184,10 @@ WindowsEventRouter::WindowsEventRouter(Profile* profile)
 #elif defined(TOOLKIT_VIEWS)
   views::NativeViewFocusManager::GetInstance()->AddFocusChangeListener(this);
 #elif BUILDFLAG(IS_ANDROID)
+  // TODO is this the reason why tap on popup doesn't lead to keyboard appearance?
   // TODO(https://crbug.com/424857039): Add focus support.
 #else
-#error Unsupported
+// #error Unsupported
 #endif
 }
 

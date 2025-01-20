@@ -225,14 +225,14 @@ void SetConstrainedWindowViewsClient(
 void UpdateWebContentsModalDialogPosition(
     views::Widget* widget,
     web_modal::WebContentsModalDialogHost* dialog_host) {
-  gfx::Size size = widget->GetRootView()->GetPreferredSize({});
-  gfx::Size max_size = dialog_host->GetMaximumDialogSize();
+  // gfx::Size size = widget->GetRootView()->GetPreferredSize({});
+  // gfx::Size max_size = dialog_host->GetMaximumDialogSize();
   // Enlarge the max size by the top border, as the dialog will be shifted
   // outside the area specified by the dialog host by this amount later.
-  max_size.Enlarge(0,
-                   widget->non_client_view()->frame_view()->GetInsets().top());
-  size.SetToMin(max_size);
-  UpdateModalDialogPosition(widget, dialog_host, size);
+  // max_size.Enlarge(0,
+  //                  widget->non_client_view()->frame_view()->GetInsets().top());
+  // size.SetToMin(max_size);
+  // UpdateModalDialogPosition(widget, dialog_host, size);
 }
 
 void UpdateWidgetModalDialogPosition(views::Widget* widget,

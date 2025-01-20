@@ -668,6 +668,13 @@ static_library("ui") {
     "//v8:v8_version",
   ]
 
+  if (is_android) {
+    sources += [
+      "incognito_allowed_url.cc",
+      "incognito_allowed_url.h",
+    ]
+  }
+
   if (!is_android || is_desktop_android) {
     sources += [
       "browser_navigator.h",
@@ -684,7 +691,11 @@ static_library("ui") {
 
     # Desktop-Android-only dependencies.
     if (is_desktop_android) {
-      sources += [ "//chrome/browser/ui/android/browser_navigator_android.cc" ]
+      sources += [
+        "//chrome/browser/ui/android/browser_navigator_android.cc",
+        "incognito_allowed_url.cc",
+        "incognito_allowed_url.h",
+        ]
       deps += [ "//chrome/browser/ui/android/extensions/windowing/internal" ]
     }
   }
@@ -794,6 +805,22 @@ static_library("ui") {
 
   if (enterprise_data_controls) {
     deps += [ "//chrome/browser/enterprise/data_controls" ]
+  }
+
+  if (is_android && enable_desktop_android_extensions) {
+    sources += [
+      "webui/extensions/extension_basic_info.cc",
+      "webui/extensions/extension_basic_info.h",
+      # "views/extensions/extension_uninstall_dialog_view.cc",
+      "webui/theme_handler.cc",
+      "webui/theme_handler.h",
+      "webui/theme_source.cc",
+      "webui/theme_source.h",
+      "webui/ntp/ntp_resource_cache.cc",
+      "webui/ntp/ntp_resource_cache.h",
+      "webui/ntp/ntp_resource_cache_factory.cc",
+      "webui/ntp/ntp_resource_cache_factory.h",
+    ]
   }
 
   if (is_android) {
@@ -1016,12 +1043,20 @@ static_library("ui") {
         "android/extensions/extension_util_bridge.h",
         "extensions/icon_with_badge_image_source.cc",
         "extensions/icon_with_badge_image_source.h",
+        "browser_navigator.cc",
+        "browser_navigator.h",
+        "singleton_tabs.cc",
+        "singleton_tabs.h",
       ]
 
       deps += [
         "//chrome/browser/extensions/api/web_navigation",
         "//chrome/browser/ui/android/extensions:jni_headers",
         "//extensions/browser:extension_action_enums",
+        "//chrome/browser/ui/bookmarks",
+        "//chrome/browser/ui/bookmarks:impl",
+        "//chrome/browser/ui/tabs:tab_strip_model_observer",
+        "//chrome/browser/ui/tabs:tab_strip_model_observer_impl",
       ]
     }
   } else {
@@ -1462,9 +1497,9 @@ static_library("ui") {
       "//chrome/browser/ui/task_manager",
       "//chrome/browser/ui/thumbnails",
       "//chrome/browser/ui/translate:impl",
-      "//chrome/browser/ui/web_applications",
-      "//chrome/browser/ui/web_applications:impl",
-      "//chrome/browser/ui/web_applications:launch_utils",
+      # "//chrome/browser/ui/web_applications",
+      # "//chrome/browser/ui/web_applications:impl",
+      # "//chrome/browser/ui/web_applications:launch_utils",
       "//chrome/browser/ui/webui/access_code_cast",
       "//chrome/browser/ui/webui/access_code_cast:impl",
       "//chrome/browser/ui/webui/omnibox_popup/mojom",
@@ -1590,8 +1625,8 @@ static_library("ui") {
       "//chrome/browser/ui/webui_browser:impl",
       "//chrome/browser/ui/window_sizer",
       "//chrome/browser/ui/window_sizer:impl",
-      "//chrome/browser/web_applications",
-      "//chrome/browser/web_applications:features",
+      # "//chrome/browser/web_applications",
+      # "//chrome/browser/web_applications:features",
       "//chrome/common:buildflags",
       "//chrome/common:version_header",
       "//chrome/common/read_anything:mojo_bindings",
@@ -1804,11 +1839,11 @@ static_library("ui") {
       # - c/b/ui/browser.h, browser_finder.h, browser_window.h, browser_window_state.h,
       #   browser_commands.h, chrome_pages.h, browser_navigator.h, intent_picker_tab_helper.h,
       #   browser_tabstrip.h, intent_picker_tab_helper.h.
-      "//chrome/browser/ui/web_applications:impl",
+      # "//chrome/browser/ui/web_applications:impl",
 
       # TODO(crbug.com/438226511): Remove this circular dependency when c/b/ui/browser.h gets
       # componentized.
-      "//chrome/browser/ui/web_applications:launch_utils",
+      # "//chrome/browser/ui/web_applications:launch_utils",
     ]
 
     if (is_mac) {
@@ -2357,7 +2392,7 @@ static_library("ui") {
       "//chrome/browser/ui/webui/ash/user_image",
       "//chrome/browser/ui/webui/nearby_share",
       "//chrome/browser/ui/webui/signin/ash",
-      "//chrome/browser/web_applications",
+      # "//chrome/browser/web_applications",
       "//chrome/browser/webshare:storage",
       "//chrome/services/file_util/public/cpp",
       "//chromeos/ash/components/account_manager",

@@ -453,7 +453,6 @@ bool GetValidLocales(const base::FilePath& locale_path,
                      std::string* error) {
   std::set<std::string> chrome_locales;
   GetAllLocales(&chrome_locales);
-
   // Enumerate all supplied locales in the extension.
   base::FileEnumerator locales(
       locale_path, false, base::FileEnumerator::DIRECTORIES);
@@ -551,6 +550,7 @@ bool ShouldSkipValidation(const base::FilePath& locales_path,
   // skipping any strings with '.'. This happens sometimes, for example with
   // '.svn' directories.
   base::FilePath relative_path;
+  // TODO locale_path can be full content uri
   if (!locales_path.AppendRelativePath(locale_path, &relative_path)) {
     NOTREACHED();
   }
@@ -558,6 +558,7 @@ bool ShouldSkipValidation(const base::FilePath& locales_path,
   if (subdir.empty())
     return true;  // Non-ASCII.
 
+#if !BUILDFLAG(IS_ANDROID)
   if (base::Contains(subdir, '.'))
     return true;
 
@@ -566,6 +567,7 @@ bool ShouldSkipValidation(const base::FilePath& locales_path,
   // work here, when we match locale name with file name.
   if (!extensions::ContainsStringIgnoreCaseASCII(all_locales, subdir))
     return true;
+#endif
 
   return false;
 }
