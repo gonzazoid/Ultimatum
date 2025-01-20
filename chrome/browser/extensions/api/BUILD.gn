@@ -30,6 +30,12 @@ group("api_implementations") {
     "//chrome/browser/extensions/api/cookies",
     "//chrome/browser/extensions/api/module",
     "//chrome/browser/extensions/api/notifications",
+    "//chrome/browser/extensions/api/permissions",
+    "//chrome/browser/extensions/api/proxy",
+    "//chrome/browser/extensions/api/scripting",
+    "//chrome/browser/extensions/api/extension_action",
+    "//chrome/browser/extensions/api/preference",
+    "//chrome/browser/extensions/api/context_menus",
   ]
 
   if (enable_extensions) {

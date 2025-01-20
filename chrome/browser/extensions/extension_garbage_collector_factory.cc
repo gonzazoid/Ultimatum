@@ -11,6 +11,9 @@
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/extensions/extension_garbage_collector.h"
 #include "chrome/browser/extensions/extension_system_factory.h"
+#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+#include "chrome/browser/extensions/desktop_android/desktop_android_extension_system.h"
+#endif
 #include "chrome/browser/extensions/install_tracker_factory.h"
 #include "extensions/browser/extensions_browser_client.h"
 
@@ -47,7 +50,11 @@ ExtensionGarbageCollectorFactory::ExtensionGarbageCollectorFactory()
               // Ash Internals.
               .WithAshInternals(ProfileSelection::kOriginalOnly)
               .Build()) {
+#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+  DependsOn(extensions::DesktopAndroidExtensionSystem::GetFactory());
+#else
   DependsOn(ExtensionsBrowserClient::Get()->GetExtensionSystemFactory());
+#endif
   DependsOn(InstallTrackerFactory::GetInstance());
 }
 

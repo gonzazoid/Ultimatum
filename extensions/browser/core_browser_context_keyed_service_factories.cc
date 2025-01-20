@@ -22,9 +22,9 @@
 #include "extensions/browser/user_script_world_configuration_manager.h"
 #include "extensions/buildflags/buildflags.h"
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+// #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "extensions/browser/api/web_request/web_request_event_router_factory.h"
-#endif
+// #endif
 
 #if BUILDFLAG(ENABLE_GUEST_VIEW)
 #include "extensions/browser/guest_view/mime_handler_view/mime_handler_stream_manager.h"
@@ -59,10 +59,10 @@ void EnsureCoreBrowserContextKeyedServiceFactoriesBuilt() {
   ServiceWorkerTaskQueueFactory::GetInstance();
   UpdateServiceFactory::GetInstance();
   UserScriptWorldConfigurationManager::GetFactory();
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+// #if BUILDFLAG(ENABLE_EXTENSIONS)
   WebRequestEventRouterFactory::GetInstance();
   MessageTracker::GetFactory();
-#endif
+// #endif
 }
 
 }  // namespace extensions

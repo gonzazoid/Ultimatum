@@ -27,6 +27,14 @@
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_registry_factory.h"
 #include "extensions/browser/extension_system_provider.h"
+
+#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/extensions/blocklist.h"
+#include "chrome/browser/extensions/blocklist_factory.h"
+#include "chrome/browser/extensions/update_install_gate.h"
+#include "chrome/browser/extensions/extension_service.h"
+// #include "chrome/browser/extensions/desktop_android/extension_system_factory.h"
+
 #include "extensions/browser/install_flag.h"
 #include "extensions/browser/null_app_sorting.h"
 #include "extensions/browser/quota_service.h"
@@ -53,6 +61,7 @@ class DesktopAndroidExtensionSystemFactory : public ExtensionSystemProvider {
             BrowserContextDependencyManager::GetInstance()) {
     DependsOn(ExtensionPrefsFactory::GetInstance());
     DependsOn(ExtensionRegistryFactory::GetInstance());
+    DependsOn(BlocklistFactory::GetInstance());
   }
   DesktopAndroidExtensionSystemFactory(
       const DesktopAndroidExtensionSystemFactory&) = delete;
@@ -157,6 +166,10 @@ ExtensionSystemProvider* DesktopAndroidExtensionSystem::GetFactory() {
   return DesktopAndroidExtensionSystemFactory::GetInstance();
 }
 
+ExtensionSystem* DesktopAndroidExtensionSystem::Get(content::BrowserContext* context) {
+  return DesktopAndroidExtensionSystemFactory::GetInstance()->GetForBrowserContext(context);
+}
+
 void DesktopAndroidExtensionSystem::Shutdown() {}
 
 bool DesktopAndroidExtensionSystem::AddExtension(
@@ -234,16 +247,37 @@ void DesktopAndroidExtensionSystem::InitForRegularProfile(
   registrar_ = std::make_unique<ExtensionRegistrar>(browser_context_,
                                                     registrar_delegate_.get());
 
+  profile_ = Profile::FromBrowserContext(browser_context_);
+  bool autoupdate_enabled =
+      !profile_->IsGuestSession() && !profile_->IsSystemProfile();
+
   service_worker_manager_ =
       std::make_unique<ServiceWorkerManager>(browser_context_);
   quota_service_ = std::make_unique<QuotaService>();
   user_script_manager_ = std::make_unique<UserScriptManager>(browser_context_);
 
-  ready_.Signal();
+  content_verifier_ = new ContentVerifier(
+      profile_, std::make_unique<ChromeContentVerifierDelegate>(profile_));
+
+  extension_service_ = std::make_unique<ExtensionService>(
+      profile_, base::CommandLine::ForCurrentProcess(),
+      profile_->GetPath().AppendASCII(kInstallDirectoryName),
+      profile_->GetPath().AppendASCII(kUnpackedInstallDirectoryName),
+      ExtensionPrefs::Get(profile_), Blocklist::Get(profile_),
+      autoupdate_enabled, extensions_enabled, &ready_);
+
+  update_install_gate_ = std::make_unique<UpdateInstallGate>(profile_);
+  extension_service_->RegisterInstallGate(
+      ExtensionPrefs::DelayReason::kWaitForIdle, update_install_gate_.get());
+
+  extension_service_->Init();
+
+  // ready_.Signal();
 }
 
 ExtensionService* DesktopAndroidExtensionSystem::extension_service() {
-  return nullptr;
+  // return nullptr;
+  return extension_service_.get();
 }
 
 ManagementPolicy* DesktopAndroidExtensionSystem::management_policy() {
@@ -292,7 +326,8 @@ bool DesktopAndroidExtensionSystem::is_ready() const {
 }
 
 ContentVerifier* DesktopAndroidExtensionSystem::content_verifier() {
-  return nullptr;
+  // return nullptr;
+  return content_verifier_.get();
 }
 
 std::unique_ptr<ExtensionSet>

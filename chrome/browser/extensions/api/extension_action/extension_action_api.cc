@@ -70,11 +70,12 @@ constexpr char kNoActiveWindowFound[] =
     "Could not find an active browser window.";
 constexpr char kNoActivePopup[] =
     "Extension does not have a popup on the active tab.";
+#if !BUILDFLAG(IS_ANDROID)
 constexpr char kOpenPopupInactiveWindow[] =
     "Cannot show popup for an inactive window. To show the popup for this "
     "window, first call `chrome.windows.update` with `focused` set to "
     "true.";
-
+#endif
 bool g_report_error_for_invisible_icon = false;
 
 // Returns the browser that was last active in the given `profile`, optionally
@@ -326,7 +327,8 @@ ExtensionActionSetIconFunction::RunExtensionAction() {
     // Obsolete argument: ignore it.
     return RespondNow(NoArguments());
   } else {
-    EXTENSION_FUNCTION_VALIDATE(false);
+    return RespondNow(NoArguments());
+    // EXTENSION_FUNCTION_VALIDATE(false);
   }
 
   NotifyChange();
@@ -484,8 +486,12 @@ ExtensionFunction::ResponseAction ActionGetUserSettingsFunction::Run() {
   DCHECK_EQ(ActionInfo::Type::kAction, action->action_type());
 
   const bool is_pinned =
+#if BUILDFLAG(IS_ANDROID)
+      false;
+#else
       ToolbarActionsModel::Get(Profile::FromBrowserContext(browser_context()))
           ->IsActionPinned(extension_id());
+#endif
 
   // TODO(crbug.com/360916928): Today, no action APIs are compiled.
   // Unfortunately, this means we miss out on the compiled types, which would be
@@ -500,6 +506,9 @@ ActionOpenPopupFunction::ActionOpenPopupFunction() = default;
 ActionOpenPopupFunction::~ActionOpenPopupFunction() = default;
 
 ExtensionFunction::ResponseAction ActionOpenPopupFunction::Run() {
+#if BUILDFLAG(IS_ANDROID)
+  return RespondNow(NoArguments());
+#else
   // TODO(crbug.com/360916928): Unfortunately, the action API types aren't
   // compiled. However, the bindings should still valid the form of the
   // arguments.
@@ -559,6 +568,7 @@ ExtensionFunction::ResponseAction ActionOpenPopupFunction::Run() {
   // The function responds in OnShowPopupComplete(). Note that the function is
   // kept alive by the ref-count owned by the ShowPopupCallback.
   return RespondLater();
+#endif
 }
 
 void ActionOpenPopupFunction::OnShowPopupComplete(ExtensionHost* popup_host) {

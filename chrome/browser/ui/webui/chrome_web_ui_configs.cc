@@ -116,7 +116,7 @@
 #include "chrome/browser/ui/webui/webapks/webapks_ui.h"
 #endif  // !BUILDFLAG(IS_ANDROID)
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || (BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS))
 #include "chrome/browser/ui/webui/extensions/extensions_ui.h"
 #endif  // !BUILDFLAG(ENABLE_EXTENSIONS)
 
@@ -323,7 +323,7 @@ void RegisterChromeWebUIConfigs() {
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) ||
         // BUILDFLAG(IS_OPENBSD)
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || (BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS))
   map.AddWebUIConfig(std::make_unique<extensions::ExtensionsUIConfig>());
 #endif  // !BUILDFLAG(ENABLE_EXTENSIONS)
 

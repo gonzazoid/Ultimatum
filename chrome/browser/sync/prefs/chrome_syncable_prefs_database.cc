@@ -36,7 +36,7 @@
 #if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
 #include "extensions/browser/pref_names.h"  // nogncheck
 #endif
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "components/supervised_user/core/common/pref_names.h"
 #endif
 
@@ -552,7 +552,7 @@ constexpr auto kChromeSyncablePrefsAllowlist = base::MakeFixedFlatMap<
       sync_preferences::PrefSensitivity::kNone,
       sync_preferences::MergeBehavior::kNone}},
 #endif
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
     {prefs::kSupervisedUserApprovedExtensions,
      {syncable_prefs_ids::kSupervisedUserApprovedExtensions,
       syncer::PREFERENCES, sync_preferences::PrefSensitivity::kNone,

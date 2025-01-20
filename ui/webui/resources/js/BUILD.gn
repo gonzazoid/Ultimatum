@@ -53,6 +53,12 @@ build_webui("build") {
     non_web_component_files += [ "util_deprecated.js" ]
   }
 
+  if (is_android && enable_desktop_android_extensions) {
+    non_web_component_files += [
+      "focus_without_ink.ts",
+    ]
+  }
+
   if (include_polymer) {
     non_web_component_files += [
       "browser_command/browser_command_proxy.ts",

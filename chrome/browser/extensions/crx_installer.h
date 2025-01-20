@@ -18,7 +18,7 @@
 #include "base/scoped_observation.h"
 #include "base/values.h"
 #include "base/version.h"
-#include "chrome/browser/extensions/extension_install_prompt.h"
+// #include "chrome/browser/extensions/extension_install_prompt.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/webstore_installer.h"
 #include "chrome/browser/profiles/profile_observer.h"

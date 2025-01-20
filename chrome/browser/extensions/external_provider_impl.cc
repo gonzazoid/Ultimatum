@@ -387,12 +387,12 @@ void ExternalProviderImpl::RetrieveExtensionsFromPrefs(
     // so it can get uninstalled by WebAppUiManager::UninstallAndReplace() once
     // the replacement web app has installed and migrated over user preferences.
     // TODO(crbug.com/1099150): Remove this field after migration is complete.
-    const std::string* web_app_migration_flag =
-        extension_dict.FindString(kWebAppMigrationFlag);
-    bool is_migrating_to_web_app =
-        web_app_migration_flag &&
-        web_app::IsPreinstalledAppInstallFeatureEnabled(*web_app_migration_flag,
-                                                        *profile_);
+    // const std::string* web_app_migration_flag =
+    //     extension_dict.FindString(kWebAppMigrationFlag);
+    bool is_migrating_to_web_app = false;
+    //     web_app_migration_flag &&
+    //     web_app::IsPreinstalledAppInstallFeatureEnabled(*web_app_migration_flag,
+    //                                                     *profile_);
     bool keep_if_present =
         extension_dict.FindBool(kKeepIfPresent).value_or(false);
     if (keep_if_present || is_migrating_to_web_app) {
@@ -834,12 +834,12 @@ void ExternalProviderImpl::CreateExternalProviders(
 #if !BUILDFLAG(IS_CHROMEOS)
   // The pre-installed apps are installed as INTERNAL but use the external
   // extension installer codeflow.
-  provider_list->push_back(std::make_unique<preinstalled_apps::Provider>(
-      profile, service,
-      base::MakeRefCounted<ExternalPrefLoader>(
-          chrome::DIR_DEFAULT_APPS, ExternalPrefLoader::NONE, nullptr),
-      ManifestLocation::kInternal, ManifestLocation::kInternal,
-      Extension::FROM_WEBSTORE | Extension::WAS_INSTALLED_BY_DEFAULT));
+  // provider_list->push_back(std::make_unique<preinstalled_apps::Provider>(
+  //     profile, service,
+  //     base::MakeRefCounted<ExternalPrefLoader>(
+  //         chrome::DIR_DEFAULT_APPS, ExternalPrefLoader::NONE, nullptr),
+  //     ManifestLocation::kInternal, ManifestLocation::kInternal,
+  //     Extension::FROM_WEBSTORE | Extension::WAS_INSTALLED_BY_DEFAULT));
 #endif
 
   std::unique_ptr<ExternalProviderImpl> drive_migration_provider(

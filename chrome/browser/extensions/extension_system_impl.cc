@@ -333,7 +333,7 @@ QuotaService* ExtensionSystemImpl::Shared::quota_service() {
 }
 
 AppSorting* ExtensionSystemImpl::Shared::app_sorting() {
-  return app_sorting_.get();
+  return nullptr; // app_sorting_.get();
 }
 
 ContentVerifier* ExtensionSystemImpl::Shared::content_verifier() {

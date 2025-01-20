@@ -46,6 +46,10 @@
 #include "extensions/common/permissions/permissions_data.h"
 #include "extensions/common/url_pattern_set.h"
 
+#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+#include "chrome/browser/extensions/desktop_android/desktop_android_extension_system.h"
+#endif
+
 using content::RenderProcessHost;
 using extensions::permissions_api_helpers::PackPermissionSet;
 
@@ -77,7 +81,11 @@ class PermissionsUpdaterShutdownNotifierFactory
       : BrowserContextKeyedServiceShutdownNotifierFactory(
             "PermissionsUpdaterShutdownFactory") {
     DependsOn(EventRouterFactory::GetInstance());
+#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+    DependsOn(DesktopAndroidExtensionSystem::GetFactory());
+#else
     DependsOn(ExtensionSystemFactory::GetInstance());
+#endif
   }
   ~PermissionsUpdaterShutdownNotifierFactory() override = default;
 };

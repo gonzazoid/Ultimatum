@@ -330,6 +330,10 @@ are declared in tools/grit/grit_args.gni.
         <part file="extensions_strings.grdp" />
       </if>
 
+      <if expr="is_android and enable_desktop_android_extensions">
+        <part file="extensions_strings.grdp" />
+      </if>
+
       <!-- Nearby Share specific strings -->
       <if expr="not is_android">
         <part file="nearby_share_strings.grdp" />
@@ -501,7 +505,7 @@ are declared in tools/grit/grit_args.gni.
         Disable
       </message>
       <!-- Search strings are only used in webui, so no mobile. -->
-      <if expr="not is_android">
+      <if expr="not is_android or enable_desktop_android_extensions">
         <message name="IDS_SEARCH_CLEARED" desc="Message announced to screenreader users when search is cleared.">
           Search cleared
         </message>
@@ -5859,7 +5863,7 @@ are declared in tools/grit/grit_args.gni.
       </if>
 
       <!-- Extensions strings, which are not used by chrome://extensions. -->
-      <if expr="enable_extensions">
+      <if expr="enable_extensions or enable_desktop_android_extensions">
         <message name="IDS_EXTENSIONS_WANTS_ACCESS_TO_SITE" desc="The message shown on mouseover when an extension wants to run on a specific site.">
           Wants access to this site
         </message>
@@ -12651,7 +12655,10 @@ Check your passwords anytime in <ph name="GOOGLE_PASSWORD_MANAGER">$1<ex>Google 
       <!-- Settings related strings not specific to chrome://settings.
            (Settings specific strings are in settings_strings.grdp).
            Android uses native UI for settings -->
-      <if expr="not is_android">
+      <if expr="not is_android or enable_desktop_android_extensions">
+        <message name="IDS_SETTINGS_SAFETY_HUB" desc="Name of a page in settings that gives users an overview over their safety status and where users can take action to improve their safety.">
+          Safety Check
+        </message>
         <message name="IDS_TOOLBAR_INFORM_SET_HOME_PAGE" desc="The confirmation message when dropping a link on the Home toolbar button">
            Your home page has been set.
         </message>

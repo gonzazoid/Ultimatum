@@ -18,7 +18,7 @@ namespace {
 
 ExtensionErrorUI* CreateDefaultExtensionErrorUI(
     ExtensionErrorUI::Delegate* delegate) {
-  return new ExtensionErrorUIDefault(delegate);
+  return nullptr; // new ExtensionErrorUIDefault(delegate);
 }
 
 ExtensionErrorController::UICreateMethod g_create_ui =

@@ -52,7 +52,7 @@ class ChromeExtensionsAPIClient : public ExtensionsAPIClient {
                         const Extension& extension) override;
   void OpenFileUrl(const GURL& file_url,
                    content::BrowserContext* browser_context) override;
-  AppViewGuestDelegate* CreateAppViewGuestDelegate() const override;
+//   AppViewGuestDelegate* CreateAppViewGuestDelegate() const override;
   ExtensionOptionsGuestDelegate* CreateExtensionOptionsGuestDelegate(
       ExtensionOptionsGuest* guest) const override;
   std::unique_ptr<guest_view::GuestViewManagerDelegate>

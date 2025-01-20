@@ -107,7 +107,7 @@ export class ExtensionsItemListElement extends ExtensionsItemListElementBase {
   protected filteredExtensions_: chrome.developerPrivate.ExtensionInfo[] = [];
   protected filteredApps_: chrome.developerPrivate.ExtensionInfo[] = [];
   protected computedFilter_: Filter|null = null;
-  protected maxColumns_: number = 3;
+  protected maxColumns_: number = 1;
   protected unsafeExtensions_: chrome.developerPrivate.ExtensionInfo[] = [];
   protected mv2ExperimentStage_: Mv2ExperimentStage =
       getMv2ExperimentStage(loadTimeData.getInteger('MV2ExperimentStage'));

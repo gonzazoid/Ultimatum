@@ -113,7 +113,7 @@ TabHelper::TabHelper(content::WebContents* web_contents)
       web_contents, sessions::SessionTabHelper::IdForTab(web_contents).id(),
       profile_);
 
-  ActivityLog::GetInstance(profile_)->ObserveScripts(script_executor_.get());
+  // ActivityLog::GetInstance(profile_)->ObserveScripts(script_executor_.get());
 
   InvokeForContentRulesRegistries([this](ContentRulesRegistry* registry) {
     registry->MonitorWebContentsForRuleEvaluation(this->web_contents());
@@ -269,18 +269,18 @@ void TabHelper::DidFinishNavigation(
   DisableBackForwardCacheIfNecessary(enabled_extensions, context,
                                      navigation_handle);
 
-  Browser* browser = chrome::FindBrowserWithTab(web_contents());
-  if (browser && (browser->is_type_app() || browser->is_type_app_popup())) {
-    const Extension* extension = registry->GetInstalledExtension(
-        web_app::GetAppIdFromApplicationName(browser->app_name()));
-    if (extension && AppLaunchInfo::GetFullLaunchURL(extension).is_valid()) {
-      DCHECK(extension->is_app());
-      SetExtensionApp(extension);
-    }
-  } else {
+  // Browser* browser = chrome::FindBrowserWithTab(web_contents());
+  // if (browser && (browser->is_type_app() || browser->is_type_app_popup())) {
+  //   const Extension* extension = registry->GetInstalledExtension(
+  //       web_app::GetAppIdFromApplicationName(browser->app_name()));
+  //   if (extension && AppLaunchInfo::GetFullLaunchURL(extension).is_valid()) {
+  //     DCHECK(extension->is_app());
+  //     SetExtensionApp(extension);
+  //   }
+  // } else {
     UpdateExtensionAppIcon(
         enabled_extensions.GetExtensionOrAppByURL(navigation_handle->GetURL()));
-  }
+  // }
 
   // Reset the `reload_required_` data member, since a page navigation acts as a
   // page refresh.
@@ -344,7 +344,7 @@ void TabHelper::OnImageLoaded(const gfx::Image& image) {
 }
 
 WindowController* TabHelper::GetExtensionWindowController() const  {
-  return ExtensionTabUtil::GetWindowControllerOfTab(web_contents());
+  return nullptr; // ExtensionTabUtil::GetWindowControllerOfTab(web_contents());
 }
 
 WebContents* TabHelper::GetAssociatedWebContents() const {

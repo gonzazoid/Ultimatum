@@ -487,7 +487,7 @@ template("chrome_extra_paks") {
       ]
       deps += [ "//extensions:extensions_resources" ]
     }
-    if (enable_extensions) {
+    if (enable_extensions || (is_android && enable_desktop_android_extensions)) {
       sources += [ "$root_gen_dir/chrome/extensions_resources.pak" ]
       deps += [ "//chrome/browser/resources/extensions:resources" ]
     }

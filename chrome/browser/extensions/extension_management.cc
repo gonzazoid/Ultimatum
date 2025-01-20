@@ -303,8 +303,8 @@ bool ExtensionManagement::IsAllowedManifestType(
     const std::string& extension_id) const {
   // If a managed theme has been set for the current profile, theme extension
   // installations are not allowed.
-  if (manifest_type == Manifest::Type::TYPE_THEME &&
-      ThemeServiceFactory::GetForProfile(profile_)->UsingPolicyTheme())
+  if (manifest_type == Manifest::Type::TYPE_THEME /* &&
+      ThemeServiceFactory::GetForProfile(profile_)->UsingPolicyTheme() */)
     return false;
 
   if (!global_settings_->allowed_types.has_value())

@@ -17,6 +17,9 @@
 #include "extensions/browser/api/web_request/web_request_api.h"
 #include "extensions/browser/api/web_request/web_request_proxying_url_loader_factory.h"
 #include "extensions/buildflags/buildflags.h"
+#include "extensions/browser/api/management/management_api.h"
+#include "extensions/browser/api/messaging/message_service.h"
+#include "extensions/browser/api/declarative/rules_registry_service.h"
 
 // The following are not supported in the experimental desktop-android build.
 // TODO(https://crbug.com/356905053): Enable these APIs on desktop-android.
@@ -35,8 +38,6 @@
 #include "extensions/browser/api/feedback_private/feedback_private_api.h"
 #include "extensions/browser/api/hid/hid_connection_resource.h"
 #include "extensions/browser/api/hid/hid_device_manager.h"
-#include "extensions/browser/api/management/management_api.h"
-#include "extensions/browser/api/messaging/message_service.h"
 #include "extensions/browser/api/networking_private/networking_private_event_router_factory.h"
 #include "extensions/browser/api/printer_provider/printer_provider_api_factory.h"
 #include "extensions/browser/api/serial/serial_connection.h"
@@ -79,6 +80,9 @@ void EnsureApiBrowserContextKeyedServiceFactoriesBuilt() {
   StorageFrontend::GetFactoryInstance();
   WebRequestAPI::GetFactoryInstance();
   WebRequestProxyingURLLoaderFactory::EnsureAssociatedFactoryBuilt();
+  MessageService::GetFactoryInstance();
+  ManagementAPI::GetFactoryInstance();
+  RulesRegistryService::GetFactoryInstance();
 
 // The following are not supported in the experimental desktop-android build.
 // TODO(https://crbug.com/356905053): Enable these APIs on desktop-android.
@@ -114,11 +118,9 @@ void EnsureApiBrowserContextKeyedServiceFactoriesBuilt() {
   ContentSettingsService::GetFactoryInstance();
   FeedbackPrivateAPI::GetFactoryInstance();
   HidDeviceManager::GetFactoryInstance();
-  ManagementAPI::GetFactoryInstance();
 #if BUILDFLAG(IS_CHROMEOS)
   MediaPerceptionAPIManager::GetFactoryInstance();
 #endif
-  MessageService::GetFactoryInstance();
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN) || \
     BUILDFLAG(IS_MAC)
   NetworkingPrivateEventRouterFactory::GetInstance();

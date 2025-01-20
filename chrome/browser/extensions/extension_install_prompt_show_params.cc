@@ -59,7 +59,7 @@ ExtensionInstallPromptShowParams::ExtensionInstallPromptShowParams(
       parent_window_(parent_window) {
   DCHECK(profile);
   if (parent_window_) {
-    native_window_tracker_ = views::NativeWindowTracker::Create(parent_window_);
+    // native_window_tracker_ = views::NativeWindowTracker::Create(parent_window_);
   }
 }
 

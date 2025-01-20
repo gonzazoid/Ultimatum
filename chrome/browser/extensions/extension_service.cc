@@ -383,7 +383,7 @@ void ExtensionService::OnExternalProviderUpdateComplete(
     updater_->CheckNow(ExtensionUpdater::CheckParams());
   }
 
-  error_controller_->ShowErrorIfNeeded();
+  // error_controller_->ShowErrorIfNeeded();
   external_install_manager_->UpdateExternalExtensionAlert();
 }
 
@@ -444,7 +444,7 @@ ExtensionService::ExtensionService(
   if (g_browser_process->profile_manager())
     profile_manager_observation_.Observe(g_browser_process->profile_manager());
 
-  UpgradeDetector::GetInstance()->AddObserver(this);
+  // UpgradeDetector::GetInstance()->AddObserver(this);
 
   cws_info_service_observation_.Observe(CWSInfoService::Get(profile_));
 
@@ -504,7 +504,7 @@ base::WeakPtr<ExtensionServiceInterface> ExtensionService::AsWeakPtr() {
 }
 
 ExtensionService::~ExtensionService() {
-  UpgradeDetector::GetInstance()->RemoveObserver(this);
+  // UpgradeDetector::GetInstance()->RemoveObserver(this);
   // No need to unload extensions here because they are profile-scoped, and the
   // profile is in the process of being deleted.
   for (const auto& provider : external_extension_providers_)
@@ -785,7 +785,7 @@ void ExtensionService::LoadExtensionForReload(
 
 void ExtensionService::ShowExtensionDisabledError(const Extension* extension,
                                                   bool is_remote_install) {
-  AddExtensionDisabledError(this, extension, is_remote_install);
+  // AddExtensionDisabledError(this, extension, is_remote_install);
 }
 
 void ExtensionService::FinishDelayedInstallationsIfAny() {
@@ -1557,11 +1557,11 @@ void ExtensionService::CheckPermissionsIncrease(const Extension* extension,
     disable_reasons.insert(disable_reason::DISABLE_PERMISSIONS_INCREASE);
   }
 
-  if (disable_reasons.empty()) {
+  // if (disable_reasons.empty()) {
     extension_prefs_->SetExtensionEnabled(extension->id());
-  } else {
-    extension_prefs_->SetExtensionDisabled(extension->id(), disable_reasons);
-  }
+  // } else {
+  //   extension_prefs_->SetExtensionDisabled(extension->id(), disable_reasons);
+  // }
 }
 
 void ExtensionService::UpdateActiveExtensionsInCrashReporter() {

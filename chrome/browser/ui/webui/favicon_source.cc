@@ -214,8 +214,8 @@ bool FaviconSource::ShouldServiceRequest(
     content::BrowserContext* browser_context,
     int render_process_id) {
   if (url.SchemeIs(chrome::kChromeSearchScheme)) {
-    return InstantService::ShouldServiceRequest(url, browser_context,
-                                                render_process_id);
+    return false; // InstantService::ShouldServiceRequest(url, browser_context,
+                  //                               render_process_id);
   }
   return URLDataSource::ShouldServiceRequest(url, browser_context,
                                              render_process_id);
@@ -223,7 +223,7 @@ bool FaviconSource::ShouldServiceRequest(
 
 ui::NativeTheme* FaviconSource::GetNativeTheme(
     const content::WebContents::Getter& wc_getter) {
-  return webui::GetNativeThemeDeprecated(wc_getter.Run());
+  return nullptr; // webui::GetNativeThemeDeprecated(wc_getter.Run());
 }
 
 void FaviconSource::OnFaviconDataAvailable(

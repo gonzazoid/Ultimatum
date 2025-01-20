@@ -10,6 +10,9 @@
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/extensions/extension_system_factory.h"
+#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+#include "chrome/browser/extensions/desktop_android/desktop_android_extension_system.h"
+#endif
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/themes/theme_service.h"
 #include "chrome/common/pref_names.h"
@@ -101,7 +104,11 @@ ThemeServiceFactory::ThemeServiceFactory()
               .Build()) {
   DependsOn(extensions::ExtensionRegistryFactory::GetInstance());
   DependsOn(extensions::ExtensionPrefsFactory::GetInstance());
+#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+  DependsOn(extensions::DesktopAndroidExtensionSystem::GetFactory());
+#else
   DependsOn(extensions::ExtensionSystemFactory::GetInstance());
+#endif
 }
 
 ThemeServiceFactory::~ThemeServiceFactory() = default;

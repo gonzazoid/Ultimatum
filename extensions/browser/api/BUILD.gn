@@ -40,6 +40,11 @@ group("api_implementations") {
     "//extensions/browser/api/system_cpu",
     "//extensions/browser/api/system_memory",
     "//extensions/browser/api/test",
+    "//extensions/browser/api/mime_handler_private",
+    "//extensions/browser/api/management",
+    "//extensions/browser/api/metrics_private",
+    "//extensions/browser/api/automation_internal",
+    "//extensions/browser/api/messaging",
   ]
 
   # APIs that are currently not supported on desktop-android.
@@ -50,7 +55,6 @@ group("api_implementations") {
       "//extensions/browser/api/app_runtime",
       "//extensions/browser/api/app_window",
       "//extensions/browser/api/audio",
-      "//extensions/browser/api/automation_internal",
       "//extensions/browser/api/bluetooth",
       "//extensions/browser/api/bluetooth_low_energy",
       "//extensions/browser/api/bluetooth_socket",

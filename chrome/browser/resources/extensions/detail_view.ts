@@ -23,7 +23,7 @@ import type {CrLinkRowElement} from 'chrome://resources/cr_elements/cr_link_row/
 import type {CrToggleElement} from 'chrome://resources/cr_elements/cr_toggle/cr_toggle.js';
 import {I18nMixinLit} from 'chrome://resources/cr_elements/i18n_mixin_lit.js';
 import type {CrTooltipIconElement} from 'chrome://resources/cr_elements/policy/cr_tooltip_icon.js';
-import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
+import {assert , assertNotReached} from 'chrome://resources/js/assert.js';
 import {focusWithoutInk} from 'chrome://resources/js/focus_without_ink.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {CrLitElement} from 'chrome://resources/lit/v3_0/lit.rollup.js';
@@ -520,8 +520,8 @@ export class ExtensionsDetailViewElement extends
    * should be displayed.
    */
   protected shouldShowMv2DeprecationFindAlternativeButton_(): boolean {
-    return this.mv2ExperimentStage_ === Mv2ExperimentStage.WARNING &&
-        !!this.data.recommendationsUrl;
+    return false; // this.mv2ExperimentStage_ === Mv2ExperimentStage.WARNING &&
+        // !!this.data.recommendationsUrl;
   }
 
   /**
@@ -653,12 +653,12 @@ export class ExtensionsDetailViewElement extends
    * It will not be shown again during this stage.
    */
   protected onKeepActionClick_(): void {
-    assert(
-        this.mv2ExperimentStage_ === Mv2ExperimentStage.DISABLE_WITH_REENABLE);
+    // assert(
+    //     this.mv2ExperimentStage_ === Mv2ExperimentStage.DISABLE_WITH_REENABLE);
     chrome.metricsPrivate.recordUserAction(
         'Extensions.Mv2Deprecation.Disabled.DismissedForExtension.DetailPage');
     this.$.actionMenu.close();
-    this.delegate.dismissMv2DeprecationNoticeForExtension(this.data.id);
+    // this.delegate.dismissMv2DeprecationNoticeForExtension(this.data.id);
   }
 
   /**

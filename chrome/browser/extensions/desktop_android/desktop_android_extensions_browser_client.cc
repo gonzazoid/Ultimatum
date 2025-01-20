@@ -14,6 +14,7 @@
 #include "chrome/browser/extensions/desktop_android/desktop_android_extension_web_contents_observer.h"
 #include "chrome/browser/extensions/desktop_android/desktop_android_runtime_api_delegate.h"
 #include "chrome/browser/extensions/error_console/error_console.h"
+#include "chrome/browser/extensions/extension_tab_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_selections.h"
@@ -24,7 +25,8 @@
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/common/user_agent.h"
 #include "extensions/browser/api/core_extensions_browser_api_provider.h"
-#include "extensions/browser/api/extensions_api_client.h"
+// #include "extensions/browser/api/extensions_api_client.h"
+#include "chrome/browser/extensions/api/chrome_extensions_api_client.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_error.h"
 #include "extensions/browser/extension_util.h"
@@ -44,6 +46,8 @@ namespace extensions {
 
 namespace {
 
+DesktopAndroidExtensionsBrowserClient* g_extension_browser_client = nullptr;
+
 class DesktopAndroidKioskDelegate : public KioskDelegate {
  public:
   DesktopAndroidKioskDelegate() = default;
@@ -60,13 +64,21 @@ class DesktopAndroidKioskDelegate : public KioskDelegate {
 DesktopAndroidExtensionsBrowserClient::DesktopAndroidExtensionsBrowserClient()
     : extension_cache_(std::make_unique<NullExtensionCache>()),
       kiosk_delegate_(std::make_unique<DesktopAndroidKioskDelegate>()),
-      api_client_(std::make_unique<ExtensionsAPIClient>()) {
+      api_client_(std::make_unique<ChromeExtensionsAPIClient>()) {
   AddAPIProvider(std::make_unique<CoreExtensionsBrowserAPIProvider>());
   AddAPIProvider(std::make_unique<ChromeExtensionsBrowserAPIProvider>());
 }
 
 DesktopAndroidExtensionsBrowserClient::
     ~DesktopAndroidExtensionsBrowserClient() = default;
+
+DesktopAndroidExtensionsBrowserClient* DesktopAndroidExtensionsBrowserClient::Get() {
+  return g_extension_browser_client;
+}
+
+void DesktopAndroidExtensionsBrowserClient::Set(DesktopAndroidExtensionsBrowserClient* client) {
+  g_extension_browser_client = client;
+}
 
 bool DesktopAndroidExtensionsBrowserClient::IsShuttingDown() {
   return false;
@@ -76,6 +88,19 @@ bool DesktopAndroidExtensionsBrowserClient::AreExtensionsDisabled(
     const base::CommandLine& command_line,
     BrowserContext* context) {
   return false;
+}
+
+bool DesktopAndroidExtensionsBrowserClient::IsValidTabId(content::BrowserContext* browser_context,
+    int tab_id,
+    bool include_incognito,
+    content::WebContents** web_contents) const {
+  return ExtensionTabUtil::GetTabById(tab_id, browser_context, include_incognito, nullptr, web_contents, nullptr);
+}
+
+ScriptExecutor* DesktopAndroidExtensionsBrowserClient::GetScriptExecutorForTab(
+    content::WebContents& web_contents) {
+  TabHelper* tab_helper = TabHelper::FromWebContents(&web_contents);
+  return tab_helper ? tab_helper->script_executor() : nullptr;
 }
 
 bool DesktopAndroidExtensionsBrowserClient::IsValidContext(void* context) {

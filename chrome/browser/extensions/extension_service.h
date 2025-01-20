@@ -54,7 +54,7 @@
 #include "extensions/common/extension_set.h"
 #include "extensions/common/manifest.h"
 
-static_assert(BUILDFLAG(ENABLE_EXTENSIONS));
+// static_assert(BUILDFLAG(ENABLE_EXTENSIONS));
 
 class BlocklistedExtensionSyncServiceTest;
 class Profile;

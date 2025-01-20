@@ -254,6 +254,7 @@ namespace developerPrivate {
     AccessModifier fileAccess;
     HomePage homePage;
     DOMString iconUrl;
+    DOMString popupUrl;
     DOMString id;
     AccessModifier incognitoAccess;
     DOMString[] installWarnings;

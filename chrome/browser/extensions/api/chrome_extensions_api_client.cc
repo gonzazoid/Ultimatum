@@ -144,8 +144,8 @@ bool ChromeExtensionsAPIClient::ShouldHideBrowserNetworkRequest(
       request.web_request_type != WebRequestResourceType::MAIN_FRAME;
 
   // Hide requests made by the Devtools frontend.
-  bool is_sensitive_request =
-      is_browser_request && DevToolsUI::IsFrontendResourceURL(request.url);
+  bool is_sensitive_request = false;
+  //     is_browser_request && DevToolsUI::IsFrontendResourceURL(request.url);
 
   // Hide requests made by the browser on behalf of the NTP.
   is_sensitive_request |=
@@ -160,14 +160,14 @@ bool ChromeExtensionsAPIClient::ShouldHideBrowserNetworkRequest(
            url::Origin::Create(GURL(chrome::kChromeUINewTabPageURL)));
 
   // Hide requests made by the NTP Instant renderer.
-  auto* instant_service =
-      context
-          ? InstantServiceFactory::GetForProfile(static_cast<Profile*>(context))
-          : nullptr;
-  if (instant_service) {
-    is_sensitive_request |=
-        instant_service->IsInstantProcess(request.render_process_id);
-  }
+  // auto* instant_service =
+  //     context
+  //         ? InstantServiceFactory::GetForProfile(static_cast<Profile*>(context))
+  //         : nullptr;
+  // if (instant_service) {
+  //   is_sensitive_request |=
+  //       instant_service->IsInstantProcess(request.render_process_id);
+  // }
 
   return is_sensitive_request;
 }
@@ -266,14 +266,14 @@ void ChromeExtensionsAPIClient::ClearActionCount(
 
   action->ClearDNRActionCountForAllTabs();
 
-  std::vector<content::WebContents*> contents_to_notify =
-      ExtensionTabUtil::GetAllActiveWebContentsForContext(
-          context, true /* include_incognito */);
+  // std::vector<content::WebContents*> contents_to_notify =
+  //     ExtensionTabUtil::GetAllActiveWebContentsForContext(
+  //         context, true /* include_incognito */);
 
-  for (auto* active_contents : contents_to_notify) {
-    ExtensionActionDispatcher::Get(context)->NotifyChange(
-        action, active_contents, context);
-  }
+  // for (auto* active_contents : contents_to_notify) {
+  //   ExtensionActionDispatcher::Get(context)->NotifyChange(
+  //       action, active_contents, context);
+  // }
 }
 
 void ChromeExtensionsAPIClient::OpenFileUrl(
@@ -285,15 +285,15 @@ void ChromeExtensionsAPIClient::OpenFileUrl(
   NavigateParams navigate_params(profile, file_url,
                                  ui::PAGE_TRANSITION_FROM_API);
   navigate_params.disposition = WindowOpenDisposition::CURRENT_TAB;
-  navigate_params.browser =
-      chrome::FindTabbedBrowser(profile, /*match_original_profiles=*/false);
-  Navigate(&navigate_params);
+  // navigate_params.browser =
+  //     chrome::FindTabbedBrowser(profile, /*match_original_profiles=*/false);
+  // Navigate(&navigate_params);
 }
 
-AppViewGuestDelegate* ChromeExtensionsAPIClient::CreateAppViewGuestDelegate()
-    const {
-  return new ChromeAppViewGuestDelegate();
-}
+// AppViewGuestDelegate* ChromeExtensionsAPIClient::CreateAppViewGuestDelegate()
+//     const {
+//   return new ChromeAppViewGuestDelegate();
+// }
 
 ExtensionOptionsGuestDelegate*
 ChromeExtensionsAPIClient::CreateExtensionOptionsGuestDelegate(
@@ -303,7 +303,7 @@ ChromeExtensionsAPIClient::CreateExtensionOptionsGuestDelegate(
 
 std::unique_ptr<guest_view::GuestViewManagerDelegate>
 ChromeExtensionsAPIClient::CreateGuestViewManagerDelegate() const {
-  return std::make_unique<ChromeGuestViewManagerDelegate>();
+  return nullptr; // std::make_unique<ChromeGuestViewManagerDelegate>();
 }
 
 std::unique_ptr<MimeHandlerViewGuestDelegate>
@@ -348,7 +348,7 @@ ChromeExtensionsAPIClient::CreateContentRulesRegistry(
 std::unique_ptr<DevicePermissionsPrompt>
 ChromeExtensionsAPIClient::CreateDevicePermissionsPrompt(
     content::WebContents* web_contents) const {
-  return std::make_unique<ChromeDevicePermissionsPrompt>(web_contents);
+  return nullptr; // std::make_unique<ChromeDevicePermissionsPrompt>(web_contents);
 }
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -395,7 +395,7 @@ ChromeExtensionsAPIClient::CreateSupervisedUserExtensionsDelegate(
 
 std::unique_ptr<DisplayInfoProvider>
 ChromeExtensionsAPIClient::CreateDisplayInfoProvider() const {
-  return CreateChromeDisplayInfoProvider();
+  return nullptr; // CreateChromeDisplayInfoProvider();
 }
 
 MetricsPrivateDelegate* ChromeExtensionsAPIClient::GetMetricsPrivateDelegate() {
@@ -406,14 +406,14 @@ MetricsPrivateDelegate* ChromeExtensionsAPIClient::GetMetricsPrivateDelegate() {
 }
 
 FileSystemDelegate* ChromeExtensionsAPIClient::GetFileSystemDelegate() {
-#if BUILDFLAG(IS_CHROMEOS)
-  using ChromeFileSystemDelegate_Use = ChromeFileSystemDelegateAsh;
-#else
-  using ChromeFileSystemDelegate_Use = ChromeFileSystemDelegate;
-#endif
-  if (!file_system_delegate_)
-    file_system_delegate_ = std::make_unique<ChromeFileSystemDelegate_Use>();
-  return file_system_delegate_.get();
+// #if BUILDFLAG(IS_CHROMEOS)
+//   using ChromeFileSystemDelegate_Use = ChromeFileSystemDelegateAsh;
+// #else
+//   using ChromeFileSystemDelegate_Use = ChromeFileSystemDelegate;
+// #endif
+//   if (!file_system_delegate_)
+//     file_system_delegate_ = std::make_unique<ChromeFileSystemDelegate_Use>();
+  return nullptr; // file_system_delegate_.get();
 }
 
 MessagingDelegate* ChromeExtensionsAPIClient::GetMessagingDelegate() {
@@ -424,11 +424,11 @@ MessagingDelegate* ChromeExtensionsAPIClient::GetMessagingDelegate() {
 
 FeedbackPrivateDelegate*
 ChromeExtensionsAPIClient::GetFeedbackPrivateDelegate() {
-  if (!feedback_private_delegate_) {
-    feedback_private_delegate_ =
-        std::make_unique<ChromeFeedbackPrivateDelegate>();
-  }
-  return feedback_private_delegate_.get();
+  // if (!feedback_private_delegate_) {
+  //   feedback_private_delegate_ =
+  //       std::make_unique<ChromeFeedbackPrivateDelegate>();
+  // }
+  return nullptr; // feedback_private_delegate_.get();
 }
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -477,7 +477,7 @@ std::vector<KeyedServiceBaseFactory*>
 ChromeExtensionsAPIClient::GetFactoryDependencies() {
   // clang-format off
   return {
-      InstantServiceFactory::GetInstance(),
+      // InstantServiceFactory::GetInstance(),
       SupervisedUserServiceFactory::GetInstance(),
   };
   // clang-format on

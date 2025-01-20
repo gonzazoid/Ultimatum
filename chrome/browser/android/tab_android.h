@@ -21,6 +21,7 @@
 #include "chrome/browser/tab/web_contents_state.h"
 #include "components/infobars/core/infobar_manager.h"
 #include "components/sessions/core/session_id.h"
+#include "components/tab_groups/tab_group_id.h"
 #include "tab_android_data_provider.h"
 
 class GURL;
@@ -77,6 +78,7 @@ class TabAndroid : public TabAndroidDataProvider,
 
   ~TabAndroid() override;
 
+  SessionID GetTabId() const;
   // TabAndroidDataProvider
   SessionID GetWindowId() const override;
   int GetAndroidId() const override;
@@ -111,6 +113,11 @@ class TabAndroid : public TabAndroidDataProvider,
   // Return whether the tab is currently visible and the user can interact with
   // it.
   bool IsUserInteractable() const;
+  int GetParentId() const;
+  std::optional<tab_groups::TabGroupId> GetTabGroupId() const;
+  bool IsFrozen() const;
+  bool NeedsReload() const;
+  gfx::Rect GetBounds() const;
 
   sync_sessions::SyncedTabDelegate* GetSyncedTabDelegate() const;
 

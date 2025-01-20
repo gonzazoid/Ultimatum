@@ -8,6 +8,13 @@
 #include "extensions/buildflags/buildflags.h"
 #include "printing/buildflags/buildflags.h"
 
+#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+#include "chrome/browser/extensions/api/developer_private/developer_private_api.h"
+#include "chrome/browser/extensions/commands/command_service.h"
+#include "extensions/browser/api/management/management_api.h"
+#include "chrome/browser/extensions/api/preference/preference_api.h"
+#include "chrome/browser/extensions/api/tabs/tabs_windows_api.h"
+#endif
 // The following are not supported in the experimental desktop-android build.
 // TODO(https://crbug.com/356905053): Enable these APIs on desktop-android.
 #if BUILDFLAG(ENABLE_EXTENSIONS)
@@ -73,6 +80,14 @@ void EnsureApiBrowserContextKeyedServiceFactoriesBuilt() {
   // APIs supported on Win/Mac/Linux plus desktop Android go here.
   extensions::CookiesAPI::GetFactoryInstance();
   extensions::ExtensionNotificationDisplayHelperFactory::GetInstance();
+
+#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+  extensions::CommandService::GetFactoryInstance();
+  extensions::DeveloperPrivateAPI::GetFactoryInstance();
+  extensions::ManagementAPI::GetFactoryInstance();
+  extensions::PreferenceAPI::GetFactoryInstance();
+  extensions::TabsWindowsAPI::GetFactoryInstance();
+#endif
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   extensions::ActivityLogAPI::GetFactoryInstance();

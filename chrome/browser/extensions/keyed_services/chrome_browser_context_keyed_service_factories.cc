@@ -8,19 +8,22 @@
 #include "chrome/browser/extensions/error_console/error_console_factory.h"
 #include "chrome/browser/extensions/extension_web_ui_override_registrar.h"
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
-#include "chrome/browser/extensions/account_extension_tracker.h"
-#include "chrome/browser/extensions/activity_log/activity_log.h"
-#include "chrome/browser/extensions/chrome_app_icon_service_factory.h"
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+// #include "chrome/browser/extensions/account_extension_tracker.h"
+// #include "chrome/browser/extensions/activity_log/activity_log.h"
+// #include "chrome/browser/extensions/chrome_app_icon_service_factory.h"
 #include "chrome/browser/extensions/chrome_extension_cookies_factory.h"
 #include "chrome/browser/extensions/cws_info_service_factory.h"
 #include "chrome/browser/extensions/extension_action_dispatcher.h"
 #include "chrome/browser/extensions/extension_garbage_collector_factory.h"
-#include "chrome/browser/extensions/extension_gcm_app_handler.h"
+// #include "chrome/browser/extensions/extension_gcm_app_handler.h"
 #include "chrome/browser/extensions/extension_management.h"
 #include "chrome/browser/extensions/extension_sync_service_factory.h"
 #include "chrome/browser/extensions/extension_system_factory.h"
-#include "chrome/browser/extensions/extension_web_ui_override_registrar.h"
+#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+#include "chrome/browser/extensions/desktop_android/desktop_android_extension_system.h"
+#endif
+// #include "chrome/browser/extensions/extension_web_ui_override_registrar.h"
 #include "chrome/browser/extensions/install_tracker_factory.h"
 #include "chrome/browser/extensions/install_verifier_factory.h"
 #include "chrome/browser/extensions/manifest_v2_experiment_manager.h"
@@ -40,28 +43,33 @@ namespace chrome_extensions {
 void EnsureChromeBrowserContextKeyedServiceFactoriesBuilt() {
   extensions::ErrorConsoleFactory::GetInstance();
   extensions::ExtensionWebUIOverrideRegistrar::GetFactoryInstance();
+  // extensions::PendingExtensionManagerFactory::GetInstance();
+  extensions::PermissionsUpdater::EnsureAssociatedFactoryBuilt();
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   ExtensionSyncServiceFactory::GetInstance();
-  extensions::AccountExtensionTracker::GetFactory();
-  extensions::ActivityLog::GetFactoryInstance();
-  extensions::ChromeAppIconServiceFactory::GetInstance();
+  // extensions::AccountExtensionTracker::GetFactory();
+  // extensions::ActivityLog::GetFactoryInstance();
+  // extensions::ChromeAppIconServiceFactory::GetInstance();
   extensions::ChromeExtensionCookiesFactory::GetInstance();
   extensions::CWSInfoServiceFactory::GetInstance();
   extensions::ExtensionActionDispatcher::GetFactoryInstance();
   extensions::ExtensionGarbageCollectorFactory::GetInstance();
-  extensions::ExtensionGCMAppHandler::GetFactoryInstance();
+  // extensions::ExtensionGCMAppHandler::GetFactoryInstance();
   extensions::ExtensionManagementFactory::GetInstance();
+#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+  extensions::DesktopAndroidExtensionSystem::GetFactory();
+#else
   extensions::ExtensionSystemFactory::GetInstance();
+#endif
   extensions::InstallTrackerFactory::GetInstance();
   extensions::InstallVerifierFactory::GetInstance();
   extensions::ManifestV2ExperimentManager::GetFactory();
   extensions::MenuManagerFactory::GetInstance();
-  extensions::PermissionsUpdater::EnsureAssociatedFactoryBuilt();
 #if BUILDFLAG(ENABLE_PLUGINS)
   extensions::PluginManager::GetFactoryInstance();
 #endif
-  extensions::WarningBadgeServiceFactory::GetInstance();
+  // extensions::WarningBadgeServiceFactory::GetInstance();
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 #if BUILDFLAG(IS_CHROMEOS)
   extensions::AssessmentAssistantTrackerFactory::GetInstance();

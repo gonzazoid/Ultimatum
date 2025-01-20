@@ -125,10 +125,10 @@ bool ChromeWebViewGuestDelegate::NavigateToURLShouldBlock(const GURL& url) {
 std::optional<blink::UserAgentOverride>
 ChromeWebViewGuestDelegate::GetDefaultUserAgentOverride() {
   // Controlled Frame has its own UserAgentOverride.
-  if (web_view_guest()->IsOwnedByControlledFrameEmbedder()) {
-    return controlled_frame::GetDefaultControlledFrameUserAgentOverride(
-        enable_client_hints_brand_);
-  }
+  // if (web_view_guest()->IsOwnedByControlledFrameEmbedder()) {
+  //   return controlled_frame::GetDefaultControlledFrameUserAgentOverride(
+  //       enable_client_hints_brand_);
+  // }
   return std::nullopt;
 }
 

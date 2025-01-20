@@ -37,7 +37,10 @@ class AppWindowController;
 // inside extension process renderers. The router listens to *all* events,
 // but will only route events within a profile to extension processes in the
 // same profile.
-class WindowsEventRouter : public AppWindowRegistry::Observer,
+class WindowsEventRouter :
+#if !BUILDFLAG(IS_ANDROID)
+                           public AppWindowRegistry::Observer,
+#endif
 #if BUILDFLAG(IS_MAC)
                            public KeyWindowNotifier::Observer,
 #elif defined(TOOLKIT_VIEWS)
@@ -56,10 +59,12 @@ class WindowsEventRouter : public AppWindowRegistry::Observer,
   void OnActiveWindowChanged(WindowController* window_controller);
 
  private:
+#if !BUILDFLAG(IS_ANDROID)
   // AppWindowRegistry::Observer:
   void OnAppWindowAdded(AppWindow* app_window) override;
   void OnAppWindowRemoved(AppWindow* app_window) override;
   void OnAppWindowActivated(AppWindow* app_window) override;
+#endif
 
   // WindowControllerListObserver methods:
   void OnWindowControllerAdded(WindowController* window_controller) override;
@@ -98,9 +103,11 @@ class WindowsEventRouter : public AppWindowRegistry::Observer,
   // Map of application windows, the key to the session of the app window.
   AppWindowMap app_windows_;
 
+#if !BUILDFLAG(IS_ANDROID)
   // Observed AppWindowRegistry.
   base::ScopedObservation<AppWindowRegistry, AppWindowRegistry::Observer>
       observed_app_registry_{this};
+#endif
 
   // Observed WindowControllerList.
   base::ScopedObservation<WindowControllerList, WindowControllerListObserver>

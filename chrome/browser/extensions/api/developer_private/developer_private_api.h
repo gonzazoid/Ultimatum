@@ -72,15 +72,15 @@ struct ProfileInfo;
 class DeveloperPrivateEventRouter : public ExtensionRegistryObserver,
                                     public ErrorConsole::Observer,
                                     public ProcessManagerObserver,
-                                    public AppWindowRegistry::Observer,
+                                    // public AppWindowRegistry::Observer,
                                     public CommandService::Observer,
                                     public ExtensionPrefsObserver,
                                     public ExtensionAllowlist::Observer,
                                     public ExtensionManagement::Observer,
                                     public WarningService::Observer,
-                                    public PermissionsManager::Observer,
-                                    public ToolbarActionsModel::Observer,
-                                    public AccountExtensionTracker::Observer {
+                                    public PermissionsManager::Observer // ,
+                                    // public ToolbarActionsModel::Observer,
+                                    /* public AccountExtensionTracker::Observer */ {
  public:
   explicit DeveloperPrivateEventRouter(Profile* profile);
 
@@ -129,8 +129,8 @@ class DeveloperPrivateEventRouter : public ExtensionRegistryObserver,
       const WorkerId& worker_id) override;
 
   // AppWindowRegistry::Observer:
-  void OnAppWindowAdded(AppWindow* window) override;
-  void OnAppWindowRemoved(AppWindow* window) override;
+  void OnAppWindowAdded(AppWindow* window); //  override;
+  void OnAppWindowRemoved(AppWindow* window); //  override;
 
   // CommandService::Observer:
   void OnExtensionCommandAdded(const ExtensionId& extension_id,
@@ -165,17 +165,17 @@ class DeveloperPrivateEventRouter : public ExtensionRegistryObserver,
       PermissionsManager::UpdateReason reason) override;
 
   // ToolbarActionsModel::Observer:
-  void OnToolbarActionAdded(const ToolbarActionsModel::ActionId& id) override {}
+  void OnToolbarActionAdded(const ToolbarActionsModel::ActionId& id) /* override */ {}
   void OnToolbarActionRemoved(
-      const ToolbarActionsModel::ActionId& id) override {}
+      const ToolbarActionsModel::ActionId& id) /* override */ {}
   void OnToolbarActionUpdated(
-      const ToolbarActionsModel::ActionId& id) override {}
-  void OnToolbarModelInitialized() override {}
-  void OnToolbarPinnedActionsChanged() override;
+      const ToolbarActionsModel::ActionId& id) /* override */ {}
+  void OnToolbarModelInitialized() /* override */ {}
+  void OnToolbarPinnedActionsChanged(); //  override;
 
   // AccountExtensionTracker::Observer:
-  void OnExtensionUploadabilityChanged(const ExtensionId& id) override;
-  void OnExtensionsUploadabilityChanged() override;
+  void OnExtensionUploadabilityChanged(const ExtensionId& id); //  override;
+  void OnExtensionsUploadabilityChanged(); //  override;
 
   // Handles a profile preference change.
   void OnProfilePrefChanged();
@@ -195,8 +195,8 @@ class DeveloperPrivateEventRouter : public ExtensionRegistryObserver,
       error_console_observation_{this};
   base::ScopedObservation<ProcessManager, ProcessManagerObserver>
       process_manager_observation_{this};
-  base::ScopedObservation<AppWindowRegistry, AppWindowRegistry::Observer>
-      app_window_registry_observation_{this};
+  // base::ScopedObservation<AppWindowRegistry, AppWindowRegistry::Observer>
+  //     app_window_registry_observation_{this};
   base::ScopedObservation<WarningService, WarningService::Observer>
       warning_service_observation_{this};
   base::ScopedObservation<ExtensionPrefs, ExtensionPrefsObserver>
@@ -209,11 +209,11 @@ class DeveloperPrivateEventRouter : public ExtensionRegistryObserver,
       extension_allowlist_observer_{this};
   base::ScopedObservation<PermissionsManager, PermissionsManager::Observer>
       permissions_manager_observation_{this};
-  base::ScopedObservation<ToolbarActionsModel, ToolbarActionsModel::Observer>
-      toolbar_actions_model_observation_{this};
-  base::ScopedObservation<AccountExtensionTracker,
-                          AccountExtensionTracker::Observer>
-      account_extension_tracker_observation_{this};
+  // base::ScopedObservation<ToolbarActionsModel, ToolbarActionsModel::Observer>
+  //     toolbar_actions_model_observation_{this};
+  // base::ScopedObservation<AccountExtensionTracker,
+  //                         AccountExtensionTracker::Observer>
+  //     account_extension_tracker_observation_{this};
 
   raw_ptr<Profile> profile_;
 
@@ -685,7 +685,7 @@ class DeveloperPrivatePackDirectoryFunction
   ResponseAction Run() override;
 
  private:
-  std::unique_ptr<PackExtensionJob> pack_job_;
+  // std::unique_ptr<PackExtensionJob> pack_job_;
   std::string item_path_str_;
   std::string key_path_str_;
 };
