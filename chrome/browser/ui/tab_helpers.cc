@@ -158,6 +158,8 @@
 #include "third_party/blink/public/common/features.h"
 #include "ui/accessibility/accessibility_features.h"
 
+#include "extensions/browser/view_type_utils.h"  // nogncheck
+
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/build_info.h"
 #include "base/functional/bind.h"
@@ -233,7 +235,7 @@
 #include "components/captive_portal/content/captive_portal_tab_helper.h"
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "chrome/browser/extensions/api/web_navigation/web_navigation_api.h"
 #include "chrome/browser/extensions/app_tab_helper.h"
 #include "chrome/browser/extensions/navigation_extension_enabler.h"

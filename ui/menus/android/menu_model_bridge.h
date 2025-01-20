@@ -30,6 +30,7 @@ class COMPONENT_EXPORT(UI_MENUS) MenuModelBridge {
 
   base::android::ScopedJavaGlobalRef<jobject> GetJavaObject();
 
+  jni_zero::ScopedJavaLocalRef<jobject> GetListItems();
  private:
   base::android::ScopedJavaGlobalRef<jobject> java_obj_;
   base::WeakPtrFactory<MenuModelBridge> weak_ptr_factory_{this};

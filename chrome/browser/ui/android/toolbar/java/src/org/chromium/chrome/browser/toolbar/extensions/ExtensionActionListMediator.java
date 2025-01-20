@@ -26,6 +26,8 @@ import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
 import org.chromium.ui.modelutil.ModelListAdapter;
 import org.chromium.ui.modelutil.PropertyModel;
 
+import org.chromium.ui.base.ViewUtils;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -163,7 +165,11 @@ class ExtensionActionListMediator implements Destroyable {
             case ShowAction.NONE:
                 break;
             case ShowAction.SHOW_POPUP:
-                openPopup(buttonView, actionId);
+                if (mCurrentPopup == null) {
+                  openPopup(buttonView, actionId);
+                } else {
+                  closePopup();
+                }
                 break;
             case ShowAction.TOGGLE_SIDE_PANEL:
                 Log.e(TAG, "Extension side panels are not implemented yet");
@@ -174,6 +180,7 @@ class ExtensionActionListMediator implements Destroyable {
     private void openPopup(View buttonView, String actionId) {
         // TODO(crbug.com/385987224): Do not open a popup again when the user clicks the action
         // button while its popup is open.
+        // or we can just close popup if the user clicks the extension icon again
         closePopup();
 
         if (mProfile == null || mCurrentTab == null) {
@@ -219,12 +226,22 @@ class ExtensionActionListMediator implements Destroyable {
         // are pinned.
         String[] actionIds = mExtensionActionsBridge.getActionIds();
 
+        // get extensions menu icon as a standard (height/width-wise)
+        // suppose it's 24dp based on chrome/browser/ui/android/extensions/java/res/drawable/chrome_extension.xml
         List<ListItem> items = new ArrayList<>(actionIds.length);
         for (String actionId : actionIds) {
             ExtensionAction action = mExtensionActionsBridge.getAction(actionId, tabId);
             assert action != null;
+            // TODO moved to chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionsUpdateHelper.java
+            // mActionsUpdateDelegate.createActionModel
+            int expectedHeight = ViewUtils.dpToPx(mContext, 6);
             Bitmap icon = mExtensionActionsBridge.getActionIcon(actionId, tabId);
             assert icon != null;
+            int height = icon.getHeight();
+            if (((float) height / (float) expectedHeight) > 1.2) {
+              icon = Bitmap.createScaledBitmap(icon, expectedHeight, expectedHeight, false);
+            }
+
             items.add(
                     new ModelListAdapter.ListItem(
                             ListItemType.EXTENSION_ACTION,

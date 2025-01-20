@@ -47,7 +47,18 @@ class ExtensionActionsBridge : public ToolbarActionsModel::Observer,
       const ToolbarActionsModel::ActionId& action_id,
       content::WebContents* web_contents);
   bool ExtensionsEnabled(JNIEnv* env);
-
+  bool IsInIncognito(
+      JNIEnv* env,
+      const ToolbarActionsModel::ActionId& action_id);
+  void ReloadExtension(
+      JNIEnv* env,
+      const ToolbarActionsModel::ActionId& action_id);
+  int GetManifestVersion(
+      JNIEnv* env,
+      const ToolbarActionsModel::ActionId& action_id);
+  void DoReloadExtension(
+    const ToolbarActionsModel::ActionId& action_id
+    );
   // ToolbarActionsModel::Observer:
   void OnToolbarActionAdded(const ToolbarActionsModel::ActionId& id) override;
   void OnToolbarActionRemoved(const ToolbarActionsModel::ActionId& id) override;

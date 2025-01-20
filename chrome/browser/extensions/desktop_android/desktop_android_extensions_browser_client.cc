@@ -8,8 +8,13 @@
 #include "chrome/browser/extensions/chrome_extensions_browser_client.h"
 #include "chrome/browser/extensions/desktop_android/desktop_android_extension_host_delegate.h"
 #include "chrome/browser/extensions/error_console/error_console.h"
+#include "chrome/browser/extensions/tab_helper.h"
 #include "chrome/browser/extensions/user_script_listener.h"
+#include "chrome/browser/android/tab_android.h"
+#include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/ui/android/tab_model/tab_model_list.h"
 #include "chrome/browser/ui/webui/devtools/devtools_ui.h"
+#include "chrome/browser/browser_process.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -86,6 +91,19 @@ void ChromeExtensionsBrowserClient::Init() {
   // Must occur after g_browser_process is initialized.
   user_script_listener_ = std::make_unique<UserScriptListener>();
 }
+
+// DesktopAndroidExtensionsBrowserClient::DesktopAndroidExtensionsBrowserClient()
+//     : extension_cache_(std::make_unique<NullExtensionCache>()),
+//       kiosk_delegate_(std::make_unique<DesktopAndroidKioskDelegate>()) // ,
+//       /* api_client_(std::make_unique<DesktopAndroidExtensionsAPIClient>()) */ {
+//   AddAPIProvider(std::make_unique<CoreExtensionsBrowserAPIProvider>());
+//   AddAPIProvider(std::make_unique<ChromeExtensionsBrowserAPIProvider>());
+
+//   static bool registered = RegisterTransformers();
+//   CHECK(registered);
+
+//   api_client_ = std::make_unique<ChromeExtensionsAPIClient>();
+// }
 
 void ChromeExtensionsBrowserClient::GetEarlyExtensionPrefsObservers(
     content::BrowserContext* context,

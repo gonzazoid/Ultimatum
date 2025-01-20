@@ -46,6 +46,8 @@ class ExtensionUninstallDialog : public ChromeAppIconDelegate,
     CLOSE_ACTION_LAST = 3,
   };
 
+  using DoneCallback = base::OnceCallback<void(CloseAction result)>;
+
   // TODO(devlin): For a single method like this, a callback is probably more
   // appropriate than a delegate.
   class Delegate {

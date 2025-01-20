@@ -26,7 +26,7 @@
 
 namespace windows_util {
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
 bool GetControllerFromWindowID(ExtensionFunction* function,
                                int window_id,
                                extensions::WindowController::TypeFilter filter,
@@ -69,7 +69,7 @@ bool GetControllerFromWindowID(ExtensionFunction* function,
     return false;
   }
 }
-#endif  // !BUILDFLAG(IS_ANDROID)
+// #endif  // !BUILDFLAG(IS_ANDROID)
 
 bool CanOperateOnWindow(const ExtensionFunction* function,
                         const extensions::WindowController* controller,
@@ -97,13 +97,16 @@ bool CanOperateOnWindow(const ExtensionFunction* function,
              controller->profile();
 }
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
 // TODO(crbug.com/371432155): Support on Android, specifically the call to
 // IsURLAllowedInIncognito() which is part of browser_navigator.h.
 IncognitoResult ShouldOpenIncognitoWindow(Profile* profile,
                                           std::optional<bool> incognito,
                                           std::vector<GURL>* urls,
                                           std::string* error) {
+// #if BUILDFLAG(IS_ANDROID)
+//   return IncognitoResult::kError;
+// #else
   const policy::IncognitoModeAvailability incognito_availability =
       IncognitoModePrefs::GetAvailability(profile->GetPrefs());
   bool incognito_result = false;
@@ -148,7 +151,8 @@ IncognitoResult ShouldOpenIncognitoWindow(Profile* profile,
   }
   return incognito_result ? IncognitoResult::kIncognito
                           : IncognitoResult::kRegular;
+// #endif
 }
-#endif  // !BUILDFLAG(IS_ANDROID)
+// #endif  // !BUILDFLAG(IS_ANDROID)
 
 }  // namespace windows_util

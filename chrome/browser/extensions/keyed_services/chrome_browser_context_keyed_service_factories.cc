@@ -37,11 +37,13 @@
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "chrome/browser/extensions/extension_web_ui_override_registrar.h"
-#include "chrome/browser/extensions/permissions/permissions_updater.h"
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "chrome/browser/extensions/plugin_manager.h"
 #include "chrome/browser/extensions/warning_badge_service_factory.h"
 #include "ppapi/buildflags/buildflags.h"
-#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+#endif
 
 #if BUILDFLAG(IS_CHROMEOS)
 #include "chrome/browser/chromeos/extensions/component_extension_content_settings/component_extension_content_settings_allowlist_factory.h"

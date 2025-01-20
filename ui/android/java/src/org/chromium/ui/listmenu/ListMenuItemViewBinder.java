@@ -22,6 +22,8 @@ import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModel.ReadableIntPropertyKey;
 
+import org.chromium.base.Log;
+
 /**
  * Class responsible for binding the model of the ListMenuItem and the view. Each item is expected
  * to have at the bare minimum a title (TITLE_ID, or TITLE) or an icon (START_ICON_ID,
@@ -83,11 +85,13 @@ public class ListMenuItemViewBinder {
             // for an item. The intent will be expected to be retrieved and used
             // by the component using this binder and not the binder itself.
         } else if (propertyKey == ListMenuItemProperties.KEEP_START_ICON_SPACING_WHEN_HIDDEN) {
-            if (startIcon.getVisibility() != View.VISIBLE) {
+            if (startIcon != null) {
+              if (startIcon.getVisibility() != View.VISIBLE) {
                 // Update the "hidden" visibility type as needed.
                 hideStartIcon(
                         startIcon,
                         model.get(ListMenuItemProperties.KEEP_START_ICON_SPACING_WHEN_HIDDEN));
+              }
             }
         } else if (propertyKey == ListMenuItemProperties.ENABLED) {
             textView.setEnabled(model.get(ListMenuItemProperties.ENABLED));
@@ -109,8 +113,8 @@ public class ListMenuItemViewBinder {
                                 model.get(ListMenuItemProperties.ICON_TINT_COLOR_STATE_LIST_ID)));
             } else {
                 // No tint.
-                ImageViewCompat.setImageTintList(startIcon, null);
-                ImageViewCompat.setImageTintList(endIcon, null);
+                if (startIcon != null) ImageViewCompat.setImageTintList(startIcon, null);
+                if (endIcon != null) ImageViewCompat.setImageTintList(endIcon, null);
             }
         } else if (propertyKey == ListMenuItemProperties.TEXT_APPEARANCE_ID) {
             textView.setTextAppearance(model.get(ListMenuItemProperties.TEXT_APPEARANCE_ID));
@@ -122,7 +126,8 @@ public class ListMenuItemViewBinder {
                 textView.setEllipsize(null);
             }
         } else {
-            assert false : "Supplied propertyKey not implemented in ListMenuItemProperties.";
+            // assert false : "Supplied propertyKey not implemented in ListMenuItemProperties.";
+            // Log.i("ULTIMATUM", propertyKey.toString());
         }
     }
 
@@ -156,11 +161,13 @@ public class ListMenuItemViewBinder {
     }
 
     private static void hideStartIcon(ImageView startIcon, boolean keepIconSpacing) {
+        if (startIcon == null) return;
         startIcon.setImageDrawable(null);
         startIcon.setVisibility(keepIconSpacing ? View.INVISIBLE : View.GONE);
     }
 
     private static void hideEndIcon(ImageView endIcon) {
+        if (endIcon == null) return;
         endIcon.setImageDrawable(null);
         endIcon.setVisibility(View.GONE);
     }

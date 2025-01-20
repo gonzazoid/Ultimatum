@@ -169,12 +169,12 @@ void ScriptingPermissionsModifier::RemoveBroadGrantedHostPermissions() {
     }
   }
 
-  PermissionsUpdater(browser_context_)
-      .RevokeRuntimePermissions(
-          *extension_,
-          PermissionSet(APIPermissionSet(), ManifestPermissionSet(),
-                        std::move(explicit_hosts), std::move(scriptable_hosts)),
-          base::DoNothing());
+  // PermissionsUpdater(browser_context_)
+  //     .RevokeRuntimePermissions(
+  //         *extension_,
+  //         PermissionSet(APIPermissionSet(), ManifestPermissionSet(),
+  //                       std::move(explicit_hosts), std::move(scriptable_hosts)),
+  //         base::DoNothing());
 }
 
 void ScriptingPermissionsModifier::RemoveAllGrantedHostPermissions() {
@@ -183,21 +183,21 @@ void ScriptingPermissionsModifier::RemoveAllGrantedHostPermissions() {
   std::unique_ptr<const PermissionSet> revokable_permissions =
       permissions_manager_->GetRevokablePermissions(*extension_);
   DCHECK(revokable_permissions);
-  PermissionsUpdater(browser_context_)
-      .RevokeRuntimePermissions(*extension_, *revokable_permissions,
-                                base::DoNothing());
+  // PermissionsUpdater(browser_context_)
+  //     .RevokeRuntimePermissions(*extension_, *revokable_permissions,
+  //                               base::DoNothing());
 }
 
 void ScriptingPermissionsModifier::GrantHostPermission(
     URLPatternSet explicit_hosts,
     URLPatternSet scriptable_hosts,
     base::OnceClosure done_callback) {
-  PermissionsUpdater(browser_context_)
-      .GrantRuntimePermissions(
-          *extension_,
-          PermissionSet(APIPermissionSet(), ManifestPermissionSet(),
-                        std::move(explicit_hosts), std::move(scriptable_hosts)),
-          std::move(done_callback));
+  // PermissionsUpdater(browser_context_)
+  //     .GrantRuntimePermissions(
+  //         *extension_,
+  //         PermissionSet(APIPermissionSet(), ManifestPermissionSet(),
+  //                       std::move(explicit_hosts), std::move(scriptable_hosts)),
+  //         std::move(done_callback));
 }
 
 void ScriptingPermissionsModifier::GrantWithheldHostPermissions() {
@@ -223,9 +223,9 @@ void ScriptingPermissionsModifier::WithholdHostPermissions(
     return;
   }
 
-  PermissionsUpdater(browser_context_)
-      .RevokeRuntimePermissions(*extension_, *permissions_to_remove,
-                                std::move(done_callback));
+  // PermissionsUpdater(browser_context_)
+  //     .RevokeRuntimePermissions(*extension_, *permissions_to_remove,
+  //                               std::move(done_callback));
 }
 
 }  // namespace extensions

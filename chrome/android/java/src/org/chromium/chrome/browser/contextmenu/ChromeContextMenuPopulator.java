@@ -4,10 +4,13 @@
 
 package org.chromium.chrome.browser.contextmenu;
 
+import org.chromium.base.Log;
+
 import static org.chromium.chrome.browser.contextmenu.ContextMenuItemWithIconButtonProperties.BUTTON_CONTENT_DESC;
 import static org.chromium.chrome.browser.contextmenu.ContextMenuItemWithIconButtonProperties.BUTTON_IMAGE;
 import static org.chromium.chrome.browser.contextmenu.ContextMenuItemWithIconButtonProperties.BUTTON_MENU_ID;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.ENABLED;
+import static org.chromium.ui.listmenu.ListMenuItemProperties.CLICK_LISTENER;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.HOVER_LISTENER;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.MENU_ITEM_ID;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.TITLE;
@@ -105,6 +108,10 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
     private static final String LENS_SUPPORT_STATUS_HISTOGRAM_NAME =
             "ContextMenu.LensSupportStatus";
     private final boolean mIsDownloadRestrictedByPolicy;
+
+    private List<ListItem> mExtensionsMenu;
+    private boolean extensionMenuAdded = false;
+
     // Custom listener to set hover state so that the background color updates when user hovers or
     // exits hover on the list item.
     // This is normally handled by the View API if the view is clickable. However, the text views
@@ -367,6 +374,11 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
     }
 
     @Override
+    public void setExtensionsMenu(List<ListItem> extensionsMenu) {
+      mExtensionsMenu = extensionsMenu;
+    }
+
+    @Override
     public List<Pair<Integer, ModelList>> buildContextMenu() {
         mShowEphemeralTabNewLabel = null;
 
@@ -388,6 +400,7 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
         }
         if (mParams.isAnchor()) {
             ModelList linkGroup = new ModelList();
+
             if (FirstRunStatus.getFirstRunFlowComplete()
                     && !isEmptyUrl(mParams.getUrl())
                     && UrlUtilities.isAcceptedScheme(mParams.getUrl())) {
@@ -478,6 +491,14 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
                     || MailTo.isMailTo(mParams.getLinkUrl().getSpec())) {
                 linkGroup.add(createListItem(Item.COPY));
             }
+
+            if (mExtensionsMenu != null && !extensionMenuAdded) {
+                for (ListItem item : mExtensionsMenu) {
+                    linkGroup.add(item);
+                }
+                extensionMenuAdded = true;
+            }
+
             if (linkGroup.size() > 0) {
                 groupedItems.add(new Pair<>(R.string.contextmenu_link_title, linkGroup));
             }
@@ -536,6 +557,13 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
                 imageGroup.add(createShareListItem(Item.SHARE_IMAGE, Item.DIRECT_SHARE_IMAGE));
             }
 
+
+            if (mExtensionsMenu != null && !extensionMenuAdded) {
+                for (ListItem item : mExtensionsMenu) {
+                    imageGroup.add(item);
+                }
+                extensionMenuAdded = true;
+            }
             groupedItems.add(new Pair<>(R.string.contextmenu_image_title, imageGroup));
         }
 
@@ -549,6 +577,14 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
                             Item.SAVE_VIDEO,
                             /* showInProductHelp= */ false,
                             !mIsDownloadRestrictedByPolicy));
+
+            if (mExtensionsMenu != null && !extensionMenuAdded) {
+                for (ListItem item : mExtensionsMenu) {
+                    videoGroup.add(item);
+                }
+                extensionMenuAdded = true;
+            }
+
             groupedItems.add(new Pair<>(R.string.contextmenu_video_title, videoGroup));
         }
 
@@ -605,6 +641,9 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
             developerGroup.add(createListItem(Item.INSPECT_ELEMENT));
             groupedItems.add(new Pair<>(R.string.contextmenu_developer_title, developerGroup));
         }
+
+
+
         return groupedItems;
     }
 
@@ -885,6 +924,15 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
             recordContextMenuSelection(ContextMenuUma.Action.SHOW_INTEREST_IN_ELEMENT);
             WebContents webContents = mItemDelegate.getWebContents();
             webContents.showInterestInElement(mParams.getInterestTargetNodeID());
+        } else if (itemId == R.id.contextmenu_extensions_menu) {
+            for (ListItem item : mExtensionsMenu) {
+              if (item.model.get(MENU_ITEM_ID) == R.id.contextmenu_extensions_menu) {
+                item.model.set(MENU_ITEM_ID, 0);
+                View.OnClickListener listener = item.model.get(CLICK_LISTENER);
+                listener.onClick(null);
+                break;
+              }
+            }
         } else {
             assert false;
         }
@@ -897,6 +945,10 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
         if (mShowEphemeralTabNewLabel != null && mShowEphemeralTabNewLabel) {
             Tracker tracker = TrackerFactory.getTrackerForProfile(getProfile());
             if (tracker.isInitialized()) tracker.dismissed(FeatureConstants.EPHEMERAL_TAB_FEATURE);
+        }
+        if (mExtensionsMenu != null) {
+          mExtensionsMenu = null;
+          extensionMenuAdded = false;
         }
     }
 

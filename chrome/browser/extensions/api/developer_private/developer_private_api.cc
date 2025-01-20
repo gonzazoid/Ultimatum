@@ -17,6 +17,8 @@
 #include "extensions/browser/process_manager_factory.h"
 #include "extensions/browser/warning_service_factory.h"
 #include "ui/base/clipboard/file_info.h"
+#include "chrome/browser/extensions/account_extension_tracker.h"
+#include "extensions/browser/permissions_manager.h"
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "chrome/browser/extensions/account_extension_tracker.h"

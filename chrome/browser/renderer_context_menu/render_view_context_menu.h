@@ -48,7 +48,7 @@
 #include "chrome/browser/lens/region_search/lens_region_search_controller.h"
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
 #include "chrome/browser/extensions/context_menu_matcher.h"
 #include "chrome/browser/extensions/menu_manager.h"
 #endif
@@ -158,6 +158,9 @@ class RenderViewContextMenu
   void AddObserverForTesting(RenderViewContextMenuObserver* observer);
   void RemoveObserverForTesting(RenderViewContextMenuObserver* observer);
 
+  static bool MenuItemMatchesParams(const content::ContextMenuParams& params,
+                                    const extensions::MenuItem* item);
+
  protected:
   Profile* GetProfile() const;
 
@@ -192,7 +195,7 @@ class RenderViewContextMenu
   // Helper function to escape "&" as "&&".
   void EscapeAmpersands(std::u16string* text);
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   extensions::ContextMenuMatcher extension_items_;
 #endif
   void RecordUsedItem(int id) override;
@@ -224,6 +227,7 @@ class RenderViewContextMenu
                                ui::PageTransition transition,
                                const std::string& extra_headers,
                                bool started_from_context_menu) override;
+
 
  private:
   friend class RenderViewContextMenuTest;
@@ -304,7 +308,7 @@ class RenderViewContextMenu
   // cases, e.g. these are only appended if a screen reader is enabled.
   bool AppendAccessibilityLabelsItems();
   void AppendSearchProvider();
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   void AppendCurrentExtensionItems();
 #endif
   void AppendPrintPreviewItems();

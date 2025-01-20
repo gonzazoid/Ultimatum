@@ -22,7 +22,7 @@
 #include "base/files/safe_base_name.h"
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
-static_assert(BUILDFLAG(ENABLE_EXTENSIONS));
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 class Browser;
 class SettingsOverriddenDialogController;

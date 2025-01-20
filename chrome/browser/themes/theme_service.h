@@ -28,7 +28,9 @@ class BrowserThemePack;
 class CustomThemeSupplier;
 class Profile;
 class ThemeServiceObserver;
+#if !BUILDFLAG(IS_ANDROID)
 class ThemeSyncableService;
+#endif
 
 namespace extensions {
 class Extension;
@@ -162,9 +164,11 @@ class ThemeService : public KeyedService, public BrowserThemeProviderDelegate {
   // Uninstall theme extensions which are no longer in use.
   void RemoveUnusedThemes();
 
+#if !BUILDFLAG(IS_ANDROID)
   // Returns the syncable service for syncing theme. The returned service is
   // owned by |this| object.
   virtual ThemeSyncableService* GetThemeSyncableService() const;
+#endif
 
   // Gets the ThemeProvider for |profile|. This will be different for an
   // incognito profile and its original profile, even though both profiles use
@@ -371,7 +375,9 @@ class ThemeService : public KeyedService, public BrowserThemeProviderDelegate {
   // removes itself from the |observers_| list on destruction.
   base::ObserverList<ThemeServiceObserver> observers_;
 
+#if !BUILDFLAG(IS_ANDROID)
   std::unique_ptr<ThemeSyncableService> theme_syncable_service_;
+#endif
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   class ThemeObserver;

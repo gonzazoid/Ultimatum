@@ -341,7 +341,7 @@ public class DownloadMessageUiControllerImpl implements DownloadMessageUiControl
 
     // The current state of the message UI.
     private @UiState int mState = UiState.INITIAL;
-
+    private boolean mIsExtension = false;
     // This is used when the message UI is currently in a state awaiting timer completion, e.g.
     // showing the result of a download. This is used to schedule a task to determine the next
     // state. If the message UI moves out of the current state, the scheduled task should be
@@ -662,6 +662,10 @@ public class DownloadMessageUiControllerImpl implements DownloadMessageUiControl
 
         if (userCancel) nextState = UiState.CANCELLED;
 
+        if (updatedItem != null && "application/x-chrome-extension".equals(updatedItem.mimeType)) {
+          mIsExtension = true;
+        }
+
         moveToState(nextState);
     }
 
@@ -878,6 +882,12 @@ public class DownloadMessageUiControllerImpl implements DownloadMessageUiControl
 
         setForceShow(info);
         mCurrentInfo = info;
+        // HERE!!!
+        if (mIsExtension && resultState == ResultState.COMPLETE) {
+          mIsExtension = false;
+          return;
+        }
+
         showMessage(uiState, info);
     }
 

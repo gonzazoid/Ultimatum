@@ -33,9 +33,9 @@
 #include "ui/base/window_open_disposition.h"
 #include "url/gurl.h"
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
 #include "components/tab_groups/tab_group_id.h"
-#endif
+// #endif
 
 class Browser;
 class Profile;
@@ -70,16 +70,16 @@ struct OpenURLParams;
 
 // TODO(thestig): Split or ifdef out more fields that are not used on Android.
 struct NavigateParams {
-#if BUILDFLAG(IS_ANDROID)
+// #if BUILDFLAG(IS_ANDROID)
   explicit NavigateParams(
       std::unique_ptr<content::WebContents> contents_to_insert);
-#else
+// #else
   NavigateParams(Browser* browser,
                  const GURL& a_url,
                  ui::PageTransition a_transition);
   NavigateParams(Browser* browser,
                  std::unique_ptr<content::WebContents> contents_to_insert);
-#endif
+// #endif
   NavigateParams(Profile* profile,
                  const GURL& a_url,
                  ui::PageTransition a_transition);
@@ -259,7 +259,7 @@ struct NavigateParams {
   };
   PathBehavior path_behavior = RESPECT;
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
   // [in]  Specifies a Browser object where the navigation could occur or the
   //       tab could be added. Navigate() is not obliged to use this Browser if
   //       it is not compatible with the operation being performed. This can be
@@ -288,7 +288,7 @@ struct NavigateParams {
   // determine where to insert a new tab and whether or not it should be
   // selected, among other properties.
   int tabstrip_add_types = AddTabTypes::ADD_ACTIVE;
-#endif
+// #endif
 
   // The profile that is initiating the navigation. If there is a non-NULL
   // browser passed in via |browser|, it's profile will be used instead.

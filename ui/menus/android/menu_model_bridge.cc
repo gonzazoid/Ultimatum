@@ -4,6 +4,7 @@
 
 #include "ui/menus/android/menu_model_bridge.h"
 
+#include "base/logging.h"
 #include "base/android/jni_android.h"
 #include "base/android/jni_callback.h"
 #include "base/android/jni_string.h"
@@ -28,6 +29,11 @@ MenuModelBridge::MenuModelBridge() {
 }
 
 MenuModelBridge::~MenuModelBridge() = default;
+
+jni_zero::ScopedJavaLocalRef<jobject> MenuModelBridge::GetListItems() {
+  JNIEnv* env = base::android::AttachCurrentThread();
+  return Java_MenuModelBridge_getListItems(env, java_obj_);
+}
 
 void MenuModelBridge::AddExtensionItems(ui::MenuModel* menu_model) {
   JNIEnv* env = base::android::AttachCurrentThread();
@@ -99,12 +105,15 @@ ScopedJavaGlobalRef<jobject> MenuModelBridge::GetJavaObject() {
 // private
 void MenuModelBridge::ActivatedAt(base::WeakPtr<MenuModel> menu_model_weak_ptr,
                                   size_t i) {
+  LOG(INFO) << "MenuModelBridge::ActivatedAt " << i;
   /* Should always null-check WeakPtr, see
    * https://source.chromium.org/chromium/chromium/src/+/main:base/memory/weak_ptr.h;l=192;drc=192000bedcb9891ac5de22e98115f2578389e1e5
    */
   if (!menu_model_weak_ptr) {
+    LOG(INFO) << "NOP!!!";
     return;
   }
+  LOG(INFO) << "menu_model_weak_ptr->ActivatedAt(i)";
   menu_model_weak_ptr->ActivatedAt(i);
 }
 

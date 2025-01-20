@@ -7,6 +7,7 @@
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
 #include "base/values.h"
+#include "base/logging.h"
 #include "chrome/grit/generated_resources.h"
 #include "content/public/browser/web_ui.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -85,6 +86,7 @@ std::u16string PluralStringHandler::GetPluralizedStringForMessageName(
     std::string message_name,
     int count) {
   auto message_id_it = name_to_id_.find(message_name);
+  LOG(INFO) << "PluralStringHandler::GetPluralizedStringForMessageName " << message_name;
   CHECK(name_to_id_.end() != message_id_it);
   return l10n_util::GetPluralStringFUTF16(message_id_it->second, count);
 }

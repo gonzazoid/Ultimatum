@@ -114,7 +114,10 @@ void SupervisedUserExtensionsManager::UpdateManagementPolicyRegistration() {
       management_policy->UnregisterProvider(this);
     }
     // Re-check the policy to make sure any new settings get applied.
-    extension_system_->extension_service()->CheckManagementPolicy();
+    LOG(INFO) << "SupervisedUserExtensionsManager::UpdateManagementPolicyRegistration1 " << (extension_system_ == nullptr);
+    LOG(INFO) << "SupervisedUserExtensionsManager::UpdateManagementPolicyRegistration2 " << (extension_system_->extension_service() == nullptr);
+    // TODO extension_service is nullptr - not created yet?
+    // extension_system_->extension_service()->CheckManagementPolicy();
   }
 }
 

@@ -179,6 +179,7 @@
 #include "chrome/browser/ui/webui/chrome_web_ui_controller_factory.h"
 #include "chrome/browser/ui/webui/internal_debug_pages_disabled/internal_debug_pages_disabled_ui.h"
 #include "chrome/browser/ui/webui/log_web_ui_url.h"
+#include "chrome/browser/ui/webui/theme_source.h"
 #include "chrome/browser/ui/webui/top_chrome/webui_url_utils.h"
 #include "chrome/browser/universal_web_contents_observers.h"
 #include "chrome/browser/usb/chrome_usb_delegate.h"
@@ -340,6 +341,7 @@
 #include "content/public/browser/web_contents_view_delegate.h"
 #include "content/public/browser/web_ui_url_loader_factory.h"
 #include "content/public/browser/webui_config_map.h"
+#include "content/public/browser/url_data_source.h"
 #include "content/public/common/buildflags.h"
 #include "content/public/common/content_descriptors.h"
 #include "content/public/common/content_features.h"
@@ -504,6 +506,7 @@
 #include "ui/base/resource/resource_bundle_android.h"
 #include "ui/base/ui_base_paths.h"
 #include "ui/display/util/display_util.h"
+
 #elif BUILDFLAG(IS_POSIX)
 #include "chrome/browser/chrome_browser_main_posix.h"
 #endif
@@ -6206,8 +6209,9 @@ void AddChromeSchemeFactories(
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   Profile* profile =
       Profile::FromBrowserContext(web_contents->GetBrowserContext());
-  InstantService* instant_service =
-      InstantServiceFactory::GetForProfile(profile);
+  content::URLDataSource::Add(profile, std::make_unique<ThemeSource>(profile));
+  // InstantService* instant_service =
+  //     InstantServiceFactory::GetForProfile(profile);
   // The test below matches when a remote 3P NTP is loaded. The effective
   // URL is chrome-search://remote-ntp. This is to allow the use of the NTP
   // public api and to embed most-visited tiles
@@ -6215,12 +6219,12 @@ void AddChromeSchemeFactories(
   //
   // InstantService might be null for some irregular profiles, e.g. the System
   // Profile.
-  if (instant_service && instant_service->IsInstantProcess(render_process_id)) {
-    factories->emplace(chrome::kChromeSearchScheme,
-                       content::CreateWebUIURLLoaderFactory(
-                           frame_host, chrome::kChromeSearchScheme,
-                           /*allowed_hosts=*/base::flat_set<std::string>()));
-  }
+  // if (instant_service && instant_service->IsInstantProcess(render_process_id)) {
+  //   factories->emplace(chrome::kChromeSearchScheme,
+  //                      content::CreateWebUIURLLoaderFactory(
+  //                          frame_host, chrome::kChromeSearchScheme,
+  //                          /*allowed_hosts=*/base::flat_set<std::string>()));
+  // }
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
   extensions::ExtensionWebContentsObserver* web_observer =
@@ -6241,7 +6245,7 @@ void AddChromeSchemeFactories(
     allowed_webui_hosts.emplace_back(content::kChromeUIResourcesHost);
     allowed_webui_hosts.emplace_back(chrome::kChromeUIThemeHost);
     // For testing purposes chrome://webui-test/ is also allowed.
-    allowed_webui_hosts.emplace_back(chrome::kChromeUIWebUITestHost);
+    // allowed_webui_hosts.emplace_back(chrome::kChromeUIWebUITestHost);
   }
   if (extension->is_extension() || extension->is_legacy_packaged_app() ||
       (extension->is_platform_app() &&
@@ -6277,7 +6281,19 @@ void ChromeContentBrowserClient::
   WebContents* web_contents = WebContents::FromRenderFrameHost(frame_host);
 #endif  // BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(ENABLE_EXTENSIONS_CORE) || \
         // !BUILDFLAG(IS_ANDROID)
-
+#if BUILDFLAG(IS_ANDROID)
+  web_contents = nullptr;
+  for (TabModel* model : TabModelList::models()) {
+    if (model->IsActiveModel()) {
+      web_contents = model->GetActiveWebContents();
+      break;
+    }
+  }
+  frame_host = nullptr;
+  if (web_contents) {
+    frame_host = web_contents->GetPrimaryMainFrame();
+  }
+#endif
 #if BUILDFLAG(IS_CHROMEOS)
   if (web_contents) {
     Profile* profile =

@@ -11,8 +11,8 @@
 #include "build/build_config.h"
 #include "content/public/browser/page_navigator.h"
 
-#if !BUILDFLAG(IS_ANDROID)
 #include "base/callback_list.h"
+#if !BUILDFLAG(IS_ANDROID)
 #include "ui/base/window_open_disposition.h"
 #endif
 
@@ -31,7 +31,7 @@
 // the UnownedUserData (via BrowserWindowInterface::GetUnownedUserDataHost())
 // or on DesktopBrowserWindowCapabilities.
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
 namespace tabs {
 class TabInterface;
 }  // namespace tabs
@@ -60,7 +60,7 @@ class ImmersiveModeController;
 class Profile;
 class SessionID;
 class TabStripModel;
-#endif  // BUILDFLAG(IS_ANDROID)
+// #endif  // BUILDFLAG(IS_ANDROID)
 
 namespace ui {
 class BaseWindow;
@@ -68,7 +68,7 @@ class BaseWindow;
 
 class UnownedUserDataHost;
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
 // A feature which wants to show window level call to action UI  should call
 // BrowserWindowInterface::ShowCallToAction and keep alive the instance of
 // ScopedWindowCallToAction for the duration of the window-modal UI.
@@ -77,7 +77,7 @@ class ScopedWindowCallToAction {
   ScopedWindowCallToAction() = default;
   virtual ~ScopedWindowCallToAction() = default;
 };
-#endif  // !BUILDFLAG(IS_ANDROID)
+// #endif  // !BUILDFLAG(IS_ANDROID)
 
 class BrowserWindowInterface : public content::PageNavigator {
  public:
@@ -98,7 +98,7 @@ class BrowserWindowInterface : public content::PageNavigator {
   // top of this file.
   // The following methods will be removed in the future.
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
   // Returns nullptr if no browser window with the given session ID exists.
   static BrowserWindowInterface* FromSessionID(const SessionID& session_id);
 
@@ -292,7 +292,7 @@ class BrowserWindowInterface : public content::PageNavigator {
 
   virtual DesktopBrowserWindowCapabilities* capabilities() = 0;
   virtual const DesktopBrowserWindowCapabilities* capabilities() const = 0;
-#endif  // !BUILDFLAG(IS_ANDROID)
+// #endif  // !BUILDFLAG(IS_ANDROID)
 
   // S T O P
   // Please do not add new features here without consulting desktop leads

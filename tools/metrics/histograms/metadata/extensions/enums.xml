@@ -2823,6 +2823,7 @@ Called by update_extension_histograms.py.-->
   <int value="1938" label="CONTROLLEDFRAMEINTERNAL_CONTEXTMENUSUPDATE"/>
   <int value="1939" label="BOOKMARKMANAGERPRIVATE_ISACTIVETABINSPLIT"/>
   <int value="1940" label="ENTERPRISE_LOGIN_EXITCURRENTMANAGEDGUESTSESSION"/>
+  <int value="1941" label="DEVELOPERPRIVATE_LOADCRX"/>
 </enum>
 
 <!-- LINT.ThenChange(//extensions/browser/extension_function_histogram_value.h:HistogramValue) -->
