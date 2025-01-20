@@ -49,6 +49,7 @@ namespace {
 // allowed by web request event listeners. Consolidate the two.
 bool HasWebRequestScheme(const GURL& url) {
   return (url.SchemeIs(url::kAboutScheme) || url.SchemeIs(url::kFileScheme) ||
+          url.SchemeIs(content::kChromeUIScheme) || // TODO add hashnet schemes???
           url.SchemeIs(url::kFileSystemScheme) ||
           url.SchemeIs(url::kFtpScheme) || url.SchemeIsHTTPOrHTTPS() ||
           url.SchemeIs(extensions::kExtensionScheme) || url.SchemeIsWSOrWSS() ||
@@ -333,12 +334,14 @@ bool WebRequestPermissions::HideRequest(
           << request.initiator->GetTupleOrPrecursorTupleIfOpaque().GetURL()
           << " for " << url << " with request type "
           << WebRequestResourceTypeToString(request.web_request_type);
+      // Ultimatum browser: we hide network requests from webui but we allow to interceipt local resources
+      return true;
     }
 #endif  // DCHECK_IS_ON()
 
     // In any case, we treat the requests as sensitive to ensure that the Web
     // Request API doesn't see them.
-    return true;
+    // return true;
   }
 
   // Requests from chrome-untrusted:// are generally sensitive (because they

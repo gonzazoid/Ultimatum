@@ -37,6 +37,8 @@
 #include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/download/bubble/download_bubble_prefs.h"
+// #include "chrome/browser/download/bubble/download_bubble_ui_controller.h"
 #include "chrome/browser/download/download_core_service.h"
 #include "chrome/browser/download/download_core_service_factory.h"
 #include "chrome/browser/download/download_file_icon_extractor.h"
@@ -1445,15 +1447,15 @@ void DownloadsAcceptDangerFunction::PromptOrWait(int download_id, int retries) {
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   // DownloadDangerPrompt displays a modal dialog using native widgets that the
   // user must either accept or cancel. It cannot be scripted.
-  DownloadDangerPrompt* prompt = DownloadDangerPrompt::Create(
-      download_item, web_contents,
-      base::BindOnce(&DownloadsAcceptDangerFunction::DangerPromptCallback, this,
-                     download_id));
+  // DownloadDangerPrompt* prompt = DownloadDangerPrompt::Create(
+  //     download_item, web_contents,
+  //     base::BindOnce(&DownloadsAcceptDangerFunction::DangerPromptCallback, this,
+  //                    download_id));
   // DownloadDangerPrompt deletes itself
-  if (on_prompt_created_ && !on_prompt_created_->is_null()) {
-    std::move(*on_prompt_created_).Run(prompt);
-    on_prompt_created_ = nullptr;
-  }
+  // if (on_prompt_created_ && !on_prompt_created_->is_null()) {
+  //   std::move(*on_prompt_created_).Run(prompt);
+  //   on_prompt_created_ = nullptr;
+  // }
   // Function finishes in DangerPromptCallback().
 #else
   NOTIMPLEMENTED();
@@ -1650,10 +1652,10 @@ ExtensionFunction::ResponseAction DownloadsSetShelfEnabledFunction::Run() {
     // using this API is still compatible with the new download bubble. This
     // API will eventually be deprecated (replaced by the SetUiOptions API
     // below).
-    Browser* browser = window->GetBrowser();
-    if (browser->window()->GetDownloadBubbleUIController()) {
-      browser->window()->GetDownloadBubbleUIController()->HideDownloadUi();
-    }
+    // Browser* browser = window->GetBrowser();
+    // if (browser->window()->GetDownloadBubbleUIController()) {
+    //   browser->window()->GetDownloadBubbleUIController()->HideDownloadUi();
+    // }
 #endif
   }
 

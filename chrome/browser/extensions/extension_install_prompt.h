@@ -34,6 +34,7 @@ static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 class ExtensionInstallPromptShowParams;
 class Profile;
+class ExtensionInstallDialogBridge;
 
 namespace content {
 class BrowserContext;
@@ -333,6 +334,14 @@ class ExtensionInstallPrompt : public extensions::ExtensionInstallPromptClient {
   // Shows the actual UI (the icon should already be loaded).
   void ShowConfirmation();
 
+#if BUILDFLAG(IS_ANDROID)
+void ShowExtensionInstallAndroidDialogImpl(
+    std::unique_ptr<ExtensionInstallPromptShowParams> show_params,
+    ExtensionInstallPrompt::DoneCallback done_callback,
+    std::unique_ptr<ExtensionInstallPrompt::Prompt> prompt);
+#endif
+
+
   // If auto confirm is enabled then posts a task to proceed with or cancel the
   // install and returns true. Otherwise returns false.
   bool AutoConfirmPromptIfEnabled();
@@ -368,6 +377,11 @@ class ExtensionInstallPrompt : public extensions::ExtensionInstallPromptClient {
 
   // Whether or not the `show_dialog_callback_` was called.
   bool did_call_show_dialog_;
+
+#if BUILDFLAG(IS_ANDROID)
+  std::unique_ptr<ExtensionInstallDialogBridge> extension_install_dialog_bridge_;
+#endif
+
 
   base::WeakPtrFactory<ExtensionInstallPrompt> weak_factory_{this};
 };

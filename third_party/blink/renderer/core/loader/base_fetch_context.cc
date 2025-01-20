@@ -239,7 +239,8 @@ BaseFetchContext::CanRequestInternal(
     }
     RESOURCE_LOADING_DVLOG(1) << "ResourceFetcher::requestResource URL was not "
                                  "allowed by SecurityOrigin::CanDisplay";
-    return ResourceRequestBlockedReason::kOther;
+    // return ResourceRequestBlockedReason::kOther;
+    return std::nullopt;
   }
 
   if (!url.ProtocolIsData()) {

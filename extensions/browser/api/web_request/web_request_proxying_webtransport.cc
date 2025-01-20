@@ -80,7 +80,7 @@ class WebTransportHandshakeProxy : public WebRequestAPI::Proxy,
                 base::BindOnce(
                     &WebTransportHandshakeProxy::OnBeforeRequestCompleted,
                     base::Unretained(this)),
-                &redirect_url_, &should_collapse_initiator);
+                &redirect_url_, &blocking_response_, &should_collapse_initiator);
     // It doesn't make sense to collapse WebTransport requests since they won't
     // be associated with a DOM element.
     CHECK(!should_collapse_initiator);
@@ -270,6 +270,7 @@ class WebTransportHandshakeProxy : public WebRequestAPI::Proxy,
   net::HttpRequestHeaders request_headers_;
   std::optional<std::string> selected_application_protocol_;
   GURL redirect_url_;
+  extension_web_request_api_helpers::BlockingResponse blocking_response_;
   mojo::Remote<WebTransportHandshakeClient> remote_;
   mojo::Receiver<WebTransportHandshakeClient> receiver_{this};
   scoped_refptr<net::HttpResponseHeaders> response_headers_;

@@ -118,9 +118,9 @@ void ChromeFeedbackPrivateDelegate::FetchSystemInformation(
     content::BrowserContext* context,
     system_logs::SysLogsFetcherCallback callback) const {
   // self-deleting object
-  auto* fetcher = system_logs::BuildChromeSystemLogsFetcher(
-      Profile::FromBrowserContext(context), /*scrub_data=*/true);
-  fetcher->Fetch(std::move(callback));
+  // auto* fetcher = system_logs::BuildChromeSystemLogsFetcher(
+  //     Profile::FromBrowserContext(context), /*scrub_data=*/true);
+  // fetcher->Fetch(std::move(callback));
 }
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -255,7 +255,7 @@ void ChromeFeedbackPrivateDelegate::NotifyFeedbackDelayed() const {
 feedback::FeedbackUploader*
 ChromeFeedbackPrivateDelegate::GetFeedbackUploaderForContext(
     content::BrowserContext* context) const {
-  return feedback::FeedbackUploaderFactoryChrome::GetForBrowserContext(context);
+  return nullptr; // feedback::FeedbackUploaderFactoryChrome::GetForBrowserContext(context);
 }
 
 void ChromeFeedbackPrivateDelegate::OpenFeedback(
@@ -265,13 +265,13 @@ void ChromeFeedbackPrivateDelegate::OpenFeedback(
 
   DCHECK(source == api::feedback_private::FeedbackSource::kQuickoffice);
 
-  Profile* profile = Profile::FromBrowserContext(context);
-  chrome::ShowFeedbackPage(url, profile,
-                           /*source=*/feedback::kFeedbackSourceQuickOffice,
-                           /*description_template=*/std::string(),
-                           /*description_placeholder_text=*/std::string(),
-                           /*category_tag=*/std::string(),
-                           /*extra_diagnostics=*/std::string());
+  // Profile* profile = Profile::FromBrowserContext(context);
+  // chrome::ShowFeedbackPage(url, profile,
+  //                          /*source=*/feedback::kFeedbackSourceQuickOffice,
+  //                          /*description_template=*/std::string(),
+  //                          /*description_placeholder_text=*/std::string(),
+  //                          /*category_tag=*/std::string(),
+  //                          /*extra_diagnostics=*/std::string());
 }
 
 }  // namespace extensions

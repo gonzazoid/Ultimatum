@@ -11,19 +11,19 @@
 #include "content/public/browser/browser_thread.h"
 
 // TODO(crbug.com/371321982): port system.storage api on desktop android.
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
 #include "components/storage_monitor/storage_info.h"
 #include "components/storage_monitor/storage_monitor.h"
 #include "extensions/common/api/system_storage.h"
 
 using storage_monitor::StorageInfo;
 using storage_monitor::StorageMonitor;
-#endif
+// #endif
 
 namespace extensions {
 
 // TODO(crbug.com/371321982): port system.storage api on desktop android.
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
 using api::system_storage::StorageUnitInfo;
 using api::system_storage::StorageUnitType;
 
@@ -41,7 +41,7 @@ void BuildStorageUnitInfo(const StorageInfo& info, StorageUnitInfo* unit) {
 }
 
 }  // namespace systeminfo
-#endif  // !BUILDFLAG(IS_ANROID)
+// #endif  // !BUILDFLAG(IS_ANROID)
 
 SystemInfoProvider::SystemInfoProvider()
     : is_waiting_for_completion_(false),

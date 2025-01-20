@@ -380,12 +380,12 @@ void ExternalPrefLoader::ReadStandaloneExtensionPrefFiles(
     auto ext_prefs =
         ExtractExtensionPrefs(&deserializer, extension_candidate_path);
 
-    if (options_ & USE_USER_TYPE_PROFILE_FILTER &&
-        !apps::UserTypeMatchesJsonUserType(
-            user_type_, id /* app_id */, ext_prefs, default_user_types.get())) {
-      // Already logged.
-      continue;
-    }
+    // if (options_ & USE_USER_TYPE_PROFILE_FILTER &&
+    //     !apps::UserTypeMatchesJsonUserType(
+    //         user_type_, id /* app_id */, ext_prefs, default_user_types.get())) {
+    //   // Already logged.
+    //   continue;
+    // }
 
     DVLOG(1) << "Adding extension with id: " << id;
     prefs.Set(id, std::move(ext_prefs));

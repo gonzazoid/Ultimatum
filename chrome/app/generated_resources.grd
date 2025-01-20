@@ -317,7 +317,7 @@ are declared in tools/grit/grit_args.gni.
       </if>
 
       <!-- Settings specific strings -->
-      <if expr="not is_android">
+      <if expr="not is_android or is_android">
         <part file="settings_strings.grdp" />
         <part file="shared_settings_strings.grdp"/>
       </if>
@@ -1315,7 +1315,7 @@ are declared in tools/grit/grit_args.gni.
       </if>
 
       <!-- Page menu. Android has separate strings for its menu -->
-      <if expr="not is_android">
+      <if expr="not is_android or is_android">
         <message name="IDS_PROFILE_ROW_VERIFY_MESSAGE" desc="A label to indicate that the profile needs credential verification (reauthentication). This is a shorter version of 'Verify it's you' that is used in other places.">
           Verify
         </message>
@@ -7415,7 +7415,7 @@ Keep your key file in a safe place. You will need it to create new versions of y
       </message>
 
       <!-- about:system strings -->
-      <if expr="not is_android">
+      <if expr="not is_android or is_android">
         <message name="IDS_ABOUT_SYS_TITLE" desc="about:system page title">
           About System
         </message>
@@ -11626,6 +11626,23 @@ Check your passwords anytime in <ph name="GOOGLE_PASSWORD_MANAGER">$1<ex>Google 
         </message>
       </if>
 
+      <if expr="is_android">
+        <message name="IDS_IMPORT_FROM_ICEWEASEL" desc="browser combo box: Iceweasel">
+          Iceweasel
+        </message>
+        <message name="IDS_IMPORT_FROM_FIREFOX" desc="browser combo box: Mozilla Firefox">
+          Mozilla Firefox
+        </message>
+        <message name="IDS_IMPORT_FROM_SAFARI" desc="browser combo box: Safari">
+          Safari
+        </message>
+        <message name="IDS_IMPORT_FROM_BOOKMARKS_HTML_FILE" desc="browser combo box: Bookmarks HTML File">
+          Bookmarks HTML File
+        </message>
+        <message name="IDS_UTILITY_PROCESS_PROFILE_IMPORTER_NAME" desc="The name of the utility process used for importing profiles.">
+          Profile Importer
+        </message>
+      </if>
       <!-- Android uses custom UI for Bookmark importing -->
       <if expr="not is_android">
         <!-- Import Settings Dialog -->
@@ -11690,7 +11707,7 @@ Check your passwords anytime in <ph name="GOOGLE_PASSWORD_MANAGER">$1<ex>Google 
         </message>
       </if>
 
-      <if expr="enable_extensions">
+      <if expr="enable_extensions_core">
         <!-- Feedback Dialog -->
         <message name="IDS_FEEDBACK_REPORT_APP_TITLE" desc="The title of the feedback app as shown in the app switcher and system tray">
           Feedback
@@ -13854,6 +13871,9 @@ Check your passwords anytime in <ph name="GOOGLE_PASSWORD_MANAGER">$1<ex>Google 
            (Settings specific strings are in settings_strings.grdp).
            Not necessary on Android that uses native UI in settings unless extensions are enabled. -->
       <if expr="not is_android or enable_extensions_core">
+        <message name="IDS_SETTINGS_SAFETY_HUB" desc="Name of a page in settings that gives users an overview over their safety status and where users can take action to improve their safety.">
+          Safety Check
+        </message>
         <message name="IDS_TOOLBAR_INFORM_SET_HOME_PAGE" desc="The confirmation message when dropping a link on the Home toolbar button">
            Your home page has been set.
         </message>

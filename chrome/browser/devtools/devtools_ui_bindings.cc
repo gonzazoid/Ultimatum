@@ -137,7 +137,7 @@
 #include "chrome/browser/user_education/user_education_service_factory.h"
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
 #include "chrome/browser/extensions/extension_management.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_system.h"
@@ -1594,18 +1594,18 @@ void DevToolsUIBindings::SendPortForwardingStatus(base::Value status) {
 }
 
 void DevToolsUIBindings::SetDevicesUpdatesEnabled(bool enabled) {
-#if BUILDFLAG(IS_ANDROID)
-  NOTIMPLEMENTED();
-#else
+// #if BUILDFLAG(IS_ANDROID)
+//   NOTIMPLEMENTED();
+// #else
   if (devices_updates_enabled_ == enabled) {
     return;
   }
   devices_updates_enabled_ = enabled;
   if (enabled) {
-    remote_targets_handler_ = DevToolsTargetsUIHandler::CreateForAdb(
-        base::BindRepeating(&DevToolsUIBindings::DevicesUpdated,
-                            base::Unretained(this)),
-        profile_);
+    // remote_targets_handler_ = DevToolsTargetsUIHandler::CreateForAdb(
+    //     base::BindRepeating(&DevToolsUIBindings::DevicesUpdated,
+    //                         base::Unretained(this)),
+    //     profile_);
     pref_change_registrar_.Init(profile_->GetPrefs());
     pref_change_registrar_.Add(
         prefs::kDevToolsDiscoverUsbDevicesEnabled,
@@ -1627,10 +1627,10 @@ void DevToolsUIBindings::SetDevicesUpdatesEnabled(bool enabled) {
         prefs::kDevToolsTCPDiscoveryConfig,
         base::BindRepeating(&DevToolsUIBindings::DevicesDiscoveryConfigUpdated,
                             base::Unretained(this)));
-    port_status_serializer_ = std::make_unique<PortForwardingStatusSerializer>(
-        base::BindRepeating(&DevToolsUIBindings::SendPortForwardingStatus,
-                            base::Unretained(this)),
-        profile_);
+    // port_status_serializer_ = std::make_unique<PortForwardingStatusSerializer>(
+    //     base::BindRepeating(&DevToolsUIBindings::SendPortForwardingStatus,
+    //                         base::Unretained(this)),
+    //     profile_);
     DevicesDiscoveryConfigUpdated();
   } else {
     remote_targets_handler_.reset();
@@ -1638,7 +1638,7 @@ void DevToolsUIBindings::SetDevicesUpdatesEnabled(bool enabled) {
     pref_change_registrar_.RemoveAll();
     SendPortForwardingStatus(base::Value());
   }
-#endif
+// #endif
 }
 
 void DevToolsUIBindings::OpenRemotePage(const std::string& browser_id,
@@ -2679,7 +2679,7 @@ void DevToolsUIBindings::OnPermissionDialogResult(
 }
 
 void DevToolsUIBindings::AddDevToolsExtensionsToClient() {
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   const extensions::ExtensionRegistry* registry =
       extensions::ExtensionRegistry::Get(profile_->GetOriginalProfile());
   if (!registry) {

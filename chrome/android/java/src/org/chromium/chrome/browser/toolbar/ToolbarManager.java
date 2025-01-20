@@ -2362,7 +2362,8 @@ public class ToolbarManager
                                 mActivityTabProvider.asObservable(),
                                 mTabCreatorManager.getTabCreator(false),
                                 getBrowsingModeThemeColorProvider(),
-                                (ToolbarTablet) mToolbarLayout,
+                                (mToolbarLayout instanceof ToolbarPhone ? (ToolbarPhone) mToolbarLayout : (ToolbarTablet) mToolbarLayout),
+                                // (ToolbarTablet) mToolbarLayout,
                                 contextMenuPopulatorFactory,
                                 selectionDropdownMenuDelegate);
                 if (mExtensionToolbarCoordinator != null) {

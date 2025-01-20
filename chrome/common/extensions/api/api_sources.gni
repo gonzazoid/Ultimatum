@@ -42,6 +42,7 @@ schema_sources_ = [
   "tabs.json",
   "web_authentication_proxy.webidl",
   "web_navigation.json",
+  "proxy_override_rules_private.json",
 
   # Despite the name, these APIs do not rely on any WebRTC-specific bits and
   # as such do not belong in a conditional.
@@ -49,6 +50,10 @@ schema_sources_ = [
   "webrtc_logging_private.idl",
   "webstore_private.json",
   "windows.json",
+  "bookmark_manager_private.json",
+  "settings_private.idl",
+  "autofill_private.idl",
+  "resources_private.idl",
 ]
 
 if (enable_service_discovery) {
@@ -63,6 +68,7 @@ if (enable_guest_view) {
 # registration. These do not generate the strong C++ types.
 uncompiled_sources_ = [
   "action.json",
+  "browser_action.json",
   "browsing_data.json",
   "commands.json",
   "extension.json",
@@ -77,20 +83,15 @@ if (enable_extensions) {
     "accessibility_features.json",
     "experimental_actor.idl",
     "experimental_ai_data.idl",
-    "autofill_private.idl",
     "autotest_private.idl",
-    "bookmark_manager_private.json",
     "braille_display_private.idl",
     "command_line_private.json",
     "crash_report_private.idl",
     "enterprise_reporting_private.idl",
-    "proxy_override_rules_private.json",
     "image_writer_private.idl",
     "language_settings_private.idl",
     "passwords_private.idl",
-    "resources_private.idl",
     "safe_browsing_private.idl",
-    "settings_private.idl",
     "side_panel.idl",
     "system_private.json",
 
@@ -155,7 +156,6 @@ if (enable_extensions) {
   }
 
   uncompiled_sources_ += [
-    "browser_action.json",
     "idltest.idl",
     "page_action.json",
   ]

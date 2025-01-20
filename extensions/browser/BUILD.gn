@@ -626,7 +626,7 @@ source_set("browser_sources") {
     "//extensions:extensions_browser_resources",
     "//extensions/browser:keepalive",
     "//extensions/browser/api:extensions_api_client",
-    "//extensions/browser/api/messaging:native_messaging",
+    # "//extensions/browser/api/messaging:native_messaging",
     "//extensions/browser/api/storage:settings_namespace",
     "//extensions/browser/api/storage:settings_observer",
     "//extensions/browser/api/system_display:display_info_provider",
@@ -718,6 +718,8 @@ source_set("browser_sources") {
       ]
     }
     sources += [
+      "guest_view/app_view/app_view_guest.cc",
+      "guest_view/app_view/app_view_guest.h",
       "guest_view/extension_options/extension_options_constants.cc",
       "guest_view/extension_options/extension_options_constants.h",
       "guest_view/extension_options/extension_options_guest.cc",
@@ -784,6 +786,11 @@ source_set("browser_sources") {
 
     deps += [ "//components/web_modal" ]
   }
+
+  sources += [
+    # "api/device_permissions_prompt.cc",
+    # "api/device_permissions_prompt.h",
+  ]
 
   # TODO(https://crbug.com/356905053): The following files don't compile cleanly
   # with desktop-android. Either make them compile, or determine they should

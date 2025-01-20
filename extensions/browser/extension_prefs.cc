@@ -1512,7 +1512,7 @@ void ExtensionPrefs::OnExtensionInstalled(
 void ExtensionPrefs::OnExtensionUninstalled(const ExtensionId& extension_id,
                                             const ManifestLocation location,
                                             bool external_uninstall) {
-  app_sorting()->ClearOrdinals(extension_id);
+  // app_sorting()->ClearOrdinals(extension_id);
 
   // For external extensions, we save a preference reminding ourself not to try
   // and install the extension anymore (except when |external_uninstall| is
@@ -2497,10 +2497,10 @@ void ExtensionPrefs::FinishExtensionInfoPrefs(
   // |app_sorting|, |extension_pref_value_map_|, and (potentially) observers
   // are updated non-transactionally. This is probably not fixable without
   // nested transactional updates to pref dictionaries.
-  if (needs_sort_ordinal) {
-    CHECK(app_sorting());
-    app_sorting()->EnsureValidOrdinals(extension_id, suggested_page_ordinal);
-  }
+  // if (needs_sort_ordinal) {
+  //   CHECK(app_sorting());
+  //   app_sorting()->EnsureValidOrdinals(extension_id, suggested_page_ordinal);
+  // }
 
   bool is_enabled = true;
   base::ListValue* disable_reasons = nullptr;

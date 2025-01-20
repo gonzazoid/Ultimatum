@@ -30,8 +30,12 @@ public class ExtensionsMenuItemProperties {
     public static final WritableObjectPropertyKey<View.OnClickListener>
             CONTEXT_MENU_BUTTON_ON_CLICK = new WritableObjectPropertyKey<>();
 
+    public static final WritableObjectPropertyKey<View.OnClickListener>
+            ITEM_CLICK_LISTENER = new WritableObjectPropertyKey<>();
+
     public static final PropertyKey[] ALL_KEYS =
             new PropertyKey[] {
-                EXTENSION_ID, ICON, TITLE, CONTEXT_MENU_BUTTON_ICON, CONTEXT_MENU_BUTTON_ON_CLICK
+                EXTENSION_ID, ICON, TITLE, CONTEXT_MENU_BUTTON_ICON, CONTEXT_MENU_BUTTON_ON_CLICK, ITEM_CLICK_LISTENER
             };
+
 }

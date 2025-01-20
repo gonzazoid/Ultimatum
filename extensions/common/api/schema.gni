@@ -11,6 +11,7 @@ import("//extensions/buildflags/buildflags.gni")
 # TODO(https://crbug.com/356905053): Continue moving more here.
 extensions_api_schema_files_ = [
   "alarms.webidl",
+  "app_runtime.webidl",
   "declarative_net_request.webidl",
   "dns.webidl",
   "events.json",
@@ -33,6 +34,20 @@ extensions_api_schema_files_ = [
   "types.json",
   "user_scripts.webidl",
   "web_request.json",
+  "mime_handler_private.idl",
+  "automation.idl",
+  "automation_internal.webidl",
+  "scripts_internal.webidl",
+  "mime_handler_view_guest_internal.json",
+  "file_system.idl",
+  "networking_private.webidl",
+  "socket.idl",
+  "sockets_tcp_server.idl",
+  "sockets_tcp.idl",
+  "sockets_udp.idl",
+  "system_storage.webidl",
+  "app_view_guest_internal.json",
+  "feedback_private.webidl",
 ]
 
 # Schemas that should be used only to auto-generate the C++ types.
@@ -64,11 +79,10 @@ if (enable_guest_view) {
 if (enable_extensions) {
   extensions_api_schema_files_ += [
     "app_current_window_internal.webidl",
-    "app_runtime.webidl",
-    "app_view_guest_internal.json",
+    # "app_runtime.idl",
     "app_window.idl",
     "audio.webidl",
-    "automation_internal.webidl",
+    # "automation_internal.webidl",
     "automation.idl",
     "bluetooth_low_energy.webidl",
     "bluetooth_private.webidl",
@@ -76,16 +90,14 @@ if (enable_extensions) {
     "bluetooth.webidl",
     "cec_private.webidl",
     "clipboard.webidl",
-    "feedback_private.webidl",
-    "file_system.idl",
+    # "file_system.idl",
     "hid.idl",
-    "mime_handler_private.idl",
-    "mime_handler_view_guest_internal.json",
+    # "mime_handler_private.idl",
+    # "mime_handler_view_guest_internal.json",
     "mojo_private.webidl",
-    "networking_private.webidl",
+    # "networking_private.webidl",
     "printer_provider_internal.webidl",
     "printer_provider.webidl",
-    "scripts_internal.webidl",
     "socket.idl",
     "sockets_tcp_server.idl",
     "sockets_tcp.idl",
@@ -113,7 +125,6 @@ if (enable_extensions) {
 if (enable_desktop_android_extensions) {
   extensions_types_only_schema_files_ += [
     "clipboard.webidl",
-    "scripts_internal.webidl",
     "usb.webidl",
     "virtual_keyboard_private.json",
     "virtual_keyboard.webidl",

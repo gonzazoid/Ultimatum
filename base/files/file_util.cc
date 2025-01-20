@@ -345,6 +345,31 @@ std::optional<std::vector<uint8_t>> ReadFileToBytes(const FilePath& path) {
     return std::nullopt;
   }
 
+// This is definitely not the best approach, I can see that. I took this code from tools/android/touch_replay/touch_replay.cc ReadNullTerminatedString
+// One day may be I'll find the time to make it better
+// #if BUILDFLAG(IS_ANDROID)
+//   if(path.IsContentUri()) {
+//     base::File file(path,
+//                        base::File::FLAG_OPEN | base::File::FLAG_READ);
+//     if (!file.IsValid()) {
+//       return std::nullopt;
+//     }
+
+//     std::vector<uint8_t> bytes;
+
+//     int64_t length = file.GetLength();
+//     if (length < 0) return std::nullopt;
+//     bytes.resize((size_t)length);
+
+//     int bytes_read = UNSAFE_BUFFERS(file.Read(0, reinterpret_cast<char*>(bytes.data()), (int)length));
+//     if (bytes_read < length) {
+//       return std::nullopt;
+//     }
+
+//     return bytes;
+//   }
+// #endif
+
   ScopedFILE file_stream(OpenFile(path, "rb"));
   if (!file_stream) {
     return std::nullopt;
@@ -376,6 +401,29 @@ bool ReadFileToStringWithMaxSize(const FilePath& path,
   if (path.ReferencesParent()) {
     return false;
   }
+
+// This is definitely not the best approach, I can see that. I took this code from tools/android/touch_replay/touch_replay.cc ReadNullTerminatedString
+// One day may be I'll find the time to make it better
+// #if BUILDFLAG(IS_ANDROID)
+//   if(path.IsContentUri()) {
+//     base::File file = base::File(path,
+//                        base::File::FLAG_OPEN | base::File::FLAG_READ);
+//     if (!file.IsValid()) {
+//       return false;
+//     }
+//     int64_t length = file.GetLength();
+//     if (length < 0) return false;
+//     contents->resize((size_t)length);
+
+//     int bytes_read = UNSAFE_BUFFERS(file.Read(0, contents->data(), (int)length));
+//     if (bytes_read < length) {
+//       return false;
+//     }
+
+//     return true;
+//   }
+// #endif
+
   ScopedFILE file_stream(OpenFile(path, "rb"));
   if (!file_stream) {
     return false;

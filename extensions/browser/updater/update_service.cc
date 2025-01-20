@@ -166,7 +166,7 @@ void UpdateService::StartUpdateCheck(
   DCHECK(!update_params.update_info.empty());
 
   VLOG(2) << "UpdateService::StartUpdateCheck";
-
+  // return;
   if (!ExtensionsBrowserClient::Get()->IsBackgroundUpdateAllowed()) {
     VLOG(1) << "UpdateService - Extension update not allowed.";
     if (!callback.is_null()) {

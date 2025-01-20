@@ -34,9 +34,9 @@
 #include "ui/gfx/native_ui_types.h"
 #include "url/origin.h"
 
-#if BUILDFLAG(IS_ANDROID)
-#error This file should only be included on desktop.
-#endif
+// #if BUILDFLAG(IS_ANDROID)
+// #error This file should only be included on desktop.
+// #endif
 
 class Browser;
 class BrowserView;

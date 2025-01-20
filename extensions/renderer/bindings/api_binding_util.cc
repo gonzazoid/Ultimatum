@@ -150,6 +150,8 @@ std::string_view GetPlatformString() {
   return "win";
 #elif BUILDFLAG(IS_DESKTOP_ANDROID)
   return "desktop_android";
+#elif BUILDFLAG(IS_ANDROID)
+  return "android";
 #else
   NOTREACHED();
 #endif

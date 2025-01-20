@@ -119,9 +119,9 @@ void GeneratedPrefs::CreatePrefs() {
   prefs_[content_settings::kGeneratedGeolocationPref] = std::make_unique<
       content_settings::GeneratedPermissionPromptingBehaviorPref>(
       profile_, ContentSettingsType::GEOLOCATION);
-  prefs_[content_settings::kGeneratedJavascriptOptimizerPref] =
-      std::make_unique<content_settings::GeneratedJavascriptOptimizerPref>(
-          profile_);
+  // prefs_[content_settings::kGeneratedJavascriptOptimizerPref] =
+  //     std::make_unique<content_settings::GeneratedJavascriptOptimizerPref>(
+  //         profile_);
   prefs_[kGeneratedHttpsFirstModePref] =
       std::make_unique<GeneratedHttpsFirstModePref>(profile_);
 }

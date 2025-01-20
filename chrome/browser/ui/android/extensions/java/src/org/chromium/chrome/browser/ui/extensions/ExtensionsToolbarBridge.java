@@ -125,14 +125,14 @@ public class ExtensionsToolbarBridge implements Destroyable {
         return ExtensionsToolbarBridgeJni.get().getAllActionIds(mNativeExtensionsToolbarAndroid);
     }
 
-    public String[] getPinnedActionIds() {
+    public String[] getPinnedActionIds(boolean incognito) {
         if (mProfile.shutdownStarted()) {
             // TODO(crbug.com/459079170): This is to prevent tests from breaking. {@code
             // ExtensionToolbarCoordinatorImpl} should ideally be destroyed following {@code
             // ChromeAndroidTask}'s destruction, and it is currently being worked on.
             return new String[0];
         }
-        return ExtensionsToolbarBridgeJni.get().getPinnedActionIds(mNativeExtensionsToolbarAndroid);
+        return ExtensionsToolbarBridgeJni.get().getPinnedActionIds(mNativeExtensionsToolbarAndroid, incognito);
     }
 
     public void executeUserAction(String actionId, @InvocationSource int source) {
@@ -290,7 +290,7 @@ public class ExtensionsToolbarBridge implements Destroyable {
         String[] getAllActionIds(long nativeExtensionsToolbarAndroid);
 
         @JniType("std::vector<std::string>")
-        String[] getPinnedActionIds(long nativeExtensionsToolbarAndroid);
+        String[] getPinnedActionIds(long nativeExtensionsToolbarAndroid, boolean incognito);
 
         void executeUserAction(
                 long nativeExtensionsToolbarAndroid,

@@ -52,7 +52,7 @@
 #include "chrome/browser/privacy_sandbox/privacy_sandbox_service_factory.h"
 #include "chrome/browser/serial/serial_chooser_context.h"
 #include "chrome/browser/serial/serial_chooser_context_factory.h"
-#include "chrome/browser/ui/browser.h"
+// #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/page_info/page_info_infobar_delegate.h"
@@ -66,7 +66,7 @@
 #include "chrome/browser/usb/usb_chooser_context_factory.h"
 #include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_url_info.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
-#include "chrome/browser/web_applications/web_app_registrar.h"
+// #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "chrome/common/extensions/manifest_handlers/app_launch_info.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/generated_resources.h"
@@ -139,7 +139,7 @@
 #include "chrome/browser/media/cdm_document_service_impl.h"
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
 #include "extensions/common/constants.h"
 #endif
 
@@ -875,10 +875,10 @@ void SiteSettingsHandler::OnJavascriptAllowed() {
   pref_change_registrar_->Init(profile_->GetPrefs());
 
   // If the block autoplay pref changes send the new status.
-  pref_change_registrar_->Add(
-      prefs::kBlockAutoplayEnabled,
-      base::BindRepeating(&SiteSettingsHandler::SendBlockAutoplayStatus,
-                          base::Unretained(this)));
+  // pref_change_registrar_->Add(
+  //     prefs::kBlockAutoplayEnabled,
+  //     base::BindRepeating(&SiteSettingsHandler::SendBlockAutoplayStatus,
+  //                         base::Unretained(this)));
 
   // Setup observation of system permissions.
   system_permission_settings_observation_ = system_permission_settings::Observe(
@@ -891,7 +891,7 @@ void SiteSettingsHandler::OnJavascriptDisallowed() {
   observations_.RemoveAllObservations();
   chooser_observations_.RemoveAllObservations();
   host_zoom_map_subscriptions_.clear();
-  pref_change_registrar_->Remove(prefs::kBlockAutoplayEnabled);
+  // pref_change_registrar_->Remove(prefs::kBlockAutoplayEnabled);
   observed_profiles_.RemoveAllObservations();
 }
 
@@ -1778,21 +1778,21 @@ void SiteSettingsHandler::HandleSetOriginPermissions(
   // on the same profile, or on any pages where changes to a double-keyed
   // setting occurred.
   tabs::ForEachTabInterface([&](tabs::TabInterface* tab) {
-    content::WebContents* const web_contents = tab->GetContents();
-    const GURL tab_url = web_contents->GetLastCommittedURL();
-    const bool tab_is_same_origin = url::IsSameOriginWith(origin, tab_url);
-    const bool tab_might_embed_origin = std::ranges::any_of(
-        additional_patterns_for_infobar, [&](const auto& additional_pattern) {
-          return additional_pattern.Matches(tab_url);
-        });
+    // content::WebContents* const web_contents = tab->GetContents();
+    // const GURL tab_url = web_contents->GetLastCommittedURL();
+    // const bool tab_is_same_origin = url::IsSameOriginWith(origin, tab_url);
+    // const bool tab_might_embed_origin = std::ranges::any_of(
+    //     additional_patterns_for_infobar, [&](const auto& additional_pattern) {
+    //       return additional_pattern.Matches(tab_url);
+    //     });
 
-    if ((tab_is_same_origin || tab_might_embed_origin) &&
-        tab->GetBrowserWindowInterface()->GetProfile()->GetOriginalProfile() ==
-            profile_->GetOriginalProfile()) {
-      infobars::ContentInfoBarManager* const infobar_manager =
-          infobars::ContentInfoBarManager::FromWebContents(web_contents);
-      PageInfoInfoBarDelegate::Create(infobar_manager);
-    }
+    // if ((tab_is_same_origin || tab_might_embed_origin) &&
+    //     tab->GetBrowserWindowInterface()->GetProfile()->GetOriginalProfile() ==
+    //         profile_->GetOriginalProfile()) {
+    //   infobars::ContentInfoBarManager* const infobar_manager =
+    //       infobars::ContentInfoBarManager::FromWebContents(web_contents);
+    //   PageInfoInfoBarDelegate::Create(infobar_manager);
+    // }
     return true;
   });
 }
@@ -2109,9 +2109,10 @@ void SiteSettingsHandler::SendZoomLevels() {
                     *b.GetDict().FindString(site_settings::kDisplayName);
                 return name_a < name_b;
               });
+  // really?
+  }
 #endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) ||
         // BUILDFLAG(IS_CHROMEOS)
-  }
 
   content::HostZoomMap* host_zoom_map =
       content::HostZoomMap::GetDefaultForBrowserContext(profile_);
@@ -2241,9 +2242,9 @@ void SiteSettingsHandler::HandleSetBlockAutoplayEnabled(
 
   CHECK_EQ(1U, args.size());
   CHECK(args[0].is_bool());
-  bool value = args[0].GetBool();
+  // bool value = args[0].GetBool();
 
-  profile_->GetPrefs()->SetBoolean(prefs::kBlockAutoplayEnabled, value);
+  // profile_->GetPrefs()->SetBoolean(prefs::kBlockAutoplayEnabled, value);
 }
 
 void SiteSettingsHandler::RebuildModel() {

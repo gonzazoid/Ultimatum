@@ -55,9 +55,9 @@
 #include "chrome/services/system_signals/linux/linux_system_signals_service.h"
 #endif  // BUILDFLAG(IS_LINUX)
 
-#if !BUILDFLAG(IS_ANDROID)
 #include "chrome/common/importer/profile_import.mojom.h"
 #include "chrome/utility/importer/profile_import_impl.h"
+#if !BUILDFLAG(IS_ANDROID)
 #include "components/mirroring/service/mirroring_service.h"
 #include "components/private_ai/oak_session_service/oak_session_service.h"  // nogncheck
 #include "services/proxy_resolver/proxy_resolver_factory_impl.h"  // nogncheck
@@ -225,6 +225,11 @@ auto RunSystemSignalsService(
 }
 #endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
 
+auto RunProfileImporter(
+    mojo::PendingReceiver<chrome::mojom::ProfileImport> receiver) {
+  return std::make_unique<ProfileImportImpl>(std::move(receiver));
+}
+
 #if !BUILDFLAG(IS_ANDROID)
 auto RunOakSessionService(
     mojo::PendingReceiver<private_ai::mojom::OakSession> receiver) {
@@ -236,11 +241,6 @@ auto RunProxyResolver(
         receiver) {
   return std::make_unique<proxy_resolver::ProxyResolverFactoryImpl>(
       std::move(receiver));
-}
-
-auto RunProfileImporter(
-    mojo::PendingReceiver<chrome::mojom::ProfileImport> receiver) {
-  return std::make_unique<ProfileImportImpl>(std::move(receiver));
 }
 
 auto RunMirroringService(
@@ -447,9 +447,9 @@ void RegisterMainThreadServices(mojo::ServiceFactory& services) {
   services.Add(ContentBookmarkParser);
   services.Add(RunPassageEmbeddingsService);
 
+  services.Add(RunProfileImporter);
 #if !BUILDFLAG(IS_ANDROID)
   services.Add(RunOakSessionService);
-  services.Add(RunProfileImporter);
   services.Add(RunMirroringService);
   services.Add(RunScreenAIServiceFactory);
 #endif  // !BUILDFLAG(IS_ANDROID)

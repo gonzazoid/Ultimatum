@@ -122,6 +122,19 @@ bool ShouldDisplayManagedUi(Profile* profile) {
 }
 
 #if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_EXTENSIONS_CORE)
+std::string GetManagedUiWebUIIcon(Profile* profile) {
+  if (enterprise_util::IsBrowserManaged(profile)) {
+    return "cr:domain";
+  }
+
+  if (ShouldDisplayManagedByParentUi(profile)) {
+    // The Family Link "kite" icon.
+    return "cr20:kite";
+  }
+
+  // This method can be called even if we shouldn't display the managed UI.
+  return std::string();
+}
 
 GURL GetManagedUiUrl(Profile* profile) {
   if (enterprise_util::IsBrowserManaged(profile)) {
@@ -199,20 +212,6 @@ std::u16string GetManagedUiMenuItemTooltip(Profile* profile) {
       return std::u16string();
   }
   return std::u16string();
-}
-
-std::string GetManagedUiWebUIIcon(Profile* profile) {
-  if (enterprise_util::IsBrowserManaged(profile)) {
-    return "cr:domain";
-  }
-
-  if (ShouldDisplayManagedByParentUi(profile)) {
-    // The Family Link "kite" icon.
-    return "cr20:kite";
-  }
-
-  // This method can be called even if we shouldn't display the managed UI.
-  return std::string();
 }
 
 std::u16string GetManagedUiWebUILabel(Profile* profile) {

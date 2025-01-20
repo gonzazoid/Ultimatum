@@ -46,6 +46,8 @@ class ExtensionSystem;
 class ImageLoader;
 class WarningService;
 
+namespace developer = api::developer_private;
+
 // Generates the developerPrivate api's specification for ExtensionInfo.
 // This class is designed to only have one generation running at a time!
 class ExtensionInfoGenerator : public ProfileObserver {
@@ -70,7 +72,9 @@ class ExtensionInfoGenerator : public ProfileObserver {
   // Creates and asynchronously returns an ExtensionInfo for the given
   // `extension_id`, if the extension can be found.
   // If the extension cannot be found, an empty vector is passed to `callback`.
-  void CreateExtensionInfo(const ExtensionId& id,
+  void CreateExtensionInfo(
+      developer::EventType event_type,
+      const ExtensionId& id,
                            ExtensionInfosCallback callback);
 
   // Creates and asynchronously returns a collection of ExtensionInfos,

@@ -707,8 +707,8 @@ Feature::Availability SimpleFeature::GetManifestAvailability(
   if (min_manifest_version_ && manifest_version < *min_manifest_version_)
     return CreateAvailability(AvailabilityResult::kInvalidMinManifestVersion);
 
-  if (max_manifest_version_ && manifest_version > *max_manifest_version_)
-    return CreateAvailability(AvailabilityResult::kInvalidMaxManifestVersion);
+  // if (max_manifest_version_ && manifest_version > *max_manifest_version_)
+  //   return CreateAvailability(AvailabilityResult::kInvalidMaxManifestVersion);
 
   return CreateAvailability(AvailabilityResult::kIsAvailable);
 }

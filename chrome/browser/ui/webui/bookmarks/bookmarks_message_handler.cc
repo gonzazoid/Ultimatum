@@ -336,9 +336,9 @@ void BookmarksMessageHandler::HandleSingleUploadClicked(
 
   // Show the dialog asking the user to confirm their choice to move the
   // bookmark.
-  ShowBookmarkAccountStorageUploadDialog(
-      chrome::FindLastActiveWithProfile(profile),
-      bookmarks::GetBookmarkNodeByID(model, id));
+  // ShowBookmarkAccountStorageUploadDialog(
+  //     chrome::FindLastActiveWithProfile(profile),
+  //     bookmarks::GetBookmarkNodeByID(model, id));
 }
 
 void BookmarksMessageHandler::UpdateCanEditBookmarks() {
@@ -360,12 +360,12 @@ void BookmarksMessageHandler::HandleGetBatchUploadPromoData(
   }
 
 #if !BUILDFLAG(IS_CHROMEOS)
-  BatchUploadService* batch_upload =
-      BatchUploadServiceFactory::GetForProfile(profile);
-  CHECK(batch_upload);
-  batch_upload->GetLocalDataDescriptionsForAvailableTypes(base::BindOnce(
-      &BookmarksMessageHandler::OnGetLocalDataDescriptionReceived,
-      weak_ptr_factory_.GetWeakPtr(), callback_id.Clone()));
+  // BatchUploadService* batch_upload =
+  //     BatchUploadServiceFactory::GetForProfile(profile);
+  // CHECK(batch_upload);
+  // batch_upload->GetLocalDataDescriptionsForAvailableTypes(base::BindOnce(
+  //     &BookmarksMessageHandler::OnGetLocalDataDescriptionReceived,
+  //     weak_ptr_factory_.GetWeakPtr(), callback_id.Clone()));
 #endif
 }
 
@@ -393,12 +393,12 @@ void BookmarksMessageHandler::RequestLocalDataDescriptionsUpdate() {
   }
 
 #if !BUILDFLAG(IS_CHROMEOS)
-  BatchUploadService* batch_upload =
-      BatchUploadServiceFactory::GetForProfile(profile);
-  CHECK(batch_upload);
-  batch_upload->GetLocalDataDescriptionsForAvailableTypes(base::BindOnce(
-      &BookmarksMessageHandler::FireOnGetLocalDataDescriptionReceived,
-      weak_ptr_factory_.GetWeakPtr()));
+  // BatchUploadService* batch_upload =
+  //     BatchUploadServiceFactory::GetForProfile(profile);
+  // CHECK(batch_upload);
+  // batch_upload->GetLocalDataDescriptionsForAvailableTypes(base::BindOnce(
+  //     &BookmarksMessageHandler::FireOnGetLocalDataDescriptionReceived,
+  //     weak_ptr_factory_.GetWeakPtr()));
 #endif
 }
 
@@ -410,12 +410,12 @@ void BookmarksMessageHandler::HandleOnBatchUploadPromoClicked(
   CHECK(SyncServiceFactory::IsSyncAllowed(profile));
   CHECK(CanShowBatchUploadPromo(profile));
 
-  BatchUploadService* service =
-      BatchUploadServiceFactory::GetForProfile(profile);
-  CHECK(service);
-  Browser* browser = chrome::FindBrowserWithTab(web_ui()->GetWebContents());
-  service->OpenBatchUpload(
-      browser, BatchUploadService::EntryPoint::kBookmarksManagerPromoCard);
+  // BatchUploadService* service =
+  //     BatchUploadServiceFactory::GetForProfile(profile);
+  // CHECK(service);
+  // Browser* browser = chrome::FindBrowserWithTab(web_ui()->GetWebContents());
+  // service->OpenBatchUpload(
+  //     browser, BatchUploadService::EntryPoint::kBookmarksManagerPromoCard);
 #endif
 }
 

@@ -48,6 +48,12 @@
 #include "ui/color/color_provider_source.h"
 #include "ui/color/color_provider_utils.h"
 
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+#include "chrome/browser/android/tab_android.h"
+#endif
+
 using content::RenderProcessHost;
 using content::WebContents;
 
@@ -252,6 +258,7 @@ void ExtensionHost::Close() {
   }
 
   called_close_handler_ = true;
+  // if (!close_handler_) return; // TODO this code should be removed after android extensions' popup is stable
   std::move(close_handler_).Run(this);
   // NOTE: `this` may be deleted at this point!
 }
@@ -350,6 +357,41 @@ void ExtensionHost::OnExtensionUnloaded(
   if (extension_ == extension) {
     extension_ = nullptr;
   }
+}
+
+void ExtensionHost::OnExtensionInstalled(content::BrowserContext* browser_context,
+    const Extension* extension,
+    bool is_update) {
+// TODO move it somewhere, like extensions tab utils
+#if BUILDFLAG(IS_ANDROID)
+  if (!is_update) {
+    GURL url = GURL("chrome://extensions/");
+    for (TabModel* model : TabModelList::models()) {
+      if (!model->IsActiveModel()) continue;
+      int tab_count = model->GetTabCount();
+      for (int i = 0; i < tab_count; i++) {
+        content::WebContents* web_contents = model->GetWebContentsAt(i);
+        if (!web_contents) continue;
+        if (web_contents->GetURL() == url) {
+          model->SetActiveIndex(i);
+          return;
+        }
+      }
+      std::unique_ptr<content::WebContents> contents = content::WebContents::Create(
+      content::WebContents::CreateParams(browser_context));
+      CHECK(contents);
+      contents->GetController().LoadURL(url, content::Referrer(), ui::PAGE_TRANSITION_LINK, std::string());
+      // content::WebContents* const second_web_contents = contents.release();
+
+      model->CreateTab(TabAndroid::FromWebContents(web_contents()),
+                       std::move(contents),
+                       TabModel::kInvalidIndex,
+                       TabModel::TabLaunchType::FROM_RECENT_TABS_FOREGROUND,
+                       /*should_pin=*/true);
+      break;
+    }
+  }
+#endif
 }
 
 void ExtensionHost::PrimaryMainFrameRenderProcessGone(

@@ -323,7 +323,8 @@ ExtensionActionSetIconFunction::RunExtensionAction() {
     // Obsolete argument: ignore it.
     return RespondNow(NoArguments());
   } else {
-    EXTENSION_FUNCTION_VALIDATE(false);
+    return RespondNow(NoArguments());
+    // EXTENSION_FUNCTION_VALIDATE(false);
   }
 
   NotifyChange();

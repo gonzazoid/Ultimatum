@@ -63,9 +63,11 @@ void AddAxAnnotationsSectionStrings(content::WebUIDataSource* html_source) {
        IDS_SETTINGS_MAIN_NODE_ANNOTATIONS_SUBTITLE},
   };
   html_source->AddLocalizedStrings(kLocalizedStrings);
+#if !BUILDFLAG(IS_ANDROID)
   html_source->AddBoolean(
       "mainNodeAnnotationsEnabled",
       base::FeatureList::IsEnabled(features::kMainNodeAnnotations));
+#endif
 }
 
 void AddCaptionSubpageStrings(content::WebUIDataSource* html_source) {
@@ -187,13 +189,17 @@ void AddSharedSyncPageStrings(content::WebUIDataSource* html_source) {
       {"passphraseConfirmationPlaceholder",
        IDS_SETTINGS_PASSPHRASE_CONFIRMATION_PLACEHOLDER},
       {"syncLoading", IDS_SETTINGS_SYNC_LOADING},
+#if !BUILDFLAG(IS_ANDROID)
       {"syncDataEncryptedText", IDS_SETTINGS_SYNC_DATA_ENCRYPTED_TEXT},
+#endif
       {"sync", IDS_SETTINGS_SYNC},
       {"syncAdvancedBrowserPageTitle",
        IDS_SETTINGS_NEW_SYNC_ADVANCED_BROWSER_PAGE_TITLE},
+#if !BUILDFLAG(IS_ANDROID)
       {"enterPassphraseLabel", IDS_SYNC_ENTER_PASSPHRASE_BODY},
       {"enterPassphraseLabelWithDate",
        IDS_SYNC_ENTER_PASSPHRASE_BODY_WITH_DATE},
+#endif
   };
   html_source->AddLocalizedStrings(kLocalizedStrings);
 
@@ -235,6 +241,7 @@ void AddSharedSyncPageStrings(content::WebUIDataSource* html_source) {
       updateAccountSettingsStrings
           ? IDS_SYNC_FULL_ACCOUNT_DATA_ENCRYPTION_BODY_CUSTOM
           : IDS_SYNC_FULL_ENCRYPTION_BODY_CUSTOM);
+#if !BUILDFLAG(IS_ANDROID)
   html_source->AddLocalizedString(
       "manageSyncedDataTitle",
       updateAccountSettingsStrings
@@ -269,12 +276,15 @@ void AddSharedSyncPageStrings(content::WebUIDataSource* html_source) {
 #else
           chrome::kSyncEncryptionHelpURL));
 #endif
+#endif
 }
 
 void AddSecureDnsStrings(content::WebUIDataSource* html_source) {
   webui::LocalizedString kLocalizedStrings[] = {
       {"secureDns", IDS_SETTINGS_SECURE_DNS},
+#if !BUILDFLAG(IS_ANDROID)
       {"secureDnsDescription", IDS_SETTINGS_SECURE_DNS_DESCRIPTION},
+#endif
       {"secureDnsDisabledForManagedEnvironment",
        IDS_SETTINGS_SECURE_DNS_DISABLED_FOR_MANAGED_ENVIRONMENT},
       {"secureDnsDisabledForParentalControl",

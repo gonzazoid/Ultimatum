@@ -566,6 +566,10 @@ void WebstorePrivateBeginInstallWithManifest3Function::OnInstallStatusCheckDone(
   }
 
   if (install_status == kCanRequest || install_status == kRequestPending) {
+#if BUILDFLAG(IS_ANDROID)
+     OnRequestPromptDone(ExtensionInstallPrompt::DoneCallbackPayload(
+        ExtensionInstallPrompt::Result::ACCEPTED));
+#else
     install_prompt_ = std::make_unique<ExtensionInstallPrompt>(web_contents);
     install_prompt_->ShowDialog(
         base::BindRepeating(&WebstorePrivateBeginInstallWithManifest3Function::
@@ -577,9 +581,13 @@ void WebstorePrivateBeginInstallWithManifest3Function::OnInstallStatusCheckDone(
                 ? ExtensionInstallPrompt::EXTENSION_REQUEST_PROMPT
                 : ExtensionInstallPrompt::EXTENSION_PENDING_REQUEST_PROMPT),
         ExtensionInstallPrompt::GetDefaultShowDialogCallback());
+#endif
   } else {
     ReportWebStoreInstallEsbAllowlistParameter(details().esb_allowlist);
-
+#if BUILDFLAG(IS_ANDROID)
+    OnInstallPromptDone(ExtensionInstallPrompt::DoneCallbackPayload(
+      ExtensionInstallPrompt::Result::ACCEPTED));
+#else
     if (ShouldShowFrictionDialog(profile_)) {
       ShowInstallFrictionDialog(web_contents);
 #if BUILDFLAG(IS_ANDROID)
@@ -601,6 +609,7 @@ void WebstorePrivateBeginInstallWithManifest3Function::OnInstallStatusCheckDone(
     } else {
       ShowInstallDialog(web_contents);
     }
+#endif
   }
   // Control flow finishes up in OnInstallPromptDone, OnRequestPromptDone,
   // OnBlockByPolicyPromptDone, or OnRequestParentApprovalPromptCancelled.
@@ -1040,6 +1049,7 @@ void WebstorePrivateBeginInstallWithManifest3Function::
       base::BindOnce(&WebstorePrivateBeginInstallWithManifest3Function::
                          OnFrictionPromptDone,
                      this));
+  // OnFrictionPromptDone(true);
 }
 
 void WebstorePrivateBeginInstallWithManifest3Function::ShowInstallDialog(
@@ -1080,6 +1090,7 @@ void WebstorePrivateBeginInstallWithManifest3Function::ShowInstallDialog(
     }
   }
 
+#if !BUILDFLAG(IS_ANDROID)
   install_prompt_ = std::make_unique<ExtensionInstallPrompt>(contents);
   install_prompt_->ShowDialog(
       base::BindOnce(&WebstorePrivateBeginInstallWithManifest3Function::
@@ -1087,6 +1098,7 @@ void WebstorePrivateBeginInstallWithManifest3Function::ShowInstallDialog(
                      this),
       dummy_extension_.get(), &icon_, std::move(prompt),
       ExtensionInstallPrompt::GetDefaultShowDialogCallback());
+#endif
 }
 
 void WebstorePrivateBeginInstallWithManifest3Function::

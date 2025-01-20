@@ -85,7 +85,7 @@ export class BookmarksCommandManagerElement extends
   private confirmOpenCallback_: (() => void)|null = null;
   private accessor canPaste_: boolean = false;
   private accessor isActiveTabInSplit_: boolean = false;
-  private accessor globalCanEdit_: boolean = false;
+  private accessor globalCanEdit_: boolean = true; // false;
   protected accessor menuIds_: Set<string> = new Set<string>();
   protected accessor showEditDialog_: boolean = false;
   protected accessor showOpenDialog_: boolean = false;

@@ -18,22 +18,22 @@
     "channel": "stable",
     "contexts": ["privileged_extension"],
     "extension_types": ["platform_app"],
-    "noparent": true,
+    "noparent": true
     // "desktop_android" is not supported.
-    "platforms": ["chromeos", "linux", "mac", "win"]
+    // "platforms": ["chromeos", "linux", "mac", "win"]
   }, {
     "channel": "stable",
     "component_extensions_auto_granted": false,
     "contexts": ["privileged_extension"],
     "extension_types": ["extension"],
-    "noparent": true,
+    "noparent": true
     // "desktop_android" is not supported.
-    "platforms": ["chromeos", "linux", "mac", "win"],
-    "allowlist": [
-      "2FC374607C2DF285634B67C64A2E356C607091C3",  // Quickoffice
-      "3727DD3E564B6055387425027AD74C58784ACC15",  // Quickoffice internal
-      "12E618C3C6E97495AAECF2AC12DEB082353241C6"   // QO component extension
-    ]
+    // "platforms": ["chromeos", "linux", "mac", "win"],
+    // "allowlist": [
+    //   "2FC374607C2DF285634B67C64A2E356C607091C3",  // Quickoffice
+    //   "3727DD3E564B6055387425027AD74C58784ACC15",  // Quickoffice internal
+    //   "12E618C3C6E97495AAECF2AC12DEB082353241C6"   // QO component extension
+    // ]
   }],
   "app.window": [{
     "channel": "stable",
@@ -47,14 +47,14 @@
     "contexts": ["privileged_extension"],
     "extension_types": ["extension"],
     "noparent": true,
-    "component_extensions_auto_granted": false,
+    "component_extensions_auto_granted": false
     // "desktop_android" is not supported.
-    "platforms": ["chromeos", "linux", "mac", "win"],
-    "allowlist": [
-      "B9EF10DDFEA11EF77873CC5009809E5037FC4C7A",  // Google input tools
-      "06BE211D5F014BAB34BC22D9DDA09C63A81D828E",  // Official xkb extension
-      "F94EE6AB36D6C6588670B2B01EB65212D9C64E33"   // Open source xkb extension
-    ]
+    // "platforms": ["chromeos", "linux", "mac", "win"],
+    // "allowlist": [
+    //   "B9EF10DDFEA11EF77873CC5009809E5037FC4C7A",  // Google input tools
+    //   "06BE211D5F014BAB34BC22D9DDA09C63A81D828E",  // Official xkb extension
+    //   "F94EE6AB36D6C6588670B2B01EB65212D9C64E33"   // Open source xkb extension
+    // ]
   }],
   "app.currentWindowInternal": {
     "noparent": true,
@@ -254,9 +254,9 @@
     {
       "internal": true,
       "channel": "stable",
-      "contexts": ["privileged_extension"],
+      "contexts": ["privileged_extension"]
       // "desktop_android" is not supported.
-      "platforms": ["chromeos", "linux", "mac", "win"]
+      // "platforms": ["chromeos", "linux", "mac", "win", "android"]
     }, {
       "internal": true,
       "channel": "stable",
@@ -300,9 +300,9 @@
       ],
       // This feature is only enabled if the embedder's delegated check returns
       // true.
-      "requires_delegated_availability_check": true,
+      "requires_delegated_availability_check": true
       // "desktop_android" is not supported.
-      "platforms": ["chromeos", "linux", "mac", "win"]
+      // "platforms": ["chromeos", "linux", "mac", "win", "android"]
     }
   ],
   "hid": {
@@ -496,9 +496,9 @@
   },
   "mimeHandlerPrivate": {
     "dependencies": ["manifest:mime_types_handler"],
-    "contexts": ["privileged_extension"],
+    "contexts": ["privileged_extension"]
     // "desktop_android" is not supported.
-    "platforms": ["chromeos", "linux", "mac", "win"]
+    // "platforms": ["chromeos", "linux", "mac", "win", "android"]
   },
   "mojoPrivate": {
     "contexts": ["privileged_extension"],
@@ -723,45 +723,45 @@
   },
   "sockets.tcp": [{
     "dependencies": ["manifest:sockets"],
-    "contexts": ["privileged_extension"],
+    "contexts": ["privileged_extension"]
     // "desktop_android" is not supported.
-    "platforms": ["chromeos", "linux", "mac", "win"]
+    // "platforms": ["chromeos", "linux", "mac", "win", "android"]
   },{
     "channel": "stable",
     "contexts": ["webui_untrusted"],
     "matches": [
       "chrome-untrusted://terminal/*"
-    ],
+    ]
     // "desktop_android" is not supported.
-    "platforms": ["chromeos", "linux", "mac", "win"]
+    // "platforms": ["chromeos", "linux", "mac", "win", "android"]
   }],
   "sockets.tcpServer": [{
     "dependencies": ["manifest:sockets"],
-    "contexts": ["privileged_extension"],
+    "contexts": ["privileged_extension"]
     // "desktop_android" is not supported.
-    "platforms": ["chromeos", "linux", "mac", "win"]
+    // "platforms": ["chromeos", "linux", "mac", "win", "android"]
   },{
     "channel": "stable",
     "contexts": ["webui_untrusted"],
     "matches": [
       "chrome-untrusted://terminal/*"
-    ],
+    ]
     // "desktop_android" is not supported.
-    "platforms": ["chromeos", "linux", "mac", "win"]
+    // "platforms": ["chromeos", "linux", "mac", "win", "android"]
   }],
   "sockets.udp": [{
     "dependencies": ["manifest:sockets"],
-    "contexts": ["privileged_extension"],
+    "contexts": ["privileged_extension"]
     // "desktop_android" is not supported.
-    "platforms": ["chromeos", "linux", "mac", "win"]
+    // "platforms": ["chromeos", "linux", "mac", "win", "android"]
   },{
     "channel": "stable",
     "contexts": ["webui_untrusted"],
     "matches": [
       "chrome-untrusted://terminal/*"
-    ],
+    ]
     // "desktop_android" is not supported.
-    "platforms": ["chromeos", "linux", "mac", "win"]
+    // "platforms": ["chromeos", "linux", "mac", "win", "android"]
   }],
   "storage": {
     "dependencies": ["permission:storage"],

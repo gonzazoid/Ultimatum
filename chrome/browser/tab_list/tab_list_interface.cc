@@ -7,9 +7,25 @@
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "ui/base/unowned_user_data/unowned_user_data_host.h"
 
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+#include "chrome/browser/android/tab_android.h"
+#endif
+
 DEFINE_USER_DATA(TabListInterface);
 
 // static
 TabListInterface* TabListInterface::From(BrowserWindowInterface* browser) {
+#if BUILDFLAG(IS_ANDROID)
+  for (TabModel* model : TabModelList::models()) {
+    if (!model->IsActiveModel()) {
+      continue;
+    }
+    return model;
+  }
+  return nullptr;
+#else
   return browser ? Get(browser->GetUnownedUserDataHost()) : nullptr;
+#endif
 }

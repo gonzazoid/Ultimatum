@@ -101,11 +101,19 @@ ExtensionFunction::ResponseAction TabGroupsGetFunction::Run() {
   tab_groups::TabGroupId id = tab_groups::TabGroupId::CreateEmpty();
   tab_groups::TabGroupVisualData visual_data;
   std::string error;
+#if BUILDFLAG(IS_ANDROID)
+  if (!ExtensionTabUtil::GetGroupByIdAndroid(group_id,
+                                      include_incognito_information(),
+                                      &id, nullptr, &visual_data, &error)) {
+    return RespondNow(Error(std::move(error)));
+  }
+#else
   if (!ExtensionTabUtil::GetGroupById(group_id, browser_context(),
                                       include_incognito_information(), nullptr,
                                       &id, &visual_data, &error)) {
     return RespondNow(Error(std::move(error)));
   }
+#endif
 
   DCHECK(!id.is_empty());
 
@@ -113,6 +121,66 @@ ExtensionFunction::ResponseAction TabGroupsGetFunction::Run() {
       ExtensionTabUtil::CreateTabGroupObject(id, visual_data))));
 }
 
+#if BUILDFLAG(IS_ANDROID)
+ExtensionFunction::ResponseAction TabGroupsQueryFunction::Run() {
+  std::optional<api::tab_groups::Query::Params> params =
+      api::tab_groups::Query::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
+
+  base::ListValue result_list;
+
+  for (TabModel* model : TabModelList::models()) {
+    if (model->IsOffTheRecord() && !include_incognito_information())
+      continue;
+    if (params->query_info.window_id) {
+      const int window_id = *params->query_info.window_id;
+      if (window_id == extension_misc::kCurrentWindowId && !model->IsActiveModel())
+        continue;
+      if (window_id != extension_misc::kCurrentWindowId && model->GetSessionId().id() != window_id)
+        continue;
+    }
+
+    for (const tab_groups::TabGroupId& id : model->ListTabGroups()) {
+      std::optional<tab_groups::TabGroupVisualData> visual_data =
+          model->GetTabGroupVisualData(id);
+      if (!visual_data) {
+        continue;
+      }
+
+      if (params->query_info.collapsed &&
+          *params->query_info.collapsed != visual_data->is_collapsed()) {
+        continue;
+      }
+
+      if (params->query_info.title &&
+          !base::MatchPattern(
+              visual_data->title(),
+              base::UTF8ToUTF16(*params->query_info.title))) {
+        continue;
+      }
+
+      if (params->query_info.color != api::tab_groups::Color::kNone &&
+          params->query_info.color !=
+              ExtensionTabUtil::ColorIdToColor(visual_data->color())) {
+        continue;
+      }
+
+      if (params->query_info.shared.has_value() &&
+          ExtensionTabUtil::GetSharedStateOfGroup(id) !=
+              params->query_info.shared.value()) {
+        continue;
+      }
+
+      result_list.Append(
+          ExtensionTabUtil::CreateTabGroupObject(id, *visual_data)
+              .ToValue());
+    }
+
+  }
+
+  return RespondNow(WithArguments(std::move(result_list)));
+}
+#else
 ExtensionFunction::ResponseAction TabGroupsQueryFunction::Run() {
   std::optional<api::tab_groups::Query::Params> params =
       api::tab_groups::Query::Params::Create(args());
@@ -213,7 +281,59 @@ ExtensionFunction::ResponseAction TabGroupsQueryFunction::Run() {
 
   return RespondNow(WithArguments(std::move(result_list)));
 }
+#endif
 
+#if BUILDFLAG(IS_ANDROID)
+ExtensionFunction::ResponseAction TabGroupsUpdateFunction::Run() {
+  std::optional<api::tab_groups::Update::Params> params =
+      api::tab_groups::Update::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
+
+  int group_id = params->group_id;
+  tab_groups::TabGroupId id = tab_groups::TabGroupId::CreateEmpty();
+  TabModel* tab_list = nullptr;
+  tab_groups::TabGroupVisualData visual_data;
+  std::string error;
+  if (!ExtensionTabUtil::GetGroupByIdAndroid(group_id,
+                                      include_incognito_information(),
+                                      &id, &tab_list, &visual_data, &error)) {
+    return RespondNow(Error(std::move(error)));
+  }
+
+  DCHECK(!id.is_empty());
+
+  bool collapsed = visual_data.is_collapsed();
+  if (params->update_properties.collapsed) {
+    collapsed = *params->update_properties.collapsed;
+  }
+
+  tab_groups::TabGroupColorId color = visual_data.color();
+  if (params->update_properties.color != api::tab_groups::Color::kNone) {
+    color = ExtensionTabUtil::ColorToColorId(params->update_properties.color);
+  }
+
+  std::u16string title = visual_data.title();
+  if (params->update_properties.title) {
+    title = base::UTF8ToUTF16(*params->update_properties.title);
+  }
+
+  // Update the visual data.
+  // auto* tab_list = TabListInterface::From(browser);
+  if (!tab_list) {
+    return RespondNow(
+        Error(ExtensionTabUtil::kTabStripDoesNotSupportTabGroupsError));
+  }
+  tab_groups::TabGroupVisualData new_visual_data(title, color, collapsed);
+  tab_list->SetTabGroupVisualData(id, new_visual_data);
+
+  if (!has_callback()) {
+    return RespondNow(NoArguments());
+  }
+
+  return RespondNow(ArgumentList(api::tab_groups::Get::Results::Create(
+      ExtensionTabUtil::CreateTabGroupObject(id, new_visual_data))));
+}
+#else
 ExtensionFunction::ResponseAction TabGroupsUpdateFunction::Run() {
   std::optional<api::tab_groups::Update::Params> params =
       api::tab_groups::Update::Params::Create(args());
@@ -282,6 +402,7 @@ ExtensionFunction::ResponseAction TabGroupsUpdateFunction::Run() {
   return RespondNow(ArgumentList(api::tab_groups::Get::Results::Create(
       ExtensionTabUtil::CreateTabGroupObject(id, new_visual_data))));
 }
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 

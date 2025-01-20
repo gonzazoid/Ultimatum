@@ -177,8 +177,8 @@ bool ThemeSource::ShouldServiceRequest(const GURL& url,
                                        content::BrowserContext* browser_context,
                                        int render_process_id) {
   return url.SchemeIs(chrome::kChromeSearchScheme)
-             ? InstantService::ShouldServiceRequest(url, browser_context,
-                                                    render_process_id)
+             ? false // InstantService::ShouldServiceRequest(url, browser_context,
+                     //                                render_process_id)
              : URLDataSource::ShouldServiceRequest(url, browser_context,
                                                    render_process_id);
 }

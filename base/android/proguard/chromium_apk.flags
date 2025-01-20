@@ -7,7 +7,7 @@
 # APKs, e.g. Cronet.
 
 # Keep line number information, useful for stack traces.
--keepattributes SourceFile,LineNumberTable
+# -keepattributes SourceFile,LineNumberTable
 
 # Enable protobuf-related optimizations.
 -shrinkunusedprotofields

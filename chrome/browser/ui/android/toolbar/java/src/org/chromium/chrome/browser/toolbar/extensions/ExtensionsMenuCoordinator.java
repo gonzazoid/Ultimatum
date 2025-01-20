@@ -27,10 +27,13 @@ import org.chromium.chrome.browser.toolbar.MenuBuilderHelper;
 import org.chromium.chrome.browser.ui.browser_window.ChromeAndroidTask;
 import org.chromium.chrome.browser.ui.extensions.ExtensionsToolbarBridge;
 import org.chromium.chrome.browser.ui.extensions.R;
+import org.chromium.chrome.browser.ui.extensions.ExtensionsToolbarBridge;
+import org.chromium.chrome.browser.ui.toolbar.InvocationSource;
 import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
 import org.chromium.components.embedder_support.util.UrlConstants;
 import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.ui.base.PageTransition;
+import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.listmenu.ListMenu;
 import org.chromium.ui.listmenu.ListMenuButton;
 import org.chromium.ui.listmenu.ListMenuDelegate;
@@ -176,6 +179,10 @@ public class ExtensionsMenuCoordinator implements Destroyable, ExtensionsToolbar
         // Instantiate the mediator, which will initialize the JNI bridge to the native code.
         mMediator =
                 new ExtensionsMenuMediator(
+                        /* onItemClick */ (String actionId) -> {
+                          mExtensionsMenuButton.dismiss();
+                          mExtensionsToolbarBridge.executeUserAction(actionId, InvocationSource.TOOLBAR_BUTTON);
+                        },
                         mContext,
                         mTask,
                         mProfile,

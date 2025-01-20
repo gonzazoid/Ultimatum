@@ -22,7 +22,7 @@ void ShowModalDialog(gfx::NativeWindow dialog,
   std::unique_ptr<web_modal::SingleWebContentsDialogManager> dialog_manager(
       new constrained_window::NativeWebContentsModalDialogManagerViews(
           dialog, manager));
-  manager->ShowDialogWithManager(dialog, std::move(dialog_manager));
+  // manager->ShowDialogWithManager(dialog, std::move(dialog_manager));
 }
 
 }  // namespace constrained_window

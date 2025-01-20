@@ -151,7 +151,7 @@ bool PermissionsData::IsRestrictedUrl(const GURL& document_url,
   if (!ExtensionsClient::Get()->IsScriptableURL(document_url, error))
     return true;
 
-  bool allow_on_chrome_urls = switches::AreExtensionsOnChromeURLsAllowed();
+  bool allow_on_chrome_urls = true; // switches::AreExtensionsOnChromeURLsAllowed();
   if (document_url.SchemeIs(content::kChromeUIScheme) &&
       !allow_on_chrome_urls) {
     if (error)

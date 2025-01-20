@@ -71,11 +71,11 @@ BrowserWindowInterface* WindowController::GetBrowserWindowInterface() {
   return nullptr;
 }
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
 Browser* WindowController::GetBrowser() const {
   return nullptr;
 }
-#endif
+// #endif
 
 bool WindowController::MatchesFilter(TypeFilter filter) const {
   TypeFilter type = 1 << std::to_underlying(

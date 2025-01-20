@@ -66,8 +66,15 @@
 #include "url/url_constants.h"
 
 #if BUILDFLAG(IS_ANDROID)
+#include "base/types/expected_macros.h"
 #include "chrome/browser/ui/android/tab_model/tab_model.h"
 #include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+#include "extensions/common/manifest_handlers/incognito_info.h"
+// #include "chrome/browser/ui/browser.h"                   // nogncheck
+#include "chrome/browser/ui/browser_finder.h"            // nogncheck
+// #include "chrome/browser/ui/browser_window.h"            // nogncheck
+#include "chrome/browser/renderer_host/chrome_navigation_ui_data.h"
+#include "chrome/browser/ui/tabs/tab_utils.h"        // nogncheck
 #else
 #include "chrome/browser/resource_coordinator/tab_lifecycle_unit_external.h"
 #include "chrome/browser/ui/browser.h"                             // nogncheck
@@ -360,7 +367,18 @@ api::tabs::Tab ExtensionTabUtil::CreateTabObject(
   tabs::TabInterface* tab_interface =
       tab_list ? tab_list->GetTab(tab_index) : nullptr;
 
+#if BUILDFLAG(IS_ANDROID)
+  WebContents* active_contents = nullptr;
+  for (TabModel* model : TabModelList::models()) {
+    if (model->IsActiveModel()) {
+      active_contents = model->GetActiveWebContents();
+      break;
+    }
+  }
+  bool is_active = contents == active_contents;
+#else
   bool is_active = tab_interface && tab_interface->IsActivated();
+#endif
   tab_object.active = is_active;
   tab_object.selected = is_active;
   tab_object.highlighted = tab_interface && tab_interface->IsSelected();
@@ -774,6 +792,58 @@ bool ExtensionTabUtil::SupportsTabGroups(BrowserWindowInterface* browser) {
   return browser->GetTabStripModel()->SupportsTabGroups();
 #endif
 }
+
+#if BUILDFLAG(IS_ANDROID)
+bool ExtensionTabUtil::GetGroupByIdAndroid(
+    int group_id,
+    bool include_incognito,
+    tab_groups::TabGroupId* out_id,
+    TabModel** out_tab_model,
+    tab_groups::TabGroupVisualData* out_visual_data,
+    std::string* error) {
+  // Zero output parameters for the error cases.
+  if (out_tab_model) {
+    *out_tab_model = nullptr;
+  }
+  if (out_visual_data) {
+    *out_visual_data = {};
+  }
+
+  if (group_id == -1) {
+    return false;
+  }
+
+  for (TabModel* model : TabModelList::models()) {
+    if (model->IsOffTheRecord() && !include_incognito) {
+      continue;
+    }
+
+    for (tab_groups::TabGroupId target_group : model->ListTabGroups()) {
+      if (ExtensionTabUtil::GetGroupId(target_group) == group_id) {
+        if (out_id) {
+          *out_id = target_group;
+        }
+        if(out_tab_model) {
+          *out_tab_model = model;
+        }
+        if (out_visual_data) {
+          std::optional<tab_groups::TabGroupVisualData> visual_data =
+            model->GetTabGroupVisualData(target_group);
+          if (visual_data.has_value()) {
+            *out_visual_data = visual_data.value();
+          }
+        }
+        return true;
+      }
+    }
+  }
+
+  *error = ErrorUtils::FormatErrorMessage(kGroupNotFoundError,
+                                          base::NumberToString(group_id));
+
+  return false;
+}
+#endif
 
 // static
 bool ExtensionTabUtil::GetGroupById(

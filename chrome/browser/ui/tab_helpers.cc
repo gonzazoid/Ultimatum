@@ -158,6 +158,8 @@
 #include "rlz/buildflags/buildflags.h"
 #include "ui/accessibility/accessibility_features.h"
 
+#include "extensions/browser/view_type_utils.h"  // nogncheck
+
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/android_info.h"
 #include "base/functional/bind.h"
@@ -233,7 +235,8 @@
 #include "components/captive_portal/content/captive_portal_tab_helper.h"
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+#include "chrome/browser/extensions/api/web_navigation/web_navigation_api.h"
 #include "chrome/browser/extensions/app_tab_helper.h"
 #include "chrome/browser/ui/extensions/extension_side_panel_utils.h"
 #include "chrome/browser/web_applications/isolated_web_apps/window_management/window_management_content_setting_observer.h"

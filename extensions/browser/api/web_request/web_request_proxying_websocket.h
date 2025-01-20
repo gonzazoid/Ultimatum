@@ -160,6 +160,8 @@ class WebRequestProxyingWebSocket
   OnHeadersReceivedCallback on_headers_received_callback_;
 
   GURL redirect_url_;
+  extension_web_request_api_helpers::BlockingResponse blocking_response_;
+
   bool is_done_ = false;
   bool has_extra_headers_;
   bool has_security_info_;

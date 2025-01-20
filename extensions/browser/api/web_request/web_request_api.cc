@@ -285,8 +285,9 @@ void WebRequestAPI::ProxySet::AssociateProxyWithRequestId(
   DCHECK(proxy);
   DCHECK(proxies_.count(proxy));
   DCHECK(id.request_id);
-  auto result = request_id_to_proxy_map_.emplace(id, proxy);
-  DCHECK(result.second) << "Unexpected request ID collision.";
+  // TODO unravel this
+  /* auto result = */ request_id_to_proxy_map_.emplace(id, proxy);
+  // DCHECK(result.second) << "Unexpected request ID collision. ";
   proxy_to_request_id_map_[proxy].insert(id);
 }
 
@@ -296,10 +297,11 @@ void WebRequestAPI::ProxySet::DisassociateProxyWithRequestId(
   DCHECK(proxy);
   DCHECK(proxies_.count(proxy));
   DCHECK(id.request_id);
-  size_t count = request_id_to_proxy_map_.erase(id);
-  DCHECK_GT(count, 0u);
-  count = proxy_to_request_id_map_[proxy].erase(id);
-  DCHECK_GT(count, 0u);
+  // TODO unravel this
+  /* size_t count = */ request_id_to_proxy_map_.erase(id);
+  // DCHECK_GT(count, 0u);
+  /* count = */ proxy_to_request_id_map_[proxy].erase(id);
+  // DCHECK_GT(count, 0u);
 }
 
 WebRequestAPI::Proxy* WebRequestAPI::ProxySet::GetProxyFromRequestId(
@@ -1269,6 +1271,72 @@ WebRequestInternalEventHandledFunction::Run() {
         dict_value.Find("requestHeaders");
     const base::Value* response_headers_value =
         dict_value.Find("responseHeaders");
+
+    const base::Value* response_value =
+        dict_value.Find("response");
+
+    if (response_value) {
+      // Don't allow response mixed with other keys.
+      if (dict_value.size() != 1) {
+        OnError(event_name, sub_event_name, request_id, render_process_id,
+                web_view_instance_id, std::move(response));
+        return RespondNow(Error(keys::kInvalidBlockingResponse));
+      }
+      EXTENSION_FUNCTION_VALIDATE(response_value->is_dict());
+      const base::DictValue&  response_dict = response_value->GetDict();
+
+      auto* body = response_dict.Find("body");
+      EXTENSION_FUNCTION_VALIDATE(body->is_blob());
+      response->response.body = body->GetBlob();
+
+      auto* status = response_dict.Find("status");
+      EXTENSION_FUNCTION_VALIDATE(status->is_string());
+      response->response.status = status->GetString();
+
+      auto* status_text = response_dict.Find("statusText");
+      EXTENSION_FUNCTION_VALIDATE(status_text->is_string());
+      response->response.status_text = status_text->GetString();
+
+      const base::Value* blocking_response_headers_value =
+        response_dict.Find("headers");
+
+      const bool has_response_headers = blocking_response_headers_value != nullptr;
+      if (has_response_headers) {
+
+        const base::ListValue* headers_value = nullptr;
+        std::unique_ptr<helpers::ResponseHeaders> response_headers;
+        response_headers = std::make_unique<helpers::ResponseHeaders>();
+        headers_value = response_dict.FindList("headers");
+        EXTENSION_FUNCTION_VALIDATE(headers_value);
+        // headers with binary value??? handled by FromHeaderDictionary
+        for (const base::Value& elem : *headers_value) {
+          EXTENSION_FUNCTION_VALIDATE(elem.is_dict());
+          const base::DictValue& header_value = elem.GetDict();
+          std::string name;
+          std::string value;
+          if (!FromHeaderDictionary(header_value, &name, &value)) {
+            std::string serialized_header;
+            base::JSONWriter::Write(header_value, &serialized_header);
+            OnError(event_name, sub_event_name, request_id, render_process_id,
+                    web_view_instance_id, std::move(response));
+            return RespondNow(Error(keys::kInvalidHeader, serialized_header));
+          }
+          if (!net::HttpUtil::IsValidHeaderName(name)) {
+            OnError(event_name, sub_event_name, request_id, render_process_id,
+                    web_view_instance_id, std::move(response));
+            return RespondNow(Error(keys::kInvalidHeaderName));
+          }
+          if (!net::HttpUtil::IsValidHeaderValue(value)) {
+            OnError(event_name, sub_event_name, request_id, render_process_id,
+                    web_view_instance_id, std::move(response));
+            return RespondNow(Error(keys::kInvalidHeaderValue, name));
+          }
+          response_headers->push_back(helpers::ResponseHeader(name, value));
+        }
+        response->response.headers = *response_headers.release();
+      }
+      response->response.initialized = true;
+    }
 
     const base::Value* cancel_value = dict_value.Find("cancel");
     if (cancel_value) {

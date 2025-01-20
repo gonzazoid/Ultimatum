@@ -45,7 +45,7 @@
 #include "chrome/browser/ui/webui/management/management_ui_constants.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
-#include "chrome/browser/web_applications/web_app_registrar.h"
+// #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "chrome/browser/web_applications/web_app_utils.h"
 #include "chrome/common/pref_names.h"
 #include "components/content_settings/core/common/content_settings_pattern.h"
@@ -559,30 +559,30 @@ base::ListValue ManagementUIHandler::GetApplicationsInfo(
     return applications;
   }
 
-  auto& registrar = provider->registrar_unsafe();
+  // auto& registrar = provider->registrar_unsafe();
 
-  for (const webapps::AppId& app_id : registrar.GetAppIds()) {
-    base::ListValue permission_messages;
-    // Display RunOnOsLogin if it is set to autostart by admin policy.
-    web_app::ValueWithPolicy<web_app::RunOnOsLoginMode> policy =
-        registrar.GetAppRunOnOsLoginMode(app_id);
-    if (!policy.user_controllable &&
-        web_app::IsRunOnOsLoginModeEnabledForAutostart(policy.value)) {
-      permission_messages.Append(l10n_util::GetStringUTF16(
-          IDS_MANAGEMENT_APPLICATIONS_RUN_ON_OS_LOGIN));
-    }
+  // for (const webapps::AppId& app_id : registrar.GetAppIds()) {
+  //   base::ListValue permission_messages;
+  //   // Display RunOnOsLogin if it is set to autostart by admin policy.
+  //   web_app::ValueWithPolicy<web_app::RunOnOsLoginMode> policy =
+  //       registrar.GetAppRunOnOsLoginMode(app_id);
+  //   if (!policy.user_controllable &&
+  //       web_app::IsRunOnOsLoginModeEnabledForAutostart(policy.value)) {
+  //     permission_messages.Append(l10n_util::GetStringUTF16(
+  //         IDS_MANAGEMENT_APPLICATIONS_RUN_ON_OS_LOGIN));
+  //   }
 
-    if (!permission_messages.empty()) {
-      base::DictValue app_info;
-      app_info.Set("name", registrar.GetAppShortName(app_id));
-      // We try to match the same icon size as used for the extensions
-      GURL icon = apps::AppIconSource::GetIconURL(
-          app_id, extension_misc::EXTENSION_ICON_SMALLISH);
-      app_info.Set("icon", icon.spec());
-      app_info.Set("permissions", std::move(permission_messages));
-      applications.Append(std::move(app_info));
-    }
-  }
+  //   if (!permission_messages.empty()) {
+  //     base::DictValue app_info;
+  //     app_info.Set("name", registrar.GetAppShortName(app_id));
+  //     // We try to match the same icon size as used for the extensions
+  //     GURL icon = apps::AppIconSource::GetIconURL(
+  //         app_id, extension_misc::EXTENSION_ICON_SMALLISH);
+  //     app_info.Set("icon", icon.spec());
+  //     app_info.Set("permissions", std::move(permission_messages));
+  //     applications.Append(std::move(app_info));
+  //   }
+  // }
 
   return applications;
 }

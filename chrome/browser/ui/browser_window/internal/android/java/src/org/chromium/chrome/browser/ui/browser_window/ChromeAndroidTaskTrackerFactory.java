@@ -20,12 +20,12 @@ public final class ChromeAndroidTaskTrackerFactory {
      */
     @Nullable
     public static ChromeAndroidTaskTracker getInstance() {
-        if (BuildConfig.IS_DESKTOP_ANDROID) {
+        // if (BuildConfig.IS_DESKTOP_ANDROID) {
             return ChromeAndroidTaskTrackerImpl.getInstance();
-        }
+        // }
 
-        return ChromeFeatureList.sBrowserWindowInterfaceMobile.isEnabled()
-                ? ChromeAndroidTaskTrackerImpl.getInstance()
-                : null;
+        // return ChromeFeatureList.sBrowserWindowInterfaceMobile.isEnabled()
+        //         ? ChromeAndroidTaskTrackerImpl.getInstance()
+        //         : null;
     }
 }

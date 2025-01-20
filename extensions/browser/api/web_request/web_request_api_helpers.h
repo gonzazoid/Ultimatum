@@ -179,6 +179,26 @@ struct IgnoredAction {
 
 using IgnoredActions = std::vector<IgnoredAction>;
 
+struct BlockingResponse {
+  BlockingResponse();
+  BlockingResponse(const BlockingResponse&) = delete;
+  BlockingResponse(BlockingResponse&& other);
+  BlockingResponse& operator=(const BlockingResponse&);
+  BlockingResponse& operator=(BlockingResponse&& other);
+  ~BlockingResponse();
+
+  bool operator==(const BlockingResponse& other) const;
+
+  BlockingResponse Clone() const;
+  bool empty() const;
+
+  base::Value::BlobStorage body;
+  ResponseHeaders headers;
+  std::string status;
+  std::string status_text;
+  bool initialized = false;
+};
+
 // Internal representation of the extraInfoSpec parameter on webRequest
 // events, used to specify extra information to be included with network
 // events.
@@ -333,6 +353,7 @@ struct EventResponseDelta {
   // Response values. These are mutually exclusive.
   bool cancel;
   GURL new_url;
+  BlockingResponse new_response;
 
   // Newly introduced or overridden request headers.
   net::HttpRequestHeaders modified_request_headers;
@@ -386,6 +407,7 @@ EventResponseDelta CalculateOnBeforeRequestDelta(
     const extensions::ExtensionId& extension_id,
     const base::Time& extension_install_time,
     bool cancel,
+    BlockingResponse& response,
     const GURL& new_url);
 EventResponseDelta CalculateOnBeforeSendHeadersDelta(
     content::BrowserContext* browser_context,
@@ -419,6 +441,7 @@ EventResponseDelta CalculateOnAuthRequiredDelta(
 // request, std::nullopt if none did, the extension id otherwise.
 void MergeCancelOfResponses(
     const EventResponseDeltas& deltas,
+    std::optional<extensions::ExtensionId>* finished_by_extension,
     std::optional<extensions::ExtensionId>* canceled_by_extension);
 // Stores in |*new_url| the redirect request of the extension with highest
 // precedence. Extensions that did not command to redirect the request are
@@ -427,6 +450,7 @@ void MergeRedirectUrlOfResponses(
     const GURL& url,
     const EventResponseDeltas& deltas,
     GURL* new_url,
+    BlockingResponse* new_response,
     std::optional<extensions::ExtensionId>* extension_id,
     IgnoredActions* ignored_actions);
 // Stores in |*new_url| the redirect request of the extension with highest
@@ -436,6 +460,7 @@ void MergeOnBeforeRequestResponses(
     const GURL& url,
     const EventResponseDeltas& deltas,
     GURL* new_url,
+    BlockingResponse* response,
     std::optional<extensions::ExtensionId>* extension_id,
     IgnoredActions* ignored_actions);
 // Modifies the "Cookie" header in `request_headers` according to

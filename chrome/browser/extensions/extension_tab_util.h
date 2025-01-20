@@ -23,6 +23,11 @@
 #include "extensions/common/mojom/context_type.mojom-forward.h"
 #include "ui/base/window_open_disposition.h"
 
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/android/tab_android.h"
+#endif
+
 static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 class BrowserWindowInterface;
@@ -198,6 +203,15 @@ class ExtensionTabUtil {
   // Chrome Apps, etc.).
   static bool SupportsTabGroups(BrowserWindowInterface* browser);
 
+#if BUILDFLAG(IS_ANDROID)
+  static bool GetGroupByIdAndroid(
+    int group_id,
+    bool include_incognito,
+    tab_groups::TabGroupId* out_id,
+    TabModel** out_tab_model,
+    tab_groups::TabGroupVisualData* out_visual_data,
+    std::string* error);
+#endif
   // Gets the metadata for the group with ID `group_id`. Sets the `error` if not
   // found. `out_window`, `out_id`, or `out_visual_data` may be nullptr and will
   // not be set within the function if so.

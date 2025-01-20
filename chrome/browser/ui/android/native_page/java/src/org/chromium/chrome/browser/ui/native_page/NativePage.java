@@ -269,8 +269,8 @@ public interface NativePage {
 
         if (UrlConstants.NTP_HOST.equals(host)) {
             return NativePageType.NTP;
-        } else if (UrlConstants.BOOKMARKS_HOST.equals(host)) {
-            return NativePageType.BOOKMARKS;
+        /* } else if (UrlConstants.BOOKMARKS_HOST.equals(host)) {
+            return NativePageType.BOOKMARKS; */
         } else if (UrlConstants.DOWNLOADS_HOST.equals(host)) {
             return NativePageType.DOWNLOADS;
         } else if (UrlConstants.HISTORY_HOST.equals(host)) {

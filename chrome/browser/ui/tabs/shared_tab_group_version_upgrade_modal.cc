@@ -8,7 +8,9 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/tab_group_sync/tab_group_sync_service_factory.h"
+#if !BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/ui/browser.h"
+#endif
 #include "chrome/browser/ui/browser_navigator.h"
 #include "chrome/browser/ui/browser_navigator_params.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
@@ -33,16 +35,18 @@ class SharedTabGroupVersionDialogDelegate : public ui::DialogModelDelegate {
 
   // Called when the "Update Chrome" button is clicked.
   void OnUpdateChromeClicked() {
+#if !BUILDFLAG(IS_ANDROID)
     NavigateParams params(browser_, GURL("chrome://settings/help"),
                           ui::PAGE_TRANSITION_LINK);
     params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
     Navigate(&params);
+#endif
   }
 
  private:
   raw_ptr<Browser> browser_;
 };
-
+#if !BUILDFLAG(IS_ANDROID)
 void ShowSharedTabGroupVersionOutOfDateModal(
     base::WeakPtr<Browser> browser,
     tab_groups::VersioningMessageController* versioning_message_controller,
@@ -101,10 +105,12 @@ void ShowSharedTabGroupVersionUpToDateToast(
             VERSION_UPDATED_MESSAGE);
   }
 }
+#endif
 
 }  // anonymous namespace
 
 void MaybeShowSharedTabGroupVersionOutOfDateModal(Browser* browser) {
+#if !BUILDFLAG(IS_ANDROID)
   // Only show on normal browser.
   if (!browser || !browser->is_type_normal()) {
     return;
@@ -127,9 +133,11 @@ void MaybeShowSharedTabGroupVersionOutOfDateModal(Browser* browser) {
           VERSION_OUT_OF_DATE_INSTANT_MESSAGE,
       base::BindOnce(&ShowSharedTabGroupVersionOutOfDateModal,
                      browser->AsWeakPtr(), versioning_message_controller));
+#endif
 }
 
 void MaybeShowSharedTabGroupVersionUpToDateToast(Browser* browser) {
+#if !BUILDFLAG(IS_ANDROID)
   // Only show on normal browser.
   if (!browser || !browser->is_type_normal()) {
     return;
@@ -152,6 +160,7 @@ void MaybeShowSharedTabGroupVersionUpToDateToast(Browser* browser) {
           VERSION_UPDATED_MESSAGE,
       base::BindOnce(&ShowSharedTabGroupVersionUpToDateToast,
                      browser->AsWeakPtr(), versioning_message_controller));
+#endif
 }
 
 }  // namespace tab_groups

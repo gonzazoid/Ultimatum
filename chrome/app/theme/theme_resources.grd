@@ -79,7 +79,7 @@
       <if expr="is_win">
         <structure type="chrome_scaled_image" name="IDR_BOOKMARK_BAR_FOLDER_MANAGED" file="win/bookmark_bar_folder_managed.png" />
       </if>
-      <if expr="not is_android">
+      <if expr="not is_android or is_android">
         <structure type="chrome_scaled_image" name="IDR_BOOKMARK_BAR_APPS_SHORTCUT" file="common/apps_bookmark_bar_icon.png" />
         <structure type="chrome_scaled_image" name="IDR_BOOKMARKS_FAVICON" file="common/favicon_bookmarks.png" />
       </if>
@@ -123,9 +123,9 @@
       <structure type="chrome_scaled_image" name="IDR_INCOGNITO_WHITE_CIRCLE" file="common/incognito_white_circle.png" />
       <structure type="chrome_scaled_image" name="IDR_INPUT_ALERT" file="common/input_alert.png" />
       <structure type="chrome_scaled_image" name="IDR_INPUT_ALERT_MENU" file="common/input_alert_menu.png" />
+      <structure type="chrome_scaled_image" name="IDR_MANAGEMENT_FAVICON" file="common/favicon_management.png" />
       <if expr="not is_android">
         <structure type="chrome_scaled_image" name="IDR_IWA_INSTALL_SUCCESS" file="common/iwa_install_success.png" />
-        <structure type="chrome_scaled_image" name="IDR_MANAGEMENT_FAVICON" file="common/favicon_management.png" />
         <structure type="chrome_scaled_image" name="IDR_MAXIMIZE_BUTTON_MASK" file="common/maximize_button_mask.png" />
         <structure type="chrome_scaled_image" name="IDR_MINIMIZE_BUTTON_MASK" file="common/minimize_button_mask.png" />
       </if>
@@ -308,7 +308,7 @@
         <structure type="chrome_scaled_image" name="IDR_AUTOFILL_MANDATORY_REAUTH_CONFIRMATION" file="common/autofill_mandatory_reauth_confirmation.png" />
       </if>
       <structure type="chrome_scaled_image" name="IDR_SCREEN_CAPTURE_NOTIFICATION_GRIP" file="screen_capture_notification_grip.png" />
-      <if expr="not is_android">
+      <if expr="not is_android or is_android">
         <structure type="chrome_scaled_image" name="IDR_SETTINGS_FAVICON" file="common/favicon_settings.png" />
         <if expr="_google_chrome">
             <structure type="chrome_scaled_image" name="IDR_SHARED_TAB_GROUPS_DARK" file="${branding_path_component}/shared_tab_groups_dark.png" />
@@ -381,13 +381,13 @@
         <structure type="chrome_scaled_image" name="IDR_UPLOAD_VIOLATION_DARK" file="common/upload_violation_dark.png" />
       </if>
       <if expr="not _google_chrome">
-        <if expr="not is_android or is_desktop_android">
+        <!-- if expr="not is_android or is_desktop_android" -->
           <!-- Desktop Android supports extensions and the web store. -->
           <structure type="chrome_scaled_image" name="IDR_WEBSTORE_ICON" file="chromium/webstore_icon.png" />
           <structure type="chrome_scaled_image" name="IDR_WEBSTORE_ICON_16" file="chromium/webstore_icon_16.png" />
           <structure type="chrome_scaled_image" name="IDR_WEBSTORE_ICON_24" file="chromium/webstore_icon_24.png" />
           <structure type="chrome_scaled_image" name="IDR_WEBSTORE_ICON_32" file="chromium/webstore_icon_32.png" />
-        </if>
+        <!-- /if -->
       </if>
       <if expr="_google_chrome">
         <if expr="not is_android or is_desktop_android">

@@ -103,6 +103,7 @@ TabHelper::TabHelper(content::WebContents* web_contents)
   registry_observation_.Observe(
       ExtensionRegistry::Get(web_contents->GetBrowserContext()));
 
+// TODO
 #if !BUILDFLAG(IS_ANDROID)
   // The Android bookmark manager is native UI, not web UI, so this event router
   // isn't needed on desktop Android.

@@ -8,6 +8,7 @@
 #include "third_party/blink/public/mojom/scroll/scrollbar_mode.mojom-blink.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
+#include "third_party/blink/renderer/core/frame/location.h"
 #include "third_party/blink/renderer/core/layout/layout_box.h"
 #include "third_party/blink/renderer/core/layout/layout_view.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
@@ -131,11 +132,24 @@ bool FrameViewAutoSizeInfo::AutoSizeIfNeeded() {
       size.width() <= max_auto_size_.width() &&
       !frame_view_->GetFrame().GetDocument()->LoadEventFinished() &&
       (new_size.height() < size.height() || new_size.width() < size.width())) {
+    // LOG(INFO) << "DO NOT CHANGE SIZE!!!";
     change_size = false;
   }
 
-  if (change_size)
-    frame_view_->Resize(new_size.width(), new_size.height());
+  if (change_size) {
+    if (document->location()->protocol() == "chrome-extension:") {
+      // LOG(INFO) << "RESIZE width: " << new_size.width() << " height: " << new_size.height();
+      if ((new_size.width() > size.width()) || (new_size.height() > size.height())) {
+        // LOG(INFO) << "frame_view_->GetFrame().GetDocument()->LoadEventFinished() " << frame_view_->GetFrame().GetDocument()->LoadEventFinished();
+        // LOG(INFO) << "running_first_autosize_ " << running_first_autosize_;
+        // LOG(INFO) << "max_auto_size_.height() " << max_auto_size_.height();
+        // LOG(INFO) << "max_auto_size_.width() " << max_auto_size_.width();
+        frame_view_->Resize(new_size.width(), new_size.height());
+      }
+    } else {
+      frame_view_->Resize(new_size.width(), new_size.height());
+    }
+  }
 
   // Force the scrollbar state to avoid the scrollbar code adding them and
   // causing them to be needed. For example, a vertical scrollbar may cause

@@ -55,9 +55,9 @@ bool IncognitoHandler::Parse(Extension* extension, std::u16string* error) {
   if (mode == api::incognito::IncognitoMode::kNone) {
     // Extensions and Chrome apps default to spanning mode. Hosted and legacy
     // packaged apps default to split mode.
-    mode = extension->is_hosted_app() || extension->is_legacy_packaged_app()
-               ? api::incognito::IncognitoMode::kSplit
-               : api::incognito::IncognitoMode::kSpanning;
+    mode = api::incognito::IncognitoMode::kSpanning; // extension->is_hosted_app() || extension->is_legacy_packaged_app()
+    //            ? api::incognito::IncognitoMode::kSplit
+    //            : api::incognito::IncognitoMode::kSpanning;
   }
 
   extension->SetManifestData(IncognitoManifestKeys::kIncognito,

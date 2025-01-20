@@ -20,8 +20,9 @@ public class DevToolsWindowAndroid {
     private DevToolsWindowAndroid() {}
 
     public static boolean isDevToolsAllowedFor(Profile profile, WebContents webContents) {
-        return ContentFeatureMap.isEnabled(ContentFeatureList.ANDROID_DEV_TOOLS_FRONTEND)
-                && DevToolsWindowAndroidJni.get().isDevToolsAllowedFor(profile, webContents);
+        // TODO dig deeper
+        return true; /* ContentFeatureMap.isEnabled(ContentFeatureList.ANDROID_DEV_TOOLS_FRONTEND)
+                && DevToolsWindowAndroidJni.get().isDevToolsAllowedFor(profile, webContents); */
     }
 
     public static boolean canViewSource(Profile profile, WebContents webContents) {

@@ -38,6 +38,12 @@ GURL FilePathToFileURL(const base::FilePath& path) {
   std::string utf8_path = path.AsUTF8Unsafe();
   url_string.reserve(url_string.size() + (3 * utf8_path.size()));
 
+#if BUILDFLAG(IS_ANDROID)
+  if (path.IsContentUri()) {
+    url_string += utf8_path;
+  } else {
+#endif
+
   for (auto c : utf8_path) {
     if (c == '%' || c == ';' || c == '#' || c == '?' ||
 #if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
@@ -50,6 +56,10 @@ GURL FilePathToFileURL(const base::FilePath& path) {
       url_string += c;
     }
   }
+
+#if BUILDFLAG(IS_ANDROID)
+  }
+#endif
 
   return GURL(url_string);
 }
@@ -95,6 +105,13 @@ bool FileURLToFilePath(const GURL& url, base::FilePath* file_path) {
     return false;
   }
   std::string path = url.GetPath();
+#if BUILDFLAG(IS_ANDROID)
+  if (path.length() > 11 && path.substr(0, 11) == "/content://") {
+    path = path.substr(1);
+    *file_path = base::FilePath(path);
+    return true;
+  }
+#endif
 #endif  // !BUILDFLAG(IS_WIN)
 
   if (path.empty())

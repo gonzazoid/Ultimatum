@@ -67,6 +67,8 @@
 #include "extensions/common/manifest_url_handlers.h"
 #include "ui/message_center/public/cpp/notifier_id.h"
 
+#include "chrome/browser/extensions/sync/extension_sync_service.h"
+
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "chrome/browser/extensions/chrome_app_sorting.h"
 #else
@@ -365,7 +367,7 @@ QuotaService* ChromeExtensionSystem::Shared::quota_service() {
 }
 
 AppSorting* ChromeExtensionSystem::Shared::app_sorting() {
-  return app_sorting_.get();
+  return nullptr; // app_sorting_.get();
 }
 
 ContentVerifier* ChromeExtensionSystem::Shared::content_verifier() {

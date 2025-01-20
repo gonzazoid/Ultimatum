@@ -76,6 +76,7 @@ public class ExtensionToolbarCoordinatorImpl implements ExtensionToolbarCoordina
                         context,
                         mContainer.findViewById(R.id.extension_action_list),
                         windowAndroid,
+                        mContainer.findViewById(R.id.extensions_menu_button),
                         task,
                         profile,
                         currentTabSupplier,

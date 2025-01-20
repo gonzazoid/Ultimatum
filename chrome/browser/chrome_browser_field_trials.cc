@@ -252,12 +252,13 @@ void ChromeBrowserFieldTrials::RegisterFeatureOverrides(
   feature_overrides.EnableFeature(features::kWebContentsDiscard);
   feature_overrides.EnableFeature(features::kLazyBrowserInterfaceBroker);
   feature_overrides.EnableFeature(chrome::android::kLoadAllTabsAtStartup);
-
+#endif
   // Enable the ability for extensions to override chrome pages.
   // TODO(crbug.com/404069963): Remove flag when the feature is verified to be
   // stable on desktop Android.
   feature_overrides.EnableFeature(chrome::android::kChromeNativeUrlOverriding);
 
+#if BUILDFLAG(IS_DESKTOP_ANDROID)
   // Enable desktop full screen to a screen feature flag by default for desktop
   // platforms.
   // TODO(crbug.com/417426218) Remove once feature is launched to 100% on all

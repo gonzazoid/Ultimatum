@@ -43,6 +43,9 @@
 #include "components/tab_groups/tab_group_visual_data.h"
 #include "components/tabs/public/tab_interface.h"
 #include "content/public/browser/render_frame_host.h"
+// #include "chrome/browser/ui/browser_window/internal/android/android_browser_window.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_features.h"
 #include "content/public/common/resource_request_body_android.h"
@@ -381,6 +384,29 @@ WebContents* TabModelJniBridge::GetWebContentsAt(int index) const {
   TabAndroid* tab = GetTabAt(index);
   return tab == nullptr ? nullptr : tab->web_contents();
 }
+
+bool TabModelJniBridge::AddTabsToTabGroup(std::vector<int> indices, int destination) const {
+  JNIEnv* env = base::android::AttachCurrentThread();
+
+  ScopedJavaLocalRef<jintArray> java_array =
+    base::android::ToJavaIntArray(env, indices);
+
+  return Java_TabModelJniBridge_addTabsToTabGroup(env, java_object_.get(env), java_array, destination);
+}
+
+// tab_groups::TabGroupId TabModelJniBridge::CreateTabGroup(std::vector<int> indices) const {
+//   JNIEnv* env = base::android::AttachCurrentThread();
+
+//   ScopedJavaLocalRef<jintArray> java_array =
+//     base::android::ToJavaIntArray(env, indices);
+
+//   auto java_token = Java_TabModelJniBridge_createTabGroup(env, java_object_.get(env), java_array);
+//   if (java_token) {
+//     base::Token token = base::android::TokenAndroid::FromJavaToken(env, java_token);
+//     return tab_groups::TabGroupId::FromRawToken(token);
+//   }
+//   return tab_groups::TabGroupId::CreateEmpty();
+// }
 
 TabAndroid* TabModelJniBridge::GetTabAt(int index) const {
   JNIEnv* env = AttachCurrentThread();
@@ -725,9 +751,10 @@ std::optional<tab_groups::TabGroupId> TabModelJniBridge::CreateTabGroup(
   JNIEnv* env = AttachCurrentThread();
   ScopedJavaLocalRef<jobject> jobj = java_object_.get(env);
   std::vector<TabAndroid*> tabs_to_add = GetAllTabsFromHandles(tabs);
-  std::optional<base::Token> group_id_token =
-      Java_TabModelJniBridge_createTabGroup(env, jobj, tabs_to_add);
-  return tab_groups::TabGroupId::FromOptionalToken(group_id_token);
+  // std::optional<base::Token> group_id_token =
+  //     Java_TabModelJniBridge_createTabGroup(env, jobj, tabs_to_add);
+  // return tab_groups::TabGroupId::FromOptionalToken(group_id_token);
+  return std::nullopt;
 }
 
 void TabModelJniBridge::SetTabGroupVisualData(

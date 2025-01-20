@@ -156,8 +156,10 @@ class TabModel final : public TabInterface,
       TabInterfaceCallback callback) override;
 
   bool IsInNormalWindow() const override;
+// #if !BUILDFLAG(IS_ANDROID)
   BrowserWindowInterface* GetBrowserWindowInterface() override;
   const BrowserWindowInterface* GetBrowserWindowInterface() const override;
+// #endif
   tabs::TabFeatures* GetTabFeatures() override;
   const tabs::TabFeatures* GetTabFeatures() const override;
   bool IsPinned() const override;

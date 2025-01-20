@@ -183,6 +183,8 @@
 #include "chrome/browser/ui/webui/chrome_web_ui_controller_factory.h"
 #include "chrome/browser/ui/webui/internal_debug_pages_disabled/internal_debug_pages_disabled_ui.h"
 #include "chrome/browser/ui/webui/log_web_ui_url.h"
+#include "chrome/browser/ui/webui/theme_source.h"
+// #include "chrome/browser/ui/webui/top_chrome/webui_url_utils.h"
 #include "chrome/browser/universal_web_contents_observers.h"
 #include "chrome/browser/usb/chrome_usb_delegate.h"
 #include "chrome/browser/vr/vr_tab_helper.h"
@@ -350,6 +352,7 @@
 #include "content/public/browser/web_contents_view_delegate.h"
 #include "content/public/browser/web_ui_url_loader_factory.h"
 #include "content/public/browser/webui_config_map.h"
+#include "content/public/browser/url_data_source.h"
 #include "content/public/common/buildflags.h"
 #include "content/public/common/content_descriptors.h"
 #include "content/public/common/content_features.h"
@@ -6308,9 +6311,10 @@ void AddChromeSchemeFactories(
     content::WebContents* web_contents,
     const extensions::Extension* extension,
     ChromeContentBrowserClient::NonNetworkURLLoaderFactoryMap* factories) {
-#if BUILDFLAG(ENABLE_EXTENSIONS)
   Profile* profile =
       Profile::FromBrowserContext(web_contents->GetBrowserContext());
+  content::URLDataSource::Add(profile, std::make_unique<ThemeSource>(profile));
+#if BUILDFLAG(ENABLE_EXTENSIONS)
   InstantService* instant_service =
       InstantServiceFactory::GetForProfile(profile);
   // The test below matches when a remote 3P NTP is loaded. The effective
@@ -6382,7 +6386,19 @@ void ChromeContentBrowserClient::
   WebContents* web_contents = WebContents::FromRenderFrameHost(frame_host);
 #endif  // BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(ENABLE_EXTENSIONS_CORE) || \
         // !BUILDFLAG(IS_ANDROID)
-
+#if BUILDFLAG(IS_ANDROID)
+  web_contents = nullptr;
+  for (TabModel* model : TabModelList::models()) {
+    if (model->IsActiveModel()) {
+      web_contents = model->GetActiveWebContents();
+      break;
+    }
+  }
+  frame_host = nullptr;
+  if (web_contents) {
+    frame_host = web_contents->GetPrimaryMainFrame();
+  }
+#endif
 #if BUILDFLAG(IS_CHROMEOS)
   if (web_contents) {
     Profile* profile =

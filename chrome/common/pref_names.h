@@ -1790,12 +1790,11 @@ inline constexpr char kSuppressDifferentOriginSubframeJSDialogs[] =
 // or disabled. Defaults to blink::features::kReduceUserAgent field trial.
 inline constexpr char kUserAgentReduction[] = "user_agent_reduction";
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
 // Boolean determining whether the projects panel entrypoint is displayed in the
 // tab strip.
 inline constexpr char kProjectsPanelEntrypointEnabled[] =
     "projects_panel.entrypoint_enabled";
-
 // Boolean determining the side the side panel will be appear on (left / right).
 // True when the side panel is aligned to the right.
 inline constexpr char kSidePanelHorizontalAlignment[] =
@@ -1840,7 +1839,7 @@ inline constexpr char kVerticalTabsEnabled[] = "vertical_tabs.enabled";
 // used for metrics reporting purposes.
 inline constexpr char kVerticalTabsEnabledFirstTime[] =
     "vertical_tabs.enabled_first_time";
-#endif  // !BUILDFLAG(IS_ANDROID)
+// #endif  // !BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(ENABLE_COMPOSE)
 // Boolean indicating whether or not the Compose FRE has been completed.
@@ -2211,7 +2210,7 @@ inline constexpr char kNtpCustomBackgroundLocalToDeviceId[] =
 inline constexpr char kNtpCustomBackgroundInspiration[] =
     "ntp.custom_background_inspiration";
 
-#if BUILDFLAG(IS_ANDROID)
+// #if BUILDFLAG(IS_ANDROID)
 // Keeps track of recently closed tabs collapsed state in the Other Devices
 // menu.
 inline constexpr char kNtpCollapsedRecentlyClosedTabs[] =
@@ -2223,7 +2222,7 @@ inline constexpr char kNtpCollapsedSnapshotDocument[] =
 
 // Keeps track of sync promo collapsed state in the Other Devices menu.
 inline constexpr char kNtpCollapsedSyncPromo[] = "ntp.collapsed_sync_promo";
-#else
+// #else
 // Name of preference to count of times compose button was shown.
 inline const char kNtpComposeButtonShownCountPrefName[] =
     "ntp.compose_button.shown_count";
@@ -2306,7 +2305,7 @@ inline constexpr char kSeedColorChangeCount[] =
     "colorpicker.SeedColorChangeCount";
 // Whether the NTP footer is visible.
 inline constexpr char kNtpFooterVisible[] = "NewTabPage.FooterVisible";
-#endif  // BUILDFLAG(IS_ANDROID)
+// #endif  // BUILDFLAG(IS_ANDROID)
 
 // A private RSA key for ADB handshake.
 inline constexpr char kDevToolsAdbKey[] = "devtools.adb_key";
@@ -2996,7 +2995,7 @@ inline constexpr char kShowCastIconInToolbar[] =
     "media_router.show_cast_icon_in_toolbar";
 #endif  // !BUILDFLAG(IS_ANDROID)
 
-#if !BUILDFLAG(IS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 // Pref name for the policy controlling the way in which users are notified of
 // the need to relaunch the browser for a pending update.
 inline constexpr char kRelaunchNotification[] = "browser.relaunch_notification";
@@ -3010,12 +3009,12 @@ inline constexpr char kRelaunchNotificationPeriod[] =
 inline constexpr char kRelaunchWindow[] = "browser.relaunch_window";
 #endif  // !BUILDFLAG(IS_ANDROID)
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
 // Pref name for the policy controlling the maximum age of a build before
 // forcing a fast relaunch.
 inline constexpr char kRelaunchFastIfOutdated[] =
     "browser.relaunch_fast_if_outdated";
-#endif  // !BUILDFLAG(IS_ANDROID)
+// #endif  // !BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_CHROMEOS)
 // Pref name for the policy controlling the time period between the first user
@@ -3129,7 +3128,7 @@ inline constexpr char kHardwareAccelerationModePrevious[] =
 // by the cloud policy subsystem.
 inline constexpr char kDevicePolicyRefreshRate[] = "policy.device_refresh_rate";
 
-#if !BUILDFLAG(IS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 // A boolean where true means that the browser has previously attempted to
 // enable autoupdate and failed, so the next out-of-date browser start should
 // not prompt the user to enable autoupdate, it should offer to reinstall Chrome

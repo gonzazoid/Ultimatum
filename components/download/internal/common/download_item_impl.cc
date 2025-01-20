@@ -1955,7 +1955,6 @@ void DownloadItemImpl::MaybeCompleteDownload() {
 // is ready for completion.
 void DownloadItemImpl::OnDownloadCompleting() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-
   if (state_ != IN_PROGRESS_INTERNAL)
     return;
 
