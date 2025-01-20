@@ -12,7 +12,7 @@
 #include "base/ranges/algorithm.h"
 #include "base/version.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/web_applications/preinstalled_web_apps/preinstalled_web_apps.h"
+// #include "chrome/browser/web_applications/preinstalled_web_apps/preinstalled_web_apps.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/extensions/extension_constants.h"
 #include "content/public/browser/browser_thread.h"
@@ -320,16 +320,16 @@ void PendingExtensionManager::
   if (migrating_default_chrome_app_ids_cache_)
     return;
 
-  std::vector<web_app::PreinstalledWebAppMigration> migrations =
-      web_app::GetPreinstalledWebAppMigrations(
-          *Profile::FromBrowserContext(context_.get()));
+  // std::vector<web_app::PreinstalledWebAppMigration> migrations =
+  //     web_app::GetPreinstalledWebAppMigrations(
+  //         *Profile::FromBrowserContext(context_.get()));
 
-  std::vector<std::string> chrome_app_ids;
-  chrome_app_ids.reserve(migrations.size());
-  for (const web_app::PreinstalledWebAppMigration& migration : migrations)
-    chrome_app_ids.push_back(migration.old_chrome_app_id);
+  // std::vector<std::string> chrome_app_ids;
+  // chrome_app_ids.reserve(migrations.size());
+  // for (const web_app::PreinstalledWebAppMigration& migration : migrations)
+  //   chrome_app_ids.push_back(migration.old_chrome_app_id);
 
-  migrating_default_chrome_app_ids_cache_.emplace(std::move(chrome_app_ids));
+  // migrating_default_chrome_app_ids_cache_.emplace(std::move(chrome_app_ids));
 }
 
 void PendingExtensionManager::AddForTesting(

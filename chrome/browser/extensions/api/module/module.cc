@@ -16,7 +16,7 @@
 #include "extensions/common/constants.h"
 #include "extensions/common/manifest_url_handlers.h"
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "chrome/browser/extensions/extension_management.h"
 #endif
 
@@ -27,7 +27,7 @@ ExtensionFunction::ResponseAction ExtensionSetUpdateUrlDataFunction::Run() {
   EXTENSION_FUNCTION_VALIDATE(args()[0].is_string());
   const std::string& data = args()[0].GetString();
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   // TODO(crbug.com/356905053): Support ExtensionManagement on desktop android.
   ExtensionManagement* extension_management =
       ExtensionManagementFactory::GetForBrowserContext(browser_context());

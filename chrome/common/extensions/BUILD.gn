@@ -26,6 +26,7 @@ source_set("extensions") {
     "sync_helper.h",
     "webstore_install_result.h",
     "webstore_override.h",
+    "api/storage/storage_schema_manifest_handler.h",
   ]
 
   # Files that can only be included from here.
@@ -51,6 +52,7 @@ source_set("extensions") {
     "sync_helper.cc",
     "webstore_install_result.cc",
     "webstore_override.cc",
+    "api/storage/storage_schema_manifest_handler.cc",
   ]
 
   public_deps = [

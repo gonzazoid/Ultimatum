@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_EXTENSIONS_DESKTOP_ANDROID_DESKTOP_ANDROID_EXTENSIONS_BROWSER_CLIENT_H_
 
 #include "extensions/browser/extensions_browser_client.h"
+// #include "chrome/browser/extensions/api/chrome_extensions_api_client.h"
 #include "extensions/buildflags/buildflags.h"
 
 #if !BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
@@ -57,6 +58,10 @@ class DesktopAndroidExtensionsBrowserClient : public ExtensionsBrowserClient {
   DesktopAndroidExtensionsBrowserClient& operator=(
       const DesktopAndroidExtensionsBrowserClient&) = delete;
   ~DesktopAndroidExtensionsBrowserClient() override;
+
+  // Returns the single instance of |this|.
+  static DesktopAndroidExtensionsBrowserClient* Get();
+  void Set(DesktopAndroidExtensionsBrowserClient* client);
 
   // ExtensionsBrowserClient overrides:
   bool IsShuttingDown() override;

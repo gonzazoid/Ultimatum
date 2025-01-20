@@ -61,6 +61,7 @@
 #include "extensions/common/extension_urls.h"
 #include "extensions/common/install_warning.h"
 #include "extensions/common/manifest.h"
+#include "extensions/common/manifest_constants.h"
 #include "extensions/common/manifest_handlers/background_info.h"
 #include "extensions/common/manifest_handlers/icons_handler.h"
 #include "extensions/common/manifest_handlers/offline_enabled_info.h"
@@ -584,10 +585,10 @@ void ExtensionInfoGenerator::CreateExtensionInfoHelper(
     info->blocklist_text = l10n_util::GetStringUTF8(blocklist_text);
   }
 
-  if (extension_system_->extension_service()->allowlist()->ShouldDisplayWarning(
-          extension.id())) {
-    info->show_safe_browsing_allowlist_warning = true;
-  }
+  // if (extension_system_->extension_service()->allowlist()->ShouldDisplayWarning(
+  //         extension.id())) {
+  //   info->show_safe_browsing_allowlist_warning = true;
+  // }
   ExtensionManagement* extension_management =
       ExtensionManagementFactory::GetForBrowserContext(browser_context_);
   Profile* profile = Profile::FromBrowserContext(browser_context_);
@@ -600,9 +601,9 @@ void ExtensionInfoGenerator::CreateExtensionInfoHelper(
         l10n_util::GetStringUTF8(IDS_EXTENSIONS_INSTALL_LOCATION_ENTERPRISE);
   } else {
     // Create Safety Hub information for any non-enterprise extension.
-    developer::SafetyCheckWarningReason warning_reason =
-        ExtensionSafetyCheckUtils::GetSafetyCheckWarningReason(extension,
-                                                               profile);
+    developer::SafetyCheckWarningReason warning_reason = developer::SafetyCheckWarningReason::kNone;
+    //     ExtensionSafetyCheckUtils::GetSafetyCheckWarningReason(extension,
+    //                                                            profile);
     if (warning_reason != developer::SafetyCheckWarningReason::kNone) {
       info->safety_check_warning_reason = warning_reason;
       info->safety_check_text =
@@ -619,17 +620,17 @@ void ExtensionInfoGenerator::CreateExtensionInfoHelper(
 
   // Dependent extensions.
   if (extension.is_shared_module()) {
-    std::unique_ptr<ExtensionSet> dependent_extensions =
-        extension_system_->extension_service()
-            ->shared_module_service()
-            ->GetDependentExtensions(&extension);
-    for (const scoped_refptr<const Extension>& dependent :
-             *dependent_extensions) {
-      developer::DependentExtension dependent_extension;
-      dependent_extension.id = dependent->id();
-      dependent_extension.name = dependent->name();
-      info->dependent_extensions.push_back(std::move(dependent_extension));
-    }
+    // std::unique_ptr<ExtensionSet> dependent_extensions =
+    //     extension_system_->extension_service()
+    //         ->shared_module_service()
+    //         ->GetDependentExtensions(&extension);
+    // for (const scoped_refptr<const Extension>& dependent :
+    //          *dependent_extensions) {
+    //   developer::DependentExtension dependent_extension;
+    //   dependent_extension.id = dependent->id();
+    //   dependent_extension.name = dependent->name();
+    //   info->dependent_extensions.push_back(std::move(dependent_extension));
+    // }
   }
 
   info->description = extension.description();
@@ -700,6 +701,17 @@ void ExtensionInfoGenerator::CreateExtensionInfoHelper(
 
   info->id = extension.id();
 
+  info->popup_url = "";
+  const base::Value::Dict* dict =
+        extension.manifest()->value()->FindDict(manifest_keys::kAction);
+  if (dict) {
+    const base::Value* default_popup = dict->Find(manifest_keys::kActionDefaultPopup);
+    if (default_popup) {
+      const std::string* url_str = default_popup->GetIfString();
+      if (url_str)
+        info->popup_url = "chrome-extension://" + extension.id() + "/" + *url_str;
+    }
+  }
   // Incognito access.
   info->incognito_access.is_enabled = util::CanBeIncognitoEnabled(&extension);
   info->incognito_access.is_active =
@@ -723,7 +735,7 @@ void ExtensionInfoGenerator::CreateExtensionInfoHelper(
   }
 
   // Location.
-  bool updates_from_web_store =
+  bool updates_from_web_store = false;
       extension_management->UpdatesFromWebstore(extension);
   if (extension.location() == mojom::ManifestLocation::kInternal &&
       updates_from_web_store) {
@@ -826,30 +838,30 @@ void ExtensionInfoGenerator::CreateExtensionInfoHelper(
   }
 
   // Show access requests in toolbar.
-  info->show_access_requests_in_toolbar =
-      SitePermissionsHelper(profile).ShowAccessRequestsInToolbar(
-          extension.id());
+  // info->show_access_requests_in_toolbar =
+  //     SitePermissionsHelper(profile).ShowAccessRequestsInToolbar(
+  //         extension.id());
 
   // Pinned to toolbar.
   // TODO(crbug.com/40280426): Currently this information is only shown for
   // enabled extensions as only enabled extensions can have actions. However,
   // this information can be found in prefs, so disabled extensiosn can be
   // included as well.
-  ToolbarActionsModel* toolbar_actions_model =
-      ToolbarActionsModel::Get(profile);
-  if (toolbar_actions_model->HasAction(extension.id())) {
-    info->pinned_to_toolbar =
-        toolbar_actions_model->IsActionPinned(extension.id());
-  }
+  // ToolbarActionsModel* toolbar_actions_model =
+  //     ToolbarActionsModel::Get(profile);
+  // if (toolbar_actions_model->HasAction(extension.id())) {
+  //   info->pinned_to_toolbar =
+  //       toolbar_actions_model->IsActionPinned(extension.id());
+  // }
 
   // MV2 deprecation.
-  ManifestV2ExperimentManager* mv2_experiment_manager =
-      ManifestV2ExperimentManager::Get(profile);
-  CHECK(mv2_experiment_manager);
-  info->is_affected_by_mv2_deprecation =
-      mv2_experiment_manager->IsExtensionAffected(extension);
-  info->did_acknowledge_mv2_deprecation_notice =
-      mv2_experiment_manager->DidUserAcknowledgeNotice(extension.id());
+  // ManifestV2ExperimentManager* mv2_experiment_manager =
+  //     ManifestV2ExperimentManager::Get(profile);
+  // CHECK(mv2_experiment_manager);
+  info->is_affected_by_mv2_deprecation = false;
+  //     mv2_experiment_manager->IsExtensionAffected(extension);
+  info->did_acknowledge_mv2_deprecation_notice = false;
+  //     mv2_experiment_manager->DidUserAcknowledgeNotice(extension.id());
   if (info->web_store_url.length() > 0) {
     info->recommendations_url =
         extension_urls::GetNewWebstoreItemRecommendationsUrl(extension.id())
@@ -859,10 +871,10 @@ void ExtensionInfoGenerator::CreateExtensionInfoHelper(
   // Whether the extension can be uploaded as an account extension.
   // `CanUploadAsAccountExtension` should already check for the feature flag
   // somewhere but add another guard for it here just in case.
-  info->can_upload_as_account_extension =
-      sync_util::IsExtensionsExplicitSigninEnabled() &&
-      AccountExtensionTracker::Get(profile)->CanUploadAsAccountExtension(
-          extension);
+  // info->can_upload_as_account_extension =
+  //     sync_util::IsExtensionsExplicitSigninEnabled() &&
+  //     AccountExtensionTracker::Get(profile)->CanUploadAsAccountExtension(
+  //         extension);
 
   // The icon.
   ExtensionResource icon = IconsInfo::GetIconResource(

@@ -10,7 +10,7 @@
 
 .items-container,
 #content-wrapper {
-  --extensions-card-width: 400px;
+  --extensions-card-width: 95%;
 }
 
 #container {

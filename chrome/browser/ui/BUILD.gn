@@ -764,6 +764,38 @@ static_library("ui") {
     deps += [ "//chrome/browser/enterprise/data_controls" ]
   }
 
+  if (is_android && enable_desktop_android_extensions) {
+    sources += [
+      # "webui/extension_control_handler.cc",
+      # "webui/extension_control_handler.h",
+      "webui/extensions/extensions_internals_source.cc",
+      "webui/extensions/extensions_internals_source.h",
+      "webui/extensions/extensions_ui.cc",
+      "webui/extensions/extensions_ui.h",
+      # "webui/favicon_source.cc",
+      # "webui/favicon_source.h",
+      "webui/managed_ui_handler.cc",
+      "webui/managed_ui_handler.h",
+      "webui/plural_string_handler.cc",
+      "webui/plural_string_handler.h",
+      "webui/extensions/extension_basic_info.cc",
+      "webui/extensions/extension_basic_info.h",
+      "webui/extensions/extension_icon_source.cc",
+      "webui/extensions/extension_icon_source.h",
+      # "browser_navigator.cc",
+      # "browser_navigator.h",
+      "views/extensions/extension_uninstall_dialog_view.cc",
+      "webui/theme_handler.cc",
+      "webui/theme_handler.h",
+      "webui/theme_source.cc",
+      "webui/theme_source.h",
+      "webui/ntp/ntp_resource_cache.cc",
+      "webui/ntp/ntp_resource_cache.h",
+      "webui/ntp/ntp_resource_cache_factory.cc",
+      "webui/ntp/ntp_resource_cache_factory.h",
+    ]
+  }
+
   if (is_android) {
     sources += [
       "android/android_about_app_info.cc",

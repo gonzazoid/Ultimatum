@@ -15,13 +15,13 @@ DesktopAndroidRuntimeApiDelegate::~DesktopAndroidRuntimeApiDelegate() = default;
 void DesktopAndroidRuntimeApiDelegate::AddUpdateObserver(
     UpdateObserver* observer) {
   // TODO(crbug.com/373434594): Support update observation.
-  NOTIMPLEMENTED();
+  // NOTIMPLEMENTED();
 }
 
 void DesktopAndroidRuntimeApiDelegate::RemoveUpdateObserver(
     UpdateObserver* observer) {
   // TODO(crbug.com/373434594): Support update observation.
-  NOTIMPLEMENTED();
+  // NOTIMPLEMENTED();
 }
 
 void DesktopAndroidRuntimeApiDelegate::ReloadExtension(

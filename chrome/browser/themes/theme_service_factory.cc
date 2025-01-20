@@ -101,7 +101,7 @@ ThemeServiceFactory::ThemeServiceFactory()
               .Build()) {
   DependsOn(extensions::ExtensionRegistryFactory::GetInstance());
   DependsOn(extensions::ExtensionPrefsFactory::GetInstance());
-  DependsOn(extensions::ExtensionSystemFactory::GetInstance());
+  // DependsOn(extensions::ExtensionSystemFactory::GetInstance());
 }
 
 ThemeServiceFactory::~ThemeServiceFactory() = default;

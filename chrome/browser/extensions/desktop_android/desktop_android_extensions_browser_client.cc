@@ -23,7 +23,8 @@
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/common/user_agent.h"
 #include "extensions/browser/api/core_extensions_browser_api_provider.h"
-#include "extensions/browser/api/extensions_api_client.h"
+// #include "extensions/browser/api/extensions_api_client.h"
+#include "chrome/browser/extensions/api/chrome_extensions_api_client.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_util.h"
 #include "extensions/browser/extension_web_contents_observer.h"
@@ -42,6 +43,8 @@ namespace extensions {
 
 namespace {
 
+DesktopAndroidExtensionsBrowserClient* g_extension_browser_client = nullptr;
+
 class DesktopAndroidKioskDelegate : public KioskDelegate {
  public:
   DesktopAndroidKioskDelegate() = default;
@@ -58,13 +61,21 @@ class DesktopAndroidKioskDelegate : public KioskDelegate {
 DesktopAndroidExtensionsBrowserClient::DesktopAndroidExtensionsBrowserClient()
     : extension_cache_(std::make_unique<NullExtensionCache>()),
       kiosk_delegate_(std::make_unique<DesktopAndroidKioskDelegate>()),
-      api_client_(std::make_unique<ExtensionsAPIClient>()) {
+      api_client_(std::make_unique<ChromeExtensionsAPIClient>()) {
   AddAPIProvider(std::make_unique<CoreExtensionsBrowserAPIProvider>());
   AddAPIProvider(std::make_unique<ChromeExtensionsBrowserAPIProvider>());
 }
 
 DesktopAndroidExtensionsBrowserClient::
     ~DesktopAndroidExtensionsBrowserClient() = default;
+
+DesktopAndroidExtensionsBrowserClient* DesktopAndroidExtensionsBrowserClient::Get() {
+  return g_extension_browser_client;
+}
+
+void DesktopAndroidExtensionsBrowserClient::Set(DesktopAndroidExtensionsBrowserClient* client) {
+  g_extension_browser_client = client;
+}
 
 bool DesktopAndroidExtensionsBrowserClient::IsShuttingDown() {
   return false;

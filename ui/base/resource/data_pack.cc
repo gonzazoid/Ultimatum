@@ -307,6 +307,7 @@ bool DataPack::SanityCheckFileAndRegisterResources(size_t margin_to_skip,
 bool DataPack::LoadImpl(std::unique_ptr<DataPack::DataSource> data_source) {
   const uint8_t* data = data_source->GetData();
   size_t data_length = data_source->GetLength();
+
   // Parse the version and check for truncated header.
   uint32_t version = 0;
   if (data_length > sizeof(version)) {

@@ -137,8 +137,11 @@ group("resources") {
     public_deps += [ "tab_strip:resources" ]
   }
 
-  if (enable_extensions) {
-    public_deps += [ "extensions:resources" ]
+  if (enable_extensions || (is_android && enable_desktop_android_extensions)) {
+    public_deps += [
+      ":component_extension_resources",
+      "extensions:resources",
+    ]
   }
 
   if (enable_pdf) {
@@ -172,7 +175,7 @@ if (is_chromeos_ash && enable_js_type_check) {
   }
 }
 
-if (!is_android) {
+if (!is_android || (is_android && enable_desktop_android_extensions)) {
   grit("component_extension_resources") {
     source = "component_extension_resources.grd"
 

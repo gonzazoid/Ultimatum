@@ -77,7 +77,7 @@ class PermissionsUpdaterShutdownNotifierFactory
       : BrowserContextKeyedServiceShutdownNotifierFactory(
             "PermissionsUpdaterShutdownFactory") {
     DependsOn(EventRouterFactory::GetInstance());
-    DependsOn(ExtensionSystemFactory::GetInstance());
+    // DependsOn(ExtensionSystemFactory::GetInstance());
   }
   ~PermissionsUpdaterShutdownNotifierFactory() override = default;
 };

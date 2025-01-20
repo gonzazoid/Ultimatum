@@ -9,7 +9,7 @@ import './review_panel.js';
 
 import {getInstance as getAnnouncerInstance} from 'chrome://resources/cr_elements/cr_a11y_announcer/cr_a11y_announcer.js';
 import {I18nMixinLit} from 'chrome://resources/cr_elements/i18n_mixin_lit.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+// import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {CrLitElement} from 'chrome://resources/lit/v3_0/lit.rollup.js';
 import type {PropertyValues} from 'chrome://resources/lit/v3_0/lit.rollup.js';
 
@@ -17,7 +17,7 @@ import {DummyItemDelegate} from './item.js';
 import type {ExtensionsItemElement, ItemDelegate} from './item.js';
 import {getCss} from './item_list.css.js';
 import {getHtml} from './item_list.html.js';
-import {getMv2ExperimentStage, Mv2ExperimentStage} from './mv2_deprecation_util.js';
+import {/* getMv2ExperimentStage, */ Mv2ExperimentStage} from './mv2_deprecation_util.js';
 
 type Filter = (info: chrome.developerPrivate.ExtensionInfo) => boolean;
 
@@ -107,10 +107,10 @@ export class ExtensionsItemListElement extends ExtensionsItemListElementBase {
   protected filteredExtensions_: chrome.developerPrivate.ExtensionInfo[] = [];
   protected filteredApps_: chrome.developerPrivate.ExtensionInfo[] = [];
   protected computedFilter_: Filter|null = null;
-  protected maxColumns_: number = 3;
+  protected maxColumns_: number = 1;
   protected unsafeExtensions_: chrome.developerPrivate.ExtensionInfo[] = [];
-  protected mv2ExperimentStage_: Mv2ExperimentStage =
-      getMv2ExperimentStage(loadTimeData.getInteger('MV2ExperimentStage'));
+  protected mv2ExperimentStage_: Mv2ExperimentStage = Mv2ExperimentStage.NONE;
+      // getMv2ExperimentStage(loadTimeData.getInteger('MV2ExperimentStage'));
   protected mv2DeprecatedExtensions_: chrome.developerPrivate.ExtensionInfo[] =
       [];
   protected shownAppsCount_: number = 0;

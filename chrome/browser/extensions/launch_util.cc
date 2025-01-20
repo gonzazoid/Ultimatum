@@ -33,22 +33,22 @@ LaunchType GetLaunchType(const ExtensionPrefs* prefs,
   if (!extension) {
     return LAUNCH_TYPE_INVALID;
   }
-  LaunchType result = LAUNCH_TYPE_DEFAULT;
+  // LaunchType result = LAUNCH_TYPE_DEFAULT;
 
-  int value = GetLaunchTypePrefValue(prefs, extension->id());
-  if (value >= LAUNCH_TYPE_FIRST && value < NUM_LAUNCH_TYPES)
-    result = static_cast<LaunchType>(value);
+  // int value = GetLaunchTypePrefValue(prefs, extension->id());
+  // if (value >= LAUNCH_TYPE_FIRST && value < NUM_LAUNCH_TYPES)
+  //   result = static_cast<LaunchType>(value);
 
   // Force hosted apps that are not locally installed to open in tabs.
-  if (extension->is_hosted_app() &&
-      !BookmarkAppIsLocallyInstalled(prefs, extension)) {
-    result = LAUNCH_TYPE_REGULAR;
-  } else if (result == LAUNCH_TYPE_PINNED) {
-    result = LAUNCH_TYPE_REGULAR;
-  } else if (result == LAUNCH_TYPE_FULLSCREEN) {
-    result = LAUNCH_TYPE_WINDOW;
-  }
-  return result;
+  // if (extension->is_hosted_app() &&
+  //     !BookmarkAppIsLocallyInstalled(prefs, extension)) {
+  //   result = LAUNCH_TYPE_REGULAR;
+  // } else if (result == LAUNCH_TYPE_PINNED) {
+  //   result = LAUNCH_TYPE_REGULAR;
+  // } else if (result == LAUNCH_TYPE_FULLSCREEN) {
+  //   result = LAUNCH_TYPE_WINDOW;
+  // }
+  return LAUNCH_TYPE_REGULAR; // result;
 }
 
 LaunchType GetLaunchTypePrefValue(const ExtensionPrefs* prefs,

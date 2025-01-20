@@ -156,13 +156,13 @@ bool StandardManagementPolicyProvider::UserMayInstall(
 
   // Check if the extension would be force-disabled once it's installed. If it
   // would, block the new installation.
-  auto* mv2_experiment_manager = ManifestV2ExperimentManager::Get(profile_);
-  if (mv2_experiment_manager &&
-      mv2_experiment_manager->ShouldBlockExtensionEnable(*extension)) {
-    *error =
-        l10n_util::GetStringUTF16(IDS_EXTENSIONS_CANT_INSTALL_MV2_EXTENSION);
-    return false;
-  }
+  // auto* mv2_experiment_manager = ManifestV2ExperimentManager::Get(profile_);
+  // if (mv2_experiment_manager &&
+  //     mv2_experiment_manager->ShouldBlockExtensionEnable(*extension)) {
+  //   *error =
+  //       l10n_util::GetStringUTF16(IDS_EXTENSIONS_CANT_INSTALL_MV2_EXTENSION);
+  //   return false;
+  // }
 
   return UserMayLoad(extension, error);
 }
@@ -177,6 +177,7 @@ bool StandardManagementPolicyProvider::ExtensionMayModifySettings(
     const Extension* source_extension,
     const Extension* extension,
     std::u16string* error) const {
+  LOG(INFO) << "StandardManagementPolicyProvider::ExtensionMayModifySettings " << (source_extension == nullptr) << "::" << (extension == nullptr);
   return AdminPolicyIsModifiable(source_extension, extension, error);
 }
 
@@ -221,15 +222,15 @@ bool StandardManagementPolicyProvider::MustRemainDisabled(
   // Note: `mv2_experiment_manager` may be null for certain types of profiles
   // (such as the sign-in profile). We can ignore this check in this case, since
   // users can't install extensions in these profiles.
-  auto* mv2_experiment_manager = ManifestV2ExperimentManager::Get(profile_);
-  if (mv2_experiment_manager &&
-      mv2_experiment_manager->ShouldBlockExtensionEnable(*extension)) {
-    if (reason) {
-      *reason = disable_reason::DISABLE_UNSUPPORTED_MANIFEST_VERSION;
-    }
+  // auto* mv2_experiment_manager = ManifestV2ExperimentManager::Get(profile_);
+  // if (mv2_experiment_manager &&
+  //     mv2_experiment_manager->ShouldBlockExtensionEnable(*extension)) {
+  //   if (reason) {
+  //     *reason = disable_reason::DISABLE_UNSUPPORTED_MANIFEST_VERSION;
+  //   }
 
-    return true;
-  }
+  //   return true;
+  // }
 
   return false;
 }

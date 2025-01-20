@@ -55,7 +55,7 @@ ExtensionSystemSharedFactory::ExtensionSystemSharedFactory()
   DependsOn(ExtensionManagementFactory::GetInstance());
   // This depends on ExtensionService, which depends on ExtensionRegistry.
   DependsOn(ExtensionRegistryFactory::GetInstance());
-  DependsOn(GlobalErrorServiceFactory::GetInstance());
+  // DependsOn(GlobalErrorServiceFactory::GetInstance());
   DependsOn(InstallVerifierFactory::GetInstance());
   DependsOn(ProcessManagerFactory::GetInstance());
   DependsOn(RendererStartupHelperFactory::GetInstance());

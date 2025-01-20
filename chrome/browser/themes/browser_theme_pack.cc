@@ -1789,41 +1789,41 @@ void BrowserThemePack::GenerateFrameColorsFromTints() {
 }
 
 void BrowserThemePack::GenerateWindowControlButtonColor(ImageCache* images) {
-  static constexpr struct ControlBGValue {
-    // The color to compute and store.
-    int color_id;
+  // static constexpr struct ControlBGValue {
+  //   // The color to compute and store.
+  //   int color_id;
 
-    // The frame color to use as the base of this button background.
-    int frame_color_id;
-  } kControlButtonBackgroundMap[] = {
-      {TP::COLOR_WINDOW_CONTROL_BUTTON_BACKGROUND_ACTIVE,
-       TP::COLOR_FRAME_ACTIVE},
-      {TP::COLOR_WINDOW_CONTROL_BUTTON_BACKGROUND_INACTIVE,
-       TP::COLOR_FRAME_INACTIVE},
-      {TP::COLOR_WINDOW_CONTROL_BUTTON_BACKGROUND_INCOGNITO_ACTIVE,
-       TP::COLOR_FRAME_ACTIVE_INCOGNITO},
-      {TP::COLOR_WINDOW_CONTROL_BUTTON_BACKGROUND_INCOGNITO_INACTIVE,
-       TP::COLOR_FRAME_INACTIVE_INCOGNITO},
-  };
+  //   // The frame color to use as the base of this button background.
+  //   int frame_color_id;
+  // } kControlButtonBackgroundMap[] = {
+  //     {TP::COLOR_WINDOW_CONTROL_BUTTON_BACKGROUND_ACTIVE,
+  //      TP::COLOR_FRAME_ACTIVE},
+  //     {TP::COLOR_WINDOW_CONTROL_BUTTON_BACKGROUND_INACTIVE,
+  //      TP::COLOR_FRAME_INACTIVE},
+  //     {TP::COLOR_WINDOW_CONTROL_BUTTON_BACKGROUND_INCOGNITO_ACTIVE,
+  //      TP::COLOR_FRAME_ACTIVE_INCOGNITO},
+  //     {TP::COLOR_WINDOW_CONTROL_BUTTON_BACKGROUND_INCOGNITO_INACTIVE,
+  //      TP::COLOR_FRAME_INACTIVE_INCOGNITO},
+  // };
 
   // Get data related to the control button background image and color first,
   // since they are shared by all variants.
-  gfx::ImageSkia bg_image;
-  ImageCache::const_iterator bg_img_it =
-      images->find(PRS::kWindowControlBackground);
-  if (bg_img_it != images->end()) {
-    bg_image = bg_img_it->second.AsImageSkia();
-  }
+  // gfx::ImageSkia bg_image;
+  // ImageCache::const_iterator bg_img_it =
+  //     images->find(PRS::kWindowControlBackground);
+  // if (bg_img_it != images->end()) {
+  //   bg_image = bg_img_it->second.AsImageSkia();
+  // }
 
-  SkColor button_bg_color = SK_ColorTRANSPARENT;
-  SkAlpha button_bg_alpha = SK_AlphaTRANSPARENT;
-  if (GetColor(TP::COLOR_CONTROL_BUTTON_BACKGROUND, &button_bg_color)) {
-    button_bg_alpha = SkColorGetA(button_bg_color);
-  }
+  // SkColor button_bg_color = SK_ColorTRANSPARENT;
+  // SkAlpha button_bg_alpha = SK_AlphaTRANSPARENT;
+  // if (GetColor(TP::COLOR_CONTROL_BUTTON_BACKGROUND, &button_bg_color)) {
+  //   button_bg_alpha = SkColorGetA(button_bg_color);
+  // }
 
-  button_bg_alpha =
-      WindowFrameUtil::CalculateWindowsCaptionButtonBackgroundAlpha(
-          button_bg_alpha);
+  // button_bg_alpha =
+  //     WindowFrameUtil::CalculateWindowsCaptionButtonBackgroundAlpha(
+  //         button_bg_alpha);
 
   // Determine what portion of the image to use in our calculations (we won't
   // use more along the X-axis than the width of the caption buttons).  This
@@ -1833,34 +1833,34 @@ void BrowserThemePack::GenerateWindowControlButtonColor(ImageCache* images) {
   // processing time (as it is determined by the size of icons, which we don't
   // have easy access to here), so we use the glass frame area as an
   // approximation.
-  gfx::Size dest_size = WindowFrameUtil::GetWindowsCaptionButtonAreaSize();
+  // gfx::Size dest_size = WindowFrameUtil::GetWindowsCaptionButtonAreaSize();
 
   // To get an accurate sampling, all we need to do is get a representative
   // image that is at MOST the size of the caption button area.  In the case of
   // an image that is smaller - we only need to sample an area the size of the
   // provided image (trying to take tiling into account would be overkill).
-  if (!bg_image.isNull()) {
-    dest_size.SetToMin(bg_image.size());
-  }
+  // if (!bg_image.isNull()) {
+  //   dest_size.SetToMin(bg_image.size());
+  // }
 
-  for (const ControlBGValue& bg_pair : kControlButtonBackgroundMap) {
-    SkColor frame_color;
-    GetColor(bg_pair.frame_color_id, &frame_color);
-    SkColor base_color =
-        color_utils::AlphaBlend(button_bg_color, frame_color, button_bg_alpha);
+  // for (const ControlBGValue& bg_pair : kControlButtonBackgroundMap) {
+  //   SkColor frame_color;
+  //   GetColor(bg_pair.frame_color_id, &frame_color);
+  //   SkColor base_color =
+  //       color_utils::AlphaBlend(button_bg_color, frame_color, button_bg_alpha);
 
-    if (bg_image.isNull()) {
-      SetColor(bg_pair.color_id, base_color);
-      continue;
-    }
+  //   if (bg_image.isNull()) {
+  //     SetColor(bg_pair.color_id, base_color);
+  //     continue;
+  //   }
 
-    auto source = std::make_unique<ControlButtonBackgroundImageSource>(
-        base_color, bg_image, dest_size);
-    const gfx::Image dest_image(gfx::ImageSkia(std::move(source), dest_size));
+  //   auto source = std::make_unique<ControlButtonBackgroundImageSource>(
+  //       base_color, bg_image, dest_size);
+  //   const gfx::Image dest_image(gfx::ImageSkia(std::move(source), dest_size));
 
-    SetColorIfUnspecified(bg_pair.color_id,
-                          ComputeImageColor(dest_image, dest_size.height()));
-  }
+  //   SetColorIfUnspecified(bg_pair.color_id,
+  //                         ComputeImageColor(dest_image, dest_size.height()));
+  // }
 }
 
 void BrowserThemePack::CreateTabBackgroundImagesAndColors(ImageCache* images) {

@@ -324,6 +324,7 @@ export function createDummyExtensionInfo():
     fileAccess: {isEnabled: false, isActive: false},
     homePage: {url: '', specified: false},
     iconUrl: '',
+    popupUrl: '',
     id: '',
     incognitoAccess: {isEnabled: false, isActive: false},
     installWarnings: [],

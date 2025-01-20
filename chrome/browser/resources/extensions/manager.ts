@@ -165,8 +165,8 @@ export class ExtensionsManagerElement extends ExtensionsManagerElementBase {
   canLoadUnpacked: boolean = false;
   delegate: ServiceInterface = Service.getInstance();
   inDevMode: boolean = loadTimeData.getBoolean('inDevMode');
-  isMv2DeprecationNoticeDismissed: boolean =
-      loadTimeData.getBoolean('MV2DeprecationNoticeDismissed');
+  isMv2DeprecationNoticeDismissed: boolean = true;
+      // loadTimeData.getBoolean('MV2DeprecationNoticeDismissed');
   showActivityLog: boolean = loadTimeData.getBoolean('showActivityLog');
   enableEnhancedSiteControls: boolean =
       loadTimeData.getBoolean('enableEnhancedSiteControls');
@@ -233,6 +233,7 @@ export class ExtensionsManagerElement extends ExtensionsManagerElementBase {
     service.getProfileConfiguration().then(onProfileStateChanged);
 
     service.getExtensionsInfo().then(extensionsAndApps => {
+      console.log("Extensions!!!", extensionsAndApps);
       this.initExtensionsAndApps_(extensionsAndApps);
       this.initPage_();
 

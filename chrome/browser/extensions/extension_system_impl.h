@@ -134,7 +134,7 @@ class ExtensionSystemImpl : public ExtensionSystem {
     std::unique_ptr<ExtensionService> extension_service_;
     std::unique_ptr<ManagementPolicy> management_policy_;
     std::unique_ptr<QuotaService> quota_service_;
-    std::unique_ptr<AppSorting> app_sorting_;
+    // std::unique_ptr<AppSorting> app_sorting_;
     std::unique_ptr<InstallGate> update_install_gate_;
 
     // For verifying the contents of extensions read from disk.

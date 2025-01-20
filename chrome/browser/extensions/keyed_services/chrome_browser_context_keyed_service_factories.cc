@@ -5,22 +5,22 @@
 #include "chrome/browser/extensions/keyed_services/chrome_browser_context_keyed_service_factories.h"
 
 #include "build/build_config.h"
-#include "chrome/browser/extensions/account_extension_tracker.h"
-#include "chrome/browser/extensions/activity_log/activity_log.h"
-#include "chrome/browser/extensions/chrome_app_icon_service_factory.h"
-#include "chrome/browser/extensions/chrome_extension_cookies_factory.h"
+// #include "chrome/browser/extensions/account_extension_tracker.h"
+// #include "chrome/browser/extensions/activity_log/activity_log.h"
+// #include "chrome/browser/extensions/chrome_app_icon_service_factory.h"
+// #include "chrome/browser/extensions/chrome_extension_cookies_factory.h"
 #include "chrome/browser/extensions/cws_info_service_factory.h"
 #include "chrome/browser/extensions/extension_action_dispatcher.h"
-#include "chrome/browser/extensions/extension_garbage_collector_factory.h"
-#include "chrome/browser/extensions/extension_gcm_app_handler.h"
+// #include "chrome/browser/extensions/extension_garbage_collector_factory.h"
+// #include "chrome/browser/extensions/extension_gcm_app_handler.h"
 #include "chrome/browser/extensions/extension_management.h"
 #include "chrome/browser/extensions/extension_sync_service_factory.h"
-#include "chrome/browser/extensions/extension_system_factory.h"
-#include "chrome/browser/extensions/extension_web_ui_override_registrar.h"
+// #include "chrome/browser/extensions/extension_system_factory.h"
+// #include "chrome/browser/extensions/extension_web_ui_override_registrar.h"
 #include "chrome/browser/extensions/install_tracker_factory.h"
 #include "chrome/browser/extensions/install_verifier_factory.h"
-#include "chrome/browser/extensions/manifest_v2_experiment_manager.h"
-#include "chrome/browser/extensions/menu_manager_factory.h"
+// #include "chrome/browser/extensions/manifest_v2_experiment_manager.h"
+// #include "chrome/browser/extensions/menu_manager_factory.h"
 #include "chrome/browser/extensions/permissions/permissions_updater.h"
 #include "chrome/browser/extensions/plugin_manager.h"
 #include "chrome/browser/extensions/warning_badge_service_factory.h"
@@ -30,26 +30,26 @@ namespace chrome_extensions {
 
 void EnsureChromeBrowserContextKeyedServiceFactoriesBuilt() {
   ExtensionSyncServiceFactory::GetInstance();
-  extensions::AccountExtensionTracker::GetFactory();
-  extensions::ActivityLog::GetFactoryInstance();
-  extensions::ChromeAppIconServiceFactory::GetInstance();
-  extensions::ChromeExtensionCookiesFactory::GetInstance();
+  // extensions::AccountExtensionTracker::GetFactory();
+  // extensions::ActivityLog::GetFactoryInstance();
+  // extensions::ChromeAppIconServiceFactory::GetInstance();
+  // extensions::ChromeExtensionCookiesFactory::GetInstance();
   extensions::CWSInfoServiceFactory::GetInstance();
   extensions::ExtensionActionDispatcher::GetFactoryInstance();
-  extensions::ExtensionGarbageCollectorFactory::GetInstance();
-  extensions::ExtensionGCMAppHandler::GetFactoryInstance();
+  // extensions::ExtensionGarbageCollectorFactory::GetInstance();
+  // extensions::ExtensionGCMAppHandler::GetFactoryInstance();
   extensions::ExtensionManagementFactory::GetInstance();
-  extensions::ExtensionSystemFactory::GetInstance();
-  extensions::ExtensionWebUIOverrideRegistrar::GetFactoryInstance();
+  // extensions::ExtensionSystemFactory::GetInstance();
+  // extensions::ExtensionWebUIOverrideRegistrar::GetFactoryInstance();
   extensions::InstallTrackerFactory::GetInstance();
   extensions::InstallVerifierFactory::GetInstance();
-  extensions::ManifestV2ExperimentManager::GetFactory();
-  extensions::MenuManagerFactory::GetInstance();
+  // extensions::ManifestV2ExperimentManager::GetFactory();
+  // extensions::MenuManagerFactory::GetInstance();
   extensions::PermissionsUpdater::EnsureAssociatedFactoryBuilt();
 #if BUILDFLAG(ENABLE_PLUGINS)
   extensions::PluginManager::GetFactoryInstance();
 #endif
-  extensions::WarningBadgeServiceFactory::GetInstance();
+  // extensions::WarningBadgeServiceFactory::GetInstance();
 }
 
 }  // namespace chrome_extensions

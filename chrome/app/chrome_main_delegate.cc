@@ -204,7 +204,7 @@
 #include "components/crash/core/app/crashpad.h"
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "chrome/browser/extensions/startup_helper.h"
 #include "extensions/common/constants.h"
 #endif
@@ -253,7 +253,7 @@ base::LazyInstance<ChromeContentRendererClient>::DestructorAtExit
 extern int NaClMain(content::MainFunctionParams);
 
 const char* const ChromeMainDelegate::kNonWildcardDomainNonPortSchemes[] = {
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
     extensions::kExtensionScheme,
 #endif
     chrome::kChromeSearchScheme,       chrome::kIsolatedAppScheme,

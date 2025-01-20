@@ -171,7 +171,7 @@ WindowsEventRouter::WindowsEventRouter(Profile* profile)
 #elif defined(TOOLKIT_VIEWS)
   views::WidgetFocusManager::GetInstance()->AddFocusChangeListener(this);
 #else
-#error Unsupported
+// #error Unsupported
 #endif
 
   AppWindowRegistry* registry = AppWindowRegistry::Get(profile_);

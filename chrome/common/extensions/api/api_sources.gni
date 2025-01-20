@@ -15,6 +15,10 @@ assert(enable_extensions_core)
 schema_sources_ = [
   "cookies.json",
   "notifications.idl",
+  "developer_private.idl",
+  "permissions.json",
+  "downloads.idl",
+  "tabs.json",
 ]
 
 # Schemas that should be used only to auto-generate the C++ types.
@@ -30,7 +34,6 @@ types_only_schema_sources_ = []
 
 if (enable_desktop_android_extensions) {
   types_only_schema_sources_ += [
-    "tabs.json",
     "windows.json",
   ]
 }
@@ -51,7 +54,6 @@ if (enable_extensions) {
     "context_menus.json",
     "debugger.json",
     "desktop_capture.json",
-    "developer_private.idl",
     "crash_report_private.idl",
     "downloads.idl",
     "downloads_internal.idl",

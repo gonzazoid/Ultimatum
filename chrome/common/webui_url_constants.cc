@@ -212,7 +212,7 @@ base::span<const base::cstring_view> ChromeURLHosts() {
 #if BUILDFLAG(ENABLE_NACL)
       kChromeUINaClHost,
 #endif
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || (BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS))
       kChromeUIExtensionsHost,
       kChromeUIExtensionsInternalsHost,
 #endif

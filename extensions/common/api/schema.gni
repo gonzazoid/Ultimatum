@@ -20,6 +20,13 @@ extensions_api_schema_files_ = [
   "system_memory.idl",
   "test.json",
   "web_request.json",
+  "extension_options_internal.idl",
+  "mime_handler_private.idl",
+  "guest_view_internal.json",
+  "management.json",
+  "metrics_private.json",
+  "automation.idl",
+  "automation_internal.idl",
 ]
 
 # Schemas that should be used only to auto-generate the C++ types.
@@ -35,13 +42,13 @@ extensions_types_only_schema_files_ = [
   "shared_module.idl",
   "web_accessible_resources.idl",
   "web_accessible_resources_mv2.idl",
+  "app_runtime.idl",
 ]
 
 # APIs that are not currently supported on the experimental desktop-android.
 if (enable_extensions) {
   extensions_api_schema_files_ += [
     "app_current_window_internal.idl",
-    "app_runtime.idl",
     "app_view_guest_internal.json",
     "app_window.idl",
     "audio.idl",
@@ -56,17 +63,13 @@ if (enable_extensions) {
     "declarative_net_request.idl",
     "dns.idl",
     "events.json",
-    "extension_options_internal.idl",
     "extension_types.json",
     "feedback_private.idl",
     "file_handlers.idl",
     "file_system.idl",
-    "guest_view_internal.json",
     "management.json",
     "hid.idl",
     "icon_variants.idl",
-    "metrics_private.json",
-    "mime_handler_private.idl",
     "mime_handler_view_guest_internal.json",
     "mojo_private.idl",
     "networking_private.idl",

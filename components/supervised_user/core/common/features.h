@@ -26,7 +26,7 @@ BASE_DECLARE_FEATURE(kUpdatedSupervisedUserExtensionApprovalStrings);
 BASE_DECLARE_FEATURE(kEnableExtensionsPermissionsForSupervisedUsersOnDesktop);
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 // Returns whether a new installation state for supervised users
 // on new extension installations is offered to the Webstore.
 BASE_DECLARE_FEATURE(kExposedParentalControlNeededForExtensionInstallation);

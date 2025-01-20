@@ -86,7 +86,7 @@ inline constexpr char kSupervisedUserExtensionsMayRequestPermissions[] =
 inline constexpr char kSkipParentApprovalToInstallExtensions[] =
     "profile.managed.skip_parent_approval_to_install_extensions";
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 // DictionaryValue that maps extension ids to the approved version of this
 // extension for a supervised user. Missing extensions are not approved.
 inline constexpr char kSupervisedUserApprovedExtensions[] =
@@ -128,8 +128,8 @@ inline constexpr char kSupervisedUserSharedSettings[] =
 inline constexpr char kDefaultSupervisedUserFilteringBehavior[] =
     "profile.managed.default_filtering_behavior";
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_ANDROID)
 // An integer pref that stores the current state of the local extension
 // parent approval migration when the feature
 // `kEnableSupervisedUserSkipParentApprovalToInstallExtensions` becomes enabled.

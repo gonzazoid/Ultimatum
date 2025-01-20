@@ -62,7 +62,7 @@ BASE_FEATURE(kEnableExtensionsPermissionsForSupervisedUsersOnDesktop,
              base::FEATURE_ENABLED_BY_DEFAULT);
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 BASE_FEATURE(kExposedParentalControlNeededForExtensionInstallation,
              "ExposedParentalControlNeededForExtensionInstallation",
              base::FEATURE_ENABLED_BY_DEFAULT);

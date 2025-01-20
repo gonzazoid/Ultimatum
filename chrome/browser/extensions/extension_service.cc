@@ -377,7 +377,7 @@ void ExtensionService::OnExternalProviderUpdateComplete(
     updater_->CheckNow(ExtensionUpdater::CheckParams());
   }
 
-  error_controller_->ShowErrorIfNeeded();
+  // error_controller_->ShowErrorIfNeeded();
   external_install_manager_->UpdateExternalExtensionAlert();
 }
 
@@ -438,7 +438,7 @@ ExtensionService::ExtensionService(
   if (g_browser_process->profile_manager())
     profile_manager_observation_.Observe(g_browser_process->profile_manager());
 
-  UpgradeDetector::GetInstance()->AddObserver(this);
+  // UpgradeDetector::GetInstance()->AddObserver(this);
 
   cws_info_service_observation_.Observe(CWSInfoService::Get(profile_));
 
@@ -498,7 +498,7 @@ base::WeakPtr<ExtensionServiceInterface> ExtensionService::AsWeakPtr() {
 }
 
 ExtensionService::~ExtensionService() {
-  UpgradeDetector::GetInstance()->RemoveObserver(this);
+  // UpgradeDetector::GetInstance()->RemoveObserver(this);
   // No need to unload extensions here because they are profile-scoped, and the
   // profile is in the process of being deleted.
   for (const auto& provider : external_extension_providers_)
@@ -779,7 +779,7 @@ void ExtensionService::LoadExtensionForReload(
 
 void ExtensionService::ShowExtensionDisabledError(const Extension* extension,
                                                   bool is_remote_install) {
-  AddExtensionDisabledError(this, extension, is_remote_install);
+  // AddExtensionDisabledError(this, extension, is_remote_install);
 }
 
 void ExtensionService::FinishDelayedInstallationsIfAny() {
@@ -1006,22 +1006,22 @@ void ExtensionService::PostActivateExtension(
   // ExtensionRegistryObserver. See http://crbug.com/355029.
   UpdateActiveExtensionsInCrashReporter();
 
-  const PermissionsData* permissions_data = extension->permissions_data();
+  // const PermissionsData* permissions_data = extension->permissions_data();
 
   // If the extension has permission to load chrome://favicon/ resources we need
   // to make sure that the FaviconSource is registered with the
   // ChromeURLDataManager.
-  if (permissions_data->HasHostPermission(GURL(chrome::kChromeUIFaviconURL))) {
-    content::URLDataSource::Add(
-        profile_, std::make_unique<FaviconSource>(
-                      profile_, chrome::FaviconUrlFormat::kFaviconLegacy));
-  }
+  // if (permissions_data->HasHostPermission(GURL(chrome::kChromeUIFaviconURL))) {
+  //   content::URLDataSource::Add(
+  //       profile_, std::make_unique<FaviconSource>(
+  //                     profile_, chrome::FaviconUrlFormat::kFaviconLegacy));
+  // }
 
   // Same for chrome://theme/ resources.
-  if (permissions_data->HasHostPermission(GURL(chrome::kChromeUIThemeURL))) {
-    content::URLDataSource::Add(profile_,
-                                std::make_unique<ThemeSource>(profile_));
-  }
+  // if (permissions_data->HasHostPermission(GURL(chrome::kChromeUIThemeURL))) {
+  //   content::URLDataSource::Add(profile_,
+  //                               std::make_unique<ThemeSource>(profile_));
+  // }
 }
 
 // TODO(michaelpg): Group with other ExtensionRegistrar::Delegate overrides
@@ -1097,7 +1097,7 @@ void ExtensionService::PostUninstallExtension(
     }
   }
 
-  DataDeleter::StartDeleting(profile_, extension.get(), subtask_done_callback);
+  // DataDeleter::StartDeleting(profile_, extension.get(), subtask_done_callback);
 }
 
 void ExtensionService::PostNotifyUninstallExtension(
@@ -1135,8 +1135,8 @@ void ExtensionService::CheckManagementPolicy() {
     PermissionsUpdater(profile()).ApplyPolicyHostRestrictions(*extension);
   }
 
-  ManifestV2ExperimentManager* mv2_experiment_manager =
-      ManifestV2ExperimentManager::Get(profile_);
+  // ManifestV2ExperimentManager* mv2_experiment_manager =
+  //     ManifestV2ExperimentManager::Get(profile_);
 
   // Loop through the disabled extension list, find extensions to re-enable
   // automatically. These extensions are exclusive from the |to_disable| list
@@ -1196,13 +1196,13 @@ void ExtensionService::CheckManagementPolicy() {
     // TODO(https://crbug.com/362756477): As above, this is effectively
     // fragmenting logic between the policy provider and here to ensure that
     // the extension gets properly re-enabled when appropriate.
-    if (mv2_experiment_manager &&
-        mv2_experiment_manager->GetCurrentExperimentStage() ==
-            MV2ExperimentStage::kUnsupported &&
-        !mv2_experiment_manager->ShouldBlockExtensionEnable(*extension)) {
-      disable_reasons &=
-          (~disable_reason::DISABLE_UNSUPPORTED_MANIFEST_VERSION);
-    }
+    // if (mv2_experiment_manager &&
+    //     mv2_experiment_manager->GetCurrentExperimentStage() ==
+    //         MV2ExperimentStage::kUnsupported &&
+    //     !mv2_experiment_manager->ShouldBlockExtensionEnable(*extension)) {
+    //   disable_reasons &=
+    //       (~disable_reason::DISABLE_UNSUPPORTED_MANIFEST_VERSION);
+    // }
 
     // If this profile is not supervised, then remove any supervised user
     // related disable reasons.
@@ -1534,10 +1534,10 @@ void ExtensionService::CheckPermissionsIncrease(const Extension* extension,
     disable_reasons |= disable_reason::DISABLE_PERMISSIONS_INCREASE;
   }
 
-  if (disable_reasons == disable_reason::DISABLE_NONE)
+  // if (disable_reasons == disable_reason::DISABLE_NONE)
     extension_prefs_->SetExtensionEnabled(extension->id());
-  else
-    extension_prefs_->SetExtensionDisabled(extension->id(), disable_reasons);
+  // else
+  //   extension_prefs_->SetExtensionDisabled(extension->id(), disable_reasons);
 }
 
 void ExtensionService::UpdateActiveExtensionsInCrashReporter() {

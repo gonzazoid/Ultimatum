@@ -7,14 +7,14 @@
 #include "chrome/browser/extensions/api/api_browser_context_keyed_service_factories.h"
 #include "extensions/buildflags/buildflags.h"
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "chrome/browser/extensions/keyed_services/chrome_browser_context_keyed_service_factories.h"
 #endif
 
 namespace chrome_extensions {
 
 void EnsureBrowserContextKeyedServiceFactoriesBuilt() {
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   EnsureChromeBrowserContextKeyedServiceFactoriesBuilt();
 #endif
   EnsureApiBrowserContextKeyedServiceFactoriesBuilt();

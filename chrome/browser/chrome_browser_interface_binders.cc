@@ -453,7 +453,7 @@
 #include "media/mojo/mojom/speech_recognition_service.mojom.h"
 #endif  // BUILDFLAG(ENABLE_BROWSER_SPEECH_SERVICE)
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "extensions/browser/api/mime_handler_private/mime_handler_private.h"
 #include "extensions/browser/guest_view/mime_handler_view/mime_handler_view_guest.h"
 #include "extensions/common/api/mime_handler.mojom.h"  // nogncheck
@@ -622,7 +622,7 @@ void ForwardToJavaFrame(content::RenderFrameHost* render_frame_host,
 }
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 void BindMimeHandlerService(
     content::RenderFrameHost* frame_host,
     mojo::PendingReceiver<extensions::mime_handler::MimeHandlerService>
@@ -858,7 +858,7 @@ void PopulateChromeFrameBinders(
   }
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   map->Add<extensions::mime_handler::MimeHandlerService>(
       base::BindRepeating(&BindMimeHandlerService));
   map->Add<extensions::mime_handler::BeforeUnloadControl>(

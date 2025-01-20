@@ -31,10 +31,10 @@ bool ChromeMimeHandlerViewGuestDelegate::HandleContextMenu(
       ContextMenuDelegate::FromWebContents(web_contents);
   DCHECK(menu_delegate);
 
-  std::unique_ptr<RenderViewContextMenuBase> menu = menu_delegate->BuildMenu(
-      render_frame_host,
-      AddContextMenuParamsPropertiesFromPreferences(web_contents, params));
-  menu_delegate->ShowMenu(std::move(menu));
+  // std::unique_ptr<RenderViewContextMenuBase> menu = menu_delegate->BuildMenu(
+  //     render_frame_host,
+  //     AddContextMenuParamsPropertiesFromPreferences(web_contents, params));
+  // menu_delegate->ShowMenu(std::move(menu));
   return true;
 }
 

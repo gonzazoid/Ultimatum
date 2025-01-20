@@ -6,7 +6,7 @@
 
 #include <set>
 
-#include "chrome/browser/devtools/chrome_devtools_manager_delegate.h"
+// #include "chrome/browser/devtools/chrome_devtools_manager_delegate.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/extensions/api/developer_private.h"
 #include "content/public/browser/render_frame_host.h"
@@ -105,8 +105,8 @@ InspectableViewsFinder::ViewList InspectableViewsFinder::GetViewsForExtension(
     const Extension& extension,
     bool is_enabled) {
   ViewList result;
-  if (!ChromeDevToolsManagerDelegate::AllowInspection(profile_, &extension))
-    return result;
+  // if (!ChromeDevToolsManagerDelegate::AllowInspection(profile_, &extension))
+  //   return result;
   GetViewsForExtensionForProfile(
       extension, profile_, is_enabled, false, &result);
   if (profile_->HasPrimaryOTRProfile()) {
@@ -209,28 +209,28 @@ void InspectableViewsFinder::GetViewsForExtensionProcess(
 void InspectableViewsFinder::GetAppWindowViewsForExtension(
     const Extension& extension,
     ViewList* result) {
-  AppWindowRegistry* registry = AppWindowRegistry::Get(profile_);
-  if (!registry)
+  // AppWindowRegistry* registry = AppWindowRegistry::Get(profile_);
+  // if (!registry)
     return;
 
-  AppWindowRegistry::AppWindowList windows =
-      registry->GetAppWindowsForApp(extension.id());
+  // AppWindowRegistry::AppWindowList windows =
+  //     registry->GetAppWindowsForApp(extension.id());
 
-  for (const AppWindow* window : windows) {
-    content::WebContents* web_contents = window->web_contents();
+  // for (const AppWindow* window : windows) {
+  //   content::WebContents* web_contents = window->web_contents();
 
     // If the window just opened, there might not be a committed (or visible)
     // url yet. In this case, use the initial url.
-    GURL url = web_contents->GetLastCommittedURL();
-    if (url.is_empty())
-      url = window->initial_url();
+  //   GURL url = web_contents->GetLastCommittedURL();
+  //   if (url.is_empty())
+  //     url = window->initial_url();
 
-    content::RenderFrameHost* main_frame = web_contents->GetPrimaryMainFrame();
-    result->push_back(
-        ConstructView(url, main_frame->GetProcess()->GetDeprecatedID(),
-                      main_frame->GetRoutingID(), false, false,
-                      ConvertViewType(GetViewType(web_contents))));
-  }
+  //   content::RenderFrameHost* main_frame = web_contents->GetPrimaryMainFrame();
+  //   result->push_back(
+  //       ConstructView(url, main_frame->GetProcess()->GetDeprecatedID(),
+  //                     main_frame->GetRoutingID(), false, false,
+  //                     ConvertViewType(GetViewType(web_contents))));
+  // }
 }
 
 }  // namespace extensions

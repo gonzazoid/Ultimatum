@@ -15,7 +15,7 @@
 #include "extensions/common/extensions_client.h"
 #include "extensions/common/features/feature.h"
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "chrome/common/controlled_frame/controlled_frame.h"
 #include "chrome/common/controlled_frame/controlled_frame_api_provider.h"
 #endif
@@ -30,7 +30,7 @@
 
 namespace {
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 
 // Helper method to merge all the FeatureDelegatedAvailabilityCheckMaps into a
 // single map.
@@ -67,7 +67,7 @@ void EnsureExtensionsClientInitialized() {
   if (!initialized) {
     initialized = true;
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
     extensions_client->SetFeatureDelegatedAvailabilityCheckMap(
         CombineAllAvailabilityCheckMaps());
 #endif
@@ -75,7 +75,7 @@ void EnsureExtensionsClientInitialized() {
     extensions_client->AddAPIProvider(
         std::make_unique<chrome_apps::ChromeAppsAPIProvider>());
 #endif
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
     extensions_client->AddAPIProvider(
         std::make_unique<controlled_frame::ControlledFrameAPIProvider>());
 #endif

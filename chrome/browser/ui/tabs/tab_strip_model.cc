@@ -72,12 +72,12 @@
 #include "chrome/browser/ui/tabs/tab_utils.h"
 #include "chrome/browser/ui/thumbnails/thumbnail_tab_helper.h"
 #include "chrome/browser/ui/views/tabs/dragging/tab_drag_controller.h"
-#include "chrome/browser/ui/web_applications/web_app_dialog_utils.h"
-#include "chrome/browser/ui/web_applications/web_app_launch_utils.h"
-#include "chrome/browser/ui/web_applications/web_app_tabbed_utils.h"
-#include "chrome/browser/web_applications/policy/web_app_policy_manager.h"
-#include "chrome/browser/web_applications/web_app_provider.h"
-#include "chrome/browser/web_applications/web_app_tab_helper.h"
+// #include "chrome/browser/ui/web_applications/web_app_dialog_utils.h"
+// #include "chrome/browser/ui/web_applications/web_app_launch_utils.h"
+// #include "chrome/browser/ui/web_applications/web_app_tabbed_utils.h"
+// #include "chrome/browser/web_applications/policy/web_app_policy_manager.h"
+// #include "chrome/browser/web_applications/web_app_provider.h"
+// #include "chrome/browser/web_applications/web_app_tab_helper.h"
 #include "chrome/common/webui_url_constants.h"
 #include "components/commerce/core/commerce_utils.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
@@ -1447,7 +1447,7 @@ bool TabStripModel::IsContextMenuCommandEnabled(
 
     case CommandCloseAllTabs:
       DCHECK(delegate()->IsForWebApp());
-      DCHECK(web_app::HasPinnedHomeTab(this));
+      // DCHECK(web_app::HasPinnedHomeTab(this));
       return true;
 
     default:
@@ -2173,7 +2173,7 @@ int TabStripModel::InsertTabAtImpl(
       web_modal::WebContentsModalDialogManager::FromWebContents(
           tab->GetContents());
   if (manager) {
-    tab->set_blocked(manager->IsDialogActive());
+    // tab->set_blocked(manager->IsDialogActive());
   }
 
   InsertTabAtIndexImpl(std::move(tab), index, group, pin, active);
@@ -2390,8 +2390,8 @@ TabStripSelectionChange TabStripModel::SetSelection(
             selection.old_contents->IsCurrentlyAudible()) {
           Browser* browser = chrome::FindBrowserWithTab(selection.old_contents);
           DCHECK(browser);
-          browser->window()->MaybeShowFeaturePromo(
-              feature_engagement::kIPHTabAudioMutingFeature);
+          // browser->window()->MaybeShowFeaturePromo(
+          //     feature_engagement::kIPHTabAudioMutingFeature);
         }
       }
     }
@@ -3306,16 +3306,16 @@ bool TabStripModel::PolicyAllowsTabClosing(
     return true;
   }
 
-  web_app::WebAppProvider* provider =
-      web_app::WebAppProvider::GetForWebContents(contents);
+  // web_app::WebAppProvider* provider =
+  //     web_app::WebAppProvider::GetForWebContents(contents);
   // Can be null if there is no tab helper or app id.
-  const webapps::AppId* app_id = web_app::WebAppTabHelper::GetAppId(contents);
-  if (!app_id) {
+  // const webapps::AppId* app_id = web_app::WebAppTabHelper::GetAppId(contents);
+  // if (!app_id) {
     return true;
-  }
+  // }
 
-  return !delegate()->IsForWebApp() ||
-         !provider->policy_manager().IsPreventCloseEnabled(*app_id);
+  // return !delegate()->IsForWebApp() ||
+  //        !provider->policy_manager().IsPreventCloseEnabled(*app_id);
 }
 
 int TabStripModel::DetermineInsertionIndex(ui::PageTransition transition,

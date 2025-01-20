@@ -32,7 +32,11 @@
 #include "extensions/browser/extension_dialog_auto_confirm.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registry.h"
+#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+#include "chrome/browser/extensions/desktop_android/desktop_android_extension_system.h"
+#else
 #include "extensions/browser/extension_system.h"
+#endif
 #include "extensions/browser/management_policy.h"
 #include "extensions/browser/requirements_checker.h"
 #include "extensions/browser/supervised_user_extensions_delegate.h"
@@ -434,22 +438,22 @@ ExtensionFunction::ResponseAction ManagementSetEnabledFunction::Run() {
   EXTENSION_FUNCTION_VALIDATE(params);
   extension_id_ = params->id;
 
-  if (ExtensionsBrowserClient::Get()->IsAppModeForcedForApp(extension_id_)) {
-    return RespondNow(Error(keys::kCannotChangePrimaryKioskAppError));
-  }
+  // if (ExtensionsBrowserClient::Get()->IsAppModeForcedForApp(extension_id_)) {
+  //   return RespondNow(Error(keys::kCannotChangePrimaryKioskAppError));
+  // }
 
   ExtensionRegistry* registry = ExtensionRegistry::Get(browser_context());
   const Extension* target_extension = GetExtension();
-  if (!target_extension || !ShouldExposeViaManagementAPI(*target_extension)) {
-    return RespondNow(Error(keys::kNoExtensionError, extension_id_));
-  }
+  // if (!target_extension || !ShouldExposeViaManagementAPI(*target_extension)) {
+  //   return RespondNow(Error(keys::kNoExtensionError, extension_id_));
+  // }
 
   const ManagementPolicy* policy =
       ExtensionSystem::Get(browser_context())->management_policy();
-  if (!policy->ExtensionMayModifySettings(extension(), target_extension,
-                                          /*error=*/nullptr)) {
-    return RespondNow(Error(keys::kUserCantModifyError, extension_id_));
-  }
+  // if (!policy->ExtensionMayModifySettings(extension(), target_extension,
+  //                                         /*error=*/nullptr)) {
+  //   return RespondNow(Error(keys::kUserCantModifyError, extension_id_));
+  // }
 
   // Do nothing if method wants to enable an already enabled extension, and
   // vice-versa.
@@ -857,7 +861,6 @@ ExtensionFunction::ResponseAction ManagementUninstallFunction::Run() {
   std::optional<management::Uninstall::Params> params =
       management::Uninstall::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
-
   bool show_confirm_dialog =
       params->options && params->options->show_confirm_dialog.value_or(false);
   return Uninstall(params->id, show_confirm_dialog);

@@ -16,9 +16,13 @@
 #include "extensions/browser/extension_registrar.h"
 #include "extensions/browser/extension_system.h"
 
+#include "chrome/browser/extensions/install_gate.h"
+
 #if !BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #error "This file is only used for the experimental desktop-android build."
 #endif
+
+class Profile;
 
 namespace base {
 class FilePath;
@@ -122,6 +126,7 @@ class DesktopAndroidExtensionSystem : public ExtensionSystem {
                                         bool install_immediately) override;
 
  private:
+
   raw_ptr<content::BrowserContext> browser_context_;  // Not owned.
 
   std::unique_ptr<ServiceWorkerManager> service_worker_manager_;
@@ -132,6 +137,10 @@ class DesktopAndroidExtensionSystem : public ExtensionSystem {
 
   std::unique_ptr<ExtensionRegistrar::Delegate> registrar_delegate_;
   std::unique_ptr<ExtensionRegistrar> registrar_;
+
+  std::unique_ptr<InstallGate> update_install_gate_;
+  raw_ptr<Profile> profile_;
+  std::unique_ptr<ExtensionService> extension_service_;
 
   // Signaled when the extension system has completed its startup tasks.
   base::OneShotEvent ready_;

@@ -217,6 +217,8 @@
 
 #if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "chrome/browser/extensions/desktop_android/desktop_android_extensions_browser_client.h"
+#include "chrome/browser/extensions/chrome_extensions_browser_client.h"
+#include "chrome/common/extensions/chrome_extensions_client.h"
 #endif
 
 #if BUILDFLAG(ENABLE_PLUGINS)
@@ -333,7 +335,7 @@ void BrowserProcessImpl::Init() {
 #if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   extensions_browser_client_ =
       std::make_unique<extensions::DesktopAndroidExtensionsBrowserClient>();
-#elif BUILDFLAG(ENABLE_EXTENSIONS)
+#elif BUILDFLAG(ENABLE_EXTENSIONS) // TODO
   extensions::AppWindowClient::Set(ChromeAppWindowClient::GetInstance());
   extensions_browser_client_ =
       std::make_unique<extensions::ChromeExtensionsBrowserClient>();
@@ -1250,7 +1252,7 @@ void BrowserProcessImpl::CreateProfileManager() {
 }
 
 void BrowserProcessImpl::PreCreateThreads() {
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   // chrome-extension:// URLs are safe to request anywhere, but may only
   // commit (including in iframes) in extension processes.
   ChildProcessSecurityPolicy::GetInstance()->RegisterWebSafeIsolatedScheme(

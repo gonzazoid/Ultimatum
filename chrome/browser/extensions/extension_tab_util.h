@@ -11,11 +11,12 @@
 
 #include "chrome/browser/extensions/window_controller.h"
 
+#include "base/types/expected.h"
+
 #if !BUILDFLAG(IS_ANDROID)
 // gn check doesn't understand this conditional, hence the nogncheck directives
 // below.
 #include "base/functional/callback.h"
-#include "base/types/expected.h"
 #include "base/values.h"
 #include "chrome/common/extensions/api/tab_groups.h"
 #include "chrome/common/extensions/api/tabs.h"
@@ -53,7 +54,7 @@ class WindowController;
 // Provides various utility functions that help manipulate tabs.
 class ExtensionTabUtil {
  public:
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
   // This file is slowly being ported to Android. For now, most of it is
   // ifdef'd out.
   static constexpr char kNoCrashBrowserError[] =
@@ -120,6 +121,7 @@ class ExtensionTabUtil {
       const OpenTabParams& params,
       bool user_gesture);
 
+#if !BUILDFLAG(IS_ANDROID)
   static int GetWindowId(const Browser* browser);
   static int GetWindowIdOfTabStripModel(const TabStripModel* tab_strip_model);
 #endif  // !BUILDFLAG(IS_ANDROID)
@@ -149,7 +151,7 @@ class ExtensionTabUtil {
 
   // Returns the tabs:: API constant for the window type of the |browser|.
   static std::string GetBrowserWindowTypeText(const Browser& browser);
-
+#endif
   // Creates a Tab object (see chrome/common/extensions/api/tabs.json) with
   // information about the state of a browser tab for the given |web_contents|.
   // This will scrub the tab of sensitive data (URL, favicon, title) according
@@ -168,7 +170,7 @@ class ExtensionTabUtil {
                                         const Extension* extension,
                                         TabStripModel* tab_strip,
                                         int tab_index);
-
+#if !BUILDFLAG(IS_ANDROID)
   // Creates a base::Value::Dict representing the window for the given
   // |browser|, and scrubs any privacy-sensitive data that |extension| does not
   // have access to. |populate_tab_behavior| determines whether tabs will be
@@ -184,7 +186,7 @@ class ExtensionTabUtil {
   // Creates a tab MutedInfo object (see chrome/common/extensions/api/tabs.json)
   // with information about the mute state of a browser tab.
   static api::tabs::MutedInfo CreateMutedInfo(content::WebContents* contents);
-
+#endif
   // Gets the level of scrubbing of tab data that needs to happen for a given
   // extension and web contents. This is the preferred way to get
   // ScrubTabBehavior.
@@ -204,7 +206,7 @@ class ExtensionTabUtil {
                                    content::WebContents* contents,
                                    api::tabs::Tab* tab,
                                    ScrubTabBehavior scrub_tab_behavior);
-
+#if !BUILDFLAG(IS_ANDROID)
   // Gets the |tab_strip_model| and |tab_index| for the given |web_contents|.
   static bool GetTabStripModel(const content::WebContents* web_contents,
                                TabStripModel** tab_strip_model,
@@ -230,6 +232,10 @@ class ExtensionTabUtil {
                          bool include_incognito,
                          content::WebContents** contents);
 
+  static base::expected<GURL, std::string> PrepareURLForNavigation(
+      const std::string& url_string,
+      const Extension* extension,
+      content::BrowserContext* browser_context);
 #if !BUILDFLAG(IS_ANDROID)
   // Gets the extensions-specific Group ID.
   static int GetGroupId(const tab_groups::TabGroupId& id);

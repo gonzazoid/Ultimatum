@@ -322,7 +322,7 @@
 #include "chrome/browser/ui/browser_dialogs.h"
 #endif  // BUILDFLAG(IS_MAC)
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "chrome/browser/extensions/cws_info_service.h"
 #include "extensions/common/extension_features.h"
 #include "extensions/common/switches.h"
@@ -489,7 +489,7 @@ const FeatureEntry::Choice kUseAngleChoicesAndroid[] = {
      gl::kANGLEImplementationVulkanName}};
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 const FeatureEntry::Choice kExtensionsToolbarZeroStateChoices[] = {
     {flag_descriptions::kExtensionsToolbarZeroStateChoicesDisabled, "", ""},
     {flag_descriptions::kExtensionsToolbarZeroStateVistWebStore,
@@ -9058,16 +9058,16 @@ const FeatureEntry kFeatureEntries[] = {
      FEATURE_VALUE_TYPE(ash::features::kTrafficCountersForWiFiTesting)},
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
-    {"experimental-omnibox-labs",
-     flag_descriptions::kExperimentalOmniboxLabsName,
-     flag_descriptions::kExperimentalOmniboxLabsDescription, kOsDesktop,
-     FEATURE_VALUE_TYPE(extensions_features::kExperimentalOmniboxLabs)},
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+    // {"experimental-omnibox-labs",
+    //  flag_descriptions::kExperimentalOmniboxLabsName,
+    //  flag_descriptions::kExperimentalOmniboxLabsDescription, kOsDesktop,
+    //  FEATURE_VALUE_TYPE(extensions_features::kExperimentalOmniboxLabs)},
 
-    {kExtensionAiDataInternalName,
-     flag_descriptions::kExtensionAiDataCollectionName,
-     flag_descriptions::kExtensionAiDataCollectionDescription, kOsDesktop,
-     SINGLE_VALUE_TYPE(switches::kExtensionAiDataCollection)},
+    // {kExtensionAiDataInternalName,
+    //  flag_descriptions::kExtensionAiDataCollectionName,
+    //  flag_descriptions::kExtensionAiDataCollectionDescription, kOsDesktop,
+    //  SINGLE_VALUE_TYPE(switches::kExtensionAiDataCollection)},
 
     {"extensions-menu-access-control",
      flag_descriptions::kExtensionsMenuAccessControlName,
@@ -9079,17 +9079,17 @@ const FeatureEntry kFeatureEntries[] = {
      flag_descriptions::kExtensionsToolbarZeroStateDescription, kOsDesktop,
      MULTI_VALUE_TYPE(kExtensionsToolbarZeroStateChoices)},
 
-    {"iph-extensions-menu-feature",
-     flag_descriptions::kIPHExtensionsMenuFeatureName,
-     flag_descriptions::kIPHExtensionsMenuFeatureDescription, kOsDesktop,
-     FEATURE_VALUE_TYPE(feature_engagement::kIPHExtensionsMenuFeature)},
+    // {"iph-extensions-menu-feature",
+    //  flag_descriptions::kIPHExtensionsMenuFeatureName,
+    //  flag_descriptions::kIPHExtensionsMenuFeatureDescription, kOsDesktop,
+    //  FEATURE_VALUE_TYPE(feature_engagement::kIPHExtensionsMenuFeature)},
 
-    {"iph-extensions-request-access-button-feature",
-     flag_descriptions::kIPHExtensionsRequestAccessButtonFeatureName,
-     flag_descriptions::kIPHExtensionsRequestAccessButtonFeatureDescription,
-     kOsDesktop,
-     FEATURE_VALUE_TYPE(
-         feature_engagement::kIPHExtensionsRequestAccessButtonFeature)},
+    // {"iph-extensions-request-access-button-feature",
+    //  flag_descriptions::kIPHExtensionsRequestAccessButtonFeatureName,
+    //  flag_descriptions::kIPHExtensionsRequestAccessButtonFeatureDescription,
+    //  kOsDesktop,
+    //  FEATURE_VALUE_TYPE(
+    //      feature_engagement::kIPHExtensionsRequestAccessButtonFeature)},
 
     {"extension-manifest-v2-deprecation-warning",
      flag_descriptions::kExtensionManifestV2DeprecationWarningName,
@@ -9960,10 +9960,10 @@ const FeatureEntry kFeatureEntries[] = {
      flag_descriptions::kSiteInstanceGroupsForDataUrlsDescription, kOsAll,
      FEATURE_VALUE_TYPE(features::kSiteInstanceGroupsForDataUrls)},
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
-    {"cws-info-fast-check", flag_descriptions::kCWSInfoFastCheckName,
-     flag_descriptions::kCWSInfoFastCheckDescription, kOsDesktop,
-     FEATURE_VALUE_TYPE(extensions::kCWSInfoFastCheck)},
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+    // {"cws-info-fast-check", flag_descriptions::kCWSInfoFastCheckName,
+    //  flag_descriptions::kCWSInfoFastCheckDescription, kOsDesktop,
+    //  FEATURE_VALUE_TYPE(extensions::kCWSInfoFastCheck)},
 
     {"extension-disable-unsupported-developer-mode-extensions",
      flag_descriptions::kExtensionDisableUnsupportedDeveloperName,
@@ -9972,13 +9972,13 @@ const FeatureEntry kFeatureEntries[] = {
      FEATURE_VALUE_TYPE(
          extensions_features::kExtensionDisableUnsupportedDeveloper)},
 
-    {"extension-telemetry-for-enterprise",
-     flag_descriptions::kExtensionTelemetryForEnterpriseName,
-     flag_descriptions::kExtensionTelemetryForEnterpriseDescription, kOsDesktop,
-     FEATURE_WITH_PARAMS_VALUE_TYPE(
-         safe_browsing::kExtensionTelemetryForEnterprise,
-         kExtensionTelemetryEnterpriseReportingIntervalSecondsVariations,
-         "EnterpriseReportingIntervalSeconds")},
+    // {"extension-telemetry-for-enterprise",
+    //  flag_descriptions::kExtensionTelemetryForEnterpriseName,
+    //  flag_descriptions::kExtensionTelemetryForEnterpriseDescription, kOsDesktop,
+    //  FEATURE_WITH_PARAMS_VALUE_TYPE(
+    //      safe_browsing::kExtensionTelemetryForEnterprise,
+    //      kExtensionTelemetryEnterpriseReportingIntervalSecondsVariations,
+    //      "EnterpriseReportingIntervalSeconds")},
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
     {"autofill-enable-cvc-storage-and-filling",

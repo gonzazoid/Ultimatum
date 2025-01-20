@@ -239,6 +239,7 @@ declare global {
         fileAccess: AccessModifier;
         homePage: HomePage;
         iconUrl: string;
+        popupUrl: string;
         id: string;
         incognitoAccess: AccessModifier;
         installWarnings: string[];

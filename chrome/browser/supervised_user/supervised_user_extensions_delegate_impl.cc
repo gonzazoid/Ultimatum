@@ -14,8 +14,8 @@
 #include "chrome/browser/supervised_user/supervised_user_extensions_manager.h"
 #include "chrome/browser/supervised_user/supervised_user_extensions_metrics_recorder.h"
 #include "chrome/browser/supervised_user/supervised_user_service_factory.h"
-#include "chrome/browser/ui/extensions/extensions_dialogs.h"
-#include "chrome/browser/ui/supervised_user/parent_permission_dialog.h"
+// #include "chrome/browser/ui/extensions/extensions_dialogs.h"
+// #include "chrome/browser/ui/supervised_user/parent_permission_dialog.h"
 #include "components/prefs/pref_service.h"
 #include "components/supervised_user/core/common/features.h"
 #include "components/supervised_user/core/common/pref_names.h"
@@ -24,7 +24,7 @@
 #include "ui/gfx/image/image_skia.h"
 
 namespace {
-
+/*
 void OnParentPermissionDialogComplete(
     extensions::SupervisedUserExtensionsDelegate::ExtensionApprovalDoneCallback
         delegate_done_callback,
@@ -47,7 +47,7 @@ void OnParentPermissionDialogComplete(
       break;
   }
 }
-
+*/
 }  // namespace
 
 namespace extensions {
@@ -135,7 +135,7 @@ void SupervisedUserExtensionsDelegateImpl::RecordExtensionEnablementUmaMetrics(
     bool enabled) const {
   extensions_manager_.RecordExtensionEnablementUmaMetrics(enabled);
 }
-
+/*
 void SupervisedUserExtensionsDelegateImpl::
     ShowParentPermissionDialogForExtension(
         const Extension& extension,
@@ -155,7 +155,7 @@ void SupervisedUserExtensionsDelegateImpl::
           std::move(inner_done_callback));
   parent_permission_dialog_->ShowDialog();
 }
-
+*/
 void SupervisedUserExtensionsDelegateImpl::
     ShowInstallBlockedByParentDialogForExtension(
         const Extension& extension,
@@ -173,9 +173,9 @@ void SupervisedUserExtensionsDelegateImpl::
         FROM_HERE, std::move(block_dialog_callback));
     return;
   }
-  ShowExtensionInstallBlockedByParentDialog(
-      ExtensionInstalledBlockedByParentDialogAction::kEnable, &extension,
-      contents, std::move(block_dialog_callback));
+  // ShowExtensionInstallBlockedByParentDialog(
+  //     ExtensionInstalledBlockedByParentDialogAction::kEnable, &extension,
+  //     contents, std::move(block_dialog_callback));
 }
 
 void SupervisedUserExtensionsDelegateImpl::RequestExtensionApproval(

@@ -42,7 +42,7 @@ ExtensionSyncServiceFactory::ExtensionSyncServiceFactory()
   DependsOn(extensions::AccountExtensionTracker::GetFactory());
   DependsOn(extensions::ExtensionPrefsFactory::GetInstance());
   DependsOn(extensions::ExtensionRegistryFactory::GetInstance());
-  DependsOn(extensions::ExtensionSystemFactory::GetInstance());
+  // DependsOn(extensions::ExtensionSystemFactory::GetInstance());
 }
 
 ExtensionSyncServiceFactory::~ExtensionSyncServiceFactory() = default;

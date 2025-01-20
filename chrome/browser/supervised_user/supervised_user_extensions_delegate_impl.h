@@ -26,7 +26,7 @@ namespace gfx {
 class ImageSkia;
 }  // namespace gfx
 
-class ParentPermissionDialog;
+// class ParentPermissionDialog;
 
 namespace extensions {
 
@@ -73,12 +73,12 @@ class SupervisedUserExtensionsDelegateImpl
   // Shows a ParentPermissionDialog for |extension| and calls
   // |done_callback| when it completes. Called for non-ChromeOS desktop
   // platforms.
-  void ShowParentPermissionDialogForExtension(
-      const Extension& extension,
-      content::WebContents* contents,
-      const gfx::ImageSkia& icon,
-      SupervisedUserExtensionParentApprovalEntryPoint
-          extension_approval_entry_point);
+  // void ShowParentPermissionDialogForExtension(
+  //     const Extension& extension,
+  //     content::WebContents* contents,
+  //     const gfx::ImageSkia& icon,
+  //     SupervisedUserExtensionParentApprovalEntryPoint
+  //         extension_approval_entry_point);
 
   // Shows ParentPermissionDialog indicating that |extension| has been blocked
   // and call |done_callback| when it completes. Depending on the blocked_action
@@ -111,7 +111,7 @@ class SupervisedUserExtensionsDelegateImpl
   // can have a pretty long lifetime.
   // TODO(b/278874130): Move non ChromeOS platform-specific code to its own
   // class for clearer distinction.
-  std::unique_ptr<ParentPermissionDialog> parent_permission_dialog_;
+  // std::unique_ptr<ParentPermissionDialog> parent_permission_dialog_;
 
   SupervisedUserExtensionsDelegate::ExtensionApprovalDoneCallback
       done_callback_;

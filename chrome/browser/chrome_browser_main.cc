@@ -313,7 +313,7 @@
 #include "chrome/browser/background/background_mode_manager.h"
 #endif  // BUILDFLAG(ENABLE_BACKGROUND_MODE)
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "extensions/browser/extension_protocols.h"
 #include "extensions/common/features/feature_provider.h"
 #include "extensions/components/javascript_dialog_extensions_client/javascript_dialog_extension_client_impl.h"
@@ -1303,7 +1303,7 @@ void ChromeBrowserMainParts::PreProfileInit() {
       .CleanUpDeletedProfiles();
 #endif  // !BUILDFLAG(IS_ANDROID)
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   javascript_dialog_extensions_client::InstallClient();
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
@@ -1316,8 +1316,8 @@ void ChromeBrowserMainParts::PreProfileInit() {
   InstallChromeJavaScriptAppModalDialogViewFactory();
 #endif  // BUILDFLAG(IS_MAC)
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
-  SetChromeAppModalDialogManagerDelegate();
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+  // SetChromeAppModalDialogManagerDelegate();
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
   media_router::ChromeMediaRouterFactory::DoPlatformInit();

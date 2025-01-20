@@ -291,6 +291,10 @@ std::string Command::CommandPlatform() {
   // For now, we use linux keybindings on desktop android.
   // TODO(https://crbug.com/356905053): Should this be ChromeOS keybindings?
   return values::kKeybindingPlatformLinux;
+#elif BUILDFLAG(IS_ANDROID)
+  // For now, we use linux keybindings on desktop android.
+  // TODO(https://crbug.com/356905053): Should this be ChromeOS keybindings?
+  return values::kKeybindingPlatformLinux;
 #else
 #error Unsupported platform
 #endif

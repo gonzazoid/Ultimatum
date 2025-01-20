@@ -1436,7 +1436,7 @@ void ExtensionPrefs::OnExtensionInstalled(
 void ExtensionPrefs::OnExtensionUninstalled(const ExtensionId& extension_id,
                                             const ManifestLocation location,
                                             bool external_uninstall) {
-  app_sorting()->ClearOrdinals(extension_id);
+  // app_sorting()->ClearOrdinals(extension_id);
 
   // For external extensions, we save a preference reminding ourself not to try
   // and install the extension anymore (except when |external_uninstall| is
@@ -1444,6 +1444,7 @@ void ExtensionPrefs::OnExtensionUninstalled(const ExtensionId& extension_id,
   // no longer lists the extension).
   if (!external_uninstall && Manifest::IsExternalLocation(location)) {
     ScopedListPrefUpdate update(prefs_, kExternalUninstalls);
+
     update->Append(extension_id);
   }
 
@@ -2184,7 +2185,7 @@ void ExtensionPrefs::RegisterProfilePrefs(
   // defined.
   registry->RegisterIntegerPref(kCorruptedDisableCount.name, 0);
 
-#if BUILDFLAG(ENABLE_SUPERVISED_USERS) && BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_SUPERVISED_USERS) && (BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS))
   registry->RegisterBooleanPref(
       prefs::kSupervisedUserExtensionsMayRequestPermissions, false);
   registry->RegisterBooleanPref(prefs::kSkipParentApprovalToInstallExtensions,

@@ -28,7 +28,7 @@ class BrowserThemePack;
 class CustomThemeSupplier;
 class Profile;
 class ThemeServiceObserver;
-class ThemeSyncableService;
+// class ThemeSyncableService;
 
 namespace extensions {
 class Extension;
@@ -164,7 +164,7 @@ class ThemeService : public KeyedService, public BrowserThemeProviderDelegate {
 
   // Returns the syncable service for syncing theme. The returned service is
   // owned by |this| object.
-  virtual ThemeSyncableService* GetThemeSyncableService() const;
+  // virtual ThemeSyncableService* GetThemeSyncableService() const;
 
   // Gets the ThemeProvider for |profile|. This will be different for an
   // incognito profile and its original profile, even though both profiles use
@@ -371,7 +371,7 @@ class ThemeService : public KeyedService, public BrowserThemeProviderDelegate {
   // removes itself from the |observers_| list on destruction.
   base::ObserverList<ThemeServiceObserver> observers_;
 
-  std::unique_ptr<ThemeSyncableService> theme_syncable_service_;
+  // std::unique_ptr<ThemeSyncableService> theme_syncable_service_;
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   class ThemeObserver;

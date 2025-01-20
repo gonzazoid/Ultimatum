@@ -17,6 +17,7 @@ source_set("keyed_service_factories") {
   ]
 
   deps = [
+    "//base",
     "//chrome/browser/extensions/api:keyed_service_factories",
     "//chrome/common:buildflags",
     "//extensions/buildflags",
@@ -25,7 +26,7 @@ source_set("keyed_service_factories") {
     "//printing/buildflags:buildflags",
   ]
 
-  if (enable_extensions) {
+  if (enable_extensions || enable_desktop_android_extensions) {
     sources += [
       "chrome_browser_context_keyed_service_factories.cc",
       "chrome_browser_context_keyed_service_factories.h",
