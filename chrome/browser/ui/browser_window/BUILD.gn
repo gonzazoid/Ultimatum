@@ -4,7 +4,7 @@
 
 import("//chrome/common/features.gni")
 
-assert(is_win || is_mac || is_linux || is_chromeos || is_desktop_android)
+assert(is_win || is_mac || is_linux || is_chromeos || is_desktop_android || is_android)
 
 # This is the public interface for a browser window. Most features in
 # //chrome/browser depend on this interface, and thus to prevent circular
@@ -30,12 +30,40 @@ source_set("browser_window") {
 }
 
 source_set("impl") {
-  sources = []
+  sources = [
+    "browser_window_features.cc",
+    "browser_window_interface_iterator.cc",
+  ]
+  public_deps = [ "//chrome/browser:browser_public_dependencies" ]
+  deps = [
+    ":browser_window",
+    "//chrome/browser/extensions",
+    # "//chrome/browser/lens/region_search:region_search",
+    "//chrome/browser/media/router:media_router_feature",
+    "//chrome/browser/profiles:profile",
+    "//chrome/browser/ui:ui_features",
+    # "//chrome/browser/ui/commerce",
+    # "//chrome/browser/ui/lens",
+    # "//chrome/browser/ui/tabs/tab_strip_api",
+    # "//chrome/browser/ui/toasts",
+    # "//chrome/browser/ui/views/download",
+    # "//chrome/browser/ui/views/new_tab_footer",
+    # "//chrome/browser/ui/views/side_panel",
+    # "//chrome/browser/ui/views/toolbar",
+    # "//chrome/browser/ui/tabs/tab_strip_api:impl",
+    "//components/collaboration/public:public",
+    "//components/commerce/core:feature_list",
+    "//components/data_sharing/public:public",
+    "//components/lens:features",
+    "//components/profile_metrics",
+    "//components/saved_tab_groups/public",
+    "//components/search",
+  ]
 
   if (!is_android) {
     sources += [
-      "browser_window_features.cc",
-      "browser_window_interface_iterator.cc",
+      # "browser_window_features.cc",
+      # "browser_window_interface_iterator.cc",
       "desktop_browser_window_capabilities.cc",
     ]
     public_deps = [ "//chrome/browser:browser_public_dependencies" ]

@@ -5,6 +5,10 @@
 #include "chrome/browser/extensions/api/chrome_extensions_api_client.h"
 
 #include "base/notimplemented.h"
+#include "chrome/browser/supervised_user/supervised_user_extensions_delegate_impl.h"
+#include "chrome/browser/extensions/api/messaging/chrome_messaging_delegate.h"
+// #include "extensions/browser/api/messaging/messaging_delegate.h"
+#include "extensions/browser/api/messaging/native_message_host.h"
 #include "extensions/buildflags/buildflags.h"
 
 // TODO(crbug.com/417770773): This file contains stubs for the parts of
@@ -36,8 +40,10 @@ std::unique_ptr<SupervisedUserExtensionsDelegate>
 ChromeExtensionsAPIClient::CreateSupervisedUserExtensionsDelegate(
     content::BrowserContext* browser_context) const {
   // TODO(crbug.com/402488726): Support supervised users on desktop Android.
-  NOTIMPLEMENTED();
-  return nullptr;
+  // NOTIMPLEMENTED();
+  // return nullptr;
+  return std::make_unique<SupervisedUserExtensionsDelegateImpl>(
+      browser_context);
 }
 
 std::unique_ptr<DisplayInfoProvider>

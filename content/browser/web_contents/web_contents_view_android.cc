@@ -349,6 +349,7 @@ void WebContentsViewAndroid::DestroyBackForwardTransitionAnimationManager() {
 
 void WebContentsViewAndroid::ShowContextMenu(RenderFrameHost& render_frame_host,
                                              const ContextMenuParams& params) {
+  LOG(INFO) << "WebContentsViewAndroid::ShowContextMenu";
   if (is_active_drag_ && drag_exceeded_movement_threshold_)
     return;
 

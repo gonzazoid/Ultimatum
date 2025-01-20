@@ -33,7 +33,7 @@ class PrefService;
 // associated with the profile.
 class ProxyConfigMonitor : public net::ProxyConfigService::Observer,
                            public network::mojom::ProxyConfigPollerClient
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
     ,
                            public network::mojom::ProxyErrorClient
 #endif
@@ -76,7 +76,7 @@ class ProxyConfigMonitor : public net::ProxyConfigService::Observer,
   // network::mojom::ProxyConfigPollerClient implementation:
   void OnLazyProxyConfigPoll() override;
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   // network::mojom::ProxyErrorClient implementation:
   void OnPACScriptError(int32_t line_number,
                         const std::string& details) override;
@@ -92,7 +92,7 @@ class ProxyConfigMonitor : public net::ProxyConfigService::Observer,
 
   mojo::RemoteSet<network::mojom::ProxyConfigClient> proxy_config_client_set_;
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   mojo::ReceiverSet<network::mojom::ProxyErrorClient> error_receiver_set_;
   raw_ptr<Profile> profile_ = nullptr;
 #endif

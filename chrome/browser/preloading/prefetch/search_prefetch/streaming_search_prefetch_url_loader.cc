@@ -41,7 +41,7 @@
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "url/gurl.h"
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
 #include "extensions/browser/api/web_request/web_request_api.h"
 #include "extensions/browser/browser_context_keyed_api_factory.h"
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
@@ -287,7 +287,7 @@ StreamingSearchPrefetchURLLoader::StreamingSearchPrefetchURLLoader(
   // that extensions can be informed of any prefetches.
   network::URLLoaderFactoryBuilder factory_builder;
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   auto* web_request_api =
       extensions::BrowserContextKeyedAPIFactory<extensions::WebRequestAPI>::Get(
           profile);

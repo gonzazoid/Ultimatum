@@ -29,12 +29,12 @@
 #include "chrome/browser/extensions/external_install_manager.h"
 #include "chrome/browser/extensions/webstore_data_fetcher.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
+// #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/global_error/global_error.h"
 #include "chrome/browser/ui/global_error/global_error_service.h"
 #include "chrome/browser/ui/global_error/global_error_service_factory.h"
-#include "chrome/browser/ui/tabs/tab_strip_model.h"
+// #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "content/public/browser/storage_partition.h"
@@ -296,9 +296,9 @@ ExternalInstallErrorDesktop::ExternalInstallErrorDesktop(
     : browser_context_(browser_context),
       extension_id_(extension_id),
       alert_type_(alert_type),
-      manager_(manager),
-      error_service_(GlobalErrorServiceFactory::GetForProfile(
-          Profile::FromBrowserContext(browser_context_))) {
+      manager_(manager) // ,
+      // error_service_(GlobalErrorServiceFactory::GetForProfile(
+      /*    Profile::FromBrowserContext(browser_context_))) */ {
   prompt_ = std::make_unique<ExtensionInstallPrompt::Prompt>(
       ExtensionInstallPrompt::EXTERNAL_INSTALL_PROMPT);
 
@@ -326,9 +326,9 @@ ExternalInstallErrorDesktop::~ExternalInstallErrorDesktop() {
   BrowserContextDependencyManager::GetInstance()
       ->AssertBrowserContextWasntDestroyed(browser_context_);
 #endif
-  if (global_error_.get()) {
-    error_service_->RemoveUnownedGlobalError(global_error_.get());
-  }
+  // if (global_error_.get()) {
+  //   error_service_->RemoveUnownedGlobalError(global_error_.get());
+  // }
 }
 
 void ExternalInstallErrorDesktop::OnInstallPromptDone(
@@ -380,14 +380,14 @@ void ExternalInstallErrorDesktop::ShowDialog(Browser* browser) {
   DCHECK(install_ui_.get());
   DCHECK(prompt_.get());
   DCHECK(browser);
-  content::WebContents* web_contents = nullptr;
-  web_contents = browser->tab_strip_model()->GetActiveWebContents();
+  // content::WebContents* web_contents = nullptr;
+  // web_contents = browser->tab_strip_model()->GetActiveWebContents();
   manager_->DidChangeInstallAlertVisibility(this, true);
-  ExtensionInstallPrompt::GetDefaultShowDialogCallback().Run(
-      std::make_unique<ExtensionInstallPromptShowParams>(web_contents),
-      base::BindOnce(&ExternalInstallErrorDesktop::OnInstallPromptDone,
-                     weak_factory_.GetWeakPtr()),
-      std::move(prompt_));
+  // ExtensionInstallPrompt::GetDefaultShowDialogCallback().Run(
+  //     std::make_unique<ExtensionInstallPromptShowParams>(web_contents),
+  //     base::BindOnce(&ExternalInstallErrorDesktop::OnInstallPromptDone,
+  //                    weak_factory_.GetWeakPtr()),
+  //     std::move(prompt_));
 }
 
 const Extension* ExternalInstallErrorDesktop::GetExtension() const {
@@ -456,25 +456,25 @@ void ExternalInstallErrorDesktop::OnDialogReady(
   prompt_ = std::move(prompt);
 
   if (alert_type_ == BUBBLE_ALERT) {
-    global_error_ =
-        std::make_unique<ExternalInstallBubbleAlert>(this, prompt_.get());
-    error_service_->AddUnownedGlobalError(global_error_.get());
+    // global_error_ =
+    //     std::make_unique<ExternalInstallBubbleAlert>(this, prompt_.get());
+    // error_service_->AddUnownedGlobalError(global_error_.get());
 
     if (!manager_->has_currently_visible_install_alert()) {
       // |browser| is nullptr during unit tests, so call
       // DidChangeInstallAlertVisibility() regardless because we depend on this
       // in unit tests.
       manager_->DidChangeInstallAlertVisibility(this, true);
-      Browser* browser = chrome::FindTabbedBrowser(
-          Profile::FromBrowserContext(browser_context_), true);
-      if (browser) {
-        global_error_->ShowBubbleView(browser);
-      }
+      // Browser* browser = chrome::FindTabbedBrowser(
+      //     Profile::FromBrowserContext(browser_context_), true);
+      // if (browser) {
+      //   global_error_->ShowBubbleView(browser);
+      // }
     }
   } else {
     DCHECK(alert_type_ == MENU_ALERT);
-    global_error_ = std::make_unique<ExternalInstallMenuAlert>(this);
-    error_service_->AddUnownedGlobalError(global_error_.get());
+    // global_error_ = std::make_unique<ExternalInstallMenuAlert>(this);
+    // error_service_->AddUnownedGlobalError(global_error_.get());
   }
 }
 

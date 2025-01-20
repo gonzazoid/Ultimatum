@@ -10,6 +10,7 @@
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "base/android/jni_weak_ref.h"
+#include "base/android/token_android.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notimplemented.h"
 #include "base/time/time.h"
@@ -131,6 +132,38 @@ void TabModelJniBridge::HandlePopupNavigation(TabAndroid* parent,
 WebContents* TabModelJniBridge::GetWebContentsAt(int index) const {
   TabAndroid* tab = GetTabAt(index);
   return tab == nullptr ? nullptr : tab->web_contents();
+}
+
+bool TabModelJniBridge::AddTabsToTabGroup(std::vector<int> indices, int destination) const {
+  JNIEnv* env = base::android::AttachCurrentThread();
+
+  ScopedJavaLocalRef<jintArray> java_array =
+    base::android::ToJavaIntArray(env, indices);
+
+  return Java_TabModelJniBridge_addTabsToTabGroup(env, java_object_.get(env), java_array, destination);
+}
+
+tab_groups::TabGroupId TabModelJniBridge::CreateTabGroup(std::vector<int> indices) const {
+  JNIEnv* env = base::android::AttachCurrentThread();
+
+  ScopedJavaLocalRef<jintArray> java_array =
+    base::android::ToJavaIntArray(env, indices);
+
+  auto java_token = Java_TabModelJniBridge_createTabGroup(env, java_object_.get(env), java_array);
+  if (java_token) {
+    base::Token token = base::android::TokenAndroid::FromJavaToken(env, java_token);
+    return tab_groups::TabGroupId::FromRawToken(token);
+  }
+  return tab_groups::TabGroupId::CreateEmpty();
+}
+
+bool TabModelJniBridge::Ungroup(std::vector<int> indices) const {
+  JNIEnv* env = base::android::AttachCurrentThread();
+
+  ScopedJavaLocalRef<jintArray> java_array =
+    base::android::ToJavaIntArray(env, indices);
+
+  return Java_TabModelJniBridge_ungroup(env, java_object_.get(env), java_array);
 }
 
 TabAndroid* TabModelJniBridge::GetTabAt(int index) const {
@@ -266,11 +299,17 @@ void TabModelJniBridge::HighlightTabs(std::set<int> indicies) {
   NOTIMPLEMENTED();
 }
 
+// void TabModelJniBridge::MoveTab(int from_index, int to_index) {
+//   // TODO(crbug.com/415351293): Implement.
+//   NOTIMPLEMENTED();
+// }
+
 void TabModelJniBridge::MoveTab(int from_index, int to_index) {
   JNIEnv* env = AttachCurrentThread();
   ScopedJavaLocalRef<jobject> jobj = java_object_.get(env);
   Java_TabModelJniBridge_moveTabToIndex(env, jobj, from_index, to_index);
 }
+
 
 void TabModelJniBridge::CloseTab(int index) {
   CloseTabAt(index);

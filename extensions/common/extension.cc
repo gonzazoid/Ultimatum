@@ -597,7 +597,7 @@ Extension::Extension(const base::FilePath& path,
       finished_parsing_manifest_(false),
       wants_file_access_(false),
       creation_flags_(0) {
-  DCHECK(path.empty() || path.IsAbsolute());
+  DCHECK(path.empty() || path.IsAbsolute() || path.IsContentUri());
   path_ = crx_file::id_util::MaybeNormalizePath(path);
 }
 

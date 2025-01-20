@@ -10,6 +10,8 @@ import android.view.View;
 import org.jni_zero.CalledByNative;
 import org.jni_zero.NativeMethods;
 
+import org.chromium.chrome.R;
+
 import org.chromium.base.Callback;
 import org.chromium.base.ResettersForTesting;
 import org.chromium.base.metrics.RecordHistogram;
@@ -26,6 +28,8 @@ import org.chromium.content_public.browser.RenderFrameHost;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
+import org.chromium.ui.modelutil.MVCListAdapter.ListItem;
+// import org.chromium.ui.listmenu.MenuModelBridge;
 
 import java.util.List;
 
@@ -46,6 +50,7 @@ public class ContextMenuHelper {
     private Runnable mOnMenuShown;
     private Runnable mOnMenuClosed;
     private ChipDelegate mChipDelegate;
+    private List<ListItem> mExtensionsMenu;
 
     private ContextMenuHelper(long nativeContextMenuHelper, WebContents webContents) {
         mNativeContextMenuHelper = nativeContextMenuHelper;
@@ -72,6 +77,11 @@ public class ContextMenuHelper {
         mCurrentPopulator = null;
         if (mPopulatorFactory != null) mPopulatorFactory.onDestroy();
         mPopulatorFactory = populatorFactory;
+    }
+
+    @CalledByNative
+    private void setExtensionsMenu(List<ListItem> list) {
+      mExtensionsMenu = list;
     }
 
     /**
@@ -168,6 +178,13 @@ public class ContextMenuHelper {
 
     private void displayContextMenu(float topContentOffsetPx) {
         List<Pair<Integer, ModelList>> items = mCurrentPopulator.buildContextMenu();
+        if (mExtensionsMenu != null) {
+          ModelList extGroup = new ModelList();
+          for (ListItem item : mExtensionsMenu) {
+            extGroup.add(item);
+          }
+          items.add(new Pair<>(R.string.contextmenu_page_title, extGroup));
+        }
         if (items.isEmpty()) {
             PostTask.postTask(TaskTraits.UI_DEFAULT, mOnMenuClosed);
             // Only call if no items are populated. Otherwise call in mOnMenuShown callback.

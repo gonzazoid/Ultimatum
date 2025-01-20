@@ -73,6 +73,11 @@
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "chrome/browser/ui/extensions/extensions_dialogs.h"
+#endif
+
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
+#include "chrome/browser/extensions/manifest_v2_experiment_manager.h"
+#include "chrome/browser/extensions/mv2_experiment_stage.h"
 #include "extensions/browser/api/management/management_api.h"
 #endif
 
@@ -527,6 +532,10 @@ void WebstorePrivateBeginInstallWithManifest3Function::OnWebstoreParseSuccess(
   }
 
   if (install_status == kCanRequest || install_status == kRequestPending) {
+#if BUILDFLAG(IS_ANDROID)
+     OnRequestPromptDone(ExtensionInstallPrompt::DoneCallbackPayload(
+        ExtensionInstallPrompt::Result::ACCEPTED));
+#else
     install_prompt_ = std::make_unique<ExtensionInstallPrompt>(web_contents);
     install_prompt_->ShowDialog(
         base::BindRepeating(&WebstorePrivateBeginInstallWithManifest3Function::
@@ -538,14 +547,19 @@ void WebstorePrivateBeginInstallWithManifest3Function::OnWebstoreParseSuccess(
                 ? ExtensionInstallPrompt::EXTENSION_REQUEST_PROMPT
                 : ExtensionInstallPrompt::EXTENSION_PENDING_REQUEST_PROMPT),
         ExtensionInstallPrompt::GetDefaultShowDialogCallback());
+#endif
   } else {
     ReportWebStoreInstallEsbAllowlistParameter(details().esb_allowlist);
-
+#if BUILDFLAG(IS_ANDROID)
+    OnInstallPromptDone(ExtensionInstallPrompt::DoneCallbackPayload(
+      ExtensionInstallPrompt::Result::ACCEPTED));
+#else
     if (ShouldShowFrictionDialog(profile_)) {
       ShowInstallFrictionDialog(web_contents);
     } else {
       ShowInstallDialog(web_contents);
     }
+#endif
   }
   // Control flow finishes up in OnInstallPromptDone, OnRequestPromptDone or
   // OnBlockByPolicyPromptDone.
@@ -567,12 +581,16 @@ void WebstorePrivateBeginInstallWithManifest3Function::OnWebstoreParseFailure(
 
 void WebstorePrivateBeginInstallWithManifest3Function::RequestExtensionApproval(
     content::WebContents* web_contents) {
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   SupervisedUserExtensionsDelegate* supervised_user_extensions_delegate =
       ManagementAPI::GetFactoryInstance()
           ->Get(profile_)
           ->GetSupervisedUserExtensionsDelegate();
   CHECK(supervised_user_extensions_delegate);
+
+#if BUILDFLAG(IS_ANDROID)
+  OnExtensionApprovalApproved();
+#else
   auto extension_approval_callback =
       base::BindOnce(&WebstorePrivateBeginInstallWithManifest3Function::
                          OnExtensionApprovalDone,
@@ -582,6 +600,7 @@ void WebstorePrivateBeginInstallWithManifest3Function::RequestExtensionApproval(
       gfx::ImageSkia::CreateFrom1xBitmap(icon_),
       SupervisedUserExtensionParentApprovalEntryPoint::kOnWebstoreInstallation,
       std::move(extension_approval_callback));
+#endif
 #else
   // TODO(crbug.com/410616937): Support supervised user install controls on
   // desktop Android.
@@ -880,7 +899,7 @@ void WebstorePrivateBeginInstallWithManifest3Function::
                          OnFrictionPromptDone,
                      this));
 #else
-  NOTIMPLEMENTED() << "ShowInstallFrictionDialog not supported on Android";
+  // NOTIMPLEMENTED() << "ShowInstallFrictionDialog not supported on Android";
   OnFrictionPromptDone(true);
 #endif
 }
@@ -923,6 +942,7 @@ void WebstorePrivateBeginInstallWithManifest3Function::ShowInstallDialog(
     }
   }
 
+#if !BUILDFLAG(IS_ANDROID)
   install_prompt_ = std::make_unique<ExtensionInstallPrompt>(contents);
   install_prompt_->ShowDialog(
       base::BindOnce(&WebstorePrivateBeginInstallWithManifest3Function::
@@ -930,6 +950,7 @@ void WebstorePrivateBeginInstallWithManifest3Function::ShowInstallDialog(
                      this),
       dummy_extension_.get(), &icon_, std::move(prompt),
       ExtensionInstallPrompt::GetDefaultShowDialogCallback());
+#endif
 }
 
 void WebstorePrivateBeginInstallWithManifest3Function::

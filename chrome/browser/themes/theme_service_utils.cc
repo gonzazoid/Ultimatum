@@ -14,9 +14,12 @@
 
 bool CurrentThemeIsGrayscale(const PrefService* pref_service) {
   return pref_service->GetBoolean(prefs::kGrayscaleThemeEnabled);
+  // return false; // pref_service->GetBoolean(GetThemePrefNameInMigration(
+      // ThemePrefInMigration::kGrayscaleThemeEnabled));
 }
 
 std::optional<SkColor> CurrentThemeUserColor(const PrefService* pref_service) {
+  // return std::nullopt;
   const SkColor user_color = pref_service->GetInteger(prefs::kUserColor);
   return user_color == SK_ColorTRANSPARENT ? std::nullopt
                                            : std::make_optional(user_color);

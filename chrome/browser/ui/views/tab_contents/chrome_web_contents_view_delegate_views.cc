@@ -76,6 +76,7 @@ std::unique_ptr<RenderViewContextMenuBase>
 ChromeWebContentsViewDelegateViews::BuildMenu(
     content::RenderFrameHost& render_frame_host,
     const content::ContextMenuParams& params) {
+  LOG(INFO) << "ChromeWebContentsViewDelegateViews::BuildMenu";
   std::unique_ptr<RenderViewContextMenuBase> menu(
       RenderViewContextMenuViews::Create(render_frame_host, params));
   menu->Init();

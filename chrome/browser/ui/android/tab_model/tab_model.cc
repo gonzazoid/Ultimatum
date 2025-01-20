@@ -5,6 +5,7 @@
 #include "chrome/browser/ui/android/tab_model/tab_model.h"
 
 #include "base/metrics/histogram_functions.h"
+#include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/android/tab_android.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
@@ -12,9 +13,16 @@
 #include "chrome/browser/sync/session_sync_service_factory.h"
 #include "chrome/browser/sync/sessions/sync_sessions_web_contents_router.h"
 #include "chrome/browser/sync/sessions/sync_sessions_web_contents_router_factory.h"
+#include "chrome/browser/resource_coordinator/tab_lifecycle_unit_external.h"
 #include "components/omnibox/browser/location_bar_model_impl.h"
 #include "components/sync_sessions/open_tabs_ui_delegate.h"
 #include "components/sync_sessions/session_sync_service.h"
+
+#include "chrome/common/extensions/extension_constants.h"
+#include "chrome/browser/extensions/extension_tab_util.h"
+#include "content/public/browser/navigation_entry.h"
+#include "content/public/browser/favicon_status.h"
+#include "chrome/browser/ui/recently_audible_helper.h"
 
 using chrome::android::ActivityType;
 
@@ -23,6 +31,26 @@ using chrome::android::ActivityType;
 static int INVALID_TAB_INDEX = -1;
 
 namespace {
+// Must match Java Tab.INVALID_TAB_ID.
+// doesn't seems ok to have it here but googlers have it all over the project so we can afford not to care about it
+// unless they all of the sudden decide to become decent coders (which is very much unlikely, if history is any indication)
+static constexpr int kInvalidTabId = -1;
+// from chrome/browser/extensions/browser_extension_window_controller.cc
+// and it's very very VERY wrong!!!
+constexpr char kAlwaysOnTopKey[] = "alwaysOnTop";
+constexpr char kFocusedKey[] = "focused";
+constexpr char kHeightKey[] = "height";
+constexpr char kIncognitoKey[] = "incognito";
+constexpr char kLeftKey[] = "left";
+constexpr char kShowStateKey[] = "state";
+constexpr char kTopKey[] = "top";
+constexpr char kWidthKey[] = "width";
+constexpr char kWindowTypeKey[] = "type";
+constexpr char kShowStateValueNormal[] = "normal";
+// this one from extensions/common/constants.h it's still wrong to have it here
+inline constexpr char kId[] = "id";
+// end of wrongness
+
 sync_sessions::OpenTabsUIDelegate* GetOpenTabsUIDelegate(Profile* profile) {
   sync_sessions::SessionSyncService* service =
       SessionSyncServiceFactory::GetForProfile(profile);
@@ -41,6 +69,142 @@ TabModel::TabModel(Profile* profile, ActivityType activity_type)
       session_id_(SessionID::NewUnique()) {}
 
 TabModel::~TabModel() = default;
+
+// stick to BrowserExtensionWindowController::CreateWindowValueForExtension
+// from chrome/browser/extensions/browser_extension_window_controller.cc
+base::Value::Dict
+TabModel::CreateWindowValueForExtension(
+    const extensions::Extension* extension,
+    extensions::WindowController::PopulateTabBehavior populate_tab_behavior,
+    extensions::mojom::ContextType context) const {
+  base::Value::Dict dict;
+
+  dict.Set(kId, GetSessionId().id());
+  dict.Set(kWindowTypeKey, extensions::api::tabs::ToString(extensions::api::tabs::WindowType::kNormal));
+  dict.Set(kFocusedKey, IsActiveModel());
+  const Profile* profile = GetProfile();
+  dict.Set(kIncognitoKey, profile->IsOffTheRecord());
+  dict.Set(kAlwaysOnTopKey, false);
+
+  dict.Set(kShowStateKey, kShowStateValueNormal);
+
+  TabAndroid* tab = GetTabAt(GetActiveIndex()); // may be 0?
+  if (tab) {
+    gfx::Rect bounds = tab->GetBounds();
+    dict.Set(kLeftKey, bounds.x());
+    dict.Set(kTopKey, bounds.y());
+    dict.Set(kWidthKey, bounds.width());
+    dict.Set(kHeightKey, bounds.height());
+  }
+
+  if (populate_tab_behavior == extensions::WindowController::kPopulateTabs) {
+    dict.Set(extensions::ExtensionTabUtil::kTabsKey, CreateTabList(extension, context));
+  }
+
+  return dict;
+}
+
+base::Value::List TabModel::CreateTabList(
+    const extensions::Extension* extension,
+    extensions::mojom::ContextType context) const {
+  base::Value::List tab_list;
+  for (int i = 0; i < GetTabCount(); ++i) {
+    tab_list.Append(CreateTabObject(extension, i)
+                        .ToValue());
+  }
+
+  return tab_list;
+}
+
+extensions::api::tabs::Tab TabModel::CreateTabObject(
+    const extensions::Extension* extension,
+    int tab_index) const {
+  extensions::api::tabs::Tab tab_object;
+  auto* tab = GetTabAt(tab_index);
+  tab_object.index = tab_index;
+  tab_object.id = tab->GetTabId().id();
+  tab_object.window_id = tab->GetWindowId().id();
+  auto* contents = tab->web_contents();
+  if (contents) {
+    tab_object.last_accessed =
+      contents->GetLastActiveTime().InMillisecondsFSinceUnixEpoch();
+
+    gfx::Size contents_size = contents->GetContainerBounds().size();
+    tab_object.width = contents_size.width();
+    tab_object.height = contents_size.height();
+
+    tab_object.url = contents->GetLastCommittedURL().spec(); // or GetUrl() ??
+    content::NavigationEntry* pending_entry = contents->GetController().GetPendingEntry();
+    if (pending_entry) {
+      tab_object.pending_url = pending_entry->GetVirtualURL().spec();
+    }
+    tab_object.title = base::UTF16ToUTF8(contents->GetTitle());
+
+    // TODO(tjudkins) This should probably use the LastCommittedEntry() for
+    // consistency.
+    content::NavigationEntry* visible_entry = contents->GetController().GetVisibleEntry();
+    if (visible_entry && visible_entry->GetFavicon().valid) {
+      tab_object.fav_icon_url = visible_entry->GetFavicon().url.spec();
+    }
+
+    auto* audible_helper = RecentlyAudibleHelper::FromWebContents(contents); // TODO does it work?
+    bool audible = false;
+    if (audible_helper) {
+      // WebContents in a tab strip have RecentlyAudible helpers. They endow the
+      // tab with a notion of audibility that has a timeout for quiet periods. Use
+      // that if available.
+      audible = audible_helper->WasRecentlyAudible();
+    } else {
+      // Otherwise use the instantaneous notion of audibility.
+      audible = contents->IsCurrentlyAudible();
+    }
+    tab_object.audible = audible;
+    tab_object.muted_info = extensions::ExtensionTabUtil::CreateMutedInfo(contents);
+
+    tab_object.status = extensions::ExtensionTabUtil::GetLoadingStatus(contents);
+  }
+
+  tab_object.discarded = tab->NeedsReload();
+  tab_object.auto_discardable = true;
+  tab_object.frozen = tab->IsFrozen();
+  tab_object.active = tab_index == GetActiveIndex();
+  tab_object.selected = tab_index == GetActiveIndex();
+  tab_object.highlighted = tab_index == GetActiveIndex();
+  tab_object.pinned = live_tab_context_->IsTabPinned(tab_index);
+
+  tab_object.group_id = -1;
+  // std::optional<tab_groups::TabGroupId> group = tab->GetTabGroupId();
+  std::optional<base::Token> group = tab->GetTabGroupId();
+  if (group.has_value()) {
+    tab_object.group_id = extensions::ExtensionTabUtil::GetGroupId(
+      tab_groups::TabGroupId::FromRawToken(*group)
+    );
+  }
+
+  tab_object.incognito = tab->IsIncognito();
+
+  int parent_id = tab->GetParentId(); // it's android id
+  tab_object.opener_tab_id = 0;
+  if (parent_id != kInvalidTabId) {
+    bool opener_is_alive = false;
+    // that's very very bad, we do brutforce because of poor TabModel design
+    // we need something like TabModel::Includes(tabId)
+    for (int i=0; i < GetTabCount(); i++) {
+      auto* curr_tab = GetTabAt(i);
+      if (curr_tab->GetAndroidId() == parent_id) { // compare with android id
+        parent_id = curr_tab->GetTabId().id(); // now we can get conventional tab id
+        opener_is_alive = true;
+        break;
+      }
+    }
+    if (opener_is_alive && parent_id > 0) {
+      tab_object.opener_tab_id = parent_id;
+    }
+  }
+
+  // ScrubTabForExtension(extension, contents, &tab_object, scrub_tab_behavior);
+  return tab_object;
+}
 
 Profile* TabModel::GetProfile() const {
   return profile_;

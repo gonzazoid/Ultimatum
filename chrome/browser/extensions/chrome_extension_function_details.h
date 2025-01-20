@@ -35,7 +35,7 @@ class ChromeExtensionFunctionDetails {
 
   // TODO(crbug.com/423725749): Enable this function on Android once
   // BrowserExtensionWindowController is ported.
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   // Gets the "current" WindowController, if any.
   //
   // Many extension APIs operate relative to the current window, which is the

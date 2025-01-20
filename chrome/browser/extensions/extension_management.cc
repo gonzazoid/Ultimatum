@@ -339,8 +339,8 @@ bool ExtensionManagement::IsAllowedManifestType(
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   // If a managed theme has been set for the current profile, theme extension
   // installations are not allowed.
-  if (manifest_type == Manifest::Type::TYPE_THEME &&
-      ThemeServiceFactory::GetForProfile(profile_)->UsingPolicyTheme())
+  if (manifest_type == Manifest::Type::TYPE_THEME /* &&
+      ThemeServiceFactory::GetForProfile(profile_)->UsingPolicyTheme() */)
     return false;
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 

@@ -15,7 +15,7 @@
 #include "extensions/renderer/native_extension_bindings_system.h"
 #include "extensions/renderer/resource_bundle_source_map.h"
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "build/chromeos_buildflags.h"
 #include "chrome/renderer/extensions/api/app_hooks_delegate.h"
 #include "chrome/renderer/extensions/api/identity_hooks_delegate.h"

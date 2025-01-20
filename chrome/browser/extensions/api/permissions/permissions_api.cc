@@ -127,13 +127,13 @@ bool ValidateDocument(const std::string& document_id,
   // Document is invalid if the web contents doesn't exist in our
   // BrowserContext. We check for this since we found the RenderFrameHost
   // through a generic lookup.
-  *web_contents = content::WebContents::FromRenderFrameHost(frame);
-  if (!ExtensionTabUtil::IsWebContentsInContext(
-          *web_contents, browser_context, include_incognito_information)) {
-    *error =
-        ErrorUtils::FormatErrorMessage(kInvalidDocumentIdError, document_id);
-    return false;
-  }
+  // *web_contents = content::WebContents::FromRenderFrameHost(frame);
+  // if (!ExtensionTabUtil::IsWebContentsInContext(
+  //         *web_contents, browser_context, include_incognito_information)) {
+  //   *error =
+  //       ErrorUtils::FormatErrorMessage(kInvalidDocumentIdError, document_id);
+  //   return false;
+  // }
 
   return true;
 }
@@ -319,17 +319,14 @@ ExtensionFunction::ResponseAction PermissionsRequestFunction::Run() {
     return RespondNow(Error(kUserGestureRequiredError));
   }
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(IS_ANDROID)
+  gfx::NativeWindow native_window = gfx::NativeWindow();
+#else
   gfx::NativeWindow native_window =
       ChromeExtensionFunctionDetails(this).GetNativeWindowForUI();
   if (!native_window && g_dialog_action == DialogAction::kDefault) {
     return RespondNow(Error("Could not find an active window."));
   }
-#else
-  // TODO(crbug.com/419057482): Once we have a cross-platform interface for
-  // browser windows that works on desktop Android, check for an active window.
-  NOTIMPLEMENTED() << "Skipping active window check";
-  gfx::NativeWindow native_window = nullptr;
 #endif
 
   std::optional<api::permissions::Request::Params> params =
@@ -475,13 +472,13 @@ ExtensionFunction::ResponseAction PermissionsRequestFunction::Run() {
 
   install_ui_ = std::make_unique<ExtensionInstallPrompt>(
       Profile::FromBrowserContext(browser_context()), native_window);
-  install_ui_->ShowDialog(
-      base::BindOnce(&PermissionsRequestFunction::OnInstallPromptDone, this),
-      extension(), nullptr,
-      std::make_unique<ExtensionInstallPrompt::Prompt>(
-          ExtensionInstallPrompt::PERMISSIONS_PROMPT),
-      std::move(total_new_permissions),
-      ExtensionInstallPrompt::GetDefaultShowDialogCallback());
+  // install_ui_->ShowDialog(
+  //     base::BindOnce(&PermissionsRequestFunction::OnInstallPromptDone, this),
+  //     extension(), nullptr,
+  //     std::make_unique<ExtensionInstallPrompt::Prompt>(
+  //         ExtensionInstallPrompt::PERMISSIONS_PROMPT),
+  //     std::move(total_new_permissions),
+  //     ExtensionInstallPrompt::GetDefaultShowDialogCallback());
 
   // ExtensionInstallPrompt::ShowDialog() can call the response synchronously.
   return did_respond() ? AlreadyResponded() : RespondLater();

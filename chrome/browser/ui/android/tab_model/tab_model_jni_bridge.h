@@ -50,6 +50,10 @@ class TabModelJniBridge : public TabModel {
                        const base::android::JavaParamRef<jobject>& jtab);
 
   // TabModel::
+  tab_groups::TabGroupId CreateTabGroup(std::vector<int>) const override;
+  bool AddTabsToTabGroup(std::vector<int>, int) const override;
+  bool Ungroup(std::vector<int>) const override;
+  // void MoveTab(int id, int newIndex) const override;
   int GetTabCount() const override;
   int GetActiveIndex() const override;
   content::WebContents* GetWebContentsAt(int index) const override;

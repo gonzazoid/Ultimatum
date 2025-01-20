@@ -14,17 +14,18 @@
 #include "extensions/browser/app_window/app_window_registry.h"
 #endif  // !BUILDFLAG(IS_ANDROID)
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+// #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "chrome/browser/extensions/browser_extension_window_controller.h"
 #include "chrome/browser/extensions/window_controller.h"
 #include "chrome/browser/extensions/window_controller_list.h"
-#include "chrome/browser/ui/browser.h"
+// #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_finder.h"
-#include "chrome/browser/ui/browser_window.h"
-#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
-#include "chrome/browser/ui/tabs/tab_strip_model.h"
+// #include "chrome/browser/ui/browser_window.h"
+// #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+// #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "components/web_modal/web_contents_modal_dialog_manager.h"
-#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+// #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 ChromeExtensionFunctionDetails::ChromeExtensionFunctionDetails(
     ExtensionFunction* function)
@@ -32,7 +33,7 @@ ChromeExtensionFunctionDetails::ChromeExtensionFunctionDetails(
 
 ChromeExtensionFunctionDetails::~ChromeExtensionFunctionDetails() = default;
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
 extensions::WindowController*
 ChromeExtensionFunctionDetails::GetCurrentWindowController() const {
   // If the delegate has an associated window controller, return it.
@@ -54,15 +55,15 @@ ChromeExtensionFunctionDetails::GetCurrentWindowController() const {
   // |include_incognito|. Look only for browsers on the active desktop as it is
   // preferable to pretend no browser is open then to return a browser on
   // another desktop.
-  content::WebContents* web_contents = function_->GetSenderWebContents();
-  Profile* profile = Profile::FromBrowserContext(
-      web_contents ? web_contents->GetBrowserContext()
-                   : function_->browser_context());
-  Browser* browser = chrome::FindAnyBrowser(
-      profile, function_->include_incognito_information());
-  if (browser) {
-    return browser->GetFeatures().extension_window_controller();
-  }
+  // content::WebContents* web_contents = function_->GetSenderWebContents();
+  // Profile* profile = Profile::FromBrowserContext(
+  //     web_contents ? web_contents->GetBrowserContext()
+  //                  : function_->browser_context());
+  // Browser* browser = chrome::FindAnyBrowser(
+  //     profile, function_->include_incognito_information());
+  // if (browser) {
+  //   return browser->GetFeatures().extension_window_controller();
+  // }
 
   // NOTE(rafaelw): This can return NULL in some circumstances. In particular,
   // a background_page onload chrome.tabs api call can make it into here
@@ -120,8 +121,8 @@ gfx::NativeWindow ChromeExtensionFunctionDetails::GetNativeWindowForUI() {
   // TODO(crbug.com/419057482): Enable this logic on Android.
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   // As a last resort, find a browser.
-  Browser* browser = chrome::FindBrowserWithProfile(
-      Profile::FromBrowserContext(function_->browser_context()));
+  // Browser* browser = chrome::FindBrowserWithProfile(
+  //     Profile::FromBrowserContext(function_->browser_context()));
   // If there are no browser windows open, no window is available.
   // This could happen e.g. if extension launches a long process or simple
   // sleep() in the background script, during which browser is closed.

@@ -65,7 +65,7 @@ ExtensionInstallPromptShowParams::ExtensionInstallPromptShowParams(
   DCHECK(!parent_window) << "Android does not support a parent window.";
 #else
   if (parent_window_) {
-    native_window_tracker_ = views::NativeWindowTracker::Create(parent_window_);
+    // native_window_tracker_ = views::NativeWindowTracker::Create(parent_window_);
   }
 #endif
 }

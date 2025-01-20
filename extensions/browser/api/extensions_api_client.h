@@ -226,9 +226,9 @@ class ExtensionsAPIClient {
 
   // Returns a delegate for the chrome.feedbackPrivate API.
   virtual FeedbackPrivateDelegate* GetFeedbackPrivateDelegate();
+#endif  // !BUILDFLAG(IS_ANDROID)
 
   virtual AutomationInternalApiDelegate* GetAutomationInternalApiDelegate();
-#endif  // !BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_CHROMEOS)
   // If supported by the embedder, returns a delegate for querying non-native

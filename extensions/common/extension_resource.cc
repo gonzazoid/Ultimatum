@@ -52,6 +52,11 @@ base::FilePath ExtensionResource::GetFilePath(
     const base::FilePath& extension_root,
     const base::FilePath& relative_path,
     SymlinkPolicy symlink_policy) {
+#if BUILDFLAG(IS_ANDROID)
+  if (extension_root.IsContentUri()) {
+    return extension_root.Append(relative_path);
+  }
+#endif
   // We need to normalize `extension_root` on its own because `IsParent` doesn't
   // normalize file paths. Without normalization parent references, Windows
   // short paths, or different path capitalization will cause `IsParent` to

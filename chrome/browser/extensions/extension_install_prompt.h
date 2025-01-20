@@ -284,7 +284,7 @@ class ExtensionInstallPrompt {
 
   virtual ~ExtensionInstallPrompt();
 
-  ExtensionInstallUI* install_ui() const { return install_ui_.get(); }
+  // ExtensionInstallUI* install_ui() const { return install_ui_.get(); }
 
   // Starts the process to show the install dialog. Loads the icon (if `icon` is
   // null), sets up the Prompt, and calls `show_dialog_callback` when ready to
@@ -365,7 +365,7 @@ class ExtensionInstallPrompt {
   std::unique_ptr<const extensions::PermissionSet> custom_permissions_;
 
   // The object responsible for doing the UI specific actions.
-  std::unique_ptr<ExtensionInstallUI> install_ui_;
+  // std::unique_ptr<ExtensionInstallUI> install_ui_;
 
   // Parameters to show the confirmation UI.
   std::unique_ptr<ExtensionInstallPromptShowParams> show_params_;
