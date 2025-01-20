@@ -24,9 +24,9 @@ class BrowserWindowInterface;
 class GURL;
 class Profile;
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
 class Browser;  // TODO(stevenjb) eliminate this dependency.
-#endif
+// #endif
 
 namespace content {
 class WebContents;
@@ -104,11 +104,11 @@ class WindowController {
   // if any. Defaults to returning null.
   virtual BrowserWindowInterface* GetBrowserWindowInterface();
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
   // Returns a Browser if available. Defaults to returning NULL.
   // TODO(stevenjb): Temporary workaround. Eliminate this.
   virtual Browser* GetBrowser() const;
-#endif
+// #endif
 
   // Returns true if the window is in the process of being torn down. See
   // Browser::is_delete_scheduled().

@@ -1904,6 +1904,9 @@ void BrowserThemePack::GenerateFrameColorsFromTints() {
 }
 
 void BrowserThemePack::GenerateWindowControlButtonColor(ImageCache* images) {
+#if BUILDFLAG(IS_ANDROID)
+
+#else
   static constexpr struct ControlBGValue {
     // The color to compute and store.
     int color_id;
@@ -1976,6 +1979,7 @@ void BrowserThemePack::GenerateWindowControlButtonColor(ImageCache* images) {
     SetColorIfUnspecified(bg_pair.color_id,
                           ComputeImageColor(dest_image, dest_size.height()));
   }
+#endif
 }
 
 void BrowserThemePack::CreateTabBackgroundImagesAndColors(ImageCache* images) {

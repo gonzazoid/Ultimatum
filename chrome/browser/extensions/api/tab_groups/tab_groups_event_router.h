@@ -53,7 +53,7 @@ class TabGroupsEventRouter : public TabStripModelObserver,
 
   const raw_ptr<Profile> profile_;
   const raw_ptr<EventRouter> event_router_ = nullptr;
-  BrowserTabStripTracker browser_tab_strip_tracker_;
+  // BrowserTabStripTracker browser_tab_strip_tracker_;
 };
 
 }  // namespace extensions

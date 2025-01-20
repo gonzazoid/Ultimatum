@@ -35,6 +35,7 @@ class ExtensionActionsBridge : public ToolbarActionsModel::Observer {
   void Destroy(JNIEnv* env);
   bool AreActionsInitialized(JNIEnv* env);
   std::vector<ToolbarActionsModel::ActionId> GetActionIds(JNIEnv* env);
+  std::vector<ToolbarActionsModel::ActionId> GetPinnedActionIds(JNIEnv* env);
   base::android::ScopedJavaLocalRef<jobject> GetAction(
       JNIEnv* env,
       const ToolbarActionsModel::ActionId& action_id,
@@ -55,6 +56,19 @@ class ExtensionActionsBridge : public ToolbarActionsModel::Observer {
   jni_zero::ScopedJavaLocalRef<jobject> HandleKeyDownEvent(
       JNIEnv* env,
       const ui::KeyEventAndroid& key_event);
+
+  bool IsInIncognito(
+      JNIEnv* env,
+      const ToolbarActionsModel::ActionId& action_id);
+  void ReloadExtension(
+      JNIEnv* env,
+      const ToolbarActionsModel::ActionId& action_id);
+  int GetManifestVersion(
+      JNIEnv* env,
+      const ToolbarActionsModel::ActionId& action_id);
+  void DoReloadExtension(
+    const ToolbarActionsModel::ActionId& action_id
+    );
 
   // ToolbarActionsModel::Observer:
   void OnToolbarActionAdded(const ToolbarActionsModel::ActionId& id) override;

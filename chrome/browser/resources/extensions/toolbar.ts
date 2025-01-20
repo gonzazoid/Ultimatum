@@ -28,6 +28,7 @@ export interface ToolbarDelegate {
 
   /** Opens the dialog to load unpacked extensions. */
   loadUnpacked(): Promise<boolean>;
+  loadCRX(): Promise<boolean>;
 
   /** Updates all extensions. */
   updateAllExtensions(extensions: chrome.developerPrivate.ExtensionInfo[]):
@@ -37,6 +38,9 @@ export interface ToolbarDelegate {
 class DummyToolbarDelegate {
   setProfileInDevMode(_inDevMode: boolean) {}
   loadUnpacked() {
+    return Promise.resolve(true);
+  }
+  loadCRX() {
     return Promise.resolve(true);
   }
   updateAllExtensions(_extensions: chrome.developerPrivate.ExtensionInfo[]) {
@@ -181,6 +185,21 @@ export class ExtensionsToolbarElement extends ExtensionsToolbarElementBase {
 
   protected onLoadUnpackedClick_() {
     this.delegate.loadUnpacked()
+        .then((success) => {
+          if (success) {
+            const toastManager = getToastManager();
+            toastManager.duration = TOAST_DURATION_MS;
+            toastManager.show(this.i18n('toolbarLoadUnpackedDone'));
+          }
+        })
+        .catch(loadError => {
+          this.fire('load-error', loadError);
+        });
+    chrome.metricsPrivate.recordUserAction('Options_LoadUnpackedExtension');
+  }
+
+  protected onLoadCRXClick_() {
+    this.delegate.loadCRX()
         .then((success) => {
           if (success) {
             const toastManager = getToastManager();

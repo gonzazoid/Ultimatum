@@ -31,6 +31,7 @@ group("api_implementations") {
   # TODO(https://crbug.com/356905053): Continue moving more APIs here.
   public_deps = [
     "//extensions/browser/api/alarms",
+    "//extensions/browser/api/app_runtime",
     "//extensions/browser/api/declarative_net_request",
     "//extensions/browser/api/dns",
     "//extensions/browser/api/file_handlers",
@@ -48,8 +49,24 @@ group("api_implementations") {
     "//extensions/browser/api/system_memory",
     "//extensions/browser/api/system_network",
     "//extensions/browser/api/test",
+    "//extensions/browser/api/mime_handler_private",
+    "//extensions/browser/api/automation_internal",
     "//extensions/browser/api/user_scripts",
+    "//extensions/browser/api/socket",
+    "//extensions/browser/api/sockets_tcp",
+    "//extensions/browser/api/sockets_tcp_server",
+    "//extensions/browser/api/sockets_udp",
+    "//extensions/browser/api/system_storage",
+    "//extensions/browser/api/file_system",
   ]
+
+  if (enable_guest_view) {
+    public_deps += [
+      "//extensions/browser/api/guest_view",
+      "//extensions/browser/api/guest_view/app_view",
+      "//extensions/browser/api/guest_view/web_view",
+    ]
+  }
 
   # APIs that are currently not supported on desktop-android.
   if (enable_extensions) {
@@ -59,25 +76,23 @@ group("api_implementations") {
       "//extensions/browser/api/app_runtime",
       "//extensions/browser/api/app_window",
       "//extensions/browser/api/audio",
-      "//extensions/browser/api/automation_internal",
       "//extensions/browser/api/bluetooth",
       "//extensions/browser/api/bluetooth_low_energy",
       "//extensions/browser/api/bluetooth_socket",
       "//extensions/browser/api/content_settings",
       "//extensions/browser/api/feedback_private",
-      "//extensions/browser/api/file_system",
+      # "//extensions/browser/api/file_system",
       "//extensions/browser/api/mime_handler_private",
       "//extensions/browser/api/networking_private",
       "//extensions/browser/api/printer_provider",
       "//extensions/browser/api/protocol_handlers",
       "//extensions/browser/api/serial",
-      "//extensions/browser/api/socket",
-      "//extensions/browser/api/sockets_tcp",
-      "//extensions/browser/api/sockets_tcp_server",
-      "//extensions/browser/api/sockets_udp",
+      # "//extensions/browser/api/sockets_tcp",
+      # "//extensions/browser/api/sockets_tcp_server",
+      # "//extensions/browser/api/sockets_udp",
       "//extensions/browser/api/system_display",
       "//extensions/browser/api/system_info",
-      "//extensions/browser/api/system_storage",
+      # "//extensions/browser/api/system_storage",
       "//extensions/browser/api/virtual_keyboard_private",
     ]
 
@@ -89,14 +104,6 @@ group("api_implementations") {
         "//extensions/browser/api/media_perception_private",
         "//extensions/browser/api/virtual_keyboard",
         "//extensions/browser/api/webcam_private",
-      ]
-    }
-
-    if (enable_guest_view) {
-      public_deps += [
-        "//extensions/browser/api/guest_view",
-        "//extensions/browser/api/guest_view/app_view",
-        "//extensions/browser/api/guest_view/web_view",
       ]
     }
   }

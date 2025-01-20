@@ -7,8 +7,9 @@
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/profiles/profile.h"
 #include "content/public/browser/web_contents.h"
+#include "extensions/buildflags/buildflags.h"
 
-#if !BUILDFLAG(IS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #include "extensions/browser/extension_registry.h"  // nogncheck
 #include "extensions/browser/process_map.h"         // nogncheck
 #include "extensions/common/constants.h"            // nogncheck
@@ -20,7 +21,7 @@ namespace {
 
 bool HostsExtension(content::WebContents* web_contents) {
   DCHECK(web_contents);
-#if BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID) && !BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   return false;
 #else   // BUILDFLAG(IS_ANDROID)
   return web_contents->GetLastCommittedURL().SchemeIs(
@@ -58,7 +59,7 @@ std::u16string TabContentsTask::GetCurrentTitle() const {
   Profile* profile =
       Profile::FromBrowserContext(web_contents()->GetBrowserContext());
 
-#if BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID) && !BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
   bool is_app = false;
 #else   // BUILDFLAG(IS_ANDROID)
   extensions::ProcessMap* process_map = extensions::ProcessMap::Get(profile);

@@ -29,6 +29,7 @@ import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
 import org.chromium.components.embedder_support.util.UrlConstants;
 import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.ui.base.PageTransition;
+import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.listmenu.ListMenu;
 import org.chromium.ui.listmenu.ListMenuButton;
 import org.chromium.ui.listmenu.ListMenuDelegate;
@@ -72,6 +73,7 @@ public class ExtensionsMenuCoordinator implements Destroyable {
      */
     public ExtensionsMenuCoordinator(
             Context context,
+            WindowAndroid windowAndroid,
             ListMenuButton extensionsMenuButton,
             ThemeColorProvider themeColorProvider,
             ChromeAndroidTask task,
@@ -99,7 +101,6 @@ public class ExtensionsMenuCoordinator implements Destroyable {
 
         mExtensionModels = new ModelList();
         setUpExtensionsRecyclerView(mContentView, mContext, mExtensionModels);
-
         ListMenu listMenu =
                 new ListMenu() {
                     @Override
@@ -120,6 +121,8 @@ public class ExtensionsMenuCoordinator implements Destroyable {
         mMediator =
                 new ExtensionsMenuMediator(
                         mContext,
+                        windowAndroid,
+                        mExtensionsMenuButton,
                         task,
                         mCurrentTabSupplier,
                         mExtensionModels,

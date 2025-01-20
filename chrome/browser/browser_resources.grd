@@ -8,7 +8,7 @@
   </outputs>
   <release seq="1">
     <structures>
-      <if expr="not is_android">
+      <if expr="not is_android or enable_desktop_android_extensions">
         <!-- Incognito and Guest mode, new tab page WebUI. -->
         <structure name="IDR_INCOGNITO_TAB_HTML" file="resources\new_tab_page_incognito_guest\incognito_tab.html" flattenhtml="true" type="chrome_html" />
         <structure name="IDR_INCOGNITO_TAB_THEME_CSS" file="resources\new_tab_page_incognito_guest\incognito_tab_theme.css" flattenhtml="true" type="chrome_html" />

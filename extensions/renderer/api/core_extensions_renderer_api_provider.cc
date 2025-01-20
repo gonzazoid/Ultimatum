@@ -233,8 +233,8 @@ void CoreExtensionsRendererAPIProvider::PopulateSourceMap(
       {"automationEvent", IDR_AUTOMATION_EVENT_JS},
       {"automationNode", IDR_AUTOMATION_NODE_JS},
       {"automationTreeCache", IDR_AUTOMATION_TREE_CACHE_JS},
-#if BUILDFLAG(ENABLE_PLATFORM_APPS)
       {"app.runtime", IDR_APP_RUNTIME_CUSTOM_BINDINGS_JS},
+#if BUILDFLAG(ENABLE_PLATFORM_APPS)
       {"app.window", IDR_APP_WINDOW_CUSTOM_BINDINGS_JS},
 #endif
       {"declarativeWebRequest", IDR_DECLARATIVE_WEBREQUEST_CUSTOM_BINDINGS_JS},

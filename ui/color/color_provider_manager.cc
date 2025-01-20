@@ -19,9 +19,9 @@
 #include "ui/color/color_provider_key.h"
 #include "ui/color/color_provider_utils.h"
 
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
 #include "ui/color/color_mixers.h"
-#endif
+// #endif
 
 namespace ui {
 
@@ -57,10 +57,10 @@ ColorProviderManager& ColorProviderManager::Get() {
   std::optional<GlobalManager>& manager = GetGlobalManager();
   if (!manager.has_value()) {
     manager.emplace();
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
     manager.value().AppendColorProviderInitializer(
         base::BindRepeating(AddColorMixers));
-#endif  // !BUILDFLAG(IS_ANDROID)
+// #endif  // !BUILDFLAG(IS_ANDROID)
   }
 
   return manager.value();

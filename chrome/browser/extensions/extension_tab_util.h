@@ -21,6 +21,8 @@
 #include "extensions/buildflags/buildflags.h"
 #include "extensions/common/mojom/context_type.mojom-forward.h"
 #include "ui/base/window_open_disposition.h"
+// #include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/android/tab_android.h"
 
 static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
@@ -225,10 +227,10 @@ class ExtensionTabUtil {
   static api::tab_groups::TabGroup CreateTabGroupObject(
       const tab_groups::TabGroupId& id,
       const tab_groups::TabGroupVisualData& visual_data);
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+// #if BUILDFLAG(ENABLE_EXTENSIONS)
   static std::optional<api::tab_groups::TabGroup> CreateTabGroupObject(
       const tab_groups::TabGroupId& id);
-#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+// #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
   // Conversions between the api::tab_groups::Color enum and the TabGroupColorId
   // enum.
@@ -303,7 +305,7 @@ class ExtensionTabUtil {
   static WindowController* GetWindowControllerOfTab(
       content::WebContents* web_contents);
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   // Open the extension's options page. Returns true if an options page was
   // successfully opened (though it may not necessarily *load*, e.g. if the
   // URL does not exist). This call to open the options page is iniatiated by
@@ -318,7 +320,7 @@ class ExtensionTabUtil {
   static bool OpenOptionsPage(const Extension* extension,
                               BrowserWindowInterface* browser);
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   // Returns true if the given Browser can report tabs to extensions.
   // Example of Browsers which don't support tabs include apps and devtools.
   static bool BrowserSupportsTabs(BrowserWindowInterface* browser);

@@ -64,18 +64,18 @@ BrowserWindowInterface* GetBrowserForTabContents(
     return nullptr;
   }
 
-  std::vector<BrowserWindowInterface*> all_browsers =
-      GetAllBrowserWindowInterfaces();
-  for (auto* browser : all_browsers) {
-    TabListInterface* tab_list = TabListInterface::From(browser);
-    if (!tab_list) {
-      continue;
-    }
-    std::vector<tabs::TabInterface*> all_tabs = tab_list->GetAllTabs();
-    if (base::Contains(all_tabs, tab)) {
-      return browser;  // Found it!
-    }
-  }
+  // std::vector<BrowserWindowInterface*> all_browsers =
+  //     GetAllBrowserWindowInterfaces();
+  // for (auto* browser : all_browsers) {
+  //   TabListInterface* tab_list = TabListInterface::From(browser);
+  //   if (!tab_list) {
+  //     continue;
+  //   }
+  //   std::vector<tabs::TabInterface*> all_tabs = tab_list->GetAllTabs();
+  //   if (base::Contains(all_tabs, tab)) {
+  //     return browser;  // Found it!
+  //   }
+  // }
 
   return nullptr;
 }

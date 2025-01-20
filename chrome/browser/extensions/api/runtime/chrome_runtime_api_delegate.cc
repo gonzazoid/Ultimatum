@@ -50,9 +50,10 @@
 #include "base/win/windows_version.h"
 #endif
 
+#include "chrome/browser/extensions/extension_tab_util.h"
+
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "chrome/browser/devtools/devtools_window.h"
-#include "chrome/browser/extensions/extension_tab_util.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_navigator.h"
@@ -415,7 +416,7 @@ bool ChromeRuntimeAPIDelegate::RestartDevice(std::string* error_message) {
 bool ChromeRuntimeAPIDelegate::OpenOptionsPage(
     const Extension* extension,
     content::BrowserContext* browser_context) {
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   return extensions::ExtensionTabUtil::OpenOptionsPageFromAPI(extension,
                                                               browser_context);
 #else

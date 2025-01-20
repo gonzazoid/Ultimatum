@@ -1389,9 +1389,9 @@ void ChromeBrowserMainExtraPartsProfiles::
   TemplateURLFetcherFactory::GetInstance();
   TemplateURLPrepopulateData::ResolverFactory::GetInstance();
   TemplateURLServiceFactory::GetInstance();
-#if !BUILDFLAG(IS_ANDROID)
+// #if !BUILDFLAG(IS_ANDROID)
   ThemeServiceFactory::GetInstance();
-#endif
+// #endif
 #if BUILDFLAG(IS_ANDROID)
   thin_webview::android::ChromeThinWebViewInitializer::Initialize();
 #endif

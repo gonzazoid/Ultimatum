@@ -21,9 +21,9 @@ namespace extensions {
 
 TabGroupsEventRouter::TabGroupsEventRouter(content::BrowserContext* context)
     : profile_(Profile::FromBrowserContext(context)),
-      event_router_(EventRouter::Get(context)),
-      browser_tab_strip_tracker_(this, this) {
-  browser_tab_strip_tracker_.Init();
+      event_router_(EventRouter::Get(context)) // ,
+      /* browser_tab_strip_tracker_(this, this) */ {
+  // browser_tab_strip_tracker_.Init();
 }
 
 void TabGroupsEventRouter::OnTabGroupChanged(const TabGroupChange& change) {

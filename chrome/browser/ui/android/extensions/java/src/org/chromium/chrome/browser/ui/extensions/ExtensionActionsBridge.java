@@ -99,6 +99,11 @@ public class ExtensionActionsBridge implements Destroyable {
         return ExtensionActionsBridgeJni.get().getActionIds(mNativeExtensionActionsBridge);
     }
 
+    /** Returns a sorted list of enabled action IDs. */
+    public String[] getPinnedActionIds() {
+        return ExtensionActionsBridgeJni.get().getPinnedActionIds(mNativeExtensionActionsBridge);
+    }
+
     /** Returns the state of an action for a particular tab. */
     @Nullable
     public ExtensionAction getAction(String actionId, int tabId) {
@@ -145,6 +150,21 @@ public class ExtensionActionsBridge implements Destroyable {
         // as an argument, even though the value is not used in production.
         return ExtensionActionsBridgeJni.get()
                 .runAction(mNativeExtensionActionsBridge, actionId, tabId, webContents);
+    }
+
+    public boolean isInIncognito(String actionId) {
+        return ExtensionActionsBridgeJni.get()
+                .isInIncognito(mNativeExtensionActionsBridge, actionId);
+    }
+
+    public void reloadExtension(String actionId) {
+        ExtensionActionsBridgeJni.get()
+                .reloadExtension(mNativeExtensionActionsBridge, actionId);
+    }
+
+    public int getManifestVersion(String actionId) {
+        return ExtensionActionsBridgeJni.get()
+                .getManifestVersion(mNativeExtensionActionsBridge, actionId);
     }
 
     /**
@@ -254,6 +274,9 @@ public class ExtensionActionsBridge implements Destroyable {
         @JniType("std::vector<std::string>")
         String[] getActionIds(long nativeExtensionActionsBridge);
 
+        @JniType("std::vector<std::string>")
+        String[] getPinnedActionIds(long nativeExtensionActionsBridge);
+
         @Nullable ExtensionAction getAction(
                 long nativeExtensionActionsBridge,
                 @JniType("std::string") String actionId,
@@ -278,5 +301,15 @@ public class ExtensionActionsBridge implements Destroyable {
         HandleKeyEventResult handleKeyDownEvent(
                 long nativeExtensionActionsBridge,
                 @JniType("ui::KeyEventAndroid") KeyEvent keyEvent);
+
+        boolean isInIncognito(
+                long nativeExtensionActionsBridge,
+                @JniType("std::string") String actionId);
+        void reloadExtension(
+                long nativeExtensionActionsBridge,
+                @JniType("std::string") String actionId);
+        int getManifestVersion(
+                long nativeExtensionActionsBridge,
+                @JniType("std::string") String actionId);
     }
 }

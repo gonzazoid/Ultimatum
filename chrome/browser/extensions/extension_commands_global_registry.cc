@@ -33,30 +33,30 @@ namespace extensions {
 
 namespace {
 
-gfx::AcceleratedWidget GetAcceleratedWidgetForContext(
-    content::BrowserContext* context) {
-#if defined(USE_AURA) && !BUILDFLAG(IS_ANDROID)
-  auto* profile = Profile::FromBrowserContext(context);
-  if (!profile) {
-    return gfx::kNullAcceleratedWidget;
-  }
+// gfx::AcceleratedWidget GetAcceleratedWidgetForContext(
+//     content::BrowserContext* context) {
+// #if defined(USE_AURA) && !BUILDFLAG(IS_ANDROID)
+//   auto* profile = Profile::FromBrowserContext(context);
+//   if (!profile) {
+//     return gfx::kNullAcceleratedWidget;
+//   }
 
-  Browser* browser =
-      chrome::FindLastActiveWithProfile(Profile::FromBrowserContext(context));
-  if (!browser || !browser->window()) {
-    return gfx::kNullAcceleratedWidget;
-  }
+//   Browser* browser =
+//       chrome::FindLastActiveWithProfile(Profile::FromBrowserContext(context));
+//   if (!browser || !browser->window()) {
+//     return gfx::kNullAcceleratedWidget;
+//   }
 
-  auto* native_window = browser->window()->GetNativeWindow();
-  if (!native_window || !native_window->GetHost()) {
-    return gfx::kNullAcceleratedWidget;
-  }
+//   auto* native_window = browser->window()->GetNativeWindow();
+//   if (!native_window || !native_window->GetHost()) {
+//     return gfx::kNullAcceleratedWidget;
+//   }
 
-  return native_window->GetHost()->GetAcceleratedWidget();
-#else
-  return gfx::kNullAcceleratedWidget;
-#endif  // defined(USE_AURA) && !BUILDFLAG(IS_ANDROID)
-}
+//   return native_window->GetHost()->GetAcceleratedWidget();
+// #else
+//   return gfx::kNullAcceleratedWidget;
+// #endif  // defined(USE_AURA) && !BUILDFLAG(IS_ANDROID)
+// }
 
 }  // namespace
 
@@ -72,19 +72,19 @@ ExtensionCommandsGlobalRegistry::ExtensionCommandsGlobalRegistry(
 
 ExtensionCommandsGlobalRegistry::~ExtensionCommandsGlobalRegistry() {
   if (!IsEventTargetsEmpty()) {
-    ui::GlobalAcceleratorListener* global_shortcut_listener =
-        ui::GlobalAcceleratorListener::GetInstance();
-    if (!global_shortcut_listener) {
+    // ui::GlobalAcceleratorListener* global_shortcut_listener =
+    //     ui::GlobalAcceleratorListener::GetInstance();
+    // if (!global_shortcut_listener) {
       return;
-    }
+    // }
 
     // Resume GlobalShortcutListener before we clean up if the shortcut handling
     // is currently suspended.
-    if (global_shortcut_listener->IsShortcutHandlingSuspended()) {
-      global_shortcut_listener->SetShortcutHandlingSuspended(false);
-    }
+    // if (global_shortcut_listener->IsShortcutHandlingSuspended()) {
+    //   global_shortcut_listener->SetShortcutHandlingSuspended(false);
+    // }
 
-    global_shortcut_listener->UnregisterAccelerators(this);
+    // global_shortcut_listener->UnregisterAccelerators(this);
   }
 }
 
@@ -115,41 +115,41 @@ bool ExtensionCommandsGlobalRegistry::IsRegistered(
 bool ExtensionCommandsGlobalRegistry::PopulateCommands(
     const Extension* extension,
     ui::CommandMap* commands) {
-  auto* instance = ui::GlobalAcceleratorListener::GetInstance();
-  if (!instance) {
+  // auto* instance = ui::GlobalAcceleratorListener::GetInstance();
+  // if (!instance) {
     return false;
-  }
+  // }
 
-  extensions::CommandService* command_service =
-      extensions::CommandService::Get(browser_context_);
-  if (instance->IsRegistrationHandledExternally()) {
-    if (!command_service->GetNamedCommands(
-            extension->id(), extensions::CommandService::ALL,
-            extensions::CommandService::ANY_SCOPE, commands)) {
-      return false;
-    }
-    PrefService* prefs =
-        ExtensionsBrowserClient::Get()->GetPrefServiceForContext(
-            browser_context_);
-    std::string profile_id = prefs->GetString(pref_names::kGlobalShortcutsUuid);
-    if (profile_id.empty()) {
-      auto uuid = base::Uuid::GenerateRandomV4();
-      profile_id = uuid.AsLowercaseString();
-      prefs->SetString(pref_names::kGlobalShortcutsUuid, profile_id);
-    }
+  // extensions::CommandService* command_service =
+  //     extensions::CommandService::Get(browser_context_);
+  // if (instance->IsRegistrationHandledExternally()) {
+  //   if (!command_service->GetNamedCommands(
+  //           extension->id(), extensions::CommandService::ALL,
+  //           extensions::CommandService::ANY_SCOPE, commands)) {
+  //     return false;
+  //   }
+  //   PrefService* prefs =
+  //       ExtensionsBrowserClient::Get()->GetPrefServiceForContext(
+  //           browser_context_);
+  //   std::string profile_id = prefs->GetString(pref_names::kGlobalShortcutsUuid);
+  //   if (profile_id.empty()) {
+  //     auto uuid = base::Uuid::GenerateRandomV4();
+  //     profile_id = uuid.AsLowercaseString();
+  //     prefs->SetString(pref_names::kGlobalShortcutsUuid, profile_id);
+  //   }
 
-    instance->OnCommandsChanged(
-        extension->id(), profile_id, *commands,
-        GetAcceleratedWidgetForContext(browser_context_), this);
-  }
+  //   instance->OnCommandsChanged(
+  //       extension->id(), profile_id, *commands,
+  //       GetAcceleratedWidgetForContext(browser_context_), this);
+  // }
 
   // Add all the active global keybindings, if any.
-  if (!command_service->GetNamedCommands(
-          extension->id(), extensions::CommandService::ACTIVE,
-          extensions::CommandService::GLOBAL, commands)) {
-    return false;
-  }
-  return true;
+  // if (!command_service->GetNamedCommands(
+  //         extension->id(), extensions::CommandService::ACTIVE,
+  //         extensions::CommandService::GLOBAL, commands)) {
+  //   return false;
+  // }
+  // return true;
 }
 
 bool ExtensionCommandsGlobalRegistry::RegisterAccelerator(
@@ -165,23 +165,23 @@ bool ExtensionCommandsGlobalRegistry::RegisterAccelerator(
 
 void ExtensionCommandsGlobalRegistry::UnregisterAccelerator(
     const ui::Accelerator& accelerator) {
-  auto* instance = ui::GlobalAcceleratorListener::GetInstance();
-  if (!instance) {
+  // auto* instance = ui::GlobalAcceleratorListener::GetInstance();
+  // if (!instance) {
     return;
-  }
-  instance->UnregisterAccelerator(accelerator, this);
+  // }
+  // instance->UnregisterAccelerator(accelerator, this);
 }
 
 void ExtensionCommandsGlobalRegistry::OnShortcutHandlingSuspended(
     bool suspended) {
-  auto* instance = ui::GlobalAcceleratorListener::GetInstance();
-  if (!instance) {
+  // auto* instance = ui::GlobalAcceleratorListener::GetInstance();
+  // if (!instance) {
     return;
-  }
-  instance->SetShortcutHandlingSuspended(suspended);
-  if (registry_for_active_window()) {
-    registry_for_active_window()->SetShortcutHandlingSuspended(suspended);
-  }
+  // }
+  // instance->SetShortcutHandlingSuspended(suspended);
+  // if (registry_for_active_window()) {
+  //   registry_for_active_window()->SetShortcutHandlingSuspended(suspended);
+  // }
 }
 
 void ExtensionCommandsGlobalRegistry::OnKeyPressed(

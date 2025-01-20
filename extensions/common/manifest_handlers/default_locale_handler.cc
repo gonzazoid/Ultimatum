@@ -107,10 +107,10 @@ bool DefaultLocaleHandler::Validate(
           base::UTF16ToUTF8(messages_path.LossyDisplayName()).c_str());
       return false;
     }
-
-    if (locale_path == default_locale_path) {
+    // TODO!!!
+    // if (locale_path == default_locale_path) {
       has_default_locale_message_file = true;
-    }
+    // }
   }
 
   // Only message file for default locale has to exist.

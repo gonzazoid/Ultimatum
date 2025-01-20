@@ -10,6 +10,8 @@ import static org.chromium.ui.listmenu.ListMenuItemProperties.CLICK_LISTENER;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.ENABLED;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.MENU_ITEM_ID;
 
+import org.chromium.base.Log;
+
 import android.app.Activity;
 import android.widget.ListView;
 
@@ -19,6 +21,7 @@ import org.chromium.base.Callback;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.chrome.browser.contextmenu.ContextMenuCoordinator.ContextMenuItemType;
 import org.chromium.ui.hierarchicalmenu.HierarchicalMenuController;
+import org.chromium.chrome.R;
 import org.chromium.ui.listmenu.ListItemType;
 import org.chromium.ui.modelutil.MVCListAdapter.ListItem;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
@@ -119,19 +122,34 @@ public class ContextMenuMediator {
 
         // Add callbacks to all other first-level items.
         for (ListItem item : mModelList) {
+            if (item.model.get(MENU_ITEM_ID) == 0) {
+              Log.i("ULTIMATUM", "EXTENSION MENU ITEM");
+              continue;
+            }
             if (item.type == ListItemType.MENU_ITEM
                     || item.type == ContextMenuItemType.CONTEXT_MENU_ITEM_WITH_ICON_BUTTON) {
                 // Note: this does NOT handle items inside submenus.
                 item.model.set(
                         CLICK_LISTENER,
                         // Note: clickItem already includes dismissDialog.
-                        (v) -> clickItem(item.model.get(MENU_ITEM_ID), item.model.get(ENABLED)));
+                        (v) -> {
+                          if (item.model.get(MENU_ITEM_ID) == 0) {
+                            item.model.set(MENU_ITEM_ID, R.id.contextmenu_extensions_menu);
+                          }
+                          clickItem(item.model.get(MENU_ITEM_ID), item.model.get(ENABLED));
+                        });
             }
             if (item.type == ContextMenuItemType.CONTEXT_MENU_ITEM_WITH_ICON_BUTTON) {
                 PropertyModel model = item.model;
                 model.set(
                         END_BUTTON_CLICK_LISTENER,
-                        (v) -> clickItem(model.get(END_BUTTON_MENU_ID), model.get(ENABLED)));
+                        (v) -> {
+                          if (item.model.get(MENU_ITEM_ID) == 0) {
+                            item.model.set(MENU_ITEM_ID, R.id.contextmenu_extensions_menu);
+                            item.model.set(END_BUTTON_MENU_ID, R.id.contextmenu_extensions_menu);
+                          }
+                          clickItem(model.get(END_BUTTON_MENU_ID), model.get(ENABLED));
+                        });
             }
         }
 

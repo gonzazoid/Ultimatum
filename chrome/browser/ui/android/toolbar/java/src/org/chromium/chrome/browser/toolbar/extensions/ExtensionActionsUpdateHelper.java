@@ -50,6 +50,7 @@ public class ExtensionActionsUpdateHelper implements Destroyable {
     private final ActionsUpdateDelegate mActionsUpdateDelegate;
     private final ModelList mModels;
     private final ExtensionActionsBridge mExtensionActionsBridge;
+    private boolean mOnlyPinned;
 
     private final Callback<@Nullable Tab> mTabChangedCallback = this::onTabChanged;
     private final ActionsObserver mActionsObserver = new ActionsObserver();
@@ -62,12 +63,17 @@ public class ExtensionActionsUpdateHelper implements Destroyable {
             NullableObservableSupplier<Tab> currentTabSupplier,
             ActionsUpdateDelegate delegate) {
         mModels = models;
+        mOnlyPinned = false;
         mCurrentTabSupplier = currentTabSupplier;
         mActionsUpdateDelegate = delegate;
         mExtensionActionsBridge = new ExtensionActionsBridge(task);
 
         mCurrentTabSupplier.addObserver(mTabChangedCallback);
         mExtensionActionsBridge.addObserver(mActionsObserver);
+    }
+
+    public void useOnlyPinned() {
+      mOnlyPinned = true;
     }
 
     private void maybeUpdateAllActions() {
@@ -85,8 +91,7 @@ public class ExtensionActionsUpdateHelper implements Destroyable {
 
         // TODO(crbug.com/385984462): Show pinned actions only. For now, we pretend that all actions
         // are pinned.
-        String[] actionIds = mExtensionActionsBridge.getActionIds();
-
+        String[] actionIds = mOnlyPinned ? mExtensionActionsBridge.getPinnedActionIds() : mExtensionActionsBridge.getActionIds();
         List<ListItem> items = new ArrayList<>(actionIds.length);
         for (String actionId : actionIds) {
             items.add(

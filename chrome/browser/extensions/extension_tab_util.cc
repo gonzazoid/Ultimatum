@@ -65,8 +65,15 @@
 #include "url/url_constants.h"
 
 #if BUILDFLAG(IS_ANDROID)
+#include "base/types/expected_macros.h"
 #include "chrome/browser/ui/android/tab_model/tab_model.h"
 #include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+#include "extensions/common/manifest_handlers/incognito_info.h"
+// #include "chrome/browser/ui/browser.h"                   // nogncheck
+#include "chrome/browser/ui/browser_finder.h"            // nogncheck
+// #include "chrome/browser/ui/browser_window.h"            // nogncheck
+#include "chrome/browser/renderer_host/chrome_navigation_ui_data.h"
+#include "chrome/browser/ui/tabs/tab_utils.h"        // nogncheck
 #else
 #include "chrome/browser/resource_coordinator/tab_lifecycle_unit_external.h"
 #include "chrome/browser/ui/browser.h"                             // nogncheck
@@ -322,6 +329,9 @@ WindowController* ExtensionTabUtil::GetControllerInProfileWithId(
     int window_id,
     bool also_match_incognito_profile,
     std::string* error_message) {
+#if BUILDFLAG(IS_ANDROID)
+  return WindowControllerFromBrowser(nullptr);
+#else
   Profile* incognito_profile =
       also_match_incognito_profile
           ? profile->GetPrimaryOTRProfile(/*create_if_needed=*/false)
@@ -342,6 +352,7 @@ WindowController* ExtensionTabUtil::GetControllerInProfileWithId(
   }
 
   return nullptr;
+#endif
 }
 
 int ExtensionTabUtil::GetWindowId(BrowserWindowInterface* browser) {
@@ -378,7 +389,18 @@ api::tabs::Tab ExtensionTabUtil::CreateTabObject(
   tabs::TabInterface* tab_interface =
       tab_list ? tab_list->GetTab(tab_index) : nullptr;
 
+#if BUILDFLAG(IS_ANDROID)
+  WebContents* active_contents = nullptr;
+  for (TabModel* model : TabModelList::models()) {
+    if (model->IsActiveModel()) {
+      active_contents = model->GetActiveWebContents();
+      break;
+    }
+  }
+  bool is_active = contents == active_contents;
+#else
   bool is_active = tab_interface && tab_interface->IsActivated();
+#endif
   tab_object.active = is_active;
   tab_object.selected = is_active;
   tab_object.highlighted = tab_interface && tab_interface->IsSelected();
@@ -907,25 +929,26 @@ bool ExtensionTabUtil::GetSharedStateOfGroup(const tab_groups::TabGroupId& id) {
   return saved_group->is_shared_tab_group();
 }
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+// #if BUILDFLAG(ENABLE_EXTENSIONS)
 // static
 std::optional<api::tab_groups::TabGroup> ExtensionTabUtil::CreateTabGroupObject(
     const tab_groups::TabGroupId& id) {
-  Browser* browser = chrome::FindBrowserWithGroup(id, nullptr);
-  if (!browser) {
-    return std::nullopt;
-  }
+  // Browser* browser = chrome::FindBrowserWithGroup(id, nullptr);
+  // if (!browser) {
+  //   return std::nullopt;
+  // }
 
-  CHECK(browser->tab_strip_model()->SupportsTabGroups());
-  TabGroupModel* group_model = browser->tab_strip_model()->group_model();
-  const tab_groups::TabGroupVisualData* visual_data =
-      group_model->GetTabGroup(id)->visual_data();
+  // CHECK(browser->tab_strip_model()->SupportsTabGroups());
+  // TabGroupModel* group_model = browser->tab_strip_model()->group_model();
+  // const tab_groups::TabGroupVisualData* visual_data =
+  //     group_model->GetTabGroup(id)->visual_data();
 
-  DCHECK(visual_data);
+  // DCHECK(visual_data);
 
-  return CreateTabGroupObject(id, *visual_data);
+  // return CreateTabGroupObject(id, *visual_data);
+  return std::nullopt;
 }
-#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+// #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 // static
 api::tab_groups::Color ExtensionTabUtil::ColorIdToColor(
@@ -1282,13 +1305,50 @@ WindowController* ExtensionTabUtil::GetWindowControllerOfTab(
   return nullptr;
 }
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
 // static
 bool ExtensionTabUtil::OpenOptionsPageFromAPI(
     const Extension* extension,
     content::BrowserContext* browser_context) {
   if (!OptionsPageInfo::HasOptionsPage(extension))
     return false;
+
+#if BUILDFLAG(IS_ANDROID)
+  for (TabModel* model : TabModelList::models()) {
+    if (!model->IsActiveModel()) {
+      continue;
+    }
+
+    GURL options_url = OptionsPageInfo::GetOptionsPage(extension);
+
+    for (int i = 0; i < model->GetTabCount(); i++) {
+      TabAndroid* tab = model->GetTabAt(i);
+      GURL tab_url = tab->GetURL();
+      if (tab_url.spec().rfind(options_url.spec(), 0) == 0) {
+        model->SetActiveIndex(i);
+        return true;
+      }
+    }
+
+    std::unique_ptr<WebContents> contents =
+        WebContents::Create(WebContents::CreateParams(browser_context));
+    content::NavigationController::LoadURLParams load_params(options_url);
+    load_params.transition_type = ui::PageTransitionFromInt(
+    ui::PAGE_TRANSITION_TYPED | ui::PAGE_TRANSITION_FROM_ADDRESS_BAR);
+    contents->GetController().LoadURLWithParams(load_params);
+    contents->GetOutermostWebContents()->Focus();
+    // WebContents* second_web_contents = contents.release();
+    model->CreateTab(
+        nullptr, // parent
+        std::move(contents),
+        TabModel::kInvalidIndex,
+        TabModel::TabLaunchType::FROM_RECENT_TABS_FOREGROUND,
+        /*should_pin=*/false);
+    return true;
+  }
+  return false;
+#else
+
   Profile* profile = Profile::FromBrowserContext(browser_context);
   // This version of OpenOptionsPage() is only called when the extension
   // initiated the command via chrome.runtime.openOptionsPage. For a spanning
@@ -1301,6 +1361,7 @@ bool ExtensionTabUtil::OpenOptionsPageFromAPI(
   if (!browser)
     return false;
   return extensions::ExtensionTabUtil::OpenOptionsPage(extension, browser);
+#endif
 }
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
@@ -1316,7 +1377,7 @@ bool ExtensionTabUtil::OpenOptionsPage(const Extension* extension,
                                                                open_in_tab);
 }
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
 // static
 bool ExtensionTabUtil::BrowserSupportsTabs(BrowserWindowInterface* browser) {
   return browser && browser->GetType() != BrowserWindowInterface::TYPE_DEVTOOLS;
@@ -1359,10 +1420,10 @@ bool ExtensionTabUtil::IsTabStripEditable() {
 
 TabListInterface* ExtensionTabUtil::GetEditableTabList(
     BrowserWindowInterface& browser) {
-  if (!IsTabStripEditable()) {
+  // if (!IsTabStripEditable()) {
     return nullptr;
-  }
-  return TabListInterface::From(&browser);
+  // }
+  // return TabListInterface::From(&browser);
 }
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)

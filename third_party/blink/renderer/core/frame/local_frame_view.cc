@@ -2696,7 +2696,6 @@ bool LocalFrameView::RunCompositingInputsLifecyclePhase(
           highlight_registry->ValidateHighlightMarkers();
         }
       }
-
       frame_view.GetLayoutView()->CommitPendingSelection();
       frame_view.GetLayoutView()->Layer()->UpdateDescendantDependentFlags();
     });
@@ -3860,6 +3859,7 @@ void LocalFrameView::PropagateFrameRects() {
   gfx::Size frame_size = FrameRect().size();
   if (!frame_size_ || *frame_size_ != frame_size) {
     frame_size_ = frame_size;
+    LOG(INFO) << "FRAME SIZE!!! " << frame_size.width() << " " << GetFrame().GetDocument()->Url();
     GetFrame().GetLocalFrameHostRemote().FrameSizeChanged(frame_size);
   }
 }

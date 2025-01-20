@@ -31,6 +31,9 @@ constexpr char kAudibleKey[] = "audible";
 #endif
 constexpr char kAutoDiscardableKey[] = "autoDiscardable";
 constexpr char kMutedInfoKey[] = "mutedInfo";
+// constexpr char kTabIdKey[] = "tabId";
+// constexpr char kTabIdsKey[] = "tabIds";
+// constexpr char kToIndexKey[] = "toIndex";
 
 // Callback for the event dispatch system. Computes which tab properties have
 // changed. Builds an argument list with an entry for the changed properties and

@@ -32,6 +32,11 @@
 #include "base/notimplemented.h"
 #endif
 
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+#endif
+
 static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 using content::BrowserThread;
@@ -76,18 +81,34 @@ std::unique_ptr<ExtensionInstallPrompt> CreateExtensionInstallPrompt(
     return std::make_unique<ExtensionInstallPrompt>(web_contents);
   }
 #else
+#if BUILDFLAG(IS_ANDROID)
+  content::WebContents* web_contents =
+      content::DownloadItemUtils::GetWebContents(
+          const_cast<DownloadItem*>(&download_item));
+  if (!web_contents) {
+    for (TabModel* model : TabModelList::models()) {
+      if (model->IsActiveModel()) {
+        web_contents = model->GetActiveWebContents();
+        break;
+      }
+    }
+  }
+  return std::make_unique<ExtensionInstallPrompt>(web_contents);
+#else
   // TODO(crbug.com/397754565): Show extension install UI on desktop Android.
   NOTIMPLEMENTED() << "CreateExtensionInstallPrompt";
   return nullptr;
+#endif
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 }
 
 }  // namespace
 
 bool OffStoreInstallAllowedByPrefs(Profile* profile, const DownloadItem& item) {
-  return g_allow_offstore_install_for_testing ||
-         extensions::ExtensionManagementFactory::GetForBrowserContext(profile)
-             ->IsOffstoreInstallAllowed(item.GetURL(), item.GetReferrerUrl());
+  return true;
+  // return g_allow_offstore_install_for_testing ||
+  //        extensions::ExtensionManagementFactory::GetForBrowserContext(profile)
+  //            ->IsOffstoreInstallAllowed(item.GetURL(), item.GetReferrerUrl());
 }
 
 // Tests can call this method to inject a mock ExtensionInstallPrompt
@@ -115,9 +136,9 @@ scoped_refptr<extensions::CrxInstaller> CreateCrxInstaller(
 }
 
 bool IsExtensionDownload(const DownloadItem& download_item) {
-  if (download_item.GetTargetDisposition() ==
-      DownloadItem::TARGET_DISPOSITION_PROMPT)
-    return false;
+  // if (download_item.GetTargetDisposition() ==
+  //     DownloadItem::TARGET_DISPOSITION_PROMPT)
+  //   return false;
 
   if (download_item.GetMimeType() == extensions::Extension::kMimeType ||
       extensions::UserScript::IsURLUserScript(download_item.GetURL(),
@@ -129,10 +150,10 @@ bool IsExtensionDownload(const DownloadItem& download_item) {
 }
 
 bool IsTrustedExtensionDownload(Profile* profile, const DownloadItem& item) {
-  return IsExtensionDownload(item) &&
-         (OffStoreInstallAllowedByPrefs(profile, item) ||
-          extension_urls::IsWebstoreUpdateUrl(item.GetOriginalUrl()) ||
-          extension_urls::IsWebstoreDomain(item.GetOriginalUrl()));
+  return IsExtensionDownload(item); //  &&
+         // (OffStoreInstallAllowedByPrefs(profile, item) ||
+         //  extension_urls::IsWebstoreUpdateUrl(item.GetOriginalUrl()) ||
+         //  extension_urls::IsWebstoreDomain(item.GetOriginalUrl()));
 }
 
 std::unique_ptr<base::AutoReset<bool>> OverrideOffstoreInstallAllowedForTesting(

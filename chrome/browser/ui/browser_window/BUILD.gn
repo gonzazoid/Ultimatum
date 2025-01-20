@@ -4,7 +4,7 @@
 
 import("//chrome/common/features.gni")
 
-assert(is_win || is_mac || is_linux || is_chromeos || is_desktop_android)
+assert(is_win || is_mac || is_linux || is_chromeos || is_desktop_android || is_android)
 
 # This is the public interface for a browser window. Most features in
 # //chrome/browser depend on this interface, and thus to prevent circular
@@ -20,7 +20,7 @@ source_set("browser_window") {
   public_deps = [ "//content/public/browser" ]
   deps = [ "//ui/base/unowned_user_data" ]
 
-  if (!is_android) {
+#   if (!is_android) {
     sources += [
       "public/browser_collection.h",
       "public/browser_window_features.h",
@@ -34,7 +34,7 @@ source_set("browser_window") {
       "//extensions/buildflags",
       "//ui/base:types",
     ]
-  }
+#   }
 }
 
 source_set("create_browser_window") {

@@ -10,6 +10,7 @@ import("//extensions/buildflags/buildflags.gni")
 # TODO(https://crbug.com/356905053): Continue moving more here.
 extensions_api_schema_files_ = [
   "alarms.webidl",
+  # "app_runtime.idl",
   "declarative_net_request.idl",
   "dns.webidl",
   "events.json",
@@ -32,6 +33,20 @@ extensions_api_schema_files_ = [
   "types.json",
   "user_scripts.idl",
   "web_request.json",
+  "mime_handler_private.idl",
+  "guest_view_internal.json",
+  "automation.idl",
+  "automation_internal.idl",
+  "scripts_internal.idl",
+  "extension_options_internal.webidl",
+    "mime_handler_view_guest_internal.json",
+    "file_system.idl",
+    "networking_private.idl",
+    "socket.idl",
+    "sockets_tcp_server.idl",
+    "sockets_tcp.idl",
+    "sockets_udp.idl",
+    "web_view_internal.json",
 ]
 
 # Schemas that should be used only to auto-generate the C++ types.
@@ -54,7 +69,7 @@ extensions_types_only_schema_files_ = [
 if (enable_extensions) {
   extensions_api_schema_files_ += [
     "app_current_window_internal.webidl",
-    "app_runtime.webidl",
+    "app_runtime.idl",
     "app_view_guest_internal.json",
     "app_window.idl",
     "audio.webidl",
@@ -68,27 +83,24 @@ if (enable_extensions) {
     "clipboard.webidl",
     "extension_options_internal.webidl",
     "feedback_private.idl",
-    "file_system.idl",
-    "guest_view_internal.json",
+    # "file_system.idl",
     "hid.idl",
-    "mime_handler_private.idl",
-    "mime_handler_view_guest_internal.json",
+    # "mime_handler_view_guest_internal.json",
     "mojo_private.idl",
-    "networking_private.idl",
+    # "networking_private.idl",
     "printer_provider_internal.idl",
     "printer_provider.idl",
-    "scripts_internal.idl",
     "serial.idl",
-    "socket.idl",
-    "sockets_tcp_server.idl",
-    "sockets_tcp.idl",
-    "sockets_udp.idl",
+    # "socket.idl",
+    # "sockets_tcp_server.idl",
+    # "sockets_tcp.idl",
+    # "sockets_udp.idl",
     "system_display.webidl",
     "system_storage.webidl",
     "usb.webidl",
     "virtual_keyboard_private.json",
     "virtual_keyboard.webidl",
-    "web_view_internal.json",
+    # "web_view_internal.json",
   ]
 
   if (is_chromeos) {
@@ -107,7 +119,7 @@ if (enable_extensions) {
 if (enable_desktop_android_extensions) {
   extensions_types_only_schema_files_ += [
     "clipboard.webidl",
-    "scripts_internal.idl",
+    # "scripts_internal.idl",
     "system_display.webidl",
     "usb.webidl",
     "virtual_keyboard_private.json",

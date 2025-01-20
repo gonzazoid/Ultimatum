@@ -8,6 +8,7 @@
 #include <variant>
 
 #include "base/android/jni_string.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/extensions/extension_action_runner.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
@@ -15,17 +16,22 @@
 #include "content/public/browser/web_contents.h"
 #include "extensions/browser/extension_action.h"
 #include "extensions/browser/extension_action_manager.h"
+#include "extensions/browser/extension_registrar.h"
 #include "extensions/browser/extension_registry.h"
 #include "ui/color/color_provider_manager.h"
 #include "ui/events/android/key_event_android.h"
 #include "ui/events/event.h"
 #include "ui/events/platform_event.h"
+#include "extensions/browser/extension_util.h"
+#include "chrome/browser/extensions/extension_util.h"
 #include "ui/gfx/android/java_bitmap.h"
 #include "ui/gfx/image/image.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/image/image_skia_operations.h"
 #include "ui/gfx/image/image_skia_rep_default.h"
 #include "ui/native_theme/native_theme.h"
+
+#include "chrome/browser/ui/layout_constants.h"
 
 // Must come after all headers that specialize FromJniType() / ToJniType().
 #include "chrome/browser/ui/android/extensions/jni_headers/ExtensionAction_jni.h"
@@ -76,6 +82,18 @@ void ExtensionActionsBridge::Destroy(JNIEnv* env) {
 
 bool ExtensionActionsBridge::AreActionsInitialized(JNIEnv* env) {
   return model_->actions_initialized();
+}
+
+std::vector<ToolbarActionsModel::ActionId> ExtensionActionsBridge::GetPinnedActionIds(
+    JNIEnv* env) {
+  const auto& ids = model_->action_ids();
+  std::vector<ToolbarActionsModel::ActionId> actions = {};
+  for (auto it : ids) {
+    if (model_->IsActionPinned(it)) {
+      actions.push_back(it);
+    }
+  }
+  return actions;
 }
 
 std::vector<ToolbarActionsModel::ActionId> ExtensionActionsBridge::GetActionIds(
@@ -210,6 +228,43 @@ ExtensionActionsBridge::HandleKeyDownEvent(
   }
   return Java_HandleKeyEventResult_Constructor(
       env, false, std::get<ToolbarActionsModel::ActionId>(result));
+}
+
+bool ExtensionActionsBridge::IsInIncognito(
+    JNIEnv* env,
+    const ToolbarActionsModel::ActionId& action_id
+    ) {
+  return util::IsIncognitoEnabled(action_id, profile_);
+}
+
+void ExtensionActionsBridge::ReloadExtension(
+    JNIEnv* env,
+    const ToolbarActionsModel::ActionId& action_id
+    ) {
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE, base::BindOnce(&ExtensionActionsBridge::DoReloadExtension, base::Unretained(this), action_id),
+      base::Milliseconds(600));
+}
+
+int ExtensionActionsBridge::GetManifestVersion(
+    JNIEnv* env,
+    const ToolbarActionsModel::ActionId& action_id) {
+  ExtensionRegistry* registry = ExtensionRegistry::Get(profile_);
+  DCHECK(registry);
+
+  const Extension* extension =
+      registry->enabled_extensions().GetByID(action_id);
+  if (extension == nullptr) {
+    return -1;
+  }
+
+  return extension->manifest_version();
+}
+
+void ExtensionActionsBridge::DoReloadExtension(
+    const ToolbarActionsModel::ActionId& action_id
+    ) {
+  ExtensionRegistrar::Get(profile_)->ReloadExtension(action_id);
 }
 
 void ExtensionActionsBridge::OnToolbarActionAdded(

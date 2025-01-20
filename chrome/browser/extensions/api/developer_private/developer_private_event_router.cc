@@ -144,6 +144,7 @@ void DeveloperPrivateEventRouter::OnExtensionInstalled(
   DCHECK(
       profile_->IsSameOrParent(Profile::FromBrowserContext(browser_context)));
   BroadcastItemStateChanged(developer::EventType::kInstalled, extension->id());
+  LOG(INFO) << "EXTENSION INSTALLED!!!";
 }
 
 void DeveloperPrivateEventRouter::OnExtensionUninstalled(

@@ -18,7 +18,7 @@ source_set("page_info") {
     "//ui/base",
     "//ui/base/metadata",
     "//ui/gfx",
-    "//ui/views",
+    # "//ui/views",
   ]
 }
 
@@ -46,6 +46,6 @@ source_set("impl") {
     "//extensions/common:common_constants",
     "//ui/base",
     "//ui/gfx",
-    "//ui/views",
+    # "//ui/views",
   ]
 }
