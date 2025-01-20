@@ -12,6 +12,9 @@
 #include "extensions/browser/extension_prefs_factory.h"
 #include "extensions/browser/extension_registry_factory.h"
 #include "extensions/browser/extension_system.h"
+#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+#include "chrome/browser/extensions/desktop_android/desktop_android_extension_system.h"
+#endif
 #include "extensions/browser/extensions_browser_client.h"
 
 // static
@@ -42,7 +45,11 @@ ExtensionSyncServiceFactory::ExtensionSyncServiceFactory()
   DependsOn(extensions::AccountExtensionTracker::GetFactory());
   DependsOn(extensions::ExtensionPrefsFactory::GetInstance());
   DependsOn(extensions::ExtensionRegistryFactory::GetInstance());
+#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+  DependsOn(extensions::DesktopAndroidExtensionSystem::GetFactory());
+#else
   DependsOn(extensions::ChromeExtensionSystemFactory::GetInstance());
+#endif
 }
 
 ExtensionSyncServiceFactory::~ExtensionSyncServiceFactory() = default;

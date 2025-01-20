@@ -35,7 +35,7 @@
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/download/bubble/download_bubble_prefs.h"
-#include "chrome/browser/download/bubble/download_bubble_ui_controller.h"
+// #include "chrome/browser/download/bubble/download_bubble_ui_controller.h"
 #include "chrome/browser/download/download_core_service.h"
 #include "chrome/browser/download/download_core_service_factory.h"
 #include "chrome/browser/download/download_danger_prompt.h"
@@ -53,8 +53,8 @@
 #include "chrome/browser/icon_manager.h"
 #include "chrome/browser/platform_util.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/browser_window.h"
+// #include "chrome/browser/ui/browser.h"
+// #include "chrome/browser/ui/browser_window.h"
 #include "chrome/common/extensions/api/downloads.h"
 #include "components/download/public/common/download_danger_type.h"
 #include "components/download/public/common/download_interrupt_reasons.h"
@@ -1432,15 +1432,15 @@ void DownloadsAcceptDangerFunction::PromptOrWait(int download_id, int retries) {
   RecordApiFunctions(DOWNLOADS_FUNCTION_ACCEPT_DANGER);
   // DownloadDangerPrompt displays a modal dialog using native widgets that the
   // user must either accept or cancel. It cannot be scripted.
-  DownloadDangerPrompt* prompt = DownloadDangerPrompt::Create(
-      download_item, web_contents,
-      base::BindOnce(&DownloadsAcceptDangerFunction::DangerPromptCallback, this,
-                     download_id));
+  // DownloadDangerPrompt* prompt = DownloadDangerPrompt::Create(
+  //     download_item, web_contents,
+  //     base::BindOnce(&DownloadsAcceptDangerFunction::DangerPromptCallback, this,
+  //                    download_id));
   // DownloadDangerPrompt deletes itself
-  if (on_prompt_created_ && !on_prompt_created_->is_null()) {
-    std::move(*on_prompt_created_).Run(prompt);
-    on_prompt_created_ = nullptr;
-  }
+  // if (on_prompt_created_ && !on_prompt_created_->is_null()) {
+  //   std::move(*on_prompt_created_).Run(prompt);
+  //   on_prompt_created_ = nullptr;
+  // }
   // Function finishes in DangerPromptCallback().
 }
 
@@ -1556,15 +1556,15 @@ ExtensionFunction::ResponseAction DownloadsOpenFunction::Run() {
   // TODO(qinmin): check if user prefers to open all download using the same
   // extension, or check the recent user gesture on the originating webcontents
   // to avoid showing the prompt.
-  DownloadOpenPrompt* download_open_prompt =
-      DownloadOpenPrompt::CreateDownloadOpenConfirmationDialog(
-          active_contents,
-          util::GetFixupExtensionNameForUIDisplay(extension()->name()),
-          download_item->GetFullPath(),
-          base::BindOnce(&DownloadsOpenFunction::OpenPromptDone, this,
-                         params->download_id));
-  if (on_prompt_created_cb_)
-    std::move(*on_prompt_created_cb_).Run(download_open_prompt);
+  // DownloadOpenPrompt* download_open_prompt =
+  //     DownloadOpenPrompt::CreateDownloadOpenConfirmationDialog(
+  //         active_contents,
+  //         util::GetFixupExtensionNameForUIDisplay(extension()->name()),
+  //         download_item->GetFullPath(),
+  //         base::BindOnce(&DownloadsOpenFunction::OpenPromptDone, this,
+  //                        params->download_id));
+  // if (on_prompt_created_cb_)
+  //   std::move(*on_prompt_created_cb_).Run(download_open_prompt);
   RecordApiFunctions(DOWNLOADS_FUNCTION_OPEN);
   return RespondLater();
 }
@@ -1623,13 +1623,13 @@ ExtensionFunction::ResponseAction DownloadsSetShelfEnabledFunction::Run() {
     // using this API is still compatible with the new download bubble. This
     // API will eventually be deprecated (replaced by the SetUiOptions API
     // below).
-    Browser* browser = window->GetBrowser();
-    if (download::IsDownloadBubbleEnabled() &&
-        browser->window()->GetDownloadBubbleUIController()) {
-      browser->window()->GetDownloadBubbleUIController()->HideDownloadUi();
-    } else if (browser->window()->IsDownloadShelfVisible()) {
-      browser->window()->GetDownloadShelf()->Close();
-    }
+    // Browser* browser = window->GetBrowser();
+    // if (download::IsDownloadBubbleEnabled() &&
+    //     browser->window()->GetDownloadBubbleUIController()) {
+    //   browser->window()->GetDownloadBubbleUIController()->HideDownloadUi();
+    // } else if (browser->window()->IsDownloadShelfVisible()) {
+    //   browser->window()->GetDownloadShelf()->Close();
+    // }
   }
 
   if (params->enabled &&
@@ -1674,13 +1674,13 @@ ExtensionFunction::ResponseAction DownloadsSetUiOptionsFunction::Run() {
       continue;
     }
 
-    Browser* browser = window->GetBrowser();
-    if (download::IsDownloadBubbleEnabled() &&
-        browser->window()->GetDownloadBubbleUIController()) {
-      browser->window()->GetDownloadBubbleUIController()->HideDownloadUi();
-    } else if (browser->window()->IsDownloadShelfVisible()) {
-      browser->window()->GetDownloadShelf()->Close();
-    }
+    // Browser* browser = window->GetBrowser();
+    // if (download::IsDownloadBubbleEnabled() &&
+    //     browser->window()->GetDownloadBubbleUIController()) {
+    //   browser->window()->GetDownloadBubbleUIController()->HideDownloadUi();
+    // } else if (browser->window()->IsDownloadShelfVisible()) {
+    //   browser->window()->GetDownloadShelf()->Close();
+    // }
   }
 
   if (options.enabled &&

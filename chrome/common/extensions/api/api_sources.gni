@@ -17,12 +17,24 @@ schema_sources_ = [
   "developer_private.idl",
   "identity.idl",
   "notifications.idl",
+  "permissions.json",
+  "downloads.idl",
+  "tabs.json",
+  "scripting.idl",
+  "webstore_private.json",
+  "windows.json",
+  "context_menus.json",
+  "bookmark_manager_private.json",
+  "bookmarks.json",
+  "settings_private.idl",
+  "content_settings.json",
 ]
 
 # Schemas that should be used only to auto-generate the C++ types.
 # In many cases, this includes schemas used to generate types used in manifest
 # parsing.
 uncompiled_sources_ = [
+  "action.json",
   "browsing_data.json",
   "extension.json",
 ]
@@ -32,8 +44,6 @@ types_only_schema_sources_ = []
 
 if (enable_desktop_android_extensions) {
   types_only_schema_sources_ += [
-    "tabs.json",
-    "windows.json",
   ]
 }
 
@@ -43,17 +53,12 @@ if (enable_extensions) {
     "experimental_ai_data.idl",
     "autofill_private.idl",
     "autotest_private.idl",
-    "bookmark_manager_private.json",
-    "bookmarks.json",
     "braille_display_private.idl",
     "chrome_web_view_internal.json",
     "command_line_private.json",
-    "content_settings.json",
-    "context_menus.json",
     "debugger.json",
     "desktop_capture.json",
     "crash_report_private.idl",
-    "downloads.idl",
     "downloads_internal.idl",
     "enterprise_hardware_platform.idl",
     "enterprise_reporting_private.idl",
@@ -66,19 +71,15 @@ if (enable_extensions) {
     "omnibox.json",
     "page_capture.json",
     "passwords_private.idl",
-    "permissions.json",
     "reading_list.idl",
     "resources_private.idl",
     "safe_browsing_private.idl",
-    "scripting.idl",
     "search.idl",
     "sessions.json",
-    "settings_private.idl",
     "side_panel.idl",
     "system_private.json",
     "tab_capture.idl",
     "tab_groups.json",
-    "tabs.json",
     "web_authentication_proxy.idl",
     "web_navigation.json",
 
@@ -88,8 +89,6 @@ if (enable_extensions) {
     "webrtc_desktop_capture_private.idl",
     "webrtc_logging_private.idl",
 
-    "webstore_private.json",
-    "windows.json",
   ]
 
   if (!is_android) {
@@ -155,7 +154,6 @@ if (enable_extensions) {
   }
 
   uncompiled_sources_ += [
-    "action.json",
     "browser_action.json",
     "idltest.idl",
     "page_action.json",

@@ -336,7 +336,7 @@ QuotaService* ChromeExtensionSystem::Shared::quota_service() {
 }
 
 AppSorting* ChromeExtensionSystem::Shared::app_sorting() {
-  return app_sorting_.get();
+  return nullptr; // app_sorting_.get();
 }
 
 ContentVerifier* ChromeExtensionSystem::Shared::content_verifier() {

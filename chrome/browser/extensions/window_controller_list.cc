@@ -75,18 +75,24 @@ WindowController* WindowControllerList::FindWindowForFunctionByIdWithFilter(
   return nullptr;
 }
 
-#if !BUILDFLAG(IS_ANDROID)
 // TODO(crbug.com/371432155): Support on Android, specifically when
 // windows_util::CalledFromChildWindow() is available on Android.
 WindowController* WindowControllerList::CurrentWindowForFunction(
     ExtensionFunction* function) const {
+#if !BUILDFLAG(IS_ANDROID)
   return CurrentWindowForFunctionWithFilter(function,
                                             WindowController::kNoWindowFilter);
+#else
+  return nullptr;
+#endif
 }
 
 WindowController* WindowControllerList::CurrentWindowForFunctionWithFilter(
     ExtensionFunction* function,
     WindowController::TypeFilter filter) const {
+#if BUILDFLAG(IS_ANDROID)
+  return nullptr;
+#else
   // Always prefer the focused window if available. If there is no focused
   // window, prefer the window to which the sender window is logically parented.
   // Since the browser window is not "focused" when an extension popup is open
@@ -114,7 +120,7 @@ WindowController* WindowControllerList::CurrentWindowForFunctionWithFilter(
   }
 
   return parent_window ? parent_window : last_window;
+#endif  // BUILDFLAG(IS_ANDROID)
 }
-#endif  // !BUILDFLAG(IS_ANDROID)
 
 }  // namespace extensions

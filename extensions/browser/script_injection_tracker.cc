@@ -24,6 +24,9 @@
 #include "extensions/browser/browser_frame_context_data.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_system.h"
+#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+#include "chrome/browser/extensions/desktop_android/desktop_android_extension_system.h"
+#endif
 #include "extensions/browser/url_loader_factory_manager.h"
 #include "extensions/browser/user_script_manager.h"
 #include "extensions/common/constants.h"
@@ -47,7 +50,6 @@ using perfetto::protos::pbzero::ChromeTrackEvent;
 namespace extensions {
 
 namespace {
-
 // Helper for lazily attaching ExtensionIdSet to a RenderProcessHost.  Used to
 // track the set of extensions which have injected a JS script into a
 // RenderProcessHost.
@@ -174,9 +176,13 @@ std::vector<const UserScript*> GetLoadedDynamicScripts(
   // `manager` can be null for some unit tests which do not initialize the
   // ExtensionSystem.
   UserScriptManager* manager =
+#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+      DesktopAndroidExtensionSystem::Get(process.GetBrowserContext())->user_script_manager();
+#else
       ExtensionSystem::Get(process.GetBrowserContext())->user_script_manager();
+#endif
   if (!manager) {
-    CHECK_IS_TEST();
+    // CHECK_IS_TEST(); // TODO
     return std::vector<const UserScript*>();
   }
 

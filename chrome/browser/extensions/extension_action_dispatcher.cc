@@ -59,13 +59,14 @@ void ExtensionActionDispatcher::NotifyChange(ExtensionAction* extension_action,
   }
 }
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS) || BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 void ExtensionActionDispatcher::DispatchExtensionActionClicked(
     const ExtensionAction& extension_action,
     content::WebContents* web_contents,
     const Extension* extension) {
-  events::HistogramValue histogram_value = events::UNKNOWN;
+  // events::HistogramValue histogram_value = events::UNKNOWN;
   const char* event_name = nullptr;
+  /*
   switch (extension_action.action_type()) {
     case ActionInfo::Type::kAction:
       histogram_value = events::ACTION_ON_CLICKED;
@@ -80,24 +81,24 @@ void ExtensionActionDispatcher::DispatchExtensionActionClicked(
       event_name = "pageAction.onClicked";
       break;
   }
-
+  */
   if (event_name) {
-    base::Value::List args;
+    // base::Value::List args;
     // The action APIs (browserAction, pageAction, action) are only available
     // to privileged extension contexts. As such, we deterministically know that
     // the right context type here is privileged.
-    constexpr mojom::ContextType context_type =
-        mojom::ContextType::kPrivilegedExtension;
-    ExtensionTabUtil::ScrubTabBehavior scrub_tab_behavior =
-        ExtensionTabUtil::GetScrubTabBehavior(extension, context_type,
-                                              web_contents);
-    args.Append(ExtensionTabUtil::CreateTabObject(web_contents,
-                                                  scrub_tab_behavior, extension)
-                    .ToValue());
+    // constexpr mojom::ContextType context_type =
+    //     mojom::ContextType::kPrivilegedExtension;
+    // ExtensionTabUtil::ScrubTabBehavior scrub_tab_behavior =
+    //     ExtensionTabUtil::GetScrubTabBehavior(extension, context_type,
+    //                                           web_contents);
+    // args.Append(ExtensionTabUtil::CreateTabObject(web_contents,
+    //                                               scrub_tab_behavior, extension)
+    //                 .ToValue());
 
-    DispatchEventToExtension(web_contents->GetBrowserContext(),
-                             extension_action.extension_id(), histogram_value,
-                             event_name, std::move(args));
+    // DispatchEventToExtension(web_contents->GetBrowserContext(),
+    //                          extension_action.extension_id(), histogram_value,
+    //                          event_name, std::move(args));
   }
 }
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)

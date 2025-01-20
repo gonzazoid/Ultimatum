@@ -12,6 +12,10 @@
 #include "extensions/browser/extension_system_provider.h"
 #include "extensions/browser/extensions_browser_client.h"
 
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/extensions/desktop_android/desktop_android_extension_system.h"
+#endif
+
 namespace extensions {
 
 // static
@@ -38,7 +42,13 @@ SettingsPrivateEventRouterFactory::SettingsPrivateEventRouterFactory()
               // Ash Internals.
               .WithAshInternals(ProfileSelection::kOwnInstance)
               .Build()) {
+
+#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+  DependsOn(extensions::DesktopAndroidExtensionSystem::GetFactory());
+#else
   DependsOn(ExtensionsBrowserClient::Get()->GetExtensionSystemFactory());
+#endif
+
   DependsOn(EventRouterFactory::GetInstance());
   DependsOn(settings_private::GeneratedPrefsFactory::GetInstance());
   DependsOn(SettingsPrivateDelegateFactory::GetInstance());

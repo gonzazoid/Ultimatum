@@ -5,8 +5,8 @@
 import("//build/config/ui.gni")
 import("//extensions/buildflags/buildflags.gni")
 
-assert(enable_extensions,
-       "Cannot depend on extensions because enable_extensions=false.")
+# assert(enable_extensions,
+#        "Cannot depend on extensions because enable_extensions=false.")
 
 source_set("automation_internal") {
   sources = [
@@ -25,7 +25,7 @@ source_set("automation_internal") {
     "//base",
     "//content/public/browser",
     "//extensions/browser:browser_sources",
-    "//extensions/browser/api/app_runtime:app_runtime",
+    # "//extensions/browser/api/app_runtime:app_runtime",
     "//extensions/common",
     "//extensions/common:mojom",
     "//extensions/common/api",

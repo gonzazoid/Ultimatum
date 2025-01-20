@@ -25,9 +25,9 @@
 #include "chrome/browser/extensions/permissions/site_permissions_helper.h"
 #include "chrome/browser/extensions/tab_helper.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser_finder.h"
-#include "chrome/browser/ui/browser_window.h"
-#include "chrome/browser/ui/extensions/extensions_dialogs.h"
+// #include "chrome/browser/ui/browser_finder.h"
+// #include "chrome/browser/ui/browser_window.h"
+// #include "chrome/browser/ui/extensions/extensions_dialogs.h"
 #include "chrome/browser/ui/toolbar/toolbar_actions_model.h"
 #include "components/crx_file/id_util.h"
 #include "components/sessions/content/session_tab_helper.h"
@@ -422,17 +422,17 @@ void ExtensionActionRunner::ShowReloadPageBubble(
   // TODO(emiliapaz): Consider showing the dialog as a modal if container
   // doesn't exist. Currently we get the extension's icon via the action
   // controller from the container, so the container must exist.
-  Browser* browser = chrome::FindBrowserWithTab(web_contents());
-  ExtensionsContainer* const extensions_container =
-      browser ? browser->window()->GetExtensionsContainer() : nullptr;
-  if (!extensions_container) {
+  // Browser* browser = chrome::FindBrowserWithTab(web_contents());
+  // ExtensionsContainer* const extensions_container =
+  //     browser ? browser->window()->GetExtensionsContainer() : nullptr;
+  // if (!extensions_container) {
     return;
-  }
+  // }
 
-  ShowReloadPageDialog(
-      browser, extension_ids,
-      base::BindOnce(&ExtensionActionRunner::OnReloadPageBubbleAccepted,
-                     weak_factory_.GetWeakPtr()));
+  // ShowReloadPageDialog(
+  //     browser, extension_ids,
+  //     base::BindOnce(&ExtensionActionRunner::OnReloadPageBubbleAccepted,
+  //                    weak_factory_.GetWeakPtr()));
 }
 
 void ExtensionActionRunner::OnReloadPageBubbleAccepted() {

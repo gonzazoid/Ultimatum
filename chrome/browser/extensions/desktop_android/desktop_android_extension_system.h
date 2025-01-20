@@ -16,9 +16,16 @@
 #include "extensions/browser/extension_registrar.h"
 #include "extensions/browser/extension_system.h"
 
+#include "chrome/browser/extensions/chrome_content_verifier_delegate.h"
+#include "extensions/browser/content_verifier/content_verifier.h"
+
+#include "chrome/browser/extensions/install_gate.h"
+
 #if !BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 #error "This file is only used for the experimental desktop-android build."
 #endif
+
+class Profile;
 
 namespace base {
 class FilePath;
@@ -86,6 +93,7 @@ class DesktopAndroidExtensionSystem : public ExtensionSystem {
   // Returns the singleton instance of the ExtensionSystemProvider to construct
   // the DesktopAndroidExtensionSystem.
   static ExtensionSystemProvider* GetFactory();
+  static ExtensionSystem* Get(content::BrowserContext* context);
 
   // KeyedService implementation:
   void Shutdown() override;
@@ -123,6 +131,7 @@ class DesktopAndroidExtensionSystem : public ExtensionSystem {
                                         bool install_immediately) override;
 
  private:
+
   raw_ptr<content::BrowserContext> browser_context_;  // Not owned.
 
   std::unique_ptr<ServiceWorkerManager> service_worker_manager_;
@@ -135,6 +144,11 @@ class DesktopAndroidExtensionSystem : public ExtensionSystem {
 
   std::unique_ptr<ChromeExtensionRegistrarDelegate> registrar_delegate_;
   raw_ptr<ExtensionRegistrar> registrar_;  // Not owned
+
+  std::unique_ptr<InstallGate> update_install_gate_;
+  raw_ptr<Profile> profile_;
+  std::unique_ptr<ExtensionService> extension_service_;
+  scoped_refptr<ContentVerifier> content_verifier_;
 
   // Signaled when the extension system has completed its startup tasks.
   base::OneShotEvent ready_;

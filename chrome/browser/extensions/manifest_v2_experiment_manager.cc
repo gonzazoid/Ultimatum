@@ -24,6 +24,9 @@
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_registry_factory.h"
 #include "extensions/browser/extension_system.h"
+#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+#include "chrome/browser/extensions/desktop_android/desktop_android_extension_system.h"
+#endif
 #include "extensions/browser/extensions_browser_client.h"
 #include "extensions/browser/pref_names.h"
 #include "extensions/browser/pref_types.h"
@@ -121,7 +124,11 @@ ManifestV2ExperimentManagerFactory::ManifestV2ExperimentManagerFactory()
               .Build()) {
   DependsOn(ExtensionManagementFactory::GetInstance());
   DependsOn(ExtensionPrefsFactory::GetInstance());
+#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+  DependsOn(DesktopAndroidExtensionSystem::GetFactory());
+#else
   DependsOn(ChromeExtensionSystemFactory::GetInstance());
+#endif
   DependsOn(ExtensionRegistryFactory::GetInstance());
 }
 
