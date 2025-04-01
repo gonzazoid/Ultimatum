@@ -6,8 +6,10 @@
 # these rules will not be applied to Chromium code that ships in third-party
 # APKs, e.g. Cronet.
 
+-optimizationpasses 3
+
 # Keep line number information, useful for stack traces.
--keepattributes SourceFile,LineNumberTable
+# -keepattributes SourceFile,LineNumberTable
 
 # Enable protobuf-related optimizations.
 -shrinkunusedprotofields
