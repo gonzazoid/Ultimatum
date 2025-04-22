@@ -2,6 +2,10 @@
 
 This is my attempt to port webextensions system on android. Something is already working, something still in progress.
 
+### How to install webextensions?
+
+Pretty much the same as you do on desktops. [Here](ultimatum/webext_install/install.md) you can find instruction with pictures.
+
 ### How to build.
 
 Basicaly the same way you build chromium but there is a couple tricks. First of all, before you do ``gn gen out/Default`` create ``out/Default`` manually (like ``mkdir out/Default``) and put this ``args.gn`` there:
