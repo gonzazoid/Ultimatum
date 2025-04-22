@@ -4,7 +4,7 @@ This is my attempt to port webextensions system on android. Something is already
 
 ### How to install webextensions?
 
-Pretty much the same as you do on desktops. [Here](ultimatum/webext_install/install.md) you can find instruction with pictures.
+Pretty much the same as you do on desktops. [Here](docs/ultimatum/webext_install/install.md) you can find instruction with pictures.
 
 ### How to build.
 
