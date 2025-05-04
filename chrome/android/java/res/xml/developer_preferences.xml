@@ -17,7 +17,7 @@ found in the LICENSE file.
         android:layout_height="wrap_content"
         android:enabled="false"
         android:key="beta_stable_hint"
-        android:title="Hint: You can also enable Developer options on Beta/Stable channels by tapping the Chrome version in &quot;Settings > About Chrome&quot; multiple times."
+        android:title="Hint: You can also enable Developer options on Beta/Stable channels by tapping the Ultimatum version in &quot;Settings > About Ultimatum&quot; multiple times."
         app:allowDividerAbove="false"
         app:allowDividerBelow="false" />
 </PreferenceScreen>
