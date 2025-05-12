@@ -258,6 +258,9 @@ bool Statement::Succeeded() const {
 bool Statement::BindAll(base::Value::List bindings) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
+  int sqlite_param_count = sqlite3_bind_parameter_count(ref_->stmt());
+  if (bindings.size() != (size_t) sqlite_param_count) return false;
+
   if (!is_valid())
     return false;
   int index = -1;
