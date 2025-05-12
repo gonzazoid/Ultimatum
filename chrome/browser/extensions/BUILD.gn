@@ -511,6 +511,10 @@ source_set("extensions") {
     "api/settings_private/settings_private_event_router.h",
     "api/settings_private/settings_private_event_router_factory.cc",
     "api/settings_private/settings_private_event_router_factory.h",
+    "api/messaging/chrome_native_message_port_dispatcher.cc",
+    "api/messaging/chrome_native_message_port_dispatcher.h",
+    "api/file_system/chrome_file_system_delegate.cc",
+    "api/file_system/chrome_file_system_delegate.h",
   ]
   configs += [
     "//build/config:precompiled_headers",

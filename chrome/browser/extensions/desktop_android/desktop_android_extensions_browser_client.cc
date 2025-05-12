@@ -159,13 +159,15 @@ class DesktopAndroidExtensionsAPIClient : public ExtensionsAPIClient {
 
 DesktopAndroidExtensionsBrowserClient::DesktopAndroidExtensionsBrowserClient()
     : extension_cache_(std::make_unique<NullExtensionCache>()),
-      kiosk_delegate_(std::make_unique<DesktopAndroidKioskDelegate>()),
-      api_client_(std::make_unique<DesktopAndroidExtensionsAPIClient>()) {
+      kiosk_delegate_(std::make_unique<DesktopAndroidKioskDelegate>()) // ,
+      /* api_client_(std::make_unique<DesktopAndroidExtensionsAPIClient>()) */ {
   AddAPIProvider(std::make_unique<CoreExtensionsBrowserAPIProvider>());
   AddAPIProvider(std::make_unique<ChromeExtensionsBrowserAPIProvider>());
 
   static bool registered = RegisterTransformers();
   CHECK(registered);
+
+  api_client_ = std::make_unique<ChromeExtensionsAPIClient>();
 }
 
 DesktopAndroidExtensionsBrowserClient::
