@@ -11,12 +11,14 @@
 #include "chrome/browser/extensions/api/management/chrome_management_api_delegate.h"
 #include "chrome/browser/extensions/chrome_extension_system_factory.h"
 #include "chrome/browser/extensions/chrome_extension_web_contents_observer.h"
+#include "chrome/browser/extensions/api/preference/network_prediction_transformer.h"
 #include "chrome/browser/extensions/api/proxy/proxy_pref_transformer.h"
 #include "chrome/browser/extensions/chrome_extensions_browser_api_provider.h"
 #include "chrome/browser/extensions/desktop_android/desktop_android_extension_host_delegate.h"
 #include "chrome/browser/extensions/desktop_android/desktop_android_runtime_api_delegate.h"
 #include "chrome/browser/extensions/error_console/error_console.h"
 #include "chrome/browser/extensions/extension_util.h"
+#include "chrome/browser/prefetch/pref_names.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_selections.h"
@@ -55,6 +57,11 @@
 
 #include "extensions/browser/api/content_settings/content_settings_service.h"
 
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+#endif
+
 using content::BrowserContext;
 using content::BrowserThread;
 
@@ -69,9 +76,9 @@ bool RegisterTransformers() {
   //     std::make_unique<CookieControlsModeTransformer>());
   pref_mapping->RegisterPrefTransformer(
       proxy_config::prefs::kProxy, std::make_unique<ProxyPrefTransformer>());
-  // pref_mapping->RegisterPrefTransformer(
-  //     prefetch::prefs::kNetworkPredictionOptions,
-  //     std::make_unique<NetworkPredictionTransformer>());
+  pref_mapping->RegisterPrefTransformer(
+      prefetch::prefs::kNetworkPredictionOptions,
+      std::make_unique<NetworkPredictionTransformer>());
   // pref_mapping->RegisterPrefTransformer(
   //     prefs::kProtectedContentDefault,
   //     std::make_unique<ProtectedContentEnabledTransformer>());
@@ -471,6 +478,26 @@ KioskDelegate* DesktopAndroidExtensionsBrowserClient::GetKioskDelegate() {
 
 std::string DesktopAndroidExtensionsBrowserClient::GetApplicationLocale() {
   return "en-US";
+}
+
+void DesktopAndroidExtensionsBrowserClient::GetTabAndWindowIdForWebContents(
+    content::WebContents* web_contents,
+    int* tab_id,
+    int* window_id) {
+  for (TabModel* model : TabModelList::models()) {
+    for (int i = 0; i < model->GetTabCount(); i++) {
+      // yeah, I'm ashamed of myself too
+      content::WebContents* contents = model->GetWebContentsAt(i);
+      if (contents == web_contents) {
+        *tab_id = model->GetTabAt(i)->GetTabId().id();
+        *window_id = model->GetTabAt(i)->GetWindowId().id();
+        return;
+      }
+    }
+  }
+
+  *tab_id = -1;
+  *window_id = -1;
 }
 
 }  // namespace extensions

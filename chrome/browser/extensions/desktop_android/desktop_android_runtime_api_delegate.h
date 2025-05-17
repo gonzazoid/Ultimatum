@@ -30,6 +30,9 @@ class DesktopAndroidRuntimeApiDelegate : public RuntimeAPIDelegate {
   bool CheckForUpdates(const ExtensionId& extension_id,
                        UpdateCheckCallback callback) override;
   void OpenURL(const GURL& uninstall_url) override;
+  bool OpenOptionsPage(
+    const Extension* extension,
+    content::BrowserContext* browser_context) override;
   bool GetPlatformInfo(api::runtime::PlatformInfo* info) override;
   bool RestartDevice(std::string* error_message) override;
 

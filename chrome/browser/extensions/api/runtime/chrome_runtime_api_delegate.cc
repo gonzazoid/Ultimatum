@@ -344,8 +344,8 @@ bool ChromeRuntimeAPIDelegate::RestartDevice(std::string* error_message) {
 bool ChromeRuntimeAPIDelegate::OpenOptionsPage(
     const Extension* extension,
     content::BrowserContext* browser_context) {
-  return false; // extensions::ExtensionTabUtil::OpenOptionsPageFromAPI(extension,
-                //                                               browser_context);
+  return extensions::ExtensionTabUtil::OpenOptionsPageFromAPI(extension,
+                                                              browser_context);
 }
 
 int ChromeRuntimeAPIDelegate::GetDeveloperToolsWindowId(

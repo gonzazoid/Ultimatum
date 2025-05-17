@@ -741,14 +741,21 @@ FilePath FilePath::Append(StringViewType component) const {
   if (IsContentUri()) {
     FileEnumerator::FileInfo maybe_dir_info;
     base::internal::ContentUriGetFileInfo(*this, &maybe_dir_info);
+    FilePath res = *this;
+    std::istringstream f((std::basic_string<char>(component)));
+    std::string token;
     if (maybe_dir_info.IsDirectory()) {
-      auto directory_entries_ = base::internal::ListContentUriDirectory(*this);
-      for (auto& info : directory_entries_) {
-        if (info.GetName().AsUTF8Unsafe() == appended) {
-          return FilePath(info.content_uri());
+      while(getline(f, token, '/')) {
+        auto directory_entries = base::internal::ListContentUriDirectory(res);
+        for (auto& info : directory_entries) {
+          if (info.GetName().AsUTF8Unsafe() == token) {
+            res = FilePath(info.content_uri());
+            break;
+          }
         }
       }
     }
+    return res;
   }
 #endif
 

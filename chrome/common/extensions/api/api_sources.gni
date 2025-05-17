@@ -42,6 +42,7 @@ schema_sources_ = [
 uncompiled_sources_ = [
   "action.json",
   "browsing_data.json",
+  "browser_action.json",
   "extension.json",
 ]
 
@@ -160,7 +161,6 @@ if (enable_extensions) {
   }
 
   uncompiled_sources_ += [
-    "browser_action.json",
     "idltest.idl",
     "page_action.json",
     "top_sites.json",

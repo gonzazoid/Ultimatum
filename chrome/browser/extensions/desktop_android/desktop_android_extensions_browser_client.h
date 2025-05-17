@@ -165,6 +165,11 @@ class DesktopAndroidExtensionsBrowserClient : public ExtensionsBrowserClient {
   KioskDelegate* GetKioskDelegate() override;
   std::string GetApplicationLocale() override;
 
+  void GetTabAndWindowIdForWebContents(
+    content::WebContents* web_contents,
+    int* tab_id,
+    int* window_id) override;
+
  private:
   std::unique_ptr<ExtensionCache> extension_cache_;
   std::unique_ptr<KioskDelegate> kiosk_delegate_;

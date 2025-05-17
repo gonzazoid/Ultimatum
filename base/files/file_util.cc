@@ -354,17 +354,19 @@ std::optional<std::vector<uint8_t>> ReadFileToBytes(const FilePath& path) {
     if (!file.IsValid()) {
       return std::nullopt;
     }
-    char cur;
-    int64_t offset = 0;
+
     std::vector<uint8_t> bytes;
-    do {
-      int bytes_read = file.Read(offset, &cur, 1);
-      if (bytes_read < 1) {
-        return bytes;
-      }
-      bytes.push_back(cur);
-      offset++;
-    } while (true);
+
+    int64_t length = file.GetLength();
+    if (length < 0) return std::nullopt;
+    bytes.resize((size_t)length);
+
+    int bytes_read = file.Read(0, reinterpret_cast<char*>(bytes.data()), (int)length);
+    if (bytes_read < length) {
+      return std::nullopt;
+    }
+
+    return bytes;
   }
 #endif
 
@@ -404,22 +406,20 @@ bool ReadFileToStringWithMaxSize(const FilePath& path,
 // One day may be I'll find the time to make it better
 #if BUILDFLAG(IS_ANDROID)
   if(path.IsContentUri()) {
-    base::File file(path,
+    base::File file = base::File(path,
                        base::File::FLAG_OPEN | base::File::FLAG_READ);
     if (!file.IsValid()) {
       return false;
     }
-    char cur;
-    size_t name_bytes_read = 0;
-    int64_t offset = 0;
-    do {
-      int bytes_read = file.Read(offset, &cur, 1);
-      if (bytes_read < 1) {
-        return true;
-      }
-      contents->resize(++name_bytes_read, cur);
-      offset++;
-    } while (cur != '\0');
+    int64_t length = file.GetLength();
+    if (length < 0) return false;
+    contents->resize((size_t)length);
+
+    int bytes_read = file.Read(0, contents->data(), (int)length);
+    if (bytes_read < length) {
+      return false;
+    }
+
     return true;
   }
 #endif

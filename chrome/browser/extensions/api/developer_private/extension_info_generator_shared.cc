@@ -645,14 +645,31 @@ void ExtensionInfoGeneratorShared::FillExtensionInfo(
   info.id = extension.id();
 
   info.popup_url = "";
-  const base::Value::Dict* dict =
+  auto manifest_version = extension.manifest()->value()->FindInt(manifest_keys::kManifestVersion);
+
+  if (*manifest_version == 2) {
+    const base::Value::Dict* dict =
+        extension.manifest()->value()->FindDict(manifest_keys::kBrowserAction);
+    if (dict) {
+      const base::Value* default_popup = dict->Find(manifest_keys::kActionDefaultPopup);
+      if (default_popup) {
+        const std::string* url_str = default_popup->GetIfString();
+        if (url_str)
+          info.popup_url = "chrome-extension://" + extension.id() + "/" + *url_str;
+      }
+    }
+  }
+
+  if (*manifest_version == 3) {
+    const base::Value::Dict* dict =
         extension.manifest()->value()->FindDict(manifest_keys::kAction);
-  if (dict) {
-    const base::Value* default_popup = dict->Find(manifest_keys::kActionDefaultPopup);
-    if (default_popup) {
-      const std::string* url_str = default_popup->GetIfString();
-      if (url_str)
-        info.popup_url = "chrome-extension://" + extension.id() + "/" + *url_str;
+    if (dict) {
+      const base::Value* default_popup = dict->Find(manifest_keys::kActionDefaultPopup);
+      if (default_popup) {
+        const std::string* url_str = default_popup->GetIfString();
+        if (url_str)
+          info.popup_url = "chrome-extension://" + extension.id() + "/" + *url_str;
+      }
     }
   }
 

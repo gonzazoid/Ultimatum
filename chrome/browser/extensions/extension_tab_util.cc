@@ -138,6 +138,7 @@ bool HasValidMainFrameProcess(content::WebContents* contents) {
   return process_host->IsReady() && process_host->IsInitializedAndNotDead();
 }
 
+#if !BUILDFLAG(IS_ANDROID)
 Browser* CreateBrowser(Profile* profile, bool user_gesture) {
   if (Browser::GetCreationStatusForProfile(profile) !=
       Browser::CreationStatus::kOk) {
@@ -147,6 +148,7 @@ Browser* CreateBrowser(Profile* profile, bool user_gesture) {
   Browser::CreateParams params(Browser::TYPE_NORMAL, profile, user_gesture);
   return Browser::Create(params);
 }
+#endif
 
 #if !BUILDFLAG(IS_ANDROID)
 Browser* CreateAndShowBrowser(Profile* profile,
@@ -1753,18 +1755,38 @@ bool ExtensionTabUtil::OpenOptionsPageFromAPI(
     content::BrowserContext* browser_context) {
   if (!OptionsPageInfo::HasOptionsPage(extension))
     return false;
+
+#if BUILDFLAG(IS_ANDROID)
+  for (TabModel* model : TabModelList::models()) {
+    if (model->IsActiveModel()) {
+      GURL url = OptionsPageInfo::GetOptionsPage(extension);
+      std::unique_ptr<WebContents> contents =
+          WebContents::Create(WebContents::CreateParams(browser_context));
+      content::NavigationController::LoadURLParams load_params(url);
+      load_params.transition_type = ui::PageTransitionFromInt(
+      ui::PAGE_TRANSITION_TYPED | ui::PAGE_TRANSITION_FROM_ADDRESS_BAR);
+      contents->GetController().LoadURLWithParams(load_params);
+      contents->GetOutermostWebContents()->Focus();
+      WebContents* second_web_contents = contents.release();
+      model->CreateTab(nullptr, second_web_contents, true);
+      return true;
+    }
+  }
+  return false;
+#else
   Profile* profile = Profile::FromBrowserContext(browser_context);
   // This version of OpenOptionsPage() is only called when the extension
   // initiated the command via chrome.runtime.openOptionsPage. For a spanning
   // mode extension, this API could only be called from a regular profile, since
   // that's the only place it's running.
   // DCHECK(!profile->IsOffTheRecord() || IncognitoInfo::IsSplitMode(extension));
-  Browser* browser = nullptr; // chrome::FindBrowserWithProfile(profile);
+  Browser* browser = chrome::FindBrowserWithProfile(profile);
   if (!browser)
     browser = CreateBrowser(profile, true);
   if (!browser)
     return false;
   return extensions::ExtensionTabUtil::OpenOptionsPage(extension, browser);
+#endif
 }
 
 bool ExtensionTabUtil::OpenOptionsPage(const Extension* extension,

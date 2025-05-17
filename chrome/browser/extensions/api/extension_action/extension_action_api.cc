@@ -83,6 +83,7 @@ bool g_report_error_for_invisible_icon = false;
 // also checking the incognito profile.
 Browser* FindLastActiveBrowserWindow(Profile* profile,
                                      bool check_incognito_profile) {
+#if !BUILDFLAG(IS_ANDROID)
   Browser* browser = chrome::FindLastActiveWithProfile(profile);
 
   if (browser && browser->window()->IsActive())
@@ -101,7 +102,7 @@ Browser* FindLastActiveBrowserWindow(Profile* profile,
     if (incognito_browser->window()->IsActive())
       return incognito_browser;
   }
-
+#endif
   return nullptr;
 }
 
