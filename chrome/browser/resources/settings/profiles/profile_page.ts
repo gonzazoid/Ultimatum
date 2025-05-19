@@ -96,25 +96,28 @@ export class ProfilePageElement extends ProfilePageElementBase {
     };
   }
 
-  private userAgentSubstitution: chrome.settingsPrivate.PrefObject<boolean>;
-  userAgent: string;
-  userAgentChangedAndValid: boolean;
-  oldUserAgent: String;
+  declare prefs: {[key: string]: any};
+  declare private isManaged_: boolean;
 
-  private productSubSubstitution: chrome.settingsPrivate.PrefObject<boolean>;
-  productSub: string;
-  productSubChangedAndValid: boolean;
-  oldProductSub: String;
+  declare private userAgentSubstitution: chrome.settingsPrivate.PrefObject<boolean>;
+  declare userAgent: string;
+  declare userAgentChangedAndValid: boolean;
+  declare oldUserAgent: String;
 
-  private platformSubstitution: chrome.settingsPrivate.PrefObject<boolean>;
-  platform: string;
-  platformChangedAndValid: boolean;
-  oldPlatform: String;
+  declare private productSubSubstitution: chrome.settingsPrivate.PrefObject<boolean>;
+  declare productSub: string;
+  declare productSubChangedAndValid: boolean;
+  declare oldProductSub: String;
 
-  private vendorSubstitution: chrome.settingsPrivate.PrefObject<boolean>;
-  vendor: string;
-  vendorChangedAndValid: boolean;
-  oldVendor: String;
+  declare private platformSubstitution: chrome.settingsPrivate.PrefObject<boolean>;
+  declare platform: string;
+  declare platformChangedAndValid: boolean;
+  declare oldPlatform: String;
+
+  declare private vendorSubstitution: chrome.settingsPrivate.PrefObject<boolean>;
+  declare vendor: string;
+  declare vendorChangedAndValid: boolean;
+  declare oldVendor: String;
 
   override ready() {
     super.ready();

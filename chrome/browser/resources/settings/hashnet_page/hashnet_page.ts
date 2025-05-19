@@ -68,13 +68,16 @@ export class HashNetPageElement extends HashNetPageElementBase {
     };
   }
 
-  agentsList: string;
-  agentsListChanged: boolean;
-  oldAgentsList: string;
+  declare prefs: {[key: string]: any};
+  declare private isManaged_: boolean;
 
-  privateKey: string;
-  privateKeyChangedAndValid: boolean;
-  oldPrivateKey: String;
+  declare agentsList: string;
+  declare agentsListChanged: boolean;
+  declare oldAgentsList: string;
+
+  declare privateKey: string;
+  declare privateKeyChangedAndValid: boolean;
+  declare oldPrivateKey: String;
 
   override ready() {
     super.ready();
