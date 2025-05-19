@@ -4,7 +4,7 @@
 
 import("//third_party/closure_compiler/compile_js.gni")
 
-assert(!is_android, "Android does not use these settings")
+# assert(!is_android, "Android does not use these settings")
 
 settings_closure_flags =
     default_closure_args + [

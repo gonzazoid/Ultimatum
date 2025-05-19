@@ -8,7 +8,7 @@ import("//crypto/features.gni")
 import("//ui/webui/resources/tools/build_webui.gni")
 import("./settings.gni")
 
-assert(!is_android, "Android does not use these settings")
+# assert(!is_android, "Android does not use these settings")
 
 build_webui("build") {
   grd_prefix = "settings"

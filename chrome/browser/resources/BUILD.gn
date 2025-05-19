@@ -19,6 +19,7 @@ group("resources") {
   public_deps = [
     "saved_tab_groups_unsupported:resources",
     "segmentation_internals:resources",
+    "settings:resources",
   ]
 
   if (!is_android) {
